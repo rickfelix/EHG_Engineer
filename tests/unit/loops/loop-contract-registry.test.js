@@ -16,11 +16,17 @@ import { validateLoopContract, BOUNDARY_KIND } from '../../../lib/loops/loop-con
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
-/** Extract the first `cron: '...'` schedule from a workflow yml. */
-function cronFromWorkflow(relPath) {
+/** Extract ALL active (non-commented) `cron: '...'` schedules from a workflow yml. */
+function activeCronsFromWorkflow(relPath) {
   const text = readFileSync(resolve(repoRoot, relPath), 'utf8');
-  const m = text.match(/cron:\s*['"]([^'"]+)['"]/);
-  return m ? m[1] : null;
+  return text
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*#/.test(line)) // drop full-line comments so a commented cron can't match
+    .map((line) => {
+      const m = line.match(/cron:\s*['"]([^'"]+)['"]/);
+      return m ? m[1] : null;
+    })
+    .filter(Boolean);
 }
 
 describe('registry shape + invariants', () => {
@@ -70,11 +76,11 @@ describe('cron-coherence: declared cadence matches the LIVE workflow .yml (anti-
     ['LOOP-ADAM-OPPORTUNITY-SCAN-001', '.github/workflows/adam-opportunity-scan-cron.yml'],
   ];
   for (const [loopId, yml] of cases) {
-    it(`${loopId} declared cadence === cron in ${yml}`, () => {
+    it(`${loopId} declared cadence is among the active crons in ${yml}`, () => {
       const declared = get(loopId).timeline.cadence;
-      const live = cronFromWorkflow(yml);
-      expect(live, `no cron found in ${yml}`).toBeTruthy();
-      expect(declared).toBe(live);
+      const liveCrons = activeCronsFromWorkflow(yml);
+      expect(liveCrons.length, `no active cron found in ${yml}`).toBeGreaterThan(0);
+      expect(liveCrons).toContain(declared);
     });
   }
 });
