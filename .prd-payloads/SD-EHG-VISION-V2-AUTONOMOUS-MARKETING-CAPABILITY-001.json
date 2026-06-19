@@ -1,0 +1,65 @@
+{
+  "executive_summary": "Ratify (record) the chairman-approved V2 vision capability 'Autonomous customer acquisition & distribution' as ONE vision_ladder_criteria row at the existing inactive V2 rung, WITHOUT touching the live V1 gauge. The coherence model (lib/vision/vdr-registry.js) computes the gauge over the ACTIVE rung only (dbVisionSource selects is_active=true → V1), and assertRegistryCoherence compares VDR_REGISTRY to that active set. So an inactive-V2 criteria row is invisible to V1, and FR-2 DEFERS adding a VDR_REGISTRY probe (a V2 probe while V1 is active would be a staleProbe that withholds the whole V1 gauge). The intended V2 probe (AUTONOMOUS_CAMPAIGN_EXECUTION) is documented for wiring at V2 activation. FR-3 verifies the V1 gauge still computes (same 25-criteria denominator, coherence ok). The V2 rung already exists (rung_key='V2', is_active=false, 0 criteria, id a269840a-...); V1 criteria were script-seeded (precedent), so this row is inserted live via an idempotent seed script.",
+  "system_architecture": {
+    "overview": "One additive governed-data-row INSERT into vision_ladder_criteria (pointing at the existing inactive V2 rung) via an idempotent seed script, plus a unit test proving the V1 gauge/coherence is unaffected. No schema change, no VDR_REGISTRY change, no V1 row touched.",
+    "components": [
+      {"name": "scripts/okr/seed-v2-autonomous-marketing-criteria.mjs", "responsibility": "FR-1: idempotent INSERT of the single V2 criteria row (rung_id=V2 rung, ordinal=1, capability/today/required from the chairman ratification). Service-role, upsert-on-conflict / existence-guarded so re-runs are no-ops. Mirrors scripts/okr/wire-v1-caplayer-criteria.mjs."},
+      {"name": "PRD/SD documentation of the deferred probe", "responsibility": "FR-2: record the INTENDED V2 probe AUTONOMOUS_CAMPAIGN_EXECUTION (code_grep proving lib/eva or an orchestrator invokes publisher.publish()/executePipeline() from the S24 launch path; today: zero refs → would honestly read unbuilt) + secondary candidates (DISTRIBUTION_CHANNEL_LIVE_COUNT, VENTURE_CUSTOMER_COHORT) for the chairman to pick at V2 activation. NO VDR_REGISTRY entry added now."},
+      {"name": "tests/unit/vision/v2-ratification-coherence.test.js", "responsibility": "FR-3: assert the V2 rung stays inactive, the V1 active-rung criteria set is unchanged (count + coherence), and VDR_REGISTRY contains no V2 probe — so the live V1 gauge is unaffected by the ratification."}
+    ]
+  },
+  "functional_requirements": [
+    {"id": "FR-1", "title": "Ratify the V2 capability as one inactive criteria row", "description": "Insert ONE vision_ladder_criteria row at the existing V2 rung (is_active=false): ordinal=1; capability='Autonomous customer acquisition & distribution'; today='marketing/distribution is automated at the PLANNING layer only — stages produce strategy/copy/config/playbook artifacts; EXECUTION is unwired (the lib/marketing publisher (X/Bluesky), content-pipeline.executePipeline(), and email-campaigns infra is built but ORPHANED — lib/eva has zero refs; S24 Go-Live records status=activated but invokes no publish/announce/campaign API)'; required='a venture autonomously runs real campaigns, publishes content, registers/activates real distribution channels, and runs ongoing growth WITHOUT the chairman'. Idempotent insert."},
+    {"id": "FR-2", "title": "Defer the VDR probe (preserve V1 coherence)", "description": "Do NOT add a VDR_REGISTRY entry now — assertRegistryCoherence compares VDR_REGISTRY to the ACTIVE rung (V1) byte-identically, so a V2 probe while V1 is active = a staleProbe that withholds the whole V1 gauge. Document the intended probe AUTONOMOUS_CAMPAIGN_EXECUTION (+ secondary candidates) for wiring at V2 activation."},
+    {"id": "FR-3", "title": "Verify V1 gauge intact", "description": "Assert the V1 active-rung criteria denominator is unchanged (still 25), assertRegistryCoherence is ok over the active rung, and VDR_REGISTRY has no V2 probe — proving the ratification did not affect the live V1 gauge."}
+  ],
+  "technical_requirements": [
+    {"id": "TR-1", "requirement": "The V2 criteria row attaches to the existing inactive V2 rung (id a269840a-0035-49bb-bf41-ea1d0027339b); the seed is idempotent (existence-guarded) so re-runs are no-ops."},
+    {"id": "TR-2", "requirement": "No VDR_REGISTRY change and no V1 criteria mutation — the live gauge (dbVisionSource over is_active=true) and assertRegistryCoherence must be byte-unaffected."},
+    {"id": "TR-3", "requirement": "Insert via the established script pattern (service-role), not a chairman-gated DDL migration — this is a governed DATA row at an inactive rung, chairman-ratified."}
+  ],
+  "implementation_approach": {
+    "summary": "Insert the single ratified V2 criteria row at the existing inactive rung via an idempotent seed script (script precedent), document the deferred probe, and unit-test that the V1 gauge/coherence is unaffected.",
+    "steps": [
+      "Write scripts/okr/seed-v2-autonomous-marketing-criteria.mjs (idempotent insert of the V2 criteria row).",
+      "Run it to insert the row live; confirm V2 rung stays inactive.",
+      "Document the deferred AUTONOMOUS_CAMPAIGN_EXECUTION probe (+ secondary candidates) for V2-activation wiring.",
+      "Unit-test: V1 denominator unchanged (25), assertRegistryCoherence ok, no V2 probe in VDR_REGISTRY."
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": "vision_ladder_criteria is read by lib/vision/vdr-registry.js dbVisionSource (active rung only) and the vision-build gauge / adam-exec-summary. The new row is at the INACTIVE V2 rung, so it has zero live consumers until V2 is activated. The deferred probe (AUTONOMOUS_CAMPAIGN_EXECUTION) would be consumed by VDR_REGISTRY only once V2 is the active rung.",
+    "dependencies": "Depends on the existing inactive V2 rung (vision_ladder_rungs rung_key='V2', id a269840a-...). No SD dependency. Insert pattern mirrors scripts/okr/wire-v1-caplayer-criteria.mjs / seed-v1-automation-criteria.mjs.",
+    "data_contracts": "Adds one vision_ladder_criteria row {rung_id, ordinal=1, capability, today, required}. No schema change, no column change, no V1 row mutation, no VDR_REGISTRY change. The active-rung (V1) criteria set and gauge denominator are unchanged.",
+    "runtime_config": "No env vars or feature flags. The row is inserted at an inactive rung — no runtime behavior changes until the chairman activates V2 (a separate future action) and the probe is wired.",
+    "observability_rollout": "Rollout: the seed script inserts the row immediately; the V2 capability is recorded but dormant (inactive rung). Verification: the V1 gauge still computes with coherence ok and the same denominator. Rollback: delete the single V2 criteria row (no live impact — it was never in the active gauge)."
+  },
+  "acceptance_criteria": [
+    "The chairman-ratified V2 capability 'Autonomous customer acquisition & distribution' is recorded as one criteria row at the V2 rung.",
+    "The V2 rung remains inactive, so the new row is not part of the live vision gauge.",
+    "The live V1 vision gauge still computes exactly as before — same set of criteria, no coherence error introduced.",
+    "No V2 probe was added to the code registry yet (the probe is documented for later), so V1 coherence is preserved.",
+    "Re-running the insert does not create a duplicate row.",
+    "The unit test for this work passes."
+  ],
+  "test_scenarios": [
+    {"id": "TS-1", "title": "V2 criteria row recorded at the inactive rung", "type": "db", "scenario": "After running the seed, query vision_ladder_criteria joined to vision_ladder_rungs for rung_key='V2'.", "expected": "Exactly one V2 criteria row (ordinal=1, the ratified capability) whose rung is is_active=false."},
+    {"id": "TS-2", "title": "V1 gauge/coherence unaffected", "type": "unit", "scenario": "Compute the active-rung criteria set and assertRegistryCoherence (over VDR_REGISTRY vs active criteria).", "expected": "V1 denominator unchanged (25), coherence ok=true (no missingProbes/staleProbes)."},
+    {"id": "TS-3", "title": "No V2 probe in the registry", "type": "unit", "scenario": "Inspect VDR_REGISTRY for an AUTONOMOUS_CAMPAIGN_EXECUTION (or other V2) probe.", "expected": "Absent — FR-2 deferred it, so the registry still matches the active V1 criteria."},
+    {"id": "TS-4", "title": "Idempotent re-run", "type": "db", "scenario": "Run the seed script twice.", "expected": "Still exactly one V2 criteria row (no duplicate)."}
+  ],
+  "risks": [
+    {"risk": "A V2 probe added now would withhold the live V1 gauge", "mitigation": "FR-2 explicitly defers the VDR_REGISTRY probe; TS-3 asserts none is present. Coherence is computed only over the active rung.", "severity": "medium"},
+    {"risk": "Accidentally activating V2 or mutating V1 criteria", "mitigation": "Only an INSERT at the inactive V2 rung; no rung is_active change, no V1 row touched; TS-2 asserts V1 denominator + coherence unchanged.", "severity": "low"},
+    {"risk": "Duplicate criteria row on re-run", "mitigation": "Idempotent existence-guarded seed; TS-4 asserts single row.", "severity": "low"}
+  ],
+  "metadata": {
+    "sd_key": "SD-EHG-VISION-V2-AUTONOMOUS-MARKETING-CAPABILITY-001",
+    "target_application": "EHG_Engineer",
+    "target_files": [
+      "scripts/okr/seed-v2-autonomous-marketing-criteria.mjs",
+      "tests/unit/vision/v2-ratification-coherence.test.js"
+    ],
+    "created_via": "fleet-worker-charlie"
+  }
+}
