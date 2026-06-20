@@ -339,6 +339,7 @@
     "working-context": "node scripts/working-context.cjs",
     "chairman:notify": "node lib/integrations/todoist/chairman-notify.js",
     "adam:retro": "node scripts/adam-retro.cjs",
+    "sourcing:deferred-watcher": "node scripts/sourcing-engine-deferred-watcher-sweep.mjs",
     "adam:scan": "node scripts/adam-opportunity-scan.cjs --scan",
     "adam:briefing": "node scripts/adam-opportunity-scan.cjs --briefing",
     "adam:self-score": "node scripts/adam-self-assessment-writer.cjs",
