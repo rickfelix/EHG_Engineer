@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-20T00:42:20.836Z
+**Generated**: 2026-06-20T06:20:33.881Z
 **Rows**: 26
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (7 total)
+## Columns (8 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -25,6 +25,7 @@
 | today | `text` | **NO** | `''::text` | - |
 | required | `text` | **NO** | `''::text` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
+| nature | `text` | YES | - | Deterministic capability classification: buildable (the fleet can ship it) or operational (requires a live venture / KR / chairman signal). NULL = un-backfilled. Source of truth is OPERATIONAL_NATURE in lib/vision/vdr-registry.js. SD-LEO-INFRA-VISION-LADDER-ROADMAP-COHERENCE-001. |
 
 ## Constraints
 
@@ -36,6 +37,9 @@
 
 ### Unique Constraints
 - `vision_ladder_criteria_rung_id_capability_key`: UNIQUE (rung_id, capability)
+
+### Check Constraints
+- `chk_vision_ladder_criteria_nature`: CHECK (((nature IS NULL) OR (nature = ANY (ARRAY['buildable'::text, 'operational'::text]))))
 
 ## Indexes
 
