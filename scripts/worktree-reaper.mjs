@@ -1015,7 +1015,15 @@ export function buildPassthroughFlags(opts) {
  * decision logic is already repo-agnostic, so only the iteration is new here. Emits a loud warning for
  * any pool at/above the cap threshold (FR-2) and returns the worst child exit code.
  */
-async function runAllPools(opts, { repoRoot, repoName, supabase }) {
+export async function runAllPools(opts, { repoRoot, repoName, supabase }, deps = {}) {
+  // Dependency injection (defaults wire the real runtime; tests inject fakes so the orchestration
+  // glue — pool fan-out, per-pool child argv, worst-exit selection — is unit-testable without git/DB).
+  const existsSync = deps.existsSync || ((p) => fs.existsSync(p));
+  const hasGit = deps.hasGit || ((root) => fs.existsSync(path.join(root, '.git')));
+  const usedCounter = deps.listUsed || ((root) => { try { return listActiveWorktrees(root).length; } catch { return 0; } });
+  const spawn = deps.spawn || ((cmd, argv) => spawnSync(cmd, argv, { stdio: 'inherit', windowsHide: true }));
+  const thisFile = deps.selfPath || fileURLToPath(import.meta.url);
+
   let applications = [];
   if (supabase) {
     try {
@@ -1027,17 +1035,15 @@ async function runAllPools(opts, { repoRoot, repoName, supabase }) {
     applications,
     currentRepoRoot: repoRoot,
     currentRepoName: repoName,
-    existsSync: (p) => fs.existsSync(p),
-    hasGit: (root) => fs.existsSync(path.join(root, '.git')),
+    existsSync,
+    hasGit,
   });
 
   console.log(`\n🌐 MULTI-POOL REAPER — ${pools.length} registered pool(s), ${opts.execute ? 'EXECUTE' : 'DRY-RUN'}`);
   const passthrough = buildPassthroughFlags(opts);
-  const thisFile = fileURLToPath(import.meta.url);
   let worst = 0;
   for (const pool of pools) {
-    let used = 0;
-    try { used = listActiveWorktrees(pool.root).length; } catch { used = 0; }
+    const used = usedCounter(pool.root);
     const cap = computePoolCapStatus(used, MAX_WORKTREE_COUNT, opts.threshold);
     const tag = `${pool.name} (${pool.root})`;
     if (cap.warn) {
@@ -1047,11 +1053,8 @@ async function runAllPools(opts, { repoRoot, repoName, supabase }) {
       );
     }
     console.log(`\n──▶ Pool: ${tag} — ${cap.used}/${cap.cap} worktrees (${cap.percent}%)`);
-    const res = spawnSync('node', [thisFile, '--repo', pool.root, ...passthrough], {
-      stdio: 'inherit',
-      windowsHide: true,
-    });
-    const code = res.status == null ? 9 : res.status;
+    const res = spawn('node', [thisFile, '--repo', pool.root, ...passthrough]);
+    const code = res && res.status != null ? res.status : 9;
     if (code > worst) worst = code;
     console.log(`◀── Pool ${pool.name} reaper exited ${code}`);
   }

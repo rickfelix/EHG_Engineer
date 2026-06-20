@@ -15,6 +15,7 @@ import {
   classifyStage0,
   selectStage0Reclaim,
   computePoolUtilization,
+  runAllPools,
 } from '../../scripts/worktree-reaper.mjs';
 
 const EHG_ENG = 'C:/Users/rickf/Projects/_EHG/EHG_Engineer';
@@ -127,6 +128,51 @@ describe('pools — buildPassthroughFlags', () => {
     expect(buildPassthroughFlags({ days: 7, threshold: 0.8 })).not.toContain('--days');
     const f = buildPassthroughFlags({ days: 14, threshold: 0.5 });
     expect(f).toEqual(expect.arrayContaining(['--days', '14', '--threshold', '0.5']));
+  });
+});
+
+describe('runAllPools — orchestration fan-out (injected spawner)', () => {
+  const fakeSupabase = (apps) => ({ from: () => ({ select: async () => ({ data: apps }) }) });
+
+  it('spawns one --repo child per resolved pool, never leaks --all-pools, returns the worst exit', async () => {
+    const calls = [];
+    // ehg child fails (exit 4); keyed by normalized path so backslash-resolved roots still match.
+    const statuses = { [normalizePoolPath(EHG_ENG)]: 0, [normalizePoolPath(EHG)]: 4 };
+    const worst = await runAllPools(
+      { execute: true, threshold: 0.8 },
+      { repoRoot: EHG_ENG, repoName: 'EHG_Engineer', supabase: fakeSupabase([{ name: 'EHG', local_path: EHG }]) },
+      {
+        existsSync: () => true,
+        hasGit: () => true,
+        listUsed: () => 0,
+        selfPath: '/abs/worktree-reaper.mjs',
+        spawn: (cmd, argv) => {
+          calls.push({ cmd, argv });
+          const root = normalizePoolPath(argv[2]);
+          return { status: statuses[root] ?? 0 };
+        },
+      }
+    );
+    // one child per pool (current EHG_Engineer + registered EHG)
+    expect(calls).toHaveLength(2);
+    for (const c of calls) {
+      expect(c.cmd).toBe('node');
+      expect(c.argv[0]).toBe('/abs/worktree-reaper.mjs');
+      expect(c.argv[1]).toBe('--repo');
+      expect(c.argv).toContain('--execute');
+      expect(c.argv).not.toContain('--all-pools'); // no recursion / fork bomb
+      expect(c.argv.filter((a) => a === '--repo')).toHaveLength(1); // exactly the orchestrator's --repo
+    }
+    expect(worst).toBe(4); // worst child exit propagates
+  });
+
+  it('a spawn that returns null status counts as exit 9 (failure), not 0', async () => {
+    const worst = await runAllPools(
+      { threshold: 0.8 },
+      { repoRoot: EHG_ENG, repoName: 'EHG_Engineer', supabase: fakeSupabase([]) },
+      { existsSync: () => true, hasGit: () => true, listUsed: () => 0, selfPath: '/x.mjs', spawn: () => ({ status: null }) }
+    );
+    expect(worst).toBe(9);
   });
 });
 
