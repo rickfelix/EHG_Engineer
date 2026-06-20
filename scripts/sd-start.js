@@ -51,6 +51,10 @@ import { formatRosterClaim } from './modules/sd-next/display/claim-formatters.js
 // patterns, so no behavior regresses for existing error shapes.
 import { classify as classifyWorktreeFailure } from '../lib/protocol-policies/worktree-failure-classification.js';
 import { decideOwnConflictReattach } from '../lib/exec-context-guard.mjs';
+// SD-LEO-INFRA-SD-START-STALE-BASE-WARN-001: warn (or opt-in auto-rebase) when a resolved worktree's
+// base is behind origin/main, so a worker never silently builds on a stale base (a merge-as-is would
+// revert sibling work that landed after the base commit). Fail-open; reuses checkout-freshness.
+import { runStaleBaseGuard } from '../lib/worktree/stale-base-guard.mjs';
 import { getNextReadyChild } from './modules/handoff/child-sd-selector.js';
 import { checkSDAge, handleTimelineViolation, formatBlockMessage } from './modules/governance/timeline-violation-handler.js';
 import {
@@ -1505,6 +1509,20 @@ async function main() {
     await releaseClaimOnWorktreeFailure('resolution');
     process.exit(1);
   }
+
+  // 4.7. SD-LEO-INFRA-SD-START-STALE-BASE-WARN-001: stale-base guard.
+  // The worktree resolved successfully — now check whether its base is BEHIND origin/main. Building
+  // on a stale base risks a merge-as-is reverting sibling work (esp. deletions) that landed after the
+  // base commit. Warn-by-default with the safe remedy; opt-in auto-rebase via --rebase-base /
+  // SD_START_AUTO_REBASE. Fail-open: the guard never throws / never blocks the claim.
+  try {
+    const wtCwd = worktreeInfo?.cwd || worktreeInfo?.worktree?.path || null;
+    if (wtCwd) {
+      const autoRebase = process.argv.includes('--rebase-base')
+        || ['1', 'true', 'on'].includes(String(process.env.SD_START_AUTO_REBASE || '').toLowerCase());
+      runStaleBaseGuard({ cwd: wtCwd, autoRebase });
+    }
+  } catch { /* fail-open: a stale-base check must never block sd-start */ }
 
   // 4.9. SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Pre-claim health check
   // Verify handoff chain integrity before proceeding
