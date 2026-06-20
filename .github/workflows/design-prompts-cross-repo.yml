@@ -11,9 +11,11 @@ name: Design Prompts Cross-Repo Parity
 # (the QF/PR #3941 class of drift). The twin workflow lives in rickfelix/ehg and
 # triggers on the frontend copy.
 #
-# ADVISORY: continue-on-error: true. Flip to blocking (remove that line + add
-# "Design Prompts Cross-Repo Parity" to required status checks) in a 1-line
-# follow-up once the false-positive rate is confirmed ~0.
+# ADVISORY (content divergence only): the DIVERGENCE compare is advisory at the
+# STEP level (continue-on-error on the compare step). A configured-token cross-repo
+# checkout FAILURE is now BLOCKING (SD-LEO-INFRA-CROSSREPO-DRIFT-GUARDS-EHG-PAT-001 FR-3
+# removed the job-level continue-on-error). To make divergence itself blocking, drop
+# the compare step's continue-on-error + add this workflow to required status checks.
 
 on:
   pull_request:

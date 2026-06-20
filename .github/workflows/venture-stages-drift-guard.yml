@@ -12,9 +12,11 @@ name: Venture Stages Drift Guard
 # on-disk existence in the checked-out ehg sibling. It runs on PRs/pushes that
 # touch the generator, the committed stage-config.js, or this workflow.
 #
-# ADVISORY: continue-on-error: true. Flip to blocking (remove that line + add
-# "Venture Stages Drift Guard" to required status checks) in a 1-line follow-up
-# once the false-positive rate is confirmed ~0. Modeled on
+# ADVISORY (content drift only): the DRIFT compare is advisory at the STEP level
+# (continue-on-error on the drift_check step). A configured-token cross-repo checkout
+# FAILURE is now BLOCKING (SD-LEO-INFRA-CROSSREPO-DRIFT-GUARDS-EHG-PAT-001 FR-3 removed
+# the job-level continue-on-error). To make drift itself blocking, drop the drift_check
+# step's continue-on-error + add this workflow to required status checks. Modeled on
 # .github/workflows/design-prompts-cross-repo.yml + schema-drift-guard.yml.
 
 on:
