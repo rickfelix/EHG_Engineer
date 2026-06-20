@@ -698,7 +698,45 @@ When the user mentions any of these phrases, suggest `/coordinator`:
 
 ---
 
+## Sourcing engine + Roadmap-SSOT awareness (belt-low FIRST-CHECK)
+
+> **SD-LEO-INFRA-COORDINATOR-SOURCING-ENGINE-AWARENESS-001.** This complements — does not restate —
+> the charter's belt-low→ask-Adam duty (canonical in `CLAUDE_COORDINATOR.md`). It defines the
+> decision path the coordinator runs *before* a manual hand-ask.
+
+**You have a sourcing engine.** The sourcing-engine SD family (10/10 children, shipped) plus the
+`roadmap_wave_items` SSOT and the rung roadmap already exist to keep the belt fed *automatically*.
+Perpetual manual backfill (reflexively pinging Adam to hand-source candidates every time the belt
+dips) is the **anti-pattern** — it means the engine is idle while you do its job by hand.
+
+**On belt-low, the FIRST check is the engine, NOT a hand-ask to Adam:**
+1. **Engine activation-flag state** — are the `SOURCING_*` flags on? (`SOURCING_GAUGE_GAP_MINER_V1`,
+   `SOURCING_DEFERRED_WATCHER_V1`, …). The canonical list + the reader live in
+   `scripts/lib/sourcing-engine-awareness.mjs` (`readSourcingEngineFlags`).
+2. **Unpromoted roadmap depth** — how many `roadmap_wave_items` have `promoted_to_sd_key IS NULL`?
+   A rich unpromoted backlog with the engine OFF is the tell.
+3. **Remediation order:**
+   - **Engine DORMANT + rich backlog** → the fix is to **PROPOSE/co-sponsor ACTIVATION** (flip the
+     flags + apply the dormant migrations) and/or **Wave-0 distillation**, escalating to the
+     chairman — *not* a manual source ask.
+   - **Engine ON + backlog** → let the engine promote/distill; give it a tick before hand-asking.
+   - **Engine ON + 0 unpromoted** → belt-low is genuine worker demand or a genuinely empty backlog;
+     *now* a targeted Adam source ask (weakest-capability shortlist) is appropriate.
+
+**Where this surfaces automatically:** the capacity forecaster
+(`scripts/coordinator-capacity-forecast.mjs`) prints a `SOURCING:` line every run and embeds the
+same engine-state framing in its DEFICIT verdict and in the `[COORD->ADAM]` belt-low ping body
+(`SOURCING ENGINE FIRST-CHECK: …`), plus `engine_on=`/`unpromoted=` on the machine-readable `GAUGE`
+line. So a DEFICIT reads *"engine OFF, N unpromoted → activate/distill"* — not just *"source N
+candidates"*. Read that line before acting on any belt-low signal.
+
+---
+
 ## Adam advisory lane (read + reply)
+
+> **Before a belt-low source ask to Adam:** run the *Sourcing engine + Roadmap-SSOT awareness*
+> FIRST-CHECK above (engine flag state + unpromoted roadmap depth). If the engine is dormant with a
+> rich backlog, the remediation is activation/distillation — not a manual hand-ask.
 
 Adam advisories are `session_coordination` `INFO` rows (`payload.kind=adam_advisory`), **retired
 ONLY by `payload.actioned_at`** (`read_at` = delivered, not actioned). The coordinator-startup

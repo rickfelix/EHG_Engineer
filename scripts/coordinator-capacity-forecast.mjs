@@ -37,6 +37,10 @@ import { isExcludedFromBelt } from '../lib/coordinator/sd-exclusion.mjs';
 // fleet-dashboard.cjs on coordinator/adam/non_fleet/fixture exclusion) and ADDS a released-status
 // guard (FR-2; the forecaster is deliberately stricter than the dashboard on status).
 import { isLiveCountableWorker } from './lib/live-countable-worker.mjs';
+// SD-LEO-INFRA-COORDINATOR-SOURCING-ENGINE-AWARENESS-001 (FR-2): surface the sourcing-engine
+// flag state + unpromoted roadmap depth so a belt-low/DEFICIT ping says "engine OFF, N unpromoted
+// -> activate/distill" instead of only "source N candidates" (manual backfill is the anti-pattern).
+import { readSourcingEngineFlags, formatSourcingAwareness } from './lib/sourcing-engine-awareness.mjs';
 // SD-LEO-INFRA-CAPACITY-FORECAST-STALLED-BELT-EMPTY-FP-001: an idle worker is STALLED only when
 // its loop isn't claiming DESPITE available work — gate the stall label on belt depth, not heartbeat
 // age alone, so an empty-belt idle worker isn't a false-positive STALLED.
@@ -203,7 +207,15 @@ async function main() {
   }
   console.log(`  BELT: ${beltDepth} claimable (${claimable.length} SD + ${openQfCount} QF)  |  DEMAND(soon): ${demandSoon} (idle ${idleNow} + freeing-soon ${freeingSoon})  |  buffer ${BELT_BUFFER}`);
   if (claimable.length) console.log(`        claimable SDs: ${claimable.map(d => d.sd_key.replace('SD-LEO-INFRA-', '')).join(', ')}`);
-  console.log(`  VERDICT: ${verdict}` + (deficit > 0 ? `  → belt short by ${deficit} — SOURCE AHEAD (reach Adam)` : ''));
+
+  // SD-LEO-INFRA-COORDINATOR-SOURCING-ENGINE-AWARENESS-001 (FR-2): sourcing-engine awareness — flag
+  // state + unpromoted roadmap depth so belt-low is read as "activate/distill" before "hand-ask Adam".
+  const sourcingFlags = readSourcingEngineFlags(process.env);
+  const unpromotedCount = await countUnpromotedRoadmapItems(sb);
+  const awareness = formatSourcingAwareness({ flags: sourcingFlags, unpromotedCount });
+  console.log(`  SOURCING: ${awareness.line}`);
+
+  console.log(`  VERDICT: ${verdict}` + (deficit > 0 ? `  → belt short by ${deficit} — ${awareness.recommendation}` : ''));
 
   // ── proactive Adam reach-out on a forecast deficit ──
   if (verdict.startsWith('DEFICIT')) {
@@ -214,14 +226,30 @@ async function main() {
     } else if (since < cooldownMin) {
       console.log(`  ACTION: deficit, but Adam was pinged ${since.toFixed(0)}m ago (< ${cooldownMin}m cooldown) — holding.`);
     } else {
-      const sent = await reachAdam({ verdict, beltDepth, demandSoon, idleNow, freeingSoon, deficit, claimable, rows });
+      const sent = await reachAdam({ verdict, beltDepth, demandSoon, idleNow, freeingSoon, deficit, claimable, rows, awareness });
       if (sent) { writeCooldown(); console.log('  ACTION: ✅ sourcing request dispatched to Adam (cooldown started).'); }
       else console.log('  ACTION: ⚠ no live Adam session found to reach — surface to operator.');
     }
   }
 
-  // machine-readable last line for the cron/log
-  console.log(`  GAUGE belt=${beltDepth} idle=${idleNow} freeing_soon=${freeingSoon} demand=${demandSoon} deficit=${Math.max(0, deficit)} verdict=${verdict}`);
+  // machine-readable last line for the cron/log (+ sourcing-engine awareness fields, FR-2)
+  console.log(`  GAUGE belt=${beltDepth} idle=${idleNow} freeing_soon=${freeingSoon} demand=${demandSoon} deficit=${Math.max(0, deficit)} verdict=${verdict} engine_on=${awareness.anyOn} unpromoted=${awareness.countStr}`);
+}
+
+// SD-LEO-INFRA-COORDINATOR-SOURCING-ENGINE-AWARENESS-001 (FR-2): unpromoted roadmap depth.
+// Unpromoted = roadmap_wave_items with promoted_to_sd_key IS NULL (mirrors scripts/roadmap-status.js).
+// Fail-soft: any error (table absent/unreadable) → null ("unknown"), never throws or blocks the forecast.
+async function countUnpromotedRoadmapItems(client) {
+  try {
+    const { count, error } = await client
+      .from('roadmap_wave_items')
+      .select('id', { count: 'exact', head: true })
+      .is('promoted_to_sd_key', null);
+    if (error) return null;
+    return typeof count === 'number' ? count : null;
+  } catch {
+    return null;
+  }
 }
 
 function readCooldown() {
@@ -246,18 +274,22 @@ async function reachAdam(f) {
     `[COORD->ADAM] PREDICTIVE belt-low (capacity forecaster). Verdict=${f.verdict}.`,
     `Belt=${f.beltDepth} claimable vs demand(soon)=${f.demandSoon} (idle ${f.idleNow} + freeing-soon ${f.freeingSoon}) → short by ${f.deficit}.`,
     `Claimable now: ${f.claimable.map(d => d.sd_key.replace('SD-LEO-INFRA-', '')).join(', ') || 'NONE'}. Idle/at-risk workers: ${idleList}.`,
+    // SD-LEO-INFRA-COORDINATOR-SOURCING-ENGINE-AWARENESS-001 (FR-2): surface the engine state FIRST so
+    // the ask is "activate/distill the engine/roadmap" when it's dormant-with-backlog, NOT perpetual
+    // manual sourcing (the anti-pattern). The engine (10/10 children) + roadmap_wave_items are the SSOT.
+    f.awareness ? `SOURCING ENGINE FIRST-CHECK: ${f.awareness.line}` : '',
     // SD-LEO-INFRA-ADAM-DURABLE-SOURCE-TRIGGER-001 (FR-3): retarget the belt-low ask at the
     // VISION-ALIGNED weakest capabilities (read the per-capability gauge + mine the dispositioned
     // estate) instead of generic harness-backlog grooming.
-    `Per protocol I'm reaching out BEFORE the belt empties. Please READ the per-capability vision gauge + MINE the dispositioned estate for the WEAKEST capabilities, then propose a shortlist of CONFLICT-FREE, non-gated, draft-ready SD candidates that move those weakest capabilities forward (NOT generic harness-backlog grooming), propose-only; I'll dispatch. Dedup vs in-flight + SD-LEO-INFRA-SWEEP-CLAIM-SAFETY-001.`,
+    `If the engine is dormant while the roadmap is rich, the remediation is to PROPOSE/co-sponsor ACTIVATION (flip the SOURCING_* flags + apply dormant migrations) and/or Wave-0 distillation, escalating to the chairman — before any manual backfill. Otherwise: READ the per-capability vision gauge + MINE the dispositioned estate for the WEAKEST capabilities, then propose a shortlist of CONFLICT-FREE, non-gated, draft-ready SD candidates that move those weakest capabilities forward (NOT generic harness-backlog grooming), propose-only; I'll dispatch. Dedup vs in-flight + SD-LEO-INFRA-SWEEP-CLAIM-SAFETY-001.`,
     `Reply via adam-advisory (correlation ${correlation_id}).`,
-  ].join('\n');
+  ].filter(Boolean).join('\n');
   const res = await insertCoordinationRow(sb, {
     message_type: 'INFO',
     sender_session: process.env.CLAUDE_SESSION_ID,
     target_session: adamId,
     subject: `[COORD->ADAM] PREDICTIVE source_work — belt short by ${f.deficit} (${f.verdict})`,
-    payload: { kind: 'coordinator_request', topic: 'source_work', expects_reply: true, correlation_id, body, forecast: { belt: f.beltDepth, demand: f.demandSoon, deficit: f.deficit, verdict: f.verdict } },
+    payload: { kind: 'coordinator_request', topic: 'source_work', expects_reply: true, correlation_id, body, forecast: { belt: f.beltDepth, demand: f.demandSoon, deficit: f.deficit, verdict: f.verdict, sourcing_engine_on: f.awareness ? f.awareness.anyOn : null, unpromoted_roadmap_items: f.awareness ? f.awareness.countStr : null } },
   });
   return !res.error;
 }
