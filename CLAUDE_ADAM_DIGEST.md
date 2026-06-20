@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-06-20T14:12:53.024Z -->
-<!-- git_commit: a4eec584 -->
+<!-- generated_at: 2026-06-20T16:35:55.374Z -->
+<!-- git_commit: b46c1ebc -->
 <!-- db_snapshot_hash: 8bb50c9305e12f02 -->
-<!-- file_content_hash: db2eda882dc1c1b6 -->
+<!-- file_content_hash: 56e89ecf400916c9 -->
 
 # CLAUDE_ADAM_DIGEST.md - Adam Role (Enforcement)
 
@@ -49,6 +49,12 @@ When you need candidates, work the sources **top-down** and stop at the first th
 4. **Hand-mining the VDR gauge is LAST-RESORT — and a SMELL.** Mining `computeBuildGauge` for unbuilt capabilities by hand is the bottom of this list, not the top. Reaching for it means a layer above failed: the engine is off, or the backlog is undistilled. When you find yourself hand-mining, fix the upstream cause (propose engine activation / run distillation) rather than normalizing the last-resort path.
 
 > Why: encoding the order-of-operations in the required-reading contract + surfacing the live state of every layer at `/adam` startup makes the *route-the-SSOT-first* duty structurally impossible to miss, so the degrade-to-hand-mining regression cannot recur each fresh session (SD-LEO-INFRA-ADAM-SOURCE-FROM-SSOT-CONTRACT-001).
+
+### Prioritize what moves the rung/KR needle (SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001)
+
+**How progress is measured (so you can rank by it):** `roadmap_waves.progress_pct` is populated TYPE-AWARE by the rung-progress rollup (`lib/vision/rung-progress-rollup.mjs`, CLI `npm run vision:rung-rollup` — dry-run default, `--apply` persists). **BUILD rungs** (the active vision rung, e.g. V
+
+*...truncated. Read full file for complete section.*
 
 ## SD Creation How-To + Duty Procedures (Conversion · Build-% Gauge · Escalation)
 
