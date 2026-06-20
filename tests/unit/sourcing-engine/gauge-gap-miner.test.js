@@ -21,11 +21,14 @@ import {
   VDR_GAUGE_SOURCE_TYPE,
 } from '../../../lib/sourcing-engine/gauge-gap-miner.js';
 import { stampCandidate } from '../../../lib/sourcing-engine/dedup-autostamp.js';
+import { validate as uuidValidate } from 'uuid';
 
 /**
- * Schema-aware Supabase mock — models the REAL roadmap_wave_items columns (source_type, source_id,
- * title, promoted_to_sd_key, metadata, lane) so a column-name drift would surface (the target_rung-vs-
- * rung lesson). Tracks inserts so STAGED-only + dormant-safe can be asserted.
+ * Schema-aware AND TYPE-aware Supabase mock — models the REAL roadmap_wave_items columns (source_type,
+ * source_id, title, promoted_to_sd_key, metadata, lane) AND enforces that source_id is a valid UUID
+ * (the live column is UUID-typed; a non-UUID 22P02-throws — the activation-lethal bug class the
+ * adversarial review caught, mirroring the target_rung-vs-rung lesson). Tracks inserts so STAGED-only +
+ * dormant-safe can be asserted.
  */
 function makeSupabaseMock({ laneColumnExists = true, sds = [], waveResolvable = true, existingStaged = [], insertError = null } = {}) {
   const inserts = [];
@@ -40,6 +43,10 @@ function makeSupabaseMock({ laneColumnExists = true, sds = [], waveResolvable = 
       order() { return b; },
       insert(payload) {
         if (insertError) return Promise.resolve({ data: null, error: insertError });
+        // TYPE-aware: the live source_id column is UUID — reject a non-UUID exactly as Postgres would.
+        if (table === 'roadmap_wave_items' && payload && payload.source_id != null && !uuidValidate(payload.source_id)) {
+          return Promise.resolve({ data: null, error: { code: '22P02', message: `invalid input syntax for type uuid: "${payload.source_id}"` } });
+        }
         inserts.push(payload);
         return Promise.resolve({ data: [payload], error: null });
       },
@@ -97,7 +104,9 @@ describe('FR-2: gapToCandidate routing', () => {
   it('a buildable gap carries no authority (belt-ready residual)', () => {
     const c = gapToCandidate({ capability: 'Build a thing', nature: 'buildable' }, { activeRungKey: 'V1' });
     expect(c.authority).toBeNull();
-    expect(c.source_id).toBe('vdr:Build a thing');
+    // source_id must be a valid UUID (the live column is UUID-typed), deterministic per capability.
+    expect(uuidValidate(c.source_id)).toBe(true);
+    expect(c.source_id).toBe(gaugeGapSourceId('Build a thing'));
     expect(c.rung).toBe('V1');
     expect(c.disposition).toBe('BUILD');
   });
@@ -144,6 +153,10 @@ describe('FR-1/2/4: mineGaugeGaps runner (live-ish, dry-run)', () => {
     for (const row of supabase._inserts) {
       expect(row.promoted_to_sd_key).toBeNull();
       expect(row.metadata.sourcing_stage).toBe('staged');
+      // Activation-safe: source_id is a valid UUID (the mock 22P02-rejects a non-UUID), and the
+      // human-readable key is preserved in metadata.source_label.
+      expect(uuidValidate(row.source_id)).toBe(true);
+      expect(row.metadata.source_label).toBe(`vdr:${row.metadata.capability}`);
     }
     const lanes = supabase._inserts.map((r) => r.lane).sort();
     expect(lanes).toEqual(['belt-ready', 'chairman-gated']);
