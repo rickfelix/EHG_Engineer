@@ -61,6 +61,34 @@ describe('computeForecast (FR-1)', () => {
   });
 });
 
+describe('confidence is horizon-capped (ADV-2)', () => {
+  it('a far-out queue-covered ETA does NOT report high confidence', () => {
+    // 1 completion/14d window projected far out: queue covers it, but the horizon is long.
+    const f = computeForecast({ buildPct: 20, buildableRemaining: 20, velocityPerDay: 0.1, sourcingPerDay: 0, queueDepth: 50, capsPerCompletion: 1, nowMs: NOW });
+    expect(f.etaDays).toBeGreaterThan(120);
+    expect(f.confidence).not.toBe('high');
+  });
+});
+
+describe('learned caps-per-completion is clamped (ADV-1 drift guard)', () => {
+  it('EWMA never drifts above the band over many up-nudges', () => {
+    let c = 1;
+    for (let n = 0; n < 200; n++) c = adjustLearnedRate(c, c * 1.1, 0.3); // sustained "faster than forecast"
+    expect(c).toBeLessThanOrEqual(5);
+    expect(c).toBeGreaterThanOrEqual(0.2);
+  });
+  it('EWMA never drifts below the band over many down-nudges', () => {
+    let c = 1;
+    for (let n = 0; n < 200; n++) c = adjustLearnedRate(c, c * 0.9, 0.3);
+    expect(c).toBeGreaterThanOrEqual(0.2);
+  });
+  it('computeForecast clamps an absurd injected capsPerCompletion', () => {
+    const f = computeForecast({ buildPct: 50, buildableRemaining: 10, velocityPerDay: 1, queueDepth: 50, capsPerCompletion: 999, nowMs: NOW });
+    // clamped to 5 → 10 caps / (1×5)/day = 2 days, not ~0.
+    expect(f.etaDays).toBeCloseTo(2, 5);
+  });
+});
+
 describe('scoreForecastError (FR-3)', () => {
   it('no prior → no_prior kind', () => {
     expect(scoreForecastError(null, { nowMs: NOW, buildPct: 50 }).kind).toBe('no_prior');
