@@ -28,7 +28,7 @@ const TERMINAL_DISPOSITIONS = ['built', 'already_covered', 'duplicate', 'decline
 async function loadSources(db) {
   // 1. conversion_ledger — undispositioned backlog
   const { data: ledger } = await db.from('conversion_ledger')
-    .select('id,source_pool,source_id,source_external_id,title,target_rung,dedup_match_sd_key,disposition')
+    .select('id,source_pool,source_id,source_external_id,title,description,target_rung,dedup_match_sd_key,disposition')
     .is('disposition', null).limit(2000);
   // 2. Wave-6 (highest-rank wave of the LEO Roadmap) — already-staged items, enumerated for the report
   let wave6 = [];
@@ -45,7 +45,7 @@ async function loadSources(db) {
     }
   } catch { /* fail-soft: wave6 stays empty */ }
   // 3. deferred V2 cluster
-  const { data: deferred } = await db.from('strategic_directives_v2').select('id,sd_key,title,status,metadata').eq('status', 'deferred').limit(500);
+  const { data: deferred } = await db.from('strategic_directives_v2').select('id,sd_key,title,description,status,metadata').eq('status', 'deferred').limit(500);
   // 4. harness backlog (exclude auto-capture noise)
   const { data: backlogRaw } = await db.from('feedback').select('id,title,description,status,category,sd_id,metadata').eq('category', 'harness_backlog').eq('status', 'new').limit(1000);
   const backlog = (backlogRaw || []).filter((r) => !(r.metadata && r.metadata.flag_class) && !/^(Completion flag|Fleet retro|Coordinator review)/i.test(r.title || ''));
@@ -75,8 +75,10 @@ export async function fetchAllRows(db, table, select, pageSize = 1000) {
 
 async function loadContext(db) {
   // Load EVERY SD (paginated) so dedup matches against the full corpus, not just the first 1000.
-  const sds = await fetchAllRows(db, 'strategic_directives_v2', 'sd_key,title,status');
-  const existing = sds.map((s) => ({ sd_key: s.sd_key, title: s.title }));
+  // SD-LEO-INFRA-SOURCING-DEDUP-SEMANTIC-001: also load description so findDedupMatch's semantic
+  // problem-key path can catch problem-phrased restatements (not just title matches).
+  const sds = await fetchAllRows(db, 'strategic_directives_v2', 'sd_key,title,description,status');
+  const existing = sds.map((s) => ({ sd_key: s.sd_key, title: s.title, description: s.description }));
   const shippedInfraKeys = sds.filter((s) => s.status === 'completed').map((s) => s.sd_key);
   // outcomeRealizedKeys left empty = the SAFE direction (a shipped-but-unrealized SD re-emits; never falsely closes work).
   return { existing, inFlight: [], shippedInfraKeys, outcomeRealizedKeys: [] };
