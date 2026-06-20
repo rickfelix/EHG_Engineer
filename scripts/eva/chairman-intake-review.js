@@ -24,6 +24,7 @@
 
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
+import { pathToFileURL } from 'url';
 
 dotenv.config();
 
@@ -72,7 +73,29 @@ async function getUnreviewedItems() {
     console.error('Error fetching items:', error.message);
     return [];
   }
-  return data || [];
+  return (data || []).map((it) => ({ ...it, _source: 'eva_todoist_intake' }));
+}
+
+/**
+ * Find unreviewed YouTube intake (SD-LEO-INFRA-DISTILL-YT-REVIEW-GAP-AND-BACKLOG-CLEAR-001 FR-1).
+ * The /distill spec already assumes YouTube items appear in the chairman B1 review (Phase 2b's
+ * clickable-link handling), but the review query omitted them. Surface classified (classified_at set)
+ * + unreviewed eva_youtube_intake rows alongside Todoist. Each row is tagged _source so
+ * storeReviewDecision stamps the correct table.
+ */
+async function getUnreviewedYoutubeItems() {
+  const { data, error } = await supabase
+    .from('eva_youtube_intake')
+    .select('id, title, description, youtube_video_id, target_application, target_aspects, chairman_intent, enrichment_summary, classification_confidence, classified_at')
+    .not('classified_at', 'is', null)
+    .is('chairman_reviewed_at', null)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching YouTube items:', error.message);
+    return [];
+  }
+  return (data || []).map((it) => ({ ...it, _source: 'eva_youtube_intake' }));
 }
 
 /**
@@ -103,7 +126,9 @@ function formatItemForReview(item, index, total) {
     '',
   ];
 
+  // Source link is polymorphic: Todoist items carry todoist_url; YouTube items carry youtube_video_id.
   if (item.todoist_url) lines.push(`**Source:** ${item.todoist_url}`);
+  else if (item.youtube_video_id) lines.push(`**Source:** https://www.youtube.com/watch?v=${item.youtube_video_id}`);
   if (item.target_application) lines.push(`**Application:** ${item.target_application}`);
   if (item.target_aspects) {
     const aspects = Array.isArray(item.target_aspects) ? item.target_aspects.join(', ') : item.target_aspects;
@@ -148,9 +173,9 @@ function inferAIRecommendation(item) {
   return 'Research';
 }
 
-async function storeReviewDecision(itemId, intent, reviewMethod = 'auto') {
+async function storeReviewDecision(itemId, intent, reviewMethod = 'auto', sourceTable = 'eva_todoist_intake') {
   if (dryRun) {
-    console.log(`  [DRY RUN] Would stamp reviewed (${reviewMethod}) for item ${itemId} [intent=${intent}]`);
+    console.log(`  [DRY RUN] Would stamp reviewed (${reviewMethod}) for item ${itemId} [intent=${intent}, table=${sourceTable}]`);
     return true;
   }
 
@@ -158,8 +183,9 @@ async function storeReviewDecision(itemId, intent, reviewMethod = 'auto') {
   // stamp chairman_reviewed_at and set status=processed so the post-processor can find it.
   // The action-intent mapping (idea→build, etc.) is derived at query time via CAPTURE_TO_ACTION_MAP.
   // SD-LEO-FIX-DISTILL-ORPHAN-RECOVERY-001: status must be 'processed' or post-processor query misses it.
+  // SD-LEO-INFRA-DISTILL-YT-REVIEW-GAP-...: sourceTable routes the stamp to the correct intake table.
   const { error } = await supabase
-    .from('eva_todoist_intake')
+    .from(sourceTable)
     .update({
       chairman_reviewed_at: new Date().toISOString(),
       status: 'processed',
@@ -233,7 +259,11 @@ async function main() {
     console.log(`  ✅ Recovered ${recovered}/${orphans.length} orphan(s) → status=processed`);
   }
 
-  const items = await getUnreviewedItems();
+  // FR-1: surface BOTH Todoist and YouTube intake so YouTube playlist videos reach the chairman review.
+  const todoistItems = await getUnreviewedItems();
+  const youtubeItems = await getUnreviewedYoutubeItems();
+  const items = [...todoistItems, ...youtubeItems];
+  if (youtubeItems.length > 0) console.log(`  (${todoistItems.length} Todoist + ${youtubeItems.length} YouTube)`);
 
   if (items.length === 0) {
     console.log('  No unreviewed enriched items found. Skipping review step.');
@@ -255,6 +285,7 @@ async function main() {
       captureIntent: item.chairman_intent,
       mappedActionIntent: mapCaptureToActionIntent(item.chairman_intent),
       title: item.title,
+      sourceTable: item._source || 'eva_todoist_intake',
     }));
 
     console.log('REVIEW_ITEMS_START');
@@ -279,7 +310,7 @@ async function main() {
     const captureIntent = item.chairman_intent || 'question';
     const actionIntent = mapCaptureToActionIntent(captureIntent);
 
-    const ok = await storeReviewDecision(item.id, actionIntent, 'auto');
+    const ok = await storeReviewDecision(item.id, actionIntent, 'auto', item._source || 'eva_todoist_intake');
     if (ok) {
       decisions.push({ intent: captureIntent, actionIntent });
       stored++;
@@ -309,6 +340,7 @@ async function main() {
 // Export for programmatic use
 export {
   getUnreviewedItems,
+  getUnreviewedYoutubeItems,
   getOrphanedItems,
   formatItemForReview,
   buildIntentOptions,
@@ -320,7 +352,11 @@ export {
   CAPTURE_TO_ACTION_MAP,
 };
 
-main().catch(err => {
-  console.error('Chairman review error:', err.message);
-  process.exit(1);
-});
+// Only run main() when invoked as a CLI — not when imported (e.g. by unit tests or the pipeline).
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  main().catch(err => {
+    console.error('Chairman review error:', err.message);
+    process.exit(1);
+  });
+}
