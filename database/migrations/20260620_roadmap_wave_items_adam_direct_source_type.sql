@@ -1,4 +1,8 @@
 -- SD-LEO-INFRA-SOURCING-ENGINE-ADAM-DIRECT-REGISTRY-001 (FR-2 enabler)
+-- @approved-by: codestreetlabs@gmail.com
+-- Prod-apply approval (additive-only) stamped during SD-LEO-INFRA-SOURCING-ENGINE-ACTIVATION-001
+-- go-live, chairman-authorized 2026-06-20. Additive CHECK widen; reversible. APPLY BEFORE the
+-- vdr_gauge widening (this array omits vdr_gauge; vdr_gauge migration carries the full set).
 -- DORMANT (TIER-2): extend roadmap_wave_items.source_type CHECK to admit 'adam_direct', so
 -- Adam-direct candidates + ghost-backfill rows can be registered. ADDITIVE + REVERSIBLE (widening a
 -- CHECK never invalidates existing rows). Workers do NOT self-apply: Adam applies under the

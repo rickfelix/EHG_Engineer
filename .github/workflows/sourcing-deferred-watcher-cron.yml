@@ -1,0 +1,62 @@
+name: "Sourcing deferred-watcher (cron)"
+
+# SD-LEO-INFRA-SOURCING-ENGINE-ACTIVATION-001 (FR-3)
+#
+# Activates the sourcing-engine deferred/blocked-on watcher (child 8/10). Re-evaluates
+# conversion_ledger candidates parked in a 'blocked-on-X' lane and re-routes them (advisory lane
+# UPDATE only — never creates an SD, never promotes to belt) once their blocker clears. Gated by the
+# SOURCING_DEFERRED_WATCHER_V1 flag (set ON here). Idempotent + fail-soft; concurrency cancels an
+# in-flight run. KILL-SWITCH: set the env flag to 'off' (or disable this workflow) to revert.
+
+on:
+  schedule:
+    # Every 6 hours at :23 (offset from other crons; advisory lane re-eval needs no high cadence).
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (preview only, no lane writes)"
+        required: false
+        default: "false"
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  watch:
+    name: Re-evaluate blocked-on sourcing candidates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # FR-3 activation flag (kill-switch: set to 'off' to revert).
+      SOURCING_DEFERRED_WATCHER_V1: 'on'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run deferred-watcher sweep
+        run: |
+          ARGS=""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS="--dry-run"
+          fi
+          node scripts/sourcing-engine-deferred-watcher-sweep.mjs $ARGS

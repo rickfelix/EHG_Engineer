@@ -1,0 +1,65 @@
+name: "Sourcing gauge-gap miner (cron)"
+
+# SD-LEO-INFRA-SOURCING-ENGINE-ACTIVATION-001 (FR-3)
+#
+# Activates the sourcing-engine VDR gauge-gap miner (child 10/10). Mines unbuilt/partial active-rung
+# capabilities from computeBuildGauge and STAGES them as roadmap_wave_items candidates
+# (item_disposition='pending', source_type='vdr_gauge') — it NEVER promotes to belt and NEVER creates
+# an SD (promotion stays the separate leo-create-sd --from-roadmap-item step). Gated by the
+# SOURCING_GAUGE_GAP_MINER_V1 flag (set ON here); runs --apply (the dormant additive migrations —
+# lane column + vdr_gauge source_type CHECK — are applied, so staging is live). Dormant-safe: forces
+# dry-run if either migration is missing. KILL-SWITCH: set the env flag to 'off' (or disable this
+# workflow) to revert; staged rows are idempotent on (wave_id, source_type, source_id).
+
+on:
+  schedule:
+    # Daily at 06:41 UTC (offset from other crons; gauge gaps change slowly).
+    - cron: '41 6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (preview only, no staging writes)"
+        required: false
+        default: "false"
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  mine:
+    name: Mine VDR gauge gaps into staged roadmap items
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # FR-3 activation flag (kill-switch: set to 'off' to revert).
+      SOURCING_GAUGE_GAP_MINER_V1: 'on'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run gauge-gap miner sweep
+        run: |
+          ARGS="--apply"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS=""
+          fi
+          node scripts/sourcing-engine/gauge-gap-miner-sweep.mjs $ARGS
