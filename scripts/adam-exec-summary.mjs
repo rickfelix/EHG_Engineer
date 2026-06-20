@@ -25,6 +25,8 @@ import { renderDecisionLines, prepareDecisions, DEAD_VENTURE_STATUSES } from '..
 import { computeBuildGauge, formatGaugeForSummary } from '../lib/vision/vdr-registry.js';
 // SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-E (FR-4): rung/KR rollup → email, in lockstep
 import { runRollup } from '../lib/vision/rung-progress-rollup.mjs';
+// SD-LEO-INFRA-BUILD-COMPLETION-FORECAST-001 (FR-4): one-line infra-build completion ETA
+import { formatForecastLine } from '../lib/vision/build-completion-forecast.mjs';
 import { formatRungRollupLine } from '../lib/fleet/exec-email-rung-rollup.js';
 // SD-LEO-INFRA-VDR-GREP-SEAM-CROSSREPO-001: the shared code-grep seam so the 5 code_grep probes resolve
 // (the chairman-visible gauge measures all 11 capabilities, not just the 6 DB/KR-backed ones).
@@ -165,6 +167,20 @@ try {
   visNote = `(gauge unavailable ${EM} compute error)`;
 }
 
+// SD-LEO-INFRA-BUILD-COMPLETION-FORECAST-001 (FR-4): ONE line — the infra-build completion ETA from
+// the latest persisted forecast run (build_completion_forecast_log), with the delta vs the prior run.
+// Fail-soft: a dormant table / no runs / any error → the line is omitted, NEVER blocks the email.
+let forecastLine = '';
+try {
+  const { data: fc, error } = await db.from('build_completion_forecast_log')
+    .select('plateau, build_pct, binding_constraint, eta_days, eta_date, confidence, note')
+    .order('measured_at', { ascending: false }).limit(2);
+  if (!error && Array.isArray(fc) && fc[0]) {
+    const toF = (r) => r && ({ plateau: r.plateau, buildPct: r.build_pct, bindingConstraint: r.binding_constraint, etaDays: r.eta_days, etaDateIso: r.eta_date, confidence: r.confidence, note: r.note });
+    forecastLine = formatForecastLine(toF(fc[0]), toF(fc[1]));
+  }
+} catch (e) { console.warn('[adam-email] build-completion forecast line skipped (fail-soft): ' + (e?.message || e)); }
+
 // FR-4 (SD-LEO-INFRA-ADAM-SELF-AUDIT-RESOLVERS-001): write a DURABLE 'Adam read the vision gauge'
 // marker so the self-adherence audit can measure the vision-monitoring duty. Best-effort + fail-soft:
 // a write failure NEVER blocks the email, and a SKIP in dry-run keeps dry-runs side-effect-free. Only
@@ -259,6 +275,7 @@ const text = [
   ...(rungNatureLine ? ['   ' + rungNatureLine] : []),
   ...(rungLine ? ['   ' + rungLine] : []),
   ...(rungRollupLine ? ['   ' + rungRollupLine] : []), // FR-4: per-rung completion rollup (Foundation → revenue)
+  ...(forecastLine ? ['   ' + forecastLine] : []), // BUILD-COMPLETION-FORECAST FR-4: infra-build completion ETA
   ...(operationalLine ? ['   ' + operationalLine] : []),
   ...(layerLine ? ['   ' + layerLine] : []),
   ...(visNote ? ['   ' + visNote] : []),
