@@ -642,6 +642,29 @@ ${rawResponse.substring(0, 1000)}`;
 
     scoreRecord.id = inserted.id;
 
+    // SD-LEO-FEAT-VISION-SCORER-NEVER-001: sync the score back onto the SD's own
+    // strategic_directives_v2.vision_score / vision_score_action columns. The scorer
+    // historically wrote ONLY eva_vision_scores, leaving the SD column null forever —
+    // so the dashboard showed no score and the GATE_VISION_SCORE fast-path (which reads
+    // sd.vision_score first) always missed. Now every successful scoring run populates
+    // the cached column. Non-blocking: a sync failure must never fail the scoring run.
+    if (sdKey) {
+      try {
+        const { error: syncError } = await supabase
+          .from('strategic_directives_v2')
+          .update({
+            vision_score: Math.round(parsed.total_score),
+            vision_score_action: thresholdAction,
+          })
+          .eq('sd_key', sdKey);
+        if (syncError) {
+          console.warn(`[vision-scorer] vision_score sync failed for ${sdKey}: ${syncError.message}`);
+        }
+      } catch (e) {
+        console.warn(`[vision-scorer] vision_score sync threw for ${sdKey}: ${e?.message || e}`);
+      }
+    }
+
     // Publish vision.scored event — notification orchestrator subscribes
     // via event bus (SD-MAN-INFRA-EVENT-BUS-BACKBONE-001).
     // Errors are caught per-subscriber in the event bus; never fail the scoring run.

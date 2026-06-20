@@ -200,13 +200,64 @@ function getDimensionWarnings(dimensionScores) {
 }
 
 /**
+ * SD-LEO-FEAT-VISION-SCORER-NEVER-001: run ONE bounded, awaited vision-score for an
+ * unscored SD right when the gate needs it. The conception-time score (leo-create-sd.js)
+ * and the LEAD-entry async trigger are both fire-and-forget and routinely never complete,
+ * so unscored SDs sat at GATE_VISION_SCORE forever waiting for a human to run the scorer.
+ * This makes the scorer auto-run at the one moment the score is actually required.
+ *
+ * FAIL-OPEN by construction: the scorer is lazy-imported (tests inject deps.scoreSD) and
+ * raced against a timeout; on ANY timeout/error (e.g. no LLM key in CI) it returns null and
+ * the caller falls through to the existing hard block — removing no protection.
+ *
+ * @param {string} sdKey
+ * @param {Object} supabase
+ * @param {Object} [deps] - { scoreSD, timeoutMs } injectable seams for testing
+ * @returns {Promise<Object|null>} the score record ({total_score, threshold_action, dimension_scores}) or null
+ */
+export async function autoScoreUnscoredSD(sdKey, supabase, deps = {}) {
+  if (!sdKey || !supabase) return null;
+  const timeoutMs = Number.isFinite(deps.timeoutMs)
+    ? deps.timeoutMs
+    : Number(process.env.VISION_SCORE_GATE_TIMEOUT_MS) || 120000;
+  const scorer = typeof deps.scoreSD === 'function'
+    ? deps.scoreSD
+    : async (o) => (await import('../../../../../eva/vision-scorer.js')).scoreSD(o);
+  let timer;
+  try {
+    console.log(`   ⏳ No score yet — auto-running vision-scorer for ${sdKey} (bounded ${Math.round(timeoutMs / 1000)}s)…`);
+    // Attach a no-op .catch to the scorer promise so that if it REJECTS after we've already lost the
+    // timeout race (the LLM error arrives past the bound), it never surfaces as an unhandledRejection
+    // (which can crash a process run with --unhandled-rejections=strict). NOTE: the timeout bounds our
+    // WAIT, not the underlying LLM WORK — threading an AbortSignal into scoreSD is a follow-up.
+    const scoring = scorer({ sdKey, supabase, quiet: true });
+    if (scoring && typeof scoring.then === 'function') scoring.catch(() => {});
+    const result = await Promise.race([
+      scoring,
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('vision auto-score timeout')), timeoutMs); }),
+    ]);
+    if (result && typeof result.total_score === 'number') {
+      console.log(`   ✅ Auto-score complete for ${sdKey}: ${Math.round(result.total_score)}/100`);
+      return result;
+    }
+    return null;
+  } catch (e) {
+    console.log(`   ⚠️  Auto-score for ${sdKey} did not complete (${e?.message || e}) — falling through to hard block.`);
+    return null;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/**
  * Validate vision alignment score for the SD (hard enforcement).
  *
  * @param {Object} sd - Strategic Directive (must have sd_key, sd_type)
  * @param {Object} supabase - Supabase client
+ * @param {Object} [deps] - injectable seams (deps.scoreSD, deps.timeoutMs) for the auto-score
  * @returns {Promise<Object>} Gate result — may block (valid: false)
  */
-export async function validateVisionScore(sd, supabase) {
+export async function validateVisionScore(sd, supabase, deps = {}) {
   const sdKey = sd.sd_key || sd.id;
   const sdType = (sd.sd_type || 'unknown').toLowerCase();
   const baseThreshold = SD_TYPE_THRESHOLDS[sdType] ?? SD_TYPE_THRESHOLDS._default;
@@ -277,6 +328,20 @@ export async function validateVisionScore(sd, supabase) {
     } catch (e) {
       // Intentionally suppressed: DB unavailable — proceed to hard block
       console.debug('[VisionScore] DB score lookup suppressed:', e?.message || e);
+    }
+  }
+
+  // ── SD-LEO-FEAT-VISION-SCORER-NEVER-001: auto-run the scorer for an unscored SD ──
+  // If the SD is STILL unscored (the fire-and-forget conception/LEAD-entry scores never
+  // completed), run ONE bounded, awaited score now so the SD never sits at this gate
+  // indefinitely. Fail-open: on timeout/error this returns null and we fall through to the
+  // existing hard block below — no protection is removed.
+  if (visionScore === null && supabase && sdKey) {
+    const auto = await autoScoreUnscoredSD(sdKey, supabase, deps);
+    if (auto && typeof auto.total_score === 'number') {
+      visionScore = auto.total_score;
+      thresholdAction = auto.threshold_action ?? thresholdAction;
+      dimensionScores = auto.dimension_scores ?? dimensionScores;
     }
   }
 

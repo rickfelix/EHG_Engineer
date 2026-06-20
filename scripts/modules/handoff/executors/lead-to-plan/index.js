@@ -85,14 +85,12 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // Surfaces known gaps from prior failed runs so they can be fixed without a full retry cycle.
     await displayTranslationFidelityPreview(sd, this.supabase);
 
-    // SD-LEO-INFRA-SILENT-STALL-PREVENTION-001: opportunistic, FAIL-OPEN, NON-BLOCKING vision-score populate.
-    // If the conception-time async score silently failed, this fires a re-score WITHOUT awaiting it — purely to
-    // raise the pass-rate of the hard createVisionScoreGate below (which is unchanged and remains the safety net).
-    // Import-guarded + fire-and-forget so it can NEVER block this handoff; setup() still returns null regardless.
-    try {
-      const { triggerAsyncVisionScore } = await import('./gates/vision-score-async-trigger.js');
-      triggerAsyncVisionScore(sd, this.supabase);
-    } catch { /* non-blocking: a silent-stall re-score must never affect the LEAD handoff */ }
+    // SD-LEO-INFRA-SILENT-STALL-PREVENTION-001 superseded by SD-LEO-FEAT-VISION-SCORER-NEVER-001:
+    // the old opportunistic fire-and-forget re-score here ran in PARALLEL with the createVisionScoreGate
+    // below, so once the gate began auto-scoring (FR-2) every unscored SD was scored TWICE in one handoff
+    // (two LLM calls, two eva_vision_scores rows, two racing strategic_directives_v2.vision_score writes).
+    // The gate's autoScoreUnscoredSD is now the single, awaited, fail-open authoritative score path, so the
+    // redundant warm-up trigger is removed. createVisionScoreGate remains the hard safety net.
 
     return null;
   }
