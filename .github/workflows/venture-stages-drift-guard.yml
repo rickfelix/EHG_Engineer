@@ -38,7 +38,10 @@ jobs:
   drift:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    continue-on-error: true # ADVISORY; remove this line to make blocking
+    # SD-LEO-INFRA-CROSSREPO-DRIFT-GUARDS-EHG-PAT-001 (FR-3): job-level continue-on-error REMOVED so a
+    # configured-token cross-repo-checkout FAILURE (token lapse/expiry) fails the job and is surfaced —
+    # it green-masked the broken guard for ~12 days. The venture_stages DRIFT result stays advisory at
+    # the STEP level so only a real token regression is blocking, not a content drift.
     steps:
       - name: Checkout EHG_Engineer
         uses: actions/checkout@v4
@@ -55,13 +58,24 @@ jobs:
         with:
           repository: rickfelix/ehg
           path: ehg-sibling
-          token: ${{ secrets.GH_TOKEN_CROSS_REPO || secrets.GITHUB_TOKEN }}
+          # FR-2: fall back to the scoped cross-repo PAT (EHG_RO_PAT), NOT the default GITHUB_TOKEN
+          # (which can't read the private rickfelix/ehg). Mirrors the exec-email cron.
+          token: ${{ secrets.GH_TOKEN_CROSS_REPO || secrets.EHG_RO_PAT }}
           fetch-depth: 1
 
-      - name: Sibling repo unreachable (advisory skip)
+      # FR-3: distinguish "no token configured" (advisory skip) from "token configured but checkout
+      # FAILED" (real regression — fail loud). Secrets mapped to env so a lapse/expiry surfaces.
+      - name: Sibling checkout outcome gate
         if: steps.sibling_checkout.outcome != 'success'
+        env:
+          EHG_RO_PAT: ${{ secrets.EHG_RO_PAT }}
+          GH_TOKEN_CROSS_REPO: ${{ secrets.GH_TOKEN_CROSS_REPO }}
         run: |
-          echo "::warning ::Could not check out the sibling rickfelix/ehg repo (private; needs the GH_TOKEN_CROSS_REPO secret). Skipping the venture_stages cross-repo drift check. Set GH_TOKEN_CROSS_REPO to enable it. SD-FDBK-FIX-DRIFT-CHECK-FAILS-001."
+          if [ -n "$EHG_RO_PAT" ] || [ -n "$GH_TOKEN_CROSS_REPO" ]; then
+            echo "::error ::Cross-repo checkout of rickfelix/ehg FAILED despite a configured token (EHG_RO_PAT / GH_TOKEN_CROSS_REPO) — the token likely EXPIRED or lost access. The venture_stages drift guard is DISABLED until the secret is rotated. SD-LEO-INFRA-CROSSREPO-DRIFT-GUARDS-EHG-PAT-001."
+            exit 1
+          fi
+          echo "::warning ::No cross-repo token configured (EHG_RO_PAT / GH_TOKEN_CROSS_REPO) — skipping the venture_stages cross-repo drift check (advisory). Set EHG_RO_PAT to enable it."
 
       - name: Setup Node
         if: steps.sibling_checkout.outcome == 'success'
@@ -74,7 +88,9 @@ jobs:
         run: npm install --no-audit --no-fund @supabase/supabase-js dotenv
 
       - name: Check venture_stages <-> artifacts drift
+        id: drift_check
         if: steps.sibling_checkout.outcome == 'success'
+        continue-on-error: true  # FR-3: DRIFT stays advisory (only a token regression is blocking)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -84,6 +100,6 @@ jobs:
         run: node scripts/generate-stage-config.cjs --check
 
       - name: Note about advisory mode
-        if: failure()
+        if: steps.drift_check.outcome == 'failure'
         run: |
-          echo "::warning ::venture_stages drifted from stage-config.js and/or ehg venture-workflow.ts. This gate is in advisory mode (continue-on-error). Regenerate with 'npm run venture-stages:generate' (in EHG_Engineer) and commit both artifacts. See SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-D."
+          echo "::warning ::venture_stages drifted from stage-config.js and/or ehg venture-workflow.ts. This drift check is advisory. Regenerate with 'npm run venture-stages:generate' (in EHG_Engineer) and commit both artifacts. See SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-D."
