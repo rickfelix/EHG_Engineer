@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-06-20](#2026-06-20)
+  - [Infrastructure](#infrastructure)
 - [2026-06-19](#2026-06-19)
   - [Infrastructure](#infrastructure)
 - [2026-06-16](#2026-06-16)
@@ -61,6 +63,13 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-06-20
+
+### Infrastructure
+- **The sourcing engine gains its chairman decision-queue lane — candidates that need an authority only the chairman can grant (or that wait on an operational outcome) now have a durable, SLA'd, idempotent home instead of evaporating as a transient prose ask** - PR #4899 (SD-LEO-INFRA-SOURCING-ENGINE-CHAIRMAN-QUEUE-001)
+  - **What shipped**: Sourcing engine child 4/10. The router (child 1) lanes some intake candidates to `chairman-gated` (needs a grant/rls/credential/operational/vision authority) or `outcome-gated` (buildable only after a venture earns an operational outcome), but there was nowhere durable for them to land. This adds **`sourcing_chairman_queue`** via an **additive, idempotent migration** (`CREATE TABLE IF NOT EXISTS` with a `state` CHECK enum `pending|decided|deferred_until|escalated`, a `UNIQUE (source_id, gate_type)` idempotency key, a `context` jsonb carrying the routed payload, SLA columns, and two indexes), plus **`lib/sourcing-engine/escalator.js`** — a pure `buildQueueRow` (chairman-gated → 72h SLA + the authority; outcome-gated → 168h SLA + enablers; null for non-queue lanes) and a fail-soft `escalateToChairmanQueue` that idempotently upserts one row per `(source_id, gate_type)`, **refuses a null/empty `source_id`** (in Postgres `NULL != NULL`, so a null key would silently re-insert and flood the queue), and **never throws** — a missing client, the DORMANT table, or a thrown transport error each return a structured `degraded` verdict. Ships **DORMANT**: the fleet authors and tests the migration; Adam applies this additive `CREATE TABLE` via the database-agent under the chairman's additive-DDL delegation (not chairman-gated — fleet-internal queue state, no RLS), and the escalator degrades until it is live.
+  - **Verification**: 18 hermetic unit tests (per-lane row building, the idempotent/fail-soft/null-source upsert paths, a real `routeCandidate` integration, and migration-file content) plus 1 DORMANT `*.db.test.js` live probe that **skips until the migration is applied** (never a false failure). `npx vitest run tests/unit/sourcing-engine/` → **26 passed / 3 skipped** (the dormant probes). Independent adversarial review returned **SHIP** and caught the null-`source_id` idempotency hole (fixed pre-ship with a `no_source_id` guard + a 3-case covering test asserting zero DB writes); lane strings were live-confirmed to match the router↔lane vocabulary exactly. TESTING / VALIDATION / REGRESSION all PASS (conf 96); Heal 93/100; gates P2E 97 / E2P 94 / P2L 95 / LEAD-FINAL 98.
 
 ## 2026-06-19
 
