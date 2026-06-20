@@ -1,0 +1,115 @@
+{
+  "executive_summary": "Adam-direct (chairman-directed) candidates and historically Adam-sourced SDs bypass the sourcing-engine's roadmap entirely — 78 Adam-sourced SDs currently have NO roadmap_wave_items row, so register-first / routeCandidate / lane coherence never sees them. This SD closes that gap by REUSING the shipped pieces (routeCandidate, isValidLane, shouldWarnRegisterFirst — never a parallel SSOT): a single-candidate register (FR-1, soft-warn on skip) and an idempotent ghost-backfill (FR-2). The whole thing is DORMANT-SAFE + DRY-RUN-DEFAULT: it forces dry-run whenever a precondition is unmet (the roadmap_wave_items.lane column is dormant, the source_type CHECK does not yet admit 'adam_direct', or no target wave resolves), so it computes exactly what it WOULD register (78 ghosts) but never mutates the chairman-visible roadmap until an operator applies the migrations and passes --apply.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Register an Adam-direct candidate as a roadmap_wave_items row (soft-warn on skip)",
+      "description": "registerAdamDirectCandidate (lib/sourcing-engine/adam-direct-registry.js) registers a single Adam-direct SD as a roadmap_wave_items row, routing it through the SHIPPED routeCandidate for its lane and gating lane writes on the column's presence. It is idempotent (an already-registered SD is a no-op) and SOFT-WARNS (never throws/blocks) when registration cannot proceed, reusing the SHIPPED shouldWarnRegisterFirst nudge (the ratified register-first=soft-warn decision). No parallel insert/route/lane code is written.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "registerAdamDirectCandidate routes via routeCandidate and only writes a lane that passes isValidLane.",
+        "An already-registered SD (existing roadmap_wave_items.promoted_to_sd_key) is a no-op (registered=false, no warn).",
+        "A candidate that cannot register (no wave / dormant column / CHECK violation / missing key) SOFT-WARNS via shouldWarnRegisterFirst and does NOT throw.",
+        "No new insert/route/lane SSOT — routeCandidate, isValidLane, shouldWarnRegisterFirst are imported, not re-derived."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Ghost-backfill Adam-sourced SDs lacking a roadmap row (idempotent)",
+      "description": "backfillAdamGhosts enumerates Adam-sourced SDs (metadata.sourced_by='adam' — the canonical attribution, NOT a top-level column or sd_key prefix) that have NO roadmap_wave_items row (promoted_to_sd_key match), and registers one row each. Idempotent: findAdamGhostSds excludes already-registered SDs, so a re-run sources nothing new. dedup_match_sd_key = the SD itself; lane via the router. Live dry-run verified: 78 ghosts would register, 0 written.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "findAdamGhostSds returns only Adam SDs whose sd_key is not already a promoted_to_sd_key.",
+        "backfillAdamGhosts registers exactly one row per ghost (no duplicates), counting candidates and would-register.",
+        "A re-run after a successful apply registers zero additional rows (idempotent via exclusion)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Reuse the canonical shipped pieces (no duplicate-SSOT)",
+      "description": "The module imports routeCandidate (lib/sourcing-engine/router.js), isValidLane (lib/sourcing-engine/lane.js), and shouldWarnRegisterFirst (lib/sourcing-engine/register-first.js). It adds only a roadmap_wave_items.lane column probe (mirror of dedup-autostamp's ledgerLaneColumnExists, but for roadmap_wave_items), a target-wave resolver, ghost enumeration, and the dormant-safe register/backfill. No parallel insert/route/lane logic.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "routeCandidate, isValidLane, shouldWarnRegisterFirst are imported from their shipped modules.",
+        "No re-implementation of routing, lane validation, or the register-first warn.",
+        "The lane-column probe mirrors the existing dormant-column-probe pattern (42703/PGRST204 detection, throws on unrelated errors)."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "WIRE_CHECK reachability for the new lib + CLI",
+      "description": "The lib's consumer is scripts/sourcing-engine/backfill-adam-ghosts.mjs, wired via the package.json 'sourcing:backfill-adam-ghosts' script — so WIRE_CHECK resolves the new module through a real entry point (no @wire-check-exempt needed). The CLI is dry-run by default; --apply is gated (and still dormant-safe).",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "package.json has a sourcing:backfill-adam-ghosts script invoking the CLI.",
+        "The CLI imports backfillAdamGhosts, so the lib is reachable from a package.json entry point (WIRE_CHECK).",
+        "The CLI is dry-run by default; --apply does not bypass the dormant-safety guards."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Tests — register+lane, ghost backfill, idempotency, soft-warn, dormant-safety",
+      "description": "tests/unit/sourcing-engine/adam-direct-registry.test.js (15 pure unit tests with an injected fake supabase): an Adam-direct candidate registers+lanes; a registry-bypassing ghost SD enumerates+would-register; a re-run is idempotent (exclusion); a candidate that skips registration soft-warns (does not throw); and the backfill is dormant-safe (dry-run when lane column absent / source_type CHECK dormant / no wave).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Tests cover buildAdamRoadmapItem routing + lane gating, findAdamGhostSds enumeration, backfill dry-run-default + dormant-safety + 23514 downgrade, and registerAdamDirectCandidate idempotency + soft-warn.",
+        "Tests assert NO writes occur in dry-run (db.inserted is empty).",
+        "All tests pass."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Dormant-safe by construction", "description": "Two dormant deps (roadmap_wave_items.lane column + the source_type CHECK extension). The build forces dry-run when either is absent — ships INERT, never mutates the chairman roadmap prematurely." },
+    { "id": "TR-2", "title": "ESM", "description": "lib/sourcing-engine modules are ESM; the new module + CLI use ESM imports." },
+    { "id": "TR-3", "title": "Additive reversible DDL", "description": "The source_type CHECK widening is additive (never invalidates existing rows) + reversible. DORMANT — Adam applies under the additive-DDL delegation; the worker does not self-apply." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Ghost backfill is dry-run-default and writes nothing", "type": "unit", "expected": "78-candidate live dry-run registers 0 rows; unit dry-run db.inserted empty." },
+    { "id": "TS-2", "scenario": "Idempotent + soft-warn", "type": "unit", "expected": "already-registered = no-op; skip = soft-warn, no throw." },
+    { "id": "TS-3", "scenario": "Dormant-safety", "type": "unit", "expected": "lane column absent / source_type 23514 / no wave each force dry-run." }
+  ],
+  "acceptance_criteria": [
+    "Adam-direct candidates + Adam ghost SDs can register as roadmap items via the shipped register-first/router/lane pieces.",
+    "The build is dormant-safe and dry-run-default — never mutates the chairman roadmap until migrations applied + --apply.",
+    "Idempotent + soft-warn; no duplicate-SSOT.",
+    "Live dry-run proves 78 ghosts would register, 0 written."
+  ],
+  "risks": [
+    { "risk": "Autonomous bulk insert of 78 rows into the chairman-visible roadmap", "mitigation": "DRY-RUN-DEFAULT + dormant-gated (lane column + source_type CHECK both must be applied by an operator first); --apply still forced to dry-run while dormant.", "severity": "high" },
+    { "risk": "Wrong target wave for historical ghosts", "mitigation": "Deterministic resolver (LEO Roadmap, highest sequence_rank active wave); reviewable while dormant before any live apply.", "severity": "medium" },
+    { "risk": "Duplicate-SSOT (re-deriving router/lane/register code)", "mitigation": "FR-3 imports the shipped routeCandidate/isValidLane/shouldWarnRegisterFirst; the lane probe mirrors the existing pattern.", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["the sourcing-engine roadmap coherence (register-first/router/lane)", "operators running npm run sourcing:backfill-adam-ghosts", "the LEO Roadmap (chairman-visible) once migrations applied", "Adam-direct intake (registerAdamDirectCandidate)"],
+    "dependencies": ["lib/sourcing-engine/router.js routeCandidate", "lib/sourcing-engine/lane.js isValidLane", "lib/sourcing-engine/register-first.js shouldWarnRegisterFirst", "roadmap_wave_items + strategic_directives_v2 + strategic_roadmaps + roadmap_waves tables", "the DORMANT 20260619 lane column migration + this SD's DORMANT source_type CHECK migration"],
+    "data_contracts": ["roadmap_wave_items insert (wave_id, source_type='adam_direct', source_id=SD uuid, promoted_to_sd_key=SD key, metadata.dedup_match_sd_key)", "metadata.sourced_by='adam' = Adam attribution (read)", "source_type CHECK widening (DORMANT additive)", "no breaking change"],
+    "runtime_config": ["--apply (default DRY-RUN)", "--cap=N (bound a run)", "no new env var; dormant-safety is automatic (probes lane column + 23514)"],
+    "observability_rollout": ["[backfill-adam-ghosts] DRY-RUN/APPLIED report with candidate/registered counts + dormant notes", "ships INERT (dry-run) until an operator applies BOTH migrations then runs --apply", "metadata.registered_by='adam-direct-registry' tags backfilled rows for audit"]
+  },
+  "system_architecture": {
+    "summary": "One new lib module reusing the shipped router/lane/register-first pieces + a dormant CHECK migration + a CLI, all dormant-safe + dry-run-default so the chairman roadmap is never mutated prematurely.",
+    "components": [
+      { "name": "lib/sourcing-engine/adam-direct-registry.js", "change": "NEW register + ghost-backfill (reuses router/lane/register-first)" },
+      { "name": "database/migrations/20260620_roadmap_wave_items_adam_direct_source_type.sql", "change": "NEW DORMANT additive CHECK widening (adam_direct)" },
+      { "name": "scripts/sourcing-engine/backfill-adam-ghosts.mjs", "change": "NEW CLI (dry-run default)" },
+      { "name": "package.json", "change": "ADD sourcing:backfill-adam-ghosts (WIRE_CHECK)" },
+      { "name": "tests/unit/sourcing-engine/adam-direct-registry.test.js", "change": "NEW 15 unit tests" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Reuse the shipped sourcing-engine pieces; add a dormant-safe register/backfill keyed off metadata.sourced_by='adam', dry-run-default so the chairman roadmap is never mutated until an operator applies the dormant migrations + --apply.",
+    "steps": [
+      "Write lib/sourcing-engine/adam-direct-registry.js: roadmapLaneColumnExists probe, resolveTargetWaveId, findAdamGhostSds, buildAdamRoadmapItem (routeCandidate+isValidLane), registerAdamDirectCandidate (FR-1), backfillAdamGhosts (FR-2) — all dormant-safe/dry-run-default.",
+      "Author the DORMANT source_type CHECK-widening migration (not applied by the worker).",
+      "Add the CLI + package.json entry; write 15 tests; live-smoke the dry-run (78 ghosts, 0 writes).",
+      "TESTING+SECURITY @ EXEC, adversarial review, EXEC-TO-PLAN."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run: npx vitest run tests/unit/sourcing-engine/adam-direct-registry.test.js", "expected_outcome": "15 tests pass (register+lane, ghost enumeration, dry-run-default, dormant-safety, idempotency, soft-warn)." },
+    { "step_number": 2, "instruction": "Run: npm run sourcing:backfill-adam-ghosts (no --apply) against the live DB", "expected_outcome": "DRY-RUN: ~78 ghosts WOULD register into the LEO Roadmap wave; 0 roadmap_wave_items rows written; 0 source_type=adam_direct rows after." },
+    { "step_number": 3, "instruction": "Inspect the module imports + the migration", "expected_outcome": "Reuses routeCandidate/isValidLane/shouldWarnRegisterFirst (FR-3); the source_type CHECK migration is DORMANT (not applied), additive + reversible." }
+  ],
+  "activation_test_id": "tests/unit/sourcing-engine/adam-direct-registry.test.js",
+  "metadata": { "sd_key": "SD-LEO-INFRA-SOURCING-ENGINE-ADAM-DIRECT-REGISTRY-001" }
+}
