@@ -78,11 +78,10 @@ describe('assertRegistryCoherence (FR-1 fail-loud denominator↔probe lockstep)'
 
 describe('computeBuildGauge (FR-1 numerator math + honest unknown handling)', () => {
   it('computes overall % + per-layer with HONEST banding, EXCLUDING unknowns from the denominator', async () => {
-    // 8 DB-backed probeable; 5 code_grep → unknown (no grep seam). With the post-review semantics:
-    //   built(1):  Take-a-dollar (KR04 achieved)
-    //   partial(.5): self-operating (agent_messages=2 < min20), survivability (KR02 45/90)
-    //   unbuilt(0): distance-to-quit (KR05 0/1), venture-learning (pattern_occurrences=0), north-star (KR05 0/1),
-    //              Capability Registry (sd_capabilities=0 < min50), Expertise on-demand (specialist_registry=0 < min10)
+    // After the V1->V2 re-cut (SD-LEO-INFRA-VISION-LADDER-V1-V2-RECUT-001) the 4 revenue/operating caps
+    // (Take-a-dollar, distance-to-quit, self-operating, venture-learning) are V2-deferred — NOT probed.
+    // Remaining DB-backed in this stub: survivability (KR02 45/90 → partial 0.5), north-star (KR05 0/1 → 0),
+    //   Capability Registry (0 < min50 → 0), Expertise on-demand (0 < min10 → 0), + 3 consolidation probes (0).
     const io = {
       supabase: stubSupabase({
         countByTable: { agent_messages: 2, pattern_occurrences: 0, key_results: 1 },
@@ -98,16 +97,16 @@ describe('computeBuildGauge (FR-1 numerator math + honest unknown handling)', ()
     expect(g.coherence.ok).toBe(true);
     expect(g.total_capabilities).toBe(VDR_REGISTRY.length);
     // unknown_count = 5 original code_grep + 5 governance (V1-GOV-PROBES) + 4 automation/intelligence
-    // (V1-AUTOMATION-PROBES, ordinals 17-20) = 14, all 'unknown' (no seam / KR-GOV rows in this stub) →
-    // EXCLUDED. The +3 consolidation probes (V1-CONSOLIDATION-PROBES) are unbuilt at count 0, so they
-    // ENTER the denominator (8 → 11).
+    // (V1-AUTOMATION-PROBES) = 14, all 'unknown' (no seam / KR-GOV rows in this stub) → EXCLUDED. The 4
+    // moved revenue/operating probes leave the denominator (11 → 7); the +3 consolidation probes (unbuilt
+    // at count 0) still ENTER it.
     expect(g.unknown_count).toBe(14);
-    expect(g.denominator).toBe(11); // 8 + 3 consolidation probes (unbuilt at count 0)
-    // numerator unchanged (1 + 0.5 + 0.5 + 0×8) = 2.0; 2.0/11 = 18%
-    expect(g.overall_pct).toBe(18);
+    expect(g.denominator).toBe(7); // 4 DB-backed remaining (survivability + north-star + Cap Registry + Expertise) + 3 consolidation
+    // numerator 0.5 (survivability only); 0.5/7 = 7%
+    expect(g.overall_pct).toBe(7);
     // infrastructure scored = survivability(0.5) + Capability Registry(0) + Expertise on-demand(0) = 0.5/3 = 17%
-    // application/process gain consolidation probes that are all 0 → those layer %s stay 0 (numerator 0).
-    expect(g.per_layer).toMatchObject({ venture: 75, infrastructure: 17, application: 0, process: 0 });
+    // venture layer now has 0 probes (both moved to V2) → venture %=null; application/process stay 0.
+    expect(g.per_layer).toMatchObject({ infrastructure: 17, application: 0, process: 0 });
     for (const c of g.components) expect(STATUS_SCORE).toHaveProperty(c.status);
   });
 

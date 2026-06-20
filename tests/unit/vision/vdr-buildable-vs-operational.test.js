@@ -32,31 +32,41 @@ function stubSupabase({ countByTable = {}, krRows = {} } = {}) {
 const round = (subset) => (subset.length === 0 ? null : Math.round((100 * subset.reduce((s, c) => s + c.score, 0)) / subset.length));
 
 describe('FR-1 taxonomy completeness', () => {
-  it('every one of the 25 registry entries has a nature in {buildable, operational}', () => {
-    expect(VDR_REGISTRY).toHaveLength(25);
+  it('every one of the 21 active registry entries has a nature in {buildable, operational}', () => {
+    expect(VDR_REGISTRY).toHaveLength(21);
     for (const e of VDR_REGISTRY) expect(['buildable', 'operational']).toContain(e.nature);
   });
-  it('OPERATIONAL_NATURE has exactly 10 members and every one names a real capability (no drift)', () => {
-    expect(OPERATIONAL_NATURE.size).toBe(10);
+  it('OPERATIONAL_NATURE has exactly 6 members and every one names a real capability (no drift)', () => {
+    expect(OPERATIONAL_NATURE.size).toBe(6);
     const caps = new Set(VDR_REGISTRY.map((e) => e.capability));
     for (const c of OPERATIONAL_NATURE) expect(caps.has(c)).toBe(true);
   });
-  it('15 buildable + 10 operational, partitioned by OPERATIONAL_NATURE', () => {
+  it('15 buildable + 6 operational, partitioned by OPERATIONAL_NATURE', () => {
     const buildable = VDR_REGISTRY.filter((e) => e.nature === 'buildable');
     const operational = VDR_REGISTRY.filter((e) => e.nature === 'operational');
     expect(buildable).toHaveLength(15);
-    expect(operational).toHaveLength(10);
+    expect(operational).toHaveLength(6);
     for (const e of operational) expect(OPERATIONAL_NATURE.has(e.capability)).toBe(true);
     for (const e of buildable) expect(OPERATIONAL_NATURE.has(e.capability)).toBe(false);
   });
-  it('the venture/income KR proofs are operational; the code-shipped capabilities are buildable', () => {
+  it('the venture/governance KR proofs are operational; the code-shipped capabilities are buildable', () => {
     const natureOf = (cap) => VDR_REGISTRY.find((e) => e.capability === cap).nature;
-    expect(natureOf('Take a real dollar')).toBe('operational');
-    expect(natureOf('Run a self-operating venture')).toBe('operational');
+    expect(natureOf('Solo-operator survivability')).toBe('operational');
     expect(natureOf('All 7 governance guardrails')).toBe('operational');
     expect(natureOf('The cockpit')).toBe('buildable');
     expect(natureOf('Decision Filter Engine')).toBe('buildable');
     expect(natureOf('Capability Registry')).toBe('buildable');
+  });
+  // SD-LEO-INFRA-VISION-LADDER-V1-V2-RECUT-001 (FR-5): the 4 revenue/operating capabilities moved to the
+  // inactive V2 rung; their probes must NOT be in the active VDR_REGISTRY (a probe for an inactive rung is
+  // a staleProbe that withholds the whole gauge). This regression fails if any is re-added before V2 activates.
+  it('the 4 V2-deferred capabilities have NO probe in the active registry while V2 is inactive', () => {
+    const v2Deferred = ['Take a real dollar', 'See distance-to-quit', 'Run a self-operating venture', 'Compound venture-level learning'];
+    const caps = new Set(VDR_REGISTRY.map((e) => e.capability));
+    for (const c of v2Deferred) {
+      expect(caps.has(c), `${c} must not be probed while V2 is inactive`).toBe(false);
+      expect(OPERATIONAL_NATURE.has(c)).toBe(false);
+    }
   });
 });
 

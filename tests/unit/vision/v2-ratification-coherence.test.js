@@ -4,9 +4,10 @@
  * Proves the V2 ratification is coherence-safe:
  *  (hermetic) the V2 capability is NOT in VDR_REGISTRY (FR-2 deferred the probe), and the seed
  *             logic builds the correct row;
- *  (live)     the V2 rung stays inactive with the single ratified row, the active V1 rung keeps its
- *             25-criteria denominator, and assertRegistryCoherence is ok over the active rung — so
- *             the inactive V2 row is invisible to the live V1 gauge.
+ *  (live)     the V2 rung stays inactive with its ratified rows, the active V1 rung's denominator equals
+ *             the registry probe count (21 after SD-LEO-INFRA-VISION-LADDER-V1-V2-RECUT-001 moved the 4
+ *             revenue/operating capabilities to V2), and assertRegistryCoherence is ok over the active
+ *             rung — so the inactive V2 rows are invisible to the live V1 gauge.
  *
  * The live block runs against the engineer DB (where the seed was applied); it reads only — no writes.
  */
@@ -48,7 +49,7 @@ describe.skipIf(!HAS_DB)('FR-3 (live): V2 recorded inactive; V1 gauge unaffected
   });
   afterAll(async () => { if (client) await client.end(); });
 
-  it('the V2 rung is inactive and carries the single ratified criterion', async () => {
+  it('the V2 rung is inactive and carries its ratified + recut-moved criteria (incl. the original ratified cap)', async () => {
     const r = await client.query(
       `SELECT r.is_active, count(c.id)::int AS n,
               bool_or(c.capability = $1) AS has_cap
@@ -60,11 +61,14 @@ describe.skipIf(!HAS_DB)('FR-3 (live): V2 recorded inactive; V1 gauge unaffected
     );
     expect(r.rows).toHaveLength(1);
     expect(r.rows[0].is_active).toBe(false);
-    expect(r.rows[0].n).toBe(1);
+    // SD-LEO-INFRA-VISION-LADDER-V1-V2-RECUT-001 moved 4 revenue/operating criteria into V2, so the
+    // inactive rung now carries 5 (the original ratified cap + the 4 moved). It stays inactive, so it is
+    // still invisible to the live V1 gauge.
+    expect(r.rows[0].n).toBe(5);
     expect(r.rows[0].has_cap).toBe(true);
   });
 
-  it('the active V1 rung keeps its 25-criteria denominator and assertRegistryCoherence is ok', async () => {
+  it('the active V1 rung denominator equals the registry probe count (21 post-recut) and assertRegistryCoherence is ok', async () => {
     const r = await client.query(
       `SELECT c.capability
        FROM vision_ladder_rungs r
