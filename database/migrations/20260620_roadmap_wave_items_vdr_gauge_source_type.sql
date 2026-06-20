@@ -1,4 +1,8 @@
 -- SD-LEO-INFRA-SOURCING-ENGINE-GAUGE-GAP-MINER-001 (FR-2 enabler)
+-- @approved-by: codestreetlabs@gmail.com
+-- Prod-apply approval (additive-only) stamped during SD-LEO-INFRA-SOURCING-ENGINE-ACTIVATION-001
+-- go-live, chairman-authorized 2026-06-20. Additive CHECK widen (full set incl adam_direct+vdr_gauge);
+-- reversible. APPLY LAST (after adam_direct) — this array is the complete allowed set.
 -- DORMANT (TIER-2): extend roadmap_wave_items.source_type CHECK to admit 'vdr_gauge', so the gauge-gap
 -- miner can register STAGED candidates (one per unbuilt/partial active-rung capability) as roadmap
 -- items. ADDITIVE + REVERSIBLE (widening a CHECK never invalidates existing rows). Workers do NOT

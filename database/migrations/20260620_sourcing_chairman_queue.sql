@@ -1,4 +1,7 @@
 -- SD-LEO-INFRA-SOURCING-ENGINE-CHAIRMAN-QUEUE-001 (FR-1 / FR-2)
+-- @approved-by: codestreetlabs@gmail.com
+-- Prod-apply approval (additive-only) stamped during SD-LEO-INFRA-SOURCING-ENGINE-ACTIVATION-001
+-- go-live, chairman-authorized 2026-06-20. Additive CREATE TABLE IF NOT EXISTS; reversible.
 -- Sourcing engine child 4/10 — the chairman decision-queue lane.
 --
 -- A durable home for candidates the router lanes to 'chairman-gated' (needs an authority only the
