@@ -437,6 +437,8 @@
     "worktree:reap": "node scripts/worktree-reaper.mjs",
     "worktree:reap:execute": "node scripts/worktree-reaper.mjs --execute",
     "worktree:reap:full": "node scripts/worktree-reaper.mjs --execute --stage2 --yes",
+    "worktree:reap:all-pools": "node scripts/worktree-reaper.mjs --all-pools",
+    "worktree:reap:all-pools:execute": "node scripts/worktree-reaper.mjs --all-pools --execute",
     "worktree:orphan-sweep": "node scripts/worktree-reaper.mjs --orphan-sweep",
     "worktree:orphan-sweep:execute": "node scripts/worktree-reaper.mjs --orphan-sweep --execute",
     "worktree:cleanup-pending": "node scripts/cleanup-pending-sweep.mjs",
