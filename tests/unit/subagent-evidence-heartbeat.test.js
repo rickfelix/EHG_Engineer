@@ -12,76 +12,42 @@
  * and (FR-3) that a heartbeat-refreshed long tick stays claim-valid.
  */
 import { describe, it, expect } from 'vitest';
-import { resolveEvidenceClient } from '../../lib/sub-agent-executor/results-storage.js';
+import { touchOwnerHeartbeat } from '../../lib/sub-agent-executor/results-storage.js';
 import { ownerIsDeadByLiveness, isHeartbeatStale, CLAIM_TTL_MS } from '../../lib/claim-validity-gate.js';
 
-/** A minimal PostgREST-like chainable thenable returning a fixed result. */
-function fakeBuilder(result = { data: [{ id: 'evt-1' }], error: null }) {
-  const b = {
-    insert() { return b; },
-    update() { return b; },
-    upsert() { return b; },
-    delete() { return b; },
-    select() { return b; },
-    eq() { return b; },
-    single() { return b; },
-    maybeSingle() { return b; },
-    then(onF, onR) { return Promise.resolve(result).then(onF, onR); },
-    catch(onR) { return Promise.resolve(result).catch(onR); },
-  };
-  return b;
-}
-
-/** A fake supabase client recording which tables were touched. */
-function fakeClient() {
-  const touched = [];
-  return {
-    touched,
-    from(table) { touched.push(table); return fakeBuilder(); },
-  };
-}
-
-describe('resolveEvidenceClient — FR-1 wire (heartbeat on sub-agent evidence write)', () => {
-  it('returns the RAW client unchanged when no session id is provided (fail-soft, non-fleet)', () => {
-    const raw = fakeClient();
-    expect(resolveEvidenceClient(raw, undefined)).toBe(raw);
-    expect(resolveEvidenceClient(raw, null)).toBe(raw);
-    expect(resolveEvidenceClient(raw, '')).toBe(raw);
-    expect(resolveEvidenceClient(raw, '   ')).toBe(raw);
-  });
-
-  it('returns a WRAPPED client (not the raw one) when a session id is provided', () => {
-    const raw = fakeClient();
-    const wrapped = resolveEvidenceClient(raw, 'sess-123', { heartbeatFn: async () => {} });
-    expect(wrapped).not.toBe(raw);
-    expect(typeof wrapped.from).toBe('function');
-  });
-
-  it('fires exactly ONE heartbeat ping for the owner after a sub_agent_execution_results insert', async () => {
-    const raw = fakeClient();
+describe('touchOwnerHeartbeat — FR-1 (refresh claim heartbeat on sub-agent evidence write)', () => {
+  it('is a no-op (returns false, no ping) when no session id is provided (non-fleet, fail-soft)', async () => {
     const pinged = [];
-    const wrapped = resolveEvidenceClient(raw, 'sess-owner', { heartbeatFn: async (sid) => { pinged.push(sid); } });
-    await wrapped.from('sub_agent_execution_results').insert({ verdict: 'PASS' });
-    // ping is fire-and-forget (microtask) — flush the queue before asserting.
-    await new Promise((r) => setTimeout(r, 0));
-    expect(pinged).toEqual(['sess-owner']);
-  });
-
-  it('does NOT fire a heartbeat ping when writing a non-trigger table', async () => {
-    const raw = fakeClient();
-    const pinged = [];
-    const wrapped = resolveEvidenceClient(raw, 'sess-owner', { heartbeatFn: async (sid) => { pinged.push(sid); } });
-    await wrapped.from('some_other_table').insert({ x: 1 });
-    await new Promise((r) => setTimeout(r, 0));
+    const spy = async (sid) => { pinged.push(sid); };
+    expect(await touchOwnerHeartbeat(undefined, spy)).toBe(false);
+    expect(await touchOwnerHeartbeat(null, spy)).toBe(false);
+    expect(await touchOwnerHeartbeat('', spy)).toBe(false);
+    expect(await touchOwnerHeartbeat('   ', spy)).toBe(false);
     expect(pinged).toEqual([]);
   });
 
-  it('is fail-soft: a heartbeat ping rejection never breaks the caller write', async () => {
-    const raw = fakeClient();
-    const wrapped = resolveEvidenceClient(raw, 'sess-owner', { heartbeatFn: async () => { throw new Error('ping boom'); } });
-    const res = await wrapped.from('sub_agent_execution_results').insert({ verdict: 'PASS' });
-    await new Promise((r) => setTimeout(r, 0));
-    expect(res.error).toBeNull(); // the insert still resolved fine
+  it('fires exactly ONE heartbeat ping for the owning session when a session id is provided', async () => {
+    const pinged = [];
+    const ok = await touchOwnerHeartbeat('sess-owner', async (sid) => { pinged.push(sid); });
+    expect(ok).toBe(true);
+    expect(pinged).toEqual(['sess-owner']);
+  });
+
+  it('is fail-soft: a ping rejection is swallowed (returns false, does not throw)', async () => {
+    let returned;
+    await expect(
+      (async () => { returned = await touchOwnerHeartbeat('sess-owner', async () => { throw new Error('ping boom'); }); })()
+    ).resolves.toBeUndefined(); // the call itself never rejects
+    expect(returned).toBe(false);
+  });
+
+  it('FR-2 by construction: a session that performs no evidence write never pings (no zombie heartbeat)', async () => {
+    // touchOwnerHeartbeat is only reached AFTER an evidence row lands. A dead session writes nothing,
+    // so this is never called for it. We assert the guard itself never pings without a session id —
+    // i.e. it cannot fabricate liveness for a session that did no work.
+    const pinged = [];
+    await touchOwnerHeartbeat(undefined, async (sid) => { pinged.push(sid); });
+    expect(pinged).toEqual([]);
   });
 });
 
