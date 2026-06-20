@@ -1,0 +1,69 @@
+{
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Pure routeCandidate(classifiedItem, context) in lib/sourcing-engine/router.js",
+      "description": "Export a PURE, TOTAL function routeCandidate(classifiedItem, context) -> { lane, rung, disposition, escalation?, blocker?, enablers?, dedup_match_sd_key?, re_emit? }. No LLM (the classifier ran upstream), no DB IO, no Date.now()/Math.random(). Given a sparse or null item it never throws. The module also exports the frozen LANES vocabulary, CHAIRMAN_AUTHORITIES, and a jaccard() helper.",
+      "acceptance_criteria": [
+        "routeCandidate is importable from lib/sourcing-engine/router.js and is side-effect-free",
+        "Returns exactly one lane per call from the frozen LANES set",
+        "Handles null/empty item and empty context without throwing (totality)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "The 5 lane rules per the parent design",
+      "description": "Implement the five lanes with this precedence: (1) dedup — exact normalized title OR Jaccard>=threshold OR source_id is itself an existing sd_key -> dedup_match_sd_key, with a re_emit flag set true ONLY when the matched SD is infra-shipped but its outcome is not yet realized; (2) chairman-gated — authority in {grant,rls,credential,operational,vision} -> escalation {to:'chairman', reason}; (3) outcome-gated — needsOutcome -> target rung + enabler hints; (4) blocked-on — a write-surface or declared-dependency conflict with an in-flight SD -> blocker {sd_key, reason}; (5) belt-ready — the residual (novel, non-gated, conflict-free, fleet-buildable).",
+      "acceptance_criteria": [
+        "Each of the 5 lanes is produced for its triggering input",
+        "Precedence holds: dedup > chairman-gated > outcome-gated > blocked-on > belt-ready",
+        "The infra-shipped-but-outcome-open re-emit flag is true only when shipped AND not outcome-realized"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "LANE is a field DISTINCT from disposition (no overload)",
+      "description": "The router passes disposition (BUILD|RESEARCH|REFERENCE|CANCEL|null) through unchanged and never re-derives or overloads it. The lane vocabulary shares no value with the disposition vocabulary, so a consumer can store lane and disposition as independent fields (this child does NOT read/write the lane column — that is child LEDGER-LANE-COLUMN).",
+      "acceptance_criteria": [
+        "disposition is returned unchanged across every lane",
+        "No LANES value collides with any disposition value",
+        "The router never mutates or recomputes disposition"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "Unit tests covering each lane rule + the separation + the re-emit",
+      "description": "tests/unit/sourcing-engine-router.test.js covers each of the 5 lane rules, the precedence ordering, the lane/disposition separation (FR-3), the infra-shipped-but-outcome-open re-emit flag (both true and false branches), the jaccard helper edge cases, and totality on sparse/null input.",
+      "acceptance_criteria": [
+        "npx vitest run tests/unit/sourcing-engine-router.test.js passes",
+        "Every lane has at least one positive case and the dedup re-emit has both true and false cases",
+        "A totality case (null item) and the lane/disposition non-collision are asserted"
+      ]
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Every lane is reachable",
+      "steps": "Run npx vitest run tests/unit/sourcing-engine-router.test.js.",
+      "expected_result": "All 29 assertions pass; each of belt-ready, blocked-on, chairman-gated, outcome-gated, dedup is produced for its triggering input."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Lane never overloads disposition",
+      "steps": "Assert no value in LANES appears in the disposition vocabulary and that disposition is returned unchanged across lanes.",
+      "expected_result": "LANES and the disposition set are disjoint; disposition passes through verbatim."
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Infra-shipped-but-outcome-open re-emits",
+      "steps": "Route a dedup-matching item whose matched SD is in shippedInfraKeys but not in outcomeRealizedKeys.",
+      "expected_result": "lane=dedup, dedup_match_sd_key set, re_emit=true; when the same key is also outcome-realized, re_emit=false."
+    }
+  ],
+  "acceptance_criteria": [
+    "A pure, total routeCandidate maps a classified candidate onto exactly one of five sourcing lanes",
+    "lane is a first-class field distinct from disposition and never overloads it",
+    "Unit tests cover all 5 lanes, precedence, the separation, and the re-emit flag"
+  ]
+}
