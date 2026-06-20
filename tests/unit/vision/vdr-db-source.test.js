@@ -90,12 +90,12 @@ describe('computeBuildGauge visionSource=true (FR-4) — DB denominator, unchang
     expect(g.available).toBe(true);
     expect(g.coherence.ok).toBe(true); // DB labels match VDR_REGISTRY → no drift
     expect(g.total_capabilities).toBe(VDR_REGISTRY.length);
-    // unknown_count = 5 original code_grep + 5 governance + 4 automation/intelligence (ordinals 17-20) = 14,
-    // all 'unknown' (no seam / KR-GOV rows in this stub) → excluded. The +3 consolidation probes are unbuilt
-    // at count 0 → they enter the denominator (8 → 11).
+    // unknown_count = 5 original code_grep + 5 governance + 4 automation/intelligence = 14, all 'unknown'
+    // (no seam / KR-GOV rows in this stub) → excluded. After the V1->V2 re-cut the 4 revenue/operating
+    // probes leave the denominator (11 → 7); the +3 consolidation probes (unbuilt at 0) remain.
     expect(g.unknown_count).toBe(14);
-    expect(g.denominator).toBe(11); // 8 + 3 consolidation probes (unbuilt at count 0)
-    expect(g.overall_pct).toBe(18); // (1+0.5+0.5+0×8)/11 = 2.0/11 = 18%; identical to the markdown-source path
+    expect(g.denominator).toBe(7); // 4 DB-backed remaining + 3 consolidation probes (unbuilt at count 0)
+    expect(g.overall_pct).toBe(7); // 0.5/7 = 7%; identical to the markdown-source path
     expect(g.measured_at_note).toMatch(/DB vision source/);
   });
 

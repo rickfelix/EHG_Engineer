@@ -94,12 +94,14 @@ describe('ord-11 VDR probe repoint + no double-count (FR-3 / US-003)', () => {
     expect(ord11.probe.table).toBe('north_star');
     expect(ord11.probe.filter).toEqual({ status: 'chairman_ratified' });
   });
-  it('ord-2 still references KR-2026-07-05 (it legitimately belongs there)', () => {
-    expect(ord2.probe).toEqual({ type: 'kr_status', code: 'KR-2026-07-05' });
+  it('See distance-to-quit (the former KR-2026-07-05 owner) is V2-deferred — absent from the active registry', () => {
+    // SD-LEO-INFRA-VISION-LADDER-V1-V2-RECUT-001 moved 'See distance-to-quit' to the inactive V2 rung.
+    expect(ord2).toBeUndefined();
   });
-  it('no two capabilities share KR-2026-07-05 (double-count removed)', () => {
+  it('no capability double-counts KR-2026-07-05 (ord-11 repointed; the other owner is now V2-deferred)', () => {
     const sharers = VDR_REGISTRY.filter((c) => c.probe?.code === 'KR-2026-07-05');
-    expect(sharers).toHaveLength(1);
+    expect(sharers.length).toBeLessThanOrEqual(1); // the no-double-count invariant still holds
+    expect(sharers).toHaveLength(0);               // after the recut, KR-2026-07-05 has no active probe
   });
   it('the VDR coherence invariant still holds after the repoint (real assertion, not just no-throw)', () => {
     // assertRegistryCoherence() never throws — it returns a verdict. Assert the verdict is ok,
