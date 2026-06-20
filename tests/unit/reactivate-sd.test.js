@@ -10,6 +10,7 @@ import {
   computeReactivation,
   buildReactivationAudit,
   VALID_REACTIVATION_TARGETS,
+  resolveArgs,
 } from '../../scripts/reactivate-sd.js';
 
 const NOW_ISO = '2026-06-16T03:00:00.000Z';
@@ -95,6 +96,50 @@ describe('computeReactivation — guards (FR-3)', () => {
   it('exposes the valid reactivation targets (does NOT allow re-deferring)', () => {
     expect([...VALID_REACTIVATION_TARGETS].sort()).toEqual(['active', 'draft', 'in_progress']);
     expect(VALID_REACTIVATION_TARGETS.has('deferred')).toBe(false);
+  });
+});
+
+describe('resolveArgs — argv parsing (SD-LEO-INFRA-REACTIVATE-SD-ARGV-FIX-001)', () => {
+  // BUG 1/2 regression: the documented default-to-draft invocation (no --to) must
+  // resolve the SD-key positional and default target=draft, instead of dropping it.
+  it('resolves the SD key and defaults target=draft when --to is omitted (--reason present)', () => {
+    const r = resolveArgs(['SD-LEO-FIX-FOO-001', '--reason', 'x']);
+    expect(r.sdInput).toBe('SD-LEO-FIX-FOO-001');
+    expect(r.toStatus).toBe('draft');
+    expect(r.reason).toBe('x');
+  });
+
+  it('resolves a bare SD key (no flags at all) and defaults target=draft', () => {
+    const r = resolveArgs(['SD-LEO-FIX-FOO-001']);
+    expect(r.sdInput).toBe('SD-LEO-FIX-FOO-001');
+    expect(r.toStatus).toBe('draft');
+    expect(r.reason).toBeNull();
+  });
+
+  it('honors an explicit --to and does not consume the positional', () => {
+    const r = resolveArgs(['SD-LEO-FIX-FOO-001', '--to', 'in_progress']);
+    expect(r.sdInput).toBe('SD-LEO-FIX-FOO-001');
+    expect(r.toStatus).toBe('in_progress');
+  });
+
+  it('resolves the positional regardless of flag order (SD key last)', () => {
+    const r = resolveArgs(['--reason', 'cleared', '--to', 'active', 'SD-LEO-FIX-FOO-001']);
+    expect(r.sdInput).toBe('SD-LEO-FIX-FOO-001');
+    expect(r.toStatus).toBe('active');
+    expect(r.reason).toBe('cleared');
+  });
+
+  it('does not mistake a flag value for the SD positional', () => {
+    // 'draft' here is the --to value, not the SD key; with no real positional sdInput is undefined.
+    const r = resolveArgs(['--to', 'draft', '--reason', 'note']);
+    expect(r.sdInput).toBeUndefined();
+  });
+
+  it('resolves a UUID positional with --reason and no --to', () => {
+    const uuid = '3c9ebdcc-3620-43f9-bd26-c7e007ef77b1';
+    const r = resolveArgs([uuid, '--reason', 'chairman cleared']);
+    expect(r.sdInput).toBe(uuid);
+    expect(r.toStatus).toBe('draft');
   });
 });
 
