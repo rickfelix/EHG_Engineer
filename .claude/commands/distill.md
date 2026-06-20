@@ -331,8 +331,12 @@ const { randomUUID } = require('crypto');
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 async function run() {
-  // 1. Store chairman decision + mark processed
-  const { error: dbErr } = await sb.from('eva_todoist_intake').update({
+  // 1. Store chairman decision + mark processed. SOURCE_TABLE comes from each REVIEW_ITEMS entry's
+  //    sourceTable field (SD-LEO-INFRA-DISTILL-YT-REVIEW-GAP-...): 'eva_todoist_intake' for Todoist
+  //    items, 'eva_youtube_intake' for YouTube items. A hardcoded 'eva_todoist_intake' here would
+  //    silently no-op a YouTube item's review (id lives in the youtube table) — leaving the review gap
+  //    half-open. ALWAYS substitute the item's own sourceTable.
+  const { error: dbErr } = await sb.from('SOURCE_TABLE').update({
     chairman_intent: 'INTENT_VALUE',
     chairman_reviewed_at: new Date().toISOString(),
     status: 'processed',
@@ -340,7 +344,9 @@ async function run() {
   }).eq('id', 'ITEM_UUID');
   if (dbErr) { console.error('DB Error:', dbErr.message); return; }
 
-  // 2. Get the todoist_task_id
+  // 2. Todoist completion only applies to Todoist items — YouTube items have no todoist_task_id and are
+  //    physically moved by the post-processor instead. Skip steps 2-3 when SOURCE_TABLE is the YT table.
+  if ('SOURCE_TABLE' !== 'eva_todoist_intake') { console.log('YouTube item reviewed — playlist move handled by post-processor'); return; }
   const { data: item } = await sb.from('eva_todoist_intake')
     .select('todoist_task_id').eq('id', 'ITEM_UUID').single();
   if (!item?.todoist_task_id) { console.log('No Todoist task to complete'); return; }
@@ -365,7 +371,7 @@ run();
 "
 ```
 
-Replace `INTENT_VALUE` with the mapped capture-intent value and `ITEM_UUID` with the item ID.
+Replace `INTENT_VALUE` with the mapped capture-intent value, `ITEM_UUID` with the item ID, and `SOURCE_TABLE` with that item's `sourceTable` from the `REVIEW_ITEMS` entry (`eva_todoist_intake` or `eva_youtube_intake`). YouTube items skip the Todoist-completion sub-step automatically.
 
 You can batch multiple updates into a single script for efficiency.
 
@@ -402,7 +408,9 @@ node -e "
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-sb.from('eva_todoist_intake').update({
+// This block runs only for YouTube items (Gemini video analysis), so it targets eva_youtube_intake
+// (SD-LEO-INFRA-DISTILL-YT-REVIEW-GAP-...; a hardcoded eva_todoist_intake here silently no-ops).
+sb.from('eva_youtube_intake').update({
   enrichment_summary: 'EXISTING_SUMMARY | Chairman Analysis: GEMINI_RESULT'
 }).eq('id', 'ITEM_UUID').then(({error}) => {
   if (error) console.error('Error:', error.message);
@@ -533,7 +541,9 @@ For each item in the **selected** brainstorm queue (cherry-picked subset), proce
    require('dotenv').config();
    const { createClient } = require('@supabase/supabase-js');
    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-   sb.from('eva_todoist_intake').update({
+   // SOURCE_TABLE = the item's sourceTable (eva_todoist_intake | eva_youtube_intake) so a YouTube-sourced
+   // build links correctly (SD-LEO-INFRA-DISTILL-YT-REVIEW-GAP-...).
+   sb.from('SOURCE_TABLE').update({
      enrichment_summary: 'EXISTING_SUMMARY | Brainstorm: SESSION_ID | SD: SD_KEY'
    }).eq('id', 'ITEM_UUID').then(({error}) => {
      if (error) console.error('Error:', error.message);
