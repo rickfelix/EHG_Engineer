@@ -1301,10 +1301,15 @@ export async function main(argv = process.argv) {
         continue;
       }
 
+      // SD-LEO-FEAT-DATA-LOSS-HIGH-001 (FR-2): preserve BOTH untracked AND modified-tracked files
+      // before the force-remove. Uncommitted edits to tracked files (the ~56-LOC data-loss class)
+      // were previously destroyed because only `untracked` was copied. Dedupe defensively. The
+      // preserve-before-delete contract is intact: if preservation throws, removal aborts.
+      const toPreserve = [...new Set([...(dirty.untracked || []), ...(dirty.modified || [])])];
       const preserve = preserveUntrackedFiles({
         wtPath,
         preserveRoot: opts.preserveRoot ? path.resolve(opts.preserveRoot) : null,
-        untracked: dirty.untracked,
+        untracked: toPreserve,
         repoRoot,
         logger: (m) => process.stderr.write(`  ${m}\n`),
       });
