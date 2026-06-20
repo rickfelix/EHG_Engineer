@@ -1,0 +1,129 @@
+{
+  "executive_summary": "The vision ladder's rung placement (V1 foundation / V2 revenue / V3) and the live VDR build gauge drifted: revenue capabilities were misfiled in V1, letting a single blended 'built %' be misread as income progress (the paired SD-LEO-INFRA-VISION-LADDER-V1-V2-RECUT-001 corrected the data). This SD builds the durable ENFORCEMENT + honest reporting so the drift can never silently return: a reviewable `nature` classification persisted on each criterion, a pure placement-rules module, an extended coherence assertion (assertLadderRoadmapCoherence) that surfaces wave<->rung and placement drift, a CI + gauge-compute hook so drift is caught every run, and a per-rung AND per-nature breakdown in the exec email/gauge. CRITICAL SAFETY: the NEW coherence checks are ADVISORY-ONLY — they report drift but NEVER gate the live gauge's `available`, so the chairman gauge can never be suppressed by them (only the pre-existing registry-coherence check continues to withhold). The placement rule is scoped to the 4 revenue capabilities, not all operational capabilities (6 operational KR/governance caps correctly live in V1).",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Persist a reviewable `nature` classification on vision_ladder_criteria (additive DDL + backfill)",
+      "description": "Add an additive, nullable `nature` text column to vision_ladder_criteria with CHECK (nature IS NULL OR nature IN ('buildable','operational')), mirroring database/migrations/20260619_sd_backlog_map_disposition.sql (ADD COLUMN IF NOT EXISTS, idempotent constraint, COMMENT, inline rollback). Backfill: nature='operational' for the 6 OPERATIONAL_NATURE members (lib/vision/vdr-registry.js), 'buildable' for the rest, keyed on (rung_id, capability). NULL is treated as 'unclassified' (never a violation). The column is the persisted, queryable form of the existing JS-only OPERATIONAL_NATURE classification; OPERATIONAL_NATURE remains the source of truth.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "vision_ladder_criteria has a nullable `nature` column with a CHECK limiting it to buildable/operational/NULL.",
+        "Backfill sets the 6 OPERATIONAL_NATURE capabilities to operational and the remaining active criteria to buildable.",
+        "computeBuildGauge still returns available=true after the migration (the column is additive; gauge unaffected); NULL nature is never treated as a violation.",
+        "The migration is reversible (DROP COLUMN nature) and additive-only (no data loss)."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Reviewable placement-rules module (pure, frozen registry)",
+      "description": "New lib/vision/placement-rules.js mirroring the house frozen-registry style (lib/governance/guardrail-registry.js / lib/adam/adherence-probes.js): a frozen array of rules, each with id/description and a pure check(capability, rung_key, nature) => {ok, violation}. The canonical rule: a REVENUE capability (the 4 moved to V2: 'Take a real dollar', 'See distance-to-quit', 'Run a self-operating venture', 'Compound venture-level learning') must NOT sit in the foundation rung V1. The rule is SCOPED to those revenue capabilities by name, NOT to all operational-nature capabilities — because 6 operational KR/governance capabilities (e.g. Solo-operator survivability, All 7 governance guardrails) correctly live in V1. evaluatePlacement(criteria) returns the list of violations. Pure, no IO, unit-tested.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "placement-rules.js exports a frozen rule registry + a pure evaluatePlacement; assertion loud-at-import if a rule is malformed.",
+        "The revenue-placement rule flags ONLY the 4 named revenue capabilities when found in V1; the 6 legitimate operational-in-V1 capabilities are NOT flagged.",
+        "No IO inside the rules; the caller injects the criteria rows."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Extend coherence into assertLadderRoadmapCoherence — ADVISORY-ONLY new checks",
+      "description": "New assertLadderRoadmapCoherence (lib/vision/vdr-registry.js) returning { registry: <assertRegistryCoherence result, GATING>, advisories: [...] }. The advisories cover (b) roadmap waves<->rungs (time_horizon now/next/later == V1/V2/V3 consistency) and (c) placement-rule violations (via evaluatePlacement). CRITICAL: the advisories are reported but DO NOT gate computeBuildGauge's `available` — only the existing registry-coherence mismatch continues to withhold the live gauge. Defensive: a missing roadmap_waves.time_horizon column or zero waves is treated as ok (no false advisory/withhold). This matches the proven pattern where a coherence check is advisory until proven stable, so the chairman gauge is never suppressed by the new checks.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "assertLadderRoadmapCoherence returns the existing registry coherence (gating) plus a non-gating advisories array for wave<->rung and placement drift.",
+        "computeBuildGauge.available stays true when only advisories fire (the new checks never withhold the live gauge).",
+        "Missing time_horizon / zero roadmap waves is treated as ok (no false withhold), fail-soft on DB error."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Run the assertion every run — CI workflow + gauge-compute hook (fail-soft)",
+      "description": "Wire assertLadderRoadmapCoherence into the gauge compute path (so advisories are computed every gauge run) and add a CI workflow (.github/workflows) that runs the assertion and emits a loud ::warning:: on any advisory drift, NEVER failing the build (fail-soft) — drift is surfaced every run, not only on human inspection. A package.json script (e.g. vision:coherence) exposes the check for CI + local use.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "A package.json script runs the coherence assertion and prints advisories.",
+        "A CI workflow runs it and warns (never errors) on advisory drift.",
+        "The advisories are available in the gauge compute return for the report."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Honest reporting — per-rung AND per-nature breakdown in exec email/gauge",
+      "description": "Extend formatGaugeForSummary (lib/vision/vdr-registry.js) with a per-rung AND per-nature breakdown line (e.g. 'V1 foundation NN% built / operational NN%') built from the already-shipped GAUGE-BUILDABLE-VS-OPERATIONAL split (build_pct / operational_pct / operational_status), and render it in scripts/adam-exec-summary.mjs (both plaintext and HTML bodies, mirroring rungLine/operationalLine). This ensures a single blended % can never again be misread as income/north-star progress.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "formatGaugeForSummary returns a per-rung/per-nature breakdown line built from the existing buildable-vs-operational split.",
+        "The exec email (text + HTML) renders the breakdown line after the existing operational line.",
+        "No new gauge computation — reuses build_pct/operational_pct/operational_status already on the gauge."
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Document the forward complement (sourcing-engine classify-to-rung router)",
+      "description": "Document (a short doc / CHANGELOG note) that the sourcing-engine's classify-and-route router (SOURCING-ROADMAP-ENGINE) is the FORWARD complement to this backward enforcement: every NEW candidate is auto-filed to the correct rung+lane, preventing re-drift at the source. This SD enforces existing placement; the router prevents future misplacement.",
+      "priority": "low",
+      "acceptance_criteria": [
+        "A doc/CHANGELOG note records the backward-enforcement (this SD) vs forward-prevention (sourcing router) relationship.",
+        "The note names the relevant modules so a future reader can trace both halves."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Additive, reversible DDL", "description": "nature column is nullable + CHECK + reversible; applied via scripts/apply-migration.js additive-DDL path (deploy self-attestation, not CONST-002)." },
+    { "id": "TR-2", "title": "Pure modules", "description": "placement-rules.js and the advisory checks are pure/injected-IO; the gauge compute owns DB IO. Repo is ESM." },
+    { "id": "TR-3", "title": "Advisory-only safety", "description": "The new coherence checks must NOT gate computeBuildGauge.available; only assertRegistryCoherence continues to withhold (protect the live chairman gauge)." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Placement rule flags only the 4 revenue capabilities in V1", "type": "unit", "expected": "evaluatePlacement returns violations for the 4 revenue caps in V1 and none for the 6 operational KR/governance caps in V1." },
+    { "id": "TS-2", "scenario": "Advisory checks never withhold the live gauge", "type": "unit", "expected": "computeBuildGauge.available stays true when advisories (wave/placement) are non-empty; only registry mismatch withholds." },
+    { "id": "TS-3", "scenario": "Per-rung/per-nature breakdown line rendered", "type": "unit", "expected": "formatGaugeForSummary returns a breakdown line from the buildable-vs-operational split." }
+  ],
+  "acceptance_criteria": [
+    "vision_ladder_criteria carries a persisted nature classification (additive, backfilled).",
+    "Placement + wave<->rung drift is asserted as ADVISORY (surfaced, never suppressing the live gauge), scoped correctly to revenue caps.",
+    "The assertion runs every gauge compute + in CI (fail-soft).",
+    "The exec email/gauge reports per-rung AND per-nature so income progress is never misread."
+  ],
+  "risks": [
+    { "risk": "A too-strict new coherence check permanently withholds the live chairman gauge", "mitigation": "New checks are ADVISORY-ONLY (do not gate available); defensive on missing/zero waves; only the proven registry-coherence check withholds.", "severity": "high" },
+    { "risk": "Placement rule flags the 6 legitimate operational-in-V1 capabilities", "mitigation": "The rule is scoped to the 4 named REVENUE capabilities, not all operational nature; unit-tested against the 6 legit V1 operational caps.", "severity": "high" },
+    { "risk": "roadmap_waves.time_horizon column missing (schema gap)", "mitigation": "Wave<->rung advisory treats a missing column / zero waves as ok (fail-soft, no false advisory).", "severity": "medium" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["the live chairman vision gauge (computeBuildGauge / Chairman-UI tile)", "the Adam exec-email cron (scripts/adam-exec-summary.mjs)", "CI (the new coherence workflow)", "future readers of the placement-rules registry"],
+    "dependencies": ["lib/vision/vdr-registry.js (OPERATIONAL_NATURE, VDR_REGISTRY, computeBuildGauge, formatGaugeForSummary, assertRegistryCoherence)", "vision_ladder_criteria + vision_ladder_rungs tables", "roadmap_waves (advisory wave<->rung)", "scripts/apply-migration.js (additive DDL)", "the already-shipped GAUGE-BUILDABLE-VS-OPERATIONAL split"],
+    "data_contracts": ["vision_ladder_criteria.nature (NEW additive nullable column, CHECK buildable/operational)", "OPERATIONAL_NATURE set = source of truth for backfill", "roadmap_waves.time_horizon now/next/later == V1/V2/V3 (advisory invariant)", "no breaking schema change"],
+    "runtime_config": ["scripts/apply-migration.js 3-factor guard for the additive DDL", "package.json vision:coherence script", "no new env var; the advisory checks are always-on but non-gating"],
+    "observability_rollout": ["::warning:: lines in the new CI workflow on advisory drift", "the gauge return carries advisories[] for the report", "the exec email per-rung/per-nature line makes income progress legible", "live gauge available stays true throughout (advisory-only) — verify build_pct/operational_pct render after rollout"]
+  },
+  "system_architecture": {
+    "summary": "Additive nature column + a pure placement-rules registry + an advisory-only extension of the coherence assertion wired into the gauge compute and CI, plus a per-rung/per-nature reporting line — all protecting the live gauge by keeping the new checks non-gating.",
+    "components": [
+      { "name": "database/migrations/20260620_vision_ladder_criteria_nature.sql", "change": "NEW additive nullable nature column + backfill" },
+      { "name": "lib/vision/placement-rules.js", "change": "NEW pure frozen placement-rules registry + evaluatePlacement" },
+      { "name": "lib/vision/vdr-registry.js", "change": "ADD assertLadderRoadmapCoherence (advisory-only) + per-rung/per-nature in formatGaugeForSummary; wire into computeBuildGauge return (non-gating)" },
+      { "name": "scripts/adam-exec-summary.mjs", "change": "RENDER the per-rung/per-nature breakdown line (text + HTML)" },
+      { "name": ".github/workflows/vision-ladder-coherence.yml", "change": "NEW fail-soft CI workflow running the assertion" },
+      { "name": "tests/unit/placement-rules.test.js + tests/unit/ladder-roadmap-coherence.test.js", "change": "NEW unit tests" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Land the additive nature column + backfill first, then the pure placement-rules module, then the advisory-only assertLadderRoadmapCoherence wired non-gating into computeBuildGauge, then the reporting line + CI workflow + docs — keeping every new coherence check advisory so the live chairman gauge is never suppressed.",
+    "steps": [
+      "Write + apply the additive nature column migration + idempotent backfill (verify gauge still available).",
+      "Write lib/vision/placement-rules.js (frozen registry, revenue-scoped rule, evaluatePlacement) + tests.",
+      "Add assertLadderRoadmapCoherence (registry [gating] + advisories [non-gating] for wave<->rung + placement); wire its advisories into the computeBuildGauge return WITHOUT gating available; defensive on missing waves.",
+      "Add the per-rung/per-nature line to formatGaugeForSummary + render in adam-exec-summary.mjs (text+HTML).",
+      "Add the package.json vision:coherence script + a fail-soft CI workflow; document the forward complement.",
+      "Run tests + a live gauge smoke (available stays true; advisories surface), TESTING+SECURITY @ EXEC, commit early per coherent unit, EXEC-TO-PLAN."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Apply database/migrations/20260620_vision_ladder_criteria_nature.sql + backfill, then query vision_ladder_criteria + run computeBuildGauge", "expected_outcome": "nature column exists (nullable, CHECK); 6 operational + rest buildable on V1; gauge available=true (additive, unaffected)." },
+    { "step_number": 2, "instruction": "Run: npx vitest run tests/unit/placement-rules.test.js tests/unit/ladder-roadmap-coherence.test.js", "expected_outcome": "Placement rule flags ONLY the 4 revenue caps in V1, not the 6 operational KR/governance caps; assertLadderRoadmapCoherence returns gating registry coherence + non-gating advisories." },
+    { "step_number": 3, "instruction": "Run computeBuildGauge with a placement/wave advisory non-empty", "expected_outcome": "gauge.available stays true (advisories never withhold the live chairman gauge); missing time_horizon/zero waves treated as ok." },
+    { "step_number": 4, "instruction": "Render formatGaugeForSummary / the exec email", "expected_outcome": "A per-rung AND per-nature breakdown line appears (V1 foundation NN% built / operational NN%) from the buildable-vs-operational split." }
+  ],
+  "activation_test_id": "tests/unit/ladder-roadmap-coherence.test.js",
+  "metadata": { "sd_key": "SD-LEO-INFRA-VISION-LADDER-ROADMAP-COHERENCE-001" }
+}

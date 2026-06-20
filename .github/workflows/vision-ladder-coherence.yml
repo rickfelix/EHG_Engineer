@@ -1,0 +1,33 @@
+# SD-LEO-INFRA-VISION-LADDER-ROADMAP-COHERENCE-001 (FR-4)
+# Run the vision ladder/roadmap coherence assertion every push + on a daily cadence, so placement /
+# wave<->rung drift is surfaced the moment it lands, not only on human inspection. FAIL-SOFT: the
+# check emits ::warning:: on advisory drift but never fails the job (advisory-only posture, matching
+# the gauge's own non-gating ladder_coherence). It never withholds or breaks anything.
+name: vision-ladder-coherence
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/vision/**'
+      - 'scripts/vision-coherence-check.mjs'
+      - 'database/migrations/**vision_ladder**'
+  schedule:
+    - cron: '17 6 * * *' # daily at 06:17 UTC (offset from other crons)
+  workflow_dispatch: {}
+
+jobs:
+  coherence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci --no-audit --no-fund
+      - name: Run vision-ladder coherence assertion (advisory, fail-soft)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run vision:coherence
