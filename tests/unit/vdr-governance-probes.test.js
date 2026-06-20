@@ -134,8 +134,8 @@ describe('FR-1/FR-3: coherence invariant — criteria rows ↔ VDR_REGISTRY must
     }
   });
 
-  it('registry has 25 entries (11 original + 4 automation + 2 capability-layer + 5 governance + 3 consolidation)', () => {
-    expect(VDR_REGISTRY.length).toBe(25);
+  it('registry has 21 entries (7 original after the V1->V2 re-cut + 4 automation + 2 capability-layer + 5 governance + 3 consolidation)', () => {
+    expect(VDR_REGISTRY.length).toBe(21);
   });
 
   it('a matched criteria set is coherent (ok:true, no missing/stale probes)', () => {
@@ -193,7 +193,7 @@ describe('FR-3: computeBuildGauge end-to-end — governance contributes, coheren
     const gauge = await computeBuildGauge({ io, visionSource: async () => rows16() });
     expect(gauge.available).toBe(true);
     expect(gauge.coherence.ok).toBe(true);
-    expect(gauge.total_capabilities).toBe(25); // +4 automation +3 consolidation since the 18-entry baseline
+    expect(gauge.total_capabilities).toBe(21); // 7 original (post V1->V2 re-cut) +4 automation +2 caplayer +5 governance +3 consolidation
     const byCap = Object.fromEntries(gauge.components.map((c) => [c.capability, c.status]));
     expect(byCap['All 7 governance guardrails']).toBe('built');
     expect(byCap['OKR-driven prioritization + day-28 hard stop']).toBe('built');

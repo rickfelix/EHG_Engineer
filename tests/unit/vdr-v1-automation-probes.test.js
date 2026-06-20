@@ -35,9 +35,10 @@ describe('VDR_REGISTRY — 4 new automation/intelligence entries (ordinals 17-20
   });
 
   it('the registry includes these 4 (alongside the concurrently-landed governance + capability-layer clusters)', () => {
-    // 25 = 11 original + 5 governance (V1-GOV-PROBES) + 2 capability-layer (V1-CAPLAYER-PROBES)
-    //      + 4 here (automation ordinals 17-20) + 3 consolidation (V1-CONSOLIDATION-PROBES, 23-25).
-    expect(VDR_REGISTRY.length).toBe(25);
+    // 21 = 7 original (after SD-LEO-INFRA-VISION-LADDER-V1-V2-RECUT-001 moved 4 revenue/operating caps to
+    //      inactive V2) + 5 governance (V1-GOV-PROBES) + 2 capability-layer (V1-CAPLAYER-PROBES)
+    //      + 4 here (automation ordinals 17-20) + 3 consolidation (V1-CONSOLIDATION-PROBES).
+    expect(VDR_REGISTRY.length).toBe(21);
   });
 });
 
