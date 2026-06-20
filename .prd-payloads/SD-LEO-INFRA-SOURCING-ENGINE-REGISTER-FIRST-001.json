@@ -1,0 +1,79 @@
+{
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "--from-roadmap-item promotion path",
+      "description": "Add `--from-roadmap-item <id>` to scripts/leo-create-sd.js: createFromRoadmapItem fetches a roadmap_wave_items row (full or partial uuid), derives the SD fields (deriveSdFieldsFromRoadmapItem), creates the SD via createSD, then performs the two-way stamp (FR-3) and lane persist (FR-4). FR-5 hard guard: an item whose promoted_to_sd_key is already set never double-promotes (exits 0, skip). Mirrors the createFromFeedback contract (--type/--title/--migration-reviewed/--security-reviewed).",
+      "acceptance_criteria": [
+        "node scripts/leo-create-sd.js --from-roadmap-item <id> promotes the item to an SD",
+        "An already-promoted item (promoted_to_sd_key set) is skipped with no double-SD",
+        "The new mode is listed in the script usage and the script loads cleanly"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Register-first SOFT-WARN (PATH_A, warn-only)",
+      "description": "Per the coordinator PATH_A ruling (ack 75448f1b): on SD creation, if no preceding roadmap_wave_items registration points to the SD, emit a non-blocking WARNING — but do NOT auto-register. The default-wave / source-id minting convention is owned by the deferred parent SD-LEO-INFRA-SOURCING-ROADMAP-ENGINE-001 and must not be invented on the universal SD-creation path. The hook is a single lightweight query fully wrapped in try/catch (never blocks creation), env-disable via REGISTER_FIRST_WARN=off, and shouldWarnRegisterFirst skips children/fixtures/roadmap-sourced SDs to stay low-noise.",
+      "acceptance_criteria": [
+        "An SD created without a roadmap registration emits a non-blocking warning (warn-only)",
+        "No auto-register occurs; SD creation never blocks on the register-first hook",
+        "shouldWarnRegisterFirst returns false for a registered SD, a roadmap-sourced SD, fixtures, and children"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "Atomic two-way stamping on creation",
+      "description": "buildTwoWayStamp produces the linkage written together so it cannot drift: roadmap_wave_items.promoted_to_sd_key = the new SD key, and (only when the item traces to a conversion_ledger source) conversion_ledger.linked_sd_key + .promoted_proposal_path. The stamp is applied fail-soft in createFromRoadmapItem (try/catch, non-blocking).",
+      "acceptance_criteria": [
+        "roadmap_wave_items.promoted_to_sd_key is stamped with the new SD key",
+        "conversion_ledger.linked_sd_key/promoted_proposal_path are stamped only for a conversion_ledger-sourced item",
+        "A stamp failure is non-blocking (warns, does not abort)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "Lane via the shipped router + fail-soft dormant persistence",
+      "description": "laneForRoadmapItem routes the item through the shipped routeCandidate (lib/sourcing-engine/router.js) to get its lane. persistLaneFailSoft writes the lane to roadmap_wave_items.lane (and conversion_ledger.lane for a ledger source), but the lane column ships DORMANT — so a PostgREST 42703 (column absent) is detected and skipped silently until the lane-column migration is applied.",
+      "acceptance_criteria": [
+        "The lane is computed via the shipped routeCandidate (not a re-implementation)",
+        "Persisting the lane against the absent column logs a dormant-skip and does not throw",
+        "Lane persistence is non-blocking"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "Tests",
+      "description": "tests/unit/register-first.test.js covers deriveSdFieldsFromRoadmapItem, buildTwoWayStamp (roadmap-always / ledger-only-for-conversion_ledger / proposal-path-optional), shouldWarnRegisterFirst (warn / no-warn / registered / roadmap-sourced / fixture / child), and laneForRoadmapItem (belt-ready novel + dedup match). The double-promote guard and dormant-lane fail-soft are documented + exercised via the pure payload builders.",
+      "acceptance_criteria": [
+        "npx vitest run tests/unit/register-first.test.js passes",
+        "Each FR-1/FR-2/FR-3/FR-4 pure helper has at least one positive and one negative case",
+        "A re-promotion guard and the warn-only skip cases are asserted"
+      ]
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Pure register-first helpers",
+      "steps": "Run npx vitest run tests/unit/register-first.test.js.",
+      "expected_result": "12 assertions pass across derivation, two-way stamp, warn-only decision, and lane routing."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Universal create path still loads + new flag",
+      "steps": "Run node scripts/leo-create-sd.js --help.",
+      "expected_result": "Loads cleanly (register-first.js + routeCandidate imports resolve) and usage lists --from-roadmap-item."
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Dormant lane fail-soft + warn-only never blocks",
+      "steps": "Inspect persistLaneFailSoft and the FR-2 hook in scripts/leo-create-sd.js.",
+      "expected_result": "persistLaneFailSoft skips on PostgREST 42703; the FR-2 register-first hook is fully try/catch-wrapped and env-disableable, never blocking SD creation."
+    }
+  ],
+  "acceptance_criteria": [
+    "leo-create-sd.js can promote a roadmap_wave_items row to an SD with an atomic two-way stamp",
+    "Register-first is warn-only (PATH_A): no auto-register on the universal path; never blocks creation",
+    "Lane comes from the shipped router and persists fail-soft against the dormant lane column"
+  ]
+}
