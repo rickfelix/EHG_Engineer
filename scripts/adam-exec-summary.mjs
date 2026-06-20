@@ -23,6 +23,9 @@ import { renderDecisionLines, prepareDecisions, DEAD_VENTURE_STATUSES } from '..
 // SD-LEO-INFRA-AUTOMATED-ONE-ROADMAP-001 (FR-4): the LIVE VDR build-% gauge, replacing the
 // static .adam-vision-build.json number.
 import { computeBuildGauge, formatGaugeForSummary } from '../lib/vision/vdr-registry.js';
+// SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-E (FR-4): rung/KR rollup → email, in lockstep
+import { runRollup } from '../lib/vision/rung-progress-rollup.mjs';
+import { formatRungRollupLine } from '../lib/fleet/exec-email-rung-rollup.js';
 // SD-LEO-INFRA-VDR-GREP-SEAM-CROSSREPO-001: the shared code-grep seam so the 5 code_grep probes resolve
 // (the chairman-visible gauge measures all 11 capabilities, not just the 6 DB/KR-backed ones).
 import { makeDefaultGrepSeam } from '../lib/vision/vdr-grep-seam.js';
@@ -131,6 +134,7 @@ let buildLine = '';
 let rungLine = '';
 let operationalLine = '';
 let rungNatureLine = ''; // SD-LEO-INFRA-VISION-LADDER-ROADMAP-COHERENCE-001 (FR-5): per-rung + per-nature
+let rungRollupLine = ''; // SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-E (FR-4): rung-completion rollup
 try {
   // SD-LEO-INFRA-VISION-LADDER-V1-001 (FR-5): source the denominator from the ACTIVE vision rung
   // (visionSource:true → the re-anchorable ladder pointer), so the gauge re-points automatically when
@@ -148,6 +152,13 @@ try {
   rungLine = fmt.rungLine;
   operationalLine = fmt.operationalLine;
   rungNatureLine = fmt.rungNatureLine; // FR-5
+  // SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-E (FR-4): roll the type-aware rung/KR
+  // progress into the email IN LOCKSTEP — reuse the SAME gauge just computed (computeGaugeFn returns it,
+  // no second compute, no divergence) and DRY-RUN (apply:false → the email reads, never writes progress_pct).
+  try {
+    const rollup = await runRollup({ supabase: db, computeGaugeFn: async () => gauge, apply: false, log: () => {} });
+    rungRollupLine = formatRungRollupLine(rollup, { em: EM });
+  } catch (e) { console.warn('[adam-email] rung-rollup line skipped (fail-soft): ' + (e?.message || e)); }
 } catch (e) {
   console.warn('[adam-email] live VDR gauge failed (fail-soft): ' + (e?.message || e));
   visPct = null;
@@ -247,6 +258,7 @@ const text = [
   buildLine || (visPct != null ? `EHG vision: ${visPct}% built` : 'EHG vision: (gauge unavailable)'),
   ...(rungNatureLine ? ['   ' + rungNatureLine] : []),
   ...(rungLine ? ['   ' + rungLine] : []),
+  ...(rungRollupLine ? ['   ' + rungRollupLine] : []), // FR-4: per-rung completion rollup (Foundation → revenue)
   ...(operationalLine ? ['   ' + operationalLine] : []),
   ...(layerLine ? ['   ' + layerLine] : []),
   ...(visNote ? ['   ' + visNote] : []),
