@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-20T12:34:33.406Z
+**Generated**: 2026-06-20T19:16:58.204Z
 **Rows**: 624
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (19 total)
+## Columns (20 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -37,6 +37,7 @@
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
 | target_rung | `text` | YES | - | - |
+| lane | `text` | YES | - | Sourcing-engine routing lane (mutable; SEPARATE from terminal disposition). Vocab: lib/sourcing-engine/lane.js. SD-LEO-INFRA-SOURCING-ENGINE-LEDGER-LANE-COLUMN-001. |
 
 ## Constraints
 
@@ -49,6 +50,7 @@
 ### Check Constraints
 - `conversion_ledger_disposition_check`: CHECK (((disposition IS NULL) OR (disposition = ANY (ARRAY['built'::text, 'already_covered'::text, 'duplicate'::text, 'declined'::text, 'deferred_to_rung'::text, 'converted'::text, 'dismissed'::text, 'merged_duplicate'::text, 'deferred'::text]))))
 - `conversion_ledger_intake_status_check`: CHECK ((intake_status = ANY (ARRAY['registered'::text, 'triaged'::text])))
+- `conversion_ledger_lane_check`: CHECK (((lane IS NULL) OR (lane = ANY (ARRAY['belt-ready'::text, 'chairman-gated'::text, 'outcome-gated'::text, 'dedup'::text, 'decline'::text])) OR (lane ~~ 'blocked-on-_%'::text)))
 - `conversion_ledger_normalized_priority_check`: CHECK ((normalized_priority = ANY (ARRAY['critical'::text, 'high'::text, 'medium'::text, 'low'::text])))
 - `conversion_ledger_source_pool_check`: CHECK ((source_pool = ANY (ARRAY['eva_consultant_rec'::text, 'sd_proposal'::text, 'prd_payload_file'::text, 'todoist_todo'::text, 'youtube_playlist'::text, 'ehg_folder'::text, 'estate_corpus'::text])))
 - `conversion_ledger_target_rung_check`: CHECK (((target_rung IS NULL) OR (target_rung = ANY (ARRAY['v2'::text, 'v3'::text]))))

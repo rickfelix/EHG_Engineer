@@ -1,4 +1,7 @@
 -- SD-LEO-INFRA-SOURCING-ENGINE-LEDGER-LANE-COLUMN-001 (FR-1 / FR-2)
+-- @approved-by: codestreetlabs@gmail.com
+-- Prod-apply approval (additive-only) stamped during SD-LEO-INFRA-SOURCING-ENGINE-ACTIVATION-001
+-- go-live, chairman-authorized 2026-06-20. Additive nullable column + additive CHECK; reversible.
 -- Sourcing engine child 2/10 — the schema foundation.
 --
 -- Adds a SEPARATE, mutable `lane` column (DISTINCT from the terminal `disposition`) to

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-20T12:34:33.406Z
-**Rows**: 520
+**Generated**: 2026-06-20T19:16:58.204Z
+**Rows**: 728
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (12 total)
+## Columns (13 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -30,6 +30,7 @@
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 | item_disposition | `text` | YES | `'pending'::text` | Flow state: pending->selected->brainstormed->promoted (or deferred/dropped at any point) |
 | brainstorm_session_id | `uuid` | YES | - | FK to brainstorm_sessions when item has been brainstormed. Null = not yet brainstormed. |
+| lane | `text` | YES | - | Sourcing-engine routing lane (mutable; SEPARATE from terminal item_disposition). Vocab: lib/sourcing-engine/lane.js. SD-LEO-INFRA-SOURCING-ENGINE-LEDGER-LANE-COLUMN-001. |
 
 ## Constraints
 
@@ -45,7 +46,8 @@
 
 ### Check Constraints
 - `roadmap_wave_items_item_disposition_check`: CHECK ((item_disposition = ANY (ARRAY['pending'::text, 'selected'::text, 'deferred'::text, 'brainstormed'::text, 'promoted'::text, 'dropped'::text])))
-- `roadmap_wave_items_source_type_check`: CHECK ((source_type = ANY (ARRAY['todoist'::text, 'youtube'::text, 'brainstorm'::text])))
+- `roadmap_wave_items_lane_check`: CHECK (((lane IS NULL) OR (lane = ANY (ARRAY['belt-ready'::text, 'chairman-gated'::text, 'outcome-gated'::text, 'dedup'::text, 'decline'::text])) OR (lane ~~ 'blocked-on-_%'::text)))
+- `roadmap_wave_items_source_type_check`: CHECK ((source_type = ANY (ARRAY['todoist'::text, 'youtube'::text, 'brainstorm'::text, 'adam_direct'::text, 'vdr_gauge'::text])))
 
 ## Indexes
 
