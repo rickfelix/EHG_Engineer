@@ -546,15 +546,17 @@ async function createFromFeedback(feedbackId, options = {}) {
 }
 
 // SD-LEO-INFRA-SOURCING-ENGINE-REGISTER-FIRST-001 (FR-4): persist the routed lane, FAIL-SOFT against
-// the DORMANT lane column. PostgREST 42703 (or a "lane … column … exist" message) means the lane-column
-// migration is not applied yet — skip silently until it is. Never throws on the dormant case.
+// the DORMANT lane column. The PostgREST client reports an unknown/unapplied column as PGRST204
+// ("Could not find the 'lane' column ... in the schema cache") — NOT the raw Postgres 42703 — so detect
+// both, plus a "lane … column … exist" message fallback. Skip silently until the migration is applied.
 async function persistLaneFailSoft(sb, item, lane) {
   if (!lane) return;
   const tryUpdate = async (table, match) => {
     const { error } = await sb.from(table).update({ lane }).match(match);
     if (error) {
       const msg = error.message || '';
-      const absent = error.code === '42703' || (/lane/i.test(msg) && /(column|exist)/i.test(msg));
+      const absent = error.code === 'PGRST204' || error.code === '42703'
+        || (/lane/i.test(msg) && /(column|exist)/i.test(msg));
       if (absent) { console.log(`   ℹ️  lane column not yet applied (dormant) — lane='${lane}' not persisted to ${table}`); return; }
       throw error;
     }
@@ -2078,7 +2080,7 @@ async function createSD(options) {
       const { data: reg } = await supabase
         .from('roadmap_wave_items').select('id').eq('promoted_to_sd_key', data.sd_key).limit(1);
       const hasRegistration = Array.isArray(reg) && reg.length > 0;
-      if (shouldWarnRegisterFirst({ sd_key: data.sd_key, metadata }, hasRegistration)) {
+      if (shouldWarnRegisterFirst({ sd_key: data.sd_key, metadata }, hasRegistration, parentId)) {
         console.warn(`   ⚠️  register-first: ${data.sd_key} created without a preceding roadmap registration (warn-only; auto-register awaits the roadmap-engine convention).`);
       }
     } catch { /* warn-only must never block SD creation */ }

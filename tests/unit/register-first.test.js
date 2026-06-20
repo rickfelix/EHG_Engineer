@@ -59,9 +59,16 @@ describe('register-first — shouldWarnRegisterFirst (FR-2, PATH_A warn-only)', 
   it('does NOT warn for a roadmap-sourced SD (already linked)', () => {
     expect(shouldWarnRegisterFirst({ sd_key: 'SD-LEO-FOO-001', metadata: { source: 'roadmap_item' } }, false)).toBe(false);
   });
-  it('does NOT warn for fixtures or children', () => {
+  it('does NOT warn for fixtures', () => {
     expect(shouldWarnRegisterFirst({ sd_key: 'SD-TEST-FOO-001', metadata: {} }, false)).toBe(false);
     expect(shouldWarnRegisterFirst({ sd_key: 'SD-LEO-FOO-001', metadata: { is_fixture: true } }, false)).toBe(false);
+  });
+  it('does NOT warn for a child SD in its REAL shape (parentId arg + metadata.parent_sd_key)', () => {
+    // The real createChild path passes parentId to createSD and stamps metadata.parent_sd_key/child_index
+    // (source:'leo'), NOT source:'child'/parent_sd_id — so the skip must key on those shapes.
+    expect(shouldWarnRegisterFirst({ sd_key: 'SD-LEO-FOO-001-A', metadata: { source: 'leo', parent_sd_key: 'SD-LEO-FOO-001', child_index: 1 } }, false, 'SD-LEO-FOO-001')).toBe(false);
+    expect(shouldWarnRegisterFirst({ sd_key: 'SD-LEO-FOO-001-A', metadata: { source: 'leo', parent_sd_key: 'SD-LEO-FOO-001' } }, false)).toBe(false);
+    // legacy shapes still skip
     expect(shouldWarnRegisterFirst({ sd_key: 'SD-LEO-FOO-001', metadata: { source: 'child' } }, false)).toBe(false);
   });
 });
