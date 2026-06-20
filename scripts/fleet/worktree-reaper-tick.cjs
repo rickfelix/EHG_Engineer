@@ -154,6 +154,38 @@ function poolWatchdogDecision({ used, cap = MAX_WORKTREE_COUNT, threshold = DEFA
 }
 
 /**
+ * SD-LEO-INFRA-WIRE-ALL-POOLS-001: should the hourly tick reap EVERY registered pool?
+ * Default ON; opt out only with a falsey WORKTREE_REAPER_ALL_POOLS token (false/0/off/no),
+ * mirroring the WORKTREE_POOL_WATCHDOG convention. Pure (env injected) for unit testing.
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {boolean}
+ */
+function isAllPoolsEnabled(env = process.env) {
+  return !['false', '0', 'off', 'no'].includes(
+    String(env.WORKTREE_REAPER_ALL_POOLS || '').trim().toLowerCase(),
+  );
+}
+
+/**
+ * Build the argv for the reaper spawn. Pure (no I/O) so the flag wiring is unit-testable.
+ * With `allPools` true the reaper fans out a per-pool --repo child running the unchanged
+ * single-repo reaper (active-claim-protected, preserve-before-delete, dry-run-default all
+ * inherited; buildPassthroughFlags excludes --all-pools/--repo so no child re-fans-out).
+ * Without it, only the current repo is reaped — the pre-2026-06-20 behavior. The current
+ * repo stays covered either way (it is one of the pools resolveRegisteredPools returns).
+ * The watchdog appends --stage0/--execute to this base array afterward.
+ * @param {{ reaperScript:string, execute?:boolean, stage2?:boolean, allPools?:boolean }} o
+ * @returns {string[]}
+ */
+function buildReaperArgs({ reaperScript, execute, stage2, allPools }) {
+  const args = [reaperScript];
+  if (execute) args.push('--execute');
+  if (stage2) args.push('--stage2', '--yes');
+  if (allPools) args.push('--all-pools');
+  return args;
+}
+
+/**
  * Tick the counter and invoke the reaper when due.
  * Returns the post-invocation state for caller visibility.
  *
@@ -203,9 +235,7 @@ function tick(opts = {}) {
     return { invoked: false, counter: state.sweep_counter, cadence, result: 'skipped_in_flight', pid: state.last_pid, enabled: true };
   }
 
-  const args = [reaperScript];
-  if (execute) args.push('--execute');
-  if (stage2) args.push('--stage2', '--yes');
+  const args = buildReaperArgs({ reaperScript, execute, stage2, allPools: isAllPoolsEnabled() });
 
   // SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001 (FR-002): pool-utilization watchdog.
   // When the pool is at/above threshold, proactively run Stage-0 (terminal-SD
@@ -287,6 +317,8 @@ module.exports = {
   resolvePoolThreshold,
   countActiveWorktrees,
   poolWatchdogDecision,
+  isAllPoolsEnabled,
+  buildReaperArgs,
   DEFAULT_CADENCE,
   DEFAULT_POOL_THRESHOLD,
   MAX_WORKTREE_COUNT,
