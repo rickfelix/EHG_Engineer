@@ -44,7 +44,7 @@ import { readSourcingEngineFlags, formatSourcingAwareness } from './lib/sourcing
 // SD-LEO-INFRA-CAPACITY-FORECAST-STALLED-BELT-EMPTY-FP-001: an idle worker is STALLED only when
 // its loop isn't claiming DESPITE available work — gate the stall label on belt depth, not heartbeat
 // age alone, so an empty-belt idle worker isn't a false-positive STALLED.
-import { classifyIdleWorker } from './lib/capacity-idle-classifier.mjs';
+import { classifyIdleWorker, DEFAULT_STALL_TTL_S } from './lib/capacity-idle-classifier.mjs';
 
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
@@ -175,11 +175,14 @@ async function main() {
       // idle: distinguish a healthy idle from a stalled loop (alive but never converting work)
       idleNow++;
       const hbAgeS = Math.round((Date.now() - new Date(w.heartbeat_at).getTime()) / 1000);
-      // A stale heartbeat is only a STALL if there is claimable work the loop is failing to take.
+      // A stale heartbeat is only a STALL if (a) there is claimable work the loop is failing to take
+      // AND (b) the heartbeat is older than a full healthy idle re-poll cycle. The /loop idle cadence
+      // is 600–1200s, so DEFAULT_STALL_TTL_S (1800s) ensures a healthy idle worker BETWEEN ticks is not
+      // false-flagged "needs /loop re-arm" just because a belt item appeared before its next wake.
       // beltDepth inputs are already populated before this loop (openQfCount + claimable[]); the
       // beltDepth re-derivation lower down is only for the verdict math.
       const { stalled: stalledFlag, state: idleState, detail: idleDetail } =
-        classifyIdleWorker({ hbAgeS, beltDepth: claimable.length + openQfCount });
+        classifyIdleWorker({ hbAgeS, beltDepth: claimable.length + openQfCount, ttlS: DEFAULT_STALL_TTL_S });
       if (stalledFlag) stalled++;
       rows.push({
         sess: w.session_id.slice(0, 8), callsign, state: idleState,
