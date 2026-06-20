@@ -69,6 +69,43 @@ describe('buildQueueRow (FR-2)', () => {
     expect(row.sla_hours).toBe(24);
   });
 
+  it('opts.gateType / escalationType / extraContext override the lane-derived defaults (child-7 reuse)', () => {
+    const row = buildQueueRow(
+      { source_id: 's' },
+      { lane: LANE.OUTCOME_GATED, rung: 'V2' },
+      { gateType: 'outcome_decomposition', escalationType: 'outcome_decomposition', extraContext: { proposed_enablers: [{ capability: 'X' }] } },
+    );
+    expect(row.lane).toBe('outcome-gated'); // lane column unchanged — still the router lane
+    expect(row.gate_type).toBe('outcome_decomposition'); // distinct idempotency axis
+    expect(row.escalation_type).toBe('outcome_decomposition');
+    expect(row.context.proposed_enablers).toEqual([{ capability: 'X' }]);
+    expect(row.context.rung).toBe('V2'); // base context preserved
+  });
+
+  it('omitting the overrides preserves the original lane-derived behavior (back-compat)', () => {
+    const row = buildQueueRow({ source_id: 's' }, { lane: LANE.OUTCOME_GATED });
+    expect(row.gate_type).toBe('outcome-gated');
+    expect(row.escalation_type).toBe('outcome');
+    expect(row.context.proposed_enablers).toBeUndefined();
+  });
+
+  it('extraContext can ADD fields but never clobbers the routed base context keys', () => {
+    const row = buildQueueRow(
+      { source_id: 's' },
+      { lane: LANE.OUTCOME_GATED, rung: 'V2', enablers: ['base'] },
+      { extraContext: { enablers: ['CLOBBER'], rung: 'V9', proposed_enablers: [{ capability: 'X' }] } },
+    );
+    expect(row.context.enablers).toEqual(['base']); // base wins
+    expect(row.context.rung).toBe('V2');            // base wins
+    expect(row.context.proposed_enablers).toEqual([{ capability: 'X' }]); // additive field survives
+  });
+
+  it('rejects an empty-string gateType/escalationType override (would break the idempotency key)', () => {
+    const row = buildQueueRow({ source_id: 's' }, { lane: LANE.OUTCOME_GATED }, { gateType: '', escalationType: '' });
+    expect(row.gate_type).toBe('outcome-gated'); // falls back to lane, not ''
+    expect(row.escalation_type).toBe('outcome');
+  });
+
   it('QUEUE_LANES + DEFAULT_SLA_HOURS only cover the two gated lanes', () => {
     expect(QUEUE_LANES).toEqual(['chairman-gated', 'outcome-gated']);
     expect(DEFAULT_SLA_HOURS['chairman-gated']).toBe(72);
