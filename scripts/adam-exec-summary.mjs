@@ -165,27 +165,12 @@ if (!DRY && visPct != null) {
   } catch (e) { console.warn('[adam-email] vision_gauge_read marker skipped (fail-soft): ' + (e?.message || e)); }
 }
 
-// ── 2a. VISION BUILD-% TREND (SD-LEO-INFRA-VISION-GAUGE-HISTORIZE-001 FR-3) ──
-// Read the last N persisted snapshots from vision_build_gauge and render the overall_pct trend
-// (compact sparkline + signed delta vs the prior run) and a short prior-analysis line, so the chairman
-// sees whether the build-% is MOVING, not just the live number. Fail-soft on EVERY branch: a DB/read
-// error degrades to an honest "(unavailable this run)" note and NEVER blocks the email; <2 snapshots
-// degrade to "trend: building history" (the pure helper owns the honest fallbacks).
-let trendLine = null, trendAnalysis = null;
-try {
-  const { data: snaps } = await db.from('vision_build_gauge') // schema-lint-disable-line — real table, missing from the stale 2026-06-14 snapshot (pre-existing read; harness flag 6cc2757f)
-    .select('overall_pct, available, measured_at')
-    .order('measured_at', { ascending: false })
-    .limit(24);
-  const { computeGaugeTrend } = await import('../lib/vision/gauge-trend.js');
-  const trend = computeGaugeTrend(snaps || []);
-  trendLine = trend.trendLine;
-  trendAnalysis = trend.analysisLine;
-} catch (e) {
-  console.warn('[adam-email] vision trend unavailable (fail-soft): ' + (e?.message || e));
-  trendLine = 'EHG vision trend: (unavailable this run)';
-  trendAnalysis = null;
-}
+// ── 2a. VISION BUILD-% TREND — REMOVED from the email per chairman directive 2026-06-20. ──
+// The "EHG vision trend" sparkline + "prior analysis" lines are no longer shown in the exec summary.
+// Kept as null so the downstream text/HTML renderers omit the section (both gate on these being
+// truthy); the vision_build_gauge history still accrues for other consumers — only this email
+// surface is dropped, and the now-unused snapshot read + computeGaugeTrend import are removed.
+const trendLine = null, trendAnalysis = null;
 
 // ── 2b. DONE IN THE LAST HOUR (SD-LEO-INFRA-FIX-CHAIRMAN-HOURLY-001 FR-2/FR-3) ──
 // Replaces the stale "Distance-to-quit" roadmap prose (chairman-directed 2026-06-16). A couple of
