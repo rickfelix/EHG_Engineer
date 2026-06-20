@@ -175,26 +175,17 @@ node scripts/fleet-dashboard.cjs all
 ```
 Display the output.
 
-**Step 4: Coordinator onboarding check (surface role + verify the eight-loop set)**
+**Step 4: Coordinator onboarding check (surface role + verify the canonical loop set)**
 ```bash
 node scripts/coordinator-startup-check.mjs
 ```
-This (a) surfaces the durable coordinator role context and prints a roles/responsibilities summary (MANAGER-not-IC, keep-workers-busy=KPI, recurring 3-source audit, teardown discipline), and (b) emits the canonical set of **eight** standard cron loops, each with a ready CronCreate spec. It is fail-open (warns, exits 0). `CronList`/`CronCreate` are HARNESS tools (not Node-callable), so the helper EMITS the spec — YOU compare it against `CronList` and arm only the loops not already present. To get an explicit armed|MISSING verdict, re-run with the prompts already in CronList: `node scripts/coordinator-startup-check.mjs --armed "<prompt1>,<prompt2>,…"`.
+This (a) surfaces the durable coordinator role context and prints a roles/responsibilities summary (MANAGER-not-IC, keep-workers-busy=KPI, recurring 3-source audit, teardown discipline), and (b) emits the canonical set of standard cron loops (the authoritative `STANDARD_LOOPS` array in `scripts/coordinator-startup-check.mjs` — do NOT hand-count them here), each with a ready CronCreate spec. It is fail-open (warns, exits 0). `CronList`/`CronCreate` are HARNESS tools (not Node-callable), so the helper EMITS the spec — YOU compare it against `CronList` and arm only the loops not already present. To get an explicit armed|MISSING verdict, re-run with the prompts already in CronList: `node scripts/coordinator-startup-check.mjs --armed "<prompt1>,<prompt2>,…"`.
 
 **Step 5: Set up automated cron loops using CronCreate**
 
-Arm all standard loops (idempotent — skip any already in `CronList`; `coordinator-startup-check.mjs` emits the canonical set):
-1. **Sweep every 5 minutes**: `cron: "*/5 * * * *"`, `prompt: "node scripts/stale-session-sweep.cjs"`, `recurring: true`
-2. **Dashboard every 5 minutes (offset by 2 min)**: `cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"`, `prompt: "node scripts/fleet-dashboard.cjs all"`, `recurring: true`
-3. **Identity refresh every 5 minutes (offset by 4 min)**: `cron: "4,9,14,19,24,29,34,39,44,49,54,59 * * * *"`, `prompt: "node scripts/assign-fleet-identities.cjs"`, `recurring: true`
-4. **Inbox every 2 minutes**: `cron: "*/2 * * * *"`, `prompt: "node scripts/fleet-dashboard.cjs inbox"`, `recurring: true` — surfaces unread worker `/signal` traffic (also re-asserts the coordinator pointer).
-5. **Coordinator 3-source audit every 15 minutes**: `cron: "*/15 * * * *"`, `prompt: "node scripts/coordinator-audit.mjs"`, `recurring: true` — SD queue / harness backlog / inbox, with the source-vs-wake decision.
-6. ~~Executive email summary~~ **RETIRED** (chairman email cutover 2026-06-10, advisory b7b73b86 / QF-20260609-024): do NOT arm `coordinator-email-summary.mjs`. The ONE chairman-facing email is the **Adam exec-summary**, scheduled durably via GitHub Actions (`.github/workflows/adam-exec-email-cron.yml`, live when repo var `ADAM_EMAIL_LIVE=true`). Escalate questions via the inbox/advisory lanes instead.
-7. **Feature-flag governance review daily at 09:00**: `cron: "0 9 * * *"`, `prompt: "node scripts/flag-governance-review.mjs"`, `recurring: true` — gated default-OFF behind `leo_feature_flags FLAG_GOVERNANCE_REVIEW_V1` (cheap no-op until enabled). SD-LEO-INFRA-ACTIVATE-FEATURE-FLAG-001.
-8. **Coordinator self-review every 5 minutes (work-triggered, cheap poller)**: `cron: "*/5 * * * *"`, `prompt: "node scripts/coordinator-self-review.mjs"`, `recurring: true` — captures any worker `COORDINATOR-FEEDBACK` / Adam `ADAM-COORD-FEEDBACK` responses every tick; SOLICITS fresh tri-party (coordinator↔workers↔Adam) critique only when the completed-SD delta reaches `COORD_REVIEW_EVERY` (default 8). No-op below threshold, so it is safe to leave armed. The Adam bidirectional lane is gated by `COORD_ADAM_REVIEW_V1` (now `on` in `.claude/settings.json`). The `*/15` audit surfaces a **REVIEW HEALTH** gauge that flags a STUCK counter if this loop ever stops firing.
-9. **Hourly responsibilities review at :17**: `cron: "17 * * * *"`, `prompt: "node scripts/coordinator-hourly-review.cjs"`, `recurring: true` — surfaces the SRE charter + Adam reminder; cycle-down-aware (self-suppresses when the fleet is quiescent).
-10. **Capacity forecast every 10 minutes (predictive belt refill)**: `cron: "3,13,23,33,43,53 * * * *"`, `prompt: "node scripts/coordinator-capacity-forecast.mjs --dispatch"`, `recurring: true` — the standing-duty-5 mechanism (operator 2026-06-10). Tracks per-worker busy-state + ETA-to-free + belt depth; on a FORECAST deficit (`demand_soon + buffer > claimable`) auto-reaches Adam for sourcing BEFORE the belt empties (30m cooldown). `--dispatch` enables the auto-reach; drop it for forecast-only.
-11. **Backlog prioritization pass every 15 minutes**: `cron: "6,21,36,51 * * * *"`, `prompt: "node scripts/coordinator-backlog-rank.mjs"`, `recurring: true` — the standing-duty-6 mechanism (operator 2026-06-10). Ranks claimable leaf SDs critical-path-first (unlock-count → priority → age), persists `metadata.dispatch_rank` (TTL 1h, stale ranks cleared) that worker-checkin's self-claim tiers honor — coordinator-driven "what gets done first" by default.
+**Arm exactly the set `scripts/coordinator-startup-check.mjs` emits as `STANDARD_LOOPS` — do NOT maintain a parallel list here.** `STANDARD_LOOPS` (in `scripts/coordinator-startup-check.mjs`) is the single source of truth for which loops exist, their cron schedules, and their prompts; Step 4 already ran the helper, which prints each loop with a ready CronCreate spec. For every loop the helper emits, run `CronCreate` with its `cron` + `prompt` and `recurring: true`. Idempotent — skip any whose prompt is already in `CronList`. To get an explicit `armed|MISSING` verdict, re-run the helper with the prompts already in `CronList`: `node scripts/coordinator-startup-check.mjs --armed "<prompt1>,<prompt2>,…"`.
+
+> **Do NOT arm the retired Executive email summary** (`coordinator-email-summary.mjs`) — chairman email cutover 2026-06-10, advisory b7b73b86 / QF-20260609-024. The ONE chairman-facing email is the **Adam exec-summary**, scheduled durably via GitHub Actions (`.github/workflows/adam-exec-email-cron.yml`, live when repo var `ADAM_EMAIL_LIVE=true`). It is intentionally absent from `STANDARD_LOOPS`; escalate questions via the inbox/advisory lanes instead.
 
 The identity refresh loop detects new workers that joined since the last assignment and gives them a color/callsign. Existing assignments are preserved (the script reads current metadata and only assigns to workers without an identity).
 
@@ -228,16 +219,7 @@ Display:
 ```
 Primed: coordinator.md + role doc read ✓ (sections: <N>, standing duties: 4, pause-discipline + belt rules loaded)
 Coordinator initialized and REGISTERED as the active coordinator (role context surfaced; all standard loops armed).
-  Sweep loop: every 5 minutes (auto-releases dead claims, resolves conflicts, QA fixes)
-  Dashboard loop: every 5 minutes (offset 2min from sweep)
-  Identity loop: every 5 minutes (offset 4min — assigns colors/callsigns to new workers)
-  Inbox loop: every 2 minutes (surfaces worker /signal traffic; re-asserts the coordinator pointer)
-  Audit loop: every 15 minutes (3-source audit: SD queue / harness backlog / inbox; REVIEW HEALTH gauge)
-  Chairman email: handled by the Adam exec-summary GHA cron (adam-exec-email-cron.yml) — coordinator fleet email RETIRED
-  Self-review loop: every 5 minutes (work-triggered tri-party review; no-op below COORD_REVIEW_EVERY)
-  Hourly-review loop: every hour at :17 (responsibilities review, coordinator + Adam, cycle-down aware)
-  Capacity-forecast loop: every 10 minutes (per-worker ETA-to-free + belt depth; auto-reaches Adam on a FORECAST deficit before workers go idle)
-  Backlog-rank loop: every 15 minutes (critical-path-first dispatch_rank published to the self-claim path — coordinator-driven ordering)
+  All standard loops armed: every loop in STANDARD_LOOPS (scripts/coordinator-startup-check.mjs — the single source of truth) is now in CronList. Re-run `node scripts/coordinator-startup-check.mjs --armed "<prompts-in-CronList>"` for an explicit armed|MISSING verdict per loop. (The retired Executive email summary is intentionally NOT armed — the chairman email is the Adam exec-summary GHA cron, adam-exec-email-cron.yml.)
   All loops auto-expire after 7 days (CronCreate's recurring-job limit) or when this session exits — re-arm weekly to keep the fleet supervised.
 
   ✓ STEP 1 of 3 COMPLETE — the coordinator is up and officially registered. The fleet is supervised.
