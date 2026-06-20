@@ -1568,6 +1568,12 @@ async function createSD(options) {
     scope = null,
     // SD-LEO-INFRA-MULTI-REPO-ROUTING-001: Allow explicit target_application
     target_application: explicitTargetApp = null,
+    // SD-FDBK-INFRA-LEO-CREATE-PROPOSAL-001 (FR-3): accept dependencies so the
+    // canonical-column write below (~line 1915) is reachable. Previously `dependencies`
+    // was never destructured, so its typeof guard always resolved to [] — the column
+    // could not be populated by ANY caller. Default null preserves behavior for the
+    // direct/--from-feedback/--child callers that omit it.
+    dependencies = null,
   } = options;
 
   // QF-CLAIM-CONFLICT-UX-001 + SD-LEO-ENH-IMPLEMENT-TIERED-QUICK-001:
@@ -2276,6 +2282,16 @@ export function mapProposalToCreateArgs(normalized, proposal, filePath, opts = {
     rationale: proposal.rationale || `Materialized from proposal ${filePath || 'unknown'}`,
     scope: proposal.scope || null,
     success_criteria: Array.isArray(proposal.success_criteria) ? proposal.success_criteria : null,
+    // SD-FDBK-INFRA-LEO-CREATE-PROPOSAL-001 (FR-1): a proposal that declares
+    // metadata.depends_on must populate the CANONICAL `dependencies` column — that is
+    // what lib/coordinator/claimable-work.cjs and scripts/modules/sd-next/dependency-resolver.js
+    // gate BLOCKED/READY on. metadata.depends_on alone is documented (Dependency Field Guide)
+    // as ignored by the resolver, so the prior closed whitelist silently dropped child
+    // sequencing — forcing manual ordering of the sourcing-engine children. Only set the
+    // key when there is at least one normalized dep (preserves dependencies=[] otherwise).
+    ...(normalizeDependsOn(proposal.metadata?.depends_on).length > 0
+      ? { dependencies: normalizeDependsOn(proposal.metadata?.depends_on) }
+      : {}),
     metadata: {
       source: 'proposal',
       proposal_file_path: filePath || null,
@@ -2285,6 +2301,20 @@ export function mapProposalToCreateArgs(normalized, proposal, filePath, opts = {
       gold_origin: proposal.gold_origin || null,
       necessity: proposal.necessity || null,
       dedup_note: proposal.dedup_note || null,
+      // SD-FDBK-INFRA-LEO-CREATE-PROPOSAL-001 (FR-2): carry the proposal's informational
+      // dependency/provenance keys through the closed whitelist. engine_child_index and
+      // parent_sd_key are ordering/lineage hints the coordinator + reporting consume;
+      // depends_on is retained in metadata for back-compat with any reader that still
+      // inspects it (the ENFORCED copy lives in the dependencies column above). Each key
+      // appears ONLY when the proposal declares it (no coercion/defaulting), preserving
+      // the closed-whitelist metadata invariant.
+      ...(proposal.metadata?.engine_child_index !== undefined && proposal.metadata?.engine_child_index !== null
+        ? { engine_child_index: proposal.metadata.engine_child_index }
+        : {}),
+      ...(proposal.metadata?.parent_sd_key ? { parent_sd_key: proposal.metadata.parent_sd_key } : {}),
+      ...(normalizeDependsOn(proposal.metadata?.depends_on).length > 0
+        ? { depends_on: proposal.metadata.depends_on }
+        : {}),
       // FR-1a: canonical Adam-origin attribution (the code-enforced producer for FR-1b's
       // sourcing-cadence consumer; see this function's doc comment). Only stamped for an explicit
       // Adam-origin proposal — never coerced/defaulted, so a non-Adam proposal stays unattributed.
@@ -2300,6 +2330,29 @@ export function mapProposalToCreateArgs(normalized, proposal, filePath, opts = {
       ...(proposal.metadata?.security_reviewed === true || opts.securityReviewed === true ? { security_reviewed: true } : {}),
     },
   };
+}
+
+/**
+ * SD-FDBK-INFRA-LEO-CREATE-PROPOSAL-001 (FR-1): normalize a proposal's declared
+ * depends_on into the CANONICAL dependencies-column shape [{ sd_id: <key> }].
+ * Accepts the same loose entry forms the dispatcher's depsArray() tolerates:
+ *   - bare SD-key string            "SD-FOO-001"        -> { sd_id: "SD-FOO-001" }
+ *   - { sd_id: "SD-FOO-001" }       (canonical)          -> passed through
+ *   - { sd_key: "SD-FOO-001" }      (alias)              -> { sd_id: "SD-FOO-001" }
+ * Non-string / empty / malformed entries are dropped (fail-soft — a bad dep entry
+ * must never crash SD creation). Returns [] for any non-array / nullish input, so a
+ * proposal without depends_on yields dependencies=[] (no behavior change). PURE.
+ */
+export function normalizeDependsOn(dependsOn) {
+  if (!Array.isArray(dependsOn)) return [];
+  const out = [];
+  for (const entry of dependsOn) {
+    let key = null;
+    if (typeof entry === 'string') key = entry.trim();
+    else if (entry && typeof entry === 'object') key = (entry.sd_id || entry.sd_key || '').trim();
+    if (key) out.push({ sd_id: key });
+  }
+  return out;
 }
 
 /**
