@@ -45,6 +45,15 @@ describe('autoScoreUnscoredSD', () => {
     expect(await autoScoreUnscoredSD('SD-X-001', stubSupabase(), { scoreSD, timeoutMs: 5 })).toBeNull();
   });
 
+  it('a scorer that REJECTS after the timeout does not throw or leak (no unhandledRejection)', async () => {
+    // The losing scorer promise rejects past the bound; the gate must already have returned null and the
+    // late rejection must be swallowed by the attached .catch. We flush the microtask/timer queue to give
+    // the late rejection a chance to surface as an unhandledRejection (it must not).
+    const scoreSD = vi.fn(() => new Promise((_, rej) => setTimeout(() => rej(new Error('late LLM error')), 30)));
+    expect(await autoScoreUnscoredSD('SD-X-001', stubSupabase(), { scoreSD, timeoutMs: 5 })).toBeNull();
+    await new Promise((r) => setTimeout(r, 50));
+  });
+
   it('returns null when the scorer resolves without a numeric total_score', async () => {
     const scoreSD = vi.fn().mockResolvedValue({ summary: 'oops' });
     expect(await autoScoreUnscoredSD('SD-X-001', stubSupabase(), { scoreSD })).toBeNull();

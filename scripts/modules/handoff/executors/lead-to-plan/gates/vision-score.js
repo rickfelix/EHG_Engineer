@@ -226,8 +226,14 @@ export async function autoScoreUnscoredSD(sdKey, supabase, deps = {}) {
   let timer;
   try {
     console.log(`   ⏳ No score yet — auto-running vision-scorer for ${sdKey} (bounded ${Math.round(timeoutMs / 1000)}s)…`);
+    // Attach a no-op .catch to the scorer promise so that if it REJECTS after we've already lost the
+    // timeout race (the LLM error arrives past the bound), it never surfaces as an unhandledRejection
+    // (which can crash a process run with --unhandled-rejections=strict). NOTE: the timeout bounds our
+    // WAIT, not the underlying LLM WORK — threading an AbortSignal into scoreSD is a follow-up.
+    const scoring = scorer({ sdKey, supabase, quiet: true });
+    if (scoring && typeof scoring.then === 'function') scoring.catch(() => {});
     const result = await Promise.race([
-      scorer({ sdKey, supabase, quiet: true }),
+      scoring,
       new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('vision auto-score timeout')), timeoutMs); }),
     ]);
     if (result && typeof result.total_score === 'number') {
