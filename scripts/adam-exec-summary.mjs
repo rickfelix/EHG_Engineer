@@ -130,6 +130,7 @@ let visNote = '';
 let buildLine = '';
 let rungLine = '';
 let operationalLine = '';
+let rungNatureLine = ''; // SD-LEO-INFRA-VISION-LADDER-ROADMAP-COHERENCE-001 (FR-5): per-rung + per-nature
 try {
   // SD-LEO-INFRA-VISION-LADDER-V1-001 (FR-5): source the denominator from the ACTIVE vision rung
   // (visionSource:true → the re-anchorable ladder pointer), so the gauge re-points automatically when
@@ -146,6 +147,7 @@ try {
   buildLine = fmt.buildLine;
   rungLine = fmt.rungLine;
   operationalLine = fmt.operationalLine;
+  rungNatureLine = fmt.rungNatureLine; // FR-5
 } catch (e) {
   console.warn('[adam-email] live VDR gauge failed (fail-soft): ' + (e?.message || e));
   visPct = null;
@@ -258,6 +260,7 @@ const text = [
   // FR-3: lead with the fleet-build % (the honest 'built' number); fall back to the rung-% if the
   // segregated number is unavailable; then show V1 rung-completion + operational proofs separately.
   buildLine || (visPct != null ? `EHG vision: ${visPct}% built` : 'EHG vision: (gauge unavailable)'),
+  ...(rungNatureLine ? ['   ' + rungNatureLine] : []),
   ...(rungLine ? ['   ' + rungLine] : []),
   ...(operationalLine ? ['   ' + operationalLine] : []),
   ...(layerLine ? ['   ' + layerLine] : []),
@@ -288,6 +291,7 @@ const actionsHtml = nActions
 const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px">' +
   `<p style="font-size:15px;margin:0 0 12px"><b>Workers:</b> ${esc(workerText)}</p>` +
   `<p style="font-size:15px;font-weight:600;margin:0 0 0">EHG vision: ${visPct != null ? visPct + '% built' : '(gauge unavailable)'}</p>` +
+  (rungNatureLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(rungNatureLine)}</div>` : '') +
   layerHtml + noteHtml + trendHtml + trendAnalysisHtml +
   (watchdogLine ? `<div style="font-size:12px;color:#b54708;margin:2px 0 0">${esc(watchdogLine)}</div>` : '') +
   recentHtml + decisionsHtml +
