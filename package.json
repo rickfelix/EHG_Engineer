@@ -14,6 +14,7 @@
     "vision:wire-v1-caplayer": "node scripts/okr/wire-v1-caplayer-criteria.mjs",
     "vision:seed-v2-autonomous-marketing": "node scripts/okr/seed-v2-autonomous-marketing-criteria.mjs",
     "vision:gauge": "node scripts/vision-gauge-refresh.mjs",
+    "vision:rung-rollup": "node scripts/vision/rung-progress-rollup.mjs",
     "vision:coherence": "node scripts/vision-coherence-check.mjs",
     "vision:seed-v1-automation": "node scripts/seed-v1-automation-criteria.mjs",
     "setup-db": "node scripts/setup-database.js",
