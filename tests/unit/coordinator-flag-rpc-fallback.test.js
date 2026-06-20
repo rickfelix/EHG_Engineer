@@ -122,6 +122,16 @@ describe('assertCoordinatorRpcsExist canary', () => {
     expect(r.missing).toEqual(['set_coordinator_flag', 'clear_coordinator_flag']);
   });
 
+  it('reports ok=null (not a false COORD_RPC_MISSING) when exec_sql returns an unexpected shape', async () => {
+    const supabase = makeSupabase({
+      rpcImpl: () => ({ data: { unexpected: 'object-not-array' }, error: null }),
+    });
+    const r = await assertCoordinatorRpcsExist(supabase);
+    expect(r.ok).toBeNull();
+    expect(r.missing).toEqual([]);
+    expect(r.reason).toBe('unexpected_exec_sql_shape');
+  });
+
   it('reports ok=null (cannot verify) when exec_sql itself errors — never throws', async () => {
     const supabase = makeSupabase({
       rpcImpl: () => ({ data: null, error: { message: 'exec_sql missing' } }),
