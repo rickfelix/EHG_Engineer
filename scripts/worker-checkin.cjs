@@ -625,6 +625,22 @@ async function selfHealStaleClaim(sb, sessionId, sdKey) {
   } catch { /* fail-open */ }
 }
 
+// SD-LEO-FEAT-WORKER-CHECKIN-SELF-001 (FR-1/FR-2): confirm a claimed row was HARD-DELETED before we
+// release the claim on it. Returns true ONLY when TWO consecutive reads both find the row absent — a
+// single eventual-consistency null must NEVER release a LIVE claim (observed live: a transient read
+// returned null for an SD that still existed). A read ERROR returns false (fail-open: preserve the
+// claim — exactly today's behaviour). Exported for unit tests.
+async function confirmRowGone(sb, table, col, key) {
+  try {
+    const r1 = await sb.from(table).select(col).eq(col, key).maybeSingle();
+    if (r1 && r1.error) return false;       // read error -> fail-open, do not release
+    if (r1 && r1.data) return false;        // present -> not gone
+    const r2 = await sb.from(table).select(col).eq(col, key).maybeSingle(); // confirm
+    if (r2 && r2.error) return false;       // confirming read errored -> fail-open
+    return !(r2 && r2.data);                // gone only if the confirming read also finds nothing
+  } catch { return false; }                 // any throw -> fail-open (preserve resume)
+}
+
 // SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: assign a fleet identity (NATO callsign + color) to a
 // freshly-claimed worker AT check-in, instead of up to ~5 minutes later when the coordinator cron
 // scripts/assign-fleet-identities.cjs next runs (it is the ONLY other writer of fleet_identity).
@@ -770,23 +786,40 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
     // LEAD-FINAL-APPROVAL) and recoverStrandedFinal (step 5.7) owns the cleared-claim variant.
     // Fail-open: any query error preserves today's resume.
     let staleTerminal = false;
+    // SD-LEO-FEAT-WORKER-CHECKIN-SELF-001 (FR-1): a HARD-DELETED claimed SD (row gone) used to fall
+    // through every guard and loop action=resume on a ghost forever (sd-start then exits SD-not-found
+    // = permanent strand). Track it separately and self-heal it like a stale-terminal claim.
+    let staleDeleted = false;
     if (!isQf) {
       try {
-        const { data: sdRow } = await sb.from('strategic_directives_v2').select('status').eq('sd_key', mySd).maybeSingle();
-        if (sdRow && ['completed', 'cancelled', 'deferred'].includes(sdRow.status)) staleTerminal = true;
-      } catch { /* fail-open: leave staleTerminal false -> resume preserved */ }
+        const { data: sdRow, error: sdErr } = await sb.from('strategic_directives_v2').select('status').eq('sd_key', mySd).maybeSingle();
+        if (sdErr) throw sdErr; // read error -> fail-open (preserve resume)
+        if (sdRow) {
+          if (['completed', 'cancelled', 'deferred'].includes(sdRow.status)) staleTerminal = true;
+        } else if (await confirmRowGone(sb, 'strategic_directives_v2', 'sd_key', mySd)) {
+          // FR-2: only after a CONFIRMING re-read also finds the row absent (never release on a single
+          // transient/eventual-consistency null).
+          staleDeleted = true;
+        }
+      } catch { /* fail-open: leave flags false -> resume preserved */ }
     } else {
       // Quick-fix QF-20260612-113: QF claims land in claude_sessions.sd_key too, but the
       // terminal self-heal above was SD-only — a completed/cancelled/escalated QF looped
       // action=resume forever. Apply the same check against quick_fixes.status.
       try {
-        const { data: qfRow } = await sb.from('quick_fixes').select('status').eq('id', mySd).maybeSingle();
-        if (qfRow && ['completed', 'cancelled', 'escalated'].includes(qfRow.status)) staleTerminal = true;
-      } catch { /* fail-open: leave staleTerminal false -> resume preserved */ }
+        const { data: qfRow, error: qfErr } = await sb.from('quick_fixes').select('status').eq('id', mySd).maybeSingle();
+        if (qfErr) throw qfErr;
+        if (qfRow) {
+          if (['completed', 'cancelled', 'escalated'].includes(qfRow.status)) staleTerminal = true;
+        } else if (await confirmRowGone(sb, 'quick_fixes', 'id', mySd)) {
+          staleDeleted = true; // FR-1/FR-2: a hard-deleted quick-fix, confirmed absent
+        }
+      } catch { /* fail-open: leave flags false -> resume preserved */ }
     }
-    if (staleTerminal) {
+    if (staleTerminal || staleDeleted) {
       await selfHealStaleClaim(sb, sessionId, mySd);
       base.self_healed_stale_claim = mySd;
+      if (staleDeleted) base.self_healed_deleted_claim = mySd; // FR-1: distinguish deleted from terminal
       mySd = null; // fall through to assignment / self-claim below
     } else {
       // SD-FDBK-FIX-WORKER-CHECK-SURFACES-001 (seam 1): a claim-holding worker used to
@@ -979,7 +1012,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, selfHealStaleClaim, orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
+module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
 
 if (require.main === module) {
   main().catch(err => {
