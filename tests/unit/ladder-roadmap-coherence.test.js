@@ -6,7 +6,7 @@
  * are computed and that computeBuildGauge stays available even when an advisory fires.
  */
 import { describe, it, expect } from 'vitest';
-import { assertLadderRoadmapCoherence, computeBuildGauge, VDR_REGISTRY } from '../../lib/vision/vdr-registry.js';
+import { assertLadderRoadmapCoherence, VDR_REGISTRY } from '../../lib/vision/vdr-registry.js';
 
 describe('assertLadderRoadmapCoherence — structure + advisory placement (FR-3)', () => {
   it('returns gating registry coherence PLUS a non-gating advisories array', () => {

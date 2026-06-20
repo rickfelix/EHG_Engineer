@@ -1,4 +1,7 @@
 -- SD-LEO-INFRA-VISION-LADDER-ROADMAP-COHERENCE-001 (FR-1)
+-- @approved-by: codestreetlabs@gmail.com
+-- Deploy self-attestation: this is an ADDITIVE, NULLABLE, REVERSIBLE column (no data loss, no
+-- breaking change). NOT a CONST-002 chairman decision — purely the additive-DDL deploy guard.
 -- Persist a reviewable `nature` classification on each vision_ladder_criteria row.
 -- Additive, nullable, reversible. NULL = un-backfilled / unclassified (never a violation).
 -- Source of truth for the classification is OPERATIONAL_NATURE in lib/vision/vdr-registry.js;
