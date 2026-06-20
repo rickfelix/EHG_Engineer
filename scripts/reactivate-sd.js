@@ -93,6 +93,29 @@ export function buildReactivationAudit({ sdId, pre_state, post_state, sessionId 
 
 // ── CLI (IO) ────────────────────────────────────────────────────────────────
 
+/**
+ * Pure argv resolver — no IO, no process.exit. Returns { sdInput, toStatus, reason }
+ * where sdInput is undefined when no SD positional is present.
+ *
+ * Bug fix (SD-LEO-INFRA-REACTIVATE-SD-ARGV-FIX-001): a flag's value index is only
+ * marked "consumed" when the flag is actually present. Previously the consumed set was
+ * `[toIdx, toIdx+1, reasonIdx, reasonIdx+1].filter(i => i >= 0)`; when --to/--reason was
+ * omitted, indexOf returned -1 and (-1)+1 === 0 passed the (i >= 0) filter, wrongly
+ * consuming args[0] (the SD-key positional) — so EVERY invocation without an explicit
+ * --to dropped the SD identifier and failed with "Missing SD identifier".
+ */
+export function resolveArgs(args) {
+  const toIdx = args.indexOf('--to');
+  const toStatus = toIdx !== -1 ? args[toIdx + 1] : 'draft';
+  const reasonIdx = args.indexOf('--reason');
+  const reason = reasonIdx !== -1 ? args[reasonIdx + 1] : null;
+  const consumed = new Set();
+  if (toIdx !== -1) { consumed.add(toIdx); consumed.add(toIdx + 1); }
+  if (reasonIdx !== -1) { consumed.add(reasonIdx); consumed.add(reasonIdx + 1); }
+  const sdInput = args.find((a, i) => !a.startsWith('-') && !consumed.has(i));
+  return { sdInput, toStatus, reason };
+}
+
 function parseArgs() {
   const args = process.argv.slice(2);
   if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
@@ -116,12 +139,7 @@ Examples:
 `);
     process.exit(args.includes('--help') || args.includes('-h') ? 0 : 1);
   }
-  const toIdx = args.indexOf('--to');
-  const toStatus = toIdx !== -1 ? args[toIdx + 1] : 'draft';
-  const reasonIdx = args.indexOf('--reason');
-  const reason = reasonIdx !== -1 ? args[reasonIdx + 1] : null;
-  const consumed = new Set([toIdx, toIdx + 1, reasonIdx, reasonIdx + 1].filter(i => i >= 0));
-  const sdInput = args.find((a, i) => !a.startsWith('-') && !consumed.has(i));
+  const { sdInput, toStatus, reason } = resolveArgs(args);
   if (!sdInput) {
     console.error('❌ Missing SD identifier (sd_key or UUID)');
     process.exit(1);
