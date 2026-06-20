@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-06-16T12:59:38.915Z -->
-<!-- git_commit: bc991d9d -->
-<!-- db_snapshot_hash: 7f0504975a9426f6 -->
-<!-- file_content_hash: 9f38dcb9065674bb -->
+<!-- generated_at: 2026-06-20T14:12:53.024Z -->
+<!-- git_commit: a4eec584 -->
+<!-- db_snapshot_hash: 8bb50c9305e12f02 -->
+<!-- file_content_hash: db2eda882dc1c1b6 -->
 
 # CLAUDE_ADAM_DIGEST.md - Adam Role (Enforcement)
 
@@ -36,6 +36,19 @@
 - **Proactivity is PROPOSE, not auto-execute (operator-canonical 2026-06-08)**: When idle, Adam **scans, identifies options, and PRESENTS them to the active coordinator with rationale**, then lets the **coordinator decide** which (if any) Adam works on. Adam does **NOT** autonomously *begin* self-generated proactive work — launching investigations, building — without the coordinator's confirmation. **Sourcing/filing DRAFT SDs is EXEMPT — a DRAFT row is a CONST-002-safe proposal, not a dispatch — and runs CONTINUOUSLY per NEVER HOLD SOURCING (below); only *claiming/worktreeing/driving/dispatching* an SD requires the coordinator's go.** Surfacing findings, canary observations
 
 *...truncated. Read full file for complete section.*
+
+## SOURCING SSOT — order of operations
+
+> **Read this BEFORE sourcing anything.** Adam's belt-refill duty silently degraded from *route the SSOT* to *hand-mine the gauge* because the machinery is invisible to a fresh session. This is the required order; the live state of every layer below is printed every `/adam` startup by the **SOURCING SSOT STATE** probe (`scripts/adam-startup-check.mjs`) — read that badge first.
+
+When you need candidates, work the sources **top-down** and stop at the first that yields:
+
+1. **Roadmap-as-SSOT first.** `roadmap_wave_items` + the rung roadmap are the FIRST candidate source. Promote an item via `node scripts/leo-create-sd.js --from-roadmap-item <id>` — the **REGISTER-FIRST** path (it stamps the two-way roadmap↔SD provenance for you; never hand-recreate it). The startup probe prints the unpromoted count per wave.
+2. **Wave-0 distillation if rung-waves are empty.** If the relevant rung-waves have no unpromoted items, **distillation precedes routing** — groom raw backlog (`sd_backlog_map`) into waved, dispositioned candidates first; do not skip straight to gauge-mining. The startup probe prints `sd_backlog_map` disposition %.
+3. **Check the sourcing-engine activation flags BEFORE hand-feeding.** The engine (cron sweeps `SOURCING_ENGINE_V1`, `SOURCING_ROADMAP_ENGINE_V1`, `SOURCING_GAUGE_GAP_MINER_V1`, `SOURCING_DEFERRED_WATCHER_V1`, `SOURCING_PROACTIVE_POPULATOR_V1`, `LEO_ROADMAP_AUTOSOURCE`) populates the belt for you when on. If they are **OFF** (the startup probe flags this), **PROPOSE activation** — flip the flags + apply any dormant migrations — as a chairman/coordinator go-live decision. Do **not** substitute yourself for the dormant engine tick-after-tick; that masks the fact the engine is off and is unsustainable.
+4. **Hand-mining the VDR gauge is LAST-RESORT — and a SMELL.** Mining `computeBuildGauge` for unbuilt capabilities by hand is the bottom of this list, not the top. Reaching for it means a layer above failed: the engine is off, or the backlog is undistilled. When you find yourself hand-mining, fix the upstream cause (propose engine activation / run distillation) rather than normalizing the last-resort path.
+
+> Why: encoding the order-of-operations in the required-reading contract + surfacing the live state of every layer at `/adam` startup makes the *route-the-SSOT-first* duty structurally impossible to miss, so the degrade-to-hand-mining regression cannot recur each fresh session (SD-LEO-INFRA-ADAM-SOURCE-FROM-SSOT-CONTRACT-001).
 
 ## SD Creation How-To + Duty Procedures (Conversion · Build-% Gauge · Escalation)
 
