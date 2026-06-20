@@ -80,10 +80,21 @@ async function main() {
   const yt = moved?.youtube || moved || {};
   console.log(`  post-processor: processed=${yt.processed ?? 'n/a'} errors=${(yt.errors || []).length}`);
 
-  // FR-3 verify: re-query the drain.
-  const remaining = await loadBacklog(supabase);
-  const remPlan = planBacklogClear(remaining);
-  console.log(`\nVERIFY: classified-unreviewed remaining=${remaining.length} (routable still-to-move=${remPlan.toMove.length}). Target ~0 for routable.`);
+  // FR-3 verify: query the ACTUAL drain state. After stamping, the review backlog
+  // (chairman_reviewed_at IS NULL) is empty by construction, so it cannot reveal whether the physical
+  // move happened — the honest signal is rows still status='processed' with processed_at IS NULL.
+  const { count: unreviewed } = await supabase
+    .from('eva_youtube_intake').select('id', { count: 'exact', head: true })
+    .not('classified_at', 'is', null).is('chairman_reviewed_at', null);
+  const { count: unmoved } = await supabase
+    .from('eva_youtube_intake').select('id', { count: 'exact', head: true })
+    .eq('status', 'processed').is('processed_at', null);
+  console.log(`\nVERIFY: classified-unreviewed remaining=${unreviewed ?? '?'} (target 0). Reviewed-but-NOT-physically-moved=${unmoved ?? '?'} (target 0).`);
+  if ((unmoved ?? 0) > 0) {
+    console.warn(`  ⚠️  ${unmoved} row(s) reviewed but their videos are NOT yet moved out of For-Processing.`);
+    console.warn('     Most likely cause: YouTube not authenticated (run `npm run eva:ideas:auth:youtube`).');
+    console.warn('     Re-run this command (or the post-processor) once authenticated — the move is idempotent.');
+  }
   if (stampErrors.length) for (const e of stampErrors.slice(0, 5)) console.warn(`  [stamp error] ${e.id}: ${e.error}`);
 }
 
