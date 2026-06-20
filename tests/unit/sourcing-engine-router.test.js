@@ -123,6 +123,31 @@ describe('sourcing-engine router — dedup', () => {
     expect(r.dedup_match_sd_key).toBe('SD-SIM-001');
   });
 
+  it('a single shared token never fuzzy-dedups two distinct one-word titles', () => {
+    const r = routeCandidate(
+      { title: 'sourcing' },
+      { existing: [{ sd_key: 'SD-ONEWORD-001', title: 'sourcing' }], jaccardThreshold: 0.5 }
+    );
+    // identical single-word titles ARE an exact match (caught by the exact path)...
+    expect(r.lane).toBe(LANES.DEDUP);
+    expect(r.dedup_match_sd_key).toBe('SD-ONEWORD-001');
+    // ...but a single COINCIDENTAL shared token below the 2-token floor must NOT fuzzy-merge:
+    const r2 = routeCandidate(
+      { title: 'sourcing alpha' },
+      { existing: [{ sd_key: 'SD-ONEWORD-002', title: 'sourcing beta gamma delta' }], jaccardThreshold: 0.1 }
+    );
+    expect(r2.lane).toBe(LANES.BELT_READY); // inter=1 < MIN_FUZZY_TOKEN_OVERLAP, no fuzzy dup
+  });
+
+  it('a two-token reordering still fuzzy-dedups (>=2 shared tokens)', () => {
+    const r = routeCandidate(
+      { title: 'auth user' },
+      { existing: [{ sd_key: 'SD-REORDER-001', title: 'user auth' }], jaccardThreshold: 0.8 }
+    );
+    expect(r.lane).toBe(LANES.DEDUP);
+    expect(r.dedup_match_sd_key).toBe('SD-REORDER-001');
+  });
+
   it('below the Jaccard threshold is NOT a dup', () => {
     const r = routeCandidate(
       { title: 'completely different subject matter entirely' },
@@ -209,6 +234,9 @@ describe('sourcing-engine router — jaccard helper', () => {
   });
   it('identical token sets yield 1', () => {
     expect(jaccard('alpha beta', 'beta alpha')).toBe(1);
+  });
+  it('pins a known fractional value (2 of 3 tokens) = 2/3', () => {
+    expect(jaccard('a b c', 'a b')).toBeCloseTo(2 / 3, 10);
   });
 });
 
