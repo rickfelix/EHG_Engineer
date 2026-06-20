@@ -4,8 +4,8 @@
  * findDedupMatch was title-only (exact normalized title OR Jaccard>=0.8 over title tokens), so it
  * missed PROBLEM-PHRASED restatements of already-shipped work (Adam triage: 116/208 = 56% of staged
  * keepers were such dups). A description-aware problem-key path now catches them — PRECISION-FIRST:
- * a false positive would drop NOVEL work via the disposition gate, so the bar is high (>=0.5 Jaccard
- * over normalized problem-key token-sets AND >=4 shared meaningful tokens). These tests pin both the
+ * a false positive would drop NOVEL work via the disposition gate, so the bar is high (>=0.6
+ * overlap-coefficient over normalized problem-key token-sets AND >=4 shared meaningful tokens). These tests pin both the
  * catch (problem-phrased dup) and the precision guard (novel work never falsely flagged).
  */
 import { describe, it, expect } from 'vitest';
