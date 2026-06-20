@@ -573,6 +573,19 @@ async function persistLaneFailSoft(sb, item, lane) {
  * (FR-4). FR-5 hard guard: an already-promoted item never double-promotes. Mirrors the createFromFeedback
  * contract (--type / --title overrides, guardrail review flags).
  */
+/**
+ * SD-LEO-INFRA-PRODUCT-PROMOTION-TARGET-REPO-001: compute the repo-routing overrides for a
+ * promoted roadmap SD from a (already-validated, normalized) --target-repos list. Pure + exported.
+ * The first repo is the primary target_application (drives EXEC/gate/branch repo resolution); the
+ * full list is stamped to metadata.target_repos. Empty/missing → {} (createSD keeps its default).
+ * @param {string[]|null|undefined} targetRepos
+ * @returns {{ target_application?: string, target_repos?: string[] }}
+ */
+export function buildPromotionRepoOverrides(targetRepos) {
+  if (!Array.isArray(targetRepos) || targetRepos.length === 0) return {};
+  return { target_application: targetRepos[0], target_repos: targetRepos };
+}
+
 async function createFromRoadmapItem(itemId, options = {}) {
   const { migrationReviewed = false, securityReviewed = false } = options;
   console.log(`\n🗺️  Creating SD from roadmap item: ${itemId}`);
@@ -612,6 +625,11 @@ async function createFromRoadmapItem(itemId, options = {}) {
   const sdTitle = options.titleOverride || fields.title;
   const sdKey = await generateSDKey({ source: SD_SOURCES.LEO, type, title: sdTitle, venturePrefix: null });
 
+  // SD-LEO-INFRA-PRODUCT-PROMOTION-TARGET-REPO-001: route the promoted SD to a product repo when
+  // --target-repos is given (the PRIMARY repo → top-level target_application that branch-resolver/
+  // repo-paths read to resolve EXEC/gates/branch onto rickfelix/ehg; the full list → metadata.target_repos).
+  const repoOverrides = buildPromotionRepoOverrides(options.targetRepos);
+
   const sd = await createSD({
     sdKey,
     title: sdTitle,
@@ -619,10 +637,12 @@ async function createFromRoadmapItem(itemId, options = {}) {
     type,
     priority: 'medium',
     rationale: `Promoted from roadmap_wave_items ${item.id} (register-first path).`,
+    ...(repoOverrides.target_application ? { target_application: repoOverrides.target_application } : {}),
     metadata: {
       ...fields.metadata,
       ...(migrationReviewed ? { migration_reviewed: true } : {}),
       ...(securityReviewed ? { security_reviewed: true } : {}),
+      ...(repoOverrides.target_repos ? { target_repos: repoOverrides.target_repos } : {}),
     },
   });
 
@@ -2596,8 +2616,10 @@ Flags:
                         to ONLY these repos. Required for SDs spanning both platform repos.
                         Example: --target-repos EHG,EHG_Engineer
                         Pairs with computeReposForSD() at lead-final-approval/gates.js
-                        (SD-LEO-INFRA-CROSS-REPO-MERGE-001). Supported in all 3 modes:
-                        direct LEO, --from-plan, --child.
+                        (SD-LEO-INFRA-CROSS-REPO-MERGE-001). Supported in: direct LEO,
+                        --from-plan, --child, AND --from-roadmap-item (the latter also sets
+                        the promoted SD's target_application to the PRIMARY repo so product
+                        roadmap items route to rickfelix/ehg — SD-LEO-INFRA-PRODUCT-PROMOTION-TARGET-REPO-001).
   --dry-run          (--from-proposal / --proposal-b64 / --proposal-stdin) Validate + report
                      would-create SDs; ZERO database writes.
   --proposal-b64 <b64>  File-free DB-direct sourcing: base64-encoded proposal JSON ingested via
@@ -2678,11 +2700,16 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // SD with the two-way stamp. Mirrors --from-feedback flag parsing (--type/--title/review flags).
       const riTypeIdx = args.indexOf('--type');
       const riTitleIdx = args.indexOf('--title');
+      // SD-LEO-INFRA-PRODUCT-PROMOTION-TARGET-REPO-001: --target-repos routes a promoted roadmap
+      // item to a product repo (e.g. EHG → rickfelix/ehg), unblocking the 268 product roadmap items
+      // that --from-roadmap-item could not target (it forced venturePrefix=null / EHG_Engineer).
+      const riTargetReposIdx = args.indexOf('--target-repos');
       const riFlagValuePositions = new Set(
         [riTypeIdx !== -1 ? riTypeIdx + 1 : -1,
-         riTitleIdx !== -1 ? riTitleIdx + 1 : -1].filter(i => i > 0)
+         riTitleIdx !== -1 ? riTitleIdx + 1 : -1,
+         riTargetReposIdx !== -1 ? riTargetReposIdx + 1 : -1].filter(i => i > 0)
       );
-      const riKnownFlags = new Set(['--from-roadmap-item', '--type', '--title', '--migration-reviewed', '--security-reviewed']);
+      const riKnownFlags = new Set(['--from-roadmap-item', '--type', '--title', '--migration-reviewed', '--security-reviewed', '--target-repos']);
       const roadmapItemId = args.find((arg, i) =>
         i > 0 && !arg.startsWith('-') && !riFlagValuePositions.has(i) && !riKnownFlags.has(arg)
       ) || args[1];
@@ -2691,6 +2718,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         titleOverride: riTitleIdx !== -1 ? args[riTitleIdx + 1] : null,
         migrationReviewed: args.includes('--migration-reviewed'),
         securityReviewed: args.includes('--security-reviewed'),
+        targetRepos: riTargetReposIdx !== -1 ? parseTargetReposArg(args[riTargetReposIdx + 1]) : null,
       });
     } else if (args[0] === '--from-qf') {
       await createFromQF(args[1]);
