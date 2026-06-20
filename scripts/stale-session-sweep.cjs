@@ -29,6 +29,11 @@ const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate (same one the
 // worker self_claim path uses) so CLAIM_FIX never re-affirms an orchestrator PARENT / dep-blocked SD.
 const { evaluateDispatchEligibility, classifyDispatchIneligibility } = require('../lib/fleet/claim-eligibility.cjs');
+// SD-LEO-FEAT-CLAIM-ASSIGNMENT-PATH-001: the sweep is the primary scheduled WORK_ASSIGNMENT producer
+// and inserts raw (it does NOT route through insertCoordinationRow), so the dispatch-side terminal
+// guard would never reach it. Call assertSdDispatchable here so the sweep also refuses to nudge a
+// worker about a terminal/non-existent SD (it fails OPEN on a transient DB error).
+const { assertSdDispatchable } = require('../lib/coordinator/dispatch.cjs');
 // SD-LEO-INFRA-EXPOSE-CLAIM-OWNER-001 (FR-3): single shared definition of which
 // classified session statuses count as "currently holding the SD claim" — used
 // by BOTH the available-to-claim filter and the worker-render filter below so
@@ -595,17 +600,26 @@ async function dispatchWorkAssignmentsIfAllowed(supabase, activeSessions, availa
 
     if (existing && existing.length > 0) continue; // Don't spam
 
-    await supabase
-      .from('session_coordination')
-      .insert({
-        target_session: s.session_id,
-        target_sd: s.sd_key,
-        message_type: 'WORK_ASSIGNMENT',
-        subject: 'Next work available when ' + s.sd_key.split('-').pop() + ' completes',
-        body: 'When you complete ' + s.sd_key + ', pick up the next unclaimed child.\n\nREMINDER: Ensure you are in your own isolated worktree before starting new work. Run: node scripts/resolve-sd-workdir.js <SD-ID>',
-        payload: { available_sds: available, current_sd: s.sd_key },
-        sender_type: 'sweep'
-      });
+    const row = {
+      target_session: s.session_id,
+      target_sd: s.sd_key,
+      message_type: 'WORK_ASSIGNMENT',
+      subject: 'Next work available when ' + s.sd_key.split('-').pop() + ' completes',
+      body: 'When you complete ' + s.sd_key + ', pick up the next unclaimed child.\n\nREMINDER: Ensure you are in your own isolated worktree before starting new work. Run: node scripts/resolve-sd-workdir.js <SD-ID>',
+      payload: { available_sds: available, current_sd: s.sd_key },
+      sender_type: 'sweep'
+    };
+    // SD-LEO-FEAT-CLAIM-ASSIGNMENT-PATH-001: refuse to nudge about a terminal/non-existent SD.
+    // assertSdDispatchable throws DISPATCH_SD_TERMINAL/NOT_FOUND (skip this worker) and fails OPEN
+    // on a transient DB error (the nudge proceeds; claim_sd remains the backstop).
+    try {
+      await assertSdDispatchable(supabase, row, console);
+    } catch (e) {
+      console.log('[SWEEP] WORK_ASSIGNMENT skipped for ' + s.session_id + ' (' + (e.code || 'guard') + '): ' + s.sd_key);
+      continue;
+    }
+
+    await supabase.from('session_coordination').insert(row);
     dispatched++;
   }
   return { dispatched, skipped: 0, blocked: false };

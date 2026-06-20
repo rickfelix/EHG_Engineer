@@ -57,7 +57,13 @@ describe('pure terminal-status classifiers', () => {
 });
 
 describe('assertSdDispatchable', () => {
-  const wa = (sdKey) => ({ message_type: 'WORK_ASSIGNMENT', target_session: LIVE_TARGET, payload: { assigned_sd: sdKey } });
+  // Realistic producer shape: stale-session-sweep emits target_sd (top-level) + payload.current_sd —
+  // NOT payload.assigned_sd. Using the real shape is what makes these tests catch a resolution-key
+  // regression instead of masking one (the adversarial-review fix for this SD).
+  const wa = (sdKey) => ({
+    message_type: 'WORK_ASSIGNMENT', target_session: LIVE_TARGET,
+    target_sd: sdKey, payload: { available_sds: [], current_sd: sdKey },
+  });
 
   it('REFUSES a completed SD (DISPATCH_SD_TERMINAL)', async () => {
     const sb = stubSupabase({ sds: { 'SD-X-001': 'completed' } });
@@ -91,6 +97,24 @@ describe('assertSdDispatchable', () => {
   it('IGNORES a WORK_ASSIGNMENT with no named SD', async () => {
     const sb = stubSupabase({});
     await expect(assertSdDispatchable(sb, { message_type: 'WORK_ASSIGNMENT', payload: {} }, silentLog)).resolves.toBeUndefined();
+  });
+  it('resolves the SD from payload.current_sd alone (sweep nudge with no top-level target_sd)', async () => {
+    const sb = stubSupabase({ sds: { 'SD-SWEEP': 'completed' } });
+    await expect(assertSdDispatchable(sb, {
+      message_type: 'WORK_ASSIGNMENT', target_session: LIVE_TARGET, payload: { current_sd: 'SD-SWEEP' },
+    }, silentLog)).rejects.toMatchObject({ code: 'DISPATCH_SD_TERMINAL' });
+  });
+  it('resolves the SD from payload.sd_key alone (cold-recovery resume shape)', async () => {
+    const sb = stubSupabase({ sds: { 'SD-RESUME': 'cancelled' } });
+    await expect(assertSdDispatchable(sb, {
+      message_type: 'WORK_ASSIGNMENT', target_session: 'broadcast', payload: { kind: 'resume', sd_key: 'SD-RESUME' },
+    }, silentLog)).rejects.toMatchObject({ code: 'DISPATCH_SD_TERMINAL' });
+  });
+  it('resolves the SD from top-level target_sd alone', async () => {
+    const sb = stubSupabase({ sds: { 'SD-TOP': 'deferred' } });
+    await expect(assertSdDispatchable(sb, {
+      message_type: 'WORK_ASSIGNMENT', target_session: LIVE_TARGET, target_sd: 'SD-TOP', payload: {},
+    }, silentLog)).rejects.toMatchObject({ code: 'DISPATCH_SD_TERMINAL' });
   });
   it('FAILS-OPEN on a transient lookup error (does not block dispatch)', async () => {
     const sb = stubSupabase({ throwOn: 'strategic_directives_v2' });
