@@ -48,10 +48,32 @@ async function loadSources(db) {
   return { ledger: ledger || [], wave6, deferred: deferred || [], backlog };
 }
 
+/**
+ * SD-LEO-INFRA-SOURCING-ENGINE-ACTIVATION-001 (FR-2): page through ALL rows of a table.
+ * PostgREST silently caps a single response at 1000 rows regardless of .limit(), so the prior
+ * single-shot load returned only the first 1000 of ~4000 SDs — which is WHY the dedup context was
+ * incomplete and dry-run reported dedup_matches=0 (NOT the dormant lane column, as the SD hypothesized:
+ * the lane column governs PERSISTENCE, the existing-SD set governs MATCHING). A duplicate that lives
+ * past row 1000 was simply invisible to findDedupMatch, so the belt would flood with already-covered work.
+ * @param {object} db  @param {string} table  @param {string} select  @param {number} [pageSize]
+ */
+export async function fetchAllRows(db, table, select, pageSize = 1000) {
+  const out = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await db.from(table).select(select).range(from, from + pageSize - 1);
+    if (error) throw new Error(`fetchAllRows(${table}): ${error.message}`);
+    if (!data || data.length === 0) break;
+    out.push(...data);
+    if (data.length < pageSize) break; // last page
+  }
+  return out;
+}
+
 async function loadContext(db) {
-  const { data: sds } = await db.from('strategic_directives_v2').select('sd_key,title,status').limit(4000);
-  const existing = (sds || []).map((s) => ({ sd_key: s.sd_key, title: s.title }));
-  const shippedInfraKeys = (sds || []).filter((s) => s.status === 'completed').map((s) => s.sd_key);
+  // Load EVERY SD (paginated) so dedup matches against the full corpus, not just the first 1000.
+  const sds = await fetchAllRows(db, 'strategic_directives_v2', 'sd_key,title,status');
+  const existing = sds.map((s) => ({ sd_key: s.sd_key, title: s.title }));
+  const shippedInfraKeys = sds.filter((s) => s.status === 'completed').map((s) => s.sd_key);
   // outcomeRealizedKeys left empty = the SAFE direction (a shipped-but-unrealized SD re-emits; never falsely closes work).
   return { existing, inFlight: [], shippedInfraKeys, outcomeRealizedKeys: [] };
 }
@@ -65,6 +87,8 @@ function printReport(out) {
   console.log(`by lane   : ${fmt(r.by_lane)}`);
   console.log(`by rung   : ${fmt(r.by_rung)}`);
   console.log(`dedup matches: ${r.dedup_matches}  |  decline: ${r.decline}  |  re-emit: ${r.re_emit}  |  register-first warns: ${r.register_first_warn}`);
+  // FR-2: disposition / quality gate — how the raw routed corpus curates to keepers before staging.
+  console.log(`disposition: kept=${r.disposition_kept} dropped=${r.disposition_dropped}  by-reason: ${fmt(r.drop_by_reason) || '(none)'}`);
   console.log(`wave: ${wave_id ? wave_id.slice(0, 8) : 'none'}  |  lane column: ${lane_column_present ? 'present' : 'DORMANT'}`);
   console.log(`staging: ${s.dry_run ? 'DRY-RUN' : 'APPLIED'} (chairman_approved=${s.chairman_approved}) — staged=${s.staged} skipped=${s.skipped} errors=${s.errors.length}`);
   if (s.dry_run && (apply && !chairmanApproved)) console.log('  note: --apply given but NOT chairman-approved -> dry-run. Add --chairman-approved to stage.');
