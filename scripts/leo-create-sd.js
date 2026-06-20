@@ -7,6 +7,7 @@
  * - --from-uat <test-id>: Create from UAT finding
  * - --from-learn <pattern-id>: Create from /learn pattern
  * - --from-feedback <id>: Create from /inbox feedback item
+ * - --from-roadmap-item <id>: Promote a roadmap_wave_items row to an SD (register-first two-way stamp)
  * - --from-qf <QF-ID>: Escalate open quick-fix to SD (Tier 3 routing)
  * - --child <parent-key> <index>: Create child SD
  * - --vision-key <key>: Link to EVA vision document
@@ -58,6 +59,14 @@ import { trackWriteSource } from '../lib/eva/cli-write-gate.js';
 import { isLegitimateNoVenture } from '../lib/eva/bridge/sd-router.js';
 import { validateSDFields } from './modules/validate-sd-fields.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+// SD-LEO-INFRA-SOURCING-ENGINE-REGISTER-FIRST-001: pure register-first helpers (FR-1 roadmap-item
+// derivation, FR-3 two-way stamp payload, FR-2 warn-only decision, FR-4 lane via the shipped router).
+import {
+  deriveSdFieldsFromRoadmapItem,
+  buildTwoWayStamp,
+  shouldWarnRegisterFirst,
+  laneForRoadmapItem,
+} from '../lib/sourcing-engine/register-first.js';
 // SD-LEO-INFRA-SD-AUTHORING-TARGET-AUTODETECT-001: path-based target detector
 import { detectFromKeyChanges } from './modules/handoff/executors/lead-to-plan/gates/target-application.js';
 import { assertValidSdType } from '../lib/sd-type-enum.js';
@@ -532,6 +541,110 @@ async function createFromFeedback(feedbackId, options = {}) {
       strategic_directive_id: sd.id
     })
     .eq('id', feedback.id);
+
+  return sd;
+}
+
+// SD-LEO-INFRA-SOURCING-ENGINE-REGISTER-FIRST-001 (FR-4): persist the routed lane, FAIL-SOFT against
+// the DORMANT lane column. The PostgREST client reports an unknown/unapplied column as PGRST204
+// ("Could not find the 'lane' column ... in the schema cache") — NOT the raw Postgres 42703 — so detect
+// both, plus a "lane … column … exist" message fallback. Skip silently until the migration is applied.
+async function persistLaneFailSoft(sb, item, lane) {
+  if (!lane) return;
+  const tryUpdate = async (table, match) => {
+    const { error } = await sb.from(table).update({ lane }).match(match);
+    if (error) {
+      const msg = error.message || '';
+      const absent = error.code === 'PGRST204' || error.code === '42703'
+        || (/lane/i.test(msg) && /(column|exist)/i.test(msg));
+      if (absent) { console.log(`   ℹ️  lane column not yet applied (dormant) — lane='${lane}' not persisted to ${table}`); return; }
+      throw error;
+    }
+  };
+  await tryUpdate('roadmap_wave_items', { id: item.id });
+  if (item.source_type === 'conversion_ledger' && item.source_id) {
+    await tryUpdate('conversion_ledger', { id: item.source_id });
+  }
+}
+
+/**
+ * Create an SD from a roadmap_wave_items row (FR-1, --from-roadmap-item). Promotes the item: creates
+ * the SD, then atomically two-way stamps the linkage (FR-3) and persists the routed lane fail-soft
+ * (FR-4). FR-5 hard guard: an already-promoted item never double-promotes. Mirrors the createFromFeedback
+ * contract (--type / --title overrides, guardrail review flags).
+ */
+async function createFromRoadmapItem(itemId, options = {}) {
+  const { migrationReviewed = false, securityReviewed = false } = options;
+  console.log(`\n🗺️  Creating SD from roadmap item: ${itemId}`);
+
+  let item;
+  const { data: exact } = await supabase
+    .from('roadmap_wave_items').select('*').eq('id', itemId).maybeSingle();
+  if (exact) {
+    item = exact;
+  } else {
+    if (!/^[0-9a-f-]+$/i.test(itemId)) {
+      console.error('Invalid roadmap item id (must be UUID hex characters):', itemId);
+      process.exit(1);
+    }
+    const { data: partial } = await supabase
+      .rpc('exec_sql', { sql_text: `SELECT id FROM roadmap_wave_items WHERE id::text LIKE '${itemId}%' LIMIT 1` });
+    const pid = partial?.[0]?.result?.[0]?.id;
+    if (pid) {
+      const { data } = await supabase.from('roadmap_wave_items').select('*').eq('id', pid).single();
+      item = data;
+    }
+  }
+  if (!item) {
+    console.error('Roadmap item not found:', itemId);
+    process.exit(1);
+  }
+
+  // FR-5 hard guard: an already-promoted item never double-promotes.
+  if (item.promoted_to_sd_key) {
+    console.log(`\n⚠️  Roadmap item already promoted to SD: ${item.promoted_to_sd_key}`);
+    console.log('   Skipping to prevent a double-SD.\n');
+    process.exit(0);
+  }
+
+  const fields = deriveSdFieldsFromRoadmapItem(item);
+  const type = options.typeOverride || fields.type;
+  const sdTitle = options.titleOverride || fields.title;
+  const sdKey = await generateSDKey({ source: SD_SOURCES.LEO, type, title: sdTitle, venturePrefix: null });
+
+  const sd = await createSD({
+    sdKey,
+    title: sdTitle,
+    description: item.title || sdTitle,
+    type,
+    priority: 'medium',
+    rationale: `Promoted from roadmap_wave_items ${item.id} (register-first path).`,
+    metadata: {
+      ...fields.metadata,
+      ...(migrationReviewed ? { migration_reviewed: true } : {}),
+      ...(securityReviewed ? { security_reviewed: true } : {}),
+    },
+  });
+
+  // FR-3: atomic two-way stamp (written together so the linkage cannot drift). Fail-soft.
+  try {
+    const stamp = buildTwoWayStamp(item, sd.sd_key, null);
+    await supabase.from('roadmap_wave_items').update(stamp.roadmap).eq('id', item.id);
+    if (stamp.ledger) {
+      await supabase.from('conversion_ledger').update(stamp.ledger).eq('id', item.source_id);
+    }
+    console.log(`   🔗 Two-way stamp: roadmap_wave_items.promoted_to_sd_key=${sd.sd_key}${stamp.ledger ? ' + conversion_ledger.linked_sd_key' : ''}`);
+  } catch (e) {
+    console.warn(`   ⚠️  Two-way stamp skipped (non-blocking): ${e.message}`);
+  }
+
+  // FR-4: route the lane via the shipped router, persist fail-soft (lane column ships DORMANT).
+  try {
+    const routed = laneForRoadmapItem(item);
+    await persistLaneFailSoft(supabase, item, routed.lane);
+  } catch (e) {
+    console.warn(`   ⚠️  Lane persist skipped (non-blocking): ${e.message}`);
+  }
 
   return sd;
 }
@@ -1957,6 +2070,22 @@ async function createSD(options) {
     } catch { /* Non-fatal: brainstorm backfill should not block SD creation */ }
   }
 
+  // SD-LEO-INFRA-SOURCING-ENGINE-REGISTER-FIRST-001 (FR-2, PATH_A warn-only): nudge when an SD is
+  // created without a preceding roadmap registration. NEVER blocks, NEVER auto-registers — the
+  // default-wave / source-id minting convention is owned by the deferred parent engine and must not be
+  // invented on this universal create path. One lightweight check, fully fail-soft; disable via
+  // REGISTER_FIRST_WARN=off. shouldWarnRegisterFirst skips children/fixtures/roadmap-sourced SDs.
+  if (process.env.REGISTER_FIRST_WARN !== 'off') {
+    try {
+      const { data: reg } = await supabase
+        .from('roadmap_wave_items').select('id').eq('promoted_to_sd_key', data.sd_key).limit(1);
+      const hasRegistration = Array.isArray(reg) && reg.length > 0;
+      if (shouldWarnRegisterFirst({ sd_key: data.sd_key, metadata }, hasRegistration, parentId)) {
+        console.warn(`   ⚠️  register-first: ${data.sd_key} created without a preceding roadmap registration (warn-only; auto-register awaits the roadmap-engine convention).`);
+      }
+    } catch { /* warn-only must never block SD creation */ }
+  }
+
   // Vision pre-screen at SD conception (SD-LEO-INFRA-VISION-SD-CONCEPTION-GATE-001)
   // Fire-and-forget: vision scoring is advisory and should not block SD creation.
   // Blocking here caused duplicate SDs when the script timed out after DB insert.
@@ -2373,6 +2502,7 @@ Usage:
   node scripts/leo-create-sd.js --from-uat <test-id>
   node scripts/leo-create-sd.js --from-learn <pattern-id>
   node scripts/leo-create-sd.js --from-feedback <feedback-id>
+  node scripts/leo-create-sd.js --from-roadmap-item <roadmap-item-id>
   node scripts/leo-create-sd.js --from-qf <QF-ID>
   node scripts/leo-create-sd.js --from-proposal <path|glob> [--dry-run]
   node scripts/leo-create-sd.js --proposal-b64 <base64> [--dry-run]      # file-free DB-direct sourcing
@@ -2487,6 +2617,25 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       await createFromFeedback(feedbackId, {
         typeOverride: fbTypeIdx !== -1 ? args[fbTypeIdx + 1] : null,
         titleOverride: fbTitleIdx !== -1 ? args[fbTitleIdx + 1] : null,
+        migrationReviewed: args.includes('--migration-reviewed'),
+        securityReviewed: args.includes('--security-reviewed'),
+      });
+    } else if (args[0] === '--from-roadmap-item') {
+      // SD-LEO-INFRA-SOURCING-ENGINE-REGISTER-FIRST-001 (FR-1): promote a roadmap_wave_items row to an
+      // SD with the two-way stamp. Mirrors --from-feedback flag parsing (--type/--title/review flags).
+      const riTypeIdx = args.indexOf('--type');
+      const riTitleIdx = args.indexOf('--title');
+      const riFlagValuePositions = new Set(
+        [riTypeIdx !== -1 ? riTypeIdx + 1 : -1,
+         riTitleIdx !== -1 ? riTitleIdx + 1 : -1].filter(i => i > 0)
+      );
+      const riKnownFlags = new Set(['--from-roadmap-item', '--type', '--title', '--migration-reviewed', '--security-reviewed']);
+      const roadmapItemId = args.find((arg, i) =>
+        i > 0 && !arg.startsWith('-') && !riFlagValuePositions.has(i) && !riKnownFlags.has(arg)
+      ) || args[1];
+      await createFromRoadmapItem(roadmapItemId, {
+        typeOverride: riTypeIdx !== -1 ? args[riTypeIdx + 1] : null,
+        titleOverride: riTitleIdx !== -1 ? args[riTitleIdx + 1] : null,
         migrationReviewed: args.includes('--migration-reviewed'),
         securityReviewed: args.includes('--security-reviewed'),
       });
