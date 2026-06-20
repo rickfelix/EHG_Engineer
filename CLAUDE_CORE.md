@@ -1,8 +1,8 @@
-<!-- file_content_hash: 1d836b8aa8e2cb79 -->
+<!-- file_content_hash: 57d12c480d1c4aa6 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-06-20 10:12:53 AM
+**Generated**: 2026-06-20 12:35:55 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
