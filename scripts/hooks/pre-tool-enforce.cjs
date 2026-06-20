@@ -263,38 +263,51 @@ async function resolveSessionClaimedSdKey(sessionId) {
 // (mirrors resolveSessionClaimedSdKey: REST + 1.5s timeout + fail-open → null on any error).
 // Used only by the AskUserQuestion guard, so the lookup happens at most once per
 // AskUserQuestion call (a rare tool), never on the hot path of other tools.
-const { isBlockableWorker, ASKUSER_DENY_MESSAGE } = require('./askuser-worker-policy.cjs');
+const { isBlockableWorker, decideAskUserBlock, ASKUSER_DENY_MESSAGE } = require('./askuser-worker-policy.cjs');
 // Resolves the calling session's { metadata, loopState } for the AskUserQuestion guard.
 // loop_state is a TOP-LEVEL claude_sessions column (active|awaiting_tick|exited|unknown) — it is
 // the autonomy signal that catches a /loop worker the coordinator has not yet callsigned.
-// Returns { metadata:null, loopState:null } on ANY error → fail-open ALLOW (never wedge a tool).
+// Returns { metadata:null, loopState:null } on ANY error → caller applies the positive-worker floor.
+//
+// SD-LEO-INFRA-ASKUSER-GUARD-FAILOPEN-HARDEN-001 (FR-3): a SINGLE 1.5s timeout previously dropped a
+// KNOWN worker straight to fail-open ALLOW (the 2026-06-20 hang). One transient hiccup must not do
+// that, so this does ONE bounded retry before giving up. AskUserQuestion is a rare tool, so the extra
+// round-trip is never on a hot path.
+async function _resolveSessionContextOnce(sessionId) {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey || !sessionId || sessionId === 'unknown') return { metadata: null, loopState: null, resolved: false };
+  const url = supabaseUrl +
+    '/rest/v1/claude_sessions?session_id=eq.' +
+    encodeURIComponent(sessionId) + '&select=metadata,loop_state&limit=1';
+  // clearTimeout in finally: when fetch wins the race, the timeout promise would otherwise stay
+  // pending and reject at 1500ms with NO handler → an unhandled rejection. Clearing keeps it safe.
+  let _timer;
+  const resp = await Promise.race([
+    fetch(url, { headers: { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey } }),
+    new Promise((_, reject) => { _timer = setTimeout(() => reject(new Error('timeout')), 1500); }),
+  ]).finally(() => clearTimeout(_timer));
+  if (!resp || !resp.ok) return { metadata: null, loopState: null, resolved: false };
+  const rows = await resp.json();
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) return { metadata: null, loopState: null, resolved: true }; // resolved: session simply has no row
+  const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : null;
+  const loopState = typeof row.loop_state === 'string' ? row.loop_state : null;
+  return { metadata, loopState, resolved: true };
+}
+
 async function resolveSessionContext(sessionId) {
-  try {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceKey || !sessionId || sessionId === 'unknown') return { metadata: null, loopState: null };
-    const url = supabaseUrl +
-      '/rest/v1/claude_sessions?session_id=eq.' +
-      encodeURIComponent(sessionId) + '&select=metadata,loop_state&limit=1';
-    // clearTimeout in finally: when fetch wins the race, the timeout promise would
-    // otherwise stay pending and reject at 1500ms with NO handler → an unhandled
-    // rejection that crashes node on the fall-through (non-block) path. Clearing the
-    // timer makes the helper safe whether it blocks or exempts the caller.
-    let _timer;
-    const resp = await Promise.race([
-      fetch(url, { headers: { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey } }),
-      new Promise((_, reject) => { _timer = setTimeout(() => reject(new Error('timeout')), 1500); }),
-    ]).finally(() => clearTimeout(_timer));
-    if (!resp || !resp.ok) return { metadata: null, loopState: null };
-    const rows = await resp.json();
-    const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
-    if (!row) return { metadata: null, loopState: null };
-    const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : null;
-    const loopState = typeof row.loop_state === 'string' ? row.loop_state : null;
-    return { metadata, loopState };
-  } catch {
-    return { metadata: null, loopState: null }; // fail-open: a resolution error must NEVER block a tool call
+  // FR-3: one bounded retry — a transient timeout/network blip must not silently fail-open a worker.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await _resolveSessionContextOnce(sessionId);
+      if (r.resolved) return { metadata: r.metadata, loopState: r.loopState };
+      // not resolved (timeout/non-ok/missing creds) → retry once more, then give up
+    } catch {
+      // transient error → retry
+    }
   }
+  return { metadata: null, loopState: null }; // give up → caller applies the positive-worker floor
 }
 
 // --- WORKTREE CLAIM GUARD (PAT-CLMMULTI-001) ---
@@ -568,16 +581,27 @@ async function main() {
   // (any resolution error → meta=null → not blockable) so it can never wedge a tool call.
   if (TOOL_NAME === 'AskUserQuestion') {
     const { metadata: meta, loopState } = await resolveSessionContext(_SESSION_ID);
-    if (isBlockableWorker(meta, loopState)) {
+    // SD-LEO-INFRA-ASKUSER-GUARD-FAILOPEN-HARDEN-001 (FR-2): positive-worker FLOOR. If metadata is
+    // momentarily unresolvable (timeout/post-completion/sub-agent), a session that PROVABLY holds an
+    // sd_key claim is still a worker and must block — operator/chairman/Adam/coordinator never hold
+    // SD claims, so the floor can never block them. resolveSessionClaimedSdKey is session-scoped
+    // (claiming_session_id) + fail-soft. (Skip the claim lookup when meta already proves a worker.)
+    let hasClaim = false;
+    if (!isBlockableWorker(meta, loopState)) {
+      try { hasClaim = !!(await resolveSessionClaimedSdKey(_SESSION_ID)); } catch { hasClaim = false; }
+    }
+    const decision = decideAskUserBlock({ meta, loopState, hasClaim });
+    if (decision.block) {
+      const callsign = (meta && ((meta.fleet_identity && meta.fleet_identity.callsign) || meta.callsign)) || null;
       const auditPromise = auditPermissionDecision(
         _SESSION_ID, TOOL_NAME, 'ENF-NO-ASKUSER-WORKER',
-        'AskUserQuestion blocked for autonomous fleet worker', 'block',
-        { callsign: (meta.fleet_identity && meta.fleet_identity.callsign) || meta.callsign || null }
+        'AskUserQuestion blocked for autonomous fleet worker (' + decision.reason + ')', 'block',
+        { callsign, reason: decision.reason, hasClaim }
       );
       process.stderr.write(ASKUSER_DENY_MESSAGE + '\n');
       await auditAndExit(auditPromise, 2, 800);
     }
-    // EXEMPT (coordinator/Adam/operator/unresolved): allow. No other enforcement
+    // EXEMPT (coordinator/Adam/operator, or no positive worker evidence): allow. No other enforcement
     // applies to AskUserQuestion, so exit now — but drain undici FIRST. The
     // resolveSessionContext fetch above leaves a keep-alive socket whose libuv
     // async-handle is still closing; a raw process.exit here races it and trips

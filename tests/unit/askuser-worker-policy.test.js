@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { isBlockableWorker, ASKUSER_DENY_MESSAGE } = require('../../scripts/hooks/askuser-worker-policy.cjs');
+const { isBlockableWorker, decideAskUserBlock, ASKUSER_DENY_MESSAGE } = require('../../scripts/hooks/askuser-worker-policy.cjs');
 
 describe('isBlockableWorker — AskUserQuestion block policy (SD-FDBK-ENH-ENFORCEMENT-IDEA-OPERATOR-001)', () => {
   it('BLOCKS a fleet worker (fleet_identity.callsign present, not privileged)', () => {
@@ -80,5 +80,60 @@ describe('isBlockableWorker — AskUserQuestion block policy (SD-FDBK-ENH-ENFORC
     expect(ASKUSER_DENY_MESSAGE).toMatch(/recommendation/);
     expect(ASKUSER_DENY_MESSAGE).toMatch(/default/);
     expect(ASKUSER_DENY_MESSAGE).toMatch(/exempt/i);
+  });
+});
+
+// SD-LEO-INFRA-ASKUSER-GUARD-FAILOPEN-HARDEN-001 (FR-2/FR-5): the positive-worker FLOOR closes the
+// fail-open residual that still hung a worker on 2026-06-20 (no ENF block row was written ⇒ the
+// guard reached 'allow'). decideAskUserBlock blocks a session with POSITIVE worker evidence even
+// when metadata is momentarily unresolvable — while NEVER blocking operator/chairman/Adam/coordinator.
+describe('decideAskUserBlock — positive-worker floor (FR-2)', () => {
+  it('blocks a metadata-confirmed worker (callsign)', () => {
+    expect(decideAskUserBlock({ meta: { callsign: 'Delta' }, loopState: null, hasClaim: false }).block).toBe(true);
+  });
+
+  it('blocks a callsign-less /loop worker (loop_state)', () => {
+    expect(decideAskUserBlock({ meta: {}, loopState: 'active', hasClaim: false }).block).toBe(true);
+  });
+
+  // THE 2026-06-20 RESIDUAL: metadata unresolvable (timeout) but the session provably holds an SD
+  // claim → it is a worker → BLOCK (previously fell through to allow and hung).
+  it('FLOOR: blocks when metadata is unresolved (null) but the session holds an sd_key claim', () => {
+    const d = decideAskUserBlock({ meta: null, loopState: null, hasClaim: true });
+    expect(d.block).toBe(true);
+    expect(d.reason).toBe('holds-sd-claim-floor');
+  });
+
+  // Post-completion window: callsign dropped, loop exited, but still holds the claim → BLOCK.
+  it('FLOOR: blocks a post-completion worker (no callsign, loop_state=exited) that still holds a claim', () => {
+    expect(decideAskUserBlock({ meta: { source: 'startup' }, loopState: 'exited', hasClaim: true }).block).toBe(true);
+  });
+
+  // HARD LINE: operator/chairman/Adam/coordinator must NEVER be blocked.
+  it('NEVER blocks a genuine operator (no positive evidence at all)', () => {
+    expect(decideAskUserBlock({ meta: { auto_proceed: true }, loopState: null, hasClaim: false }).block).toBe(false);
+  });
+
+  it('NEVER blocks when metadata unresolved AND no claim (genuine interactive session)', () => {
+    const d = decideAskUserBlock({ meta: null, loopState: null, hasClaim: false });
+    expect(d.block).toBe(false);
+    expect(d.reason).toBe('no-positive-evidence');
+  });
+
+  it('NEVER blocks the coordinator even if (impossibly) it held a claim — exemption wins over the floor', () => {
+    expect(decideAskUserBlock({ meta: { is_coordinator: true }, loopState: 'active', hasClaim: true }).block).toBe(false);
+  });
+
+  it('NEVER blocks Adam even with a claim', () => {
+    expect(decideAskUserBlock({ meta: { role: 'adam' }, loopState: null, hasClaim: true }).block).toBe(false);
+  });
+
+  it('NEVER blocks a non_fleet helper even with a claim', () => {
+    expect(decideAskUserBlock({ meta: { non_fleet: true }, loopState: null, hasClaim: true }).block).toBe(false);
+  });
+
+  it('tolerates an empty/garbage ctx without throwing (fail-open allow)', () => {
+    expect(decideAskUserBlock(undefined).block).toBe(false);
+    expect(decideAskUserBlock({}).block).toBe(false);
   });
 });
