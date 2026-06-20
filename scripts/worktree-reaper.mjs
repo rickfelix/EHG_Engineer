@@ -71,6 +71,9 @@ import {
   isPatchEquivalentToMain,
   isIdle,
 } from '../lib/worktree-reaper/detectors.js';
+// SD-LEO-INFRA-WORKTREE-REAPER-MULTIREPO-001: resolve every registered worktree pool (EHG_Engineer +
+// ehg + any other registered app) and compute per-pool cap status, so --all-pools reaps each pool.
+import { resolveRegisteredPools, computePoolCapStatus } from '../lib/worktree-reaper/pools.js';
 
 const SCHEMA_VERSION = '1.0';
 const DEFAULT_IDLE_DAYS = 7;
@@ -110,6 +113,9 @@ function parseArgs(argv) {
     // otherwise folded into the normal flow (so the hourly tick includes it).
     orphanSweep: args.includes('--orphan-sweep'),
     noOrphanSweep: args.includes('--no-orphan-sweep'),
+    // SD-LEO-INFRA-WORKTREE-REAPER-MULTIREPO-001: reap EVERY registered pool (spawns a per-pool
+    // --repo child so each pool keeps the full single-repo safety), not just the current repo.
+    allPools: args.includes('--all-pools'),
     help: args.includes('--help') || args.includes('-h'),
     days: DEFAULT_IDLE_DAYS,
     threshold: DEFAULT_POOL_THRESHOLD,
@@ -155,6 +161,9 @@ Options:
   --preserve-root <p>   Override preserve destination root (default: scratch/preserved-from-*)
   --repo <path>         Run against a different repo (chdir before scanning); useful when
                         the target repo's quota is full but you can't easily cd into it
+  --all-pools           Reap EVERY registered worktree pool (EHG_Engineer + ehg + any other
+                        registered app) by spawning a per-pool --repo child; loudly warns when
+                        any pool is at/above the cap threshold. Passes through the other flags.
   --phantom-only        Legacy mode: only report phantoms (missing dirs / prunable)
   --orphan-sweep        Standalone: ONLY reclaim ORPHANED .worktrees/ dirs (on disk but
                         NOT in 'git worktree list'). Dry-run unless --execute. Junction-safe.
@@ -980,6 +989,79 @@ async function runAndReportOrphanSweep({ repoRoot, worktreesDir, supabase, execu
   return sweep;
 }
 
+// ── Multi-pool orchestration (SD-LEO-INFRA-WORKTREE-REAPER-MULTIREPO-001) ──
+
+/** Rebuild the per-pool child's flag list from opts (everything EXCEPT --all-pools and --repo, which
+ *  the orchestrator sets itself). Keeps every pool's run identical to a manual single-repo invocation. */
+export function buildPassthroughFlags(opts) {
+  const f = [];
+  if (opts.execute) f.push('--execute');
+  if (opts.stage0) f.push('--stage0');
+  if (opts.stage2) f.push('--stage2');
+  if (opts.yes) f.push('--yes');
+  if (opts.verbose) f.push('--verbose');
+  if (opts.phantomOnly) f.push('--phantom-only');
+  if (opts.orphanSweep) f.push('--orphan-sweep');
+  if (opts.noOrphanSweep) f.push('--no-orphan-sweep');
+  if (opts.days && opts.days !== DEFAULT_IDLE_DAYS) f.push('--days', String(opts.days));
+  if (opts.threshold && opts.threshold !== DEFAULT_POOL_THRESHOLD) f.push('--threshold', String(opts.threshold));
+  if (opts.preserveRoot) f.push('--preserve-root', opts.preserveRoot);
+  return f;
+}
+
+/**
+ * Reap EVERY registered worktree pool. Spawns a per-pool `--repo <root>` child so each pool keeps the
+ * full single-repo safety (active-claim protection, preserve-before-delete, dry-run default) — the
+ * decision logic is already repo-agnostic, so only the iteration is new here. Emits a loud warning for
+ * any pool at/above the cap threshold (FR-2) and returns the worst child exit code.
+ */
+export async function runAllPools(opts, { repoRoot, repoName, supabase }, deps = {}) {
+  // Dependency injection (defaults wire the real runtime; tests inject fakes so the orchestration
+  // glue — pool fan-out, per-pool child argv, worst-exit selection — is unit-testable without git/DB).
+  const existsSync = deps.existsSync || ((p) => fs.existsSync(p));
+  const hasGit = deps.hasGit || ((root) => fs.existsSync(path.join(root, '.git')));
+  const usedCounter = deps.listUsed || ((root) => { try { return listActiveWorktrees(root).length; } catch { return 0; } });
+  const spawn = deps.spawn || ((cmd, argv) => spawnSync(cmd, argv, { stdio: 'inherit', windowsHide: true }));
+  const thisFile = deps.selfPath || fileURLToPath(import.meta.url);
+
+  let applications = [];
+  if (supabase) {
+    try {
+      const { data } = await supabase.from('applications').select('name, local_path');
+      applications = data || [];
+    } catch { /* fail-soft: still reap the current pool below */ }
+  }
+  const pools = resolveRegisteredPools({
+    applications,
+    currentRepoRoot: repoRoot,
+    currentRepoName: repoName,
+    existsSync,
+    hasGit,
+  });
+
+  console.log(`\n🌐 MULTI-POOL REAPER — ${pools.length} registered pool(s), ${opts.execute ? 'EXECUTE' : 'DRY-RUN'}`);
+  const passthrough = buildPassthroughFlags(opts);
+  let worst = 0;
+  for (const pool of pools) {
+    const used = usedCounter(pool.root);
+    const cap = computePoolCapStatus(used, MAX_WORKTREE_COUNT, opts.threshold);
+    const tag = `${pool.name} (${pool.root})`;
+    if (cap.warn) {
+      console.warn(
+        `\n⚠️  POOL ${cap.atCap ? 'AT' : 'NEAR'} CAP: ${tag} — ${cap.used}/${cap.cap} (${cap.percent}%) ` +
+        `>= ${Math.round((opts.threshold || DEFAULT_POOL_THRESHOLD) * 100)}% threshold`,
+      );
+    }
+    console.log(`\n──▶ Pool: ${tag} — ${cap.used}/${cap.cap} worktrees (${cap.percent}%)`);
+    const res = spawn('node', [thisFile, '--repo', pool.root, ...passthrough]);
+    const code = res && res.status != null ? res.status : 9;
+    if (code > worst) worst = code;
+    console.log(`◀── Pool ${pool.name} reaper exited ${code}`);
+  }
+  console.log(`\n🌐 Multi-pool reaper done — ${pools.length} pool(s), worst exit ${worst}`);
+  return worst;
+}
+
 export async function main(argv = process.argv) {
   const opts = parseArgs(argv);
   if (opts.help) {
@@ -1013,6 +1095,14 @@ export async function main(argv = process.argv) {
 
   const worktreesDir = path.join(repoRoot, '.worktrees');
   const supabase = getSupabaseClient();
+
+  // SD-LEO-INFRA-WORKTREE-REAPER-MULTIREPO-001: --all-pools fans out one --repo child per registered
+  // pool (the current repo included), so a single invocation reaps EHG_Engineer AND ehg AND any other
+  // registered app. Each child keeps the full single-repo safety; this returns the worst child exit.
+  if (opts.allPools) {
+    return await runAllPools(opts, { repoRoot, repoName: path.basename(repoRoot), supabase });
+  }
+
   const allWorktrees = listActiveWorktrees(repoRoot);
 
   // Phantom-only mode: preserves legacy cleanup-phantom-worktrees.js behavior.

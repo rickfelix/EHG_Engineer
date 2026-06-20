@@ -1,0 +1,69 @@
+{
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Multi-repo reaping across every registered pool",
+      "description": "Add an --all-pools mode to scripts/worktree-reaper.mjs that reaps orphaned worktrees in BOTH the EHG_Engineer pool AND the ehg pool (and any other registered application pool), using the SAME orphan/liveness criteria per pool. Implemented by resolving the pools from the applications registry (lib/worktree-reaper/pools.js resolveRegisteredPools — current repo + every registered local_path that exists with a .git, deduped) and fanning out one --repo child reaper per pool. The decision logic is already repo-agnostic, so each pool inherits the full single-repo reaper unchanged.",
+      "acceptance_criteria": [
+        "--all-pools resolves the current repo plus every existing-git registered application pool, deduped",
+        "Each resolved pool is reaped via a --repo child (the ehg pool, previously never scanned, is now scanned)",
+        "Missing or non-git registered paths are excluded; the orchestrator returns the worst child exit"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Per-pool cap awareness with a loud near/at-cap warning",
+      "description": "computePoolCapStatus(used, cap, threshold) returns utilization + a warn flag (used/cap >= threshold) + atCap (used >= cap). The orchestrator computes each pool's used count via listActiveWorktrees(pool.root) against MAX_WORKTREE_COUNT and emits a loud 'POOL NEAR/AT CAP' warning for any pool at/above the threshold, then prints per-pool used/cap regardless.",
+      "acceptance_criteria": [
+        "computePoolCapStatus.warn is true at/above the threshold and false below",
+        "atCap is true when used >= cap; the helper is total on degenerate input (cap<=0 falls back, fails loud)",
+        "A loud per-pool warning line is emitted when a pool is at/above the cap threshold"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "Same safety as the single-repo reaper",
+      "description": "Multi-repo reaping never reaps a worktree owned by a live heartbeating session. This is preserved by construction: --all-pools spawns the existing single-repo reaper per pool via --repo, so every per-pool run keeps active-claim protection (v_active_sessions + claiming_session_id), preserve-before-delete, the Supabase-unavailable refusal, and dry-run-by-default. No change to the reaping core.",
+      "acceptance_criteria": [
+        "A live-owned worktree is never reclaimed even with a stale terminal row (classifyStage0 returns active_sd_protected)",
+        "Each pool runs the unchanged single-repo safety (active-claim, preserve-before-delete, dry-run default)",
+        "The orchestrator passes through the operator flags (execute/stage0/stage2/yes/days/threshold) to each pool"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "Tests for multi-repo reaping",
+      "description": "tests/unit/worktree-reaper-pools.test.js covers resolveRegisteredPools (include/exclude/dedup), computePoolCapStatus (warn/atCap/degenerate), buildPassthroughFlags (flag passthrough, no --all-pools/--repo, non-default days/threshold), and the FR-4 scenario over an ehg-pool listing: an orphan is reaped, a live-owned worktree is not, and draining the orphans drops the pool below cap.",
+      "acceptance_criteria": [
+        "npx vitest run tests/unit/worktree-reaper-pools.test.js passes",
+        "An orphaned ehg-pool worktree is selected for reclaim; a live-owned one is not",
+        "Post-reclaim pool utilization drops below the cap threshold"
+      ]
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Pool resolution + cap helpers",
+      "steps": "Run npx vitest run tests/unit/worktree-reaper-pools.test.js.",
+      "expected_result": "13 assertions pass covering pool include/exclude/dedup, cap warn/atCap, flag passthrough, and the ehg-pool reaping decision."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Live multi-pool fan-out",
+      "steps": "From the main repo root run node scripts/worktree-reaper.mjs --all-pools --no-orphan-sweep.",
+      "expected_result": "Fans out a --repo child per registered pool (incl ehg), prints per-pool used/cap, each child exits 0 in dry-run, worst exit reported; the ehg pool is scanned."
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Live worktree is protected across pools",
+      "steps": "Drive classifyStage0 with an ehg-pool worktree whose SD is in activeSdSet.",
+      "expected_result": "reclaim=false with reason active_sd_protected — a live-owned worktree is never reaped regardless of pool."
+    }
+  ],
+  "acceptance_criteria": [
+    "The reaper reaps orphaned worktrees in every registered pool (EHG_Engineer, ehg, and any other registered app), not just the current repo",
+    "Per-pool cap awareness emits a loud warning when a pool is at/above the cap threshold",
+    "Live-owned worktrees are never reaped; each pool keeps the full single-repo safety"
+  ]
+}
