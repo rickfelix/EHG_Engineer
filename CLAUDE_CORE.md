@@ -1,8 +1,8 @@
-<!-- file_content_hash: 57d12c480d1c4aa6 -->
+<!-- file_content_hash: 9b81349a627c1d03 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-06-20 12:35:55 PM
+**Generated**: 2026-06-20 7:03:19 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1535,11 +1535,11 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 | Pattern ID | Category | Severity | Count | Trend | Top Solution |
 |------------|----------|----------|-------|-------|--------------|
+| PAT-HF-LEADTOPLAN-90e39736 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
 | PAT-HF-PLANTOEXEC-3e540545 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
-| PAT-RETRO-PLANTOEXEC-SD-EVA-F | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
 | PAT-RETRO-PLANTOLEAD-e8842331 | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
 | PAT-HF-PLANTOLEAD-e8842331 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
-| PAT-RETRO-PLANTOEXEC-3e540545 | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
+| PAT-RETRO-PLANTOEXEC-SD-EVA-F | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
 
 ### Prevention Checklists
 

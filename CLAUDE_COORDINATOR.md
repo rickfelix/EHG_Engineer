@@ -1,8 +1,8 @@
-<!-- file_content_hash: 73e76493f9b982a8 -->
+<!-- file_content_hash: 4e6a2b6e17f47e45 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-06-20 12:35:55 PM
+**Generated**: 2026-06-20 7:03:19 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -45,6 +45,18 @@ Operating a fleet of *AI agents* (not humans) requires supervisor-process duties
 **Deploy-verification practice — SYNC → RESTART → CANARY-VERIFY.** Merged + git-synced ≠ RUNNING. On ANY worker-code refresh the coordinator must (1) **sync** the checkout to `origin/main` — use `npm run resync:safe` (`node scripts/safe-root-resync.mjs`), the canonical SYNC step; **never** use ad-hoc `git clean -fdx` (the `-x` flag deletes gitignored runtime state including `node_modules/` and `.claude/active-coordinator.json` — 3 confirmed prod incidents; see `docs/runbooks/safe-root-resync.md`), (2) **restart** the long-lived worker process (a synced file is not loaded until the process restarts — verify the process StartTime is *after* the sync), and (3) **canary-verify** at runtime (have a worker re-run one stage and confirm the new behavior is live) BEFORE declaring a deploy-gap closed. Never declare a deploy closed on git state alone. *(credit: Adam canary loop, 2026-06-07.)*
 
 **Relationship to sibling SDs (complementary, no duplication):** this charter is the **ongoing-operations** duty set. The one-time **startup ritual** is SD-LEO-INFRA-COORDINATOR-STARTUP-ONBOARDING-001; **self-sustaining loop-wake** is SD-LEO-INFRA-FLEET-WAKE-UNDER-001; the **worktree pool watchdog mechanics** live in SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001 (this charter only references it).
+
+## Coordinator → Adam comms MUST be typed (payload.kind) — untyped is silently skipped
+
+## Coordinator → Adam messages MUST carry a recognized payload.kind
+
+When sending ANY Adam-directed message (a session_coordination row targeting the Adam session), ALWAYS set a recognized payload.kind. Adam inbox (adam-advisory.cjs drainInbox) ONLY surfaces rows where payload.kind is a recognized kind (e.g. coordinator_reply, or an ADAM_INBOX_KINDS directive) OR payload.reply_to is set. UNTYPED rows (payload.kind=null) are SILENTLY SKIPPED — Adam never sees them, a silent comms black hole.
+
+> Why: observed 2026-06-20 — an enforcer verdict + cross-check sent as untyped session_coordination rows sat INVISIBLE to Adam for ~40m and were mis-read as a slow inbox drain. Convergence nearly stalled. The fix is on BOTH sides: coordinator sends typed (this rule) + the Adam inbox is being fixed to WARN about, not silently drop, any unread row targeting the Adam session.
+
+- REPLY to an Adam message: payload = { kind: "coordinator_reply", reply_to: <Adam correlation_id or the Adam row id> }.
+- INITIATE a coordinator→Adam directive: use a recognized directive kind (e.g. coordinator_advisory).
+- NEVER raw-insert an untyped (kind=null) session_coordination row to the Adam session — it will be invisible.
 
 ---
 
