@@ -32,6 +32,10 @@ import { dirname, join } from 'path';
 // fixtures AND bare-shell stubs (neither can pass LEAD-TO-PLAN) never inflate belt depth —
 // counting them as claimable over-reports capacity and suppresses the deficit/Adam alert.
 import { isExcludedFromBelt } from '../lib/coordinator/sd-exclusion.mjs';
+// SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: the pure live-worker predicate (wraps the
+// canonical isDispatchableFleetMember SSOT the dashboard uses, + the released-status guard) so the
+// forecaster's live-worker set AGREES with fleet-dashboard.cjs and excludes fixture/test sessions.
+import { isLiveCountableWorker } from './lib/live-countable-worker.mjs';
 // SD-LEO-INFRA-CAPACITY-FORECAST-STALLED-BELT-EMPTY-FP-001: an idle worker is STALLED only when
 // its loop isn't claiming DESPITE available work — gate the stall label on belt depth, not heartbeat
 // age alone, so an empty-belt idle worker isn't a false-positive STALLED.
@@ -39,6 +43,9 @@ import { classifyIdleWorker } from './lib/capacity-idle-classifier.mjs';
 
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
+// SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: resolve the active coordinator id so the
+// shared isDispatchableFleetMember excludes the coordinator by id exactly like the dashboard does.
+const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
 // SD-LEO-INFRA-FORECASTER-DEP-SENTINEL-BELTDEPTH-001: resolve dependency keys via the canonical
 // blocker rule (lib/utils/parse-sd-dependencies.cjs, same SSOT coordinator-audit.mjs uses) instead of
 // a hand-rolled resolver. parseSdDependencies counts ONLY /^SD-/ entries as real blockers, so the
@@ -90,7 +97,9 @@ async function main() {
   const liveCutoff = new Date(Date.now() - HEARTBEAT_LIVE_MS).toISOString();
   const [{ data: sessions }, { data: sds }, { data: openQfRows }] = await Promise.all([
     sb.from('claude_sessions')
-      .select('session_id, terminal_id, sd_key, heartbeat_at, loop_state, metadata')
+      // SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: + status so released/terminal sessions
+      // are not counted as available workers even with a recent heartbeat (FR-2).
+      .select('session_id, terminal_id, sd_key, heartbeat_at, loop_state, metadata, status')
       .gte('heartbeat_at', liveCutoff),
     sb.from('strategic_directives_v2')
       // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + metadata (is_fixture marker) and
@@ -131,11 +140,15 @@ async function main() {
   }
   if (beltExcludes) console.log(`[CAPACITY-FORECAST] ${beltExcludes} non-distributable SD(s) (fixture/bare-shell) excluded from belt depth`);
 
-  // ── classify live workers (exclude coordinator + adam) ──
-  const workers = (sessions || []).filter(s => {
-    const md = s.metadata || {};
-    return !md.is_coordinator && md.role !== 'adam';
-  });
+  // ── classify live workers (exclude coordinator + adam + non_fleet + fixtures + released) ──
+  // SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: use the canonical isDispatchableFleetMember
+  // SSOT (the dashboard's predicate) so a fixture/test session (FR-1) never counts as live idle/at-risk
+  // demand; ALSO drop released/terminal sessions (FR-2) which are not available workers even with a
+  // recent heartbeat. Keep the metadata.is_coordinator guard so a stale coordinator-marked session is
+  // excluded even when it is not the CURRENTLY-active coordinator id.
+  let coordinatorId = null;
+  try { coordinatorId = await getActiveCoordinatorId(sb); } catch { coordinatorId = null; }
+  const workers = (sessions || []).filter(s => isLiveCountableWorker(s, coordinatorId));
 
   const rows = [];
   let idleNow = 0, freeingSoon = 0, building = 0, stalled = 0;
