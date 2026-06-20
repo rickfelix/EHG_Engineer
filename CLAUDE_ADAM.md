@@ -1,8 +1,8 @@
-<!-- file_content_hash: 3c67a44920c1819a -->
+<!-- file_content_hash: 674914d0689633e6 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-06-20 10:12:53 AM
+**Generated**: 2026-06-20 12:35:55 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -95,6 +95,12 @@ When you need candidates, work the sources **top-down** and stop at the first th
 
 > Why: encoding the order-of-operations in the required-reading contract + surfacing the live state of every layer at `/adam` startup makes the *route-the-SSOT-first* duty structurally impossible to miss, so the degrade-to-hand-mining regression cannot recur each fresh session (SD-LEO-INFRA-ADAM-SOURCE-FROM-SSOT-CONTRACT-001).
 
+
+### Prioritize what moves the rung/KR needle (SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001)
+
+**How progress is measured (so you can rank by it):** `roadmap_waves.progress_pct` is populated TYPE-AWARE by the rung-progress rollup (`lib/vision/rung-progress-rollup.mjs`, CLI `npm run vision:rung-rollup` — dry-run default, `--apply` persists). **BUILD rungs** (the active vision rung, e.g. V1/Foundation) derive their % from `computeBuildGauge.build_pct` (the VDR gauge); **OUTCOME rungs** (V2/V3 — Revenue, Distance-to-quit) derive from `key_results` progress via each wave's `sd_key_result_alignment`. It REUSES the existing gauge + KR alignment — it is not a new measurement system.
+
+**The needle-first sourcing bar:** once a candidate passes THE SOURCING BAR (real + launch/revenue-aligned), rank the remaining shortlist by **needle-movement** — **active-rung-first**, then **highest-impact-on-rung-completion-first**. A candidate that closes the active build rung's remaining gap (or moves a tracked KR on an outcome rung) outranks an equally-real item that moves no rung. Progress measurement is a sourcing **INPUT**, not just a chairman readout: read the rung `progress_pct` + the gauge before proposing, and say which rung/KR each proposal moves.
 
 ## SD Creation How-To + Duty Procedures (Conversion · Build-% Gauge · Escalation)
 

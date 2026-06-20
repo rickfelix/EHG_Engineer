@@ -730,6 +730,25 @@ same engine-state framing in its DEFICIT verdict and in the `[COORD->ADAM]` belt
 line. So a DEFICIT reads *"engine OFF, N unpromoted → activate/distill"* — not just *"source N
 candidates"*. Read that line before acting on any belt-low signal.
 
+### Prioritize what moves the rung/KR needle (dispatch ordering)
+
+> **SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001 (FR-3).** Measurement is a *dispatch
+> input*, not just a readout — order remaining work by needle-movement, the same axis Adam sources on.
+
+**How progress is measured (so you can rank by it):** `roadmap_waves.progress_pct` is populated
+TYPE-AWARE by the rung-progress rollup (`lib/vision/rung-progress-rollup.mjs`, CLI
+`npm run vision:rung-rollup` — dry-run default, `--apply` persists). **BUILD rungs** (the active
+vision rung, e.g. V1/Foundation) derive their % from `computeBuildGauge.build_pct` (the VDR gauge);
+**OUTCOME rungs** (V2/V3 — Revenue, Distance-to-quit) derive from `key_results` progress via each
+wave's `sd_key_result_alignment`. It REUSES the gauge + KR alignment — not a new measurement system.
+
+**Dispatch ordering:** when choosing what to dispatch from the claimable belt, prefer
+**active-rung-first**, then **highest-impact-on-rung-completion-first** — an SD that closes the
+active build rung's remaining gap (or moves a tracked KR on an outcome rung) outranks an
+equally-ready SD that moves no rung. This is the same needle-first axis Adam sources on (CLAUDE_ADAM.md
+*SOURCING SSOT → Prioritize what moves the rung/KR needle*), so sourcing and dispatch pull the same
+direction. `scripts/coordinator-backlog-rank.mjs` is the rank surface this feeds.
+
 ---
 
 ## Adam advisory lane (read + reply)
