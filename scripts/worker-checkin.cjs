@@ -42,7 +42,12 @@ const { NATO, COLORS, nextAvailable, isTestSessionId } = require('./assign-fleet
 
 const ROLL_CALL_TTL_MS = 60 * 60 * 1000;     // availability row lives 1h
 const ROLL_CALL_DEDUP_MS = 5 * 60 * 1000;    // don't re-register within 5m (idempotency)
-const DEFAULT_IDLE_WAKEUP_SECONDS = 1200;    // ~20m, matches the fleet idle cadence
+// SD-LEO-INFRA-LOOP-RESUME-DELAY-SHORTEN-001: shortened from 1200 (20m) to 600 (10m) so a
+// finished idle worker re-engages its /loop ~2x faster and the fleet stops looking idle.
+// Trade-off: idle workers re-check roughly twice as often, a modest increase in /checkin DB
+// chatter — but each idle check is a cheap idempotent roll_call (5m dedup), so the cost is
+// small. NOT applied to the propose-only idle branch below, which keeps its own 1200 literal.
+const DEFAULT_IDLE_WAKEUP_SECONDS = 600;      // ~10m, matches the tightened fleet idle cadence
 const SELF_CLAIM_CANDIDATE_LIMIT = 5;
 const QF_CANDIDATE_LIMIT = 25;               // open quick_fixes to consider for self-claim
 const STALE_QF_DAYS = Number(process.env.SD_NEXT_QF_STALE_DAYS) || 3;  // verify-first freshness boundary (shared with sd-next display)
