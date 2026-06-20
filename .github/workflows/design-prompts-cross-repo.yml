@@ -11,9 +11,11 @@ name: Design Prompts Cross-Repo Parity
 # (the QF/PR #3941 class of drift). The twin workflow lives in rickfelix/ehg and
 # triggers on the frontend copy.
 #
-# ADVISORY: continue-on-error: true. Flip to blocking (remove that line + add
-# "Design Prompts Cross-Repo Parity" to required status checks) in a 1-line
-# follow-up once the false-positive rate is confirmed ~0.
+# ADVISORY (content divergence only): the DIVERGENCE compare is advisory at the
+# STEP level (continue-on-error on the compare step). A configured-token cross-repo
+# checkout FAILURE is now BLOCKING (SD-LEO-INFRA-CROSSREPO-DRIFT-GUARDS-EHG-PAT-001 FR-3
+# removed the job-level continue-on-error). To make divergence itself blocking, drop
+# the compare step's continue-on-error + add this workflow to required status checks.
 
 on:
   pull_request:
@@ -33,7 +35,11 @@ jobs:
   parity:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    continue-on-error: true  # ADVISORY; remove this line to make blocking
+    # SD-LEO-INFRA-CROSSREPO-DRIFT-GUARDS-EHG-PAT-001 (FR-3): job-level continue-on-error REMOVED so a
+    # configured-token cross-repo-checkout FAILURE (token lapse/expiry) actually fails the job and is
+    # surfaced — it green-masked the broken guard for ~12 days. The design-prompts DIVERGENCE result
+    # stays advisory at the STEP level (continue-on-error on the compare step) so only a real token
+    # regression is blocking, not a content divergence.
     steps:
       - name: Checkout EHG_Engineer
         uses: actions/checkout@v4
@@ -50,13 +56,28 @@ jobs:
         with:
           repository: rickfelix/ehg
           path: ehg-sibling
-          token: ${{ secrets.GH_TOKEN_CROSS_REPO || secrets.GITHUB_TOKEN }}
+          # SD-LEO-INFRA-CROSSREPO-DRIFT-GUARDS-EHG-PAT-001 (FR-1): fall back to the scoped
+          # cross-repo PAT (EHG_RO_PAT), NOT the default GITHUB_TOKEN — the default can't read the
+          # private rickfelix/ehg, so it 404'd and the guard was silently skipped. Mirrors the
+          # now-working exec-email cron (GH_TOKEN_CROSS_REPO || EHG_RO_PAT).
+          token: ${{ secrets.GH_TOKEN_CROSS_REPO || secrets.EHG_RO_PAT }}
           fetch-depth: 1
 
-      - name: Sibling repo unreachable (advisory skip)
+      # SD-LEO-INFRA-CROSSREPO-DRIFT-GUARDS-EHG-PAT-001 (FR-3): distinguish "no token configured"
+      # (clean advisory skip) from "token configured but checkout FAILED" (real regression — fail loud).
+      # Secrets are mapped to env (the supported pattern; secrets are not directly testable in bash) so a
+      # token lapse/expiry surfaces instead of being silently warned-and-skipped like a missing token.
+      - name: Sibling checkout outcome gate
         if: steps.sibling_checkout.outcome != 'success'
+        env:
+          EHG_RO_PAT: ${{ secrets.EHG_RO_PAT }}
+          GH_TOKEN_CROSS_REPO: ${{ secrets.GH_TOKEN_CROSS_REPO }}
         run: |
-          echo "::warning ::Could not check out the sibling rickfelix/ehg repo (private; needs the GH_TOKEN_CROSS_REPO secret). Skipping the S17/S19 design-prompts cross-repo comparison. Set GH_TOKEN_CROSS_REPO to enable it. SD-FDBK-FIX-DRIFT-CHECK-FAILS-001."
+          if [ -n "$EHG_RO_PAT" ] || [ -n "$GH_TOKEN_CROSS_REPO" ]; then
+            echo "::error ::Cross-repo checkout of rickfelix/ehg FAILED despite a configured token (EHG_RO_PAT / GH_TOKEN_CROSS_REPO) — the token likely EXPIRED or lost access. The S17/S19 design-prompts drift guard is DISABLED until the secret is rotated. SD-LEO-INFRA-CROSSREPO-DRIFT-GUARDS-EHG-PAT-001."
+            exit 1
+          fi
+          echo "::warning ::No cross-repo token configured (EHG_RO_PAT / GH_TOKEN_CROSS_REPO) — skipping the S17/S19 design-prompts cross-repo comparison (advisory). Set EHG_RO_PAT to enable it."
 
       - name: Setup Node
         if: steps.sibling_checkout.outcome == 'success'
@@ -65,10 +86,12 @@ jobs:
           node-version: '20'
 
       - name: Compare shared design-prompts checksum across repos
+        id: compare_prompts
         if: steps.sibling_checkout.outcome == 'success'
+        continue-on-error: true  # FR-3: DIVERGENCE stays advisory (only a token regression is blocking)
         run: node scripts/design-prompts-cross-repo-check.mjs ehg-sibling/src/components/stage17/gvos/shared-design-prompts.json
 
       - name: Note about advisory mode
-        if: failure()
+        if: steps.compare_prompts.outcome == 'failure'
         run: |
-          echo "::warning ::S17/S19 shared design-prompts diverged. This gate is in advisory mode (continue-on-error). Re-vendor the shared JSON into both repos and run 'npm run design-prompts:sync'. See SD-LEO-INFRA-UNIFY-STAGE-DESIGN-001."
+          echo "::warning ::S17/S19 shared design-prompts diverged. This comparison is advisory. Re-vendor the shared JSON into both repos and run 'npm run design-prompts:sync'. See SD-LEO-INFRA-UNIFY-STAGE-DESIGN-001."
