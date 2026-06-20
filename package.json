@@ -128,6 +128,7 @@
     "glide:add-income-dimension": "node scripts/glide-path/add-income-dimension.mjs",
     "qf:link": "node scripts/qf-link-resolution.mjs",
     "session:prologue": "node scripts/generate-session-prologue.js",
+    "db:size-monitor": "node scripts/db-retention/db-size-monitor.mjs",
     "db:create": "node scripts/execute-database-sql.js",
     "db:timeline": "node scripts/execute-database-sql.js database/schema/sd_execution_timeline.sql",
     "db:leo": "node scripts/execute-database-sql.js database/schema/007_leo_protocol_schema.sql",
