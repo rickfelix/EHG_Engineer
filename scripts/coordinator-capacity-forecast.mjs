@@ -32,9 +32,10 @@ import { dirname, join } from 'path';
 // fixtures AND bare-shell stubs (neither can pass LEAD-TO-PLAN) never inflate belt depth —
 // counting them as claimable over-reports capacity and suppresses the deficit/Adam alert.
 import { isExcludedFromBelt } from '../lib/coordinator/sd-exclusion.mjs';
-// SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: the pure live-worker predicate (wraps the
-// canonical isDispatchableFleetMember SSOT the dashboard uses, + the released-status guard) so the
-// forecaster's live-worker set AGREES with fleet-dashboard.cjs and excludes fixture/test sessions.
+// SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: the pure live-worker predicate. It wraps the
+// canonical isDispatchableFleetMember SSOT the dashboard uses (so the forecaster AGREES with
+// fleet-dashboard.cjs on coordinator/adam/non_fleet/fixture exclusion) and ADDS a released-status
+// guard (FR-2; the forecaster is deliberately stricter than the dashboard on status).
 import { isLiveCountableWorker } from './lib/live-countable-worker.mjs';
 // SD-LEO-INFRA-CAPACITY-FORECAST-STALLED-BELT-EMPTY-FP-001: an idle worker is STALLED only when
 // its loop isn't claiming DESPITE available work — gate the stall label on belt depth, not heartbeat

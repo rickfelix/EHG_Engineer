@@ -12,7 +12,14 @@
 
 import { isDispatchableFleetMember } from '../../lib/fleet/session-predicates.mjs';
 
-// Session statuses that mean "not an available worker" even within the live-heartbeat window.
+// Session statuses that mean "not an available worker" even within the live-heartbeat window (FR-2).
+// NOTE on agreement with the dashboard: this predicate AGREES with fleet-dashboard.cjs on the identity
+// polluters (coordinator/adam/non_fleet/fixture, via the shared isDispatchableFleetMember SSOT) but is
+// deliberately STRICTER on status — the dashboard applies no status guard. The transient
+// "recoverable-released" window (a still-heartbeating worker the sweep briefly marked 'released' before
+// its next heartbeat resets it to 'active', lib/session-manager.mjs) can drop one real idle worker for
+// a single tick; that errs toward UNDER-counting demand (a missed reach-out), never toward starving a
+// worker, and self-heals on the next heartbeat — the accepted, safe direction for FR-2.
 export const RELEASED_WORKER_STATUSES = new Set(['released', 'completed', 'terminated', 'inactive']);
 
 /**
