@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-19T17:58:02.373Z
+**Generated**: 2026-06-20T00:42:20.836Z
 **Rows**: 159
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (33 total)
+## Columns (34 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -51,6 +51,7 @@
 | completion_reference | `text` | YES | - | - |
 | utilized_from_sd | `text` | YES | - | - |
 | completion_notes | `text` | YES | - | - |
+| disposition | `text` | YES | - | Distillation verdict for the backlog item: BUILD|RESEARCH|REFERENCE|CANCEL, or NULL when un-dispositioned. Set by scripts/distill-backlog-dispositions.mjs (completion_status proxy + conversion_ledger feeder) or by a human; read by vision ordinal-23. SD-LEO-INFRA-BACKLOG-DISPOSITION-COLUMN-WORKFLOW-001. |
 
 ## Constraints
 
@@ -64,6 +65,7 @@
 - `sd_backlog_map_unique_sd_backlog`: UNIQUE (sd_id, backlog_id)
 
 ### Check Constraints
+- `chk_sd_backlog_map_disposition`: CHECK (((disposition IS NULL) OR (disposition = ANY (ARRAY['BUILD'::text, 'RESEARCH'::text, 'REFERENCE'::text, 'CANCEL'::text]))))
 - `sd_backlog_map_completion_status_check`: CHECK ((completion_status = ANY (ARRAY['NOT_STARTED'::text, 'IN_PROGRESS'::text, 'COMPLETED'::text, 'UTILIZED_ELSEWHERE'::text, 'DEFERRED'::text, 'CANCELLED'::text])))
 - `sd_backlog_map_coverage_pct_check`: CHECK (((coverage_pct >= 0) AND (coverage_pct <= 100)))
 - `sd_backlog_map_item_type_check`: CHECK ((item_type = ANY (ARRAY['epic'::text, 'story'::text, 'task'::text])))
