@@ -1,0 +1,118 @@
+{
+  "executive_summary": "The production-breakage detector/surface family writes recurring breakage signals into system_alerts (each carrying metadata.break_class), but nothing turns a recurring spike into actionable work — that last mile is missing. This PRD delivers a fail-soft, flag-gated (default OFF) cron sweep that reads system_alerts over a rolling window, groups by (break_class, source), detects classes recurring above a threshold, and sources exactly ONE DRAFT corrective/diagnostic SD per recurring uncovered class — never auto-fixing and never auto-resolving the alert (CONST-002). It mirrors the proven scripts/clockwork/ci-autotriage-loop.cjs doctrine and reuses its status-aware isCovered/stripDeadLinks dedup so a stale CANCELLED link cannot immortalize a class.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Fail-soft flag-gated sweep over system_alerts, grouped by (break_class, source)",
+      "description": "A new scripts/clockwork/prod-error-sweep-loop.cjs mirroring the ci-autotriage-loop.cjs structure: gated behind PROD_ERROR_SWEEP_LOOP_ENABLE (default OFF -> prints [SKIP] and exits 0), default DRY-RUN unless --apply, with --threshold/--per-run/--per-day overrides. It reads unresolved system_alerts (resolved_at IS NULL) created within a rolling window (default 24h), and groups them by the (break_class, source_service) tuple. The break-class set is the FROZEN denominator imported from lib/coordinator/break-class-taxonomy.cjs (BREAK_CLASSES) — alerts whose metadata.break_class is not an enumerated class are ignored. Detection is pure (new scripts/lib/prod-error-recurrence-detector.mjs): a class is a candidate when its windowed occurrence count is >= threshold (default 3).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "With PROD_ERROR_SWEEP_LOOP_ENABLE unset, the script prints [SKIP] and exits 0 having written nothing.",
+        "With the flag on and no --apply, it lists each recurring uncovered (break_class, source) class above the threshold and writes nothing.",
+        "Only break_class values present in BREAK_CLASSES from break-class-taxonomy.cjs are considered; unknown classes are skipped.",
+        "Detection groups by the (break_class, source_service) tuple and counts occurrences within the configured window."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Source ONE DRAFT corrective SD per recurring uncovered class, carrying alert context, never auto-fixing or auto-resolving",
+      "description": "For each recurring uncovered class, the loop creates a durable bridge feedback row (category='production_error') carrying the alert context (occurrence count, source, break_class, a sample alert title/message), then sources exactly ONE DRAFT corrective SD through the canonical CLI: node scripts/leo-create-sd.js --from-feedback <bridgeId> --type infrastructure (SD_CREATE_VIA_SKILL=1). The created SD key is read back authoritatively from feedback.strategic_directive_id (never scraped from stdout), tagged metadata.sourced_by='prod-error-sweep' + metadata.break_class. The loop NEVER edits code, NEVER merges, and NEVER writes system_alerts.resolved_at — diagnosis is deferred to the worker who picks up the DRAFT SD (CONST-002), exactly the ci-autotriage boundary.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Each recurring uncovered class produces exactly one DRAFT SD via leo-create-sd.js --from-feedback (no hand-rolled inserts).",
+        "The bridge feedback row and SD metadata carry the alert context: occurrence count, source, break_class, and a sample.",
+        "No system_alerts row is ever updated (resolved_at stays null); no code is edited and nothing is merged by the loop.",
+        "Per-run and per-day anti-spam caps bound how many SDs a single run / day can source (defaults 3 / 10)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Status-aware idempotency reusing isCovered / stripDeadLinks",
+      "description": "Before sourcing, the loop fetches open production_error bridge rows for the candidate classes and applies the ci-autotriage stripDeadLinks logic (TERMINAL_SD_STATUSES = cancelled/archived/superseded/rejected): a bridge row linked ONLY to a terminal SD is treated as uncovered so a stale CANCELLED link cannot immortalize a class. A (break_class, source) class is COVERED — and skipped — when an open bridge row for it still links to a non-terminal SD (reusing isCovered from scripts/lib/ci-recurrence-detector.mjs). Re-running the loop immediately after an apply re-sources nothing.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A class already covered by an open, non-terminal corrective SD is skipped (no duplicate SD).",
+        "A class whose only corrective SD is in a terminal status (cancelled/archived/superseded/rejected) is treated as uncovered and may be re-sourced.",
+        "An immediate re-run after --apply sources zero additional SDs for the just-covered classes."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Bounded run ledger + loud outcome-gated warnings, fail-soft",
+      "description": "Each run logs a bounded summary: window, candidate count, sourced count, per-run/per-day remaining, and per-class -> SD linkage, prefixed [prod-error-sweep]. Degraded conditions (alert fetch failed, per-day count failed, create/tag failed for a class) emit a loud [ALERT] line but the run continues and the process always exits 0 (fail-soft, never throws) — mirroring the ci-autotriage main().catch(exit 0) contract. A single class failure never aborts the remaining classes.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Every run prints a bounded summary line with window, candidates, sourced, and caps.",
+        "A fetch/count/create failure logs a loud [ALERT] line and the run continues; the process exits 0 even on internal error.",
+        "One class failing to source does not prevent the other classes in the run from being processed."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Register the loop contract, wire it into package.json, and pin behavior with tests",
+      "description": "Declare the loop in lib/loops/loop-contract-registry.js as a third exemplar contract (id LOOP-PROD-ERROR-SWEEP-001) with goals, ordered workflow steps, may/may_not boundaries (may: read system_alerts, detect classes, source DRAFT SDs, link bridge rows; may_not: edit code, merge, auto-fix, write strategy tables, or resolve alerts), tasks (entrypoint + pure_logic + flag), and a cron timeline. The contract is DATA ONLY (assertContractsValid must still pass). Note: goal_type=verifiable is NOT added because SD-LEO-INFRA-LOOP-CONTRACT-GOAL-TYPE-BUDGET-001 has not shipped (the schema does not yet accept it). Add a package.json scripts entry (prod-error-sweep) so WIRE_CHECK can reach the new entrypoint, and add tests covering recurrence detection, status-aware idempotency, and the no-auto-fix/no-auto-resolve boundary.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "lib/loops/loop-contract-registry.js declares LOOP-PROD-ERROR-SWEEP-001 and assertContractsValid() still passes (loud at import).",
+        "package.json has a scripts entry invoking scripts/clockwork/prod-error-sweep-loop.cjs so WIRE_CHECK resolves the entrypoint.",
+        "Tests cover: threshold-based recurrence detection, status-aware idempotency (covered vs terminal-link), and a boundary assertion that the detector module exposes no resolve/fix capability."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Pure detector module", "description": "scripts/lib/prod-error-recurrence-detector.mjs is pure (no DB/IO), mirroring scripts/lib/ci-recurrence-detector.mjs; the loop script owns all IO." },
+    { "id": "TR-2", "title": "No schema change", "description": "Additive only: new bridge feedback rows use the existing feedback table (category='production_error', a free varchar); system_alerts is read-only. No migration." },
+    { "id": "TR-3", "title": "Canonical sourcing only", "description": "SDs are created exclusively via scripts/leo-create-sd.js --from-feedback with SD_CREATE_VIA_SKILL=1; never a hand-rolled strategic_directives_v2 insert." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Recurrence detection groups by (break_class, source) and applies the threshold", "type": "unit", "expected": "detectRecurringClasses returns only tuples whose windowed count meets the threshold, sorted deterministically." },
+    { "id": "TS-2", "scenario": "Status-aware idempotency skips covered classes but re-sources terminal-linked ones", "type": "unit", "expected": "A class with an open non-terminal corrective SD is excluded; a class whose only link is a cancelled SD is included again." },
+    { "id": "TS-3", "scenario": "No-auto-fix / no-auto-resolve boundary", "type": "unit", "expected": "The detector exposes only read/classify functions (no resolve/fix/update); the loop never writes system_alerts.resolved_at." }
+  ],
+  "acceptance_criteria": [
+    "The loop is OFF by default and fail-soft (always exits 0).",
+    "Recurring uncovered (break_class, source) classes each yield exactly one traceably-linked DRAFT corrective SD.",
+    "No alert is auto-resolved and no code is auto-fixed by the loop.",
+    "The loop is declared in the loop-contract registry and reachable from package.json (WIRE_CHECK)."
+  ],
+  "risks": [
+    { "risk": "Sourcing storm if many classes recur at once", "mitigation": "Per-run (3) and per-day (10) caps, mirroring ci-autotriage applyCaps.", "severity": "low" },
+    { "risk": "Bridge feedback rows pollute the inbox", "mitigation": "Dedicated category='production_error' + status-aware idempotency prevents duplicate rows per covered class.", "severity": "low" },
+    { "risk": "Stale CANCELLED link permanently suppresses a still-recurring class", "mitigation": "stripDeadLinks treats terminal-SD links as uncovered, reused verbatim from ci-autotriage.", "severity": "medium" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["LEO fleet workers who pick up the DRAFT corrective SDs", "Coordinator/Adam who see new infrastructure SDs in the queue", "the loop-contract registry consumers (npm run loops:list)"],
+    "dependencies": ["lib/coordinator/break-class-taxonomy.cjs (BREAK_CLASSES denominator)", "scripts/lib/ci-recurrence-detector.mjs (isCovered)", "scripts/leo-create-sd.js --from-feedback", "system_alerts table (read-only)", "feedback table (bridge rows)"],
+    "data_contracts": ["system_alerts.metadata.break_class encoding (read)", "feedback category='production_error' bridge row (write)", "feedback.strategic_directive_id linkage (read-back)", "strategic_directives_v2.metadata.sourced_by='prod-error-sweep' tag (write); no schema change"],
+    "runtime_config": ["PROD_ERROR_SWEEP_LOOP_ENABLE (default false)", "--apply (default DRY-RUN)", "--threshold (default 3)", "--per-run (default 3)", "--per-day (default 10)", "SD_CREATE_VIA_SKILL=1 for the create child process"],
+    "observability_rollout": ["[prod-error-sweep] log lines (bounded per-run summary + [ALERT] degraded warnings)", "ships INERT (flag OFF) — enable in a controlled window and watch sourced DRAFT SD volume + system_alerts staying unresolved", "metadata.sourced_by='prod-error-sweep' makes sourced SDs queryable for the per-day cap and audit"]
+  },
+  "system_architecture": {
+    "summary": "Pure detector (scripts/lib) + fail-soft clockwork loop (scripts/clockwork) reading system_alerts and sourcing DRAFT SDs via the canonical CLI; declared as a loop contract.",
+    "components": [
+      { "name": "scripts/lib/prod-error-recurrence-detector.mjs", "change": "NEW pure detector (group by break_class+source, threshold, coverage filter)" },
+      { "name": "scripts/clockwork/prod-error-sweep-loop.cjs", "change": "NEW fail-soft flag-gated loop (IO, sourcing, ledger)" },
+      { "name": "lib/loops/loop-contract-registry.js", "change": "ADD LOOP-PROD-ERROR-SWEEP-001 contract" },
+      { "name": "package.json", "change": "ADD prod-error-sweep scripts entry (WIRE_CHECK)" },
+      { "name": "tests/unit/prod-error-recurrence-detector.test.js", "change": "NEW unit tests (recurrence, idempotency, boundary)" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Mirror the ci-autotriage-loop doctrine, swapping the feedback(ci_failure) source for system_alerts(break_class) and adding a bridge-feedback sourcing hop so the existing --from-feedback path and isCovered/stripDeadLinks dedup are reused unchanged.",
+    "steps": [
+      "Write the pure detector scripts/lib/prod-error-recurrence-detector.mjs (classKey=break_class::source, detectRecurringClasses with threshold + coveredKeys exclusion, applyCaps).",
+      "Write scripts/clockwork/prod-error-sweep-loop.cjs: flag gate, read unresolved windowed system_alerts, build coveredKeys from open production_error bridge rows after stripDeadLinks, cap, then per class create bridge row -> leo-create-sd.js --from-feedback -> read-back -> tag.",
+      "Declare LOOP-PROD-ERROR-SWEEP-001 in loop-contract-registry.js (no goal_type) and add the package.json entry.",
+      "Add tests/unit/prod-error-recurrence-detector.test.js (recurrence, idempotency, boundary).",
+      "Run TESTING + SECURITY sub-agents, commit early, EXEC-TO-PLAN."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run: PROD_ERROR_SWEEP_LOOP_ENABLE unset, node scripts/clockwork/prod-error-sweep-loop.cjs", "expected_outcome": "Prints [SKIP] disabled and exits 0; writes nothing (flag-gated default OFF)." },
+    { "step_number": 2, "instruction": "Run: PROD_ERROR_SWEEP_LOOP_ENABLE=true node scripts/clockwork/prod-error-sweep-loop.cjs", "expected_outcome": "Lists recurring uncovered (break_class, source) classes above threshold from system_alerts; writes nothing (DRY-RUN)." },
+    { "step_number": 3, "instruction": "Seed >=3 unresolved system_alerts sharing one (break_class, source), then run with --apply", "expected_outcome": "Sources exactly ONE DRAFT corrective SD via leo-create-sd.js --from-feedback carrying alert context; links the bridge feedback row; system_alerts stay unresolved." },
+    { "step_number": 4, "instruction": "Re-run --apply immediately, then cancel the sourced SD and run again", "expected_outcome": "Immediate re-run sources nothing (covered); after the SD is cancelled, the class is treated as uncovered again (stripDeadLinks)." }
+  ],
+  "activation_test_id": "tests/unit/prod-error-recurrence-detector.test.js",
+  "metadata": { "sd_key": "SD-LEO-INFRA-PROD-ERROR-SWEEP-LOOP-001" }
+}
