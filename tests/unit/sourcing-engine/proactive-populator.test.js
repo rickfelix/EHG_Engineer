@@ -5,6 +5,7 @@
  * apply AND chairman-approved, never promotes, idempotent, dormant-safe (FR-3/FR-4).
  */
 import { describe, it, expect } from 'vitest';
+import { validate as isUuid } from 'uuid';
 import {
   corpusSourceType,
   buildCorpus,
@@ -12,6 +13,7 @@ import {
   routeCorpus,
   buildReport,
   stageCorpus,
+  toUuidSourceId,
 } from '../../../lib/sourcing-engine/proactive-populator.js';
 
 describe('corpusSourceType — maps to a live-allowed roadmap_wave_items.source_type', () => {
@@ -40,6 +42,24 @@ describe('buildCorpus — enumerate 4 sources, dedup by (source_type, source_id)
 
   it('skips items with no source_id', () => {
     expect(buildCorpus({ backlog: [{ title: 'no id' }] })).toHaveLength(0);
+  });
+
+  it('normalizes a non-UUID source id to a STABLE valid UUID + preserves the original key (22P02 guard)', () => {
+    // strategic_directives_v2.id is varchar — frequently the sd_key STRING, which would throw 22P02
+    // against the UUID-typed roadmap_wave_items.source_id. The deferred candidate must carry a UUID.
+    const run = () => buildCorpus({ deferred: [{ id: 'SD-LEO-FIX-REMEDIATION-NPM-AUDIT-003', sd_key: 'SD-LEO-FIX-REMEDIATION-NPM-AUDIT-003', title: 'X' }] })[0];
+    const a = run();
+    expect(isUuid(a.source_id)).toBe(true);
+    expect(a.source_key).toBe('SD-LEO-FIX-REMEDIATION-NPM-AUDIT-003'); // original preserved for traceability
+    expect(run().source_id).toBe(a.source_id);                        // deterministic -> idempotent
+  });
+
+  it('passes an already-UUID source id through unchanged (no source_key churn)', () => {
+    const uuid = '98d7fd7f-bb80-4ba5-98a9-b76c6c3f2baa';
+    expect(toUuidSourceId(uuid)).toBe(uuid);
+    const c = buildCorpus({ backlog: [{ id: uuid, title: 'Y' }] })[0];
+    expect(c.source_id).toBe(uuid);
+    expect(c.source_key).toBeUndefined();
   });
 });
 
@@ -133,5 +153,28 @@ describe('stageCorpus — HARD safeguards: dry-run default, chairman-gated, neve
     const res = await stageCorpus(db, routed, { apply: true, chairmanApproved: true, waveId: null, lanePresent: true });
     expect(res.dry_run).toBe(true);
     expect(db.inserted).toHaveLength(0);
+  });
+
+  it('schema-aware: a real UUID source_id from the normalized corpus inserts cleanly (no 22P02)', async () => {
+    // Fake DB that enforces the live roadmap_wave_items.source_id UUID type — rejects non-UUID like Postgres 22P02.
+    const inserted = [];
+    const uuidDb = { inserted, from: () => ({ insert: (row) => {
+      if (!isUuid(String(row.source_id))) return Promise.resolve({ error: { code: '22P02', message: `invalid input syntax for type uuid: "${row.source_id}"` } });
+      inserted.push(row); return Promise.resolve({ error: null });
+    } }) };
+    const corpus = buildCorpus({ deferred: [{ id: 'SD-NON-UUID-KEY-007', sd_key: 'SD-NON-UUID-KEY-007', title: 'Deferred thing' }] });
+    const routedCorpus = routeCorpus(corpus, { existing: [], inFlight: [] });
+    const res = await stageCorpus(uuidDb, routedCorpus, { apply: true, chairmanApproved: true, waveId: 'wave-1', lanePresent: false });
+    expect(res.errors).toHaveLength(0);           // would be 22P02 without the UUIDv5 normalization
+    expect(inserted).toHaveLength(1);
+    expect(isUuid(String(inserted[0].source_id))).toBe(true);
+    expect(inserted[0].metadata.source_key).toBe('SD-NON-UUID-KEY-007'); // origin traceable
+  });
+
+  it('dormant CHECK violation (23514) forces dry-run rather than throwing', async () => {
+    const db = fakeDb({ code: '23514', message: 'source_type/lane CHECK' });
+    const res = await stageCorpus(db, routed, { apply: true, chairmanApproved: true, waveId: 'wave-1', lanePresent: true });
+    expect(res.dry_run).toBe(true);          // forced back to dry-run on a dormant CHECK
+    expect(res.errors.length).toBeGreaterThanOrEqual(1);
   });
 });
