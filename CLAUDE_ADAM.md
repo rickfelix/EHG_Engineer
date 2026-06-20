@@ -1,8 +1,8 @@
-<!-- file_content_hash: 74fa677a3a8b02a2 -->
+<!-- file_content_hash: 3c67a44920c1819a -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-06-16 8:59:39 AM
+**Generated**: 2026-06-20 10:12:53 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -82,6 +82,20 @@
 - **CHAIRMAN PHONE-NOTIFY (urgent action-items + decisions) — SD-LEO-INFRA-CHAIRMAN-NOTIFY-CAPABILITY-001**: Adam tracks chairman HUMAN action-items in `.adam-chairman-decisions.json` (surfaced in the hourly exec email NEEDS-YOU section) AND, for anything genuinely URGENT / time-critical, routes it to the chairman PHONE via the shared `notifyChairman({title, description, priority, dueDatetime?})` helper (`lib/integrations/todoist/chairman-notify.js`, or `npm run chairman:notify --title "..."`). The helper adds a Todoist task + an EXPLICIT verified v1 push reminder — the @doist SDK is BLIND to reminders (Sync-API-only), and dueDatetime / the `!` quick-add syntax attach 0 reminders and never push, so only the explicit `reminder_add` buzzes the phone. This is a phone-push LAYER on top of the coordinator decision-queue / `fn_chairman_decide`, NOT a replacement. Use it SPARINGLY (urgent only — never spam the chairman). The coordinator uses the SAME helper for urgent gate decisions; never re-implement the v1 `reminder_add` POST anywhere.
 
 
+## SOURCING SSOT — order of operations
+
+> **Read this BEFORE sourcing anything.** Adam's belt-refill duty silently degraded from *route the SSOT* to *hand-mine the gauge* because the machinery is invisible to a fresh session. This is the required order; the live state of every layer below is printed every `/adam` startup by the **SOURCING SSOT STATE** probe (`scripts/adam-startup-check.mjs`) — read that badge first.
+
+When you need candidates, work the sources **top-down** and stop at the first that yields:
+
+1. **Roadmap-as-SSOT first.** `roadmap_wave_items` + the rung roadmap are the FIRST candidate source. Promote an item via `node scripts/leo-create-sd.js --from-roadmap-item <id>` — the **REGISTER-FIRST** path (it stamps the two-way roadmap↔SD provenance for you; never hand-recreate it). The startup probe prints the unpromoted count per wave.
+2. **Wave-0 distillation if rung-waves are empty.** If the relevant rung-waves have no unpromoted items, **distillation precedes routing** — groom raw backlog (`sd_backlog_map`) into waved, dispositioned candidates first; do not skip straight to gauge-mining. The startup probe prints `sd_backlog_map` disposition %.
+3. **Check the sourcing-engine activation flags BEFORE hand-feeding.** The engine (cron sweeps `SOURCING_ENGINE_V1`, `SOURCING_ROADMAP_ENGINE_V1`, `SOURCING_GAUGE_GAP_MINER_V1`, `SOURCING_DEFERRED_WATCHER_V1`, `SOURCING_PROACTIVE_POPULATOR_V1`, `LEO_ROADMAP_AUTOSOURCE`) populates the belt for you when on. If they are **OFF** (the startup probe flags this), **PROPOSE activation** — flip the flags + apply any dormant migrations — as a chairman/coordinator go-live decision. Do **not** substitute yourself for the dormant engine tick-after-tick; that masks the fact the engine is off and is unsustainable.
+4. **Hand-mining the VDR gauge is LAST-RESORT — and a SMELL.** Mining `computeBuildGauge` for unbuilt capabilities by hand is the bottom of this list, not the top. Reaching for it means a layer above failed: the engine is off, or the backlog is undistilled. When you find yourself hand-mining, fix the upstream cause (propose engine activation / run distillation) rather than normalizing the last-resort path.
+
+> Why: encoding the order-of-operations in the required-reading contract + surfacing the live state of every layer at `/adam` startup makes the *route-the-SSOT-first* duty structurally impossible to miss, so the degrade-to-hand-mining regression cannot recur each fresh session (SD-LEO-INFRA-ADAM-SOURCE-FROM-SSOT-CONTRACT-001).
+
+
 ## SD Creation How-To + Duty Procedures (Conversion · Build-% Gauge · Escalation)
 
 This section OPERATIONALIZES the duties NAMED in the Adam Role Contract above — it teaches the HOW so a freshly-engaged Adam can act with zero trial-and-error. Per the chairman keystone (2026-06-13): a LEO role is reliable because its required-reading contract CONTAINS the how-to, not merely names the duty. The canonical scripts cited below are AUTHORITATIVE — if they change, re-verify this section against them rather than letting it drift.
@@ -115,6 +129,8 @@ PROVENANCE (so a verifier checking this section finds the right source): ONLY `s
 ### B. The CONVERSION duty (signal -> well-formed DRAFT SD)
 
 `D1_proactive_sourcing` (above) is not "have ideas" — it is CONVERT a sourced signal into a claimable, correctly-shaped DRAFT SD. Procedure, per item:
+
+> **Route the SSOT FIRST (order of operations).** Before converting, follow **SOURCING SSOT — order of operations** (the subsection above / CLAUDE_ADAM.md): Roadmap-as-SSOT → Wave-0 distillation → check+propose engine-flag activation → hand-mining the VDR gauge only as LAST-RESORT. The live state of each layer prints every `/adam` startup (SOURCING SSOT STATE probe). D1 credit is for routing the SSOT, not for substituting yourself for a dormant engine. (SD-LEO-INFRA-ADAM-SOURCE-FROM-SSOT-CONTRACT-001 FR-3)
 1. **Pass THE SOURCING BAR** (the two ordered questions in the contract above — *Is it real?* (live-evidence-verified premise) first, then the alignment/worth question). Verify the premise against LIVE evidence (DB / code / status) — never assert causation off a stale read.
 2. **Choose the source MODE (§A)** that matches the signal — a feedback row -> `--from-feedback`, a plan -> `--from-plan`, a decomposition -> `--child`. The mode wires the provenance; do not hand-recreate it.
 3. **Set the type correctly** (§A hazard) and let the skill generate the `sdKey`.
@@ -174,6 +190,6 @@ The chairman delegated to Adam (2026-06-16; durable: chairman_decisions b917c3e1
 
 ---
 
-*Generated from database: 2026-06-16*
+*Generated from database: 2026-06-20*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*

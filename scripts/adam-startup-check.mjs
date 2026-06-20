@@ -221,11 +221,139 @@ export function buildReport(argv = [], env = {}, repoRoot = REPO_ROOT) {
   return [renderResponsibilities(repoRoot), '', renderLoops(armed), '', renderContractParity(repoRoot), '', renderFreshness(repoRoot)].join('\n');
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SD-LEO-INFRA-ADAM-SOURCE-FROM-SSOT-CONTRACT-001 (FR-2): the SOURCING SSOT STATE PROBE.
+// A read-only badge printed every /adam startup so a fresh Adam can NEVER miss that the
+// Roadmap-SSOT + the (often dormant) sourcing engine exist before reaching for hand-mining.
+// All helpers are PURE + the DB read is fail-open (a hiccup degrades to a skip line, never
+// throws / blocks startup — same doctrine as the rest of this file).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// The sourcing-engine activation flags, in escalation order (umbrella first, then per-engine,
+// then the autosource switch). Each is an env feature flag, OFF unless explicitly on|1|true.
+export const SOURCING_FLAGS = [
+  'SOURCING_ENGINE_V1',
+  'SOURCING_ROADMAP_ENGINE_V1',
+  'SOURCING_GAUGE_GAP_MINER_V1',
+  'SOURCING_DEFERRED_WATCHER_V1',
+  'SOURCING_PROACTIVE_POPULATOR_V1',
+  'LEO_ROADMAP_AUTOSOURCE',
+];
+
+/** Pure flag parse mirroring the sourcing-engine helpers: on|1|true => true; everything else => false. */
+export function isSourcingFlagOn(env, name) {
+  const v = String((env && env[name]) || 'off').toLowerCase();
+  return v === 'on' || v === '1' || v === 'true';
+}
+
+/** Pure: read every SOURCING_FLAGS entry from env => [{ flag, on }]. */
+export function readSourcingFlags(env = {}) {
+  return SOURCING_FLAGS.map((flag) => ({ flag, on: isSourcingFlagOn(env, flag) }));
+}
+
+/**
+ * Pure: aggregate UNPROMOTED roadmap_wave_items (promoted_to_sd_key == null) by wave.
+ * @param {Array<{wave_id:string, promoted_to_sd_key:?string}>} items
+ * @param {Array<{id:string, title:string, sequence_rank:number}>} waves
+ * @returns {{ totalUnpromoted:number, byWave:Array<{wave_id:string,title:string,rank:number,count:number}> }}
+ */
+export function summarizeUnpromotedByWave(items = [], waves = []) {
+  const titleById = new Map((waves || []).map((w) => [w.id, w]));
+  const counts = new Map();
+  let totalUnpromoted = 0;
+  for (const it of items || []) {
+    if (it && (it.promoted_to_sd_key === null || it.promoted_to_sd_key === undefined)) {
+      totalUnpromoted += 1;
+      counts.set(it.wave_id, (counts.get(it.wave_id) || 0) + 1);
+    }
+  }
+  const byWave = [...counts.entries()].map(([wave_id, count]) => {
+    const w = titleById.get(wave_id);
+    return { wave_id, title: (w && w.title) || '(unknown wave)', rank: w ? w.sequence_rank : 9999, count };
+  }).sort((a, b) => a.rank - b.rank);
+  return { totalUnpromoted, byWave };
+}
+
+/** Pure: disposition coverage of sd_backlog_map. */
+export function summarizeBacklogDisposition(total = 0, dispositioned = 0) {
+  const t = Number(total) || 0;
+  const d = Number(dispositioned) || 0;
+  const pct = t === 0 ? 0 : Math.round((100 * d) / t);
+  return { total: t, dispositioned: d, pct };
+}
+
+/** Pure: render the state-probe section from already-resolved data (no I/O). */
+export function renderSourcingStateLines({ flags = [], wave = null, backlog = null } = {}) {
+  const lines = ['═══ SOURCING SSOT STATE (read-only — route the SSOT before hand-mining) ═══'];
+  // Flags
+  const anyOn = flags.some((f) => f.on);
+  lines.push('  Sourcing-engine flags: ' + (anyOn ? '' : '⚠️ ALL OFF — engine dormant; PROPOSE activation, do not substitute yourself tick-after-tick'));
+  for (const f of flags) lines.push(`    ${f.on ? '🟢 on ' : '⚪ off'}  ${f.flag}`);
+  // Roadmap-SSOT unpromoted items
+  if (wave) {
+    lines.push(`  Roadmap-SSOT (roadmap_wave_items) unpromoted: ${wave.totalUnpromoted} — promote via leo-create-sd --from-roadmap-item (REGISTER-FIRST)`);
+    for (const w of wave.byWave.slice(0, 8)) lines.push(`    wave#${w.rank} ${String(w.count).padStart(4)} unpromoted  ${w.title}`);
+    if (wave.byWave.length > 8) lines.push(`    … ${wave.byWave.length - 8} more wave(s)`);
+  } else {
+    lines.push('  Roadmap-SSOT: (unavailable — DB read skipped, fail-open)');
+  }
+  // Backlog disposition
+  if (backlog) {
+    lines.push(`  sd_backlog_map disposition: ${backlog.dispositioned}/${backlog.total} (${backlog.pct}%) — if rung-waves are empty, Wave-0 distillation precedes routing`);
+  } else {
+    lines.push('  sd_backlog_map disposition: (unavailable — DB read skipped, fail-open)');
+  }
+  lines.push('  ↳ Hand-mining the VDR gauge is LAST-RESORT (a SMELL the engine is off / backlog undistilled). See CLAUDE_ADAM.md "SOURCING SSOT — order of operations".');
+  return lines.join('\n');
+}
+
+/**
+ * Fail-open async DB read for the state probe. Returns { wave, backlog } (either may be null on
+ * error). Accepts an injected supabase client for tests; otherwise builds one from env creds.
+ */
+export async function fetchSourcingState({ supabase = null, env = process.env } = {}) {
+  let client = supabase;
+  if (!client) {
+    const url = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) return { wave: null, backlog: null };
+    const { createClient } = await import('@supabase/supabase-js');
+    client = createClient(url, key);
+  }
+  let wave = null;
+  let backlog = null;
+  try {
+    const items = await client.from('roadmap_wave_items').select('wave_id,promoted_to_sd_key').is('promoted_to_sd_key', null);
+    const waves = await client.from('roadmap_waves').select('id,title,sequence_rank');
+    if (!items.error && !waves.error) wave = summarizeUnpromotedByWave(items.data || [], waves.data || []);
+  } catch { wave = null; }
+  try {
+    const tot = await client.from('sd_backlog_map').select('*', { count: 'exact', head: true });
+    const disp = await client.from('sd_backlog_map').select('*', { count: 'exact', head: true }).not('disposition', 'is', null);
+    if (!tot.error && !disp.error) backlog = summarizeBacklogDisposition(tot.count, disp.count);
+  } catch { backlog = null; }
+  return { wave, backlog };
+}
+
+/** Compose the full state-probe section (async, fail-open — never throws). */
+export async function renderSourcingState({ supabase = null, env = process.env } = {}) {
+  try {
+    const flags = readSourcingFlags(env);
+    const { wave, backlog } = await fetchSourcingState({ supabase, env });
+    return renderSourcingStateLines({ flags, wave, backlog });
+  } catch (err) {
+    return '═══ SOURCING SSOT STATE ═══\n  ✅ state probe skipped (fail-open): ' + (err?.message || String(err));
+  }
+}
+
 // ── Main (fail-open: always exit 0) ──
-function main() {
+async function main() {
   try {
     console.log('[ADAM-STARTUP] ' + (process.env.CLAUDE_SESSION_ID ? 'session=' + process.env.CLAUDE_SESSION_ID : 'session=unknown'));
     console.log(buildReport(process.argv.slice(2), process.env));
+    // FR-2: the read-only Sourcing SSOT state probe (DB-backed, fail-open).
+    console.log('');
+    console.log(await renderSourcingState({ env: process.env }));
   } catch (err) {
     console.warn('⚠️  adam-startup-check hiccup (non-blocking, fail-open): ' + (err && err.message ? err.message : String(err)));
   }
