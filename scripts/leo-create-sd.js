@@ -633,7 +633,12 @@ async function createFromRoadmapItem(itemId, options = {}) {
   const sd = await createSD({
     sdKey,
     title: sdTitle,
-    description: item.title || sdTitle,
+    // SD-LEO-INFRA-PROMOTION-THIN-STUB-FIX-001: use the deriver's DISTINCT description/scope/intent
+    // instead of cloning item.title into description (which produced title===description===scope stubs
+    // the bare-shell detector flagged). A title-only item is now flagged via metadata.needs_enrichment.
+    description: fields.description || item.title || sdTitle,
+    scope: fields.scope,
+    strategic_intent: fields.strategic_intent,
     type,
     priority: 'medium',
     rationale: `Promoted from roadmap_wave_items ${item.id} (register-first path).`,
@@ -1586,6 +1591,9 @@ async function createSD(options) {
     // SD-LEO-INFRA-BUILDDEFAULTSMOKETESTSTEPS-KEYWORD-DETECTOR-001 (FR-3): accept scope so the plan-file path becomes atomic INSERT.
     // Default null preserves behavior for callers that omit it (5 internal callers + /leo create path).
     scope = null,
+    // SD-LEO-INFRA-PROMOTION-THIN-STUB-FIX-001: accept strategic_intent so the from-roadmap-item path can
+    // populate it (was always empty for promoted SDs). Default null preserves behavior for other callers.
+    strategic_intent = null,
     // SD-LEO-INFRA-MULTI-REPO-ROUTING-001: Allow explicit target_application
     target_application: explicitTargetApp = null,
     // SD-FDBK-INFRA-LEO-CREATE-PROPOSAL-001 (FR-3): accept dependencies so the
@@ -1913,6 +1921,9 @@ async function createSD(options) {
     title,
     description,
     scope: scope || description,  // SD-LEO-INFRA-BUILDDEFAULTSMOKETESTSTEPS-KEYWORD-DETECTOR-001 (FR-3): prefer atomic-INSERT scope, fall back to description.
+    // SD-LEO-INFRA-PROMOTION-THIN-STUB-FIX-001: persist strategic_intent when a caller provides it
+    // (the from-roadmap-item path now derives one); null preserves the column default for other callers.
+    ...(strategic_intent ? { strategic_intent } : {}),
     rationale,
     sd_type: dbType,
     status: 'draft',
