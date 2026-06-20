@@ -51,6 +51,9 @@ const DEFAULT_IDLE_WAKEUP_SECONDS = 600;      // ~10m, matches the tightened fle
 const SELF_CLAIM_CANDIDATE_LIMIT = 5;
 const QF_CANDIDATE_LIMIT = 25;               // open quick_fixes to consider for self-claim
 const STALE_QF_DAYS = Number(process.env.SD_NEXT_QF_STALE_DAYS) || 3;  // verify-first freshness boundary (shared with sd-next display)
+// SD-LEO-FEAT-WORKER-CHECKIN-SELF-001 (FR-2): gap before confirmRowGone's confirming read so it lands
+// genuinely later than the first (defends a momentary stale-replica null). Env-overridable; tests set 0.
+const CONFIRM_DELETE_GAP_MS = process.env.CHECKIN_CONFIRM_GAP_MS != null ? Number(process.env.CHECKIN_CONFIRM_GAP_MS) : 250;
 // Tier-3 risk keywords (CLAUDE.md Work Item Routing). Auto-self-claim is for small,
 // low-risk QFs only. The sd-next display path excludes _escalate via a LIVE re-triage
 // (runTriageGate, ESM); a .cjs can't run that pipeline, so we approximate parity with the
@@ -635,9 +638,14 @@ async function confirmRowGone(sb, table, col, key) {
     const r1 = await sb.from(table).select(col).eq(col, key).maybeSingle();
     if (r1 && r1.error) return false;       // read error -> fail-open, do not release
     if (r1 && r1.data) return false;        // present -> not gone
+    // Brief gap so the confirming read lands genuinely LATER — a confirming read fired on the same
+    // tick/connection can repeat a momentary stale-replica null; a small delay lets it catch up
+    // (adversarial review: same-replica back-to-back reads under-defend a lagging window).
+    if (CONFIRM_DELETE_GAP_MS > 0) await new Promise((resolve) => setTimeout(resolve, CONFIRM_DELETE_GAP_MS));
     const r2 = await sb.from(table).select(col).eq(col, key).maybeSingle(); // confirm
-    if (r2 && r2.error) return false;       // confirming read errored -> fail-open
-    return !(r2 && r2.data);                // gone only if the confirming read also finds nothing
+    // Fail-CLOSED on a malformed/absent r2: release ONLY when r2 is a well-formed result with no data
+    // AND no error. A misbehaving client returning undefined must PRESERVE the claim, not drop it.
+    return !!(r2 && !r2.data && !r2.error); // gone only if the confirming read is clean AND empty
   } catch { return false; }                 // any throw -> fail-open (preserve resume)
 }
 

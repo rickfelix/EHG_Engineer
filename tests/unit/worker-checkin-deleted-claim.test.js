@@ -5,6 +5,8 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 
+// Zero the inter-read confirm gap so the absent-row tests run instantly (the gap is read at module load).
+process.env.CHECKIN_CONFIRM_GAP_MS = '0';
 const require = createRequire(import.meta.url);
 const { confirmRowGone } = require('../../scripts/worker-checkin.cjs');
 
@@ -56,6 +58,12 @@ describe('confirmRowGone — FR-1/FR-2 deleted-claim guard', () => {
 
   it('returns FALSE when a read throws (fail-open)', async () => {
     const { sb } = stub([new Error('network down')]);
+    expect(await confirmRowGone(sb, 't', 'c', 'k')).toBe(false);
+  });
+
+  it('FAIL-CLOSED: a malformed/undefined confirming result does NOT release the claim', async () => {
+    // First read clean-empty, confirming read returns undefined (misbehaving client) -> must PRESERVE.
+    const { sb } = stub([{ data: null, error: null }, undefined]);
     expect(await confirmRowGone(sb, 't', 'c', 'k')).toBe(false);
   });
 });
