@@ -169,6 +169,39 @@ export function extractContentArg(args) {
 
 export { CONTENT_PAYLOAD_MAX_BYTES };
 
+/**
+ * SD-LEO-INFRA-ADD-PRD-EXIT-CODE-SUCCESS-001: make the process exit code reflect the
+ * real outcome. addPRDToDatabase resolves once the PRD + user-story rows have landed, but
+ * lingering undici/supabase keep-alive sockets can keep the event loop alive until Bash
+ * SIGTERMs the process at its timeout (exit 143) — so callers and automation mis-read a
+ * successful write as a failure. Mapping the outcome to an explicit exit code (0 success,
+ * 1 failure) and forcing a prompt, flushed exit makes the signal deterministic.
+ */
+export function resolveExitCode(outcome) {
+  return outcome === 'success' ? 0 : 1;
+}
+
+/**
+ * Drain stdout/stderr, then call exitFn(code) exactly once. Draining first avoids
+ * truncating buffered output on piped runs; the unref'd safety timer guarantees we never
+ * hang waiting on a 'drain' that may never fire (e.g. a closed/destroyed pipe under the
+ * EPIPE-tolerant handlers above). exitFn is injectable for unit testing.
+ */
+export function flushAndExit(code, exitFn = process.exit, { timeoutMs = 250 } = {}) {
+  let exited = false;
+  const done = () => { if (!exited) { exited = true; exitFn(code); } };
+  let pending = 0;
+  for (const stream of [process.stdout, process.stderr]) {
+    if (stream && !stream.destroyed && typeof stream.writableLength === 'number' && stream.writableLength > 0) {
+      pending++;
+      stream.once('drain', () => { if (--pending === 0) done(); });
+    }
+  }
+  if (pending === 0) { done(); return; }
+  const t = setTimeout(done, timeoutMs);
+  if (t && typeof t.unref === 'function') t.unref();
+}
+
 if (isMainModule(import.meta.url)) {
   // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR1 call-site migration):
   // PRD creation is sub-agent-heavy and regularly exceeds the 15-min claim
@@ -218,13 +251,21 @@ if (isMainModule(import.meta.url)) {
 
   const sdId = args[0];
   const prdTitle = args.slice(1).filter(a => !a.startsWith('--')).join(' ');
-  // QF-20260424-805: Stop the heartbeat interval after addPRDToDatabase resolves
-  // so Node can exit naturally. Without this, setInterval keeps the event loop
-  // alive forever and Bash SIGTERMs the process at its 10-min default timeout
-  // (exit 143) — even though the PRD + user-story rows already landed in the DB.
-  // Cooperative mode means stopHeartbeat does NOT release the parent session's
-  // claim; only the in-process timer is cleared.
-  addPRDToDatabase(sdId, prdTitle, contentOverride).finally(() => {
-    if (heartbeatActive) stopHeartbeat();
-  });
+  // QF-20260424-805: Stop the heartbeat interval after addPRDToDatabase resolves so the
+  // setInterval no longer keeps the event loop alive. SD-LEO-INFRA-ADD-PRD-EXIT-CODE-SUCCESS-001:
+  // stopping the heartbeat alone is not enough — lingering undici/supabase keep-alive sockets can
+  // still hold the loop open until Bash SIGTERMs the process (exit 143) AFTER the PRD + user-story
+  // rows already landed, so callers mis-read the success as a failure. Map the outcome to an
+  // explicit, flushed exit code instead: 0 on a resolved write (incl. inline-mode null), 1 on a
+  // rejection. Cooperative mode means stopHeartbeat does NOT release the parent session's claim.
+  addPRDToDatabase(sdId, prdTitle, contentOverride)
+    .then(() => {
+      if (heartbeatActive) stopHeartbeat();
+      flushAndExit(resolveExitCode('success'));
+    })
+    .catch((err) => {
+      console.error(`\n❌ add-prd-to-database failed: ${err?.message || err}`);
+      if (heartbeatActive) stopHeartbeat();
+      flushAndExit(resolveExitCode('failure'));
+    });
 }
