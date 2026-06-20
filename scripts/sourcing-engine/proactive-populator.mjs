@@ -18,6 +18,10 @@ import { populate } from '../../lib/sourcing-engine/proactive-populator.js';
 const apply = process.argv.includes('--apply');
 const chairmanApproved = process.argv.includes('--chairman-approved') || process.env.POPULATOR_CHAIRMAN_APPROVED === 'true';
 const capArg = (process.argv.find((a) => a.startsWith('--cap=')) || '').split('=')[1];
+// SD-LEO-INFRA-SOURCING-ENGINE-ACTIVATION-001 (FR-2, chairman policy 2026-06-20): the disposition
+// gate drops raw todoist/youtube intake by default (it is personal-productivity intake, not curated
+// engineering work). --keep-raw disables that drop (re-includes the raw corpus).
+const dropRawIntake = !process.argv.includes('--keep-raw');
 
 const TERMINAL_DISPOSITIONS = ['built', 'already_covered', 'duplicate', 'declined', 'deferred_to_rung'];
 
@@ -97,7 +101,7 @@ function printReport(out) {
 
 async function main() {
   const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-  const out = await populate(db, { loadSources, loadContext }, { apply, chairmanApproved, cap: capArg ? Number(capArg) : undefined });
+  const out = await populate(db, { loadSources, loadContext }, { apply, chairmanApproved, cap: capArg ? Number(capArg) : undefined, dropRawIntake });
   printReport(out);
 }
 

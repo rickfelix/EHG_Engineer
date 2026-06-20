@@ -95,6 +95,20 @@ describe('dispositionGate (FR-2) — curate routed corpus to keepers', () => {
     expect(r.drop_by_reason).toEqual({ noise: 1, terminal_dup: 1, already_covered: 1 });
   });
 
+  it('dropRawIntake drops todoist/youtube source types, keeps brainstorm/estate (FR-2 chairman policy)', () => {
+    const corpus = [
+      routed({ source_type: 'todoist', title: 'Buy milk and call the dentist' }),
+      routed({ source_type: 'youtube', title: 'Cool video about rockets to watch later' }),
+      routed({ source_type: 'brainstorm', title: 'Harness backlog: fix the reaper race' }),
+    ];
+    const off = dispositionGate(corpus);
+    expect(off.keepers).toHaveLength(3); // default: source-agnostic
+    const on = dispositionGate(corpus, { dropRawIntake: true });
+    expect(on.keepers).toHaveLength(1);
+    expect(on.keepers[0].source_type).toBe('brainstorm');
+    expect(on.drop_by_reason.raw_intake).toBe(2);
+  });
+
   it('respects a custom minTitleLen', () => {
     const r = dispositionGate([routed({ title: 'short' })], { minTitleLen: 3 });
     expect(r.keepers).toHaveLength(1); // 'short' (5) >= 3
