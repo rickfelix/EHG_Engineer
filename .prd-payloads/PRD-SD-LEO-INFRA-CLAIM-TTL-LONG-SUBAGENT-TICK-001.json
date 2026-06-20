@@ -1,0 +1,102 @@
+{
+  "executive_summary": "A worker's claim is authoritative on claude_sessions.heartbeat_at; the stale-session sweep reaps a claim once heartbeat_at is older than 900s (15min) and the stored claim pid is dead. During a long worker tick that orchestrates parallel sub-agent reviews, the original short-lived `node` process that acquired the claim has already exited (its pid is dead) and no process refreshes heartbeat_at between tool calls, so a >15min review tick lets heartbeat_at cross the 900s boundary and the claim is released — the next handoff then trips GATE_CLAIM_VALIDITY_FAILED and the SD churns through deconflict. The purpose-built withHeartbeat() proxy (lib/heartbeat-manager.mjs, FR1 of SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001) was written to close exactly this race by refreshing heartbeat_at at WORK frequency (on every write to the 4 high-traffic tables) rather than tick frequency — but it has ZERO production callers. This PRD wires it into the canonical sub-agent evidence writer (storeSubAgentResults), keyed off the owning CLAUDE_SESSION_ID, so each sub-agent evidence write during a parallel-review tick touches the claim and keeps it live. It changes NO sweep/TTL/schema, so genuine reaping of dead sessions is preserved by construction.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Heartbeat the claim on every sub-agent evidence write (wire withHeartbeat into storeSubAgentResults)",
+      "description": "In lib/sub-agent-executor/results-storage.js, wrap the supabase client used by storeSubAgentResults with withHeartbeat(rawClient, process.env.CLAUDE_SESSION_ID) when CLAUDE_SESSION_ID is set (skip the wrap when unset — fail-soft, no behavior change). The sub_agent_execution_results insert is one of withHeartbeat's 4 trigger tables, so writing each sub-agent's evidence row automatically refreshes claude_sessions.heartbeat_at for the owning session. This is the preferred FR-1(a) HEARTBEAT approach: a periodic claim touch while sub-agents run, at work frequency rather than tick frequency. It reuses the already-built, already-tested proxy rather than adding a parallel mechanism.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "storeSubAgentResults wraps its client with withHeartbeat when process.env.CLAUDE_SESSION_ID is set; the wrap is skipped (raw client used) when it is unset.",
+        "Writing a sub-agent evidence row advances claude_sessions.heartbeat_at for the owning session to ~now.",
+        "The wrap is fail-soft: a heartbeat ping failure never breaks the evidence insert (withHeartbeat swallows ping errors).",
+        "No change to the verdict/confidence/phase/repo_path evidence semantics — only the heartbeat side-effect is added."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Do NOT weaken genuine stale-claim reaping — alive-but-busy vs dead is preserved",
+      "description": "The fix touches ONLY the heartbeat-refresh side-effect on a real write by a real live process. scripts/stale-session-sweep.cjs, the deadness predicate (heartbeat_age>900s AND pid dead), the claim-validity gate (lib/claim-validity-gate.js ownerIsDeadByLiveness), and the claim schema are all unchanged. A genuinely-dead session performs no writes, so withHeartbeat never fires for it and it is still reaped exactly as before. The distinction 'alive-but-busy-in-sub-agent' (still writing evidence) vs 'dead' (writing nothing) falls out naturally: only the former refreshes the heartbeat.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "No edits to scripts/stale-session-sweep.cjs or the sweep's release/deadness predicate.",
+        "No edits to the claim-validity gate's ownerIsDeadByLiveness deadness logic or the 900s TTL constants.",
+        "A session that performs no evidence writes and has a stale heartbeat + dead pid remains classified reapable (regression-tested)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Regression test — a live >15min sub-agent tick keeps the claim valid",
+      "description": "Add tests/unit/subagent-evidence-heartbeat.test.js proving: (a) storeSubAgentResults wraps with withHeartbeat only when CLAUDE_SESSION_ID is set (injected fake client + heartbeatFn spy); (b) the sub_agent_execution_results insert triggers exactly one heartbeat ping for the owning session; (c) the long-tick scenario: a sequence of evidence writes keeps heartbeat_at fresh so ownerIsDeadByLiveness(owner, now) stays false even after a simulated >15min elapsed-since-claim, i.e. the claim does NOT become GATE_CLAIM_VALIDITY_FAILED; (d) FR-2 guard: a no-write session with a >900s-old heartbeat and is_alive=false is still reported dead by ownerIsDeadByLiveness.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Test asserts withHeartbeat is applied iff CLAUDE_SESSION_ID is set.",
+        "Test asserts an evidence insert fires one heartbeat ping for the owning session.",
+        "Test asserts a heartbeat refreshed by an evidence write keeps ownerIsDeadByLiveness false past the 15min mark (live-but-busy stays valid).",
+        "Test asserts a no-write, stale-heartbeat, is_alive=false owner is still ownerIsDeadByLiveness=true (reaping intact)."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Dedup vs SESSION-CLAIM-LIFECYCLE-001 — extend, do not duplicate",
+      "description": "SD-LEO-INFRA-SESSION-CLAIM-LIFECYCLE-001 (FR19) built the per-sd_type TTL resolution layer (resolveClaimTtlSeconds in lib/claim-guard.mjs) — the LENGTH of the claim window. This SD addresses a different axis: keeping heartbeat_at FRESH within whatever window is configured, during a long sub-agent tick. No TTL constant, the per-type TTL map, or claim-guard logic is duplicated or modified; this SD only wires the existing withHeartbeat proxy (built by SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001) into the sub-agent evidence path. The two layers compose (longer TTL + fresher heartbeat) without overlap.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "No edits to lib/claim-guard.mjs resolveClaimTtlSeconds or the sd_type TTL map.",
+        "The wired mechanism is the pre-existing withHeartbeat from lib/heartbeat-manager.mjs (no new parallel heartbeat helper is introduced).",
+        "The PRD/commit notes the relationship to both SESSION-CLAIM-LIFECYCLE-001 (TTL length) and SESSION-LIFECYCLE-HYGIENE-001 (the withHeartbeat proxy)."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "ESM import", "description": "results-storage.js is ESM; import { withHeartbeat } from '../heartbeat-manager.mjs' (sibling lib path)." },
+    { "id": "TR-2", "title": "No schema change", "description": "Pure code wiring; reads/writes existing claude_sessions.heartbeat_at via the existing updateHeartbeat path inside withHeartbeat. No migration." },
+    { "id": "TR-3", "title": "Fail-soft", "description": "When CLAUDE_SESSION_ID is unset (e.g. non-fleet contexts) the raw client is used unchanged — zero behavior change for existing callers." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "withHeartbeat applied only when CLAUDE_SESSION_ID is set", "type": "unit", "expected": "Wrapped client when set; raw client when unset." },
+    { "id": "TS-2", "scenario": "Evidence insert refreshes the owning session heartbeat", "type": "unit", "expected": "One heartbeat ping fired for the owner after the sub_agent_execution_results insert." },
+    { "id": "TS-3", "scenario": "Live-but-busy long tick stays claim-valid; dead session still reaped", "type": "unit", "expected": "ownerIsDeadByLiveness stays false for a heartbeat-refreshed owner past 15min; stays true for a no-write stale dead owner." }
+  ],
+  "acceptance_criteria": [
+    "A long worker tick running parallel sub-agent reviews refreshes the claim heartbeat on each evidence write and does not trip GATE_CLAIM_VALIDITY_FAILED.",
+    "Genuine stale-claim reaping is unchanged (a dead session is still reaped).",
+    "The fix reuses withHeartbeat and the per-type TTL layer untouched (no duplication)."
+  ],
+  "risks": [
+    { "risk": "An extra heartbeat UPDATE per evidence write adds DB load", "mitigation": "withHeartbeat ping is fire-and-forget and only fires on the 4 high-traffic tables; one UPDATE per evidence row is negligible vs the insert it accompanies.", "severity": "low" },
+    { "risk": "withHeartbeat could mask a truly-dead session if a zombie process kept writing", "mitigation": "A process writing evidence IS alive by definition; the sweep's pid+heartbeat predicate is unchanged for genuinely non-writing dead sessions.", "severity": "low" },
+    { "risk": "CLAUDE_SESSION_ID resolves to a non-owner session", "mitigation": "CLAUDE_SESSION_ID is the worker's own session = the claim owner in the fleet model; if unset the wrap is skipped (no wrong-session pings).", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["LEO fleet workers running long parallel-sub-agent review ticks", "the GATE_CLAIM_VALIDITY gate (sees fresher heartbeat_at)", "the stale-session-sweep (sees a live session it correctly does not reap)"],
+    "dependencies": ["lib/heartbeat-manager.mjs withHeartbeat (the proxy being wired)", "lib/sub-agent-executor/results-storage.js storeSubAgentResults (the wire point)", "claude_sessions.heartbeat_at (refresh target)", "lib/session-manager.mjs updateHeartbeat (withHeartbeat's default ping fn)"],
+    "data_contracts": ["claude_sessions.heartbeat_at (write, via existing updateHeartbeat)", "sub_agent_execution_results insert (unchanged; now also triggers a heartbeat ping); no schema change"],
+    "runtime_config": ["CLAUDE_SESSION_ID (gates whether the wrap is applied)", "no new env var; existing STALE_SESSION_THRESHOLD_SECONDS / CLAIM_TTL_MS untouched"],
+    "observability_rollout": ["[withHeartbeat] ping-failed warnings (existing) surface any ping issues", "rollout is a code wire active for any CLAUDE_SESSION_ID-bearing worker; observe by confirming heartbeat_at advances during long ticks and GATE_CLAIM_VALIDITY_FAILED / deconflict churn on long-review SDs drops"]
+  },
+  "system_architecture": {
+    "summary": "One-line wire: storeSubAgentResults wraps its client with the pre-built withHeartbeat proxy so each sub-agent evidence write refreshes the owner's heartbeat_at during long ticks.",
+    "components": [
+      { "name": "lib/sub-agent-executor/results-storage.js", "change": "WIRE withHeartbeat around the supabase client (keyed off CLAUDE_SESSION_ID)" },
+      { "name": "lib/heartbeat-manager.mjs", "change": "REUSED unchanged (withHeartbeat — the proxy)" },
+      { "name": "tests/unit/subagent-evidence-heartbeat.test.js", "change": "NEW regression tests (FR-2/FR-3)" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Minimal, least-invasive wire of the purpose-built-but-unwired withHeartbeat proxy into the canonical sub-agent evidence writer, gated on CLAUDE_SESSION_ID, with regression tests proving the long-tick claim stays valid while genuine reaping is preserved.",
+    "steps": [
+      "Import withHeartbeat into lib/sub-agent-executor/results-storage.js and wrap the supabase client returned by getSupabaseClient() with withHeartbeat(client, process.env.CLAUDE_SESSION_ID) when CLAUDE_SESSION_ID is set.",
+      "Add tests/unit/subagent-evidence-heartbeat.test.js: inject a fake client + heartbeatFn spy; assert wrap-iff-session-set, one ping per evidence insert, ownerIsDeadByLiveness stays false for a refreshed owner past 15min, and stays true for a no-write dead owner.",
+      "Run the suite green, live-smoke a single evidence write proving heartbeat_at advances, TESTING+SECURITY @ EXEC, commit early, EXEC-TO-PLAN."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run: npx vitest run tests/unit/subagent-evidence-heartbeat.test.js", "expected_outcome": "All tests pass: wrap-iff-CLAUDE_SESSION_ID, one heartbeat ping per evidence insert, live-but-busy claim stays valid past 15min, no-write dead session still reaped." },
+    { "step_number": 2, "instruction": "Grep lib/sub-agent-executor/results-storage.js for withHeartbeat", "expected_outcome": "storeSubAgentResults imports withHeartbeat and wraps its client keyed off process.env.CLAUDE_SESSION_ID." },
+    { "step_number": 3, "instruction": "Live: with CLAUDE_SESSION_ID = a live claiming session, write one evidence row via storeSubAgentResults; read claude_sessions.heartbeat_at before/after", "expected_outcome": "heartbeat_at advances to ~now after the write, keeping a long parallel-sub-agent tick under the 900s reap boundary (no GATE_CLAIM_VALIDITY_FAILED)." },
+    { "step_number": 4, "instruction": "Confirm scripts/stale-session-sweep.cjs and the claim-validity deadness predicate are unchanged (git diff)", "expected_outcome": "No changes to the sweep or deadness predicate; genuine reaping of dead sessions intact (FR-2)." }
+  ],
+  "activation_test_id": "tests/unit/subagent-evidence-heartbeat.test.js",
+  "metadata": { "sd_key": "SD-LEO-INFRA-CLAIM-TTL-LONG-SUBAGENT-TICK-001" }
+}
