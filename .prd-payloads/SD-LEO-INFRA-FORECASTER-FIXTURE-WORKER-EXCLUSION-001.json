@@ -1,0 +1,69 @@
+{
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Exclude fixture/test sessions from the forecaster's live-worker set",
+      "description": "scripts/coordinator-capacity-forecast.mjs hand-rolled its worker filter (!is_coordinator && role!==adam), so a fixture/test session with a fresh heartbeat counted as a live idle/at-risk worker — inflating demand and producing a false deficit + spurious Adam reach-out. Reuse the EXISTING canonical session SSOT (SD-FDBK-INFRA-SHARED-FLEET-WORKER-001) the dashboard already uses: isDispatchableFleetMember (lib/fleet/session-predicates.mjs) drops coordinator (by id) + adam + non_fleet + fixture/test sessions. No new parallel predicate is created — a NEW isFixtureSession would re-introduce the very divergence this fixes.",
+      "acceptance_criteria": [
+        "A fixture/test session (drain_test_/test-/probe/QF-TEST/fixture id, or metadata fixture marker) is not counted as a live worker",
+        "The forecaster resolves the active coordinator id and excludes it via isDispatchableFleetMember, matching the dashboard",
+        "No new fixture-session predicate is added; the canonical session-predicates.mjs SSOT is reused"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Guard released/terminal sessions from the live-worker count",
+      "description": "A session with status in {released, completed, terminated, inactive} is not an available worker even with a recent heartbeat. The forecaster now selects the status column and excludes those statuses before counting. Encapsulated in the pure isLiveCountableWorker helper (RELEASED_WORKER_STATUSES) plus a stale metadata.is_coordinator guard.",
+      "acceptance_criteria": [
+        "A released/terminal-status session is excluded from the live-worker count",
+        "An active-status real worker is still counted",
+        "A stale metadata.is_coordinator session is excluded even when it is not the active coordinator id"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "Audit fleet-dashboard.cjs + worker-status.cjs for the same fixture-counting",
+      "description": "Audit confirmed: fleet-dashboard.cjs ALREADY excludes fixtures via the same isDispatchableFleetMember SSOT (SD-FDBK-INFRA-SHARED-FLEET-WORKER-001) for its idle/available-worker panel — so after FR-1 the forecaster and dashboard AGREE. lib/fleet/worker-status.cjs getActiveSessions is a raw heartbeat-window query primitive (no worker-counting / fixture classification), so it needs no change. Documented so the agreement is intentional, not accidental.",
+      "acceptance_criteria": [
+        "The forecaster and dashboard use the same isDispatchableFleetMember SSOT for the live-worker set",
+        "worker-status.cjs is confirmed to be a query primitive with no worker-counting to fix",
+        "No divergent inline fixture/worker classification remains in the forecaster"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "Tests",
+      "description": "scripts/lib/live-countable-worker.mjs extracts the forecaster's filter into a pure isLiveCountableWorker(session, coordinatorId) (the forecaster runs main() on import and cannot be imported by a test). tests/unit/live-countable-worker.test.js covers: fixture ids not counted, adam/non_fleet/coordinator excluded, released-status excluded, a real worker counted, a mixed set filtering to only real workers, and totality on null input.",
+      "acceptance_criteria": [
+        "npx vitest run tests/unit/live-countable-worker.test.js passes",
+        "A fixture/test session is NOT counted and a real worker IS; demand reflects only real workers",
+        "A regression case with a fixture-named session asserts exclusion"
+      ]
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Live-worker predicate",
+      "steps": "Run npx vitest run tests/unit/live-countable-worker.test.js.",
+      "expected_result": "20 assertions pass: fixtures/adam/non_fleet/coordinator/released excluded, real workers counted, mixed-set filters correctly, totality holds."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Forecaster excludes fixtures live",
+      "steps": "Run node scripts/coordinator-capacity-forecast.mjs against the live DB.",
+      "expected_result": "Completes; the live-worker count excludes fixture/test + released + coordinator + adam + non_fleet sessions, matching the dashboard."
+    },
+    {
+      "id": "TS-3",
+      "scenario": "SSOT reuse (no parallel predicate)",
+      "steps": "Inspect scripts/lib/live-countable-worker.mjs and scripts/coordinator-capacity-forecast.mjs.",
+      "expected_result": "isLiveCountableWorker wraps the canonical isDispatchableFleetMember from lib/fleet/session-predicates.mjs; no new fixture-session predicate is introduced."
+    }
+  ],
+  "acceptance_criteria": [
+    "The capacity forecaster never counts a fixture/test or released/coordinator/adam/non_fleet session as a live worker",
+    "The forecaster's live-worker set agrees with the dashboard via the shared isDispatchableFleetMember SSOT",
+    "A pure isLiveCountableWorker helper is unit-tested for fixture/released exclusion and real-worker inclusion"
+  ]
+}
