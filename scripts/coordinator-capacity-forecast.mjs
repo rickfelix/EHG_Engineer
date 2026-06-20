@@ -270,6 +270,14 @@ async function reachAdam(f) {
   if (!adamId) return false;
   const correlation_id = `cap-${Date.now()}`;
   const idleList = f.rows.filter(r => r.state.startsWith('IDLE')).map(r => r.callsign + '/' + r.sess).join(', ') || 'none';
+  // SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-C (FR-3): feed rung progress into the Adam
+  // sourcing rank — name the active build rung so Adam ranks candidates active-rung-first / highest-
+  // impact-on-rung-completion-first. Best-effort: omit the line if the active rung can't be resolved.
+  let activeRungKey = null;
+  try {
+    const r = await sb.from('vision_ladder_rungs').select('rung_key').eq('is_active', true).maybeSingle();
+    activeRungKey = r && r.data ? r.data.rung_key : null;
+  } catch { activeRungKey = null; }
   const body = [
     `[COORD->ADAM] PREDICTIVE belt-low (capacity forecaster). Verdict=${f.verdict}.`,
     `Belt=${f.beltDepth} claimable vs demand(soon)=${f.demandSoon} (idle ${f.idleNow} + freeing-soon ${f.freeingSoon}) → short by ${f.deficit}.`,
@@ -282,6 +290,8 @@ async function reachAdam(f) {
     // VISION-ALIGNED weakest capabilities (read the per-capability gauge + mine the dispositioned
     // estate) instead of generic harness-backlog grooming.
     `If the engine is dormant while the roadmap is rich, the remediation is to PROPOSE/co-sponsor ACTIVATION (flip the SOURCING_* flags + apply dormant migrations) and/or Wave-0 distillation, escalating to the chairman — before any manual backfill. Otherwise: READ the per-capability vision gauge + MINE the dispositioned estate for the WEAKEST capabilities, then propose a shortlist of CONFLICT-FREE, non-gated, draft-ready SD candidates that move those weakest capabilities forward (NOT generic harness-backlog grooming), propose-only; I'll dispatch. Dedup vs in-flight + SD-LEO-INFRA-SWEEP-CLAIM-SAFETY-001.`,
+    // FR-3 needle-movement: rank the sourcing shortlist by which rung it moves.
+    `NEEDLE-MOVEMENT RANK: order the shortlist ACTIVE-RUNG-FIRST${activeRungKey ? ` (active build rung = ${activeRungKey})` : ''}, then highest-impact-on-rung-completion-first — candidates that advance the active rung's weakest capabilities top the list; future-rung work ranks below.`,
     `Reply via adam-advisory (correlation ${correlation_id}).`,
   ].filter(Boolean).join('\n');
   const res = await insertCoordinationRow(sb, {

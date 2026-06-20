@@ -40,6 +40,14 @@ import { isFixtureSd, isBareShell, bareShellLastCompare, isStartedSd } from '../
 // handling both the [{sd_id}]/[{sd_key}] object and raw-string shapes the old hand-rolled
 // resolver coerced, while correctly dropping the sentinel the hand-rolled one mis-counted.
 import { parseSdDependencies } from '../lib/utils/parse-sd-dependencies.cjs';
+// SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-C (FR-2): needle-movement prioritization.
+// Reuse FR-1's rollup (active rung + per-rung progress) and the pure needle scorer to order remaining
+// work active-rung-first among same-unlock candidates. Loaded fail-soft — any read error leaves the
+// ranking unchanged (every SD scores 0).
+import { runRollup } from '../lib/vision/rung-progress-rollup.mjs';
+import { computeBuildGauge } from '../lib/vision/vdr-registry.js';
+import { makeDefaultGrepSeam } from '../lib/vision/vdr-grep-seam.js';
+import { needleScore, rungProgressByKey, buildSdRungMap } from '../lib/vision/needle-priority.mjs';
 
 const DRY = process.argv.includes('--dry-run');
 const PRIORITY_W = { critical: 3, high: 2, medium: 1, med: 1, low: 0 };
@@ -144,6 +152,34 @@ async function main() {
     const m = d.metadata || {};
     return m.source === 'proposal' && !!m.roadmap_phase;
   };
+
+  // ── needle-movement context (FR-2) ── REUSE the FR-1 rollup for the active rung + per-rung progress,
+  // and roadmap_wave_items→waves for each SD's rung. Best-effort: any failure leaves needle scores at 0
+  // (ranking unchanged). The active-rung TIER does not need the build gauge; the gauge only sharpens the
+  // small completion bonus, so a slow/unavailable gauge still yields correct active-rung-first ordering.
+  let activeRungKey = null;
+  let progByKey = {};
+  let sdRungMap = {};
+  try {
+    const grep = makeDefaultGrepSeam();
+    const computeGaugeFn = () => computeBuildGauge({ io: { supabase: sb, grep }, visionSource: true });
+    const roll = await runRollup({ supabase: sb, computeGaugeFn, apply: false, log: () => {} });
+    if (roll && roll.ok) {
+      activeRungKey = roll.activeRungKey || null;
+      progByKey = rungProgressByKey(roll.rows);
+    }
+    const [{ data: waveItems }, { data: waves }] = await Promise.all([
+      sb.from('roadmap_wave_items').select('promoted_to_sd_key, wave_id').not('promoted_to_sd_key', 'is', null),
+      sb.from('roadmap_waves').select('id, time_horizon, metadata'),
+    ]);
+    const wavesById = Object.fromEntries((waves || []).map((w) => [w.id, w]));
+    sdRungMap = buildSdRungMap(waveItems, wavesById);
+    console.log(`[BACKLOG-RANK] needle context: activeRung=${activeRungKey} rungs=${Object.keys(progByKey).join(',') || 'none'} sd↦rung=${Object.keys(sdRungMap).length}`);
+  } catch (e) {
+    console.log(`[BACKLOG-RANK] needle context unavailable (fail-soft, ranking unchanged): ${e?.message || e}`);
+  }
+  const needleOf = (d) => needleScore(sdRungMap[d.sd_key], { activeRungKey, rungProgressByKey: progByKey });
+
   claimable.sort((a, b) => {
     // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: bare-shell stubs sort below EVERY
     // authored SD (rank-last), so a worker never self-claims a stub that cannot pass
@@ -155,6 +191,11 @@ async function main() {
     if (qa !== qb) return qa - qb;                          // human-authored first
     const ua = unlockScore(a.sd_key), ub = unlockScore(b.sd_key);
     if (ub !== ua) return ub - ua;
+    // FR-2 needle-movement: among same-unlock candidates, order active-rung-first, then highest-impact-
+    // on-rung-completion-first (the completion bonus). Applied AFTER unlock (never overrides critical-path
+    // unlocking) and BEFORE the vision-loop nudge/priority/age. Unknown-rung SDs score 0 (neutral).
+    const na = needleOf(a), nb = needleOf(b);
+    if (nb !== na) return nb - na;
     // FR-1 LEAD-advancement nudge: vision-loop drafts ahead of other claimable SDs at the same unlock level.
     const va = visionLoopDraft(a) ? 1 : 0, vb = visionLoopDraft(b) ? 1 : 0;
     if (vb !== va) return vb - va;
