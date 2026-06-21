@@ -55,7 +55,18 @@ import { readSourcingEngineFlags, formatSourcingAwareness } from './lib/sourcing
 
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
-const { stalledLoopSessionIds } = require('../lib/coordinator/detectors.cjs');
+const { stalledLoopSessionIds, maskedStallSessionIds } = require('../lib/coordinator/detectors.cjs');
+const { getActiveAdamId } = require('../lib/coordinator/adam-identity.cjs');
+
+// SD-FDBK-INFRA-STALL-AFTER-COMPLETION-001 — DORMANT BY DEFAULT. Adversarial validation
+// (sub_agent_execution_results b71d405b) empirically found process_alive_at is currently
+// "fleet-broken": the detached session-tick is not running for most workers, so a STALE
+// process_alive_at is the NORMAL state of a HEALTHY worker, not proof of a dead loop. Keying the
+// masked-stall detector on it today would mostly emit FALSE POSITIVES (a healthy just-completed
+// worker: active + no claim + fresh hb + stale tick). The detector + surface are shipped and
+// tested, but gated OFF until session-tick reliability is restored (or a second liveness witness
+// is added). Flip LEO_MASKED_STALL_DETECT=on once process_alive_at is trustworthy.
+const MASKED_STALL_DETECT_ON = process.env.LEO_MASKED_STALL_DETECT === 'on';
 // SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: resolve the active coordinator id so the
 // shared isDispatchableFleetMember excludes the coordinator by id exactly like the dashboard does.
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
@@ -69,6 +80,9 @@ const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
 const COOLDOWN_FILE = join(REPO_ROOT, '.coord-capacity-source-last.json');
+// SD-FDBK-INFRA-STALL-AFTER-COMPLETION-001: separate cooldown stamp for the masked-stall escalation
+// so it does not conflate with the Adam belt-low source_work cooldown.
+const MASKED_STALL_COOLDOWN_FILE = join(REPO_ROOT, '.coord-masked-stall-last.json');
 
 // ── tunables ──
 const HEARTBEAT_LIVE_MS = 5 * 60 * 1000;   // a session is "live" if it heartbeat within 5 min
@@ -117,7 +131,10 @@ async function main() {
       // toMs(undefined)=0 → the parked guard silently fails open → a parked worker is mis-flagged
       // STALLED. Reusing a detector requires replicating its full input-column contract (mirrors the
       // canonical coordinator-audit.mjs select).
-      .select('session_id, terminal_id, sd_key, heartbeat_at, loop_state, expected_silence_until, metadata, status')
+      // SD-FDBK-INFRA-STALL-AFTER-COMPLETION-001: + process_alive_at — the authoritative tick-liveness
+      // signal (written every 30s by the detached session-tick). detectMaskedStall uses it to tell a
+      // CONFIRMED dead loop (live parent / fresh heartbeat but dead tick) from a momentarily-idle one.
+      .select('session_id, terminal_id, sd_key, heartbeat_at, process_alive_at, loop_state, expected_silence_until, metadata, status')
       .gte('heartbeat_at', liveCutoff),
     sb.from('strategic_directives_v2')
       // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + metadata (is_fixture marker) and
@@ -175,6 +192,13 @@ async function main() {
   const stalledIds = stalledLoopSessionIds({
     sessions: workers, unclaimedItems: claimable.length + openQfCount, now,
   });
+  // SD-FDBK-INFRA-STALL-AFTER-COMPLETION-001: the CONFIRMED (dead-tick) subset — a fresh heartbeat
+  // masking a dead loop. DORMANT until process_alive_at is trustworthy (see MASKED_STALL_DETECT_ON):
+  // an empty Set when the flag is off → no MASKED-STALL rendering, no escalation, zero false-positive
+  // noise. The detector remains exported + unit-tested for activation.
+  const maskedIds = MASKED_STALL_DETECT_ON
+    ? maskedStallSessionIds({ sessions: workers, unclaimedItems: claimable.length + openQfCount, now })
+    : new Set();
 
   const rows = [];
   let idleNow = 0, freeingSoon = 0, building = 0, stalled = 0;
@@ -197,12 +221,16 @@ async function main() {
       // canonical detectStalledLoop verdict computed above (NOT a raw heartbeat-age threshold).
       idleNow++;
       const hbAgeS = Math.round((now - new Date(w.heartbeat_at).getTime()) / 1000);
+      const maskedFlag = maskedIds.has(w.session_id);
       const stalledFlag = stalledIds.has(w.session_id);
       if (stalledFlag) stalled++;
+      // MASKED-STALL is the higher-confidence (dead-tick) subset and takes display priority over the
+      // generic IDLE⚠STALLED advisory: the loop is CONFIRMED dead (fresh parent, stale tick).
       rows.push({
         sess: w.session_id.slice(0, 8), callsign,
-        state: stalledFlag ? 'IDLE⚠STALLED' : 'IDLE',
-        detail: stalledFlag ? 'alive but loop not claiming (needs /loop re-arm)' : 'available',
+        state: maskedFlag ? 'MASKED-STALL⚠' : stalledFlag ? 'IDLE⚠STALLED' : 'IDLE',
+        detail: maskedFlag ? 'tick dead + no claim while ranked work waits — needs /loop re-arm'
+          : stalledFlag ? 'alive but loop not claiming (needs /loop re-arm)' : 'available',
         eta: `idle ${hbAgeS}s`,
       });
     }
@@ -251,8 +279,66 @@ async function main() {
     }
   }
 
+  // ── SD-FDBK-INFRA-STALL-AFTER-COMPLETION-001: masked-stall escalation ──
+  // A CONFIRMED dead loop (fresh parent, dead tick) holding no claim while ranked work waits cannot
+  // self-revive, and the coordinator cannot re-arm a worker's /loop — only the operator can re-paste.
+  // Turn the previously stdout-only advisory into a DURABLE, cooldowned escalation so the operator is
+  // actually alerted. Read-only by default; emit gated behind --dispatch (mirrors the Adam reach-out).
+  if (maskedIds.size > 0 && beltDepth > 0) {
+    const maskedRows = rows.filter(r => r.state.startsWith('MASKED-STALL'));
+    const who = maskedRows.map(r => `${r.callsign}/${r.sess}`).join(', ');
+    const cd = readMaskedCooldown();
+    const since = cd ? (Date.now() - cd.at) / 60000 : Infinity;
+    if (!DISPATCH) {
+      console.log(`  ACTION: ${maskedIds.size} MASKED-STALL worker(s) [${who}] — confirmed dead loop holding no claim while ${beltDepth} ranked item(s) wait. Run with --dispatch to emit a durable operator re-paste escalation (cooldown ${cooldownMin}m; last ${cd ? since.toFixed(0) + 'm ago' : 'never'}).`);
+    } else if (since < cooldownMin) {
+      console.log(`  ACTION: ${maskedIds.size} MASKED-STALL worker(s), but escalation was emitted ${since.toFixed(0)}m ago (< ${cooldownMin}m cooldown) — holding.`);
+    } else {
+      const emitted = await emitMaskedStallEscalation({ who, count: maskedIds.size, beltDepth, claimable });
+      if (emitted) { writeMaskedCooldown(); console.log('  ACTION: ✅ masked-stall operator escalation emitted (cooldown started).'); }
+      else console.log('  ACTION: ⚠ masked-stall escalation emit failed — surface to operator.');
+    }
+  }
+
   // machine-readable last line for the cron/log (+ sourcing-engine awareness fields, FR-2)
-  console.log(`  GAUGE belt=${beltDepth} idle=${idleNow} freeing_soon=${freeingSoon} demand=${demandSoon} deficit=${Math.max(0, deficit)} verdict=${verdict} engine_on=${awareness.anyOn} unpromoted=${awareness.countStr}`);
+  console.log(`  GAUGE belt=${beltDepth} idle=${idleNow} freeing_soon=${freeingSoon} demand=${demandSoon} deficit=${Math.max(0, deficit)} verdict=${verdict} masked_stall=${maskedIds.size} engine_on=${awareness.anyOn} unpromoted=${awareness.countStr}`);
+}
+
+function readMaskedCooldown() {
+  try { return existsSync(MASKED_STALL_COOLDOWN_FILE) ? JSON.parse(readFileSync(MASKED_STALL_COOLDOWN_FILE, 'utf8')) : null; }
+  catch { return null; }
+}
+function writeMaskedCooldown() {
+  try { writeFileSync(MASKED_STALL_COOLDOWN_FILE, JSON.stringify({ at: Date.now(), iso: new Date().toISOString() })); } catch {}
+}
+
+// Emit ONE durable escalation row for confirmed masked-stalled workers, TARGETED AT ADAM — the
+// escalation aggregation point + designated HITL who triages what reaches the chairman/operator (a
+// worker cannot self-revive and the coordinator cannot re-arm a /loop, so a human must re-paste).
+// insertCoordinationRow requires a valid full-UUID target, so we resolve the live Adam session.
+// Fail-soft: no Adam session / any error returns false (the forecast never throws on this path).
+async function emitMaskedStallEscalation(f) {
+  try {
+    // Canonical fresh-Adam election (freshness floor included) — never target a stale/dead Adam inbox.
+    const adamId = await getActiveAdamId(sb);
+    if (!adamId) return false; // no live Adam → caller logs "surface to operator"
+    const correlation_id = `masked-stall-${Date.now()}`;
+    const body = [
+      `[COORD->ADAM] MASKED-STALL: ${f.count} worker(s) [${f.who}] have a CONFIRMED dead /loop — fresh heartbeat (parent alive) but a dead session-tick (process_alive_at stale), holding NO claim while ${f.beltDepth} ranked item(s) wait.`,
+      `These workers cannot self-revive and the coordinator cannot re-arm a /loop. ACTION: surface to the operator to re-paste the /loop (or /checkin) wake prompt into those windows, or let the staleness sweep recycle them.`,
+      `Claimable now: ${f.claimable.map(d => d.sd_key.replace('SD-LEO-INFRA-', '')).join(', ') || 'NONE'}.`,
+    ].join('\n');
+    const res = await insertCoordinationRow(sb, {
+      message_type: 'INFO',
+      sender_session: process.env.CLAUDE_SESSION_ID,
+      target_session: adamId,
+      subject: `[COORD->ADAM] MASKED-STALL — ${f.count} dead loop(s) blocking ${f.beltDepth} ranked item(s)`,
+      payload: { kind: 'coordinator_alert', topic: 'masked_stall', correlation_id, body, masked_count: f.count, belt_depth: f.beltDepth },
+    });
+    return !res.error;
+  } catch {
+    return false;
+  }
 }
 
 // SD-LEO-INFRA-COORDINATOR-SOURCING-ENGINE-AWARENESS-001 (FR-2): unpromoted roadmap depth.
