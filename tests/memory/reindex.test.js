@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { PassThrough } from 'node:stream';
 
 import { reindex, resolveMemoryDir } from '../../scripts/modules/memory/reindex.mjs';
-import { clusterByPrefix, buildTopicFilename, buildTopicContent } from '../../scripts/modules/memory/clustering.mjs';
+import { clusterByPrefix, buildTopicContent } from '../../scripts/modules/memory/clustering.mjs';
 
 const TARGET_BYTES = 15 * 1024;
 const MAX_LINE_CHARS = 120;
