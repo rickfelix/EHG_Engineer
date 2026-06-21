@@ -5,11 +5,26 @@
  * enforceWorktreeQuota integration via the injectable getFreeDisk seam (no real disk needed).
  */
 import { describe, it, expect, vi } from 'vitest';
+import os from 'node:os';
 import {
   checkDiskFloor, createDiskPressureError, enforceWorktreeQuota, WORKTREE_DISK_FLOOR_BYTES,
 } from '../../lib/worktree-quota.js';
+import { getFreeDiskBytes } from '../../lib/worktree-provision.js';
 
 const GB = 1024 * 1024 * 1024;
+
+describe('getFreeDiskBytes — real statfs smoke (the fail-open-no-op risk)', () => {
+  // The guard fails OPEN when free space is unreadable. If fs.statfsSync silently stopped working on
+  // this platform/Node version, the guard would become a permanent no-op with no other signal. This
+  // smoke test asserts the real reader returns a finite positive number on a known dir, so a Node
+  // downgrade/regression that breaks statfs is caught here rather than silently disabling the guard.
+  it('returns a finite positive byte count for os.tmpdir()', () => {
+    const free = getFreeDiskBytes(os.tmpdir());
+    expect(typeof free).toBe('number');
+    expect(Number.isFinite(free)).toBe(true);
+    expect(free).toBeGreaterThan(0);
+  });
+});
 
 describe('checkDiskFloor (pure, fail-open)', () => {
   it('ok when free >= floor', () => {
