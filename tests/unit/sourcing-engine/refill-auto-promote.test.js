@@ -74,11 +74,23 @@ describe('buildRefillSdKey / buildRefillSdPayload (pure)', () => {
     expect(p.metadata.sourced_by).toBe('auto-refill');
     expect(p.metadata.promoted_from_roadmap_item_id).toBe('rwi-1');
     expect(p.metadata.source_id).toBe('led-123');
+    // id is NOT NULL in strategic_directives_v2 with no DB default — the raw-insert path MUST mint one
+    // (omitting it 23502-fails every promotion on live-flip). Guard against that regression.
+    expect(p.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    // untyped item -> sd_type null so the createSD/key-prefix default applies (not a baked 'feature').
+    expect(p.sd_type).toBeNull();
+    // explicit target so harness items don't fall to the DB's EHG default.
+    expect(p.target_application).toBe('EHG_Engineer');
+    // DISTINCT description (not a title clone) via the canonical deriver.
+    expect(p.description).not.toBe(p.title);
   });
 
-  it('clamps an empty title to a safe default and caps length', () => {
+  it('falls back to a traceable title for an empty title and caps length', () => {
+    // The canonical deriver yields a traceable default ("Roadmap item <id>") for an empty title —
+    // non-empty + identifiable, better than a generic constant.
     const p = buildRefillSdPayload({ id: 'x', title: '' }, 'SD-REFILL-Z');
-    expect(p.title).toBe('Auto-refill candidate');
+    expect(p.title.length).toBeGreaterThan(0);
+    expect(p.title).toContain('x');
     const long = buildRefillSdPayload({ id: 'y', title: 'z'.repeat(500) }, 'SD-REFILL-Y');
     expect(long.title.length).toBe(200);
   });
@@ -101,7 +113,15 @@ function makeStub({ existingSd = [] } = {}) {
           }
           return Promise.resolve({ data: [], error: null });
         },
-        insert(payload) { writes.inserts.push({ table: this._table, payload }); return Promise.resolve({ error: null }); },
+        insert(payload) {
+          writes.inserts.push({ table: this._table, payload });
+          // Simulate the strategic_directives_v2 NOT-NULL constraints so a payload missing id (the
+          // live-fail the prior build shipped) is caught by tests instead of a fake {error:null}.
+          if (this._table === 'strategic_directives_v2' && (!payload || !payload.id)) {
+            return Promise.resolve({ error: { code: '23502', message: 'null value in column "id"' } });
+          }
+          return Promise.resolve({ error: null });
+        },
         update(payload) {
           const u = { table: this._table, payload, _filters: {} };
           writes.updates.push(u);
