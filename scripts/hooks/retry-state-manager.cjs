@@ -58,6 +58,15 @@ const EXEMPT_PATTERNS = [
   // active coordinator ~every 2 min — match its stable tokens, not a path.
   /\bsetActiveCoordinator\b/,
   /\bcoordinator[/\\]resolve\.cjs\b/,
+  // SD-FDBK-INFRA-RCA-TIERED-ENFORCEMENT-001 — two more SCHEDULED, idempotent, succeeding ticks
+  // that the exit-0 exemption can't reliably catch (it keys on the single per-session last-outcome
+  // file, which interleaved loops in a busy session clobber — see the coordinator-cron note above).
+  //   adam-advisory.cjs inbox — the Adam inbox drain (~every 15min + on-demand). Scoped to the
+  //     `inbox` subcommand so a genuinely-failing OTHER adam-advisory subcommand stays RCA-gated.
+  /\bscripts[/\\]adam-advisory\.cjs\b[^\n]*\binbox\b/,
+  //   worker-checkin.cjs — the /loop worker check-in tick (each pass; observed blocked at the 3rd
+  //     invocation this session, forcing EMERGENCY_RCA_BYPASS). It always exits 0 on a fixed cadence.
+  /\bscripts[/\\]worker-checkin\.cjs\b/,
 ];
 
 /**
