@@ -210,7 +210,8 @@ describe('FR-2 _resolveVisionPendingDecision', () => {
     expect(updates).toHaveLength(1);
     expect(updates[0].payload.status).toBe('approved');
     expect(updates[0].payload.decision).toBe('proceed');
-    expect(typeof updates[0].payload.resolved_at).toBe('string');
+    // SD-REFILL-007PVF5E: phantom resolved_at dropped (no such column live; updated_at is trigger-maintained)
+    expect(updates[0].payload.resolved_at).toBeUndefined();
 
     const filters = eqStrings(supabase._calls, 'chairman_decisions');
     expect(filters).toContain('venture_id=v-1');
