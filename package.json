@@ -322,6 +322,7 @@
     "sd:next": "node scripts/sd-next.js",
     "sd:cancel": "node scripts/cancel-sd.js",
     "sd:reactivate": "node scripts/reactivate-sd.js",
+    "sd:promote-orchestrator": "node scripts/promote-parent-to-orchestrator.js",
     "sd:park": "node scripts/sd-park.js park",
     "sd:unpark": "node scripts/sd-park.js unpark",
     "signal": "node scripts/worker-signal.cjs",
