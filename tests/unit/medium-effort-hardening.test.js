@@ -187,6 +187,26 @@ describe('FR-3: red-merge decide()', async () => {
   it('masking does NOT compound: a further rise above an elevated baseline still fires', () => {
     expect(decide([snap(130, 'higher'), snap(130), snap(118), snap(118), snap(118)], []).action).toBe('file_qf');
   });
+
+  // SD-REFILL-00Z7INJF: dedup window gap — a QF that COMPLETED minutes ago must still suppress a
+  // re-file for the same offending sha. opts.dedupeQfs carries red-merge QFs of ANY status.
+  const win = [snap(121, 'donesha'), snap(120), snap(103), snap(103), snap(102)]; // a confirmed rise
+  it('dedup matches a COMPLETED QF with the same signature (any status) => noop', () => {
+    const v = decide(win, [], { dedupeQfs: [{ id: 'QF-old', status: 'completed', description: 'red-merge:ci_test_failure_count:donesha ...' }] });
+    expect(v.action).toBe('noop');
+    expect(v.reason).toContain('dedup');
+  });
+
+  it('storm guard counts OPEN only: a completed QF for a DIFFERENT sha does not block a fresh fire', () => {
+    const v = decide(win, [], { dedupeQfs: [{ id: 'QF-x', status: 'completed', description: 'red-merge:ci_test_failure_count:othersha' }] });
+    expect(v.action).toBe('file_qf'); // different sig => no dedup; completed => no storm-guard
+  });
+
+  it('backward compatible: absent dedupeQfs falls back to the open list for dedup', () => {
+    const v = decide(win, [{ id: 'QF-open', description: 'red-merge:ci_test_failure_count:donesha' }]);
+    expect(v.action).toBe('noop');
+    expect(v.reason).toContain('dedup');
+  });
 });
 
 // ── FR-1: recordFailure routing (TS-1) ───────────────────────────────────────

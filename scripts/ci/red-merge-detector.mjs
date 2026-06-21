@@ -97,8 +97,13 @@ export function decide(snapshots = [], openRedMergeQfs = [], opts = {}) {
 
   const sha = f(snapshots[0]).commit_sha || 'unknown-sha';
   const signature = `red-merge:${DIMENSION}:${sha}`;
-  if (openRedMergeQfs.some((q) => (q.description || '').includes(signature))) {
-    return { action: 'noop', reason: `dedup: open QF already carries signature ${signature}` };
+  // Dedup across ANY QF status: an offending sha is immutable and should be flagged at most once,
+  // EVER. A QF that completed minutes ago must still suppress a re-file while the snapshot pair
+  // still shows the rise. opts.dedupeQfs carries recent red-merge QFs of any status (caller bounds
+  // the window); fall back to the open list when absent. (SD-REFILL-00Z7INJF)
+  const dedupeQfs = Array.isArray(opts.dedupeQfs) ? opts.dedupeQfs : openRedMergeQfs;
+  if (dedupeQfs.some((q) => (q.description || '').includes(signature))) {
+    return { action: 'noop', reason: `dedup: a QF already carries signature ${signature}` };
   }
   if (openRedMergeQfs.length > 0) {
     // Storm guard: one open red-merge QF at a time — a flaky test flipping
@@ -134,7 +139,17 @@ async function main() {
     .in('status', ['open', 'in_progress'])
     .ilike('title', '%red-merge%');
 
-  const verdict = decide(mainSnaps, openQfs || []);
+  // Dedup window: red-merge QFs of ANY status created in the last 48h, so a QF that completed
+  // minutes ago still suppresses a re-file for the same offending sha (SD-REFILL-00Z7INJF). The
+  // open list above remains the storm-guard input (open/in_progress only).
+  const since48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+  const { data: recentQfs } = await db
+    .from('quick_fixes')
+    .select('id, description, status, created_at')
+    .gte('created_at', since48h)
+    .ilike('title', '%red-merge%');
+
+  const verdict = decide(mainSnaps, openQfs || [], { dedupeQfs: recentQfs || [] });
   console.log(`[red-merge-detector] ${verdict.action}: ${verdict.reason}`);
   if (verdict.action !== 'file_qf') return;
 
