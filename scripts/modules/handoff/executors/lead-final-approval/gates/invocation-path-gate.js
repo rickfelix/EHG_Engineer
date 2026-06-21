@@ -80,12 +80,15 @@ export function createInvocationPathGate(_supabase) {
         return { passed: true, score: 100, max_score: 100, issues: [], warnings: [`INVOCATION_PATH_PROOF skipped for venture target_application=${sd.target_application}`], details: { skipped: 'venture_opt_out' } };
       }
 
-      // Step 1: added/modified JS in scripts/ & lib/ vs origin/main. Fail-OPEN on diff error.
+      // Step 1: ADDED JS in scripts/ & lib/ vs origin/main. Fail-OPEN on diff error.
+      // --diff-filter=A (added only, mirrors WIRE_CHECK): a violation must be one this SD
+      // INTRODUCED. Flagging a merely-MODIFIED pre-existing un-wired runner would false-block an
+      // innocent SD for a wiring gap it did not cause (adversarial HIGH).
       const mainRef = getMainRef({ cwd: ROOT_DIR }).ref;
       let changed = [];
       try {
         const diff = execSync(
-          `git diff --name-only --diff-filter=AM ${mainRef}...HEAD -- "*.js" "*.mjs" "*.cjs"`,
+          `git diff --name-only --diff-filter=A ${mainRef}...HEAD -- "*.js" "*.mjs" "*.cjs"`,
           { encoding: 'utf8', cwd: ROOT_DIR, timeout: 10000 }
         );
         changed = diff.split('\n').map((f) => f.trim()).filter(Boolean)

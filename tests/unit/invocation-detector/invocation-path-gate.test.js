@@ -65,6 +65,18 @@ describe('evaluateInvocationViolations — the FR-1 ∧ FR-2 core', () => {
     expect(evaluateInvocationViolations([], SOURCES).violations).toHaveLength(0);
     expect(evaluateInvocationViolations(undefined, undefined).violations).toHaveLength(0);
   });
+
+  // Adversarial HIGH regression: a -loop/-sweep-named PURE LIBRARY under scripts/modules/ (no
+  // runnable surface) must NOT be flagged as an autonomous runner (false violation).
+  it('a scripts/modules library with a -loop name (no main) is NOT a violation', () => {
+    const r = evaluateInvocationViolations(
+      ['scripts/modules/prd/rewrite-loop.js', 'scripts/modules/pocock/rca-feedback-loop.js'],
+      SOURCES,
+      () => 'export function rewrite(){}\nexport const X = 1;', // library: exports only, no main()/argv
+    );
+    expect(r.autonomousChecked).toBe(0);
+    expect(r.violations).toHaveLength(0);
+  });
 });
 
 describe('createInvocationPathGate — gate shape & opt-out', () => {
