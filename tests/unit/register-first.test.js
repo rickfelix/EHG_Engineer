@@ -17,7 +17,9 @@ describe('register-first — deriveSdFieldsFromRoadmapItem (FR-1)', () => {
       id: 'item-1', title: 'Build the thing', source_type: 'conversion_ledger', source_id: 'led-1', item_disposition: 'BUILD',
     });
     expect(f.title).toBe('Build the thing');
-    expect(f.type).toBe('feature'); // default when metadata.sd_type absent
+    // SD-LEO-INFRA-AUTOTYPE-INFRA-KEYS-001: the deriver no longer bakes a 'feature' default — it returns
+    // null when metadata.sd_type is absent so the createSD SSOT (resolveSdType) can apply the key-prefix default.
+    expect(f.type).toBeNull();
     expect(f.metadata).toMatchObject({ source: 'roadmap_item', source_id: 'item-1', roadmap_item_source_type: 'conversion_ledger', roadmap_item_source_id: 'led-1', item_disposition: 'BUILD' });
   });
   it('honors metadata.sd_type and tolerates a missing title', () => {
@@ -27,7 +29,8 @@ describe('register-first — deriveSdFieldsFromRoadmapItem (FR-1)', () => {
   });
   it('is total on null', () => {
     const f = deriveSdFieldsFromRoadmapItem(null);
-    expect(f.type).toBe('feature');
+    // SD-LEO-INFRA-AUTOTYPE-INFRA-KEYS-001: null default (was 'feature') — SSOT applies the prefix default.
+    expect(f.type).toBeNull();
     expect(f.metadata.source).toBe('roadmap_item');
   });
 });

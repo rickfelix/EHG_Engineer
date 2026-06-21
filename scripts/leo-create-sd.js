@@ -1401,6 +1401,36 @@ function mapToDbType(userType) {
 }
 
 /**
+ * SD-LEO-INFRA-AUTOTYPE-INFRA-KEYS-001 (FR-1): infer the DEFAULT sd_type from the SD key prefix.
+ * The key prefixes SD-LEO-*, SD-MAN-INFRA-* and SD-LEARN-FIX-* are infrastructure by definition
+ * (harness/governance work), so a typeless SD with one of those keys should default to
+ * 'infrastructure' rather than 'feature' — removing the per-SD feature->infra reclassify tax.
+ * Returns 'infrastructure' for those prefixes, otherwise null (no opinion → caller falls back to
+ * its own default). Pure; exported for unit test.
+ * @param {string} sdKey
+ * @returns {('infrastructure'|null)}
+ */
+function inferDefaultSdTypeFromKey(sdKey) {
+  if (typeof sdKey !== 'string') return null;
+  // Anchored, case-insensitive; \b/hyphen boundary so SD-LEONARDO-* does NOT match SD-LEO-.
+  if (/^SD-(LEO|MAN-INFRA|LEARN-FIX)-/i.test(sdKey)) return 'infrastructure';
+  return null;
+}
+
+/**
+ * SD-LEO-INFRA-AUTOTYPE-INFRA-KEYS-001 (FR-1/FR-2/FR-3): resolve the effective sd_type for createSD.
+ * Precedence: an explicit (truthy) rawType ALWAYS wins (FR-2 — --type / proposal sd_type / child
+ * override never overridden); otherwise the key-prefix default applies (FR-1); otherwise 'feature'
+ * (FR-3 — SD-EHG-* and other product keys are unchanged). Pure; exported for unit test.
+ * @param {string|null|undefined} rawType  the caller-supplied type (may be unset)
+ * @param {string} sdKey
+ * @returns {string}
+ */
+function resolveSdType(rawType, sdKey) {
+  return rawType || inferDefaultSdTypeFromKey(sdKey) || 'feature';
+}
+
+/**
  * Build default success_metrics based on SD type and title
  * Ensures validator requirements (3+ items with {metric, target}) are met
  */
@@ -1573,7 +1603,10 @@ async function createSD(options) {
     sdKey,
     title,
     description,
-    type,
+    // SD-LEO-INFRA-AUTOTYPE-INFRA-KEYS-001: capture the caller-supplied type as rawType; the
+    // effective `type` is resolved below via resolveSdType so a typeless infra-prefixed key
+    // (SD-LEO-*/SD-MAN-INFRA-*/SD-LEARN-FIX-) defaults to infrastructure. Explicit type still wins.
+    type: rawType,
     priority = 'medium',
     rationale,
     parentId = null,
@@ -1603,6 +1636,11 @@ async function createSD(options) {
     // direct/--from-feedback/--child callers that omit it.
     dependencies = null,
   } = options;
+
+  // SD-LEO-INFRA-AUTOTYPE-INFRA-KEYS-001 (FR-1/FR-2/FR-3): resolve the effective sd_type. An explicit
+  // caller type wins; otherwise an infra-prefixed key (SD-LEO-*/SD-MAN-INFRA-*/SD-LEARN-FIX-) defaults
+  // to infrastructure; otherwise 'feature'. Always a string, so downstream type.charAt/mapToDbType are safe.
+  const type = resolveSdType(rawType, sdKey);
 
   // QF-CLAIM-CONFLICT-UX-001 + SD-LEO-ENH-IMPLEMENT-TIERED-QUICK-001:
   // Detect Quick-Fix prefix and redirect via Unified Work-Item Router
@@ -2569,7 +2607,8 @@ export async function createFromProposalStdin(options = {}) {
 
 // Export for programmatic use (e.g., corrective-sd-generator)
 // SD-LEO-INFRA-BUILDDEFAULTSMOKETESTSTEPS-KEYWORD-DETECTOR-001 (FR-4): export buildDefaultSmokeTestSteps for unit-test access.
-export { createSD, buildDefaultSmokeTestSteps };
+// SD-LEO-INFRA-AUTOTYPE-INFRA-KEYS-001 (FR-4): export the pure type-default resolvers for unit test.
+export { createSD, buildDefaultSmokeTestSteps, inferDefaultSdTypeFromKey, resolveSdType };
 
 // ============================================================================
 // CLI Handler
