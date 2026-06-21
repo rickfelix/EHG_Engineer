@@ -24,6 +24,7 @@ import { detectLoopExpiry, detectStalledLoop, detectEvaSchedulerStale } from '..
 // predicate so prose/file-path/gate-name deps don't inflate the blocked count (ESM-imports-CJS,
 // same pattern as detectors.cjs above). SSOT shared with stale-session-sweep.cjs (QF-20260525-542).
 import { parseSdDependencies } from '../lib/utils/parse-sd-dependencies.cjs';
+import { isDependentBlocked } from '../lib/coordinator/dep-readiness.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -189,13 +190,14 @@ try {
     const { data: depRows } = await db.from('strategic_directives_v2').select('sd_key,status').in('sd_key', depKeys);
     for (const r of (depRows || [])) statusByKey[r.sd_key] = r.status;
   }
-  const isTerminal = (st) => TERMINAL.includes(st); // unknown/missing dep also counts as unmet
+  // A dep is satisfied only when DELIVERED (completed/archived); deferred/cancelled/unknown/missing
+  // count the dependent as blocked (SD-REFILL-00V80FV3 semantic split — see lib/coordinator/dep-readiness.mjs).
   let blocked = 0, ready = 0;
   for (const s of sds) {
     const deps = depOf(s);
     if (!deps.length) continue;
-    if (deps.some(k => !isTerminal(statusByKey[k]))) { blocked++; continue; }
-    ready++; // all deps terminal/satisfied
+    if (isDependentBlocked(deps, statusByKey)) { blocked++; continue; }
+    ready++; // all deps delivered (completed/archived)
     if (!s.claiming_session_id && s.updated_at && (t - new Date(s.updated_at).getTime()) >= DAY) depStale.push(s.sd_key);
   }
   depLine = blocked + ' blocked (unmet deps) | ' + ready + ' dep-satisfied | ' + depStale.length + ' stale-blocked (deps done, idle >1d)';
