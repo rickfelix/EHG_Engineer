@@ -179,9 +179,18 @@ let forecastLine = '';
 // mirroring the watchdog's tableProvisioned probe below.
 let forecastDegraded = false;
 try {
-  const { data: fc, error } = await db.from('build_completion_forecast_log')
-    .select('plateau, build_pct, binding_constraint, eta_days, eta_date, confidence, note')
-    .order('measured_at', { ascending: false }).limit(2);
+  // QF-20260621-570 (FR-1): bounded read-retry. The cron writes a forecast row then reads it back in the
+  // SAME run while the PostgREST schema cache is briefly stale -> a transient cache-miss error. Retry a
+  // few times with short backoff so the re-query hits the refreshed cache and finds the rows (the real
+  // date renders) instead of the line being dropped. Retries on ANY error (the transient miss is common).
+  let fc = null, error = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    ({ data: fc, error } = await db.from('build_completion_forecast_log')
+      .select('plateau, build_pct, binding_constraint, eta_days, eta_date, confidence, note')
+      .order('measured_at', { ascending: false }).limit(2));
+    if (!error) break;
+    if (attempt < 2) await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+  }
   const cls = classifyForecastAvailability({ error, rows: fc }); // pure FR-2 discriminator (error vs genuine-empty)
   forecastDegraded = cls.degraded;
   if (cls.hasForecast) {
