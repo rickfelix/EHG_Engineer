@@ -6,9 +6,7 @@
  * that normalizeLearningCategory coerces any input to a constraint-valid value so a retro never fails.
  */
 import { describe, it, expect } from 'vitest';
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
-const { LEARNING_CATEGORIES, DEFAULT_LEARNING_CATEGORY, normalizeLearningCategory } = require('../../lib/retro/learning-category.cjs');
+import { LEARNING_CATEGORIES, DEFAULT_LEARNING_CATEGORY, normalizeLearningCategory } from '../../lib/retro/learning-category.js';
 
 describe('LEARNING_CATEGORIES', () => {
   it('is the exact 9-value constraint set', () => {

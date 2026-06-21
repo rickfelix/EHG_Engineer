@@ -36,8 +36,7 @@ import { getFilteredRetrospective } from './modules/handoff/retro-filters.js';
 import { resolveCanonicalAppName } from '../lib/repo-paths.js';
 // SD-FDBK-INFRA-RETROSPECTIVES-CHECK-LEARNING-001: canonical learning_category allowlist + normalizer
 // so any category (incl. plausible-but-rejected guesses) coerces to a constraint-valid value.
-import learningCategoryModule from '../lib/retro/learning-category.cjs';
-const { normalizeLearningCategory } = learningCategoryModule;
+import { normalizeLearningCategory } from '../lib/retro/learning-category.js';
 import dotenv from 'dotenv';
 // import fs from 'fs'; // Currently unused - available for file operations if needed
 
