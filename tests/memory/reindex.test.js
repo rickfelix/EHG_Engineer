@@ -12,8 +12,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { PassThrough } from 'node:stream';
 
-import { reindex } from '../../scripts/modules/memory/reindex.mjs';
-import { clusterByPrefix, buildTopicFilename, buildTopicContent } from '../../scripts/modules/memory/clustering.mjs';
+import { reindex, resolveMemoryDir } from '../../scripts/modules/memory/reindex.mjs';
+import { clusterByPrefix, buildTopicContent } from '../../scripts/modules/memory/clustering.mjs';
 
 const TARGET_BYTES = 15 * 1024;
 const MAX_LINE_CHARS = 120;
@@ -194,5 +194,40 @@ describe('reindex.mjs', () => {
     const source = readFileSync(join(import.meta.url.replace('file://', '').replace(/^\/([A-Z]:)/, '$1').replace('tests/memory/reindex.test.js', 'scripts/modules/memory/reindex.mjs')), 'utf8');
     expect(source).toContain("from './frontmatter.js'");
     expect(source).toContain('parseMemoryFrontmatter');
+  });
+});
+
+// SD-FDBK-INFRA-MEMORY-REINDEX-SCRIPTS-001: the project-dir slug must match Claude Code's actual
+// encoding (every non-alphanumeric char -> '-', including underscores), not the old [\\/:]-only scheme.
+describe('resolveMemoryDir slug encoding', () => {
+  it('encodes the real EHG_Engineer path to the actual Claude Code slug (underscores -> hyphens)', () => {
+    const dir = resolveMemoryDir(undefined, {
+      cwd: 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer',
+      home: 'C:\\Users\\rickf',
+      env: {},
+    });
+    // Real on-disk dir is C--Users-rickf-Projects--EHG-EHG-Engineer (double-hyphen before EHG, hyphen in EHG-Engineer).
+    expect(dir.replace(/\\/g, '/')).toBe('C:/Users/rickf/.claude/projects/C--Users-rickf-Projects--EHG-EHG-Engineer/memory');
+  });
+
+  it('does NOT leave underscores or single-hyphenate a leading-underscore segment (the bug)', () => {
+    const dir = resolveMemoryDir(undefined, { cwd: 'C:\\Users\\x\\Projects\\_EHG\\EHG_Engineer', home: '/h', env: {} });
+    expect(dir).not.toContain('_EHG');
+    expect(dir).not.toContain('EHG_Engineer');
+    expect(dir).toContain('--EHG-EHG-Engineer');
+  });
+
+  it('encodes a POSIX path (every non-alphanumeric -> hyphen)', () => {
+    const dir = resolveMemoryDir(undefined, { cwd: '/home/u/proj_a/sub.dir', home: '/home/u', env: {} });
+    expect(dir.replace(/\\/g, '/')).toBe('/home/u/.claude/projects/-home-u-proj-a-sub-dir/memory');
+  });
+
+  it('honors an explicit CLAUDE_MEMORY_DIR override', () => {
+    const dir = resolveMemoryDir(undefined, { cwd: '/anything', home: '/h', env: { CLAUDE_MEMORY_DIR: '/custom/mem' } });
+    expect(dir).toBe('/custom/mem');
+  });
+
+  it('an explicit arg still wins over everything', () => {
+    expect(resolveMemoryDir('/explicit/dir', { env: { CLAUDE_MEMORY_DIR: '/x' } })).toBe('/explicit/dir');
   });
 });
