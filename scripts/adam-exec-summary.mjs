@@ -330,8 +330,18 @@ const actionsHtml = nActions
   : `<p style="font-size:14px;margin:0 0 6px"><b>No decisions need you right now.</b></p>`;
 const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px">' +
   `<p style="font-size:15px;margin:0 0 12px"><b>Workers:</b> ${esc(workerText)}</p>` +
-  `<p style="font-size:15px;font-weight:600;margin:0 0 0">EHG vision: ${visPct != null ? visPct + '% built' : '(gauge unavailable)'}</p>` +
+  // QF-20260621-379: full plaintext↔HTML parity. Lead with the fleet-build line (buildLine)
+  // using the SAME fallback as plaintext (line ~298) — the HTML previously showed a bare vision-%
+  // and OMITTED rungLine / rungRollupLine / forecastLine / operationalLine, so the chairman (an HTML
+  // reader) never saw the Estimated-completion forecast though it was correct in plaintext + DB.
+  `<p style="font-size:15px;font-weight:600;margin:0 0 0">${esc(buildLine || (visPct != null ? `EHG vision: ${visPct}% built (build-segmented detail unavailable)` : 'EHG vision: (gauge unavailable)'))}</p>` +
   (rungNatureLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(rungNatureLine)}</div>` : '') +
+  (rungLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(rungLine)}</div>` : '') +
+  (rungRollupLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(rungRollupLine)}</div>` : '') +
+  // forecastLine with the degraded fallback mirroring plaintext line ~304 (a forecast ERROR shows an
+  // explicit degraded marker, not a silent omission; a genuine no-forecast stays silent).
+  (forecastLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(forecastLine)}</div>` : (forecastDegraded ? `<div style="font-size:13px;color:#b54708;margin:2px 0 0">${esc(FORECAST_DEGRADED_MARKER)}</div>` : '')) +
+  (operationalLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(operationalLine)}</div>` : '') +
   layerHtml + noteHtml + trendHtml + trendAnalysisHtml +
   (watchdogLine ? `<div style="font-size:12px;color:#b54708;margin:2px 0 0">${esc(watchdogLine)}</div>` : '') +
   recentHtml + decisionsHtml +
