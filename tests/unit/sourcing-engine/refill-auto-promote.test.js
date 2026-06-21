@@ -104,6 +104,17 @@ describe('buildRefillSdKey / buildRefillSdPayload (pure)', () => {
     expect(p.rationale).toContain(validRow().id); // traceable provenance
   });
 
+  it('clamps an out-of-sd_type_check metadata.sd_type to a safe default (no live 23514)', () => {
+    // The deriver passes metadata.sd_type through unverified; an out-of-list value would 23514 on raw
+    // insert. Clamp to 'infrastructure'. A valid metadata.sd_type is preserved (+ category aligned).
+    const bad = buildRefillSdPayload(validRow({ metadata: { sd_type: 'not-a-real-type' } }), 'SD-REFILL-BAD');
+    expect(bad.sd_type).toBe('infrastructure');
+    expect(bad.category).toBe('Infrastructure');
+    const good = buildRefillSdPayload(validRow({ metadata: { sd_type: 'security' } }), 'SD-REFILL-GOOD');
+    expect(good.sd_type).toBe('security');
+    expect(good.category).toBe('Security');
+  });
+
   it('falls back to a traceable title for an empty title and caps length', () => {
     // The canonical deriver yields a traceable default ("Roadmap item <id>") for an empty title —
     // non-empty + identifiable, better than a generic constant.
