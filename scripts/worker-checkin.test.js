@@ -53,6 +53,13 @@ function makeStub(cfg) {
         if (cfg.inFlightThrow) return Promise.reject(new Error('isSdInFlight query failed'));
         return Promise.resolve({ data: (cfg.sdRows && cfg.sdRows[state.filters.sd_key]) || null, error: null });
       }
+      // SD-LEO-INFRA-WORKER-CHECKIN-TEST-REGRESSION-001: the resume path (and confirmRowGone) reads
+      // quick_fixes.status by id .maybeSingle() to verify a claimed QF is still resumable. Seed it via
+      // cfg.qfRows so a QF resume test reflects an EXISTING quick-fix (an unseeded null would make the
+      // #4943 hard-deleted self-heal treat it as gone -> idle). Mirrors the strategic_directives_v2 seam.
+      if (table === 'quick_fixes') {
+        return Promise.resolve({ data: (cfg.qfRows && cfg.qfRows[state.filters.id]) || null, error: null });
+      }
       return Promise.resolve({ data: null, error: null });
     }
     function resolveList() {
@@ -134,7 +141,9 @@ const noCoord = { getCoordinator: async () => null };
 
 describe('FR-2: runCheckin deterministic resolution', () => {
   it('resume when the session already claims an SD', async () => {
-    const sb = makeStub({ session: { metadata: { callsign: 'Alpha' }, sd_key: 'SD-MINE-001' } });
+    // sdRows seeds SD-MINE-001 as an EXISTING, non-terminal SD so the resumability check resumes it
+    // (an unseeded SD would be treated as hard-deleted by the #4943 self-heal -> idle).
+    const sb = makeStub({ session: { metadata: { callsign: 'Alpha' }, sd_key: 'SD-MINE-001' }, sdRows: { 'SD-MINE-001': { status: 'in_progress' } } });
     const r = await runCheckin(sb, 'sess-1', noCoord);
     expect(r.action).toBe('resume');
     expect(r.sd).toBe('SD-MINE-001');
@@ -142,7 +151,8 @@ describe('FR-2: runCheckin deterministic resolution', () => {
   });
 
   it('resume on a self-claimed QF routes to /quick-fix, NOT sd-start', async () => {
-    const sb = makeStub({ session: { metadata: {}, sd_key: 'QF-20260607-583' } });
+    // qfRows seeds the quick-fix as EXISTING + open so the QF resumability check resumes it.
+    const sb = makeStub({ session: { metadata: {}, sd_key: 'QF-20260607-583' }, qfRows: { 'QF-20260607-583': { status: 'open' } } });
     const r = await runCheckin(sb, 'sess-1', noCoord);
     expect(r.action).toBe('resume');
     expect(r.sd).toBe('QF-20260607-583');
@@ -774,7 +784,7 @@ describe('ORPHAN-ADOPTION: adopt zero-claim in_progress SDs (resume_orphan)', ()
 // (b) leave already-named workers untouched, and (c) never name an idle worker.
 describe('SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: runCheckin names a freshly-claimed worker', () => {
   it('names an UNNAMED worker on resume (live used-set empty -> Alpha)', async () => {
-    const sb = makeStub({ session: { metadata: {}, sd_key: 'SD-MINE-001' } });
+    const sb = makeStub({ session: { metadata: {}, sd_key: 'SD-MINE-001' }, sdRows: { 'SD-MINE-001': { status: 'in_progress' } } });
     const r = await runCheckin(sb, 'sess-1', noCoord);
     expect(r.action).toBe('resume');
     expect(r.sd).toBe('SD-MINE-001');
@@ -782,7 +792,7 @@ describe('SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: runCheckin names a freshly-cla
   });
 
   it('does NOT rename an already-named worker (idempotent)', async () => {
-    const sb = makeStub({ session: { metadata: { callsign: 'Delta' }, sd_key: 'SD-MINE-001' } });
+    const sb = makeStub({ session: { metadata: { callsign: 'Delta' }, sd_key: 'SD-MINE-001' }, sdRows: { 'SD-MINE-001': { status: 'in_progress' } } });
     const r = await runCheckin(sb, 'sess-1', noCoord);
     expect(r.action).toBe('resume');
     expect(r.callsign).toBe('Delta'); // unchanged — naming branch skipped because a callsign already exists
