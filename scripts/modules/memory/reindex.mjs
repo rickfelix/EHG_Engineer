@@ -12,12 +12,22 @@ const MAX_LINE_CHARS = 120;
 const TARGET_BYTES = 15 * 1024;
 const EXPIRED_PREFIX = '(!) ';
 
-function resolveMemoryDir(arg) {
+export function resolveMemoryDir(arg, opts = {}) {
   if (arg) return arg;
-  const home = process.env.HOME || process.env.USERPROFILE || '';
-  const cwd = process.cwd();
-  const encoded = cwd.replace(/[\\/:]/g, '-').replace(/^-+/, '');
-  return join(home, '.claude', 'projects', `C--${encoded.replace(/^C--/, '')}`, 'memory');
+  const env = opts.env || process.env;
+  // Explicit override wins — robust against any path-encoding edge case (SD-FDBK-INFRA-MEMORY-REINDEX-SCRIPTS-001).
+  if (env.CLAUDE_MEMORY_DIR) return env.CLAUDE_MEMORY_DIR;
+  const home = opts.home || env.HOME || env.USERPROFILE || '';
+  const cwd = opts.cwd || process.cwd();
+  // Claude Code encodes a project dir into its ~/.claude/projects/<slug> name by replacing EVERY
+  // non-alphanumeric character (the drive colon, path separators, AND underscores) with a single '-',
+  // preserving case and NOT collapsing consecutive hyphens. The prior code only replaced [\\/:], so an
+  // underscore segment like \_EHG\EHG_Engineer encoded to '-_EHG-EHG_Engineer' instead of the real
+  // '--EHG-EHG-Engineer' — the resolved dir never existed and reindex failed with missing_dir on this
+  // machine, forcing a fall back to hand-editing MEMORY.md. Verified live: the real dir for
+  // C:\Users\rickf\Projects\_EHG\EHG_Engineer is 'C--Users-rickf-Projects--EHG-EHG-Engineer'.
+  const encoded = cwd.replace(/[^a-zA-Z0-9]/g, '-');
+  return join(home, '.claude', 'projects', encoded, 'memory');
 }
 
 function buildIndexLine(filename, parsed) {
