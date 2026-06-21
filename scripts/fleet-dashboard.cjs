@@ -1182,8 +1182,10 @@ async function printAdamInbox() {
   // which is why FR1 gives it a durable TTL). It also covers the broadcast-coordinator
   // sentinel, which this inline query previously MISSED. Unifying here removes a
   // writer/consumer-asymmetry drift surface (PAT-PROCESS-PRODUCER-CONSUMER-INVARIANT-001).
-  const { selectUnactionedAdvisories } = require('../lib/coordinator/adam-advisory-store.cjs');
-  const { rows: advisories, error } = await selectUnactionedAdvisories(supabase, coordinatorId, { limit: 20 });
+  const { selectUnactionedAdvisories, isActionRequiredAdvisory } = require('../lib/coordinator/adam-advisory-store.cjs');
+  // QF-20260621-174: fetch a wide window (was 20) so action-required asks are never buried
+  // under the 80+ belt-countdown status relays; the render partitions + caps below.
+  const { rows: advisories, error } = await selectUnactionedAdvisories(supabase, coordinatorId, { limit: 200 });
 
   if (error) {
     console.log('  (adam inbox query failed: ' + error.message + ')');
@@ -1197,13 +1199,20 @@ async function printAdamInbox() {
     return;
   }
 
-  console.log('  ' + advisories.length + ' unactioned advisory(ies)');
+  // QF-20260621-174: partition the lane so action-required advisories ALWAYS render
+  // un-truncated; passive status relays (belt-countdowns) get a capped tail so they can
+  // never crowd out an ask. Both subsets stamp read_at below (DELIVERED, not actioned).
+  const actionRows = advisories.filter(isActionRequiredAdvisory);
+  const statusRows = advisories.filter((a) => !isActionRequiredAdvisory(a));
+
+  console.log('  ' + advisories.length + ' unactioned (' + actionRows.length +
+    ' action-required, ' + statusRows.length + ' status relay(s))');
   console.log('');
   console.log('  ' + pad('Callsign', 12) + pad('Reply?', 8) + pad('Age', 8) + 'Body');
   console.log('  ' + '─'.repeat(68));
 
   const ids = [];
-  for (const a of advisories) {
+  const renderRow = (a) => {
     const callsign = a.payload?.sender_callsign || '(none)';
     const wantsReply = a.payload?.expects_reply ? 'yes' : '-';
     const ageMin = Math.floor((Date.now() - new Date(a.created_at).getTime()) / 60_000);
@@ -1211,6 +1220,13 @@ async function printAdamInbox() {
     const bodyPreview = (a.body || a.payload?.body || '').replace(/\n/g, ' ').substring(0, 32);
     console.log('  ' + pad(callsign, 12) + pad(wantsReply, 8) + pad(ageStr, 8) + bodyPreview);
     ids.push(a.id);
+  };
+
+  for (const a of actionRows) renderRow(a); // action-required: never truncated
+  const STATUS_CAP = 15;
+  for (const a of statusRows.slice(0, STATUS_CAP)) renderRow(a);
+  if (statusRows.length > STATUS_CAP) {
+    console.log('  … and ' + (statusRows.length - STATUS_CAP) + ' older status relay(s) hidden');
   }
 
   // FR-1: stamp read_at = DELIVERED (transport-level "the coordinator saw it on a render"),
@@ -1457,6 +1473,10 @@ async function main() {
       // FR-2/FR-4 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): sender-side receipts.
       await printUndeliveredOutbound();
       await printDeadLetters();
+      // QF-20260621-174: surface the Adam advisory lane on the suppression-immune */2 inbox
+      // loop too — the ~5min 'all' loop is collapsed by FLEET_DASH_SUPPRESS during quiet
+      // periods, so action-required advisories could otherwise sit unsurfaced for long stretches.
+      await printAdamInbox();
     },
     adam:          async () => await printAdamInbox(), // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B
     context:       async () => await printWorkingContext(), // SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001 (FR-3)
