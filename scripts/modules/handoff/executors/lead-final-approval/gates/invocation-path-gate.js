@@ -37,6 +37,55 @@ function safeRead(absPath) {
 }
 
 /**
+ * SD-LEO-INFRA-INVOCATION-PATH-PROOF-001-D (FR-4): rollout mode resolver.
+ * -C shipped the gate HARD-BLOCKING, which can mass-fail existing SDs on day one before the
+ * wired-to-fire discipline is adopted. Resolve a warn-first ADVISORY default that surfaces
+ * violations WITHOUT failing, promotable to BLOCK via INVOCATION_PATH_PROOF_MODE=block.
+ * @param {object} [env] @returns {'advisory'|'block'}
+ */
+export function resolveInvocationMode(env = process.env) {
+  return (env && env.INVOCATION_PATH_PROOF_MODE) === 'block' ? 'block' : 'advisory';
+}
+
+/**
+ * PURE verdict resolver: turn a violations result + mode into the gate verdict.
+ * - no violations  -> PASS (both modes)
+ * - violations + advisory -> PASS, violations surfaced as WARNINGS (enforcement opt-in)
+ * - violations + block    -> FAIL (passed:false) with issues + remediation (the -C behavior)
+ * @param {{violations:Array, autonomousChecked:number}} evalResult
+ * @param {'advisory'|'block'} mode
+ * @param {string[]} remediation
+ */
+export function resolveInvocationVerdict(evalResult, mode, remediation = []) {
+  const violations = (evalResult && evalResult.violations) || [];
+  const autonomousChecked = (evalResult && evalResult.autonomousChecked) || 0;
+  if (violations.length === 0) {
+    return { passed: true, score: 100, max_score: 100, issues: [], warnings: [], details: { mode, autonomousChecked, violations: 0 } };
+  }
+  const lines = violations.map((v) => `  - ${v.file} (${v.requires_reason})`);
+  const headline = `${violations.length} autonomous-runnable file(s) ship without a live production trigger:`;
+  if (mode === 'block') {
+    return {
+      passed: false, score: 0, max_score: 100,
+      issues: [headline, ...lines, ...remediation],
+      warnings: [],
+      details: { mode, autonomousChecked, violations: violations.length, violationFiles: violations.map((v) => v.file) },
+    };
+  }
+  // advisory (default): warn, do not fail — so the gate cannot mass-fail existing SDs during rollout.
+  return {
+    passed: true, score: 100, max_score: 100,
+    issues: [],
+    warnings: [
+      `[ADVISORY] ${headline}`,
+      ...lines,
+      'Enforcement is opt-in: set INVOCATION_PATH_PROOF_MODE=block to FAIL on these. See docs/protocol/invocation-path-proof.md.',
+    ],
+    details: { mode, autonomousChecked, violations: violations.length, violationFiles: violations.map((v) => v.file) },
+  };
+}
+
+/**
  * PURE-ish core: for each changed file, flag a violation when it is autonomous-runnable (FR-2)
  * but has no live trigger (FR-1). Composes the two SSOTs; I/O is injected (readFile), so the
  * decision is unit-testable without git/fs. @returns {{violations:[], autonomousChecked:number}}
@@ -123,10 +172,6 @@ export function createInvocationPathGate(_supabase) {
 
       console.log(`   Autonomous runners checked: ${autonomousChecked} | violations: ${violations.length}`);
 
-      if (violations.length === 0) {
-        return { passed: true, score: 100, max_score: 100, issues: [], warnings: [], details: { autonomousChecked, violations: 0 } };
-      }
-
       const remediation = [
         'This SD ships autonomous-runnable code with no live production trigger (WIRED-TO-FIRE). Wire each file with ONE of:',
         '  • A scheduled GitHub Actions workflow (.github/workflows/*.yml with `on: schedule: cron`) whose run: step invokes it (directly or via `npm run`).',
@@ -136,18 +181,11 @@ export function createInvocationPathGate(_supabase) {
         'If the file is NOT actually autonomous (a library/manual CLI/helper), it should not match the FR-2 classifier — verify its name/location (avoid -loop/-cron/-sweep suffix, cron/clockwork dirs, and in-code setInterval/cron unless it truly runs autonomously).',
       ];
 
-      return {
-        passed: false,
-        score: 0,
-        max_score: 100,
-        issues: [
-          `${violations.length} autonomous-runnable file(s) ship without a live production trigger:`,
-          ...violations.map((v) => `  - ${v.file} (${v.requires_reason})`),
-          ...remediation,
-        ],
-        warnings: [],
-        details: { autonomousChecked, violations: violations.length, violationFiles: violations.map((v) => v.file) },
-      };
+      // SD-LEO-INFRA-INVOCATION-PATH-PROOF-001-D (FR-4): advisory-by-default rollout. Advisory surfaces
+      // violations as warnings (passed:true); INVOCATION_PATH_PROOF_MODE=block restores -C's hard fail.
+      const mode = resolveInvocationMode();
+      if (violations.length > 0) console.log(`   Mode: ${mode}${mode === 'advisory' ? ' (advisory — warns, does not fail; set INVOCATION_PATH_PROOF_MODE=block to enforce)' : ' (BLOCKING)'}`);
+      return resolveInvocationVerdict({ violations, autonomousChecked }, mode, remediation);
     },
     required: true,
   };
