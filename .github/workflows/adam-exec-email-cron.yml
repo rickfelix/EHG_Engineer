@@ -146,10 +146,14 @@ jobs:
       # ETA stayed frozen and the FR-3 self-correction (needs >=2 rows) never accumulated. Same guard +
       # continue-on-error as the gauge step so a writer failure can NEVER block the chairman email; the
       # forecaster is itself fail-soft (records a degraded row rather than throwing).
+      # SD-LEO-INFRA-EXEC-EMAIL-FORECAST-APPLY-001: must use the :apply script — the bare
+      # vision:build-forecast runs DRY (build-completion-forecast.mjs persists ONLY with --apply,
+      # else returns {written:false,reason:dry_run}), so the un-freeze fix above was itself a no-op:
+      # every hourly run computed+printed but wrote NO row and the ETA stayed frozen.
       - name: Historize the build-completion forecast (advance the ETA + self-correction)
         if: steps.guard.outputs.should_send == 'true'
         continue-on-error: true
-        run: npm run vision:build-forecast
+        run: npm run vision:build-forecast:apply
 
       - name: Send chairman exec email (observe-only until ADAM_EMAIL_LIVE repo var = true)
         if: steps.guard.outputs.should_send == 'true'
