@@ -107,6 +107,11 @@
             "type": "command",
             "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/post-tool-clear-telemetry.cjs",
             "timeout": 3
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/claim-heartbeat-on-tool.cjs",
+            "timeout": 5
           }
         ]
       },
