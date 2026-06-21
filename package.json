@@ -333,6 +333,7 @@
     "prod-error-sweep": "node scripts/clockwork/prod-error-sweep-loop.cjs",
     "sourcing:backfill-adam-ghosts": "node scripts/sourcing-engine/backfill-adam-ghosts.mjs",
     "sourcing:populate": "node scripts/sourcing-engine/proactive-populator.mjs",
+    "sourcing:refill-verify": "node scripts/sourcing-engine/refill-verify.mjs",
     "sourcing:gauge-gap-miner": "node scripts/sourcing-engine/gauge-gap-miner-sweep.mjs",
     "distill:yt-backlog-clear": "node scripts/eva/youtube-backlog-clear.mjs",
     "distill:backlog-dispositions": "node scripts/distill-backlog-dispositions.mjs",
