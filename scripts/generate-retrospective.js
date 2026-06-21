@@ -34,6 +34,10 @@ import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { resolveSdInput } from './lib/sd-id-resolver.js';
 import { getFilteredRetrospective } from './modules/handoff/retro-filters.js';
 import { resolveCanonicalAppName } from '../lib/repo-paths.js';
+// SD-FDBK-INFRA-RETROSPECTIVES-CHECK-LEARNING-001: canonical learning_category allowlist + normalizer
+// so any category (incl. plausible-but-rejected guesses) coerces to a constraint-valid value.
+import learningCategoryModule from '../lib/retro/learning-category.cjs';
+const { normalizeLearningCategory } = learningCategoryModule;
 import dotenv from 'dotenv';
 // import fs from 'fs'; // Currently unused - available for file operations if needed
 
@@ -121,7 +125,9 @@ async function generateRetrospective(sdInput) {
     return 'APPLICATION_ISSUE';
   };
 
-  const learning_category = determinelearning_category(sd);
+  // Coerce to a constraint-valid value (defense-in-depth: the heuristic already returns valid values,
+  // but normalization guarantees no insert ever fails on check_learning_category). SD-FDBK-INFRA-RETROSPECTIVES-CHECK-LEARNING-001.
+  const learning_category = normalizeLearningCategory(determinelearning_category(sd));
 
   // High-quality content arrays (will be converted to JSONB)
   const what_went_well_array = [
