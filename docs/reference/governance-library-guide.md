@@ -65,7 +65,6 @@ This document provides the canonical reference for the governance subsystem in t
 
 | Module | Location | Purpose | LOC |
 |--------|----------|---------|-----|
-| hard-halt-protocol | lib/governance/hard-halt-protocol.js | Emergency halt system | 280 |
 | four-oaths-enforcement | lib/governance/four-oaths-enforcement.js | Oath validation | 320 |
 | crew-governance-wrapper | lib/governance/crew-governance-wrapper.js | Agent governance | 250 |
 | manifesto-mode | lib/governance/manifesto-mode.js | Manifesto enforcement | 180 |
@@ -75,7 +74,7 @@ This document provides the canonical reference for the governance subsystem in t
 
 ### Current State
 Exception classes are defined inline in multiple files:
-- `HardHaltException` in hard-halt-protocol.js
+- `HardHaltError` (and UnauthorizedHaltError/AlreadyHaltedError/NotHaltedError) in lib/exceptions/governance-exceptions.js
 - `OathViolationException` in four-oaths-enforcement.js
 - `BudgetExhaustedException` in venture-ceo-runtime.js AND base-sub-agent.js (DUPLICATE)
 - `GovernanceException` in crew-governance-wrapper.js

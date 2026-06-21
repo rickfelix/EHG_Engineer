@@ -24,7 +24,6 @@ import { GuardrailRegistry } from './guardrail-registry.js';
 | `budget-check.js` | Token/cost budget enforcement; returns usage percentage and remaining budget |
 | `four-oaths-enforcement.js` | Enforces the Four Oaths protocol constraints on SD execution |
 | `manifesto-mode.js` | Manifesto-mode activation and enforcement (elevated governance posture) |
-| `hard-halt-protocol.js` | Hard halt triggers: conditions that force immediate execution stop |
 | `semantic-diff-validator.js` | Validates semantic equivalence between two versions of a document or spec |
 | `compute-posture.js` | Determines compute posture (aggressive/standard/conservative) based on system state |
 | `portfolio-calibrator.js` | Calibrates portfolio-level governance thresholds across ventures |
@@ -40,7 +39,7 @@ Gate/Stage input
 decision-filter-engine.js
   ├── AUTO_PROCEED  → continue execution automatically
   ├── ESCALATE      → chairman-escalation.js → chairman_decisions table
-  └── STOP          → hard-halt-protocol.js → execution stopped
+  └── STOP          → execution stopped (DFE halt verdict)
 ```
 
 ### Chairman Escalation Record
