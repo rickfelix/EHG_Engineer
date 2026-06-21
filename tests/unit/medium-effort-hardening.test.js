@@ -129,32 +129,51 @@ describe('FR-3: red-merge decide()', async () => {
   const { decide } = await import('../../scripts/ci/red-merge-detector.mjs');
   const snap = (failed, sha = 'abc123def456') => ({ findings: [{ failed_count: failed, commit_sha: sha, branch: 'main' }] });
 
-  it('red merge (failed count rose) => file_qf with signature', () => {
-    const v = decide([snap(105, 'newsha'), snap(100)], []);
+  // SD-REFILL-00V2SADI: contract change — a CONFIRMED rise fires, not a single up-tick.
+  // A sustained rise (latest TWO readings both above the settled median) fires.
+  it('confirmed red merge (sustained rise) => file_qf with signature', () => {
+    const v = decide([snap(121, 'newsha'), snap(120), snap(103), snap(103), snap(102)], []);
     expect(v.action).toBe('file_qf');
     expect(v.signature).toContain('newsha');
-    expect(v.newFailed).toBe(105);
+    expect(v.newFailed).toBe(121);
   });
 
-  it('green or improving => noop', () => {
-    expect(decide([snap(100), snap(100)], []).action).toBe('noop');
-    expect(decide([snap(90), snap(100)], []).action).toBe('noop');
+  // The motivating flaky bounce 102→103→118→103→114→103 must NEVER fire — neither when
+  // a transient spike is the latest reading, nor after it settles back down.
+  it('flaky bounce (transient single-run spike) => noop', () => {
+    // newest-first; latest is the 114 spike, prior reading already settled back to 103.
+    expect(decide([snap(114, 'spike'), snap(103), snap(118), snap(103), snap(102)], []).action).toBe('noop');
+    // and one tick later, settled back to 103 on top of the bouncy history.
+    expect(decide([snap(103), snap(114), snap(103), snap(118), snap(103), snap(102)], []).action).toBe('noop');
+  });
+
+  it('green or improving / flat => noop', () => {
+    expect(decide([snap(103), snap(103), snap(103), snap(103)], []).action).toBe('noop');
+    expect(decide([snap(100), snap(110), snap(112), snap(111)], []).action).toBe('noop'); // latest improved
   });
 
   it('idempotent rerun: same signature already open => noop (dedup)', () => {
-    const v = decide([snap(105, 'samesha'), snap(100)], [{ id: 'QF-1', description: 'red-merge:ci_test_failure_count:samesha ...' }]);
+    const v = decide([snap(121, 'samesha'), snap(120), snap(103), snap(103)], [{ id: 'QF-1', description: 'red-merge:ci_test_failure_count:samesha ...' }]);
     expect(v.action).toBe('noop');
     expect(v.reason).toContain('dedup');
   });
 
   it('storm guard: any open red-merge QF blocks a second filing', () => {
-    const v = decide([snap(110, 'othersha'), snap(105)], [{ id: 'QF-1', description: 'red-merge:ci_test_failure_count:somesha' }]);
+    const v = decide([snap(121, 'othersha'), snap(120), snap(103), snap(103)], [{ id: 'QF-1', description: 'red-merge:ci_test_failure_count:somesha' }]);
     expect(v.action).toBe('noop');
     expect(v.reason).toContain('storm guard');
   });
 
-  it('insufficient history => noop', () => {
+  it('insufficient history (<3 snapshots) => noop', () => {
     expect(decide([snap(105)], []).action).toBe('noop');
+    expect(decide([snap(105, 'x'), snap(100)], []).action).toBe('noop');
+  });
+
+  it('noiseFloor is configurable (a sub-floor sustained rise stays noop)', () => {
+    // settled median 103; sustained 105,105 is +2 — below a floor of 5 => noop.
+    expect(decide([snap(105), snap(105), snap(103), snap(103)], [], { noiseFloor: 5 }).action).toBe('noop');
+    // same window with the default floor (1) DOES confirm.
+    expect(decide([snap(105, 's'), snap(105), snap(103), snap(103)], []).action).toBe('file_qf');
   });
 });
 
