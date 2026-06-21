@@ -32,7 +32,11 @@ import {
   extractDepKey, resolveWorktreeCount, computeDispatchBelt, detectProgressStall, detectCrossRepoStarvation,
   // SD-LEO-INFRA-GOVERNANCE-ROLE-ADHERENCE-DBVALIDATION-001 (FR-3): coordinator mirror detectors.
   detectSourceToCapacity, detectCoordinatorWithoutAdam,
+  // SD-LEO-INFRA-AUTO-REFILL-SELECTION-GATE-001-E: auto-refill awareness advisory.
+  detectAutoRefillBacklog,
 } from '../lib/coordinator/charter-audit-detectors.mjs';
+// SD-LEO-INFRA-AUTO-REFILL-SELECTION-GATE-001-E: the -B dry-run verifier supplies the promotable count.
+import { verifyStagedCandidates } from '../lib/sourcing-engine/refill-dry-run-verifier.js';
 // SD-LEO-INFRA-SILENT-STALL-PREVENTION-001: DUTY-7 silent-stall detector (drafts stranded with null vision_score).
 import { findStalledDrafts } from '../lib/coordinator/draft-stall-detector.mjs';
 // SD-LEO-INFRA-ADAM-VISION-SD-FLOW-001: DUTY-9 LEAD-aging detector (scored, unclaimed Adam-sourced vision drafts
@@ -201,6 +205,17 @@ async function main() {
     }
   } catch { /* leave sourceReqRecently null → skip */ }
 
+  // SD-LEO-INFRA-AUTO-REFILL-SELECTION-GATE-001-E: count valid auto-promote candidates in the staged
+  // corpus (read-only) via the -B dry-run verifier + -A predicate, so the coordinator is AWARE the belt
+  // can be refilled. Best-effort / fail-open: any error leaves promotableCount=0 (no advisory).
+  let promotableCount = 0;
+  try {
+    const { data: staged, error: se } = await db.from('roadmap_wave_items')
+      .select('id, title, source_type, source_id, item_disposition, promoted_to_sd_key, lane')
+      .eq('item_disposition', 'pending').is('promoted_to_sd_key', null).limit(2000);
+    if (!se) promotableCount = verifyStagedCandidates(staged || []).validCount;
+  } catch { /* fail-open → promotableCount stays 0, no advisory */ }
+
   // ── run the pure detectors ──
   const D = {
     pool: detectWorktreePool({ count: wtCount, max: MAX_WORKTREE_COUNT }),
@@ -209,6 +224,9 @@ async function main() {
     rank: detectBacklogRankStaleness({ claimableSds: claimable, nowMs, ttlMs: DISPATCH_RANK_TTL_MS }),
     // SD-FDBK-INFRA-FLEET-SELF-CLAIM-001: cross-repo SDs no live worker checkout can build (silent starvation).
     crossRepo: detectCrossRepoStarvation({ claimableSds: claimable, liveSessionApps, nowMs }),
+    // SD-LEO-INFRA-AUTO-REFILL-SELECTION-GATE-001-E: belt CAN be refilled — promotable staged candidates
+    // exist but auto-refill isn't draining them. Advisory; suppressed once AUTO_REFILL_CRON_LIVE=true.
+    autoRefill: detectAutoRefillBacklog({ promotableCount, autoRefillLive: process.env.AUTO_REFILL_CRON_LIVE === 'true' }),
     quiet: detectQuietTickUnverified({ coordinatorReviews: reviews || [] }),
     // FR-3 coordinator mirror — added only when their facts resolved (skip-on-error, no spam).
     ...(adamAlive !== null ? { d3lean: detectCoordinatorWithoutAdam({ coordinatorAlive: true, adamAlive }) } : {}),
@@ -234,6 +252,7 @@ async function main() {
   for (const a of D.dep.anomalies.slice(0, 5)) console.log('      ANOMALY ' + a.sd + ' dep(s) not found: ' + a.unknownDeps.join(','));
   console.log('  DUTY-6 BACKLOG-RANK  : ' + D.rank.detail + flag(D.rank));
   console.log('  CROSS-REPO STARVATION: ' + D.crossRepo.detail + flag(D.crossRepo)); // FLEET-SELF-CLAIM-001
+  console.log('  AUTO-REFILL BACKLOG  : ' + D.autoRefill.detail + flag(D.autoRefill)); // AUTO-REFILL-SELECTION-GATE-001-E
   console.log('  QUIET-TICK COMMITTED : ' + D.quiet.detail + flag(D.quiet));
   console.log('  DUTY-7 DRAFT-STALL   : ' + D.draft.detail + flag(D.draft)); // SILENT-STALL-PREVENTION-001
   console.log('  DUTY-8 PROGRESS-STALL: ' + D.progress.detail + flag(D.progress)); // PROGRESS-STALL-DETECTION-001
