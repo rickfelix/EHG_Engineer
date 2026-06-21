@@ -58,16 +58,44 @@ function getAliveMarkerSessionIds() {
 // link / already gone is a no-op). Mirrors preUnlinkWorktreeNodeModules +
 // _unlinkSymOrJunction (lib/worktree-manager.js); inlined to keep this hot CJS
 // SessionStart hook free of ESM dynamic imports.
+function _unlinkLinkInline(p) {
+  try {
+    fs.unlinkSync(p);
+  } catch (err) {
+    // Windows: directory junctions sometimes need rmdir to drop the reparse point.
+    if (process.platform === 'win32' && (err.code === 'EPERM' || err.code === 'EISDIR')) fs.rmdirSync(p);
+    else throw err;
+  }
+}
+
+// SD-LEO-FEAT-STORE-WIPE-SAME-001: walk a real node_modules dir and unlink every NESTED
+// junction/symlink (best-effort), so a later `git worktree remove --force` cannot follow one
+// out into the shared store. Does NOT delete regular files/dirs — git remove handles those.
+function _unlinkNestedLinks(dir) {
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+  for (const entry of entries) {
+    const child = path.join(dir, entry.name);
+    let st;
+    try { st = fs.lstatSync(child); } catch { continue; }
+    if (st.isSymbolicLink()) { try { _unlinkLinkInline(child); } catch { /* best-effort */ } continue; }
+    if (st.isDirectory()) _unlinkNestedLinks(child);
+  }
+}
+
 function unlinkNodeModulesJunction(wtPath) {
   try {
     const nm = path.join(wtPath, 'node_modules');
-    if (!fs.lstatSync(nm).isSymbolicLink()) return;
-    try {
-      fs.unlinkSync(nm);
-    } catch (err) {
-      // Windows: directory junctions sometimes need rmdir to drop the reparse point.
-      if (process.platform === 'win32' && (err.code === 'EPERM' || err.code === 'EISDIR')) fs.rmdirSync(nm);
-      else throw err;
+    const lst = fs.lstatSync(nm);
+    if (lst.isSymbolicLink()) {
+      // node_modules IS itself a junction into the shared store — unlink the link.
+      _unlinkLinkInline(nm);
+    } else if (lst.isDirectory()) {
+      // node_modules is a REAL dir (worker ran npm install) but may hold NESTED junctions into
+      // the shared store. The prior top-level-only check returned here, letting git remove follow
+      // a nested junction and wipe the shared store. Unlink nested links first. (Mirrors the
+      // recursive fix in lib/worktree-manager.js preUnlinkWorktreeNodeModules.)
+      _unlinkNestedLinks(nm);
     }
   } catch { /* no node_modules, not a link, or already gone — nothing to unlink */ }
 }
