@@ -56,6 +56,17 @@ import { readSourcingEngineFlags, formatSourcingAwareness } from './lib/sourcing
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 const { stalledLoopSessionIds, maskedStallSessionIds } = require('../lib/coordinator/detectors.cjs');
+const { getActiveAdamId } = require('../lib/coordinator/adam-identity.cjs');
+
+// SD-FDBK-INFRA-STALL-AFTER-COMPLETION-001 — DORMANT BY DEFAULT. Adversarial validation
+// (sub_agent_execution_results b71d405b) empirically found process_alive_at is currently
+// "fleet-broken": the detached session-tick is not running for most workers, so a STALE
+// process_alive_at is the NORMAL state of a HEALTHY worker, not proof of a dead loop. Keying the
+// masked-stall detector on it today would mostly emit FALSE POSITIVES (a healthy just-completed
+// worker: active + no claim + fresh hb + stale tick). The detector + surface are shipped and
+// tested, but gated OFF until session-tick reliability is restored (or a second liveness witness
+// is added). Flip LEO_MASKED_STALL_DETECT=on once process_alive_at is trustworthy.
+const MASKED_STALL_DETECT_ON = process.env.LEO_MASKED_STALL_DETECT === 'on';
 // SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: resolve the active coordinator id so the
 // shared isDispatchableFleetMember excludes the coordinator by id exactly like the dashboard does.
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
@@ -182,10 +193,12 @@ async function main() {
     sessions: workers, unclaimedItems: claimable.length + openQfCount, now,
   });
   // SD-FDBK-INFRA-STALL-AFTER-COMPLETION-001: the CONFIRMED (dead-tick) subset — a fresh heartbeat
-  // masking a dead loop. These warrant a durable operator escalation, not just a display advisory.
-  const maskedIds = maskedStallSessionIds({
-    sessions: workers, unclaimedItems: claimable.length + openQfCount, now,
-  });
+  // masking a dead loop. DORMANT until process_alive_at is trustworthy (see MASKED_STALL_DETECT_ON):
+  // an empty Set when the flag is off → no MASKED-STALL rendering, no escalation, zero false-positive
+  // noise. The detector remains exported + unit-tested for activation.
+  const maskedIds = MASKED_STALL_DETECT_ON
+    ? maskedStallSessionIds({ sessions: workers, unclaimedItems: claimable.length + openQfCount, now })
+    : new Set();
 
   const rows = [];
   let idleNow = 0, freeingSoon = 0, building = 0, stalled = 0;
@@ -306,12 +319,8 @@ function writeMaskedCooldown() {
 // Fail-soft: no Adam session / any error returns false (the forecast never throws on this path).
 async function emitMaskedStallEscalation(f) {
   try {
-    const { data: adam } = await sb.from('claude_sessions')
-      .select('session_id')
-      .filter('metadata->>role', 'eq', 'adam')
-      .order('heartbeat_at', { ascending: false })
-      .limit(1);
-    const adamId = adam && adam[0] && adam[0].session_id;
+    // Canonical fresh-Adam election (freshness floor included) — never target a stale/dead Adam inbox.
+    const adamId = await getActiveAdamId(sb);
     if (!adamId) return false; // no live Adam → caller logs "surface to operator"
     const correlation_id = `masked-stall-${Date.now()}`;
     const body = [
