@@ -8,6 +8,9 @@
  */
 
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
+// SD-LEO-FEAT-PRE-EXISTING-BUG-001: build the upsert payload via a pure helper that omits the
+// non-existent capability_gaps column (which 42703-errored every live run).
+import { buildReviewArtifact } from '../../lib/pipeline/management-review-artifact.mjs';
 
 const supabase = createSupabaseServiceClient();
 const STALE_THRESHOLD_HOURS = 24;
@@ -319,24 +322,18 @@ async function generateReview() {
     return;
   }
 
-  // Build review artifact
-  const review = {
-    review_date: new Date().toISOString().split('T')[0],
-    review_type: 'weekly',
-    baseline_version_from: baselineData.version || 1,
-    baseline_version_to: baselineData.version || 1,
-    planned_sds: baselineData.totalItems || 0,
-    actual_sds: sdData.completed,
-    planned_ventures: ventureData.activeCount,
-    actual_ventures: ventureData.ventures.filter(v => v.stage >= 5).length,
-    okr_snapshot: okrData.snapshot,
-    risk_snapshot: riskData.hasForecasts ? riskData : null,
-    capability_gaps: gapData.hasGaps ? gapData : null,
-    strategy_health: null,
-    pipeline_snapshot: pipelineData,
-    eva_narrative: narrative,
-    eva_proposals: null,
-  };
+  // Build review artifact (SD-LEO-FEAT-PRE-EXISTING-BUG-001: via the pure helper, which omits the
+  // non-existent capability_gaps column — gapData is still surfaced in the summary + narrative above).
+  const review = buildReviewArtifact({
+    reviewDate: new Date().toISOString().split('T')[0],
+    baselineData,
+    sdData,
+    ventureData,
+    okrData,
+    riskData,
+    pipelineData,
+    narrative,
+  });
 
   // Upsert (not insert) so a same-day re-run updates the existing row in place rather than appending
   // a duplicate that would violate the UNIQUE(review_date, review_type) guard
