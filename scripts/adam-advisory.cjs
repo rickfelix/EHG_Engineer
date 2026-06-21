@@ -240,6 +240,13 @@ const ADAM_INBOX_KINDS = Object.freeze([
   'chairman_heads_up',
   'chairman_handoff',
   'coordinator_advisory',
+  // SD-LEO-FEAT-ADAM-INBOX-CONSUMPTION-001 (verify-the-premise): the coordinator hourly-review dispatches
+  // Adam a payload.kind='coordinator_reminder' ('review your Adam responsibilities'). This kind is ALREADY
+  // drained by the Adam inbox because it lives in the shared DIRECTIVE_KINDS (worker-status.cjs, added by
+  // #4610 on 2026-06-10) which is spread into ADAM_INBOX_KINDS above — live data confirms 0 unread. It is
+  // intentionally NOT re-listed here to avoid a misleading duplicate; the coupling is pinned by
+  // tests/unit/adam-inbox-coordinator-reminder.test.js so a future DIRECTIVE_KINDS edit can't silently
+  // break Adam's drain of it.
   'coordinator_adam_feedback',
   'assist_request',
   'reconcile_consult',
