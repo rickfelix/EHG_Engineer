@@ -38,3 +38,32 @@ describe('QF-20260609-456: orphan classifier does not release live QF builders',
     expect(region).toMatch(/qfExistsSet\.add\(/);
   });
 });
+
+// SD-REFILL-00WD6UBF: the SECOND arm of isHeldQfClaim — the QF-CREATION-RACE grace window. A worker
+// self-claiming a freshly-created QF can have its claim read by the sweep BEFORE the QF INSERT is
+// visible/committed, so the QF id is absent from qfExistsSet. Without a grace window that claim would
+// be orphan-released with "QF-XXX not found" mid-build (witnessed QF-20260609-564/255/703/666). The
+// fix treats a QF claimed within QF_CLAIM_GRACE_SECONDS as HELD even when absent from quick_fixes.
+// These pins guard that grace arm (it was shipped but previously only the qfExistsSet arm was tested).
+describe('SD-REFILL-00WD6UBF: grace window protects a freshly-claimed (not-yet-visible) QF', () => {
+  it('isHeldQfClaim treats a recently-claimed QF (claim age < grace) as held even if absent from quick_fixes', () => {
+    expect(src).toMatch(/ageSec\s*<\s*QF_CLAIM_GRACE_SECONDS/);
+  });
+
+  it('QF_CLAIM_GRACE_SECONDS is configurable and defaults to 60s', () => {
+    expect(src).toMatch(/QF_CLAIM_GRACE_SECONDS\s*=\s*Number\(process\.env\.QF_CLAIM_GRACE_SECONDS\)\s*\|\|\s*60/);
+  });
+
+  it('claim age is derived from claude_sessions.claimed_at (the claim-age source)', () => {
+    const idx = src.indexOf('qfClaimAgeBySession');
+    expect(idx).toBeGreaterThan(0);
+    const region = src.slice(idx, idx + 800);
+    expect(region).toMatch(/claimed_at/);
+    expect(region).toMatch(/from\(['"`]claude_sessions['"`]\)/);
+  });
+
+  it('unknown claim age falls through to Infinity so a truly-absent QF is still releasable', () => {
+    // Fail-safe: a QF that does not exist AND has no known/recent claim age must NOT be held forever.
+    expect(src).toMatch(/qfClaimAgeBySession\.has\(s\.session_id\)\s*\?\s*qfClaimAgeBySession\.get\(s\.session_id\)\s*:\s*Infinity/);
+  });
+});
