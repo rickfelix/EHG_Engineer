@@ -283,13 +283,11 @@ describe('FR-3: _postStageHook_S11_LogoGeneration (logoSpec source)', () => {
     expect(wrote.artifactData.logoSpec).toEqual(logoSpec);
   });
 
-  it('falls back to venture_stage_work.stage_data.logoSpec when no artifact logoSpec', async () => {
-    const legacySpec = { iconConcept: 'legacy-icon', primaryColor: '#000000' };
+  // SD-REFILL-007PVF5E: the legacy venture_stage_work.stage_data fallback was REMOVED — that column
+  // does not exist in the live DB (the read threw), so the fallback only ever "worked" against a mock.
+  // With no artifact logoSpec, the hook now skips; a (would-be) legacy stage_data spec is never read.
+  it('does NOT fall back to the removed stage_data path — skips when the artifact has no logoSpec', async () => {
     const supabase = createQueuedSupabase({
-      venture_stage_work: [
-        { data: [{ lifecycle_stage: 11 }], error: null }, // viability gate
-        { data: { stage_data: { logoSpec: legacySpec } }, error: null }, // legacy fallback
-      ],
       venture_artifacts: [
         { data: [], error: null }, // idempotency
         { data: { artifact_data: {} }, error: null }, // identity_brand_name has NO logoSpec
@@ -302,8 +300,8 @@ describe('FR-3: _postStageHook_S11_LogoGeneration (logoSpec source)', () => {
 
     await worker._postStageHook_S11_LogoGeneration(VID);
 
-    expect(renderLogo).toHaveBeenCalledTimes(1);
-    expect(renderLogo).toHaveBeenCalledWith(legacySpec, expect.objectContaining({ ventureName: 'LegacyCo' }));
+    // no second venture_stage_work read, no render — the canonical artifact is the only logoSpec source
+    expect(renderLogo).not.toHaveBeenCalled();
   });
 
   it('skips (no render) when neither artifact nor stage_data has a logoSpec', async () => {
