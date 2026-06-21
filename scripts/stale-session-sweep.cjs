@@ -33,7 +33,7 @@ const { evaluateDispatchEligibility, classifyDispatchIneligibility } = require('
 // and inserts raw (it does NOT route through insertCoordinationRow), so the dispatch-side terminal
 // guard would never reach it. Call assertSdDispatchable here so the sweep also refuses to nudge a
 // worker about a terminal/non-existent SD (it fails OPEN on a transient DB error).
-const { assertSdDispatchable } = require('../lib/coordinator/dispatch.cjs');
+const { assertSdDispatchable, isFullUuid } = require('../lib/coordinator/dispatch.cjs');
 // SD-LEO-INFRA-EXPOSE-CLAIM-OWNER-001 (FR-3): single shared definition of which
 // classified session statuses count as "currently holding the SD claim" — used
 // by BOTH the available-to-claim filter and the worker-render filter below so
@@ -1672,6 +1672,41 @@ async function main() {
           .eq('claiming_session_id', s.session_id); // race guard: only clear if still the fixture
       }
       actions.push('CLAIM_FIX: released FIXTURE session ' + s.session_id.substring(0, 20) + ' (never re-assert onto ' + s.sd_key + ')');
+      continue;
+    }
+
+    // SD-REFILL-000XFP8B: defense-in-depth beyond isFixtureSession. The witnessed offender
+    // (test-claim-refuse-caller, a non-UUID test session id) IS caught by the ^test- positive
+    // marker above, but isFixtureSession is positive-markers-only — a NON-test-prefixed bad
+    // session id (a replayed/synthetic claim, a malformed worker id) slips through and would
+    // drive a CLAIM_FIX re-assert, stamping claiming_session_id with a non-worker id. A REAL
+    // fleet worker ALWAYS has a full 8-4-4-4-12 UUID session_id (SessionStart hook generates
+    // UUIDs); anything that is not a full UUID can never be a legitimate claim owner. Fail
+    // CLOSED toward "not a worker": bilaterally release the stale sd_key (mirroring the fixture
+    // path) so CLAIM_FIX never adopts a non-UUID session as the claim owner. isFullUuid is the
+    // SAME pure shape-check the coordinator uses to gate dispatch targets (dispatch.cjs SSOT).
+    if (!isFullUuid(s.session_id)) {
+      await supabase
+        .from('claude_sessions')
+        .update({
+          sd_key: null,
+          status: s.status === 'ACTIVE' ? 'idle' : 'released',
+          released_at: now.toISOString(),
+          released_reason: 'SWEEP_NON_UUID_SESSION_CLAIM_FIX',
+          worktree_path: null,
+          worktree_branch: null,
+          current_branch: null,
+        })
+        .eq('session_id', s.session_id)
+        .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
+      if (sd.claiming_session_id === s.session_id) {
+        await supabase
+          .from('strategic_directives_v2')
+          .update({ claiming_session_id: null, active_session_id: null, is_working_on: false })
+          .eq('sd_key', s.sd_key)
+          .eq('claiming_session_id', s.session_id); // race guard: only clear if still this session
+      }
+      actions.push('CLAIM_FIX: released NON-UUID session ' + String(s.session_id).substring(0, 20) + ' (never re-assert onto ' + s.sd_key + ')');
       continue;
     }
 
