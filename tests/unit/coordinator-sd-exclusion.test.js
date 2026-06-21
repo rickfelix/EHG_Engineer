@@ -21,6 +21,7 @@ import {
   isExcludedFromBelt,
   bareShellLastCompare,
   isStartedSd,
+  stripDispatchRank,
   FIXTURE_RE,
 } from '../../lib/coordinator/sd-exclusion.mjs';
 
@@ -215,5 +216,36 @@ describe('production wiring guards (catch call-site deletion)', () => {
 
   it('the ranker SELECTs current_phase for the in-flight guard', () => {
     expect(rankerSrc).toMatch(/select\([^)]*current_phase/s);
+  });
+
+  // SD-FDBK-INFRA-COORDINATOR-BACKLOG-RANK-001: the ranker must sweep stale ranks off TERMINAL SDs too
+  // (they are excluded from the non-terminal load). Pin the terminal-sweep query + stripDispatchRank use.
+  it('the ranker sweeps terminal SDs for stale dispatch_rank', () => {
+    expect(rankerSrc).toMatch(/\.in\(\s*['"]status['"]\s*,\s*\[[^\]]*['"]cancelled['"][^\]]*\]/s);
+    expect(rankerSrc).toMatch(/metadata->>dispatch_rank/);
+    expect(rankerSrc).toMatch(/stripDispatchRank/);
+  });
+});
+
+describe('stripDispatchRank (SD-FDBK-INFRA-COORDINATOR-BACKLOG-RANK-001)', () => {
+  it('strips the three dispatch_rank fields and reports changed', () => {
+    const { changed, meta } = stripDispatchRank({ dispatch_rank: 2, dispatch_rank_at: 't', dispatch_rank_by: 'c', keep: 1 });
+    expect(changed).toBe(true);
+    expect(meta).toEqual({ keep: 1 });
+    expect('dispatch_rank' in meta).toBe(false);
+  });
+  it('no-op (changed:false) when there is no dispatch_rank', () => {
+    const md = { keep: 1 };
+    const r = stripDispatchRank(md);
+    expect(r.changed).toBe(false);
+    expect(r.meta).toBe(md); // returns the original object so the caller skips a no-op write
+  });
+  it('handles null/undefined metadata (changed:false, no throw)', () => {
+    expect(stripDispatchRank(null)).toEqual({ changed: false, meta: null });
+    expect(stripDispatchRank(undefined)).toEqual({ changed: false, meta: undefined });
+  });
+  it('treats dispatch_rank=0 as present (clears it)', () => {
+    // rank 0 is a valid rank; != null guard must not skip it
+    expect(stripDispatchRank({ dispatch_rank: 0 }).changed).toBe(true);
   });
 });
