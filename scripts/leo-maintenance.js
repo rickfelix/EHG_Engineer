@@ -26,6 +26,18 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const supabase = createSupabaseClient();
 
+// SD-REFILL-001MABRD: three maintenance routines read tables that are NOT provisioned
+// (leo_session_tracking, circuit_breaker_state, sub_agent_activation_stats). PostgREST returns a
+// relation/schema-cache error rather than throwing, so the routines used to silently no-op (the
+// circuit-breaker reset even reported false success "Reset 0"). This detector lets each site report
+// an explicit "not provisioned — skipped" status instead of a silent dead read, making the phantom
+// tables behind the live `leo:maintenance` entry observable until they are provisioned (DDL) or removed.
+export function isUnprovisionedTableError(error) {
+  if (!error) return false;
+  const msg = (error.message || String(error) || '').toLowerCase();
+  return /relation|does not exist|find the table|schema cache|undefined table/.test(msg);
+}
+
 class LEOMaintenanceManager {
   constructor() {
     this.logRetentionDays = 30;
@@ -217,6 +229,12 @@ class LEOMaintenanceManager {
         .eq('state', 'open')
         .lt('last_failure_at', new Date(Date.now() - 3600000).toISOString());
 
+      // SD-REFILL-001MABRD: report the unprovisioned table explicitly instead of a misleading
+      // "Reset 0 stale circuit breakers" success on a table that does not exist.
+      if (isUnprovisionedTableError(error)) {
+        return { success: true, skipped: true, message: 'skipped — circuit_breaker_state not provisioned' };
+      }
+
       if (!error && data) {
         for (const breaker of data) {
           await supabase
@@ -225,7 +243,8 @@ class LEOMaintenanceManager {
         }
       }
     } catch {
-      // Table might not exist
+      // Defensive: unexpected throw — treat as skipped rather than failing maintenance.
+      return { success: true, skipped: true, message: 'skipped — circuit_breaker_state unavailable' };
     }
 
     return {
@@ -312,11 +331,14 @@ class LEOMaintenanceManager {
     // Get statistics from database
     try {
       // Sub-agent activation stats
-      const { data: activationStats } = await supabase
+      const { data: activationStats, error: activationErr } = await supabase
         .from('sub_agent_activation_stats')
         .select('*');
 
-      if (activationStats && activationStats.length > 0) {
+      // SD-REFILL-001MABRD: make an unprovisioned table visible instead of a silent empty section.
+      if (isUnprovisionedTableError(activationErr)) {
+        console.log(chalk.yellow('  ⚠️  Sub-Agent Activity: sub_agent_activation_stats not provisioned — section skipped'));
+      } else if (activationStats && activationStats.length > 0) {
         console.log(chalk.cyan('\nSub-Agent Activity:'));
         for (const stat of activationStats) {
           const successRate = stat.total_activations > 0
@@ -352,12 +374,15 @@ class LEOMaintenanceManager {
       }
 
       // Active sessions
-      const { data: activeSessions } = await supabase
+      const { data: activeSessions, error: sessionsErr } = await supabase
         .from('leo_session_tracking')
         .select('count')
         .eq('status', 'active');
 
-      if (activeSessions) {
+      // SD-REFILL-001MABRD: surface the unprovisioned table instead of silently omitting the line.
+      if (isUnprovisionedTableError(sessionsErr)) {
+        console.log(chalk.yellow('\n⚠️  Active Sessions: leo_session_tracking not provisioned — count unavailable'));
+      } else if (activeSessions) {
         console.log(chalk.cyan(`\nActive Sessions: ${activeSessions.length || 0}`));
       }
 
@@ -405,6 +430,11 @@ async function main() {
   }
 }
 
-main().catch(console.error);
+// SD-REFILL-001MABRD: only run the CLI when invoked directly, not when imported (e.g. by unit tests
+// of the exported helpers) — importing the module no longer triggers a live maintenance run.
+const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === __filename;
+if (invokedDirectly) {
+  main().catch(console.error);
+}
 
 export default LEOMaintenanceManager;
