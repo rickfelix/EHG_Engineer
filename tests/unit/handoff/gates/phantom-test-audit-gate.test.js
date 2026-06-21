@@ -12,6 +12,7 @@ import {
   auditPhantomTableTests,
   PHANTOM_COMMIT_TRIGGER,
   collectAndAudit,
+  resolveAuditBase,
 } from '../../../../scripts/phantom-test-audit.js';
 import { createPhantomTestAuditGate } from '../../../../scripts/modules/handoff/executors/lead-final-approval/gates/phantom-test-audit-gate.js';
 import { HAS_REAL_DB } from '../../../helpers/db-available.js';
@@ -72,8 +73,11 @@ describe('TS-2c: body content is NOT scanned for trigger (FR-6)', () => {
     // source-level static-pin so a future refactor that adds %b fails the
     // test loudly.
     const src = readFileSync(resolve(ROOT_DIR, 'scripts/phantom-test-audit.js'), 'utf8');
-    expect(src).toMatch(/git log\s+\$\{baseRef\}\.\.HEAD\s+--format=%s/);
+    // The diff base is the merge-base (resolved into `base`), not the raw ${baseRef} tip
+    // (SD-FDBK-INFRA-PHANTOM-TEST-AUDIT-001 stale-base false-positive fix). Pin subject-only format.
+    expect(src).toMatch(/git log\s+\$\{base\}\.\.HEAD\s+--format=%s/);
     expect(src).not.toMatch(/git log[^`]*--format=%b/);
+    expect(src).toMatch(/git merge-base HEAD \$\{baseRef\}/);
   });
 });
 
@@ -175,5 +179,33 @@ describe('TS-6: gate validator returns canonical verdict shape (FR-2+FR-4)', () 
     expect(Array.isArray(verdict.issues)).toBe(true);
     expect(Array.isArray(verdict.warnings)).toBe(true);
     expect(verdict.details).toBeDefined();
+  });
+});
+
+describe('TS-MB: resolveAuditBase diffs against the merge-base, not the raw baseRef tip (SD-FDBK-INFRA-PHANTOM-TEST-AUDIT-001)', () => {
+  it('returns the merge-base SHA when git resolves one (excludes commits already on main)', () => {
+    const MB = 'abc1234def5678abc1234def5678abc1234def56';
+    const calls = [];
+    const fakeGit = (cmd, cwd) => { calls.push(cmd); return MB + '\n'; };
+    const base = resolveAuditBase({ repoPath: '/repo', baseRef: 'origin/main', git: fakeGit });
+    expect(base).toBe(MB);
+    // It asks for the merge-base of HEAD and the base ref (the fix), not the raw tip.
+    expect(calls[0]).toBe('git merge-base HEAD origin/main');
+  });
+
+  it('falls back to baseRef when the merge-base cannot be resolved (no common ancestor / git error)', () => {
+    expect(resolveAuditBase({ repoPath: '/repo', baseRef: 'origin/main', git: () => '' })).toBe('origin/main');
+    expect(resolveAuditBase({ repoPath: '/repo', baseRef: 'origin/main', git: () => '\n  \n' })).toBe('origin/main');
+  });
+
+  it('trims whitespace and takes only the first line of git output', () => {
+    const MB = '0123456789012345678901234567890123456789';
+    expect(resolveAuditBase({ repoPath: '/repo', git: () => `  ${MB}  \nstderr-noise` })).toBe(MB);
+  });
+
+  it('honors a custom baseRef', () => {
+    const calls = [];
+    resolveAuditBase({ repoPath: '/repo', baseRef: 'upstream/release', git: (cmd) => { calls.push(cmd); return ''; } });
+    expect(calls[0]).toBe('git merge-base HEAD upstream/release');
   });
 });
