@@ -29,7 +29,7 @@ import { checkoutFreshness, freshnessBadge } from '../lib/governance/checkout-fr
 import {
   classifyLiveness, detectIdleWithWork, detectDependencyHealth, detectWorktreePool,
   detectBacklogRankStaleness, detectQuietTickUnverified, foundationalQueryError, summarizeViolations,
-  extractDepKey, resolveWorktreeCount, computeDispatchBelt, detectProgressStall,
+  extractDepKey, resolveWorktreeCount, computeDispatchBelt, detectProgressStall, detectCrossRepoStarvation,
   // SD-LEO-INFRA-GOVERNANCE-ROLE-ADHERENCE-DBVALIDATION-001 (FR-3): coordinator mirror detectors.
   detectSourceToCapacity, detectCoordinatorWithoutAdam,
 } from '../lib/coordinator/charter-audit-detectors.mjs';
@@ -47,6 +47,9 @@ import { isDispatchableFleetMember } from '../lib/fleet/session-predicates.mjs';
 const require = createRequire(import.meta.url);
 const { isWithinArmedSilenceWindow } = require('../lib/fleet/silence-cap.cjs');
 const { classifyDispatchIneligibility } = require('../lib/fleet/claim-eligibility.cjs');
+// SD-FDBK-INFRA-FLEET-SELF-CLAIM-001: appOfCwd derives a checkout's repo-app (it already strips a
+// /.worktrees/<sd> suffix) — used to map each live worker's worktree_path -> the app it can build.
+const { appOfCwd } = require('../lib/fleet/sd-executable-here.cjs');
 // SD-LEO-INFRA-PROGRESS-STALL-DETECTION-001: reuse the CANONICAL stuck-worker staleness predicate for DUTY-8
 // (no re-derived staleness math → no drift with the stale-session-sweep). GUARDED like the PID resolver above:
 // a missing/broken detectors.cjs degrades detectStuckWorker to null → detectProgressStall fail-opens to a
@@ -88,7 +91,7 @@ async function main() {
 
   // ── FOUNDATIONAL queries — FAIL LOUD (never silent-empty / false all-clean) ──
   const { data: sdRows, error: sdErr } = await db.from('strategic_directives_v2')
-    .select('sd_key,status,current_phase,claiming_session_id,updated_at,created_at,vision_score,dependencies,parent_sd_id,metadata,sd_type')
+    .select('sd_key,status,current_phase,claiming_session_id,updated_at,created_at,vision_score,dependencies,parent_sd_id,metadata,sd_type,target_application')
     .not('status', 'in', '(' + [...TERMINAL].join(',') + ')');
   const sdMarker = foundationalQueryError(sdErr, 'strategic_directives_v2');
   if (sdMarker) { console.error(sdMarker); process.exit(1); }
@@ -96,7 +99,7 @@ async function main() {
 
   // Defense-in-depth: exclude lifecycle-terminated sessions server-side (classifyLiveness also guards this).
   const { data: sessRows, error: sessErr } = await db.from('claude_sessions')
-    .select('session_id,terminal_id,heartbeat_at,sd_key,loop_state,expected_silence_until,status,metadata')
+    .select('session_id,terminal_id,heartbeat_at,sd_key,loop_state,expected_silence_until,status,metadata,worktree_path')
     .not('status', 'in', '(released,stale,ended)')
     .order('heartbeat_at', { ascending: false }).limit(80);
   const sessMarker = foundationalQueryError(sessErr, 'claude_sessions');
@@ -114,6 +117,11 @@ async function main() {
   const coordinatorId = (sessions.find((s) => s.metadata && s.metadata.is_coordinator === true) || {}).session_id
     || process.env.CLAUDE_SESSION_ID || null;
   const liveWorkers = live.filter((s) => !(s.metadata && s.metadata.is_coordinator === true) && isDispatchableFleetMember(s, coordinatorId));
+  // SD-FDBK-INFRA-FLEET-SELF-CLAIM-001: the set of repo-apps the live fleet can build (from each live
+  // worker's worktree_path checkout). A cross-repo SD whose target_application is absent from this set
+  // cannot be self-claimed by anyone → it starves until explicitly dispatched. Idle workers (no worktree)
+  // contribute no app; with zero apps the detector's GUARD declines to flag (no-fleet != cross-repo starve).
+  const liveSessionApps = Array.from(new Set((liveWorkers || []).map((s) => appOfCwd(s.worktree_path)).filter(Boolean)));
 
   // pending WORK_ASSIGNMENTs (unread => still pending; read_at-stamped => drained by the sweep, NOT pending)
   let pendingAssignmentSessionIds = new Set();
@@ -199,6 +207,8 @@ async function main() {
     idle: detectIdleWithWork({ liveSessions: liveWorkers, unclaimedCount: unclaimed.length, pendingAssignmentSessionIds, nowMs, isWithinArmedSilence: isWithinArmedSilenceWindow }),
     dep: detectDependencyHealth({ sds, statusByKey, terminalSet: TERMINAL, nowMs }),
     rank: detectBacklogRankStaleness({ claimableSds: claimable, nowMs, ttlMs: DISPATCH_RANK_TTL_MS }),
+    // SD-FDBK-INFRA-FLEET-SELF-CLAIM-001: cross-repo SDs no live worker checkout can build (silent starvation).
+    crossRepo: detectCrossRepoStarvation({ claimableSds: claimable, liveSessionApps, nowMs }),
     quiet: detectQuietTickUnverified({ coordinatorReviews: reviews || [] }),
     // FR-3 coordinator mirror — added only when their facts resolved (skip-on-error, no spam).
     ...(adamAlive !== null ? { d3lean: detectCoordinatorWithoutAdam({ coordinatorAlive: true, adamAlive }) } : {}),
@@ -223,6 +233,7 @@ async function main() {
   console.log('  DUTY-4 DEPENDENCY    : ' + D.dep.detail + flag(D.dep));
   for (const a of D.dep.anomalies.slice(0, 5)) console.log('      ANOMALY ' + a.sd + ' dep(s) not found: ' + a.unknownDeps.join(','));
   console.log('  DUTY-6 BACKLOG-RANK  : ' + D.rank.detail + flag(D.rank));
+  console.log('  CROSS-REPO STARVATION: ' + D.crossRepo.detail + flag(D.crossRepo)); // FLEET-SELF-CLAIM-001
   console.log('  QUIET-TICK COMMITTED : ' + D.quiet.detail + flag(D.quiet));
   console.log('  DUTY-7 DRAFT-STALL   : ' + D.draft.detail + flag(D.draft)); // SILENT-STALL-PREVENTION-001
   console.log('  DUTY-8 PROGRESS-STALL: ' + D.progress.detail + flag(D.progress)); // PROGRESS-STALL-DETECTION-001
