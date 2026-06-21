@@ -14,7 +14,7 @@
  * - Take periodic snapshots for trending
  */
 
-// import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { execSync } from 'child_process'; // Unused - available for future shell commands
 import dotenv from 'dotenv';
 
