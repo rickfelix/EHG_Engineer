@@ -72,7 +72,9 @@ describe('deriveSdFieldsFromRoadmapItem (thin-stub fix)', () => {
   it('still returns title/type/metadata.source for back-compat', () => {
     const f = deriveSdFieldsFromRoadmapItem(titleOnly);
     expect(f.title).toBeTruthy();
-    expect(f.type).toBe('feature');
+    // SD-LEO-INFRA-AUTOTYPE-INFRA-KEYS-001: type is null (was 'feature') when metadata.sd_type is absent —
+    // the createSD SSOT applies the key-prefix default instead of the deriver baking 'feature'.
+    expect(f.type).toBeNull();
     expect(f.metadata.source).toBe('roadmap_item');
     expect(f.metadata.source_id).toBe('rwi-1');
   });
