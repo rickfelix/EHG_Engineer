@@ -117,6 +117,33 @@ describe('detectIdleWithWork — DUTY-3 + pending-assignment suppression (FR-3/F
   it('no unclaimed work -> no violation', () => {
     expect(detectIdleWithWork({ liveSessions: [{ session_id: 'w1', sd_key: null }], unclaimedCount: 0 }).violation).toBe(false);
   });
+
+  // SD-LEO-INFRA-CHARTER-DUTY3-PARKED-WORKER-FLAG-001: parked workers (between /loop ticks) are NOT
+  // idle-while-unclaimed — they self-claim on next wake and the coordinator cannot remediate them.
+  it('a PARKED worker (loop_state=awaiting_tick) is NOT flagged (parked != idle)', () => {
+    const r = detectIdleWithWork({ liveSessions: [{ session_id: 'w1', sd_key: null, loop_state: 'awaiting_tick' }], unclaimedCount: 2 });
+    expect(r.violation).toBe(false);
+    expect(r.idleCount).toBe(0);
+  });
+  it('a worker inside an armed expected_silence_until window is NOT flagged', () => {
+    const nowMs = 1_000_000;
+    const isWithinArmedSilence = (until, now) => !!until && new Date(until).getTime() > now;
+    const r = detectIdleWithWork({
+      liveSessions: [{ session_id: 'w1', sd_key: null, expected_silence_until: new Date(nowMs + 600_000).toISOString() }],
+      unclaimedCount: 2, nowMs, isWithinArmedSilence,
+    });
+    expect(r.violation).toBe(false);
+  });
+  it('a genuinely-active idle worker (loop_state active, no silence) IS still flagged', () => {
+    const nowMs = 1_000_000;
+    const isWithinArmedSilence = (until, now) => !!until && new Date(until).getTime() > now;
+    const r = detectIdleWithWork({
+      liveSessions: [{ session_id: 'w1', sd_key: null, loop_state: 'active', expected_silence_until: null }],
+      unclaimedCount: 2, nowMs, isWithinArmedSilence,
+    });
+    expect(r.violation).toBe(true);
+    expect(r.detail).toMatch(/parked/);
+  });
 });
 
 describe('extractDepKey — SD-key vs free-text prose (FR-5 dep-resolver correctness)', () => {

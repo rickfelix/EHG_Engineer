@@ -96,7 +96,7 @@ async function main() {
 
   // Defense-in-depth: exclude lifecycle-terminated sessions server-side (classifyLiveness also guards this).
   const { data: sessRows, error: sessErr } = await db.from('claude_sessions')
-    .select('session_id,terminal_id,heartbeat_at,sd_key,expected_silence_until,status,metadata')
+    .select('session_id,terminal_id,heartbeat_at,sd_key,loop_state,expected_silence_until,status,metadata')
     .not('status', 'in', '(released,stale,ended)')
     .order('heartbeat_at', { ascending: false }).limit(80);
   const sessMarker = foundationalQueryError(sessErr, 'claude_sessions');
@@ -196,7 +196,7 @@ async function main() {
   // ── run the pure detectors ──
   const D = {
     pool: detectWorktreePool({ count: wtCount, max: MAX_WORKTREE_COUNT }),
-    idle: detectIdleWithWork({ liveSessions: liveWorkers, unclaimedCount: unclaimed.length, pendingAssignmentSessionIds }),
+    idle: detectIdleWithWork({ liveSessions: liveWorkers, unclaimedCount: unclaimed.length, pendingAssignmentSessionIds, nowMs, isWithinArmedSilence: isWithinArmedSilenceWindow }),
     dep: detectDependencyHealth({ sds, statusByKey, terminalSet: TERMINAL, nowMs }),
     rank: detectBacklogRankStaleness({ claimableSds: claimable, nowMs, ttlMs: DISPATCH_RANK_TTL_MS }),
     quiet: detectQuietTickUnverified({ coordinatorReviews: reviews || [] }),
