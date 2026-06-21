@@ -41,13 +41,21 @@ import { isLiveCountableWorker } from './lib/live-countable-worker.mjs';
 // flag state + unpromoted roadmap depth so a belt-low/DEFICIT ping says "engine OFF, N unpromoted
 // -> activate/distill" instead of only "source N candidates" (manual backfill is the anti-pattern).
 import { readSourcingEngineFlags, formatSourcingAwareness } from './lib/sourcing-engine-awareness.mjs';
-// SD-LEO-INFRA-CAPACITY-FORECAST-STALLED-BELT-EMPTY-FP-001: an idle worker is STALLED only when
-// its loop isn't claiming DESPITE available work — gate the stall label on belt depth, not heartbeat
-// age alone, so an empty-belt idle worker isn't a false-positive STALLED.
-import { classifyIdleWorker, DEFAULT_STALL_TTL_S } from './lib/capacity-idle-classifier.mjs';
+// SD-LEO-FEAT-COORDINATOR-CAPACITY-FORECAST-001: stall detection is DELEGATED to the canonical
+// detectStalledLoop SSOT (lib/coordinator/detectors.cjs), the same detector coordinator-audit.mjs uses.
+// The forecast previously ran its own heartbeat-AGE rule (classifyIdleWorker, ttl 180s), but the worker
+// fetch only admits sessions with a heartbeat within HEARTBEAT_LIVE_MS (5min), so an age-vs-low-ttl rule
+// could only ever fire inside the 180–300s window — where a worker is still healthy (it re-polls every
+// 600–1200s) — making it a pure false-positive generator that could never see a genuinely dead loop
+// (those age past the live window). detectStalledLoop uses the correct model: loop_state==='active' +
+// no claim + fresh heartbeat + claimable work waiting, while EXCLUDING legitimately-parked workers
+// (loop_state 'awaiting_tick' or a future expected_silence_until) — so a healthy idle worker between
+// ticks is never flagged. (Belt-empty FP from SD-LEO-INFRA-CAPACITY-FORECAST-STALLED-BELT-EMPTY-FP-001
+// is preserved: detectStalledLoop returns no_unclaimed_work when the belt is empty.)
 
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
+const { stalledLoopSessionIds } = require('../lib/coordinator/detectors.cjs');
 // SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: resolve the active coordinator id so the
 // shared isDispatchableFleetMember excludes the coordinator by id exactly like the dashboard does.
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
@@ -155,6 +163,13 @@ async function main() {
   try { coordinatorId = await getActiveCoordinatorId(sb); } catch { coordinatorId = null; }
   const workers = (sessions || []).filter(s => isLiveCountableWorker(s, coordinatorId));
 
+  // SD-LEO-FEAT-COORDINATOR-CAPACITY-FORECAST-001: compute the genuinely-stalled idle workers via the
+  // canonical detector (loop alive + no claim + claimable work waiting, parked workers excluded). The
+  // belt-depth (claimable SDs + open QFs) is the "unclaimed work" input; an empty belt → no stalls.
+  const stalledIds = stalledLoopSessionIds({
+    sessions: workers, unclaimedItems: claimable.length + openQfCount, now: Date.now(),
+  });
+
   const rows = [];
   let idleNow = 0, freeingSoon = 0, building = 0, stalled = 0;
   for (const w of workers) {
@@ -172,21 +187,16 @@ async function main() {
         eta: `~${eta}m to free${soon ? ' ⏰SOON' : ''}`,
       });
     } else {
-      // idle: distinguish a healthy idle from a stalled loop (alive but never converting work)
+      // idle: a healthy idle worker (re-polling on its /loop wake) vs a genuinely stalled loop, per the
+      // canonical detectStalledLoop verdict computed above (NOT a raw heartbeat-age threshold).
       idleNow++;
       const hbAgeS = Math.round((Date.now() - new Date(w.heartbeat_at).getTime()) / 1000);
-      // A stale heartbeat is only a STALL if (a) there is claimable work the loop is failing to take
-      // AND (b) the heartbeat is older than a full healthy idle re-poll cycle. The /loop idle cadence
-      // is 600–1200s, so DEFAULT_STALL_TTL_S (1800s) ensures a healthy idle worker BETWEEN ticks is not
-      // false-flagged "needs /loop re-arm" just because a belt item appeared before its next wake.
-      // beltDepth inputs are already populated before this loop (openQfCount + claimable[]); the
-      // beltDepth re-derivation lower down is only for the verdict math.
-      const { stalled: stalledFlag, state: idleState, detail: idleDetail } =
-        classifyIdleWorker({ hbAgeS, beltDepth: claimable.length + openQfCount, ttlS: DEFAULT_STALL_TTL_S });
+      const stalledFlag = stalledIds.has(w.session_id);
       if (stalledFlag) stalled++;
       rows.push({
-        sess: w.session_id.slice(0, 8), callsign, state: idleState,
-        detail: idleDetail,
+        sess: w.session_id.slice(0, 8), callsign,
+        state: stalledFlag ? 'IDLE⚠STALLED' : 'IDLE',
+        detail: stalledFlag ? 'alive but loop not claiming (needs /loop re-arm)' : 'available',
         eta: `idle ${hbAgeS}s`,
       });
     }
