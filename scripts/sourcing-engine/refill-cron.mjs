@@ -16,6 +16,7 @@
  */
 import { createSupabaseServiceClient } from '../lib/supabase-connection.js';
 import { selectRefillBatch, promoteStagedCandidate } from '../../lib/sourcing-engine/refill-auto-promote.js';
+import { normalizeTitleForCompare } from '../../lib/sourcing-engine/refill-candidate-validity.js';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -43,7 +44,20 @@ async function main() {
 
   if (error) { console.error('refill-cron: query failed:', error.message); process.exit(2); }
 
-  const sel = selectRefillBatch(rows || [], { limit });
+  // SD-LEO-INFRA-AUTO-REFILL-BELT-001 (FR-4): build the already-shipped-title Set ONCE per run (one
+  // bounded query) so the lookalike belt-quality axis rejects a staged title that re-promotes a title
+  // whose SD already COMPLETED. Fail-open: a query error yields an empty Set (axis no-ops), never blocks.
+  let shippedTitleSet = new Set();
+  try {
+    const { data: shipped } = await supabase
+      .from('strategic_directives_v2')
+      .select('title')
+      .eq('status', 'completed')
+      .limit(5000);
+    shippedTitleSet = new Set((shipped || []).map((s) => normalizeTitleForCompare(s.title)).filter(Boolean));
+  } catch { /* fail-open: empty set -> lookalike axis no-ops */ }
+
+  const sel = selectRefillBatch(rows || [], { limit, shippedTitleSet });
   const results = [];
   for (const item of sel.batch) {
     // Gate 2 (write) flows through to the only writer; apply:false => dry-run no-op.
