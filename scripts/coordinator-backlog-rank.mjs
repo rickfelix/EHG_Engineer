@@ -32,7 +32,7 @@ import { guardMutation, resolveOwnSessionId } from '../lib/coordinator-mutation-
 // demotes bare-shell stubs. FIXTURE_RE catches epoch-stamped TEST-E2E keys; the
 // bare-shell demotion uses the shared bareShellLastCompare so the test suite
 // exercises the real comparator, not a re-implementation.
-import { isFixtureSd, isBareShell, bareShellLastCompare, isStartedSd } from '../lib/coordinator/sd-exclusion.mjs';
+import { isFixtureSd, isBareShell, bareShellLastCompare, isStartedSd, stripDispatchRank } from '../lib/coordinator/sd-exclusion.mjs';
 // SD-LEO-INFRA-FORECASTER-DEP-SENTINEL-BELTDEPTH-001: resolve dependency keys via the canonical
 // blocker rule (the same SSOT coordinator-audit.mjs imports) so the ranker and the capacity
 // forecaster AGREE on the 'no dependencies' sentinel ({sd_key:'none'} / bare 'none') and on
@@ -240,15 +240,32 @@ async function main() {
     const rankedNow = new Set(claimable.map(d => d.sd_key));
     for (const d of (sds || [])) {
       if (rankedNow.has(d.sd_key)) continue;
-      if (d.metadata && d.metadata.dispatch_rank != null) {
+      const { changed, meta } = stripDispatchRank(d.metadata);
+      if (!changed) continue;
+      try {
+        const { error: e } = await sb.from('strategic_directives_v2').update({ metadata: meta }).eq('sd_key', d.sd_key);
+        if (!e) clears++;
+      } catch { /* fail-soft */ }
+    }
+    // SD-FDBK-INFRA-COORDINATOR-BACKLOG-RANK-001: the loop above only sees the NON-TERMINAL load (the
+    // line-65 query excludes completed/cancelled/deferred), so a dispatch_rank set while an SD was
+    // claimable then transitioned to terminal lingers forever (observed: cancelled
+    // REMEDIATION-UNIT-TEST-003/-004 stuck at dispatch_rank=2). Sweep terminal SDs that still carry a
+    // rank and clear them. Fail-soft per row; a query error skips the sweep entirely.
+    try {
+      const { data: terminalRanked } = await sb.from('strategic_directives_v2')
+        .select('sd_key, metadata')
+        .in('status', ['completed', 'cancelled', 'deferred'])
+        .not('metadata->>dispatch_rank', 'is', null);
+      for (const d of (terminalRanked || [])) {
+        const { changed, meta } = stripDispatchRank(d.metadata);
+        if (!changed) continue;
         try {
-          const meta = { ...d.metadata };
-          delete meta.dispatch_rank; delete meta.dispatch_rank_at; delete meta.dispatch_rank_by;
           const { error: e } = await sb.from('strategic_directives_v2').update({ metadata: meta }).eq('sd_key', d.sd_key);
           if (!e) clears++;
-        } catch { /* fail-soft */ }
+        } catch { /* fail-soft per row */ }
       }
-    }
+    } catch { /* fail-soft: terminal-sweep query error never kills the pass */ }
   }
   console.log(`[BACKLOG-RANK] done — ${DRY ? 'no writes (dry-run)' : `${writes} rank(s) written, ${clears} stale rank(s) cleared`}`);
 }
