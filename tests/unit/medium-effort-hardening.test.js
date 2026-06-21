@@ -175,6 +175,18 @@ describe('FR-3: red-merge decide()', async () => {
     // same window with the default floor (1) DOES confirm.
     expect(decide([snap(105, 's'), snap(105), snap(103), snap(103)], []).action).toBe('file_qf');
   });
+
+  // SD-REFILL-00V2SADI / RCA 105b7143: one-shot-per-event contract.
+  it('plateau: fires during the detection window, then the trailing median absorbs it (one-shot)', () => {
+    // age1-2 of a plateau (118 just landed on a 103 floor) => fires.
+    expect(decide([snap(118, 'land'), snap(118), snap(103), snap(103), snap(102)], []).action).toBe('file_qf');
+    // long-settled plateau (118 is now the median) => noop (already alerted once; dedup/storm-guard own re-alerting).
+    expect(decide([snap(118), snap(118), snap(118), snap(118), snap(118)], []).action).toBe('noop');
+  });
+
+  it('masking does NOT compound: a further rise above an elevated baseline still fires', () => {
+    expect(decide([snap(130, 'higher'), snap(130), snap(118), snap(118), snap(118)], []).action).toBe('file_qf');
+  });
 });
 
 // ── FR-1: recordFailure routing (TS-1) ───────────────────────────────────────

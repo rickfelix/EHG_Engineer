@@ -59,6 +59,12 @@ function median(nums) {
  *     that baseline (persistence — a lone transient bounce never qualifies).
  * Needs ≥3 snapshots (latest + prev + ≥1 settled baseline reading).
  *
+ * ONE-SHOT-PER-EVENT contract: a regression fires during the ~run window before it
+ * settles into the trailing median (which then absorbs it) — by design, paired with the
+ * dedup + storm-guard so a single event yields exactly one QF, not one per merge. A
+ * FURTHER sustained rise above the new elevated baseline still fires (masking does not
+ * compound). (RCA 105b7143)
+ *
  * @param {Array<{findings: Array<{failed_count: number, commit_sha?: string, branch?: string}>}>} snapshots newest-first
  * @param {Array<{id: string, description?: string}>} openRedMergeQfs
  * @param {{noiseFloor?: number}} [opts]
@@ -115,6 +121,7 @@ async function main() {
     .select('id, findings, created_at')
     .eq('dimension', DIMENSION)
     .order('created_at', { ascending: false })
+    .order('id', { ascending: false }) // deterministic tie-break for same-second snapshots (RCA 105b7143)
     .limit(10);
   if (error) { console.error('snapshot read failed:', error.message); process.exit(1); }
   // Pass a trailing WINDOW (not just 2) so decide() can compute a robust settled-median
