@@ -1,0 +1,51 @@
+name: Sourcing Auto-Refill Cron
+
+# SD-LEO-INFRA-AUTO-REFILL-SELECTION-GATE-001-C: schedule the flag-gated auto-refill cron
+# (scripts/sourcing-engine/refill-cron.mjs) that promotes VALID staged roadmap_wave_items onto the
+# belt (create draft SD + stamp promoted_to_sd_key), closing the staged->belt gap that the coordinator
+# currently bridges by hand (the documented anti-pattern). SHIP-DORMANT by design: the script exits
+# [SKIP] (exit 0) unless SOURCING_AUTO_REFILL_V1 === 'true', so wiring the schedule is safe — the
+# chairman flips the repo variable SOURCING_AUTO_REFILL_V1=true to activate it (no code change). Until
+# then every run is a clean no-op SKIP. Mirrors the sibling prod-error-sweep-loop.yml.
+on:
+  schedule:
+    # Hourly at :25 (offset from the other sourcing/sweep crons to avoid the top-of-hour cluster).
+    - cron: '25 * * * *'
+  workflow_dispatch: {}
+
+# The cron creates SDs — never overlap runs; newest waits rather than piling up.
+concurrency:
+  group: sourcing-auto-refill-cron
+  cancel-in-progress: false
+
+jobs:
+  auto-refill:
+    name: Auto-refill staged -> belt (gated by SOURCING_AUTO_REFILL_V1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+
+      - name: Run auto-refill cron (SKIP unless SOURCING_AUTO_REFILL_V1=true)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Chairman activation switch — set repo variable SOURCING_AUTO_REFILL_V1=true to enable.
+          # Absent/anything-but-'true' => the script logs [SKIP] and exits 0 (ship-dormant).
+          SOURCING_AUTO_REFILL_V1: ${{ vars.SOURCING_AUTO_REFILL_V1 }}
+        # Fail-soft: a refill hiccup must never mark the schedule red.
+        continue-on-error: true
+        # --apply is REQUIRED: the script has TWO gates — the SOURCING_AUTO_REFILL_V1 skip (fires first,
+        # returns early when off) AND a separate --apply WRITE gate (default DRY-RUN promotes ZERO items).
+        # Omitting --apply would make this a no-op even when enabled (the exact wired-but-no-op class this
+        # SD's double-gate guards against). With the enable flag OFF the run still SKIPs before --apply
+        # matters, so passing it unconditionally is safe. Mirrors prod-error-sweep-loop.yml.
+        run: node scripts/sourcing-engine/refill-cron.mjs --apply
