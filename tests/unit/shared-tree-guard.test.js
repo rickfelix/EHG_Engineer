@@ -95,6 +95,32 @@ describe('decideSharedTreeCheckout — allows safe ops (FR-1 file-restore + FR-2
   });
 });
 
+describe('decideSharedTreeCheckout — classifier bypass hardening (adversarial HIGH fixes)', () => {
+  it('blocks a hijack via --work-tree pointed at the shared root from inside a worktree', () => {
+    // The op runs with cwd in a worktree but --work-tree targets the shared root => hijack.
+    const v = decideSharedTreeCheckout(`git --work-tree=${ROOT} --git-dir=${ROOT}/.git checkout x`, foreign({ cwd: WT }));
+    expect(v).toMatchObject({ block: true, reason: 'shared_root_hijack' });
+  });
+
+  it('allows --work-tree pointed at an isolated worktree', () => {
+    expect(decideSharedTreeCheckout(`git --work-tree=${WT} checkout x`, foreign({ cwd: ROOT })).block).toBe(false);
+  });
+
+  it('blocks checkout behind leading git global options (-c / --no-pager)', () => {
+    expect(decideSharedTreeCheckout('git -c core.pager=cat checkout x', foreign()).block).toBe(true);
+    expect(decideSharedTreeCheckout('git --no-pager checkout x', foreign()).block).toBe(true);
+  });
+
+  it('blocks checkout behind a leading env-var assignment', () => {
+    expect(decideSharedTreeCheckout('FOO=bar git checkout x', foreign()).block).toBe(true);
+    expect(decideSharedTreeCheckout('GIT_PAGER=cat BAR=1 git switch y', foreign()).block).toBe(true);
+  });
+
+  it('still honours -C <worktree> even with other leading globals present', () => {
+    expect(decideSharedTreeCheckout(`git --no-pager -C ${WT} checkout x`, foreign({ cwd: ROOT })).block).toBe(false);
+  });
+});
+
 describe('decideSharedTreeCheckout — flag disable (FR-3)', () => {
   it('allows everything when LEO_SHARED_TREE_GUARD=off', () => {
     const v = decideSharedTreeCheckout('git checkout some-branch', foreign({ env: { LEO_SHARED_TREE_GUARD: 'off' } }));
