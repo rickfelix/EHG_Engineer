@@ -137,9 +137,15 @@ if [ ! -z "$STAGED_CLAUDE_FILES" ]; then
   # This allows committing regenerated files while blocking manual edits
   ALL_REGENERATED=1
   for file in $STAGED_CLAUDE_FILES; do
-    # Check for both markers that the generator adds
-    HAS_AUTO_GEN=$(grep -c "AUTO-GENERATED from the database" "$file" 2>/dev/null || echo 0)
-    HAS_TIMESTAMP=$(grep -c "Last Generated.*:" "$file" 2>/dev/null || echo 0)
+    # Check for both markers that the generator adds.
+    # NOTE: `grep -c` ALREADY prints the count "0" to stdout on no-match (and exits 1), so a
+    # `|| echo 0` fallback appended a SECOND "0" → the var became "0\n0" → `[ "0\n0" -eq 0 ]`
+    # printed "[: 0 0: integer expression expected" ~28x (SD-FDBK-INFRA-HUSKY-PRE-COMMIT-001).
+    # Use `|| true` (set -e safe) and a `:-0` default (covers an unreadable file → empty output).
+    HAS_AUTO_GEN=$(grep -c "AUTO-GENERATED from the database" "$file" 2>/dev/null || true)
+    HAS_TIMESTAMP=$(grep -c "Last Generated.*:" "$file" 2>/dev/null || true)
+    HAS_AUTO_GEN=${HAS_AUTO_GEN:-0}
+    HAS_TIMESTAMP=${HAS_TIMESTAMP:-0}
 
     if [ "$HAS_AUTO_GEN" -eq 0 ] || [ "$HAS_TIMESTAMP" -eq 0 ]; then
       echo "   ❌ $file missing generator markers"
