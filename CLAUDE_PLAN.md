@@ -1,8 +1,8 @@
-<!-- file_content_hash: 8a1abe9605d22793 -->
+<!-- file_content_hash: af7745fe03e07537 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-06-20 12:35:55 PM
+**Generated**: 2026-06-20 5:27:00 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 **Effort**: high (architecture decisions and PRD rubrics require full reasoning depth)

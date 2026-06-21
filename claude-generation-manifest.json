@@ -1,109 +1,109 @@
 {
-  "generated_at": "2026-06-20T16:35:55.374Z",
-  "git_commit": "b46c1ebc",
-  "db_snapshot_hash": "8bb50c9305e12f02",
+  "generated_at": "2026-06-20T21:27:00.825Z",
+  "git_commit": "dc94cf45",
+  "db_snapshot_hash": "c834d15d81f97da8",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 19369,
-      "estimated_tokens": 4843,
-      "content_hash": "070a59945c9e3ca1",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-D\\CLAUDE.md"
+      "chars": 19368,
+      "estimated_tokens": 4842,
+      "content_hash": "da84efeff906e971",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 83528,
-      "estimated_tokens": 20882,
-      "content_hash": "bd3155e94d5cf19d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-D\\CLAUDE_CORE.md"
+      "chars": 83518,
+      "estimated_tokens": 20880,
+      "content_hash": "355c6e5c57779f54",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 65129,
-      "estimated_tokens": 16283,
-      "content_hash": "623dd9bbf37871cd",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-D\\CLAUDE_LEAD.md"
+      "chars": 65128,
+      "estimated_tokens": 16282,
+      "content_hash": "c5b17112394b6624",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 90831,
+      "chars": 90830,
       "estimated_tokens": 22708,
-      "content_hash": "37f11c916b304319",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-D\\CLAUDE_PLAN.md"
+      "content_hash": "150748851d6e7528",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 84822,
+      "chars": 84821,
       "estimated_tokens": 21206,
-      "content_hash": "f3b070923c62e1ad",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-D\\CLAUDE_EXEC.md"
+      "content_hash": "183f454f26903077",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 41261,
-      "estimated_tokens": 10316,
-      "content_hash": "804a634215e32d66",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-D\\CLAUDE_ADAM.md"
+      "chars": 41260,
+      "estimated_tokens": 10315,
+      "content_hash": "3fd687b299804d99",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 16619,
+      "chars": 16618,
       "estimated_tokens": 4155,
-      "content_hash": "b5624e4009409e19",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-D\\CLAUDE_COORDINATOR.md"
+      "content_hash": "cb596ee5053f347f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
-      "chars": 9612,
+      "chars": 9611,
       "estimated_tokens": 2403,
-      "content_hash": "b81708bec34a1896",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-D\\CLAUDE_DIGEST.md"
+      "content_hash": "3d5fff1bd142e0c1",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 11536,
+      "chars": 11535,
       "estimated_tokens": 2884,
-      "content_hash": "e053d01fcf91d881",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-D\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "3273288ea2f87428",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
-      "chars": 5423,
+      "chars": 5422,
       "estimated_tokens": 1356,
-      "content_hash": "d4603c3ad7aad6a0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-D\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "3f54ef9f72a333d8",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
-      "chars": 8413,
-      "estimated_tokens": 2104,
-      "content_hash": "4d69e7fda5b9de94",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-D\\CLAUDE_PLAN_DIGEST.md"
+      "chars": 8412,
+      "estimated_tokens": 2103,
+      "content_hash": "58262c40a1b12f0e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
-      "chars": 10836,
+      "chars": 10835,
       "estimated_tokens": 2709,
-      "content_hash": "2878a1e41d24cbb5",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-D\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "c4b59d23cbd5e29b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 12320,
       "estimated_tokens": 3080,
-      "content_hash": "91cc6e0e77e1a938",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-D\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "85254e9c926ec754",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 3973,
       "estimated_tokens": 994,
-      "content_hash": "d4fa8b67015b2179",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-D\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "24ffb02704d9567c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_COORDINATOR_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "bacc644d2124040a",
+    "global": "3581033924ed4560",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -363,7 +363,8 @@
       "604": "67885bf567384f02",
       "605": "19e13f356fce24ab",
       "606": "25aa68b575c66d07",
-      "607": "82e04c0cc0ffb28f"
+      "607": "82e04c0cc0ffb28f",
+      "608": "7f99a4321502367e"
     },
     "meta": {
       "94": {
@@ -1660,6 +1661,11 @@
         "section_type": "adam_role_contract",
         "target_file": "CLAUDE_ADAM.md",
         "title": "SOURCING SSOT — order of operations"
+      },
+      "608": {
+        "section_type": "system_coherence",
+        "target_file": null,
+        "title": "LEO System Coherence — the Flywheel (doc pointer)"
       }
     }
   }
