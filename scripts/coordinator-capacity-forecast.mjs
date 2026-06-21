@@ -112,7 +112,12 @@ async function main() {
     sb.from('claude_sessions')
       // SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: + status so released/terminal sessions
       // are not counted as available workers even with a recent heartbeat (FR-2).
-      .select('session_id, terminal_id, sd_key, heartbeat_at, loop_state, metadata, status')
+      // SD-LEO-FEAT-COORDINATOR-CAPACITY-FORECAST-001: + expected_silence_until — detectStalledLoop
+      // reads it (top-level column) to EXCLUDE legitimately-parked workers. Omitting it makes
+      // toMs(undefined)=0 → the parked guard silently fails open → a parked worker is mis-flagged
+      // STALLED. Reusing a detector requires replicating its full input-column contract (mirrors the
+      // canonical coordinator-audit.mjs select).
+      .select('session_id, terminal_id, sd_key, heartbeat_at, loop_state, expected_silence_until, metadata, status')
       .gte('heartbeat_at', liveCutoff),
     sb.from('strategic_directives_v2')
       // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + metadata (is_fixture marker) and
@@ -166,8 +171,9 @@ async function main() {
   // SD-LEO-FEAT-COORDINATOR-CAPACITY-FORECAST-001: compute the genuinely-stalled idle workers via the
   // canonical detector (loop alive + no claim + claimable work waiting, parked workers excluded). The
   // belt-depth (claimable SDs + open QFs) is the "unclaimed work" input; an empty belt → no stalls.
+  const now = Date.now();
   const stalledIds = stalledLoopSessionIds({
-    sessions: workers, unclaimedItems: claimable.length + openQfCount, now: Date.now(),
+    sessions: workers, unclaimedItems: claimable.length + openQfCount, now,
   });
 
   const rows = [];
@@ -190,7 +196,7 @@ async function main() {
       // idle: a healthy idle worker (re-polling on its /loop wake) vs a genuinely stalled loop, per the
       // canonical detectStalledLoop verdict computed above (NOT a raw heartbeat-age threshold).
       idleNow++;
-      const hbAgeS = Math.round((Date.now() - new Date(w.heartbeat_at).getTime()) / 1000);
+      const hbAgeS = Math.round((now - new Date(w.heartbeat_at).getTime()) / 1000);
       const stalledFlag = stalledIds.has(w.session_id);
       if (stalledFlag) stalled++;
       rows.push({
