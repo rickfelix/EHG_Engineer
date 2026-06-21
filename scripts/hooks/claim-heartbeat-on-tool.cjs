@@ -67,16 +67,21 @@ function patchHeartbeat(baseUrl, key, sessionId, isoNow) {
   try {
     if (isOff(process.env.LEO_CLAIM_HEARTBEAT_ON_TOOL)) return;
 
+    // SELF-ATTRIBUTED session id ONLY. A claim-refreshing write MUST target THIS process's own session.
+    // We deliberately do NOT fall back to the identity-marker / latest-marker-by-mtime resolvers other
+    // hooks use: on a multi-session host the mtime fallback returns whichever session most recently wrote
+    // a marker — possibly a DIFFERENT (even dead-but-claimed) session — and refreshing its heartbeat would
+    // KEEP A ZOMBIE CLAIM ALIVE and block reassignment (the exact failure the TTL exists to prevent;
+    // adversarial review HIGH). A missed heartbeat self-corrects on the next tool call that carries a good
+    // stdin session_id; a wrong-session heartbeat does not. Trusted sources only: stdin payload (CC ties it
+    // to THIS invocation) + this process's own env. (Dropping the marker chain also avoids the slow
+    // findClaudeCodeCcPid execSync on the hot path.)
     const sidLib = require('../../lib/hooks/session-id.cjs');
     const payload = await sidLib.readHookStdinPayload();
     let sessionId = payload && sidLib.isValidSessionId(payload.session_id) ? payload.session_id : '';
     if (!sessionId && sidLib.isValidSessionId(process.env.CLAUDE_SESSION_ID)) sessionId = process.env.CLAUDE_SESSION_ID;
     if (!sessionId && sidLib.isValidSessionId(process.env.SESSION_ID)) sessionId = process.env.SESSION_ID;
-    if (!sessionId) {
-      const m = sidLib.readSessionIdFromIdentityMarker({}) || sidLib.readLatestMarkerByMtime();
-      if (sidLib.isValidSessionId(m)) sessionId = m;
-    }
-    if (!sessionId) return;
+    if (!sessionId) return; // no self-attributed id -> skip (self-corrects next tool call)
 
     const throttleMs = Number(process.env.LEO_CLAIM_HB_THROTTLE_MS) > 0
       ? Number(process.env.LEO_CLAIM_HB_THROTTLE_MS) : DEFAULT_THROTTLE_MS;
