@@ -11,7 +11,6 @@ import { resolve } from 'node:path';
 import {
   auditPhantomTableTests,
   PHANTOM_COMMIT_TRIGGER,
-  collectAndAudit,
   resolveAuditBase,
 } from '../../../../scripts/phantom-test-audit.js';
 import { createPhantomTestAuditGate } from '../../../../scripts/modules/handoff/executors/lead-final-approval/gates/phantom-test-audit-gate.js';
@@ -186,7 +185,7 @@ describe('TS-MB: resolveAuditBase diffs against the merge-base, not the raw base
   it('returns the merge-base SHA when git resolves one (excludes commits already on main)', () => {
     const MB = 'abc1234def5678abc1234def5678abc1234def56';
     const calls = [];
-    const fakeGit = (cmd, cwd) => { calls.push(cmd); return MB + '\n'; };
+    const fakeGit = (cmd) => { calls.push(cmd); return MB + '\n'; };
     const base = resolveAuditBase({ repoPath: '/repo', baseRef: 'origin/main', git: fakeGit });
     expect(base).toBe(MB);
     // It asks for the merge-base of HEAD and the base ref (the fix), not the raw tip.
