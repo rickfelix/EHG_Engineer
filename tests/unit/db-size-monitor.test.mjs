@@ -12,24 +12,24 @@ import {
 
 const GB = 1024 ** 3;
 
-test('defaults: 12GB cap, warn 75% / critical 85%', () => {
-  assert.equal(DEFAULT_CAP_GB, 12);
+test('defaults: 8GB cap, warn 75% / critical 85%', () => {
+  assert.equal(DEFAULT_CAP_GB, 8);
 });
 
 test('evaluateSizeAlert: under 75% → ok', () => {
-  const v = evaluateSizeAlert({ dbBytes: 6.3 * GB }, { capGB: 12 });
+  const v = evaluateSizeAlert({ dbBytes: 4.37 * GB }, { capGB: 8 }); // current: 4.37GB / 8GB ≈ 55%
   assert.equal(v.level, 'ok');
   assert.ok(v.dbPct > 50 && v.dbPct < 56);
 });
 
 test('evaluateSizeAlert: at/above 75% → warn', () => {
-  assert.equal(evaluateSizeAlert({ dbBytes: 9 * GB }, { capGB: 12 }).level, 'warn'); // 75%
-  assert.equal(evaluateSizeAlert({ dbBytes: 9.5 * GB }, { capGB: 12 }).level, 'warn');
+  assert.equal(evaluateSizeAlert({ dbBytes: 6 * GB }, { capGB: 8 }).level, 'warn'); // 75% = 6.0GB
+  assert.equal(evaluateSizeAlert({ dbBytes: 6.4 * GB }, { capGB: 8 }).level, 'warn');
 });
 
 test('evaluateSizeAlert: at/above 85% → critical (fires before the 90% auto-expand)', () => {
-  assert.equal(evaluateSizeAlert({ dbBytes: 10.2 * GB }, { capGB: 12 }).level, 'critical'); // 85%
-  assert.equal(evaluateSizeAlert({ dbBytes: 11 * GB }, { capGB: 12 }).level, 'critical');
+  assert.equal(evaluateSizeAlert({ dbBytes: 6.8 * GB }, { capGB: 8 }).level, 'critical'); // 85% = 6.8GB
+  assert.equal(evaluateSizeAlert({ dbBytes: 7.5 * GB }, { capGB: 8 }).level, 'critical');
 });
 
 test('evaluateSizeAlert: surfaces table offenders ≥1GB only', () => {
