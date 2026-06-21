@@ -26,6 +26,14 @@ describe('isBuildForbiddenSession (FR-1 predicate)', () => {
   it('rejects a role=adam session', () => {
     expect(isBuildForbiddenSession({ role: 'adam' })).toBe(true);
   });
+  // SD-REFILL-001KNKE4: a coordinator session must never hold/acquire a build claim. Critically,
+  // a worker colliding onto the coordinator's session row (shared CLAUDE_SESSION_ID) reads
+  // is_coordinator=true here and is short-circuited, so it can't write a worker claim onto the
+  // coordinator row and corrupt coordinator identity.
+  it('rejects an is_coordinator session', () => {
+    expect(isBuildForbiddenSession({ is_coordinator: true })).toBe(true);
+    expect(isBuildForbiddenSession({ is_coordinator: true, role: 'coordinator', callsign: 'Coord' })).toBe(true);
+  });
   it('allows a normal fleet session', () => {
     expect(isBuildForbiddenSession({ role: 'worker', callsign: 'Bravo' })).toBe(false);
   });
@@ -34,6 +42,8 @@ describe('isBuildForbiddenSession (FR-1 predicate)', () => {
     expect(isBuildForbiddenSession(undefined)).toBe(false);
     expect(isBuildForbiddenSession({})).toBe(false);
     expect(isBuildForbiddenSession({ non_fleet: 'true' })).toBe(false); // string, not boolean true
+    expect(isBuildForbiddenSession({ is_coordinator: 'true' })).toBe(false); // string, not boolean true
+    expect(isBuildForbiddenSession({ is_coordinator: false })).toBe(false);
   });
 });
 
