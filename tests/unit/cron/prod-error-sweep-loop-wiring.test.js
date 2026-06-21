@@ -17,8 +17,14 @@ describe('prod-error-sweep-loop is actually scheduled (was 0 runs ever)', () => 
     expect(WF).toMatch(/cron:\s*'40 \* \* \* \*'/);
   });
 
-  it('the workflow invokes the sweep script', () => {
-    expect(WF).toMatch(/node scripts\/clockwork\/prod-error-sweep-loop\.cjs/);
+  it('the workflow invokes the sweep script WITH --apply (else it DRY-RUNs and sources 0 SDs even when enabled)', () => {
+    // The script has TWO gates: PROD_ERROR_SWEEP_LOOP_ENABLE (skip) AND --apply (write). Omitting
+    // --apply is the wired-but-no-op trap this SD exists to fix — assert it explicitly.
+    expect(WF).toMatch(/node scripts\/clockwork\/prod-error-sweep-loop\.cjs --apply/);
+  });
+
+  it('the script genuinely has a separate --apply write gate (default dry-run)', () => {
+    expect(SCRIPT).toMatch(/APPLY\s*=\s*args\.includes\(\s*'--apply'\s*\)/);
   });
 
   it('the workflow passes the activation flag from a repo variable (chairman flip, no code change)', () => {

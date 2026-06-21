@@ -44,4 +44,9 @@ jobs:
         # The script is fail-soft (exits 0 even on fatal); continue-on-error is belt-and-suspenders so a
         # sweep hiccup never marks the schedule red.
         continue-on-error: true
-        run: node scripts/clockwork/prod-error-sweep-loop.cjs
+        # --apply is REQUIRED: the script has TWO gates — the PROD_ERROR_SWEEP_LOOP_ENABLE skip (fires
+        # first, returns early when off) AND a separate --apply WRITE gate (default DRY-RUN sources ZERO
+        # SDs). Omitting --apply would make this a no-op even when enabled (the exact wired-but-no-op class
+        # this SD fixes). Mirrors the sibling clockwork-ci-autotriage-loop.yml. With the enable flag OFF the
+        # run still SKIPs before --apply matters, so passing it unconditionally is safe.
+        run: node scripts/clockwork/prod-error-sweep-loop.cjs --apply

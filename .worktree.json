@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-SOURCING-ENGINE-GAUGE-GAP-MINER-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-SOURCING-ENGINE-GAUGE-GAP-MINER-001",
-  "createdAt": "2026-06-20T10:19:54.376Z",
+  "sdKey": "SD-LEO-INFRA-PROD-ERROR-SWEEP-WIRE-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-PROD-ERROR-SWEEP-WIRE-001",
+  "createdAt": "2026-06-21T04:54:19.342Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
