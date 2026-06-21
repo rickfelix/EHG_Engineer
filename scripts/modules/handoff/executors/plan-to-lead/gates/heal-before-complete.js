@@ -18,10 +18,10 @@
  *
  * - SD heal: BLOCKING — score must be >= (threshold - tolerance)
  *   - Threshold resolved in priority order:
- *     1. leo_config 'heal_gate_threshold' (global override)
+ *     1. app_config 'heal_gate_threshold' (global override)
  *     2. SD-type-aware tier (feature/security=90, infrastructure/docs=80)
  *     3. DEFAULT_HEAL_THRESHOLD (85) as final fallback
- *   - Tolerance buffer: leo_config 'heal_gate_tolerance_buffer' (default 3)
+ *   - Tolerance buffer: app_config 'heal_gate_tolerance_buffer' (default 3)
  *   - Corrective SDs: always use GRADE.A (93) via grade-scale.js
  * - Vision heal: ADVISORY — logged but does not block
  */
@@ -303,10 +303,45 @@ const SD_TYPE_THRESHOLDS = {
 };
 
 /**
+ * Read a single config value from the canonical `app_config` table (key/value).
+ *
+ * SD-LEO-FEAT-PHANTOM-TABLE-READ-001: the heal-gate override tier previously read
+ * a `leo_config` table that does not exist in the live DB (every read returned
+ * PGRST205 and fell open to defaults — the global override was silently dead).
+ * `app_config` is the canonical config table (chairman_email, pocock_provenance_writers,
+ * …); PostgREST itself hinted "Perhaps you meant the table public.app_config".
+ *
+ * Fail-open by contract: returns the raw value string when a row exists, else
+ * null on a missing row, missing/absent table, or any error — the heal gate must
+ * never be broken by a config-read failure.
+ *
+ * @param {Object} supabase
+ * @param {string} key
+ * @returns {Promise<string|null>}
+ */
+async function readAppConfigValue(supabase, key) {
+  try {
+    const { data, error } = await supabase
+      .from('app_config')
+      .select('value')
+      .eq('key', key)
+      .single();
+    // A missing row (PGRST116) or missing table is not an exception in supabase-js —
+    // it surfaces as `error`. Treat any error as "no override" (fail open).
+    if (error) return null;
+    return data?.value != null ? data.value : null;
+  } catch (e) {
+    // Defensive: any thrown error (network, etc.) also fails open.
+    console.debug('[HealBeforeComplete] app_config lookup suppressed:', e?.message || e);
+    return null;
+  }
+}
+
+/**
  * Load the heal gate threshold with SD-type awareness.
  *
  * Resolution order:
- *   1. leo_config 'heal_gate_threshold' (explicit global override)
+ *   1. app_config 'heal_gate_threshold' (explicit global override)
  *   2. SD-type-aware tier from SD_TYPE_THRESHOLDS
  *   3. DEFAULT_HEAL_THRESHOLD (85)
  *
@@ -315,23 +350,13 @@ const SD_TYPE_THRESHOLDS = {
  * @returns {Promise<{threshold: number, source: string}>}
  */
 async function loadHealThreshold(supabase, sdType) {
-  // 1. Check leo_config for explicit global override
-  try {
-    const { data } = await supabase
-      .from('leo_config') // schema-lint-disable-line — phantom table (absent from live DB); read fails open to DEFAULT_HEAL_THRESHOLD via catch. Pre-existing; flagged for cleanup (SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001).
-      .select('value')
-      .eq('key', 'heal_gate_threshold')
-      .single();
-
-    if (data?.value != null) {
-      const parsed = parseInt(data.value, 10);
-      if (!isNaN(parsed) && parsed > 0 && parsed <= 100) {
-        return { threshold: parsed, source: 'leo_config' };
-      }
+  // 1. Check app_config for an explicit global override
+  const overrideValue = await readAppConfigValue(supabase, 'heal_gate_threshold');
+  if (overrideValue != null) {
+    const parsed = parseInt(overrideValue, 10);
+    if (!isNaN(parsed) && parsed > 0 && parsed <= 100) {
+      return { threshold: parsed, source: 'app_config' };
     }
-  } catch (e) {
-    // Intentionally suppressed: Fall through to SD-type tier
-    console.debug('[HealBeforeComplete] leo_config threshold lookup suppressed:', e?.message || e);
   }
 
   // 2. SD-type-aware tier
@@ -344,32 +369,25 @@ async function loadHealThreshold(supabase, sdType) {
 }
 
 /**
- * Load the tolerance buffer from leo_config.
+ * Load the tolerance buffer from app_config.
  * Scores within (threshold - buffer) are accepted with a warning.
  *
  * @param {Object} supabase
  * @returns {Promise<number>}
  */
 async function loadToleranceBuffer(supabase) {
-  try {
-    const { data } = await supabase
-      .from('leo_config') // schema-lint-disable-line — phantom table (absent from live DB); read fails open to DEFAULT_TOLERANCE_BUFFER via catch. Pre-existing; flagged for cleanup (SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001).
-      .select('value')
-      .eq('key', 'heal_gate_tolerance_buffer')
-      .single();
-
-    if (data?.value != null) {
-      const parsed = parseInt(data.value, 10);
-      if (!isNaN(parsed) && parsed >= 0 && parsed <= 10) {
-        return parsed;
-      }
+  const overrideValue = await readAppConfigValue(supabase, 'heal_gate_tolerance_buffer');
+  if (overrideValue != null) {
+    const parsed = parseInt(overrideValue, 10);
+    if (!isNaN(parsed) && parsed >= 0 && parsed <= 10) {
+      return parsed;
     }
-  } catch (e) {
-    // Intentionally suppressed: Fall through to default tolerance buffer
-    console.debug('[HealBeforeComplete] tolerance buffer lookup suppressed:', e?.message || e);
   }
   return DEFAULT_TOLERANCE_BUFFER;
 }
+
+// Exported for unit testing (SD-LEO-FEAT-PHANTOM-TABLE-READ-001).
+export { readAppConfigValue, loadHealThreshold, loadToleranceBuffer };
 
 /**
  * Create the HEAL_BEFORE_COMPLETE gate validator.
