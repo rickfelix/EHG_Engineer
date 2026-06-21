@@ -263,6 +263,31 @@ function isAdamInboxRow(r) {
 }
 
 /**
+ * SD-FDBK-INFRA-ADAM-INBOX-ADAM-001 — handler-owned kinds the Adam inbox must NEVER surface or
+ * consume (each has a dedicated responder that owns the row; the Adam inbox marking it read first
+ * would break that handler). Mirrors the "DELIBERATELY EXCLUDED" list in the ADAM_INBOX_KINDS doc.
+ */
+const EXCLUDED_KINDS = Object.freeze(['canary_request', 'comms_check', 'ack', 'coordinator_ack']);
+
+/**
+ * SD-FDBK-INFRA-ADAM-INBOX-ADAM-001 — is this an ORPHANED Adam-directed row? A row targeting the
+ * Adam session (the drainInbox query already scopes target_session) that the two drain lanes both
+ * miss: NOT a reply, NOT an Adam-directive (kind not in ADAM_INBOX_KINDS), and NOT a handler-owned
+ * kind. This catches BOTH untyped rows (payload.kind null — the live 2026-06-20 enforcer-verdict
+ * blindspot) AND unknown typed kinds (e.g. coordinator_alert) that no allowlist covers. These are
+ * genuine deliveries, not noise — drainInbox WARNS about them (visibility) but does NOT consume
+ * them, preserving the deliberate non-consume invariant (SD-LEO-FIX-ADAM-INBOX-ALL-CLASSES-001).
+ * PURE. @param {object} r @returns {boolean}
+ */
+function isOrphanedAdamRow(r) {
+  if (!r) return false;
+  if (isReplyRow(r) || isAdamInboxRow(r)) return false; // already drained by a real lane
+  const k = r.payload && r.payload.kind;
+  if (k != null && EXCLUDED_KINDS.includes(k)) return false; // handler-owned → never touch
+  return true; // untyped, or an unknown typed kind targeting Adam → orphaned delivery
+}
+
+/**
  * SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001 — unified FULL-LANE inbox drain (the corrective for the
  * reply-only blindspot that left SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001's full-lane criterion
  * unmet). `drainReplies` surfaces ONLY the reply lane, so coordinator DIRECTIVE-kind rows (any
@@ -293,6 +318,24 @@ async function drainInbox(supabase, sessionId) {
   // SD-LEO-FIX-ADAM-INBOX-ALL-CLASSES-001: widen the drain to ALL directed Adam classes
   // (isAdamInboxRow ⊇ DIRECTIVE_KINDS) — responder-owned + untyped rows stay untouched.
   const rows = (allRows || []).filter((r) => isReplyRow(r) || isAdamInboxRow(r));
+
+  // SD-FDBK-INFRA-ADAM-INBOX-ADAM-001: surface (WARN, do NOT consume) orphaned Adam-directed rows the
+  // two drain lanes miss — untyped (payload.kind null) or unknown typed kinds (e.g. coordinator_alert),
+  // minus the handler-owned EXCLUDED_KINDS. These are real deliveries (live 2026-06-20: untyped enforcer
+  // verdicts left Adam 40m blind). WARN keeps them VISIBLE without consuming, preserving the deliberate
+  // non-consume invariant (read_at stays NULL → recoverable; pinned by adam-inbox-all-classes.test.js).
+  const orphaned = (allRows || []).filter(isOrphanedAdamRow);
+  if (orphaned.length > 0) {
+    console.warn(`⚠ ${orphaned.length} unread Adam-directed row${orphaned.length === 1 ? '' : 's'} with unrecognized/untyped kind NOT auto-drained (visibility — NOT consumed, still recoverable):`);
+    for (const r of orphaned) {
+      const kind = (r.payload && r.payload.kind) || '(untyped)';
+      const text = (r.payload && r.payload.body) || r.body || r.subject || '(empty)';
+      const ageMin = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
+      console.warn(`  ⚠ [orphan/${kind}] id=${r.id} (${ageMin}m) ${text}`);
+    }
+    console.warn('  → these target the Adam session but match no drain lane; fix the producer to use a typed ADAM_INBOX_KINDS kind, or read via the durable reader.');
+  }
+
   if (rows.length === 0) { console.log('(no unread directed inbox rows — replies or directed classes)'); return; }
 
   console.log(`${rows.length} inbox row${rows.length === 1 ? '' : 's'} (full lane — replies + all directed classes):`);
@@ -456,7 +499,7 @@ async function drainAdamOutbound(supabase, { newSessionId, oldSessionIds } = {})
   }
 }
 
-module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound };
+module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });
