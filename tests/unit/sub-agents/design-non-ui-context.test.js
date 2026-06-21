@@ -5,7 +5,7 @@
  * fix for the empty-repo DESIGN false-negative on NO-UI backend SDs.
  */
 import { describe, it, expect } from 'vitest';
-import { classifyNonUIDesignContext, NON_UI_DESIGN_TYPES } from '../../../lib/sub-agents/design/index.js';
+import { classifyNonUIDesignContext, NON_UI_DESIGN_TYPES, NON_UI_DESIGN_CATEGORIES } from '../../../lib/sub-agents/design/index.js';
 
 describe('classifyNonUIDesignContext', () => {
   it('skips on a non-UI sd_type (source=sd_type)', () => {
@@ -54,5 +54,33 @@ describe('classifyNonUIDesignContext', () => {
   it('exports the canonical non-UI signal list (includes backend)', () => {
     expect(NON_UI_DESIGN_TYPES).toContain('backend');
     expect(NON_UI_DESIGN_TYPES).toContain('infrastructure');
+  });
+
+  // --- Adversarial HIGH regression guard (SD-FDBK-INFRA-GATE-FALSE-NEGATIVE-001) ---
+  // 'orchestrator'/'process' are CONTAINER categories that orchestrator children INHERIT,
+  // so a pure-UI child SD carries category='orchestrator'. The category tier MUST NOT honor
+  // them, or DESIGN would be bypassed on real UI work (~80 live SDs).
+  it('does NOT skip a UI feature SD whose category is the inherited container "orchestrator"', () => {
+    const r = classifyNonUIDesignContext({ sd_type: 'feature', category: 'orchestrator' });
+    expect(r.isNonUI).toBe(false);
+    expect(r.source).toBeNull();
+  });
+
+  it('does NOT skip a UI feature SD whose category is "process"', () => {
+    expect(classifyNonUIDesignContext({ sd_type: 'enhancement', category: 'process' }).isNonUI).toBe(false);
+  });
+
+  it('STILL skips when sd_type itself is orchestrator/process (genuine no-UI coordinator)', () => {
+    // The type tier remains broad — an sd_type=orchestrator SD is a coordinator with no UI.
+    expect(classifyNonUIDesignContext({ sd_type: 'orchestrator', category: 'feature' }))
+      .toEqual({ isNonUI: true, effectiveType: 'orchestrator', source: 'sd_type' });
+    expect(classifyNonUIDesignContext({ sd_type: 'process', category: '' }).isNonUI).toBe(true);
+  });
+
+  it('category tier is a strict subset of the type tier (excludes the container categories)', () => {
+    for (const c of NON_UI_DESIGN_CATEGORIES) expect(NON_UI_DESIGN_TYPES).toContain(c);
+    expect(NON_UI_DESIGN_CATEGORIES).not.toContain('orchestrator');
+    expect(NON_UI_DESIGN_CATEGORIES).not.toContain('process');
+    expect(NON_UI_DESIGN_CATEGORIES).toContain('backend');
   });
 });
