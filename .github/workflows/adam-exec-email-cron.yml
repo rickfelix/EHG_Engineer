@@ -140,6 +140,17 @@ jobs:
         continue-on-error: true
         run: npm run vision:gauge
 
+      # SD-LEO-INFRA-EXEC-EMAIL-FORECAST-FROZEN-001 (FR-1): run the build-completion FORECASTER writer
+      # on the SAME hourly cadence, AFTER the gauge snapshot it reads. Without this the cron only ran
+      # vision:gauge, so build_completion_forecast_log never gained a 2nd row — the 'Estimated completion'
+      # ETA stayed frozen and the FR-3 self-correction (needs >=2 rows) never accumulated. Same guard +
+      # continue-on-error as the gauge step so a writer failure can NEVER block the chairman email; the
+      # forecaster is itself fail-soft (records a degraded row rather than throwing).
+      - name: Historize the build-completion forecast (advance the ETA + self-correction)
+        if: steps.guard.outputs.should_send == 'true'
+        continue-on-error: true
+        run: npm run vision:build-forecast
+
       - name: Send chairman exec email (observe-only until ADAM_EMAIL_LIVE repo var = true)
         if: steps.guard.outputs.should_send == 'true'
         run: |

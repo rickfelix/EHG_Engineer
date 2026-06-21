@@ -26,7 +26,7 @@ import { computeBuildGauge, formatGaugeForSummary } from '../lib/vision/vdr-regi
 // SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-E (FR-4): rung/KR rollup → email, in lockstep
 import { runRollup } from '../lib/vision/rung-progress-rollup.mjs';
 // SD-LEO-INFRA-BUILD-COMPLETION-FORECAST-001 (FR-4): one-line infra-build completion ETA
-import { formatForecastLine } from '../lib/vision/build-completion-forecast.mjs';
+import { formatForecastLine, classifyForecastAvailability, FORECAST_DEGRADED_MARKER } from '../lib/vision/build-completion-forecast.mjs';
 import { formatRungRollupLine } from '../lib/fleet/exec-email-rung-rollup.js';
 // SD-LEO-INFRA-VDR-GREP-SEAM-CROSSREPO-001: the shared code-grep seam so the 5 code_grep probes resolve
 // (the chairman-visible gauge measures all 11 capabilities, not just the 6 DB/KR-backed ones).
@@ -171,15 +171,28 @@ try {
 // the latest persisted forecast run (build_completion_forecast_log), with the delta vs the prior run.
 // Fail-soft: a dormant table / no runs / any error → the line is omitted, NEVER blocks the email.
 let forecastLine = '';
+// SD-LEO-INFRA-EXEC-EMAIL-FORECAST-FROZEN-001 (FR-2): an error-omitted forecast must be DISTINGUISHABLE
+// from a genuine no-forecast. Previously a query error (or throw) and a present-but-empty table both
+// left forecastLine='' and the line silently vanished — so a broken forecast looked identical to "no
+// forecast yet". forecastDegraded marks the error path so the render shows an honest degraded marker.
+// An UNPROVISIONED/dormant table is NOT degraded (it's a genuine "no forecast yet" — stay silent),
+// mirroring the watchdog's tableProvisioned probe below.
+let forecastDegraded = false;
 try {
   const { data: fc, error } = await db.from('build_completion_forecast_log')
     .select('plateau, build_pct, binding_constraint, eta_days, eta_date, confidence, note')
     .order('measured_at', { ascending: false }).limit(2);
-  if (!error && Array.isArray(fc) && fc[0]) {
+  const cls = classifyForecastAvailability({ error, rows: fc }); // pure FR-2 discriminator (error vs genuine-empty)
+  forecastDegraded = cls.degraded;
+  if (cls.hasForecast) {
     const toF = (r) => r && ({ plateau: r.plateau, buildPct: r.build_pct, bindingConstraint: r.binding_constraint, etaDays: r.eta_days, etaDateIso: r.eta_date, confidence: r.confidence, note: r.note });
     forecastLine = formatForecastLine(toF(fc[0]), toF(fc[1]));
   }
-} catch (e) { console.warn('[adam-email] build-completion forecast line skipped (fail-soft): ' + (e?.message || e)); }
+  // else: genuine "no forecast yet" (empty/unprovisioned) → no line, no marker
+} catch (e) {
+  forecastDegraded = true; // a thrown read is an error-omission, not a genuine no-forecast
+  console.warn('[adam-email] build-completion forecast line skipped (fail-soft): ' + (e?.message || e));
+}
 
 // FR-4 (SD-LEO-INFRA-ADAM-SELF-AUDIT-RESOLVERS-001): write a DURABLE 'Adam read the vision gauge'
 // marker so the self-adherence audit can measure the vision-monitoring duty. Best-effort + fail-soft:
@@ -271,11 +284,15 @@ const text = [
   '',
   // FR-3: lead with the fleet-build % (the honest 'built' number); fall back to the rung-% if the
   // segregated number is unavailable; then show V1 rung-completion + operational proofs separately.
-  buildLine || (visPct != null ? `EHG vision: ${visPct}% built` : 'EHG vision: (gauge unavailable)'),
+  // FR-2 (FORECAST-FROZEN): when the gauge produced a number but the build-segmented line is
+  // unavailable, mark the bare fallback so a degraded buildLine is distinguishable from a normal render.
+  buildLine || (visPct != null ? `EHG vision: ${visPct}% built (build-segmented detail unavailable)` : 'EHG vision: (gauge unavailable)'),
   ...(rungNatureLine ? ['   ' + rungNatureLine] : []),
   ...(rungLine ? ['   ' + rungLine] : []),
   ...(rungRollupLine ? ['   ' + rungRollupLine] : []), // FR-4: per-rung completion rollup (Foundation → revenue)
-  ...(forecastLine ? ['   ' + forecastLine] : []), // BUILD-COMPLETION-FORECAST FR-4: infra-build completion ETA
+  // BUILD-COMPLETION-FORECAST FR-4: infra-build completion ETA. FR-2 (FORECAST-FROZEN): on a forecast
+  // ERROR show an explicit degraded marker (not a silent omission); a genuine no-forecast stays silent.
+  ...(forecastLine ? ['   ' + forecastLine] : (forecastDegraded ? ['   ' + FORECAST_DEGRADED_MARKER] : [])),
   ...(operationalLine ? ['   ' + operationalLine] : []),
   ...(layerLine ? ['   ' + layerLine] : []),
   ...(visNote ? ['   ' + visNote] : []),
