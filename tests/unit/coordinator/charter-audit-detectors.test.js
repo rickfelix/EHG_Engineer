@@ -9,6 +9,7 @@ import {
   classifyLiveness, detectIdleWithWork, detectDependencyHealth, detectWorktreePool,
   detectBacklogRankStaleness, detectQuietTickUnverified, foundationalQueryError, summarizeViolations,
   extractDepKey, resolveWorktreeCount, computeDispatchBelt, detectCrossRepoStarvation,
+  detectAutoRefillBacklog,
 } from '../../../lib/coordinator/charter-audit-detectors.mjs';
 import { STANDARD_LOOPS } from '../../../scripts/coordinator-startup-check.mjs';
 
@@ -302,5 +303,40 @@ describe('detectCrossRepoStarvation (SD-FDBK-INFRA-FLEET-SELF-CLAIM-001)', () =>
   it('empty claimable belt -> no violation', () => {
     const r = detectCrossRepoStarvation({ claimableSds: [], liveSessionApps: ['EHG_Engineer'], nowMs: NOW });
     expect(r.violation).toBe(false);
+  });
+});
+
+describe('detectAutoRefillBacklog (SD-LEO-INFRA-AUTO-REFILL-SELECTION-GATE-001-E)', () => {
+  it('promotable candidates + auto-refill NOT live -> advisory violation with remediation', () => {
+    const r = detectAutoRefillBacklog({ promotableCount: 17, autoRefillLive: false });
+    expect(r.violation).toBe(true);
+    expect(r.promotableCount).toBe(17);
+    expect(r.detail).toMatch(/17 staged/);
+    expect(r.remediation).toMatch(/sourcing:refill-verify/);
+  });
+
+  it('no promotable candidates -> no advisory (conservative)', () => {
+    const r = detectAutoRefillBacklog({ promotableCount: 0, autoRefillLive: false });
+    expect(r.violation).toBe(false);
+    expect(r.remediation).toBeNull();
+    expect(r.detail).toMatch(/no promotable/);
+  });
+
+  it('auto-refill LIVE suppresses the advisory even with candidates (cron drains them)', () => {
+    const r = detectAutoRefillBacklog({ promotableCount: 50, autoRefillLive: true });
+    expect(r.violation).toBe(false);
+    expect(r.detail).toMatch(/auto-refill live/);
+  });
+
+  it('respects a custom threshold (below -> no advisory)', () => {
+    expect(detectAutoRefillBacklog({ promotableCount: 3, threshold: 10 }).violation).toBe(false);
+    expect(detectAutoRefillBacklog({ promotableCount: 10, threshold: 10 }).violation).toBe(true);
+  });
+
+  it('is total-safe on odd input (NaN/negative/undefined -> 0, no advisory)', () => {
+    expect(detectAutoRefillBacklog({ promotableCount: NaN }).promotableCount).toBe(0);
+    expect(detectAutoRefillBacklog({ promotableCount: -5 }).violation).toBe(false);
+    expect(detectAutoRefillBacklog().violation).toBe(false);
+    expect(detectAutoRefillBacklog({ promotableCount: 2.9 }).promotableCount).toBe(2); // floored
   });
 });
