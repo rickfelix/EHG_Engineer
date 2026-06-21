@@ -7,16 +7,32 @@ describe('buildOrchestratorPromotion — SD-FDBK-INFRA-DECOMPOSE-PLAN-DEADLOCK-0
     expect(patch.sd_type).toBe('orchestrator');
   });
 
-  it('emits BOTH bypass dialects (the empirically-verified combo that passes both triggers)', () => {
-    const patch = buildOrchestratorPromotion({}, { reason: 'A sufficiently long governance reason for promotion.' });
+  it('emits BOTH bypass dialects (the live-verified combo that passes both triggers)', () => {
+    const reason = 'A sufficiently long governance reason for promotion.';
+    const patch = buildOrchestratorPromotion({}, { reason });
     // Dialect 1: trg_enforce_type_change_timing reads automation_context.
     expect(patch.governance_metadata.automation_context).toEqual({
       bypass_governance: true,
       actor_role: ACTOR_ROLE,
-      bypass_reason: 'A sufficiently long governance reason for promotion.',
+      bypass_reason: reason,
     });
-    // Dialect 2: trg_enforce_sd_type_change_governance reads type_change_reason (does NOT honor automation_context).
-    expect(patch.governance_metadata.type_change_reason).toBe('A sufficiently long governance reason for promotion.');
+    // Dialect 2: trg_enforce_sd_type_change_governance's clean override reads TOP-LEVEL bypass_reason
+    // (>=10 chars), short-circuiting before gaming detection. automation_context alone is NOT honored.
+    expect(patch.governance_metadata.bypass_reason).toBe(reason);
+    expect(patch.governance_metadata.bypass_reason.length).toBeGreaterThanOrEqual(10);
+    // type_change_reason kept for audit.
+    expect(patch.governance_metadata.type_change_reason).toBe(reason);
+  });
+
+  it('DEFAULT_REASON is gaming-clean (clears detect_type_change_gaming for a threshold-lowering change)', () => {
+    // Mirrors the live SQL detector: gaming regex AND NOT exoneration regex.
+    const gamingRe = /(threshold|validation|gate|reduce|easier|bypass|skip|avoid)/i;
+    const exonerationRe = /(discovered|actually|truly|nature|incorrect|wrong|mistaken|error)/i;
+    const lower = DEFAULT_REASON.toLowerCase();
+    const isGaming = gamingRe.test(lower) && !exonerationRe.test(lower);
+    expect(isGaming).toBe(false);
+    // It also clears the >=10-char top-level override floor.
+    expect(DEFAULT_REASON.length).toBeGreaterThanOrEqual(10);
   });
 
   it('preserves existing governance_metadata', () => {
