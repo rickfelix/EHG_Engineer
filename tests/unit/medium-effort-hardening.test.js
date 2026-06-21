@@ -207,6 +207,22 @@ describe('FR-3: red-merge decide()', async () => {
     expect(v.action).toBe('noop');
     expect(v.reason).toContain('dedup');
   });
+
+  // RCA f4ab2603 F2: a sha-PREFIX must not collide. Candidate 'donesha' must NOT be deduped by a QF
+  // for 'doneshaEXTRA' (':donesha' is a substring of ':doneshaEXTRA' but not the same sha).
+  it('dedup is delimiter-anchored: a sha-prefix does not collide', () => {
+    const v = decide(win, [], { dedupeQfs: [{ id: 'QF-y', status: 'completed', description: 'red-merge:ci_test_failure_count:doneshaEXTRA more' }] });
+    expect(v.action).toBe('file_qf');
+  });
+
+  // RCA f4ab2603 F5: the 'unknown-sha' sentinel must never dedup (degenerate signature would
+  // suppress DISTINCT sha-less regressions). snap() with no sha -> commit_sha defaults present, so
+  // build an explicit sha-less window.
+  it('unknown-sha sentinel is never deduped', () => {
+    const noSha = (failed) => ({ findings: [{ failed_count: failed, branch: 'main' }] }); // no commit_sha
+    const v = decide([noSha(121), noSha(120), noSha(103), noSha(103)], [], { dedupeQfs: [{ id: 'QF-u', status: 'completed', description: 'red-merge:ci_test_failure_count:unknown-sha prior' }] });
+    expect(v.action).toBe('file_qf');
+  });
 });
 
 // ── FR-1: recordFailure routing (TS-1) ───────────────────────────────────────
