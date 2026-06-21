@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 import {
   classifyLiveness, detectIdleWithWork, detectDependencyHealth, detectWorktreePool,
   detectBacklogRankStaleness, detectQuietTickUnverified, foundationalQueryError, summarizeViolations,
-  extractDepKey, resolveWorktreeCount, computeDispatchBelt,
+  extractDepKey, resolveWorktreeCount, computeDispatchBelt, detectCrossRepoStarvation,
 } from '../../../lib/coordinator/charter-audit-detectors.mjs';
 import { STANDARD_LOOPS } from '../../../scripts/coordinator-startup-check.mjs';
 
@@ -256,5 +256,51 @@ describe('STANDARD_LOOPS — durable schedule (FR-6)', () => {
     expect(loop.script).toBe('coordinator-charter-audit.mjs');
     expect(loop.prompt).toMatch(/RE-RUN/i);
     expect(loop.prompt).toMatch(/CHARTER_AUDIT_VIOLATIONS=0/);
+  });
+});
+
+describe('detectCrossRepoStarvation (SD-FDBK-INFRA-FLEET-SELF-CLAIM-001)', () => {
+  const ehgSd = (over = {}) => ({ sd_key: 'SD-EHG-COCKPIT-VENTPERF-BUILD-001', target_application: 'ehg', priority: 'high', created_at: ago(30 * 60 * 1000), ...over });
+
+  it('flags a cross-repo SD that NO live worker checkout can build (the starvation case)', () => {
+    const r = detectCrossRepoStarvation({ claimableSds: [ehgSd()], liveSessionApps: ['EHG_Engineer'], nowMs: NOW });
+    expect(r.violation).toBe(true);
+    expect(r.starvingCount).toBe(1);
+    expect(r.starving[0].sd_key).toBe('SD-EHG-COCKPIT-VENTPERF-BUILD-001');
+    expect(r.remediation).toMatch(/explicitly dispatch/i);
+    expect(r.remediation).toMatch(/SD-EHG-COCKPIT-VENTPERF-BUILD-001/);
+  });
+
+  it('does NOT flag when a live worker checkout CAN build it (an ehg-checkout worker is live)', () => {
+    const r = detectCrossRepoStarvation({ claimableSds: [ehgSd()], liveSessionApps: ['EHG_Engineer', 'ehg'], nowMs: NOW });
+    expect(r.violation).toBe(false);
+    expect(r.starvingCount).toBe(0);
+  });
+
+  it('does NOT flag a repo-agnostic SD (no target_application — executable anywhere)', () => {
+    const sd = { sd_key: 'SD-LEO-INFRA-X-001', priority: 'high', created_at: ago(30 * 60 * 1000) };
+    const r = detectCrossRepoStarvation({ claimableSds: [sd], liveSessionApps: ['EHG_Engineer'], nowMs: NOW });
+    expect(r.violation).toBe(false);
+  });
+
+  it('does NOT flag a too-young cross-repo SD (still inside a brief window)', () => {
+    const r = detectCrossRepoStarvation({ claimableSds: [ehgSd({ created_at: ago(60 * 1000) })], liveSessionApps: ['EHG_Engineer'], nowMs: NOW, minAgeMs: 12 * 60 * 1000 });
+    expect(r.violation).toBe(false);
+  });
+
+  it('uses metadata.dispatch_rank_at for age when present (belt-arrival time)', () => {
+    const r = detectCrossRepoStarvation({ claimableSds: [ehgSd({ created_at: ago(1000), metadata: { dispatch_rank_at: ago(30 * 60 * 1000) } })], liveSessionApps: ['EHG_Engineer'], nowMs: NOW });
+    expect(r.violation).toBe(true);
+  });
+
+  it('GUARD: with zero live worker apps it never flags (no-fleet != cross-repo starvation)', () => {
+    const r = detectCrossRepoStarvation({ claimableSds: [ehgSd()], liveSessionApps: [], nowMs: NOW });
+    expect(r.violation).toBe(false);
+    expect(r.detail).toMatch(/no live worker apps/i);
+  });
+
+  it('empty claimable belt -> no violation', () => {
+    const r = detectCrossRepoStarvation({ claimableSds: [], liveSessionApps: ['EHG_Engineer'], nowMs: NOW });
+    expect(r.violation).toBe(false);
   });
 });
