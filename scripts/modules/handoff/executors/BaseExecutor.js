@@ -10,6 +10,7 @@ import { safeTruncate as _safeTruncate } from '../../../../lib/utils/safe-trunca
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
+import { createRequire } from 'module';
 import { shouldSkipAndContinue, executeSkipAndContinue } from '../skip-and-continue.js';
 import { resolveRepoPath, ENGINEER_ROOT, isVentureRepo, resolveGateRepoContext } from '../../../../lib/repo-paths.js';
 // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Shared git context to eliminate redundant execSync calls
@@ -413,6 +414,30 @@ export class BaseExecutor {
             // Retry eligible — increment and loop
             currentRetryCount++;
             console.log(`\n   🔄 Gate retry ${currentRetryCount}/${maxGateRetries}: ${skipCheck.reason}`);
+            // SD-LEO-INFRA-SIGNAL-THRESHOLD-AUTO-EMIT-001 (FR-1): auto-emit a /signal at the gate-2x
+            // crossing — enforcement-layer escalation mirroring the shipped RCA-2x wiring. Fire-and-forget
+            // (detached + unref), env-gated (LEO_AUTO_SIGNAL=off), wrapped fail-open: it can NEVER block,
+            // slow, or throw into the handoff. Removes worker discretion at the gate-recurrence threshold.
+            try {
+              const _req = createRequire(import.meta.url);
+              const { shouldEmitGateAutoSignal, buildGateAutoSignalArgs } =
+                _req(path.join(ENGINEER_ROOT, 'lib', 'hooks', 'auto-signal-threshold.cjs'));
+              const _sessionId = process.env.CLAUDE_SESSION_ID;
+              if (shouldEmitGateAutoSignal({ retryCount: currentRetryCount, sessionId: _sessionId, env: process.env })) {
+                const { spawn } = _req('child_process');
+                const _args = buildGateAutoSignalArgs({
+                  gateName: gateResults.failedGate,
+                  sdKey: sd?.sd_key || sd?.id,
+                  retryCount: currentRetryCount,
+                });
+                const _child = spawn(
+                  process.execPath,
+                  [path.join(ENGINEER_ROOT, 'scripts', 'worker-signal.cjs'), ..._args],
+                  { detached: true, stdio: 'ignore', env: { ...process.env, CLAUDE_SESSION_ID: _sessionId } }
+                );
+                _child.unref();
+              }
+            } catch { /* fail-open: auto-signal must never block the handoff */ }
             continue;
           }
         }
