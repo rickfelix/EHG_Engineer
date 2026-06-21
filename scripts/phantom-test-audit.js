@@ -64,7 +64,7 @@ export function auditPhantomTableTests({ removedTables, changedFiles, testFiles 
   const issues = [
     `PHANTOM_TEST_AUDIT: ${orphaned.length} orphaned test reference(s) to removed table literal(s):`,
     ...orphaned.map(o => `  - test "${o.testFile}" references removed table '${o.table}' but was NOT edited in this PR`),
-    `Edit the listed test file(s) in the same PR, OR set PHANTOM_TEST_AUDIT_BYPASS=1 with bypass reason in handoff governance_metadata.`,
+    'Edit the listed test file(s) in the same PR, OR set PHANTOM_TEST_AUDIT_BYPASS=1 with bypass reason in handoff governance_metadata.',
   ];
   return {
     passed: false,
@@ -97,9 +97,34 @@ export const PHANTOM_COMMIT_TRIGGER = /phantom.*table|dead.*query/i;
  * @param {string} opts.baseRef - Base ref (default origin/main)
  * @returns {{triggered: boolean, result: ReturnType<auditPhantomTableTests> | null}}
  */
+/**
+ * Resolve the effective audit base = the MERGE-BASE of HEAD and baseRef, not the raw baseRef tip.
+ * SD-FDBK-INFRA-PHANTOM-TEST-AUDIT-001: on a worktree branch N commits BEHIND origin/main,
+ * `git diff origin/main..HEAD` (two-dot in diff = compare the two tips) surfaces origin/main's
+ * ADVANCING commits as reversed removals, so extractRemovedLiterals harvests literals that the
+ * branch never touched and the audit reports hundreds of false phantom orphans (Alpha 2026-06-21:
+ * 668 false orphans on a 5-behind branch, only cleared by resetting the worktree to origin/main).
+ * The merge-base excludes commits already on main, scoping the diff to what THIS branch changed.
+ * Fall back to baseRef when the merge-base can't be resolved (no common ancestor / detached HEAD /
+ * git error) — never worse than the prior behavior.
+ *
+ * @param {Object} opts
+ * @param {string} opts.repoPath - Repo root
+ * @param {string} [opts.baseRef] - Base ref (default origin/main)
+ * @param {(cmd: string, cwd: string) => string} [opts.git] - Injectable git runner (for tests)
+ * @returns {string} merge-base commit SHA, or baseRef if it cannot be resolved
+ */
+export function resolveAuditBase({ repoPath, baseRef = 'origin/main', git = safeGit }) {
+  const mergeBase = (git(`git merge-base HEAD ${baseRef}`, repoPath) || '').trim().split('\n')[0].trim();
+  return mergeBase || baseRef;
+}
+
 export function collectAndAudit({ repoPath, baseRef = 'origin/main' }) {
-  // Commit subjects in baseRef..HEAD; subject-only (--format=%s)
-  const subjects = safeGit(`git log ${baseRef}..HEAD --format=%s`, repoPath);
+  // Diff against the merge-base, not the raw baseRef tip (stale-base false-positive fix; see resolveAuditBase).
+  const base = resolveAuditBase({ repoPath, baseRef });
+
+  // Commit subjects in base..HEAD; subject-only (--format=%s)
+  const subjects = safeGit(`git log ${base}..HEAD --format=%s`, repoPath);
   const triggered = subjects
     .split('\n')
     .map(s => s.trim())
@@ -111,11 +136,11 @@ export function collectAndAudit({ repoPath, baseRef = 'origin/main' }) {
   }
 
   // Removed string literals from src diff (single-line single/double-quoted).
-  const diff = safeGit(`git diff ${baseRef}..HEAD -- "scripts/*" "lib/*" "src/*"`, repoPath, { maxBuffer: 16 * 1024 * 1024 });
+  const diff = safeGit(`git diff ${base}..HEAD -- "scripts/*" "lib/*" "src/*"`, repoPath, { maxBuffer: 16 * 1024 * 1024 });
   const removedTables = extractRemovedLiterals(diff);
 
   // Files changed in this PR.
-  const changedRaw = safeGit(`git diff --name-only ${baseRef}..HEAD`, repoPath);
+  const changedRaw = safeGit(`git diff --name-only ${base}..HEAD`, repoPath);
   const changedFiles = changedRaw.split('\n').map(s => s.trim()).filter(Boolean);
 
   // Test files to scan (recursive from tests/ and __tests__/).
