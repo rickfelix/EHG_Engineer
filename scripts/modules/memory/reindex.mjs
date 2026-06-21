@@ -57,10 +57,15 @@ export function reindex({ memoryDir, dryRun = false, stderr = process.stderr } =
     .sort();
 
   const entries = [];
+  let parseFailures = 0;
   for (const filename of files) {
     try {
       entries.push({ filename, parsed: parseMemoryFrontmatter(join(dir, filename)) });
     } catch (err) {
+      // A read/parse THROW (file vanished mid-loop, EISDIR, permission) means we
+      // cannot trust this snapshot's completeness — track it for the lost-update
+      // guard so a transient error can't silently shrink the index.
+      parseFailures++;
       stderr.write(`[memory/reindex] WARN: skipping ${filename}: ${err.message}\n`);
     }
   }
@@ -100,6 +105,17 @@ export function reindex({ memoryDir, dryRun = false, stderr = process.stderr } =
     stderr.write(`[memory/reindex] GUARD: refusing to overwrite a populated MEMORY.md with an empty index (lost-update guard)\n`);
     return { ok: false, reason: 'lost_update_guard', dryRun: false, lineCount: 0, fileCount: files.length };
   }
+  // FR-3 (partial): if SOME pointer files failed to read this run AND the result
+  // would SHRINK an existing index, the snapshot is untrustworthy — refuse and
+  // self-heal on the next clean run. A shrink with NO read errors is a legitimate
+  // removal and is allowed through.
+  if (parseFailures > 0) {
+    const existingCount = indexFileLineCount(join(dir, INDEX_FILENAME));
+    if (existingCount > indexLines.length) {
+      stderr.write(`[memory/reindex] GUARD: ${parseFailures} pointer file(s) failed to read and the index would shrink ${existingCount}->${indexLines.length}; refusing to drop lines (partial lost-update guard)\n`);
+      return { ok: false, reason: 'partial_lost_update_guard', dryRun: false, lineCount: indexLines.length, existingCount, parseFailures };
+    }
+  }
 
   // FR-1/FR-2: serialize concurrent regenerators with an atomic lock, and write
   // every file atomically (temp + rename) so a concurrent reader/writer never
@@ -124,6 +140,16 @@ function indexFileNonEmpty(indexPath) {
     return readFileSync(indexPath, 'utf8').trim().length > 0;
   } catch {
     return false;
+  }
+}
+
+/** @returns {number} count of non-empty lines in the existing index (0 if absent/unreadable). */
+function indexFileLineCount(indexPath) {
+  try {
+    if (!existsSync(indexPath)) return 0;
+    return readFileSync(indexPath, 'utf8').split('\n').filter(l => l.trim().length > 0).length;
+  } catch {
+    return 0;
   }
 }
 

@@ -3,7 +3,7 @@
  * Tests the atomic-write + index-lock primitives and the reindex lost-update guard.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, readdirSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, readdirSync, mkdirSync, renameSync as renameSyncReal } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { atomicWriteFileSync, withMemoryIndexLock } from '../../lib/memory/atomic-write.mjs';
@@ -31,6 +31,25 @@ describe('atomicWriteFileSync', () => {
     atomicWriteFileSync(target, 'v1');
     atomicWriteFileSync(target, 'v2-longer-content');
     expect(readFileSync(target, 'utf8')).toBe('v2-longer-content');
+  });
+
+  it('retries a transient EPERM rename (Windows sharing violation) then succeeds', () => {
+    const target = join(dir, 'MEMORY.md');
+    let calls = 0;
+    const flakyRename = (from, to) => {
+      calls++;
+      if (calls < 3) { const e = new Error('EPERM'); e.code = 'EPERM'; throw e; }
+      renameSyncReal(from, to);
+    };
+    atomicWriteFileSync(target, 'after-retry', { _rename: flakyRename, renameBackoffMs: 0, sleep: () => {} });
+    expect(calls).toBe(3);
+    expect(readFileSync(target, 'utf8')).toBe('after-retry');
+  });
+
+  it('rethrows a non-transient rename error immediately', () => {
+    const target = join(dir, 'MEMORY.md');
+    const enoent = (from, to) => { const e = new Error('ENOENT'); e.code = 'ENOENT'; throw e; };
+    expect(() => atomicWriteFileSync(target, 'x', { _rename: enoent, sleep: () => {} })).toThrow('ENOENT');
   });
 });
 
@@ -90,6 +109,29 @@ describe('reindex lost-update guard + atomic output', () => {
     expect(r.reason).toBe('lost_update_guard');
     // populated index left intact
     expect(readFileSync(join(dir, 'MEMORY.md'), 'utf8')).toContain('existing');
+  });
+
+  it('refuses to SHRINK a populated index when some pointer files fail to read (partial lost-update)', () => {
+    // 3 pointer "files": 2 are directories named *.md → readFileSync throws (EISDIR/EPERM)
+    // → parseFailures>0; 1 valid. Existing index has 3 lines; result would shrink to 1.
+    writeFileSync(join(dir, 'MEMORY.md'), '- [a](project_a.md)\n- [b](project_b.md)\n- [c](project_c.md)\n');
+    writeFileSync(join(dir, 'project_a.md'), pointerFile('mem-a', 'first'));
+    mkdirSync(join(dir, 'project_b.md')); // a directory → read throws
+    mkdirSync(join(dir, 'project_c.md')); // a directory → read throws
+    const r = reindex({ memoryDir: dir, stderr: { write() {} } });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('partial_lost_update_guard');
+    expect(r.parseFailures).toBeGreaterThan(0);
+    // existing 3-line index left intact (no lines dropped)
+    expect(readFileSync(join(dir, 'MEMORY.md'), 'utf8').split('\n').filter(Boolean).length).toBe(3);
+  });
+
+  it('allows a legitimate shrink (fewer files, NO read errors)', () => {
+    writeFileSync(join(dir, 'MEMORY.md'), '- [a](project_a.md)\n- [b](project_b.md)\n');
+    writeFileSync(join(dir, 'project_a.md'), pointerFile('mem-a', 'only one left'));
+    const r = reindex({ memoryDir: dir });
+    expect(r.ok).toBe(true);
+    expect(r.lineCount).toBe(1); // legitimately removed project_b
   });
 
   it('allows writing an empty index for a genuinely empty memory dir', () => {
