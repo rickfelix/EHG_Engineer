@@ -1,0 +1,47 @@
+name: Prod Error Sweep Loop
+
+# SD-LEO-INFRA-PROD-ERROR-SWEEP-WIRE-001: schedule the shipped-but-never-fired
+# scripts/clockwork/prod-error-sweep-loop.cjs. Before this workflow the loop had a
+# loop-contract-registry entry declaring cron '40 * * * *' but NOTHING actually scheduled it
+# (0 runs ever). The script is SHIP-DORMANT by design: it exits [SKIP] (exit 0) unless
+# PROD_ERROR_SWEEP_LOOP_ENABLE === 'true', so wiring the schedule is safe — the chairman flips the
+# repo variable PROD_ERROR_SWEEP_LOOP_ENABLE=true to activate it (no code change needed). Until then
+# every run is a clean no-op SKIP.
+on:
+  schedule:
+    # Matches the loop-contract-registry cron for prod-error-sweep-loop (hourly at :40).
+    - cron: '40 * * * *'
+  workflow_dispatch: {}
+
+# Avoid overlapping runs (the sweep can create SDs); newest run waits, never piles up.
+concurrency:
+  group: prod-error-sweep-loop
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    name: Prod error sweep -> source remediation SDs (gated by PROD_ERROR_SWEEP_LOOP_ENABLE)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+
+      - name: Run prod-error sweep loop (SKIP unless PROD_ERROR_SWEEP_LOOP_ENABLE=true)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Chairman activation switch — set repo variable PROD_ERROR_SWEEP_LOOP_ENABLE=true to enable.
+          # Absent/anything-but-'true' => the script logs [SKIP] and exits 0 (ship-dormant).
+          PROD_ERROR_SWEEP_LOOP_ENABLE: ${{ vars.PROD_ERROR_SWEEP_LOOP_ENABLE }}
+        # The script is fail-soft (exits 0 even on fatal); continue-on-error is belt-and-suspenders so a
+        # sweep hiccup never marks the schedule red.
+        continue-on-error: true
+        run: node scripts/clockwork/prod-error-sweep-loop.cjs
