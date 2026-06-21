@@ -14,6 +14,7 @@ import {
   detectClaimHalfWrite,
   detectLoopExpiry,
   detectStalledLoop,
+  stalledLoopSessionIds,
   detectEvaSchedulerStale,
   runDetectors,
 } from '../../../lib/coordinator/detectors.cjs';
@@ -155,6 +156,31 @@ describe('detectStalledLoop', () => {
       { ...stalled, session_id: 'stale', heartbeat_at: minsAgo(30) },                             // not fresh → looks dead
     ];
     expect(detectStalledLoop({ sessions, unclaimedItems: 5, now: NOW }).matched).toBe(false);
+  });
+});
+
+describe('stalledLoopSessionIds (SD-LEO-FEAT-COORDINATOR-CAPACITY-FORECAST-001)', () => {
+  const active = { session_id: 'w1', loop_state: 'active', sd_key: null, heartbeat_at: minsAgo(2), expected_silence_until: null };
+
+  it('projects the flagged session_ids as a Set', () => {
+    const ids = stalledLoopSessionIds({ sessions: [active], unclaimedItems: 3, now: NOW });
+    expect(ids).toBeInstanceOf(Set);
+    expect(ids.has('w1')).toBe(true);
+    expect(ids.size).toBe(1);
+  });
+
+  it('the capacity-forecast false positive is gone: a healthy idle /loop worker between ticks is NOT flagged', () => {
+    // A parked worker (loop set awaiting_tick / a future silence window before ScheduleWakeup) with
+    // claimable belt is exactly what the old heartbeat-age rule false-flagged "needs /loop re-arm".
+    const parked = [
+      { ...active, session_id: 'parked', loop_state: 'awaiting_tick' },
+      { ...active, session_id: 'silenced', expected_silence_until: new Date(NOW + 600_000).toISOString() },
+    ];
+    expect(stalledLoopSessionIds({ sessions: parked, unclaimedItems: 5, now: NOW }).size).toBe(0);
+  });
+
+  it('empty belt → empty set (belt-empty guard preserved)', () => {
+    expect(stalledLoopSessionIds({ sessions: [active], unclaimedItems: 0, now: NOW }).size).toBe(0);
   });
 });
 
