@@ -18,6 +18,7 @@
  * 12. npm install Concurrency Guard (QF-20260426-822) - HARD BLOCK (exit 2)
  * 13. Worktree Hygiene Guard (SD-LEO-INFRA-PRE-TOOL-WORKTREE-GUARD-001) - HARD BLOCK on main/master + WARN-ONCE on inherited dirt
  * 15. Force-Push Gate (SD-FDBK-INFRA-ALLOW-FORCE-LEASE-001) - HARD BLOCK by default; OVERRIDE on solo SD/QF feature branches when LEO_FORCE_PUSH_OWN_BRANCH=allow
+ * 17. Shared-Tree Hijack Guard (SD-LEO-FEAT-SHARED-TREE-HIJACK-001) - HARD BLOCK on HEAD-moving git op (checkout/switch/reset --hard) in the shared ROOT while a foreign coordinator is active; fail-open
  *
  * Hook API:
  *   Input:  CLAUDE_TOOL_INPUT (JSON), CLAUDE_TOOL_NAME (string)
@@ -1383,6 +1384,46 @@ async function main() {
       // Fail-open: any internal error in ENF-16 must NOT block tool execution.
       if (process.env.LEO_TELEMETRY_DEBUG === '1') {
         process.stderr.write(`[pre-tool-enforce] ENF-16 errored (fail-open): ${noVerifyErr.message}\n`);
+      }
+    }
+
+    // --- ENFORCEMENT 17: Shared-Tree Hijack Guard (SD-LEO-FEAT-SHARED-TREE-HIJACK-001) ---
+    // Blocks a HEAD-moving git op (checkout/switch to a branch, or `reset --hard`) run in the
+    // SHARED operator/coordinator ROOT working tree while a DIFFERENT session holds the
+    // active-coordinator pointer. Live HIGH incident 2026-06-11: a QF worker's `git checkout`
+    // in the shared root un-deployed the coordinator's branch, reverting its scripts/hooks on
+    // disk mid-tick while loaded skills kept running. The pointer was only RESTORED after the
+    // fact (post-checkout-role-restore.cjs); this defends BEFORE the destructive checkout.
+    // Decision logic is pure + unit-tested in lib/shared-tree-guard.cjs; this owns pointer-read,
+    // cwd resolution, audit + exit. Fail-OPEN (no coordinator / self / any error → allow), so a
+    // solo operator is never locked out. Disable with LEO_SHARED_TREE_GUARD=off.
+    try {
+      const { decideSharedTreeCheckout } = require('./lib/shared-tree-guard.cjs');
+      let coordinatorSessionId = null;
+      try {
+        const pointer = require('../../lib/coordinator/resolve.cjs').readPointerFile();
+        coordinatorSessionId = pointer && pointer.session_id ? pointer.session_id : null;
+      } catch { coordinatorSessionId = null; }
+      const verdict = decideSharedTreeCheckout(cmd, {
+        cwd: (input && input.cwd) || process.cwd(),
+        sessionId: _SESSION_ID,
+        coordinatorSessionId,
+        env: process.env,
+      });
+      if (verdict.block) {
+        const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-17', 'Shared-tree hijack guard: HEAD-moving git op in shared root while a foreign coordinator is active', 'block', { kind: verdict.kind, coordinator_session_id: coordinatorSessionId });
+        process.stderr.write(
+          `[ENF-17] SHARED-TREE HIJACK BLOCKED: a '${verdict.kind === 'reset' ? 'git reset --hard' : 'git checkout/switch'}' in the SHARED ROOT tree\n` +
+          `  would revert coordinator ${coordinatorSessionId}'s branch on disk (scripts/hooks vanish mid-tick — the 2026-06-11 incident).\n` +
+          `  Work in an isolated worktree instead: node scripts/sd-start.js <SD>  (or: npm run session:worktree)\n` +
+          `  A branch op INSIDE .worktrees/<sd>/ (or via 'git -C <worktree>') is allowed. Override: LEO_SHARED_TREE_GUARD=off\n`
+        );
+        await auditAndExit(auditPromise, 2);
+      }
+    } catch (sharedTreeErr) {
+      // Fail-open: any internal error in ENF-17 must NOT block tool execution.
+      if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+        process.stderr.write(`[pre-tool-enforce] ENF-17 errored (fail-open): ${sharedTreeErr.message}\n`);
       }
     }
   }
