@@ -1205,6 +1205,26 @@ async function main() {
           `next repeat ${bypassed ? '(bypass active)' : 'will be blocked'}. ` +
           `Consider invoking rca-agent if this indicates a persistent failure.`
         );
+
+        // SD-LEO-INFRA-THRESHOLD-AUTO-SIGNAL-001 (FR-1): at the RCA recurrence threshold, AUTO-EMIT a
+        // /signal to the coordinator instead of relying on worker discretion (workers under-escalate
+        // because the threshold is prompt-advisory). Fires ONCE per signature (===2 crossing),
+        // FIRE-AND-FORGET (detached + unref, never awaited), env-disableable (LEO_AUTO_SIGNAL=off),
+        // FAIL-OPEN (any error swallowed — auto-signal must NEVER block or slow a tool call).
+        try {
+          const { shouldEmitAutoSignal, buildAutoSignalArgs } = require('../../lib/hooks/auto-signal-threshold.cjs');
+          if (shouldEmitAutoSignal({ attempts, sessionId: _SESSION_ID, env: process.env })) {
+            const path = require('path');
+            const { spawn } = require('child_process');
+            const args = buildAutoSignalArgs({ toolName: TOOL_NAME, signature, attempts, sdKey: claimedSdKey });
+            const child = spawn(
+              process.execPath,
+              [path.join(__dirname, '..', 'worker-signal.cjs'), ...args],
+              { detached: true, stdio: 'ignore', env: { ...process.env, CLAUDE_SESSION_ID: _SESSION_ID } }
+            );
+            child.unref();
+          }
+        } catch { /* fail-open: auto-signal must never block tool execution */ }
       }
     }
   } catch (rcaErr) {
