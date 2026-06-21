@@ -66,6 +66,15 @@ describe('classifyRequiresInvocation — conservative FALSE (no false violations
       expect(classifyRequiresInvocation(p, { content: main }).requiresInvocation, p).toBe(false);
     }
   });
+  it('a -loop/-sweep-named PURE LIBRARY (no runnable surface) is NOT required (adversarial -C HIGH)', () => {
+    const lib = 'export function step(){}\nexport const N = 1;'; // exports only, no main/argv/shebang
+    expect(classifyRequiresInvocation('scripts/modules/prd/rewrite-loop.js', { content: lib }).requiresInvocation).toBe(false);
+    expect(classifyRequiresInvocation('scripts/modules/qf/compliance-loop.js', { content: lib }).requiresInvocation).toBe(false);
+    // but a -loop file that IS runnable still requires a trigger:
+    expect(classifyRequiresInvocation('scripts/x-loop.cjs', { content: 'async function main(){}\nmain();' }).requiresInvocation).toBe(true);
+    // and path-only (no content) still trusts the suffix (can't verify):
+    expect(classifyRequiresInvocation('scripts/y-loop.cjs').requiresInvocation).toBe(true);
+  });
   it('a plain runnable CLI with no scheduling semantics defaults to FALSE', () => {
     const content = '#!/usr/bin/env node\nasync function main(){ console.log("report"); }\nmain();';
     expect(classifyRequiresInvocation('scripts/print-report.mjs', { content }).requiresInvocation).toBe(false);

@@ -35,6 +35,11 @@ export { createWiringValidationGate };
 import { createWireCheckGate } from './gates/wire-check-gate.js';
 export { createWireCheckGate };
 
+// Invocation-Path Proof Gate — autonomous code must have a LIVE trigger, not just be reachable
+// (SD-LEO-INFRA-INVOCATION-PATH-PROOF-001-C)
+import { createInvocationPathGate } from './gates/invocation-path-gate.js';
+export { createInvocationPathGate };
+
 // Phantom Test Audit Gate — call-surface alignment check (SD-FDBK-ENH-PAT-PHANTOM-TABLE-001)
 import { createPhantomTestAuditGate } from './gates/phantom-test-audit-gate.js';
 export { createPhantomTestAuditGate };
@@ -1201,6 +1206,10 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // Wire Check Gate — AST call graph reachability for new files
   // (SD-MAN-INFRA-FIX-ORCHESTRATOR-CHILD-001-C)
   gates.push(createWireCheckGate(supabase));
+  // Invocation-Path Proof — autonomous code (per FR-2 classifier) must have a LIVE production
+  // trigger (per FR-1 detector), complementing WIRE_CHECK's reachable-only check.
+  // (SD-LEO-INFRA-INVOCATION-PATH-PROOF-001-C)
+  gates.push(createInvocationPathGate(supabase));
   gates.push(createPhantomTestAuditGate(supabase));
 
   // Learning-or-Bypass-Resolved Gate — completion safeguard
