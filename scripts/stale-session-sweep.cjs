@@ -494,7 +494,12 @@ async function splitCollidingSessions(supabase, collisions, actions, warnings) {
           original_session_id: collision.session_id
         },
         sender_type: 'sweep'
-      }).catch(() => {});
+      // SD-FDBK-INFRA-FATAL-CRASH-STALE-001: a PostgREST builder is thenable but exposes no catch
+      // method, so chaining catch directly onto the insert builder threw TypeError synchronously and
+      // main's rejection handler did process.exit(1), aborting the ENTIRE sweep tick on the
+      // (intermittent) IDENTITY_SPLIT path. then() yields a real Promise first, so the rejection
+      // handler is valid — the same fire-and-forget pattern this file already uses near line 1621.
+      }).then(() => {}).catch(() => {});
 
       actions.push('IDENTITY_SPLIT: PID ' + extra.pid + ' → new session ' + newSessionId.substring(0, 20) + ' (terminal_id=' + newTerminalId + ')');
     }
