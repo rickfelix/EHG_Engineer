@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import process from 'node:process';
 import { parseMemoryFrontmatter } from './frontmatter.js';
 import { clusterByPrefix, buildTopicFilename, buildTopicContent } from './clustering.mjs';
+import { atomicWriteFileSync, withMemoryIndexLock } from '../../../lib/memory/atomic-write.mjs';
 
 const INDEX_FILENAME = 'MEMORY.md';
 const TOPIC_PREFIX = 'topic_';
@@ -86,13 +87,44 @@ export function reindex({ memoryDir, dryRun = false, stderr = process.stderr } =
     return { ok: !overBudget, dryRun: true, indexBytes, lineCount: indexLines.length, topicCount: topics.length, overBudget };
   }
 
-  for (const t of topics) {
-    const path = join(dir, buildTopicFilename(t.prefix));
-    writeFileSync(path, buildTopicContent(t.prefix, t.members), 'utf8');
+  // FR-3 lost-update guard: never replace a populated index with a degenerate
+  // (zero-line) one produced by a transient readdir/parse error. If we computed
+  // zero entries but pointer files exist on disk OR a non-empty index already
+  // exists, refuse the write and fail safe — a real wipe only happens when the
+  // memory dir is genuinely empty (no eligible pointer files).
+  if (indexLines.length === 0 && files.length > 0) {
+    stderr.write(`[memory/reindex] GUARD: refusing to overwrite the index with 0 entries while ${files.length} pointer file(s) exist (lost-update guard)\n`);
+    return { ok: false, reason: 'lost_update_guard', dryRun: false, lineCount: 0, fileCount: files.length };
   }
-  writeFileSync(join(dir, INDEX_FILENAME), indexOutput, 'utf8');
+  if (indexLines.length === 0 && indexFileNonEmpty(join(dir, INDEX_FILENAME))) {
+    stderr.write(`[memory/reindex] GUARD: refusing to overwrite a populated MEMORY.md with an empty index (lost-update guard)\n`);
+    return { ok: false, reason: 'lost_update_guard', dryRun: false, lineCount: 0, fileCount: files.length };
+  }
 
-  return { ok: !overBudget, dryRun: false, indexBytes, lineCount: indexLines.length, topicCount: topics.length, overBudget };
+  // FR-1/FR-2: serialize concurrent regenerators with an atomic lock, and write
+  // every file atomically (temp + rename) so a concurrent reader/writer never
+  // observes a torn or partially-written index. Lock fails open after its retry
+  // budget; the atomic writes still guarantee tear-free output.
+  const { acquired } = withMemoryIndexLock(dir, () => {
+    for (const t of topics) {
+      const path = join(dir, buildTopicFilename(t.prefix));
+      atomicWriteFileSync(path, buildTopicContent(t.prefix, t.members), { encoding: 'utf8' });
+    }
+    atomicWriteFileSync(join(dir, INDEX_FILENAME), indexOutput, { encoding: 'utf8' });
+  });
+
+  return { ok: !overBudget, dryRun: false, indexBytes, lineCount: indexLines.length, topicCount: topics.length, overBudget, lockAcquired: acquired };
+}
+
+/** @returns {boolean} true if the index file exists and has non-whitespace content. */
+function indexFileNonEmpty(indexPath) {
+  try {
+    if (!existsSync(indexPath)) return false;
+    if (statSync(indexPath).size === 0) return false;
+    return readFileSync(indexPath, 'utf8').trim().length > 0;
+  } catch {
+    return false;
+  }
 }
 
 const isMain = import.meta.url === `file://${process.argv[1]}` ||
