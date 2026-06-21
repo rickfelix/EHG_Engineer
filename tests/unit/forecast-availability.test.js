@@ -22,13 +22,21 @@ describe('classifyForecastAvailability (FR-2)', () => {
     expect(r.hasForecast).toBe(false);
   });
 
-  it('treats an UNPROVISIONED/dormant table as a genuine no-forecast (silent, not degraded)', () => {
+  it('treats a genuine pre-migration table (relation does not exist, 42P01) as a no-forecast (silent)', () => {
+    const r = classifyForecastAvailability({ error: { message: 'relation "build_completion_forecast_log" does not exist' }, rows: null });
+    expect(r).toEqual({ degraded: false, hasForecast: false });
+  });
+
+  it('QF-20260621-570: a transient schema-cache miss (table is LIVE) is DEGRADED (loud marker), never silent', () => {
+    // The PostgREST PGRST205 "schema cache" / "could not find the table" message on a provisioned table is
+    // a transient cache miss (common right after a same-run write+read), not a missing table — so it must
+    // render the degraded marker, not silently drop the line.
     for (const msg of [
-      'relation "build_completion_forecast_log" does not exist',
+      "Could not find the table 'public.build_completion_forecast_log' in the schema cache",
       'Could not find the table in the schema cache',
     ]) {
       const r = classifyForecastAvailability({ error: { message: msg }, rows: null });
-      expect(r).toEqual({ degraded: false, hasForecast: false });
+      expect(r).toEqual({ degraded: true, hasForecast: false });
     }
   });
 
