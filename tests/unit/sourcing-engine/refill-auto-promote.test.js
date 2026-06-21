@@ -77,12 +77,31 @@ describe('buildRefillSdKey / buildRefillSdPayload (pure)', () => {
     // id is NOT NULL in strategic_directives_v2 with no DB default — the raw-insert path MUST mint one
     // (omitting it 23502-fails every promotion on live-flip). Guard against that regression.
     expect(p.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-    // untyped item -> sd_type null so the createSD/key-prefix default applies (not a baked 'feature').
-    expect(p.sd_type).toBeNull();
+    // sd_type is NOT NULL (DB default 'feature'); the raw-insert path can't rely on key-prefix resolution
+    // and an explicit null 23502s. Untyped belt item -> concrete 'infrastructure' (not a baked 'feature'),
+    // with category aligned (capitalize). Guards against the live NOT-NULL failure the null shape shipped.
+    expect(p.sd_type).toBe('infrastructure');
+    expect(p.category).toBe('Infrastructure');
     // explicit target so harness items don't fall to the DB's EHG default.
     expect(p.target_application).toBe('EHG_Engineer');
     // DISTINCT description (not a title clone) via the canonical deriver.
     expect(p.description).not.toBe(p.title);
+  });
+
+  it('sets EVERY NOT-NULL-without-default column the DB triggers do not backfill (no live 23502)', () => {
+    // Authoritative set from the live schema (information_schema NOT NULL + no default), MINUS the three
+    // a BEFORE INSERT trigger fills (sequence_rank, sd_code_user_facing, uuid_internal_pk). The raw-insert
+    // path bypasses createSD, so omitting any of THESE 23502-fails every promotion on live-flip. This test
+    // is the regression guard against column-drift (3 columns surfaced one-at-a-time across two rounds).
+    const REQUIRED = ['id', 'sd_key', 'title', 'status', 'sd_type', 'category', 'priority', 'description', 'scope', 'rationale'];
+    const p = buildRefillSdPayload(validRow(), 'SD-REFILL-ABC');
+    for (const col of REQUIRED) {
+      expect(p[col], `payload.${col} must be set (NOT NULL, no DB default, not trigger-backfilled)`).not.toBeNull();
+      expect(p[col], `payload.${col} must be set`).not.toBeUndefined();
+    }
+    expect(p.priority).toBe('medium'); // valid per priority_check
+    expect(p.category.length).toBeGreaterThan(0); // no DB default; createSD-convention value
+    expect(p.rationale).toContain(validRow().id); // traceable provenance
   });
 
   it('falls back to a traceable title for an empty title and caps length', () => {
@@ -115,10 +134,15 @@ function makeStub({ existingSd = [] } = {}) {
         },
         insert(payload) {
           writes.inserts.push({ table: this._table, payload });
-          // Simulate the strategic_directives_v2 NOT-NULL constraints so a payload missing id (the
-          // live-fail the prior build shipped) is caught by tests instead of a fake {error:null}.
-          if (this._table === 'strategic_directives_v2' && (!payload || !payload.id)) {
-            return Promise.resolve({ error: { code: '23502', message: 'null value in column "id"' } });
+          // Simulate strategic_directives_v2's NOT-NULL-without-default columns that NO trigger backfills
+          // (sequence_rank/sd_code_user_facing/uuid_internal_pk ARE trigger-filled, so excluded). A payload
+          // missing any of these 23502-fails live; assert that here instead of a fake {error:null}.
+          if (this._table === 'strategic_directives_v2') {
+            const REQUIRED = ['id', 'sd_key', 'title', 'status', 'sd_type', 'category', 'priority', 'description', 'scope', 'rationale'];
+            const missing = REQUIRED.find((c) => payload == null || payload[c] == null);
+            if (missing) {
+              return Promise.resolve({ error: { code: '23502', message: `null value in column "${missing}"` } });
+            }
           }
           return Promise.resolve({ error: null });
         },
