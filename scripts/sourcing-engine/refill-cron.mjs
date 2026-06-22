@@ -59,7 +59,7 @@ async function main() {
   const { data: rows, error } = await supabase
     .from('roadmap_wave_items')
     // lane is live (sourcing-engine activation migrations) but postdates the schema-reference snapshot.
-    .select('id, title, source_type, source_id, item_disposition, promoted_to_sd_key, lane, wave_id') // schema-lint-disable-line
+    .select('id, title, source_type, source_id, item_disposition, promoted_to_sd_key, lane, wave_id, metadata') // schema-lint-disable-line
     .eq('item_disposition', 'pending')
     .is('promoted_to_sd_key', null)
     .limit(1000);

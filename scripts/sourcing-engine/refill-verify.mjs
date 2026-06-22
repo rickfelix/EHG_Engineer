@@ -25,7 +25,7 @@ async function main() {
   // Staged = item_disposition='pending' AND not yet promoted. Read-only.
   const { data: rows, error } = await supabase
     .from('roadmap_wave_items')
-    .select('id, title, source_type, source_id, item_disposition, promoted_to_sd_key, lane')
+    .select('id, title, source_type, source_id, item_disposition, promoted_to_sd_key, lane, metadata')
     .eq('item_disposition', 'pending')
     .is('promoted_to_sd_key', null)
     .limit(limit);
