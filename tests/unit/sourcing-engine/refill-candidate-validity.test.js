@@ -132,3 +132,20 @@ describe('evaluateRefillCandidate belt-quality axes', () => {
     expect(evaluateRefillCandidate(validItem(), {})).toEqual({ valid: true, reason: null });
   });
 });
+
+describe('evaluateRefillCandidate raw-label source guard (SD-LEO-INFRA-VDR-GAUGE-BELT-001 FR-1)', () => {
+  it('rejects a staged item whose source_type is the raw-label vdr_gauge', () => {
+    expect(evaluateRefillCandidate(validItem({ source_type: 'vdr_gauge' })))
+      .toEqual({ valid: false, reason: REFILL_INVALID_REASONS.RAW_LABEL_SOURCE });
+  });
+  it('is case-insensitive on source_type', () => {
+    expect(evaluateRefillCandidate(validItem({ source_type: 'VDR_GAUGE' })).reason).toBe(REFILL_INVALID_REASONS.RAW_LABEL_SOURCE);
+  });
+  it('does NOT block a normal source_type (no over-block)', () => {
+    expect(evaluateRefillCandidate(validItem({ source_type: 'conversion_ledger' }))).toEqual({ valid: true, reason: null });
+    expect(evaluateRefillCandidate(validItem({ source_type: 'brainstorm' }))).toEqual({ valid: true, reason: null });
+  });
+  it('a MISSING source_type still reports the provenance reason first (ordering preserved)', () => {
+    expect(evaluateRefillCandidate(validItem({ source_type: '' })).reason).toBe(REFILL_INVALID_REASONS.MISSING_PROVENANCE);
+  });
+});
