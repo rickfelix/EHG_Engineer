@@ -225,4 +225,20 @@ describe('isInformationalSkippedFinding (SD-REFILL-00OFH2SF)', () => {
     expect(isInformationalSkippedFinding(null)).toBe(false);
     expect(isInformationalSkippedFinding({ evidence_pointer: { file: 'src/foo.js' } })).toBe(false);
   });
+
+  // RCA b62ba6b5 F2 (under-exclusion, live): the lint "could not run / deps unavailable" skip the
+  // first regex MISSED (it was still filing SDs) must now be excluded.
+  it('excludes the lint "could not run / deps unavailable" skip', () => {
+    expect(isInformationalSkippedFinding({ evidence_pointer: { legacy_title: 'Lint could not run (eslint/deps unavailable)' } })).toBe(true);
+    expect(isInformationalSkippedFinding({ evidence_pointer: { legacy_detail: 'eslint or its deps were unavailable.' } })).toBe(true);
+  });
+
+  // RCA b62ba6b5 F1 (over-exclusion): real findings that merely MENTION skipped/not-available must
+  // be KEPT — the predicate anchors on check-didn't-run phrasings, not bare tokens.
+  it('KEEPS real findings that merely mention skipped/not-available', () => {
+    expect(isInformationalSkippedFinding({ evidence_pointer: { legacy_detail: 'No upstream patch is not available yet; pin the version.' } })).toBe(false);
+    expect(isInformationalSkippedFinding({ evidence_pointer: { legacy_detail: 'This gitleaks rule can be skipped via config but the secret is real.' } })).toBe(false);
+    expect(isInformationalSkippedFinding({ evidence_pointer: { legacy_detail: 'Payment flow test was skipped due to flake — must re-enable.' } })).toBe(false);
+    expect(isInformationalSkippedFinding({ evidence_pointer: { legacy_title: 'The widget is not available in production builds.' } })).toBe(false);
+  });
 });
