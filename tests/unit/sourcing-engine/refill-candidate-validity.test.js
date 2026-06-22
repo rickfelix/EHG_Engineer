@@ -3,7 +3,7 @@
  * Pins: the VALID staged case, every INVALID reason, lifecycle-first ordering, and totality on odd input.
  */
 import { describe, it, expect } from 'vitest';
-import { evaluateRefillCandidate, REFILL_INVALID_REASONS, isSubstanceThinTitle, normalizeTitleForCompare, TITLE_TRUNCATION_CAP } from '../../../lib/sourcing-engine/refill-candidate-validity.js';
+import { evaluateRefillCandidate, REFILL_INVALID_REASONS, NON_BUILDABLE_SOURCE_TYPES, isSubstanceThinTitle, normalizeTitleForCompare, TITLE_TRUNCATION_CAP } from '../../../lib/sourcing-engine/refill-candidate-validity.js';
 
 // A well-formed staged refill candidate (the 683-item live shape: pending, unpromoted, real provenance).
 const validItem = (over = {}) => ({
@@ -130,5 +130,45 @@ describe('evaluateRefillCandidate belt-quality axes', () => {
   it('tolerates a malformed opts.shippedTitleSet (not a Set) without throwing', () => {
     expect(evaluateRefillCandidate(validItem(), { shippedTitleSet: ['not', 'a', 'set'] })).toEqual({ valid: true, reason: null });
     expect(evaluateRefillCandidate(validItem(), {})).toEqual({ valid: true, reason: null });
+  });
+});
+
+describe('evaluateRefillCandidate NON_BUILDABLE_SOURCE axis (SD-LEO-INFRA-AUTO-REFILL-CANDIDATE-001)', () => {
+  it('rejects a vdr_gauge source item (non_buildable_source)', () => {
+    const r = evaluateRefillCandidate(validItem({ source_type: 'vdr_gauge' }));
+    expect(r).toEqual({ valid: false, reason: REFILL_INVALID_REASONS.NON_BUILDABLE_SOURCE });
+  });
+
+  it('rejects vdr_gauge case/space-insensitively (trimmed)', () => {
+    expect(evaluateRefillCandidate(validItem({ source_type: ' vdr_gauge ' })).reason)
+      .toBe(REFILL_INVALID_REASONS.NON_BUILDABLE_SOURCE);
+  });
+
+  it('keeps buildable source types VALID (brainstorm / conversion_ledger / adam-direct)', () => {
+    for (const st of ['brainstorm', 'conversion_ledger', 'adam-direct']) {
+      expect(evaluateRefillCandidate(validItem({ source_type: st, source_id: 'sid-' + st })))
+        .toEqual({ valid: true, reason: null });
+    }
+  });
+
+  it('PRECEDENCE: a lifecycle reason (already_promoted / not_staged / declined_lane) wins over non_buildable_source', () => {
+    expect(evaluateRefillCandidate(validItem({ source_type: 'vdr_gauge', promoted_to_sd_key: 'SD-X-001' })).reason)
+      .toBe(REFILL_INVALID_REASONS.ALREADY_PROMOTED);
+    expect(evaluateRefillCandidate(validItem({ source_type: 'vdr_gauge', item_disposition: 'declined' })).reason)
+      .toBe(REFILL_INVALID_REASONS.NOT_STAGED);
+    expect(evaluateRefillCandidate(validItem({ source_type: 'vdr_gauge', lane: 'decline' })).reason)
+      .toBe(REFILL_INVALID_REASONS.DECLINED_LANE);
+  });
+
+  it('PRECEDENCE: non_buildable_source wins over the structural title/provenance checks', () => {
+    // a vdr_gauge item with an empty title still reports non_buildable_source (source-type fires first)
+    expect(evaluateRefillCandidate(validItem({ source_type: 'vdr_gauge', title: '' })).reason)
+      .toBe(REFILL_INVALID_REASONS.NON_BUILDABLE_SOURCE);
+  });
+
+  it('the set excludes the buildable corpora (guards against accidental over-broadening)', () => {
+    expect(NON_BUILDABLE_SOURCE_TYPES.has('vdr_gauge')).toBe(true);
+    expect(NON_BUILDABLE_SOURCE_TYPES.has('brainstorm')).toBe(false);
+    expect(NON_BUILDABLE_SOURCE_TYPES.has('conversion_ledger')).toBe(false);
   });
 });
