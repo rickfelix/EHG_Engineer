@@ -1,0 +1,60 @@
+name: "Adam github-assessment (cron)"
+
+# SD: SD-LEO-INFRA-REGISTER-TWO-EVERY-001 (DUTY 2)
+#
+# Durable, server-side every-3-day Adam GitHub-health assessment — mirrors adam-opportunity-scan-cron.yml.
+# Runs the read-only scripts/adam-github-assessment.mjs, which aggregates existing GitHub-health producers
+# (CI red, failed runs, PR hygiene, merge conflicts) plus open dependabot/code-scanning alerts into ONE
+# ranked advisory via adam-advisory.cjs send (silent when clean). CONST-002: read-only.
+#
+# SHIPS INERT: the job is gated on the repo variable ADAM_GH_ASSESS_V1 (default unset = OFF). The gh API
+# reads need a token + extra read scopes (pull-requests, actions, security-events). Fail-soft (`|| true`).
+
+on:
+  schedule:
+    # Every 3rd day-of-month at 09:30 UTC (offset from the doc-drift tick at :00 to spread cron load).
+    - cron: '30 9 */3 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+  security-events: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  adam-github-assessment:
+    name: Adam github-assessment
+    # Inert until the operator flips the repo var. Unset/anything-but-'true' => job is skipped.
+    if: ${{ vars.ADAM_GH_ASSESS_V1 == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      ADAM_GH_ASSESS_V1: ${{ vars.ADAM_GH_ASSESS_V1 }}
+      # gh CLI auth for the PR-hygiene + dependabot/code-scanning alert reads.
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Adam github-assessment (read-only; one ranked advisory, silent when clean)
+        run: |
+          echo "Running adam github-assessment (flag=${ADAM_GH_ASSESS_V1:-off})"
+          node scripts/adam-github-assessment.mjs || true
