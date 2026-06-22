@@ -17,7 +17,7 @@
 We are in the BUILD-OUT phase: drive the VDR gauge up by building genuinely-unbuilt
 capabilities. Competitive vigilance — keeping an **observed** (not merely assumed) baseline
 of each venture's competitors — is one such capability. It is genuinely unbuilt, and a
-design-first rung is correct because the single highest-leverage decision (where observations
+design-first rung is correct because the single highest-impact decision (where observations
 come from) is **chairman-gated**, while the other build pieces have independent write-surfaces
 and can proceed in parallel once shaped.
 
