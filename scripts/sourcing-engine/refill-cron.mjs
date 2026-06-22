@@ -16,7 +16,29 @@
  */
 import { createSupabaseServiceClient } from '../lib/supabase-connection.js';
 import { selectRefillBatch, promoteStagedCandidate } from '../../lib/sourcing-engine/refill-auto-promote.js';
-import { normalizeTitleForCompare } from '../../lib/sourcing-engine/refill-candidate-validity.js';
+import { pathToFileURL } from 'node:url';
+import { normalizeTitleForCompare, crossRefShippedTitleAdvisory } from '../../lib/sourcing-engine/refill-candidate-validity.js';
+
+/**
+ * SD-LEO-INFRA-WIRE-ALREADY-SHIPPED-001 (Phase 1 — ADVISORY): for a selected promotion batch, collect the
+ * titles that the bounded crossRefShippedTitleAdvisory flags as a PREFIX/lookalike of an already-shipped SD
+ * (a class the EXACT-match belt axis does NOT catch). ADVISORY ONLY — pure, no verdict change, no writes;
+ * the caller LOGS the result so the false-positive rate is measurable before Phase 2 promotes it to a reject.
+ * Pure/total: reuses the caller's once-per-run shippedTitleSet, O(batch × set).
+ * @param {Array<{title?:string, source_id?:string}>} batch  the selected refill batch
+ * @param {Set<string>} shippedTitleSet  normalizeTitleForCompare() keys of completed SD titles
+ * @returns {{ matches: Array<{title:string, source_id:(string|undefined), matched:string}>, byReason: object }}
+ */
+export function collectShippedTitleAdvisories(batch, shippedTitleSet) {
+  const matches = [];
+  for (const item of Array.isArray(batch) ? batch : []) {
+    if (!item || typeof item !== 'object') continue;
+    const matched = crossRefShippedTitleAdvisory(item.title, shippedTitleSet);
+    if (matched) matches.push({ title: item.title, source_id: item.source_id, matched });
+  }
+  const byReason = matches.length ? { ALREADY_SHIPPED_PREFIX_LOOKALIKE: matches.length } : {};
+  return { matches, byReason };
+}
 
 async function main() {
   const args = process.argv.slice(2);
@@ -59,6 +81,16 @@ async function main() {
 
   const sel = selectRefillBatch(rows || [], { limit, shippedTitleSet });
   const results = [];
+  // SD-LEO-INFRA-WIRE-ALREADY-SHIPPED-001 (Phase 1 — ADVISORY): wire the exported-but-unused
+  // crossRefShippedTitleAdvisory into the live promotion caller (its only production call site). It
+  // catches a staged title that is a PREFIX/lookalike of an already-shipped SD title — a class the
+  // EXACT-match belt axis (in selectRefillBatch/evaluateRefillCandidate) does NOT catch. Advisory ONLY:
+  // we LOG matches and surface a count so the false-positive rate is measurable, but we DO NOT change
+  // the verdict (no candidate is dropped). Promoting the match to a hard reject is Phase 2, gated on
+  // the measured FP rate. shippedTitleSet is REUSED (built once above), never a new full-corpus scan.
+  // Phase 1 advisory pass (pure helper) — surfaces lookalike matches WITHOUT changing any verdict.
+  const { matches: advisoryMatches, byReason: advisoryByReason } =
+    collectShippedTitleAdvisories(sel.batch, shippedTitleSet);
   for (const item of sel.batch) {
     // Gate 2 (write) flows through to the only writer; apply:false => dry-run no-op.
     results.push(await promoteStagedCandidate(supabase, item, { apply }));
@@ -70,14 +102,22 @@ async function main() {
       mode: apply ? 'apply' : 'dry_run',
       total: sel.total, validCount: sel.validCount, selected: sel.batch.length, limit: sel.limit,
       promoted, results,
+      advisoryByReason, advisoryMatches, // Phase 1 advisory (no verdict change) — for FP-rate measurement
     }, null, 2));
   } else {
     console.log(`🔁 Auto-refill cron (${apply ? 'APPLY' : 'DRY RUN'})`);
     console.log(`   staged scanned: ${sel.total} | valid: ${sel.validCount} | selected (≤${sel.limit}): ${sel.batch.length}`);
     console.log(apply ? `   ✅ promoted: ${promoted}` : `   would promote: ${sel.batch.length} (no writes — pass --apply)`);
     for (const r of results) console.log(`     - ${r.sd_key || '(none)'}: ${r.reason}`);
+    if (advisoryMatches.length) {
+      console.log(`   ⚠️  advisory (NOT enforced): ${advisoryMatches.length} selected title(s) look like an already-shipped SD:`);
+      for (const a of advisoryMatches) console.log(`        - "${a.title}" ~ shipped "${a.matched}"`);
+    }
   }
   process.exit(0);
 }
 
-main().catch((e) => { console.error('refill-cron error:', e.message); process.exit(2); });
+// Guard CLI execution so the module is importable for unit tests (no main()/DB-client on import).
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((e) => { console.error('refill-cron error:', e.message); process.exit(2); });
+}
