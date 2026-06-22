@@ -23,7 +23,7 @@
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
-import { removeWorktreeViaGit, getRepoRoot } from '../lib/worktree-manager.js';
+import { removeWorktreeViaGit, getRepoRoot, safeRecursiveRm } from '../lib/worktree-manager.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const WORKTREES_DIR = '.worktrees';
@@ -93,15 +93,17 @@ function main() {
   // it into the shared store. Defensive: re-check node_modules isn't still a link.
   try { execSync('git worktree prune', { cwd: repoRoot, stdio: 'pipe' }); } catch { /* best-effort */ }
   if (fs.existsSync(wtPath)) {
-    const nm = path.join(wtPath, 'node_modules');
+    // SD-LEO-INFRA-WORKTREE-REMOVE-CHOKEPOINT-001: route the orphan/fallback delete
+    // through the canonical junction-safe chokepoint instead of a top-level-only
+    // node_modules check + raw fs.rmSync. The prior code only tested whether
+    // wtPath/node_modules was ITSELF a symlink — it missed NESTED junctions and any
+    // junction OUTSIDE node_modules, so the raw fs.rmSync followed one into the shared
+    // store and wiped it (the recurring node_modules wipe). safeRecursiveRm does a
+    // WHOLE-TREE _unlinkLinksRecursive before fs.rmSync — the same routine the reaper
+    // (worktree-reaper.mjs) and orphan-sweep already use.
     try {
-      if (fs.lstatSync(nm).isSymbolicLink()) {
-        try { fs.unlinkSync(nm); } catch { try { fs.rmdirSync(nm); } catch { /* noop */ } }
-      }
-    } catch { /* no node_modules / not a link */ }
-    try {
-      fs.rmSync(wtPath, { recursive: true, force: true });
-      console.log(`✓ Removed orphan worktree dir (node_modules pre-unlinked + pruned): ${wtPath}`);
+      safeRecursiveRm(wtPath, { force: true });
+      console.log(`✓ Removed orphan worktree dir (whole-tree junction-safe via safeRecursiveRm + pruned): ${wtPath}`);
       process.exit(0);
     } catch (e) {
       console.error(`✗ Failed to remove ${wtPath}: ${e.message}`);
