@@ -11,6 +11,7 @@ import {
   buildCreateSdArgs,
   generateRemediationSD,
   generateBatch,
+  isInformationalSkippedFinding,
 } from '../../../../lib/eva/quality-findings/sd-generator.js';
 import { computeFindingHash, FINDING_CATEGORIES } from '../../../../lib/eva/quality-findings/finding-shape.js';
 
@@ -192,5 +193,52 @@ describe('generateBatch', () => {
     expect(r.created).toEqual([]);
     expect(r.skipped).toEqual([]);
     expect(r.errors).toEqual([]);
+  });
+});
+
+describe('isInformationalSkippedFinding (SD-REFILL-00OFH2SF)', () => {
+  it('excludes a SKIPPED check (the real bun-audit case)', () => {
+    const f = validFinding({ finding_category: 'npm_audit', severity: 'medium', evidence_pointer: {
+      legacy_check: 'npm_audit',
+      legacy_title: 'Dependency audit not available for bun',
+      legacy_detail: 'bun has no first-class audit command; skipped (not a vulnerability finding).',
+    } });
+    expect(isInformationalSkippedFinding(f)).toBe(true);
+  });
+
+  it('matches the "not available" marker in legacy_title alone', () => {
+    expect(isInformationalSkippedFinding({ evidence_pointer: { legacy_title: 'Dependency audit not available for bun' } })).toBe(true);
+  });
+
+  it('KEEPS a real medium vulnerability finding (no informational markers)', () => {
+    const real = validFinding({ finding_category: 'npm_audit', severity: 'medium', evidence_pointer: {
+      legacy_title: 'Vulnerable dependency: lodash <4.17.21',
+      legacy_detail: 'Prototype pollution in lodash; upgrade to 4.17.21.',
+    } });
+    expect(isInformationalSkippedFinding(real)).toBe(false);
+  });
+
+  it('is total / fail-safe: missing or odd evidence_pointer is NOT informational (never over-excludes)', () => {
+    expect(isInformationalSkippedFinding({})).toBe(false);
+    expect(isInformationalSkippedFinding({ evidence_pointer: null })).toBe(false);
+    expect(isInformationalSkippedFinding({ evidence_pointer: 'str' })).toBe(false);
+    expect(isInformationalSkippedFinding(null)).toBe(false);
+    expect(isInformationalSkippedFinding({ evidence_pointer: { file: 'src/foo.js' } })).toBe(false);
+  });
+
+  // RCA b62ba6b5 F2 (under-exclusion, live): the lint "could not run / deps unavailable" skip the
+  // first regex MISSED (it was still filing SDs) must now be excluded.
+  it('excludes the lint "could not run / deps unavailable" skip', () => {
+    expect(isInformationalSkippedFinding({ evidence_pointer: { legacy_title: 'Lint could not run (eslint/deps unavailable)' } })).toBe(true);
+    expect(isInformationalSkippedFinding({ evidence_pointer: { legacy_detail: 'eslint or its deps were unavailable.' } })).toBe(true);
+  });
+
+  // RCA b62ba6b5 F1 (over-exclusion): real findings that merely MENTION skipped/not-available must
+  // be KEPT — the predicate anchors on check-didn't-run phrasings, not bare tokens.
+  it('KEEPS real findings that merely mention skipped/not-available', () => {
+    expect(isInformationalSkippedFinding({ evidence_pointer: { legacy_detail: 'No upstream patch is not available yet; pin the version.' } })).toBe(false);
+    expect(isInformationalSkippedFinding({ evidence_pointer: { legacy_detail: 'This gitleaks rule can be skipped via config but the secret is real.' } })).toBe(false);
+    expect(isInformationalSkippedFinding({ evidence_pointer: { legacy_detail: 'Payment flow test was skipped due to flake — must re-enable.' } })).toBe(false);
+    expect(isInformationalSkippedFinding({ evidence_pointer: { legacy_title: 'The widget is not available in production builds.' } })).toBe(false);
   });
 });
