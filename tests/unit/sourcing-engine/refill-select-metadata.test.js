@@ -30,6 +30,10 @@ const cronSrc = readFileSync(
   fileURLToPath(new URL('../../../scripts/sourcing-engine/refill-cron.mjs', import.meta.url)), 'utf8');
 const verifySrc = readFileSync(
   fileURLToPath(new URL('../../../scripts/sourcing-engine/refill-verify.mjs', import.meta.url)), 'utf8');
+// QF-20260622-620: the 3rd staged-corpus SELECT — coordinator-charter-audit.mjs feeds verifyStagedCandidates
+// to compute promotableCount (the auto-refill-backlog advisory), so it must carry metadata too.
+const charterAuditSrc = readFileSync(
+  fileURLToPath(new URL('../../../scripts/coordinator-charter-audit.mjs', import.meta.url)), 'utf8');
 
 // Extract the roadmap_wave_items .select('...') arguments from a source string. Keyed on
 // item_disposition (a roadmap_wave_items-only column) so the strategic_directives_v2 .select('title')
@@ -64,6 +68,13 @@ describe('QF-20260622-505: refill SELECT carries metadata (description recovery 
 
   it('refill-verify.mjs SELECTs metadata from roadmap_wave_items', () => {
     const args = selectArgs(verifySrc);
+    expect(args.length).toBeGreaterThan(0);
+    expect(args.every((a) => /\bmetadata\b/.test(a))).toBe(true);
+  });
+
+  // QF-20260622-620: the 3rd/last blind site — the coordinator's own promotableCount advisory.
+  it('coordinator-charter-audit.mjs SELECTs metadata from roadmap_wave_items', () => {
+    const args = selectArgs(charterAuditSrc);
     expect(args.length).toBeGreaterThan(0);
     expect(args.every((a) => /\bmetadata\b/.test(a))).toBe(true);
   });

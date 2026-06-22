@@ -211,7 +211,10 @@ async function main() {
   let promotableCount = 0;
   try {
     const { data: staged, error: se } = await db.from('roadmap_wave_items')
-      .select('id, title, source_type, source_id, item_disposition, promoted_to_sd_key, lane')
+      // QF-20260622-620: select metadata so promotableCount reflects recovered descriptions
+      // (hasRecoveredSubstance reads item.metadata.description). 3rd/last blind site after PR #5030
+      // fixed refill-cron.mjs + refill-verify.mjs; without it this advisory under-counts the belt.
+      .select('id, title, source_type, source_id, item_disposition, promoted_to_sd_key, lane, metadata')
       .eq('item_disposition', 'pending').is('promoted_to_sd_key', null).limit(2000);
     if (!se) promotableCount = verifyStagedCandidates(staged || []).validCount;
   } catch { /* fail-open → promotableCount stays 0, no advisory */ }
