@@ -77,6 +77,16 @@ function buildIntentPayload({ action, targetSdKey, targetTree, targetFiles, send
   return payload;
 }
 
+// SD-REFILL-00KGB0SK: validate the --links-sd value (the SD a review already auto-filed for this
+// finding). Pure. Accepts an SD-/QF- key shape (case-insensitive, upper-cased); rejects anything
+// else (incl. `true` from a bare flag) -> null so a malformed value never lands on the payload.
+const LINKS_SD_RE = /^(SD|QF)-[A-Za-z0-9][A-Za-z0-9-]{2,80}$/;
+function normalizeLinksSd(raw) {
+  if (typeof raw !== 'string') return null;
+  const v = raw.trim().toUpperCase();
+  return LINKS_SD_RE.test(v) ? v : null;
+}
+
 const REDACTION_PATTERNS = [
   // AWS access key id
   { re: /AKIA[0-9A-Z]{16}/g, label: 'AWS_KEY' },
@@ -122,7 +132,10 @@ function parseArgs(argv) {
 
 function printHelp() {
   console.log(`Usage:
-  node scripts/worker-signal.cjs <type> "<body>" [--severity <level>] [--reason "<label>"]
+  node scripts/worker-signal.cjs <type> "<body>" [--severity <level>] [--reason "<label>"] [--links-sd <SD-KEY>]
+
+  --links-sd <SD-KEY>  link an SD a review ALREADY auto-filed for this finding, so the coordinator
+                       dedups instead of filing a duplicate follow-up (SD-REFILL-00KGB0SK).
 
 Types: ${SIGNAL_TYPES.join(' | ')}
 Severities: ${SEVERITIES.join(' | ')} (default: medium)
@@ -481,6 +494,12 @@ async function main() {
   // systematically instead of parsing free text. --block-class is accepted for any type but is the
   // intended companion of `unfit`.
   const blockClass = flags['block-class'] ? redact(String(flags['block-class'])).slice(0, 80) : null;
+  // SD-REFILL-00KGB0SK: when an adversarial review has ALREADY auto-filed an SD for a finding, a
+  // follow-up signal (esp. spec-conflict) should LINK that SD key instead of asking the coordinator
+  // to file a fresh one — closing the double-file dedup gap (witnessed: worker review auto-filed
+  // SD-LEO-INFRA-CLAIM-RPC-HONOR-001 then the coordinator filed a duplicate ~4min later). The
+  // coordinator reads payload.links_sd to dedup before filing a worker-requested follow-up.
+  const linksSd = normalizeLinksSd(flags['links-sd']);
   const payload = {
     signal_type: type,
     body,
@@ -489,7 +508,8 @@ async function main() {
     sd_key: claimedSdKey,
     repo: process.cwd(),
     ...(subtype ? { subtype } : {}),
-    ...(blockClass ? { block_class: blockClass } : {})
+    ...(blockClass ? { block_class: blockClass } : {}),
+    ...(linksSd ? { links_sd: linksSd } : {})
   };
 
   const expiresAt = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
@@ -526,6 +546,8 @@ async function main() {
 // Export internals for unit testing.
 module.exports = {
   redact, parseArgs, REDACTION_PATTERNS, SIGNAL_TYPES, SEVERITIES, BODY_HARD_CAP,
+  // SD-REFILL-00KGB0SK — dedup link on a follow-up signal
+  normalizeLinksSd,
   // FR-1 (SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001)
   INTENT_ACTIONS, INTENT_PAYLOAD_KEYS, buildIntentPayload, DECONFLICTION_ENABLED,
   // FR-7 (SD-LEO-INFRA-COMPLETE-TWO-WAY-001) — request/await round-trip
