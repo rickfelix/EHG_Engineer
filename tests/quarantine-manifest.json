@@ -52,11 +52,13 @@
     },
     {
       "file": "lib/feature-flags/feature-flags.test.js",
-      "reason_class": "timeout",
+      "reason_class": "suite-load-error",
       "error_signature": "Error: No test found in suite Feature Flag Registry",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "No test found in suite (registry load) — not a real timeout",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "lib/hooks/__tests__/session-id.test.js",
@@ -228,11 +230,13 @@
     },
     {
       "file": "scripts/modules/sd-key-generator-coverage.test.js",
-      "reason_class": "unclassified",
+      "reason_class": "test-setup-error",
       "error_signature": "TypeError: The \"path\" argument must be of type string. Received undefined",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "TypeError: path argument must be string — test harness/setup passes non-string path",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "scripts/modules/shipping/__tests__/post-merge-worktree-cleanup-claim-protect.test.js",
@@ -260,11 +264,13 @@
     },
     {
       "file": "tests/ci/sibling-a-recursive-failure-lint.test.js",
-      "reason_class": "unclassified",
+      "reason_class": "real-finding-guard",
       "error_signature": "Error: Recursive writer-consumer asymmetry detected — 1 bypass_validation site(s) without emitValidationAuditLog within 50 lines:",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "Lint guard correctly detecting recursive writer-consumer asymmetry (1 bypass) — fix the violation, do not silence",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "tests/claude-md-generator/opus47-alignment.test.js",
@@ -308,11 +314,13 @@
     },
     {
       "file": "tests/eva/s15-design-studio-reliability.test.js",
-      "reason_class": "unclassified",
+      "reason_class": "missing-fixture",
       "error_signature": "Error: ENOENT: no such file or directory, open 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-GREEN-MAIN-TRIAGE-001\\lib\\eva\\bridge\\stitch-client.js'",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "ENOENT: test fixture file absent",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "tests/eva/s20-pause-controller.test.js",
@@ -396,11 +404,13 @@
     },
     {
       "file": "tests/security/security-definer-remediation.test.js",
-      "reason_class": "unclassified",
+      "reason_class": "missing-db-function",
       "error_signature": "Error: SQL execution failed: Could not find the function public.exec_sql(sql) in the schema cache / Could not find the function public.raw_query(query_text) in the schema cache",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "SQL: Could not find the function (DB not provisioned in test env)",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "tests/sub-agents/qa-engineering-director-v2.test.js",
@@ -412,11 +422,13 @@
     },
     {
       "file": "tests/subagent-workflow.test.js",
-      "reason_class": "unclassified",
+      "reason_class": "misclassified-e2e",
       "error_signature": "Error: Playwright Test did not expect test.describe() to be called here.",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "Playwright test.describe() in unit tier — belongs in e2e project, exclude from unit",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "tests/theme-performance.test.js",
@@ -500,11 +512,13 @@
     },
     {
       "file": "tests/unit/emit-feedback-bypass-static-guard.test.js",
-      "reason_class": "unclassified",
+      "reason_class": "real-finding-guard",
       "error_signature": "Error: emit-feedback bypass-site set does not match OOS allowlist.",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "Static guard correctly detecting emit-feedback bypass-site set drift vs OOS allowlist — reconcile the allowlist or fix the bypass",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "tests/unit/enforcement-npm-install-guard.test.js",
@@ -676,11 +690,13 @@
     },
     {
       "file": "tests/unit/eva/exit-table-wiring.test.js",
-      "reason_class": "unclassified",
+      "reason_class": "mock-gap",
       "error_signature": "TypeError: Cannot read properties of undefined (reading 'acquisition')",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "TypeError reading acq* of undefined — incomplete mock/stub for the wiring dependency",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "tests/unit/eva/exit/separation-rehearsal.test.js",
@@ -724,11 +740,13 @@
     },
     {
       "file": "tests/unit/eva/okr-monthly-generator-acceptance-routing.test.js",
-      "reason_class": "unclassified",
+      "reason_class": "missing-db-seed",
       "error_signature": "Error: No canonical L1 vision found (eva_vision_documents vision_key=VISION-EHG-L1-001, status=active, chairman_approved=true)",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "No canonical L1 vision found (eva_vision_documents not seeded in test env)",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "tests/unit/eva/orchestration-hub.test.js",
@@ -828,11 +846,13 @@
     },
     {
       "file": "tests/unit/factories/directive-factory.test.js",
-      "reason_class": "unclassified",
+      "reason_class": "schema-drift",
       "error_signature": "Error: Failed to create directive: Could not find the 'phase' column of 'strategic_directives_v2' in the schema cache",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "Could not find the phase column — phantom-column drift on strategic_directives_v2 insert",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "tests/unit/gap-014/escalation-threshold.test.js",
@@ -860,11 +880,13 @@
     },
     {
       "file": "tests/unit/genesis/branch-lifecycle.test.js",
-      "reason_class": "unclassified",
+      "reason_class": "supabase-mock-chain",
       "error_signature": "TypeError: Cannot destructure property 'data' of '(intermediate value)' as it is undefined.",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "Cannot destructure data of intermediate value — mock chain returns undefined (same class as SD-REFILL-002XLOD1)",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "tests/unit/governance/canonical-helper-bypass-guard.test.js",
@@ -916,11 +938,13 @@
     },
     {
       "file": "tests/unit/helpers/database-helpers.test.js",
-      "reason_class": "unclassified",
+      "reason_class": "schema-drift",
       "error_signature": "Error: Failed to create test directive: Could not find the 'phase' column of 'strategic_directives_v2' in the schema cache",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "Could not find a column on test directive insert — phantom-column drift",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "tests/unit/integration-verification-gate.test.js",
@@ -956,19 +980,23 @@
     },
     {
       "file": "tests/unit/lib/context-aware-sub-agent-selector.test.js",
-      "reason_class": "unclassified",
+      "reason_class": "process-exit-in-test",
       "error_signature": "Error: process.exit unexpectedly called with \"0\"",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "Code under test calls process.exit(0) — needs injectable exit/guard",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "tests/unit/lib/error-pattern-library.test.js",
-      "reason_class": "unclassified",
+      "reason_class": "process-exit-in-test",
       "error_signature": "Error: process.exit unexpectedly called with \"0\"",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "Code under test calls process.exit(0) — needs injectable exit/guard",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "tests/unit/lib/eva/chairman-decision-watcher-lookup.test.js",
@@ -988,19 +1016,23 @@
     },
     {
       "file": "tests/unit/lib/worktree-rmsync-junction-safety.test.js",
-      "reason_class": "unclassified",
+      "reason_class": "real-finding-guard",
       "error_signature": "Error: Found 1 WORKTREE-RELATED file(s) using raw fs.rmSync({recursive:true}) without junction-safe handling:",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "Guard correctly detecting 2 worktree-related files using raw fs.rmSync({recursive:true}): scripts/hooks/concurrent-session-worktree.cjs + scripts/maintenance/sweep-worker-scratch.mjs — likely tied to the live node_modules junction-reap churn; FIX the 2 files, do not silence",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "tests/unit/marketing-ai-email-campaigns.test.js",
-      "reason_class": "unclassified",
+      "reason_class": "test-setup-error",
       "error_signature": "Error: enrollInCampaign requires ventureId",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "enrollInCampaign requires ventureId — test omits required arg",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "tests/unit/mock/firewall.test.js",
@@ -1012,11 +1044,13 @@
     },
     {
       "file": "tests/unit/orchestrator-completeness-audit.test.js",
-      "reason_class": "unclassified",
+      "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected +0 to be 2 // Object.is equality",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "expected +0 to be 2 — count assertion drifted from production",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "tests/unit/prd-enrichment.test.js",
@@ -1268,11 +1302,13 @@
     },
     {
       "file": "tests/unit/vision-portfolio-scorecard.test.js",
-      "reason_class": "unclassified",
+      "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected false to be true // Object.is equality",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "triage_note": "expected false to be true (8 fails) — assertion drifted from loadVisionScores behavior (spot-verified live)",
+      "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
       "file": "tests/unit/vision-score-dynamic-threshold.test.js",
