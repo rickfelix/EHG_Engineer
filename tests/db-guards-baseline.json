@@ -1,5 +1,4 @@
 [
-  "tests/archived/directive-lab-e2e.test.js",
   "tests/create-quick-fix-unknown-flag.test.js",
   "tests/execute-team-supervisor.test.js",
   "tests/lib/supabase-connection-connstr-skip-password.test.js",
@@ -15,6 +14,7 @@
   "tests/unit/mock/firewall.test.js",
   "tests/unit/progress-tick.test.js",
   "tests/unit/regression-pins/qf-orchestrator-service-role-pins.test.js",
+  "tests/unit/sd-burnrate-import-guard.test.js",
   "tests/unit/split-postgresql-statements.test.js",
   "tests/unit/supabase-anon-governance-guard.test.js",
   "tests/wiring-validators/e2e-demo-recorder.test.js"
