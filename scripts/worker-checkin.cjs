@@ -48,6 +48,19 @@ const ROLL_CALL_DEDUP_MS = 5 * 60 * 1000;    // don't re-register within 5m (ide
 // chatter — but each idle check is a cheap idempotent roll_call (5m dedup), so the cost is
 // small. NOT applied to the propose-only idle branch below, which keeps its own 1200 literal.
 const DEFAULT_IDLE_WAKEUP_SECONDS = 600;      // ~10m, matches the tightened fleet idle cadence
+
+// SD-LEO-INFRA-WORKER-ANTI-PREMATURE-WINDDOWN-001 (Mode B, the DOMINANT wind-down failure 3/4):
+// the enforceable lever. When a worker holds/just-claimed RANKED claimable work, this directive
+// rides the check-in payload to kill the false "drained" feeling with data and to surface — AT the
+// wind-down decision point — CLAUDE.md's already-FORBIDDEN non-pause-triggers. RELEASING claimable
+// ranked work is NOT a valid wind-down; a too-large/design-heavy SD is DECOMPOSED (orchestrator
+// path), never released; only a GENUINELY-BLOCKED SD may be deferred WITH A LOGGED REASON (the
+// guardrail that preserves legitimate defer — e.g. a verified spec-conflict, never "scope/context").
+function antiWinddownDirective(beltRankedClaimable) {
+  const n = Number.isFinite(beltRankedClaimable) ? beltRankedClaimable : null;
+  const depth = n && n > 0 ? `The belt has ${n} ranked claimable SD(s).` : 'You hold ranked claimable work.';
+  return `ANTI-WIND-DOWN (Mode B): ${depth} Releasing claimable RANKED work to wind down is FORBIDDEN — "scope size / design-heaviness / chairman-gated / context length / session-tail / felt drained" are CLAUDE.md's explicitly-forbidden non-pause-triggers, NOT reasons to release. Build this SD; if it is too large/design-heavy, DECOMPOSE it into children (orchestrator path) — do not release. Only a GENUINELY-BLOCKED SD may be deferred, and only with a logged blocker reason (e.g. a verified spec-conflict). Otherwise keep working.`;
+}
 const SELF_CLAIM_CANDIDATE_LIMIT = 5;
 const QF_CANDIDATE_LIMIT = 25;               // open quick_fixes to consider for self-claim
 const STALE_QF_DAYS = Number(process.env.SD_NEXT_QF_STALE_DAYS) || 3;  // verify-first freshness boundary (shared with sd-next display)
@@ -443,7 +456,10 @@ async function tryClaimDraftCandidate(sb, sessionId, base, d) {
       ...base,
       action: 'self_claimed',
       sd: d.sd_key,
-      message: `Self-claimed ${d.sd_key} (un-baselined draft) from the SD belt. Run: node scripts/sd-start.js ${d.sd_key}`,
+      // FR-1: a draft claim is still ranked claimable work — carry the anti-wind-down directive so the
+      // worker builds/decomposes it rather than rationalizing a release (base.belt_ranked_claimable was
+      // set by the step-6 merged pool before this is called; default 0 if the draft path ran standalone).
+      message: `Self-claimed ${d.sd_key} (un-baselined draft) from the SD belt. Run: node scripts/sd-start.js ${d.sd_key}. ${antiWinddownDirective(base.belt_ranked_claimable)}`,
     };
   }
   return null;
@@ -931,7 +947,7 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
           const effortRec = assignment.payload?.effort_recommendation || null;
           return { ...base, action: 'claimed_assignment', sd: sdKey,
             ...(effortRec ? { effort_recommendation: effortRec, effort_recommendation_reason: assignment.payload?.effort_recommendation_reason || null } : {}),
-            message: `Claimed assigned ${sdKey} via claim_sd.${effortRec ? ` Recommended effort: ${effortRec} (advisory).` : ''} Run: node scripts/sd-start.js ${sdKey}` };
+            message: `Claimed assigned ${sdKey} via claim_sd.${effortRec ? ` Recommended effort: ${effortRec} (advisory).` : ''} Run: node scripts/sd-start.js ${sdKey}. ${antiWinddownDirective(base.belt_ranked_claimable)}` };
         }
         // could not claim the assigned SD -> fall through to self-claim
         base.assignment_claim_error = claimed.error;
@@ -998,6 +1014,10 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
 
     // duty-6: honor the coordinator's fresh dispatch_rank across the WHOLE pool (fail-open).
     const ranked = await sortByDispatchRank(sb, merged, (x) => x.key);
+    // FR-1 (anti-premature-winddown): expose the ranked claimable belt depth on EVERY result so the
+    // /checkin skill can render concrete available work — a worker about to wind down sees data, not a
+    // vibe. base is spread into the self_claimed / idle / QF results below.
+    base.belt_ranked_claimable = ranked.length;
     for (const x of ranked) {
       if (x.kind === 'baselined') {
         // SD-FDBK-FIX-WORKER-SELF-CLAIM-001: skip dependency-blocked SDs and orchestrator PARENTS
@@ -1008,7 +1028,8 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
         if (await isSdInFlight(sb, x.key, sessionId)) continue;  // dedup: started or live-foreign-held
         const claimed = await tryClaim(sb, x.key, sessionId, x.track);
         if (claimed.ok) {
-          return { ...base, action: 'self_claimed', sd: x.key, track: x.track, message: `Self-claimed ${x.key} from sd:next. Run: node scripts/sd-start.js ${x.key}` };
+          return { ...base, action: 'self_claimed', sd: x.key, track: x.track,
+            message: `Self-claimed ${x.key} from sd:next. Run: node scripts/sd-start.js ${x.key}. ${antiWinddownDirective(ranked.length)}` };
         }
       } else {
         const result = await tryClaimDraftCandidate(sb, sessionId, base, x.row);
@@ -1050,7 +1071,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
+module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective };
 
 if (require.main === module) {
   main().catch(err => {
