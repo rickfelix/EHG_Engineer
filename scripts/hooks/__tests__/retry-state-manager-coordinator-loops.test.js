@@ -26,6 +26,10 @@ const LOOP_COMMANDS = [
   // Step-0 keepalive: node -e inline (no script path) — matched on stable tokens.
   'node -e "const { setActiveCoordinator } = require(\'./lib/coordinator/resolve.cjs\'); setActiveCoordinator(process.env.CLAUDE_SESSION_ID).then(...)"',
   'node -e "require(\'./lib/coordinator/resolve.cjs\').setActiveCoordinator(id)"',
+  // SD-REFILL-00D2CC0B — two more recurring coordinator crons (false-blocked during fleet
+  // re-engagement churn; coordinator Kamo 2026-06-15).
+  'node scripts/coordinator-backlog-rank.mjs',                                  // per-sourced-SD + interval
+  'node scripts/coordinator-capacity-forecast.mjs',                            // periodic capacity probe
 ];
 
 describe('QF-626 isExempt: canonical coordinator cron loops', () => {
@@ -40,6 +44,13 @@ describe('QF-626 isExempt: canonical coordinator cron loops', () => {
   it('still exempts with ./ prefix and windows separators', () => {
     expect(isExempt('node ./scripts/coordinator-self-review.mjs')).toBe(true);
     expect(isExempt('node scripts\\coordinator-audit.mjs')).toBe(true);
+  });
+
+  // SD-REFILL-00D2CC0B — the two newly-whitelisted recurring crons, both separators.
+  it('exempts coordinator-backlog-rank.mjs and coordinator-capacity-forecast.mjs', () => {
+    expect(isExempt('node scripts/coordinator-backlog-rank.mjs')).toBe(true);
+    expect(isExempt('node ./scripts/coordinator-backlog-rank.mjs --apply')).toBe(true);
+    expect(isExempt('node scripts\\coordinator-capacity-forecast.mjs')).toBe(true);
   });
 
   // FR-5 — anchoring: unrelated coordinator-* scripts stay RCA-gated.
