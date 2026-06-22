@@ -118,6 +118,26 @@ export function parseDeclaredObjects(sql) {
   return [...parseFunctions(sql), ...parseTriggers(sql)];
 }
 
+/**
+ * SD-REFILL-00EAHZRZ: collect objects that are idempotently dropped before (re)creation.
+ * A `DROP {TRIGGER|FUNCTION} IF EXISTS <name>` makes a following bare `CREATE` of that object
+ * idempotent — semantically equivalent to `CREATE OR REPLACE` — so the bare CREATE must NOT be
+ * flagged CONFLICTING just because the object already exists live. Keyed `${kind}:${name}` to
+ * match the lowercased name parseTriggers/parseFunctions store (function names are matched
+ * unqualified, mirroring how an unqualified DROP ... IF EXISTS resolves on the search_path).
+ * @param {string} sql
+ * @returns {Set<string>}
+ */
+export function parseDropIfExists(sql) {
+  const set = new Set();
+  const trigRe = /DROP\s+TRIGGER\s+IF\s+EXISTS\s+([a-z_][\w]*)/gi;
+  const funcRe = /DROP\s+FUNCTION\s+IF\s+EXISTS\s+(?:[a-z_][\w]*\.)?([a-z_][\w]*)/gi;
+  let m;
+  while ((m = trigRe.exec(sql)) !== null) set.add(`trigger:${m[1].toLowerCase()}`);
+  while ((m = funcRe.exec(sql)) !== null) set.add(`function:${m[1].toLowerCase()}`);
+  return set;
+}
+
 export function normalizeBody(text) {
   if (text == null) return '';
   return String(text)
@@ -173,6 +193,10 @@ export function shortDiff(a, b, lines = 6) {
 
 export async function evaluateMigration({ filePath, sql, client }) {
   const declared = parseDeclaredObjects(sql);
+  // SD-REFILL-00EAHZRZ: a `DROP ... IF EXISTS <name>` ahead of a bare CREATE of the same object
+  // makes that CREATE idempotent — treat it like CREATE OR REPLACE (status IDEMPOTENT, not CONFLICTING).
+  const droppedIfExists = parseDropIfExists(sql);
+  const isIdempotentRecreate = (obj) => droppedIfExists.has(`${obj.kind}:${obj.name}`);
   const findings = [];
   for (const obj of declared) {
     if (obj.kind === 'function') {
@@ -182,14 +206,14 @@ export async function evaluateMigration({ filePath, sql, client }) {
         continue;
       }
       if (!obj.hasOrReplace) {
-        findings.push({ ...obj, status: 'CONFLICTING' });
+        findings.push({ ...obj, status: isIdempotentRecreate(obj) ? 'IDEMPOTENT' : 'CONFLICTING' });
         continue;
       }
       findings.push({ ...obj, status: compareBodies(obj.body, live) ? 'MATCHES' : 'DIVERGED', live });
     } else if (obj.kind === 'trigger') {
       const exists = await queryLiveTrigger(client, obj.name);
       if (!exists) findings.push({ ...obj, status: 'NEW' });
-      else if (!obj.hasOrReplace) findings.push({ ...obj, status: 'CONFLICTING' });
+      else if (!obj.hasOrReplace) findings.push({ ...obj, status: isIdempotentRecreate(obj) ? 'IDEMPOTENT' : 'CONFLICTING' });
       else findings.push({ ...obj, status: 'MATCHES' });
     }
   }
