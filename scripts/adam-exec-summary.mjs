@@ -129,6 +129,9 @@ const workerText = pulseSource === 'unavailable' ? 'count unavailable (will refr
 // Registry gauge (deterministic typed probes over EHG-VISION.md's REQUIRED capabilities; no LLM).
 // Fail-soft: a gauge error or an unavailable vision doc degrades to "(gauge unavailable)".
 let visPct = null;
+// QF-20260621-940: FR-3 fleet-build % (gauge.build_pct) — the BODY-headline number; the SUBJECT must
+// lead with this too (it previously only used visPct=overall_pct, so subject/body % disagreed).
+let visBuildPct = null;
 let layerLine = '';
 let visNote = '';
 // SD-LEO-INFRA-GAUGE-BUILDABLE-VS-OPERATIONAL-001 (FR-3): lead with fleet-build %, show rung-% + operational separately
@@ -148,6 +151,7 @@ try {
   const gauge = await computeBuildGauge({ io: { supabase: db, grep }, visionSource: true });
   const fmt = formatGaugeForSummary(gauge, { em: EM }); // single-source display mapping (shared with the Chairman-UI tile)
   visPct = fmt.pct;
+  visBuildPct = fmt.build_pct; // QF-20260621-940: capture the body-headline % for the subject
   layerLine = fmt.layerLine;
   visNote = fmt.note;
   buildLine = fmt.buildLine;
@@ -266,7 +270,13 @@ const copyBlock = nActions ? [LEAD_IN, '', ...numbered].join('\n') : null;
 
 // ── subject + bodies (no emojis) ──
 const when = new Date(t).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' });
-const visSubj = visPct != null ? `EHG ${visPct}% built` : 'EHG vision n/a';
+// QF-20260621-940: the SUBJECT must lead with the SAME number as the body headline (build_pct),
+// not overall_pct. Use a typeof-number test, NOT a truthy-OR fallback: build_pct===0 is a real
+// value the body renders ("0% built", vdr gates on bp != null), so a truthy-OR fallback would
+// wrongly drop through to overall_pct at zero and re-introduce the mismatch. Mirror the body's
+// `bp != null` rule (typeof-number here is equivalent for the numeric/null gauge shape).
+const subjPct = (typeof visBuildPct === 'number') ? visBuildPct : visPct;
+const visSubj = subjPct != null ? `EHG ${subjPct}% built` : 'EHG vision n/a';
 // '(hr avg)' tag only for a CONFIDENT (non-sparse) hourly average — keep the subject honest too.
 const workerSubj = pulseSource === 'unavailable' ? 'workers n/a' : `${avgActive} active${(pulseSource === 'hourly avg' && !wc.sparse) ? ' (hr avg)' : ''}`;
 const actionsSubj = nActions ? `${nActions} ${nActions === 1 ? 'action' : 'actions'} for you` : 'all clear';
