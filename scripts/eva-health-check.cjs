@@ -27,7 +27,9 @@ function mapSchedulerHeartbeat(r) {
     last_heartbeat: row.last_poll_at,
     metadata: {
       ...(row.metadata && typeof row.metadata === 'object' ? row.metadata : {}),
-      consecutiveFailures: row.error_count || 0,
+      // NOTE (RCA 8e4e76b2 F2): error_count is a LIFETIME cumulative counter, so it maps to
+      // totalErrors but NOT to consecutiveFailures (a distinct concept the scheduler heartbeat
+      // does not record) — reusing it there would falsely print "<lifetime> consecutive".
       circuitBroken: String(row.circuit_breaker_state || '').toUpperCase() === 'OPEN',
       totalRuns: row.poll_count || 0,
       totalErrors: row.error_count || 0,

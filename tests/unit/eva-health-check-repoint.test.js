@@ -20,8 +20,9 @@ describe('mapSchedulerHeartbeat (SD-REFILL-00FHK2ED)', () => {
     expect(w.last_heartbeat).toBe('2026-06-21T22:00:00Z'); // last_poll_at
     expect(w.metadata.circuitBroken).toBe(false);  // CLOSED
     expect(w.metadata.totalRuns).toBe(120);        // poll_count
-    expect(w.metadata.totalErrors).toBe(2);        // error_count
-    expect(w.metadata.consecutiveFailures).toBe(2);
+    expect(w.metadata.totalErrors).toBe(2);        // error_count (lifetime cumulative)
+    // RCA F2: error_count is lifetime, NOT consecutive — must NOT be synthesized as consecutiveFailures
+    expect(w.metadata.consecutiveFailures).toBeUndefined();
     expect(w.metadata.foo).toBe('bar');            // existing metadata preserved
   });
 
