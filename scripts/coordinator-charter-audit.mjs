@@ -211,7 +211,9 @@ async function main() {
   let promotableCount = 0;
   try {
     const { data: staged, error: se } = await db.from('roadmap_wave_items')
-      .select('id, title, source_type, source_id, item_disposition, promoted_to_sd_key, lane')
+      // SD-LEO-INFRA-REFILL-SELECT-METADATA-001: select metadata so verifyStagedCandidates' promotableCount
+      // reflects recovered descriptions (hasRecoveredSubstance reads item.metadata.description).
+      .select('id, title, source_type, source_id, item_disposition, promoted_to_sd_key, lane, metadata')
       .eq('item_disposition', 'pending').is('promoted_to_sd_key', null).limit(2000);
     if (!se) promotableCount = verifyStagedCandidates(staged || []).validCount;
   } catch { /* fail-open → promotableCount stays 0, no advisory */ }
