@@ -23,6 +23,21 @@ const REASON_CLASSES = new Set([
   'live-db-dependent',
   'duplicate',
   'unclassified',
+  // Hand-maintained debt-register classes already present in the manifest.
+  'test-setup-error',
+  'real-finding-guard',
+  'missing-fixture',
+  'missing-db-function',
+  'misclassified-e2e',
+  'mock-gap',
+  'missing-db-seed',
+  'schema-drift',
+  'process-exit-in-test',
+  // SD-REFILL-00CO4E8Q: node:test files (valid under `node --test`, invisible to vitest) +
+  // the two fixable singletons split out of suite-load-error.
+  'node-test-runner',
+  'stale-import-extension',
+  'empty-suite',
 ]);
 
 const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));

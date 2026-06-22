@@ -3,38 +3,6 @@
   "generated_at": "2026-06-11T10:09:40.368Z",
   "quarantined": [
     {
-      "file": "docs/archived/orphan-stage-23-modules/stage-23-deployment.test.js",
-      "reason_class": "suite-load-error",
-      "error_signature": "Error: Cannot find module '/lib/eva/stage-templates/analysis-steps/stage-23-deployment.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/docs/arch",
-      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
-      "quarantined_at": "2026-06-11T10:09:40.362Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "docs/archived/orphan-stage-23-modules/stage-23-release-readiness.test.js",
-      "reason_class": "suite-load-error",
-      "error_signature": "Error: Cannot find module '/lib/eva/stage-templates/analysis-steps/stage-23-release-readiness.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/do",
-      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
-      "quarantined_at": "2026-06-11T10:09:40.362Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "docs/archived/orphan-stage-23-modules/stage-24-launch-execution.test.js",
-      "reason_class": "suite-load-error",
-      "error_signature": "Error: Cannot find module '../../../../../lib/eva/stage-templates/analysis-steps/stage-24-launch-execution.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-",
-      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
-      "quarantined_at": "2026-06-11T10:09:40.362Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "docs/archived/orphan-stage-23-modules/stage-24-marketing-prep.test.js",
-      "reason_class": "suite-load-error",
-      "error_signature": "Error: Cannot find module '../../../../../lib/eva/stage-templates/analysis-steps/stage-24-marketing-prep.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TR",
-      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
-      "quarantined_at": "2026-06-11T10:09:40.362Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
       "file": "lib/__tests__/repo-paths-git-capable.test.js",
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected true to be false // Object.is equality",
@@ -52,13 +20,14 @@
     },
     {
       "file": "lib/feature-flags/feature-flags.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "empty-suite",
       "error_signature": "Error: No test found in suite Feature Flag Registry",
       "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "No test found in suite (registry load) — not a real timeout",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "reclassified_note": "file loads but registers no runner-visible tests (empty/conditional suite) — not a load error. follow-up SD-REFILL-00CO4E8Q: restore/skip-annotate the suite or delete if obsolete."
     },
     {
       "file": "lib/hooks/__tests__/session-id.test.js",
@@ -70,11 +39,12 @@
     },
     {
       "file": "lib/security/encryption.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "stale-import-extension",
       "error_signature": "Error: Cannot find module '/lib/security/encryption.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/lib/security/encryption.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "module exists at a different extension (e.g. .js->.cjs rename); test import path is stale. follow-up SD-REFILL-00CO4E8Q: update the import extension and de-quarantine."
     },
     {
       "file": "lib/sub-agents/modules/stories/llm-story-generator.test.js",
@@ -86,11 +56,12 @@
     },
     {
       "file": "lib/utils/work-item-router.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/lib/utils/work-item-router.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "lib/worktree-rollback.test.js",
@@ -102,11 +73,12 @@
     },
     {
       "file": "packages/venture-agent/src/cli.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/packages/venture-agent/src/cli.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "scripts/__tests__/leo-create-sd-smoke-detector.test.js",
@@ -118,11 +90,12 @@
     },
     {
       "file": "scripts/__tests__/sd-creation-roundtrip.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/scripts/__tests__/sd-creation-roundtrip.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "scripts/hooks/__tests__/coordination-inbox.test.js",
@@ -150,11 +123,12 @@
     },
     {
       "file": "scripts/hooks/__tests__/pre-tool-enforce-inflight-default-on.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/scripts/hooks/__tests__/pre-tool-enforce-inflight-default-on.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "scripts/hooks/__tests__/retry-state-manager-outcome-mix.test.js",
@@ -166,11 +140,12 @@
     },
     {
       "file": "scripts/leo-create-sd.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/scripts/leo-create-sd.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "scripts/modules/handoff/executors/exec-to-plan/gates/test-coverage-quality.test.js",
@@ -198,11 +173,12 @@
     },
     {
       "file": "scripts/modules/handoff/executors/lead-to-plan/gates/verifier-parity.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/scripts/modules/handoff/executors/lead-to-plan/gates/verifier-parity.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "scripts/modules/handoff/gates/dual-generation.test.js",
@@ -214,19 +190,21 @@
     },
     {
       "file": "scripts/modules/plan-parser.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/scripts/modules/plan-parser.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "scripts/modules/prd/rewrite-loop.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/scripts/modules/prd/rewrite-loop.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "scripts/modules/sd-key-generator-coverage.test.js",
@@ -282,11 +260,12 @@
     },
     {
       "file": "tests/content-sanitizer.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/content-sanitizer.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "tests/eva/launch-workflow.test.js",
@@ -348,19 +327,21 @@
     },
     {
       "file": "tests/feedback-build-prompt.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/feedback-build-prompt.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "tests/playground-logic.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/playground-logic.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "tests/programmatic/tool-loop.test.js",
@@ -372,35 +353,39 @@
     },
     {
       "file": "tests/rank-items.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/rank-items.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "tests/review-findings-logger.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/review-findings-logger.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "tests/review-gate.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/review-gate.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "tests/review-risk-scorer.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/review-risk-scorer.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "tests/security/security-definer-remediation.test.js",
@@ -431,28 +416,13 @@
       "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
-      "file": "tests/theme-performance.test.js",
-      "reason_class": "suite-load-error",
-      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/theme-performance.test.js",
-      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
       "file": "tests/unit/auto-validate-user-stories-draft.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/auto-validate-user-stories-draft.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/unit/automated-knowledge-retrieval.test.js",
-      "reason_class": "suite-load-error",
-      "error_signature": "Error: Cannot find module './context7-circuit-breaker.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/scripts/automated-knowledge-retrieval.js",
-      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "tests/unit/blocked-state-detector.test.js",
@@ -467,14 +437,6 @@
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected [Function] to throw an error",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/unit/circuit-breaker.test.js",
-      "reason_class": "suite-load-error",
-      "error_signature": "Error: Cannot find module '/scripts/context7-circuit-breaker.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/circuit-breaker.test.js",
-      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
@@ -565,38 +527,6 @@
       "reason_class": "assertion-drift",
       "error_signature": "TypeError: Cannot read properties of undefined (reading 'dependencyContext')",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/unit/eva/bridge/stitch-adapter.test.js",
-      "reason_class": "suite-load-error",
-      "error_signature": "Error: Cannot find module '/lib/eva/bridge/stitch-adapter.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/eva/bridge/stitch-adapter.t",
-      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/unit/eva/bridge/stitch-client-budget.test.js",
-      "reason_class": "suite-load-error",
-      "error_signature": "Error: Cannot find module '/lib/eva/bridge/stitch-client.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/eva/bridge/stitch-client-bud",
-      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/unit/eva/bridge/stitch-exporter.test.js",
-      "reason_class": "suite-load-error",
-      "error_signature": "Error: Cannot find module '/lib/eva/bridge/stitch-exporter.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/eva/bridge/stitch-exporter",
-      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/unit/eva/bridge/stitch-provisioner.test.js",
-      "reason_class": "suite-load-error",
-      "error_signature": "Error: Cannot find module '/lib/eva/bridge/stitch-provisioner.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/eva/bridge/stitch-provi",
-      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
@@ -1053,14 +983,6 @@
       "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
-      "file": "tests/unit/prd-enrichment.test.js",
-      "reason_class": "suite-load-error",
-      "error_signature": "Error: Cannot find module './context7-circuit-breaker.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/scripts/automated-knowledge-retrieval.js",
-      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
-      "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
       "file": "tests/unit/pre-tool-enforce-schema.test.js",
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected '[pre-tool-enforce] RCA-TIERED-ENFORCE…' to contain 'schema-preflight'",
@@ -1149,20 +1071,13 @@
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
     {
-      "file": "tests/unit/resolve-sd-workdir/orphan-husk-recovery.test.js",
-      "reason_class": "suite-load-error",
-      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/resolve-sd-workdir/orphan-husk-recovery.test.js",
-      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
-      "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
       "file": "tests/unit/resolve-sd-workdir/worktree-atomicity.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/resolve-sd-workdir/worktree-atomicity.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "tests/unit/risk-classifier/anti-bloat-system.test.js",
@@ -1233,22 +1148,6 @@
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: Files writing raw to claude_sessions without going through lib/session-writer.cjs:",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/unit/stitch-design-system.test.js",
-      "reason_class": "suite-load-error",
-      "error_signature": "Error: Cannot find module '../../lib/eva/bridge/stitch-design-system.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/stitch-design-sy",
-      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
-      "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/unit/stitch-device-type-resolver.test.js",
-      "reason_class": "suite-load-error",
-      "error_signature": "Error: Cannot find module '../../lib/eva/bridge/stitch-device-type-resolver.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/stitch-de",
-      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
@@ -1327,28 +1226,22 @@
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
     {
-      "file": "tests/unit/wiring-validators/orphan-detector.test.js",
-      "reason_class": "suite-load-error",
-      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/wiring-validators/orphan-detector.test.js",
-      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
-      "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
       "file": "tests/unit/wiring-validators/spec-code-drift.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/wiring-validators/spec-code-drift.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "tests/unit/wiring-validators/vision-traceability.test.js",
-      "reason_class": "suite-load-error",
+      "reason_class": "node-test-runner",
       "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/wiring-validators/vision-traceability.test.js",
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
     },
     {
       "file": "tests/wsjf-priority-fetcher.test.js",

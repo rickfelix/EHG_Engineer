@@ -37,6 +37,12 @@ export const CLASS_DEFAULT_REFS = {
   'supabase-mock-chain': 'SD-LEO-FIX-GREEN-MAIN-TRIAGE-001',
   'timeout': 'SD-LEO-FIX-GREEN-MAIN-TRIAGE-001',
   'suite-load-error': 'SD-LEO-FIX-GREEN-MAIN-TRIAGE-001',
+  // SD-REFILL-00CO4E8Q: a node:test-style file (imports from 'node:test') is invisible to vitest
+  // ("No test suite found") but passes under `node --test` — NOT a real load error. Classified
+  // distinctly so a future rebuild does not re-lump it with dead suite-load-error tests.
+  'node-test-runner': 'SD-REFILL-00CO4E8Q',
+  'stale-import-extension': 'SD-REFILL-00CO4E8Q',
+  'empty-suite': 'SD-REFILL-00CO4E8Q',
   'assertion-drift': 'SD-LEO-FIX-GREEN-MAIN-TRIAGE-001',
   'unclassified': 'SD-LEO-FIX-GREEN-MAIN-TRIAGE-001',
 };
@@ -90,6 +96,17 @@ export function parseFailures(logText) {
   return failures;
 }
 
+// SD-REFILL-00CO4E8Q: a file that imports the Node built-in test runner ('node:test') registers
+// no vitest suite, so vitest reports "No test suite found" — but the file is a VALID test that
+// passes under `node --test`. classifyError sees only error TEXT and cannot tell it apart from a
+// genuinely broken load, so detect it here (we have the file path) and classify it distinctly.
+function isNodeTestFile(file) {
+  try {
+    const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    return /from\s+['"]node:test['"]|require\(\s*['"]node:test['"]\s*\)/.test(src);
+  } catch { return false; }
+}
+
 export function classifyFile(file, errors) {
   if (KNOWN_DUPLICATES.has(file)) return 'duplicate';
   const counts = {};
@@ -99,8 +116,11 @@ export function classifyFile(file, errors) {
   }
   // Dominant class, with the precedence order as tiebreaker.
   const order = Object.keys(CLASS_DEFAULT_REFS);
-  return Object.entries(counts).sort((a, b) =>
+  const dominant = Object.entries(counts).sort((a, b) =>
     b[1] - a[1] || order.indexOf(a[0]) - order.indexOf(b[0]))[0][0];
+  // A node:test file mis-surfacing as suite-load-error is not a real load error.
+  if (dominant === 'suite-load-error' && isNodeTestFile(file)) return 'node-test-runner';
+  return dominant;
 }
 
 function buildEntries(logText, refs) {
