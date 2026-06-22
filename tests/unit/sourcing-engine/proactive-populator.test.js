@@ -141,6 +141,20 @@ describe('stageCorpus — HARD safeguards: dry-run default, chairman-gated, neve
     expect(row.lane).toBe('belt-ready'); // lanePresent -> lane stamped
   });
 
+  it('SD-LEO-INFRA-BELT-001-PART-001 (FR-3a): carries candidate description into metadata.description', async () => {
+    const db = fakeDb();
+    const withDesc = [{ corpus: 'harness_backlog', source_type: 'brainstorm', source_id: 'b1', title: 'X',
+      description: 'The full source substance recovered from feedback.description (well over the floor).', lane: 'belt-ready' }];
+    await stageCorpus(db, withDesc, { apply: true, chairmanApproved: true, waveId: 'wave-1', lanePresent: true });
+    expect(db.inserted[0].metadata.description).toBe('The full source substance recovered from feedback.description (well over the floor).');
+  });
+
+  it('SD-LEO-INFRA-BELT-001-PART-001 (FR-3a): omits metadata.description when the candidate has none', async () => {
+    const db = fakeDb();
+    await stageCorpus(db, routed, { apply: true, chairmanApproved: true, waveId: 'wave-1', lanePresent: true });
+    expect(db.inserted[0].metadata).not.toHaveProperty('description'); // no empty key forced
+  });
+
   it('idempotent: a 23505 unique-violation is treated as already-staged (skipped, not an error)', async () => {
     const db = fakeDb({ code: '23505', message: 'duplicate key' });
     const res = await stageCorpus(db, routed, { apply: true, chairmanApproved: true, waveId: 'wave-1', lanePresent: true });
