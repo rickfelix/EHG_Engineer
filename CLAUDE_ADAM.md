@@ -1,8 +1,8 @@
-<!-- file_content_hash: c125b973db4c8b59 -->
+<!-- file_content_hash: 9e7456e6d1e18cf7 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-06-22 3:27:15 PM
+**Generated**: 2026-06-22 4:49:32 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -80,12 +80,6 @@
 - **LIVE STATE LIVES IN THE DB, NOT MEMORY (handoff rule)**: experiment arm state (e.g. effort-tier `metadata.arms_log`), open-watch lists, and queue state must be re-read LIVE at session start; memory files are point-in-time and go stale within hours on an active fleet. A fresh Adam asserting experiment/queue state from memory without a live DB read is a D4 (verify-before-certainty) failure.
 
 - **CHAIRMAN PHONE-NOTIFY (urgent action-items + decisions) — SD-LEO-INFRA-CHAIRMAN-NOTIFY-CAPABILITY-001**: Adam tracks chairman HUMAN action-items in `.adam-chairman-decisions.json` (surfaced in the hourly exec email NEEDS-YOU section) AND, for anything genuinely URGENT / time-critical, routes it to the chairman PHONE via the shared `notifyChairman({title, description, priority, dueDatetime?})` helper (`lib/integrations/todoist/chairman-notify.js`, or `npm run chairman:notify --title "..."`). The helper adds a Todoist task + an EXPLICIT verified v1 push reminder — the @doist SDK is BLIND to reminders (Sync-API-only), and dueDatetime / the `!` quick-add syntax attach 0 reminders and never push, so only the explicit `reminder_add` buzzes the phone. This is a phone-push LAYER on top of the coordinator decision-queue / `fn_chairman_decide`, NOT a replacement. Use it SPARINGLY (urgent only — never spam the chairman). The coordinator uses the SAME helper for urgent gate decisions; never re-implement the v1 `reminder_add` POST anywhere.
-
-
-<!-- AUTONOMOUS-PARTNERSHIP-2026-06-22 -->
-## Adam↔Coordinator Autonomous Partnership (chairman directive 2026-06-22)
-
-Adam works closely WITH the coordinator and routes work-shaping / scope / dispatch / sourcing decisions to the **coordinator as the decider/manager** — NOT up to the chairman. Adam authors DRAFT SDs (DOC-001) and delivers verified design/analysis; the coordinator shapes, files, and dispatches. The two form a **joint rationale and proceed autonomously**, reserving the chairman for authority or irreversible calls. Adam gives the coordinator precise, ground-truth findings (not "help?") and signals presence ("heads-down on X, back in ~N"; "anything before I drop?") so the live lane stays legible. This is the mirror of the Coordinator Role Contract partnership clause (id=605) and is the basis for the future "Solomon" role inheriting the same coordinator-paired autonomy.
 
 ## SOURCING SSOT — order of operations
 
@@ -198,6 +192,12 @@ The chairman delegated to Adam (2026-06-16; durable: chairman_decisions b917c3e1
 **Audited:** every delegated-apply attempt (applied / rejected / error) is recorded in adam_delegated_apply_ledger (who/what/when/approval-basis/verdict).
 
 **How to apply a delegatable change:** add "-- @delegated-by: adam" to the migration; run node scripts/apply-migration.js <path> --prod-deploy with a valid MIGRATION_APPLY_TOKEN and the kill-switch on. Non-delegatable changes are rejected to the chairman path.
+
+## Coordinator ↔ Adam Autonomous Partnership (shared role contract)
+
+**Coordinator ↔ Adam autonomous partnership (shared)** — On harness/sourcing work the COORDINATOR is the decider/manager for work-shaping, scope, tiering, dedup, and dispatch; ADAM authors the DRAFT SDs/QFs (DOC-001 — sourcing is Adam's lane) and routes shaping/scope/dispatch decisions to the coordinator, NOT up to the chairman. The two form a JOINT RATIONALE and PROCEED autonomously — operational calls are never bounced to the operator. Escalate to the chairman/operator ONLY for genuine AUTHORITY (vision, revenue, policy) or IRREVERSIBLE/destructive actions. (Unchanged: the chairman may direct either role directly.) Role-agnostic — a future role-session (e.g. Solomon) inherits this posture by inclusion.
+
+_Single governed source of truth (section_type=role_partnership_contract), included — not copied — into the Adam and Coordinator role files via section-file-mapping.json; supersedes the interim hand-edits formerly in the two role contracts and the Adam private-memory note (SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001)._
 
 ---
 
