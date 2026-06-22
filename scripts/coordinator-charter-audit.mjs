@@ -34,6 +34,8 @@ import {
   detectSourceToCapacity, detectCoordinatorWithoutAdam,
   // SD-LEO-INFRA-AUTO-REFILL-SELECTION-GATE-001-E: auto-refill awareness advisory.
   detectAutoRefillBacklog,
+  // SD-REFILL-00R7REXL: DUTY-3b — in_progress + unclaimed orphans (invisible to DUTY-2/3/4/5/7/8/9).
+  detectInProgressOrphans,
 } from '../lib/coordinator/charter-audit-detectors.mjs';
 // SD-LEO-INFRA-AUTO-REFILL-SELECTION-GATE-001-E: the -B dry-run verifier supplies the promotable count.
 import { verifyStagedCandidates } from '../lib/sourcing-engine/refill-dry-run-verifier.js';
@@ -85,6 +87,11 @@ const LEAD_AGING_MS = (Number.isFinite(_leadAgingDays) && _leadAgingDays >= 0 ? 
 // rather than nagging every healthy long-EXEC worker. Env-tunable via PROGRESS_STALL_HOURS_THRESHOLD.
 const _progressStallHrs = Number(process.env.PROGRESS_STALL_HOURS_THRESHOLD);
 const PROGRESS_STALL_MS = (Number.isFinite(_progressStallHrs) && _progressStallHrs >= 0 ? _progressStallHrs : 4) * 3600000;
+// SD-REFILL-00R7REXL — DUTY-3b threshold: an in_progress + UNCLAIMED SD with no live worker is only flagged an
+// orphan once its updated_at is older than this, so a claim just hard-cap-released (the worker is about to
+// self-resume, or the 15min orphan-adoption window hasn't elapsed) is not mis-flagged. Honor an explicit 0; default 10min.
+const _orphanMinAgeMin = Number(process.env.ORPHAN_MIN_AGE_MINUTES);
+const ORPHAN_MIN_AGE_MS = (Number.isFinite(_orphanMinAgeMin) && _orphanMinAgeMin >= 0 ? _orphanMinAgeMin : 10) * 60000;
 const TERMINAL = new Set(['completed', 'cancelled', 'archived', 'deferred']);
 const depKeysOf = (s) => (Array.isArray(s.dependencies) ? s.dependencies.map(extractDepKey).filter(Boolean) : []);
 
@@ -245,6 +252,10 @@ async function main() {
     // SD-LEO-INFRA-PROGRESS-STALL-DETECTION-001: DUTY-8 — claim-holders heartbeat-ALIVE but claimed SD FROZEN.
     // Reuses the canonical detectStuckWorker predicate (injected); advisory remediation count only (no new exit).
     progress: detectProgressStall({ liveSessions: liveWorkers, sds, nowMs, thresholdMs: PROGRESS_STALL_MS, isWithinArmedSilence: isWithinArmedSilenceWindow, detectStuck: detectStuckWorker }),
+    // SD-REFILL-00R7REXL: DUTY-3b — in_progress + unclaimed orphan with no live worker. Liveness gate uses
+    // the full `live` set (heartbeat|armed-silence|PID) NOT liveWorkers, so a long-Task worker whose claim
+    // was transiently hard-cap-released (still heartbeating its sd_key) is never mis-flagged (c1df435f).
+    orphan: detectInProgressOrphans({ sds, liveSessions: live, classifyIneligibility: classifyDispatchIneligibility, nowMs, minAgeMs: ORPHAN_MIN_AGE_MS }),
   };
 
   const flag = (r) => (r.remediation ? '  ⚠ ' + r.remediation : '');
@@ -260,6 +271,7 @@ async function main() {
   console.log('  DUTY-7 DRAFT-STALL   : ' + D.draft.detail + flag(D.draft)); // SILENT-STALL-PREVENTION-001
   console.log('  DUTY-8 PROGRESS-STALL: ' + D.progress.detail + flag(D.progress)); // PROGRESS-STALL-DETECTION-001
   console.log('  DUTY-9 LEAD-AGING    : ' + D.leadAging.detail + flag(D.leadAging)); // ADAM-VISION-SD-FLOW-001
+  console.log('  DUTY-3b IN-PROG ORPHAN: ' + D.orphan.detail + flag(D.orphan)); // SD-REFILL-00R7REXL
   // SD-LEO-INFRA-GOVERNANCE-ROLE-ADHERENCE-DBVALIDATION-001 (FR-3) — coordinator mirror adherence.
   if (D.srcCap) console.log('  SOURCE-TO-CAPACITY   : ' + D.srcCap.detail + flag(D.srcCap));
   if (D.d3lean) console.log('  D3-LEAN (coord/Adam) : ' + D.d3lean.detail + flag(D.d3lean));

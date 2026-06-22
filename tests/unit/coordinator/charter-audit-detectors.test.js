@@ -9,7 +9,7 @@ import {
   classifyLiveness, detectIdleWithWork, detectDependencyHealth, detectWorktreePool,
   detectBacklogRankStaleness, detectQuietTickUnverified, foundationalQueryError, summarizeViolations,
   extractDepKey, resolveWorktreeCount, computeDispatchBelt, detectCrossRepoStarvation,
-  detectAutoRefillBacklog,
+  detectAutoRefillBacklog, detectInProgressOrphans,
 } from '../../../lib/coordinator/charter-audit-detectors.mjs';
 import { STANDARD_LOOPS } from '../../../scripts/coordinator-startup-check.mjs';
 
@@ -338,5 +338,50 @@ describe('detectAutoRefillBacklog (SD-LEO-INFRA-AUTO-REFILL-SELECTION-GATE-001-E
     expect(detectAutoRefillBacklog({ promotableCount: -5 }).violation).toBe(false);
     expect(detectAutoRefillBacklog().violation).toBe(false);
     expect(detectAutoRefillBacklog({ promotableCount: 2.9 }).promotableCount).toBe(2); // floored
+  });
+});
+
+describe('detectInProgressOrphans — DUTY-3b in_progress+unclaimed orphan (SD-REFILL-00R7REXL)', () => {
+  const OLD = ago(30 * 60 * 1000); // older than the 10min default min-age
+  const orphanSd = (over = {}) => ({ sd_key: 'SD-ORPHAN-001', status: 'in_progress', claiming_session_id: null, current_phase: 'PLAN_PRD', updated_at: OLD, ...over });
+
+  it('flags an in_progress + UNCLAIMED SD with no live worker (the false-all-clear case)', () => {
+    const r = detectInProgressOrphans({ sds: [orphanSd()], liveSessions: [], nowMs: NOW });
+    expect(r.violation).toBe(true);
+    expect(r.orphanCount).toBe(1);
+    expect(r.samples[0]).toEqual({ sd_key: 'SD-ORPHAN-001', phase: 'PLAN_PRD' });
+    expect(r.remediation).toMatch(/recover/i);
+  });
+
+  it('does NOT flag when a live session still holds the sd_key (transient hard-cap claim release — c1df435f)', () => {
+    const r = detectInProgressOrphans({ sds: [orphanSd()], liveSessions: [{ session_id: 'live-1', sd_key: 'SD-ORPHAN-001' }], nowMs: NOW });
+    expect(r.violation).toBe(false);
+    expect(r.orphanCount).toBe(0);
+  });
+
+  it('does NOT flag a CLAIMED in_progress SD (DUTY-8 domain, not orphan)', () => {
+    const r = detectInProgressOrphans({ sds: [orphanSd({ claiming_session_id: 'sess-x' })], liveSessions: [], nowMs: NOW });
+    expect(r.violation).toBe(false);
+  });
+
+  it('does NOT flag a draft / completed / non-in_progress SD', () => {
+    const sds = [orphanSd({ status: 'draft' }), orphanSd({ sd_key: 'SD-X', status: 'completed' })];
+    expect(detectInProgressOrphans({ sds, liveSessions: [], nowMs: NOW }).violation).toBe(false);
+  });
+
+  it('excludes orchestrator parents / fixtures / human-action via classifyIneligibility', () => {
+    const r = detectInProgressOrphans({ sds: [orphanSd()], liveSessions: [], nowMs: NOW, classifyIneligibility: () => 'orchestrator_parent' });
+    expect(r.violation).toBe(false);
+  });
+
+  it('age-gates: a just-released claim (updated_at fresher than minAgeMs) is NOT yet an orphan', () => {
+    const r = detectInProgressOrphans({ sds: [orphanSd({ updated_at: ago(60 * 1000) })], liveSessions: [], nowMs: NOW });
+    expect(r.violation).toBe(false);
+  });
+
+  it('is total / fail-open on odd input', () => {
+    expect(detectInProgressOrphans().violation).toBe(false);
+    expect(detectInProgressOrphans({ sds: null, liveSessions: null }).violation).toBe(false);
+    expect(detectInProgressOrphans({ sds: [orphanSd()], liveSessions: [] }).violation).toBe(true); // nowMs undefined → age guard skipped, still flags
   });
 });
