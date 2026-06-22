@@ -1,0 +1,104 @@
+{
+  "executive_summary": "Phase-0 DESIGN-ONLY spec for the competitive-vigilance OBSERVED-baseline capability (build-out phase — drive the VDR gauge). The capability is genuinely unbuilt: competitive_baselines holds 4 STATUS_QUO/ASSUMPTION seed rows (one per venture) and the competitive_baselines_epistemic_tag_check CHECK (epistemic_tag IN ('FACT','ASSUMPTION','SIMULATION','UNKNOWN')) REJECTS an OBSERVED insert today (verified live via supabase MCP). The deliverable is a single design doc (docs/plans/competitive-vigilance-observed-baseline-design.md) that settles the 3 unknowns blocking any build, plus a proposed decomposition into 2-3 right-sized buildable child SDs. DESIGN-ONLY write surface: the doc + proposed child-SD rows (advisory) — does NOT touch lib/vision/vdr-registry.js and produces no runtime code. Two premise corrections from the SD framing are load-bearing and verified: (1) the table is NOT empty (4 seeds), and (2) there is NO 'epistemic_tags' enum (pg_enum lookup returned null) — so the migration is CHECK-constraint-only, dropping the 'add OBSERVED to the enum' half of the original scope. The observation source-of-truth decision is CHAIRMAN-GATED and is FLAGGED with enumerated options, not decided in this Phase-0.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "OBSERVED epistemic contract + migration shape (design)",
+      "description": "Specify what an OBSERVED competitive_baselines row MEANS (externally-observed competitor fact, distinct from ASSUMPTION/SIMULATION/FACT/UNKNOWN) and the exact migration shape to admit it: an additive, idempotent expansion of the competitive_baselines_epistemic_tag_check CHECK to add 'OBSERVED' (DROP CONSTRAINT IF EXISTS + re-ADD with the widened allowlist). Document the no-enum finding (no epistemic_tags pg_enum exists) so no build child wastes effort on a non-existent enum. Make an explicit BACKFILL decision: the 4 existing STATUS_QUO seeds are genuinely ASSUMPTION (assumed baselines, not observed) -> NO backfill to OBSERVED.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Doc defines the OBSERVED tag semantics vs the existing 4 tags (one-line each, no overlap)",
+        "Doc gives the additive idempotent CHECK-expansion migration shape (not the SQL applied — design only) and notes it is the same widen-the-allowlist pattern used elsewhere",
+        "Doc states there is NO epistemic_tags enum and corrects the SD's 'both CHECK and enum' framing to CHECK-only",
+        "Doc records the no-backfill decision for the 4 ASSUMPTION seeds with a one-line rationale"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Observation source-of-truth options (CHAIRMAN-GATED — flag, do not decide)",
+      "description": "Enumerate the candidate observation source-of-truth options and the extraction path for each, with a clearly-marked CHAIRMAN-GATED DECISION callout. Options to cover: (a) web research; (b) the dormant Apple RSS / Google Play / Product Hunt pollers (per COMPETITOR-MONITORING-PHASE-001); (c) manual chairman/analyst briefs; (d) the currently-empty competitor_intelligence / ci_snapshots tables. For each, note feasibility, what would feed competitive_baselines, and whether it is buildable without chairman input. The Phase-0 doc FLAGS the decision (with a recommended default + tradeoffs) and does NOT silently choose one.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "All 4 source-of-truth options enumerated with extraction path + feasibility per option",
+        "A single explicit 'CHAIRMAN-GATED DECISION' callout that the source-of-truth is open and requires chairman input",
+        "A recommended default with tradeoffs stated, but the decision is flagged not made",
+        "Reuse surfaces confirmed against reality (competitor_intelligence=0, ci_snapshots=0, app_rankings=0, dormant pollers exist)"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Recurrence (recurring-vigilance) model design",
+      "description": "Specify the recurrence model for keeping OBSERVED baselines fresh: the mechanism (scheduler/cron vs existing EVA scheduler), the cadence (e.g. weekly/monthly), and the scope decision (per-venture vs global). Ground the mechanism choice in existing scheduler infrastructure rather than inventing a new one. The recurrence design is downstream of the FR-2 source-of-truth decision, so it must state the dependency explicitly and design conditionally where needed.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "Mechanism named (reuse existing scheduler/cron infra; no net-new scheduler invented)",
+        "Cadence proposed with a one-line rationale",
+        "Per-venture vs global scope decided (or flagged if it depends on the chairman-gated source-of-truth)",
+        "Stated dependency on the FR-2 decision so the recurrence build child is correctly sequenced"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Decomposition into 2-3 right-sized buildable child SDs",
+      "description": "Propose 2-3 right-sized build child SDs that realize the design, each with a bounded scope and an INDEPENDENT write surface (the SD rationale notes the build pieces have independent write-surfaces). Expected shape: (1) the OBSERVED CHECK-expansion migration child (DDL only, no chairman gate — independently buildable now); (2) the source-of-truth ingestion child (chairman-gated, blocked on the FR-2 decision); (3) the recurrence/scheduler child (depends on child 2). Each proposed child lists scope, write-surface, dependencies, and gating. Children are PROPOSED in the doc (and optionally as draft rows) — this Phase-0 does not build them.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "2-3 child SDs proposed, each with scope + independent write-surface + dependencies + gating",
+        "The migration child is identified as independently buildable now (no chairman gate)",
+        "The ingestion child is identified as blocked on the FR-2 chairman-gated decision",
+        "Sequencing/dependency between children is explicit"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Design-only write surface", "description": "Output is docs/plans/competitive-vigilance-observed-baseline-design.md plus proposed child-SD content. No production code; explicitly does NOT touch lib/vision/vdr-registry.js. No migration is APPLIED in this SD (the migration SHAPE is designed for a build child)." },
+    { "id": "TR-2", "title": "Premise-faithful", "description": "The doc must correct the two verified premise errors (table not empty = 4 seeds; no epistemic_tags enum -> CHECK-only) so downstream build children operate on reality, not the SD's loose framing." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Doc settles all 3 unknowns", "type": "doc-review", "expected": "FR-1/FR-2/FR-3 each have a concrete settled section" },
+    { "id": "TS-2", "scenario": "Chairman-gated decision flagged not decided", "type": "doc-review", "expected": "A single explicit CHAIRMAN-GATED DECISION callout for the source-of-truth" },
+    { "id": "TS-3", "scenario": "Child decomposition present", "type": "doc-review", "expected": "2-3 child SDs with scope/write-surface/deps/gating" },
+    { "id": "TS-4", "scenario": "Premise corrections present", "type": "doc-review", "expected": "Doc states 4 seeds (not empty) and CHECK-only (no enum)" }
+  ],
+  "acceptance_criteria": [
+    "Design doc exists at docs/plans/competitive-vigilance-observed-baseline-design.md and settles the 3 blocking unknowns",
+    "Source-of-truth decision is FLAGGED as chairman-gated (options enumerated, not silently chosen)",
+    "2-3 right-sized buildable child SDs proposed with independent write-surfaces and explicit sequencing",
+    "The two premise corrections (4 seeds; CHECK-only/no-enum) are recorded; no production code touched; vdr-registry.js untouched"
+  ],
+  "risks": [
+    { "risk": "Design silently makes the chairman-gated source-of-truth decision instead of flagging it", "mitigation": "FR-2 acceptance criteria require an explicit CHAIRMAN-GATED DECISION callout; the prior session's release_note specifically asked for flag-not-decide.", "severity": "medium" },
+    { "risk": "Build children inherit the SD's premise errors (empty table / enum)", "mitigation": "TR-2 + FR-1 require the doc to correct both, verified live via supabase MCP.", "severity": "low" },
+    { "risk": "Scope creep into actually applying the migration or building ingestion", "mitigation": "TR-1 locks design-only write surface; migration is shaped not applied; vdr-registry.js untouched.", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["Future build child SDs (migration / ingestion / recurrence)", "chairman (source-of-truth decision)", "VDR build gauge (capability anchor, criteria 23-25)"],
+    "dependencies": ["competitive_baselines table + competitive_baselines_epistemic_tag_check", "dormant Apple RSS / Google Play / Product Hunt pollers (COMPETITOR-MONITORING-PHASE-001)", "competitor_intelligence / ci_snapshots tables (currently empty)", "existing scheduler/cron infrastructure"],
+    "data_contracts": ["competitive_baselines.epistemic_tag widened allowlist adding 'OBSERVED' (designed, not applied)"],
+    "runtime_config": ["none in Phase-0 (design only)"],
+    "observability_rollout": ["doc + proposed child SDs are the deliverable; no runtime rollout in Phase-0"]
+  },
+  "system_architecture": {
+    "summary": "A single Phase-0 design doc settling the OBSERVED epistemic contract + CHECK-only migration shape (FR-1), the chairman-gated source-of-truth options (FR-2), and the recurrence model (FR-3), then decomposing into 2-3 buildable child SDs (FR-4). No code; no migration applied.",
+    "components": [
+      { "name": "docs/plans/competitive-vigilance-observed-baseline-design.md", "change": "new design doc (the deliverable)" },
+      { "name": "Proposed child SDs (content in doc; optional draft rows)", "change": "2-3 right-sized buildable children with independent write-surfaces" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Author the design doc grounding every claim in the live-verified DB state; settle the 3 unknowns; flag the chairman-gated decision; propose the child decomposition. Correct the two premise errors. Do not touch vdr-registry.js or apply any migration.",
+    "steps": [
+      "Write FR-1 OBSERVED contract + additive CHECK-only migration shape + no-backfill decision",
+      "Write FR-2 source-of-truth options with an explicit CHAIRMAN-GATED DECISION callout",
+      "Write FR-3 recurrence model (reuse existing scheduler; cadence; per-venture vs global; FR-2 dependency)",
+      "Write FR-4 decomposition into 2-3 buildable child SDs (scope/write-surface/deps/gating)",
+      "Record the two premise corrections; confirm vdr-registry.js untouched and no migration applied"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Open docs/plans/competitive-vigilance-observed-baseline-design.md", "expected_outcome": "Doc settles the 3 blocking unknowns: OBSERVED contract + CHECK-only migration shape, chairman-gated source-of-truth options, and the recurrence model" },
+    { "step_number": 2, "instruction": "Read the 'Proposed child SDs' section", "expected_outcome": "2-3 right-sized buildable child SDs are listed, each with scope + independent write-surface + dependencies + gating" },
+    { "step_number": 3, "instruction": "Read the 'CHAIRMAN-GATED DECISION' callout", "expected_outcome": "The observation source-of-truth decision is explicitly flagged for chairman input with options enumerated (web research / dormant pollers / manual briefs / empty competitor_intelligence|ci_snapshots) — not silently decided" }
+  ],
+  "metadata": { "sd_key": "SD-LEO-INFRA-COMPETITIVE-VIGILANCE-OBSERVED-DESIGN-001" }
+}
