@@ -30,6 +30,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/node-modules-autoheal.cjs",
+            "timeout": 60
+          },
+          {
+            "type": "command",
             "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/session-state-sync.cjs",
             "timeout": 5
           },
