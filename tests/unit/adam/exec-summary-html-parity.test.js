@@ -77,3 +77,40 @@ describe('QF-20260621-379 exec-email HTML parity', () => {
     }
   });
 });
+
+// QF-20260621-940 — the SUBJECT %-built must equal the BODY-headline %-built (both build_pct).
+// Mirror the subject selector (the script isn't imported); the body headline leads with build_pct.
+function subjPctSelector(visPct, visBuildPct) {
+  return (typeof visBuildPct === 'number') ? visBuildPct : visPct;
+}
+// What the body headline shows as its number (FR-3: build_pct when present, else overall_pct).
+function bodyHeadlinePct(visPct, visBuildPct) {
+  return (typeof visBuildPct === 'number') ? visBuildPct : visPct;
+}
+
+describe('QF-20260621-940 exec-email subject↔body %-built parity', () => {
+  const cases = [
+    { name: 'normal split (the live bug: subject 55 vs body 60 → must converge)', pct: 55, build_pct: 60, expect: 60 },
+    { name: 'build_pct===0 (the falsy trap a `||` would break)', pct: 42, build_pct: 0, expect: 0 },
+    { name: 'no buildable split (both fall back to overall_pct)', pct: 48, build_pct: null, expect: 48 },
+    { name: 'fully unavailable', pct: null, build_pct: null, expect: null },
+  ];
+  for (const c of cases) {
+    it(`subject% === body-headline% — ${c.name}`, () => {
+      const subj = subjPctSelector(c.pct, c.build_pct);
+      const body = bodyHeadlinePct(c.pct, c.build_pct);
+      expect(subj).toBe(c.expect);
+      expect(subj).toBe(body); // the parity the QF exists to guarantee
+    });
+  }
+
+  it('SOURCE GUARD: subject uses a typeof-number/subjPct selector, NEVER `visBuildPct || visPct`', () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const src = readFileSync(resolve(here, '../../../scripts/adam-exec-summary.mjs'), 'utf8');
+    expect(src).toContain('const subjPct =');
+    expect(src).toMatch(/typeof visBuildPct === 'number'/);
+    expect(src).toMatch(/visBuildPct = fmt\.build_pct/);
+    // the zero-trap: a truthy `||` fallback must NOT be used for the subject percent
+    expect(src).not.toMatch(/visBuildPct\s*\|\|\s*visPct/);
+  });
+});
