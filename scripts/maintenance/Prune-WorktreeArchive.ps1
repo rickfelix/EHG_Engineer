@@ -23,8 +23,10 @@
       2. LIVE    - skips any path that 'git worktree list' reports as active.
       3. RECENCY - never deletes an entry modified within -SafetyHours.
 
-    Deletion uses 'rd /s /q' which removes junctions as links (never follows
-    them), so a junctioned node_modules can't lead to the main repo being hit.
+    Deletion routes through the fleet's CANONICAL junction-safe routine
+    (lib/worktree-manager.js safeRecursiveRmWithRetry, via safe-rm-tree.mjs): it unlinks
+    every nested junction before fs.rmSync, so a junctioned node_modules can't lead to
+    the shared store being hit. The import chain is node_modules-free (survives a wipe).
 
 .PARAMETER RetentionDays   Delete entries older than this. Default 7.
 .PARAMETER MaxKeep         Keep at most this many newest (hard space cap). Default 40.
@@ -60,6 +62,9 @@ if ($ArchiveRoot) { $Archive = $ArchiveRoot }   # optional override (testing / r
 $LogDir    = Join-Path $RepoRoot '.logs'
 $LogFile   = Join-Path $LogDir 'worktree-archive-prune.log'
 $HighWater = 200
+# Deletion routes through the fleet's canonical junction-safe routine (see Remove-Tree).
+$SafeRm    = Join-Path $PSScriptRoot 'safe-rm-tree.mjs'
+$NodeExe   = (Get-Command node -ErrorAction SilentlyContinue).Source
 
 function Write-Log([string]$msg) {
     $line = '[' + (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') + '] ' + $msg
@@ -70,9 +75,15 @@ function Write-Log([string]$msg) {
 
 function Get-FreeGB { return [math]::Round((Get-PSDrive C).Free / 1GB, 2) }
 
-# Junction-safe recursive delete. Returns $true if the path is gone afterward.
+# Junction-safe recursive delete via the fleet's CANONICAL routine
+# (lib/worktree-manager.js safeRecursiveRmWithRetry, invoked through safe-rm-tree.mjs):
+# it unlinks every nested junction/symlink BEFORE fs.rmSync, so a node_modules junction
+# can never be followed into the shared store. The import chain is node_modules-free, so
+# this keeps working during a node_modules wipe. Coordinator-confirmed 2026-06-22.
+# Returns $true if the path is gone afterward.
 function Remove-Tree([string]$path) {
-    cmd.exe /c "rd /s /q `"$path`"" 2>&1 | Out-Null
+    if (-not $NodeExe) { Write-Log "  ERROR  node not on PATH - cannot prune (skipped): $path"; return $false }
+    & $NodeExe $SafeRm $path 2>&1 | Out-Null
     return (-not (Test-Path -LiteralPath $path))
 }
 
