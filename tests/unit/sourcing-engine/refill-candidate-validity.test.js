@@ -149,3 +149,19 @@ describe('evaluateRefillCandidate raw-label source guard (SD-LEO-INFRA-VDR-GAUGE
     expect(evaluateRefillCandidate(validItem({ source_type: '' })).reason).toBe(REFILL_INVALID_REASONS.MISSING_PROVENANCE);
   });
 });
+
+describe('evaluateRefillCandidate vdr_gauge translated-escape (SD-LEO-INFRA-TRANSLATEGAPTOBUILDABLE-GAUGE-GAP-001 FR-3)', () => {
+  it('a TRANSLATED vdr_gauge item passes the raw-label gate (metadata.translated=true)', () => {
+    const r = evaluateRefillCandidate(validItem({ source_type: 'vdr_gauge', metadata: { translated: true } }));
+    expect(r).toEqual({ valid: true, reason: null });
+  });
+  it('a RAW (untranslated) vdr_gauge item is STILL blocked (raw_label_source)', () => {
+    expect(evaluateRefillCandidate(validItem({ source_type: 'vdr_gauge' })).reason).toBe(REFILL_INVALID_REASONS.RAW_LABEL_SOURCE);
+    expect(evaluateRefillCandidate(validItem({ source_type: 'vdr_gauge', metadata: {} })).reason).toBe(REFILL_INVALID_REASONS.RAW_LABEL_SOURCE);
+    // a falsey/non-true translated marker does not escape
+    expect(evaluateRefillCandidate(validItem({ source_type: 'vdr_gauge', metadata: { translated: 'yes' } })).reason).toBe(REFILL_INVALID_REASONS.RAW_LABEL_SOURCE);
+  });
+  it('the escape does not affect non-vdr_gauge source_types', () => {
+    expect(evaluateRefillCandidate(validItem({ source_type: 'conversion_ledger', metadata: { translated: true } }))).toEqual({ valid: true, reason: null });
+  });
+});

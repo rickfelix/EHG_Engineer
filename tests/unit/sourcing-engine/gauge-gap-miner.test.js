@@ -16,6 +16,7 @@ import {
   gapToCandidate,
   gaugeGapSourceId,
   buildStagedRoadmapItem,
+  translateGapToBuildable,
   mineGaugeGaps,
   isGaugeGapMinerFlagEnabled,
   VDR_GAUGE_SOURCE_TYPE,
@@ -115,6 +116,45 @@ describe('FR-2: gapToCandidate routing', () => {
     expect(c.authority).toBe('operational');
     // The SHIPPED router maps authority=operational -> chairman-gated.
     expect(stampCandidate(c, {}).lane).toBe('chairman-gated');
+  });
+});
+
+describe('SD-LEO-INFRA-TRANSLATEGAPTOBUILDABLE-GAUGE-GAP-001 FR-1: translateGapToBuildable', () => {
+  it('emits a concrete buildable title (not the raw capability label) + scope + translated:true', () => {
+    const t = translateGapToBuildable({ capability: 'Backlog distilled and dispositioned', required: 'feedback backlog has 0 untriaged > 7d', status: 'partial' });
+    expect(t.translated).toBe(true);
+    expect(t.title).not.toBe('Backlog distilled and dispositioned'); // not the bare label
+    expect(t.title).toContain('Backlog distilled and dispositioned'); // but references it
+    expect(t.title.length).toBeLessThan(120); // never a truncation shell
+    expect(t.scope).toContain('feedback backlog has 0 untriaged > 7d'); // required acceptance carried
+    expect(t.scope).toContain('partial'); // gauge status carried
+  });
+  it('is total on odd/missing input and still carries an acceptance fallback', () => {
+    const t = translateGapToBuildable(null);
+    expect(t.translated).toBe(true);
+    expect(typeof t.title).toBe('string');
+    expect(t.title.length).toBeGreaterThan(0);
+    expect(t.scope).toMatch(/Acceptance/);
+  });
+});
+
+describe('SD-LEO-INFRA-TRANSLATEGAPTOBUILDABLE-GAUGE-GAP-001 FR-2: miner stamps the translation', () => {
+  it('buildStagedRoadmapItem carries the translated title + metadata.translated + metadata.description, raw capability traceable', () => {
+    const payload = buildStagedRoadmapItem(
+      { capability: 'Backlog distilled and dispositioned', nature: 'buildable', status: 'partial', required: 'acceptance criterion text' },
+      { lane: 'belt-ready', dedup_match_sd_key: null, re_emit: false },
+      { waveId: 'wave-1', lanePresent: true, activeRungKey: 'V1' },
+    );
+    expect(payload.title).not.toBe('Backlog distilled and dispositioned'); // translated, not raw
+    expect(payload.metadata.translated).toBe(true);
+    expect(typeof payload.metadata.description).toBe('string');
+    expect(payload.metadata.description.length).toBeGreaterThan(40);
+    expect(payload.metadata.capability).toBe('Backlog distilled and dispositioned'); // raw still traceable
+    expect(payload.metadata.source_label).toBe('vdr:Backlog distilled and dispositioned');
+  });
+  it('gapToCandidate KEEPS the raw capability title (the dedup match key — translation is staged-row-only)', () => {
+    const c = gapToCandidate({ capability: 'Build a thing', nature: 'buildable' });
+    expect(c.title).toBe('Build a thing'); // raw, so the SHIPPED dedup matcher still matches shipped capability SDs
   });
 });
 
