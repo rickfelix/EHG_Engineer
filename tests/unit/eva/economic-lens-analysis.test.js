@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createSupabaseChainMock } from '../../helpers/supabase-chain-mock.js';
 
 // Must mock before importing
 vi.mock('../../../lib/llm/index.js', () => ({
@@ -96,17 +97,8 @@ describe('EconomicLensAnalysis', () => {
       mockLLMClient = { complete: vi.fn() };
       getLLMClient.mockReturnValue(mockLLMClient);
 
-      mockSupabase = {
-        from: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        in: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-        single: vi.fn(),
-        update: vi.fn().mockReturnThis(),
-        insert: vi.fn().mockReturnThis()
-      };
+      // Cache-hit path mock (single .single() resolver is overridden per-test).
+      mockSupabase = createSupabaseChainMock();
     });
 
     it('should return cached result when available and not forcing refresh', async () => {
@@ -129,52 +121,23 @@ describe('EconomicLensAnalysis', () => {
     it('should call LLM when forcing refresh', async () => {
       const { analyzeEconomicLens } = await import('../../../lib/eva/economic-lens-analysis.js');
 
-      // Build a chainable mock that tracks calls
-      const chainable = () => {
-        const chain = {};
-        const methods = ['from', 'select', 'eq', 'in', 'order', 'limit', 'update', 'insert'];
-        methods.forEach(m => { chain[m] = vi.fn(() => chain); });
+      // forceRefresh path issues these terminal reads/writes in order:
+      //   single():     (1) ventures lookup, (2) insert .select('id').single()
+      //                 from writeArtifact, (3) created_at fetch
+      //   maybeSingle(): writeArtifact dedup (no existing → null)
+      //   order():      fetchUpstreamContext (awaited → empty array)
+      // A single chainable+thenable mock composes the deep .eq()/.limit() chains;
+      // we sequence only the terminal resolvers (the old bespoke mock lacked
+      // maybeSingle → "dedupQuery.limit(...).maybeSingle is not a function").
+      const sb = createSupabaseChainMock();
+      sb.single
+        .mockResolvedValueOnce({ data: { id: 'v1', name: 'Test Venture' }, error: null }) // ventures
+        .mockResolvedValueOnce({ data: { id: 'new-id' }, error: null })                   // insert .select('id')
+        .mockResolvedValueOnce({ data: { id: 'new-id', created_at: '2026-03-11' }, error: null }); // created_at fetch
+      sb.maybeSingle.mockResolvedValue({ data: null, error: null }); // writeArtifact dedup: no existing
+      // fetchUpstreamContext awaits the chain after .order(); resolve to no rows.
+      sb.__setResult({ data: [], error: null });
 
-        // single() returns different values based on call order
-        let singleCallCount = 0;
-        chain.single = vi.fn(() => {
-          singleCallCount++;
-          if (singleCallCount === 1) {
-            // Venture lookup
-            return Promise.resolve({ data: { id: 'v1', name: 'Test Venture' }, error: null });
-          }
-          return Promise.resolve({ data: null, error: null });
-        });
-
-        // order returns data for upstream artifacts query
-        const origOrder = chain.order;
-        chain.order = vi.fn((...args) => {
-          const result = origOrder(...args);
-          // Make it awaitable for the upstream artifacts query
-          result.then = (resolve) => resolve({ data: [], error: null });
-          return result;
-        });
-
-        // select on insert returns inserted data
-        let selectAfterInsert = false;
-        const origInsert = chain.insert;
-        chain.insert = vi.fn((...args) => {
-          selectAfterInsert = true;
-          return origInsert(...args);
-        });
-        const origSelect = chain.select;
-        chain.select = vi.fn((...args) => {
-          if (selectAfterInsert) {
-            selectAfterInsert = false;
-            return Promise.resolve({ data: [{ id: 'new-id', created_at: '2026-03-11' }], error: null });
-          }
-          return origSelect(...args);
-        });
-
-        return chain;
-      };
-
-      const sb = chainable();
       mockLLMClient.complete.mockResolvedValueOnce({
         content: validLLMResponse,
         model: 'claude-sonnet-4-20250514'

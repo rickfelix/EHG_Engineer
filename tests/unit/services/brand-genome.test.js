@@ -57,6 +57,15 @@ function createMockSupabase({ data = [], error = null, singleData = null } = {})
     };
   });
 
+  // createBrandGenome() uses .upsert().select().single(); mirror the insert
+  // branch so the write path composes (the old mock had no upsert →
+  // "supabase.from(...).upsert is not a function").
+  const insertOrUpsertReturn = () => ({
+    select: vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({ data: singleData, error }),
+    }),
+  });
+
   // Build the mock from builder
   const fromMock = vi.fn().mockReturnValue({
     select: vi.fn().mockReturnValue({
@@ -79,11 +88,8 @@ function createMockSupabase({ data = [], error = null, singleData = null } = {})
       order: orderFn,
       maybeSingle: vi.fn().mockResolvedValue({ data: singleData, error }),
     }),
-    insert: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({ data: singleData, error }),
-      }),
-    }),
+    insert: vi.fn().mockImplementation(insertOrUpsertReturn),
+    upsert: vi.fn().mockImplementation(insertOrUpsertReturn),
     update: vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({

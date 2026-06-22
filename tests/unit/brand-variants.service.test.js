@@ -25,34 +25,45 @@ const createMockSupabaseClient = () => {
     nextId: 1
   };
 
+  // Chainable, thenable SELECT builder. Accumulates .eq() filters and an
+  // optional .order(), so getBrandVariants()'s `select().eq().eq().order()`
+  // composes (the old mock returned a non-chainable object → "query.order is
+  // not a function"). Awaiting resolves the filtered+sorted rows; .single()
+  // resolves the first match.
+  const makeSelectBuilder = () => {
+    const filters = [];
+    let sort = null;
+    const applyFilters = () =>
+      mockData.variants.filter(v => filters.every(([f, val]) => v[f] === val));
+    const applySort = (rows) => {
+      if (!sort) return rows;
+      const { field, ascending } = sort;
+      return [...rows].sort((a, b) =>
+        ascending ? (a[field] > b[field] ? 1 : -1) : (a[field] < b[field] ? 1 : -1));
+    };
+    const builder = {
+      eq(field, value) {
+        filters.push([field, value]);
+        return builder;
+      },
+      order(field, options = {}) {
+        sort = { field, ascending: !!options.ascending };
+        return builder;
+      },
+      async single() {
+        const variant = applyFilters()[0];
+        return { data: variant || null, error: variant ? null : { message: 'Not found' } };
+      },
+      async then(resolve) {
+        return resolve({ data: applySort(applyFilters()), error: null });
+      }
+    };
+    return builder;
+  };
+
   return {
     from: (table) => ({
-      select: (columns = '*') => ({
-        eq: (field, value) => ({
-          single: async () => {
-            const variant = mockData.variants.find(v => v[field] === value);
-            return { data: variant || null, error: variant ? null : { message: 'Not found' } };
-          },
-          async then(resolve) {
-            const filtered = mockData.variants.filter(v => v[field] === value);
-            return resolve({ data: filtered, error: null });
-          }
-        }),
-        order: (field, options) => ({
-          async then(resolve) {
-            const sorted = [...mockData.variants].sort((a, b) => {
-              if (options.ascending) {
-                return a[field] > b[field] ? 1 : -1;
-              }
-              return a[field] < b[field] ? 1 : -1;
-            });
-            return resolve({ data: sorted, error: null });
-          }
-        }),
-        async then(resolve) {
-          return resolve({ data: mockData.variants, error: null });
-        }
-      }),
+      select: (columns = '*') => makeSelectBuilder(),
       insert: (data) => ({
         select: () => ({
           single: async () => {

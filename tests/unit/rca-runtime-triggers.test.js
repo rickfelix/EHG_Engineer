@@ -12,6 +12,7 @@
 
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
+import { createSupabaseChainMock } from '../helpers/supabase-chain-mock.js';
 
 // Mock Supabase client
 vi.mock('@supabase/supabase-js');
@@ -20,19 +21,7 @@ describe('RCA Runtime Triggers', () => {
   let mockSupabase;
 
   beforeEach(() => {
-    mockSupabase = {
-      from: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      insert: vi.fn().mockReturnThis(),
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      in: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn(),
-      single: vi.fn(),
-      channel: vi.fn().mockReturnThis(),
-      on: vi.fn().mockReturnThis(),
-      subscribe: vi.fn()
-    };
+    mockSupabase = createSupabaseChainMock();
 
     createClient.mockReturnValue(mockSupabase);
   });
@@ -114,7 +103,8 @@ describe('RCA Runtime Triggers', () => {
       };
 
       mockSupabase.maybeSingle.mockResolvedValue({ data: existingRCR, error: null });
-      mockSupabase.update.mockResolvedValue({ data: { ...existingRCR, recurrence_count: 2 }, error: null });
+      // update().eq() is awaited but its result is discarded by production code;
+      // the chainable mock stays chainable so .eq() resolves via the thenable chain.
 
       const params = {
         failure_signature: 'test_regression:login_test:SD-AUTH-001',

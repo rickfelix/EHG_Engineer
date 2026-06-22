@@ -24,38 +24,75 @@ vi.mock('../../../lib/eva/artifact-persistence-service.js', () => ({
 
 import { writeArtifact } from '../../../lib/eva/artifact-persistence-service.js';
 
+// Fully chainable + thenable Supabase mock. The query builder accumulates
+// arbitrary .eq()/.in()/.contains()/.limit() calls (the old bespoke mock only
+// nested a few levels deep → "...eq().eq().eq().eq is not a function" and
+// "...eq().eq().eq().limit is not a function"). Distinct queries are served by
+// their terminal call:
+//   .single()      → the source/archetype artifact (fetchArtifactById)
+//   .maybeSingle() → the wireframe_screens artifact (drives expectedScreens)
+//   .contains()… (awaited) → approved-mobile lookup → [{ content }]
+//   select(.., {count:'exact'}) (awaited) → { count } (approved-artifact count)
+//   plain awaited select chain → { data: [] } (e.g. the retire-existing lookup)
 function createMockSupabase(opts = {}) {
-  const { artifactContent = '<html>Test</html>', metadata = {}, count = 0 } = opts;
-  return {
-    from: vi.fn().mockReturnValue({
-      select: vi.fn().mockImplementation((sel, selectOpts) => {
-        if (selectOpts?.count === 'exact') {
-          return {
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                in: vi.fn().mockResolvedValue({ count, error: null }),
-              }),
-            }),
-          };
-        }
-        return {
-          eq: vi.fn().mockImplementation((col, val) => ({
-            single: vi.fn().mockResolvedValue({
-              data: { id: val, content: artifactContent, artifact_data: {}, metadata, title: 'Screen', artifact_type: 'stage_17_archetype' },
-              error: null,
-            }),
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                contains: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue({ data: [{ content: '<html>Mobile</html>' }], error: null }),
-                }),
-              }),
-            }),
-          })),
-        };
-      }),
-    }),
+  const {
+    artifactContent = '<html>Test</html>',
+    metadata = {},
+    count = 0,
+    // expectedScreens drives isDesignPassComplete's completion threshold. The
+    // original suite treated 14 as the magic "all screens approved" count, so
+    // keep 14 as the default screen count (preserves the test intent against
+    // the refactored wireframe-screens-based completion check).
+    screenCount = 14,
+  } = opts;
+
+  const archetypeRow = {
+    id: 'archetype-id',
+    content: artifactContent,
+    artifact_data: {},
+    metadata,
+    title: 'Screen',
+    artifact_type: 'stage_17_archetype',
   };
+  const wireframeRow = {
+    artifact_data: { screens: Array.from({ length: screenCount }, (_, i) => ({ id: `s${i}` })) },
+  };
+
+  const from = vi.fn((table) => {
+    const builder = {
+      _isCount: false,
+      _hasContains: false,
+      select(sel, selectOpts) {
+        if (selectOpts?.count === 'exact') this._isCount = true;
+        return builder;
+      },
+      eq(col, val) { this._lastEqVal = val; return builder; },
+      in() { return builder; },
+      contains() { this._hasContains = true; return builder; },
+      order() { return builder; },
+      update() { return builder; },
+      limit() { return builder; },
+      // Terminal: source/archetype artifact (echo id so variant-suffix logic works)
+      single: vi.fn(() =>
+        Promise.resolve({ data: { ...archetypeRow, id: builder._lastEqVal ?? archetypeRow.id }, error: null })),
+      // Terminal: wireframe_screens artifact (expectedScreens source)
+      maybeSingle: vi.fn(() => Promise.resolve({ data: wireframeRow, error: null })),
+      // Awaited chain:
+      //   count query → { count }
+      //   approved-mobile lookup (contains) → [{ content }]
+      //   otherwise → empty list
+      then(resolve, reject) {
+        let result;
+        if (this._isCount) result = { count, error: null };
+        else if (this._hasContains) result = { data: [{ content: artifactContent }], error: null };
+        else result = { data: [], error: null };
+        return Promise.resolve(result).then(resolve, reject);
+      },
+    };
+    return builder;
+  });
+
+  return { from };
 }
 
 describe('selection-flow', () => {

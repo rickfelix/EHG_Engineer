@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
+import { createSupabaseChainMock } from '../../helpers/supabase-chain-mock.js';
 import { resetStaleStageWork, advanceStage } from '../../../lib/eva/artifact-persistence-service.js';
 
 const VENTURE_ID = '94856fc6-9ba9-4f56-9a5c-85041031a0fc'; // LexiGuard
@@ -29,6 +30,14 @@ const lexiguardVentureRow = {
 
 /**
  * Build a mock supabase that records UPDATE payloads for assertion.
+ *
+ * Only the two tables the reset logic touches (venture_stage_work, ventures)
+ * have bespoke handlers. advanceStage() also runs checkExitGates / checkGateDebt
+ * which read other tables (venture_stages, eva_stage_gate_results,
+ * chairman_decisions); the fallback returns a fully chainable + thenable
+ * createSupabaseChainMock() that resolves empty so those checks pass through to
+ * allowed/not-blocked (the previous `|| {}` fallback broke with
+ * "supabase.from(...).select is not a function").
  */
 function createMockSupabase({ stageWorkRow, ventureRow, rpcResult = { success: true } }) {
   const updates = { venture_stage_work: [], ventures: [] };
@@ -63,7 +72,7 @@ function createMockSupabase({ stageWorkRow, ventureRow, rpcResult = { success: t
     }),
   };
   const supabase = {
-    from: vi.fn().mockImplementation((tbl) => fromHandlers[tbl]?.() || {}),
+    from: vi.fn().mockImplementation((tbl) => fromHandlers[tbl]?.() || createSupabaseChainMock()),
     rpc: vi.fn().mockResolvedValue({ data: rpcResult, error: null }),
   };
   return { supabase, updates };
