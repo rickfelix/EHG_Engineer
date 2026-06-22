@@ -683,7 +683,15 @@ fi
 # (leo-create-sd --child emits -B/-C/...). Without it the key truncates to the
 # PARENT orchestrator (often legitimately draft while children run), falsely
 # blocking every child commit with "SD is in DRAFT status".
-SD_ID=$(echo "$COMMIT_MSG $BRANCH" | grep -oE 'SD-[A-Z0-9]+(-[A-Z0-9]+)*-[0-9]+(-[A-Z])?' | head -1)
+# QF-20260621-393: the old pattern's MANDATORY trailing '-[0-9]+' segment truncated
+# alnum-terminal keys (auto-refill mints SD-REFILL-<8 alnum>, NO trailing -digits):
+# SD-REFILL-00XUUGXQ -> 'SD-REFILL-00' (the '-00' satisfied '-[0-9]+', alnum tail dropped)
+# -> validate-sd-commit.js can't find the truncated key -> false 'not found' -> the WHOLE
+# SD-REFILL belt was forced onto LEO_ALLOW_NO_VERIFY on every commit. Accept SD- followed by
+# >=2 dash-separated alnum segments (greedy -> captures the whole key, digit-terminal OR
+# alnum-terminal, incl. the -B child suffix as a segment). grep -oE is case-sensitive so
+# lowercase prose ('SD-based-thing') never matches; a real key always has >=2 segments.
+SD_ID=$(echo "$COMMIT_MSG $BRANCH" | grep -oE 'SD-[A-Z0-9]+(-[A-Z0-9]+)+' | head -1)
 
 if [ ! -z "$SD_ID" ]; then
   echo "   Found SD reference: $SD_ID"
