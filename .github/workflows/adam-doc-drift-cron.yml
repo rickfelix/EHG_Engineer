@@ -1,0 +1,56 @@
+name: "Adam doc-drift review (cron)"
+
+# SD: SD-LEO-INFRA-REGISTER-TWO-EVERY-001 (DUTY 1)
+#
+# Durable, server-side every-3-day Adam doc-drift review — mirrors adam-opportunity-scan-cron.yml.
+# Runs the read-only / propose-only scripts/adam-doc-drift-review.mjs, which reads only the SDs/QFs
+# COMPLETED in the trailing 3 days, maps them by sd_type to likely doc dirs, clusters, and surfaces ONE
+# propose-only feedback flag (category adam_doc_drift). CONST-002: it edits no docs.
+#
+# SHIPS INERT: the job is gated on the repo variable ADAM_DOC_DRIFT_V1 (default unset = OFF) — the
+# scheduled run is a no-op skip until the operator sets ADAM_DOC_DRIFT_V1='true'. Fail-soft (`|| true`).
+
+on:
+  schedule:
+    # Every 3rd day-of-month at 09:00 UTC (roughly every 3 days; resets at month boundaries — acceptable
+    # per scope). Offset from the github-assessment tick (:30) to spread fleet cron load.
+    - cron: '0 9 */3 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  adam-doc-drift:
+    name: Adam doc-drift review
+    # Inert until the operator flips the repo var. Unset/anything-but-'true' => job is skipped.
+    if: ${{ vars.ADAM_DOC_DRIFT_V1 == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      ADAM_DOC_DRIFT_V1: ${{ vars.ADAM_DOC_DRIFT_V1 }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Adam doc-drift review (read-only / propose-only)
+        run: |
+          echo "Running adam doc-drift review (flag=${ADAM_DOC_DRIFT_V1:-off})"
+          node scripts/adam-doc-drift-review.mjs || true
