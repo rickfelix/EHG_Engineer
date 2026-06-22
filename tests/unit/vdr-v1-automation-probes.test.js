@@ -18,20 +18,33 @@ import { buildCriteriaRows, EXPECTED_V1_RUNG_ID } from '../../scripts/seed-v1-au
 const NEW_LABELS = ['Automation-by-default', 'Active intelligence per stage', 'Cross-stage data contracts', 'CLI authoritative'];
 
 describe('VDR_REGISTRY — 4 new automation/intelligence entries (ordinals 17-20)', () => {
-  it('contains all 4 new capabilities as layer=process code_grep probes', () => {
+  it('contains all 4 new capabilities as layer=process probes (3 code_grep + Automation-by-default upgraded to count_ratio)', () => {
     for (const label of NEW_LABELS) {
       const e = VDR_REGISTRY.find((r) => r.capability === label);
       expect(e, `registry entry for "${label}"`).toBeTruthy();
       expect(e.layer).toBe('process');
-      expect(e.probe.type).toBe('code_grep');
-      expect(e.probe.builtWhen).toBe('present');
+      if (label === 'Automation-by-default') {
+        // SD-LEO-INFRA-VDR-PROBE-RECALIBRATION-001 (FR-5): upgraded off the floor to the realized rate.
+        expect(e.probe.type).toBe('count_ratio');
+        expect(e.probe.builtAt).toBe(0.8);
+      } else {
+        expect(e.probe.type).toBe('code_grep');
+        expect(e.probe.builtWhen).toBe('present');
+      }
     }
   });
 
-  it('Automation-by-default is NOT a row_predicate (no built-from-policy-flag inflation)', () => {
+  it('Automation-by-default bands built ONLY from a real live realized rate, never from a policy flag (anti-inflation)', () => {
     const e = VDR_REGISTRY.find((r) => r.capability === 'Automation-by-default');
+    // A leo_settings auto_proceed flag (row_predicate) would be a built-from-presence inflation — forbidden.
     expect(e.probe.type).not.toBe('row_predicate');
-    expect(e.probe.type).toBe('code_grep'); // bands 'partial' max, never 'built'
+    // It is a count_ratio over the REALIZED accepted/total handoff rate (30d window, excl ADMIN_OVERRIDE),
+    // so 'built' requires the live rate to actually clear builtAt(0.8); it can never come from mere presence.
+    expect(e.probe.type).toBe('count_ratio');
+    expect(e.probe.table).toBe('sd_phase_handoffs');
+    expect(e.probe.builtAt).toBe(0.8);
+    expect(e.probe.numerFilter.created_by).toEqual({ ne: 'ADMIN_OVERRIDE' });
+    expect(e.probe.numerFilter.created_at).toEqual({ gteDaysAgo: 30 });
   });
 
   it('the registry includes these 4 (alongside the concurrently-landed governance + capability-layer clusters)', () => {

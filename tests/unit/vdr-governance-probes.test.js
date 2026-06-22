@@ -78,7 +78,8 @@ describe('FR-2/FR-3: governance kr_status probes — score tracks the live KR si
 
 describe('FR-2/FR-3: governance code_grep probes — partial on match, unbuilt on miss, unknown without a seam (never false-built)', () => {
   const GREP_CAPS = [
-    ['Govern-by-exception', 'database/migrations', 'enforce_doctrine_of_constraint'],
+    // 'Govern-by-exception' was UPGRADED to a cross-table invert count_ratio by
+    // SD-LEO-INFRA-VDR-PROBE-RECALIBRATION-001 (FR-4) — see the dedicated describe below; no longer code_grep.
     // 'Decision Filter Engine' stays code_grep (HONEST band = partial) even after
     // SD-LEO-INFRA-DFE-CHAIRMAN-FORWARD-GATE-001 wired it as an ADVISORY forward filter: the ord-13
     // required state is "gating" and CONST-002 forbids gating, so advisory wiring is not 'built'.
@@ -110,6 +111,42 @@ describe('FR-2/FR-3: governance code_grep probes — partial on match, unbuilt o
       expect((await runProbe(probe, {})).status).toBe('unknown');
     });
   }
+});
+
+describe('SD-LEO-INFRA-VDR-PROBE-RECALIBRATION-001 (FR-4): Govern-by-exception is a cross-table invert count_ratio — built only on a genuinely-low LIVE bypass rate', () => {
+  // Mock supabase head-count: returns a fixed count per table; chainable filters are no-ops.
+  const mkSb = (counts) => ({
+    from: (table) => {
+      const q = {
+        select() { return this; }, eq() { return this; }, in() { return this; },
+        neq() { return this; }, not() { return this; }, gte() { return this; },
+        then(resolve, reject) { return Promise.resolve({ count: counts[table] ?? 0, error: null }).then(resolve, reject); },
+      };
+      return q;
+    },
+  });
+  const probe = () => reg('Govern-by-exception').probe;
+
+  it('is a count_ratio over sd_governance_bypass_audit ÷ leo_handoff_executions, inverted (1 − bypass-rate)', () => {
+    const p = probe();
+    expect(p.type).toBe('count_ratio');
+    expect(p.invert).toBe(true);
+    expect(p.table).toBe('leo_handoff_executions');
+    expect(p.numerTable).toBe('sd_governance_bypass_audit');
+    expect(p.builtAt).toBe(0.9);
+  });
+  it('a genuinely-low bypass rate → built (1 − 92/4000 = 0.977 ≥ 0.9)', async () => {
+    const r = await runProbe(probe(), { supabase: mkSb({ leo_handoff_executions: 4000, sd_governance_bypass_audit: 92 }) });
+    expect(r.status).toBe('built');
+  });
+  it('a HIGH bypass rate → partial, NEVER built (anti-inflation: only a real low rate earns built)', async () => {
+    const r = await runProbe(probe(), { supabase: mkSb({ leo_handoff_executions: 100, sd_governance_bypass_audit: 50 }) }); // 1−0.5 = 0.5 < 0.9
+    expect(r.status).toBe('partial');
+    expect(r.status).not.toBe('built');
+  });
+  it('no supabase seam → unknown (never fabricated)', async () => {
+    expect((await runProbe(probe(), {})).status).toBe('unknown');
+  });
 });
 
 describe('SD-LEO-INFRA-DFE-CHAIRMAN-FORWARD-GATE-001: ord-13 stays HONEST partial (advisory wiring != gating)', () => {
@@ -198,7 +235,9 @@ describe('FR-3: computeBuildGauge end-to-end — governance contributes, coheren
     expect(byCap['All 7 governance guardrails']).toBe('built');
     expect(byCap['OKR-driven prioritization + day-28 hard stop']).toBe('built');
     expect(byCap['Governance cascade enforced']).toBe('built');
-    expect(byCap['Govern-by-exception']).toBe('partial');
+    // Govern-by-exception is now a count_ratio (FR-4); this mock returns a count error ⇒ honestly 'unknown'
+    // (excluded), not fabricated. Its built/partial banding is covered by the dedicated FR-4 describe + live verification.
+    expect(byCap['Govern-by-exception']).toBe('unknown');
     expect(byCap['Decision Filter Engine']).toBe('partial');
     // governance lives in the 'process' layer breakdown
     expect(gauge.per_layer.process).not.toBeNull();
