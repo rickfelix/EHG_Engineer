@@ -24,6 +24,7 @@
  * Read-only with --dry-run. Fail-soft per item: a row that errors is skipped, never kills the pass.
  */
 import 'dotenv/config';
+import { pathToFileURL } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2: single-writer mutation guard.
 import { guardMutation, resolveOwnSessionId } from '../lib/coordinator-mutation-guard.mjs';
@@ -40,6 +41,19 @@ import { isFixtureSd, isBareShell, bareShellLastCompare, isStartedSd, stripDispa
 // handling both the [{sd_id}]/[{sd_key}] object and raw-string shapes the old hand-rolled
 // resolver coerced, while correctly dropping the sentinel the hand-rolled one mis-counted.
 import { parseSdDependencies } from '../lib/utils/parse-sd-dependencies.cjs';
+// SD-REFILL-00AH2L4Q: honor the SAME canonical metadata blocker key (metadata.blocked_by_sd_key)
+// that dependency-resolver + worker-checkin enforce, so the dispatch ranker does not keep a
+// metadata-blocked SD on the claimable belt (the convention was inconsistently enforced fleet-wide).
+import { checkMetadataDependency } from './modules/sd-next/dependency-resolver.js';
+
+// Collect every blocker sd_key for an SD: the `dependencies` column PLUS the canonical
+// metadata.blocked_by_sd_key. ONE predicate, shared by depKeys collection and the unmet check.
+export function blockerKeysFor(d) {
+  const keys = parseSdDependencies(d.dependencies);
+  const { blockerSdKey } = checkMetadataDependency(d.metadata);
+  if (blockerSdKey) keys.push(blockerSdKey);
+  return keys;
+}
 // SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-C (FR-2): needle-movement prioritization.
 // Reuse FR-1's rollup (active rung + per-rung progress) and the pure needle scorer to order remaining
 // work active-rung-first among same-unlock candidates. Loaded fail-soft — any read error leaves the
@@ -68,7 +82,7 @@ async function main() {
   // ── dependency graph: edges dep -> dependents (over non-terminal set + completed deps resolved) ──
   const byKey = new Map((sds || []).map(d => [d.sd_key, d]));
   const depKeys = new Set();
-  (sds || []).forEach(d => parseSdDependencies(d.dependencies).forEach(k => depKeys.add(k)));
+  (sds || []).forEach(d => blockerKeysFor(d).forEach(k => depKeys.add(k)));
   let depStatus = {};
   if (depKeys.size) {
     const { data: deps } = await sb.from('strategic_directives_v2').select('sd_key,status').in('sd_key', Array.from(depKeys));
@@ -77,7 +91,7 @@ async function main() {
   // dependents[dep] = [sd_keys that list dep and are not terminal]
   const dependents = new Map();
   for (const d of (sds || [])) {
-    for (const k of parseSdDependencies(d.dependencies)) {
+    for (const k of blockerKeysFor(d)) {
       if (!dependents.has(k)) dependents.set(k, []);
       dependents.get(k).push(d.sd_key);
     }
@@ -118,7 +132,9 @@ async function main() {
       console.log(`  [skip] fixture excluded from ranking: ${d.sd_key}`);
       continue;
     }
-    const unmet = parseSdDependencies(d.dependencies)
+    // SD-REFILL-00AH2L4Q: include metadata.blocked_by_sd_key (via blockerKeysFor) so a metadata-blocked
+    // SD whose blocker is not yet completed is NOT ranked/dispatched — matching worker-checkin's claim guard.
+    const unmet = blockerKeysFor(d)
       .filter(k => (byKey.has(k) ? byKey.get(k).status !== 'completed' : depStatus[k] !== 'completed'));
     if (unmet.length) continue;
     claimable.push(d);
@@ -270,5 +286,11 @@ async function main() {
   console.log(`[BACKLOG-RANK] done — ${DRY ? 'no writes (dry-run)' : `${writes} rank(s) written, ${clears} stale rank(s) cleared`}`);
 }
 
-main().then(() => { /* natural drain; no process.exit (Windows undici abort) */ })
-  .catch(e => { console.error('[BACKLOG-RANK] error:', e.message); });
+// SD-REFILL-00AH2L4Q: guard the entrypoint so the module is importable for unit tests
+// (e.g. blockerKeysFor) without running the DB-touching pass. Direct `node ...mjs` still runs main().
+// process.argv[1] is undefined under `node -e`/some loaders, so guard it before pathToFileURL.
+const invokedDirectly = !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (invokedDirectly) {
+  main().then(() => { /* natural drain; no process.exit (Windows undici abort) */ })
+    .catch(e => { console.error('[BACKLOG-RANK] error:', e.message); });
+}
