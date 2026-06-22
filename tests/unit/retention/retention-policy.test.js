@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../../');
 
 describe('policy registry (TS-1)', () => {
-  it('registers all 6 unbounded tables with the VERIFIED timestamp columns', () => {
+  it('registers all 7 unbounded tables with the VERIFIED timestamp columns', () => {
     const m = Object.fromEntries(RETENTION_POLICIES.map((p) => [p.table, p.timestampColumn]));
     expect(m).toEqual({
       workflow_trace_log: 'created_at',
@@ -24,7 +24,20 @@ describe('policy registry (TS-1)', () => {
       validation_audit_log: 'created_at',
       model_usage_log: 'captured_at',
       permission_audit_log: 'created_at',
+      // SD-REFILL-00LHUVME: eva_scheduler_metrics retention coverage
+      eva_scheduler_metrics: 'created_at',
     });
+  });
+
+  it('eva_scheduler_metrics policy uses the safe defaults (SD-REFILL-00LHUVME)', () => {
+    const p = RETENTION_POLICIES.find((x) => x.table === 'eva_scheduler_metrics');
+    expect(p).toBeDefined();
+    expect(p.timestampColumn).toBe('created_at');
+    expect(p.mode).toBe('archive');
+    expect(effectiveHotDays(p, {})).toBe(DEFAULT_HOT_DAYS);
+    // floor still protects readers
+    expect(() => effectiveHotDays(p, { RETENTION_HOT_DAYS_EVA_SCHEDULER_METRICS: '30' }))
+      .toThrow(/below the MIN_HOT_DAYS floor/);
   });
 
   it('default window is 90d (3x the 30d longest consumer lookback)', () => {
