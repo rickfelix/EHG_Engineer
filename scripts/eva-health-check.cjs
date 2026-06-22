@@ -11,16 +11,48 @@
 
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 
-const supabase = createSupabaseServiceClient();
+/**
+ * SD-REFILL-00FHK2ED: map an eva_scheduler_heartbeat row into the worker-shaped object the health
+ * report builder expects (eva:health was repointed off the never-provisioned eva_worker_heartbeats).
+ * Pure — no DB/clock. The report reads metadata.{consecutiveFailures,circuitBroken,totalRuns,totalErrors},
+ * which live as TOP-LEVEL columns on eva_scheduler_heartbeat, so synthesize them here.
+ * @param {{instance_id?:string,status?:string,last_poll_at?:string,circuit_breaker_state?:string,
+ *          poll_count?:number,dispatch_count?:number,error_count?:number,metadata?:object}} r
+ */
+function mapSchedulerHeartbeat(r) {
+  const row = r || {};
+  return {
+    worker_id: row.instance_id,
+    status: row.status,
+    last_heartbeat: row.last_poll_at,
+    metadata: {
+      ...(row.metadata && typeof row.metadata === 'object' ? row.metadata : {}),
+      // NOTE (RCA 8e4e76b2 F2): error_count is a LIFETIME cumulative counter, so it maps to
+      // totalErrors but NOT to consecutiveFailures (a distinct concept the scheduler heartbeat
+      // does not record) — reusing it there would falsely print "<lifetime> consecutive".
+      circuitBroken: String(row.circuit_breaker_state || '').toUpperCase() === 'OPEN',
+      totalRuns: row.poll_count || 0,
+      totalErrors: row.error_count || 0,
+    },
+  };
+}
+
+// Export the pure mapper for unit tests (require() must not run the CLI or create a DB client).
+module.exports = { mapSchedulerHeartbeat };
 
 const jsonMode = process.argv.includes('--json');
 
 async function main() {
-  // 1. Query worker heartbeats from eva_worker_heartbeats
-  const { data: heartbeats, error: hbError } = await supabase
-    .from('eva_worker_heartbeats')
-    .select('worker_id, status, last_heartbeat, metadata')
-    .order('last_heartbeat', { ascending: false });
+  const supabase = createSupabaseServiceClient();
+  // 1. Query scheduler heartbeats. SD-REFILL-00FHK2ED: repointed from the never-provisioned
+  // eva_worker_heartbeats to eva_scheduler_heartbeat (the table the scheduler actually writes).
+  // Normalize the scheduler-instance shape (instance_id / last_poll_at + top-level counters) into
+  // the worker-shaped rows the report builder below already expects, so downstream logic is unchanged.
+  const { data: schedRows, error: hbError } = await supabase
+    .from('eva_scheduler_heartbeat')
+    .select('instance_id, status, last_poll_at, circuit_breaker_state, poll_count, dispatch_count, error_count, metadata')
+    .order('last_poll_at', { ascending: false });
+  const heartbeats = (schedRows || []).map(mapSchedulerHeartbeat);
 
   // 2. Query recent alerts from workflow_executions (alert records)
   const { data: recentAlerts, error: alertError } = await supabase
@@ -37,12 +69,8 @@ async function main() {
     .eq('status', 'in_progress')
     .order('updated_at', { ascending: false });
 
-  // 4. Query stage execution worker heartbeat
-  const { data: sewHb } = await supabase
-    .from('eva_worker_heartbeats')
-    .select('*')
-    .eq('worker_id', 'stage-execution-worker')
-    .maybeSingle();
+  // (SD-REFILL-00FHK2ED) Removed the per-worker 'stage-execution-worker' heartbeat query: it read
+  // the never-provisioned eva_worker_heartbeats and its result (sewHb) was assigned but never used.
 
   const now = Date.now();
   const pollInterval = 30000; // DEFAULT_POLL_INTERVAL_MS
@@ -191,7 +219,9 @@ function statusIcon(status) {
   }
 }
 
-main().catch(err => {
-  console.error('Health check failed:', err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch(err => {
+    console.error('Health check failed:', err.message);
+    process.exit(1);
+  });
+}
