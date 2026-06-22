@@ -28,6 +28,11 @@ const ALLOWED_PHASES = new Set([
   'HANDOFF', 'COMPLETE', 'LEAD_APPROVAL', 'LEAD_FINAL_APPROVAL', 'PLAN_DESIGN',
   'PLAN_VERIFY', 'EXEC_IMPLEMENTATION', 'LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN',
   'PLAN-TO-LEAD', 'LEAD-FINAL', 'LEAD_FINAL', 'PROSPECTIVE_VALIDATION',
+  // Diagnostic sub-agent phases (added 2026-06-22 per SD-REFILL-00WV9A45): github-agent /
+  // rca-agent diagnosis runs (ROOT CAUSE DIAGNOSIS). Mirrors the constraint widen in
+  // database/migrations/20260622_fix_model_usage_log_phase_diagnosis_rca.sql so these are
+  // tracked distinctly instead of collapsing to UNKNOWN. Requires that migration LIVE.
+  'DIAGNOSIS', 'RCA',
 ]);
 
 // Canonical synonyms used elsewhere that are NOT in ALLOWED_PHASES → their accepted equivalent.
