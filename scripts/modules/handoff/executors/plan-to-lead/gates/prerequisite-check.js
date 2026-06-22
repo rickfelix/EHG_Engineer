@@ -127,6 +127,46 @@ export function createPrerequisiteCheckGate(supabase) {
 }
 
 /**
+ * SD-REFILL-001YZJNQ — premature-parent guard. A parent orchestrator auto-completes when all its
+ * CREATED children reach a terminal status, but the program plan may declare MORE children (waves)
+ * that were never authored as SD rows (witnessed on SD-LEO-ORCH-ADAM-PLAN-KEEPER-001: 6 created
+ * children all complete, Wave 2-4 ~SDs/QFs never created → counting only created children completed
+ * the parent prematurely). This decides whether an all-created-children-complete parent should still
+ * WAIT because more children are planned than authored.
+ *
+ * CONSERVATIVE / regression-free: returns wait=false UNLESS an EXPLICIT planned-children signal is
+ * present AND exceeds the created count AND decomposition is not explicitly marked complete. Parents
+ * without any planned signal behave exactly as before (no regression). decomposition_complete===true
+ * short-circuits to NO wait (author asserts the plan is fully decomposed / intentionally smaller).
+ * Planned count is taken from the first present of: metadata.planned_children_count (number) |
+ * metadata.planned_children (array length) | metadata.plan_content.planned_children_count (number).
+ * Free-form plan_content TEXT is NOT parsed — that would risk false WAITs blocking legitimate parents.
+ *
+ * @param {{parentMetadata?:object, createdChildCount:number}} args
+ * @returns {{wait:boolean, plannedCount:number|null, createdCount:number, reason:string}}
+ */
+export function evaluatePlannedDecomposition({ parentMetadata, createdChildCount } = {}) {
+  const md = parentMetadata && typeof parentMetadata === 'object' ? parentMetadata : {};
+  const created = Number.isFinite(createdChildCount) ? createdChildCount : 0;
+  if (md.decomposition_complete === true) {
+    return { wait: false, plannedCount: null, createdCount: created, reason: 'decomposition_complete=true (author marked the plan fully decomposed)' };
+  }
+  let planned = null;
+  if (Number.isFinite(md.planned_children_count)) planned = md.planned_children_count;
+  else if (Array.isArray(md.planned_children)) planned = md.planned_children.length;
+  else if (md.plan_content && typeof md.plan_content === 'object' && Number.isFinite(md.plan_content.planned_children_count)) planned = md.plan_content.planned_children_count;
+  if (!Number.isFinite(planned) || planned <= created) {
+    return { wait: false, plannedCount: Number.isFinite(planned) ? planned : null, createdCount: created, reason: 'no explicit planned-children signal exceeding the created count' };
+  }
+  return {
+    wait: true,
+    plannedCount: planned,
+    createdCount: created,
+    reason: `Parent program plan declares ${planned} child SD(s) but only ${created} have been authored — ${planned - created} planned child(ren) not yet created (premature-parent guard).`,
+  };
+}
+
+/**
  * Check if SD is a parent orchestrator with completed children
  *
  * @param {Object} supabase - Supabase client
@@ -174,6 +214,35 @@ async function checkParentOrchestrator(supabase, sdUuid, _ctx) {
           total_children: childSDs.length,
           completed_children: completedChildren.length,
           incomplete_children: incompleteList,
+        },
+      });
+    }
+
+    // SD-REFILL-001YZJNQ: all CREATED children are terminal — but guard against PREMATURE parent
+    // completion when the program plan declares MORE children than were authored as SD rows. The
+    // parent SD is ctx.sd (the row being handed off); read its metadata directly (no extra query).
+    // Only WAITs on an EXPLICIT planned-children signal (regression-free + fail-open: a thin context
+    // with no metadata degrades to today's behavior, never a false block).
+    const decomp = evaluatePlannedDecomposition({
+      parentMetadata: _ctx?.sd?.metadata,
+      createdChildCount: childSDs.length,
+    });
+    if (decomp.wait) {
+      console.log(`   ⏳ WAITING on un-authored planned children (${decomp.createdCount}/${decomp.plannedCount} authored) — not a failure (premature-parent guard):`);
+      console.log(`      ${decomp.reason}`);
+      return buildWaitResult({
+        score: 0,
+        max_score: 100,
+        wait_reason: decomp.reason,
+        issues: [],
+        warnings: [`WAIT: parent plan declares ${decomp.plannedCount} children but only ${decomp.createdCount} authored — decomposition incomplete`],
+        remediation: `Author the remaining ${decomp.plannedCount - decomp.createdCount} planned child SD(s), OR set metadata.decomposition_complete=true if the plan is intentionally smaller than declared. Then re-run PLAN-TO-LEAD.`,
+        details: {
+          is_parent_sd: true,
+          total_children: childSDs.length,
+          completed_children: completedChildren.length,
+          planned_children: decomp.plannedCount,
+          decomposition_incomplete: true,
         },
       });
     }
