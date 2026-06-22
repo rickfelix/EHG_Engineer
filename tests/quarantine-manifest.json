@@ -1115,14 +1115,6 @@
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
     {
-      "file": "tests/unit/rca-runtime-triggers.test.js",
-      "reason_class": "supabase-mock-chain",
-      "error_signature": "TypeError: supabase.from(...).update(...).eq is not a function",
-      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
-      "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
       "file": "tests/unit/reality-gates.test.js",
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected false to be true // Object.is equality",
