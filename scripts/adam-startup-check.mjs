@@ -88,6 +88,28 @@ export const ADAM_LOOPS = [
     cron: '*/15 * * * *',
     prompt: 'Adam belt-countdown tick: if the fleet is active, post ONE belt-countdown line via node scripts/adam-advisory.cjs send "<line>" — Eastern time in 12-hour format with a rolling ETA to belt-dry (claimable-SD depth vs current fleet burn; read depth/burn from DB rows via node scripts/fleet-dashboard.cjs, never hand-convert ET↔UTC). If the fleet is idle/empty, STAY SILENT.',
   },
+  {
+    // SD-LEO-INFRA-REGISTER-TWO-EVERY-001 (DUTY 1): every-3-day propose-only doc-drift review. Reads ONLY
+    // the SDs/QFs COMPLETED in the trailing 3 days (delta-scoped, NOT a full doc scour), maps each by
+    // sd_type to the doc dirs most likely affected, clusters, and surfaces a doc-update PROPOSAL to the
+    // coordinator. Edits no docs (CONST-002). Ships INERT behind ADAM_DOC_DRIFT_V1 (default OFF).
+    key: 'doc-drift',
+    label: 'Every-3-day doc-drift review (delta-scoped completed SDs/QFs -> doc-dir proposal, propose-only, gated on ADAM_DOC_DRIFT_V1)',
+    script: 'adam-doc-drift-review.mjs',
+    cron: '0 9 */3 * *',
+    prompt: 'node scripts/adam-doc-drift-review.mjs',
+  },
+  {
+    // SD-LEO-INFRA-REGISTER-TWO-EVERY-001 (DUTY 2): every-3-day propose-only GitHub-health assessment.
+    // Aggregates existing GitHub-health producers (CI red, failed runs, open/stale/oversized PRs, merge
+    // conflicts) PLUS open dependabot/code-scanning alerts into ONE ranked advisory to the coordinator.
+    // Read-only (CONST-002). Ships INERT behind ADAM_GH_ASSESS_V1 (default OFF).
+    key: 'github-assessment',
+    label: 'Every-3-day GitHub-health assessment (CI/PR/alerts -> one ranked advisory, propose-only, gated on ADAM_GH_ASSESS_V1)',
+    script: 'adam-github-assessment.mjs',
+    cron: '30 9 */3 * *',
+    prompt: 'node scripts/adam-github-assessment.mjs',
+  },
 ];
 
 // Parse the armed-cron basenames/prompts the agent passes from its CronList output.
