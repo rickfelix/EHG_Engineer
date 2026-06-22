@@ -323,6 +323,17 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // If already completed, just return success
     if (options._alreadyCompleted) {
       console.log('\n✅ SD already completed - verification passed');
+      // SD-REFILL-0038AO42: the already-completed / resume-from-checkpoint path
+      // (status was flipped to 'completed' before LEAD-FINAL-APPROVAL ran — e.g. a
+      // squash-merge or reconcile raced ahead, then the session resumed from a
+      // compacted checkpoint) historically returned here WITHOUT ever writing the
+      // canonical accepted sd_phase_handoffs LFA row that v_sd_completion_integrity
+      // treats as the sole completion evidence — leaving a permanent ghost
+      // (is_ghost_completed=true) despite a genuine, gate-verified completion
+      // (observed: SD-LEO-INFRA-VENTURE-INTAKE-GATE-PACK-001, completed 2026-06-14).
+      // The normal path writes this row pre-completion (SD-FDBK-FIX-LFA-ACCEPT-ORDERING-001);
+      // this branch skips that block, so reconcile it idempotently here.
+      await this._reconcileCanonicalLfaRow(sd, gateResults);
       return {
         success: true,
         sdId: sdId,
@@ -792,6 +803,91 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       }
     } catch (cleanupErr) {
       console.warn(`   ⚠️  [LFA_PENDING_CLEANUP_FAILED] sd_id=${sdId} reason=${cleanupErr?.message || cleanupErr}`);
+    }
+  }
+
+  /**
+   * SD-REFILL-0038AO42: idempotently reconcile the canonical accepted sd_phase_handoffs
+   * LEAD-FINAL-APPROVAL row for an SD that reached LEAD-FINAL-APPROVAL while ALREADY
+   * status='completed' (resume-from-checkpoint / squash-merge-raced-ahead path). The
+   * normal completion path writes this canonical row pre-completion
+   * (SD-FDBK-FIX-LFA-ACCEPT-ORDERING-001), but the already-completed branch in
+   * executeSpecific short-circuits before that block, so the SD ghosts in
+   * v_sd_completion_integrity (which keys solely on an accepted sd_phase_handoffs LFA row).
+   *
+   * Design contract:
+   *  - IDEMPOTENT: no-op when an accepted canonical row already exists.
+   *  - NON-FATAL: the SD is already completed and gate-verified — a reconcile-write
+   *    failure must NOT turn a passing verification into a rejection. On failure it logs
+   *    and points to the existing backfill (scripts/one-off/backfill-lfa-canonical-rows.mjs).
+   *  - created_by='ADMIN_OVERRIDE': a completed SD has is_working_on=false, so the
+   *    enforce_is_working_on_for_handoffs trigger would reject a UNIFIED-HANDOFF-SYSTEM
+   *    insert; ADMIN_OVERRIDE is the documented administrative actor that skips the
+   *    claim check (handoff_actor_policy), matching the backfill script.
+   *  - Score/provenance sourced from the genuine accepted leo_handoff_executions LFA row.
+   * @param {Object} sd - Strategic directive row (must include id, sd_key)
+   * @param {Object} [gateResults] - Gate results (fallback score source)
+   * @returns {Promise<void>}
+   */
+  async _reconcileCanonicalLfaRow(sd, gateResults) {
+    try {
+      const { data: existingLfa } = await this.supabase
+        .from('sd_phase_handoffs')
+        .select('id')
+        .eq('sd_id', sd.id)
+        .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
+        .eq('status', 'accepted')
+        .limit(1)
+        .maybeSingle();
+      if (existingLfa) {
+        console.log(`   ℹ️  Canonical accepted LFA row already present (${existingLfa.id}) — no reconcile needed`);
+        return;
+      }
+
+      // Source the score/provenance from the genuine accepted leo_handoff_executions
+      // LFA row (the real completion evidence), falling back to the gate result then 100.
+      const { data: lheRows } = await this.supabase
+        .from('leo_handoff_executions')
+        .select('id, validation_score')
+        .eq('sd_id', sd.id)
+        .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
+        .eq('status', 'accepted')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      const srcId = lheRows && lheRows[0] ? lheRows[0].id : null;
+      const srcScore = (lheRows && lheRows[0] && lheRows[0].validation_score != null)
+        ? lheRows[0].validation_score
+        : (gateResults && gateResults.actualScore != null ? gateResults.actualScore : 100);
+
+      const { error: insErr } = await this.supabase
+        .from('sd_phase_handoffs')
+        .insert({
+          sd_id: sd.id,
+          from_phase: 'LEAD',
+          to_phase: 'LEAD', // APPROVAL->LEAD coercion (sd_phase_handoffs to_phase CHECK)
+          handoff_type: 'LEAD-FINAL-APPROVAL',
+          status: 'accepted',
+          executive_summary: `Canonical LFA row reconciled for already-completed SD ${sd.sd_key || sd.id} (score ${srcScore}). Completion took the already-completed / resume-from-checkpoint path which skipped the pre-completion canonical writer; this idempotent reconcile clears the v_sd_completion_integrity ghost (SD-REFILL-0038AO42).`,
+          deliverables_manifest: { items: [{ name: 'canonical LFA row reconciled (resume/already-completed path)', status: 'completed' }] },
+          key_decisions: [{ decision: `Canonical row reconciled from accepted leo_handoff_executions${srcId ? ` ${srcId}` : ''} (score ${srcScore})` }],
+          known_issues: [{ issue: 'Row synthesized at verify-time; original completion-time gate context lives on the leo_handoff_executions execution row' }],
+          resource_utilization: { execution_table: 'leo_handoff_executions', source_execution_id: srcId },
+          action_items: [{ item: 'None — historical reconciliation; the already-completed path now self-heals via this branch' }],
+          completeness_report: { validation_score: srcScore, source: 'leo_handoff_executions' },
+          validation_score: srcScore,
+          validation_passed: true,
+          validation_details: { reconciled_by: 'LeadFinalApprovalExecutor already-completed path', sd_ref: 'SD-REFILL-0038AO42' },
+          accepted_at: new Date().toISOString(),
+          created_by: 'ADMIN_OVERRIDE',
+          metadata: { canonical_reconcile_write: true, resume_path: true, source_execution_id: srcId, sd_ref: 'SD-REFILL-0038AO42' }
+        });
+      if (insErr) {
+        console.warn(`   ⚠️  Canonical LFA reconcile failed (non-fatal): ${insErr.message}. Run scripts/one-off/backfill-lfa-canonical-rows.mjs --execute to clear the ghost.`);
+      } else {
+        console.log('   ✅ Canonical accepted LFA row reconciled (sd_phase_handoffs) — ghost cleared');
+      }
+    } catch (reconcileErr) {
+      console.warn(`   ⚠️  Canonical LFA reconcile errored (non-fatal): ${reconcileErr?.message || reconcileErr}`);
     }
   }
 
