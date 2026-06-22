@@ -54,6 +54,19 @@ const STALE_QF_DAYS = Number(process.env.SD_NEXT_QF_STALE_DAYS) || 3;  // verify
 // SD-LEO-FEAT-WORKER-CHECKIN-SELF-001 (FR-2): gap before confirmRowGone's confirming read so it lands
 // genuinely later than the first (defends a momentary stale-replica null). Env-overridable; tests set 0.
 const CONFIRM_DELETE_GAP_MS = process.env.CHECKIN_CONFIRM_GAP_MS != null ? Number(process.env.CHECKIN_CONFIRM_GAP_MS) : 250;
+
+// SD-REFILL-00BCYOYW: session-level self-claim opt-out. A long-lived WINDING-DOWN worker whose
+// /loop directive declines reserved/staged/large/peer-owned SDs otherwise re-grabs the sd:next top
+// every pass then releases it — a claim->release churn that makes a FRESH session briefly see the
+// SD as CLAIMED and skip the reserved-pickup. A session marked metadata.self_claim===false (or
+// metadata.availability==='idle_only') still does roll_call, resumes its own claim, honors directed
+// WORK_ASSIGNMENTs and recovers its own stranded/orphaned work — but SKIPS the self_claim-from-
+// sd:next path. STRICT: only `self_claim===false` or `availability==='idle_only'` disable it; any
+// other/absent value leaves self-claim ENABLED (fail-toward-active — never silently park a worker).
+function isSelfClaimDisabled(metadata) {
+  if (!metadata || typeof metadata !== 'object') return false;
+  return metadata.self_claim === false || metadata.availability === 'idle_only';
+}
 // Tier-3 risk keywords (CLAUDE.md Work Item Routing). Auto-self-claim is for small,
 // low-risk QFs only. The sd-next display path excludes _escalate via a LIVE re-triage
 // (runTriageGate, ESM); a .cjs can't run that pipeline, so we approximate parity with the
@@ -940,6 +953,17 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
   const adopted = await adoptOrphanInProgress(sb, sessionId, base);
   if (adopted) return adopted;
 
+  // 5.9 SD-REFILL-00BCYOYW: session-level self-claim opt-out. Placed AFTER the recovery tiers (so a
+  //     winding-down worker still finishes its own stranded/orphaned build work — that is not churn)
+  //     and BEFORE step-6, so it skips ONLY the self_claim-from-sd:next path (step-6 + selfClaimQuickFix).
+  //     roll_call, resume, directed WORK_ASSIGNMENT claiming and recovery all run before this point and
+  //     are unaffected. Narrower sibling of the 4.5 isBuildForbiddenSession guard (which blocks ALL
+  //     acquisition incl. directed work); this blocks only self-initiated claims.
+  if (isSelfClaimDisabled(sessionMetadata)) {
+    return { ...base, action: 'idle', recommended_wakeup_seconds: 1200,
+      message: 'Session availability=idle_only (metadata.self_claim=false): skipping self-claim from sd:next to avoid grab-release churn that blocks fresh-session pickup of reserved SDs. roll_call, directed WORK_ASSIGNMENTs and own stranded/orphan recovery still honored. Set metadata.self_claim=true (or clear metadata.availability) to resume self-claim.' };
+  }
+
   // 5.5 SD-FDBK-INFRA-AUTO-MAINTAIN-EXECUTION-001: ensure an active execution baseline exists
   //      BEFORE reading v_sd_next_candidates. With zero active baseline the view returns 0 rows
   //      and self-claim silently idles with a full queue. Fail-open: a failure here degrades to
@@ -1026,7 +1050,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
+module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
 
 if (require.main === module) {
   main().catch(err => {
