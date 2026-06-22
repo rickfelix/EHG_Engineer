@@ -29,6 +29,23 @@ function isPerWorktreeMetadata(file) {
   return PER_WORKTREE_METADATA.includes((file || '').trim());
 }
 
+// SD-REFILL-00HKPG2F: the DB-generated protocol docs (CLAUDE*.md, *_DIGEST.md, and
+// claude-generation-manifest.json — all marked "GENERATED FILE - DO NOT EDIT DIRECTLY",
+// source of truth: leo_protocol_sections) are regenerated from the DB at session start and
+// sit uncommitted on main, yet are uncommittable there (no-direct-commit-to-main pre-commit
+// hook) with no maintenance branch. That regen drift tripped this git-state gate for every
+// worker, forcing a restore-to-HEAD that re-introduces DB drift. Excluded from the blocking
+// classification below (mirrors isPerWorktreeMetadata / QF-20260529-729) — this does NOT
+// untrack them, and DB-fidelity stays enforced independently by scripts/check-claude-md-drift.cjs.
+const GENERATED_PROTOCOL_DOC_RE = /^CLAUDE(_[A-Z0-9]+)*(_DIGEST)?\.md$/;
+const GENERATED_PROTOCOL_DOC_FILES = ['claude-generation-manifest.json'];
+function isGeneratedProtocolDoc(file) {
+  // Match on the trimmed basename so it works whether git reports a repo-root or nested path.
+  const base = (file || '').trim().split(/[\\/]/).pop();
+  if (!base) return false;
+  return GENERATED_PROTOCOL_DOC_RE.test(base) || GENERATED_PROTOCOL_DOC_FILES.includes(base);
+}
+
 async function gitCommand(command, cwd) {
   try {
     const { stdout, stderr } = await execAsync(command, cwd ? { cwd } : undefined);
@@ -61,7 +78,8 @@ async function checkGitState(options = {}) {
       unpushedCommits: 0,
       stagedFiles: [],
       modifiedFiles: [],
-      untrackedFiles: []
+      untrackedFiles: [],
+      exemptedGeneratedDocs: []
     }
   };
 
@@ -83,6 +101,13 @@ async function checkGitState(options = {}) {
 
       // QF-20260529-729: skip per-worktree metadata noise — never blocks a handoff.
       if (isPerWorktreeMetadata(file)) return;
+
+      // SD-REFILL-00HKPG2F: skip DB-generated protocol-doc regen drift — never blocks a
+      // handoff (recorded for transparency below as a non-blocking warning, not discarded).
+      if (isGeneratedProtocolDoc(file)) {
+        result.details.exemptedGeneratedDocs.push(file);
+        return;
+      }
 
       // Classify by status
       if (status[0] === '?' && status[1] === '?') {
@@ -147,6 +172,18 @@ async function checkGitState(options = {}) {
         console.log(`   ⚠️  Untracked files: ${blockingUntracked.length}`);
       }
     }
+
+    // SD-REFILL-00HKPG2F: surface exempted generated-doc drift as a NON-BLOCKING warning so
+    // the divergence stays visible (not silently masked) while never failing the gate.
+    if (result.details.exemptedGeneratedDocs.length > 0) {
+      result.warnings.push({
+        type: 'GENERATED_DOC_DRIFT_EXEMPTED',
+        message: `${result.details.exemptedGeneratedDocs.length} generated protocol-doc(s) have uncommitted regen drift (exempt — does not block handoff)`,
+        files: result.details.exemptedGeneratedDocs,
+        remediation: 'Regenerate + commit via a protocol-doc maintenance path: node scripts/generate-claude-md-from-db.js'
+      });
+      console.log(`   ⚠️  Generated protocol-doc drift (exempt): ${result.details.exemptedGeneratedDocs.length}`);
+    }
   } else {
     console.log('   ✅ Working directory clean');
   }
@@ -208,7 +245,7 @@ async function checkGitState(options = {}) {
   return result;
 }
 
-export { checkGitState, isPerWorktreeMetadata, PER_WORKTREE_METADATA };
+export { checkGitState, isPerWorktreeMetadata, PER_WORKTREE_METADATA, isGeneratedProtocolDoc };
 
 // CLI execution — only when run directly (node scripts/check-git-state.js), NOT when
 // imported. Without this guard, importing the module (e.g. from the handoff precheck CLI
