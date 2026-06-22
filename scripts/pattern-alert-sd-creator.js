@@ -11,7 +11,8 @@
  * - Occurrence count >= 7 AND severity = 'high'
  * - Trend = 'increasing' AND occurrence count >= 4
  *
- * Created SDs are always CRITICAL priority to ensure immediate attention.
+ * Created SDs take their priority from the pattern's actual severity
+ * (derivePatternSdPriority) — NOT a blanket 'critical' (SD-REFILL-00TH22DQ).
  *
  * Usage:
  *   node scripts/pattern-alert-sd-creator.js [--dry-run] [--threshold=N]
@@ -60,7 +61,13 @@ const CONFIG = {
 
   // SD metadata
   SD_PREFIX: 'SD-PAT-FIX',
-  SD_PRIORITY: 'critical', // Always critical to ensure immediate attention
+  // SD-REFILL-00TH22DQ (priority inflation, belt-audit 2026-06-10): the created SD
+  // priority is DERIVED from the pattern's actual severity (derivePatternSdPriority),
+  // not hardcoded. Previously every filed SD was stamped 'critical' regardless of
+  // whether it qualified via critical severity, high severity, or merely an increasing
+  // trend on a low/medium-severity pattern — so 50/50 SD-PAT-FIX-* landed at 'critical'
+  // (47 later cancelled). DEFAULT_SD_PRIORITY is only the fallback for an unknown severity.
+  DEFAULT_SD_PRIORITY: 'medium',
   SD_STATUS: 'draft', // Start as draft for review before approval
 
   // Category to team mapping for assignment suggestions
@@ -256,6 +263,26 @@ export function effectiveOccurrences(pattern) {
 }
 
 /**
+ * SD-REFILL-00TH22DQ — derive the created SD's priority from the pattern's actual
+ * severity instead of stamping every auto-filed pattern SD 'critical' (the
+ * priority-inflation belt-audit finding 2026-06-10). The three filing triggers
+ * (critical severity, high severity, increasing trend on ANY severity) collapsed
+ * to one priority before; an increasing-trend pattern at medium/low severity was
+ * the worst inflater. Map severity → SD priority 1:1 over the validated enum
+ * (critical|high|medium|low); an unknown/missing severity (trend-only qualifier)
+ * falls back to DEFAULT_SD_PRIORITY ('medium' — recurring but not asserted urgent).
+ * Pure — exported for tests.
+ */
+export function derivePatternSdPriority(pattern) {
+  const sev = String(pattern?.severity || '').toLowerCase();
+  if (sev === 'critical') return 'critical';
+  if (sev === 'high') return 'high';
+  if (sev === 'medium') return 'medium';
+  if (sev === 'low') return 'low';
+  return CONFIG.DEFAULT_SD_PRIORITY;
+}
+
+/**
  * Generate SD key
  * SD-LEO-SDKEY-001: Uses centralized SDKeyGenerator for consistent naming
  */
@@ -337,7 +364,7 @@ ${suggestedTeam}
 *Pattern first seen: ${pattern.first_seen_sd_id || 'Unknown'}*
 *Pattern last seen: ${pattern.last_seen_sd_id || 'Unknown'}*`,
     status: CONFIG.SD_STATUS,
-    priority: CONFIG.SD_PRIORITY,
+    priority: derivePatternSdPriority(pattern),
     rationale: `This pattern has occurred ${pattern.occurrence_count} times with ${pattern.severity} severity. Recurring issues indicate a systemic problem requiring root cause resolution.`,
     scope: `Resolve the root cause of recurring pattern ${pattern.pattern_id} (category: ${pattern.category}). In scope: root-cause analysis of the recorded occurrences, a permanent fix, and prevention-checklist updates. Out of scope: unrelated refactors beyond the pattern's blast radius.`,
     // SD-PAT-FIX-LEAD-PLAN-REJECTED-004 (FR-2): emit a COMPLETE SD. Before
