@@ -67,6 +67,15 @@ const EXEMPT_PATTERNS = [
   //   worker-checkin.cjs — the /loop worker check-in tick (each pass; observed blocked at the 3rd
   //     invocation this session, forcing EMERGENCY_RCA_BYPASS). It always exits 0 on a fixed cadence.
   /\bscripts[/\\]worker-checkin\.cjs\b/,
+  // SD-REFILL-00D2CC0B — two more canonical recurring coordinator crons the exit-0 exemption can't
+  // reliably catch (interleaved loops clobber the single per-session last-outcome file). Each is a
+  // SCHEDULED, idempotent, succeeding tick that the 3x-same-target counter misreads as a stuck retry;
+  // they false-blocked normal fleet re-engagement churn (Adam sourcing multiple V1 SDs rapidly →
+  // coordinator ranks each), forcing EMERGENCY_RCA_BYPASS (witnessed by coordinator Kamo 2026-06-15).
+  //   coordinator-backlog-rank.mjs — re-ranks the dispatch belt; runs per new sourced SD + on interval.
+  /\bscripts[/\\]coordinator-backlog-rank\.mjs\b/,
+  //   coordinator-capacity-forecast.mjs — periodic fleet capacity/forecast probe.
+  /\bscripts[/\\]coordinator-capacity-forecast\.mjs\b/,
 ];
 
 /**
