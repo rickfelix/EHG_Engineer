@@ -19,11 +19,15 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { pathToFileURL } from 'url';
 import { analyzePatterns, createPatternRetrospective } from '../lib/utils/quickfix-rca-integration.js';
 // SD-LEO-INFRA-SESSION-AWARE-AUTO-001 (FR-2): session-aware QF adoption.
 import { claimQuickFix } from '../lib/quick-fix-claim.mjs';
 
 dotenv.config();
+
+// SD-REFILL-00202Z4B: export the pure matchers for unit tests (CLI is guarded below).
+export { matchesKeyword, analyzeDescription, CLASSIFICATION_RULES };
 
 // Classification rules
 const CLASSIFICATION_RULES = {
@@ -50,20 +54,42 @@ const CLASSIFICATION_RULES = {
   ]
 };
 
+// SD-REFILL-00202Z4B: escape regex metacharacters so a keyword is matched literally.
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * SD-REFILL-00202Z4B: word-boundary keyword match. The prior naive `combined.includes(keyword)`
+ * substring-matched 'auth' INSIDE 'authoring'/'author'/'authentic', force-escalating low-LOC doc QFs
+ * to a full SD (witnessed: QF-20260614-918, a doc fix for the Adam contract, escalated on 'authoring').
+ * Anchor with \b on both sides, but tolerate a trailing plural/gerund suffix so genuinely-risky inflected
+ * forms still match (refactor→refactoring/refactors, database→databases, migration→migrations,
+ * "breaking change"→"breaking changes"). 'authoring' is NOT matched: after 'auth' comes 'o' (a word char),
+ * so no suffix option and no \b applies. Case-insensitive. Pure.
+ * @param {string} text already-lowercased haystack
+ * @param {string} keyword the keyword/phrase to test
+ * @returns {boolean}
+ */
+function matchesKeyword(text, keyword) {
+  const re = new RegExp(`\\b${escapeRegExp(keyword.toLowerCase())}(?:e?s|ing|ed)?\\b`, 'i');
+  return re.test(text);
+}
+
 function analyzeDescription(description, title) {
   const combined = `${title} ${description}`.toLowerCase();
   const issues = [];
 
-  // Check for forbidden keywords
+  // Check for forbidden keywords (word-boundary, not naive substring — see matchesKeyword)
   for (const keyword of CLASSIFICATION_RULES.forbiddenKeywords) {
-    if (combined.includes(keyword.toLowerCase())) {
+    if (matchesKeyword(combined, keyword)) {
       issues.push(`Contains forbidden keyword: "${keyword}"`);
     }
   }
 
   // Check for risk keywords
   for (const keyword of CLASSIFICATION_RULES.riskKeywords) {
-    if (combined.includes(keyword.toLowerCase())) {
+    if (matchesKeyword(combined, keyword)) {
       issues.push(`Contains risk keyword: "${keyword}"`);
     }
   }
@@ -291,10 +317,11 @@ async function classifyQuickFix(qfId, options = {}) {
   }
 }
 
-// CLI argument parsing
-const args = process.argv.slice(2);
+// CLI argument parsing — guarded so importing this module (for tests) does not run the CLI.
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+const args = isMain ? process.argv.slice(2) : [];
 
-if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+if (isMain && (args.length === 0 || args.includes('--help') || args.includes('-h'))) {
   console.log(`
 LEO Quick-Fix Workflow - Classify Issue
 
@@ -320,13 +347,15 @@ Examples:
   process.exit(0);
 }
 
-const qfId = args[0];
-const options = {
-  autoEscalate: args.includes('--auto-escalate')
-};
+if (isMain) {
+  const qfId = args[0];
+  const options = {
+    autoEscalate: args.includes('--auto-escalate')
+  };
 
-// Run
-classifyQuickFix(qfId, options).catch((err) => {
-  console.error('❌ Error:', err.message);
-  process.exit(1);
-});
+  // Run
+  classifyQuickFix(qfId, options).catch((err) => {
+    console.error('❌ Error:', err.message);
+    process.exit(1);
+  });
+}
