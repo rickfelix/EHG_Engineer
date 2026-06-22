@@ -11,6 +11,7 @@ import {
   buildCreateSdArgs,
   generateRemediationSD,
   generateBatch,
+  isInformationalSkippedFinding,
 } from '../../../../lib/eva/quality-findings/sd-generator.js';
 import { computeFindingHash, FINDING_CATEGORIES } from '../../../../lib/eva/quality-findings/finding-shape.js';
 
@@ -192,5 +193,36 @@ describe('generateBatch', () => {
     expect(r.created).toEqual([]);
     expect(r.skipped).toEqual([]);
     expect(r.errors).toEqual([]);
+  });
+});
+
+describe('isInformationalSkippedFinding (SD-REFILL-00OFH2SF)', () => {
+  it('excludes a SKIPPED check (the real bun-audit case)', () => {
+    const f = validFinding({ finding_category: 'npm_audit', severity: 'medium', evidence_pointer: {
+      legacy_check: 'npm_audit',
+      legacy_title: 'Dependency audit not available for bun',
+      legacy_detail: 'bun has no first-class audit command; skipped (not a vulnerability finding).',
+    } });
+    expect(isInformationalSkippedFinding(f)).toBe(true);
+  });
+
+  it('matches the "not available" marker in legacy_title alone', () => {
+    expect(isInformationalSkippedFinding({ evidence_pointer: { legacy_title: 'Dependency audit not available for bun' } })).toBe(true);
+  });
+
+  it('KEEPS a real medium vulnerability finding (no informational markers)', () => {
+    const real = validFinding({ finding_category: 'npm_audit', severity: 'medium', evidence_pointer: {
+      legacy_title: 'Vulnerable dependency: lodash <4.17.21',
+      legacy_detail: 'Prototype pollution in lodash; upgrade to 4.17.21.',
+    } });
+    expect(isInformationalSkippedFinding(real)).toBe(false);
+  });
+
+  it('is total / fail-safe: missing or odd evidence_pointer is NOT informational (never over-excludes)', () => {
+    expect(isInformationalSkippedFinding({})).toBe(false);
+    expect(isInformationalSkippedFinding({ evidence_pointer: null })).toBe(false);
+    expect(isInformationalSkippedFinding({ evidence_pointer: 'str' })).toBe(false);
+    expect(isInformationalSkippedFinding(null)).toBe(false);
+    expect(isInformationalSkippedFinding({ evidence_pointer: { file: 'src/foo.js' } })).toBe(false);
   });
 });
