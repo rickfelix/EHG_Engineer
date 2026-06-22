@@ -7,6 +7,7 @@ import {
   parseFunctions,
   parseTriggers,
   parseDeclaredObjects,
+  parseDropIfExists,
   normalizeBody,
   compareBodies,
   evaluateMigration,
@@ -45,6 +46,12 @@ $$ LANGUAGE plpgsql;
 
 const FIXTURE_TRIGGER = `
 CREATE OR REPLACE TRIGGER validate_handoff_trigger
+BEFORE INSERT ON sd_phase_handoffs
+FOR EACH ROW EXECUTE FUNCTION public.auto_validate_handoff();
+`;
+
+const FIXTURE_TRIGGER_NO_OR_REPLACE = `
+CREATE TRIGGER validate_handoff_trigger
 BEFORE INSERT ON sd_phase_handoffs
 FOR EACH ROW EXECUTE FUNCTION public.auto_validate_handoff();
 `;
@@ -127,14 +134,14 @@ describe('evaluateMigration (mocked live DB)', () => {
   });
 
   it('PASS-idempotent: live body normalizes-equals migration body → MATCHES', async () => {
-    const live = `\nBEGIN\n  -- preserve recoverable stale claims\n  IF NEW.claim_status = 'absent' AND OLD.claim_status = 'present' THEN\n    NEW.claim_status := 'recoverable_stale';\n  END IF;\n  RETURN NEW;\nEND;\n`;
+    const live = '\nBEGIN\n  -- preserve recoverable stale claims\n  IF NEW.claim_status = \'absent\' AND OLD.claim_status = \'present\' THEN\n    NEW.claim_status := \'recoverable_stale\';\n  END IF;\n  RETURN NEW;\nEND;\n';
     const client = makeMockClient({ functions: { 'public.sync_is_working_on_with_session': live }, triggers: new Set() });
     const r = await evaluateMigration({ filePath: 'database/migrations/x.sql', sql: FIXTURE_FUNCTION, client });
     expect(r.findings[0].status).toBe('MATCHES');
   });
 
   it('FAIL-drift: live body differs → DIVERGED', async () => {
-    const live = `BEGIN RETURN NEW; END;`;
+    const live = 'BEGIN RETURN NEW; END;';
     const client = makeMockClient({ functions: { 'public.sync_is_working_on_with_session': live }, triggers: new Set() });
     const r = await evaluateMigration({ filePath: 'database/migrations/x.sql', sql: FIXTURE_FUNCTION, client });
     expect(r.findings[0].status).toBe('DIVERGED');
@@ -144,6 +151,51 @@ describe('evaluateMigration (mocked live DB)', () => {
     const client = makeMockClient({ functions: { 'public.brand_new_fn': 'BEGIN RETURN; END;' }, triggers: new Set() });
     const r = await evaluateMigration({ filePath: 'database/migrations/x.sql', sql: FIXTURE_FUNCTION_NO_OR_REPLACE, client });
     expect(r.findings[0].status).toBe('CONFLICTING');
+  });
+
+  // SD-REFILL-00EAHZRZ: DROP ... IF EXISTS + bare CREATE is idempotent (== OR REPLACE), not a conflict.
+  it('IDEMPOTENT: DROP FUNCTION IF EXISTS + bare CREATE on existing function → not CONFLICTING', async () => {
+    const sql = `DROP FUNCTION IF EXISTS public.brand_new_fn();\n${FIXTURE_FUNCTION_NO_OR_REPLACE}`;
+    const client = makeMockClient({ functions: { 'public.brand_new_fn': 'BEGIN RETURN; END;' }, triggers: new Set() });
+    const r = await evaluateMigration({ filePath: 'database/migrations/x.sql', sql, client });
+    expect(r.findings[0].status).toBe('IDEMPOTENT');
+    expect(r.findings[0].status).not.toBe('CONFLICTING');
+  });
+
+  it('IDEMPOTENT: DROP TRIGGER IF EXISTS + bare CREATE on existing trigger → not CONFLICTING', async () => {
+    const sql = `DROP TRIGGER IF EXISTS validate_handoff_trigger ON sd_phase_handoffs;\n${FIXTURE_TRIGGER_NO_OR_REPLACE}`;
+    const client = makeMockClient({ functions: {}, triggers: new Set(['validate_handoff_trigger']) });
+    const r = await evaluateMigration({ filePath: 'database/migrations/x.sql', sql, client });
+    expect(r.findings[0].status).toBe('IDEMPOTENT');
+  });
+
+  it('still CONFLICTING: a DROP IF EXISTS for a DIFFERENT object does not exempt the bare CREATE', async () => {
+    const sql = `DROP FUNCTION IF EXISTS public.some_other_fn();\n${FIXTURE_FUNCTION_NO_OR_REPLACE}`;
+    const client = makeMockClient({ functions: { 'public.brand_new_fn': 'BEGIN RETURN; END;' }, triggers: new Set() });
+    const r = await evaluateMigration({ filePath: 'database/migrations/x.sql', sql, client });
+    expect(r.findings[0].status).toBe('CONFLICTING');
+  });
+
+  it('an IDEMPOTENT migration classifies PASS (no conflict, no drift)', async () => {
+    const sql = `DROP TRIGGER IF EXISTS validate_handoff_trigger ON sd_phase_handoffs;\n${FIXTURE_TRIGGER_NO_OR_REPLACE}`;
+    const client = makeMockClient({ functions: {}, triggers: new Set(['validate_handoff_trigger']) });
+    const r = await evaluateMigration({ filePath: 'database/migrations/x.sql', sql, client });
+    expect(r.findings.every(f => f.status !== 'CONFLICTING' && f.status !== 'DIVERGED')).toBe(true);
+  });
+});
+
+describe('parseDropIfExists (SD-REFILL-00EAHZRZ)', () => {
+  it('captures DROP TRIGGER/FUNCTION IF EXISTS (case-insensitive, schema-qualified) keyed by kind:name', () => {
+    const set = parseDropIfExists(
+      'DROP TRIGGER IF EXISTS my_trig ON t;\ndrop function if exists public.My_Fn();'
+    );
+    expect(set.has('trigger:my_trig')).toBe(true);
+    expect(set.has('function:my_fn')).toBe(true);
+  });
+
+  it('does NOT match a plain DROP without IF EXISTS, nor unrelated text', () => {
+    const set = parseDropIfExists('DROP TRIGGER my_trig ON t;\n-- npm ci note, CREATE TRIGGER foo');
+    expect(set.size).toBe(0);
   });
 });
 
