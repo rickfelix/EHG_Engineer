@@ -26,7 +26,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { createRequire } from 'module';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: shared belt-exclusion predicate so test/UAT
 // fixtures AND bare-shell stubs (neither can pass LEAD-TO-PLAN) never inflate belt depth —
@@ -268,13 +268,19 @@ async function main() {
   if (verdict.startsWith('DEFICIT')) {
     const cd = readCooldown();
     const since = cd ? (Date.now() - cd.at) / 60000 : Infinity;
+    // SD-REFILL-00G39SZT: fingerprint the belt-dry state so an UNCHANGED deficit self-suppresses
+    // (saturation-ack) until a supply-change signal, instead of re-pinging Adam every cooldown.
+    const currentFp = deficitFingerprint({ verdict, beltDepth, deficit, claimable });
+    const decision = shouldPingAdam({ cd, sinceMin: since, cooldownMin, currentFp });
     if (!DISPATCH) {
       console.log(`  ACTION: deficit forecast — run with --dispatch to auto-request a sourcing shortlist from Adam (cooldown ${cooldownMin}m; last ${cd ? since.toFixed(0) + 'm ago' : 'never'}).`);
-    } else if (since < cooldownMin) {
+    } else if (decision.reason === 'cooldown') {
       console.log(`  ACTION: deficit, but Adam was pinged ${since.toFixed(0)}m ago (< ${cooldownMin}m cooldown) — holding.`);
+    } else if (decision.reason === 'saturation-unchanged') {
+      console.log(`  ACTION: deficit unchanged since last ping (same belt-dry state, no supply change) — suppressing duplicate Adam ping until supply changes.`);
     } else {
       const sent = await reachAdam({ verdict, beltDepth, demandSoon, idleNow, freeingSoon, deficit, claimable, rows, awareness });
-      if (sent) { writeCooldown(); console.log('  ACTION: ✅ sourcing request dispatched to Adam (cooldown started).'); }
+      if (sent) { writeCooldown(currentFp); console.log('  ACTION: ✅ sourcing request dispatched to Adam (cooldown started).'); }
       else console.log('  ACTION: ⚠ no live Adam session found to reach — surface to operator.');
     }
   }
@@ -361,8 +367,32 @@ function readCooldown() {
   try { return existsSync(COOLDOWN_FILE) ? JSON.parse(readFileSync(COOLDOWN_FILE, 'utf8')) : null; }
   catch { return null; }
 }
-function writeCooldown() {
-  try { writeFileSync(COOLDOWN_FILE, JSON.stringify({ at: Date.now(), iso: new Date().toISOString() })); } catch {}
+function writeCooldown(fingerprint) {
+  try { writeFileSync(COOLDOWN_FILE, JSON.stringify({ at: Date.now(), iso: new Date().toISOString(), fingerprint: fingerprint ?? null })); } catch {}
+}
+
+// SD-REFILL-00G39SZT: saturation-ack suppression. The time cooldown alone re-pings Adam with the
+// SAME deficit on an unchanged belt-dry state once it lapses (6+ pings in ~2h after Adam reports
+// saturation). A deficit fingerprint identifies the belt-dry STATE — verdict + belt depth + deficit
+// magnitude + the (sorted) claimable sd_key set — so the forecaster can self-suppress re-pinging an
+// identical deficit until the fingerprint changes (a supply-change signal). Pure (no IO).
+export function deficitFingerprint({ verdict, beltDepth, deficit, claimable }) {
+  const keys = Array.isArray(claimable)
+    ? claimable.map((c) => (c && (c.sd_key || c.sd_id || c.key)) || '').filter(Boolean).sort()
+    : [];
+  return `${verdict}|belt=${beltDepth}|deficit=${Math.max(0, deficit)}|items=${keys.join(',')}`;
+}
+
+// Pure decision for the proactive Adam reach-out. Order: (a) inside the time cooldown -> hold;
+// (b) cooldown lapsed but the fingerprint is unchanged from the last ping -> SUPPRESS (saturation:
+// same deficit, no supply change); (c) otherwise -> ping. A legacy stamp without a fingerprint is
+// treated as changed (one ping re-stamps it). Returns { ping, reason }.
+export function shouldPingAdam({ cd, sinceMin, cooldownMin, currentFp }) {
+  if (sinceMin < cooldownMin) return { ping: false, reason: 'cooldown' };
+  if (cd && cd.fingerprint != null && cd.fingerprint === currentFp) {
+    return { ping: false, reason: 'saturation-unchanged' };
+  }
+  return { ping: true, reason: 'state-changed-or-first' };
 }
 
 async function reachAdam(f) {
@@ -409,5 +439,9 @@ async function reachAdam(f) {
   return !res.error;
 }
 
-main().then(() => { /* natural drain; no process.exit (Windows undici abort) */ })
-  .catch(e => { console.error('[CAPACITY-FORECAST] error:', e.message); });
+// SD-REFILL-00G39SZT: guard the entrypoint so importing this module (e.g. unit tests of the pure
+// helpers) does not run the DB-touching main(). Only run when invoked directly as the CLI.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().then(() => { /* natural drain; no process.exit (Windows undici abort) */ })
+    .catch(e => { console.error('[CAPACITY-FORECAST] error:', e.message); });
+}
