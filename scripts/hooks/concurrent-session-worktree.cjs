@@ -574,7 +574,14 @@ async function cleanupStaleConcurrentWorktrees(supabase) {
     // f4028ef8: pre-unlink the node_modules junction so the PRIMARY
     // `git worktree remove --force` below (not just the rmSync fallback) cannot
     // follow it into the shared main-repo node_modules and wipe it.
-    unlinkNodeModulesJunction(wtPath);
+    // SD-LEO-INFRA-WORKTREE-REMOVE-CHOKEPOINT-001: widen the pre-unlink from
+    // node_modules-SCOPE to the WHOLE worktree tree. A junction living OUTSIDE
+    // wtPath/node_modules (nested package node_modules, .bin, workspace links)
+    // was left in place by unlinkNodeModulesJunction and then followed by
+    // git-remove / the rmSync fallback into the shared store — the recurring
+    // wipe. _unlinkNestedLinks(wtPath) matches the canonical _unlinkLinksRecursive
+    // (lib/worktree-manager.js:1334) the reaper uses safely; strictly a superset.
+    _unlinkNestedLinks(wtPath);
     try {
       gitViaPowerShell(`worktree remove --force "${wtPath}"`, {
         cwd: repoRoot, timeout: 5000
@@ -600,7 +607,7 @@ async function cleanupStaleConcurrentWorktrees(supabase) {
         let lastErr = null;
         for (let attempt = 0; attempt < CJS_RETRY_DELAYS_MS.length; attempt++) {
           try {
-            unlinkNodeModulesJunction(wtPath); // f4028ef8: DRY with the pre-unlink above
+            _unlinkNestedLinks(wtPath); // SD-LEO-INFRA-WORKTREE-REMOVE-CHOKEPOINT-001: whole-tree unlink (was node_modules-scope-only via unlinkNodeModulesJunction) so the raw rmSync below cannot follow a junction outside node_modules into the shared store
             fs.rmSync(wtPath, { recursive: true, force: true });
             rmOk = !fs.existsSync(wtPath);
             if (rmOk) break;
