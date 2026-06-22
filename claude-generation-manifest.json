@@ -1,109 +1,18 @@
 {
-  "generated_at": "2026-06-20T21:27:00.825Z",
-  "git_commit": "dc94cf45",
-  "db_snapshot_hash": "c834d15d81f97da8",
+  "generated_at": "2026-06-22T19:27:28.959Z",
+  "git_commit": "de82f3f3",
+  "db_snapshot_hash": "b29a4d557fed9f83",
   "files": {
-    "CLAUDE.md": {
-      "type": "full",
-      "chars": 19368,
-      "estimated_tokens": 4842,
-      "content_hash": "da84efeff906e971",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE.md"
-    },
-    "CLAUDE_CORE.md": {
-      "type": "full",
-      "chars": 83518,
-      "estimated_tokens": 20880,
-      "content_hash": "355c6e5c57779f54",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE.md"
-    },
-    "CLAUDE_LEAD.md": {
-      "type": "full",
-      "chars": 65128,
-      "estimated_tokens": 16282,
-      "content_hash": "c5b17112394b6624",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD.md"
-    },
-    "CLAUDE_PLAN.md": {
-      "type": "full",
-      "chars": 90830,
-      "estimated_tokens": 22708,
-      "content_hash": "150748851d6e7528",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN.md"
-    },
-    "CLAUDE_EXEC.md": {
-      "type": "full",
-      "chars": 84821,
-      "estimated_tokens": 21206,
-      "content_hash": "183f454f26903077",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC.md"
-    },
-    "CLAUDE_ADAM.md": {
-      "type": "full",
-      "chars": 41260,
-      "estimated_tokens": 10315,
-      "content_hash": "3fd687b299804d99",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM.md"
-    },
-    "CLAUDE_COORDINATOR.md": {
-      "type": "full",
-      "chars": 16618,
-      "estimated_tokens": 4155,
-      "content_hash": "cb596ee5053f347f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_COORDINATOR.md"
-    },
-    "CLAUDE_DIGEST.md": {
-      "type": "digest",
-      "chars": 9611,
-      "estimated_tokens": 2403,
-      "content_hash": "3d5fff1bd142e0c1",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_DIGEST.md"
-    },
-    "CLAUDE_CORE_DIGEST.md": {
-      "type": "digest",
-      "chars": 11535,
-      "estimated_tokens": 2884,
-      "content_hash": "3273288ea2f87428",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE_DIGEST.md"
-    },
-    "CLAUDE_LEAD_DIGEST.md": {
-      "type": "digest",
-      "chars": 5422,
-      "estimated_tokens": 1356,
-      "content_hash": "3f54ef9f72a333d8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD_DIGEST.md"
-    },
-    "CLAUDE_PLAN_DIGEST.md": {
-      "type": "digest",
-      "chars": 8412,
-      "estimated_tokens": 2103,
-      "content_hash": "58262c40a1b12f0e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN_DIGEST.md"
-    },
-    "CLAUDE_EXEC_DIGEST.md": {
-      "type": "digest",
-      "chars": 10835,
-      "estimated_tokens": 2709,
-      "content_hash": "c4b59d23cbd5e29b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC_DIGEST.md"
-    },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 12320,
       "estimated_tokens": 3080,
-      "content_hash": "85254e9c926ec754",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM_DIGEST.md"
-    },
-    "CLAUDE_COORDINATOR_DIGEST.md": {
-      "type": "digest",
-      "chars": 3973,
-      "estimated_tokens": 994,
-      "content_hash": "24ffb02704d9567c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "8ad4165b9dcde20a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-002WZAV0\\CLAUDE_ADAM_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "3581033924ed4560",
+    "global": "f2a046173800e258",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -357,14 +266,15 @@
       "596": "bf95e6419e99aee7",
       "597": "8220a84f943767a6",
       "599": "7ddd3e2178799aa8",
-      "601": "88747ca78c466c44",
+      "601": "d8c30ec186c358a5",
       "602": "ad0aecae8cdc6cb3",
       "603": "ca922c736e8d8ed3",
       "604": "67885bf567384f02",
-      "605": "19e13f356fce24ab",
+      "605": "eb981dea8abe023c",
       "606": "25aa68b575c66d07",
       "607": "82e04c0cc0ffb28f",
-      "608": "7f99a4321502367e"
+      "608": "7f99a4321502367e",
+      "609": "9790a74a362ff0ca"
     },
     "meta": {
       "94": {
@@ -1666,6 +1576,11 @@
         "section_type": "system_coherence",
         "target_file": null,
         "title": "LEO System Coherence — the Flywheel (doc pointer)"
+      },
+      "609": {
+        "section_type": "coordinator_role_contract",
+        "target_file": "CLAUDE_COORDINATOR.md",
+        "title": "Coordinator → Adam comms MUST be typed (payload.kind) — untyped is silently skipped"
       }
     }
   }
