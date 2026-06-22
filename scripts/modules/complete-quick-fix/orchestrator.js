@@ -43,6 +43,32 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 /**
+ * SD-REFILL-00QQ60BN: build the quick_fixes UPDATE payload for the already-MERGED reconcile path.
+ * The completed_requires_verification CHECK requires (tests_passing AND uat_verified) OR
+ * force_completed for status='completed'. A QF whose verification columns were never stamped
+ * pre-merge would otherwise fail this update forever ("Could not reconcile QF record (non-fatal)"
+ * on every re-run; QF stuck in_progress with a merged PR). A merged PR is the CI witness, so
+ * tests_passing=true is justified; UAT does not run in this reconcile path, so the CHECK is
+ * satisfied via force_completed=true + an appended audit note rather than fabricating uat_verified.
+ * Pure: no DB/clock access — the caller passes nowIso.
+ * @param {{ qf?:object, prUrl:string, mergeSha?:string|null, nowIso:string }} args
+ * @returns {object} the UPDATE payload
+ */
+export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, nowIso }) {
+  const reconcileNote = `Reconciled to completed from already-MERGED PR ${prUrl} (SD-REFILL-00QQ60BN merged-PR witness; UAT not re-run in reconcile path).`;
+  const verification_notes = [qf.verification_notes, reconcileNote].filter(Boolean).join(' | ');
+  return {
+    status: 'completed',
+    pr_url: prUrl,
+    commit_sha: mergeSha,
+    tests_passing: true,
+    force_completed: true,
+    verification_notes,
+    completed_at: qf.completed_at || nowIso
+  };
+}
+
+/**
  * Main orchestration function for completing quick-fixes
  * @param {string} qfId - Quick-fix ID
  * @param {object} options - Completion options
@@ -144,20 +170,20 @@ export async function completeQuickFix(qfId, options = {}) {
       if (meta && meta.state === 'MERGED') {
         console.log(`\n✅ PR #${probePrNumber} is already MERGED — reconciling ${qfId} to completed (idempotent re-run short-circuit).\n`);
         const mergeSha = meta.mergeCommit?.oid || qf.commit_sha || null;
+        // SD-REFILL-00QQ60BN: stamp the verification columns the completed_requires_verification
+        // CHECK demands so this reconcile no longer fails forever for an un-stamped QF.
+        const reconcileUpdate = buildMergedReconcileUpdate({
+          qf, prUrl: probePrUrl, mergeSha, nowIso: new Date().toISOString()
+        });
         const { error: reconcileErr } = await supabase
           .from('quick_fixes')
-          .update({
-            status: 'completed',
-            pr_url: probePrUrl,
-            commit_sha: mergeSha,
-            completed_at: qf.completed_at || new Date().toISOString()
-          })
+          .update(reconcileUpdate)
           .eq('id', qfId)
           .neq('status', 'completed');
         if (reconcileErr) {
           console.log(`   ⚠️  Could not reconcile QF record (non-fatal): ${reconcileErr.message}`);
         }
-        return { ...qf, status: 'completed', pr_url: probePrUrl, commit_sha: mergeSha };
+        return { ...qf, ...reconcileUpdate };
       }
     } catch (e) {
       console.log(`   ℹ️  Already-merged probe skipped (will run normal pipeline): ${e.message}`);

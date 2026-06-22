@@ -143,7 +143,11 @@ describe('FR-4 already-MERGED probe', () => {
   });
 
   it('reconciles the QF to completed and returns early on MERGED', () => {
-    expect(orchSrc).toMatch(/status:\s*'completed'[\s\S]{0,200}\.eq\('id',\s*qfId\)[\s\S]{0,80}\.neq\('status',\s*'completed'\)/);
+    // SD-REFILL-00QQ60BN: the reconcile UPDATE payload is now built by buildMergedReconcileUpdate
+    // (which stamps the verification columns the completed_requires_verification CHECK demands) and
+    // applied via .update(reconcileUpdate). Pin the call + the targeting clauses.
+    expect(orchSrc).toMatch(/buildMergedReconcileUpdate\(\{[\s\S]{0,160}qf,[\s\S]{0,160}\}\)/);
+    expect(orchSrc).toMatch(/\.update\(reconcileUpdate\)[\s\S]{0,80}\.eq\('id',\s*qfId\)[\s\S]{0,80}\.neq\('status',\s*'completed'\)/);
     // The probe must return BEFORE autoDetectGitInfo (which is the next major step).
     const probeIdx = orchSrc.indexOf("meta.state === 'MERGED'");
     const autodetectIdx = orchSrc.indexOf('autoDetectGitInfo(testDir, options)');
