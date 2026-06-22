@@ -67,14 +67,6 @@
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
     {
-      "file": "lib/llm/usage-logger.test.js",
-      "reason_class": "supabase-mock-chain",
-      "error_signature": "TypeError: db.from(...).select is not a function",
-      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
       "file": "lib/security/encryption.test.js",
       "reason_class": "suite-load-error",
       "error_signature": "Error: Cannot find module '/lib/security/encryption.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/lib/security/encryption.test.js",
@@ -459,14 +451,6 @@
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
     {
-      "file": "tests/unit/brand-variants.service.test.js",
-      "reason_class": "supabase-mock-chain",
-      "error_signature": "TypeError: query.order is not a function",
-      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
       "file": "tests/unit/brand-variants.validation.test.js",
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected [Function] to throw an error",
@@ -551,14 +535,6 @@
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected 'FAILED' to be 'COMPLETED' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/unit/eva/artifact-persistence-advance-reset.test.js",
-      "reason_class": "supabase-mock-chain",
-      "error_signature": "TypeError: supabase.from(...).select is not a function",
-      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
@@ -695,14 +671,6 @@
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected false to be true // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/unit/eva/economic-lens-analysis.test.js",
-      "reason_class": "supabase-mock-chain",
-      "error_signature": "TypeError: dedupQuery.limit(...).maybeSingle is not a function",
-      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
@@ -1219,14 +1187,6 @@
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
     {
-      "file": "tests/unit/services/brand-genome.test.js",
-      "reason_class": "supabase-mock-chain",
-      "error_signature": "TypeError: supabase.from(...).upsert is not a function",
-      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
-      "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
       "file": "tests/unit/session-summary/secret-redactor.test.js",
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected 'createClerkClient({ secret_key=[REDAC…' to contain 'CLERK_SECRET_KEY_REDACTED'",
@@ -1239,22 +1199,6 @@
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: Files writing raw to claude_sessions without going through lib/session-writer.cjs:",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/unit/stage-17/selection-flow.test.js",
-      "reason_class": "supabase-mock-chain",
-      "error_signature": "TypeError: supabase.from(...).select(...).eq(...).eq(...).eq(...).eq is not a function",
-      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
-      "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/unit/stage-gates-ext.test.js",
-      "reason_class": "supabase-mock-chain",
-      "error_signature": "AssertionError: expected { isGated: true, gateType: 'TASTE' } to deeply equal { isGated: false, gateType: null }",
-      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
@@ -1377,6 +1321,14 @@
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/stage-gates-ext.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected { isGated: true, gateType: 'TASTE' } to deeply equal { isGated: false, gateType: null } (production added TASTE gate SD-LEO-ORCH-GSTACK-TASTE-GATE-001-A + promotion severity logic changed; out-of-class for supabase-mock-chain sweep SD-REFILL-002XLOD1)",
+      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
+      "quarantined_at": "2026-06-22T17:48:33.555Z",
+      "quarantined_by": "SD-REFILL-002XLOD1"
     }
   ]
 }
