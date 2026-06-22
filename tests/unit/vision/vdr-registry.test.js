@@ -110,6 +110,15 @@ describe('computeBuildGauge (FR-1 numerator math + honest unknown handling)', ()
     for (const c of g.components) expect(STATUS_SCORE).toHaveProperty(c.status);
   });
 
+  it('SD-LEO-INFRA-VDR-GAUGE-BELT-001 FR-2: mapped components carry the per-capability `required` acceptance criterion', async () => {
+    const io = { supabase: stubSupabase({}) };
+    const g = await computeBuildGauge({ io, visionMarkdown: visionFixture() });
+    const mapped = g.components.filter((c) => c.layer !== 'unmapped');
+    expect(mapped.length).toBeGreaterThan(0);
+    // The fixture's "required cell" column is the acceptance criterion that was previously dropped.
+    for (const c of mapped) expect(c).toHaveProperty('required', 'required cell');
+  });
+
   it('FIX: all-unknown (0 probeable) ⇒ overall_pct=null + available:false (not a confident 0%)', async () => {
     // no supabase, no grep ⇒ every probe is 'unknown'
     const g = await computeBuildGauge({ io: {}, visionMarkdown: visionFixture() });
