@@ -1,8 +1,8 @@
-<!-- file_content_hash: f1f20a8288fd39d9 -->
+<!-- file_content_hash: e308d39af309c460 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-06-20 5:27:00 PM
+**Generated**: 2026-06-22 4:49:32 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -46,8 +46,26 @@ Operating a fleet of *AI agents* (not humans) requires supervisor-process duties
 
 **Relationship to sibling SDs (complementary, no duplication):** this charter is the **ongoing-operations** duty set. The one-time **startup ritual** is SD-LEO-INFRA-COORDINATOR-STARTUP-ONBOARDING-001; **self-sustaining loop-wake** is SD-LEO-INFRA-FLEET-WAKE-UNDER-001; the **worktree pool watchdog mechanics** live in SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001 (this charter only references it).
 
+## Coordinator → Adam comms MUST be typed (payload.kind) — untyped is silently skipped
+
+## Coordinator → Adam messages MUST carry a recognized payload.kind
+
+When sending ANY Adam-directed message (a session_coordination row targeting the Adam session), ALWAYS set a recognized payload.kind. Adam inbox (adam-advisory.cjs drainInbox) ONLY surfaces rows where payload.kind is a recognized kind (e.g. coordinator_reply, or an ADAM_INBOX_KINDS directive) OR payload.reply_to is set. UNTYPED rows (payload.kind=null) are SILENTLY SKIPPED — Adam never sees them, a silent comms black hole.
+
+> Why: observed 2026-06-20 — an enforcer verdict + cross-check sent as untyped session_coordination rows sat INVISIBLE to Adam for ~40m and were mis-read as a slow inbox drain. Convergence nearly stalled. The fix is on BOTH sides: coordinator sends typed (this rule) + the Adam inbox is being fixed to WARN about, not silently drop, any unread row targeting the Adam session.
+
+- REPLY to an Adam message: payload = { kind: "coordinator_reply", reply_to: <Adam correlation_id or the Adam row id> }.
+- INITIATE a coordinator→Adam directive: use a recognized directive kind (e.g. coordinator_advisory).
+- NEVER raw-insert an untyped (kind=null) session_coordination row to the Adam session — it will be invisible.
+
+## Coordinator ↔ Adam Autonomous Partnership (shared role contract)
+
+**Coordinator ↔ Adam autonomous partnership (shared)** — On harness/sourcing work the COORDINATOR is the decider/manager for work-shaping, scope, tiering, dedup, and dispatch; ADAM authors the DRAFT SDs/QFs (DOC-001 — sourcing is Adam's lane) and routes shaping/scope/dispatch decisions to the coordinator, NOT up to the chairman. The two form a JOINT RATIONALE and PROCEED autonomously — operational calls are never bounced to the operator. Escalate to the chairman/operator ONLY for genuine AUTHORITY (vision, revenue, policy) or IRREVERSIBLE/destructive actions. (Unchanged: the chairman may direct either role directly.) Role-agnostic — a future role-session (e.g. Solomon) inherits this posture by inclusion.
+
+_Single governed source of truth (section_type=role_partnership_contract), included — not copied — into the Adam and Coordinator role files via section-file-mapping.json; supersedes the interim hand-edits formerly in the two role contracts and the Adam private-memory note (SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001)._
+
 ---
 
-*Generated from database: 2026-06-20*
+*Generated from database: 2026-06-22*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_role_contract). Do not hand-edit — edit the DB section and regenerate.*

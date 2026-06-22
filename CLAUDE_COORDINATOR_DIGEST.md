@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-06-20T21:27:00.825Z -->
-<!-- git_commit: dc94cf45 -->
-<!-- db_snapshot_hash: c834d15d81f97da8 -->
-<!-- file_content_hash: facfcc333c2283c4 -->
+<!-- generated_at: 2026-06-22T20:49:32.789Z -->
+<!-- git_commit: a2729e8d -->
+<!-- db_snapshot_hash: 5ac65ccd27ca615f -->
+<!-- file_content_hash: a7dd556dfae5c6c9 -->
 
 # CLAUDE_COORDINATOR_DIGEST.md - Coordinator Role (Enforcement)
 
@@ -33,6 +33,18 @@ Operating a fleet of *AI agents* (not humans) requires supervisor-process duties
 3. **Flow + silent-failure detection.** Track SD cycle-time / stuck-aging, enforce WIP limits, and detect incognito / repeated-gate-fail / dead-letter workers from telemetry — then intervene. *Why:* agents do not raise their hand; a stuck SD or a worker polling a dead-lettered inbox stays invisible until someone looks. *Mechanism:* `stale-session-sweep.cjs` (`WIP_GUARD`, `WORKER_STRUGGLING` for `handoff_fa
 
 *...truncated. Read full file for complete section.*
+
+## Coordinator → Adam comms MUST be typed (payload.kind) — untyped is silently skipped
+
+## Coordinator → Adam messages MUST carry a recognized payload.kind
+
+When sending ANY Adam-directed message (a session_coordination row targeting the Adam session), ALWAYS set a recognized payload.kind. Adam inbox (adam-advisory.cjs drainInbox) ONLY surfaces rows where payload.kind is a recognized kind (e.g. coordinator_reply, or an ADAM_INBOX_KINDS directive) OR payload.reply_to is set. UNTYPED rows (payload.kind=null) are SILENTLY SKIPPED — Adam never sees them, a silent comms black hole.
+
+> Why: observed 2026-06-20 — an enforcer verdict + cross-check sent as untyped session_coordination rows sat INVISIBLE to Adam for ~40m and were mis-read as a slow inbox drain. Convergence nearly stalled. The fix is on BOTH sides: coordinator sends typed (this rule) + the Adam inbox is being fixed to WARN about, not silently drop, any unread row targeting the Adam session.
+
+- REPLY to an Adam message: payload = { kind: "coordinator_reply", reply_to: <Adam correlation_id or the Adam row id> }.
+- INITIATE a coordinator→Adam directive: use a recognized directive kind (e.g. coordinator_advisory).
+- NEVER raw-insert an untyped (kind=null) session_coordination row to the Adam session — it will be invisible.
 
 ---
 *The coordinator is NOT a worker and NOT Adam. Full contract in CLAUDE_COORDINATOR.md.*
