@@ -115,6 +115,15 @@ describe('buildRefillSdKey / buildRefillSdPayload (pure)', () => {
     expect(good.category).toBe('Security');
   });
 
+  it('QF-20260621-219: mints the draft at the INITIAL phase LEAD (not the LEAD_APPROVAL column default)', () => {
+    // The current_phase column DEFAULT is 'LEAD_APPROVAL'; omitting it landed every auto-refilled
+    // draft there, which worker-checkin's isSdInFlight read as "already started" → un-claimable belt
+    // (chairman-escalated claim-stall). The payload must set current_phase explicitly to 'LEAD'.
+    const p = buildRefillSdPayload(validRow(), 'SD-REFILL-PHASE');
+    expect(p.current_phase).toBe('LEAD');
+    expect(p.current_phase).not.toBe('LEAD_APPROVAL');
+  });
+
   it('falls back to a traceable title for an empty title and caps length', () => {
     // The canonical deriver yields a traceable default ("Roadmap item <id>") for an empty title —
     // non-empty + identifiable, better than a generic constant.

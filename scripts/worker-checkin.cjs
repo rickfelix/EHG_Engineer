@@ -584,13 +584,19 @@ async function adoptOrphanInProgress(sb, sessionId, base) {
  */
 async function isSdInFlight(sb, sdKey, mySessionId) {
   try {
-    // (a) already started past the initial LEAD draft
+    // (a) already started past the initial draft
     const { data: sd } = await sb
       .from('strategic_directives_v2')
       .select('current_phase')
       .eq('sd_key', sdKey)
       .maybeSingle();
-    if (sd && sd.current_phase && sd.current_phase !== 'LEAD') return true;
+    // QF-20260621-219 (PART 2): LEAD_APPROVAL is an INITIAL (claimable) phase too, not in-flight.
+    // The current_phase column DEFAULT is 'LEAD_APPROVAL', so a brand-new never-touched
+    // auto-refilled draft sits at LEAD_APPROVAL and was wrongly skipped here BEFORE claim_sd — the
+    // eligible belt looked full but 0% claimable (chairman-escalated claim-stall). Phase only
+    // advances past these on an ACCEPTED handoff, so LEAD and LEAD_APPROVAL are equivalent
+    // un-started states for claimability.
+    if (sd && sd.current_phase && sd.current_phase !== 'LEAD' && sd.current_phase !== 'LEAD_APPROVAL') return true;
     // (b) a live foreign session already holds it
     const { data: live } = await sb
       .from('v_active_sessions')
