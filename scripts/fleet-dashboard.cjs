@@ -8,6 +8,9 @@ const crypto = require('crypto');
 const util = require('util');
 const { spawnSync } = require('child_process');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
+// SD-LEO-INFRA-IS-ALIVE-LIVENESS-SSOT-001 (FR-2): the read-time liveness SSOT — the gauge reconcile
+// wraps isSessionAlive so the P(alive) override and the authoritative-liveness definition can never diverge.
+const { isSessionAlive } = require('../lib/fleet/session-liveness.cjs');
 
 // Idle-fleet diff suppression — coordinator was generating ~120 identical
 // dashboard renders overnight. After N consecutive identical renders, emit a
@@ -102,10 +105,16 @@ function pBar(p, width = 10) {
  * @param {{pidAlive?:boolean, tickAlive?:boolean, silenceArmed?:boolean}} signals
  * @returns {object|null}
  */
-function reconcilePAliveWithLiveness(mcWorker, { pidAlive = false, tickAlive = false, silenceArmed = false } = {}) {
+// SD-LEO-INFRA-IS-ALIVE-LIVENESS-SSOT-001 (FR-2): thin wrapper over the shared isSessionAlive SSOT.
+// Upgrades the raw-heartbeat MC P(alive) to 1.0 (stamped + reasoned) when the SESSION is alive by any
+// authoritative signal — one-directional (never downgrades). Delegating to isSessionAlive means the
+// gauge override and the fleet-wide liveness definition can never drift apart (no 'three local copies').
+function reconcilePAliveWithLiveness(mcWorker, session, { nowMs = Date.now(), aliveCcPids = null } = {}) {
   if (!mcWorker || typeof mcWorker !== 'object') return mcWorker;
-  if (!(pidAlive || tickAlive || silenceArmed)) return mcWorker;
-  const reason = pidAlive ? 'pid_alive' : tickAlive ? 'process_tick' : 'armed_silence';
+  const { alive, reason } = isSessionAlive(session || {}, { nowMs, aliveCcPids });
+  // A raw-heartbeat-fresh worker already reads a high p_alive from the MC engine; only stamp an
+  // override when liveness comes from a PARKED-alive authoritative signal (the false-DORMANT case).
+  if (!alive || reason === 'raw_is_alive' || reason === 'fresh_heartbeat') return mcWorker;
   return { ...mcWorker, p_alive: 1, p_alive_authoritative_override: true, p_alive_override_reason: reason };
 }
 
@@ -316,14 +325,12 @@ async function loadData() {
     // SD-REFILL-005M4BN9: reconcile the raw-heartbeat P(alive) gauge with the SAME authoritative
     // liveness signals the active/stale split uses, so an armed-silence / PID-alive worker is not
     // shown as a false 'dying worker' (P(alive)=0.00) that lures a force-release.
+    const _gaugeNowMs = Date.now();
     for (const s of sessions) {
       const w = mcByWorker[s.session_id];
       if (!w) continue;
-      mcByWorker[s.session_id] = reconcilePAliveWithLiveness(w, {
-        pidAlive: hasPidAlive(s),
-        tickAlive: hasTickAlive(s),
-        silenceArmed: hasExpectedSilence(s),
-      });
+      // FR-2: reconcile via the shared SSOT (session-based), passing the already-loaded aliveCcPids Set.
+      mcByWorker[s.session_id] = reconcilePAliveWithLiveness(w, s, { nowMs: _gaugeNowMs, aliveCcPids });
     }
   }
 
