@@ -12,6 +12,7 @@
  *         npm run sourcing:populate -- --apply --chairman-approved   # stage (chairman-gated)
  */
 import 'dotenv/config';
+import { pathToFileURL } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { populate } from '../../lib/sourcing-engine/proactive-populator.js';
 
@@ -26,10 +27,15 @@ const dropRawIntake = !process.argv.includes('--keep-raw');
 const TERMINAL_DISPOSITIONS = ['built', 'already_covered', 'duplicate', 'declined', 'deferred_to_rung'];
 
 async function loadSources(db) {
+  // SD-LEO-INFRA-SOURCING-LOADSOURCES-CAP-FIX-001: page every source through fetchAllFiltered so a
+  // bare .limit() no longer silently TRUNCATES the newest tail. PostgREST returns rows in an
+  // unspecified order and caps a single response, so .limit(N) dropped the most-recent (highest-id)
+  // intake — verified: feedback harness_backlog held 1139 rows vs .limit(1000), hiding the latest ~2h
+  // from routing/dedup/disposition. This mirrors loadContext's full-corpus paging (fetchAllRows).
   // 1. conversion_ledger — undispositioned backlog
-  const { data: ledger } = await db.from('conversion_ledger')
+  const ledger = await fetchAllFiltered(() => db.from('conversion_ledger')
     .select('id,source_pool,source_id,source_external_id,title,description,target_rung,dedup_match_sd_key,disposition')
-    .is('disposition', null).limit(2000);
+    .is('disposition', null));
   // 2. Wave-6 (highest-rank wave of the LEO Roadmap) — already-staged items, enumerated for the report
   let wave6 = [];
   try {
@@ -37,19 +43,19 @@ async function loadSources(db) {
     if (rm && rm[0]) {
       const { data: w } = await db.from('roadmap_waves').select('id').eq('roadmap_id', rm[0].id).order('sequence_rank', { ascending: false }).limit(1);
       if (w && w[0]) {
-        const { data: items } = await db.from('roadmap_wave_items')
+        const items = await fetchAllFiltered(() => db.from('roadmap_wave_items')
           .select('id,source_type,source_id,title,item_disposition,promoted_to_sd_key,metadata')
-          .eq('wave_id', w[0].id).limit(2000);
-        wave6 = (items || []).filter((it) => !['promoted', 'dropped'].includes(it.item_disposition));
+          .eq('wave_id', w[0].id));
+        wave6 = items.filter((it) => !['promoted', 'dropped'].includes(it.item_disposition));
       }
     }
   } catch { /* fail-soft: wave6 stays empty */ }
   // 3. deferred V2 cluster
-  const { data: deferred } = await db.from('strategic_directives_v2').select('id,sd_key,title,description,status,metadata').eq('status', 'deferred').limit(500);
+  const deferred = await fetchAllFiltered(() => db.from('strategic_directives_v2').select('id,sd_key,title,description,status,metadata').eq('status', 'deferred'));
   // 4. harness backlog (exclude auto-capture noise)
-  const { data: backlogRaw } = await db.from('feedback').select('id,title,description,status,category,sd_id,metadata').eq('category', 'harness_backlog').eq('status', 'new').limit(1000);
-  const backlog = (backlogRaw || []).filter((r) => !(r.metadata && r.metadata.flag_class) && !/^(Completion flag|Fleet retro|Coordinator review)/i.test(r.title || ''));
-  return { ledger: ledger || [], wave6, deferred: deferred || [], backlog };
+  const backlogRaw = await fetchAllFiltered(() => db.from('feedback').select('id,title,description,status,category,sd_id,metadata').eq('category', 'harness_backlog').eq('status', 'new'));
+  const backlog = backlogRaw.filter((r) => !(r.metadata && r.metadata.flag_class) && !/^(Completion flag|Fleet retro|Coordinator review)/i.test(r.title || ''));
+  return { ledger, wave6, deferred, backlog };
 }
 
 /**
@@ -66,6 +72,29 @@ export async function fetchAllRows(db, table, select, pageSize = 1000) {
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await db.from(table).select(select).range(from, from + pageSize - 1);
     if (error) throw new Error(`fetchAllRows(${table}): ${error.message}`);
+    if (!data || data.length === 0) break;
+    out.push(...data);
+    if (data.length < pageSize) break; // last page
+  }
+  return out;
+}
+
+/**
+ * SD-LEO-INFRA-SOURCING-LOADSOURCES-CAP-FIX-001: page through ALL rows of a FILTERED query so a bare
+ * .limit() can never silently truncate the newest tail (PostgREST returns rows unordered + caps a
+ * single response). The fetchAllRows sibling cannot carry .eq()/.is() filters, so loadSources' four
+ * filtered sources use this: `buildQuery` is a zero-arg factory returning a FRESH PostgREST builder
+ * (select + filters applied) each call — required because a builder is single-use once awaited. A
+ * STABLE .order(orderCol) makes range() paging deterministic (no skips/dupes across pages); every
+ * row, including the most recent intake, is returned. Throws on a query error (callers fail-soft).
+ * @param {() => any} buildQuery  factory returning a fresh filtered PostgREST builder
+ * @param {{pageSize?:number, orderCol?:string}} [opts]
+ */
+export async function fetchAllFiltered(buildQuery, { pageSize = 1000, orderCol = 'id' } = {}) {
+  const out = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await buildQuery().order(orderCol, { ascending: true }).range(from, from + pageSize - 1);
+    if (error) throw new Error(`fetchAllFiltered: ${error.message}`);
     if (!data || data.length === 0) break;
     out.push(...data);
     if (data.length < pageSize) break; // last page
@@ -107,4 +136,10 @@ async function main() {
   printReport(out);
 }
 
-main().then(() => process.exit(0)).catch((e) => { console.error('[proactive-populator] fatal:', e.message); process.exit(1); });
+// SD-LEO-INFRA-SOURCING-LOADSOURCES-CAP-FIX-001: guard the entrypoint so importing the module (e.g.
+// a unit test of fetchAllFiltered) does NOT run the DB-touching pass + process.exit. Direct
+// `node proactive-populator.mjs` still runs main(). argv[1] is undefined under some loaders → guard it.
+const invokedDirectly = !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (invokedDirectly) {
+  main().then(() => process.exit(0)).catch((e) => { console.error('[proactive-populator] fatal:', e.message); process.exit(1); });
+}
