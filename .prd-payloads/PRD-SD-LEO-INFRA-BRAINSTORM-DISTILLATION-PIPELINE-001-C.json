@@ -1,0 +1,100 @@
+{
+  "executive_summary": "Child idx 2 of the Brainstorm Distillation Pipeline orchestrator (FR-1/FR-4). Builds the LLM brainstorm distiller that turns a raw roadmap_wave_items brainstorm row into a structured, chairman-reviewable distilled SD payload, plus a CLI that DEFAULTS to a zero-DB-write top-20 dry-run so the chairman can quality-validate distillation before any scale-up. Hard dependency (child idx-0: lib/eva/consultant/distillation-queue-writer.js enqueueDistilledCandidate + eva_consultant_recommendations.distilled_sd_payload column) is COMPLETE and merged (PR #5112; branch rebased onto origin/main). The soft sequencing dependency on the disposition gate (idx-1, in-flight by another worker) is non-blocking because the distiller NEVER mints — it defaults to dry-run and, under --apply, writes only to the chairman review queue (promotion is gated separately by idx-1). LEAD validation (evidence bd00ce8a, confidence 92) confirmed the reuse contract: getClassificationClient() -> client.complete(systemPrompt, userPrompt, {maxTokens}) wrapped in Promise.race timeout; complete() returns string OR {content}; deterministic keyword fallback fires on stub/timeout/parse-fail; ordering field is roadmap_wave_items.metadata->>'refine_composite_score' (DESC NULLS LAST). Files are disjoint from idx-1.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Pure LLM distiller core (distill-brainstorm.js)",
+      "description": "lib/integrations/distill-brainstorm.js: buildDistillPrompt(item) -> distillItem(item, {client}) -> parseDistillResponse(text) with a deterministic keywordDistill(item) fallback. distillItem reuses the refine-score.js pattern: getClassificationClient(); Promise.race([client.complete(system, user, {maxTokens}), timeout]); accept response as string OR {content}; JSON.parse; on stub/timeout/parse-fail use keywordDistill. Output payload shape: {title, description, scope, rationale, sd_type, confidence_tier}. Pure (client injectable) for testability.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "distillItem returns a valid {title,description,scope,rationale,sd_type,confidence_tier} payload from a raw brainstorm row via the LLM path",
+        "keyword fallback fires on stub/timeout/parse-fail and returns a valid payload (method='keyword')",
+        "complete() string OR {content} both handled; client is injectable"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Distiller CLI with default dry-run (eva-distill-brainstorm.js)",
+      "description": "scripts/eva-distill-brainstorm.js: load the top-20 roadmap_wave_items by metadata.refine_composite_score (DESC, NULLS LAST), distill each via the core, and DEFAULT to --dry-run: write a temp-file report + console summary, ZERO DB writes. Only with --apply does it enqueue each distilled payload to the chairman review queue via the idx-0 writer enqueueDistilledCandidate(supabase, {sourceWaveItemId, distilledPayload, title, description, confidenceTier}). import.meta.url main-guard so the module is import-safe.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Default run is --dry-run: temp-file + console report, ZERO DB writes",
+        "Top-20 ordered by metadata.refine_composite_score DESC NULLS LAST",
+        "--apply maps the distilled payload into enqueueDistilledCandidate; import.meta.url main-guard present"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Pure distiller-schema unit tests",
+      "description": "tests/unit covering: AI-path payload shape (fake client returning JSON), keyword-fallback payload shape (client throws/stub), dry-run performs no insert, and the payload->enqueueDistilledCandidate field mapping. Fake client + fake supabase; no live LLM/DB.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "Test: AI-path returns a valid payload from a fake client",
+        "Test: keyword fallback returns a valid payload when the client throws/stub",
+        "Test: dry-run path performs zero inserts; --apply mapping is correct"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Chairman validation checkpoint (no-mint guarantee)",
+      "description": "The distiller MUST NOT mint SDs. Its dry-run default opens no churn window; --apply writes only to the chairman review queue (eva_consultant_recommendations, status pending), and promotion to the belt remains gated by the idx-1 disposition gate. This guarantee is encoded by the dry-run default + the writer-only --apply path (no call into any mint/promote function).",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "No code path in the distiller calls a mint/promote function",
+        "Dry-run default; --apply writes only via enqueueDistilledCandidate"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {"requirement": "Reuse refine-score.js LLM pattern: getClassificationClient + client.complete(system,user,{maxTokens}) + Promise.race timeout + keyword fallback; handle string OR {content}", "type": "code"},
+    {"requirement": "Order by roadmap_wave_items.metadata->>'refine_composite_score' DESC NULLS LAST (JSONB key); fetch + numeric sort if PostgREST JSONB ordering is unreliable", "type": "constraint"},
+    {"requirement": "--apply target is the idx-0 writer enqueueDistilledCandidate (already on origin/main; branch rebased)", "type": "constraint"},
+    {"requirement": "Distiller NEVER mints — dry-run default + writer-only --apply; promotion gated by idx-1", "type": "constraint"}
+  ],
+  "test_scenarios": [
+    {"scenario": "fake client returns JSON payload", "type": "unit", "expected": "distillItem returns the parsed {title,...} payload, method='ai'"},
+    {"scenario": "client throws / inline stub / unparseable", "type": "unit", "expected": "keyword fallback returns a valid payload, method='keyword'"},
+    {"scenario": "dry-run default", "type": "unit", "expected": "no supabase insert called; report produced"},
+    {"scenario": "--apply mapping", "type": "unit", "expected": "enqueueDistilledCandidate called with {sourceWaveItemId, distilledPayload, title, description, confidenceTier}"}
+  ],
+  "acceptance_criteria": [
+    "Distiller core produces valid payloads via LLM and via deterministic keyword fallback",
+    "CLI defaults to a zero-DB-write top-20 dry-run; --apply enqueues to the review queue only",
+    "No mint path; unit tests green"
+  ],
+  "risks": [
+    {"risk": "Cloud LLM unavailable", "mitigation": "Deterministic keyword fallback fires on stub/timeout/parse-fail; tests cover it", "severity": "low"},
+    {"risk": "Opening a churn window before the idx-1 gate lands", "mitigation": "Dry-run default + writer-only --apply (review queue, not belt); distiller never mints", "severity": "low"},
+    {"risk": "JSONB ordering quirk on metadata->>refine_composite_score", "mitigation": "Fetch + client-side numeric sort with NULLS LAST if PostgREST ordering is unreliable", "severity": "low"}
+  ],
+  "integration_operationalization": {
+    "consumers": ["chairman review of distilled candidates in eva_consultant_recommendations", "downstream idx-3 gauge + scale-up (consumes distillation coverage)", "npm/eva distillation tooling"],
+    "dependencies": ["lib/eva/consultant/distillation-queue-writer.js enqueueDistilledCandidate (idx-0, merged)", "lib/integrations/refine-score.js (LLM pattern)", "lib/llm/client-factory.js getClassificationClient", "roadmap_wave_items.metadata.refine_composite_score"],
+    "data_contracts": ["Reads roadmap_wave_items; under --apply writes eva_consultant_recommendations via the idx-0 writer (distilled_sd_payload jsonb). No schema change in this child."],
+    "runtime_config": ["--dry-run (default) / --apply flag"],
+    "observability_rollout": ["dry-run report is the chairman validation artifact before any scale-up (FR-4)"]
+  },
+  "system_architecture": {
+    "summary": "One pure distiller core module + one CLI (default dry-run) + unit tests. Reuses the refine-score.js LLM scaffold and the idx-0 queue writer. No schema change; no mint path.",
+    "components": [
+      {"name": "lib/integrations/distill-brainstorm.js", "change": "pure distiller core (LLM + keyword fallback)"},
+      {"name": "scripts/eva-distill-brainstorm.js", "change": "default --dry-run top-20 CLI; --apply enqueues via idx-0 writer; main-guard"},
+      {"name": "tests/unit distiller tests", "change": "AI-path + fallback + dry-run-no-write + apply-mapping"}
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build the pure distiller core mirroring refine-score.js; build the dry-run-default CLI ordering by refine_composite_score and enqueuing via the idx-0 writer only on --apply; add unit tests with fake client + fake supabase; dry-run smoke.",
+    "steps": [
+      "Add distill-brainstorm.js (buildDistillPrompt/distillItem/parseDistillResponse/keywordDistill)",
+      "Add eva-distill-brainstorm.js (top-20 by refine_composite_score, default dry-run, --apply via enqueueDistilledCandidate, main-guard)",
+      "Add unit tests (AI-path, fallback, dry-run no-write, apply-mapping)",
+      "Run unit suite + dry-run smoke (zero DB writes)"
+    ]
+  },
+  "smoke_test_steps": [
+    {"step_number": 1, "instruction": "npx vitest run the distiller unit test file", "expected_outcome": "all green"},
+    {"step_number": 2, "instruction": "node scripts/eva-distill-brainstorm.js (default)", "expected_outcome": "top-20 dry-run report prints, ZERO DB writes"},
+    {"step_number": 3, "instruction": "node -c lib/integrations/distill-brainstorm.js && node -c scripts/eva-distill-brainstorm.js", "expected_outcome": "both parse OK"}
+  ],
+  "metadata": {"sd_key": "SD-LEO-INFRA-BRAINSTORM-DISTILLATION-PIPELINE-001-C", "parent_sd": "SD-LEO-INFRA-BRAINSTORM-DISTILLATION-PIPELINE-001", "child_index": 2, "lead_evidence_id": "bd00ce8a", "ordering_field": "roadmap_wave_items.metadata->>refine_composite_score (DESC NULLS LAST)", "apply_target": "lib/eva/consultant/distillation-queue-writer.js enqueueDistilledCandidate"}
+}
