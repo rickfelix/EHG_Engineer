@@ -12,13 +12,18 @@
  * - Adds resolution_date and resolution_notes support
  */
 
-import { createSupabaseClient } from '../lib/supabase-client.js';
+// SD-REFILL-00CAKXC2: read with the SERVICE client, not the ANON client. retrospectives is
+// RLS-protected and rows are written by the service role, so an anon read returns zero rows →
+// the script threw 'Retrospective not found' for EVERY generated retro and silently skipped
+// pattern extraction (witnessed: retro 66938c8b on SD-FDBK-FIX-SELF-ONLY-AUTHORIZATION-001).
+// This is a server-side batch script (no end-user context), so the service role is correct.
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { IssueKnowledgeBase } from '../lib/learning/issue-knowledge-base.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createSupabaseClient();
+const supabase = createSupabaseServiceClient();
 
 const kb = new IssueKnowledgeBase();
 
