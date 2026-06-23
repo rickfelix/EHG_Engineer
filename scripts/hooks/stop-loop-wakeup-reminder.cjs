@@ -94,6 +94,54 @@ function isFlagEnabled() {
   return v === 'on' || v === '1' || v === 'true';
 }
 
+/**
+ * SD-LEO-INFRA-WORKER-ENGAGEMENT-ARM-PARK-001 — pure decision: on a Stop ALLOW-PATH (the hook is
+ * letting this turn end without blocking), should we PARK the session recoverable rather than let it
+ * cold-exit to zero? SEPARATION OF CONCERNS (the wind-down lesson): opting out of self-claim (stop
+ * churn) and parking-with-a-wakeup (stay recoverable) are SEPARATE — a worker that signalled a
+ * wind-down OR hit the second-stop allow-path should STILL be parked recoverable, not cold-exited.
+ *
+ * Park iff the session looks like a WORKER that could strand work: it holds a live SD claim, is in a
+ * loop state ('active'/'awaiting_tick'), or announced a wind-down. A claim-less, loop-less,
+ * non-signalling interactive operator session is NEVER parked (no false telemetry on an operator).
+ * @param {{ loopState?:string|null, hasActiveClaim?:boolean, windDownSignaled?:boolean }} args
+ * @returns {boolean}
+ */
+function shouldParkRecoverable({ loopState, hasActiveClaim, windDownSignaled } = {}) {
+  if (hasActiveClaim) return true;
+  if (windDownSignaled) return true;
+  if (loopState === LOOP_STATE_ACTIVE || loopState === LOOP_STATE_AWAITING_TICK) return true;
+  return false;
+}
+
+/**
+ * Write a RECOVERABLE park-state for the session: loop_state='awaiting_tick' + a capped
+ * expected_silence_until, reusing the post-tool-loop-state.cjs writeTelemetryAwait pattern so
+ * coordinator-revival / orphan-adoption deterministically re-engages the worker (no cold-exit).
+ * Best-effort / fail-open — any failure is logged and never blocks the stop.
+ */
+async function parkSessionRecoverable(sessionId) {
+  try {
+    const { setLoopState } = require('../lib/sessions/loop-state-tracker.cjs');
+    await setLoopState(sessionId, LOOP_STATE_AWAITING_TICK);
+  } catch (e) {
+    process.stderr.write(`[stop-loop-wakeup-reminder] park loop-state (non-fatal): ${e.message}\n`);
+  }
+  try {
+    const { computeSilenceMinutes } = require('../park-worker.cjs');
+    const { writeTelemetryAwait } = require('./lib/session-telemetry-writer.cjs');
+    const silenceMin = computeSilenceMinutes(undefined); // undefined wake → safe DEFAULT, pre-capped
+    const nowMs = Date.now();
+    await writeTelemetryAwait(sessionId, {
+      heartbeat_at: new Date(nowMs).toISOString(),
+      expected_silence_until: new Date(nowMs + silenceMin * 60000).toISOString(),
+      last_activity_kind: 'idle',
+    });
+  } catch (e) {
+    process.stderr.write(`[stop-loop-wakeup-reminder] park silence-arm (non-fatal): ${e.message}\n`);
+  }
+}
+
 const REMINDER = [
   'Worker stopping with NO ScheduleWakeup armed — you will go INCOGNITO and strand your claimed SD',
   '(the worktree then gets reaped by the claim-sweep). Run the WIND-DOWN HANDSHAKE before you stop:',
@@ -139,7 +187,9 @@ async function main() {
 
     const payload = await readStdinPayload();
     const stopHookActive = payload.stop_hook_active === true;
-    if (stopHookActive) { return shutdown(); }   // already reminded — let it stop
+    // SD-LEO-INFRA-WORKER-ENGAGEMENT-ARM-PARK-001: do NOT early-return on the second-stop allow-path.
+    // The stop is allowed (shouldRemind returns false for stopHookActive), but we still flow through
+    // to PARK the worker recoverable below — converting the cold-exit into a recoverable park.
 
     const sessionId = payload.session_id || process.env.CLAUDE_SESSION_ID || process.env.SESSION_ID || '';
     if (!sessionId) { return shutdown(); }       // can't resolve — fail-open
@@ -187,7 +237,17 @@ async function main() {
     } catch { /* fail-open: treat as not-signaled (conservative — still reminds) */ }
 
     if (shouldRemind({ loopState, stopHookActive, flagEnabled, hasActiveClaim, windDownSignaled })) {
+      // BLOCK — the worker must arm its OWN ScheduleWakeup; do not park on its behalf (parking here
+      // would let it cold-exit anyway by satisfying the recoverable-state check it should set itself).
       process.stdout.write(JSON.stringify({ decision: 'block', reason: REMINDER }));
+      return shutdown();
+    }
+    // ALLOW-PATH (SD-LEO-INFRA-WORKER-ENGAGEMENT-ARM-PARK-001): the stop is allowed — windDownSignaled
+    // (:83) or the second-stop (:78), or a non-worker session. If this is a WORKER that could strand
+    // work, PARK it recoverable (loop_state='awaiting_tick' + capped expected_silence_until) so
+    // coordinator-revival / orphan-adoption re-engages it, instead of a cold-exit to zero workers.
+    if (shouldParkRecoverable({ loopState, hasActiveClaim, windDownSignaled })) {
+      await parkSessionRecoverable(sessionId);
     }
     return shutdown();
   } catch (e) {
@@ -205,4 +265,4 @@ if (require.main === module) {
   main().catch(() => shutdown());
 }
 
-module.exports = { shouldRemind, isFlagEnabled, REMINDER };
+module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, isFlagEnabled, REMINDER };
