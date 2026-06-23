@@ -86,6 +86,29 @@ function pBar(p, width = 10) {
   return '\u2593'.repeat(filled) + '\u2591'.repeat(width - filled);
 }
 
+/**
+ * SD-REFILL-005M4BN9: the Monte-Carlo P(alive) gauge is computed from raw heartbeat-age only,
+ * so a worker in a legitimate armed-silence window (expected_silence_until in the future,
+ * running a long sub-agent op) or with a live PID shows P(alive)=0.00 \u2014 while the AUTHORITATIVE
+ * checks (stale-session-sweep PID/armed-silence + charter-audit DUTY-2) correctly count it ALIVE.
+ * That false 'dying worker' reading lures the coordinator into force-releasing a mid-operation
+ * worker. Reconcile the gauge with the SAME authoritative signals: short-circuit P(alive) to 1.0
+ * when PID-alive, a fresh process-tick, or within an armed-silence window. The override only ever
+ * RAISES a false-low reading for an authoritatively-alive worker \u2014 it never masks a real death
+ * (no authoritative signal => the raw MC estimate is preserved). Stamped + reasoned (auditable,
+ * not a silent fabrication). Pure/total: returns a NEW object, never mutates; null-safe.
+ *
+ * @param {{session_id?:string, p_alive?:number}|null} mcWorker
+ * @param {{pidAlive?:boolean, tickAlive?:boolean, silenceArmed?:boolean}} signals
+ * @returns {object|null}
+ */
+function reconcilePAliveWithLiveness(mcWorker, { pidAlive = false, tickAlive = false, silenceArmed = false } = {}) {
+  if (!mcWorker || typeof mcWorker !== 'object') return mcWorker;
+  if (!(pidAlive || tickAlive || silenceArmed)) return mcWorker;
+  const reason = pidAlive ? 'pid_alive' : tickAlive ? 'process_tick' : 'armed_silence';
+  return { ...mcWorker, p_alive: 1, p_alive_authoritative_override: true, p_alive_override_reason: reason };
+}
+
 function formatEtaTime(iso) {
   if (!iso) return '-';
   try {
@@ -290,6 +313,18 @@ async function loadData() {
   const mcByWorker = {};
   if (mc && Array.isArray(mc.workers)) {
     for (const w of mc.workers) mcByWorker[w.session_id] = w;
+    // SD-REFILL-005M4BN9: reconcile the raw-heartbeat P(alive) gauge with the SAME authoritative
+    // liveness signals the active/stale split uses, so an armed-silence / PID-alive worker is not
+    // shown as a false 'dying worker' (P(alive)=0.00) that lures a force-release.
+    for (const s of sessions) {
+      const w = mcByWorker[s.session_id];
+      if (!w) continue;
+      mcByWorker[s.session_id] = reconcilePAliveWithLiveness(w, {
+        pidAlive: hasPidAlive(s),
+        tickAlive: hasTickAlive(s),
+        silenceArmed: hasExpectedSilence(s),
+      });
+    }
   }
 
   // QF-20260525-836: surface open/in_progress QFs (aging ones went unseen). Degrade-safe.
@@ -1506,7 +1541,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback };
+module.exports = { printFeedback, reconcilePAliveWithLiveness };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.
