@@ -180,6 +180,39 @@ describe('mapProposalToCreateArgs (pure field mapping)', () => {
     expect(args.metadata.source).toBe('proposal'); // only the closed whitelist survives
   });
 
+  // SD-LEO-INFRA-PROPOSAL-INGEST-ARCHPLAN-WHITELIST-001: an orchestrator proposal's arch-plan
+  // presence keys must flow through the whitelist so GR-ORCHESTRATOR-ARCH-PLAN passes — WITHOUT
+  // re-leaking the arch_key/vision_key routing keys the leak guard protects.
+  it('propagates arch-plan presence keys (architecture_plan_ref / arch_plan_key / architecture_plan)', () => {
+    const p = validProposal({ metadata: {
+      architecture_plan_ref: 'ARCH-PLAN-REF-001', arch_plan_key: 'APK-001', architecture_plan: 'x'.repeat(2052),
+    } });
+    const args = mapProposalToCreateArgs(normalized, p, 'p.json');
+    expect(args.metadata.architecture_plan_ref).toBe('ARCH-PLAN-REF-001');
+    expect(args.metadata.arch_plan_key).toBe('APK-001');
+    expect(args.metadata.architecture_plan).toHaveLength(2052);
+    // the GR-ORCHESTRATOR-ARCH-PLAN presence check (architecture_plan_ref || arch_plan_key || arch_key) now passes
+    expect(args.metadata.architecture_plan_ref || args.metadata.arch_plan_key || args.metadata.arch_key).toBeTruthy();
+  });
+
+  it('arch-plan propagation does NOT re-leak arch_key/vision_key (leak guard preserved)', () => {
+    // A proposal carrying BOTH the safe ref AND the dangerous routing keys: ref flows, routing keys drop.
+    const p = validProposal({ metadata: {
+      architecture_plan_ref: 'ARCH-PLAN-REF-002', arch_key: 'ARCH-EVIL', vision_key: 'VIS-EVIL',
+    } });
+    const args = mapProposalToCreateArgs(normalized, p, 'p.json');
+    expect(args.metadata.architecture_plan_ref).toBe('ARCH-PLAN-REF-002');
+    expect(args.metadata.arch_key).toBeUndefined();   // routing key still dropped (enrichFromVisionArch orphan-FK guard)
+    expect(args.metadata.vision_key).toBeUndefined();
+  });
+
+  it('omits the arch-plan keys when the proposal does not declare them (no coercion)', () => {
+    const args = mapProposalToCreateArgs(normalized, validProposal(), 'p.json');
+    expect(args.metadata.architecture_plan_ref).toBeUndefined();
+    expect(args.metadata.arch_plan_key).toBeUndefined();
+    expect(args.metadata.architecture_plan).toBeUndefined();
+  });
+
   // SD-LEO-INFRA-ADAM-SELF-AUDIT-RESOLVERS-001 (FR-1a, load-bearing): the canonical Adam-origin
   // marker metadata.sourced_by='adam' is stamped ONLY for an explicit Adam-origin proposal, and
   // is ABSENT for any non-Adam proposal (so non-Adam creation paths are unchanged).

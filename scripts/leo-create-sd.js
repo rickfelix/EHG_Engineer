@@ -2403,6 +2403,20 @@ export function mapProposalToCreateArgs(normalized, proposal, filePath, opts = {
       // FALSE block (an already-reviewed proposal), it does NOT weaken the review gate.
       ...(proposal.metadata?.migration_reviewed === true || opts.migrationReviewed === true ? { migration_reviewed: true } : {}),
       ...(proposal.metadata?.security_reviewed === true || opts.securityReviewed === true ? { security_reviewed: true } : {}),
+      // SD-LEO-INFRA-PROPOSAL-INGEST-ARCHPLAN-WHITELIST-001: propagate the orchestrator arch-plan
+      // PRESENCE keys so GR-ORCHESTRATOR-ARCH-PLAN (a presence check on architecture_plan_ref ||
+      // arch_plan_key || arch_key, guardrail-registry.js) passes for an orchestrator proposal that
+      // carries a real plan. Without this the closed whitelist stripped them and the guardrail read
+      // undefined → BLOCKED, so NO orchestrator proposal could materialize via --from-proposal (parity
+      // gap vs the direct-args route + the review flags above). architecture_plan_ref / arch_plan_key /
+      // architecture_plan are PURE metadata consumed by the guardrail + reporting — NOT routing keys.
+      // CRITICAL: arch_key (and vision_key) are still DELIBERATELY dropped — they drive
+      // enrichFromVisionArch's orphan-FK re-activation (see this fn's header + line ~2169); the two
+      // ref/plan keys already satisfy the guardrail WITHOUT that risk, so the leak guard is preserved.
+      // Each key appears ONLY when the proposal declares it (no coercion/defaulting).
+      ...(proposal.metadata?.architecture_plan_ref ? { architecture_plan_ref: proposal.metadata.architecture_plan_ref } : {}),
+      ...(proposal.metadata?.arch_plan_key ? { arch_plan_key: proposal.metadata.arch_plan_key } : {}),
+      ...(proposal.metadata?.architecture_plan ? { architecture_plan: proposal.metadata.architecture_plan } : {}),
     },
   };
 }
