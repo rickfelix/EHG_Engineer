@@ -20,7 +20,25 @@ const me = process.env.CLAUDE_SESSION_ID;
 const t = Date.now();
 const STATE = resolve('.coord-review-last.json');
 const REVIEW_EVERY = parseInt(process.env.COORD_REVIEW_EVERY || '8', 10);
+// SD-LEO-INFRA-BIDIRECTIONAL-REVIEW-MININTERVAL-001 (FR-1): a MIN-INTERVAL FLOOR on the review trigger.
+// In a heavy build stretch the every-N-SD work gate fires repeatedly in a short window, diluting the
+// review into ritual. The floor suppresses a re-fire until MIN_REVIEW_INTERVAL_MS has elapsed since the
+// last ACTUAL review (durable state.lastReviewAt). Default 6h; 0/negative disables the floor.
+const MIN_REVIEW_INTERVAL_MS = Math.max(0, parseFloat(process.env.COORD_REVIEW_MIN_INTERVAL_HOURS || '6') * 3600 * 1000);
 const RE = /COORDINATOR-FEEDBACK|COORD-REVIEW/i;
+
+/**
+ * SD-LEO-INFRA-BIDIRECTIONAL-REVIEW-MININTERVAL-001 (FR-1): pure min-interval-floor decision.
+ * Returns true when the review is work-due but a prior review fired too recently to re-fire.
+ * Disabled (always false) when minIntervalMs<=0 or no prior review has been recorded.
+ * @param {{ lastReviewAt?:number, now:number, minIntervalMs:number }} args
+ * @returns {boolean}
+ */
+export function reviewSuppressedByMinInterval({ lastReviewAt, now, minIntervalMs } = {}) {
+  if (!minIntervalMs || minIntervalMs <= 0) return false;          // floor disabled
+  if (typeof lastReviewAt !== 'number' || !Number.isFinite(lastReviewAt)) return false; // never reviewed
+  return (now - lastReviewAt) < minIntervalMs;
+}
 // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-D / FR-5: Adam's reciprocal response marker.
 const ADAM_RE = /ADAM-COORD-FEEDBACK|ADAM-REVIEW/i;
 
@@ -101,6 +119,17 @@ export async function selfReviewMain() {
   if (!dueByWork) {
     console.log('[COORD-REVIEW] captured ' + captured + ' new; ' + delta + '/' + REVIEW_EVERY + ' completed SDs toward next review (WORK-triggered, not clock). No solicit.');
     if (!('lastReviewCompletedCount' in state)) { try { writeFileSync(STATE, JSON.stringify({ ...state, lastReviewCompletedCount: completedNow })); } catch {} }
+    return;
+  }
+
+  // 2b) MIN-INTERVAL FLOOR (SD-LEO-INFRA-BIDIRECTIONAL-REVIEW-MININTERVAL-001 / FR-1+FR-3): the work
+  // gate is satisfied, but SUPPRESS a re-fire until MIN_REVIEW_INTERVAL_MS has elapsed since the last
+  // ACTUAL review (durable state.lastReviewAt). The counter is intentionally NOT reset here, so once
+  // the floor elapses the next poll fires with the full accumulated delta — the signal is preserved
+  // (FR-3: do not throttle to death), only rate-limited away from heavy-stretch ritual.
+  if (reviewSuppressedByMinInterval({ lastReviewAt: state.lastReviewAt, now: t, minIntervalMs: MIN_REVIEW_INTERVAL_MS })) {
+    const remainMin = Math.round((MIN_REVIEW_INTERVAL_MS - (t - state.lastReviewAt)) / 60000);
+    console.log('[COORD-REVIEW] DUE by work (' + delta + '/' + REVIEW_EVERY + ') but SUPPRESSED by the min-interval floor (~' + remainMin + 'm until the floor elapses). captured ' + captured + ' new; counter NOT reset — fires on the next poll after the floor.');
     return;
   }
 
