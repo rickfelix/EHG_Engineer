@@ -58,7 +58,10 @@ export const ADAM_LOOPS = [
     label: 'Adam inbox — drain ALL coordinator-directed kinds (full-lane reader)',
     script: 'adam-advisory.cjs',
     cron: '*/15 * * * *',
-    prompt: 'node scripts/adam-advisory.cjs inbox',
+    // SD-REFILL-00YJS6VB: --quiet suppresses the no-op "(no unread...)" line on a fully-empty
+    // lane so the recurring tick is SILENT when there's nothing to drain (real rows + orphaned
+    // WARNINGs still surface). Reduces narration churn during quiescent/chairman-attached work.
+    prompt: 'node scripts/adam-advisory.cjs inbox --quiet',
   },
   {
     key: 'offer-help',

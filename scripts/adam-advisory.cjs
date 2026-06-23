@@ -305,7 +305,7 @@ function isOrphanedAdamRow(r) {
  * DELIVERED-but-unacked directive stays recoverable via scripts/read-adam-directives.cjs (the
  * acknowledged_at IS NULL tier) until Adam genuinely acts.
  */
-async function drainInbox(supabase, sessionId) {
+async function drainInbox(supabase, sessionId, { quiet = false } = {}) {
   const { data: allRows, error } = await supabase
     .from('session_coordination')
     .select('id, sender_session, sender_type, message_type, subject, body, payload, created_at')
@@ -336,7 +336,12 @@ async function drainInbox(supabase, sessionId) {
     console.warn('  → these target the Adam session but match no drain lane; fix the producer to use a typed ADAM_INBOX_KINDS kind, or read via the durable reader.');
   }
 
-  if (rows.length === 0) { console.log('(no unread directed inbox rows — replies or directed classes)'); return; }
+  // SD-REFILL-00YJS6VB: the recurring inbox-monitor tick fires every few minutes and was a
+  // no-op narration line ("(no unread...)") when the lane is empty — churn during quiescent /
+  // chairman-attached work. With --quiet (the recurring tick), stay SILENT on a fully-empty lane
+  // (mirrors the belt-countdown/offer-help silence-by-default). Manual `inbox` keeps the
+  // confirmation line. Orphaned-row WARNINGs above are NEVER suppressed (real unread deliveries).
+  if (rows.length === 0) { if (!quiet) console.log('(no unread directed inbox rows — replies or directed classes)'); return; }
 
   console.log(`${rows.length} inbox row${rows.length === 1 ? '' : 's'} (full lane — replies + all directed classes):`);
   const ids = [];
@@ -385,7 +390,7 @@ async function main() {
   // if the env var didn't propagate; falls back to the env sessionId.
   if (mode === 'inbox') {
     const adamId = (await resolveAdamSessionId(supabase)) || sessionId;
-    await drainInbox(supabase, adamId);
+    await drainInbox(supabase, adamId, { quiet: argv.includes('--quiet') });
     return;
   }
 
