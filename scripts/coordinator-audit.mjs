@@ -68,7 +68,9 @@ const stuck = unclaimed.filter(s => s.status === 'in_progress');
 // audit's FLOW/LIVENESS gauges stop over-counting Adam / non_fleet / released / never-claimed
 // (ghost) sessions. Previously this only excluded `me` and any heartbeat <15m.
 // SD-LEO-INFRA-LOOP-LIVENESS-DETECTORS-001: + created_at, expected_silence_until for the loop-liveness gauges.
-const { data: sessRaw } = await db.from('claude_sessions').select('session_id,heartbeat_at,sd_key,loop_state,status,metadata,claimed_at,worktree_path,continuous_sds_completed,created_at,expected_silence_until').order('heartbeat_at', { ascending: false }).limit(60);
+// SD-LEO-INFRA-STALLED-POSTCOMPLETION-TAIL-FP-001: + released_reason,released_at so detectStalledLoop
+// can exclude a worker running its post-completion tail (replicate the detector input-column contract).
+const { data: sessRaw } = await db.from('claude_sessions').select('session_id,heartbeat_at,sd_key,loop_state,status,metadata,claimed_at,worktree_path,continuous_sds_completed,created_at,expected_silence_until,released_reason,released_at').order('heartbeat_at', { ascending: false }).limit(60);
 const live = liveFleetWorkers(sessRaw, me, t);
 const builders = live.filter(s => s.sd_key).length;
 const liveIdle = live.filter(s => !s.sd_key).length;

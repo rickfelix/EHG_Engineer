@@ -157,6 +157,28 @@ describe('detectStalledLoop', () => {
     ];
     expect(detectStalledLoop({ sessions, unclaimedItems: 5, now: NOW }).matched).toBe(false);
   });
+
+  // SD-LEO-INFRA-STALLED-POSTCOMPLETION-TAIL-FP-001: post-completion-tail exclusion
+  it('excludes a worker running its post-completion tail (completed + recent released_at)', () => {
+    const tail = { ...stalled, session_id: 'tail', released_reason: 'completed', released_at: minsAgo(3) };
+    expect(detectStalledLoop({ sessions: [tail], unclaimedItems: 5, now: NOW }).matched).toBe(false);
+  });
+  it('excludes a qf_completed tail within the grace window', () => {
+    const tail = { ...stalled, session_id: 'qf-tail', released_reason: 'QF_COMPLETED', released_at: minsAgo(1) };
+    expect(detectStalledLoop({ sessions: [tail], unclaimedItems: 5, now: NOW }).matched).toBe(false);
+  });
+  it('STILL flags a completion release with no released_at (fail-open, no mask)', () => {
+    const noTs = { ...stalled, session_id: 'no-ts', released_reason: 'completed', released_at: null };
+    expect(detectStalledLoop({ sessions: [noTs], unclaimedItems: 5, now: NOW }).matched).toBe(true);
+  });
+  it('STILL flags when released_at is older than the grace window', () => {
+    const old = { ...stalled, session_id: 'old-rel', released_reason: 'completed', released_at: minsAgo(20) };
+    expect(detectStalledLoop({ sessions: [old], unclaimedItems: 5, now: NOW }).matched).toBe(true);
+  });
+  it('STILL flags a non-completion release (e.g. stale_cleanup) with a recent released_at', () => {
+    const other = { ...stalled, session_id: 'other-rel', released_reason: 'stale_cleanup', released_at: minsAgo(2) };
+    expect(detectStalledLoop({ sessions: [other], unclaimedItems: 5, now: NOW }).matched).toBe(true);
+  });
 });
 
 describe('stalledLoopSessionIds (SD-LEO-FEAT-COORDINATOR-CAPACITY-FORECAST-001)', () => {
