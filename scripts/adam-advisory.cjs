@@ -58,6 +58,25 @@ function advisoryExpiresAt(nowMs) {
   return new Date(base + ADVISORY_TTL_MS).toISOString();
 }
 
+// SD-REFILL-00XK256L: the 2-hypothesis-bar guard for Adam urgent operational broadcasts. Adam's web-
+// research sweep has TWICE (2026-06-11 stall misdiagnosis; 2026-06-13 advisory 4f6082eb) produced a
+// HALLUCINATED fleet-wide operational alarm — a fabricated "model cutoff" naming a NON-EXISTENT model
+// ("Mythos 5") with invented anthropic.com/CNBC citations — broadcast BEFORE running the cheap
+// discriminating observable (is the fleet completing work right now?). This PURE detector trips on the
+// ALARM SHAPE only — an urgent MODEL-AVAILABILITY claim — the class that MUST clear the bar (a
+// discriminator run + a real-model-name/citation sanity check) before broadcast. It flags the shape,
+// not every advisory that merely mentions a model. Exported for tests.
+const MODEL_AVAILABILITY_ALARM_RE = /\b(cut[-\s]?off|disabled|deprecat\w*|unavailable|shut[-\s]?down|revoked|killed|export[-\s]?control\w*|sunset\w*|discontinu\w*)\b/i;
+const MODEL_TOKEN_RE = /\b(models?|fable|opus|sonnet|haiku|claude|gpt|llm|mythos)\b/i;
+function sanityCheckUrgentAdvisory(body) {
+  const text = String(body || '');
+  const reasons = [];
+  const modelRef = MODEL_TOKEN_RE.test(text);
+  if (MODEL_AVAILABILITY_ALARM_RE.test(text) && modelRef) reasons.push('urgent model-availability / cutoff claim');
+  if (/\bfleet[-\s]?wide\b/i.test(text) && modelRef) reasons.push('fleet-wide model-impact claim');
+  return { tripped: reasons.length > 0, reasons };
+}
+
 function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo }) {
   const payload = {
     kind: PAYLOAD_KINDS.ADAM_ADVISORY,
@@ -427,6 +446,25 @@ async function main() {
   // FR-1: scope-tag the advisory from the sending repo (reuse-first, fail-soft).
   const { scopeKey, reuseClass, appliesToScopes } = await resolveScopeForSend(supabase, process.cwd());
   const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo });
+  // SD-REFILL-00XK256L: the 2-hypothesis-bar GATE. Block an UNATTESTED urgent model-availability
+  // broadcast — Adam's research sweep has twice fabricated a fleet-wide "model cutoff" and broadcast it
+  // before running the cheap discriminator. The sender attests the bar was cleared with --alarm-verified.
+  const alarmCheck = sanityCheckUrgentAdvisory(payload.body);
+  const alarmAttested = argv.includes('--alarm-verified') || process.env.ADAM_ALARM_VERIFIED === '1';
+  if (alarmCheck.tripped && !alarmAttested) {
+    console.error(
+      `\n[adam-advisory] ⛔ 2-HYPOTHESIS BAR (SD-REFILL-00XK256L): this advisory makes an urgent ` +
+      `${alarmCheck.reasons.join(' + ')}. Adam's research sweep has TWICE broadcast a HALLUCINATED fleet-wide ` +
+      `"model cutoff" (a non-existent model + fabricated citations) BEFORE checking the cheap discriminator.\n` +
+      `Before broadcasting, CLEAR THE BAR:\n` +
+      `  (a) DISCRIMINATING OBSERVABLE — is the fleet COMPLETING work right now? A fresh sd_phase_handoffs / LFA in the\n` +
+      `      last ~90min FALSIFIES a "fleet-wide model cutoff".\n` +
+      `  (b) CITATION/MODEL SANITY — every model name must be REAL (Fable 5 / Opus 4.x / Sonnet 4.x / Haiku 4.x — NOT a\n` +
+      `      hallucinated name like "Mythos 5") and every citation must resolve to a real source.\n` +
+      `Then re-send with --alarm-verified (or ADAM_ALARM_VERIFIED=1) to attest the bar was cleared.\n`
+    );
+    process.exit(3);
+  }
   const subject = `[ADAM_ADVISORY] ${payload.body.slice(0, 80)}`;
   // SD-LEO-INFRA-ADAM-ADVISORY-COMMS-001 (RCA 076cf785): expires_at is the DURABLE delivery TTL
   // (how long the row stays discoverable / survives the expired-row sweep) and is decoupled from
@@ -504,7 +542,7 @@ async function drainAdamOutbound(supabase, { newSessionId, oldSessionIds } = {})
   }
 }
 
-module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS };
+module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });
