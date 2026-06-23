@@ -10,6 +10,7 @@ import {
   classifyEstateItem,
   buildEstateMarkOff,
   isEstateIdeaShipped,
+  isToolChangelogIntakeRow,
 } from '../../../lib/intake/estate-disposition-helpers.js';
 
 describe('computeCompoundingScore — 0-3, deterministic, varies by signal (FR-2)', () => {
@@ -103,5 +104,23 @@ describe('todoistPriorityToText', () => {
     expect(todoistPriorityToText(2)).toBe('medium');
     expect(todoistPriorityToText(1)).toBe('low');
     expect(todoistPriorityToText(null)).toBe('low');
+  });
+});
+
+describe('isToolChangelogIntakeRow — exclude tool changelogs from the idea estate (SD-REFILL-00SLQCLH)', () => {
+  it('flags an eva_claude_code_intake row that carries a github_release_id (a release changelog)', () => {
+    expect(isToolChangelogIntakeRow({ title: 'v2.1.123', github_release_id: 188044299 })).toBe(true);
+    expect(isToolChangelogIntakeRow({ github_release_id: '188044299' })).toBe(true);
+  });
+
+  it('does NOT flag a genuine idea row (no github_release_id)', () => {
+    expect(isToolChangelogIntakeRow({ title: 'Add a fleet dashboard', github_release_id: null })).toBe(false);
+    expect(isToolChangelogIntakeRow({ title: 'Improve sourcing dedup' })).toBe(false);
+  });
+
+  it('is total on odd input', () => {
+    expect(isToolChangelogIntakeRow(null)).toBe(false);
+    expect(isToolChangelogIntakeRow(undefined)).toBe(false);
+    expect(isToolChangelogIntakeRow({})).toBe(false);
   });
 });
