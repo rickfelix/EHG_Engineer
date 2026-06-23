@@ -1,8 +1,4 @@
 #!/usr/bin/env node
-// @wire-check-exempt: operator/chairman-invoked CLI (node scripts/eva-distill-brainstorm.js), the
-// chairman quality-validation entry point for FR-4. Defaults to --dry-run (zero DB writes); imports
-// the distiller core (lib/integrations/distill-brainstorm.js) and the idx-0 queue writer. Unit-tested
-// (tests/unit/eva/distill-brainstorm.test.js + eva-distill-brainstorm-cli.test.js).
 /**
  * eva-distill-brainstorm.js — chairman-validation CLI for the brainstorm distiller.
  *

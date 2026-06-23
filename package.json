@@ -172,6 +172,7 @@
     "llm:canary:history": "node scripts/llm-canary-control.js history",
     "separability:delta": "node scripts/separability-delta.js",
     "eva:health": "node scripts/eva-health-check.cjs",
+    "eva:distill-brainstorm": "node scripts/eva-distill-brainstorm.js",
     "eva:run": "node scripts/eva-run.js",
     "eva:stage": "node scripts/eva/run-stage.js",
     "eva:retire-pilot-ventures": "node scripts/eva/retire-pilot-ventures.mjs",
