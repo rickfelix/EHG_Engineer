@@ -35,7 +35,7 @@ const { isBuildForbiddenSession } = require('../lib/claim/build-forbidden-sessio
 const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cjs');
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate, also used by
 // scripts/stale-session-sweep.cjs CLAIM_FIX (closes the self_claim-vs-sweep writer-consumer-asymmetry).
-const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility } = require('../lib/fleet/claim-eligibility.cjs');
+const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, parentLeadPending } = require('../lib/fleet/claim-eligibility.cjs');
 // SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: reuse the coordinator cron's pool + picker + ghost guard so
 // check-in-time self-assign and the 5-min cron allocate identities identically (see assignFleetIdentityAtCheckin).
 const { NATO, COLORS, nextAvailable, isTestSessionId } = require('./assign-fleet-identities.cjs');
@@ -427,7 +427,9 @@ async function fetchDraftCandidates(sb) {
     // metadata feeds the shared classifyDispatchIneligibility gate (the requires_human_action axis);
     // sd_type already selected for the existing orchestrator exclusion. target_application added for
     // the SD-LEO-INFRA-WORKER-CLAIM-TIME-001 claim-time repo-match fitness axis.
-    .select('sd_key, status, sd_type, priority, created_at, dependencies, metadata, target_application')
+    // SD-REFILL-00SO4HZY: + parent_sd_id so the draft self-claim path can apply the parent-LEAD gate
+    // (an orchestrator child whose parent has not passed LEAD must not be claimed -> wasted PLAN cycles).
+    .select('sd_key, status, sd_type, priority, created_at, dependencies, metadata, target_application, parent_sd_id')
     .in('status', ['draft', 'active'])
     .is('claiming_session_id', null)
     .neq('sd_type', 'orchestrator')
@@ -449,6 +451,9 @@ async function tryClaimDraftCandidate(sb, sessionId, base, d) {
   // (repo mismatch / closed premise / missing precondition) is skipped before claiming.
   if (classifyDispatchIneligibility(d, { cwd: process.cwd() }) !== null) return null;
   if (!(await draftDepsSatisfied(sb, d))) return null; // skip dependency-blocked
+  // SD-REFILL-00SO4HZY: skip an orchestrator child whose parent has not yet passed LEAD (a worker would
+  // otherwise drive PLAN then hit the hard EXEC-transition block). Fail-open inside parentLeadPending.
+  if (await parentLeadPending(sb, d)) return null;
   if (await isSdInFlight(sb, d.sd_key, sessionId)) return null; // dedup: started or live-foreign-held
   const claimed = await tryClaim(sb, d.sd_key, sessionId);
   if (claimed.ok) {
