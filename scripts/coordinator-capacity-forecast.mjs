@@ -41,6 +41,9 @@ import { isLiveCountableWorker } from './lib/live-countable-worker.mjs';
 // flag state + unpromoted roadmap depth so a belt-low/DEFICIT ping says "engine OFF, N unpromoted
 // -> activate/distill" instead of only "source N candidates" (manual backfill is the anti-pattern).
 import { readSourcingEngineFlagsFromDb, formatSourcingAwareness } from './lib/sourcing-engine-awareness.mjs';
+// SD-LEO-INFRA-COORDINATOR-MATERIALIZE-QUEUE-BEFORE-SOURCE-001: prefer draining the un-materialized
+// adam-prop proposal queue (proposed_sd_key NOT IN strategic_directives_v2) over pinging Adam for more.
+import { scanPendingProposals, drainPendingProposals, shouldMaterializeBeforeSource, formatPendingSummary } from '../lib/coordinator/pending-proposals-gauge.mjs';
 // SD-LEO-FEAT-COORDINATOR-CAPACITY-FORECAST-001: stall detection is DELEGATED to the canonical
 // detectStalledLoop SSOT (lib/coordinator/detectors.cjs), the same detector coordinator-audit.mjs uses.
 // The forecast previously ran its own heartbeat-AGE rule (classifyIdleWorker, ttl 180s), but the worker
@@ -348,10 +351,33 @@ async function main() {
   const awareness = formatSourcingAwareness({ flags: sourcingFlags, unpromotedCount });
   console.log(`  SOURCING: ${awareness.line}`);
 
+  // SD-LEO-INFRA-COORDINATOR-MATERIALIZE-QUEUE-BEFORE-SOURCE-001 (FR-1): gauge the un-materialized
+  // Adam proposal queue at the same awareness seam. If belt-low supply already exists un-materialized,
+  // prefer MATERIALIZE over a fresh source_request (closes the false-DEFICIT ping loop).
+  let pendingScan = { pendingCount: 0, freshKeys: [], staleKeys: [], scanned: 0, freshProposals: [] };
+  try {
+    pendingScan = await scanPendingProposals({ supabase: sb });
+  } catch (e) {
+    console.log(`  PENDING: scan failed (non-blocking): ${e?.message || e}`);
+  }
+  console.log(`  PENDING: ${formatPendingSummary(pendingScan)}`);
+
   console.log(`  VERDICT: ${verdict}` + (deficit > 0 ? `  → belt short by ${deficit} — ${awareness.recommendation}` : ''));
 
   // ── proactive Adam reach-out on a forecast deficit ──
   if (verdict.startsWith('DEFICIT')) {
+    // SD-LEO-INFRA-COORDINATOR-MATERIALIZE-QUEUE-BEFORE-SOURCE-001 (FR-1/FR-2): drain BEFORE source.
+    // When un-materialized FRESH proposals already exist, materialize them via the canonical
+    // idempotent --from-proposal path and SUPPRESS the Adam ping (Adam already produced the supply;
+    // asking for more is the false-DEFICIT loop). Stale proposals are skipped, not mass-materialized.
+    if (shouldMaterializeBeforeSource(pendingScan)) {
+      if (!DISPATCH) {
+        console.log(`  ACTION: deficit, but ${pendingScan.freshKeys.length} FRESH un-materialized proposal(s) exist — run with --dispatch to MATERIALIZE the queue instead of pinging Adam (stale ${pendingScan.staleKeys.length} skipped).`);
+      } else {
+        const drain = await drainPendingProposals({ freshProposals: pendingScan.freshProposals });
+        console.log(`  ACTION: ✅ MATERIALIZE-before-source — drained pending queue: materialized ${drain.materialized}, skipped-existing ${drain.skippedExisting}, skipped-stale ${pendingScan.staleKeys.length}, failed ${drain.failed}. Adam ping SUPPRESSED; re-assess next tick.`);
+      }
+    } else {
     const cd = readCooldown();
     const since = cd ? (Date.now() - cd.at) / 60000 : Infinity;
     // SD-REFILL-00G39SZT: fingerprint the belt-dry state so an UNCHANGED deficit self-suppresses
@@ -369,6 +395,7 @@ async function main() {
       if (sent) { writeCooldown(currentFp); console.log('  ACTION: ✅ sourcing request dispatched to Adam (cooldown started).'); }
       else console.log('  ACTION: ⚠ no live Adam session found to reach — surface to operator.');
     }
+    } // end else (no fresh pending proposals → normal Adam-ping path)
   }
 
   // ── SD-FDBK-INFRA-STALL-AFTER-COMPLETION-001: masked-stall escalation ──
