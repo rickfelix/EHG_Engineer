@@ -207,18 +207,24 @@ async function autoValidateUserStories(sdId, sbClient) {
     return { validated: true, count: 0, message: 'No user stories' };
   }
 
+  // SD-REFILL-0093WRCJ: design-only SDs are validated against the SPEC quality bar
+  // (validateDesignOnlyStories: >=2 substantive ACs), NOT deliverable completion_status. Doc/spec
+  // deliverables have no code-artifact completer to flip them to 'completed', so gating the
+  // design-only branch behind allDeliverablesComplete left these SDs stuck at the
+  // 'Deliverables not all complete' skip below — the residual of #4838, which placed the design-only
+  // branch AFTER that skip. Route design-only SDs to their spec-quality validation FIRST so they no
+  // longer require a manual user_stories status/validation_status edit to pass USER_STORY_COVERAGE.
+  // FR-2: only stories meeting the bar are promoted/validated; thin/boilerplate stories are surfaced.
+  if (designOnly) {
+    return await validateDesignOnlyStories(supabase, resolvedSdId, stories);
+  }
+
   const allDeliverablesComplete = deliverables && deliverables.length > 0 &&
     deliverables.every(d => d.completion_status === 'completed');
 
   if (!allDeliverablesComplete) {
     console.log('⏸️  Deliverables not all complete, skipping auto-validation');
     return { validated: false, message: 'Deliverables incomplete' };
-  }
-
-  // FR-2: design-only SDs get a tailored quality check — only stories meeting the bar against the
-  // spec are promoted/validated; thin/boilerplate stories are surfaced, not rubber-stamped.
-  if (designOnly) {
-    return await validateDesignOnlyStories(supabase, resolvedSdId, stories);
   }
 
   // ── default path (code-bearing SDs): the existing universal promotion + validation ──

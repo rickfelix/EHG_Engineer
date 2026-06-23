@@ -209,6 +209,42 @@ test('design-only branch: good story validated, thin story surfaced (advisory, n
   assert.deepEqual(recorded.validatedIds, ['g1'], 'only the good story is validated');
 });
 
+test('SD-REFILL-0093WRCJ: design-only SD with an INCOMPLETE deliverable still validates (not skipped)', async () => {
+  // The bug: the design-only branch sat AFTER the allDeliverablesComplete skip, so a design-only
+  // SD whose doc/spec deliverable was not completion_status='completed' (docs have no code-artifact
+  // completer) hit "Deliverables not all complete, skipping" and its stories were never validated —
+  // forcing a manual user_stories status/validation_status edit to pass USER_STORY_COVERAGE.
+  // The fix routes design-only SDs to the spec-quality validation BEFORE that skip.
+  const stories = [
+    { id: 'g1', title: 'Good', status: 'ready', validation_status: 'pending',
+      acceptance_criteria: ['The spec documents the gauge purpose and data source clearly.', 'The spec lists open questions for the chairman.'] },
+  ];
+  const { client, recorded } = makeClient({
+    uuid: '99999999-9999-9999-9999-999999999999',
+    sdRow: { metadata: { design_only: true } },
+    stories,
+    deliverables: [{ deliverable_name: 'docs/04_features/spec.md', completion_status: 'pending' }],
+  });
+  const res = await autoValidateUserStories('99999999-9999-9999-9999-999999999999', client);
+  assert.equal(res.designOnly, true, 'must take the design-only branch, NOT the deliverables-incomplete skip');
+  assert.notEqual(res.message, 'Deliverables incomplete', 'must NOT hit the allDeliverablesComplete skip');
+  assert.equal(res.validated, true, 'the good story validates against the spec despite the incomplete deliverable');
+  assert.deepEqual(recorded.validatedIds, ['g1'], 'the good story is validated (no manual edit needed)');
+});
+
+test('SD-REFILL-0093WRCJ: a CODE SD with an incomplete deliverable is STILL skipped (no behavior change)', async () => {
+  // Guard: the reorder must not let code-bearing SDs bypass the deliverable-completeness gate.
+  const stories = [{ id: 's1', title: 'Story 1', status: 'draft', validation_status: 'pending' }];
+  const { client } = makeClient({
+    uuid: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    stories,
+    deliverables: [{ deliverable_name: 'src/foo.ts', completion_status: 'pending' }],
+  });
+  const res = await autoValidateUserStories('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', client);
+  assert.equal(res.validated, false);
+  assert.equal(res.message, 'Deliverables incomplete', 'code SD with incomplete deliverable still hits the skip');
+});
+
 test('FR-3: a design-only SD with a spec deliverable but ZERO stories is surfaced, not auto-passed', async () => {
   const { client } = makeClient({
     uuid: '88888888-8888-8888-8888-888888888888',
