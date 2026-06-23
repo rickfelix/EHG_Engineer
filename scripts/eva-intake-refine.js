@@ -28,7 +28,7 @@ import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { readFileSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { dedup, extractDedupContext } from '../lib/integrations/refine-dedup.js';
 import { reconcile, extractReconcileContext } from '../lib/integrations/refine-reconcile.js';
 import { score, extractScoringContext } from '../lib/integrations/refine-score.js';
@@ -340,6 +340,42 @@ async function runPromotion(waves, scoringResults) {
   return result;
 }
 
+// SD-LEO-INFRA-ROADMAP-TITLE-WRITEBACK-BACKFILL-001 FR-1: persist the refine scores into the
+// metadata JSONB column AND write a non-fallback source title back to the title column, so a
+// promoted SD carries a human/source title instead of a fallback. Extracted from main() as a pure,
+// exported function for unit-testability. Returns the count persisted (rows updated without error).
+export async function persistScores(waves, scoringResults, { supabase }) {
+  let persisted = 0;
+  for (const waveResult of (scoringResults || [])) {
+    const wave = (waves || []).find(w => w.id === waveResult.wave_id);
+    if (!wave) continue;
+    for (const s of waveResult.item_scores) {
+      const item = wave.items[s.item_index - 1];
+      if (!item || !item.id) continue;
+      const existingMeta = item.metadata || {};
+      const newMeta = {
+        ...existingMeta,
+        refine_composite_score: s.composite,
+        refine_recommendation: s.recommendation,
+        refine_persona_scores: s.persona_scores,
+        refine_method: waveResult.method || 'claude_inline',
+        refine_scored_at: new Date().toISOString(),
+      };
+      // Write back a real source title only — never the '(untitled)' fallback, so a human/source
+      // title is preserved and a fallback is never persisted to the title column.
+      const sourceTitle = (item.title && item.title !== '(untitled)') ? item.title : null;
+      const updatePayload = { metadata: newMeta };
+      if (sourceTitle) updatePayload.title = sourceTitle;
+      const { error } = await supabase
+        .from('roadmap_wave_items')
+        .update(updatePayload)
+        .eq('id', item.id);
+      if (!error) persisted++;
+    }
+  }
+  return persisted;
+}
+
 // ─── Main ──────────────────────────────────────────────────
 
 async function main() {
@@ -551,30 +587,8 @@ async function main() {
     writeFileSync(scorePath, JSON.stringify(scoringResults, null, 2));
     console.log('\n  Scoring results saved to scripts/temp/scoring-results.json');
 
-    // Persist scores into metadata JSONB column
-    let persisted = 0;
-    for (const waveResult of scoringResults) {
-      const wave = waves.find(w => w.id === waveResult.wave_id);
-      if (!wave) continue;
-      for (const s of waveResult.item_scores) {
-        const item = wave.items[s.item_index - 1];
-        if (!item || !item.id) continue;
-        const existingMeta = item.metadata || {};
-        const newMeta = {
-          ...existingMeta,
-          refine_composite_score: s.composite,
-          refine_recommendation: s.recommendation,
-          refine_persona_scores: s.persona_scores,
-          refine_method: waveResult.method || 'claude_inline',
-          refine_scored_at: new Date().toISOString(),
-        };
-        const { error } = await supabase
-          .from('roadmap_wave_items')
-          .update({ metadata: newMeta })
-          .eq('id', item.id);
-        if (!error) persisted++;
-      }
-    }
+    // Persist scores into metadata JSONB column (+ source title write-back, FR-1).
+    const persisted = await persistScores(waves, scoringResults, { supabase });
     console.log(`  Persisted ${persisted} scores to DB (metadata column)`);
   }
 
@@ -619,7 +633,11 @@ async function main() {
   console.log('');
 }
 
-main().catch(err => {
-  console.error('Refine error:', err.message);
-  process.exit(1);
-});
+// Main-guard (SD-LEO-INFRA-ROADMAP-TITLE-WRITEBACK-BACKFILL-001): run only as the CLI entrypoint, so
+// importing persistScores in a unit test does not execute main().
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch(err => {
+    console.error('Refine error:', err.message);
+    process.exit(1);
+  });
+}
