@@ -42,6 +42,7 @@
     "leo:build:start:cron": "node scripts/cron/leo-build-starter.mjs --once",
     "eva:scheduler:watch:cron": "node scripts/cron/eva-scheduler-watcher.mjs --once",
     "adam:exec:email:cron": "node scripts/adam-exec-summary.mjs",
+    "fleet:spawn-executor": "node scripts/fleet/worker-spawn-executor.cjs",
     "fleet:pulse": "node scripts/fleet-worker-pulse.mjs",
     "fleet:pulse:cron": "node scripts/fleet-worker-pulse.mjs",
     "fleet:down-alert": "node scripts/fleet-down-alert.mjs",
