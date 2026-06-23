@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-PREMISE-LIVENESS-GATE-SOURCING-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-PREMISE-LIVENESS-GATE-SOURCING-001",
-  "createdAt": "2026-06-23T21:12:15.920Z",
+  "sdKey": "SD-LEO-INFRA-BRAINSTORM-DISTILLATION-PIPELINE-001-A",
+  "expectedBranch": "feat/SD-LEO-INFRA-BRAINSTORM-DISTILLATION-PIPELINE-001-A",
+  "createdAt": "2026-06-23T21:37:23.363Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }

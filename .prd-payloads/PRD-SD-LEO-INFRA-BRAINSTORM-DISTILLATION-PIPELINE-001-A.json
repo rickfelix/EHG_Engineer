@@ -1,0 +1,89 @@
+{
+  "executive_summary": "Child idx 0 (dependency root) of the Brainstorm Distillation Pipeline orchestrator. Builds the chairman review-queue substrate: an additive, reversible schema migration on eva_consultant_recommendations plus a queue writer that records a distilled brainstorm candidate as a chairman-reviewable recommendation row referencing its source wave item. This is built FIRST so the downstream disposition-gate child (FK-to-accepted-recommendation check) and the distiller child (distilled_sd_payload write) both have a target. LEAD validation (evidence f76df3e9-8094-4968-b3be-8cd820b9108d, confidence 92) confirmed: confidence_tier ALREADY exists (text) so the migration only genuinely adds source_wave_item_id (uuid FK -> roadmap_wave_items(id) ON DELETE SET NULL) + distilled_sd_payload (jsonb) + an index; roadmap_wave_items.id is uuid; the queue writer must reuse the existing lib/eva/consultant/* insert shape and populate the NOT NULL columns (recommendation_type, title, action_type, status, recommendation_date). Prod-apply of the additive DDL is the governed delegation path (database-agent/Adam) — this child SHIPS the migration file + tests as the artifact and does NOT self-apply against prod.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Additive distillation-queue migration on eva_consultant_recommendations",
+      "description": "database/migrations/20260623_eva_consultant_recommendations_distillation_queue.sql: ALTER TABLE eva_consultant_recommendations ADD COLUMN IF NOT EXISTS source_wave_item_id uuid REFERENCES roadmap_wave_items(id) ON DELETE SET NULL; ADD COLUMN IF NOT EXISTS distilled_sd_payload jsonb; ADD COLUMN IF NOT EXISTS confidence_tier text (idempotent no-op — already exists); CREATE INDEX IF NOT EXISTS idx_eva_consultant_recommendations_source_wave_item_id ON eva_consultant_recommendations(source_wave_item_id). House style: SD-ID header comment marking ADDITIVE + NULLABLE + REVERSIBLE/idempotent; COMMENT ON COLUMN citing the SD-ID; trailing rollback comment. No drops/renames.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Migration is purely additive (ADD COLUMN IF NOT EXISTS + CREATE INDEX IF NOT EXISTS); no drops/renames",
+        "source_wave_item_id is uuid FK -> roadmap_wave_items(id) ON DELETE SET NULL; distilled_sd_payload is jsonb",
+        "Idempotent (re-runnable) and reversible (rollback comment present); SD-ID cited in header + COMMENT ON COLUMN"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Chairman review-queue writer",
+      "description": "A writer (lib/eva/consultant/ module) that records a distilled brainstorm candidate as a chairman-reviewable eva_consultant_recommendations row: sets source_wave_item_id (the originating roadmap_wave_items.id), distilled_sd_payload (the distilled SD JSON), confidence_tier, and the NOT NULL columns with engine-consistent defaults (status='pending', action_type='create_sd', recommendation_type='strategic', title from the distilled payload, recommendation_date defaulted). Reuses the existing recommendation insert shape (lib/eva/consultant/* / scripts/eva/recommendation-engine.mjs) rather than a bespoke insert. Pure/injectable client so it is unit-testable.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Writer inserts a recommendation row with source_wave_item_id, distilled_sd_payload, confidence_tier populated",
+        "All NOT NULL columns populated with engine-consistent defaults; reuses the existing insert shape",
+        "Client is injectable so the writer is unit-testable without a live DB"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Write/read unit tests",
+      "description": "tests/unit covering the queue writer: builds the correct row from a distilled candidate (field mapping + defaults), handles a missing/optional confidence_tier, and surfaces an insert error rather than swallowing it. Use a fake/injected supabase client (no live DB).",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "Test: writer maps a distilled candidate to the correct recommendation row (source_wave_item_id, distilled_sd_payload, defaults)",
+        "Test: insert error is surfaced, not swallowed",
+        "All new unit tests green"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {"requirement": "source_wave_item_id MUST be uuid (roadmap_wave_items.id is uuid); int/text breaks the FK", "type": "constraint"},
+    {"requirement": "confidence_tier already exists (text) — ADD COLUMN IF NOT EXISTS is a safe no-op, not a genuinely new column", "type": "constraint"},
+    {"requirement": "Worker ships the migration file + tests as the artifact; prod-apply of additive DDL is the governed database-agent/Adam delegation path (no worker self-apply against prod)", "type": "constraint"},
+    {"requirement": "Reuse the existing eva_consultant_recommendations insert shape (lib/eva/consultant/*); populate NOT NULL cols recommendation_type/title/action_type/status/recommendation_date", "type": "code"}
+  ],
+  "test_scenarios": [
+    {"scenario": "distilled candidate -> recommendation row", "type": "unit", "expected": "source_wave_item_id, distilled_sd_payload, confidence_tier, and NOT NULL defaults all set correctly"},
+    {"scenario": "missing confidence_tier", "type": "unit", "expected": "writer still produces a valid row (tier optional/defaulted)"},
+    {"scenario": "insert error", "type": "unit", "expected": "error surfaced to caller, not swallowed"},
+    {"scenario": "migration idempotency", "type": "unit", "expected": "re-running ADD COLUMN IF NOT EXISTS is a no-op (verified by statement form)"}
+  ],
+  "acceptance_criteria": [
+    "Additive reversible migration file present and idempotent",
+    "Queue writer records a chairman-reviewable recommendation row referencing the source wave item",
+    "Unit tests green; no prod self-apply"
+  ],
+  "risks": [
+    {"risk": "Wrong FK type breaks the constraint", "mitigation": "source_wave_item_id typed uuid to match roadmap_wave_items.id (verified uuid)", "severity": "low"},
+    {"risk": "Missing a NOT NULL column at insert", "mitigation": "Writer populates recommendation_type/title/action_type/status/recommendation_date with engine-consistent defaults; unit test asserts the full row", "severity": "low"},
+    {"risk": "Accidental prod DDL apply from a worker", "mitigation": "Ship the migration file as the artifact only; prod-apply delegated to database-agent/Adam", "severity": "low"}
+  ],
+  "integration_operationalization": {
+    "consumers": ["downstream disposition-gate child (FK-to-accepted-recommendation check)", "downstream distiller child (writes distilled_sd_payload via this writer)", "chairman review of eva_consultant_recommendations rows"],
+    "dependencies": ["eva_consultant_recommendations table", "roadmap_wave_items table (FK target)", "lib/eva/consultant/* existing recommendation insert shape"],
+    "data_contracts": ["Additive only: eva_consultant_recommendations gains source_wave_item_id (uuid FK), distilled_sd_payload (jsonb); confidence_tier already present; index on source_wave_item_id. No drops/renames."],
+    "runtime_config": ["none"],
+    "observability_rollout": ["distilled candidates become chairman-reviewable rows linked to their source wave item"]
+  },
+  "system_architecture": {
+    "summary": "One additive migration file + one queue-writer module reusing the existing recommendation insert shape + unit tests. No new component beyond the writer; no schema drops.",
+    "components": [
+      {"name": "database/migrations/20260623_eva_consultant_recommendations_distillation_queue.sql", "change": "additive columns + index (idempotent, reversible)"},
+      {"name": "lib/eva/consultant queue writer", "change": "record a distilled candidate as a chairman-reviewable recommendation row"},
+      {"name": "tests/unit queue-writer tests", "change": "field mapping + defaults + error-surfacing"}
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Author the additive migration, build the injectable queue writer reusing the existing insert shape, add unit tests with a fake client. Do not self-apply prod DDL.",
+    "steps": [
+      "Write the additive, idempotent, reversible migration file (house style + SD-ID comments)",
+      "Build the queue writer (injectable client) reusing lib/eva/consultant insert shape; populate NOT NULL defaults",
+      "Add write/read unit tests with a fake supabase client",
+      "Run the unit suite (green); leave prod-apply to the governed delegation path"
+    ]
+  },
+  "smoke_test_steps": [
+    {"step_number": 1, "instruction": "npx vitest run the new queue-writer test file", "expected_outcome": "all green"},
+    {"step_number": 2, "instruction": "Inspect the migration file statements", "expected_outcome": "only ADD COLUMN IF NOT EXISTS + CREATE INDEX IF NOT EXISTS; uuid FK ON DELETE SET NULL; rollback comment present"}
+  ],
+  "metadata": {"sd_key": "SD-LEO-INFRA-BRAINSTORM-DISTILLATION-PIPELINE-001-A", "parent_sd": "SD-LEO-INFRA-BRAINSTORM-DISTILLATION-PIPELINE-001", "child_index": 0, "fix_locus": "database/migrations + lib/eva/consultant queue writer", "lead_evidence_id": "f76df3e9-8094-4968-b3be-8cd820b9108d", "fk_type": "uuid -> roadmap_wave_items(id) ON DELETE SET NULL"}
+}
