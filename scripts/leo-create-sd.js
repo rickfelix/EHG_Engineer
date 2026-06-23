@@ -2345,7 +2345,13 @@ export function mapProposalToCreateArgs(normalized, proposal, filePath, opts = {
     title: normalized.title,
     type: normalized.type,
     priority: normalized.priority,
-    description: proposal.rationale || proposal.scope || proposal.title,
+    // SD-REFILL-00229BH8: lead the DESCRIPTION with the OBJECTIVE (scope), not the rationale.
+    // proposal.rationale frequently carries provenance boilerplate ("Materialized from coordinator
+    // proposal (idle-fleet vision-aligned design work)") whose purpose is the LEAD evaluator, NOT a
+    // description — when it led the description, the substantive ~1500ch scope was buried and workers
+    // mis-flagged the SD as an 8-word stub. scope (the objective) is preferred; rationale is the
+    // fallback only when scope is absent. Provenance still lives in `rationale` + metadata below.
+    description: proposal.scope || proposal.rationale || proposal.title,
     // Sibling parity: UAT/learn/feedback/QF/plan/child all set an explicit rationale
     // (used by the LEAD evaluator). Fall back to a provenance line when absent.
     rationale: proposal.rationale || `Materialized from proposal ${filePath || 'unknown'}`,

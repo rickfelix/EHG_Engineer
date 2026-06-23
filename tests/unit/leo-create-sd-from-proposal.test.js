@@ -131,9 +131,29 @@ describe('mapProposalToCreateArgs (pure field mapping)', () => {
     expect(args.success_criteria).toEqual(['criterion a']);
   });
 
-  it('description falls back rationale -> scope -> title', () => {
-    expect(mapProposalToCreateArgs(normalized, validProposal({ rationale: undefined }), 'p.json').description).toBe('DOES: x. DOES NOT: y.');
-    expect(mapProposalToCreateArgs(normalized, validProposal({ rationale: undefined, scope: undefined }), 'p.json').description).toBe('Example proposal');
+  // SD-REFILL-00229BH8: description LEADS with the OBJECTIVE (scope), falling back scope -> rationale -> title.
+  it('description prefers scope (objective), then rationale, then title', () => {
+    // scope present → description is the scope (the objective), even when a rationale exists
+    expect(mapProposalToCreateArgs(normalized, validProposal(), 'p.json').description).toBe('DOES: x. DOES NOT: y.');
+    // no scope → falls back to rationale
+    expect(mapProposalToCreateArgs(normalized, validProposal({ scope: undefined }), 'p.json').description).toBe('because the belt needs refilling');
+    // neither scope nor rationale → title
+    expect(mapProposalToCreateArgs(normalized, validProposal({ scope: undefined, rationale: undefined }), 'p.json').description).toBe('Example proposal');
+  });
+
+  // SD-REFILL-00229BH8 (regression): the witnessed bug — a proposal whose rationale is PROVENANCE
+  // boilerplate must NOT lead the description with it; the substantive scope wins. Provenance is
+  // preserved only in the rationale field (for the LEAD evaluator), never as the description.
+  it('provenance-boilerplate rationale does NOT bury the scope in the description', () => {
+    const p = validProposal({
+      rationale: 'Materialized from coordinator proposal (idle-fleet vision-aligned design work).',
+      scope: 'Produce a reviewable Phase-0 design spec for the operator-cockpit distance-to-quit gauge.',
+    });
+    const args = mapProposalToCreateArgs(normalized, p, 'p.json');
+    expect(args.description).toBe('Produce a reviewable Phase-0 design spec for the operator-cockpit distance-to-quit gauge.');
+    expect(args.description).not.toContain('Materialized from coordinator proposal');
+    // provenance is still retained in the rationale field (sibling parity / LEAD evaluator)
+    expect(args.rationale).toBe('Materialized from coordinator proposal (idle-fleet vision-aligned design work).');
   });
 
   it('sets a rationale (sibling parity): proposal rationale, else a provenance fallback', () => {
