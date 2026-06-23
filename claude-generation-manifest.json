@@ -1,109 +1,109 @@
 {
-  "generated_at": "2026-06-22T20:49:32.789Z",
-  "git_commit": "a2729e8d",
+  "generated_at": "2026-06-23T06:23:35.319Z",
+  "git_commit": "edb8b1ea",
   "db_snapshot_hash": "5ac65ccd27ca615f",
   "files": {
     "CLAUDE.md": {
       "type": "full",
       "chars": 19368,
       "estimated_tokens": 4842,
-      "content_hash": "7a293020f0a83bda",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001\\CLAUDE.md"
+      "content_hash": "e634b191bbcec3e3",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
       "chars": 83518,
       "estimated_tokens": 20880,
-      "content_hash": "0b9219a1772c753d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001\\CLAUDE_CORE.md"
+      "content_hash": "2e233e5e33d27b6e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
       "chars": 65128,
       "estimated_tokens": 16282,
-      "content_hash": "b66f8ff083b928e8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001\\CLAUDE_LEAD.md"
+      "content_hash": "8e9914ed56ca48ee",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
       "chars": 90830,
       "estimated_tokens": 22708,
-      "content_hash": "9b788eb39b64f5a0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001\\CLAUDE_PLAN.md"
+      "content_hash": "6a02a534deccaeae",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
       "chars": 84821,
       "estimated_tokens": 21206,
-      "content_hash": "9ee02541a271a776",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001\\CLAUDE_EXEC.md"
+      "content_hash": "1b0cfa94e766095a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 42502,
-      "estimated_tokens": 10626,
-      "content_hash": "3e44d51e9cb4bb75",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001\\CLAUDE_ADAM.md"
+      "chars": 43574,
+      "estimated_tokens": 10894,
+      "content_hash": "8efab0f6cf5c310b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_ADAM.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 19020,
-      "estimated_tokens": 4755,
-      "content_hash": "f297be69287cb113",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001\\CLAUDE_COORDINATOR.md"
+      "chars": 19523,
+      "estimated_tokens": 4881,
+      "content_hash": "7f8c07947b5c334b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9611,
       "estimated_tokens": 2403,
-      "content_hash": "b0e50390821da3f1",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001\\CLAUDE_DIGEST.md"
+      "content_hash": "4eb2f97a6bec33f4",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 11535,
       "estimated_tokens": 2884,
-      "content_hash": "47dcdbc6751e6ee3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "0f4954cd17c054a2",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 5422,
       "estimated_tokens": 1356,
-      "content_hash": "8d0a8f878037c400",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "83381b2416ce2ebf",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 8412,
       "estimated_tokens": 2103,
-      "content_hash": "a156ae984a30bb92",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "f275dbda594507e6",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 10835,
       "estimated_tokens": 2709,
-      "content_hash": "fb5f74bcdac6e783",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "40ff20f1aacaf4f1",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 12320,
       "estimated_tokens": 3080,
-      "content_hash": "7537b69cb0502e96",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "664f1f243c171ce4",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 5270,
       "estimated_tokens": 1318,
-      "content_hash": "962b68718a153589",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "b9ec760bae0d7d74",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_COORDINATOR_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "d19f07d9278f1ce5",
+    "global": "44bd4d5b81deb655",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -360,8 +360,8 @@
       "601": "24938018ba30efd6",
       "602": "ad0aecae8cdc6cb3",
       "603": "ca922c736e8d8ed3",
-      "604": "67885bf567384f02",
-      "605": "19e13f356fce24ab",
+      "604": "afa021c204fc90e4",
+      "605": "17f0a232fa1fada1",
       "606": "25aa68b575c66d07",
       "607": "82e04c0cc0ffb28f",
       "608": "7f99a4321502367e",

@@ -1,8 +1,8 @@
-<!-- file_content_hash: 9e7456e6d1e18cf7 -->
+<!-- file_content_hash: ebbcbbe6a12992f9 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-06-22 4:49:32 PM
+**Generated**: 2026-06-23 2:23:35 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -145,6 +145,8 @@ The result is a DRAFT SD that enters the belt correctly-typed, correctly-keyed, 
 
 **DECOMPOSE-WEAKEST-LAYER — parallelize sourcing across the whole weak layer, sized to idle capacity (chairman directive 2026-06-16).** When the VDR build-% gauge's **weakest LAYER** holds N weak (unbuilt/partial) capabilities — e.g. the application/cockpit layer with ~7 — do **not** source one monolithic SD for the belt-low cycle. Instead source up to **N parallel** design/spec SDs, **one per capability**, each a distinct **conflict-free write-surface**, right-sized (a Phase-0 design/spec pass, not a build) — and cap the count at the coordinator's stated **live idle-worker capacity** (the SOURCE-TO-CAPACITY handshake in the coordinator contract). This keeps the whole weak layer moving in parallel, one-capability-per-worker, instead of serializing it behind a single SD.
 
+**CLASSIFY each weak capability BEFORE sourcing it (Adam board-of-directors verdict 2026-06-16) — do NOT blindly source 1 design SD per capability.** A live-grounded board pass found the naive "one tile per capability" framing can yield ZERO valid SDs. For EACH weak capability, classify it FIRST: (a) **genuine leaf** → a Phase-0 design/spec SD (the default above); (b) **foundation / data-contract** — an upstream target-of-record that build SDs depend on (e.g. an ord-11 north-star contract) → **sequence it AHEAD of the builds it gates**, not as a parallel tile; (c) **already-built but reading low ONLY from a STALE/manual KR** (e.g. an ord-7 capability whose breakage-catch is live but the gauge reads ~0% off a manual KR) → a governed **KR RE-MEASURE / repoint-to-live-derivation**, NOT a new build SD; (d) **mis-bucketed** (wrong layer / registry entry) → a **registry fix**. Only (a) becomes a parallel design SD; (b)/(c)/(d) are different work — and the coordinator must VERIFY the per-capability gauge gap is REAL (not a stale-KR artifact) before dispatching.
+
 ### C. The BUILD-% GAUGE duty (THE VISIBLE GAUGE, above)
 
 Adam's exec summaries carry numbers Adam must be able to RECONSTRUCT, not merely echo:
@@ -201,6 +203,6 @@ _Single governed source of truth (section_type=role_partnership_contract), inclu
 
 ---
 
-*Generated from database: 2026-06-22*
+*Generated from database: 2026-06-23*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*
