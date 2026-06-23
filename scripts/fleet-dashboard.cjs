@@ -35,36 +35,10 @@ const FLEET_MC_ENABLED = (process.env.FLEET_MC_ENABLED ?? 'true').toLowerCase() 
 
 const supabase = createSupabaseServiceClient();
 
-function isProcessRunning(pid) {
-  if (!pid || typeof pid !== 'number') return false;
-  try { process.kill(pid, 0); return true; }
-  catch (err) { return err.code === 'EPERM'; }
-}
-
-// Read CLAUDE_SESSION_ID from marker files for disambiguation + PID liveness
-function getMarkerSessionIds() {
-  const markerDir = path.resolve(__dirname, '../.claude/session-identity');
-  if (!fs.existsSync(markerDir)) return {};
-  const map = {};
-  for (const f of fs.readdirSync(markerDir).filter(f => /^pid-\d+\.json$/.test(f))) {
-    try {
-      const pid = Number(f.match(/^pid-(\d+)\.json$/)[1]);
-      const data = JSON.parse(fs.readFileSync(path.join(markerDir, f), 'utf8'));
-      if (data.session_id) map[data.session_id] = { claude_session_id: data.claude_session_id || null, pid, alive: isProcessRunning(pid) };
-    } catch { /* skip unreadable markers */ }
-  }
-  return map;
-}
-
-// Returns a Set of alive CC PIDs (as strings) from marker files
-function getAliveCcPids() {
-  const markers = getMarkerSessionIds();
-  const alive = new Set();
-  for (const info of Object.values(markers)) {
-    if (info.alive) alive.add(String(info.pid));
-  }
-  return alive;
-}
+// SD-REFILL-00IO6NQJ: PID-liveness now lives in a shared SSOT module so the
+// coordinator standing-report (fleet-quiescence) and this dashboard read it from
+// one source. Behavior-identical to the prior local copies.
+const { isProcessRunning, getMarkerSessionIds, getAliveCcPids } = require('../lib/fleet/cc-pid-liveness.cjs');
 
 const STALE_THRESHOLD = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS, 10) || 300;
 
