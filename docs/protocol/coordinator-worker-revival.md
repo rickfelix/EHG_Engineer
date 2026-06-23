@@ -117,6 +117,65 @@ This SD does not pick a spawn-execution layer. Trade-offs for future implementer
 
 The `revival_pending` section of `fleet-dashboard.cjs` displays open requests with age + expires-in. It is hidden when zero rows are pending.
 
+## Ops Wiring & Validation (CHILD C — launch-shape-independent)
+
+> Added by SD-LEO-INFRA-WORKER-REVIVAL-GOLIVE-READINESS-001-D. These steps are
+> **independent of the spawn launch model**. The launch model itself
+> (interactive-TTY persistent `/loop` vs stateless per-turn runner) is
+> **DEFERRED to CHILD A** (SD-...-001-B) — a chairman-routed architecture
+> decision. Do NOT infer a launch model from this section.
+
+### Executor (dry-run by default)
+
+```bash
+npm run fleet:spawn-executor          # DRY-RUN unless WORKER_SPAWN_EXECUTOR_LIVE=true
+```
+
+Gate flags (documented in `.env.example`, both default-safe):
+- `WORKER_SPAWN_EXECUTOR_LIVE` (default off) — the live OS-spawn gate; **operator-gated**, never enable autonomously.
+- `WORKER_SPAWN_EXECUTOR_PER_TICK_CAP` (default 2) — max spawns per executor tick.
+
+### Supersede expired-pending spawn requests (idempotent)
+
+A pending `worker_spawn_request` past its `expires_at` keeps the
+partial-unique-index `idx_wsr_unique_pending_callsign` (UNIQUE per callsign
+WHERE `status='pending'`) occupied, blocking a fresh revival re-file for that
+callsign. There is **no always-on DB-side sweeper** (per the
+SD-LEO-INFRA-WORKER-EXTERNAL-REVIVAL-001 contract) — run the operator step:
+
+```bash
+npm run fleet:supersede-expired-spawns
+```
+
+It flips `pending AND expires_at<=now()` rows to `expired` (a live pending row,
+`expires_at` in the future, is never touched) and is **idempotent** — a second
+run supersedes 0 rows. It is a thin wrapper around the canonical reaper
+`reapExpiredPendingRequests` (`scripts/coordinator-revive.cjs`).
+
+### Validation: fulfilled-with-live-session vs fulfilled-but-dead
+
+A request marked `fulfilled` only delivered persistent capacity if its session
+is actually alive. Partition fulfilled requests using the **authoritative**
+liveness surface `v_active_sessions` (same basis the executor's
+`deriveLiveCallsigns` uses) — never raw row age:
+
+```sql
+SELECT
+  wsr.id,
+  wsr.requested_callsign,
+  wsr.fulfilled_by_session_id,
+  CASE WHEN vas.session_id IS NOT NULL AND vas.computed_status = 'active'
+       THEN 'fulfilled_live' ELSE 'fulfilled_dead' END AS liveness
+FROM worker_spawn_requests wsr
+LEFT JOIN v_active_sessions vas
+  ON vas.session_id = wsr.fulfilled_by_session_id
+WHERE wsr.status = 'fulfilled'
+ORDER BY liveness, wsr.requested_callsign;
+```
+
+`fulfilled_dead` rows are the signal that a "revival" produced no persistent
+worker — the exact failure mode CHILD A's launch-model decision must close.
+
 ## Cross-References
 
 - [Pre-Claim Cadence Gate](./cadence-gate.md) — sibling protocol contract, similar shape
