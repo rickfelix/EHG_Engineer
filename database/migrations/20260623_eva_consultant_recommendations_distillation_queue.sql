@@ -16,7 +16,8 @@
 -- DORMANT: the fleet AUTHORS and TESTS this migration; workers CANNOT self-apply prod. This is an
 -- ADDITIVE, nullable change — Adam applies it via the database-agent under the chairman's additive-DDL
 -- delegation. It is NOT chairman-gated (an additive nullable column needs no RLS policy). Until applied,
--- the queue writer fail-softs: a writer that finds the column absent degrades rather than erroring.
+-- the queue writer cannot run (its insert surfaces the missing-column error rather than swallowing it) —
+-- so the distiller child (idx 2) that calls the writer is sequenced AFTER this migration is applied.
 --
 -- Idempotent (IF NOT EXISTS) so a re-run is a no-op.
 
