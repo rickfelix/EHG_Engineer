@@ -28,7 +28,7 @@ import { registerItem, setDisposition, recordVerdict, backlogDepth } from '../..
 // SD-LEO-INFRA-ESTATE-DISPOSITION-001 (FR-2): pure 0-3 compounding score captured at disposition time.
 import { computeCompoundingScore } from '../../lib/intake/compounding-score.js';
 // SD-LEO-INFRA-ESTATE-DISPOSITION-001: pure, unit-tested estate-disposition helpers.
-import { estateAlreadyDrained, todoistPriorityToText, classifyEstateItem, buildEstateMarkOff } from '../../lib/intake/estate-disposition-helpers.js';
+import { estateAlreadyDrained, todoistPriorityToText, classifyEstateItem, buildEstateMarkOff, isToolChangelogIntakeRow } from '../../lib/intake/estate-disposition-helpers.js';
 
 const APPLY = process.argv.includes('--apply');
 const DRY_RUN = !APPLY; // dry-run is the default
@@ -153,6 +153,9 @@ const ESTATE_SOURCES = [
     map: (r) => ({ source_external_id: r.youtube_video_id || null, normalized_priority: normalizePriorityScore(r.confidence_score) }) },
   { table: 'eva_claude_code_intake', pool: 'estate_corpus',
     select: 'id, title, description, relevance_score, github_release_id, status, raw_data, created_at',
+    // SD-REFILL-00SLQCLH: release-changelog rows (github_release_id set, titles v2.1.x) are tool
+    // changelogs, NOT ideas — exclude them so they never reach the idea estate (estate_corpus).
+    exclude: isToolChangelogIntakeRow,
     map: (r) => ({ source_external_id: r.github_release_id ? String(r.github_release_id) : null, normalized_priority: normalizePriorityScore(r.relevance_score) }) },
 ];
 
@@ -163,6 +166,9 @@ async function loadEstate(sb, src) {
   if (error) throw new Error(`loadEstate(${src.table}): ${error.message}`);
   return (data || [])
     .filter((r) => !estateAlreadyDrained(r))
+    // SD-REFILL-00SLQCLH: per-source exclude predicate (e.g. tool-changelog releases) — drops the row
+    // from the drain entirely so it never registers in the conversion ledger as an idea.
+    .filter((r) => !(typeof src.exclude === 'function' && src.exclude(r)))
     .map((r) => ({
       source_pool: src.pool,
       source_id: r.id,
