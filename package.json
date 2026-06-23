@@ -319,6 +319,7 @@
     "brainstorm:health:dry": "node scripts/brainstorm-pipeline-health.js --fix --dry-run",
     "git:recover": "node scripts/git-commit-recovery.js",
     "lead:dossier": "node scripts/lead-dossier.js",
+    "plan:prep-readiness": "node scripts/plan-prep-readiness.js",
     "lead:prep-readiness": "node scripts/lead-prep-readiness.js",
     "doc:audit": "node scripts/eva/doc-health-audit.mjs",
     "doc:metadata-backfill": "node scripts/doc-metadata-backfill.mjs",
