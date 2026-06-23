@@ -90,8 +90,11 @@ const HORIZON_MIN = 20;                      // "freeing soon" = ETA-to-free wit
 const PROGRESS_SOON = 65;                    // ...or overall progress >= this
 const BELT_BUFFER = 1;                       // keep at least this many claimable SDs beyond demand
 // phase-median minutes (infrastructure-weighted; from coordinator.md fleet-eta reference table)
-const PHASE_MIN = { LEAD: 3, PLAN: 12, EXEC: 30, FINAL: 5 };
-const TOTAL_MIN = PHASE_MIN.LEAD + PHASE_MIN.PLAN + PHASE_MIN.EXEC; // ~45m fresh SD
+// SD-LEO-INFRA-FLEET-DIAL-TOKEN-EFFORT-BUILD-001: static fallback (renamed _STATIC). The dial now
+// prefers a rolling per-phase actuals feed (computePhaseMinsFromActuals) and falls back to these
+// when actuals are insufficient — it never silently degrades.
+export const PHASE_MIN_STATIC = { LEAD: 3, PLAN: 12, EXEC: 30, FINAL: 5 };
+const TOTAL_MIN_STATIC = PHASE_MIN_STATIC.LEAD + PHASE_MIN_STATIC.PLAN + PHASE_MIN_STATIC.EXEC; // ~45m fresh SD
 
 const argv = process.argv.slice(2);
 const DISPATCH = argv.includes('--dispatch');
@@ -113,11 +116,79 @@ function normPhase(p) {
   return 'LEAD';
 }
 // ETA-to-free for a single claim: overall-progress-driven remaining of a ~TOTAL_MIN SD, floored.
-function etaMinForClaim(progress, phase) {
+// SD-LEO-INFRA-FLEET-DIAL-TOKEN-EFFORT-BUILD-001: phaseMinOverride (a { LEAD, PLAN, EXEC, FINAL }
+// rolling-actuals object) replaces the static table when provided; null → byte-identical static
+// behavior. tMin is derived from the override when present. FINAL branch + Math.max(2,…) floor
+// preserved exactly.
+export function etaMinForClaim(progress, phase, phaseMinOverride = null) {
   const ph = normPhase(phase);
-  if (ph === 'FINAL') return Math.max(2, PHASE_MIN.FINAL * (1 - (progress || 0) / 100));
-  const remaining = TOTAL_MIN * (1 - Math.min(99, progress || 0) / 100);
+  const pm = phaseMinOverride || PHASE_MIN_STATIC;
+  const tMin = phaseMinOverride ? (pm.LEAD + pm.PLAN + pm.EXEC) : TOTAL_MIN_STATIC;
+  if (ph === 'FINAL') return Math.max(2, pm.FINAL * (1 - (progress || 0) / 100));
+  const remaining = tMin * (1 - Math.min(99, progress || 0) / 100);
   return Math.max(2, Math.round(remaining));
+}
+
+// SD-LEO-INFRA-FLEET-DIAL-TOKEN-EFFORT-BUILD-001: rolling per-phase actuals feed. Aggregates recent
+// sub_agent_execution_results (bounded lookback — NOT a full scan of the ~31K-row table) into a
+// per-phase median elapsed-minutes for the fleet's dominant sd_type (infrastructure, matching the
+// static table's weighting). Returns a { LEAD, PLAN, EXEC, FINAL } object or null when any phase has
+// insufficient data → caller falls back to PHASE_MIN_STATIC. Fail-open: any error → null.
+const ACTUALS_LOOKBACK_DAYS = 30;
+const ACTUALS_ROW_CAP = 4000;          // bounded scan
+const ACTUALS_MIN_SAMPLES = 5;         // per-phase minimum SD-phase samples to trust a median
+const ACTUALS_SD_TYPE = 'infrastructure';
+function _median(nums) {
+  if (!nums.length) return null;
+  const a = [...nums].sort((x, y) => x - y);
+  const mid = Math.floor(a.length / 2);
+  return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
+}
+export async function computePhaseMinsFromActuals(supabase) {
+  try {
+    const sinceIso = new Date(Date.now() - ACTUALS_LOOKBACK_DAYS * 24 * 3600 * 1000).toISOString();
+    const { data: rows, error } = await supabase
+      .from('sub_agent_execution_results')
+      .select('sd_id, phase, execution_time, created_at')
+      .gte('created_at', sinceIso)
+      .not('execution_time', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(ACTUALS_ROW_CAP);
+    if (error || !Array.isArray(rows) || !rows.length) return null;
+    // Restrict to the dominant sd_type (infrastructure) so the median is apples-to-apples with the
+    // static table; resolve sd_type for the distinct sd_ids in the window.
+    const sdIds = [...new Set(rows.map((r) => r.sd_id).filter(Boolean))];
+    if (!sdIds.length) return null;
+    const typeById = new Map();
+    for (let i = 0; i < sdIds.length; i += 200) {
+      const { data: sds } = await supabase
+        .from('strategic_directives_v2')
+        .select('id, sd_type')
+        .in('id', sdIds.slice(i, i + 200));
+      for (const s of (sds || [])) typeById.set(s.id, s.sd_type);
+    }
+    // Sum execution_time (seconds) per (sd_id, phase) → that SD-phase's elapsed minutes; collect per phase.
+    const sumBy = new Map(); // key `${sd_id}|${PHASE}` → seconds
+    for (const r of rows) {
+      if (typeById.get(r.sd_id) !== ACTUALS_SD_TYPE) continue;
+      const ph = normPhase(r.phase);
+      const key = `${r.sd_id}|${ph}`;
+      sumBy.set(key, (sumBy.get(key) || 0) + (Number(r.execution_time) || 0));
+    }
+    const perPhase = { LEAD: [], PLAN: [], EXEC: [], FINAL: [] };
+    for (const [key, secs] of sumBy) {
+      const ph = key.split('|')[1];
+      if (perPhase[ph]) perPhase[ph].push(secs / 60);
+    }
+    const out = {};
+    for (const ph of ['LEAD', 'PLAN', 'EXEC', 'FINAL']) {
+      if (perPhase[ph].length < ACTUALS_MIN_SAMPLES) return null; // insufficient → fall back to static
+      out[ph] = Math.max(1, Math.round(_median(perPhase[ph])));
+    }
+    return out;
+  } catch {
+    return null; // fail-open → static
+  }
 }
 
 async function main() {
@@ -205,6 +276,13 @@ async function main() {
     ? maskedStallSessionIds({ sessions: workers, unclaimedItems: claimable.length + openQfCount, now })
     : new Set();
 
+  // SD-LEO-INFRA-FLEET-DIAL-TOKEN-EFFORT-BUILD-001: compute the rolling actuals ONCE per run; null →
+  // etaMinForClaim falls back to the static table (no silent degradation).
+  // PROBE-REPOINT NOTE (do NOT edit vdr-registry.js in this build): once actuals accrue, the VDR
+  // fleet-dial probe in lib/vision/vdr-registry.js should repoint from a code_grep signal to a
+  // count_ratio signal measuring how often phaseMinActuals is non-null (the dial is actually fed).
+  const phaseMinActuals = await computePhaseMinsFromActuals(sb);
+
   const rows = [];
   let idleNow = 0, freeingSoon = 0, building = 0, stalled = 0;
   for (const w of workers) {
@@ -213,7 +291,7 @@ async function main() {
     if (mine.length) {
       building++;
       // multi-claim worker frees only after ALL its claims finish → sum remaining
-      const eta = mine.reduce((sum, d) => sum + etaMinForClaim(d.progress_percentage, d.current_phase), 0);
+      const eta = mine.reduce((sum, d) => sum + etaMinForClaim(d.progress_percentage, d.current_phase, phaseMinActuals), 0);
       const soon = eta <= HORIZON_MIN || mine.some(d => (d.progress_percentage || 0) >= PROGRESS_SOON);
       if (soon) freeingSoon++;
       rows.push({
