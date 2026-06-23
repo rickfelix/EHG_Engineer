@@ -320,6 +320,18 @@ function isProcessRunning(pid) {
   }
 }
 
+// SD-REFILL-00NFWJ6M: is ANY Claude Code process alive on this host? Used to gate the
+// hard-cap pid-alive OS-truth fallback against PID-recycling false-holds — if no claude.exe
+// exists at all, a "live" recycled PID is definitely NOT a worker. Cheap (single tasklist),
+// computed ONCE per sweep. Never throws (tasklist unavailable → false → no fallback, safe).
+function anyClaudeProcessRunning() {
+  try {
+    const { execSync } = require('child_process');
+    const out = execSync('tasklist /FI "IMAGENAME eq claude.exe" /NH 2>nul', { encoding: 'utf8', timeout: 5000 });
+    return out.includes('claude.exe');
+  } catch { return false; }
+}
+
 function bar(pct, width = 20) {
   const filled = Math.round((pct / 100) * width);
   return '\u2588'.repeat(filled) + '\u2591'.repeat(width - filled);
@@ -742,6 +754,8 @@ async function main() {
   // SD-LEO-INFRA-PARALLEL-AGENT-QUEUE-001: Virtual drain sessions use shorter thresholds
   const VIRTUAL_STALE_THRESHOLD = 180; // 3 minutes for virtual drain agents
   const VIRTUAL_VERY_STALE = VIRTUAL_STALE_THRESHOLD * 2; // 6 minutes = definitely dead
+  // SD-REFILL-00NFWJ6M: computed ONCE — gates the hard-cap pid-alive OS-truth fallback below.
+  const claudeProcRunningHost = anyClaudeProcessRunning();
   const classified = sessions.map(s => {
     const threshold = s.is_virtual ? VIRTUAL_STALE_THRESHOLD : STALE_THRESHOLD_SECONDS;
     const veryStaleThreshold = s.is_virtual ? VIRTUAL_VERY_STALE : VERY_STALE_SECONDS;
@@ -764,6 +778,15 @@ async function main() {
       const ccPid = resolveCcPidFromTerminalId(s.terminal_id, s.session_id);
       if (ccPid != null) {
         hasPidAlive = aliveCcPids.has(String(ccPid));
+        // SD-REFILL-00NFWJ6M: marker-vs-OS divergence — FR-4 deletes a live worker's pid-*.json
+        // marker aggressively, so a MISSING marker is NOT proof of death. A live worker deep in a
+        // >20min sub-agent run (no mid-Task heartbeat) was hard-cap-released because the marker set
+        // missed its still-running PID. Fall back to OS process truth when the marker set misses,
+        // GATED on a claude.exe existing on this host (guards PID-recycling false-holds: no claude.exe
+        // → a "live" PID is a recycled non-CC process). isProcessRunning uses process.kill(pid,0).
+        if (!hasPidAlive && claudeProcRunningHost && isProcessRunning(Number(ccPid))) {
+          hasPidAlive = true;
+        }
       }
     }
 
@@ -2478,6 +2501,9 @@ module.exports.INTENT_PAYLOAD_KEYS = INTENT_PAYLOAD_KEYS;
 // FR-3 predicate (pure): the reserved SD-TEST- fixture namespace check.
 module.exports.isTestFixtureSdKey = isTestFixtureSdKey;
 module.exports.TEST_FIXTURE_SD_KEY_LIKE = TEST_FIXTURE_SD_KEY_LIKE;
+// SD-REFILL-00NFWJ6M: hard-cap pid-alive OS-truth fallback helpers (test seam).
+module.exports.isProcessRunning = isProcessRunning;
+module.exports.anyClaudeProcessRunning = anyClaudeProcessRunning;
 // FR-1/FR-2: the fail-soft reset gate + a test-only seam to seed the lazily-imported
 // exec-context-guard cache (so tests can inject a mock assertSweepHandoffGate without
 // touching the live ESM module). Seeding the cache is exactly what the first real call
