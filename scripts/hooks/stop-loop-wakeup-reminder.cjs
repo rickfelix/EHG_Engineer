@@ -142,6 +142,63 @@ async function parkSessionRecoverable(sessionId) {
   }
 }
 
+/**
+ * SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001 (a): classify WHY a worker is winding down at the
+ * allow/park path, for the metadata.wind_down capture + fleet-wide aggregation. Pure/total.
+ *   - 'signaled'     — the worker announced a wind-down via /signal (windDownSignaled)
+ *   - 'second_stop'  — the Stop hook's second-stop allow-path (stop_hook_active)
+ *   - 'no_claim_idle'— neither, but a looping worker is parking with no live claim
+ * @param {{ windDownSignaled?:boolean, stopHookActive?:boolean }} args
+ * @returns {'signaled'|'second_stop'|'no_claim_idle'}
+ */
+function classifyWindDownReason({ windDownSignaled, stopHookActive } = {}) {
+  if (windDownSignaled) return 'signaled';
+  if (stopHookActive) return 'second_stop';
+  return 'no_claim_idle';
+}
+
+/**
+ * SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001 (a)+(c): record WHY this worker wound down.
+ * (a) merge claude_sessions.metadata.wind_down = {reason, at, had_claim} (read-modify-merge,
+ *     preserving sibling metadata keys), surfaced at re-engage by worker-checkin.
+ * (c) mirror to the feedback table (category='wind_down_survey') via the canonical emitFeedback
+ *     writer for fleet-wide stop-reason aggregation.
+ * Best-effort / fail-open — any failure is logged and never blocks the stop.
+ */
+async function recordWindDown(supabase, sessionId, { reason, hadClaim } = {}) {
+  const at = new Date().toISOString();
+  // (a) metadata.wind_down merge — preserve existing metadata keys.
+  try {
+    const { data: row } = await supabase
+      .from('claude_sessions')
+      .select('metadata')
+      .eq('session_id', sessionId)
+      .maybeSingle();
+    const metadata = { ...(row && row.metadata ? row.metadata : {}) };
+    metadata.wind_down = { reason, at, had_claim: !!hadClaim };
+    await supabase.from('claude_sessions').update({ metadata }).eq('session_id', sessionId);
+  } catch (e) {
+    process.stderr.write(`[stop-loop-wakeup-reminder] wind_down metadata (non-fatal): ${e.message}\n`);
+  }
+  // (c) fleet-wide aggregation mirror — canonical feedback writer (ESM; dynamic-import from CJS).
+  try {
+    const { emitFeedback } = await import('../../lib/governance/emit-feedback.js');
+    await emitFeedback({
+      supabase,
+      title: `Worker wind-down (${reason})`,
+      description: `Worker session ${sessionId} wound down: reason=${reason}, had_claim=${!!hadClaim}.`,
+      category: 'wind_down_survey',
+      severity: 'low',
+      source_type: 'wind_down_survey',
+      metadata: { session_id: sessionId, reason, had_claim: !!hadClaim, at },
+      // One row per session per minute-bucket per reason — idempotent if the hook fires twice.
+      dedup_key: `wind_down::${sessionId}::${reason}::${at.slice(0, 16)}`,
+    });
+  } catch (e) {
+    process.stderr.write(`[stop-loop-wakeup-reminder] wind_down feedback mirror (non-fatal): ${e.message}\n`);
+  }
+}
+
 const REMINDER = [
   'Worker stopping with NO ScheduleWakeup armed — you will go INCOGNITO and strand your claimed SD',
   '(the worktree then gets reaped by the claim-sweep). Run the WIND-DOWN HANDSHAKE before you stop:',
@@ -248,6 +305,12 @@ async function main() {
     // coordinator-revival / orphan-adoption re-engages it, instead of a cold-exit to zero workers.
     if (shouldParkRecoverable({ loopState, hasActiveClaim, windDownSignaled })) {
       await parkSessionRecoverable(sessionId);
+      // SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001 (a)+(c): capture WHY this worker wound down
+      // (same worker-gate as the park, so no false telemetry on a non-worker operator session).
+      await recordWindDown(supabase, sessionId, {
+        reason: classifyWindDownReason({ windDownSignaled, stopHookActive }),
+        hadClaim: hasActiveClaim,
+      });
     }
     return shutdown();
   } catch (e) {
@@ -265,4 +328,4 @@ if (require.main === module) {
   main().catch(() => shutdown());
 }
 
-module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, isFlagEnabled, REMINDER };
+module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, classifyWindDownReason, recordWindDown, isFlagEnabled, REMINDER };
