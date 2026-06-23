@@ -54,6 +54,10 @@ export function blockerKeysFor(d) {
   if (blockerSdKey) keys.push(blockerSdKey);
   return keys;
 }
+// SD-LEO-INFRA-FLEET-CRITICAL-DISPATCH-LANE-001 (FR-1): the narrow, explicit fleet-critical predicate.
+// metadata.fleet_critical===true marks work whose ABSENCE blocks ALL fleet progress. Exported pure so
+// the band ordering is unit-testable. STRICT === true so a stray truthy value can't silently enrol.
+export function isFleetCritical(d) { return (d && d.metadata || {}).fleet_critical === true; }
 // SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-C (FR-2): needle-movement prioritization.
 // Reuse FR-1's rollup (active rung + per-rung progress) and the pure needle scorer to order remaining
 // work active-rung-first among same-unlock candidates. Loaded fail-soft — any read error leaves the
@@ -168,6 +172,17 @@ async function main() {
     const m = d.metadata || {};
     return m.source === 'proposal' && !!m.roadmap_phase;
   };
+  // SD-LEO-INFRA-FLEET-CRITICAL-DISPATCH-LANE-001 (FR-1/FR-2): the fleet-critical operational band.
+  // metadata.fleet_critical===true is a NARROW, EXPLICIT signal — set ONLY for work whose ABSENCE
+  // blocks ALL fleet progress (the worker-engagement cluster, the comms-guard, the env-fix class).
+  // A fleet-health SD is correctly needle-0 (it is NOT a gauge cap — wave-stuffing it would POLLUTE
+  // the VDR gauge), so under the gauge-needle sort it sinks below every MED wave-promoted REFILL and
+  // gets buried, forcing manual coordinator hand-dispatch. This band is OPERATIONAL urgency —
+  // ORTHOGONAL to gauge-needle (a separate axis, not a needle hack / fake rung) — and is applied
+  // ABOVE unlock+needle so a fleet_critical SD reaches a worker WITHOUT polluting the gauge or
+  // requiring a WORK_ASSIGNMENT. It stays BELOW the bare-shell/quarantine quality gates (a
+  // fleet_critical stub still cannot pass LEAD). FR-3 anti-gaming: rationed + audited below.
+  const fleetCritical = isFleetCritical;   // module-level exported predicate (unit-tested)
 
   // ── needle-movement context (FR-2) ── REUSE the FR-1 rollup for the active rung + per-rung progress,
   // and roadmap_wave_items→waves for each SD's rung. Best-effort: any failure leaves needle scores at 0
@@ -205,6 +220,11 @@ async function main() {
     if (bs !== 0) return bs;                                // authored (non-bare-shell) first
     const qa = quarantined(a) ? 1 : 0, qb = quarantined(b) ? 1 : 0;
     if (qa !== qb) return qa - qb;                          // human-authored first
+    // SD-LEO-INFRA-FLEET-CRITICAL-DISPATCH-LANE-001 (FR-2): the fleet-critical operational band —
+    // ABOVE unlock+needle (so a needle-0 fleet-health SD outranks MED wave backlog without a fake
+    // rung or manual dispatch), BELOW the bare-shell/quarantine quality gates.
+    const fa = fleetCritical(a) ? 1 : 0, fb = fleetCritical(b) ? 1 : 0;
+    if (fa !== fb) return fb - fa;                          // fleet-critical first
     const ua = unlockScore(a.sd_key), ub = unlockScore(b.sd_key);
     if (ub !== ua) return ub - ua;
     // FR-2 needle-movement: among same-unlock candidates, order active-rung-first, then highest-impact-
@@ -223,6 +243,21 @@ async function main() {
 
   const now = new Date().toISOString();
   console.log(`[BACKLOG-RANK] ${now}${DRY ? ' (dry-run)' : ''} — ${claimable.length} claimable leaf SD(s) ranked`);
+
+  // SD-LEO-INFRA-FLEET-CRITICAL-DISPATCH-LANE-001 (FR-3): anti-gaming audit. The fleet-critical band
+  // is powerful (it jumps the whole gauge-needle backlog), so it MUST stay rationed or it becomes the
+  // new "everything is HIGH" cry-wolf failure. We AUDIT every claimable member of the band (who set it
+  // + why, from metadata.fleet_critical_by / _reason) and WARN past a small cap so over-stamping is
+  // visible to the coordinator. Advisory-only — never alters the ranking (the band already applied).
+  const FLEET_CRITICAL_CAP = 6;
+  const fleetCriticalMembers = claimable.filter(fleetCritical);
+  if (fleetCriticalMembers.length) {
+    console.log(`[BACKLOG-RANK] fleet_critical band (${fleetCriticalMembers.length}): ` +
+      fleetCriticalMembers.map(d => `${d.sd_key}[by=${(d.metadata||{}).fleet_critical_by || '?'}; why=${((d.metadata||{}).fleet_critical_reason || '?').slice(0, 40)}]`).join('; '));
+    if (fleetCriticalMembers.length > FLEET_CRITICAL_CAP) {
+      console.log(`[BACKLOG-RANK] ⚠️  fleet_critical OVER CAP (${fleetCriticalMembers.length} > ${FLEET_CRITICAL_CAP}) — priority-inflation / cry-wolf risk. The band is for work whose ABSENCE blocks ALL fleet progress; audit + demote over-stamped rows (clear metadata.fleet_critical).`);
+    }
+  }
 
   // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2: guard rank WRITES only
   // (the SELECT/ranking reads above are always allowed). Skip the write if this session
