@@ -52,9 +52,49 @@ async function findIdleCallsigns(supabase) {
 }
 
 /**
- * INSERT a single revival request. Returns { inserted, alreadyPending, error }.
+ * Pure predicate — is this a PENDING worker_spawn_requests row whose TTL has elapsed?
+ * SD-REFILL-00H0UNO7 (FR-3): an expired-but-still-'pending' row holds the partial unique
+ * index idx_wsr_unique_pending_callsign and thereby permanently blocks fresh revivals.
+ *
+ * Fail-safe: a missing / unparseable expires_at returns FALSE — we never reap a row whose
+ * TTL we cannot read, so a genuinely live request is never destroyed by a bad timestamp.
+ *
+ * @param {{status?:string, expires_at?:string}} row
+ * @param {number} nowMs
+ * @returns {boolean}
  */
-async function reviveOne(supabase, callsign, requestedBySessionId) {
+function isExpiredPendingRow(row, nowMs) {
+  if (!row || row.status !== 'pending') return false;
+  const exp = Date.parse(row.expires_at);
+  if (!Number.isFinite(exp)) return false; // fail-safe: unreadable TTL is treated as not-expired
+  return exp <= nowMs;
+}
+
+/**
+ * Reap (status: pending -> expired) every past-TTL pending request, optionally scoped to a
+ * single callsign. Flipping the row out of 'pending' frees the partial unique index so a
+ * fresh revival can be inserted. Returns the number of rows reaped.
+ * SD-REFILL-00H0UNO7 (FR-1, root cause 3).
+ *
+ * @returns {Promise<number>} rows reaped
+ */
+async function reapExpiredPendingRequests(supabase, { callsign = null, nowIso = new Date().toISOString() } = {}) {
+  let q = supabase
+    .from('worker_spawn_requests')
+    .update({ status: 'expired' })
+    .eq('status', 'pending')
+    .lte('expires_at', nowIso);
+  if (callsign) q = q.eq('requested_callsign', callsign);
+  const { data, error } = await q.select('id');
+  if (error) {
+    console.warn(`  [warn] reapExpiredPendingRequests failed: ${error.message}`);
+    return 0;
+  }
+  return (data || []).length;
+}
+
+/** Raw single-row insert + best-effort broadcast. Returns { inserted, alreadyPending, error, row }. */
+async function insertSpawnRequest(supabase, callsign, requestedBySessionId) {
   const { data, error } = await supabase
     .from('worker_spawn_requests')
     .insert({
@@ -87,6 +127,24 @@ async function reviveOne(supabase, callsign, requestedBySessionId) {
   });
 
   return { inserted: true, alreadyPending: false, error: null, row: data };
+}
+
+/**
+ * INSERT a single revival request. Returns { inserted, alreadyPending, error }.
+ * SD-REFILL-00H0UNO7 (FR-2): on an idempotency (23505) hit, the conflicting pending row may be
+ * EXPIRED (a zombie that never got consumed). Reap the callsign's expired-pending row and retry
+ * the insert ONCE — that unblocks revival. If nothing was reaped, a genuinely LIVE pending
+ * request exists, so we report alreadyPending=true exactly as before (idempotency preserved).
+ */
+async function reviveOne(supabase, callsign, requestedBySessionId) {
+  const first = await insertSpawnRequest(supabase, callsign, requestedBySessionId);
+  if (!first.alreadyPending) return first; // inserted, or a non-idempotency error
+
+  const reaped = await reapExpiredPendingRequests(supabase, { callsign });
+  if (reaped === 0) return first; // a live pending row blocks — correct idempotency skip
+
+  // An expired zombie was reaped; the unique index is now free. Retry once.
+  return insertSpawnRequest(supabase, callsign, requestedBySessionId);
 }
 
 async function main() {
@@ -153,7 +211,7 @@ async function main() {
 }
 
 // Export internal helpers for unit testing.
-module.exports = { NATO, findIdleCallsigns, reviveOne };
+module.exports = { NATO, findIdleCallsigns, reviveOne, insertSpawnRequest, isExpiredPendingRow, reapExpiredPendingRequests };
 
 // Only run main() when invoked as CLI (not when require'd by tests).
 if (require.main === module) {
