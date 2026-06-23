@@ -62,6 +62,8 @@ The CLI prints **one JSON object** describing the resolved action. It does the w
 
 This is an autonomous-fleet contract: a `/loop` worker must keep moving. Decide from the JSON, act, and proceed. Never end a check-in by asking the operator what to do (no human watches the loop window).
 
+**Prior wind-down (SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001):** when the JSON carries a non-null `prior_wind_down` (`{reason, at, had_claim}` — captured by the Stop hook when you last stopped: `signaled` | `second_stop` | `no_claim_idle`), briefly surface it before acting, e.g. *"you previously stopped because `<reason>` at `<at>` — confirm or correct"*. If the inferred reason is wrong, send the correction via `/signal feedback "wind-down reason was actually <X>, not <reason>"` so the fleet-wide stop-reason data (feedback `category='wind_down_survey'`) stays accurate. This is a one-line surface, not a pause — proceed to act on `action` in the same turn.
+
 **The cycle never terminates on its own.** For `resume` / `resume_final` / `resume_orphan` / `claimed_assignment` /
 `self_claimed`: build the SD through completion (for `resume_final`, just run the final
 LEAD-FINAL-APPROVAL handoff + post-completion tail), then **re-run `/checkin`** to pull the next

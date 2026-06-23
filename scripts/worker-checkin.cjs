@@ -846,6 +846,11 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
 
   const base = { ok: true, callsign, coordinator: coordinatorId, roll_call_id: rollCall.id, two_way: process.env.COORDINATOR_TWOWAY_V2 === 'on' };
 
+  // SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001 (b): surface the prior wind-down reason captured by the
+  // Stop hook (claude_sessions.metadata.wind_down) so the /checkin skill can render "you previously
+  // stopped because X — confirm/correct" and the worker can correct the inferred reason at re-engage.
+  base.prior_wind_down = (sessionMetadata && sessionMetadata.wind_down) ? sessionMetadata.wind_down : null;
+
   // FR-1/FR-3: surface UNCONSUMED coordinator->worker push as coordinator_messages[] on the `base`
   // object so EVERY return path (resume / idle / self_claimed / self_claimed_qf) carries it — a busy
   // claim-holder AND an idle worker both see coordinator coaching. Non-draining + bounded (see fn).

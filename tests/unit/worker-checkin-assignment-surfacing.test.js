@@ -59,7 +59,7 @@ describe('extractDirectedSd — structured directed fields only (finding #2)', (
 
 // resolveCheckin seam 1 — fake sb: session holds mySd; an unread WORK_ASSIGNMENT targets a
 // different SD. The assignment must surface on the resume result without dropping the claim.
-function fakeSb({ heldSd, assignmentSd }) {
+function fakeSb({ heldSd, assignmentSd, windDown }) {
   return {
     rpc: () => Promise.resolve({ data: { success: true }, error: null }),
     from(table) {
@@ -67,7 +67,7 @@ function fakeSb({ heldSd, assignmentSd }) {
         _t: table, select() { return this; }, eq() { return this; }, gte() { return this; },
         order() { return this; }, limit() { return this; },
         maybeSingle() {
-          if (table === 'claude_sessions') return Promise.resolve({ data: { metadata: { role: 'worker' }, sd_key: heldSd }, error: null });
+          if (table === 'claude_sessions') return Promise.resolve({ data: { metadata: { role: 'worker', ...(windDown ? { wind_down: windDown } : {}) }, sd_key: heldSd }, error: null });
           if (table === 'strategic_directives_v2') return Promise.resolve({ data: { status: 'in_progress' }, error: null });
           return Promise.resolve({ data: null, error: null });
         },
@@ -108,6 +108,35 @@ describe('resolveCheckin — surface pending WORK_ASSIGNMENT on resume (seam 1)'
       const res = await resolveCheckin(sb, 'sess-busy', { getCoordinator: async () => null });
       expect(res.action).toBe('resume');
       expect(res.pending_work_assignment).toBeUndefined();
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+
+  // SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001 (b): the prior wind-down captured by the Stop hook
+  // (claude_sessions.metadata.wind_down) is surfaced as base.prior_wind_down at re-engage.
+  it('surfaces prior_wind_down from metadata.wind_down at re-engage', async () => {
+    const wind = { reason: 'no_claim_idle', at: '2026-06-23T07:00:00.000Z', had_claim: false };
+    const sb = fakeSb({ heldSd: 'SD-CURRENT-001', assignmentSd: null, windDown: wind });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [];
+    try {
+      const res = await resolveCheckin(sb, 'sess-busy', { getCoordinator: async () => null });
+      expect(res.prior_wind_down).toEqual(wind);
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+
+  it('prior_wind_down is null when no wind_down was recorded', async () => {
+    const sb = fakeSb({ heldSd: 'SD-CURRENT-001', assignmentSd: null });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [];
+    try {
+      const res = await resolveCheckin(sb, 'sess-busy', { getCoordinator: async () => null });
+      expect(res.prior_wind_down).toBe(null);
     } finally {
       ws.getMessagesForSession = orig;
     }
