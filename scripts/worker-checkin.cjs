@@ -372,7 +372,32 @@ function orderByRankMap(items, keyOf, rankMap) {
     (rankMap.get(keyOf(a)) ?? Infinity) - (rankMap.get(keyOf(b)) ?? Infinity));
 }
 
-/** Fetch fresh dispatch_ranks for the candidate keys and order by them. Fail-open. */
+/**
+ * Pure: stable-sort so fleet_critical=true items come FIRST (STALE-PROOF — independent of the
+ * dispatch_rank TTL), then by the dispatch rank map (lower first), then input order.
+ * SD-LEO-INFRA-FLEET-CRITICAL-CLAIM-PATH-001: propagates fleet_critical to the WORKER self-claim
+ * decision. #5063 ranked fleet_critical SDs correctly coordinator-side (the WRITER), but this worker
+ * claim path only honored dispatch_rank (and only while fresh), so a fleet_critical SD whose
+ * dispatch_rank was stale/absent stayed buried under lower-ranked REFILLs across idle-worker cycles.
+ */
+function orderByFleetCriticalThenRank(items, keyOf, rankMap, fleetCriticalSet) {
+  const fc = fleetCriticalSet instanceof Set ? fleetCriticalSet : new Set();
+  const rm = rankMap instanceof Map ? rankMap : new Map();
+  if (fc.size === 0 && rm.size === 0) return items;
+  return items.slice().sort((a, b) => {
+    const af = fc.has(keyOf(a)) ? 0 : 1;
+    const bf = fc.has(keyOf(b)) ? 0 : 1;
+    if (af !== bf) return af - bf;                       // fleet_critical first (stale-proof)
+    return (rm.get(keyOf(a)) ?? Infinity) - (rm.get(keyOf(b)) ?? Infinity); // then dispatch_rank
+  });
+}
+
+/**
+ * Fetch the coordinator's dispatch signals for the candidate keys and order by them. Fail-open.
+ * Honors BOTH metadata.fleet_critical (STALE-PROOF top priority — SD-LEO-INFRA-FLEET-CRITICAL-CLAIM-
+ * PATH-001) and a fresh metadata.dispatch_rank (TTL-bounded tie-break). Both live in the SAME single
+ * metadata read, so honoring fleet_critical adds NO extra query.
+ */
 async function sortByDispatchRank(sb, items, keyOf) {
   try {
     const keys = (items || []).map(keyOf).filter(Boolean);
@@ -380,15 +405,19 @@ async function sortByDispatchRank(sb, items, keyOf) {
     const { data } = await sb.from('strategic_directives_v2')
       .select('sd_key, metadata').in('sd_key', keys);
     const rankMap = new Map();
+    const fleetCriticalSet = new Set();
     const now = Date.now();
     for (const r of (data || [])) {
       const m = r.metadata || {};
+      // fleet_critical is a STALE-PROOF claim signal: it lifts the SD to the top of the worker pool
+      // regardless of dispatch_rank freshness, so a fleet_critical SD is never buried by REFILLs.
+      if (m.fleet_critical === true) fleetCriticalSet.add(r.sd_key);
       if (m.dispatch_rank != null && m.dispatch_rank_at
           && (now - new Date(m.dispatch_rank_at).getTime()) < DISPATCH_RANK_TTL_MS) {
         rankMap.set(r.sd_key, Number(m.dispatch_rank));
       }
     }
-    return orderByRankMap(items, keyOf, rankMap);
+    return orderByFleetCriticalThenRank(items, keyOf, rankMap, fleetCriticalSet);
   } catch { return items || []; } // fail-open: ordering must never break self-claim
 }
 const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -1076,7 +1105,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective };
+module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective };
 
 if (require.main === module) {
   main().catch(err => {
