@@ -19,6 +19,7 @@ import {
   isFixtureSd,
   isBareShell,
   isExcludedFromBelt,
+  isUnactionableRemediationSd,
   bareShellLastCompare,
   isStartedSd,
   stripDispatchRank,
@@ -164,6 +165,41 @@ describe('isExcludedFromBelt — the REAL forecaster belt predicate', () => {
 });
 
 // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001 (bug d5e59236): in-flight (started) guard.
+describe('isUnactionableRemediationSd — SD-REFILL-00306WTS venture-remediation belt exclusion', () => {
+  it('excludes an auto-filed remediation SD targeting a VENTURE (target_application != EHG_Engineer)', () => {
+    expect(isUnactionableRemediationSd({ sd_key: 'SD-LEO-FIX-REMEDIATION-UNIT-TEST-005', target_application: 'EHG' })).toBe(true);
+    expect(isUnactionableRemediationSd({ sd_key: 'SD-LEO-FIX-REMEDIATION-NPM-AUDIT-003', target_application: 'EHG' })).toBe(true);
+    // target_application can also arrive via metadata
+    expect(isUnactionableRemediationSd({ sd_key: 'SD-LEO-FIX-REMEDIATION-LINT-MEDIUM-004', metadata: { target_application: 'EHG' } })).toBe(true);
+  });
+
+  it('does NOT exclude a remediation SD that genuinely targets the fleet repo (EHG_Engineer)', () => {
+    expect(isUnactionableRemediationSd({ sd_key: 'SD-LEO-FIX-REMEDIATION-X-001', target_application: 'EHG_Engineer' })).toBe(false);
+  });
+
+  it('does NOT exclude a remediation SD with no target (cannot prove un-actionable → stays on belt)', () => {
+    expect(isUnactionableRemediationSd({ sd_key: 'SD-LEO-FIX-REMEDIATION-X-002', metadata: {} })).toBe(false);
+    expect(isUnactionableRemediationSd({ sd_key: 'SD-LEO-FIX-REMEDIATION-X-003' })).toBe(false);
+  });
+
+  it('does NOT exclude a non-remediation SD even when it targets a venture (prefix-gated)', () => {
+    expect(isUnactionableRemediationSd({ sd_key: 'SD-EHG-COCKPIT-DTQ-001', target_application: 'EHG' })).toBe(false);
+    expect(isUnactionableRemediationSd({ sd_key: 'SD-REFILL-00306WTS', target_application: 'EHG' })).toBe(false);
+  });
+
+  it('fail-open on malformed input', () => {
+    expect(isUnactionableRemediationSd(null)).toBe(false);
+    expect(isUnactionableRemediationSd('x')).toBe(false);
+    expect(isUnactionableRemediationSd({})).toBe(false);
+  });
+
+  it('isExcludedFromBelt folds in the venture-remediation exclusion', () => {
+    expect(isExcludedFromBelt({ sd_key: 'SD-LEO-FIX-REMEDIATION-UNIT-TEST-005', target_application: 'EHG', title: 'x', description: 'a genuine description distinct from title', metadata: {} })).toBe(true);
+    // a fleet-targeted remediation SD with real substance still passes
+    expect(isExcludedFromBelt({ sd_key: 'SD-LEO-FIX-REMEDIATION-X-001', target_application: 'EHG_Engineer', title: 'x', description: 'a genuine description distinct from title', metadata: {} })).toBe(false);
+  });
+});
+
 describe('isStartedSd — the REAL ranker in-flight guard', () => {
   it('flags an SD past the initial LEAD draft as started (must not be fresh-ranked)', () => {
     expect(isStartedSd({ current_phase: 'PLAN_PRD' })).toBe(true);

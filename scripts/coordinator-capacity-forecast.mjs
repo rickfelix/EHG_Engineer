@@ -139,7 +139,9 @@ async function main() {
     sb.from('strategic_directives_v2')
       // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + metadata (is_fixture marker) and
       // title/description (bare-shell detection) so excluded rows do not inflate belt depth.
-      .select('sd_key, title, description, status, sd_type, current_phase, progress_percentage, claiming_session_id, dependencies, metadata')
+      // SD-REFILL-00306WTS: + target_application so un-actionable auto-filed venture remediation
+      // SDs (target_application != EHG_Engineer) are excluded from belt depth (false-SURPLUS fix).
+      .select('sd_key, title, description, status, sd_type, current_phase, progress_percentage, claiming_session_id, dependencies, metadata, target_application')
       .not('status', 'in', '("completed","cancelled","deferred")'),
     // Open QFs are claimable belt too (a worker can claim a QF) — counting only SDs
     // under-reports belt depth and over-reports deficit (workers self-claim QFs).
@@ -173,7 +175,7 @@ async function main() {
     const unmet = parseSdDependencies(d.dependencies).filter(k => depStatus[k] !== 'completed');
     if (unmet.length === 0) claimable.push(d);
   }
-  if (beltExcludes) console.log(`[CAPACITY-FORECAST] ${beltExcludes} non-distributable SD(s) (fixture/bare-shell) excluded from belt depth`);
+  if (beltExcludes) console.log(`[CAPACITY-FORECAST] ${beltExcludes} non-distributable SD(s) (fixture/bare-shell/un-actionable-venture-remediation) excluded from belt depth`);
 
   // ── classify live workers (exclude coordinator + adam + non_fleet + fixtures + released) ──
   // SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: use the canonical isDispatchableFleetMember
