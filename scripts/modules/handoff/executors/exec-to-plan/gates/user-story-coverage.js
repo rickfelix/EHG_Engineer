@@ -42,6 +42,20 @@ export function createUserStoryCoverageGate(supabase) {
       }
 
       try {
+        // SD-REFILL-00LLG0KZ: same-pass ordering false-block (3rd witness). The gate pipeline
+        // could read user_stories BEFORE STORY_AUTO_VALIDATION promoted them (draft->completed,
+        // pending->validated) in the same EXEC-TO-PLAN pass — coverage read 0% and false-blocked,
+        // burning worker retries. Best-effort, ORDER-INDEPENDENT self-heal: ensure promotion has
+        // run before scoring. autoValidateUserStories is idempotent (only promotes eligible rows;
+        // no-op if STORY_AUTO_VALIDATION already ran). Defensive: a promote failure must NEVER
+        // block coverage — fall through and score the current live state (same as prior behavior).
+        try {
+          const { autoValidateUserStories } = await import('../../../../auto-validate-user-stories-on-exec-complete.js');
+          await autoValidateUserStories(sdId, supabase);
+        } catch (promoteErr) {
+          console.log(`   ⚠️  Pre-coverage auto-validation skipped (non-fatal): ${promoteErr?.message || promoteErr}`);
+        }
+
         const { data: stories, error } = await supabase
           .from('user_stories')
           .select('id, story_key, title, status, validation_status, acceptance_criteria, created_by, metadata')
