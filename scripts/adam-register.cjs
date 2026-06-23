@@ -267,6 +267,14 @@ async function main() {
     return shutdown(1);
   }
   const result = await registerAdam(supabase, sessionId);
+  // SD-LEO-INFRA-ROLE-SESSION-NAMING-001: give this Adam session a stable status-line NAME.
+  // Fail-soft — a naming failure must never block registration.
+  if (result.ok) {
+    try {
+      const { writeRoleStatusIdentity } = require('../lib/fleet/role-status-identity.cjs');
+      writeRoleStatusIdentity({ sessionId, role: ADAM_ROLE });
+    } catch { /* status-line naming is best-effort */ }
+  }
   const contractCheck = checkContractRead();
   console.log(JSON.stringify({ ...result, ...contractCheck }, null, 2));
   const banner = contractReadBanner(contractCheck);
