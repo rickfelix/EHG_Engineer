@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-PROD-ERROR-SWEEP-WIRE-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-PROD-ERROR-SWEEP-WIRE-001",
-  "createdAt": "2026-06-21T04:54:19.342Z",
+  "sdKey": "SD-LEO-INFRA-PREMISE-LIVENESS-GATE-SOURCING-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-PREMISE-LIVENESS-GATE-SOURCING-001",
+  "createdAt": "2026-06-23T21:12:15.920Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }

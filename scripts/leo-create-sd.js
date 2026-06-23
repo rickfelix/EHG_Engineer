@@ -30,6 +30,7 @@ import {
   normalizeVenturePrefix
 } from './modules/sd-key-generator.js';
 import { VentureContextManager } from '../lib/eva/venture-context-manager.js';
+import { checkPremiseLiveness } from '../lib/eva/premise-liveness.js';
 import { getCurrentVenture, getVentureConfig } from '../lib/venture-resolver.js';
 import {
   checkGate,
@@ -2491,12 +2492,35 @@ export async function ingestProposalObject(proposal, source, options = {}) {
   const { dryRun = false, deps = {}, migrationReviewed = false, securityReviewed = false } = options;
   const _keyExists = deps.keyExists || keyExists;
   const _createSD = deps.createSD || createSD;
+  // SD-LEO-INFRA-PREMISE-LIVENESS-GATE-SOURCING-001 FR-2: injectable premise-liveness
+  // stale-guard (defaults to the real checker; tests inject a stub).
+  const _checkPremise = deps.checkPremiseLiveness || checkPremiseLiveness;
 
   const normalized = validateProposalShape(proposal, source);
   const exists = await _keyExists(normalized.sdKey);
   if (exists) {
     console.log(`⏭️  ${normalized.sdKey} already exists, skipping (${source})`);
     return { sdKey: normalized.sdKey, file: source, action: 'skipped' };
+  }
+
+  // SD-LEO-INFRA-PREMISE-LIVENESS-GATE-SOURCING-001 FR-2: re-verify diagnostic /
+  // retro-mined premises at SOURCE so a premise already killed by a shipped fix does
+  // not materialize (then get cancelled 4 stages later at worker verify-premise). The
+  // guard runs ONLY when the proposal opts in via `premise_descriptor`; non-diagnostic
+  // proposals are untouched. FAIL-SOFT: any checker error falls through to creation —
+  // only a PROVABLY STALE premise is skipped (the checker itself defaults LIVE on doubt).
+  if (proposal.premise_descriptor && typeof proposal.premise_descriptor === 'object') {
+    try {
+      const descriptor = { source, ...proposal.premise_descriptor };
+      const verdict = await _checkPremise(descriptor, { supabase: deps.supabase });
+      if (verdict && verdict.status === 'STALE') {
+        console.log(`⏭️  ${normalized.sdKey} skipped — premise STALE (${verdict.recommendation}) (${source})`);
+        for (const e of verdict.evidence || []) console.log(`      • ${e}`);
+        return { sdKey: normalized.sdKey, file: source, action: 'skipped-stale', verdict };
+      }
+    } catch (e) {
+      console.warn(`   ⚠️  Premise-liveness check skipped (non-blocking, fail-open): ${e?.message || e}`);
+    }
   }
   // FR-2: forward the threaded review-attestation flags (from --migration-reviewed /
   // --security-reviewed on the proposal-ingest CLI routes) to the mapper, which honors them
