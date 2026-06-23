@@ -43,6 +43,7 @@
     "eva:scheduler:watch:cron": "node scripts/cron/eva-scheduler-watcher.mjs --once",
     "adam:exec:email:cron": "node scripts/adam-exec-summary.mjs",
     "fleet:spawn-executor": "node scripts/fleet/worker-spawn-executor.cjs",
+    "fleet:supersede-expired-spawns": "node scripts/fleet/supersede-expired-spawn-requests.mjs",
     "fleet:pulse": "node scripts/fleet-worker-pulse.mjs",
     "fleet:pulse:cron": "node scripts/fleet-worker-pulse.mjs",
     "fleet:down-alert": "node scripts/fleet-down-alert.mjs",
