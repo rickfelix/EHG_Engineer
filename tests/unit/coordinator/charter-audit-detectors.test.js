@@ -107,7 +107,7 @@ describe('extractDepKey — object-sentinel parity (FR-5)', () => {
 
 describe('detectIdleWithWork — DUTY-3 + pending-assignment suppression (FR-3/FR-5)', () => {
   it('idle live worker + unclaimed work -> violation', () => {
-    const r = detectIdleWithWork({ liveSessions: [{ session_id: 'w1', sd_key: null }], unclaimedCount: 2 });
+    const r = detectIdleWithWork({ liveSessions: [{ session_id: 'w1', sd_key: null, worktree_path: '/repo/.worktrees/SD-X' }], unclaimedCount: 2 });
     expect(r.violation).toBe(true);
     expect(r.remediation).toMatch(/assign/i);
   });
@@ -139,11 +139,37 @@ describe('detectIdleWithWork — DUTY-3 + pending-assignment suppression (FR-3/F
     const nowMs = 1_000_000;
     const isWithinArmedSilence = (until, now) => !!until && new Date(until).getTime() > now;
     const r = detectIdleWithWork({
-      liveSessions: [{ session_id: 'w1', sd_key: null, loop_state: 'active', expected_silence_until: null }],
+      liveSessions: [{ session_id: 'w1', sd_key: null, loop_state: 'active', expected_silence_until: null, worktree_path: '/repo/.worktrees/SD-X' }],
       unclaimedCount: 2, nowMs, isWithinArmedSilence,
     });
     expect(r.violation).toBe(true);
     expect(r.detail).toMatch(/parked/);
+  });
+
+  // SD-REFILL-00N8J6HV: a never-claimed registration ghost (source:'startup', loop_state:'unknown',
+  // fresh heartbeat) has sd_key=null but has never participated — it must NOT be flagged as idle-with-work
+  // (the recurring DUTY-3 false positive). everParticipated requires a claim/worktree/completed-counter.
+  it('a never-claimed startup ghost (loop_state=unknown, no worktree/claim) is NOT flagged', () => {
+    const r = detectIdleWithWork({
+      liveSessions: [{ session_id: '0462ea61', sd_key: null, loop_state: 'unknown', expected_silence_until: null, worktree_path: null, claimed_at: null }],
+      unclaimedCount: 2, nowMs: 1_000_000,
+    });
+    expect(r.violation).toBe(false);
+    expect(r.idleCount).toBe(0);
+  });
+  it('a just-finished idle worker (everParticipated via worktree_path, not parked) IS still flagged', () => {
+    const r = detectIdleWithWork({
+      liveSessions: [{ session_id: 'w-finished', sd_key: null, loop_state: 'active', expected_silence_until: null, worktree_path: '/repo/.worktrees/SD-X', claimed_at: null }],
+      unclaimedCount: 2, nowMs: 1_000_000,
+    });
+    expect(r.violation).toBe(true);
+  });
+  it('a worker that has completed SDs (continuous_sds_completed>0) but released its claim IS flagged', () => {
+    const r = detectIdleWithWork({
+      liveSessions: [{ session_id: 'w-veteran', sd_key: null, loop_state: 'active', worktree_path: null, claimed_at: null, continuous_sds_completed: 3 }],
+      unclaimedCount: 1, nowMs: 1_000_000,
+    });
+    expect(r.violation).toBe(true);
   });
 });
 

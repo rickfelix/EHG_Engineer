@@ -110,7 +110,7 @@ async function main() {
 
   // Defense-in-depth: exclude lifecycle-terminated sessions server-side (classifyLiveness also guards this).
   const { data: sessRows, error: sessErr } = await db.from('claude_sessions')
-    .select('session_id,terminal_id,heartbeat_at,sd_key,loop_state,expected_silence_until,status,metadata,worktree_path')
+    .select('session_id,terminal_id,heartbeat_at,sd_key,loop_state,expected_silence_until,status,metadata,worktree_path,claimed_at,continuous_sds_completed')
     .not('status', 'in', '(released,stale,ended)')
     .order('heartbeat_at', { ascending: false }).limit(80);
   const sessMarker = foundationalQueryError(sessErr, 'claude_sessions');
