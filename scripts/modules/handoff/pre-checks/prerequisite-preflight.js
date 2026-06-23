@@ -488,7 +488,7 @@ export function checkLeadToPlanPrereqs(sd) {
  * PLAN-TO-EXEC: Check PRD exists + user stories exist
  * Catches: PAT-HF-PLANTOEXEC (PRD/stories missing)
  */
-async function checkPlanToExecPrereqs(supabase, sd, sdId) {
+export async function checkPlanToExecPrereqs(supabase, sd, sdId) {
   const issues = [];
 
   // Check PRD exists and is approved
