@@ -28,17 +28,35 @@ describe('GR-MIGRATION-REVIEW — genuine data-layer signals STILL block (FR-1/F
   it('BLOCKS prose-described column DDL with an identifier (VAL-1 regression: "add <id> column")', () => {
     expect(mig({ scope: 'Database migration to add user_preferences column', metadata: {} })).toBeDefined();
   });
-  it('BLOCKS a governed supabase/ file path', () => {
+  it('STILL BLOCKS a supabase/ path WHEN it co-occurs with real DDL ("add the column" → hasDDL)', () => {
+    // The block survives on the DDL arm, not the (removed) prose-path arm.
     expect(mig({ scope: 'Edit supabase/migrations/20260616_add_x.sql to add the column', metadata: {} })).toBeDefined();
-  });
-  it('BLOCKS a bare *.sql file reference', () => {
-    expect(mig({ scope: 'Apply the new schema in db/changes/add_index.sql', metadata: {} })).toBeDefined();
   });
   it('BLOCKS an explicit metadata.requires_migration flag even with pure prose', () => {
     expect(mig({ scope: 'pure prose with no ddl', metadata: { requires_migration: true } })).toBeDefined();
   });
-  it('BLOCKS a governed_files[] metadata entry under supabase/', () => {
+  it('BLOCKS a governed_files[] metadata entry under supabase/ (the STRUCTURED signal)', () => {
     expect(mig({ scope: 'pure prose', metadata: { governed_files: ['supabase/migrations/x.sql'] } })).toBeDefined();
+  });
+  it('BLOCKS a governed_files[] metadata entry ending in *.sql', () => {
+    expect(mig({ scope: 'pure prose', metadata: { governed_files: ['db/changes/add_index.sql'] } })).toBeDefined();
+  });
+});
+
+// SD-LEO-INFRA-GR-MIGRATION-SQL-PATH-CITATION-FALSE-BLOCK-001: a .sql / supabase/ PATH cited in
+// NARRATIVE (not declared in structured metadata, no DDL) is NOT a migration signal — no false block.
+describe('GR-MIGRATION-REVIEW — a narrative .sql/supabase/ PATH CITATION no longer false-blocks (FR-1)', () => {
+  it('PASSES a bare *.sql file reference cited in prose (no DDL, no metadata)', () => {
+    expect(mig({ scope: 'Apply the new schema in db/changes/add_index.sql', metadata: {} })).toBeUndefined();
+  });
+  it('PASSES a supabase/ path cited as root-cause context (no DDL)', () => {
+    expect(mig({ scope: 'Root cause traced to the policy seeded in supabase/migrations/20260613_legal_select.sql; this SD is a pure-JS guardrail fix', metadata: {} })).toBeUndefined();
+  });
+  it('PASSES an explicit OUT-OF-SCOPE disclaimer citing a .sql path', () => {
+    expect(mig({ scope: 'OUT OF SCOPE: the 5 DB-level triggers in supabase/migrations/triggers.sql are NOT changed; this is a JS-only detector narrowing', metadata: {} })).toBeUndefined();
+  });
+  it('STILL BLOCKS when the cited .sql is declared as a STRUCTURED governed_file (genuine migration)', () => {
+    expect(mig({ scope: 'Edit the policy', metadata: { governed_files: ['supabase/migrations/20260613_legal_select.sql'] } })).toBeDefined();
   });
 });
 
