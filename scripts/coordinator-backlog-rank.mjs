@@ -41,6 +41,9 @@ import { isFixtureSd, isBareShell, bareShellLastCompare, isStartedSd, stripDispa
 // handling both the [{sd_id}]/[{sd_key}] object and raw-string shapes the old hand-rolled
 // resolver coerced, while correctly dropping the sentinel the hand-rolled one mis-counted.
 import { parseSdDependencies } from '../lib/utils/parse-sd-dependencies.cjs';
+// SD-REFILL-00MFWEGZ: reuse the canonical parent-LEAD-pass dispatch gate so the ranking surface
+// mirrors what claim-eligibility actually blocks (no drift between rank-vs-claim).
+import { parentLeadPending } from '../lib/fleet/claim-eligibility.cjs';
 // SD-REFILL-00AH2L4Q: honor the SAME canonical metadata blocker key (metadata.blocked_by_sd_key)
 // that dependency-resolver + worker-checkin enforce, so the dispatch ranker does not keep a
 // metadata-blocked SD on the claimable belt (the convention was inconsistently enforced fleet-wide).
@@ -79,7 +82,9 @@ async function main() {
   const { data: sds, error } = await sb.from('strategic_directives_v2')
     // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + title, description to classify bare-shell stubs.
     // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: + current_phase for the in-flight (started) guard.
-    .select('sd_key, title, description, status, sd_type, priority, created_at, current_phase, claiming_session_id, dependencies, metadata')
+    // SD-REFILL-00MFWEGZ: + parent_sd_id so parentLeadPending can exclude an orchestrator child
+    // whose parent has not yet passed LEAD (else the field is undefined → the gate silently no-ops).
+    .select('sd_key, title, description, status, sd_type, priority, created_at, current_phase, claiming_session_id, dependencies, metadata, parent_sd_id')
     .not('status', 'in', '("completed","cancelled","deferred")');
   if (error) { console.error('[BACKLOG-RANK] load failed:', error.message); return; }
 
@@ -141,6 +146,15 @@ async function main() {
     const unmet = blockerKeysFor(d)
       .filter(k => (byKey.has(k) ? byKey.get(k).status !== 'completed' : depStatus[k] !== 'completed'));
     if (unmet.length) continue;
+    // SD-REFILL-00MFWEGZ: an orchestrator child whose PARENT has not passed LEAD is not yet
+    // dispatchable (claim-eligibility blocks it via the same gate, and it would hit the hard
+    // parent-LEAD EXEC-transition block) — exclude it from fresh ranking so the ranked belt
+    // matches the actually-claimable set. parentLeadPending early-returns false for parentless
+    // SDs (no fetch) and fail-opens on error (never strands a child).
+    if (await parentLeadPending(sb, d)) {
+      console.log(`  [skip] parent not past LEAD — child not yet dispatchable: ${d.sd_key}`);
+      continue;
+    }
     claimable.push(d);
   }
   if (fixtureSkips) console.log(`[BACKLOG-RANK] ${fixtureSkips} fixture SD(s) excluded from ranking`);
