@@ -9,7 +9,7 @@
  * (b) a live-but-lagging owner (is_alive=false BUT fresh heartbeat) is NOT reaped (thrash stops).
  */
 import { describe, it, expect } from 'vitest';
-import { ownerIsDeadByLiveness, isHeartbeatStale, CLAIM_TTL_MS } from '../../lib/claim-validity-gate.js';
+import { ownerIsDeadByLiveness, isHeartbeatStale, CLAIM_TTL_MS, shouldReleaseStaleOwner } from '../../lib/claim-validity-gate.js';
 
 const NOW = 1_700_000_000_000;
 const minsAgo = (m) => NOW - m * 60_000;
@@ -78,5 +78,32 @@ describe('ownerIsDeadByLiveness — both mandatory directions (FR-2)', () => {
   });
   it('is_alive=true with a stale heartbeat is still NOT dead (only is_alive=false consults heartbeat; no regression)', () => {
     expect(ownerIsDeadByLiveness({ is_alive: true, heartbeat_at: minsAgo(999) }, NOW)).toBe(false);
+  });
+});
+
+describe('shouldReleaseStaleOwner — PID-alive escape stops mid-build reclaim (SD-REFILL-00C7GXJS)', () => {
+  it('RELEASES a genuinely-dead owner (dead, not silenced, PID not alive) — no claim held forever', () => {
+    expect(shouldReleaseStaleOwner({ ownerIsDead: true, ownerIsSilenced: false, ownerPidAlive: false })).toBe(true);
+  });
+
+  it('does NOT release a dead-LOOKING owner whose PROCESS is alive (busy in a Task() sub-agent — the bug)', () => {
+    expect(shouldReleaseStaleOwner({ ownerIsDead: true, ownerIsSilenced: false, ownerPidAlive: true })).toBe(false);
+  });
+
+  it('does NOT release a within-armed-silence owner (existing protection preserved)', () => {
+    expect(shouldReleaseStaleOwner({ ownerIsDead: true, ownerIsSilenced: true, ownerPidAlive: false })).toBe(false);
+  });
+
+  it('sd_key DRIFT always releases — even with a live PID (drift is a real release signal)', () => {
+    expect(shouldReleaseStaleOwner({ ownerHasSdKeyDrifted: true, ownerIsDead: false, ownerPidAlive: true })).toBe(true);
+  });
+
+  it('does NOT release a live owner (not dead) regardless of PID/silence', () => {
+    expect(shouldReleaseStaleOwner({ ownerIsDead: false, ownerIsSilenced: false, ownerPidAlive: false })).toBe(false);
+  });
+
+  it('is total on empty/odd input (fail-open: do not release)', () => {
+    expect(shouldReleaseStaleOwner()).toBe(false);
+    expect(shouldReleaseStaleOwner({})).toBe(false);
   });
 });

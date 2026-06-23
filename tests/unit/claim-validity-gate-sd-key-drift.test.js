@@ -46,12 +46,16 @@ describe('FR-2 fallthrough: sd_key drift triggers auto-release alongside ownerIs
     expect(src).toMatch(/ownerHasSdKeyDrifted\s*=\s*sdKeyDriftVerdict\s*===\s*['"]drift['"]/);
   });
 
-  it('auto-release condition includes both ownerIsDead AND ownerHasSdKeyDrifted', () => {
+  it('auto-release decision goes through shouldReleaseStaleOwner with drift + dead + silence + pid-alive', () => {
     // SD-LEO-INFRA-CLAIM-SILENCE-CONSUME-VERIFY-001 (SEAM 1) gated the dead-owner arm on
-    // !ownerIsSilenced (drift still releases unconditionally). Both conditions still appear.
-    expect(src).toMatch(/if\s*\(\s*ownerHasSdKeyDrifted\s*\|\|\s*\(\s*ownerIsDead\s*&&\s*!ownerIsSilenced\s*\)\s*\)/);
-    expect(src).toMatch(/ownerIsDead/);
-    expect(src).toMatch(/ownerHasSdKeyDrifted/);
+    // !ownerIsSilenced (drift still releases unconditionally). SD-REFILL-00C7GXJS refactored the
+    // inline condition into the pure shouldReleaseStaleOwner() and ADDED the !ownerPidAlive escape
+    // (a busy worker mid Task() sub-agent call has a live PID and must not be reaped). The release is
+    // now driven by that helper; the pure function still encodes drift-always / (dead && !silenced && !pid-alive).
+    expect(src).toMatch(/if\s*\(\s*shouldReleaseStaleOwner\(\s*\{\s*ownerHasSdKeyDrifted,\s*ownerIsDead,\s*ownerIsSilenced,\s*ownerPidAlive\s*\}\s*\)\s*\)/);
+    expect(src).toMatch(/function shouldReleaseStaleOwner/);
+    expect(src).toMatch(/if\s*\(\s*ownerHasSdKeyDrifted\s*\)\s*return true/);
+    expect(src).toMatch(/Boolean\(ownerIsDead\)\s*&&\s*!ownerIsSilenced\s*&&\s*!ownerPidAlive/);
   });
 
   it('release reason is "sd_key_drift" when drift triggers (NOT stale/released/missing)', () => {
