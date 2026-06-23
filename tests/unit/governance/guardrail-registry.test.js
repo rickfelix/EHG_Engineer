@@ -485,6 +485,32 @@ describe('Guardrail Registry - GR-DELETION-SAFEGUARD', () => {
     const violation = result.violations.find((v) => v.guardrail === 'GR-DELETION-SAFEGUARD');
     expect(violation).toBeUndefined();
   });
+
+  // SD-REFILL-00GN7D8S: bare `destroy` must not false-trip on non-destructive code phrasing.
+  it('does NOT block on a colloquial/code "destroy" without a data object (false-positive fix)', () => {
+    for (const scope of [
+      'Close/destroy the DB handles on shutdown so the process can exit cleanly',
+      'Refactor the destroy() method on the connection pool',
+      'Tear down and destroy the test fixture instance after each run',
+    ]) {
+      const result = check({ scope, strategic_objectives: ['OKR-1'] });
+      const violation = result.violations.find((v) => v.guardrail === 'GR-DELETION-SAFEGUARD');
+      expect(violation, `should not block: ${scope}`).toBeUndefined();
+    }
+  });
+
+  it('STILL blocks genuine data destruction phrased with "destroy" (no weakened teeth)', () => {
+    for (const scope of [
+      'Destroy all data in the staging tables',
+      'destroy the database and recreate from scratch',
+      'Job to destroy old customer records nightly',
+    ]) {
+      const result = check({ scope, strategic_objectives: ['OKR-1'] });
+      const violation = result.violations.find((v) => v.guardrail === 'GR-DELETION-SAFEGUARD');
+      expect(violation, `should block: ${scope}`).toBeDefined();
+      expect(violation.severity).toBe('critical');
+    }
+  });
 });
 
 describe('Guardrail Registry - GR-DEPLOY-WINDOW', () => {
