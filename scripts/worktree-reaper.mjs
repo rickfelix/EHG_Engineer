@@ -411,8 +411,21 @@ function decideShippedStaleAction(wt, shipped, ctx) {
     };
   }
   // git cherry "absorbed" with zero merged PRs is known-unreliable under
-  // squash merges — advisory-only, never stage1 authority on its own.
+  // squash merges — advisory-only, never stage1 authority on its own…
   if ((shipped?.evidence?.merged_pr_count ?? 0) === 0) {
+    // …EXCEPT when the SD/QF is TERMINAL in the DB (completed/cancelled/archived). That is
+    // AUTHORITATIVE ship-evidence — in LEO, status=completed implies the PR merged — so it overrides
+    // the unreliable cherry heuristic. Without this, squash-merged completed worktrees were kept
+    // advisory-only and ACCUMULATED toward the DUTY-1 pool stall (live 2026-06-15: 16/20 with 4
+    // completed SDs held as keep/no_match). The claim-held / non-terminal / active guards above ran
+    // first (terminalSet ⟂ activeSet), so a terminal key reaching here holds NO active claim.
+    // SD-REFILL-00RMNAS7.
+    const isTerminalShipped = isQf
+      ? Boolean(ctx.terminalQfSet && ctx.terminalQfSet.has(key))
+      : Boolean(ctx.terminalSdSet && ctx.terminalSdSet.has(key));
+    if (isTerminalShipped) {
+      return { protect: false, advisory: false, key, reason: 'terminal-status authoritative ship-evidence (completion implies merge; cherry-heuristic overridden)' };
+    }
     return { protect: false, advisory: true, key, reason: 'absorbed_no_pr cherry heuristic is advisory-only (unreliable under squash merges)' };
   }
   return { protect: false, advisory: false, key, reason: 'merged-pr-backed' };
