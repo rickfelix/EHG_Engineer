@@ -16,10 +16,16 @@
 // The canonical sourcing-engine activation flags (mirrors the per-module isXxxFlagEnabled helpers:
 // lib/sourcing-engine/gauge-gap-miner.js, lib/sourcing-engine/deferred-watcher.js). Add new
 // sourcing-engine flags here as they ship so the forecaster surfaces them automatically.
+// SD-LEO-INFRA-SOURCING-FLAG-STATE-FROM-DEPLOYMENT-001 (FR-2): all THREE live sourcing arms.
+// `label` is also the primary key (`arm`) in sourcing_engine_activation_state.
 export const SOURCING_ENGINE_FLAGS = Object.freeze([
   Object.freeze({ env: 'SOURCING_GAUGE_GAP_MINER_V1', label: 'gauge-gap-miner' }),
   Object.freeze({ env: 'SOURCING_DEFERRED_WATCHER_V1', label: 'deferred-watcher' }),
+  Object.freeze({ env: 'SOURCING_AUTO_REFILL_V1', label: 'auto-refill' }),
 ]);
+
+// SD-LEO-INFRA-SOURCING-FLAG-STATE-FROM-DEPLOYMENT-001 (FR-1): the DB source-of-truth table.
+export const SOURCING_ACTIVATION_TABLE = 'sourcing_engine_activation_state';
 
 // Same truthiness convention the per-module helpers use: 'on' | '1' | 'true' (case-insensitive).
 export function isSourcingFlagOn(value) {
@@ -31,6 +37,61 @@ export function isSourcingFlagOn(value) {
 export function readSourcingEngineFlags(env = process.env) {
   const e = env || {};
   return SOURCING_ENGINE_FLAGS.map((f) => ({ env: f.env, label: f.label, enabled: isSourcingFlagOn(e[f.env]) }));
+}
+
+/**
+ * SD-LEO-INFRA-SOURCING-FLAG-STATE-FROM-DEPLOYMENT-001 (FR-1): derive each arm's on/off from the DB
+ * activation-state row (the actual deployment) instead of the coordinator's LOCAL process.env — which
+ * is blind to the GitHub-Actions JOB-scoped sourcing flags and falsely read every arm OFF.
+ *
+ * Returns the SAME [{ env, label, enabled }] shape as readSourcingEngineFlags (FR-4 contract). An arm
+ * with no row reads enabled=false. FAIL-OPEN: on any query error (incl. the table not existing yet,
+ * pre-migration), fall back to the env-based reader so shipping this before the governed prod-apply
+ * degrades to today's behavior rather than throwing in the forecaster.
+ *
+ * @param {object} supabase - service-role client
+ * @param {object} [env=process.env] - fallback env-like object
+ * @returns {Promise<Array<{env:string,label:string,enabled:boolean}>>}
+ */
+export async function readSourcingEngineFlagsFromDb(supabase, env = process.env) {
+  try {
+    const { data, error } = await supabase.from(SOURCING_ACTIVATION_TABLE).select('arm, enabled');
+    if (error) throw new Error(error.message);
+    const byArm = new Map((data || []).map((r) => [r.arm, r.enabled === true]));
+    return SOURCING_ENGINE_FLAGS.map((f) => ({ env: f.env, label: f.label, enabled: byArm.get(f.label) === true }));
+  } catch (e) {
+    if (typeof process !== 'undefined' && process.stderr) {
+      process.stderr.write(`[sourcing-awareness] DB flag read failed (${e.message}); falling back to env.\n`);
+    }
+    return readSourcingEngineFlags(env);
+  }
+}
+
+/**
+ * SD-LEO-INFRA-SOURCING-FLAG-STATE-FROM-DEPLOYMENT-001 (FR-3): idempotent reconcile — upsert the
+ * given arm→enabled state so the DB re-derives from the actual deployment. Pass the live arms on
+ * activation/deactivation. Best-effort; returns the count upserted (0 on error).
+ *
+ * @param {object} supabase - service-role client
+ * @param {Record<string,boolean>} stateByArm - e.g. {'gauge-gap-miner':true,'auto-refill':true}
+ * @param {string} [updatedBy='reconcile']
+ * @returns {Promise<number>}
+ */
+export async function reconcileSourcingArmState(supabase, stateByArm = {}, updatedBy = 'reconcile') {
+  const rows = Object.entries(stateByArm || {}).map(([arm, enabled]) => ({
+    arm, enabled: enabled === true, updated_at: new Date().toISOString(), updated_by: updatedBy,
+  }));
+  if (!rows.length) return 0;
+  try {
+    const { data, error } = await supabase.from(SOURCING_ACTIVATION_TABLE).upsert(rows, { onConflict: 'arm' }).select('arm');
+    if (error) throw new Error(error.message);
+    return (data || []).length;
+  } catch (e) {
+    if (typeof process !== 'undefined' && process.stderr) {
+      process.stderr.write(`[sourcing-awareness] reconcile upsert failed (${e.message}).\n`);
+    }
+    return 0;
+  }
 }
 
 /**

@@ -40,7 +40,7 @@ import { isLiveCountableWorker } from './lib/live-countable-worker.mjs';
 // SD-LEO-INFRA-COORDINATOR-SOURCING-ENGINE-AWARENESS-001 (FR-2): surface the sourcing-engine
 // flag state + unpromoted roadmap depth so a belt-low/DEFICIT ping says "engine OFF, N unpromoted
 // -> activate/distill" instead of only "source N candidates" (manual backfill is the anti-pattern).
-import { readSourcingEngineFlags, formatSourcingAwareness } from './lib/sourcing-engine-awareness.mjs';
+import { readSourcingEngineFlagsFromDb, formatSourcingAwareness } from './lib/sourcing-engine-awareness.mjs';
 // SD-LEO-FEAT-COORDINATOR-CAPACITY-FORECAST-001: stall detection is DELEGATED to the canonical
 // detectStalledLoop SSOT (lib/coordinator/detectors.cjs), the same detector coordinator-audit.mjs uses.
 // The forecast previously ran its own heartbeat-AGE rule (classifyIdleWorker, ttl 180s), but the worker
@@ -262,7 +262,10 @@ async function main() {
 
   // SD-LEO-INFRA-COORDINATOR-SOURCING-ENGINE-AWARENESS-001 (FR-2): sourcing-engine awareness — flag
   // state + unpromoted roadmap depth so belt-low is read as "activate/distill" before "hand-ask Adam".
-  const sourcingFlags = readSourcingEngineFlags(process.env);
+  // SD-LEO-INFRA-SOURCING-FLAG-STATE-FROM-DEPLOYMENT-001 (FR-1): derive arm state from the DB
+  // source-of-truth (the actual deployment), not the coordinator's local process.env — which is
+  // blind to the GitHub-Actions job-scoped sourcing flags. The reader fails open to env on error.
+  const sourcingFlags = await readSourcingEngineFlagsFromDb(sb, process.env);
   const unpromotedCount = await countUnpromotedRoadmapItems(sb);
   const awareness = formatSourcingAwareness({ flags: sourcingFlags, unpromotedCount });
   console.log(`  SOURCING: ${awareness.line}`);
