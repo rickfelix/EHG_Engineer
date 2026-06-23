@@ -122,11 +122,17 @@ describe('FR-2: IDENTITY_DRIFT_OVERRIDE in claim-validity-gate', () => {
     const result = await assertValidClaim(supabase, 'SD-AC22-001', { operation: 'test', allowMainRepoForAcquisition: true });
     expect(result.ownership).toBe('self');
     expect(calls.audit_insert).toBe(1);
+    // SD-REFILL-00EOAPP9: the live audit_log has only event_type + a metadata jsonb (NO action/details
+    // columns), so the audit row must map onto the REAL schema or the insert errors at runtime and the
+    // whole override path throws. event_type carries the action; the forensic detail lives in metadata.
     expect(insertedRows[0]).toMatchObject({
-      action: 'identity_drift_override',
+      event_type: 'identity_drift_override',
       severity: 'warning',
-      details: expect.objectContaining({ sd_key: 'SD-AC22-001', reason: 'test-recovery' }),
+      metadata: expect.objectContaining({ sd_key: 'SD-AC22-001', reason: 'test-recovery' }),
     });
+    // regression guard: must NOT reintroduce the phantom columns
+    expect(insertedRows[0].action).toBeUndefined();
+    expect(insertedRows[0].details).toBeUndefined();
     const stderrCalls = stderrSpy.mock.calls.map(c => c[0]).join('');
     expect(stderrCalls).toContain('identity.override.applied');
     stderrSpy.mockRestore();
