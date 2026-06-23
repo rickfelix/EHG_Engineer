@@ -1,3 +1,6 @@
+// @wire-check-exempt: one-off, gated completion-integrity backfill CLI — dry-run by default, the
+// --apply (123 corroborated ghosts) is run manually under human/coordinator review (no production
+// caller by design). The pure logic (buildCanonicalLfaRow, isBackfillable) is unit-tested.
 /**
  * SD-REFILL-00LTDQZ5 — backfill the canonical sd_phase_handoffs LEAD-FINAL-APPROVAL accept row for
  * COMPLETION GHOSTS whose approval genuinely ran.
