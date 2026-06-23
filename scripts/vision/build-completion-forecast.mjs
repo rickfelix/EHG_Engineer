@@ -59,7 +59,9 @@ async function gatherInputs() {
     velocityPerDay = (completed?.length || 0) / windowDays;
 
     const { data: live } = await sb.from('strategic_directives_v2')
-      .select('sd_key, title, description, status, sd_type, created_at, claiming_session_id, dependencies, metadata')
+      // SD-REFILL-00306WTS: + target_application so isExcludedFromBelt drops un-actionable
+      // auto-filed venture remediation SDs from sourcing-rate + queue depth.
+      .select('sd_key, title, description, status, sd_type, created_at, claiming_session_id, dependencies, metadata, target_application')
       .not('status', 'in', '("completed","cancelled","deferred")');
     const rows = Array.isArray(live) ? live : [];
 
