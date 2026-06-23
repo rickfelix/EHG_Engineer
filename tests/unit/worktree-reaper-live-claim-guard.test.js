@@ -77,4 +77,37 @@ describe('decideShippedStaleAction (stage1 authority)', () => {
     const wt = { path: 'C:/r/.worktrees/qf/QF-20260612-999', branch: 'qf/QF-20260612-999' };
     expect(decideShippedStaleAction(wt, shippedWithPr, ctx).protect).toBe(true);
   });
+
+  // SD-REFILL-00RMNAS7: a TERMINAL-status SD under SQUASH merge (absorbed_no_pr, merged_pr_count=0)
+  // is now an AUTHORITATIVE stage1 reclaim (DB status overrides the unreliable cherry heuristic),
+  // instead of being kept advisory-only and accumulating toward the DUTY-1 pool stall.
+  it('terminal SD with absorbed_no_pr (squash merge) is now stage1, NOT advisory', () => {
+    const ctx = ctxWith({ sdMap: new Set(['SD-DONE-001']), terminalSdSet: new Set(['SD-DONE-001']) });
+    const wt = { path: 'C:/r/.worktrees/SD-DONE-001', branch: 'feat/SD-DONE-001' };
+    const a = decideShippedStaleAction(wt, shippedNoPr, ctx);
+    expect(a.protect).toBe(false);
+    expect(a.advisory).toBe(false);
+    expect(a.reason).toMatch(/terminal-status authoritative/);
+  });
+
+  it('terminal QF with absorbed_no_pr (squash merge) is also stage1', () => {
+    const ctx = ctxWith({ qfMap: new Set(['QF-20260612-777']), terminalQfSet: new Set(['QF-20260612-777']) });
+    const wt = { path: 'C:/r/.worktrees/qf/QF-20260612-777', branch: 'qf/QF-20260612-777' };
+    const a = decideShippedStaleAction(wt, shippedNoPr, ctx);
+    expect(a.protect).toBe(false);
+    expect(a.advisory).toBe(false);
+    expect(a.reason).toMatch(/terminal-status authoritative/);
+  });
+
+  it('SAFETY: a claim-held terminal SD is STILL protected (claim guard wins over terminal reclaim)', () => {
+    const ctx = ctxWith({
+      claimedKeySet: new Set(['SD-DONE-002']),
+      sdMap: new Set(['SD-DONE-002']),
+      terminalSdSet: new Set(['SD-DONE-002']),
+    });
+    const wt = { path: 'C:/r/.worktrees/SD-DONE-002', branch: 'feat/SD-DONE-002' };
+    const a = decideShippedStaleAction(wt, shippedNoPr, ctx);
+    expect(a.protect).toBe(true);
+    expect(a.reason).toBe('claim-held');
+  });
 });
