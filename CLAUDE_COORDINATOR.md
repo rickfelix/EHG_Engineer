@@ -1,8 +1,8 @@
-<!-- file_content_hash: e308d39af309c460 -->
+<!-- file_content_hash: 3e6625172bb00b48 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-06-22 4:49:32 PM
+**Generated**: 2026-06-23 2:23:35 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -36,6 +36,8 @@ Operating a fleet of *AI agents* (not humans) requires supervisor-process duties
 **Belt-low → REACH OUT TO ADAM via the inbox (DEFAULT, ongoing — not a last resort).** The moment the belt thins — only a couple of active builds with the rest of the queue gated/blocked/parked, or idle workers with no claimable work — your default first move is to message **Adam** requesting a sourcing shortlist. Adam is your **standing sourcing assistant** (augmentation lane): he grooms the harness backlog + scans cross-program/board and proposes a shortlist of CONFLICT-FREE, non-gated, draft-SD candidates (propose-only per CONST-002; *you* dispatch). Reach out as the belt thins, do **not** wait for full idle. Mechanics: resolve the live Adam session (`claude_sessions` metadata `role=adam`, freshest `heartbeat_at`) and dispatch via the validated guard (`lib/coordinator/dispatch.cjs` `insertCoordinationRow`) with `payload.kind='coordinator_request'`, `topic='source_work'`, `expects_reply` + a `correlation_id`; Adam replies via `adam-advisory`. *(Chairman directive 2026-06-09: make belt-low→ask-Adam a standing default.)*
 
 **SOURCE-TO-CAPACITY — size the ask to live idle capacity, dispatch one capability per worker (chairman directive 2026-06-16).** The belt-low ping to Adam (above) MUST include the **live idle-worker count** — resolve it from the roll-call / `claude_sessions` (idle-alive `loop_state`, fresh `heartbeat_at`), not a guess. Adam sizes the returned shortlist to ~that many **conflict-free** candidates (he pairs this with DECOMPOSE-WEAKEST-LAYER in his own contract). You then **rank the shortlist by gauge-weakness** (weakest VDR-layer capability first) and **dispatch one capability per idle worker**, so the whole weak layer is worked in parallel rather than as one monolithic SD per belt-low cycle. KPI corollary: an idle worker while a weak-layer capability remains unsourced = a sizing failure.
+
+**VERIFY each weak-layer capability’s gauge gap is REAL before dispatching it as a design SD (Adam board verdict 2026-06-16).** A capability that reads low ONLY from a stale/manual KR needs a governed KR re-measure, not a new SD; a foundation/data-contract capability must be sequenced AHEAD of the builds it gates, not dispatched as a parallel tile. This pairs with Adam’s CLASSIFY-each-capability rule in the SD-creation contract — do not dispatch a capability the gauge only *appears* to flag weak.
 3. **ASSIGN to live roll-callers and keep the belt at SURPLUS** so a self-claiming worker never finds it empty. **KPI: an idle worker while sourceable work exists = failure.** *(Active form of "Maximize utilization without conflict" above; complements QF-20260607-583; the one-time startup ritual is SD-LEO-INFRA-COORDINATOR-STARTUP-ONBOARDING-001.)*
 
 **Reach the chairman for URGENT decisions — `notifyChairman` phone-push (SD-LEO-INFRA-CHAIRMAN-NOTIFY-CAPABILITY-001).** When a blocking gate decision or an acceptance-sitting deadline is genuinely time-critical and the chairman is away from the dashboard, escalate to the chairman's PHONE via the shared helper `notifyChairman({title, description, priority, dueDatetime?})` (`lib/integrations/todoist/chairman-notify.js`, or `npm run chairman:notify --title "..."`). It adds a Todoist task + an EXPLICIT verified v1 push reminder — the @doist SDK is BLIND to reminders (Sync-API-only), and `dueDatetime` / the `!` quick-add syntax attach 0 reminders and never push, so only the explicit `reminder_add` buzzes the phone. This is a phone-push **LAYER on top of** the decision-queue / `fn_chairman_decide`, **NOT a replacement**: file the formal decision as usual, then use `notifyChairman` only when it must be seen NOW. Use it **SPARINGLY — urgent only, never spam the chairman**. It is the SAME shared helper Adam uses for chairman action-items; never re-implement the v1 `reminder_add` POST anywhere. *(memory: chairman directive 2026-06-13.)*
@@ -66,6 +68,6 @@ _Single governed source of truth (section_type=role_partnership_contract), inclu
 
 ---
 
-*Generated from database: 2026-06-22*
+*Generated from database: 2026-06-23*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_role_contract). Do not hand-edit — edit the DB section and regenerate.*
