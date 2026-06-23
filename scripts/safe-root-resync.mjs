@@ -316,6 +316,29 @@ export async function safeRootResync(opts = {}) {
   }
   // gitKind === 'directory' → shared root → proceed
 
+  // ── STEP 1.5 (SD-REFILL-00KUKQVS): clear a STALE .git/index.lock before any index op ──
+  // A crash-orphaned/concurrent .git/index.lock in the SHARED checkout silently froze it
+  // behind origin/main (the Adam-not-in-sync incident: 125 behind from a 25h-stale lock; a
+  // 0-byte lock re-appeared within minutes). This recovery command must clear a STALE lock
+  // first — otherwise the very lock we're recovering from blocks our own fetch/merge. Only a
+  // STALE lock is removed (0-byte, or mtime older than the threshold); a FRESH non-empty lock
+  // (an active git op) is left untouched. We only reach here when .git is a DIRECTORY (shared
+  // root, guarded above), so we never touch a worktree's lock.
+  try {
+    const { clearStaleGitIndexLock } = await import('../lib/git/clear-stale-index-lock.mjs');
+    const lockResult = clearStaleGitIndexLock({ repoRoot: cwd, fs: fsMod });
+    if (lockResult.cleared) {
+      process.stderr.write(
+        `[safe-root-resync] cleared STALE .git/index.lock (${lockResult.reason}, age ${Math.round((lockResult.ageMs || 0) / 1000)}s) — unblocking index ops\n`
+      );
+    } else if (lockResult.reason === 'fresh_active') {
+      process.stderr.write('[safe-root-resync] .git/index.lock is FRESH (active git op) — NOT clearing\n');
+    }
+  } catch (e) {
+    // Fail-open: a stale-lock check failure must never abort the resync.
+    process.stderr.write(`[safe-root-resync] stale-lock check skipped (non-fatal): ${e && e.message || e}\n`);
+  }
+
   // ── STEP 2: Fetch origin/main ─────────────────────────────────────────────
   try {
     await exec(['fetch', 'origin', 'main', '--quiet']);
