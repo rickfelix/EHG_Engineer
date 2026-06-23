@@ -134,7 +134,10 @@ async function main() {
       // SD-FDBK-INFRA-STALL-AFTER-COMPLETION-001: + process_alive_at — the authoritative tick-liveness
       // signal (written every 30s by the detached session-tick). detectMaskedStall uses it to tell a
       // CONFIRMED dead loop (live parent / fresh heartbeat but dead tick) from a momentarily-idle one.
-      .select('session_id, terminal_id, sd_key, heartbeat_at, process_alive_at, loop_state, expected_silence_until, metadata, status')
+      // SD-LEO-INFRA-STALLED-POSTCOMPLETION-TAIL-FP-001: + released_reason,released_at so detectStalledLoop
+      // excludes a worker running its post-completion tail (else the per-session stalled mark over-escalates
+      // a fleet-down false alarm to the operator). Replicate the detector input-column contract.
+      .select('session_id, terminal_id, sd_key, heartbeat_at, process_alive_at, loop_state, expected_silence_until, metadata, status, released_reason, released_at')
       .gte('heartbeat_at', liveCutoff),
     sb.from('strategic_directives_v2')
       // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + metadata (is_fixture marker) and
