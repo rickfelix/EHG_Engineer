@@ -32,12 +32,25 @@ dotenv.config();
 
 const SOURCE_TABLES = { todoist: 'eva_todoist_intake', youtube: 'eva_youtube_intake' };
 
+// SD-LEO-INFRA-BRAINSTORM-DISTILLATION-PIPELINE-001-D (FR-2): hard batch ceiling.
+// A scale-up over the ~429 unpromoted roadmap_wave_items must stay cost-bounded —
+// at most MAX_BATCH distilled per invocation regardless of --top. SSOT constant.
+export const MAX_BATCH = 50;
+
+/** Clamp a requested batch size into [1, MAX_BATCH], coercing NaN/garbage to the default 20. */
+export function clampBatch(topN) {
+  return Math.min(MAX_BATCH, Math.max(1, Number(topN) || 20));
+}
+
 /**
  * Load the top-N wave items by refine_composite_score, newest-safe.
  * Fetches the scored set and sorts client-side (PostgREST JSONB ordering is unreliable),
- * applying NULLS LAST then taking the top N.
+ * applying NULLS LAST then taking the top N. The batch is clamped to <=MAX_BATCH (FR-2)
+ * here — the shared DB-fetch chokepoint reached by both run() and main() — so the
+ * programmatic run({topN}) path is bounded, not just the CLI arg parse.
  */
 export async function loadTopWaveItems(supabase, topN = 20) {
+  const n = clampBatch(topN);
   const { data, error } = await supabase
     .from('roadmap_wave_items')
     .select('id, wave_id, source_type, source_id, title, metadata, item_disposition')
@@ -49,7 +62,36 @@ export async function loadTopWaveItems(supabase, topN = 20) {
       typeof r.metadata?.refine_composite_score === 'number' ? r.metadata.refine_composite_score : null,
   }));
   scored.sort((a, b) => (b.refine_composite_score ?? -1) - (a.refine_composite_score ?? -1));
-  return scored.slice(0, topN);
+  return scored.slice(0, n);
+}
+
+/**
+ * SD-LEO-INFRA-BRAINSTORM-DISTILLATION-PIPELINE-001-D (FR-1): disposition-coverage probe.
+ * Standalone count_ratio over roadmap_wave_items: actively-dispositioned (item_disposition
+ * <> 'pending') / total. NOT a VDR vision-ladder capability — the "Backlog distilled and
+ * dispositioned" ladder label is already bound to sd_backlog_map and adding a new capability
+ * without a matching vision_ladder_criteria row would break the gauge-coherence invariant.
+ * Read-only. Returns { value, status, numerator, denominator, detail }.
+ */
+export async function dispositionCoverage(supabase) {
+  const { count: denom, error: dErr } = await supabase
+    .from('roadmap_wave_items')
+    .select('id', { count: 'exact', head: true });
+  if (dErr) return { value: null, status: 'unknown', numerator: 0, denominator: 0, detail: `denom error: ${dErr.message}` };
+  const { count: numer, error: nErr } = await supabase
+    .from('roadmap_wave_items')
+    .select('id', { count: 'exact', head: true })
+    .neq('item_disposition', 'pending');
+  if (nErr) return { value: null, status: 'unknown', numerator: 0, denominator: denom || 0, detail: `numer error: ${nErr.message}` };
+  if (!denom) return { value: null, status: 'unknown', numerator: 0, denominator: 0, detail: 'empty corpus (0 items)' };
+  const value = (numer || 0) / denom;
+  return {
+    value,
+    status: 'ok',
+    numerator: numer || 0,
+    denominator: denom,
+    detail: `${numer || 0}/${denom} actively-dispositioned (item_disposition <> 'pending')`
+  };
 }
 
 /** Enrich a wave item from its source intake table (mirrors eva-intake-refine.js). */
@@ -108,6 +150,15 @@ async function main() {
     process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
   );
+
+  // FR-1: read-only disposition-coverage probe (no distillation, no writes).
+  if (args.includes('--coverage')) {
+    const cov = await dispositionCoverage(supabase);
+    console.log(`\n── Brainstorm corpus disposition coverage ──`);
+    console.log(`   ${cov.detail}`);
+    console.log(`   coverage: ${cov.value === null ? 'unknown' : (cov.value * 100).toFixed(2) + '%'} (status=${cov.status})`);
+    return;
+  }
 
   console.log(`\n── Brainstorm Distiller ${apply ? '(APPLY — writing to chairman review queue)' : '(DRY-RUN — zero DB writes)'} ──`);
   console.log(`   top ${topN} by refine_composite_score\n`);
