@@ -38,6 +38,39 @@ const DRY_RUN = process.argv.includes('--dry-run');
 function log(step, msg) { console.log(`[operator-cash-burn] ${step}: ${msg}`); }
 function warn(step, msg) { console.warn(`[operator-cash-burn] ${step}: WARN ${msg}`); }
 
+/**
+ * SD-EHG-PRODUCT-OPERATOR-CASH-ATTEST-DTB-LIVE-001 (FR-1): parse the chairman-attested cash flag.
+ * Pure + DB-free (unit-testable). Supports `--cash <usd>` and `--cash=<usd>`.
+ *   - absent                  -> null (no attestation; the existing bank/stripe path runs)
+ *   - present but no value     -> THROW (an attestation must be intentional — never coerce to 0)
+ *   - NaN / Infinity / negative -> THROW naming the bad token
+ *   - finite >= 0              -> the number (0 is a valid floor). No rounding here.
+ * @param {string[]} argv
+ * @returns {number|null}
+ */
+export function parseCashFlag(argv = process.argv) {
+  let raw = null;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--cash') { raw = argv[i + 1]; break; }
+    if (typeof a === 'string' && a.startsWith('--cash=')) { raw = a.slice('--cash='.length); break; }
+  }
+  if (raw === null || raw === undefined) {
+    // distinguish "flag absent" (null) from "flag present but no value" (throw)
+    const present = argv.includes('--cash') || argv.some((a) => typeof a === 'string' && a.startsWith('--cash='));
+    if (present) throw new Error('--cash requires a USD value (e.g. --cash 50000); refusing to attest an empty cash balance');
+    return null;
+  }
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new Error(`--cash value must be a finite number >= 0 (got "${raw}")`);
+  }
+  return n;
+}
+
+// Parse once at load so a malformed flag fails fast before any DB work.
+const ATTESTED_CASH = parseCashFlag(process.argv);
+
 /** FR-2: rolling-30d AI spend (lower bound) from the cost report CLI. Returns number or null. */
 function readRolling30dAiSpend() {
   const r = spawnSync(process.execPath, [path.join(REPO_ROOT, 'scripts/llm-cost-report.mjs'), '--days', '30', '--json'], {
@@ -71,6 +104,15 @@ async function main() {
   // bank (FR-4), cash stays UNATTESTED and the gauge honestly shows 'awaiting cash source' rather
   // than a false near-zero. Fail-soft throughout: a failed pull preserves the prior value.
   try {
+    if (ATTESTED_CASH != null) {
+      // SD-EHG-PRODUCT-OPERATOR-CASH-ATTEST-DTB-LIVE-001 (FR-2): chairman-attested manual cash takes
+      // precedence — the bank/stripe readers are NOT consulted (no network/credential calls, no
+      // additive double-count). Cash-only: do not write other_burn_usd here.
+      const cashUsd = Number(ATTESTED_CASH.toFixed(2));
+      log('FR-cash', `cash-on-hand = $${cashUsd} (chairman-attested, manual)`);
+      if (!DRY_RUN) await upsertSubstrateInputs(periodMonth, { cash_usd: cashUsd }, supabase, nowIso);
+      result.cash = { written: !DRY_RUN, value_usd: cashUsd, sources: ['chairman_attested'] };
+    } else {
     const bankSlice = await readBankCashSlice();
     if (!bankSlice) {
       // Inert: no primary cash source yet. Peek Stripe for logging only; do NOT write cash.
@@ -89,6 +131,7 @@ async function main() {
         await upsertSubstrateInputs(periodMonth, fields, supabase, nowIso);
       }
       result.cash = { written: !DRY_RUN, value_usd: cashUsd, sources, other_burn_usd: otherBurn };
+    }
     }
   } catch (e) { warn('FR-cash', `failed (fail-soft): ${e.message}`); result.cash = { written: false, error: e.message }; }
 
