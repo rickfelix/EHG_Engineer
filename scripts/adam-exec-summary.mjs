@@ -25,9 +25,10 @@ import { renderDecisionLines, prepareDecisions, DEAD_VENTURE_STATUSES } from '..
 import { computeBuildGauge, formatGaugeForSummary } from '../lib/vision/vdr-registry.js';
 // SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-E (FR-4): rung/KR rollup → email, in lockstep
 import { runRollup } from '../lib/vision/rung-progress-rollup.mjs';
-// SD-LEO-INFRA-BUILD-COMPLETION-FORECAST-001 (FR-4): one-line infra-build completion ETA
-import { formatForecastLine, classifyForecastAvailability, FORECAST_DEGRADED_MARKER } from '../lib/vision/build-completion-forecast.mjs';
 import { formatRungRollupLine } from '../lib/fleet/exec-email-rung-rollup.js';
+// SD-LEO-INFRA-EXEC-EMAIL-STRATEGY-ALIGNED-001 (FR-2): the ALIGNMENT section — meta-to-product ratio
+// (taper gauge) + dormant-until-revenue distance-to-quit (mission needle), both required by CLAUDE_ADAM.md.
+import { computeAlignmentLines } from '../lib/fleet/exec-email-alignment.mjs';
 // SD-LEO-INFRA-VDR-GREP-SEAM-CROSSREPO-001: the shared code-grep seam so the 5 code_grep probes resolve
 // (the chairman-visible gauge measures all 11 capabilities, not just the 6 DB/KR-backed ones).
 import { makeDefaultGrepSeam } from '../lib/vision/vdr-grep-seam.js';
@@ -140,6 +141,10 @@ let rungLine = '';
 let operationalLine = '';
 let rungNatureLine = ''; // SD-LEO-INFRA-VISION-LADDER-ROADMAP-COHERENCE-001 (FR-5): per-rung + per-nature
 let rungRollupLine = ''; // SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-E (FR-4): rung-completion rollup
+// SD-LEO-INFRA-EXEC-EMAIL-STRATEGY-ALIGNED-001 (FR-1): the active-rung NEEDLE for the subject line —
+// a compact form of the rung rollup (the first rung segment), so the subject auto-follows a rung
+// promotion instead of leading with the infra-build "% built". Fail-soft: empty → subject falls back.
+let subjectNeedle = '';
 try {
   // SD-LEO-INFRA-VISION-LADDER-V1-001 (FR-5): source the denominator from the ACTIVE vision rung
   // (visionSource:true → the re-anchorable ladder pointer), so the gauge re-points automatically when
@@ -164,6 +169,12 @@ try {
   try {
     const rollup = await runRollup({ supabase: db, computeGaugeFn: async () => gauge, apply: false, log: () => {} });
     rungRollupLine = formatRungRollupLine(rollup, { em: EM });
+    // FR-1: compact subject needle = the first rung segment of the rollup line (strip the "… :" prefix,
+    // take up to the first separator). Auto-follows a rung promotion with zero code change.
+    if (rungRollupLine) {
+      const afterColon = rungRollupLine.includes(':') ? rungRollupLine.slice(rungRollupLine.indexOf(':') + 1) : rungRollupLine;
+      subjectNeedle = afterColon.split(/[·|]/)[0].trim();
+    }
   } catch (e) { console.warn('[adam-email] rung-rollup line skipped (fail-soft): ' + (e?.message || e)); }
 } catch (e) {
   console.warn('[adam-email] live VDR gauge failed (fail-soft): ' + (e?.message || e));
@@ -171,41 +182,10 @@ try {
   visNote = `(gauge unavailable ${EM} compute error)`;
 }
 
-// SD-LEO-INFRA-BUILD-COMPLETION-FORECAST-001 (FR-4): ONE line — the infra-build completion ETA from
-// the latest persisted forecast run (build_completion_forecast_log), with the delta vs the prior run.
-// Fail-soft: a dormant table / no runs / any error → the line is omitted, NEVER blocks the email.
-let forecastLine = '';
-// SD-LEO-INFRA-EXEC-EMAIL-FORECAST-FROZEN-001 (FR-2): an error-omitted forecast must be DISTINGUISHABLE
-// from a genuine no-forecast. Previously a query error (or throw) and a present-but-empty table both
-// left forecastLine='' and the line silently vanished — so a broken forecast looked identical to "no
-// forecast yet". forecastDegraded marks the error path so the render shows an honest degraded marker.
-// An UNPROVISIONED/dormant table is NOT degraded (it's a genuine "no forecast yet" — stay silent),
-// mirroring the watchdog's tableProvisioned probe below.
-let forecastDegraded = false;
-try {
-  // QF-20260621-570 (FR-1): bounded read-retry. The cron writes a forecast row then reads it back in the
-  // SAME run while the PostgREST schema cache is briefly stale -> a transient cache-miss error. Retry a
-  // few times with short backoff so the re-query hits the refreshed cache and finds the rows (the real
-  // date renders) instead of the line being dropped. Retries on ANY error (the transient miss is common).
-  let fc = null, error = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    ({ data: fc, error } = await db.from('build_completion_forecast_log')
-      .select('plateau, build_pct, binding_constraint, eta_days, eta_date, confidence, note')
-      .order('measured_at', { ascending: false }).limit(2));
-    if (!error) break;
-    if (attempt < 2) await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
-  }
-  const cls = classifyForecastAvailability({ error, rows: fc }); // pure FR-2 discriminator (error vs genuine-empty)
-  forecastDegraded = cls.degraded;
-  if (cls.hasForecast) {
-    const toF = (r) => r && ({ plateau: r.plateau, buildPct: r.build_pct, bindingConstraint: r.binding_constraint, etaDays: r.eta_days, etaDateIso: r.eta_date, confidence: r.confidence, note: r.note });
-    forecastLine = formatForecastLine(toF(fc[0]), toF(fc[1]));
-  }
-  // else: genuine "no forecast yet" (empty/unprovisioned) → no line, no marker
-} catch (e) {
-  forecastDegraded = true; // a thrown read is an error-omission, not a genuine no-forecast
-  console.warn('[adam-email] build-completion forecast line skipped (fail-soft): ' + (e?.message || e));
-}
+// SD-LEO-INFRA-EXEC-EMAIL-STRATEGY-ALIGNED-001 (FR-3): the infra-build-completion forecast line is
+// STRIPPED from the exec-summary email surface. Its compute (a read of build_completion_forecast_log)
+// is removed with the line — the forecast table keeps being WRITTEN by its own cron for other
+// consumers; this email simply no longer reads/renders it.
 
 // FR-4 (SD-LEO-INFRA-ADAM-SELF-AUDIT-RESOLVERS-001): write a DURABLE 'Adam read the vision gauge'
 // marker so the self-adherence audit can measure the vision-monitoring duty. Best-effort + fail-soft:
@@ -263,6 +243,17 @@ try {
   decisionsLine = 'chairman_decisions consumed: (unavailable)';
 }
 
+// ── 2d. ALIGNMENT (SD-LEO-INFRA-EXEC-EMAIL-STRATEGY-ALIGNED-001 FR-2) ──
+// The two mission-invariant pivot signals CLAUDE_ADAM.md requires: the meta-to-product taper ratio
+// and the dormant-until-revenue distance-to-quit needle. Fail-soft: each line degrades to null and
+// is simply omitted; the helper never throws.
+let metaLine = null, distanceToQuitLine = null;
+try {
+  ({ metaLine, distanceToQuitLine } = await computeAlignmentLines({ supabase: db }, { nowMs: t }));
+} catch (e) {
+  console.warn('[adam-email] alignment lines skipped (fail-soft): ' + (e?.message || e));
+}
+
 // ── 3. ACTIONS FOR YOU: render the pending decisions (fetched above) as a copy-paste block ──
 const LEAD_IN = "I have received the following executive decisions via email and I'm ready to address them:";
 const numbered = lines.map((l, i) => `${i + 1}. ${l}`);
@@ -275,8 +266,13 @@ const when = new Date(t).toLocaleString('en-US', { timeZone: 'America/New_York',
 // value the body renders ("0% built", vdr gates on bp != null), so a truthy-OR fallback would
 // wrongly drop through to overall_pct at zero and re-introduce the mismatch. Mirror the body's
 // `bp != null` rule (typeof-number here is equivalent for the numeric/null gauge shape).
+// SD-LEO-INFRA-EXEC-EMAIL-STRATEGY-ALIGNED-001 (FR-1): the SUBJECT leads with the active-rung needle
+// (auto-follows a rung promotion), NOT the infra-build "% built". Fail-soft: if the needle is
+// unavailable, fall back to the rung-completion % rather than the stripped build framing.
 const subjPct = (typeof visBuildPct === 'number') ? visBuildPct : visPct;
-const visSubj = subjPct != null ? `EHG ${subjPct}% built` : 'EHG vision n/a';
+const visSubj = subjectNeedle
+  ? `EHG ${subjectNeedle}`
+  : (subjPct != null ? `EHG rung ${subjPct}%` : 'EHG vision n/a');
 // '(hr avg)' tag only for a CONFIDENT (non-sparse) hourly average — keep the subject honest too.
 const workerSubj = pulseSource === 'unavailable' ? 'workers n/a' : `${avgActive} active${(pulseSource === 'hourly avg' && !wc.sparse) ? ' (hr avg)' : ''}`;
 const actionsSubj = nActions ? `${nActions} ${nActions === 1 ? 'action' : 'actions'} for you` : 'all clear';
@@ -305,18 +301,15 @@ const text = [
   // segregated number is unavailable; then show V1 rung-completion + operational proofs separately.
   // FR-2 (FORECAST-FROZEN): when the gauge produced a number but the build-segmented line is
   // unavailable, mark the bare fallback so a degraded buildLine is distinguishable from a normal render.
-  buildLine || (visPct != null ? `EHG vision: ${visPct}% built (build-segmented detail unavailable)` : 'EHG vision: (gauge unavailable)'),
-  ...(rungNatureLine ? ['   ' + rungNatureLine] : []),
-  ...(rungLine ? ['   ' + rungLine] : []),
-  ...(rungRollupLine ? ['   ' + rungRollupLine] : []), // FR-4: per-rung completion rollup (Foundation → revenue)
-  // BUILD-COMPLETION-FORECAST FR-4: infra-build completion ETA. FR-2 (FORECAST-FROZEN): on a forecast
-  // ERROR show an explicit degraded marker (not a silent omission); a genuine no-forecast stays silent.
-  ...(forecastLine ? ['   ' + forecastLine] : (forecastDegraded ? ['   ' + FORECAST_DEGRADED_MARKER] : [])),
-  ...(operationalLine ? ['   ' + operationalLine] : []),
-  ...(layerLine ? ['   ' + layerLine] : []),
-  ...(visNote ? ['   ' + visNote] : []),
-  ...(trendLine ? ['   ' + trendLine] : []),
-  ...(trendAnalysis ? ['   ' + trendAnalysis] : []),
+  // SD-LEO-INFRA-EXEC-EMAIL-STRATEGY-ALIGNED-001: NEEDLE (active-rung rollup) leads, then ALIGNMENT
+  // (meta-to-product taper ratio + dormant-until-revenue distance-to-quit). The infra-build framing —
+  // fleet-build %, V1 rung-completion, infra completion forecast, operational-proofs, per-layer breakdown,
+  // and the buildable-capabilities note — is STRIPPED from this email surface per the product pivot; the
+  // underlying data tables (vision_build_gauge, build_completion_forecast_log, proofs) keep accruing for
+  // other consumers, only this render drops the lines. Rung promotion re-frames the email with no code change.
+  rungRollupLine || 'Active rung: (rollup unavailable this run)',
+  ...(metaLine ? ['   ' + metaLine] : []),
+  ...(distanceToQuitLine ? ['   ' + distanceToQuitLine] : []),
   ...(watchdogLine ? ['   ' + watchdogLine] : []),
   ...(recentText ? ['', recentText] : []),
   ...(decisionsLine ? [decisionsLine] : []),
@@ -328,10 +321,9 @@ const text = [
   `as of ${when} ET ${EM} Adam ${EM} LEO Fleet Advisor`,
 ].join('\n');
 
-const layerHtml = layerLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(layerLine)}</div>` : '';
-const noteHtml = visNote ? `<div style="font-size:12px;color:#888;margin:2px 0 0">${esc(visNote)}</div>` : '';
-const trendHtml = trendLine ? `<div style="font-size:13px;color:#444;margin:4px 0 0;font-family:ui-monospace,Menlo,Consolas,monospace">${esc(trendLine)}</div>` : '';
-const trendAnalysisHtml = trendAnalysis ? `<div style="font-size:12px;color:#888;margin:2px 0 0">${esc(trendAnalysis)}</div>` : '';
+// SD-LEO-INFRA-EXEC-EMAIL-STRATEGY-ALIGNED-001: layer/note/trend HTML fragments removed with their
+// stripped lines (the infra-build per-layer breakdown, the buildable-capabilities note, and the
+// already-disabled vision trend) — they no longer render in the exec-summary email surface.
 const decisionsHtml = decisionsLine ? `<p style="font-size:12px;color:#888;margin:4px 0 0">${esc(decisionsLine)}</p>` : '';
 const actionsHtml = nActions
   ? `<p style="font-size:14px;margin:0 0 2px"><b>${nActions} ${nActions === 1 ? 'action' : 'actions'} for you</b></p>` +
@@ -340,19 +332,13 @@ const actionsHtml = nActions
   : `<p style="font-size:14px;margin:0 0 6px"><b>No decisions need you right now.</b></p>`;
 const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px">' +
   `<p style="font-size:15px;margin:0 0 12px"><b>Workers:</b> ${esc(workerText)}</p>` +
-  // QF-20260621-379: full plaintext↔HTML parity. Lead with the fleet-build line (buildLine)
-  // using the SAME fallback as plaintext (line ~298) — the HTML previously showed a bare vision-%
-  // and OMITTED rungLine / rungRollupLine / forecastLine / operationalLine, so the chairman (an HTML
-  // reader) never saw the Estimated-completion forecast though it was correct in plaintext + DB.
-  `<p style="font-size:15px;font-weight:600;margin:0 0 0">${esc(buildLine || (visPct != null ? `EHG vision: ${visPct}% built (build-segmented detail unavailable)` : 'EHG vision: (gauge unavailable)'))}</p>` +
-  (rungNatureLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(rungNatureLine)}</div>` : '') +
-  (rungLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(rungLine)}</div>` : '') +
-  (rungRollupLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(rungRollupLine)}</div>` : '') +
-  // forecastLine with the degraded fallback mirroring plaintext line ~304 (a forecast ERROR shows an
-  // explicit degraded marker, not a silent omission; a genuine no-forecast stays silent).
-  (forecastLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(forecastLine)}</div>` : (forecastDegraded ? `<div style="font-size:13px;color:#b54708;margin:2px 0 0">${esc(FORECAST_DEGRADED_MARKER)}</div>` : '')) +
-  (operationalLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(operationalLine)}</div>` : '') +
-  layerHtml + noteHtml + trendHtml + trendAnalysisHtml +
+  // SD-LEO-INFRA-EXEC-EMAIL-STRATEGY-ALIGNED-001: HTML↔plaintext parity for the new skeleton. Lead with
+  // the NEEDLE (active-rung rollup), then ALIGNMENT (meta-to-product ratio + dormant distance-to-quit).
+  // The stripped infra-build lines (fleet-build %, rung-completion, forecast, operational-proofs, layer
+  // breakdown, buildable note) are dropped from this render; data tables keep accruing for other consumers.
+  `<p style="font-size:15px;font-weight:600;margin:0 0 0">${esc(rungRollupLine || 'Active rung: (rollup unavailable this run)')}</p>` +
+  (metaLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(metaLine)}</div>` : '') +
+  (distanceToQuitLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(distanceToQuitLine)}</div>` : '') +
   (watchdogLine ? `<div style="font-size:12px;color:#b54708;margin:2px 0 0">${esc(watchdogLine)}</div>` : '') +
   recentHtml + decisionsHtml +
   '<hr style="border:none;border-top:1px solid #e1e4e8;margin:14px 0">' +
