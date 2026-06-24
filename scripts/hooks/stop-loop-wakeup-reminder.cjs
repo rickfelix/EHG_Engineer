@@ -13,7 +13,7 @@
  *
  * When the session's loop_state is 'active' at Stop (and this is the FIRST stop this turn),
  * this hook BLOCKS the stop once with a reminder to arm a ScheduleWakeup (short delay if work
- * is in-flight, ~20min if idle) or set loop_state='exited' to legitimately end the loop.
+ * is in-flight, ~5min if idle) or set loop_state='exited' to legitimately end the loop.
  *
  * SAFETY:
  *   - Flag-gated: LEO_LOOP_WAKEUP_REMINDER (default off) → fast no-op (allow stop).
@@ -105,7 +105,7 @@ const REMINDER = [
   '  3. NOTIFY the coordinator you are winding down so it can use the grace window:',
   '       /signal feedback "winding down — finished <SD>, anything queued for me? idling ~180s"',
   '  4. Arm a SHORT grace ScheduleWakeup (~180s); on that tick RE-CHECK your inbox for a coordinator reply',
-  '     BEFORE settling into the ~1200s idle cadence. (Short delay if work is in-flight, ~20min if truly idle.)',
+  '     BEFORE settling into the ~300s idle cadence. (Short delay if work is in-flight, ~5min if truly idle.)',
   "  • To legitimately END the loop instead, set claude_sessions.loop_state='exited' for your session.",
   '(This reminder fires once — if you stop again it will let you through.)',
 ].join('\n');
