@@ -1092,8 +1092,13 @@ const { getActiveCoordinatorId: _getActiveCoordinatorIdForInbox } = require('../
 // ── Section: Worker-Signal Inbox (FR-3a) ──
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001
 // CRITICAL: filter on payload->>signal_type IS NOT NULL — relying on message_type=INFO
-// alone would surface 105+ unrelated INFO rows already in production. After surfacing,
-// mark read_at so signals do not re-appear next render.
+// alone would surface 105+ unrelated INFO rows already in production.
+// RECEIPT MODEL (RCA 2026-06-24, SD-LEO-INFRA-SIGNAL-INBOX-DRAIN-ON-DISPLAY-001): stamp
+// read_at on render = DELIVERED, but gate the SELECT on acknowledged_at IS NULL = ACTIONED.
+// A signal re-surfaces every render until the coordinator explicitly acks it via
+// coordinator-ack-signal.cjs (stamps acknowledged_at). The prior code marked read_at on
+// render AND queried read_at IS NULL — so one filtered/parked render silently lost the
+// signal (high-sev consults were missed). Mirrors the Adam-lane fix (QF-20260621-174).
 async function printInbox() {
   const getActiveCoordinatorId = _getActiveCoordinatorIdForInbox;
 
@@ -1107,12 +1112,20 @@ async function printInbox() {
     return;
   }
 
+  // RCA 2026-06-24 (SD-LEO-INFRA-SIGNAL-INBOX-DRAIN-ON-DISPLAY-001): gate on the ACTIONED
+  // marker (acknowledged_at IS NULL), NOT read_at — so a filtered/skimmed/parked-cron render
+  // can no longer silently retire a signal; it re-surfaces until coordinator-ack-signal.cjs
+  // stamps acknowledged_at. Mirrors the Adam-lane DELIVERED/ACTIONED decouple (QF-20260621-174).
+  // The created_at recency window is a flood-guard against the pre-fix historical backlog
+  // (hundreds of rows accumulated read-but-never-acked under the old drain-on-display bug).
+  const signalSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data: signals, error } = await supabase
     .from('session_coordination')
     .select('id, sender_session, sender_type, subject, body, payload, created_at')
     .eq('target_session', coordinatorId)
     .not('payload->>signal_type', 'is', null)
-    .is('read_at', null)
+    .is('acknowledged_at', null)
+    .gte('created_at', signalSince)
     .order('created_at', { ascending: false })
     .limit(20);
 
@@ -1145,7 +1158,10 @@ async function printInbox() {
     ids.push(s.id);
   }
 
-  // Mark all surfaced rows as read so they don't re-surface on next /coordinator inbox.
+  // Stamp read_at = DELIVERED (transport-level "the coordinator rendered it"), but NEVER
+  // acknowledged_at — the signal is retired ONLY by coordinator-ack-signal.cjs (ACTIONED).
+  // So a filtered/skimmed/parked-cron render can no longer silently hide an unacked signal;
+  // it re-surfaces (SELECT gates on acknowledged_at IS NULL) until explicitly acked.
   if (ids.length > 0) {
     await supabase
       .from('session_coordination')
