@@ -1,8 +1,8 @@
-<!-- file_content_hash: 76886eacf8464772 -->
+<!-- file_content_hash: 0ae26b2a604ec74f -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-06-24 9:56:53 AM
+**Generated**: 2026-06-20 5:27:00 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1280,8 +1280,6 @@ For SQL migrations, use the Supabase CLI or dashboard SQL editor:
 
 The WORKER analog of CLAUDE.md "Canonical Pause Points — THE ONLY REASONS TO STOP". An autonomous fleet worker in a /loop must NEVER exit prematurely: the enumerated stops below are the ONLY legitimate exits; every other condition re-arms a ScheduleWakeup and re-enters the loop.
 
-**THE LOOP'S UNIT IS ONE COMPLETE WORK ITEM** — an SD driven through ALL its handoffs (LEAD→PLAN→EXEC→PLAN_VERIFICATION→LEAD_FINAL) to completion, OR a quick fix worked to completion — NEVER a single handoff or phase. Under AUTO-PROCEED you flow from each handoff straight into the next IN THE SAME TURN: a phase boundary is NOT an iteration boundary and is NOT a pause point. The "re-arm a ScheduleWakeup" rule governs the boundary BETWEEN iterations (item complete / blocked claim / genuine idle / waiting on an external event such as CI or a coordinator reply) — it does NOT apply BETWEEN the handoffs of an active item. Do NOT arm a ScheduleWakeup, and do NOT end your turn, while you hold a claimed item with an immediately-actionable next handoff. ScheduleWakeup is an idle/wait mechanism, never a pacing mechanism for active work.
-
 **THE ONLY legitimate stops (the allow-path):**
 1. The operator tells you to stop / wind down.
 2. A canonical pause point is reached.
@@ -1290,7 +1288,7 @@ The WORKER analog of CLAUDE.md "Canonical Pause Points — THE ONLY REASONS TO S
 **Every other condition is a CONTINUE — re-arm a ScheduleWakeup and re-run the loop. Four enforced exit-modes:**
 - **(4a) Post-ship**: you just shipped an SD → /signal a fleet-retro → /checkin → claim the next workable SD (READY > EXEC > PLANNING > DRAFT) in the SAME turn. Shipping is the START of the next iteration, not the end of the loop (the #1 wrong-stop).
 - **(4b) Blocked claim**: your SD hit a chairman gate/blocker while unblocked belt work exists → build what IS buildable, /signal the specific blocker, PARK that SD (push WIP), and claim a DIFFERENT unblocked SD. Never idle holding a blocked claim.
-- **(4c) No wind-down handshake**: never exit silently → /signal feedback "winding down — finished <SD>, anything queued? idling ~180s", arm a SHORT (~180s) grace ScheduleWakeup, re-check the inbox on that tick, THEN settle into the ~300s idle cadence.
+- **(4c) No wind-down handshake**: never exit silently → /signal feedback "winding down — finished <SD>, anything queued? idling ~180s", arm a SHORT (~180s) grace ScheduleWakeup, re-check the inbox on that tick, THEN settle into the ~1200s idle cadence.
 - **(4d) Transient error**: a connectivity/API/tool blip is NOT a stop → re-arm a ScheduleWakeup and resume (retry ≤2, then invoke the RCA sub-agent). Never treat a transient error as terminal.
 
 **ENFORCEMENT (the teeth):** the Stop hook `scripts/hooks/stop-loop-wakeup-reminder.cjs` BLOCKS a premature stop (emits `{decision:"block"}` + re-prompts you to push WIP and arm a wakeup) UNLESS you took the allow-path (operator-stop / canonical pause point / an announced /signal wind-down detected in session_coordination). Gated by `LEO_LOOP_WAKEUP_REMINDER`; fail-open + single-fire (blocks at most once per turn) so a legitimate stop is never trapped.
@@ -1680,7 +1678,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-06-24*
+*Generated from database: 2026-06-20*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*
