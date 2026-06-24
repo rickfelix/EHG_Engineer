@@ -106,6 +106,14 @@ const REMINDER = [
   '       /signal feedback "winding down — finished <SD>, anything queued for me? idling ~180s"',
   '  4. Arm a SHORT grace ScheduleWakeup (~180s); on that tick RE-CHECK your inbox for a coordinator reply',
   '     BEFORE settling into the ~1200s idle cadence. (Short delay if work is in-flight, ~20min if truly idle.)',
+  // SD-LEO-INFRA-BLOCKED-CLAIM-COORDINATOR-ESCALATION-001: a worker must NOT self-authorize an
+  // irreversible/gated action (apply a prod migration, flip a gov flag, merge a sensitive PR) nor
+  // silently re-arm a wakeup to RETRY a blocked claim ("the wakeup-bypasses-the-blocker hole").
+  // Authorization + blocker-resolution are the coordinator lane (it escalates to the chairman).
+  '  • If your claim is BLOCKED on authorization / a database-sub-agent migration / a chairman gate /',
+  '    an external dependency: do NOT self-authorize and do NOT re-arm a wakeup to retry it. Escalate +',
+  '    park in ONE step: `node scripts/park-blocked-claim.cjs <SD-KEY> --reason "<what is blocked>"`',
+  '    (signals the coordinator + releases the claim), then /checkin for a DIFFERENT unblocked SD.',
   "  • To legitimately END the loop instead, set claude_sessions.loop_state='exited' for your session.",
   '(This reminder fires once — if you stop again it will let you through.)',
 ].join('\n');
