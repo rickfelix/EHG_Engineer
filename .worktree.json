@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-BRAINSTORM-DISTILLATION-PIPELINE-001-A",
-  "expectedBranch": "feat/SD-LEO-INFRA-BRAINSTORM-DISTILLATION-PIPELINE-001-A",
-  "createdAt": "2026-06-23T21:37:23.363Z",
+  "sdKey": "SD-LEO-INFRA-COMPETITIVE-OBSERVED-TAG-MIGRATION-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-COMPETITIVE-OBSERVED-TAG-MIGRATION-001",
+  "createdAt": "2026-06-24T00:11:14.638Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }

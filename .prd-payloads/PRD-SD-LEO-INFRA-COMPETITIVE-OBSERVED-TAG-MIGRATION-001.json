@@ -1,0 +1,97 @@
+{
+  "executive_summary": "Smallest enabling change to unblock epistemic_tag='OBSERVED' inserts on competitive_baselines. Today the CHECK constraint competitive_baselines_epistemic_tag_check allows only FACT/ASSUMPTION/SIMULATION/UNKNOWN, so the vdr-registry OBSERVED gauge (lib/vision/vdr-registry.js:209 probes competitive_baselines for epistemic_tag='OBSERVED', min:1) can NEVER go green — no OBSERVED row can be inserted. This SD widens the contract by exactly one value. LEAD validation (evidence 3590623c, PASS) queried the live DB and confirmed: constraint name is exactly competitive_baselines_epistemic_tag_check; current def CHECK ((epistemic_tag = ANY (ARRAY['FACT','ASSUMPTION','SIMULATION','UNKNOWN']))); 4 live rows all ASSUMPTION; FR-2 needs only line 10 of lib/discovery/competitive-baseline-service.js (opportunity-scorer.js:271 uses a 'FACT' string literal, unaffected). The constraint has no prior versioned migration — this file becomes its canonical record; keep DROP CONSTRAINT IF EXISTS. Migration shipped as FILE only; prod-apply is governed (MIGRATION_APPLY_TOKEN), recorded as a follow-up. OUT OF SCOPE: the OBSERVED extractor and writing any OBSERVED data (separate, chairman-gated).",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Additive constraint-widen migration",
+      "description": "New database/migrations SQL file: ALTER TABLE competitive_baselines DROP CONSTRAINT IF EXISTS competitive_baselines_epistemic_tag_check; ADD CONSTRAINT competitive_baselines_epistemic_tag_check CHECK (epistemic_tag = ANY (ARRAY['FACT','ASSUMPTION','SIMULATION','UNKNOWN','OBSERVED'])). Preserves all existing values; no data backfill / no row changes. House style: SD-ID header comment marking ADDITIVE/REVERSIBLE; rollback comment re-adding the 4-value constraint.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Migration drops + re-adds competitive_baselines_epistemic_tag_check with the 5-value array including OBSERVED",
+        "All existing values (FACT/ASSUMPTION/SIMULATION/UNKNOWN) preserved; no data/row changes",
+        "Reversible (rollback comment present); DROP CONSTRAINT IF EXISTS used (constraint has no prior versioned migration)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Service constant accepts OBSERVED",
+      "description": "Add 'OBSERVED' to the EPISTEMIC_TAGS array in lib/discovery/competitive-baseline-service.js (line 10). No other consumer needs changing (opportunity-scorer.js uses a 'FACT' string literal; vdr-registry probes OBSERVED and is the beneficiary).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "EPISTEMIC_TAGS = ['FACT','ASSUMPTION','SIMULATION','UNKNOWN','OBSERVED']",
+        "No other code consumer requires a change (verified)"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Retained-teeth test",
+      "description": "Unit test asserting the service validator accepts epistemic_tag='OBSERVED' AND still rejects an invalid tag (constraint widened by exactly one value, not removed). Use the service-layer validation path (no live DB).",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "Test: OBSERVED is accepted by the service validator",
+        "Test: an invalid tag (e.g. 'BOGUS') is still rejected (teeth retained)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Governed-apply note",
+      "description": "Ship the migration FILE only. The prod-apply of the constraint is governed (MIGRATION_APPLY_TOKEN / database-agent) and recorded as a follow-up; the worker does NOT self-apply against prod.",
+      "priority": "low",
+      "acceptance_criteria": [
+        "Migration file present; no worker self-apply against prod",
+        "Governed prod-apply recorded as a follow-up"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {"requirement": "Constraint name is exactly competitive_baselines_epistemic_tag_check (confirmed live); DROP/ADD targets it; keep IF EXISTS (no prior versioned migration)", "type": "constraint"},
+    {"requirement": "Widen by exactly one value (OBSERVED); never remove existing values — retained-teeth test mandatory", "type": "constraint"},
+    {"requirement": "FR-2 edits only line 10 of lib/discovery/competitive-baseline-service.js; opportunity-scorer.js 'FACT' literal unaffected", "type": "code"},
+    {"requirement": "Prod-apply is governed (MIGRATION_APPLY_TOKEN); ship the file as the artifact", "type": "constraint"}
+  ],
+  "test_scenarios": [
+    {"scenario": "service validator with OBSERVED", "type": "unit", "expected": "accepted"},
+    {"scenario": "service validator with invalid tag", "type": "unit", "expected": "rejected (teeth retained)"},
+    {"scenario": "migration statements", "type": "unit", "expected": "DROP IF EXISTS + ADD with 5-value array incl OBSERVED; no data changes"}
+  ],
+  "acceptance_criteria": [
+    "OBSERVED is an allowed epistemic_tag at both the constraint and service layers",
+    "Existing values preserved; invalid tags still rejected",
+    "Migration shipped as file; prod-apply governed"
+  ],
+  "risks": [
+    {"risk": "Wrong constraint name → DROP misses the live constraint", "mitigation": "Live name confirmed = competitive_baselines_epistemic_tag_check; DROP IF EXISTS + ADD recreates it canonically", "severity": "low"},
+    {"risk": "Weakening the safety contract", "mitigation": "Widen by exactly one value; retained-teeth test asserts invalid tags still reject", "severity": "low"},
+    {"risk": "Accidental prod DDL apply by a worker", "mitigation": "Ship the file only; prod-apply governed (MIGRATION_APPLY_TOKEN)", "severity": "low"}
+  ],
+  "integration_operationalization": {
+    "consumers": ["vdr-registry OBSERVED gauge (lib/vision/vdr-registry.js:209) — the beneficiary", "lib/discovery/competitive-baseline-service.js (insert/read/export of epistemic_tag)", "future OBSERVED extractor (out of scope)"],
+    "dependencies": ["competitive_baselines table + competitive_baselines_epistemic_tag_check constraint", "lib/discovery/competitive-baseline-service.js EPISTEMIC_TAGS"],
+    "data_contracts": ["Constraint widened to 5 values (adds OBSERVED); no schema column change; no data backfill"],
+    "runtime_config": ["MIGRATION_APPLY_TOKEN for the governed prod-apply (follow-up)"],
+    "observability_rollout": ["once applied, OBSERVED rows can be inserted and the vdr OBSERVED gauge can reach >=1"]
+  },
+  "system_architecture": {
+    "summary": "One additive constraint-widen migration file + one service-constant line + a retained-teeth unit test. No schema column change; no data changes.",
+    "components": [
+      {"name": "database/migrations constraint-widen SQL", "change": "DROP/ADD competitive_baselines_epistemic_tag_check with OBSERVED added"},
+      {"name": "lib/discovery/competitive-baseline-service.js", "change": "add OBSERVED to EPISTEMIC_TAGS (line 10)"},
+      {"name": "tests/unit retained-teeth test", "change": "accept OBSERVED + reject invalid tag"}
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Author the additive constraint-widen migration, add OBSERVED to the service constant, add a retained-teeth test. Do not self-apply prod DDL.",
+    "steps": [
+      "Write the migration (DROP IF EXISTS + ADD CONSTRAINT, 5-value array, rollback comment, SD-ID header)",
+      "Add OBSERVED to EPISTEMIC_TAGS (line 10)",
+      "Add the retained-teeth unit test (accept OBSERVED, reject invalid)",
+      "Run the unit test (green); ship the migration file (governed prod-apply as follow-up)"
+    ]
+  },
+  "smoke_test_steps": [
+    {"step_number": 1, "instruction": "Inspect the migration SQL", "expected_outcome": "DROP/ADD competitive_baselines_epistemic_tag_check with 5-value array incl OBSERVED; no data changes; rollback comment present"},
+    {"step_number": 2, "instruction": "npx vitest run the new epistemic-tag service test", "expected_outcome": "OBSERVED accepted; invalid tag rejected; all green"},
+    {"step_number": 3, "instruction": "grep EPISTEMIC_TAGS lib/discovery/competitive-baseline-service.js", "expected_outcome": "array includes OBSERVED"}
+  ],
+  "metadata": {"sd_key": "SD-LEO-INFRA-COMPETITIVE-OBSERVED-TAG-MIGRATION-001", "lead_evidence_id": "3590623c", "constraint_name": "competitive_baselines_epistemic_tag_check", "beneficiary": "lib/vision/vdr-registry.js:209 OBSERVED gauge", "estimated_loc": "~20 + test"}
+}
