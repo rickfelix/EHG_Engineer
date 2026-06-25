@@ -36,6 +36,22 @@ export const DEFAULT_NOISE_FLOOR = (() => {
 })();
 
 /**
+ * CUMULATIVE-ROT thresholds (SD-LEO-INFRA-CI-BASELINE-ROT-DETECT-001). decide()
+ * only fires on a CONFIRMED RISE above the settled median, so a slow climb that
+ * stays under the per-merge jump is absorbed into the creeping median and never
+ * trips (observed: 102 -> 134 over 13d). detectBaselineRot() below catches that
+ * blind spot. Both thresholds are env-overridable (mirrors DEFAULT_NOISE_FLOOR).
+ */
+export const DEFAULT_ROT_CEILING = (() => {
+  const n = Number(process.env.RED_MERGE_ROT_CEILING);
+  return Number.isFinite(n) && n > 0 ? n : 110;
+})();
+export const DEFAULT_TREND_DELTA = (() => {
+  const n = Number(process.env.RED_MERGE_TREND_DELTA);
+  return Number.isFinite(n) && n > 0 ? n : 15;
+})();
+
+/**
  * Does a QF description carry this exact signature? Delimiter-anchored so a sha-PREFIX cannot
  * collide (`:abc123` must not match a QF for `:abc123def456`). A match requires the char after the
  * signature to be end-of-string or a non-hex char (SHAs are [0-9a-f]). (SD-REFILL-00Z7INJF / RCA F2)
@@ -137,6 +153,75 @@ export function decide(snapshots = [], openRedMergeQfs = [], opts = {}) {
   };
 }
 
+/**
+ * Pure CUMULATIVE-ROT detector (SD-LEO-INFRA-CI-BASELINE-ROT-DETECT-001).
+ *
+ * decide() above fires only on a CONFIRMED RISE above the settled median, so a
+ * slow climb that stays under the per-merge jump (observed: 102 -> 134 over 13d)
+ * is absorbed into the creeping median and never trips. This catches that blind
+ * spot two ways, both with the same single-bounce immunity decide() uses (the
+ * latest TWO readings must qualify, so a lone flaky spike never fires):
+ *
+ *   • ABSOLUTE CEILING — the two most recent failed_counts both sit at/above an
+ *     absolute ceiling (the suite is simply too red, however it got there). This
+ *     is the rule that catches an ALREADY-rotted baseline whose window is flat.
+ *   • CUMULATIVE TREND — the median of the recent half of the window sits
+ *     >= trendDelta above the median of the older half (decay in progress), with
+ *     both latest readings above that older-half median.
+ *
+ * Pure + deterministic (no Date.now/Math.random); newest-first snapshots, same
+ * shape decide() consumes. Does NOT touch decide() — additive (TR-1).
+ *
+ * @param {Array<{findings: Array<{failed_count: number}>}>} snapshots newest-first
+ * @param {{ceiling?: number, trendDelta?: number}} [opts]
+ * @returns {{rotted: boolean, rule: 'absolute_ceiling'|'cumulative_trend'|null, reason: string, latest?: number, prev?: number, ceiling?: number, recentMedian?: number, olderMedian?: number}}
+ */
+export function detectBaselineRot(snapshots = [], opts = {}) {
+  const ceiling = Number.isFinite(opts.ceiling) ? opts.ceiling : DEFAULT_ROT_CEILING;
+  const trendDelta = Number.isFinite(opts.trendDelta) ? opts.trendDelta : DEFAULT_TREND_DELTA;
+  const f = (s) => (s && s.findings && s.findings[0]) || {};
+  const counts = snapshots.map((s) => Number(f(s).failed_count ?? NaN)).filter(Number.isFinite);
+  if (counts.length < 2) {
+    return { rotted: false, rule: null, reason: `insufficient history (${counts.length} reading(s); need >=2)` };
+  }
+  const [latest, prev] = counts;
+
+  // ABSOLUTE CEILING — persistence: the latest TWO both at/above the ceiling.
+  if (latest >= ceiling && prev >= ceiling) {
+    return {
+      rotted: true, rule: 'absolute_ceiling',
+      reason: `failed_count sustained at/above ceiling ${ceiling} (latest ${latest}, prev ${prev})`,
+      latest, prev, ceiling,
+    };
+  }
+
+  // CUMULATIVE TREND — needs >=4 readings to split into recent/older halves.
+  if (counts.length >= 4) {
+    const half = Math.floor(counts.length / 2);
+    const recentMedian = median(counts.slice(0, half));
+    const olderMedian = median(counts.slice(half));
+    // Single-bounce immunity: BOTH recent readings must sit a full trendDelta
+    // above the older-half median (a lone spike inflating recentMedian fails this).
+    if (
+      Number.isFinite(recentMedian) && Number.isFinite(olderMedian) &&
+      recentMedian - olderMedian >= trendDelta &&
+      latest >= olderMedian + trendDelta && prev >= olderMedian + trendDelta
+    ) {
+      return {
+        rotted: true, rule: 'cumulative_trend',
+        reason: `recent median ${recentMedian} is >= ${trendDelta} above older median ${olderMedian} (sustained climb)`,
+        latest, prev, recentMedian, olderMedian,
+      };
+    }
+  }
+
+  return {
+    rotted: false, rule: null,
+    reason: `no rot: latest ${latest}/prev ${prev} below ceiling ${ceiling}; no sustained ${trendDelta}+ climb`,
+    latest, prev, ceiling,
+  };
+}
+
 async function main() {
   const dryRun = process.argv.includes('--dry-run');
   const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -152,6 +237,22 @@ async function main() {
   // Pass a trailing WINDOW (not just 2) so decide() can compute a robust settled-median
   // baseline + confirm persistence — the flaky-bounce noise floor (SD-REFILL-00V2SADI).
   const mainSnaps = (snaps || []).filter((s) => (s.findings?.[0]?.branch || '') === 'main').slice(0, 8);
+
+  // CUMULATIVE-ROT check (SD-LEO-INFRA-CI-BASELINE-ROT-DETECT-001) — catches the
+  // slow decay decide() is blind to. Report-only mode; never files a QF here.
+  if (process.argv.includes('--rot-check')) {
+    const rot = detectBaselineRot(mainSnaps);
+    console.log(`[red-merge-detector] rot-check: ${rot.rotted ? 'BASELINE_ROT_DETECTED' : 'no rot'} — ${rot.reason}`);
+    if (rot.rotted && !dryRun) {
+      try {
+        await db.from('audit_log').insert({
+          event: 'BASELINE_ROT_DETECTED',
+          metadata: { rule: rot.rule, latest: rot.latest, prev: rot.prev, ceiling: rot.ceiling, recentMedian: rot.recentMedian, olderMedian: rot.olderMedian, reason: rot.reason },
+        });
+      } catch { /* best effort — never blocks */ }
+    }
+    return;
+  }
 
   const { data: openQfs } = await db
     .from('quick_fixes')
