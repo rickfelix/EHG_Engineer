@@ -11,6 +11,7 @@ import {
   validateStageGate,
   getGateType,
   KILL_GATE_STAGES,
+  SOFT_KILL_STAGES,
   PROMOTION_GATE_STAGES,
   GATE_TYPE,
   GATE_STATUS,
@@ -274,6 +275,58 @@ describe('Kill Gate (evaluateKillGate)', () => {
     expect(result.passed).toBe(false);
     expect(result.details.evaluatedThresholds.length).toBeGreaterThan(0);
     expect(result.details.evaluatedThresholds[0].thresholdId).toBe('cost_threshold');
+  });
+
+  // SD-LEO-INFRA-S3-SOFT-GATE-REDESIGN-001 (FR-3): S3 is a SOFT kill — advisory, non-blocking.
+  it('S3 (soft kill stage) does NOT block on a threshold failure — advisory, passed:true', async () => {
+    const supabase = createMockSupabase({
+      chairman_preferences: {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        in: vi.fn().mockResolvedValue({
+          data: createPreferenceRows([['filter.cost_max_usd', 5000, 'number']]),
+          error: null,
+        }),
+      },
+    });
+    const result = await evaluateKillGate(supabase, 'v1', 2, 3, {
+      chairmanId: 'ch1',
+      stageOutput: { cost: 20000, score: 8 }, // cost over threshold -> would fail at a hard gate
+      logger: silentLogger,
+    });
+    // FR-3: at S3 the venture PROCEEDS (passed:true) with an ADVISORY verdict, deferring the
+    // authoritative kill to S5. The failing threshold is still recorded (enriches S5).
+    expect(result.passed).toBe(true);
+    expect(result.advisory).toBe(true);
+    expect(result.status).toBe(GATE_STATUS.ADVISORY);
+    expect(result.details.evaluatedThresholds.length).toBeGreaterThan(0);
+  });
+
+  it('S5 (authoritative) STILL blocks on a threshold failure (FR-3 — S5 unchanged)', async () => {
+    const supabase = createMockSupabase({
+      chairman_preferences: {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        in: vi.fn().mockResolvedValue({
+          data: createPreferenceRows([['filter.cost_max_usd', 5000, 'number']]),
+          error: null,
+        }),
+      },
+    });
+    const result = await evaluateKillGate(supabase, 'v1', 4, 5, {
+      chairmanId: 'ch1',
+      stageOutput: { cost: 20000, score: 8 },
+      logger: silentLogger,
+    });
+    expect(result.passed).toBe(false);
+    expect(result.status).toBe(GATE_STATUS.REQUIRES_CHAIRMAN_DECISION);
+  });
+
+  it('SOFT_KILL_STAGES is exactly {3}; S3 remains a KILL gate type', () => {
+    expect(SOFT_KILL_STAGES).toEqual(new Set([3]));
+    expect(getGateType(3).gateType).toBe(GATE_TYPE.KILL);
   });
 
   it('returns REQUIRES_CHAIRMAN_DECISION when score is low', async () => {
