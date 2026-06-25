@@ -35,51 +35,35 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 const _sdKeyToUuidCache = new Map(); // key -> { uuid: string|null, expires_at: number }
 const SD_KEY_CACHE_TTL_MS = 60 * 1000;
 
-// QF-20260504-830 — known-idempotent monitoring commands are exempt from
-// signature dedup. RCA-TIERED ENFORCEMENT was tripping the 4th invocation of
-// /coordinator periodic probes (all exit 0) the same way it gates retry loops.
-// Patterns are matched against the raw Bash command string.
+// QF-20260504-830 / SD-FDBK-INFRA-RCA-TIERED-ENFORCEMENT-001 — known-idempotent monitoring
+// commands are exempt from signature dedup. RETAINED as the INTERLEAVING-SAFE backstop:
+// these MUTATING scheduled scripts (worker-checkin, coordinator-*) cannot be covered by the
+// read-only classifier below, and the exit-0 succeeding-poll exemption keys on a single
+// per-session last-outcome file that interleaved loops CLOBBER (so a recurring command rarely
+// matches its own prior outcome). isExempt short-circuits recordAndCount BEFORE the counter
+// accrues, so the exemption holds under interleaving with no reliance on lastOutcome. Full
+// removal of this allowlist requires per-command outcome storage (clobber-proof) — tracked as
+// a follow-up; SD-LEO-INFRA-RCA-AUTOSIGNAL-FALSE-POSITIVE-001 stops the arms-race GROWTH via
+// Control 4 (reliable exit-0 capture) + the read-only classifier, not by deleting these.
 const EXEMPT_PATTERNS = [
   /\bscripts[/\\]stale-session-sweep\.cjs\b/,
   /\bscripts[/\\]fleet-dashboard\.cjs\b/,
   /\bscripts[/\\]assign-fleet-identities\.cjs\b/,
   /[/\\]?\.claude[/\\]tmp[/\\]coord-[\w-]+\.(?:cjs|mjs)\b/,
-  // QF-20260610-626 — the remaining canonical coordinator cron loops (coordinator.md
-  // Step 0/5). All exit 0 by design on a fixed interval; the consecutive-attempt counter
-  // misreads the cron cadence as a stuck retry loop (the SD-FDBK-FIX-RCA-TIERED-
-  // ENFORCEMENT-001 exit-0 exemption keys on a single per-session lastOutcome file that
-  // interleaved loops clobber, so it never matches for them). Each pattern is anchored
-  // to the specific script basename — unrelated coordinator-* scripts stay RCA-gated.
   /\bscripts[/\\]coordinator-self-review\.mjs\b/,           // loop 8, */5
   /\bscripts[/\\]coordinator-audit\.mjs\b/,                 // loop 5, */15
   /\bscripts[/\\]coordinator-email-summary\.mjs\b/,         // loop 6, */30
   /\bscripts[/\\]coordinator-startup-check\.mjs\b/,         // startup probe
-  // Step-0 keepalive: a `node -e` inline script (no script path) that re-asserts the
-  // active coordinator ~every 2 min — match its stable tokens, not a path.
   /\bsetActiveCoordinator\b/,
   /\bcoordinator[/\\]resolve\.cjs\b/,
-  // SD-FDBK-INFRA-RCA-TIERED-ENFORCEMENT-001 — two more SCHEDULED, idempotent, succeeding ticks
-  // that the exit-0 exemption can't reliably catch (it keys on the single per-session last-outcome
-  // file, which interleaved loops in a busy session clobber — see the coordinator-cron note above).
-  //   adam-advisory.cjs inbox — the Adam inbox drain (~every 15min + on-demand). Scoped to the
-  //     `inbox` subcommand so a genuinely-failing OTHER adam-advisory subcommand stays RCA-gated.
   /\bscripts[/\\]adam-advisory\.cjs\b[^\n]*\binbox\b/,
-  //   worker-checkin.cjs — the /loop worker check-in tick (each pass; observed blocked at the 3rd
-  //     invocation this session, forcing EMERGENCY_RCA_BYPASS). It always exits 0 on a fixed cadence.
   /\bscripts[/\\]worker-checkin\.cjs\b/,
-  // SD-REFILL-00D2CC0B — two more canonical recurring coordinator crons the exit-0 exemption can't
-  // reliably catch (interleaved loops clobber the single per-session last-outcome file). Each is a
-  // SCHEDULED, idempotent, succeeding tick that the 3x-same-target counter misreads as a stuck retry;
-  // they false-blocked normal fleet re-engagement churn (Adam sourcing multiple V1 SDs rapidly →
-  // coordinator ranks each), forcing EMERGENCY_RCA_BYPASS (witnessed by coordinator Kamo 2026-06-15).
-  //   coordinator-backlog-rank.mjs — re-ranks the dispatch belt; runs per new sourced SD + on interval.
   /\bscripts[/\\]coordinator-backlog-rank\.mjs\b/,
-  //   coordinator-capacity-forecast.mjs — periodic fleet capacity/forecast probe.
   /\bscripts[/\\]coordinator-capacity-forecast\.mjs\b/,
 ];
 
 /**
- * Whether a Bash command should bypass invocation tracking entirely.
+ * Whether a Bash command should bypass invocation tracking entirely (allowlist backstop).
  * Returns false for any non-string input.
  * @param {string} commandStr
  * @returns {boolean}
@@ -87,6 +71,93 @@ const EXEMPT_PATTERNS = [
 function isExempt(commandStr) {
   if (typeof commandStr !== 'string' || !commandStr) return false;
   return EXEMPT_PATTERNS.some(rx => rx.test(commandStr));
+}
+
+// SD-LEO-INFRA-RCA-AUTOSIGNAL-FALSE-POSITIVE-001 (Control 2 — structural read-only
+// classifier). COMPLEMENTS the allowlist above and fixes the SD's primary symptom: the
+// coordinator's READ-ONLY monitoring loop (status/query Bash, never in the script allowlist)
+// false-blocked at the 3-strikes guard. Exemption is structural:
+//   (a) the succeeding-poll exemption in recordAndCount() — prior SAME command exited 0, now
+//       RELIABLY captured by post-tool-rca-outcome.cjs Control 4 — covers non-interleaved ticks;
+//   (b) this DENY-BY-DEFAULT classifier — covers provably READ-ONLY Bash even with no exit code.
+// A FAILING loop (non-zero exit / stderr) still accumulates under every path — teeth preserved.
+
+// Shell metacharacters that could chain or redirect into a mutation. Their presence means we
+// cannot prove the command is read-only, so it is NOT classified read-only.
+const MUTATION_OPERATOR_RE = /[;&|`]|>>?|\$\(|<\(/;
+
+// Provably read-only leading verbs (anchored at the start of the trimmed command).
+const READ_ONLY_LEADING_RE =
+  /^(?:git\s+(?:status|log|diff|show|branch|rev-parse|describe|remote(?:\s+-v)?|config\s+--get|cat-file|ls-files|for-each-ref)\b|ls|ll|pwd|cat|head|tail|grep|rg|find|wc|stat|echo|whoami|date|env|printenv|which|type|node\s+--version|npm\s+(?:run\s+)?(?:ls|list|view|outdated)\b)/i;
+
+/**
+ * Structurally classify a Bash command as provably read-only / non-mutating.
+ * DENY-BY-DEFAULT: returns true ONLY for a single simple command whose leading verb is
+ * provably read-only AND which contains no chaining/redirection/mutation operators. Any
+ * non-string, compound, or unknown command returns false (it still accumulates toward the
+ * 3-strikes guard — an unknown shape is never silently exempted).
+ * @param {string} commandStr
+ * @returns {boolean}
+ */
+function isReadOnlyCommand(commandStr) {
+  if (typeof commandStr !== 'string' || !commandStr) return false;
+  const c = commandStr.trim();
+  if (!c) return false;
+  if (MUTATION_OPERATOR_RE.test(c)) return false; // cannot prove read-only
+  return READ_ONLY_LEADING_RE.test(c);
+}
+
+/**
+ * Resolve the on-disk session-scoped RCA-reset marker path.
+ * @param {string} sessionId
+ * @returns {string}
+ */
+function sessionRcaResetMarkerPath(sessionId) {
+  const override = process.env.LEO_RETRY_STATE_DIR;
+  const dir = override ? path.resolve(override) : path.resolve(__dirname, '../../.claude');
+  return path.join(dir, `rca-reset-${sessionId}.json`);
+}
+
+/**
+ * R5 (SD-LEO-INFRA-RCA-AUTOSIGNAL-FALSE-POSITIVE-001): drop a session-scoped RCA-reset
+ * marker. Reachable by ANY session — including coordinator/Adam sessions with no claimed SD,
+ * for which the SD-scoped RCA-row reset (fetchRcaInvocationSince) is structurally
+ * unavailable (it returns null when sdKey is falsy), leaving only EMERGENCY_RCA_BYPASS.
+ * recordAndCount honors this marker when sdKey is falsy. Swallows errors (fail-open).
+ * @param {string} sessionId
+ * @param {string} [atIso] ISO timestamp (defaults to now)
+ * @returns {string|null} the reset timestamp written, or null on failure
+ */
+function writeSessionRcaReset(sessionId, atIso) {
+  if (!sessionId) return null;
+  const at = atIso || new Date().toISOString();
+  try {
+    const fp = sessionRcaResetMarkerPath(sessionId);
+    fs.mkdirSync(path.dirname(fp), { recursive: true });
+    const tmp = `${fp}.tmp-${process.pid}`;
+    fs.writeFileSync(tmp, JSON.stringify({ reset_at: at }), 'utf8');
+    fs.renameSync(tmp, fp);
+    return at;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read the session-scoped RCA-reset marker timestamp, or null on absence/error.
+ * @param {string} sessionId
+ * @returns {string|null}
+ */
+function readSessionRcaReset(sessionId) {
+  if (!sessionId) return null;
+  try {
+    const fp = sessionRcaResetMarkerPath(sessionId);
+    if (!fs.existsSync(fp)) return null;
+    const parsed = JSON.parse(fs.readFileSync(fp, 'utf8'));
+    return parsed && typeof parsed.reset_at === 'string' ? parsed.reset_at : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -280,6 +351,8 @@ function pruneStale(state, nowMs) {
     const ts = state.invocations[sig].filter(t => nowMs - t <= RETRY_WINDOW_MS);
     if (ts.length === 0) {
       delete state.invocations[sig];
+      // Drop the matching Control-3 progress fingerprint so it cannot leak past the window.
+      if (state.progress && typeof state.progress === 'object') delete state.progress[sig];
     } else {
       state.invocations[sig] = ts;
     }
@@ -356,27 +429,45 @@ async function recordAndCount(sessionId, sdKey, toolName, toolInput, opts = {}) 
     return { attempts: 0, signature: null, rcaResetApplied: false };
   }
 
-  if (toolName === 'Bash' && isExempt(toolInput && toolInput.command)) {
-    return { attempts: 0, signature, rcaResetApplied: false };
-  }
-
-  // SD-FDBK-FIX-RCA-TIERED-ENFORCEMENT-001: a blind retry is, by definition, re-running
-  // a FAILED command. If the immediately-prior invocation of THIS SAME command exited 0,
-  // this is a succeeding poll (e.g. a recurring monitor cron), not a retry — do not
-  // accumulate toward the 3-strikes guard. COMMAND-SCOPED: lastOutcome.command_sha must
-  // match the current command's hash, so an interleaved success of a DIFFERENT command
-  // can never exempt a genuine failure loop. STRICT: only exit_code 0/'0' exempts;
-  // null/undefined/non-zero codes still accumulate. FAIL-OPEN/back-compat: a legacy
-  // lastOutcome without command_sha (or a non-Bash tool) never exempts.
   if (toolName === 'Bash') {
     const lo = opts.lastOutcome;
     const cmd = typeof (toolInput && toolInput.command) === 'string' ? toolInput.command : '';
+
+    // QF-20260504-830 allowlist backstop (interleaving-safe): mutating idempotent scheduled
+    // ticks short-circuit BEFORE the counter accrues, independent of lastOutcome — see the
+    // EXEMPT_PATTERNS note above for why the exit-0/classifier paths cannot cover them.
+    if (isExempt(cmd)) {
+      return { attempts: 0, signature, rcaResetApplied: false, progressStalled: undefined };
+    }
+
+    // SD-FDBK-FIX-RCA-TIERED-ENFORCEMENT-001 + Control 4: a blind retry is, by definition,
+    // re-running a FAILED command. If the immediately-prior invocation of THIS SAME command
+    // exited 0 (now RELIABLY captured by post-tool-rca-outcome.cjs Control 4), this is a
+    // succeeding poll (a recurring monitor/scheduled cron), not a retry — do not accumulate.
+    // COMMAND-SCOPED: lastOutcome.command_sha must match the current command's hash, so an
+    // interleaved success of a DIFFERENT command can never exempt a genuine failure loop.
+    // STRICT: only exit_code 0/'0' exempts; non-zero codes still accumulate.
     if (
       lo && typeof lo === 'object' && cmd &&
       lo.command_sha === bashCmdHash(cmd) &&
       (lo.exit_code === 0 || lo.exit_code === '0')
     ) {
-      return { attempts: 0, signature, rcaResetApplied: false };
+      return { attempts: 0, signature, rcaResetApplied: false, progressStalled: undefined };
+    }
+
+    // SD-LEO-INFRA-RCA-AUTOSIGNAL-FALSE-POSITIVE-001 (Control 1 + Control 2): absence-of-
+    // failure on a PROVABLY READ-ONLY command. When there is no failure signal — no prior
+    // outcome at all, OR the prior outcome has a null/undefined exit_code AND empty stderr —
+    // AND the command is structurally read-only/non-mutating, it cannot be a blind-retry
+    // FAILURE loop, so it does not accumulate. CONJUNCTION (R1): read-only ALONE (without
+    // absence-of-failure) or absence-of-failure ALONE (without read-only) does NOT exempt —
+    // a FAILING read-only loop (non-null non-zero exit, or stderr) still accumulates.
+    const noFailureSignal =
+      !lo ||
+      ((lo.exit_code === null || lo.exit_code === undefined) &&
+        !(typeof lo.stderr_sha === 'string' && lo.stderr_sha));
+    if (cmd && isReadOnlyCommand(cmd) && noFailureSignal) {
+      return { attempts: 0, signature, rcaResetApplied: false, progressStalled: undefined };
     }
   }
 
@@ -391,6 +482,7 @@ async function recordAndCount(sessionId, sdKey, toolName, toolInput, opts = {}) 
     const rcaAt = await rcaCheck(sdKey, state.reset_at);
     if (rcaAt) {
       state.invocations = {};
+      state.progress = {};
       state.reset_at = rcaAt;
       rcaResetApplied = true;
     }
@@ -398,13 +490,49 @@ async function recordAndCount(sessionId, sdKey, toolName, toolInput, opts = {}) 
     // Fail-open: don't block on reset-check errors.
   }
 
+  // R5 (SD-LEO-INFRA-RCA-AUTOSIGNAL-FALSE-POSITIVE-001): no-SD-claim sessions (coordinator/
+  // Adam) cannot use the SD-scoped RCA-row reset above (fetchRcaInvocationSince returns null
+  // when sdKey is falsy), leaving only EMERGENCY_RCA_BYPASS. Honor a session-scoped reset
+  // marker any such session can drop via writeSessionRcaReset(sessionId).
+  if (!rcaResetApplied && !sdKey) {
+    try {
+      const marker = readSessionRcaReset(sessionId);
+      if (marker && (!state.reset_at || marker > state.reset_at)) {
+        state.invocations = {};
+        state.progress = {};
+        state.reset_at = marker;
+        rcaResetApplied = true;
+      }
+    } catch {
+      // Fail-open.
+    }
+  }
+
   const existing = Array.isArray(state.invocations[signature]) ? state.invocations[signature] : [];
+
+  // Control 3 support: track a per-signature progress fingerprint so the caller can suppress
+  // a spurious auto-signal. progressStalled === true means the session showed NO progress
+  // (phase/percent unchanged) since this signature first repeated; undefined when the caller
+  // supplies no fingerprint (back-compat — the auto-signal then fires on the ===2 crossing
+  // as before).
+  let progressStalled;
+  if (typeof opts.progressFingerprint === 'string') {
+    if (!state.progress || typeof state.progress !== 'object') state.progress = {};
+    const firstFp = state.progress[signature];
+    if (firstFp === undefined) {
+      state.progress[signature] = opts.progressFingerprint; // baseline on first sighting
+      progressStalled = true;
+    } else {
+      progressStalled = firstFp === opts.progressFingerprint;
+    }
+  }
+
   existing.push(now);
   state.invocations[signature] = existing;
 
   writeState(sessionId, state);
 
-  return { attempts: existing.length, signature, rcaResetApplied };
+  return { attempts: existing.length, signature, rcaResetApplied, progressStalled };
 }
 
 module.exports = {
@@ -417,6 +545,10 @@ module.exports = {
   pruneStale,
   stateFilePath,
   isExempt,
+  isReadOnlyCommand,
+  writeSessionRcaReset,
+  readSessionRcaReset,
+  sessionRcaResetMarkerPath,
   bashCmdHash,
   RETRY_WINDOW_MS,
   UUID_REGEX,

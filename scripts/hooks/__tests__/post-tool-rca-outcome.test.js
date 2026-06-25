@@ -63,6 +63,47 @@ describe('L4 — post-tool-rca-outcome.cjs', () => {
     expect(written.stderr_sha).toBe(expectedSha);
   });
 
+  it('TS-5 (Control 4): a SUCCESS payload (no exit_code, no stderr) records exit_code 0', () => {
+    // Claude Code Bash tool_response carries NO exit_code; success was previously skipped.
+    const payload = JSON.stringify({
+      tool_name: 'Bash',
+      tool_input: { command: 'node scripts/my-idempotent-tick.js' },
+      tool_response: { stdout: 'ok', stderr: '' },
+    });
+    const result = spawnSync('node', [HOOK_PATH], {
+      input: payload,
+      env: { ...process.env, CLAUDE_TOOL_NAME: 'Bash', CLAUDE_SESSION_ID: SESSION_ID, LEO_RETRY_STATE_DIR: tmpDir },
+      encoding: 'utf8',
+    });
+    expect(result.status).toBe(0);
+    const outFile = path.join(tmpDir, `last-outcome-${SESSION_ID}.json`);
+    expect(fs.existsSync(outFile)).toBe(true);
+    const written = JSON.parse(fs.readFileSync(outFile, 'utf8'));
+    expect(written.exit_code).toBe(0);              // success inferred from absence of failure
+    expect(written.stderr_sha).toBe('');
+    expect(written.command_sha).toMatch(/^[0-9a-f]{16}$/); // captured so the poll exemption can scope
+  });
+
+  it('TS-5b (Control 4 — strict/teeth): an interrupted call is NOT recorded as success', () => {
+    const payload = JSON.stringify({
+      tool_name: 'Bash',
+      tool_input: { command: 'node scripts/hangs.js' },
+      tool_response: { stdout: '', stderr: '', interrupted: true },
+    });
+    const result = spawnSync('node', [HOOK_PATH], {
+      input: payload,
+      env: { ...process.env, CLAUDE_TOOL_NAME: 'Bash', CLAUDE_SESSION_ID: SESSION_ID, LEO_RETRY_STATE_DIR: tmpDir },
+      encoding: 'utf8',
+    });
+    expect(result.status).toBe(0);
+    // No success signal recorded (would otherwise wrongly exempt a hung/interrupted command).
+    const outFile = path.join(tmpDir, `last-outcome-${SESSION_ID}.json`);
+    if (fs.existsSync(outFile)) {
+      const written = JSON.parse(fs.readFileSync(outFile, 'utf8'));
+      expect(written.exit_code).not.toBe(0);
+    }
+  });
+
   it('TS-18: malformed stdin → exit 0, no crash, no file written', () => {
     const result = spawnSync('node', [HOOK_PATH], {
       input: 'not-json-at-all',

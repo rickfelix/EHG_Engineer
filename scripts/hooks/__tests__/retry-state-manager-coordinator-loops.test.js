@@ -1,9 +1,13 @@
-// QF-20260610-626 — exempt the remaining canonical coordinator cron loops from the
-// RCA tiered-enforcement counter. The loops exit 0 by design on fixed intervals; the
-// consecutive-attempt counter misread the cron cadence as a stuck retry loop because
-// the exit-0 exemption's single per-session lastOutcome file is clobbered under
-// interleaved loops (residual after SD-FDBK-FIX-RCA-TIERED-ENFORCEMENT-001).
-// Closes feedback ids d89abebc + c86d5027.
+// SD-LEO-INFRA-RCA-AUTOSIGNAL-FALSE-POSITIVE-001 — structural replacement of the reactive
+// EXEMPT_PATTERNS allowlist (formerly QF-20260610-626 et al). The RCA recurrence detector
+// false-blocked read-only/idempotent loops because successful Bash carried no exit signal
+// (post-tool-rca-outcome.cjs skipped the write) → the per-signature counter accumulated.
+// These tests pin the STRUCTURAL fix: (1) a succeeding poll (prior SAME command exit 0, now
+// reliably captured by Control 4) never accumulates; (2) a FAILING loop STILL accumulates
+// (teeth); (3) the absence-of-failure exemption is conjunctive with a deny-by-default
+// read-only classifier; (4) the classifier rejects compound/mutating shapes; (5) a no-SD-claim
+// session can reset via the session-scoped marker (R5); (6) the Control-3 progress fingerprint
+// is returned so the caller can suppress a spurious auto-signal.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import path from 'node:path';
@@ -17,98 +21,160 @@ function loadFresh() {
   return require(MODULE_PATH);
 }
 
-// FR-1/2/3 — the full canonical coordinator-loop command set.
-const LOOP_COMMANDS = [
-  'node scripts/coordinator-self-review.mjs',                                  // loop 8, */5
-  'node scripts/coordinator-audit.mjs',                                        // loop 5, */15
-  'node scripts/coordinator-email-summary.mjs',                                // loop 6, */30
-  'node scripts/coordinator-startup-check.mjs',                                // startup probe
-  // Step-0 keepalive: node -e inline (no script path) — matched on stable tokens.
-  'node -e "const { setActiveCoordinator } = require(\'./lib/coordinator/resolve.cjs\'); setActiveCoordinator(process.env.CLAUDE_SESSION_ID).then(...)"',
-  'node -e "require(\'./lib/coordinator/resolve.cjs\').setActiveCoordinator(id)"',
-  // SD-REFILL-00D2CC0B — two more recurring coordinator crons (false-blocked during fleet
-  // re-engagement churn; coordinator Kamo 2026-06-15).
-  'node scripts/coordinator-backlog-rank.mjs',                                  // per-sourced-SD + interval
-  'node scripts/coordinator-capacity-forecast.mjs',                            // periodic capacity probe
-];
+const NO_RCA = { rcaCheck: async () => null };
 
-describe('QF-626 isExempt: canonical coordinator cron loops', () => {
-  const { isExempt } = loadFresh();
+describe('Control 2 — isReadOnlyCommand (deny-by-default classifier)', () => {
+  const { isReadOnlyCommand } = loadFresh();
 
-  for (const cmd of LOOP_COMMANDS) {
-    it(`exempts: ${cmd.slice(0, 60)}`, () => {
-      expect(isExempt(cmd)).toBe(true);
-    });
-  }
-
-  it('still exempts with ./ prefix and windows separators', () => {
-    expect(isExempt('node ./scripts/coordinator-self-review.mjs')).toBe(true);
-    expect(isExempt('node scripts\\coordinator-audit.mjs')).toBe(true);
+  it('classifies provably read-only single commands as read-only', () => {
+    for (const c of ['git status', 'git log --oneline -5', 'ls -la', 'pwd', 'cat package.json',
+                     'grep -r foo src', 'rg pattern', 'find . -name x', 'echo hi', 'stat file']) {
+      expect(isReadOnlyCommand(c)).toBe(true);
+    }
   });
 
-  // SD-REFILL-00D2CC0B — the two newly-whitelisted recurring crons, both separators.
-  it('exempts coordinator-backlog-rank.mjs and coordinator-capacity-forecast.mjs', () => {
-    expect(isExempt('node scripts/coordinator-backlog-rank.mjs')).toBe(true);
-    expect(isExempt('node ./scripts/coordinator-backlog-rank.mjs --apply')).toBe(true);
-    expect(isExempt('node scripts\\coordinator-capacity-forecast.mjs')).toBe(true);
+  it('DENY-BY-DEFAULT: unknown / script-invoking commands are NOT read-only', () => {
+    for (const c of ['node scripts/worker-checkin.cjs', 'node scripts/coordinator-audit.mjs',
+                     'npm run build', 'rm -rf x', 'git commit -m x', 'psql -c "UPDATE t SET a=1"']) {
+      expect(isReadOnlyCommand(c)).toBe(false);
+    }
   });
 
-  // FR-5 — anchoring: unrelated coordinator-* scripts stay RCA-gated.
-  it('does NOT exempt arbitrary or unrelated coordinator-* commands', () => {
-    expect(isExempt('node scripts/leo-create-sd.js')).toBe(false);
-    expect(isExempt('node scripts/coordinator-revive.cjs')).toBe(false);
-    expect(isExempt('node scripts/coordinator-self-review-helper.mjs')).toBe(false);
+  it('rejects compound/redirecting shapes even with a read-only leading verb (R1)', () => {
+    for (const c of ['git status && rm -rf x', 'cat f | tee g', 'ls > out.txt',
+                     'echo $(rm x)', 'grep x f; touch y']) {
+      expect(isReadOnlyCommand(c)).toBe(false);
+    }
   });
 
-  // FR-5 — fail-open input handling preserved.
-  it('returns false for non-string/empty input', () => {
-    expect(isExempt(null)).toBe(false);
-    expect(isExempt(undefined)).toBe(false);
-    expect(isExempt('')).toBe(false);
+  it('fail-open input handling preserved', () => {
+    expect(isReadOnlyCommand(null)).toBe(false);
+    expect(isReadOnlyCommand(undefined)).toBe(false);
+    expect(isReadOnlyCommand('')).toBe(false);
   });
 });
 
-describe('QF-626 recordAndCount: loop commands never accumulate attempts', () => {
+describe('TS-1 — succeeding poll (prior SAME command exit 0) never accumulates', () => {
   let tmpDir;
+  beforeEach(() => { tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rca-fp-')); process.env.LEO_RETRY_STATE_DIR = tmpDir; });
+  afterEach(() => { delete process.env.LEO_RETRY_STATE_DIR; fs.rmSync(tmpDir, { recursive: true, force: true }); });
 
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qf626-'));
-    process.env.LEO_RETRY_STATE_DIR = tmpDir;
-  });
-
-  afterEach(() => {
-    delete process.env.LEO_RETRY_STATE_DIR;
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  for (const cmd of LOOP_COMMANDS.slice(0, 4)) {
-    it(`attempts stays 0 across 4 consecutive runs: ${cmd.slice(5, 50)}`, async () => {
-      const { recordAndCount } = loadFresh();
-      const opts = { rcaCheck: async () => null };
-      for (let i = 0; i < 4; i++) {
-        const r = await recordAndCount('qf626-sess', null, 'Bash', { command: cmd }, opts);
-        expect(r.attempts).toBe(0);
-      }
-    });
-  }
-
-  it('the Step-0 keepalive inline command also stays at 0', async () => {
-    const { recordAndCount } = loadFresh();
-    const opts = { rcaCheck: async () => null };
-    for (let i = 0; i < 4; i++) {
-      const r = await recordAndCount('qf626-sess', null, 'Bash', { command: LOOP_COMMANDS[4] }, opts);
+  it('a non-allowlisted succeeding tick (Control 4 exit-0 capture) stays at attempts 0 across 5 ticks', async () => {
+    const { recordAndCount, bashCmdHash } = loadFresh();
+    // NOT in EXEMPT_PATTERNS — exemption here is driven purely by the captured exit_code 0.
+    const cmd = 'node scripts/my-idempotent-tick.js';
+    const lastOutcome = { exit_code: 0, command_sha: bashCmdHash(cmd), stderr_sha: '' };
+    for (let i = 0; i < 5; i++) {
+      const r = await recordAndCount('sess-poll', null, 'Bash', { command: cmd }, { ...NO_RCA, lastOutcome });
       expect(r.attempts).toBe(0);
     }
   });
 
-  it('non-loop command still accumulates 1..4 (3-strikes machinery untouched)', async () => {
+  it('a pure read-only command with NO prior outcome stays at 0 (Control 1 + classifier)', async () => {
     const { recordAndCount } = loadFresh();
-    const opts = { rcaCheck: async () => null };
+    for (let i = 0; i < 5; i++) {
+      const r = await recordAndCount('sess-ro', null, 'Bash', { command: 'git status' }, NO_RCA);
+      expect(r.attempts).toBe(0);
+    }
+  });
+});
+
+describe('TS-2 — TEETH: a FAILING loop still accumulates to the hard-block', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rca-fp-')); process.env.LEO_RETRY_STATE_DIR = tmpDir; });
+  afterEach(() => { delete process.env.LEO_RETRY_STATE_DIR; fs.rmSync(tmpDir, { recursive: true, force: true }); });
+
+  it('a non-read-only retry loop accumulates 1..4 (3-strikes machinery intact)', async () => {
+    const { recordAndCount } = loadFresh();
     const counts = [];
     for (let i = 0; i < 4; i++) {
-      const r = await recordAndCount('qf626-throttle', null, 'Bash', { command: 'node scripts/some-retry-loop.js' }, opts);
+      const r = await recordAndCount('sess-fail', null, 'Bash', { command: 'node scripts/flaky.js' }, NO_RCA);
       counts.push(r.attempts);
     }
     expect(counts).toEqual([1, 2, 3, 4]);
+  });
+
+  it('a FAILING read-only loop (prior exit non-zero) still accumulates', async () => {
+    const { recordAndCount, bashCmdHash } = loadFresh();
+    const cmd = 'grep needle haystack';
+    const lastOutcome = { exit_code: 1, command_sha: bashCmdHash(cmd), stderr_sha: 'abc123' };
+    const counts = [];
+    for (let i = 0; i < 3; i++) {
+      const r = await recordAndCount('sess-rofail', null, 'Bash', { command: cmd }, { ...NO_RCA, lastOutcome });
+      counts.push(r.attempts);
+    }
+    expect(counts).toEqual([1, 2, 3]);
+  });
+});
+
+describe('TS-3 — conjunction: success ALONE or read-only ALONE does not over-exempt', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rca-fp-')); process.env.LEO_RETRY_STATE_DIR = tmpDir; });
+  afterEach(() => { delete process.env.LEO_RETRY_STATE_DIR; fs.rmSync(tmpDir, { recursive: true, force: true }); });
+
+  it('read-only command WITH a failure outcome is NOT exempted by the Control-1 path', async () => {
+    const { recordAndCount } = loadFresh();
+    // read-only verb but the prior outcome shows a failure (stderr present) → must accumulate.
+    const lastOutcome = { exit_code: null, command_sha: 'deadbeef', stderr_sha: 'eee111' };
+    const r1 = await recordAndCount('sess-c1', null, 'Bash', { command: 'git status' }, { ...NO_RCA, lastOutcome });
+    const r2 = await recordAndCount('sess-c1', null, 'Bash', { command: 'git status' }, { ...NO_RCA, lastOutcome });
+    expect(r2.attempts).toBe(2);
+  });
+
+  it('non-read-only command with absence-of-failure is NOT exempted by the Control-1 path', async () => {
+    const { recordAndCount } = loadFresh();
+    // no prior outcome (absence of failure) but the command is not provably read-only → accumulate.
+    const r1 = await recordAndCount('sess-c2', null, 'Bash', { command: 'node scripts/mutator.js' }, NO_RCA);
+    const r2 = await recordAndCount('sess-c2', null, 'Bash', { command: 'node scripts/mutator.js' }, NO_RCA);
+    expect(r2.attempts).toBe(2);
+  });
+});
+
+describe('TS-7 — R5: no-SD-claim session can reset via the session-scoped marker', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rca-fp-')); process.env.LEO_RETRY_STATE_DIR = tmpDir; });
+  afterEach(() => { delete process.env.LEO_RETRY_STATE_DIR; fs.rmSync(tmpDir, { recursive: true, force: true }); });
+
+  it('writeSessionRcaReset clears the counter for a sdKey=null session', async () => {
+    const { recordAndCount, writeSessionRcaReset } = loadFresh();
+    const cmd = 'node scripts/flaky.js';
+    const a = await recordAndCount('sess-r5', null, 'Bash', { command: cmd }, NO_RCA);
+    const b = await recordAndCount('sess-r5', null, 'Bash', { command: cmd }, NO_RCA);
+    expect(b.attempts).toBe(2);
+    // A no-claim (coordinator/Adam) session drops the marker — newer than reset_at.
+    writeSessionRcaReset('sess-r5', new Date(Date.now() + 1000).toISOString());
+    const c = await recordAndCount('sess-r5', null, 'Bash', { command: cmd }, NO_RCA);
+    expect(c.rcaResetApplied).toBe(true);
+    expect(c.attempts).toBe(1); // counter reset, this call is the first post-reset
+  });
+});
+
+describe('Control 3 — progress fingerprint drives progressStalled', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rca-fp-')); process.env.LEO_RETRY_STATE_DIR = tmpDir; });
+  afterEach(() => { delete process.env.LEO_RETRY_STATE_DIR; fs.rmSync(tmpDir, { recursive: true, force: true }); });
+
+  it('unchanged fingerprint across the repetition → progressStalled true', async () => {
+    const { recordAndCount } = loadFresh();
+    const cmd = 'node scripts/flaky.js';
+    await recordAndCount('sess-p1', null, 'Bash', { command: cmd }, { ...NO_RCA, progressFingerprint: 'sd:EXEC:40' });
+    const r2 = await recordAndCount('sess-p1', null, 'Bash', { command: cmd }, { ...NO_RCA, progressFingerprint: 'sd:EXEC:40' });
+    expect(r2.attempts).toBe(2);
+    expect(r2.progressStalled).toBe(true);
+  });
+
+  it('changed fingerprint (session advanced) → progressStalled false', async () => {
+    const { recordAndCount } = loadFresh();
+    const cmd = 'node scripts/flaky.js';
+    await recordAndCount('sess-p2', null, 'Bash', { command: cmd }, { ...NO_RCA, progressFingerprint: 'sd:EXEC:40' });
+    const r2 = await recordAndCount('sess-p2', null, 'Bash', { command: cmd }, { ...NO_RCA, progressFingerprint: 'sd:EXEC:55' });
+    expect(r2.attempts).toBe(2);
+    expect(r2.progressStalled).toBe(false);
+  });
+
+  it('no fingerprint supplied → progressStalled undefined (back-compat)', async () => {
+    const { recordAndCount } = loadFresh();
+    const r = await recordAndCount('sess-p3', null, 'Bash', { command: 'node scripts/flaky.js' }, NO_RCA);
+    expect(r.progressStalled).toBeUndefined();
   });
 });

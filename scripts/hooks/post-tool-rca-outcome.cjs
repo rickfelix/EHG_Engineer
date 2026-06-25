@@ -111,7 +111,7 @@ function digestStderr(stderr) {
     // For other tools, outcome capture is unnecessary (signatures are file_path-keyed).
     if (toolName !== 'Bash') return;
 
-    const exitCode =
+    const numericExit =
       typeof resp.exit_code === 'number'
         ? resp.exit_code
         : typeof resp.code === 'number'
@@ -127,7 +127,29 @@ function digestStderr(stderr) {
           : '';
     const stderrSha = digestStderr(stderr);
 
-    // Skip writes that would yield no signal (no exit code AND no stderr).
+    // SD-LEO-INFRA-RCA-AUTOSIGNAL-FALSE-POSITIVE-001 (Control 4 — exit-code capture).
+    // Claude Code's Bash tool_response carries NO numeric exit_code, so a SUCCESSFUL
+    // command previously hit the `exitCode===null && !stderrSha` skip below and wrote no
+    // last-outcome file → the next PreToolUse signature collapsed to command-only (zero
+    // entropy) → identical read-only/idempotent ticks accumulated to the 3-strikes
+    // hard-block (43 false 'stuck' signals in 26h). FIX: infer success from ABSENCE OF
+    // FAILURE and record exit_code 0 so the succeeding-poll exemption in recordAndCount
+    // can fire. STRICT (R2/R3): never infer success when a numeric non-zero code is
+    // present, when stderr/error is non-empty, or when the call was interrupted/flagged —
+    // those keep accumulating (teeth preserved). When numericExit is a number it is used
+    // verbatim (0 = success, non-zero = failure).
+    const failureFlag =
+      resp.is_error === true ||
+      resp.isError === true ||
+      resp.interrupted === true ||
+      (resp.error != null && resp.error !== '');
+    let exitCode = numericExit;
+    if (exitCode === null && !stderrSha && !failureFlag) {
+      exitCode = 0; // no failure signal of any kind → record success
+    }
+
+    // Skip only when there is STILL no usable signal (e.g. a bare failure flag with no
+    // detail) — accumulation/teeth for genuine failures are preserved by NOT exempting.
     if (exitCode === null && !stderrSha) return;
 
     // SD-FDBK-FIX-RCA-TIERED-ENFORCEMENT-001: capture command_sha so the next PreToolUse
