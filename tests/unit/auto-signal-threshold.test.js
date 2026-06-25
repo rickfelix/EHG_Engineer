@@ -43,6 +43,25 @@ describe('shouldEmitAutoSignal (FR-1)', () => {
   });
 });
 
+describe('shouldEmitAutoSignal — Control 3 progress re-scope (SD-LEO-INFRA-RCA-AUTOSIGNAL-FALSE-POSITIVE-001)', () => {
+  it('SUPPRESSES the signal when the session is demonstrably progressing (progressStalled=false)', () => {
+    expect(shouldEmitAutoSignal({ attempts: 2, sessionId: SID, progressStalled: false, env: {} })).toBe(false);
+  });
+
+  it('still fires at the ===2 crossing when progress is stalled (progressStalled=true)', () => {
+    expect(shouldEmitAutoSignal({ attempts: 2, sessionId: SID, progressStalled: true, env: {} })).toBe(true);
+  });
+
+  it('preserves prior fire-on-crossing behavior when progress is unknown (progressStalled=undefined)', () => {
+    expect(shouldEmitAutoSignal({ attempts: 2, sessionId: SID, env: {} })).toBe(true);
+  });
+
+  it('kill-switch and dedupe still win over progressStalled=true', () => {
+    expect(shouldEmitAutoSignal({ attempts: 2, sessionId: SID, progressStalled: true, env: { LEO_AUTO_SIGNAL: 'off' } })).toBe(false);
+    expect(shouldEmitAutoSignal({ attempts: 3, sessionId: SID, progressStalled: true, env: {} })).toBe(false);
+  });
+});
+
 describe('buildAutoSignalArgs (FR-1)', () => {
   it('builds a stuck/high signal with a single-line bounded body referencing the SD', () => {
     const args = buildAutoSignalArgs({ toolName: 'Bash', signature: 'git reset --hard', attempts: 2, sdKey: 'SD-X-001' });

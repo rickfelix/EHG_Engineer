@@ -1139,6 +1139,7 @@ async function main() {
       // st.sd?.sd_key (string). sub_agent_execution_results.sd_id is UUID-typed;
       // stateMgr.fetchRcaInvocationSince now also UUID-resolves as a safety net.
       let claimedSdKey = null;
+      let progressFingerprint; // Control 3: phase/percent snapshot for auto-signal re-scope
       try {
         const fs2 = require('fs');
         const path2 = require('path');
@@ -1146,6 +1147,11 @@ async function main() {
         if (fs2.existsSync(stateFile)) {
           const st = JSON.parse(fs2.readFileSync(stateFile, 'utf8'));
           claimedSdKey = st.sd?.id || st.sd?.sd_key || null;
+          // SD-LEO-INFRA-RCA-AUTOSIGNAL-FALSE-POSITIVE-001 (Control 3): a stable progress
+          // fingerprint (claimed SD + phase + percent), already on disk so no extra I/O.
+          // recordAndCount compares it across the repetition; a change means the session is
+          // advancing → the auto-signal is suppressed (not a stuck loop).
+          progressFingerprint = `${claimedSdKey || ''}:${st.sd?.phase ?? ''}:${st.sd?.progress ?? ''}`;
         }
       } catch {
         // Missing state file is not fatal — reset lookup simply no-ops.
@@ -1172,8 +1178,8 @@ async function main() {
         // Missing/malformed outcome file → fall through to command-only signature (back-compat).
       }
 
-      const { attempts, signature, rcaResetApplied } = await stateMgr.recordAndCount(
-        _SESSION_ID, claimedSdKey, TOOL_NAME, input, { lastOutcome }
+      const { attempts, signature, rcaResetApplied, progressStalled } = await stateMgr.recordAndCount(
+        _SESSION_ID, claimedSdKey, TOOL_NAME, input, { lastOutcome, progressFingerprint }
       );
 
       if (signature && attempts >= 2) {
@@ -1213,7 +1219,7 @@ async function main() {
         // FAIL-OPEN (any error swallowed — auto-signal must NEVER block or slow a tool call).
         try {
           const { shouldEmitAutoSignal, buildAutoSignalArgs } = require('../../lib/hooks/auto-signal-threshold.cjs');
-          if (shouldEmitAutoSignal({ attempts, sessionId: _SESSION_ID, env: process.env })) {
+          if (shouldEmitAutoSignal({ attempts, sessionId: _SESSION_ID, progressStalled, env: process.env })) {
             const path = require('path');
             const { spawn } = require('child_process');
             const args = buildAutoSignalArgs({ toolName: TOOL_NAME, signature, attempts, sdKey: claimedSdKey });
