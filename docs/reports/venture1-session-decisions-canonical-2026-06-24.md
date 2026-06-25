@@ -37,13 +37,22 @@ EHG is substantively built (product pivot complete). **Venture-1 is the first RE
 - **Kill-gate policy:** ride canonical S3/S5 thresholds; a KILL is a real signal.
 - **First-dollar definition:** a real live-mode Stripe charge from a non-EHG payer.
 
-## Architecture conclusion (triangulated + internally reviewed)
-**Born-isolated on Neon + a three-layer architecture:**
-1. **Per-venture customer-data layer** — isolated Neon DB per venture, never cross-accessed.
+## Architecture conclusion (deep-research triangulation + internal code-grounded review — CONVERGED)
+**Three-layer hub-and-spoke:**
+1. **Per-venture customer-data layer** — isolated Neon DB per venture, never cross-accessed (the spoke = the sale boundary).
 2. **Shared capability layer** — reusable code/modules (`sd_capabilities` reuse registry), zero data coupling.
 3. **Shared intelligence hub** — non-PII metadata only (patterns, benchmarks, playbooks); ventures emit learnings UP (one-way) and consume capabilities DOWN. Customer data never crosses a venture boundary.
 
-Compounding and isolation are NOT in tension — they operate on separate planes. Neon scale-to-zero (~$0.10–0.50/mo idle vs Supabase ~$10/mo/DB) makes isolation nearly free, so the cost concern points TOWARD born-isolated, not shared-then-peel. Externally validated by the deep-research triangulation (OpenAI+Gemini+Claude). The cross-venture **learning loop is the orphaned gap** to build; venture-1 should establish the hub emit/consume pattern.
+**Compounding does NOT require a shared customer DB** — it rides the hub. Proven already in code: the RD_DEPARTMENT pattern (AI agents `company_id=NULL` reuse across companies via service_role while RLS isolates customer rows per company). So compounding + isolation operate on separate planes.
+
+**MODEL VERDICT (both methods converged):**
+- **Model C (staged hybrid: incubate-cheap → graduate-to-isolated → compound-via-hub) is the strategic TARGET for the portfolio.** The chairman's peel-off instinct was strategically correct; the `stakes-router` (`lib/venture-deploy/stakes-router.js`) ALREADY encodes Model C at the DB-provider layer (cheap D1 default → graduate to Neon on 5 stakes triggers). C just lifts that proven policy to the company/tenancy/runtime layer.
+- **BUT venture-1 runs as Model A (born-isolated) specifically** — because the automated peel-off/separation machinery is essentially UNBUILT (data-extraction script missing, `venture_asset_registry`=0, repo-split/auth-cutover undesigned). You don't bet the first dogfood on unproven separation. Venture-1 ships on the unchanged approved standard (zero revision) and becomes the first real end-to-end dogfood of the born-isolated contract (no venture has ever exercised it).
+- Cost confirms it: Neon scale-to-zero (~$0.10–0.50/mo idle) vs Supabase (~$10/mo/DB, ~$5–6k/yr waste at 50 ventures) makes isolation nearly free — so the cost concern points TOWARD born-isolated.
+
+**Venture-1's day-one hub hooks (THIN — design-in-now):** expose `GET /v1/metrics` + register `metrics_base_url`/`metrics_api_key_ref` in `applications` (the only mandatory hook); populate `venture_asset_registry` with its real assets; flip `PREBUILD_PANEL_ENRICHMENT` to contribute capabilities UP. Consume-down is already wired free (`eva-orchestrator.processStage` → `retrieveKnowledge()`, injects prior ventures' 229 artifacts/1448 patterns). **DEFER:** the cross-venture learning loop (vision itself defers to V2/post-first-revenue) + the peel-off path.
+
+> Detail: `holding-architecture-triangulation-2026-06-24.md` (external) + internal review (task `wol51964w` output).
 
 ## The plan (factory-run + operations)
 Seed venture-1 at Stage 1 → ride/adjudicate S1–S17 (with automated-grounded real economics at S3/S5) → S18 copy → **S19 SD-bridge builds the standalone product** (auth/Stripe/persona-WTP UI/landing on the Replit/Neon stack) → S20 build gate → **build back-half gaps** (LinkedIn adapter, marketing execution bridge, the missing `venture_revenue_entries` writer, income cron, RevenueTab, `/v1/metrics`) → legal/analytics → **chairman pulls go-live (Stripe LIVE)** → **first dollar** → S25/S26 → **operate/earn/sustain** monitor loop. Full 35-step plan: `venture1-factory-run-plan-2026-06-24.md`.
@@ -52,10 +61,10 @@ Seed venture-1 at Stage 1 → ride/adjudicate S1–S17 (with automated-grounded 
 1. **Clerk application + keys** (one-click in Replit UI).
 2. **Live-mode Stripe account + keys.**
 
-## Open / next steps
-- **Re-spin a worker** — the only blocker to *starting* the build (chairman/coordinator action; fleet is wound down).
-- **Internal architecture review** (`wf_f2a2d402-d95`) running — confirms hub built-vs-gap; fold into the plan when it lands.
-- Live Stripe + Clerk provisioning at the launch stage.
+## Open / next steps (for the next session)
+- **Re-spin a worker** — the ONLY blocker to *starting* the build (chairman/coordinator action; fleet is wound down; venture-1 is #1 on the belt, sourcing done).
+- **Manual-touch-at-launch (only 2, both late):** Clerk app + keys; live-mode Stripe account + keys.
+- **Open chairman decisions** (from the architecture review — NOT blocking venture-1): adopt Model C as the portfolio standard for ventures 2+; reconcile the `eva_ventures` vs `ventures` split-brain (12/12, 0 shared ids) before any shared incubation; set the Model-C graduation trigger (reuse the stakes-router's 5 triggers); sequence funding the orphaned compounding hub.
 
 ## Detailed reports (companions)
 - `venture1-market-modeling-scoping-2026-06-24.md` — the product/MVP scoping + skeptic verdicts.
