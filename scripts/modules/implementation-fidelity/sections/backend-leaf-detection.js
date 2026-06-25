@@ -78,3 +78,47 @@ export function classifyBackendLeaf(sdType, scopeText, titleText) {
   }
   return { exempt: false, reason: 'no backend-leaf signal' };
 }
+
+// SD-LEO-INFRA-GATE2-BACKEND-FIDELITY-NA-001 — signals for a backend SD that SERVES an
+// EXISTING frontend caller (so it MENTIONS UI but ships none). These let the exemption fire
+// even when hasUISurface() is true (the classifyBackendLeaf fence above rejects such SDs).
+export const API_BUILD_RE =
+  /\/api\/|\b(POST|GET|PUT|PATCH|DELETE)\s+\/|\bapi\s+(route|endpoint|handler)\b/i;
+// References an EXISTING/already-wired UI caller — the discriminator vs an SD that BUILDS UI.
+export const SERVES_EXISTING_UI_RE =
+  /\balready\s+calls?\b|\b(operator\s+app|frontend|client|ui|component)\s+already\b|\b\S+\.(tsx|jsx)\s+(already|calls?|expects?)\b/i;
+// Generous "this SD BUILDS a UI surface" fence — keeps a genuine UI SD OUT of the exemption.
+export const BUILDS_NEW_UI_RE =
+  /\b(build|create|add|implement|render|design)\s+(\w+\s+){0,4}(component|page|form|view|dashboard|widget|modal|button|ui)\b/i;
+
+/**
+ * A backend API-endpoint SD that SERVES an EXISTING frontend caller ships NO new UI, but its
+ * scope necessarily NAMES that caller (e.g. ".../route that Stage24GoLive.tsx already calls"),
+ * tripping hasUISurface() — so classifyBackendLeaf's FENCE wrongly returns exempt:false and
+ * Section A false-blocks it (STAGE24 / SD-EHG-PRODUCT-STAGE24-GOLIVE-BACKEND-001 forced 3
+ * bypasses). This detects that precise false-positive: builds an API endpoint AND references an
+ * already-calling UI caller AND does NOT itself build a new UI surface. A real UI SD BUILDS the
+ * surface, so BUILDS_NEW_UI_RE fences it out — the exemption can never relax a genuine UI SD.
+ * Pure + synchronous + never throws.
+ *
+ * @param {string} sdType
+ * @param {string} scopeText
+ * @param {string} titleText
+ * @returns {{exempt: boolean, reason: string}}
+ */
+export function servesExistingUiBackend(sdType, scopeText, titleText) {
+  const t = String(sdType || '').trim().toLowerCase();
+  // Only the UI-capable types fall through to Section A enforcement; other types are already
+  // handled by the sd-type policy / classifyBackendLeaf, so scope this narrowly.
+  if (!BACKEND_CAPABLE_TYPES.includes(t)) {
+    return { exempt: false, reason: 'not a UI-capable type (handled by policy/classifyBackendLeaf)' };
+  }
+  const text = `${scopeText || ''} ${titleText || ''}`;
+  const buildsApi = API_BUILD_RE.test(text);
+  const servesUi = SERVES_EXISTING_UI_RE.test(text);
+  const buildsUi = BUILDS_NEW_UI_RE.test(text);
+  if (buildsApi && servesUi && !buildsUi) {
+    return { exempt: true, reason: 'backend API endpoint serving an existing UI caller - ships no new UI' };
+  }
+  return { exempt: false, reason: 'not a backend-serves-existing-UI leaf' };
+}

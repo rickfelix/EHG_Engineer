@@ -7,7 +7,7 @@
 
 import { getSDSearchTerms, gitLogForSD, detectImplementationRepos } from '../utils/index.js';
 import { getSectionEnforcement } from '../sd-type-section-policy.js';
-import { classifyBackendLeaf, isEhgEngineerTarget } from './backend-leaf-detection.js';
+import { classifyBackendLeaf, isEhgEngineerTarget, servesExistingUiBackend } from './backend-leaf-detection.js';
 
 /**
  * Validate Design Implementation Fidelity
@@ -153,6 +153,25 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
           skipped: true,
           reason: 'EHG frontend lib-level feature with no DB/forms/UI by design (PAT-GATE2-LIBFEATURE-001)'
         };
+        return;
+      }
+    }
+
+    // SD-LEO-INFRA-GATE2-BACKEND-FIDELITY-NA-001 (PAT-GATE2-BACKEND-SERVES-UI-001):
+    // A backend API-endpoint SD that SERVES an EXISTING frontend caller ships NO new UI, but
+    // its scope necessarily NAMES that caller (e.g. "the POST /api/... route that
+    // Stage24GoLive.tsx already calls"), tripping hasUISurface() and disqualifying it from the
+    // classifyBackendLeaf fence below — so STAGE24 (SD-EHG-PRODUCT-STAGE24-GOLIVE-BACKEND-001)
+    // false-blocked Section A and forced 3 bypasses. Fires EVEN WHEN hasUIScope is true (like
+    // PAT-GATE2-LIBFEATURE-001), keyed on the precise false-positive; BUILDS_NEW_UI_RE fences a
+    // genuine UI SD out. Placed BEFORE classifyBackendLeaf since that block rejects on hasUISurface.
+    {
+      const servesUi = servesExistingUiBackend(sd?.sd_type, scopeToCheck, sd?.title);
+      if (servesUi.exempt) {
+        console.log(`   ✅ ${servesUi.reason} - Section A not applicable (25/25) [PAT-GATE2-BACKEND-SERVES-UI-001]`);
+        validation.score += 25;
+        validation.gate_scores.design_fidelity = 25;
+        validation.details.design_fidelity = { skipped: true, reason: `${servesUi.reason} (PAT-GATE2-BACKEND-SERVES-UI-001)` };
         return;
       }
     }
