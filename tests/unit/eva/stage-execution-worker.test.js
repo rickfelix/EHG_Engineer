@@ -566,28 +566,23 @@ describe('StageExecutionWorker', () => {
       worker = new StageExecutionWorker({ supabase, logger });
     });
 
-    it('resets ventures with foreign lock_id on startup', async () => {
+    it('resets ventures with a STALE lock on startup (SD-LEO-INFRA-STAGE-WORKER-RELIABILITY-001 FR-1)', async () => {
+      // FR-1: recovery is now STALENESS-based (.lt orchestrator_lock_acquired_at), not the broken
+      // uuid-vs-string .neq(orchestrator_lock_id, workerId) comparison.
       const orphaned = [
-        { id: 'v1', name: 'Venture A', orchestrator_lock_id: 'old-worker-1' },
+        { id: 'v1', name: 'Venture A', orchestrator_lock_acquired_at: new Date(Date.now() - 999_999).toISOString() },
       ];
-      const chain = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        neq: vi.fn().mockReturnThis(),
-        update: vi.fn().mockReturnThis(),
-        then: vi.fn(),
-      };
       // First from('ventures') call: select query returns orphaned
       // Second from('ventures') call: update succeeds
       let callCount = 0;
       supabase.from.mockImplementation(() => {
         callCount++;
         if (callCount === 1) {
-          // SELECT query chain
+          // SELECT query chain (.eq state, .lt stale-cutoff)
           return {
             select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                neq: vi.fn().mockResolvedValue({ data: orphaned, error: null }),
+                lt: vi.fn().mockResolvedValue({ data: orphaned, error: null }),
               }),
             }),
           };
@@ -612,11 +607,11 @@ describe('StageExecutionWorker', () => {
       );
     });
 
-    it('does nothing when no orphaned ventures exist', async () => {
+    it('does nothing when no stale-locked ventures exist', async () => {
       supabase.from.mockImplementation(() => ({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            neq: vi.fn().mockResolvedValue({ data: [], error: null }),
+            lt: vi.fn().mockResolvedValue({ data: [], error: null }),
           }),
         }),
       }));
@@ -626,19 +621,20 @@ describe('StageExecutionWorker', () => {
       expect(logger.warn).not.toHaveBeenCalled();
     });
 
-    it('continues worker startup on query error', async () => {
+    it('FAILS LOUD (logs error, does not throw) on a recovery query error (FR-2)', async () => {
       supabase.from.mockImplementation(() => ({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            neq: vi.fn().mockResolvedValue({ data: null, error: { message: 'DB down' } }),
+            lt: vi.fn().mockResolvedValue({ data: null, error: { message: 'DB down' } }),
           }),
         }),
       }));
 
       await worker._onStartupRecovery();
 
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Startup recovery query failed: DB down'),
+      // FR-2: the prior silent `warn` + return is replaced by a loud error log (the swallow masked the bug).
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('Startup recovery query failed (FAIL-LOUD): DB down'),
       );
       // Worker should not throw — start() continues
     });
