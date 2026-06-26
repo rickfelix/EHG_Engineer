@@ -21,6 +21,7 @@ const { isTwoWayV2Enabled } = require('../lib/coordinator/resolve.cjs');
 const { isFullUuid } = require('../lib/coordinator/dispatch.cjs');
 const { fetchAdvisory, stampActioned } = require('../lib/coordinator/adam-advisory-store.cjs');
 const { sendCoordinatorReply } = require('./coordinator-reply.cjs');
+const { resolveAdamReplyTarget, retargetStaleAdamInbound, verifyReplyDelivered } = require('../lib/coordinator/adam-identity.cjs');
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -76,13 +77,25 @@ async function main() {
       process.exit(0);
     }
     if (!replyBody) { console.error('ERROR: --reply requires a body.'); process.exit(2); }
-    const adamSession = adv.sender_session;
+    const originator = adv.sender_session;
     const correlationId = adv.payload && adv.payload.correlation_id;
-    if (!isFullUuid(adamSession)) { console.error('ERROR: advisory sender_session is not a full UUID:', JSON.stringify(adamSession)); process.exit(1); }
+    if (!isFullUuid(originator)) { console.error('ERROR: advisory sender_session is not a full UUID:', JSON.stringify(originator)); process.exit(1); }
     if (!correlationId) { console.error('ERROR: advisory carries no payload.correlation_id (not replyable).'); process.exit(1); }
+    // FR-1: target the CURRENT live Adam, never a stale originating session.
+    const { target: adamSession, retargeted } = await resolveAdamReplyTarget(supabase, originator);
+    if (retargeted) {
+      console.log(`  ↻ re-targeted from stale originator ${originator} → live Adam ${adamSession}`);
+      // FR-2: recover any prior unread inbound stuck at the stale originator.
+      const rec = await retargetStaleAdamInbound(supabase, { staleOriginator: originator, liveAdam: adamSession });
+      if (rec.error) console.error('  WARN: stuck-inbound recovery error:', rec.error);
+      else if (rec.retargeted > 0) console.log(`  ↻ recovered ${rec.retargeted} prior unread message(s) to the live Adam`);
+    }
     const { data, error } = await sendCoordinatorReply(supabase, { coordinatorSession, workerSession: adamSession, correlationId, body: replyBody });
     if (error) { console.error('ERROR: failed to send reply:', error.message); process.exit(1); }
-    console.log('✓ Coordinator reply sent to Adam');
+    // FR-3: verify delivery (send != delivered) — fail loud if the row cannot be confirmed.
+    const delivered = await verifyReplyDelivered(supabase, data && data.id);
+    if (!delivered) { console.error('ERROR: reply send reported success but the row could not be confirmed (delivery NOT verified) — failing loud.'); process.exit(1); }
+    console.log('✓ Coordinator reply sent to Adam (delivery verified)');
     console.log('  reply_id:', data.id);
     console.log('  to_adam:', adamSession);
     console.log('  reply_to:', correlationId);
