@@ -20,6 +20,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { isTwoWayV2Enabled } = require('../lib/coordinator/resolve.cjs');
 const { isFullUuid } = require('../lib/coordinator/dispatch.cjs');
 const { redact, BODY_HARD_CAP } = require('./worker-signal.cjs');
+const { resolveAdamReplyTarget, retargetStaleAdamInbound, verifyReplyDelivered } = require('../lib/coordinator/adam-identity.cjs');
 
 // Default reply lifetime — comfortably exceeds the worker await window (30s) plus margin.
 const REPLY_DEFAULT_TTL_MS = 60 * 60_000;
@@ -124,15 +125,24 @@ async function main() {
       .maybeSingle();
     if (advErr) { console.error('ERROR: advisory lookup failed:', advErr.message); process.exit(1); }
     if (!adv) { console.error('ERROR: advisory not found:', advisoryId); process.exit(1); }
-    workerSession = adv.sender_session;
+    const originator = adv.sender_session;
     correlationId = (adv.payload && adv.payload.correlation_id) || correlationId;
     if (!correlationId) {
       console.error(`ERROR: advisory ${advisoryId} carries no payload.correlation_id (not replyable — re-send via the updated adam-advisory.cjs).`);
       process.exit(1);
     }
-    if (!isFullUuid(workerSession)) {
-      console.error(`ERROR: advisory ${advisoryId} sender_session is not a full UUID: ${JSON.stringify(workerSession)}`);
+    if (!isFullUuid(originator)) {
+      console.error(`ERROR: advisory ${advisoryId} sender_session is not a full UUID: ${JSON.stringify(originator)}`);
       process.exit(1);
+    }
+    // FR-1: target the CURRENT live Adam, never the (possibly stale) advisory originator.
+    const resolved = await resolveAdamReplyTarget(supabase, originator);
+    workerSession = resolved.target;
+    if (resolved.retargeted) {
+      console.log(`  ↻ re-targeted from stale originator ${originator} → live Adam ${workerSession}`);
+      const rec = await retargetStaleAdamInbound(supabase, { staleOriginator: originator, liveAdam: workerSession });
+      if (rec.error) console.error('  WARN: stuck-inbound recovery error:', rec.error);
+      else if (rec.retargeted > 0) console.log(`  ↻ recovered ${rec.retargeted} prior unread message(s) to the live Adam`);
     }
   }
 
@@ -144,8 +154,14 @@ async function main() {
     console.error('ERROR: failed to insert reply:', error.message);
     process.exit(1);
   }
+  // FR-3: verify delivery (send != delivered) — fail loud if the row cannot be confirmed.
+  const delivered = await verifyReplyDelivered(supabase, data && data.id);
+  if (!delivered) {
+    console.error('ERROR: reply send reported success but the row could not be confirmed (delivery NOT verified) — failing loud.');
+    process.exit(1);
+  }
 
-  console.log('✓ Coordinator reply sent');
+  console.log('✓ Coordinator reply sent (delivery verified)');
   console.log('  reply_id:', data.id);
   console.log('  to_worker:', workerSession);
   console.log('  reply_to:', correlationId);

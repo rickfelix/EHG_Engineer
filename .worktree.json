@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-S5-DEVILS-ADVOCATE-NOT-PRODUCED-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-S5-DEVILS-ADVOCATE-NOT-PRODUCED-001",
-  "createdAt": "2026-06-26T10:30:14.192Z",
+  "sdKey": "SD-LEO-INFRA-COORD-ADAM-COMMS-DELIVERY-INTEGRITY-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-COORD-ADAM-COMMS-DELIVERY-INTEGRITY-001",
+  "createdAt": "2026-06-26T11:55:40.875Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
