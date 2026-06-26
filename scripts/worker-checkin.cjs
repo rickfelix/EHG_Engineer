@@ -78,7 +78,29 @@ const CONFIRM_DELETE_GAP_MS = process.env.CHECKIN_CONFIRM_GAP_MS != null ? Numbe
 // other/absent value leaves self-claim ENABLED (fail-toward-active — never silently park a worker).
 function isSelfClaimDisabled(metadata) {
   if (!metadata || typeof metadata !== 'object') return false;
-  return metadata.self_claim === false || metadata.availability === 'idle_only';
+  // SD-LEO-INFRA-SELF-CLAIM-STANDDOWN-HONOR-001 FR-1: a coordinator can halt a SPECIFIC worker by
+  // writing metadata.coordinator_stand_down===true to that worker's session (without the worker
+  // self-setting). STRICT: only the explicit `true` disables — fail-toward-active for any other value.
+  return metadata.self_claim === false
+    || metadata.availability === 'idle_only'
+    || metadata.coordinator_stand_down === true;
+}
+
+// SD-LEO-INFRA-SELF-CLAIM-STANDDOWN-HONOR-001 FR-2: a coordinator can halt the WHOLE fleet via a
+// global stand-down state in the EXISTING system_settings store (no migration). Honors a dedicated
+// FLEET_STAND_DOWN key (mode overnight_reduction|keeper_only|venture_parked) OR the existing
+// HARD_HALT_STATUS superset. FAIL-TOWARD-ACTIVE: a missing key, enabled false/absent, or any read
+// error returns false (self_claim stays ENABLED) — never park the fleet on a transient DB issue.
+async function isGlobalStandDownActive(sb) {
+  try {
+    const { data, error } = await sb.from('system_settings')
+      .select('key, value_json')
+      .in('key', ['FLEET_STAND_DOWN', 'HARD_HALT_STATUS']);
+    if (error || !Array.isArray(data)) return false;
+    return data.some((row) => row && row.value_json && row.value_json.enabled === true);
+  } catch {
+    return false;
+  }
 }
 // Tier-3 risk keywords (CLAUDE.md Work Item Routing). Auto-self-claim is for small,
 // low-risk QFs only. The sd-next display path excludes _escalate via a LIVE re-triage
@@ -380,15 +402,22 @@ function orderByRankMap(items, keyOf, rankMap) {
  * claim path only honored dispatch_rank (and only while fresh), so a fleet_critical SD whose
  * dispatch_rank was stale/absent stayed buried under lower-ranked REFILLs across idle-worker cycles.
  */
-function orderByFleetCriticalThenRank(items, keyOf, rankMap, fleetCriticalSet) {
+function orderByFleetCriticalThenRank(items, keyOf, rankMap, fleetCriticalSet, priorityMap) {
   const fc = fleetCriticalSet instanceof Set ? fleetCriticalSet : new Set();
   const rm = rankMap instanceof Map ? rankMap : new Map();
-  if (fc.size === 0 && rm.size === 0) return items;
+  const pm = priorityMap instanceof Map ? priorityMap : new Map();
+  if (fc.size === 0 && rm.size === 0 && pm.size === 0) return items;
   return items.slice().sort((a, b) => {
     const af = fc.has(keyOf(a)) ? 0 : 1;
     const bf = fc.has(keyOf(b)) ? 0 : 1;
     if (af !== bf) return af - bf;                       // fleet_critical first (stale-proof)
-    return (rm.get(keyOf(a)) ?? Infinity) - (rm.get(keyOf(b)) ?? Infinity); // then dispatch_rank
+    const ar = rm.get(keyOf(a)) ?? Infinity;
+    const br = rm.get(keyOf(b)) ?? Infinity;
+    if (ar !== br) return ar - br;                       // then fresh dispatch_rank
+    // SD-LEO-INFRA-SELF-CLAIM-STANDDOWN-HONOR-001 FR-3: when dispatch_rank is stale/absent for BOTH
+    // (equal Infinity), fall back to SD priority so a high-priority SD is not buried under low-priority
+    // REFILLs overnight. Unknown priority sorts last in the tier; input order is the final tie-break.
+    return (pm.get(keyOf(a)) ?? Infinity) - (pm.get(keyOf(b)) ?? Infinity);
   });
 }
 
@@ -403,9 +432,10 @@ async function sortByDispatchRank(sb, items, keyOf) {
     const keys = (items || []).map(keyOf).filter(Boolean);
     if (keys.length < 2) return items || [];
     const { data } = await sb.from('strategic_directives_v2')
-      .select('sd_key, metadata').in('sd_key', keys);
+      .select('sd_key, priority, metadata').in('sd_key', keys);
     const rankMap = new Map();
     const fleetCriticalSet = new Set();
+    const priorityMap = new Map(); // FR-3: stale-proof SD-priority tier (single read, no extra query)
     const now = Date.now();
     for (const r of (data || [])) {
       const m = r.metadata || {};
@@ -416,8 +446,10 @@ async function sortByDispatchRank(sb, items, keyOf) {
           && (now - new Date(m.dispatch_rank_at).getTime()) < DISPATCH_RANK_TTL_MS) {
         rankMap.set(r.sd_key, Number(m.dispatch_rank));
       }
+      const pr = PRIORITY_RANK[String(r.priority || '').toLowerCase()];
+      if (pr != null) priorityMap.set(r.sd_key, pr);
     }
-    return orderByFleetCriticalThenRank(items, keyOf, rankMap, fleetCriticalSet);
+    return orderByFleetCriticalThenRank(items, keyOf, rankMap, fleetCriticalSet, priorityMap);
   } catch { return items || []; } // fail-open: ordering must never break self-claim
 }
 const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -1016,7 +1048,14 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
   //     acquisition incl. directed work); this blocks only self-initiated claims.
   if (isSelfClaimDisabled(sessionMetadata)) {
     return { ...base, action: 'idle', recommended_wakeup_seconds: 1200,
-      message: 'Session availability=idle_only (metadata.self_claim=false): skipping self-claim from sd:next to avoid grab-release churn that blocks fresh-session pickup of reserved SDs. roll_call, directed WORK_ASSIGNMENTs and own stranded/orphan recovery still honored. Set metadata.self_claim=true (or clear metadata.availability) to resume self-claim.' };
+      message: 'Session self-claim disabled (metadata.self_claim=false / availability=idle_only / coordinator_stand_down=true): skipping self-claim from sd:next to avoid grab-release churn that blocks fresh-session pickup of reserved SDs. roll_call, directed WORK_ASSIGNMENTs and own stranded/orphan recovery still honored. Clear the flag to resume self-claim.' };
+  }
+  // SD-LEO-INFRA-SELF-CLAIM-STANDDOWN-HONOR-001 FR-2: a coordinator/global fleet stand-down halts the
+  // whole fleet's self-claim (overnight-reduction / keeper-only / venture-parked / hard-halt). roll_call,
+  // resume, directed WORK_ASSIGNMENT and recovery all ran above; only the sd:next self-claim is skipped.
+  if (await isGlobalStandDownActive(sb)) {
+    return { ...base, action: 'idle', recommended_wakeup_seconds: 1200,
+      message: 'Global/fleet stand-down active (system_settings FLEET_STAND_DOWN / HARD_HALT_STATUS enabled): skipping self-claim from sd:next. roll_call, directed WORK_ASSIGNMENTs and own stranded/orphan recovery still honored. Clear the system_settings stand-down to resume fleet self-claim.' };
   }
 
   // 5.5 SD-FDBK-INFRA-AUTO-MAINTAIN-EXECUTION-001: ensure an active execution baseline exists
@@ -1110,7 +1149,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective };
+module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective };
 
 if (require.main === module) {
   main().catch(err => {
