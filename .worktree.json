@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-ADAM-DECISION-RUBRIC-ENFORCE-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-ADAM-DECISION-RUBRIC-ENFORCE-001",
-  "createdAt": "2026-06-26T09:07:54.822Z",
+  "sdKey": "SD-LEO-INFRA-S5-DEVILS-ADVOCATE-NOT-PRODUCED-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-S5-DEVILS-ADVOCATE-NOT-PRODUCED-001",
+  "createdAt": "2026-06-26T10:30:14.192Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }

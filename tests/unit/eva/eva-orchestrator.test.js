@@ -34,7 +34,11 @@ vi.mock('../../../lib/eva/shared-services.js', async () => {
   };
 });
 
-vi.mock('../../../lib/eva/devils-advocate.js', () => ({
+// SD-LEO-INFRA-S5-DEVILS-ADVOCATE-NOT-PRODUCED-001: spread importOriginal so the real PURE decision
+// helpers (mustProduceDevilsAdvocate / isKillGateFailLoud) the orchestrator §5b now calls are present;
+// only the IO-ish exports are stubbed.
+vi.mock('../../../lib/eva/devils-advocate.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   isDevilsAdvocateGate: vi.fn().mockReturnValue({ isGate: false, gateType: null }),
   getDevilsAdvocateReview: vi.fn(),
   buildArtifactRecord: vi.fn().mockReturnValue({}),
@@ -500,53 +504,82 @@ describe('EvaOrchestrator', () => {
       isDevilsAdvocateGate.mockReturnValue({ isGate: false, gateType: null });
     });
 
-    it('should still pass DA gate when getDevilsAdvocateReview throws', async () => {
+    // SD-LEO-INFRA-S5-DEVILS-ADVOCATE-NOT-PRODUCED-001: DA stays fully advisory (a production failure
+    // is swallowed, never blocks) ONLY for PROMOTION gates now. KILL gates fail loud — see the kill-gate
+    // test below. These two were 'kill' previously, encoding the silent-swallow behavior this SD removes.
+    it('should still pass DA gate when getDevilsAdvocateReview throws (promotion gate stays advisory)', async () => {
       const mockSupabase = createMockSupabase();
-      isDevilsAdvocateGate.mockReturnValue({ isGate: true, gateType: 'kill' });
+      isDevilsAdvocateGate.mockReturnValue({ isGate: true, gateType: 'promotion' });
       getDevilsAdvocateReview.mockRejectedValue(new Error('GPT-4o unavailable'));
 
-      const result = await processStage(
-        { ventureId: 'v-1', options: { dryRun: true, stageTemplate: { analysisSteps: [] } } },
-        {
-          supabase: mockSupabase,
-          logger: silentLogger,
-          evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
-          evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
-          validateStageGateFn: vi.fn().mockResolvedValue({ passed: true }),
-        },
-      );
+      try {
+        const result = await processStage(
+          { ventureId: 'v-1', options: { dryRun: true, stageTemplate: { analysisSteps: [] } } },
+          {
+            supabase: mockSupabase,
+            logger: silentLogger,
+            evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+            evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
+            validateStageGateFn: vi.fn().mockResolvedValue({ passed: true }),
+          },
+        );
 
-      const daGate = result.gateResults.find(g => g.type === 'devils_advocate');
-      expect(daGate).toBeDefined();
-      expect(daGate.passed).toBe(true);
-      expect(daGate.error).toBe('GPT-4o unavailable');
-
-      // Restore default mock
-      isDevilsAdvocateGate.mockReturnValue({ isGate: false, gateType: null });
+        const daGate = result.gateResults.find(g => g.type === 'devils_advocate');
+        expect(daGate).toBeDefined();
+        expect(daGate.passed).toBe(true);
+        expect(daGate.error).toBe('GPT-4o unavailable');
+      } finally {
+        isDevilsAdvocateGate.mockReturnValue({ isGate: false, gateType: null });
+      }
     });
 
-    it('should never set status to BLOCKED when only DA fails', async () => {
+    it('should never set status to BLOCKED when only DA fails (promotion gate)', async () => {
+      const mockSupabase = createMockSupabase();
+      isDevilsAdvocateGate.mockReturnValue({ isGate: true, gateType: 'promotion' });
+      getDevilsAdvocateReview.mockRejectedValue(new Error('DA service down'));
+
+      try {
+        const result = await processStage(
+          { ventureId: 'v-1', options: { dryRun: true, stageTemplate: { analysisSteps: [] } } },
+          {
+            supabase: mockSupabase,
+            logger: silentLogger,
+            evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+            evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
+            validateStageGateFn: vi.fn().mockResolvedValue({ passed: true }),
+          },
+        );
+
+        // A promotion-gate DA failure should NOT block the stage
+        expect(result.status).toBe(STATUS.COMPLETED);
+        expect(result.status).not.toBe(STATUS.BLOCKED);
+      } finally {
+        isDevilsAdvocateGate.mockReturnValue({ isGate: false, gateType: null });
+      }
+    });
+
+    // SD-LEO-INFRA-S5-DEVILS-ADVOCATE-NOT-PRODUCED-001 (FR-2, orchestrator-level): a KILL gate must
+    // FAIL LOUD when its adversarial review cannot be produced — it must NOT silently proceed with no
+    // recorded adversarial input. This is the exact silent-skip the SD removes.
+    it('should FAIL LOUD (throw) at a kill gate when the adversarial review cannot be produced', async () => {
       const mockSupabase = createMockSupabase();
       isDevilsAdvocateGate.mockReturnValue({ isGate: true, gateType: 'kill' });
       getDevilsAdvocateReview.mockRejectedValue(new Error('DA service down'));
 
-      const result = await processStage(
-        { ventureId: 'v-1', options: { dryRun: true, stageTemplate: { analysisSteps: [] } } },
-        {
-          supabase: mockSupabase,
-          logger: silentLogger,
-          evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
-          evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
-          validateStageGateFn: vi.fn().mockResolvedValue({ passed: true }),
-        },
-      );
-
-      // DA failure should NOT block the stage
-      expect(result.status).toBe(STATUS.COMPLETED);
-      expect(result.status).not.toBe(STATUS.BLOCKED);
-
-      // Restore default mock
-      isDevilsAdvocateGate.mockReturnValue({ isGate: false, gateType: null });
+      try {
+        await expect(processStage(
+          { ventureId: 'v-1', options: { dryRun: true, stageTemplate: { analysisSteps: [] } } },
+          {
+            supabase: mockSupabase,
+            logger: silentLogger,
+            evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+            evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
+            validateStageGateFn: vi.fn().mockResolvedValue({ passed: true }),
+          },
+        )).rejects.toThrow(/DA service down/);
+      } finally {
+        isDevilsAdvocateGate.mockReturnValue({ isGate: false, gateType: null });
+      }
     });
   });
 
