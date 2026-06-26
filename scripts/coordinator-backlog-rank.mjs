@@ -61,6 +61,22 @@ export function blockerKeysFor(d) {
 // metadata.fleet_critical===true marks work whose ABSENCE blocks ALL fleet progress. Exported pure so
 // the band ordering is unit-testable. STRICT === true so a stray truthy value can't silently enrol.
 export function isFleetCritical(d) { return (d && d.metadata || {}).fleet_critical === true; }
+// SD-LEO-INFRA-BELT-RANKER-PIVOT-AWARENESS-001 (FR-3): product-vs-harness class detection for the
+// pivot-aware product-priority band. Pure + exported so the band ordering is unit-testable against
+// real code (like isFleetCritical). Classification is by sd_key prefix; an SD that is neither is
+// NEUTRAL and the band never reorders it relative to its own class.
+const PRODUCT_CLASS_RE = /^SD-EHG-PRODUCT/i;
+const HARNESS_CLASS_RE = /^(SD-LEO-INFRA|SD-MAN-INFRA|SD-LEARN-FIX|QF-)/i;
+export function isProductClass(d) { return PRODUCT_CLASS_RE.test((d && d.sd_key) || ''); }
+export function isHarnessClass(d) { return HARNESS_CLASS_RE.test((d && d.sd_key) || ''); }
+// Band rank: product first (0), neutral middle (1), harness last (2). Lower sorts earlier.
+export function productPivotRank(d) { return isProductClass(d) ? 0 : isHarnessClass(d) ? 2 : 1; }
+// SD-LEO-INFRA-BELT-RANKER-PIVOT-AWARENESS-001 (FR-1/FR-4): the band comparator. INERT (returns 0,
+// ranking unchanged) unless the product pivot is active — fail-soft default OFF lives at the call site.
+export function productPivotCompare(a, b, active) {
+  if (!active) return 0;
+  return productPivotRank(a) - productPivotRank(b);
+}
 // SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-C (FR-2): needle-movement prioritization.
 // Reuse FR-1's rollup (active rung + per-rung progress) and the pure needle scorer to order remaining
 // work active-rung-first among same-unlock candidates. Loaded fail-soft — any read error leaves the
@@ -225,6 +241,21 @@ async function main() {
   }
   const needleOf = (d) => needleScore(sdRungMap[d.sd_key], { activeRungKey, rungProgressByKey: progByKey });
 
+  // SD-LEO-INFRA-BELT-RANKER-PIVOT-AWARENESS-001 (FR-2/FR-4): read the product-pivot governance flag
+  // ONCE before sorting and thread the boolean into the (synchronous) comparator. Fail-soft: any read
+  // error or a disabled/missing flag leaves productPivotActive=false, so the band is inert and ranking
+  // is byte-identical to pre-change behavior. The flag is a leo_feature_flags row (no DDL).
+  let productPivotActive = false;
+  try {
+    const { isEnabled } = await import('../lib/feature-flags/evaluator.js');
+    productPivotActive = await isEnabled('product_pivot_active');
+  } catch (e) {
+    console.log(`[BACKLOG-RANK] product-pivot flag read failed (fail-soft, band inert): ${e?.message || e}`);
+  }
+  if (productPivotActive) {
+    console.log('[BACKLOG-RANK] product-pivot band ACTIVE — product-class SDs ranked above harness-class (below gates/quarantine/fleet_critical/unlock).');
+  }
+
   claimable.sort((a, b) => {
     // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: bare-shell stubs sort below EVERY
     // authored SD (rank-last), so a worker never self-claims a stub that cannot pass
@@ -241,6 +272,12 @@ async function main() {
     if (fa !== fb) return fb - fa;                          // fleet-critical first
     const ua = unlockScore(a.sd_key), ub = unlockScore(b.sd_key);
     if (ub !== ua) return ub - ua;
+    // SD-LEO-INFRA-BELT-RANKER-PIVOT-AWARENESS-001 (FR-1): the pivot-aware product-priority band.
+    // When the product pivot is active, product-class SDs outrank harness-class SDs. Placed AFTER
+    // unlock (never strands a critical-path unlocker) and the bare-shell/quarantine/fleet_critical
+    // quality gates, and BEFORE needle/vision/priority/age. Inert (returns 0) when the pivot is off.
+    const pp = productPivotCompare(a, b, productPivotActive);
+    if (pp !== 0) return pp;
     // FR-2 needle-movement: among same-unlock candidates, order active-rung-first, then highest-impact-
     // on-rung-completion-first (the completion bonus). Applied AFTER unlock (never overrides critical-path
     // unlocking) and BEFORE the vision-loop nudge/priority/age. Unknown-rung SDs score 0 (neutral).
