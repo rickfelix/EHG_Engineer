@@ -219,7 +219,8 @@ async function attemptSDReclaim(currentSessionId) {
   // Check if SD is still claimed by previous (now-stale) session
   const { data: existingClaims } = await supabase
     .from('claude_sessions')
-    .select('session_id, heartbeat_at, status')
+    // SD-LEO-INFRA-STALE-SWEEP-PID-LIVENESS-GUARD-001: select the liveness fields the guard reads.
+    .select('session_id, heartbeat_at, status, is_alive, terminal_id, process_alive_at, expected_silence_until')
     .eq('sd_key', sdKey)
     .eq('status', 'active');
 
@@ -230,6 +231,15 @@ async function attemptSDReclaim(currentSessionId) {
 
     if (!isStale) {
       // Claim is still active - don't interfere
+      return;
+    }
+
+    // SD-LEO-INFRA-STALE-SWEEP-PID-LIVENESS-GUARD-001 (FR-2/FR-3): a heartbeat-stale claim whose
+    // holder PID is ALIVE is a parked-but-recoverable worker, not an abandoned one — do NOT release.
+    const { shouldHoldClaim } = require('../../lib/fleet/claim-release-guard.cjs');
+    const guard = shouldHoldClaim(claim);
+    if (guard.hold) {
+      console.log(`[session-state-sync] HOLD: not releasing ${sdKey} — holder ${claim.session_id} is alive (${guard.reason}); parked worker is recoverable`);
       return;
     }
 
