@@ -2340,7 +2340,40 @@ export function validateProposalShape(proposal, filePath) {
  * sourced_by. Those historical rows are still counted by FR-1b as-is; this stamp makes the
  * proposal-based routes the durable, code-enforced producer going forward. No retroactive change.
  */
+// SD-LEO-INFRA-FROM-PROPOSAL-METADATA-PRESERVE-001 (FR-1): keys DELIBERATELY excluded from the
+// preserved proposal metadata, for two reasons:
+//   (a) LEAK-GUARD — arch_key/vision_key drive enrichFromVisionArch's orphan-FK re-activation
+//       (see mapProposalToCreateArgs header + the createSD vision/arch enrichment path).
+//   (b) CANONICAL-AUTHORITATIVE — these keys have dedicated, guarded handling below that must
+//       stay the single source of truth. The review-attestation flags (migration_reviewed /
+//       security_reviewed) are security-sensitive: they may appear ONLY on an explicit `=== true`,
+//       so a preserved raw `false`/`null`/object value must NOT leak through. target_repos is
+//       translated to target_application + a normalized list; depends_on is normalized into the
+//       canonical dependencies column + a back-compat metadata copy.
+const PROPOSAL_META_DROP_KEYS = new Set([
+  'arch_key', 'vision_key',
+  'migration_reviewed', 'security_reviewed',
+  'target_repos', 'depends_on',
+]);
+
 export function mapProposalToCreateArgs(normalized, proposal, filePath, opts = {}) {
+  // FR-1: preserve the proposal's full metadata object (merge with canonical defaults rather than
+  // replacing), MINUS the leak-guard keys. This carries Adam-sourcing keys (min_tier_rank,
+  // requires_human_action, deferred/deferred_until, etc.) that the old closed whitelist dropped.
+  const preservedProposalMeta = {};
+  if (proposal.metadata && typeof proposal.metadata === 'object' && !Array.isArray(proposal.metadata)) {
+    for (const [k, v] of Object.entries(proposal.metadata)) {
+      if (!PROPOSAL_META_DROP_KEYS.has(k)) preservedProposalMeta[k] = v;
+    }
+  }
+
+  // FR-2/FR-4: translate metadata.target_repos -> canonical target_application (first repo is the
+  // primary; the full list stays in metadata.target_repos). Reuse the --target-repos validator
+  // (parseTargetReposArg validates against ALLOWED_REPOS and exits(1) on an invalid value).
+  const proposalTargetRepos = Array.isArray(proposal.metadata?.target_repos) && proposal.metadata.target_repos.length > 0
+    ? parseTargetReposArg(proposal.metadata.target_repos.join(','))
+    : null;
+
   return {
     sdKey: normalized.sdKey,
     title: normalized.title,
@@ -2368,7 +2401,13 @@ export function mapProposalToCreateArgs(normalized, proposal, filePath, opts = {
     ...(normalizeDependsOn(proposal.metadata?.depends_on).length > 0
       ? { dependencies: normalizeDependsOn(proposal.metadata?.depends_on) }
       : {}),
+    // FR-2: the primary target repo becomes the canonical top-level target_application that the
+    // branch-resolver / gate / repo-path resolution read (mirrors the --target-repos flag path).
+    ...(proposalTargetRepos ? { target_application: proposalTargetRepos[0] } : {}),
     metadata: {
+      // FR-1: full proposal metadata preserved (minus leak-guard keys), then canonical defaults
+      // below WIN over any same-named proposal key (source, provenance, validated target_repos, …).
+      ...preservedProposalMeta,
       source: 'proposal',
       proposal_file_path: filePath || null,
       proposal_provenance: proposal.provenance || null,
@@ -2418,6 +2457,9 @@ export function mapProposalToCreateArgs(normalized, proposal, filePath, opts = {
       ...(proposal.metadata?.architecture_plan_ref ? { architecture_plan_ref: proposal.metadata.architecture_plan_ref } : {}),
       ...(proposal.metadata?.arch_plan_key ? { arch_plan_key: proposal.metadata.arch_plan_key } : {}),
       ...(proposal.metadata?.architecture_plan ? { architecture_plan: proposal.metadata.architecture_plan } : {}),
+      // FR-2: keep the NORMALIZED/validated target_repos in metadata (overrides the raw preserved
+      // value), parallel to the --target-repos flag path which stamps metadata.target_repos.
+      ...(proposalTargetRepos ? { target_repos: proposalTargetRepos } : {}),
     },
   };
 }
