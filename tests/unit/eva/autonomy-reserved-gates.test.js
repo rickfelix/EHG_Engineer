@@ -12,6 +12,7 @@ import {
   checkAutonomy,
   autonomyPreCheck,
 } from '../../../lib/eva/autonomy-model.js';
+import { getStageGovernance, _resetCacheForTest } from '../../../lib/eva/stage-governance.js';
 
 // Minimal supabase mock: eva_ventures.autonomy_level read returns the given level.
 function mockSb(level) {
@@ -88,5 +89,49 @@ describe('autonomyPreCheck reserved beats chairman override (FR-1)', () => {
     const r = await autonomyPreCheck('v1', 'kill_gate', overrideDeps);
     expect(r.action).toBe('manual'); // kill_gate is manual at every level
     expect(r.overridden).toBe(true);
+  });
+});
+
+describe('stage-governance gate-type resolution (FR-2b / FR-3)', () => {
+  // Real venture_stages classification (verified against the DB): S18 is artifact_only + promotion,
+  // S19 is sd_required + promotion — both excluded from the work_type-driven promotionStages, so
+  // they previously fell into the stage_gate catch-all. gateTypeForAutonomy keys on the row gate_type.
+  const ROWS = [
+    { stage_number: 3, gate_type: 'kill', work_type: 'decision_gate', review_mode: 'auto' },
+    { stage_number: 5, gate_type: 'kill', work_type: 'decision_gate', review_mode: 'auto' },
+    { stage_number: 16, gate_type: 'promotion', work_type: 'decision_gate', review_mode: 'auto' },
+    { stage_number: 18, gate_type: 'promotion', work_type: 'artifact_only', review_mode: 'auto' },
+    { stage_number: 19, gate_type: 'promotion', work_type: 'sd_required', review_mode: 'auto' },
+    { stage_number: 22, gate_type: 'none', work_type: 'artifact_only', review_mode: 'review' },
+  ];
+  function mockGovSb(rows) {
+    return { from: () => ({ select: () => ({ order: () => ({ data: rows, error: null }) }) }) };
+  }
+
+  it('gate-type: S18/S19 resolve to promotion_gate (no longer the stage_gate catch-all)', async () => {
+    _resetCacheForTest();
+    const gov = await getStageGovernance(mockGovSb(ROWS));
+    expect(gov.gateTypeForAutonomy(18)).toBe('promotion_gate');
+    expect(gov.gateTypeForAutonomy(19)).toBe('promotion_gate');
+    // ...but the canonical work_type-driven decision sets are unchanged (additive fix):
+    expect(gov.isPromotion(18)).toBe(false);
+    expect(gov.isPromotion(19)).toBe(false);
+  });
+
+  it('gate-type: kill stages → kill_gate, decision promotion → promotion_gate, non-gate → stage_gate', async () => {
+    _resetCacheForTest();
+    const gov = await getStageGovernance(mockGovSb(ROWS));
+    expect(gov.gateTypeForAutonomy(3)).toBe('kill_gate');
+    expect(gov.gateTypeForAutonomy(16)).toBe('promotion_gate');
+    expect(gov.gateTypeForAutonomy(22)).toBe('stage_gate');
+    expect(gov.gateTypeForAutonomy(999)).toBe('stage_gate'); // unknown stage
+  });
+
+  it('gate-type: reserved-stage awareness is exposed', async () => {
+    _resetCacheForTest();
+    const gov = await getStageGovernance(mockGovSb(ROWS));
+    expect(gov.isReserved(18)).toBe(true);
+    expect(gov.isReserved(16)).toBe(false);
+    expect([...gov.reservedStages].sort((a, b) => a - b)).toEqual([3, 5, 10, 17, 18, 19]);
   });
 });
