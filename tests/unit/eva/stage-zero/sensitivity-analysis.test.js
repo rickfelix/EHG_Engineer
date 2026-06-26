@@ -49,6 +49,8 @@ const EQUAL_WEIGHTS = {
   build_cost: 1 / 10,
   virality: 1 / 10,
   tech_trajectory: 1 / 10,
+  // SD-EHG-FACTORY-AGENTIC-FIT-SELECTION-001: 11th weighted component
+  agentic_fit: 1 / 10,
 };
 
 const LEGACY_WEIGHTS = {
@@ -62,14 +64,15 @@ const LEGACY_WEIGHTS = {
   build_cost: 0.10,
   virality: 0.13,
   tech_trajectory: 0.05,
+  agentic_fit: 0.10,
 };
 
 describe('sensitivity-analysis', () => {
   describe('runSensitivityAnalysis', () => {
-    it('returns ranked array of 10 components with influence scores', () => {
+    it('returns ranked array of 11 components with influence scores', () => {
       const result = runSensitivityAnalysis(MOCK_RESULTS, LEGACY_WEIGHTS);
 
-      expect(result).toHaveLength(10);
+      expect(result).toHaveLength(11);
       expect(result[0]).toHaveProperty('component');
       expect(result[0]).toHaveProperty('influence_score');
       expect(result[0]).toHaveProperty('elasticity');
@@ -106,15 +109,15 @@ describe('sensitivity-analysis', () => {
       const small = runSensitivityAnalysis(MOCK_RESULTS, LEGACY_WEIGHTS, { delta: 0.01 });
       const large = runSensitivityAnalysis(MOCK_RESULTS, LEGACY_WEIGHTS, { delta: 0.10 });
 
-      // Both should return 10 components
-      expect(small).toHaveLength(10);
-      expect(large).toHaveLength(10);
+      // Both should return 11 components
+      expect(small).toHaveLength(11);
+      expect(large).toHaveLength(11);
     });
 
     it('returns zero influence for null inputs', () => {
       const result = runSensitivityAnalysis(null, null);
 
-      expect(result).toHaveLength(10);
+      expect(result).toHaveLength(11);
       for (const r of result) {
         expect(r.influence_score).toBe(0);
         expect(r.elasticity).toBe(0);
@@ -130,7 +133,7 @@ describe('sensitivity-analysis', () => {
       const result = runSensitivityAnalysis(MOCK_RESULTS, zeroWeights);
 
       // With zero weights, perturbing upward from 0 should still detect influence
-      expect(result).toHaveLength(10);
+      expect(result).toHaveLength(11);
       // At least some components should have non-zero influence since we perturb up from 0
       const totalInfluence = result.reduce((acc, r) => acc + r.influence_score, 0);
       expect(totalInfluence).toBeCloseTo(1.0, 2);
@@ -145,7 +148,7 @@ describe('sensitivity-analysis', () => {
 
       const result = runSensitivityAnalysis(MOCK_RESULTS, dominantWeights);
 
-      expect(result).toHaveLength(10);
+      expect(result).toHaveLength(11);
       // moat_architecture should have significant influence
       const moat = result.find(r => r.component === 'moat_architecture');
       expect(moat).toBeDefined();
@@ -177,7 +180,7 @@ describe('sensitivity-analysis', () => {
       const ranking = runSensitivityAnalysis(MOCK_RESULTS, LEGACY_WEIGHTS);
       const drivers = identifyKeyDrivers(ranking, 1.0);
 
-      expect(drivers.length).toBe(10);
+      expect(drivers.length).toBe(11);
     });
 
     it('returns empty array for null ranking', () => {
