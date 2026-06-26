@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-COORD-ADAM-COMMS-DELIVERY-INTEGRITY-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-COORD-ADAM-COMMS-DELIVERY-INTEGRITY-001",
-  "createdAt": "2026-06-26T11:55:40.875Z",
+  "sdKey": "SD-LEO-INFRA-LLM-PURPOSE-THREADING-TRUNCATION-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-LLM-PURPOSE-THREADING-TRUNCATION-001",
+  "createdAt": "2026-06-26T12:48:06.054Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
