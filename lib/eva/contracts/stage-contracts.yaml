@@ -331,7 +331,8 @@ stages:
         fields:
           risks: { type: array, minItems: 1 }
     produces:
-      runway_months: { type: number }
+      runway_months: { type: number, required: false }
+      runway_unbounded: { type: boolean, required: false }
       promotion_gate: { type: object }
 
   17:
@@ -348,7 +349,7 @@ stages:
           risks: { type: array }
       - stage: 16
         fields:
-          runway_months: { type: number }
+          runway_months: { type: number, required: false }
     produces:
       checklist: { type: object }
       readiness_pct: { type: number }
@@ -474,7 +475,7 @@ stages:
           milestones: { type: array }
       - stage: 16
         fields:
-          runway_months: { type: number }
+          runway_months: { type: number, required: false }
       - stage: 23
         fields:
           incident_response_plan: { type: string, required: false }
