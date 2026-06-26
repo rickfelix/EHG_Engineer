@@ -638,7 +638,7 @@ async function dispatchWorkAssignmentsIfAllowed(supabase, activeSessions, availa
       continue;
     }
 
-    await supabase.from('session_coordination').insert(row);
+    await supabase.from('session_coordination').insert(row); // schema-lint-disable-line — `row` columns are valid; lint mis-reads the return-object keys (skipped/blocked) below as insert columns (false positive, stale snapshot)
     dispatched++;
   }
   return { dispatched, skipped: 0, blocked: false };
