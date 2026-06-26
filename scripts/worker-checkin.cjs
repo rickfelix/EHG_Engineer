@@ -36,6 +36,8 @@ const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cj
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate, also used by
 // scripts/stale-session-sweep.cjs CLAIM_FIX (closes the self_claim-vs-sweep writer-consumer-asymmetry).
 const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, parentLeadPending } = require('../lib/fleet/claim-eligibility.cjs');
+// SD-LEO-INFRA-COMPLEXITY-TIERED-WORKER-ASSIGNMENT-001 (FR-3): WORK-DOWN-NEVER-UP on the PULL path.
+const { resolveWorkerTierRank, isTieringActive } = require('../lib/fleet/tier-ladder.cjs');
 // SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: reuse the coordinator cron's pool + picker + ghost guard so
 // check-in-time self-assign and the 5-min cron allocate identities identically (see assignFleetIdentityAtCheckin).
 const { NATO, COLORS, nextAvailable, isTestSessionId } = require('./assign-fleet-identities.cjs');
@@ -504,13 +506,15 @@ async function fetchDraftCandidates(sb) {
 
 /** Per-row claim attempt for an un-baselined draft candidate (shared by the merged
  *  step-6 tier and the legacy selfClaimDraftSd wrapper). Returns a result or null. */
-async function tryClaimDraftCandidate(sb, sessionId, base, d) {
+async function tryClaimDraftCandidate(sb, sessionId, base, d, tierCtx = {}) {
   // SD-FDBK-INFRA-CONVERGE-WORK-ASSIGNMENT-001: same shared classifier the baselined candidate-view
   // tier (step 6) and the coordinator/sweep PUSH path use — the un-baselined draft tier must not
   // self-claim a test-fixture phantom (SD-DEMO-*/SD-TEST-*) or a requires_human_action SD.
   // SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-2): pass {cwd} so an SD that is unfit for THIS checkout
   // (repo mismatch / closed premise / missing precondition) is skipped before claiming.
-  if (classifyDispatchIneligibility(d, { cwd: process.cwd() }) !== null) return null;
+  // SD-LEO-INFRA-COMPLEXITY-TIERED-WORKER-ASSIGNMENT-001 (FR-3): tierCtx adds worker_tier_rank +
+  // tiering_active so a below-rung worker skips above-rung drafts (WORK-DOWN-NEVER-UP).
+  if (classifyDispatchIneligibility(d, { cwd: process.cwd(), ...tierCtx }) !== null) return null;
   if (!(await draftDepsSatisfied(sb, d))) return null; // skip dependency-blocked
   // SD-REFILL-00SO4HZY: skip an orchestrator child whose parent has not yet passed LEAD (a worker would
   // otherwise drive PLAN then hit the hard EXEC-transition block). Fail-open inside parentLeadPending.
@@ -1096,13 +1100,24 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
     // /checkin skill can render concrete available work — a worker about to wind down sees data, not a
     // vibe. base is spread into the self_claimed / idle / QF results below.
     base.belt_ranked_claimable = ranked.length;
+    // SD-LEO-INFRA-COMPLEXITY-TIERED-WORKER-ASSIGNMENT-001 (FR-3 + FR-5): resolve this worker's rung
+    // and whether tiering is active ONCE per checkin (both are per-run constants, not per-candidate),
+    // then thread into the shared classifier so a below-rung worker skips above-rung work. Fail-open:
+    // any fault leaves tierCtx empty => byte-identical pre-tiering behavior.
+    let tierCtx = {};
+    try {
+      tierCtx = {
+        worker_tier_rank: resolveWorkerTierRank({ metadata: sessionMetadata }),
+        tiering_active: await isTieringActive(sb),
+      };
+    } catch { /* fail-open: no tier ctx */ }
     for (const x of ranked) {
       if (x.kind === 'baselined') {
         // SD-FDBK-FIX-WORKER-SELF-CLAIM-001: skip dependency-blocked SDs and orchestrator PARENTS
         // (the view surfaces both; claim_sd enforces neither). Mirrors the draft-tier guard.
         // SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-2): {cwd} adds the claim-time fitness axes so a
         // baselined candidate unfit for THIS checkout is skipped before claiming.
-        if (!(await baselinedCandidateEligible(sb, x.key, { cwd: process.cwd() }))) continue;
+        if (!(await baselinedCandidateEligible(sb, x.key, { cwd: process.cwd(), ...tierCtx }))) continue;
         if (await isSdInFlight(sb, x.key, sessionId)) continue;  // dedup: started or live-foreign-held
         const claimed = await tryClaim(sb, x.key, sessionId, x.track);
         if (claimed.ok) {
@@ -1110,7 +1125,7 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
             message: `Self-claimed ${x.key} from sd:next. Run: node scripts/sd-start.js ${x.key}. ${antiWinddownDirective(ranked.length)}` };
         }
       } else {
-        const result = await tryClaimDraftCandidate(sb, sessionId, base, x.row);
+        const result = await tryClaimDraftCandidate(sb, sessionId, base, x.row, tierCtx);
         if (result) return result;
       }
     }
