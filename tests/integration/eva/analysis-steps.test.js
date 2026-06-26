@@ -995,7 +995,9 @@ describe('Stage 16: analyzeStage16', () => {
     expect(result.revenue_projections.length).toBeGreaterThanOrEqual(6);
     for (const rp of result.revenue_projections) {
       expect(rp).toHaveProperty('cost_breakdown');
-      expect(rp.cost_breakdown).toHaveProperty('personnel');
+      // SD-LEO-INFRA-S16-OPERATING-MODEL-COST-GROUNDING-001: personnel renamed to ai_operations
+      // (no human payroll) + explicit founder_salary line.
+      expect(rp.cost_breakdown).toHaveProperty('ai_operations');
     }
     expect(mockComplete).toHaveBeenCalledOnce();
   });
