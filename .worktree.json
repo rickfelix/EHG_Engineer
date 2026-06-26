@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-STAGE-WORKER-RELIABILITY-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-STAGE-WORKER-RELIABILITY-001",
-  "createdAt": "2026-06-26T13:24:35.201Z",
+  "sdKey": "SD-LEO-INFRA-AI-FINANCIAL-RIGOR-CONTROLS-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-AI-FINANCIAL-RIGOR-CONTROLS-001",
+  "createdAt": "2026-06-26T14:03:57.405Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
