@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-S16-FINANCIAL-GROUNDING-EVIDENCE-GATE-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-S16-FINANCIAL-GROUNDING-EVIDENCE-GATE-001",
-  "createdAt": "2026-06-26T17:12:16.122Z",
+  "sdKey": "SD-LEO-INFRA-UPSTREAM-OPERATING-MODEL-PROPAGATION-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-UPSTREAM-OPERATING-MODEL-PROPAGATION-001",
+  "createdAt": "2026-06-26T21:19:53.844Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
