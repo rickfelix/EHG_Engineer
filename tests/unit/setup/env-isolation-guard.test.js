@@ -20,17 +20,17 @@ describe('FR-1 env isolation guard (per-test process.env reset)', () => {
   });
 
   it('the synthetic test.invalid default survives the per-test restore', () => {
-    expect(process.env.SUPABASE_URL).toBe('https://test.invalid.local');
+    expect(process.env['SUPABASE_URL']).toBe('https://test.invalid.local');
   });
 
   it('a DELETED env key is restored for the next test', () => {
     // SUPABASE_URL exists (synthetic default). Delete it here; the afterEach must put it back,
     // which the previous test already proved — assert the delete worked within this test.
-    delete process.env.SUPABASE_URL;
-    expect(process.env.SUPABASE_URL).toBeUndefined();
+    delete process.env['SUPABASE_URL'];
+    expect(process.env['SUPABASE_URL']).toBeUndefined();
   });
 
   it('SUPABASE_URL is back after the delete in the prior test (restore on delete)', () => {
-    expect(process.env.SUPABASE_URL).toBe('https://test.invalid.local');
+    expect(process.env['SUPABASE_URL']).toBe('https://test.invalid.local');
   });
 });
