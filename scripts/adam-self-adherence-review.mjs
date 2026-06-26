@@ -45,6 +45,7 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     recurrencesInWindow: null,
     signalsInWindow: null,
     adamAuthoredBuildsInWindow: null,
+    adamChairmanDecisionQuestionsInWindow: null,
   };
 
   // P3 friction-signaling (signals side): Adam-originated coordination messages within the window.
@@ -147,6 +148,29 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     // >=1 event -> measured TRUE. 0 events -> NOT measured-false: the marker is best-effort and may
     // simply be absent for this window, so we honestly degrade to null -> unknown (never false).
     if (Number.isFinite(count) && count >= 1) facts.visionGaugeReadInWindow = true;
+  } catch { /* leave null -> unknown */ }
+
+  // P7 decision-rubric (FR-1): the Adam->chairman decision-questions in the window. Adam's outward
+  // advisory channel is session_coordination sender_type='adam', payload.kind='adam_advisory'
+  // (verified live: 100% of Adam's coordination rows). The pure classifier (probeDecisionRubric)
+  // gates each body on a decision-ASK, so harness/status syncs that carry no ask are never counted
+  // as over-asks. HONEST: a real empty window is an honest [] (probe PASS — nothing to flag); ONLY a
+  // thrown query error leaves the fact null -> 'unknown'. We read payload.body (the canonical Adam
+  // message field) for each row.
+  try {
+    const { data, error } = await supabase
+      .from('session_coordination')
+      .select('payload, created_at')
+      .gte('created_at', since)
+      .eq('sender_type', 'adam')
+      .eq('payload->>kind', 'adam_advisory');
+    if (error) throw error; // a query error must NOT masquerade as a real "0 questions"
+    if (Array.isArray(data)) {
+      facts.adamChairmanDecisionQuestionsInWindow = data.map((r) => ({
+        body: r && r.payload ? (r.payload.body ?? r.payload.message ?? r.payload.subject ?? '') : '',
+        created_at: r ? r.created_at : null,
+      }));
+    }
   } catch { /* leave null -> unknown */ }
 
   return facts;
@@ -256,7 +280,7 @@ async function main() {
   const supabase = dryRun ? null : createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
   const runId = crypto.randomUUID();
   if (dryRun) {
-    const facts = { windowDays: WINDOW_DAYS, sourcedInWindow: null, visionGaugeReadInWindow: null, recurrencesInWindow: null, signalsInWindow: null, adamAuthoredBuildsInWindow: null };
+    const facts = { windowDays: WINDOW_DAYS, sourcedInWindow: null, visionGaugeReadInWindow: null, recurrencesInWindow: null, signalsInWindow: null, adamAuthoredBuildsInWindow: null, adamChairmanDecisionQuestionsInWindow: null };
     const bars = runAdherenceProbes(facts);
     console.log(`[dry-run] run ${runId}:`);
     for (const b of bars) console.log(`  ${b.verdict.toUpperCase().padEnd(7)} ${b.probe} — ${b.detail}`);
