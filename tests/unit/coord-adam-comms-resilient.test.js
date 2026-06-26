@@ -445,7 +445,11 @@ describe('full-lane parity: ADAM_LOOPS inbox-monitor drains the full lane', () =
   it('inbox-monitor prompt is the full-lane verb (not reply-only) — re-wiring drift guard', () => {
     const loop = ADAM_LOOPS.find((l) => l.key === 'inbox-monitor');
     expect(loop, 'inbox-monitor loop must exist').toBeTruthy();
-    expect(loop.prompt).toBe('node scripts/adam-advisory.cjs inbox');
+    // SD-LEO-INFRA-CI-BASELINE-ROT-FIX-001 FR-1a: the inbox-monitor prompt deliberately carries
+    // --quiet (noise-suppression for the recurring 15-min tick, see adam-startup-check.mjs +
+    // adam-inbox-quiet-suppression.test.js). It is STILL the full-lane verb ("inbox", not a
+    // reply-only verb) — the drift guard only needs to assert the full-lane verb, not the exact flags.
+    expect(loop.prompt).toMatch(/^node scripts[/\\]adam-advisory\.cjs inbox(\s|$)/);
     expect(loop.prompt).not.toMatch(/replies\s*$/);
   });
 });

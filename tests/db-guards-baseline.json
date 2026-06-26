@@ -6,6 +6,7 @@
   "tests/lib/supabase-connection-sslmode-strip.test.js",
   "tests/quickfix-self-verifier-loc-cap.test.js",
   "tests/subagent-workflow.test.js",
+  "tests/unit/auto-extract-patterns-service-client.test.js",
   "tests/unit/auto-trigger-stories-fk-fix.test.js",
   "tests/unit/cleanup/master-reset-validation.test.js",
   "tests/unit/enforcement-worktree-hygiene.test.js",

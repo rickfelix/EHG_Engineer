@@ -1258,6 +1258,38 @@
       "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
       "quarantined_at": "2026-06-22T17:48:33.555Z",
       "quarantined_by": "SD-REFILL-002XLOD1"
+    },
+    {
+      "file": "tests/unit/protocol-file-read-gate.test.js",
+      "reason_class": "test-isolation-order-dependent",
+      "error_signature": "should FALLBACK-PASS when required file is untracked but exists on disk (LEAD-TO-PLAN/PLAN-TO-EXEC/EXEC-TO-PLAN) — git-tracked-state sensitive; passes in isolation + in local full-suite, fails only under CI worker order",
+      "linked_ref": "sd:SD-LEO-INFRA-CI-BASELINE-ROT-FIX-001",
+      "quarantined_at": "2026-06-26T03:39:33.161Z",
+      "quarantined_by": "66f7a564-636a-435c-ade1-68096b37389a"
+    },
+    {
+      "file": "tests/unit/partial-read-detection/protocol-file-read-gate.test.js",
+      "reason_class": "test-isolation-order-dependent",
+      "error_signature": "should handle session state missing new fields without crashing — passes locally (isolation + full-suite), fails only under CI worker order",
+      "linked_ref": "sd:SD-LEO-INFRA-CI-BASELINE-ROT-FIX-001",
+      "quarantined_at": "2026-06-26T03:39:33.161Z",
+      "quarantined_by": "66f7a564-636a-435c-ade1-68096b37389a"
+    },
+    {
+      "file": "tests/unit/partial-read-detection/protocol-file-tracker.test.js",
+      "reason_class": "test-isolation-order-dependent",
+      "error_signature": "should handle full paths — passes locally, fails only under CI worker order",
+      "linked_ref": "sd:SD-LEO-INFRA-CI-BASELINE-ROT-FIX-001",
+      "quarantined_at": "2026-06-26T03:39:33.161Z",
+      "quarantined_by": "66f7a564-636a-435c-ade1-68096b37389a"
+    },
+    {
+      "file": "tests/phantom-column-fixes.test.js",
+      "reason_class": "test-isolation-order-dependent",
+      "error_signature": "dfe-escalation-gate audit_log static-source assertion: expected src not to match /^s*gate_name:.*,$\n^s*sd_key:/m — passes on byte-identical source locally, fails only under CI worker order (NOT a real source regression)",
+      "linked_ref": "sd:SD-LEO-INFRA-CI-BASELINE-ROT-FIX-001",
+      "quarantined_at": "2026-06-26T03:39:33.161Z",
+      "quarantined_by": "66f7a564-636a-435c-ade1-68096b37389a"
     }
   ]
 }

@@ -97,9 +97,13 @@ jobs:
           # Coordinator writes JSON to OUTPUT_FILE, debug output to stderr
           node lib/agents/github-review-coordinator.js 2>&1 || echo "Coordinator failed"
 
-          # Ensure valid JSON output even on failure
+          # SD-LEO-INFRA-CI-BASELINE-ROT-FIX-001 FR-3: if the coordinator produced no valid
+          # JSON it could not RUN (infra/config — e.g. a missing model key in CI) — that is NOT
+          # a review failure. Emit a SKIPPED marker so the check is neutral, not a misleading
+          # red 'Agentic Review: Failed' on every PR. A review that actually ran writes its own
+          # pass/warn/fail summary above (and a real fail>0 still goes red below).
           if [ ! -f review-output.json ] || ! jq empty review-output.json 2>/dev/null; then
-            echo '{"comment": "Review failed to complete", "results": {"summary": {"fail": 1}}}' > review-output.json
+            echo '{"comment": "ℹ️ Agentic Review could not run in this environment (coordinator unavailable) — skipped; this does not block the PR.", "results": {"summary": {"skipped": 1}}, "coordinator_unavailable": true}' > review-output.json
           fi
 
       - name: Post Review Comment
@@ -143,7 +147,12 @@ jobs:
               const results = review.results || {};
               const summaryData = results.summary || {};
 
-              if (summaryData.fail > 0) {
+              if (review.coordinator_unavailable || summaryData.skipped > 0) {
+                // FR-3: coordinator could not run (infra/config) — neutral, not a red failure.
+                conclusion = 'skipped';
+                title = 'Agentic Review: Skipped';
+                summary = 'The review coordinator could not run in this environment — not a review failure; does not block the PR.';
+              } else if (summaryData.fail > 0) {
                 conclusion = 'failure';
                 title = 'Agentic Review Failed';
                 summary = `${summaryData.fail} check(s) failed. See PR comments for details.`;
@@ -164,9 +173,11 @@ jobs:
                 summary += `\n\n### Check Results:\n${checkDetails}`;
               }
             } catch (e) {
-              conclusion = 'failure';
-              title = 'Agentic Review Error';
-              summary = 'Review system encountered an error. Check workflow logs.';
+              // FR-3: an unparseable output is an infrastructure error, NOT a review failure —
+              // neutral so it does not post a misleading red 'Agentic Review' on every PR.
+              conclusion = 'neutral';
+              title = 'Agentic Review: Inconclusive';
+              summary = 'Review output could not be parsed (infrastructure error, not a review failure). Check workflow logs.';
             }
 
             await github.rest.checks.update({

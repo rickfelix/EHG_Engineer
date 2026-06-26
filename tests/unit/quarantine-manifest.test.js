@@ -38,6 +38,10 @@ const REASON_CLASSES = new Set([
   'node-test-runner',
   'stale-import-extension',
   'empty-suite',
+  // SD-LEO-INFRA-CI-BASELINE-ROT-FIX-001: tests that pass in isolation AND in a local full
+  // suite but fail under CI's parallel worker order — environment/order-dependent isolation
+  // pollution (shared-state leak), not a code bug. Un-quarantine when the isolation-leak SD ships.
+  'test-isolation-order-dependent',
 ]);
 
 const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
