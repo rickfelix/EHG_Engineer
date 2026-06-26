@@ -88,7 +88,11 @@ describe('classifyDispatchIneligibility (FR-2 — backward-compatible extension)
   it('with ctx: adds the fitness axes (unfit_<blockClass>)', () => {
     const ctx = { cwd: ENGINEER_CWD };
     expect(classifyDispatchIneligibility({ sd_key: 'SD-E', target_application: 'ehg', status: 'draft' }, ctx)).toBe('unfit_repo_mismatch');
-    expect(classifyDispatchIneligibility({ sd_key: 'SD-C', status: 'completed' }, ctx)).toBe('unfit_premise_closed');
+    // SD-LEO-INFRA-UNIT-TEST-DEBT-TRIAGE-001: stale assertion. A completed/cancelled SD now
+    // short-circuits to the terminal-status verdict 'sd_terminal' (claim-eligibility.cjs:64,
+    // added by SD-FDBK-INFRA-STALE-SESSION-SWEEP-001) BEFORE the ctx/fitness axes — so a completed
+    // SD is classified terminal, not by a fitness blockClass. Updated test to the current behavior.
+    expect(classifyDispatchIneligibility({ sd_key: 'SD-C', status: 'completed' }, ctx)).toBe('sd_terminal');
     // a fit SD with ctx is still eligible
     expect(classifyDispatchIneligibility({ sd_key: 'SD-A', target_application: 'EHG_Engineer', status: 'draft' }, ctx)).toBeNull();
   });
