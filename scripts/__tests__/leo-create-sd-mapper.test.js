@@ -21,12 +21,13 @@ function probeMapper(userType) {
   const enumSrc = fs.readFileSync(
     path.resolve(__dirname, '../../lib/sd-type-enum.js')
   , 'utf8').replace(/\bexport\s+(const|function)\b/g, '$1');
-  const validMatch = src.match(/const VALID_DB_SD_TYPES = \[([\s\S]*?)\];/);
+  // SD-LEO-INFRA-UNIT-TEST-DEBT-TRIAGE-001: VALID_DB_SD_TYPES was REMOVED from leo-create-sd.js —
+  // the canonical type list moved to lib/sd-type-enum.js (CANONICAL_SD_TYPES) and mapToDbType now
+  // validates via assertValidSdType. Extract only mapToDbType; the injected enumSrc supplies its deps.
   const fnMatch = src.match(/function mapToDbType\(userType\)\s*\{[\s\S]*?\n\}/);
-  if (!validMatch || !fnMatch) throw new Error('Could not extract mapper from script');
+  if (!fnMatch) throw new Error('Could not extract mapToDbType from script');
   const code =
     enumSrc + '\n' +
-    validMatch[0] + '\n' +
     fnMatch[0] + '\n' +
     'process.stdout.write(String(mapToDbType(' + JSON.stringify(userType) + ')));';
   const r = spawnSync('node', ['-e', code], { encoding: 'utf8' });
@@ -65,10 +66,13 @@ describe('QF-251 MAPPER-5: existing mappings preserved', () => {
   it('orch → orchestrator', () => { expect(probeMapper('orch')).toBe('orchestrator'); });
 });
 
-describe('QF-251 MAPPER-6: VALID_DB_SD_TYPES no longer contains stale qa/library/fix entries', () => {
-  it('list aligns with DB sd_type_check constraint', () => {
-    const src = require('node:fs').readFileSync(SCRIPT_PATH, 'utf8');
-    const m = src.match(/const VALID_DB_SD_TYPES = \[([\s\S]*?)\];/);
+describe('QF-251 MAPPER-6: the canonical sd_type list (now lib/sd-type-enum.js) excludes stale qa/library/fix', () => {
+  it('CANONICAL_SD_TYPES aligns with the DB sd_type_check constraint', () => {
+    // SD-LEO-INFRA-UNIT-TEST-DEBT-TRIAGE-001: VALID_DB_SD_TYPES moved out of leo-create-sd.js into
+    // lib/sd-type-enum.js (_CANONICAL_SD_TYPES, the single validator of record). Assert against it.
+    const enumSrc = require('node:fs').readFileSync(
+      path.resolve(__dirname, '../../lib/sd-type-enum.js'), 'utf8');
+    const m = enumSrc.match(/_CANONICAL_SD_TYPES = new Set\(\[([\s\S]*?)\]\)/);
     expect(m).toBeTruthy();
     const listLiteral = m[1];
     // Stale entries — must NOT appear in current list

@@ -34,8 +34,9 @@ describe('registry shape + invariants', () => {
     expect(Object.isFrozen(LOOP_CONTRACTS)).toBe(true);
   });
 
-  it('declares the 2 exemplars and every entry validates', () => {
-    expect(LOOP_CONTRACTS).toHaveLength(2);
+  it('declares the registered contracts and every entry validates', () => {
+    // SD-LEO-INFRA-UNIT-TEST-DEBT-TRIAGE-001: a 3rd contract (LOOP-PROD-ERROR-SWEEP-001) was added.
+    expect(LOOP_CONTRACTS).toHaveLength(3);
     for (const c of LOOP_CONTRACTS) {
       expect(validateLoopContract(c)).toEqual({ valid: true, errors: [] });
     }
@@ -50,7 +51,7 @@ describe('registry shape + invariants', () => {
 
   it('list() returns id+name+cadence summaries', () => {
     const summaries = list();
-    expect(summaries).toHaveLength(2);
+    expect(summaries).toHaveLength(3); // SD-LEO-INFRA-UNIT-TEST-DEBT-TRIAGE-001: 3rd contract added
     for (const s of summaries) {
       expect(typeof s.id).toBe('string');
       expect(typeof s.name).toBe('string');
@@ -74,7 +75,12 @@ describe('registry shape + invariants', () => {
 describe('exemplar goals are typed (FR-3)', () => {
   it('every exemplar goal is a typed object with a valid GOAL_TYPE (no bare strings remain)', () => {
     const validTypes = new Set(Object.values(GOAL_TYPE));
+    // SD-LEO-INFRA-UNIT-TEST-DEBT-TRIAGE-001: LOOP-PROD-ERROR-SWEEP-001 DELIBERATELY keeps bare-string
+    // goals for now — the typed-goal migration is deferred until the loop runner accepts goal_type
+    // (see the in-source comment on PROD_ERROR_SWEEP_CONTRACT). Exempt it until that SD lands.
+    const TYPED_GOAL_DEFERRED = new Set(['LOOP-PROD-ERROR-SWEEP-001']);
     for (const c of LOOP_CONTRACTS) {
+      if (TYPED_GOAL_DEFERRED.has(c.id)) continue;
       for (const g of c.goals) {
         expect(typeof g, `${c.id} goal should be an object`).toBe('object');
         expect(validTypes.has(g.type), `${c.id} goal type ${g.type}`).toBe(true);

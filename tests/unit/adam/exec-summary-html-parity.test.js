@@ -65,14 +65,19 @@ describe('QF-20260621-379 exec-email HTML parity', () => {
     expect(h).toContain('EHG vision: 41% built (build-segmented detail unavailable)');
   });
 
-  it('SOURCE GUARD: the HTML assembly references each of the 5 parity lines', () => {
+  it('SOURCE GUARD: the HTML assembly references the current parity lines', () => {
+    // SD-LEO-INFRA-UNIT-TEST-DEBT-TRIAGE-001 (stale source-guard): the exec-email HTML was REDESIGNED
+    // by SD-LEO-INFRA-EXEC-EMAIL-STRATEGY-ALIGNED-001 — it now LEADS with the active-rung rollup, and
+    // the infra-build lines (buildLine/rungLine/forecastLine/operationalLine) were DELIBERATELY dropped
+    // from this render (see the in-source comment). Guard the CURRENT skeleton's lines instead. NOTE:
+    // the local htmlFragment replica + the old 5-line parity cases above now mirror a SUPERSEDED
+    // structure (self-consistent, still green) — a fuller parity rewrite is a residual follow-up.
     const here = dirname(fileURLToPath(import.meta.url));
     const src = readFileSync(resolve(here, '../../../scripts/adam-exec-summary.mjs'), 'utf8');
-    // Scope to the `const html = '<div...` assembly so we don't match the plaintext array.
     const start = src.indexOf("const html = '<div");
     expect(start).toBeGreaterThan(-1);
-    const htmlBlock = src.slice(start, src.indexOf('</div>\';', start));
-    for (const sym of ['buildLine', 'rungLine', 'rungRollupLine', 'forecastLine', 'forecastDegraded', 'FORECAST_DEGRADED_MARKER', 'operationalLine']) {
+    const htmlBlock = src.slice(start, src.indexOf('`;', start)); // first backtick-semicolon = end of the assembly
+    for (const sym of ['rungRollupLine', 'metaLine', 'distanceToQuitLine', 'watchdogLine']) {
       expect(htmlBlock, `HTML assembly must reference ${sym}`).toContain(sym);
     }
   });
