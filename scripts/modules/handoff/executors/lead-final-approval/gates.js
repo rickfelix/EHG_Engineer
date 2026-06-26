@@ -45,6 +45,10 @@ import { createPhantomTestAuditGate } from './gates/phantom-test-audit-gate.js';
 export { createPhantomTestAuditGate };
 import { createLearningOrBypassResolvedGate } from './gates/learning-or-bypass-resolved-gate.js';
 export { createLearningOrBypassResolvedGate };
+// SD-LEO-INFRA-COMPLETION-GATE-DEFERRED-HOME-001: block completion when declared deferred
+// follow-up work has no live home SD (stop deferred scope from evaporating).
+import { createDeferredFollowupsGate } from './gates/deferred-followups-gate.js';
+export { createDeferredFollowupsGate };
 
 // Cross-SD File-Overlap Temporal Gate — SHIP oracle (SD-LEO-INFRA-CROSS-FILE-OVERLAP-001 FR-2b)
 import { createCrossSdFileOverlapTemporalShipGate } from './gates/cross-sd-file-overlap-temporal-ship.js';
@@ -1219,6 +1223,12 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // set ENFORCE_LEARNING_GATE=true to block.
   gates.push(createLearningOrBypassResolvedGate(supabase));
 
+  // Deferred-Followups Home — SD-LEO-INFRA-COMPLETION-GATE-DEFERRED-HOME-001
+  // Blocks completion when metadata.deferred_followups[] references a follow-up SD that does
+  // not exist (or is cancelled). Heuristic-warns on unstructured deferral phrases. Blocking by
+  // default; set DEFERRED_HOME_GATE_DISABLED=true for a byte-identical pass-through.
+  gates.push(createDeferredFollowupsGate(supabase));
+
   // Cross-SD File-Overlap Temporal Gate — SHIP oracle (FR-2b)
   // Compares this PR's diff against the merge-commit diffs of SDs shipped
   // within the configured window. High-risk = FAIL, medium = WARN unless ack'd.
@@ -1253,6 +1263,7 @@ export default {
   createWireCheckGate,
   createPhantomTestAuditGate,
   createLearningOrBypassResolvedGate,
+  createDeferredFollowupsGate,
   createCrossSdFileOverlapTemporalShipGate,
   createActivationInvariantGate,
   getRequiredGates
