@@ -24,7 +24,6 @@ const os = require('os');
 
 // Load env
 const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
- });
 
 const UNIFIED_STATE_FILE = path.resolve(__dirname, '../../.claude/unified-session-state.json');
 const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
@@ -126,7 +125,8 @@ async function main() {
   // Check if the SD is currently claimed by another session
   const { data: existingClaims } = await supabase
     .from('claude_sessions')
-    .select('session_id, sd_key, heartbeat_at, status')
+    // SD-LEO-INFRA-STALE-SWEEP-PID-LIVENESS-GUARD-001: select the liveness fields the guard reads.
+    .select('session_id, sd_key, heartbeat_at, status, is_alive, terminal_id, process_alive_at, expected_silence_until')
     .eq('sd_key', sdKey)
     .eq('status', 'active');
 
@@ -137,8 +137,17 @@ async function main() {
     const isPreviousSession = claim.session_id === previousSessionId;
     const heartbeatAge = Date.now() - new Date(claim.heartbeat_at).getTime();
     const isStale = heartbeatAge > STALE_THRESHOLD_MS;
+    // SD-LEO-INFRA-STALE-SWEEP-PID-LIVENESS-GUARD-001 (FR-2/FR-3): hold a stale claim whose holder
+    // PID is alive (parked-but-recoverable worker). Applies to the foreign-session steal at minimum;
+    // also harmless for our own prior session (a live prior PID is genuinely still working).
+    const { shouldHoldClaim } = require('../../lib/fleet/claim-release-guard.cjs');
+    const guard = shouldHoldClaim(claim);
 
     if (isPreviousSession && isStale) {
+      if (guard.hold) {
+        console.log(`[RECLAIM] HOLD: previous session ${claim.session_id} is alive (${guard.reason}) - not releasing`);
+        return;
+      }
       // Release the stale previous session's claim
       console.log(`[RECLAIM] Previous session is stale (${Math.round(heartbeatAge / 1000)}s) - releasing`);
       await supabase.rpc('release_sd', {
@@ -148,6 +157,10 @@ async function main() {
     } else if (!isPreviousSession) {
       // Another session holds the claim - don't steal it
       console.log(`[RECLAIM] SD claimed by different session: ${claim.session_id} (age: ${Math.round(heartbeatAge / 1000)}s)`);
+      if (isStale && guard.hold) {
+        console.log(`[RECLAIM] HOLD: that session is alive (${guard.reason}) - not stealing the claim`);
+        return;
+      }
       if (isStale) {
         console.log('[RECLAIM] That session is stale - releasing for re-claim');
         await supabase.rpc('release_sd', {

@@ -40,6 +40,8 @@ const { assertSdDispatchable, isFullUuid } = require('../lib/coordinator/dispatc
 // they cannot drift. Absorbs QF-20260526-577.
 const { CLAIM_HOLDING_STATUSES, computeClaimedSdKeys } = require('../lib/claim/holding-statuses.cjs');
 const { SILENCE_HARD_CAP_MS } = require('../lib/fleet/silence-cap.cjs'); // FR-4: shared writer<=reader cap
+// SD-LEO-INFRA-STALE-SWEEP-PID-LIVENESS-GUARD-001: PID-liveness guard for the conflict-eviction path.
+const { shouldHoldClaim } = require('../lib/fleet/claim-release-guard.cjs');
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3b — top-level require so wire-check
 // call-graph builder can statically resolve the dependency on lib/coordinator/signal-router.cjs.
 const _signalRouterModule = require('../lib/coordinator/signal-router.cjs');
@@ -636,7 +638,7 @@ async function dispatchWorkAssignmentsIfAllowed(supabase, activeSessions, availa
       continue;
     }
 
-    await supabase.from('session_coordination').insert(row);
+    await supabase.from('session_coordination').insert(row); // schema-lint-disable-line — `row` columns are valid; lint mis-reads the return-object keys (skipped/blocked) below as insert columns (false positive, stale snapshot)
     dispatched++;
   }
   return { dispatched, skipped: 0, blocked: false };
@@ -1471,6 +1473,16 @@ async function main() {
     for (const evict of evictees) {
       // Skip if already released in step 4
       if (dead.find(d => d.session_id === evict.session_id)) continue;
+
+      // SD-LEO-INFRA-STALE-SWEEP-PID-LIVENESS-GUARD-001 (FR-2/FR-3): never evict a claimant whose
+      // PID is ALIVE — a parked-but-live worker with an older heartbeat must not lose its claim to
+      // a fresher (possibly zombie) claimant. The keeper was chosen by heartbeat alone; liveness
+      // overrides that for the release decision. aliveCcPids is already computed above (line ~690).
+      const evictGuard = shouldHoldClaim(evict, { aliveCcPids });
+      if (evictGuard.hold) {
+        actions.push('CONFLICT on ' + sdId + ': HELD live claimant ' + evict.session_id + ' (' + evictGuard.reason + ') — not evicted');
+        continue;
+      }
 
       const targetStatus = evict.status === 'ACTIVE' ? 'idle' : 'released';
       // SD-LEO-INFRA-SESSION-LIFECYCLE-CLEANUP-001 (FR-2): Clear dirty fields on claim release
