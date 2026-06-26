@@ -51,6 +51,11 @@ vi.mock('../../../../../lib/eva/stage-zero/synthesis/narrative-risk.js', () => (
 vi.mock('../../../../../lib/eva/stage-zero/synthesis/tech-trajectory.js', () => ({
   analyzeTechTrajectory: vi.fn().mockResolvedValue({ component: 'tech_trajectory', trajectory_score: 67, axes: { reasoning_autonomy: { current: 65, bull_6m: 85, base_6m: 75, bear_6m: 68, venture_impact: 'test' }, cost_deflation: { current: 50, bull_6m: 80, base_6m: 65, bear_6m: 45, venture_impact: 'test' }, multimodal_expansion: { current: 40, bull_6m: 70, base_6m: 55, bear_6m: 42, venture_impact: 'test' } }, competitive_timing: { signal: 'opening', confidence: 0.7, window_months: 6, rationale: 'test' }, next_disruption_event: { event: 'Test', estimated_months: 4, invalidation_scope: 'test' }, gap_windows: [], confidence_caveat: 'Test caveat', summary: 'ok', data_feed_active: false }),
 }));
+// SD-EHG-FACTORY-AGENTIC-FIT-SELECTION-001: 15th synthesis component
+vi.mock('../../../../../lib/eva/stage-zero/synthesis/agentic-fit.js', () => ({
+  analyzeAgenticFit: vi.fn().mockResolvedValue({ component: 'agentic_fit', agentic_fit_score: 72, fit_composite: 70, queue_jump_score: 80, dimension_scores: { agent_leverage: 80, compounding: 70, kill_speed: 65, attention_economy: 60 }, machine_improvement: 40, machine_improvement_bonus: 0.2, disadvantage_flags: [], disadvantage_down_weight: 1, hardest_disadvantage_flags: [], chairman_review_required: false, af_band: 'AF-High', af_interpretation: 'ok', confidence: 0.7, summary: 'ok' }),
+  buildAgenticFitAdvisory: vi.fn().mockReturnValue(null),
+}));
 vi.mock('../../../../../lib/eva/stage-zero/profile-service.js', () => ({
   resolveProfile: vi.fn().mockResolvedValue(null),
   calculateWeightedScore: vi.fn().mockReturnValue({ total_score: 75, breakdown: {} }),
@@ -99,7 +104,7 @@ beforeEach(() => {
 });
 
 describe('runSynthesis', () => {
-  test('runs all 14 synthesis components', async () => {
+  test('runs all 15 synthesis components', async () => {
     const result = await runSynthesis(validPathOutput, { logger: silentLogger });
 
     expect(crossReferenceIntellectualCapital).toHaveBeenCalledWith(validPathOutput, expect.anything());
@@ -115,8 +120,8 @@ describe('runSynthesis', () => {
     expect(analyzeNarrativeRisk).toHaveBeenCalledWith(validPathOutput, expect.anything());
     expect(analyzeTechTrajectory).toHaveBeenCalledWith(validPathOutput, expect.anything());
 
-    expect(result.metadata.synthesis.components_run).toBe(14);
-    expect(result.metadata.synthesis.components_total).toBe(14);
+    expect(result.metadata.synthesis.components_run).toBe(15);
+    expect(result.metadata.synthesis.components_total).toBe(15);
   });
 
   test('handles component failure gracefully', async () => {

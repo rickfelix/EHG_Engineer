@@ -40,6 +40,8 @@ const LEGACY_WEIGHTS = {
   build_cost: 0.10,
   virality: 0.13,
   tech_trajectory: 0.05,
+  // SD-EHG-FACTORY-AGENTIC-FIT-SELECTION-001: 11th weighted component
+  agentic_fit: 0.10,
 };
 
 const AGGRESSIVE_WEIGHTS = {
@@ -82,17 +84,20 @@ describe('counterfactual-engine', () => {
       expect(result.delta).toBe(result.counterfactual_score - result.original_score);
     });
 
-    it('breakdown contains all 10 components', () => {
+    it('breakdown contains all LEGACY_WEIGHTS components', () => {
       const result = generateCounterfactual({
         synthesisResults: MOCK_RESULTS,
         currentWeights: LEGACY_WEIGHTS,
         scenarioWeights: AGGRESSIVE_WEIGHTS,
       });
 
-      expect(result.breakdown).toHaveLength(10);
+      // SD-EHG-FACTORY-AGENTIC-FIT-SELECTION-001: agentic_fit is now an 11th weighted
+      // component, so the breakdown length tracks Object.keys(LEGACY_WEIGHTS).
+      expect(result.breakdown).toHaveLength(Object.keys(LEGACY_WEIGHTS).length);
       const components = result.breakdown.map(b => b.component);
       expect(components).toContain('moat_architecture');
       expect(components).toContain('virality');
+      expect(components).toContain('agentic_fit');
     });
 
     it('breakdown is sorted by absolute contribution delta', () => {
