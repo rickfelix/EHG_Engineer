@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-COMPETITIVE-OBSERVED-TAG-MIGRATION-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-COMPETITIVE-OBSERVED-TAG-MIGRATION-001",
-  "createdAt": "2026-06-24T00:11:14.638Z",
+  "sdKey": "SD-LEO-INFRA-ADAM-DECISION-RUBRIC-ENFORCE-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-ADAM-DECISION-RUBRIC-ENFORCE-001",
+  "createdAt": "2026-06-26T09:07:54.822Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }

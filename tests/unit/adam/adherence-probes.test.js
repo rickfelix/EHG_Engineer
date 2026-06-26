@@ -54,16 +54,18 @@ describe('FAIL-LOUD contract (FR-5): unresolved facts NEVER silent-pass', () => 
     const hostile = {};
     Object.defineProperty(hostile, 'sourcedInWindow', { get() { throw new Error('boom'); }, enumerable: true });
     const bars = runAdherenceProbes(hostile);
-    expect(bars).toHaveLength(6);
+    // SD-LEO-INFRA-ADAM-DECISION-RUBRIC-ENFORCE-001: a 7th probe (decision_rubric) was added.
+    expect(bars).toHaveLength(7);
     expect(bars[0].verdict).toBe('unknown');
   });
 });
 
 describe('runAdherenceProbes + hasDrift', () => {
-  it('runs the full canonical probe set (6) with {probe,duty,verdict,detail} shape', () => {
-    expect(ADHERENCE_PROBES).toHaveLength(6);
-    const bars = runAdherenceProbes({ sourcedInWindow: 1, visionGaugeReadInWindow: true, recurrencesInWindow: 0, signalsInWindow: 0, adamAuthoredBuildsInWindow: 0, claimableBelt: 1, idleWorkers: 0, sourceableBacklogCount: 0, advisoryBody: 'ok' });
-    expect(bars).toHaveLength(6);
+  it('runs the full canonical probe set (7) with {probe,duty,verdict,detail} shape', () => {
+    // SD-LEO-INFRA-ADAM-DECISION-RUBRIC-ENFORCE-001: decision_rubric is the 7th canonical probe.
+    expect(ADHERENCE_PROBES).toHaveLength(7);
+    const bars = runAdherenceProbes({ sourcedInWindow: 1, visionGaugeReadInWindow: true, recurrencesInWindow: 0, signalsInWindow: 0, adamAuthoredBuildsInWindow: 0, claimableBelt: 1, idleWorkers: 0, sourceableBacklogCount: 0, advisoryBody: 'ok', adamChairmanDecisionQuestionsInWindow: [] });
+    expect(bars).toHaveLength(7);
     for (const b of bars) {
       expect(typeof b.probe).toBe('string');
       expect(typeof b.duty).toBe('string');
