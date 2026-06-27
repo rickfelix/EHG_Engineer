@@ -32,8 +32,21 @@ describe('Stage 19 SYSTEM_PROMPT — default-capabilities inclusion (FR-2)', () 
     expect(stage19Source).toMatch(/default_capabilities_override/);
   });
 
-  it('SYSTEM_PROMPT contains the story-point budget guidance', () => {
-    expect(stage19Source).toMatch(/Reserve ~3 story points for the mandatory items/);
+  it('SYSTEM_PROMPT contains the story-point budget guidance (dynamic reserve)', () => {
+    // SD-LEO-INFRA-VENTURE-DEFAULT-CAPABILITIES-EXPAND-001 (FR-6): the reserve is no longer
+    // a hardcoded "~3" — it is derived from the sum of mandatory capability story_points so
+    // it can never drift as the default set grows.
+    expect(stage19Source).toMatch(
+      /Reserve ~\$\{MANDATORY_CAPABILITIES_RESERVE\} story points for the mandatory items/
+    );
+  });
+
+  it('derives MANDATORY_CAPABILITIES_RESERVE from the sum of capability story_points', () => {
+    expect(stage19Source).toMatch(/const MANDATORY_CAPABILITIES_RESERVE\s*=/);
+    const expectedReserve = EHG_VENTURE_DEFAULT_CAPABILITIES
+      .reduce((sum, c) => sum + (Number(c.story_points) || 0), 0);
+    // The 7-capability default set sums to 9 story points (FR-6 budget contract).
+    expect(expectedReserve).toBe(9);
   });
 
   it('renders both capability names verbatim into the prompt block', () => {
