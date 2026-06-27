@@ -23,11 +23,15 @@ vi.mock('../../../../lib/eva/stage-zero/paths/discovery-mode.js', () => ({
   executeDiscoveryMode: vi.fn(),
   listDiscoveryStrategies: vi.fn(),
 }));
+vi.mock('../../../../lib/eva/stage-zero/paths/venture-reseeding.js', () => ({
+  executeVentureReseeding: vi.fn(),
+}));
 
 import { ENTRY_PATHS, PATH_OPTIONS, routePath } from '../../../../lib/eva/stage-zero/path-router.js';
 import { executeCompetitorTeardown } from '../../../../lib/eva/stage-zero/paths/competitor-teardown.js';
 import { executeBlueprintBrowse } from '../../../../lib/eva/stage-zero/paths/blueprint-browse.js';
 import { executeDiscoveryMode } from '../../../../lib/eva/stage-zero/paths/discovery-mode.js';
+import { executeVentureReseeding } from '../../../../lib/eva/stage-zero/paths/venture-reseeding.js';
 
 const silentLogger = { log: vi.fn(), warn: vi.fn() };
 
@@ -41,19 +45,21 @@ const validPathOutput = {
 };
 
 describe('ENTRY_PATHS and PATH_OPTIONS', () => {
-  test('ENTRY_PATHS has exactly 3 keys', () => {
-    expect(Object.keys(ENTRY_PATHS)).toHaveLength(3);
+  test('ENTRY_PATHS has exactly 4 keys', () => {
+    expect(Object.keys(ENTRY_PATHS)).toHaveLength(4);
     expect(ENTRY_PATHS.COMPETITOR_TEARDOWN).toBe('competitor_teardown');
     expect(ENTRY_PATHS.BLUEPRINT_BROWSE).toBe('blueprint_browse');
     expect(ENTRY_PATHS.DISCOVERY_MODE).toBe('discovery_mode');
+    expect(ENTRY_PATHS.SEEDED_FROM_VENTURE).toBe('seeded_from_venture');
   });
 
-  test('PATH_OPTIONS has 3 entries matching ENTRY_PATHS', () => {
-    expect(PATH_OPTIONS).toHaveLength(3);
+  test('PATH_OPTIONS has 4 entries matching ENTRY_PATHS', () => {
+    expect(PATH_OPTIONS).toHaveLength(4);
     const keys = PATH_OPTIONS.map(o => o.key);
     expect(keys).toContain(ENTRY_PATHS.COMPETITOR_TEARDOWN);
     expect(keys).toContain(ENTRY_PATHS.BLUEPRINT_BROWSE);
     expect(keys).toContain(ENTRY_PATHS.DISCOVERY_MODE);
+    expect(keys).toContain(ENTRY_PATHS.SEEDED_FROM_VENTURE);
   });
 
   test('ENTRY_PATHS is frozen', () => {
@@ -81,6 +87,13 @@ describe('routePath', () => {
     const result = await routePath('discovery_mode', { strategy: 'trend_scanner' }, { logger: silentLogger });
     expect(executeDiscoveryMode).toHaveBeenCalledWith({ strategy: 'trend_scanner' }, { logger: silentLogger });
     expect(result.origin_type).toBe('discovery');
+  });
+
+  test('dispatches to venture reseeding handler', async () => {
+    executeVentureReseeding.mockResolvedValueOnce({ ...validPathOutput, origin_type: 'seeded_from_venture' });
+    const result = await routePath('seeded_from_venture', { source_venture_id: 'v-1' }, { logger: silentLogger });
+    expect(executeVentureReseeding).toHaveBeenCalledWith({ source_venture_id: 'v-1' }, { logger: silentLogger });
+    expect(result.origin_type).toBe('seeded_from_venture');
   });
 
   test('throws on invalid pathKey', async () => {
