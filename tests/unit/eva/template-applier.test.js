@@ -133,7 +133,11 @@ describe('recommendTemplates', () => {
             select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 gte: vi.fn().mockReturnValue({
-                  order: vi.fn(() => Promise.resolve({ data: [], error: null })),
+                  // SD-LEO-INFRA-COMPOUNDING-CAPTURE-FORWARD-001: the discovery query now adds an
+                  // .or provenance-exclusion before .order — mirror that in the mock chain.
+                  or: vi.fn().mockReturnValue({
+                    order: vi.fn(() => Promise.resolve({ data: [], error: null })),
+                  }),
                 }),
               }),
             }),
