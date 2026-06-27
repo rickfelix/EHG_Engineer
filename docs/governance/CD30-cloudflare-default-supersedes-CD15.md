@@ -22,7 +22,8 @@ re-lock was unintentional on 2026-06-27.
 - **Repo:** own repo per venture
 - **Replit:** demoted to explicit opt-in (prototyping only) — no longer the hardcoded default
 - **Spend-guardrails:** the 8-point policy is a **hard precondition** before Cloudflare-default goes live
-  (D1 runaway-invoice risk; no provider has a hard dollar cap)
+  (D1 runaway-invoice risk; no provider has a hard dollar cap) — the research's *conditional* go is resolved
+  by enforcing it as the fail-closed S19 exit gate `spend guardrails ready` (child -D)
 
 ## Rationale
 
@@ -44,7 +45,9 @@ Governance record only:
 
 - **-B** standard/SSOT rewrite (venture-hosting-standard.md, venture-stack-policy.js, S19 check)
 - **-C** provisioner default-seeding code (default Cloudflare `stack_descriptor`)
-- **-D** spend-guardrail wiring (`lib/venture-deploy/spend-guardrails.js`)
+- **-D** spend-guardrail wiring — carries the 8-point policy as the fail-closed S19 exit gate
+  `spend guardrails ready` (migration `20260627_s19_spend_guardrails_exit_gate.sql` + `exit-gate-enforcer.js`
+  dispatch of `verifySpendGuardrailsReady`), closing the gap where the verifier existed but was never dispatched
 
 > Propagation-integrity: the corrected decision is written into the canonical store so any future
 > "lock to the approved standard" reads the correct value and the CD-15-class accidental inheritance
