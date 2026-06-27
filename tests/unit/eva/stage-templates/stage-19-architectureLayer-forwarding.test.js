@@ -5,13 +5,21 @@
  * back to all four architecture layers (the vacuous-decomposition root cause).
  */
 import { describe, it, expect, vi } from 'vitest';
+import { EHG_VENTURE_DEFAULT_CAPABILITIES } from '../../../../lib/eva/config/venture-default-capabilities.js';
 
-// Mandatory portfolio-default capabilities analyzeStage19 validates for (feedback-widget +
-// error-capture-middleware); the planner throws MissingDefaultCapabilityError without them.
-const MANDATORY_ITEMS = [
-  { title: 'Integrate Feedback Widget', description: 'Add feedback widget', type: 'infra', priority: 'medium', estimatedLoc: 30, acceptanceCriteria: 'Widget visible', architectureLayer: 'frontend', milestoneRef: 'MVP' },
-  { title: 'Wire Error Capture Middleware', description: 'Add error capture', type: 'infra', priority: 'medium', estimatedLoc: 20, acceptanceCriteria: 'Errors captured', architectureLayer: 'backend', milestoneRef: 'MVP' },
-];
+// Mandatory portfolio-default capabilities analyzeStage19 validates for; the planner throws
+// MissingDefaultCapabilityError without them. SD-LEO-INFRA-VENTURE-DEFAULT-CAPABILITIES-EXPAND-001:
+// derive from the canonical config (was a hardcoded 2-item list that broke when the set grew to 7).
+const MANDATORY_ITEMS = EHG_VENTURE_DEFAULT_CAPABILITIES.map(c => ({
+  title: c.name,
+  description: c.description.slice(0, 60),
+  type: 'infra',
+  priority: 'medium',
+  estimatedLoc: 30,
+  acceptanceCriteria: 'Mandatory capability present',
+  architectureLayer: 'infrastructure',
+  milestoneRef: 'MVP',
+}));
 
 const mockComplete = vi.fn().mockResolvedValue(JSON.stringify({
   sprintGoal: 'Ship the landing experience',

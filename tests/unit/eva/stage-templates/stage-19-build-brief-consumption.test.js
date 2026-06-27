@@ -6,11 +6,22 @@
  * LLM prompt and works correctly without it (backward compatibility).
  */
 import { describe, it, expect, vi } from 'vitest';
+import { EHG_VENTURE_DEFAULT_CAPABILITIES } from '../../../../lib/eva/config/venture-default-capabilities.js';
 
-const MANDATORY_ITEMS = [
-  { title: 'Integrate Feedback Widget', description: 'Add feedback widget', type: 'infra', priority: 'medium', estimatedLoc: 30, acceptanceCriteria: 'Widget visible', architectureLayer: 'frontend', milestoneRef: 'MVP' },
-  { title: 'Wire Error Capture Middleware', description: 'Add error capture', type: 'infra', priority: 'medium', estimatedLoc: 20, acceptanceCriteria: 'Errors captured', architectureLayer: 'backend', milestoneRef: 'MVP' },
-];
+// SD-LEO-INFRA-VENTURE-DEFAULT-CAPABILITIES-EXPAND-001: derive the mandatory mock items from
+// the canonical config (was a hardcoded 2-item list that broke when the default set grew to 7).
+// Each capability's exact `name` is the item title so validateVentureDefaultCapabilities matches
+// it via title-prefix; any mock spreading MANDATORY_ITEMS satisfies the constraint at any set size.
+const MANDATORY_ITEMS = EHG_VENTURE_DEFAULT_CAPABILITIES.map(c => ({
+  title: c.name,
+  description: c.description.slice(0, 60),
+  type: 'infra',
+  priority: 'medium',
+  estimatedLoc: 30,
+  acceptanceCriteria: 'Mandatory capability present',
+  architectureLayer: 'infrastructure',
+  milestoneRef: 'MVP',
+}));
 
 // Shared mock function to capture calls
 const mockComplete = vi.fn().mockResolvedValue(JSON.stringify({
