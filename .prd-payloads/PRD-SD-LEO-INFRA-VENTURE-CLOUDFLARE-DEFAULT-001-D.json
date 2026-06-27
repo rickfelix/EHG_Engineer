@@ -1,0 +1,137 @@
+{
+  "executive_summary": "FR-4 child of the Cloudflare-default series: with Cloudflare now the conformant default venture-hosting target (child B), the conditional-go research finding — no provider has a hard dollar spend cap, and D1 carries a real runaway-invoice risk (~4.83B-row case) — must be carried forward as a HARD, fail-closed precondition before a Cloudflare-default venture goes live. The 8-point spend-guardrail policy (lib/venture-deploy/spend-guardrails.js) and its fail-closed verifier (verifySpendGuardrailsReady in lib/eva/lifecycle/exit-gate-verifiers.js) already exist, but the verifier is currently NEVER dispatched: no venture stage declares the gate string 'spend guardrails ready' in venture_stages.metadata.gates.exit, so the precondition is only enforced implicitly inside publish.js. This SD makes the precondition explicit at the S19 go-live boundary (where 'Application deployed' is gated), proves it fail-closed with a regression test, and records the carry-forward in the venture-hosting standard so the conditional-go becomes a documented hard gate.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Declare 'spend guardrails ready' as an explicit fail-closed exit gate on the S19 go-live stage",
+      "description": "Add the gate string 'spend guardrails ready' to venture_stages.metadata.gates.exit for stage_number 19 (Sprint Planning / the deploy boundary), ordered BEFORE the existing 'Application deployed' gate, via a new additive migration (mirroring the seed style of database/migrations/20260421_redesign_s18_s26_lifecycle_stage_config.sql). This causes lib/eva/lifecycle/exit-gate-enforcer.js to dispatch the already-registered verifySpendGuardrailsReady verifier (registered for match 'spend guardrails ready' in lib/eva/lifecycle/exit-gate-verifiers.js). Today the verifier exists but its trigger string is absent from every stage, so it is never invoked and the precondition is only implicit in publish.js. The verifier reads per-venture venture_guardrail_state rows and is satisfied ONLY when a row exists for each of the 8 canonical guardrails AND every decision === 'allow' AND no kill-switch is open.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "venture_stages stage_number=19 metadata.gates.exit includes 'spend guardrails ready' ordered before 'Application deployed'",
+        "exit-gate-enforcer dispatches verifySpendGuardrailsReady for S19 (gates_checked includes 'spend guardrails ready')",
+        "Migration is additive and idempotent (re-run safe; does not drop or reorder unrelated gates beyond the documented insert)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Regression test: a Cloudflare-default venture cannot advance past S19 go-live until all 8 guardrails are satisfied",
+      "description": "Add a fail-closed regression test (tests/unit) that drives lib/eva/lifecycle/exit-gate-enforcer.js (or verifySpendGuardrailsReady directly) for a Cloudflare-default venture and asserts: (a) with NO venture_guardrail_state rows the S19 exit gate is BLOCKED with a reason naming the missing guardrails; (b) with all 8 guardrails persisted decision='allow' and kill-switch closed the gate is SATISFIED; (c) opening the d1-write-ceiling kill-switch re-BLOCKS the gate naming d1-write-ceiling(kill-switch-open). This proves the runaway-invoice precondition is hard and fail-closed, not advisory.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Test asserts BLOCKED with missing-guardrail reason when no rows exist",
+        "Test asserts SATISFIED when all 8 rows are decision='allow' and no kill-switch open",
+        "Test asserts re-BLOCKED naming d1-write-ceiling when the kill-switch is opened",
+        "Test passes under the existing unit runner"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Record the carry-forward: conditional-go becomes a documented hard gate in the hosting standard",
+      "description": "Update docs/03_protocols_and_standards/venture-hosting-standard.md (and the CD30 governance note docs/governance/CD30-cloudflare-default-supersedes-CD15.md) to state that the Cloudflare-default standard is gated on the 8-point spend-guardrail precondition, now enforced as the fail-closed S19 exit gate 'spend guardrails ready' — so the conditional-go research finding (no hard dollar cap; D1 runaway-invoice risk) is preserved as a hard precondition and the rationale cannot be lost on a future standard read.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "venture-hosting-standard.md documents the spend-guardrail precondition and names the S19 'spend guardrails ready' gate",
+        "CD30 governance note references the hard precondition as the resolution of the conditional-go"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Additive, no behavior change to the guardrail module or publish.js",
+      "description": "The 8-point module, persistGuardrailDecisions, publish.js block, and the verifier are unchanged; this SD only WIRES the existing verifier into the S19 exit-gate set and documents/regression-tests it. No edits to lib/venture-deploy/spend-guardrails.js logic."
+    },
+    {
+      "id": "TR-2",
+      "title": "DB-first via migration, not a one-off row patch",
+      "description": "The S19 gate string change ships as a new database/migrations/*.sql file so the change is reproducible across environments, not a manual DB mutation."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "S19 exit gate blocks when guardrails are unrecorded",
+      "type": "unit",
+      "expected": "exit-gate-enforcer returns allowed=false, blocked_by names the missing guardrails, gates_checked includes 'spend guardrails ready'"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "S19 exit gate allows when all 8 guardrails are 'allow' with no kill-switch",
+      "type": "unit",
+      "expected": "exit-gate-enforcer returns allowed=true for the guardrail gate"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "S19 exit gate re-blocks when the d1-write-ceiling kill-switch is open",
+      "type": "unit",
+      "expected": "allowed=false, blocked_by names d1-write-ceiling(kill-switch-open)"
+    }
+  ],
+  "acceptance_criteria": [
+    "The 8-point spend-guardrail policy is enforced as an explicit fail-closed S19 exit gate before a Cloudflare-default venture goes live",
+    "A regression test proves the gate blocks/allows/re-blocks across the three guardrail states",
+    "The hosting standard and CD30 note document the precondition as the resolution of the conditional-go"
+  ],
+  "risks": [
+    {
+      "risk": "Adding a new S19 exit gate could block in-flight ventures whose guardrails were never persisted",
+      "mitigation": "Verifier is fail-closed by design (the conditional-go REQUIRES this); persistGuardrailDecisions runs in the deploy flow. Out-of-scope ventures (venture-1) are Replit-locked and excluded per the parent SD. The gate only engages on stage advance, surfacing a clear missing-guardrail reason rather than a silent failure.",
+      "severity": "medium"
+    },
+    {
+      "risk": "Migration could reorder or clobber existing S19 gates",
+      "mitigation": "Migration is additive and idempotent — inserts the single gate string at the correct position and is re-run safe; covered by FR-1 acceptance criteria.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "lib/eva/lifecycle/exit-gate-enforcer.js (dispatches the new gate at S19 advance)",
+      "advance_venture_stage / venture stage advance flow",
+      "Cloudflare-default venture provisioning (children B/C)"
+    ],
+    "dependencies": [
+      "lib/venture-deploy/spend-guardrails.js (GUARDRAIL_NAMES, existing)",
+      "lib/eva/lifecycle/exit-gate-verifiers.js (verifySpendGuardrailsReady, existing)",
+      "venture_guardrail_state table (existing)",
+      "Child B (Cloudflare-default standard) — landed"
+    ],
+    "data_contracts": [
+      "venture_stages.metadata.gates.exit (append 'spend guardrails ready' for stage 19)",
+      "venture_guardrail_state (read-only by the verifier; unchanged)"
+    ],
+    "runtime_config": [
+      "exit-gate-enforcer feature flag (existing) governs enforcement on/off"
+    ],
+    "observability_rollout": [
+      "gates_checked / blocked_by in the enforcer payload surface the new gate at each S19 advance",
+      "Regression test in CI proves fail-closed behavior"
+    ]
+  },
+  "system_architecture": {
+    "summary": "Wire the existing fail-closed spend-guardrail verifier into the S19 go-live exit-gate set so the conditional-go precondition is enforced explicitly, not implicitly.",
+    "components": [
+      { "name": "database/migrations/<new>_s19_spend_guardrails_exit_gate.sql", "change": "NEW — append 'spend guardrails ready' to S19 gates.exit" },
+      { "name": "tests/unit/s19-spend-guardrails-gate.test.js", "change": "NEW — fail-closed regression test" },
+      { "name": "docs/03_protocols_and_standards/venture-hosting-standard.md", "change": "document the hard precondition" },
+      { "name": "docs/governance/CD30-cloudflare-default-supersedes-CD15.md", "change": "reference the precondition as the conditional-go resolution" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Additive migration + regression test + doc carry-forward; no guardrail-logic changes.",
+    "steps": [
+      "Write the additive, idempotent migration appending 'spend guardrails ready' to S19 metadata.gates.exit before 'Application deployed'",
+      "Apply the migration and confirm exit-gate-enforcer dispatches verifySpendGuardrailsReady for S19",
+      "Add the fail-closed regression test across the three guardrail states",
+      "Update the hosting standard + CD30 note with the hard-precondition carry-forward"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run the S19 exit-gate enforcer for a Cloudflare-default venture with NO venture_guardrail_state rows", "expected_outcome": "Returns allowed=false; blocked_by lists the missing guardrails; gates_checked includes 'spend guardrails ready' — fail-closed, go-live blocked" },
+    { "step_number": 2, "instruction": "Persist all 8 guardrails as decision='allow' with kill-switch closed, then re-run the S19 enforcer", "expected_outcome": "The 'spend guardrails ready' gate returns allowed=true — the Cloudflare-default go-live path accepts the venture only after the 8-point precondition is met" },
+    { "step_number": 3, "instruction": "Open the d1-write-ceiling kill-switch and re-run the S19 enforcer", "expected_outcome": "Returns allowed=false naming d1-write-ceiling(kill-switch-open) — runaway-invoice protection holds as a hard gate" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-VENTURE-CLOUDFLARE-DEFAULT-001-D"
+  }
+}
