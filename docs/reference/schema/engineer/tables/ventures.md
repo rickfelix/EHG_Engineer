@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-27T17:44:17.055Z
+**Generated**: 2026-06-27T19:07:48.958Z
 **Rows**: 13
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (90 total)
+## Columns (91 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -113,6 +113,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 | is_scaffolding | `boolean` | **NO** | `false` | Development/build-out vehicle (SD-LEO-FIX-MAKE-VENTURE-STAGE-001): gate history excluded from threshold calibration and portfolio analytics by default. Sibling of is_demo. Set only by explicit chairman decision. |
 | launched_at | `timestamp with time zone` | YES | - | - |
 | stack_descriptor | `jsonb` | YES | - | - |
+| seeded_from_venture_id | `uuid` | YES | - | Provenance: source venture this venture was reseeded from (clean-clone mechanism). Nullable, additive, no backfill. |
 
 ## Constraints
 
@@ -126,6 +127,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 - `ventures_ceo_agent_id_fkey`: ceo_agent_id → agents(id)
 - `ventures_company_id_fkey`: company_id → companies(id)
 - `ventures_portfolio_id_fkey`: portfolio_id → portfolios(id)
+- `ventures_seeded_from_venture_id_fkey`: seeded_from_venture_id → ventures(id)
 - `ventures_vision_id_fkey`: vision_id → eva_vision_documents(id)
 
 ### Check Constraints
@@ -210,6 +212,10 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 - `idx_ventures_portfolio`
   ```sql
   CREATE INDEX idx_ventures_portfolio ON public.ventures USING btree (portfolio_id)
+  ```
+- `idx_ventures_seeded_from`
+  ```sql
+  CREATE INDEX idx_ventures_seeded_from ON public.ventures USING btree (seeded_from_venture_id) WHERE (seeded_from_venture_id IS NOT NULL)
   ```
 - `idx_ventures_stage_status`
   ```sql
