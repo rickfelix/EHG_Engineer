@@ -11,8 +11,8 @@ import {
 describe('OPERATING_MODEL SSOT', () => {
   it('encodes EHG operating-model assumptions (zero payroll, hosting-standard, organic GTM, $0 founder)', () => {
     expect(OPERATING_MODEL.ai_operations.monthly_usd_band[0]).toBeGreaterThanOrEqual(0);
-    expect(OPERATING_MODEL.hosting.stack).toEqual(expect.arrayContaining(['Replit', 'Neon', 'Clerk', 'Gemini', 'Sentry']));
-    expect(OPERATING_MODEL.hosting.monthly_usd_band).toEqual([25, 85]);
+    expect(OPERATING_MODEL.hosting.stack).toEqual(expect.arrayContaining(['Cloudflare', 'D1->Neon', 'Clerk', 'Gemini', 'Sentry']));
+    expect(OPERATING_MODEL.hosting.monthly_usd_band).toEqual([5, 50]);
     expect(OPERATING_MODEL.marketing.monthly_usd_band[0]).toBe(0);
     expect(OPERATING_MODEL.founder_salary.monthly_usd).toBe(0);
     expect(OPERATING_MODEL.other.payment_processing_pct).toBeCloseTo(2.9);
@@ -57,8 +57,8 @@ describe('groundCostBreakdown', () => {
     const early = groundCostBreakdown({ month: 1, revenue: 0 }).breakdown.infrastructure;
     const later = groundCostBreakdown({ month: 13, revenue: 0 }).breakdown.infrastructure;
     expect(later).toBeGreaterThanOrEqual(early);
-    expect(early).toBe(OPERATING_MODEL.hosting.monthly_usd_band[0]);     // $25 floor early
-    expect(later).toBe(OPERATING_MODEL.hosting.monthly_usd_band[1]);     // $85 ceiling later
+    expect(early).toBe(OPERATING_MODEL.hosting.monthly_usd_band[0]);     // $5 floor early (Cloudflare-default)
+    expect(later).toBe(OPERATING_MODEL.hosting.monthly_usd_band[1]);     // $50 ceiling later
   });
 
   it('includes payment processing (~2.9% of revenue) in other', () => {
