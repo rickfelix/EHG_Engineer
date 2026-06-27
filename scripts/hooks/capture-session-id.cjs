@@ -275,6 +275,16 @@ function findClaudeCodePid(entryPath = 'unknown') {
  * Still fail-soft after max retries: any final error is swallowed (or logged
  * with LEO_TELEMETRY_DEBUG=1). SessionStart never blocks on telemetry.
  */
+// QF-20260627-531: pure metadata merge for the session upsert. Spreads the existing row's
+// metadata first so coordinator-stamped fields (callsign, tier_rank, fleet_identity, …) survive,
+// then stamps the telemetry fields. Exported for unit testing.
+function buildSessionMetadata(existingMetadata, ccPid, source) {
+  const base = (existingMetadata && typeof existingMetadata === 'object' && !Array.isArray(existingMetadata))
+    ? existingMetadata
+    : {};
+  return { ...base, cc_pid: ccPid, source: source || 'unknown' };
+}
+
 async function upsertSessionRow(sessionId, ccPid, source) {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -290,13 +300,37 @@ async function upsertSessionRow(sessionId, ccPid, source) {
   const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/claude_sessions`;
   const now = new Date().toISOString();
   const pidNum = Number(ccPid);
+
+  // QF-20260627-531: this is an UPSERT (Prefer: resolution=merge-duplicates), which REPLACES the
+  // whole jsonb `metadata` column on conflict. Writing a fresh { cc_pid, source } object blanked
+  // coordinator-stamped fields (callsign, tier_rank) on every SessionStart recapture — the 2nd
+  // callsign-churn source (sibling to QF-20260627-108). Read the existing metadata first and MERGE,
+  // so the stamped fields persist. Fail-open to {} (new session / GET error -> nothing to preserve).
+  let existingMetadata = {};
+  try {
+    const getCtrl = new AbortController();
+    const getTimer = setTimeout(() => getCtrl.abort(), 2000);
+    try {
+      const getRes = await fetch(`${url}?session_id=eq.${encodeURIComponent(sessionId)}&select=metadata`, {
+        method: 'GET',
+        headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, Accept: 'application/json' },
+        signal: getCtrl.signal,
+      });
+      if (getRes.ok) {
+        const rows = await getRes.json();
+        const m = Array.isArray(rows) && rows[0] && rows[0].metadata;
+        if (m && typeof m === 'object' && !Array.isArray(m)) existingMetadata = m;
+      }
+    } finally { clearTimeout(getTimer); }
+  } catch { /* fail-open: new session / GET unavailable -> no existing fields to preserve */ }
+
   const body = JSON.stringify({
     session_id: sessionId,
     status: 'active',
     heartbeat_at: now,
     pid: Number.isFinite(pidNum) ? pidNum : null,
     hostname: require('os').hostname(),
-    metadata: { cc_pid: ccPid, source: source || 'unknown' },
+    metadata: buildSessionMetadata(existingMetadata, ccPid, source),
   });
 
   const MAX_ATTEMPTS = 3;
@@ -590,7 +624,7 @@ function main() {
 }
 
 // SD-LEO-INFRA-FIX-CLAUDE-CODE-001 (FR-5): expose pure helpers for unit tests.
-module.exports = { selectAncestorFromChain, findClaudeCodePid, upsertSessionRow };
+module.exports = { selectAncestorFromChain, findClaudeCodePid, upsertSessionRow, buildSessionMetadata };
 
 if (require.main === module) {
   main().then(() => process.exit(0)).catch(() => process.exit(0));
