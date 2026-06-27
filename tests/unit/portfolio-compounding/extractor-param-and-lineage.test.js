@@ -7,9 +7,11 @@ import { resolveMinExtractStage, DEFAULT_MIN_EXTRACT_STAGE } from '../../../lib/
 import { buildLineagePatch, writeVentureLineage, LINEAGE_COLUMNS } from '../../../lib/governance/venture-lineage.js';
 
 describe('resolveMinExtractStage — parameterized, default preserves prior behavior', () => {
-  it('defaults to 26 (prior hard-coded value) when nothing is set', () => {
-    expect(DEFAULT_MIN_EXTRACT_STAGE).toBe(26);
-    expect(resolveMinExtractStage({}, {})).toBe(26);
+  it('defaults to 15 (lowered for capture-forward) when nothing is set', () => {
+    // SD-LEO-INFRA-COMPOUNDING-CAPTURE-FORWARD-001 (FR-1): default lowered 26 -> 15 so ventures
+    // contribute templates early (pre-outcome captures tagged 'unvalidated' + excluded from application).
+    expect(DEFAULT_MIN_EXTRACT_STAGE).toBe(15);
+    expect(resolveMinExtractStage({}, {})).toBe(15);
   });
   it('honors opts.minStage, then env, in precedence order', () => {
     expect(resolveMinExtractStage({ minStage: 20 }, {})).toBe(20);
@@ -18,7 +20,7 @@ describe('resolveMinExtractStage — parameterized, default preserves prior beha
   });
   it('falls back to default on invalid / out-of-range overrides (no silent gate-disable)', () => {
     for (const bad of ['abc', '0', '99', '-3', '']) {
-      expect(resolveMinExtractStage({}, { LEO_TEMPLATE_EXTRACT_MIN_STAGE: bad })).toBe(26);
+      expect(resolveMinExtractStage({}, { LEO_TEMPLATE_EXTRACT_MIN_STAGE: bad })).toBe(15); // SD-...-CAPTURE-FORWARD-001: default 15
     }
   });
 });
