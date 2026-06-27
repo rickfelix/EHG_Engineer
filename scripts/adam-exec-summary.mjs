@@ -276,7 +276,19 @@ const visSubj = subjectNeedle
 // '(hr avg)' tag only for a CONFIDENT (non-sparse) hourly average — keep the subject honest too.
 const workerSubj = pulseSource === 'unavailable' ? 'workers n/a' : `${avgActive} active${(pulseSource === 'hourly avg' && !wc.sparse) ? ' (hr avg)' : ''}`;
 const actionsSubj = nActions ? `${nActions} ${nActions === 1 ? 'action' : 'actions'} for you` : 'all clear';
-const subject = `[Chairman] ${visSubj} · ${workerSubj} · ${actionsSubj}`;
+// QF-20260627-338: when an ADAM ESCALATION is present (a routed stuck-question — decision_type
+// 'session_question' — OR an Adam-flagged blocking decision), the SUBJECT must STAND OUT from the
+// routine hourly digest so the chairman instantly distinguishes it. FR-1 standout subject leading
+// with a distinct token; FR-2 routine subject unchanged otherwise. No emojis (in-file directive).
+// FR-3: escalations are pending actions (nActions>0) so they already bypass the quiescence gate, and
+// --force still triggers an immediate send. Chairman may refine the standout token.
+const escalations = rows.filter((r) => r.decision_type === 'session_question' || r.blocking === true);
+const escalationLine = escalations.length
+  ? String(escalations[0].title || escalations[0].details || 'chairman decision needed').replace(/\s+/g, ' ').trim().slice(0, 80)
+  : '';
+const subject = escalations.length
+  ? `[ACTION NEEDED - ADAM] ${escalationLine}${escalations.length > 1 ? ` (+${escalations.length - 1} more)` : ''}`
+  : `[Chairman] ${visSubj} · ${workerSubj} · ${actionsSubj}`;
 
 // FR-4 (SD-LEO-INFRA-ADAM-DURABLE-SOURCE-TRIGGER-001): missing-run watchdog. Catches a DROPPED
 // vision-gauge run — no row gets written at all, which the HISTORIZE available=false fail-soft
