@@ -51,6 +51,9 @@ import { findLeadAgingDrafts } from '../lib/coordinator/lead-aging-detector.mjs'
 import { isDispatchableFleetMember } from '../lib/fleet/session-predicates.mjs';
 
 const require = createRequire(import.meta.url);
+// SD-LEO-INFRA-FLEET-HIBERNATION-001 FR-2/FR-3: the SINGLE 'line stopped' signal, consumed here so the
+// charter-audit does not register a belt-low source-to-capacity violation while the fleet is quiesced.
+const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs');
 const { isWithinArmedSilenceWindow } = require('../lib/fleet/silence-cap.cjs');
 const { classifyDispatchIneligibility } = require('../lib/fleet/claim-eligibility.cjs');
 // SD-FDBK-INFRA-FLEET-SELF-CLAIM-001: appOfCwd derives a checkout's repo-app (it already strips a
@@ -226,6 +229,18 @@ async function main() {
     if (!se) promotableCount = verifyStagedCandidates(staged || []).validCount;
   } catch { /* fail-open → promotableCount stays 0, no advisory */ }
 
+  // SD-LEO-INFRA-FLEET-HIBERNATION-001 FR-2/FR-3: assess fleet quiescence (the shared 'line stopped'
+  // gate). Fails OPEN to active on any error (never silences the fleet), so an assessment hiccup keeps
+  // the belt-low detector live. When quiescent, the source-to-capacity detector is suppressed below.
+  let fleetQuiescent = false;
+  try {
+    const q = await assessFleetActivity(db, { now: nowMs });
+    fleetQuiescent = q.quiescent === true;
+    console.log(`[COORD-CHARTER-AUDIT] fleet quiescence: ${q.reason}`);
+  } catch (e) {
+    console.error('[COORD-CHARTER-AUDIT] WARN: quiescence assessment failed (fail-active): ' + e.message);
+  }
+
   // ── run the pure detectors ──
   const D = {
     pool: detectWorktreePool({ count: wtCount, max: MAX_WORKTREE_COUNT }),
@@ -240,7 +255,7 @@ async function main() {
     quiet: detectQuietTickUnverified({ coordinatorReviews: reviews || [] }),
     // FR-3 coordinator mirror — added only when their facts resolved (skip-on-error, no spam).
     ...(adamAlive !== null ? { d3lean: detectCoordinatorWithoutAdam({ coordinatorAlive: true, adamAlive }) } : {}),
-    ...(sourceReqRecently !== null ? { srcCap: detectSourceToCapacity({ claimableBelt: claimable.length, idleWorkers: idleWorkerCount, sourceRequestedRecently: sourceReqRecently }) } : {}),
+    ...(sourceReqRecently !== null ? { srcCap: detectSourceToCapacity({ claimableBelt: claimable.length, idleWorkers: idleWorkerCount, sourceRequestedRecently: sourceReqRecently, quiescent: fleetQuiescent }) } : {}),
     // SD-LEO-INFRA-SILENT-STALL-PREVENTION-001: drafts stranded with a null vision_score (silent stall).
     // Advisory remediation count only — summarizeViolations never drives a process.exit (foundational-query
     // failures are the ONLY hard exits), so a stalled draft surfaces a remediation action, never a hard fail.
