@@ -15,6 +15,44 @@
 const COLORS = ['blue', 'green', 'purple', 'orange', 'cyan', 'pink', 'yellow', 'red'];
 const NATO = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel'];
 
+// QF-20260627-108 (FR-1): the chairman effort-encoded callsign scheme. A worker's callsign is
+// derived from its metadata.tier_rank (the source-of-truth), NOT flat first-available NATO order —
+// otherwise the 5-min cron re-clobbers the effort names every pass. tier4=high, tier3=medium,
+// tier2=low, tier1=sonnet/max. Shared by the cron AND worker-checkin self-assign so both honor it.
+const TIER_CALLSIGNS = {
+  4: ['Alpha', 'Bravo', 'Charlie'],
+  3: ['Delta', 'Echo', 'Foxtrot'],
+  2: ['Golf'],
+  1: ['Hotel'],
+};
+
+// Resolve a worker's effort tier from metadata.tier_rank. Default 4 (top band) for an unstamped
+// worker — matches the conservative-UP dispatch default (workers default to the top rung).
+function tierRankOf(worker) {
+  const t = worker?.metadata?.tier_rank;
+  return (t === 1 || t === 2 || t === 3 || t === 4) ? t : 4;
+}
+
+// Pick the first FREE callsign within the worker's tier band (effort-encoded SoT), wrapping with a
+// numeric suffix only when the band is exhausted. Drop-in replacement for nextAvailable(NATO, ...).
+function pickCallsignForTier(tierRank, usedSet) {
+  const pool = TIER_CALLSIGNS[tierRank] || TIER_CALLSIGNS[4];
+  for (const c of pool) {
+    if (!usedSet.has(c)) return c;
+  }
+  return pool[0] + '-' + (usedSet.size + 1);
+}
+
+// True when a callsign already belongs to the worker's correct tier band, so the cron KEEPS it
+// instead of reclobbering. A callsign from the wrong band (e.g. a tier-2 worker still holding
+// "Bravo") returns false → it is re-derived, so the chairman scheme self-heals.
+function callsignInTierBand(callsign, tierRank) {
+  if (!callsign) return false;
+  const pool = TIER_CALLSIGNS[tierRank] || TIER_CALLSIGNS[4];
+  const base = String(callsign).split('-')[0];
+  return pool.includes(base);
+}
+
 // SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: hoisted to module scope (was nested in main())
 // and exported so scripts/worker-checkin.cjs can self-assign an identity at check-in using the
 // SAME pool/picker — both writers must allocate identically (including the wrap-suffix format),
@@ -244,7 +282,11 @@ async function main() {
 
   for (const worker of uniqueWorkers) {
     const identity = worker.metadata?.fleet_identity;
-    if (identity?.callsign && identity?.color && !forceReassign) {
+    // QF-20260627-108 (FR-1): a worker is "assigned" ONLY if its callsign is in its tier band
+    // (effort-encoded SoT). A callsign from the wrong band (e.g. a tier-2 worker still holding
+    // "Bravo") is re-derived, so the chairman scheme self-heals instead of being preserved-wrong.
+    if (identity?.callsign && identity?.color && !forceReassign
+        && callsignInTierBand(identity.callsign, tierRankOf(worker))) {
       assignedRaw.push(worker);
     } else {
       needsAssignment.push(worker);
@@ -356,7 +398,7 @@ async function main() {
   // Assign new workers
   let newCount = 0;
   for (const worker of needsAssignment) {
-    const callsign = nextAvailable(NATO, usedCallsigns);
+    const callsign = pickCallsignForTier(tierRankOf(worker), usedCallsigns);
     const color = nextAvailable(COLORS, usedColors);
     usedCallsigns.add(callsign);
     usedColors.add(color);
@@ -412,7 +454,7 @@ async function main() {
   console.log('');
 }
 
-module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable };
+module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, TIER_CALLSIGNS, tierRankOf, pickCallsignForTier, callsignInTierBand };
 
 if (require.main === module) {
   main().catch(err => {

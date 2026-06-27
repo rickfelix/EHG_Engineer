@@ -40,7 +40,7 @@ const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligib
 const { resolveWorkerTierRank, isTieringActive } = require('../lib/fleet/tier-ladder.cjs');
 // SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: reuse the coordinator cron's pool + picker + ghost guard so
 // check-in-time self-assign and the 5-min cron allocate identities identically (see assignFleetIdentityAtCheckin).
-const { NATO, COLORS, nextAvailable, isTestSessionId } = require('./assign-fleet-identities.cjs');
+const { NATO, COLORS, nextAvailable, isTestSessionId, tierRankOf, pickCallsignForTier, callsignInTierBand } = require('./assign-fleet-identities.cjs');
 
 const ROLL_CALL_TTL_MS = 60 * 60 * 1000;     // availability row lives 1h
 const ROLL_CALL_DEDUP_MS = 5 * 60 * 1000;    // don't re-register within 5m (idempotency)
@@ -779,8 +779,12 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
     const myMeta = (cur && cur.metadata) || {};
     if (myMeta.is_coordinator === true) return null; // coordinators stay nameless in the worker pool (QF-20260508-648)
     const existing = myMeta.fleet_identity;
-    if (existing && existing.callsign && existing.color) {
-      return { callsign: existing.callsign, color: existing.color }; // complete identity already present -> idempotent
+    // QF-20260627-108: idempotent ONLY when the existing callsign is in this worker's tier band
+    // (effort-encoded SoT). A wrong-band callsign (e.g. a tier-2 worker still holding "Bravo") falls
+    // through to re-derive, so check-in self-heals to the scheme just like the cron.
+    if (existing && existing.callsign && existing.color
+        && callsignInTierBand(existing.callsign, tierRankOf({ metadata: myMeta }))) {
+      return { callsign: existing.callsign, color: existing.color };
     }
     // Seed used-sets from currently-live assigned identities so we pick a FREE slot (not blindly Alpha).
     const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
@@ -795,7 +799,7 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
       if (id && id.callsign) usedCallsigns.add(id.callsign);
       if (id && id.color) usedColors.add(id.color);
     }
-    const callsign = nextAvailable(NATO, usedCallsigns);
+    const callsign = pickCallsignForTier(tierRankOf({ metadata: myMeta }), usedCallsigns);
     const color = nextAvailable(COLORS, usedColors);
     // display_name parity with the cron: assign-fleet-identities.cjs labels with `worker.sd_id`, a
     // column that does NOT exist on claude_sessions (it selects sd_key), so its label is ALWAYS
