@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-26T23:47:13.510Z
+**Generated**: 2026-06-27T03:59:32.718Z
 **Rows**: 13
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (89 total)
+## Columns (90 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -112,6 +112,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 | build_model | `character varying(20)` | YES | - | SSOT venture build path at Stage 19: leo_bridge (LEO-SD bridge — orchestrator+child SDs) | seeded_repo (seed repo + Replit Agent + S20 gate) | NULL (arbiter default = seeded_repo until the venture EXEC loop ships). SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001. |
 | is_scaffolding | `boolean` | **NO** | `false` | Development/build-out vehicle (SD-LEO-FIX-MAKE-VENTURE-STAGE-001): gate history excluded from threshold calibration and portfolio analytics by default. Sibling of is_demo. Set only by explicit chairman decision. |
 | launched_at | `timestamp with time zone` | YES | - | - |
+| stack_descriptor | `jsonb` | YES | - | - |
 
 ## Constraints
 
