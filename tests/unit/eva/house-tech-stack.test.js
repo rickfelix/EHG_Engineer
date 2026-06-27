@@ -48,8 +48,9 @@ describe('EHG_HOUSE_TECH_STACK', () => {
     expect(Object.isFrozen(HOUSE_STACK_LAYER_NAMES)).toBe(true);
   });
 
-  it('infrastructure layer reflects Vercel + Replit + Supabase choice (not AWS)', () => {
-    expect(EHG_HOUSE_TECH_STACK.infrastructure.technology).toMatch(/Vercel/);
+  it('infrastructure layer reflects the Cloudflare-default venture stack (not AWS, not Supabase)', () => {
+    expect(EHG_HOUSE_TECH_STACK.infrastructure.technology).toMatch(/Cloudflare/);
     expect(EHG_HOUSE_TECH_STACK.infrastructure.technology).not.toMatch(/AWS/);
+    expect(EHG_HOUSE_TECH_STACK.infrastructure.technology).not.toMatch(/Supabase/);
   });
 });
