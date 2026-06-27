@@ -57,6 +57,11 @@
       "pattern": "^LEO_.*\\.md$",
       "reason": "LEO Protocol version files",
       "example": "LEO_v4.3.3.md"
+    },
+    {
+      "pattern": "^CD\\d+-.*\\.md$",
+      "reason": "Chairman-decision governance records (the CD<NN> decision-ID prefix is the canonical naming convention)",
+      "example": "CD30-cloudflare-default-supersedes-CD15.md"
     }
   ],
   "valid_pattern": {
