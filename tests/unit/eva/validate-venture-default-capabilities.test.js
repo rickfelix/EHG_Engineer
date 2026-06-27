@@ -4,11 +4,24 @@ import {
   MissingDefaultCapabilityError,
 } from '../../../lib/eva/utils/validate-venture-default-capabilities.js';
 
+// SD-LEO-INFRA-VENTURE-DEFAULT-CAPABILITIES-EXPAND-001: the mandatory set grew from 2 to 7.
+// The five capabilities added alongside feedback-widget + error-capture-middleware. Holding
+// these constant in every fixture keeps the "missing"/"override" assertions focused on the
+// SPECIFIC capability under test rather than tripping on the newly-mandatory ones.
+const NEW_CAP_ITEMS = [
+  { title: 'Instrument Operating Cost into the Cash-Burn Feed', priority: 'high' },
+  { title: 'Wire Baseline Usage Telemetry/Analytics', priority: 'high' },
+  { title: 'Standardize Chairman-Facing Decision Card', priority: 'high' },
+  { title: 'Expose a Health/Uptime Liveness Probe', priority: 'high' },
+  { title: 'Inherit the Operating-Model Grounding SSOT', priority: 'high' },
+];
+
 const happySprintPlan = {
   sprintItems: [
     { title: 'Build core ventureHealth dashboard', priority: 'high' },
     { title: 'Integrate Feedback Widget', priority: 'high' },
     { title: 'Wire Error Capture Middleware', priority: 'high' },
+    ...NEW_CAP_ITEMS,
   ],
 };
 
@@ -16,6 +29,7 @@ const missingFeedbackPlan = {
   sprintItems: [
     { title: 'Build core ventureHealth dashboard', priority: 'high' },
     { title: 'Wire Error Capture Middleware', priority: 'high' },
+    ...NEW_CAP_ITEMS,
   ],
 };
 
@@ -23,6 +37,7 @@ const missingBothPlan = {
   sprintItems: [
     { title: 'Build core ventureHealth dashboard', priority: 'high' },
     { title: 'Add user profile page', priority: 'medium' },
+    ...NEW_CAP_ITEMS,
   ],
 };
 
@@ -40,6 +55,7 @@ describe('validateVentureDefaultCapabilities', () => {
         sprintItems: [
           { title: 'integrate feedback widget into header' },
           { title: 'wire error capture middleware (Sentry)' },
+          ...NEW_CAP_ITEMS,
         ],
       };
       const result = validateVentureDefaultCapabilities(plan, {});
@@ -51,6 +67,7 @@ describe('validateVentureDefaultCapabilities', () => {
         sprintItems: [
           { title: 'Story XYZ — feedback-widget rollout' },
           { title: 'Setup error-capture-middleware' },
+          ...NEW_CAP_ITEMS,
         ],
       };
       const result = validateVentureDefaultCapabilities(plan, {});
@@ -149,16 +166,17 @@ describe('validateVentureDefaultCapabilities', () => {
         items: [
           { title: 'Integrate Feedback Widget' },
           { title: 'Wire Error Capture Middleware' },
+          ...NEW_CAP_ITEMS,
         ],
       };
       const result = validateVentureDefaultCapabilities(plan, {});
       expect(result.valid).toBe(true);
     });
 
-    it('treats missing sprintItems as empty array (both capabilities will fail)', () => {
+    it('treats missing sprintItems as empty array (all 7 capabilities will fail)', () => {
       const result = validateVentureDefaultCapabilities({}, {});
       expect(result.valid).toBe(false);
-      expect(result.errors).toHaveLength(2);
+      expect(result.errors).toHaveLength(7);
     });
   });
 });
