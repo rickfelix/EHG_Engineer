@@ -49,6 +49,8 @@ import { createSdStartGate } from '../../gates/core-protocol-gate.js';
 
 // DFE Escalation Gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)
 import { createDFEEscalationGate } from '../../gates/dfe-escalation-gate.js';
+// SD-LEO-INFRA-SD-PRD-DRIFT-GATE-001: SD↔PRD FR/gov-precondition drift guard (advisory-first)
+import { createSDPRDDriftGate } from './gates/sd-prd-drift.js';
 
 // Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001) — Module C DB-enforced evidence
 import { createSubagentEvidenceGate } from '../../gates/subagent-evidence-gate.js';
@@ -192,6 +194,11 @@ export class PlanToExecExecutor extends BaseExecutor {
 
       // Contract Compliance
       gates.push(createContractComplianceGate(this.prdRepo, sd));
+
+      // SD↔PRD Drift (SD-LEO-INFRA-SD-PRD-DRIFT-GATE-001): an SD FR or chairman-gated
+      // precondition absent from the PRD that EXEC implements. Advisory-first (warn, never
+      // wedges) unless SD_PRD_DRIFT_ENFORCING=true. PRD exists by this point.
+      gates.push(createSDPRDDriftGate(this.supabase));
 
       // Planning Completeness
       gates.push(createPlanningCompletenessGate(this.supabase, sd));
