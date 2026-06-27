@@ -322,6 +322,17 @@ export function buildPRDGenerationContext(sd, context = {}) {
   if (sd.success_criteria?.length) sdLines.push(`\n### Success Criteria\n${formatArrayField(sd.success_criteria, 'criterion')}`);
   if (sd.key_changes?.length) sdLines.push(`\n### Key Changes\n${formatArrayField(sd.key_changes, 'change')}`);
   if (sd.success_metrics?.length) sdLines.push(`\n### Success Metrics\n${formatArrayField(sd.success_metrics, 'metric')}`);
+  // SD-LEO-INFRA-STRUCTURED-SD-FR-FIELD-001 (FR-3): read the SD's structured FR source canonically
+  // so the generated PRD's functional_requirements INHERIT these instead of being re-derived from
+  // prose. Omitted entirely when absent (FR-4 graceful fallback to the prose Description/Scope).
+  if (Array.isArray(sd.metadata?.functional_requirements) && sd.metadata.functional_requirements.length > 0) {
+    const frLines = sd.metadata.functional_requirements.map((f, i) => {
+      const id = String(f.id || f.fr_key || `FR-${i + 1}`).toUpperCase();
+      const body = [f.title, f.description].filter(Boolean).join(' — ');
+      return `- **${id}**: ${body || '(no text)'}`;
+    });
+    sdLines.push(`\n### Structured Functional Requirements (canonical — the PRD MUST cover each)\n${frLines.join('\n')}`);
+  }
   if (sd.dependencies?.length) sdLines.push(`\n### Dependencies\n${formatArrayField(sd.dependencies, 'dependency')}`);
   if (sd.risks?.length) sdLines.push(`\n### Risks\n${formatRisks(sd.risks)}`);
   sections.push(sdLines.join('\n'));

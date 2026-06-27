@@ -58,6 +58,7 @@ import { trackWriteSource } from '../lib/eva/cli-write-gate.js';
 // shared no-venture classifier — guards the applications auto-register AND the venture-prefix
 // resolver so engineering/governance work never inherits a spurious venture prefix.
 import { isLegitimateNoVenture } from '../lib/eva/bridge/sd-router.js';
+import { deriveSdFunctionalRequirements } from '../lib/sd/derive-functional-requirements.js';
 import { validateSDFields } from './modules/validate-sd-fields.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 // SD-LEO-INFRA-SOURCING-ENGINE-REGISTER-FIRST-001: pure register-first helpers (FR-1 roadmap-item
@@ -2005,6 +2006,25 @@ async function createSD(options) {
       target_application_explicit: Boolean(explicitTargetApp || process.env.VENTURE)
     }
   };
+
+  // SD-LEO-INFRA-STRUCTURED-SD-FR-FIELD-001 (FR-2): populate the structured FR source at the
+  // single createSD convergence point (covers --from-proposal, --from-plan, --child, interactive).
+  // Gap-fill ONLY: an already-supplied structured array (proposal-carried / child-inherited) is
+  // preserved verbatim — never overwritten. Derivation parses FR-N prose from description+scope
+  // into the {id,title,description} shape the PRD-writer (FR-3) and drift gate's extractSdFrs read.
+  try {
+    const existingFrs = sdData.metadata?.functional_requirements;
+    const hasStructured = Array.isArray(existingFrs) && existingFrs.length > 0;
+    if (!hasStructured) {
+      const derived = deriveSdFunctionalRequirements(sdData);
+      if (derived.length > 0) {
+        sdData.metadata = { ...sdData.metadata, functional_requirements: derived };
+      }
+    }
+  } catch (frErr) {
+    // Non-fatal: structured-FR derivation must never block SD creation (FR-4 graceful fallback).
+    console.warn(`   ⚠️  structured FR derivation skipped (non-blocking): ${frErr.message}`);
+  }
 
   // CONST-014 Enforcement: Decomposition check at creation time
   // SDs with 3+ phases or 8+ FRs must use orchestrator pattern
