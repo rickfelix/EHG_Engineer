@@ -257,15 +257,17 @@ describe('Stage 0 Interfaces', () => {
 // ── Path Router Tests ──────────────────────────────────────
 
 describe('Path Router', () => {
-  test('exposes 3 entry paths', () => {
-    expect(Object.keys(ENTRY_PATHS)).toHaveLength(3);
+  test('exposes 4 entry paths', () => {
+    expect(Object.keys(ENTRY_PATHS)).toHaveLength(4);
     expect(ENTRY_PATHS.COMPETITOR_TEARDOWN).toBe('competitor_teardown');
     expect(ENTRY_PATHS.BLUEPRINT_BROWSE).toBe('blueprint_browse');
     expect(ENTRY_PATHS.DISCOVERY_MODE).toBe('discovery_mode');
+    // SD-LEO-INFRA-CLEAN-CLONE-LAUNCH-001-A: clean-clone reseeding path
+    expect(ENTRY_PATHS.SEEDED_FROM_VENTURE).toBe('seeded_from_venture');
   });
 
   test('PATH_OPTIONS has display metadata for all paths', () => {
-    expect(PATH_OPTIONS).toHaveLength(3);
+    expect(PATH_OPTIONS).toHaveLength(4);
     for (const option of PATH_OPTIONS) {
       expect(option.key).toBeDefined();
       expect(option.label).toBeDefined();

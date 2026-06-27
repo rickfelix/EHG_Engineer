@@ -190,6 +190,29 @@ describe('ChairmanReview', () => {
       expect(mockSupabase.from).toHaveBeenCalledWith('ventures');
     });
 
+    // SD-LEO-INFRA-CLEAN-CLONE-LAUNCH-001-A (FR-3): a reseeded brief stamps provenance
+    // and stays at a fresh S0; a normal brief stamps null.
+    it('stamps seeded_from_venture_id + fresh S0 for a reseeded brief', async () => {
+      const mockSupabase = createMockSupabase();
+      await persistVentureBrief(
+        { decision: 'ready', brief: { ...validBrief, origin_type: 'seeded_from_venture', seeded_from_venture_id: 'venture-1' }, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+      const insertArg = mockSupabase._mockChain.insert.mock.calls[0][0];
+      expect(insertArg.seeded_from_venture_id).toBe('venture-1');
+      expect(insertArg.current_lifecycle_stage).toBe(1);
+    });
+
+    it('stamps seeded_from_venture_id = null for a normal (non-reseeded) brief', async () => {
+      const mockSupabase = createMockSupabase();
+      await persistVentureBrief(
+        { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+      const insertArg = mockSupabase._mockChain.insert.mock.calls[0][0];
+      expect(insertArg.seeded_from_venture_id).toBeNull();
+    });
+
     it('should throw on DB error when inserting venture', async () => {
       const mockSupabase = createMockSupabase({
         single: vi.fn().mockResolvedValue({
