@@ -43,7 +43,7 @@ import { isFixtureSd, isBareShell, bareShellLastCompare, isStartedSd, stripDispa
 import { parseSdDependencies } from '../lib/utils/parse-sd-dependencies.cjs';
 // SD-REFILL-00MFWEGZ: reuse the canonical parent-LEAD-pass dispatch gate so the ranking surface
 // mirrors what claim-eligibility actually blocks (no drift between rank-vs-claim).
-import { parentLeadPending } from '../lib/fleet/claim-eligibility.cjs';
+import { parentLeadPending, classifyDispatchIneligibility } from '../lib/fleet/claim-eligibility.cjs';
 // SD-REFILL-00AH2L4Q: honor the SAME canonical metadata blocker key (metadata.blocked_by_sd_key)
 // that dependency-resolver + worker-checkin enforce, so the dispatch ranker does not keep a
 // metadata-blocked SD on the claimable belt (the convention was inconsistently enforced fleet-wide).
@@ -56,6 +56,29 @@ export function blockerKeysFor(d) {
   const { blockerSdKey } = checkMetadataDependency(d.metadata);
   if (blockerSdKey) keys.push(blockerSdKey);
   return keys;
+}
+
+/**
+ * SD-LEO-INFRA-BACKLOG-RANK-CLAIMABLE-ELIGIBILITY-ALIGN-001: the DB-FREE claimable gate for the ranker,
+ * composed so the ranked belt matches the actually-claimable set the worker resolver enforces. Returns
+ * null when the SD passes every DB-free claimable axis, or a reason string when it must be excluded:
+ *   - 'claimed'  — a live session already holds it (claiming_session_id set)
+ *   - 'in_flight' — started/mid-build past LEAD draft (resumed via resume_orphan, never fresh-ranked)
+ *   - 'fixture'  — backlog-rank's BROADER fixture detection (epoch TEST-E2E keys / metadata.is_fixture)
+ *   - else the SHARED claim-eligibility reason: 'orchestrator_parent' | 'human_action_required' |
+ *     'co_author_pending' | 'sd_deferred' | 'sd_terminal' | 'test_fixture_key'.
+ * The shared predicate (classifyDispatchIneligibility) is the SSOT — re-implementing it is exactly how
+ * the requires_human_action skip drifted out of the ranker. Pure; the DB-backed axes (dependency/metadata
+ * blockers, parent-LEAD-pending) remain in the async claim loop. Exported for unit testing.
+ * @param {object} d - an SD row (sd_key, sd_type, status, current_phase, claiming_session_id, metadata)
+ * @returns {null|string}
+ */
+export function claimableDbFreeReason(d) {
+  if (!d) return 'missing';
+  if (d.claiming_session_id) return 'claimed';
+  if (isStartedSd(d)) return 'in_flight';
+  if (isFixtureSd(d.sd_key, d.metadata)) return 'fixture';
+  return classifyDispatchIneligibility(d); // null => eligible on the DB-free axes
 }
 // SD-LEO-INFRA-FLEET-CRITICAL-DISPATCH-LANE-001 (FR-1): the narrow, explicit fleet-critical predicate.
 // metadata.fleet_critical===true marks work whose ABSENCE blocks ALL fleet progress. Exported pure so
@@ -139,33 +162,41 @@ async function main() {
   let fixtureSkips = 0;
   let inFlightSkips = 0;
   let awaitingConvergenceSkips = 0;
+  let humanActionSkips = 0;
+  let ineligibleSkips = 0;
   for (const d of (sds || [])) {
-    if (d.claiming_session_id) continue;
-    if (d.sd_type === 'orchestrator') continue;          // parents are never dispatched
-    // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001 (bug d5e59236): a started/mid-build SD past the
-    // initial LEAD draft (current_phase != 'LEAD') must NOT be ranked for FRESH dispatch even
-    // when momentarily unclaimed (e.g. reaped mid-build) — it is resumed via worker-checkin's
-    // resume_orphan path, not re-claimed from the backlog. Mirrors isSdInFlight's (a) branch.
-    if (isStartedSd(d)) {                                 // in-flight SD is resumed, never fresh-ranked
-      inFlightSkips++;
-      console.log(`  [skip] in-flight (${d.current_phase}) excluded from fresh ranking: ${d.sd_key}`);
-      continue;
-    }
-    // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: fixtures (epoch-stamped TEST-E2E keys or
-    // metadata.is_fixture) are never ranked — they get no dispatch_rank at all.
-    if (isFixtureSd(d.sd_key, d.metadata)) {             // test fixtures are never ranked
-      fixtureSkips++;
-      console.log(`  [skip] fixture excluded from ranking: ${d.sd_key}`);
-      continue;
-    }
-    // SD-LEO-INFRA-CO-AUTHOR-CONVERGE-BEFORE-CLAIMABLE-001: a co-authored SD awaiting convergence is
-    // NON-CLAIMABLE (it would let a parked worker write the PRD before the co-author input lands).
-    // Surface it as AWAITING-CONVERGENCE — explicitly NOT idle-belt depth, so the capacity forecaster
-    // does not read it as claimable. Mirrors classifyDispatchIneligibility's co_author_pending gate so
-    // the ranked belt matches the actually-claimable set. Flips to claimable when co_author_pending=false.
-    if ((d.metadata || {}).co_author_pending === true) {
-      awaitingConvergenceSkips++;
-      console.log(`  [skip] awaiting co-author convergence (not idle-belt depth): ${d.sd_key}`);
+    // SD-LEO-INFRA-BACKLOG-RANK-CLAIMABLE-ELIGIBILITY-ALIGN-001: the DB-free claimable axes (claimed /
+    // in-flight / fixture / the SHARED claim-eligibility predicate) are computed by one pure helper so
+    // the ranked belt matches the actually-claimable set the worker resolver enforces. The shared
+    // predicate (classifyDispatchIneligibility) closes the drift that was missing the requires_human_action
+    // skip — RHA-held SDs were leaking onto 'claimable', inflating belt depth and masking genuine
+    // starvation behind a deliberate all-held state.
+    const dbFreeSkip = claimableDbFreeReason(d);
+    if (dbFreeSkip) {
+      switch (dbFreeSkip) {
+        case 'claimed': break;                              // claimed by a live session — silent (not a skip-log)
+        case 'in_flight':
+          inFlightSkips++;
+          console.log(`  [skip] in-flight (${d.current_phase}) excluded from fresh ranking: ${d.sd_key}`);
+          break;
+        case 'fixture':
+          fixtureSkips++;
+          console.log(`  [skip] fixture excluded from ranking: ${d.sd_key}`);
+          break;
+        case 'co_author_pending':
+          // NOT idle-belt depth: a co-authored SD awaiting convergence would let a parked worker write
+          // the PRD before the co-author input lands (SD-LEO-INFRA-CO-AUTHOR-CONVERGE-BEFORE-CLAIMABLE-001).
+          awaitingConvergenceSkips++;
+          console.log(`  [skip] awaiting co-author convergence (not idle-belt depth): ${d.sd_key}`);
+          break;
+        case 'human_action_required':
+          humanActionSkips++;
+          console.log(`  [skip] requires human action — not worker-claimable (not idle-belt depth): ${d.sd_key}`);
+          break;
+        default:
+          ineligibleSkips++;
+          console.log(`  [skip] dispatch-ineligible (${dbFreeSkip}): ${d.sd_key}`);
+      }
       continue;
     }
     // SD-REFILL-00AH2L4Q: include metadata.blocked_by_sd_key (via blockerKeysFor) so a metadata-blocked
@@ -187,6 +218,8 @@ async function main() {
   if (fixtureSkips) console.log(`[BACKLOG-RANK] ${fixtureSkips} fixture SD(s) excluded from ranking`);
   if (inFlightSkips) console.log(`[BACKLOG-RANK] ${inFlightSkips} in-flight SD(s) excluded from fresh ranking`);
   if (awaitingConvergenceSkips) console.log(`[BACKLOG-RANK] ${awaitingConvergenceSkips} SD(s) awaiting co-author convergence (excluded from claimable depth)`);
+  if (humanActionSkips) console.log(`[BACKLOG-RANK] ${humanActionSkips} SD(s) requiring human action excluded from claimable depth (not worker-claimable)`);
+  if (ineligibleSkips) console.log(`[BACKLOG-RANK] ${ineligibleSkips} SD(s) dispatch-ineligible (orchestrator-parent / deferred / terminal) excluded from claimable depth`);
   // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: bare-shell stubs (empty/title-only description)
   // cannot pass LEAD-TO-PLAN; log them so the demote-to-last below is auditable. The sort
   // below (bareShellLastCompare as the dominant key) is what actually places them last.

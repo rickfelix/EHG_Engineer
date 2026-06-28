@@ -32,6 +32,11 @@ import { dirname, join } from 'path';
 // fixtures AND bare-shell stubs (neither can pass LEAD-TO-PLAN) never inflate belt depth —
 // counting them as claimable over-reports capacity and suppresses the deficit/Adam alert.
 import { isExcludedFromBelt } from '../lib/coordinator/sd-exclusion.mjs';
+// SD-LEO-INFRA-BACKLOG-RANK-CLAIMABLE-ELIGIBILITY-ALIGN-001: the forecaster builds its OWN claimable
+// belt (it does not read the ranker's dispatch_rank), so it must apply the SAME shared claim-eligibility
+// predicate the worker resolver uses — else RHA-held / co_author_pending SDs inflate belt depth and the
+// forecaster emits false belt-low DEFICITs (the exact masked-starvation symptom this SD targets).
+import { classifyDispatchIneligibility } from '../lib/fleet/claim-eligibility.cjs';
 // SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: the pure live-worker predicate. It wraps the
 // canonical isDispatchableFleetMember SSOT the dashboard uses (so the forecaster AGREES with
 // fleet-dashboard.cjs on coordinator/adam/non_fleet/fixture exclusion) and ADDS a released-status
@@ -239,20 +244,32 @@ async function main() {
   const claimable = [];
   const claimsBySession = {};
   let beltExcludes = 0;
+  let ineligibleExcludes = 0;
   for (const d of (sds || [])) {
     if (d.claiming_session_id) {
       (claimsBySession[d.claiming_session_id] ||= []).push(d);
       continue;
     }
-    if (d.sd_type === 'orchestrator') continue; // parents auto-complete; never dispatch
     // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: fixtures and bare-shell stubs are not real
     // belt — neither can pass LEAD-TO-PLAN. Excluding them keeps beltDepth honest so a
     // forecast deficit (and the proactive Adam reach-out) is not masked by non-distributable rows.
     if (isExcludedFromBelt(d)) { beltExcludes++; continue; }
+    // SD-LEO-INFRA-BACKLOG-RANK-CLAIMABLE-ELIGIBILITY-ALIGN-001: apply the SHARED claim-eligibility
+    // predicate (the SSOT the worker resolver uses) so belt depth == actually-claimable depth. Catches
+    // orchestrator_parent, human_action_required (the previously-missing axis), co_author_pending,
+    // sd_deferred, sd_terminal, test_fixture_key. Without this the forecaster over-counted RHA-held +
+    // co-author-pending SDs and fired false belt-low DEFICITs that masked genuine starvation.
+    const ineligible = classifyDispatchIneligibility(d);
+    if (ineligible) {
+      ineligibleExcludes++;
+      console.log(`  [belt-skip] ${ineligible} (not worker-claimable): ${d.sd_key}`);
+      continue;
+    }
     const unmet = parseSdDependencies(d.dependencies).filter(k => depStatus[k] !== 'completed');
     if (unmet.length === 0) claimable.push(d);
   }
   if (beltExcludes) console.log(`[CAPACITY-FORECAST] ${beltExcludes} non-distributable SD(s) (fixture/bare-shell/un-actionable-venture-remediation) excluded from belt depth`);
+  if (ineligibleExcludes) console.log(`[CAPACITY-FORECAST] ${ineligibleExcludes} dispatch-ineligible SD(s) (human-action/orchestrator/co-author-pending/deferred/terminal) excluded from belt depth (claim-eligibility SSOT)`);
 
   // ── classify live workers (exclude coordinator + adam + non_fleet + fixtures + released) ──
   // SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: use the canonical isDispatchableFleetMember
