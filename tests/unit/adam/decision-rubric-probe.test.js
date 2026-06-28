@@ -7,7 +7,7 @@
  * is advisory + fail-loud (null fact -> UNKNOWN). No DB / no IO.
  */
 import { describe, it, expect } from 'vitest';
-import { classifyDecisionQuestion, probeDecisionRubric, VERDICT } from '../../../lib/adam/adherence-probes.js';
+import { classifyDecisionQuestion, probeDecisionRubric, VERDICT, fingerprintOverAsk, parseFingerprintsTail, encodeFingerprintsTail } from '../../../lib/adam/adherence-probes.js';
 
 describe('classifyDecisionQuestion — rubric', () => {
   it('flags an over-ask: a reversible, already-determined question matching no COMES-TO-HIM trigger', () => {
@@ -94,5 +94,45 @@ describe('probeDecisionRubric — verdict', () => {
   it('is advisory + fail-loud: a null fact yields UNKNOWN, never a silent pass', () => {
     expect(probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: null }).verdict).toBe(VERDICT.UNKNOWN);
     expect(probeDecisionRubric({}).verdict).toBe(VERDICT.UNKNOWN);
+  });
+});
+
+// SD-LEO-INFRA-ADAM-DECISION-RUBRIC-PROBE-HYGIENE-001: resolved/historical over-asks must be EXCLUDED
+// so the probe reflects CURRENT adherence (no perpetual fail). The over-ask fingerprint is persisted on
+// the ledger detail and read back once remediated.
+describe('decision_rubric resolved-exclusion (SD-LEO-INFRA-ADAM-DECISION-RUBRIC-PROBE-HYGIENE-001)', () => {
+  const OVER_ASK = 'Worker Delta finished its in-flight SD. I recommend we defer the stale fleet_retro P3 items to the backlog — should I proceed?';
+
+  it('fingerprint is stable + whitespace/case-insensitive, and round-trips through the ledger detail tail', () => {
+    const a = fingerprintOverAsk(OVER_ASK);
+    const b = fingerprintOverAsk('  ' + OVER_ASK.toUpperCase() + '  ');
+    expect(a).toBe(b);
+    expect(parseFingerprintsTail('some detail' + encodeFingerprintsTail([a, 'deadbeef0000']))).toEqual([a, 'deadbeef0000']);
+    expect(parseFingerprintsTail('no tail here')).toEqual([]);
+  });
+
+  it('FAILS on a NEW over-ask and emits its fingerprint on the detail tail', () => {
+    const r = probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: [{ body: OVER_ASK }], windowDays: 1 });
+    expect(r.verdict).toBe(VERDICT.FAIL);
+    expect(parseFingerprintsTail(r.detail)).toEqual([fingerprintOverAsk(OVER_ASK)]);
+    expect(r.detail).toMatch(/NEW/);
+    expect(r.detail).toMatch(/rolling window/);
+  });
+
+  it('PASSES when the only over-ask was already remediated (its fingerprint is in resolvedOverAskFingerprints)', () => {
+    const fp = fingerprintOverAsk(OVER_ASK);
+    const r = probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: [{ body: OVER_ASK }], resolvedOverAskFingerprints: [fp], windowDays: 1 });
+    expect(r.verdict).toBe(VERDICT.PASS);
+    expect(r.detail).toMatch(/0 NEW over-asks/);
+    expect(r.detail).toMatch(/1 excluded as already-remediated/);
+  });
+
+  it('still FAILS on a NEW over-ask even when a DIFFERENT historical over-ask is resolved (improving-but-not-clean)', () => {
+    const r = probeDecisionRubric({
+      adamChairmanDecisionQuestionsInWindow: [{ body: OVER_ASK }],
+      resolvedOverAskFingerprints: ['someotherfp01'],
+      windowDays: 1,
+    });
+    expect(r.verdict).toBe(VERDICT.FAIL);
   });
 });
