@@ -124,8 +124,10 @@ describe('FR-001/FR-004: persistArtifact typed-array detection branch', () => {
 
     const [, opts] = writeArtifact.mock.calls[0];
     expect(opts.lifecycleStage).toBe(7);
-    expect(opts.artifactType).toBe('stage_7_analysis');
-    expect(opts.title).toBe('Stage 7 Analysis');
+    // SD-LEO-INFRA-RUN-STAGE-CANONICAL-ARTIFACT-TYPE-001: stage 7 has a registry entry, so the
+    // legacy single-artifact path now resolves the CANONICAL type (was the non-canonical 'stage_7_analysis').
+    expect(opts.artifactType).toBe('engine_pricing_model');
+    expect(opts.title).toBe('Stage 7 engine_pricing_model');
 
     expect(id).toBe('legacy-artifact-id');
 
@@ -215,6 +217,34 @@ describe('FR-001/FR-004: persistArtifact typed-array detection branch', () => {
     expect(events).toHaveLength(1);
     expect(events[0].event_type).toBe('stage_analysis_completed');
     expect(events[0].event_data.stage_number).toBe(5);
-    expect(events[0].event_data.artifact_type).toBe('stage_5_analysis');
+    // SD-LEO-INFRA-RUN-STAGE-CANONICAL-ARTIFACT-TYPE-001: event_type follows the resolved canonical
+    // type (stage 5 -> truth_financial_model), not the non-canonical stage_5_analysis.
+    expect(events[0].event_data.artifact_type).toBe('truth_financial_model');
+  });
+
+  // SD-LEO-INFRA-RUN-STAGE-CANONICAL-ARTIFACT-TYPE-001 FR-1/FR-3
+  it('FR-1: single-object stage persists under the CANONICAL registry type (S8 -> engine_business_model_canvas)', async () => {
+    writeArtifact.mockResolvedValue('s8-id');
+    const supabase = createMockSupabase();
+    await persistArtifact(supabase, 'v1', 8, { canvas: { segments: [] } }, {}); // single object, no .artifacts
+
+    const [, opts] = writeArtifact.mock.calls[0];
+    expect(opts.artifactType).toBe('engine_business_model_canvas');
+    expect(opts.title).toBe('Stage 8 engine_business_model_canvas');
+    const ev = supabase._insertedEvents.find((e) => e.event_type === 'stage_analysis_completed');
+    expect(ev.event_data.artifact_type).toBe('engine_business_model_canvas');
+  });
+
+  it('FR-2: an unregistered stage falls back to the generic type and warns', async () => {
+    writeArtifact.mockResolvedValue('generic-id');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const supabase = createMockSupabase();
+    await persistArtifact(supabase, 'v1', 99, { foo: 'bar' }, {}); // no registry entry for stage 99
+
+    const [, opts] = writeArtifact.mock.calls[0];
+    expect(opts.artifactType).toBe('stage_99_analysis');
+    expect(opts.title).toBe('Stage 99 Analysis');
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/No canonical artifact_type registered for stage 99/));
+    warn.mockRestore();
   });
 });
