@@ -26,6 +26,14 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Verify node_modules health (@supabase probe)
+        # SD-LEO-INFRA-CI-UNIT-TIER-INSTALL-CASCADE-001: exit 2 (INFRA_ERROR) if the
+        # install is broken so a cascade of fake test failures is never mistaken for
+        # real regressions. Exit 2 distinguishes infra failure from test failure (exit 1).
+        run: |
+          node -e "require.resolve('@supabase/supabase-js')" 2>/dev/null || {
+            echo "[UNIT_TIER_INFRA_ERROR] node_modules broken: @supabase/supabase-js not resolvable. Re-run the job or run npm ci locally."; exit 2; }
+
       - name: Run unit project (manifest exclusions applied)
         run: npx vitest run --project unit
 
