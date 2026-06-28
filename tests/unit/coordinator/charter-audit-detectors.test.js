@@ -217,6 +217,25 @@ describe('detectDependencyHealth — completed-dep NO-false-block (FR-5)', () =>
     const r = detectDependencyHealth({ sds, statusByKey: { 'SD-DEP1-001': 'in_progress' }, terminalSet: TERMINAL, nowMs: NOW });
     expect(r.blocked).toBe(1);
   });
+
+  // QF-20260627-273: a co_author_pending interim hold (sentinel dep) is a legitimate hold (BLOCKED,
+  // matching claim-eligibility.draftDepsSatisfied), NOT a dep-resolver ANOMALY/violation.
+  it('a co_author_pending hold sentinel is BLOCKED, not an ANOMALY/violation', () => {
+    const sentinel = 'SD-CO-AUTHOR-CONVERGENCE-PENDING interim hold (coordinator) — REMOVE on co_author convergence';
+    const sds = [{ sd_key: 'SD-C-001', dependencies: [sentinel] }];
+    const r = detectDependencyHealth({ sds, statusByKey: {}, terminalSet: TERMINAL, nowMs: NOW });
+    expect(r.blocked).toBe(1);
+    expect(r.anomalies).toHaveLength(0);
+    expect(r.violation).toBe(false);
+  });
+  it('a co_author hold alongside a genuinely-missing real dep still flags the real dep ANOMALY', () => {
+    const sentinel = 'SD-CO-AUTHOR-CONVERGENCE-PENDING interim hold';
+    const sds = [{ sd_key: 'SD-C-001', dependencies: [sentinel, 'SD-MISSING-001'] }];
+    const r = detectDependencyHealth({ sds, statusByKey: {}, terminalSet: TERMINAL, nowMs: NOW });
+    expect(r.anomalies).toHaveLength(1);
+    expect(r.anomalies[0].unknownDeps).toEqual(['SD-MISSING-001']); // hold excluded, real-missing flagged
+    expect(r.violation).toBe(true);
+  });
 });
 
 describe('detectWorktreePool — DUTY-1 fail-loud (FR-3)', () => {
