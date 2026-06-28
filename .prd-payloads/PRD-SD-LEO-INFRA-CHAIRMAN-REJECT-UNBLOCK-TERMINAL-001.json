@@ -1,0 +1,101 @@
+{
+  "executive_summary": "When a chairman decision is made via fn_chairman_decide, the 'rejected' branch only updates chairman_decisions.status='rejected' and never touches the venture — so the venture stays status='active', orchestrator_state='blocked'. The trg_chairman_decision_unblock trigger currently fires ONLY on 'approved', so a rejected venture is stuck at blocked. If the trigger were simply broadened to also fire on 'rejected' (closing that stuck gap), a rejected venture would unblock -> become idle -> be re-picked by the worker (_pollForWork: status='active' AND orchestrator_state='idle' AND stage<26) -> re-mint a fresh pending gate = RESURRECT the killed gate and DISCARD the chairman's reject. This SD ships the PAIRED fix (both or neither): (a) broaden the unblock trigger to fire on 'rejected' too, AND (b) make fn_chairman_decide's 'rejected' branch set the venture TERMINAL (ventures.status='cancelled', mirroring reject_chairman_decision's terminal semantics) so the worker re-pick predicate excludes it. Net: a rejected venture becomes terminal + unblocked + NOT re-picked + NO new gate minted + the reject preserved. Approved decisions still advance normally (no regression vs RESOLVE-CANONICAL-001). FLAGSHIP-ADJACENT: fn_chairman_decide can now terminate ventures — gets its own DATABASE/SECURITY sub-agent gate review via the LEO pipeline.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Broaden trg_chairman_decision_unblock to fire on 'rejected' as well as 'approved'",
+      "description": "Recreate the trigger trg_chairman_decision_unblock (AFTER UPDATE ON chairman_decisions) so its WHEN clause is (new.status IN ('approved','rejected') AND old.status IS DISTINCT FROM new.status), and update its function trg_chairman_approval_unblock_orchestrator() so its internal guard unblocks (sets ventures.orchestrator_state='idle' WHERE orchestrator_state='blocked') on BOTH 'approved' and 'rejected'. This closes the rejected-stuck-at-blocked gap. PAIRED with FR-2 — must ship together (both or neither).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Trigger WHEN clause includes status='rejected' (and still 'approved')",
+        "Trigger function unblocks (orchestrator_state idle) on a 'rejected' transition from a distinct prior status",
+        "A 'rejected' decision on a blocked venture leaves orchestrator_state='idle'"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "fn_chairman_decide 'rejected' branch sets the venture TERMINAL (status='cancelled')",
+      "description": "In fn_chairman_decide, after the chairman_decisions UPDATE to status='rejected' succeeds, add a branch: IF p_action='rejected' THEN UPDATE ventures SET status='cancelled', updated_at=now() WHERE id = v_decision.venture_id. This mirrors reject_chairman_decision's terminal status (the non-kill-gate branch sets status='cancelled') and makes the venture a terminal status that the worker re-pick predicate (status='active') excludes. The 'approved' path is unchanged. PAIRED with FR-1.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "fn_chairman_decide('rejected') sets ventures.status='cancelled' for the decision's venture",
+        "fn_chairman_decide('approved') leaves ventures.status='active' (unchanged)",
+        "The reject is preserved (chairman_decisions.status='rejected'); no resurrection"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Verify re-pick predicate + gate-mint path exclude the terminal status; regression test",
+      "description": "Confirm the worker re-pick predicate (_pollForWork in lib/eva/stage-execution-worker.js: .eq('status','active').eq('orchestrator_state','idle').lt('current_lifecycle_stage',26)) excludes a status='cancelled' venture, and that the gate-mint path only runs on a picked venture (so a cancelled venture mints no new pending gate). Add integration tests: (a) a 'rejected' decision -> venture terminal (status='cancelled') + unblocked (orchestrator_state='idle') + NOT returned by the re-pick predicate + NO new pending chairman_decision minted + reject preserved; (b) an 'approved' decision -> venture unblocks, stays active, advances normally (no regression). Tests run in a rolled-back transaction so no prod state changes.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Documented: _pollForWork excludes status='cancelled' (status='active' filter)",
+        "Documented: no independent gate-mint path runs for an unpicked venture",
+        "Test asserts rejected -> terminal+unblocked+not-repicked+no-new-gate+reject-preserved",
+        "Test asserts approved -> unblock+advance (no regression)"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Single additive migration, paired both-or-neither",
+      "description": "One database/migrations/*.sql file with CREATE OR REPLACE FUNCTION for trg_chairman_approval_unblock_orchestrator + fn_chairman_decide and a DROP/CREATE TRIGGER for trg_chairman_decision_unblock (WHEN clause change requires recreate). Rollback recreates the prior definitions. No schema/column changes."
+    },
+    {
+      "id": "TR-2",
+      "title": "Flagship-adjacent — own gate review",
+      "description": "fn_chairman_decide can now terminate ventures (status='cancelled'). The change goes through the LEO DATABASE + SECURITY sub-agent gate review. Co-author convergence (coordinator) + Charlie DATABASE review (CONDITIONAL_PASS 88) already recorded on the SD."
+    }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "rejected -> terminal + unblocked + not re-picked + no new gate", "type": "integration", "expected": "ventures.status='cancelled', orchestrator_state='idle', excluded by re-pick predicate, no new pending decision, reject preserved" },
+    { "id": "TS-2", "scenario": "approved -> unblock + advance (regression)", "type": "integration", "expected": "orchestrator_state='idle', status stays 'active', advances normally" }
+  ],
+  "acceptance_criteria": [
+    "A chairman 'rejected' decision via fn_chairman_decide makes the venture terminal and unblocked, and it is never re-picked or re-minted",
+    "The reject sticks (governance: a chairman KILL/reject must STICK, never be resurrectable)",
+    "Approved decisions are unaffected (no regression)"
+  ],
+  "risks": [
+    {
+      "risk": "fn_chairman_decide now terminates ventures (status='cancelled') — a wrong reject is venture-stopping",
+      "mitigation": "fn_chairman_decide only acts on an already-pending decision the chairman explicitly decides; the terminal status mirrors the existing reject_chairman_decision path (same blast radius, now made consistent). Paired both-or-neither prevents the worse resurrection bug. DATABASE/SECURITY gate review + co-author convergence already done. Migration is reversible (rollback recreates prior defs).",
+      "severity": "medium"
+    },
+    {
+      "risk": "Shipping FR-1 without FR-2 (or vice-versa) would either leave rejected-stuck OR cause gate resurrection",
+      "mitigation": "Both ship in ONE migration; the PRD and migration are explicitly paired (both-or-neither).",
+      "severity": "high"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": ["fn_chairman_decide RPC (chairman gate decisions)", "trg_chairman_decision_unblock (venture unblock)", "stage-execution-worker _pollForWork (re-pick)", "chairman gate-mint path"],
+    "dependencies": ["reject_chairman_decision (terminal-semantics reference)", "ventures.status / orchestrator_state", "chairman_decisions.status"],
+    "data_contracts": ["ventures.status (set to 'cancelled' on reject)", "chairman_decisions.status='rejected'", "no schema change"],
+    "runtime_config": ["none"],
+    "observability_rollout": ["Integration tests prove the rejected/approved paths; migration dry-run then gated prod-apply (flagship-adjacent — apply is the controlled step)"]
+  },
+  "system_architecture": {
+    "summary": "Pair the unblock trigger (now fires on rejected) with a terminal venture status set by fn_chairman_decide's rejected branch, so a rejected venture is unblocked but excluded from re-pick.",
+    "components": [
+      { "name": "database/migrations/<new>_chairman_reject_unblock_terminal.sql", "change": "NEW — broaden trigger + terminal-on-reject in fn_chairman_decide" },
+      { "name": "tests/integration/chairman-reject-terminal.test.js", "change": "NEW — rejected/approved integration tests (rolled-back tx)" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "One paired migration + integration tests; flagship-adjacent gate review via pipeline.",
+    "steps": [
+      "Write the migration: broaden trg_chairman_decision_unblock (recreate WHEN) + its function; add terminal-on-reject to fn_chairman_decide",
+      "Dry-run the migration",
+      "Add integration tests for rejected (terminal/unblocked/not-repicked/no-new-gate) and approved (regression)",
+      "Run DATABASE + SECURITY sub-agents; ship via gated handoffs"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Call fn_chairman_decide(decision_id, 'rejected', decider, rationale) for a venture blocked at a chairman gate", "expected_outcome": "chairman_decisions.status=rejected (preserved) AND ventures.status=cancelled (terminal) AND orchestrator_state=idle (unblocked) — one transaction" },
+    { "step_number": 2, "instruction": "Run the worker re-pick predicate (status=active AND orchestrator_state=idle AND current_lifecycle_stage<26) after the reject", "expected_outcome": "Rejected venture NOT returned (status=cancelled); no new pending decision minted; reject not resurrected" },
+    { "step_number": 3, "instruction": "Call fn_chairman_decide(decision_id, 'approved', ...) for a blocked venture", "expected_outcome": "orchestrator_state=idle, status stays active, advances normally — no regression" }
+  ],
+  "metadata": { "sd_key": "SD-LEO-INFRA-CHAIRMAN-REJECT-UNBLOCK-TERMINAL-001" }
+}
