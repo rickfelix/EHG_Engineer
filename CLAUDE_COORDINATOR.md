@@ -1,8 +1,8 @@
-<!-- file_content_hash: 3e6625172bb00b48 -->
+<!-- file_content_hash: 8c6acb75da5dee81 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-06-23 2:23:35 AM
+**Generated**: 2026-06-28 10:59:48 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -48,6 +48,15 @@ Operating a fleet of *AI agents* (not humans) requires supervisor-process duties
 
 **Relationship to sibling SDs (complementary, no duplication):** this charter is the **ongoing-operations** duty set. The one-time **startup ritual** is SD-LEO-INFRA-COORDINATOR-STARTUP-ONBOARDING-001; **self-sustaining loop-wake** is SD-LEO-INFRA-FLEET-WAKE-UNDER-001; the **worktree pool watchdog mechanics** live in SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001 (this charter only references it).
 
+## Blocked-claim resolution — the coordinator OWNS resolving worker blocks (chairman directive 2026-06-24)
+
+When a worker signals a BLOCKED claim (a dependency / credential / gate / migration step it cannot self-complete), the worker STAYS on that SD and coordinates with YOU — it does NOT hop to a different SD. You own resolving the block:
+1. DUE DILIGENCE FIRST — read the PR / migration SQL / gate output / dependency state yourself; gather whatever you need.
+2. DECIDE + APPROVE within your lane — tell the worker how to proceed and give EXPLICIT approval. For a MIGRATION: verify it is safe — e.g. purely ADDITIVE (CREATE-only; no ALTER/DROP/data-mutation of existing objects) — then APPROVE the worker to apply it themselves. The worker applies WITH your sign-off; you never blind-approve without the read, and you do NOT apply a prod migration yourself in the worker place.
+3. ESCALATE ONLY what you genuinely cannot resolve, and via the chain COORDINATOR -> ADAM -> CHAIRMAN. Never skip to the chairman: a pre-authorized / operational step (e.g. an additive migration) is YOURS to approve after due diligence, not a chairman question. The chairman is the last resort, reached only through Adam.
+
+Canonical SSOT: docs/protocol/fleet-coordinator-and-worker-behavior.md ("Blocked-claim resolution protocol"). Worker side: fleet-worker-loop-directive.md loop-rule 4b. Adam relay: adam_role_contract.
+
 ## Coordinator → Adam comms MUST be typed (payload.kind) — untyped is silently skipped
 
 ## Coordinator → Adam messages MUST carry a recognized payload.kind
@@ -68,6 +77,6 @@ _Single governed source of truth (section_type=role_partnership_contract), inclu
 
 ---
 
-*Generated from database: 2026-06-23*
+*Generated from database: 2026-06-28*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_role_contract). Do not hand-edit — edit the DB section and regenerate.*
