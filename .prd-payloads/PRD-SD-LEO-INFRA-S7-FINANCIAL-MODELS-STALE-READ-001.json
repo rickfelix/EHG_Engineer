@@ -1,0 +1,91 @@
+{
+  "executive_summary": "S5 upserts financial_models on conflict (venture_id, template_type) where template_type = archetypeToTemplateType(archetype), so a venture accumulates MULTIPLE financial_models rows once its archetype/template_type changes. S7 (stage-07-pricing-strategy.js:208) reads .from('financial_models').eq('venture_id', ventureId).limit(1).maybeSingle() with NO ordering — so once a 2nd row exists it can read the WRONG (stale) financial model. The fix makes the read DETERMINISTIC by ordering on updated_at DESC (read the most-recently-written model). Because financial_models has NO updated_at trigger and the S5 upsert never set updated_at, the conflict-UPDATE path did not bump updated_at — so the fix is PAIRED: S5's upsert must explicitly set updated_at=now() so the latest write is always identifiable by updated_at (correct even on a template toggle-back, where created_at DESC would return the stale row). Audit confirms S7:208 is the only defective read: S7:379 is an update-by-id (uses the id read at :208, so it follows the fix), and S5:290 is the write. Backend read-ordering + write-timestamp change + a test; no schema change, no UI.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "S7 reads the most-recent financial_models row (order by updated_at DESC)",
+      "description": "In lib/eva/stage-templates/analysis-steps/stage-07-pricing-strategy.js (~line 208), add .order('updated_at', { ascending: false }) before .limit(1).maybeSingle() on the financial_models read so S7 deterministically reads the most-recently-written model for the venture instead of an arbitrary row. The id it reads is reused by the enrich-update at ~line 379, so that update also targets the correct row.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "The financial_models read at stage-07:208 orders by updated_at DESC limit(1)",
+        "For a venture with 2+ financial_models rows, S7 reads the row with the latest updated_at",
+        "The enrich-update (stage-07:379) targets the same (correct) row by id"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "S5 upsert sets updated_at=now() so the latest write is identifiable",
+      "description": "In lib/eva/stage-templates/analysis-steps/stage-05-financial-model.js (~line 290), add updated_at: new Date().toISOString() to the financial_models upsert payload. financial_models has NO updated_at trigger and column defaults only apply on INSERT, so without this the conflict-UPDATE path (re-upsert of an existing (venture_id, template_type)) never bumped updated_at — making FR-1's ordering wrong on a template toggle-back. With this, the most-recently-written model always has the greatest updated_at.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "The S5 financial_models upsert payload includes updated_at set to now()",
+        "Re-upserting the same (venture_id, template_type) advances that row's updated_at",
+        "FR-1 + FR-2 together make S7 read the current model even after a template toggle-back"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Audit other financial_models reads; regression test",
+      "description": "Document the audit of every financial_models access by venture_id: stage-07:208 is the only defective venture_id+limit(1) READ (now fixed); stage-07:379 is an update-by-id (follows the corrected read); stage-05:290 is the upsert (write). No other stage reads financial_models by venture_id+limit(1). Add a test: a venture with 2 financial_models rows (different template_type, different updated_at) -> the S7 read returns the row with the latest updated_at, not an arbitrary one; and re-upserting (S5) bumps updated_at.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Audit documented: stage-07:208 only defective read; 379=update-by-id; 05:290=write",
+        "Test asserts S7 reads the latest-updated_at row when 2+ rows exist",
+        "Test asserts the S5 upsert bumps updated_at on re-upsert"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Two-file backend change, additive, no schema change",
+      "description": "Confined to stage-07-pricing-strategy.js (read ordering) + stage-05-financial-model.js (upsert updated_at) plus a test. No migration/column change (updated_at already exists). No UI."
+    }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "2 financial_models rows, different template_type/updated_at", "type": "unit", "expected": "S7 read returns the latest-updated_at row" },
+    { "id": "TS-2", "scenario": "re-upsert same (venture_id, template_type)", "type": "unit", "expected": "row updated_at advances" }
+  ],
+  "acceptance_criteria": [
+    "S7 deterministically reads the current financial model even when a venture has multiple rows after a template_type change",
+    "The S5 write makes the latest model identifiable by updated_at (correct on toggle-back)",
+    "Audit confirms the defect was isolated to the S7:208 read"
+  ],
+  "risks": [
+    {
+      "risk": "FR-1 without FR-2 would still read wrong on a template toggle-back (updated_at not bumped)",
+      "mitigation": "Both ship together; FR-2 makes updated_at the reliable latest-write signal. Test covers the toggle case.",
+      "severity": "medium"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": ["analyzeStage07 (S7 pricing strategy) financial_models read", "S7 enrich-update by id", "S5 financial_models upsert"],
+    "dependencies": ["financial_models table (updated_at column)", "archetypeToTemplateType (S5 template derivation)"],
+    "data_contracts": ["financial_models read ordered by updated_at; write sets updated_at — no schema change"],
+    "runtime_config": ["none"],
+    "observability_rollout": ["unit test proves deterministic read; S7 logs the read model id+template_type"]
+  },
+  "system_architecture": {
+    "summary": "Order the S7 read by updated_at DESC and make the S5 write bump updated_at, so the most-recent model is always read.",
+    "components": [
+      { "name": "lib/eva/stage-templates/analysis-steps/stage-07-pricing-strategy.js", "change": "add .order('updated_at',desc) to the financial_models read" },
+      { "name": "lib/eva/stage-templates/analysis-steps/stage-05-financial-model.js", "change": "add updated_at=now() to the upsert payload" },
+      { "name": "tests/unit/eva/s7-financial-models-stale-read.test.js", "change": "NEW — latest-updated_at read + upsert-bumps-updated_at tests" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Two small backend edits + a unit test; no schema/UI.",
+    "steps": [
+      "Add .order('updated_at',{ascending:false}) to the S7 financial_models read",
+      "Add updated_at:new Date().toISOString() to the S5 upsert payload",
+      "Add the unit test (mock supabase returns 2 rows; assert latest-updated_at selected; assert upsert payload carries updated_at)",
+      "Document the audit"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "For a venture with 2 financial_models rows (different template_type, different updated_at), run the S7 financial_models read", "expected_outcome": "S7 reads the row with the latest updated_at (current model), not an arbitrary row" },
+    { "step_number": 2, "instruction": "Upsert the same (venture_id, template_type) twice via S5", "expected_outcome": "The row updated_at advances on the 2nd write (S5 sets updated_at=now())" },
+    { "step_number": 3, "instruction": "Toggle a venture back to an older template_type (re-upsert existing row), then run the S7 read", "expected_outcome": "S7 reads the just-re-upserted row (latest updated_at) — updated_at is the correct key, not created_at" }
+  ],
+  "metadata": { "sd_key": "SD-LEO-INFRA-S7-FINANCIAL-MODELS-STALE-READ-001" }
+}
