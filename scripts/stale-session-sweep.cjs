@@ -1913,6 +1913,46 @@ async function main() {
     warnings.push('WORK_ASSIGNMENT_TERMINAL_DRAIN: skipped due to error: ' + (e && e.message ? e.message : e));
   }
 
+  // SD-LEO-INFRA-THRESHOLD-AUTO-SIGNAL-OVERFIRE-001 (c): AUTO-DRAIN stale STUCK auto-signals so the
+  // coordinator inbox doesn't accumulate a flood that drowns real signals. A STUCK signal is drained
+  // (acknowledged_at stamped) when it is >1h old OR its sender session is dead/released (no fresh
+  // heartbeat). Coordinator-inbox mutation → gated on _coordMutationAllowed like the drain above.
+  if (!_coordMutationAllowed) {
+    // not the canonical coordinator — skip (role already logged by the WORK_ASSIGNMENT skip above)
+  } else try {
+    const stuckAgeCutoff = new Date(nowMs - 60 * 60_000).toISOString();   // >1h old → stale
+    const liveCutoff = new Date(nowMs - 10 * 60_000).toISOString();       // fresh heartbeat ≤10min → alive
+    const { data: stuckSignals } = await supabase
+      .from('session_coordination')
+      .select('id, sender_session, created_at')
+      .eq('payload->>signal_type', 'stuck')
+      .is('acknowledged_at', null);
+    const stuck = stuckSignals || [];
+    let liveSenders = new Set();
+    const senderIds = [...new Set(stuck.map(s => s.sender_session).filter(Boolean))];
+    if (senderIds.length > 0) {
+      const { data: liveRows } = await supabase
+        .from('claude_sessions')
+        .select('session_id')
+        .in('session_id', senderIds)
+        .neq('status', 'terminated')
+        .gte('heartbeat_at', liveCutoff);
+      liveSenders = new Set((liveRows || []).map(r => r.session_id));
+    }
+    const drainStuckIds = stuck
+      .filter(s => s.created_at < stuckAgeCutoff || !s.sender_session || !liveSenders.has(s.sender_session))
+      .map(s => s.id);
+    for (let i = 0; i < drainStuckIds.length; i += 50) {
+      const batch = drainStuckIds.slice(i, i + 50);
+      await supabase.from('session_coordination').update({ acknowledged_at: now.toISOString() }).in('id', batch);
+    }
+    if (drainStuckIds.length > 0) {
+      actions.push('CLEANUP: drained ' + drainStuckIds.length + ' stale/dead-sender STUCK signal(s) (acknowledged_at stamped)');
+    }
+  } catch (e) {
+    warnings.push('STUCK_SIGNAL_DRAIN: skipped due to error: ' + (e && e.message ? e.message : e));
+  }
+
   // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2 (Finding 3): the WORK_ASSIGNMENT
   // dispatch is the EXACT double-dispatch FR-2 names first — a lingering OLD coordinator's
   // sweep would re-insert a WORK_ASSIGNMENT (sender_type:'sweep') to every active worker every
