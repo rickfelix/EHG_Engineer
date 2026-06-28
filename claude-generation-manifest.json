@@ -1,109 +1,109 @@
 {
-  "generated_at": "2026-06-23T06:23:35.319Z",
-  "git_commit": "edb8b1ea",
+  "generated_at": "2026-06-28T02:59:48.751Z",
+  "git_commit": "4a9d6c8b",
   "db_snapshot_hash": "5ac65ccd27ca615f",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 19368,
-      "estimated_tokens": 4842,
-      "content_hash": "e634b191bbcec3e3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE.md"
+      "chars": 19369,
+      "estimated_tokens": 4843,
+      "content_hash": "adb936bc22f44c8c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-EXECUTE-VS-ESCALATE-CLASSIFIER-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 83518,
-      "estimated_tokens": 20880,
-      "content_hash": "2e233e5e33d27b6e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_CORE.md"
+      "chars": 84991,
+      "estimated_tokens": 21248,
+      "content_hash": "e967f71783d34eb7",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-EXECUTE-VS-ESCALATE-CLASSIFIER-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 65128,
-      "estimated_tokens": 16282,
-      "content_hash": "8e9914ed56ca48ee",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_LEAD.md"
+      "chars": 65402,
+      "estimated_tokens": 16351,
+      "content_hash": "4cfb27a026a362f7",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-EXECUTE-VS-ESCALATE-CLASSIFIER-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 90830,
-      "estimated_tokens": 22708,
-      "content_hash": "6a02a534deccaeae",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_PLAN.md"
+      "chars": 91104,
+      "estimated_tokens": 22776,
+      "content_hash": "f6fe37e99c4b8554",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-EXECUTE-VS-ESCALATE-CLASSIFIER-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 84821,
-      "estimated_tokens": 21206,
-      "content_hash": "1b0cfa94e766095a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_EXEC.md"
+      "chars": 86567,
+      "estimated_tokens": 21642,
+      "content_hash": "149f9ffa7776cc7c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-EXECUTE-VS-ESCALATE-CLASSIFIER-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 43574,
-      "estimated_tokens": 10894,
-      "content_hash": "8efab0f6cf5c310b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_ADAM.md"
+      "chars": 48788,
+      "estimated_tokens": 12197,
+      "content_hash": "0936bbebaf2818ca",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-EXECUTE-VS-ESCALATE-CLASSIFIER-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 19523,
-      "estimated_tokens": 4881,
-      "content_hash": "7f8c07947b5c334b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_COORDINATOR.md"
+      "chars": 20930,
+      "estimated_tokens": 5233,
+      "content_hash": "b0b8dc4bc4c28caf",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-EXECUTE-VS-ESCALATE-CLASSIFIER-001\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
-      "chars": 9611,
+      "chars": 9612,
       "estimated_tokens": 2403,
-      "content_hash": "4eb2f97a6bec33f4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_DIGEST.md"
+      "content_hash": "0ecfbd0c1adb25bf",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-EXECUTE-VS-ESCALATE-CLASSIFIER-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 11535,
-      "estimated_tokens": 2884,
-      "content_hash": "0f4954cd17c054a2",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_CORE_DIGEST.md"
+      "chars": 11665,
+      "estimated_tokens": 2917,
+      "content_hash": "73d42face7c36a4f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-EXECUTE-VS-ESCALATE-CLASSIFIER-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
-      "chars": 5422,
-      "estimated_tokens": 1356,
-      "content_hash": "83381b2416ce2ebf",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_LEAD_DIGEST.md"
+      "chars": 5552,
+      "estimated_tokens": 1388,
+      "content_hash": "26551c97d0b1ad1a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-EXECUTE-VS-ESCALATE-CLASSIFIER-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
-      "chars": 8412,
-      "estimated_tokens": 2103,
-      "content_hash": "f275dbda594507e6",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_PLAN_DIGEST.md"
+      "chars": 8542,
+      "estimated_tokens": 2136,
+      "content_hash": "d6496bce87228249",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-EXECUTE-VS-ESCALATE-CLASSIFIER-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
-      "chars": 10835,
-      "estimated_tokens": 2709,
-      "content_hash": "40ff20f1aacaf4f1",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_EXEC_DIGEST.md"
+      "chars": 10965,
+      "estimated_tokens": 2742,
+      "content_hash": "61ed9aca0b86c3b5",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-EXECUTE-VS-ESCALATE-CLASSIFIER-001\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 12320,
       "estimated_tokens": 3080,
-      "content_hash": "664f1f243c171ce4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "50db89aafb13ea0b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-EXECUTE-VS-ESCALATE-CLASSIFIER-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 5270,
       "estimated_tokens": 1318,
-      "content_hash": "b9ec760bae0d7d74",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-REFILL-00A3H5FN\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "ba702735fb9537f7",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-EXECUTE-VS-ESCALATE-CLASSIFIER-001\\CLAUDE_COORDINATOR_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "44bd4d5b81deb655",
+    "global": "2eea516afe62b4c5",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -354,14 +354,14 @@
       "593": "5aa3c836ecc1752c",
       "594": "ac4c90927e1cff29",
       "595": "b99d7c14d039c4be",
-      "596": "bf95e6419e99aee7",
-      "597": "8220a84f943767a6",
+      "596": "0251044882a17550",
+      "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "24938018ba30efd6",
+      "601": "dfd9cf3b3baa2531",
       "602": "ad0aecae8cdc6cb3",
-      "603": "ca922c736e8d8ed3",
-      "604": "afa021c204fc90e4",
-      "605": "17f0a232fa1fada1",
+      "603": "ea1eddc2cef94c83",
+      "604": "a35e66b64599f81d",
+      "605": "a2c192531833423f",
       "606": "25aa68b575c66d07",
       "607": "82e04c0cc0ffb28f",
       "608": "7f99a4321502367e",

@@ -1,8 +1,8 @@
-<!-- file_content_hash: fe05b8f2e9668212 -->
+<!-- file_content_hash: 1f7f59d6e89a57c0 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-06-23 2:23:35 AM
+**Generated**: 2026-06-28 10:59:48 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: LEAD agent operations and strategic validation
 **Effort**: high (strategic framing, scope bounding, and sub-agent routing require full reasoning depth)
@@ -86,6 +86,8 @@ security, testing, performance, database, documentation, accessibility, code_qua
 ## Friction signaling
 
 **Send `/signal <type> "<body>"`** for recurrence (gate 2× / RCA 2× / tool 3× / phase >2× type-bucket median), about-to-bypass (`--no-verify` / 3rd-bypass-quota / mock-not-fix), protocol-spec friction, recognized harness bug, or memory-trend match. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. Source-of-truth: CLAUDE_CORE.md "Signaling friction to the coordinator" / SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a.
+
+**Questions or decisions → relay to the coordinator.** If you have any questions or decisions needed, relay those to the coordinator — do not block on a human or decide unilaterally. The coordinator resolves what it can and escalates anything beyond its authority upward.
 
 ## 🔍 Explore Before Validation (LEAD Phase)
 
@@ -1582,6 +1584,6 @@ At LEAD-phase scope-lock, before running `add-prd-to-database.js`, invoke `testi
 
 ---
 
-*Generated from database: 2026-06-23*
+*Generated from database: 2026-06-28*
 *Protocol Version: 4.4.1*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*
