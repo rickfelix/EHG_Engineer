@@ -314,4 +314,39 @@ describe('analyzeStage07', () => {
       expect(prompt).toContain('Web: Pricing intelligence here');
     });
   });
+
+  // SD-LEO-INFRA-S7-FINANCIAL-MODELS-STALE-READ-001 (FR-1/FR-3): the
+  // financial_models read must be deterministic — order by updated_at DESC so
+  // the most-recently-written model wins when a venture has multiple rows.
+  describe('deterministic financial_models read (SD-LEO-INFRA-S7-FINANCIAL-MODELS-STALE-READ-001)', () => {
+    it('orders the financial_models read by updated_at DESC and uses that row id for the enrich-update', async () => {
+      mockComplete.mockResolvedValue(makePricingResponse());
+
+      const orderSpy = vi.fn();
+      const updateEqSpy = vi.fn().mockResolvedValue({ error: null });
+      const latestRow = { id: 'fm-latest', model_data: { unitEconomics: {} }, template_type: 'saas' };
+
+      const readChain = {
+        select: vi.fn(() => readChain),
+        eq: vi.fn(() => readChain),
+        order: vi.fn((...args) => { orderSpy(...args); return readChain; }),
+        limit: vi.fn(() => readChain),
+        maybeSingle: vi.fn().mockResolvedValue({ data: latestRow, error: null }),
+        update: vi.fn(() => ({ eq: updateEqSpy })),
+      };
+      const supabase = { from: vi.fn(() => readChain) };
+
+      await analyzeStage07({
+        stage1Data: validStage1Data,
+        ventureId: 'venture-1',
+        supabase,
+        logger,
+      });
+
+      // FR-1: the read is ordered by updated_at DESC (deterministic, not arbitrary).
+      expect(orderSpy).toHaveBeenCalledWith('updated_at', { ascending: false });
+      // The id of the most-recent row flows through to the enrich-update.
+      expect(updateEqSpy).toHaveBeenCalledWith('id', 'fm-latest');
+    });
+  });
 });

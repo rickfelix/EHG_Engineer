@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-CHAIRMAN-REJECT-UNBLOCK-TERMINAL-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-CHAIRMAN-REJECT-UNBLOCK-TERMINAL-001",
-  "createdAt": "2026-06-28T17:05:30.586Z",
+  "sdKey": "SD-LEO-INFRA-S7-FINANCIAL-MODELS-STALE-READ-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-S7-FINANCIAL-MODELS-STALE-READ-001",
+  "createdAt": "2026-06-28T18:14:37.108Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
