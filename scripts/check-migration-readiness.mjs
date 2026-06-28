@@ -14,9 +14,20 @@
  * Outcome markers:
  *   [MIGRATION_READINESS_PASS]                     — all declared objects new or matching
  *   [MIGRATION_READINESS_PASS_NO_MIGRATIONS]       — no migration files in scope
+ *   [MIGRATION_READINESS_PASS_CHAIRMAN_GATED_PENDING] — body diverges, but the migration is an
+ *                                                    intentionally chairman-gated staged-not-applied
+ *                                                    migration (advisory, exit 0) (CHAIRMAN-GATED-EXEMPT-001)
  *   [MIGRATION_READINESS_FAIL_DRIFT_DETECTED]      — CREATE OR REPLACE body diverges from live (R2)
  *   [MIGRATION_READINESS_FAIL_CONFLICTING_DECLARATION] — CREATE (no OR REPLACE) on existing object (R5)
  *   [MIGRATION_READINESS_INFRA_ERROR]              — DB unreachable / secret missing
+ *
+ * SD-LEO-INFRA-MIGRATION-READINESS-CHAIRMAN-GATED-EXEMPT-001: a chairman-gated DB-function SD ships
+ * its migration STAGED and defers the apply to a separate chairman GO (the requires_chairman_apply
+ * convention), so live != migration is the EXPECTED state at merge time, not drift. When a migration
+ * is chairman-gated — detected via the SD's metadata.requires_chairman_apply=true OR a dedicated
+ * in-file header marker (-- @chairman-gated / -- requires-chairman-apply) — its body divergence is
+ * downgraded to an advisory EXPECTED_PENDING (exit 0). Real-drift detection for every other migration
+ * is UNCHANGED (still exit 1), and CONFLICTING is never exempted.
  */
 
 import { readFileSync, existsSync } from 'node:fs';
@@ -26,21 +37,43 @@ import { createDatabaseClient } from './lib/supabase-connection.js';
 const OUTCOME = {
   PASS: 'MIGRATION_READINESS_PASS',
   PASS_NO_MIGRATIONS: 'MIGRATION_READINESS_PASS_NO_MIGRATIONS',
+  PASS_CHAIRMAN_GATED_PENDING: 'MIGRATION_READINESS_PASS_CHAIRMAN_GATED_PENDING',
   FAIL_DRIFT: 'MIGRATION_READINESS_FAIL_DRIFT_DETECTED',
   FAIL_CONFLICTING: 'MIGRATION_READINESS_FAIL_CONFLICTING_DECLARATION',
   INFRA_ERROR: 'MIGRATION_READINESS_INFRA_ERROR'
 };
 
+/**
+ * SD-LEO-INFRA-MIGRATION-READINESS-CHAIRMAN-GATED-EXEMPT-001:
+ * Detect a DEDICATED chairman-gated header marker on its own (near-bare) comment line.
+ * Accepts `-- @chairman-gated`, `-- requires-chairman-apply`, `-- requires_chairman_apply`
+ * (case-insensitive, leading whitespace tolerated). Deliberately does NOT match the broad
+ * `-- @approved-by` marker (present on every prod migration) and does NOT match the tokens when
+ * they merely appear inside prose/description sentences — the marker must be essentially the whole
+ * comment line, so a normal migration cannot accidentally exempt its own drift.
+ * @param {string} sql
+ * @returns {boolean}
+ */
+export function parseChairmanGatedMarker(sql) {
+  if (!sql) return false;
+  // A comment line whose payload is just the marker token (optional trailing ':'/'=' + value),
+  // e.g. "-- @chairman-gated", "-- requires-chairman-apply: codestreetlabs@gmail.com".
+  const re = /^\s*--\s*(@chairman-gated|requires[-_]chairman[-_]apply)\b\s*[:=]?.*$/im;
+  return re.test(sql);
+}
+
 const MIGRATION_PATH_RE = /(^|\/)database\/migrations\/[^/]+\.sql$/;
 
 function parseArgs(argv) {
-  const opts = { pr: null, files: null };
+  const opts = { pr: null, files: null, sd: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--pr') opts.pr = argv[++i];
     else if (a.startsWith('--pr=')) opts.pr = a.slice('--pr='.length);
     else if (a === '--files') opts.files = argv[++i];
     else if (a.startsWith('--files=')) opts.files = a.slice('--files='.length);
+    else if (a === '--sd') opts.sd = argv[++i];
+    else if (a.startsWith('--sd=')) opts.sd = a.slice('--sd='.length);
   }
   return opts;
 }
@@ -65,6 +98,50 @@ export function listMigrationFiles({ pr, files, env = process.env }) {
   const r = spawnSync('git', ['diff', 'origin/main...HEAD', '--name-only'], { encoding: 'utf-8' });
   if (r.status !== 0) return [];
   return r.stdout.split('\n').map(s => s.trim()).filter(p => MIGRATION_PATH_RE.test(p));
+}
+
+/**
+ * CHAIRMAN-GATED-EXEMPT-001: best-effort resolve the SD key for this run. An explicit `--sd <key>`
+ * wins; otherwise infer a `SD-*` key from the head branch (GITHUB_HEAD_REF / GITHUB_REF_NAME, or the
+ * current git branch — branches are `feat/SD-...`). Returns null when nothing resolves — the gate
+ * then falls back to the in-file header marker only.
+ * @returns {string|null}
+ */
+export function inferSdKey({ sd, env = process.env } = {}) {
+  if (sd) return sd.trim();
+  const candidates = [env.GITHUB_HEAD_REF, env.GITHUB_REF_NAME];
+  if (!candidates.some(Boolean)) {
+    const r = spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf-8' });
+    if (r.status === 0) candidates.push(r.stdout.trim());
+  }
+  for (const c of candidates) {
+    if (!c) continue;
+    const m = /\b(SD-[A-Z0-9][A-Z0-9-]*)\b/i.exec(c);
+    if (m) return m[1].toUpperCase();
+  }
+  return null;
+}
+
+/**
+ * CHAIRMAN-GATED-EXEMPT-001: best-effort read of strategic_directives_v2.metadata.requires_chairman_apply
+ * for the resolved SD. Any failure (no key, unreadable, missing row) returns false and is non-fatal —
+ * the gate never errors on SD resolution; the header-marker path still applies per-file.
+ * @returns {Promise<boolean>}
+ */
+export async function resolveSdGated({ sdKey, client }) {
+  if (!sdKey || !client) return false;
+  try {
+    const r = await client.query(
+      `SELECT (metadata->>'requires_chairman_apply') AS flag
+         FROM strategic_directives_v2
+        WHERE sd_key = $1
+        LIMIT 1`,
+      [sdKey]
+    );
+    return r.rows[0]?.flag === 'true' || r.rows[0]?.flag === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -191,12 +268,17 @@ export function shortDiff(a, b, lines = 6) {
   return out.join('\n');
 }
 
-export async function evaluateMigration({ filePath, sql, client }) {
+export async function evaluateMigration({ filePath, sql, client, chairmanGated = false }) {
   const declared = parseDeclaredObjects(sql);
   // SD-REFILL-00EAHZRZ: a `DROP ... IF EXISTS <name>` ahead of a bare CREATE of the same object
   // makes that CREATE idempotent — treat it like CREATE OR REPLACE (status IDEMPOTENT, not CONFLICTING).
   const droppedIfExists = parseDropIfExists(sql);
   const isIdempotentRecreate = (obj) => droppedIfExists.has(`${obj.kind}:${obj.name}`);
+  // CHAIRMAN-GATED-EXEMPT-001: this migration is gated if the SD requires a chairman apply OR the
+  // file carries the dedicated header marker. When gated, a diverged CREATE OR REPLACE FUNCTION body
+  // is EXPECTED (staged-not-applied), so it is downgraded to EXPECTED_PENDING. CONFLICTING is a real
+  // declaration error and is NEVER exempted.
+  const gated = chairmanGated || parseChairmanGatedMarker(sql);
   const findings = [];
   for (const obj of declared) {
     if (obj.kind === 'function') {
@@ -209,7 +291,9 @@ export async function evaluateMigration({ filePath, sql, client }) {
         findings.push({ ...obj, status: isIdempotentRecreate(obj) ? 'IDEMPOTENT' : 'CONFLICTING' });
         continue;
       }
-      findings.push({ ...obj, status: compareBodies(obj.body, live) ? 'MATCHES' : 'DIVERGED', live });
+      const matches = compareBodies(obj.body, live);
+      const divergedStatus = gated ? 'EXPECTED_PENDING' : 'DIVERGED';
+      findings.push({ ...obj, status: matches ? 'MATCHES' : divergedStatus, live });
     } else if (obj.kind === 'trigger') {
       const exists = await queryLiveTrigger(client, obj.name);
       if (!exists) findings.push({ ...obj, status: 'NEW' });
@@ -220,15 +304,19 @@ export async function evaluateMigration({ filePath, sql, client }) {
   return { filePath, declared, findings };
 }
 
-function classifyOutcome(reports) {
+export function classifyOutcome(reports) {
   if (reports.length === 0) return OUTCOME.PASS_NO_MIGRATIONS;
-  let hasDrift = false, hasConflict = false;
+  let hasDrift = false, hasConflict = false, hasExpectedPending = false;
   for (const r of reports) for (const f of r.findings) {
     if (f.status === 'DIVERGED') hasDrift = true;
     if (f.status === 'CONFLICTING') hasConflict = true;
+    if (f.status === 'EXPECTED_PENDING') hasExpectedPending = true;
   }
+  // Priority: a real declaration error or genuine (non-gated) drift always dominates a gated
+  // advisory — a mixed PR with any non-gated DIVERGED still red-blocks (CHAIRMAN-GATED-EXEMPT-001).
   if (hasConflict) return OUTCOME.FAIL_CONFLICTING;
   if (hasDrift) return OUTCOME.FAIL_DRIFT;
+  if (hasExpectedPending) return OUTCOME.PASS_CHAIRMAN_GATED_PENDING;
   return OUTCOME.PASS;
 }
 
@@ -266,12 +354,18 @@ async function main() {
     process.exit(2);
   }
 
+  // CHAIRMAN-GATED-EXEMPT-001: resolve the SD-level chairman-apply flag once (best-effort, non-fatal).
+  // A true flag gates ALL of this PR's migrations; each file is ALSO gated individually if it carries
+  // the in-file header marker (handled inside evaluateMigration).
+  const sdKey = inferSdKey({ sd: opts.sd });
+  const sdGated = await resolveSdGated({ sdKey, client });
+
   const reports = [];
   try {
     for (const filePath of files) {
       if (!existsSync(filePath)) continue;
       const sql = readFileSync(filePath, 'utf-8');
-      reports.push(await evaluateMigration({ filePath, sql, client }));
+      reports.push(await evaluateMigration({ filePath, sql, client, chairmanGated: sdGated }));
     }
   } finally {
     await client.end().catch(() => {});
@@ -285,13 +379,19 @@ async function main() {
         console.error(`[${OUTCOME.FAIL_DRIFT}] ${r.filePath} ${tag}\n${shortDiff(f.live, f.body)}`);
       } else if (f.status === 'CONFLICTING') {
         console.error(`[${OUTCOME.FAIL_CONFLICTING}] ${r.filePath} ${tag} — CREATE without OR REPLACE on existing object`);
+      } else if (f.status === 'EXPECTED_PENDING') {
+        // Advisory (NOT a failure): body diverges from live because the chairman-gated apply is
+        // deferred to a separate GO. Stated clearly so a green-with-advisory is not read as applied.
+        console.log(`[${OUTCOME.PASS_CHAIRMAN_GATED_PENDING}] ${r.filePath} ${tag} — expected-pending: chairman-gated apply deferred (live differs from migration BY DESIGN)`);
       } else {
         console.log(`[${outcome}] ${r.filePath} ${tag} (${f.status})`);
       }
     }
   }
-  console.log(JSON.stringify({ outcome, files: reports.map(r => ({ filePath: r.filePath, findings: r.findings.map(f => ({ kind: f.kind, schema: f.schema, name: f.name, status: f.status })) })) }));
-  process.exit(outcome === OUTCOME.PASS || outcome === OUTCOME.PASS_NO_MIGRATIONS ? 0 : 1);
+  if (sdGated) console.log(`[${OUTCOME.PASS_CHAIRMAN_GATED_PENDING}] SD ${sdKey} metadata.requires_chairman_apply=true — body divergence treated as expected-pending`);
+  console.log(JSON.stringify({ outcome, sdKey, sdGated, files: reports.map(r => ({ filePath: r.filePath, findings: r.findings.map(f => ({ kind: f.kind, schema: f.schema, name: f.name, status: f.status })) })) }));
+  const passing = outcome === OUTCOME.PASS || outcome === OUTCOME.PASS_NO_MIGRATIONS || outcome === OUTCOME.PASS_CHAIRMAN_GATED_PENDING;
+  process.exit(passing ? 0 : 1);
 }
 
 export { OUTCOME };
