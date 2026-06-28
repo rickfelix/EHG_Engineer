@@ -1,0 +1,22 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- Migration: add 'seeded_from_venture' label to the venture_origin_type enum.
+--
+-- Root cause (code-ahead-of-schema): lib/eva/stage-zero/paths/venture-reseeding.js:67
+--   (also path-router.js:26, lib/eva/clean-clone/launch.js:27) sets
+--   origin_type='seeded_from_venture', but the enum never received that label.
+--   Migration 20260627_ventures_seeded_from_venture_id.sql added the seeded_from_venture_id
+--   COLUMN but not the matching enum LABEL -> the clean-clone launch ventures INSERT throws
+--   'invalid input value for enum venture_origin_type: "seeded_from_venture"' and no
+--   venture persists (the original CLONE-B NOOP-complete root, confirmed live).
+--
+-- Authorization: chairman GO via Adam (clone re-launch), recorded on parent
+--   metadata.chairman_enum_migration_authorization.
+-- SCOPE: seeded_from_venture ONLY. nursery_reeval (interfaces.js:46 validOrigins) is
+--   likewise absent from the enum but is a SEPARATE verify-then-fix follow-up — NOT bundled here.
+--
+-- Apply note: ALTER TYPE ... ADD VALUE cannot run inside a transaction block, so this is
+--   applied with --no-tx --i-know. Idempotent via IF NOT EXISTS (safe to re-run).
+--
+-- SD: SD-LEO-INFRA-CLEAN-CLONE-LAUNCH-001-B (enum-drift unblock)
+
+ALTER TYPE venture_origin_type ADD VALUE IF NOT EXISTS 'seeded_from_venture';
