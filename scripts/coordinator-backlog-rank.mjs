@@ -138,6 +138,7 @@ async function main() {
   const claimable = [];
   let fixtureSkips = 0;
   let inFlightSkips = 0;
+  let awaitingConvergenceSkips = 0;
   for (const d of (sds || [])) {
     if (d.claiming_session_id) continue;
     if (d.sd_type === 'orchestrator') continue;          // parents are never dispatched
@@ -155,6 +156,16 @@ async function main() {
     if (isFixtureSd(d.sd_key, d.metadata)) {             // test fixtures are never ranked
       fixtureSkips++;
       console.log(`  [skip] fixture excluded from ranking: ${d.sd_key}`);
+      continue;
+    }
+    // SD-LEO-INFRA-CO-AUTHOR-CONVERGE-BEFORE-CLAIMABLE-001: a co-authored SD awaiting convergence is
+    // NON-CLAIMABLE (it would let a parked worker write the PRD before the co-author input lands).
+    // Surface it as AWAITING-CONVERGENCE — explicitly NOT idle-belt depth, so the capacity forecaster
+    // does not read it as claimable. Mirrors classifyDispatchIneligibility's co_author_pending gate so
+    // the ranked belt matches the actually-claimable set. Flips to claimable when co_author_pending=false.
+    if ((d.metadata || {}).co_author_pending === true) {
+      awaitingConvergenceSkips++;
+      console.log(`  [skip] awaiting co-author convergence (not idle-belt depth): ${d.sd_key}`);
       continue;
     }
     // SD-REFILL-00AH2L4Q: include metadata.blocked_by_sd_key (via blockerKeysFor) so a metadata-blocked
@@ -175,6 +186,7 @@ async function main() {
   }
   if (fixtureSkips) console.log(`[BACKLOG-RANK] ${fixtureSkips} fixture SD(s) excluded from ranking`);
   if (inFlightSkips) console.log(`[BACKLOG-RANK] ${inFlightSkips} in-flight SD(s) excluded from fresh ranking`);
+  if (awaitingConvergenceSkips) console.log(`[BACKLOG-RANK] ${awaitingConvergenceSkips} SD(s) awaiting co-author convergence (excluded from claimable depth)`);
   // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: bare-shell stubs (empty/title-only description)
   // cannot pass LEAD-TO-PLAN; log them so the demote-to-last below is auditable. The sort
   // below (bareShellLastCompare as the dominant key) is what actually places them last.
