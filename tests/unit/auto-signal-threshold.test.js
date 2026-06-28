@@ -14,27 +14,31 @@ const { shouldEmitAutoSignal, buildAutoSignalArgs, shouldEmitGateAutoSignal, bui
 
 const SID = '11111111-2222-4333-8444-555555555555';
 
-describe('shouldEmitAutoSignal (FR-1)', () => {
-  it('fires exactly on the 2nd-attempt crossing', () => {
-    expect(shouldEmitAutoSignal({ attempts: 2, sessionId: SID, env: {} })).toBe(true);
+describe('shouldEmitAutoSignal (FR-1; threshold raised to ===3 by SD-LEO-INFRA-THRESHOLD-AUTO-SIGNAL-OVERFIRE-001)', () => {
+  it('fires exactly on the 3rd same-signature repeat (genuine stuck-retry)', () => {
+    expect(shouldEmitAutoSignal({ attempts: 3, sessionId: SID, env: {} })).toBe(true);
+  });
+
+  it('does NOT fire on the 2nd attempt (over-fire fixed — one recurrence is not yet a stuck loop)', () => {
+    expect(shouldEmitAutoSignal({ attempts: 2, sessionId: SID, env: {} })).toBe(false);
   });
 
   it('does NOT fire on the 1st attempt (no recurrence yet)', () => {
     expect(shouldEmitAutoSignal({ attempts: 1, sessionId: SID, env: {} })).toBe(false);
   });
 
-  it('does NOT re-fire on the 3rd+ attempt (dedupe — 3rd hard-blocks, already signalled at 2)', () => {
-    expect(shouldEmitAutoSignal({ attempts: 3, sessionId: SID, env: {} })).toBe(false);
+  it('does NOT re-fire on the 4th+ attempt (dedupe — fires once at 3)', () => {
+    expect(shouldEmitAutoSignal({ attempts: 4, sessionId: SID, env: {} })).toBe(false);
     expect(shouldEmitAutoSignal({ attempts: 5, sessionId: SID, env: {} })).toBe(false);
   });
 
   it('respects the LEO_AUTO_SIGNAL=off kill-switch', () => {
-    expect(shouldEmitAutoSignal({ attempts: 2, sessionId: SID, env: { LEO_AUTO_SIGNAL: 'off' } })).toBe(false);
+    expect(shouldEmitAutoSignal({ attempts: 3, sessionId: SID, env: { LEO_AUTO_SIGNAL: 'off' } })).toBe(false);
   });
 
   it('does not fire without a real session identity', () => {
-    expect(shouldEmitAutoSignal({ attempts: 2, sessionId: undefined, env: {} })).toBe(false);
-    expect(shouldEmitAutoSignal({ attempts: 2, sessionId: 'unknown', env: {} })).toBe(false);
+    expect(shouldEmitAutoSignal({ attempts: 3, sessionId: undefined, env: {} })).toBe(false);
+    expect(shouldEmitAutoSignal({ attempts: 3, sessionId: 'unknown', env: {} })).toBe(false);
   });
 
   it('ignores non-integer attempts (fail-safe)', () => {
@@ -43,22 +47,37 @@ describe('shouldEmitAutoSignal (FR-1)', () => {
   });
 });
 
+describe('shouldEmitAutoSignal — coordinator/Adam exemption (SD-LEO-INFRA-THRESHOLD-AUTO-SIGNAL-OVERFIRE-001 (b))', () => {
+  it('does NOT fire from a coordinator/Adam session even at the ===3 threshold', () => {
+    expect(shouldEmitAutoSignal({ attempts: 3, sessionId: SID, isCoordinatorSession: true, env: {} })).toBe(false);
+  });
+
+  it('still fires from a normal worker session at ===3 (isCoordinatorSession false/absent)', () => {
+    expect(shouldEmitAutoSignal({ attempts: 3, sessionId: SID, isCoordinatorSession: false, env: {} })).toBe(true);
+    expect(shouldEmitAutoSignal({ attempts: 3, sessionId: SID, env: {} })).toBe(true);
+  });
+
+  it('the exemption wins over progressStalled=true', () => {
+    expect(shouldEmitAutoSignal({ attempts: 3, sessionId: SID, isCoordinatorSession: true, progressStalled: true, env: {} })).toBe(false);
+  });
+});
+
 describe('shouldEmitAutoSignal — Control 3 progress re-scope (SD-LEO-INFRA-RCA-AUTOSIGNAL-FALSE-POSITIVE-001)', () => {
   it('SUPPRESSES the signal when the session is demonstrably progressing (progressStalled=false)', () => {
-    expect(shouldEmitAutoSignal({ attempts: 2, sessionId: SID, progressStalled: false, env: {} })).toBe(false);
+    expect(shouldEmitAutoSignal({ attempts: 3, sessionId: SID, progressStalled: false, env: {} })).toBe(false);
   });
 
-  it('still fires at the ===2 crossing when progress is stalled (progressStalled=true)', () => {
-    expect(shouldEmitAutoSignal({ attempts: 2, sessionId: SID, progressStalled: true, env: {} })).toBe(true);
+  it('still fires at the ===3 threshold when progress is stalled (progressStalled=true)', () => {
+    expect(shouldEmitAutoSignal({ attempts: 3, sessionId: SID, progressStalled: true, env: {} })).toBe(true);
   });
 
-  it('preserves prior fire-on-crossing behavior when progress is unknown (progressStalled=undefined)', () => {
-    expect(shouldEmitAutoSignal({ attempts: 2, sessionId: SID, env: {} })).toBe(true);
+  it('preserves fire-on-threshold behavior when progress is unknown (progressStalled=undefined)', () => {
+    expect(shouldEmitAutoSignal({ attempts: 3, sessionId: SID, env: {} })).toBe(true);
   });
 
-  it('kill-switch and dedupe still win over progressStalled=true', () => {
-    expect(shouldEmitAutoSignal({ attempts: 2, sessionId: SID, progressStalled: true, env: { LEO_AUTO_SIGNAL: 'off' } })).toBe(false);
-    expect(shouldEmitAutoSignal({ attempts: 3, sessionId: SID, progressStalled: true, env: {} })).toBe(false);
+  it('kill-switch and below-threshold still win over progressStalled=true', () => {
+    expect(shouldEmitAutoSignal({ attempts: 3, sessionId: SID, progressStalled: true, env: { LEO_AUTO_SIGNAL: 'off' } })).toBe(false);
+    expect(shouldEmitAutoSignal({ attempts: 2, sessionId: SID, progressStalled: true, env: {} })).toBe(false);
   });
 });
 

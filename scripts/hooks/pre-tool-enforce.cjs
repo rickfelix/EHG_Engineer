@@ -1192,6 +1192,34 @@ async function main() {
           { attempts, signature, sd_key: claimedSdKey, rca_reset_applied: rcaResetApplied, bypassed }
         );
 
+        // SD-LEO-INFRA-THRESHOLD-AUTO-SIGNAL-OVERFIRE-001 (a): AUTO-EMIT a /signal at the 3rd
+        // same-signature repeat (a genuine stuck-retry), not the 2nd crossing (which over-fired and
+        // drowned real signals). This MUST run BEFORE the attempts>=3 hard-block exit below, else the
+        // signal would never fire. (b): exempt the coordinator session (local active-coordinator marker)
+        // so its own monitoring loops never flood its inbox; named cadence scripts are already exempt
+        // from counting (retry-state-manager EXEMPT_PATTERNS). FIRE-AND-FORGET, env-disableable
+        // (LEO_AUTO_SIGNAL=off), FAIL-OPEN (any error swallowed — auto-signal must never block a tool call).
+        try {
+          const { shouldEmitAutoSignal, buildAutoSignalArgs } = require('../../lib/hooks/auto-signal-threshold.cjs');
+          let isCoordinatorSession = false;
+          try {
+            const coordRaw = require('fs').readFileSync(require('path').resolve(__dirname, '../../.claude/active-coordinator.json'), 'utf8');
+            const coord = JSON.parse(coordRaw);
+            if (coord && coord.session_id && coord.session_id === _SESSION_ID) isCoordinatorSession = true;
+          } catch { /* no marker / unreadable → treat as worker (fail-open, never suppress a real worker signal) */ }
+          if (shouldEmitAutoSignal({ attempts, sessionId: _SESSION_ID, progressStalled, isCoordinatorSession, env: process.env })) {
+            const path = require('path');
+            const { spawn } = require('child_process');
+            const args = buildAutoSignalArgs({ toolName: TOOL_NAME, signature, attempts, sdKey: claimedSdKey });
+            const child = spawn(
+              process.execPath,
+              [path.join(__dirname, '..', 'worker-signal.cjs'), ...args],
+              { detached: true, stdio: 'ignore', env: { ...process.env, CLAUDE_SESSION_ID: _SESSION_ID } }
+            );
+            child.unref();
+          }
+        } catch { /* fail-open: auto-signal must never block tool execution */ }
+
         if (attempts >= 3 && !bypassed) {
           process.stderr.write(
             `\nRCA TIERED ENFORCEMENT (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-129):\n` +
@@ -1211,26 +1239,6 @@ async function main() {
           `next repeat ${bypassed ? '(bypass active)' : 'will be blocked'}. ` +
           `Consider invoking rca-agent if this indicates a persistent failure.`
         );
-
-        // SD-LEO-INFRA-THRESHOLD-AUTO-SIGNAL-001 (FR-1): at the RCA recurrence threshold, AUTO-EMIT a
-        // /signal to the coordinator instead of relying on worker discretion (workers under-escalate
-        // because the threshold is prompt-advisory). Fires ONCE per signature (===2 crossing),
-        // FIRE-AND-FORGET (detached + unref, never awaited), env-disableable (LEO_AUTO_SIGNAL=off),
-        // FAIL-OPEN (any error swallowed — auto-signal must NEVER block or slow a tool call).
-        try {
-          const { shouldEmitAutoSignal, buildAutoSignalArgs } = require('../../lib/hooks/auto-signal-threshold.cjs');
-          if (shouldEmitAutoSignal({ attempts, sessionId: _SESSION_ID, progressStalled, env: process.env })) {
-            const path = require('path');
-            const { spawn } = require('child_process');
-            const args = buildAutoSignalArgs({ toolName: TOOL_NAME, signature, attempts, sdKey: claimedSdKey });
-            const child = spawn(
-              process.execPath,
-              [path.join(__dirname, '..', 'worker-signal.cjs'), ...args],
-              { detached: true, stdio: 'ignore', env: { ...process.env, CLAUDE_SESSION_ID: _SESSION_ID } }
-            );
-            child.unref();
-          }
-        } catch { /* fail-open: auto-signal must never block tool execution */ }
       }
     }
   } catch (rcaErr) {
