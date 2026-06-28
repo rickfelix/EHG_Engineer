@@ -13,15 +13,18 @@
 -- decision values are members of the LIVE chairman_decisions_decision_check (30 values incl
 -- proceed/kill) — deliberately NOT narrowed (the 6-value set was stale migration 20251206).
 --
--- FIX (FR-2): the auto-unblock trigger previously fired ONLY on status->'approved', so a
--- rejected/terminal resolve of a BLOCKING decision left the venture stuck at orchestrator_state
--- ='blocked'. The trigger now fires on approved OR rejected (any terminal resolve releases the
--- venture so the orchestrator can act on the decision). Unblock stays daemon-independent and in
--- ONE place (the trigger) — the function does NOT also write orchestrator_state (no double-fire).
+-- FR-2 (trigger-broaden to release rejected/terminal ventures) was SPLIT OUT to a follow-up SD
+-- (coordinator decision 2026-06-28): broadening trg_chairman_decision_unblock to fire on
+-- 'rejected' is UNSAFE without a paired kill-consumer — chairman REJECT routes through
+-- fn_chairman_decide(action='rejected') which does NOT set ventures.status terminal, so an
+-- unblocked rejected venture is re-picked by the worker and re-mints a fresh pending gate,
+-- resurrecting the killed gate and discarding the chairman's reject (DATABASE review cc6de94c).
+-- The rejected-stuck-at-blocked gap is PRE-EXISTING, so leaving the trigger approved-only here
+-- is zero-regression. The safe form (fn rejected-branch sets the venture terminal) ships in the
+-- follow-up SD.
 --
--- Additive + idempotent: CREATE OR REPLACE for the functions; DROP/CREATE for the trigger (its
--- WHEN clause must broaden). No data migration here (a separate one-time backfill handles existing
--- contradictory rows).
+-- Additive + idempotent: CREATE OR REPLACE for the function. No trigger change. No data migration
+-- here (a separate one-time backfill handles existing contradictory rows).
 
 -- ── FR-1: canonical resolve function writes the full triple ──
 CREATE OR REPLACE FUNCTION public.fn_chairman_decide(
@@ -121,30 +124,7 @@ BEGIN
 END;
 $function$;
 
--- ── FR-2: broaden the unblock trigger function to cover terminal rejected resolves ──
-CREATE OR REPLACE FUNCTION public.trg_chairman_approval_unblock_orchestrator()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path TO 'public', 'extensions'
-AS $function$
-BEGIN
-  -- Fire on any TERMINAL resolve (approved OR rejected) — both release the venture from 'blocked'
-  -- so the orchestrator can act on the decision. Previously fired only on 'approved', leaving a
-  -- rejected blocking decision's venture stuck at orchestrator_state='blocked'.
-  IF NEW.status IN ('approved', 'rejected') AND (OLD.status IS DISTINCT FROM NEW.status) THEN
-    UPDATE ventures
-    SET orchestrator_state = 'idle'
-    WHERE id = NEW.venture_id
-      AND orchestrator_state = 'blocked';
-  END IF;
-  RETURN NEW;
-END;
-$function$;
-
--- The trigger WHEN clause also restricted firing to status='approved'; broaden it to match.
-DROP TRIGGER IF EXISTS trg_chairman_decision_unblock ON public.chairman_decisions;
-CREATE TRIGGER trg_chairman_decision_unblock
-  AFTER UPDATE ON public.chairman_decisions
-  FOR EACH ROW
-  WHEN (NEW.status IN ('approved', 'rejected') AND (OLD.status IS DISTINCT FROM NEW.status))
-  EXECUTE FUNCTION public.trg_chairman_approval_unblock_orchestrator();
+-- NOTE: trg_chairman_decision_unblock is intentionally LEFT UNCHANGED (fires on status->'approved'
+-- only). The approved path here still sets status='approved', so the existing trigger continues to
+-- release the venture exactly as before — no regression. FR-2's rejected-release is deferred to the
+-- follow-up SD (see header).
