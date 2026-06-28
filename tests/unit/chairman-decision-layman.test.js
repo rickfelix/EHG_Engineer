@@ -6,6 +6,8 @@ import {
   refTag,
   renderItem,
   renderDecisionLines,
+  renderLeanDecision,
+  renderLeanDecisionEmail,
   GROUPABLE_TYPES,
 } from '../../lib/chairman/decision-layman.mjs';
 
@@ -132,5 +134,81 @@ describe('renderDecisionLines — integration', () => {
     const rows = [approval('a1', 19, 'Alpha', 21), flag('f1', 'x', 8)];
     const { lines } = renderDecisionLines(rows, NOW);
     for (const l of lines) expect(l).toMatch(/\[refs? \w+:/);
+  });
+});
+
+// ── SD-LEO-INFRA-LEAN-DECISION-EMAIL-001: lean, decision-specific on-demand email ──
+// These read the BASE chairman_decisions row shape (real decision_type + brief_data), NOT the lossy view.
+const baseSessionQuestion = (id, ageDays, brief = {}) => ({
+  id, decision_type: 'session_question', summary: brief.title || 'a question',
+  brief_data: brief, lifecycle_stage: 0, blocking: false, venture_id: null, created_at: D(ageDays),
+});
+const baseVentureApproval = (id, stage, ageDays, brief = {}) => ({
+  id, decision_type: 'chairman_approval', summary: `Stage ${stage} approval`,
+  brief_data: brief, lifecycle_stage: stage, blocking: false, venture_id: `v-${id}`, created_at: D(ageDays),
+});
+
+describe('renderLeanDecision (FR-1)', () => {
+  it('renders a session_question as its QUESTION + recommendation, NOT a venture sign-off', () => {
+    const row = baseSessionQuestion('dq1', 1, {
+      title: 'Decide canonical S5 financial truth: contract 7.7:1 vs artifact 38.17:1',
+      recommendation: 'use the contract',
+      context: 'the artifact and the contract disagree',
+    });
+    const line = renderLeanDecision(row, NOW);
+    expect(line).toContain('Decide canonical S5 financial truth');
+    expect(line).toContain('Recommendation: use the contract');
+    expect(line).toContain('Context: the artifact and the contract disagree');
+    expect(line).not.toMatch(/waiting for (your )?sign-off/i);
+    expect(line).not.toMatch(/Stage 0/);
+    expect(line).toContain('[ref session_question:dq1]'); // REAL type in the ref
+  });
+
+  it('keeps venture/stage framing for a true chairman_approval with a venture', () => {
+    const row = baseVentureApproval('va1', 12, 2, { title: 'Approve Acme past Stage 12', recommendation: 'proceed' });
+    const line = renderLeanDecision(row, NOW);
+    expect(line).toMatch(/move past Stage 12/);
+    expect(line).toContain('[ref chairman_approval:va1]');
+  });
+
+  it('omits the recommendation line when none is present', () => {
+    const line = renderLeanDecision(baseSessionQuestion('dq2', 1, { title: 'open question' }), NOW);
+    expect(line).not.toMatch(/Recommendation:/);
+    expect(line).toContain('open question');
+  });
+});
+
+describe('renderLeanDecisionEmail (FR-2/FR-3)', () => {
+  it('subject is the standout [ACTION NEEDED - ADAM] + the decision title; primary leads', () => {
+    const rows = [
+      baseVentureApproval('va1', 12, 5, { title: 'Approve Acme' }),
+      baseSessionQuestion('dq1', 1, { title: 'Decide S5 financial truth', recommendation: 'contract' }),
+    ];
+    const { subject, lines } = renderLeanDecisionEmail(rows, NOW, { primaryId: 'dq1' });
+    expect(subject).toBe('[ACTION NEEDED - ADAM] Decide S5 financial truth (+1 more)');
+    expect(lines[0]).toContain('Decide S5 financial truth'); // primary first
+    expect(lines.length).toBe(2);
+  });
+
+  it('each pending decision renders by its ACTUAL type (mixed set)', () => {
+    const rows = [
+      baseSessionQuestion('dq1', 1, { title: 'a governance question' }),
+      baseVentureApproval('va1', 7, 3, { title: 'Approve Beta' }),
+    ];
+    const { lines } = renderLeanDecisionEmail(rows, NOW, { primaryId: 'dq1' });
+    const joined = lines.join('\n');
+    expect(joined).toContain('Decide: “a governance question”');     // session_question framing
+    expect(joined).toMatch(/move past Stage 7/);                      // venture framing
+    expect(joined).toContain('[ref session_question:dq1]');
+    expect(joined).toContain('[ref chairman_approval:va1]');
+  });
+
+  it('the rendered lines carry NONE of the hourly status-block markers', () => {
+    const rows = [baseSessionQuestion('dq1', 1, { title: 'q', recommendation: 'r' })];
+    const { subject, lines } = renderLeanDecisionEmail(rows, NOW, { primaryId: 'dq1' });
+    const blob = subject + '\n' + lines.join('\n');
+    for (const marker of ['Workers:', 'rung', 'meta', 'distance-to-quit', 'built', 'active idle']) {
+      expect(blob.toLowerCase()).not.toContain(marker.toLowerCase());
+    }
   });
 });
