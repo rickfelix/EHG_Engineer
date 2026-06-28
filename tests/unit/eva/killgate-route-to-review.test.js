@@ -41,7 +41,10 @@ vi.mock('../../../lib/eva/devils-advocate.js', async (importOriginal) => ({
 // vi.hoisted so the spy exists before the hoisted vi.mock factory runs.
 const { mintSpy } = vi.hoisted(() => ({ mintSpy: vi.fn() }));
 mintSpy.mockResolvedValue({ id: 'dec-hold-1', health_score: 'red' });
-vi.mock('../../../lib/eva/chairman-decision-watcher.js', () => ({
+vi.mock('../../../lib/eva/chairman-decision-watcher.js', async (importOriginal) => ({
+  // Spread the real module so pure helpers (e.g. gateDecisionToHealth — SD-LEO-INFRA-HEALTH-ROLLUP-
+  // CORRECTNESS-001 FR-2) keep their real impl; only the side-effecting fns are mocked.
+  ...(await importOriginal()),
   createOrReusePendingDecision: mintSpy,
   waitForDecision: vi.fn(),
   createAdvisoryNotification: vi.fn(),
