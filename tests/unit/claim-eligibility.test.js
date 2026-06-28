@@ -50,7 +50,7 @@ function makeSbForEligibility(sdRows, opts = {}) {
                 maybeSingle: async () => {
                   if (opts.errorOnSingle) return { data: null, error: { message: 'single boom' } };
                   const row = sdRows[val];
-                  return { data: row ? { sd_type: row.sd_type, dependencies: row.dependencies || [] } : null, error: null };
+                  return { data: row ? { sd_type: row.sd_type, dependencies: row.dependencies || [], metadata: row.metadata || {}, status: row.status } : null, error: null };
                 },
               };
             },
@@ -140,5 +140,31 @@ describe('baselinedCandidateEligible (boolean wrapper; false-on-error = worker-c
   it('deps-query error -> false (conservative skip)', async () => {
     const sb = makeSbForEligibility({ 'SD-C': { sd_type: 'bugfix', dependencies: [{ sd_key: 'SD-DEP' }] } }, { errorOnIn: true });
     expect(await baselinedCandidateEligible(sb, 'SD-C')).toBe(false);
+  });
+});
+
+// SD-LEO-INFRA-CO-AUTHOR-CONVERGE-BEFORE-CLAIMABLE-001: a co-authored DRAFT SD is NON-CLAIMABLE until
+// co-author convergence (metadata.co_author_pending===true), so a parked worker can't claim it and
+// write the PRD before the co-author input lands. Flips to claimable when co_author_pending=false.
+describe('co_author_pending gate (SD-LEO-INFRA-CO-AUTHOR-CONVERGE-BEFORE-CLAIMABLE-001)', () => {
+  it('co_author_pending:true -> ineligible(co_author_pending)', async () => {
+    const sb = makeSbForEligibility({ 'SD-COAUTH-001': { sd_type: 'feature', dependencies: [], metadata: { co_author_pending: true } } });
+    expect(await evaluateDispatchEligibility(sb, 'SD-COAUTH-001')).toEqual({ eligible: false, reason: 'co_author_pending' });
+  });
+  it('co_author_pending:false (converged) -> eligible', async () => {
+    const sb = makeSbForEligibility({ 'SD-COAUTH-DONE': { sd_type: 'feature', dependencies: [], metadata: { co_author_pending: false } } });
+    expect(await evaluateDispatchEligibility(sb, 'SD-COAUTH-DONE')).toEqual({ eligible: true });
+  });
+  it('co_author_pending absent (non-co-author DRAFT) -> eligible (no coercion / no regression)', async () => {
+    const sb = makeSbForEligibility({ 'SD-PLAIN': { sd_type: 'bugfix', dependencies: [] } });
+    expect(await evaluateDispatchEligibility(sb, 'SD-PLAIN')).toEqual({ eligible: true });
+  });
+  it('a stray truthy (non-true) value does NOT enroll the SD — strict === true only', async () => {
+    const sb = makeSbForEligibility({ 'SD-STRAY': { sd_type: 'feature', dependencies: [], metadata: { co_author_pending: 'yes' } } });
+    expect(await evaluateDispatchEligibility(sb, 'SD-STRAY')).toEqual({ eligible: true });
+  });
+  it('baselinedCandidateEligible: co_author_pending:true -> false (self-claim baselined path excludes it)', async () => {
+    const sb = makeSbForEligibility({ 'SD-COAUTH-002': { sd_type: 'feature', dependencies: [], metadata: { co_author_pending: true } } });
+    expect(await baselinedCandidateEligible(sb, 'SD-COAUTH-002')).toBe(false);
   });
 });
