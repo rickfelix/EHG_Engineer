@@ -1290,6 +1290,70 @@
       "linked_ref": "sd:SD-LEO-INFRA-CI-BASELINE-ROT-FIX-001",
       "quarantined_at": "2026-06-26T03:39:33.161Z",
       "quarantined_by": "66f7a564-636a-435c-ade1-68096b37389a"
+    },
+    {
+      "file": "tests/unit/eva/stage-execution-worker.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'vi.fn()' to be called with arguments: [ObjectContaining{...}] — processOneStage mock call signature changed; test expectations stale",
+      "linked_ref": "sd:SD-LEO-INFRA-BASELINE-QUARANTINE-SWEEP-001",
+      "quarantined_at": "2026-06-28T21:15:00.000Z",
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+    },
+    {
+      "file": "tests/unit/eva/stage-execution-worker-s19-surfacing.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected [] to have a length of 1 but got +0 — _resolveVisionPendingDecision mock API changed; UPDATE filter no longer matches mock setup",
+      "linked_ref": "sd:SD-LEO-INFRA-BASELINE-QUARANTINE-SWEEP-001",
+      "quarantined_at": "2026-06-28T21:15:00.000Z",
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+    },
+    {
+      "file": "tests/unit/notifications/scheduler.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected sendWeeklySummary error handler to reject but received unexpected resolve — scheduler error propagation contract changed",
+      "linked_ref": "sd:SD-LEO-INFRA-BASELINE-QUARANTINE-SWEEP-001",
+      "quarantined_at": "2026-06-28T21:15:00.000Z",
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+    },
+    {
+      "file": "tests/unit/resolve-sub-agent-repo.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected '/home/runner/work/EHG_Engineer/EHG_Engineer/C:/Users/rickf/...' to be 'C:/Users/rickf/Projects/_EHG/EHG_Engineer' — test hardcodes Windows developer-machine path; toCanonicalRepoPath on Linux CI prepends CWD",
+      "linked_ref": "sd:SD-LEO-INFRA-BASELINE-QUARANTINE-SWEEP-001",
+      "quarantined_at": "2026-06-28T21:15:00.000Z",
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+    },
+    {
+      "file": "tests/unit/worktree-reaper-pools.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected [...] to include 'c:/users/rickf/projects/_ehg/ehg_engineer' — resolveRegisteredPools test hardcodes Windows paths; fails on Linux CI where path normalisation differs",
+      "linked_ref": "sd:SD-LEO-INFRA-BASELINE-QUARANTINE-SWEEP-001",
+      "quarantined_at": "2026-06-28T21:15:00.000Z",
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+    },
+    {
+      "file": "tests/unit/worker-checkin-fleet-identity.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected { callsign: 'Alpha', color: 'blue' } to deeply equal { callsign: 'Echo', color: 'cyan' } — callsign assignment scheme changed (tier-encoded Alpha/Echo), test fixture stale",
+      "linked_ref": "sd:SD-LEO-INFRA-BASELINE-QUARANTINE-SWEEP-001",
+      "quarantined_at": "2026-06-28T21:15:00.000Z",
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+    },
+    {
+      "file": "tests/unit/eva/stage-execution-worker-timing.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: _syncStageWork uses result.startedAt when provided — timing sync function signature changed, test mock setup no longer matches call contract",
+      "linked_ref": "sd:SD-LEO-INFRA-BASELINE-QUARANTINE-SWEEP-001",
+      "quarantined_at": "2026-06-28T21:15:00.000Z",
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+    },
+    {
+      "file": "tests/unit/hooks/db-only-enforcement.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'WORKTREE HYGIENE GUARD: Edit/Write blocked...' to contain 'DB-ONLY ENFORCEMENT' — enforcement hook error message wording changed, test still expects old string",
+      "linked_ref": "sd:SD-LEO-INFRA-BASELINE-QUARANTINE-SWEEP-001",
+      "quarantined_at": "2026-06-28T21:15:00.000Z",
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
     }
   ]
 }
