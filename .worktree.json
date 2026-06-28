@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-VENTURE-CLOUDFLARE-DEFAULT-001-D",
-  "expectedBranch": "feat/SD-LEO-INFRA-VENTURE-CLOUDFLARE-DEFAULT-001-D",
-  "createdAt": "2026-06-27T16:56:58.651Z",
+  "sdKey": "SD-LEO-INFRA-S5-FINANCIAL-GATE-FUTURE-ARTIFACT-BUG-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-S5-FINANCIAL-GATE-FUTURE-ARTIFACT-BUG-001",
+  "createdAt": "2026-06-28T02:39:30.528Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }

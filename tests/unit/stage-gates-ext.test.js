@@ -665,8 +665,59 @@ describe('Existing Gate Preservation (FR-4)', () => {
     const result = await validateFinancialViabilityGate(supabase, 'v1');
     expect(result.passed).toBe(false);
     expect(result.gate_name).toBe('FINANCIAL_VIABILITY');
-    expect(result.checks[0].check).toBe('pricing_model_exists');
+    // SD-LEO-INFRA-S5-FINANCIAL-GATE-FUTURE-ARTIFACT-BUG-001: the first check is
+    // now the S5-appropriate financial_model_exists (truth_financial_model).
+    expect(result.checks[0].check).toBe('financial_model_exists');
     expect(result.checks[0].passed).toBe(false);
+  });
+
+  // SD-LEO-INFRA-S5-FINANCIAL-GATE-FUTURE-ARTIFACT-BUG-001: the S5 financial gate
+  // must pass on the S5 truth_financial_model alone (not require S7/S8 artifacts),
+  // still pass when future-stage artifacts are present, and fail only when NO
+  // financial artifact exists. Build a venture_artifacts mock that resolves
+  // per artifact_type via the .eq('artifact_type', T) filter.
+  function financialArtifactsMock(present) {
+    return {
+      venture_artifacts: {
+        _type: null,
+        select() { return this; },
+        eq(col, val) { if (col === 'artifact_type') this._type = val; return this; },
+        order() { return this; },
+        limit() { return this; },
+        maybeSingle() {
+          const has = present.includes(this._type);
+          this._type = null;
+          return Promise.resolve({
+            data: has ? { artifact_data: { revenueStreams: [{ name: 'r1' }] }, created_at: '2026-01-01T00:00:00Z' } : null,
+            error: null,
+          });
+        },
+      },
+    };
+  }
+
+  it('Financial Viability Gate PASSES at S5 with only truth_financial_model (no future artifacts)', async () => {
+    const { validateFinancialViabilityGate } = _internal;
+    const supabase = createMockSupabase(financialArtifactsMock(['truth_financial_model']));
+    const result = await validateFinancialViabilityGate(supabase, 'v1');
+    expect(result.passed).toBe(true);
+    expect(result.checks.find(c => c.check === 'financial_model_exists')?.passed).toBe(true);
+  });
+
+  it('Financial Viability Gate FAILS when NO financial artifact of any kind exists', async () => {
+    const { validateFinancialViabilityGate } = _internal;
+    const supabase = createMockSupabase(financialArtifactsMock([]));
+    const result = await validateFinancialViabilityGate(supabase, 'v1');
+    expect(result.passed).toBe(false);
+    expect(result.details.message).toBe('No financial artifacts found');
+  });
+
+  it('Financial Viability Gate PASSES when future-stage artifacts are present (lenient intent preserved)', async () => {
+    const { validateFinancialViabilityGate } = _internal;
+    const supabase = createMockSupabase(financialArtifactsMock(['engine_pricing_model', 'engine_business_model_canvas']));
+    const result = await validateFinancialViabilityGate(supabase, 'v1');
+    expect(result.passed).toBe(true);
+    expect(result.checks.find(c => c.check === 'pricing_model_exists')?.passed).toBe(true);
   });
 
   it('UAT Signoff Gate returns correct structure on missing artifact', async () => {

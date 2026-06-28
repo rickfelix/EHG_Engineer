@@ -1,0 +1,98 @@
+{
+  "executive_summary": "The S5->S6 financial-viability exit gate (validateFinancialViabilityGate in lib/agents/modules/venture-state-machine/stage-gates.js) structurally fails at S5 because it checks ONLY two FUTURE-stage artifacts — engine_pricing_model (produced at S7) and engine_business_model_canvas (S8). At S5 neither exists yet, so passedChecks=0 and the gate returns passed=false, blocking a venture that legitimately has its S5 financial artifact (truth_financial_model). This SD adds recognition of the S5-appropriate truth_financial_model artifact so the gate passes when it (or any future artifact) is present, and fails only when NO financial artifact of any kind exists — honoring the gate's stated lenient intent. Backend gate change + unit tests; no UI. A sibling-gate sweep confirms the bug is isolated to the financial gate (validateUATSignoffGate and validateDeploymentHealthGate check stage-appropriate artifacts).",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Recognize the S5 truth_financial_model artifact as a passing check",
+      "description": "In validateFinancialViabilityGate (lib/agents/modules/venture-state-machine/stage-gates.js ~880-952), add a check that queries venture_artifacts for ARTIFACT_TYPES.TRUTH_FINANCIAL_MODEL (is_current=true, no lifecycle_stage filter, newest first) and pushes a passing check when present. The pass predicate must be: gate passes if the S5 truth_financial_model exists OR any future-stage artifact (engine_pricing_model / engine_business_model_canvas) exists; it fails ONLY when NO financial artifact of any kind exists. Preserve the existing lenient behavior (future-stage artifacts still count when present) and the revenue-streams sub-check on the pricing artifact. Use the already-imported ARTIFACT_TYPES constant.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Gate queries venture_artifacts for truth_financial_model and records a passing check when present",
+        "Venture at S5 with truth_financial_model and no future artifacts -> gate.passed === true",
+        "Venture with no financial artifact of any kind -> gate.passed === false",
+        "Venture with future-stage artifacts present -> gate.passed === true (lenient intent preserved)",
+        "Gate details message reflects which artifact(s) satisfied the gate"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Unit tests for the three guardrail states",
+      "description": "Add unit tests (extend tests/unit/stage-gates-ext.test.js or a new sibling) that mock the supabase venture_artifacts query and assert validateFinancialViabilityGate across: (a) S5 truth_financial_model only -> PASS; (b) no financial artifact at all -> FAIL; (c) future-stage engine_pricing_model/engine_business_model_canvas present -> PASS. Tests must run under the existing unit runner.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Test asserts PASS for truth_financial_model-only at S5",
+        "Test asserts FAIL when no financial artifact exists",
+        "Test asserts PASS when future-stage artifacts are present",
+        "All new tests green"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Regression confirmation + isolated-scope sibling-gate sweep",
+      "description": "Confirm via the code whether the future-stage-only checks were a regression (the CronPulse RCA #2B comment shows the gate was already aware S7/S8 artifacts don't exist at S5 but never added the S5 artifact). Sweep the other exit-gate validators in stage-gates.js (validateUATSignoffGate S22->23, validateDeploymentHealthGate) for the same future-stage-artifact-check class. Document the finding: the bug is ISOLATED to the financial gate (the UAT and deployment gates check stage-appropriate artifacts), so no sibling fix is required.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "Sweep result documented: bug isolated to validateFinancialViabilityGate",
+        "No other gate found checking only future-stage artifacts"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Single-file gate change, additive",
+      "description": "Change confined to lib/agents/modules/venture-state-machine/stage-gates.js (the financial gate function) plus a unit test file. No schema change, no UI. Reuse the already-imported ARTIFACT_TYPES."
+    },
+    {
+      "id": "TR-2",
+      "title": "No decomposition required",
+      "description": "Although the SD noted 'decompose-at-PLAN', the fix is a ~20-30 LOC single-gate change with tests; an orchestrator/children split would add overhead without value. Built as a single SD."
+    }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "S5 truth_financial_model only", "type": "unit", "expected": "gate.passed === true" },
+    { "id": "TS-2", "scenario": "No financial artifact at all", "type": "unit", "expected": "gate.passed === false, message 'No financial artifacts found'" },
+    { "id": "TS-3", "scenario": "Future-stage artifacts present", "type": "unit", "expected": "gate.passed === true" }
+  ],
+  "acceptance_criteria": [
+    "S5 financial-viability gate passes for a venture with a valid truth_financial_model and no future-stage artifacts",
+    "Gate still fails when no financial artifact exists and still passes when future artifacts are present",
+    "Unit tests cover all three states; sibling-gate sweep documented as isolated"
+  ],
+  "risks": [
+    {
+      "risk": "Loosening the gate could let a venture with a malformed/empty truth_financial_model pass",
+      "mitigation": "The gate's existing revenue-streams sub-check on the pricing artifact is preserved; truth_financial_model presence + is_current is the S5-appropriate bar (deeper financial validation is the golden-nugget validator's job, not this advance gate). The FAIL-when-empty case is explicitly tested.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": ["validateStageGate (stage-gates.js) — the S5->S6 advance path", "EVA venture-state-machine stage advance"],
+    "dependencies": ["lib/eva/artifact-types.js (ARTIFACT_TYPES.TRUTH_FINANCIAL_MODEL)", "venture_artifacts table"],
+    "data_contracts": ["venture_artifacts (read-only: truth_financial_model / engine_pricing_model / engine_business_model_canvas)"],
+    "runtime_config": ["none"],
+    "observability_rollout": ["gate.checks[] now includes a truth_financial_model_exists entry; unit tests in CI prove the three states"]
+  },
+  "system_architecture": {
+    "summary": "Add the S5 financial artifact to the financial-viability gate's check set and broaden the pass predicate to any-financial-artifact-present.",
+    "components": [
+      { "name": "lib/agents/modules/venture-state-machine/stage-gates.js", "change": "add truth_financial_model check + broaden pass predicate in validateFinancialViabilityGate" },
+      { "name": "tests/unit/stage-gates-ext.test.js", "change": "add 3 financial-gate state tests" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Single-gate fix + tests; no schema/UI.",
+    "steps": [
+      "Add a truth_financial_model query+check to validateFinancialViabilityGate",
+      "Broaden pass predicate: pass if S5 artifact OR any future artifact; fail only if none",
+      "Add the 3-state unit tests",
+      "Run sibling-gate sweep, document isolation"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run validateFinancialViabilityGate for a venture at S5 with a truth_financial_model artifact and NO future-stage artifacts", "expected_outcome": "gate.passed === true — S5 financial artifact satisfies the gate" },
+    { "step_number": 2, "instruction": "Run the gate for a venture with NO financial artifact of any kind", "expected_outcome": "gate.passed === false with message 'No financial artifacts found'" },
+    { "step_number": 3, "instruction": "Run the gate for a venture with engine_pricing_model / engine_business_model_canvas present", "expected_outcome": "gate.passed === true — future artifacts still count when present" }
+  ],
+  "metadata": { "sd_key": "SD-LEO-INFRA-S5-FINANCIAL-GATE-FUTURE-ARTIFACT-BUG-001" }
+}
