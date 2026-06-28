@@ -36,7 +36,9 @@ import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
-import { getValidationClient } from '../../lib/llm/client-factory.js';
+// SD-LEO-INFRA-EAGER-SYNTHESIS-VISION-DIMS-EXTRACT-001: extractDimensions relocated to a shared lib
+// module so the eager-synthesis writer can reuse the ONE canonical extractor.
+import { extractDimensions } from '../../lib/eva/vision-dimensions-extractor.js';
 import { parseMarkdownToSections, buildDefaultMapping } from './markdown-to-sections-parser.mjs';
 import { buildSectionKeyMapping, getSectionSchema, validateSections } from './document-section-registry.mjs';
 import { renderSectionsToMarkdown, renderSectionsSummary } from './sections-to-markdown-renderer.mjs';
@@ -44,7 +46,6 @@ import { readStdin } from '../../lib/utils/read-stdin.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../');
-const MAX_LLM_CONTENT_CHARS = 15000;
 
 // B2 (SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001): Testable Success Criteria heuristic
 // Extracted to lib/eva/testable-criteria-heuristic.js for reuse and testability.
@@ -70,60 +71,9 @@ function parseArgs(argv) {
 }
 
 // ============================================================================
-// LLM dimension extraction (reused from seed-l1-vision.js)
+// LLM dimension extraction relocated to lib/eva/vision-dimensions-extractor.js
+// (SD-LEO-INFRA-EAGER-SYNTHESIS-VISION-DIMS-EXTRACT-001) — imported above.
 // ============================================================================
-
-async function extractDimensions(content, retryCount = 0) {
-  if (content.length > MAX_LLM_CONTENT_CHARS) {
-    console.warn(`\n   ⚠️  Content truncated from ${content.length.toLocaleString()} to ${MAX_LLM_CONTENT_CHARS.toLocaleString()} chars for LLM extraction`);
-  }
-  const truncated = content.length > MAX_LLM_CONTENT_CHARS
-    ? content.slice(0, MAX_LLM_CONTENT_CHARS) + '\n...[truncated for dimension extraction]'
-    : content;
-
-  const prompt = `You are analyzing a strategic vision document. Extract 6-10 key scoring dimensions that represent the major requirements, principles, or goals of this vision. These dimensions will be used to score whether built software aligns with this vision.
-
-For each dimension, provide:
-- name: short identifier (e.g., "chairman_governance", "stage_completeness")
-- weight: relative importance 0.0-1.0 (all weights should sum to approximately 1.0)
-- description: one sentence explaining what this dimension measures
-- source_section: which section or principle in the doc this comes from
-
-Return ONLY a valid JSON array of objects with these exact fields. No explanation text.
-
-Document:
-${truncated}`;
-
-  try {
-    const client = getValidationClient();
-    const systemPrompt = 'You are a document analyst. Extract structured scoring dimensions from strategic documents. Return only valid JSON arrays.';
-    const response = await client.complete(systemPrompt, prompt);
-    const text = typeof response === 'string' ? response : response?.content || response?.text || JSON.stringify(response);
-
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error('No JSON array found in LLM response');
-
-    const dimensions = JSON.parse(jsonMatch[0]);
-    if (!Array.isArray(dimensions) || dimensions.length < 1) throw new Error('LLM returned empty dimensions');
-
-    for (const dim of dimensions) {
-      if (!dim.name || typeof dim.weight !== 'number' || !dim.description) {
-        throw new Error(`Invalid dimension shape: ${JSON.stringify(dim)}`);
-      }
-    }
-
-    return dimensions;
-  } catch (err) {
-    if (retryCount === 0) {
-      console.warn(`\n   ⚠️  LLM extraction failed (attempt 1): ${err.message}`);
-      console.warn('   Retrying...');
-      return extractDimensions(content, 1);
-    }
-    console.warn(`\n   ⚠️  LLM extraction failed after 2 attempts: ${err.message}`);
-    console.warn('   Storing null extracted_dimensions — can be re-extracted later by scorer.');
-    return null;
-  }
-}
 
 // ============================================================================
 // Subcommands
