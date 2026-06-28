@@ -236,6 +236,34 @@ describe('createOrReusePendingDecision', () => {
     );
   });
 
+  // SD-LEO-INFRA-HEALTH-ROLLUP-CORRECTNESS-001 FR-2: a healthOverride (gate-derived health for a
+  // route-to-review HOLD) takes precedence over the advisory-derived resolveDecisionHealth, so a
+  // numeric-PASS HOLD is stamped green, not a blanket red.
+  it('stamps healthOverride on the minted decision when provided', async () => {
+    const insertFn = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: 'new-id' }, error: null }),
+      }),
+    });
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: null }), // No existing
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        insert: insertFn,
+      }),
+    };
+
+    await createOrReusePendingDecision({
+      ventureId: 'v1', stageNumber: 5, healthOverride: 'green', supabase, logger,
+    });
+
+    expect(insertFn).toHaveBeenCalledWith(
+      expect.objectContaining({ health_score: 'green' }),
+    );
+  });
+
   // SD-MAN-FIX-FIX-DUPLICATE-ARTIFACTS-001: custom decision_type is preserved
   it('uses custom decision_type when provided', async () => {
     const insertFn = vi.fn().mockReturnValue({

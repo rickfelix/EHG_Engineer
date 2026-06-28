@@ -7,9 +7,20 @@ import { describe, it, expect } from 'vitest';
 import { computeHealthScore } from '../../lib/eva/health-score-computer.js';
 
 describe('computeHealthScore', () => {
-  it('returns 0 for null input', () => {
-    expect(computeHealthScore(null)).toBe(0);
-    expect(computeHealthScore(undefined)).toBe(0);
+  // SD-LEO-INFRA-HEALTH-ROLLUP-CORRECTNESS-001 FR-1: the ROOT fix — invalid/missing advisory must
+  // yield a valid health STRING ('red'), never numeric 0 (which violates the health_score CHECK).
+  it('returns "red" (never numeric 0) for null/invalid input', () => {
+    expect(computeHealthScore(null)).toBe('red');
+    expect(computeHealthScore(undefined)).toBe('red');
+    expect(computeHealthScore(42)).toBe('red');
+    expect(computeHealthScore('not-an-object')).toBe('red');
+  });
+
+  it('never returns a non-string for any input', () => {
+    for (const input of [null, undefined, 0, 42, 'x', [], {}, { status: 'ok' }, { a: 1, b: 2, c: { d: 3 } }]) {
+      expect(typeof computeHealthScore(input)).toBe('string');
+      expect(['red', 'yellow', 'green']).toContain(computeHealthScore(input));
+    }
   });
 
   it('returns red for empty object', () => {
