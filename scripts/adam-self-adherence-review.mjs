@@ -22,7 +22,7 @@
 import 'dotenv/config';
 import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { runAdherenceProbes, hasDrift } from '../lib/adam/adherence-probes.js';
+import { runAdherenceProbes, hasDrift, parseFingerprintsTail } from '../lib/adam/adherence-probes.js';
 
 const WINDOW_DAYS = 1;
 const REMEDIATION_CATEGORY = 'adam_adherence_drift';
@@ -172,6 +172,31 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
       }));
     }
   } catch { /* leave null -> unknown */ }
+
+  // SD-LEO-INFRA-ADAM-DECISION-RUBRIC-PROBE-HYGIENE-001 (b): RESOLVED-EXCLUSION. Load the over-ask
+  // fingerprints from PRIOR decision_rubric ledger rows that already carry a remediation_ref (an
+  // over-ask that was surfaced + remediated). probeDecisionRubric excludes these so a resolved/historical
+  // over-ask never re-fails — the verdict reflects only NEW, un-remediated over-asks. (a) report the
+  // window basis so a fail is interpretable. Fail-soft: a query error leaves the set empty (no exclusion,
+  // never a fabricated pass). Look back further than the corpus window so remediations stay honored.
+  facts.windowDays = windowDays;
+  facts.decisionRubricWindowBasis = `${windowDays}-day rolling window (cross-session)`;
+  try {
+    const ledgerLookback = windowStart(Math.max(windowDays, 30), nowMs);
+    const { data: resolvedRows } = await supabase
+      .from('adam_adherence_ledger')
+      .select('detail, remediation_ref, created_at')
+      .eq('probe', 'decision_rubric')
+      .not('remediation_ref', 'is', null)
+      .gte('created_at', ledgerLookback);
+    const resolvedFps = new Set();
+    for (const row of (resolvedRows || [])) {
+      for (const fp of parseFingerprintsTail(row && row.detail)) resolvedFps.add(fp);
+    }
+    facts.resolvedOverAskFingerprints = [...resolvedFps];
+  } catch {
+    facts.resolvedOverAskFingerprints = []; // fail-soft: no exclusion, but never a fabricated pass
+  }
 
   return facts;
 }
