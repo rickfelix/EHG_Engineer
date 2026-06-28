@@ -25,6 +25,11 @@
 --
 -- Additive + idempotent: CREATE OR REPLACE for the function. No trigger change. No data migration
 -- here (a separate one-time backfill handles existing contradictory rows).
+--
+-- Chairman authorization: session_question decision 73e04cc2 APPROVED (decision=go), 2026-06-28 —
+-- "Proceed with your recommendation based on your rationale." Applied via the governed
+-- apply-migration.js --prod-deploy path by the coordinator (CONST-002).
+-- @approved-by: codestreetlabs@gmail.com
 
 -- ── FR-1: canonical resolve function writes the full triple ──
 CREATE OR REPLACE FUNCTION public.fn_chairman_decide(
