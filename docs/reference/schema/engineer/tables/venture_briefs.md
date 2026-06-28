@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-27T19:07:48.958Z
+**Generated**: 2026-06-28T01:03:23.671Z
 **Rows**: 4
 **RLS**: Enabled (1 policy)
 
@@ -57,7 +57,7 @@
 ### Check Constraints
 - `venture_briefs_chairman_day_zero_confidence_check`: CHECK (((chairman_day_zero_confidence >= 0) AND (chairman_day_zero_confidence <= 100)))
 - `venture_briefs_maturity_check`: CHECK ((maturity = ANY (ARRAY['seed'::text, 'sprout'::text, 'ready'::text])))
-- `venture_briefs_origin_type_check`: CHECK ((origin_type = ANY (ARRAY['competitor_teardown'::text, 'competitor_clone'::text, 'blueprint'::text, 'discovery'::text, 'manual'::text])))
+- `venture_briefs_origin_type_check`: CHECK ((origin_type = ANY (ARRAY['competitor_teardown'::text, 'competitor_clone'::text, 'blueprint'::text, 'discovery'::text, 'manual'::text, 'seeded_from_venture'::text])))
 - `venture_briefs_portfolio_synergy_score_check`: CHECK (((portfolio_synergy_score >= (0)::numeric) AND (portfolio_synergy_score <= (1)::numeric)))
 - `venture_briefs_time_horizon_classification_check`: CHECK ((time_horizon_classification = ANY (ARRAY['build_now'::text, 'park_later'::text, 'window_closing'::text])))
 
