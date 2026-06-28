@@ -403,3 +403,6 @@ scripts/cron/eva-watcher-task.cmd
 # SD-LEO-INFRA-FLEET-HIBERNATION-MECHANISM-001 quiet-tick runtime last-state files
 .coord-quiet-tick-last.json
 .adam-quiet-tick-last.json
+
+# SD-LEO-INFRA-RESTART-RESPECTS-DAEMON-DOWN-WALK-001: leo-stack daemon-down controlled-walk sentinel (operator runtime marker)
+.leo-stack-walk-mode

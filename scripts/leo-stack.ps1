@@ -264,10 +264,39 @@ function Start-Workers {
     $workers = Get-WorkerRegistry
     if ($workers.Count -eq 0) { return }
 
+    # SD-LEO-INFRA-RESTART-RESPECTS-DAEMON-DOWN-WALK-001: respect an active daemon-down controlled
+    # walk. When the .leo-stack-walk-mode sentinel is present, the EVA stage-execution workers stay
+    # STOPPED across a restart (web servers still come up) so the daemon cannot silently revive and
+    # auto-advance a venture past a chairman review (S8) / a HARD gate (S10). The skip set + the EVA
+    # classification live in lib/leo-stack/walk-mode.cjs (the single, unit-tested source of truth).
+    $walkSentinel = Join-Path $EngineerDir ".leo-stack-walk-mode"
+    $walkActive = Test-Path $walkSentinel
+    $skipWorkerIds = @()
+    if ($walkActive) {
+        try {
+            $skipRaw = & node (Join-Path $EngineerDir "lib\leo-stack\walk-mode.cjs") "skip-ids" 2>$null
+            $skipWorkerIds = @($skipRaw | Where-Object { $_ -and $_.Trim() } | ForEach-Object { $_.Trim() })
+        } catch {
+            $skipWorkerIds = @()
+        }
+        # FAIL-CLOSED for the daemon set: a present sentinel + a helper that returned nothing must NOT
+        # silently revive the daemon — fall back to the EVA regex and skip all of them.
+        if ($skipWorkerIds.Count -eq 0) {
+            $evaRe = 'stage-zero-queue-processor|start-stage-worker|stage-execution-worker|eva-master-scheduler|subagent-worker|lib[\\/]eva[\\/]workers'
+            $skipWorkerIds = @($workers | Where-Object { ($_.command -match $evaRe) -or ($_.id -match $evaRe) } | ForEach-Object { $_.id })
+        }
+        Write-Log "WARN" "[WALK-MODE] Daemon-down controlled walk active (.leo-stack-walk-mode) — leaving EVA stage workers STOPPED. Remove the sentinel + restart to resume the daemon." "Yellow"
+    }
+
     Write-Log "INFO" "[WORKERS] Starting enabled workers..." "Blue"
 
     foreach ($worker in $workers) {
         if (-not $worker.enabled) { continue }
+
+        if ($walkActive -and ($skipWorkerIds -contains $worker.id)) {
+            Write-Log "WARN" "[WALK-MODE] Skipping $($worker.display_name) — daemon-down controlled walk." "Yellow"
+            continue
+        }
 
         $pidFile = Join-Path $PidDir $worker.pid_file
 

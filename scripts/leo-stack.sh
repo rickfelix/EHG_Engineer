@@ -217,11 +217,34 @@ get_workers() {
 start_workers() {
     if [ ! -f "$WORKER_REGISTRY" ]; then return; fi
 
+    # SD-LEO-INFRA-RESTART-RESPECTS-DAEMON-DOWN-WALK-001: respect an active daemon-down controlled
+    # walk. With the .leo-stack-walk-mode sentinel present, the EVA stage workers stay STOPPED across
+    # a restart (web servers still come up) so the daemon can't silently revive and auto-advance a
+    # venture past S8 / S10. Shared classification + skip set: lib/leo-stack/walk-mode.cjs.
+    local walk_active=0
+    local skip_ids=""
+    if [ -f "$ENGINEER_DIR/.leo-stack-walk-mode" ]; then
+        walk_active=1
+        skip_ids=$(node "$ENGINEER_DIR/lib/leo-stack/walk-mode.cjs" skip-ids 2>/dev/null || true)
+        # FAIL-CLOSED for the daemon set: a present sentinel + empty helper output must NOT revive
+        # the daemon — fall back to the EVA regex over the registry.
+        if [ -z "$skip_ids" ]; then
+            skip_ids=$(get_workers | while IFS= read -r wj; do node -e 'const w=JSON.parse(process.argv[1]); const re=/stage-zero-queue-processor|start-stage-worker|stage-execution-worker|eva-master-scheduler|subagent-worker|lib[\\/]eva[\\/]workers/; if(re.test(w.command||"")||re.test(w.id||"")) console.log(w.id)' "$wj"; done)
+        fi
+        log "WARN" "${YELLOW}[WALK-MODE] Daemon-down controlled walk active (.leo-stack-walk-mode) — leaving EVA stage workers STOPPED. Remove the sentinel + restart to resume the daemon.${NC}"
+    fi
+
     log "INFO" "${BLUE}[WORKERS] Starting enabled workers...${NC}"
 
     get_workers | while IFS= read -r worker_json; do
         local enabled=$(node -e "console.log(JSON.parse(process.argv[1]).enabled)" "$worker_json")
         if [ "$enabled" != "true" ]; then continue; fi
+
+        local wid=$(node -e "console.log(JSON.parse(process.argv[1]).id || '')" "$worker_json")
+        if [ "$walk_active" = "1" ] && printf '%s\n' "$skip_ids" | grep -qxF "$wid"; then
+            log "WARN" "${YELLOW}[WALK-MODE] Skipping $wid — daemon-down controlled walk.${NC}"
+            continue
+        fi
 
         local name=$(node -e "console.log(JSON.parse(process.argv[1]).display_name)" "$worker_json")
         local command=$(node -e "console.log(JSON.parse(process.argv[1]).command)" "$worker_json")
