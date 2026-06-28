@@ -1354,6 +1354,14 @@
       "linked_ref": "sd:SD-LEO-INFRA-BASELINE-QUARANTINE-SWEEP-001",
       "quarantined_at": "2026-06-28T21:15:00.000Z",
       "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+    },
+    {
+      "file": "tests/unit/cleanup/master-reset-validation.test.js",
+      "reason_class": "missing-fixture",
+      "error_signature": "Error: connect ECONNREFUSED ::1:5432 — test imports pg and calls client.connect() unconditionally in beforeAll; unit-tier CI runner has no PostgreSQL database fixture",
+      "linked_ref": "sd:SD-LEO-INFRA-CI-UNIT-TIER-INSTALL-CASCADE-001",
+      "quarantined_at": "2026-06-28T22:30:00.000Z",
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
     }
   ]
 }
