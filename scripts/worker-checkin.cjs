@@ -1125,12 +1125,15 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
     // baselined candidates lack. Fail-open to the agnostic count so a fault never under-reports.
     base.belt_claimable_at_my_tier = base.belt_ranked_claimable;
     try {
-      const ids = ranked.filter((x) => x.kind === 'baselined').map((x) => x.key);
-      const keys = ranked.filter((x) => x.kind === 'draft').map((x) => x.key);
+      // QF-20260629-597: ALL ranked keys are sd_keys — baselined keys come from
+      // v_sd_next_candidates.sd_id which holds the sd_key STRING (not a UUID), and draft keys are sd_key.
+      // The prior split fetched baselined via .in('id', ids), matching the UUID `id` column against sd_key
+      // strings => 0 rows => baselined candidates dropped from the tier pool => belt_claimable_at_my_tier
+      // under-counted to 0. One fetch keyed by sd_key is correct for both kinds.
+      const allKeys = ranked.map((x) => x.key).filter(Boolean);
       const cols = 'sd_key,id,sd_type,status,description,title,metadata,target_application';
-      const pool = [];
-      if (ids.length) { const { data } = await sb.from('strategic_directives_v2').select(cols).in('id', ids); pool.push(...(data || [])); }
-      if (keys.length) { const { data } = await sb.from('strategic_directives_v2').select(cols).in('sd_key', keys); pool.push(...(data || [])); }
+      let pool = [];
+      if (allKeys.length) { const { data } = await sb.from('strategic_directives_v2').select(cols).in('sd_key', allKeys); pool = data || []; }
       base.belt_claimable_at_my_tier = claimableForTier(pool, {
         workerTierRank: tierCtx.worker_tier_rank,
         tieringActive: tierCtx.tiering_active === true,
