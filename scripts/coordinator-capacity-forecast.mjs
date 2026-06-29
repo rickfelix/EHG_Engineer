@@ -37,6 +37,9 @@ import { isExcludedFromBelt } from '../lib/coordinator/sd-exclusion.mjs';
 // predicate the worker resolver uses — else RHA-held / co_author_pending SDs inflate belt depth and the
 // forecaster emits false belt-low DEFICITs (the exact masked-starvation symptom this SD targets).
 import { classifyDispatchIneligibility } from '../lib/fleet/claim-eligibility.cjs';
+// SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-3): per-tier claimable depth (not a single aggregate).
+import { tierClaimableBreakdown } from '../lib/fleet/tier-claimable.cjs';
+import { isTieringActive } from '../lib/fleet/tier-ladder.cjs';
 // SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: the pure live-worker predicate. It wraps the
 // canonical isDispatchableFleetMember SSOT the dashboard uses (so the forecaster AGREES with
 // fleet-dashboard.cjs on coordinator/adam/non_fleet/fixture exclusion) and ADDS a released-status
@@ -357,6 +360,29 @@ async function main() {
   }
   console.log(`  BELT: ${beltDepth} claimable (${claimable.length} SD + ${openQfCount} QF)  |  DEMAND(soon): ${demandSoon} (idle ${idleNow} + freeing-soon ${freeingSoon})  |  buffer ${BELT_BUFFER}`);
   if (claimable.length) console.log(`        claimable SDs: ${claimable.map(d => d.sd_key.replace('SD-LEO-INFRA-', '')).join(', ')}`);
+
+  // SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-3): TRUE per-tier claimable depth so a tier-specific
+  // deficit (e.g. "tier-3 claimable: 0") is explicit, not masked by the aggregate above. `claimable` is
+  // already base-eligible => preFiltered. The exact-rank partition (incl. unscored / above-top) sums to the
+  // aggregate as a self-check; the cumulative is what a worker AT that rung can actually claim. Fail-open
+  // (non-blocking) so a tier-rollup fault never breaks the forecast. Counts SDs only (QFs are tier-agnostic).
+  try {
+    const tieringActive = await isTieringActive(sb);
+    const bd = tierClaimableBreakdown(claimable, { tieringActive, preFiltered: true });
+    const exactStr = Object.keys(bd.exact).map((r) => `T${r}:${bd.exact[r]}`).join(' ');
+    const cumStr = Object.keys(bd.cumulative).map((r) => `≤T${r}:${bd.cumulative[r]}`).join(' ');
+    console.log(`  BELT-BY-TIER: ${tieringActive ? 'tiering ON' : 'tiering OFF (degrade-to-1: every rung sees the full aggregate)'}`);
+    console.log(`        exact-rank partition: ${exactStr}${bd.unscored ? ` unscored:${bd.unscored}` : ''}${bd.aboveTop ? ` above-top:${bd.aboveTop}` : ''}  (sum=${bd.aggregate}${bd.partitionSumsToAggregate ? ' ✓' : ' ✗DRIFT'})`);
+    console.log(`        claimable-to-tier (cumulative): ${cumStr}`);
+    if (tieringActive) {
+      const zeroTiers = Object.keys(bd.cumulative).filter((r) => bd.cumulative[r] === 0);
+      if (zeroTiers.length && bd.aggregate > 0) {
+        console.log(`        ⚠ tier deficit: rung(s) ${zeroTiers.map((r) => `T${r}`).join(', ')} have 0 claimable — a worker at that rung idles while belt shows ${bd.aggregate}`);
+      }
+    }
+  } catch (e) {
+    console.log(`  BELT-BY-TIER: unavailable (non-blocking): ${e?.message || e}`);
+  }
 
   // SD-LEO-INFRA-COORDINATOR-SOURCING-ENGINE-AWARENESS-001 (FR-2): sourcing-engine awareness — flag
   // state + unpromoted roadmap depth so belt-low is read as "activate/distill" before "hand-ask Adam".
