@@ -58,6 +58,9 @@ import {
   buildUserStoryContext,
   buildIASitemapContext,
 } from '../../lib/eva/stage-templates/analysis-steps/stage-15-wireframe-generator.js';
+// SD-LEO-INFRA-S15-WIREFRAME-CONSTRAINED-JSON-001 (FR-2): the mocked parseJSON, so a test can force a
+// TOTAL parse failure and assert S15 falls back deterministically instead of hard-blocking.
+import { parseJSON } from '../../lib/eva/utils/parse-json.js';
 
 // ── Test Helpers ────────────────────────────────────────────────────
 
@@ -967,5 +970,34 @@ describe('Stage 15 Wireframe Generator', () => {
       expect(userPrompt).toContain('Signup');
       expect(userPrompt).toContain('User Acquisition');
     });
+  });
+});
+
+// ── SD-LEO-INFRA-S15-WIREFRAME-CONSTRAINED-JSON-001 (FR-2) ───────────
+describe('FR-2: total wireframe-LLM parse failure never hard-blocks (deterministic fallback)', () => {
+  beforeEach(() => {
+    // restore the pass-through parser after the override tests
+    parseJSON.mockImplementation((response) => (response && response._parsed) ? response._parsed : response);
+  });
+
+  it('does NOT throw and synthesizes >=MIN_SCREENS screens when the LLM JSON fails to parse on every attempt', async () => {
+    const stage10Data = createMockStage10Data();
+    mockComplete.mockResolvedValue({ content: '{"screens":[{"name":"Home", malformed mid body...' });
+    parseJSON.mockImplementation(() => { throw new Error('Failed to parse LLM response as JSON (malformed mid-body)'); });
+
+    const result = await analyzeStage15WireframeGenerator({
+      ventureId: 'venture-parsefail',
+      stage10Data,
+      stage14Data: createMockStage14Data(),
+      ventureName: 'ParseFailVenture',
+      logger: silentLogger,
+    });
+
+    // never hard-blocks: a valid result with the deterministic fallback screens
+    expect(Array.isArray(result.screens)).toBe(true);
+    expect(result.screens.length).toBeGreaterThanOrEqual(MIN_SCREENS);
+    // mandatory acquisition screens are still present (Landing + Signup)
+    expect(result.screens.some((s) => /landing|home\s*page/i.test(s.name))).toBe(true);
+    expect(result.screens.some((s) => /sign\s*up|register/i.test(s.name))).toBe(true);
   });
 });
