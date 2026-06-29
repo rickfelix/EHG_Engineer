@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-S19-CLONE-VISION-PROMOTE-ORDER-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-S19-CLONE-VISION-PROMOTE-ORDER-001",
-  "createdAt": "2026-06-29T15:37:24.185Z",
+  "sdKey": "SD-LEO-INFRA-CLONE-LAUNCH-ENABLES-REPAIR-OVERRIDE-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-CLONE-LAUNCH-ENABLES-REPAIR-OVERRIDE-001",
+  "createdAt": "2026-06-29T16:34:39.362Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
