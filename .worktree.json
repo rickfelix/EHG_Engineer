@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-CRITICAL-WALK-BLOCKER-OUTRANKS-PRODUCT-PIVOT-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-CRITICAL-WALK-BLOCKER-OUTRANKS-PRODUCT-PIVOT-001",
-  "createdAt": "2026-06-29T16:58:23.032Z",
+  "sdKey": "SD-LEO-INFRA-FORECASTER-DISTILL-GATE-AWARENESS-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-FORECASTER-DISTILL-GATE-AWARENESS-001",
+  "createdAt": "2026-06-29T17:29:34.933Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }

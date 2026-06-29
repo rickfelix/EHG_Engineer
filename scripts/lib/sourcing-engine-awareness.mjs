@@ -128,3 +128,28 @@ export function formatSourcingAwareness({ flags = [], unpromotedCount = null } =
     countStr,
   };
 }
+
+/**
+ * SD-LEO-INFRA-FORECASTER-DISTILL-GATE-AWARENESS-001 (FR-1/FR-2): when the auto-refill arm is
+ * INTENTIONALLY OFF and a belt-low DEFICIT is attributable to an intentionally-unpromoted corpus
+ * (unpromotedCount > 0), the deficit is NOT fillable — a corpus-thin belt is the CORRECT state, not a
+ * deficit to distill away (the unpromoted corpus is not claimable supply; promotion is gated to /distill).
+ * Downgrade the verdict to 'OK-CORPUS-GATED' (so the forecaster's deficit-driven Adam reach-out, gated on
+ * verdict.startsWith('DEFICIT'), does not stale-re-fire) and reframe the recommendation so it advises
+ * NEITHER distillation NOR activation. A genuine non-corpus shortfall (no unpromoted corpus, OR auto-refill
+ * ON) is returned unchanged — only that remains a real DEFICIT. PURE/TOTAL.
+ * @param {{verdict?:string, autoRefillOn?:boolean, unpromotedCount?:(number|null), baseRecommendation?:string}} [input]
+ * @returns {{ corpusGated:boolean, verdict:string, recommendation:string }}
+ */
+export function classifyCorpusGatedDeficit({ verdict, autoRefillOn, unpromotedCount, baseRecommendation } = {}) {
+  const isDeficit = typeof verdict === 'string' && verdict.startsWith('DEFICIT');
+  const corpusThin = autoRefillOn !== true && typeof unpromotedCount === 'number' && unpromotedCount > 0;
+  if (isDeficit && corpusThin) {
+    return {
+      corpusGated: true,
+      verdict: 'OK-CORPUS-GATED',
+      recommendation: `auto-refill intentionally OFF - corpus-thin belt is EXPECTED; the ${unpromotedCount} unpromoted corpus item(s) are NOT claimable supply (promotion is intentionally gated off). This is NOT a fillable deficit; only a genuine non-corpus claimable shortfall is a deficit - accept brief idle, never corpus promotion.`,
+    };
+  }
+  return { corpusGated: false, verdict, recommendation: baseRecommendation };
+}

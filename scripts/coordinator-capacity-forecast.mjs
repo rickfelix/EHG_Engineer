@@ -48,7 +48,7 @@ import { isLiveCountableWorker } from './lib/live-countable-worker.mjs';
 // SD-LEO-INFRA-COORDINATOR-SOURCING-ENGINE-AWARENESS-001 (FR-2): surface the sourcing-engine
 // flag state + unpromoted roadmap depth so a belt-low/DEFICIT ping says "engine OFF, N unpromoted
 // -> activate/distill" instead of only "source N candidates" (manual backfill is the anti-pattern).
-import { readSourcingEngineFlagsFromDb, formatSourcingAwareness } from './lib/sourcing-engine-awareness.mjs';
+import { readSourcingEngineFlagsFromDb, formatSourcingAwareness, classifyCorpusGatedDeficit } from './lib/sourcing-engine-awareness.mjs';
 // SD-LEO-INFRA-COORDINATOR-MATERIALIZE-QUEUE-BEFORE-SOURCE-001: prefer draining the un-materialized
 // adam-prop proposal queue (proposed_sd_key NOT IN strategic_directives_v2) over pinging Adam for more.
 import { scanPendingProposals, drainPendingProposals, shouldMaterializeBeforeSource, formatPendingSummary } from '../lib/coordinator/pending-proposals-gauge.mjs';
@@ -394,6 +394,19 @@ async function main() {
   const awareness = formatSourcingAwareness({ flags: sourcingFlags, unpromotedCount });
   console.log(`  SOURCING: ${awareness.line}`);
 
+  // SD-LEO-INFRA-FORECASTER-DISTILL-GATE-AWARENESS-001 (FR-1/FR-2): when the auto-refill arm is
+  // intentionally OFF, a corpus-thin belt-low is the CORRECT state — NOT a fillable deficit. Reframe the
+  // recommendation (advise NEITHER distill NOR activate) and downgrade the verdict so the deficit-driven
+  // Adam reach-out below (gated on verdict.startsWith('DEFICIT')) does not stale-re-fire every tick. A
+  // genuine non-corpus shortfall (no unpromoted corpus, or auto-refill ON) is left as a real DEFICIT.
+  const autoRefillOn = sourcingFlags.find((f) => f.label === 'auto-refill')?.enabled === true;
+  const corpusGate = classifyCorpusGatedDeficit({ verdict, autoRefillOn, unpromotedCount, baseRecommendation: awareness.recommendation });
+  if (corpusGate.corpusGated) {
+    console.log(`  CORPUS-GATED: ${corpusGate.recommendation}`);
+  }
+  verdict = corpusGate.verdict;
+  const recommendation = corpusGate.recommendation;
+
   // SD-LEO-INFRA-COORDINATOR-MATERIALIZE-QUEUE-BEFORE-SOURCE-001 (FR-1): gauge the un-materialized
   // Adam proposal queue at the same awareness seam. If belt-low supply already exists un-materialized,
   // prefer MATERIALIZE over a fresh source_request (closes the false-DEFICIT ping loop).
@@ -405,7 +418,7 @@ async function main() {
   }
   console.log(`  PENDING: ${formatPendingSummary(pendingScan)}`);
 
-  console.log(`  VERDICT: ${verdict}` + (deficit > 0 ? `  → belt short by ${deficit} — ${awareness.recommendation}` : ''));
+  console.log(`  VERDICT: ${verdict}` + (deficit > 0 ? `  → belt short by ${deficit} — ${recommendation}` : ''));
 
   // ── proactive Adam reach-out on a forecast deficit ──
   if (verdict.startsWith('DEFICIT')) {
