@@ -48,11 +48,15 @@ describe('isWalkModeActive + skipWorkerIds — sentinel-driven', () => {
   beforeEach(() => {
     tmp = fs.mkdtempSync(join(os.tmpdir(), 'walkmode-'));
     fs.mkdirSync(join(tmp, 'config'));
+    // SD-LEO-INFRA-LEO-STACK-PS-ENCODING-WALKMODE-FIX-001 FR-2: the REAL config/workers.json keys on
+    // `name` (there is NO `id` field). The prior fixture used `id:`, which made skipWorkerIds return the
+    // id and hid that the leo-stack.ps1/.sh consumers compared the non-existent worker.id (the skip was
+    // inert in production while this test stayed green). Mirror the production schema here.
     fs.writeFileSync(join(tmp, 'config', 'workers.json'), JSON.stringify([
-      { id: 'stage-zero-processor', command: 'node scripts/stage-zero-queue-processor.js', enabled: true },
-      { id: 'stage-execution-worker', command: 'node scripts/start-stage-worker.js', enabled: true },
-      { id: 'eva-master-scheduler', command: 'node lib/eva/eva-master-scheduler.js', enabled: false },
-      { id: 'web-server', command: 'node server.js', enabled: true },
+      { name: 'stage-zero-processor', command: 'node scripts/stage-zero-queue-processor.js', enabled: true },
+      { name: 'stage-execution-worker', command: 'node scripts/start-stage-worker.js', enabled: true },
+      { name: 'eva-master-scheduler', command: 'node lib/eva/eva-master-scheduler.js', enabled: false },
+      { name: 'web-server', command: 'node server.js', enabled: true },
     ]));
   });
   afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
