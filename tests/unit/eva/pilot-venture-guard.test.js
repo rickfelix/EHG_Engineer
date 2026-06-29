@@ -52,7 +52,9 @@ describe('fetchVentureFlags', () => {
 
   it('returns normalized booleans for a venture row', async () => {
     const flags = await fetchVentureFlags(flagsClient({ is_demo: true, is_scaffolding: false }), 'v-1');
-    expect(flags).toEqual({ is_demo: true, is_scaffolding: false });
+    // SD-LEO-INFRA-CLONE-BUILD-TREE-BELT-EXCLUSION-001: fetchVentureFlags now also surfaces
+    // seeded_from_venture_id (null here — this row carries no seed) for clone detection.
+    expect(flags).toEqual({ is_demo: true, is_scaffolding: false, seeded_from_venture_id: null });
   });
   it('returns null when the venture row is absent', async () => {
     const flags = await fetchVentureFlags(flagsClient(null), 'v-missing');
