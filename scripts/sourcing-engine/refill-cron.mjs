@@ -6,7 +6,12 @@
  * reusing the -A predicate via -B's verifier. Ships DORMANT.
  *
  * DOUBLE-GATED (both required to write — guards against the recurring wired-but-no-op trap):
- *   1. SOURCING_AUTO_REFILL_V1 === 'true'   (enable flag; default OFF -> [SKIP] exit 0). Checked FIRST.
+ *   1. ENABLE — the DB activation SSOT: sourcing_engine_activation_state arm 'auto-refill' enabled=true.
+ *      Read via readSourcingEngineFlagsFromDb (the SAME source the capacity-forecaster gauge reads) so
+ *      the gauge and this action CANNOT diverge. SD-LEO-INFRA-AUTO-REFILL-READ-DB-ACTIVATION-FLAG-001
+ *      fixed the prior defect where the env gate read OFF while the seeded DB arm read ON (0/414 promoted).
+ *      SOURCING_AUTO_REFILL_V1 is demoted to an OPTIONAL emergency force-off kill-switch (env=false/off/0
+ *      forces dormant regardless of the DB). Fail-closed: absent/disabled arm => dormant. Checked FIRST.
  *   2. --apply                              (write flag; default DRY-RUN -> promotes nothing).
  *
  * Usage: node scripts/sourcing-engine/refill-cron.mjs [--apply] [--limit N] [--json]
@@ -18,6 +23,30 @@ import { createSupabaseServiceClient } from '../lib/supabase-connection.js';
 import { selectRefillBatch, promoteStagedCandidate } from '../../lib/sourcing-engine/refill-auto-promote.js';
 import { pathToFileURL } from 'node:url';
 import { normalizeTitleForCompare, crossRefShippedTitleAdvisory } from '../../lib/sourcing-engine/refill-candidate-validity.js';
+import { readSourcingEngineFlagsFromDb } from '../lib/sourcing-engine-awareness.mjs';
+
+/**
+ * SD-LEO-INFRA-AUTO-REFILL-READ-DB-ACTIVATION-FLAG-001 (FR-1/FR-2): resolve the auto-refill enable
+ * decision from the sourcing_engine_activation_state DB SSOT — the SAME source the capacity-forecaster
+ * gauge reads (readSourcingEngineFlagsFromDb) — so the gauge and this action can't diverge (the defect:
+ * the env gate read OFF while the seeded DB arm read ON, so 0/414 promoted). The DB flag is PRIMARY;
+ * SOURCING_AUTO_REFILL_V1 is demoted to an OPTIONAL emergency force-off kill-switch ANDed with it.
+ * Fail-closed: an absent/disabled arm => false (dormant), never a runaway promote.
+ *
+ * @param {Array<{env?:string,label?:string,enabled?:boolean}>} dbFlags  from readSourcingEngineFlagsFromDb
+ * @param {object} [env=process.env]
+ * @returns {boolean} true when the auto-refill cron is enabled to act
+ */
+export function resolveAutoRefillEnabled(dbFlags, env = process.env) {
+  // Emergency kill-switch: an explicit force-off env value wins regardless of the DB.
+  const ev = String((env || {}).SOURCING_AUTO_REFILL_V1 ?? '').toLowerCase();
+  if (ev === 'false' || ev === 'off' || ev === '0') return false;
+  // DB activation SSOT (same read path as the forecaster). Arm absent/disabled => false (fail-closed).
+  const arm = Array.isArray(dbFlags)
+    ? dbFlags.find((f) => f && (f.label === 'auto-refill' || f.env === 'SOURCING_AUTO_REFILL_V1'))
+    : null;
+  return arm?.enabled === true;
+}
 
 /**
  * SD-LEO-INFRA-WIRE-ALREADY-SHIPPED-001 (Phase 1 — ADVISORY): for a selected promotion batch, collect the
@@ -47,13 +76,19 @@ async function main() {
   const limIdx = args.indexOf('--limit');
   const limit = limIdx >= 0 && Number(args[limIdx + 1]) > 0 ? Number(args[limIdx + 1]) : undefined;
 
-  // Gate 1 (enable) — checked FIRST so --apply is safe unconditionally when the flag is off.
-  if (process.env.SOURCING_AUTO_REFILL_V1 !== 'true') {
-    console.log('[SKIP] auto-refill dormant (SOURCING_AUTO_REFILL_V1 != "true"). No action.');
+  const supabase = await createSupabaseServiceClient('engineer', { verbose: false });
+
+  // Gate 1 (enable) — read the DB activation SSOT (sourcing_engine_activation_state), the SAME source
+  // the capacity-forecaster gauge reads, so the gauge and this action can't diverge. DB flag is PRIMARY;
+  // SOURCING_AUTO_REFILL_V1 is only an optional emergency force-off kill-switch. Fail-closed: any read
+  // failure degrades (via the reader's env fallback / an empty arm) to dormant, never a runaway promote.
+  // SD-LEO-INFRA-AUTO-REFILL-READ-DB-ACTIVATION-FLAG-001 (FR-1/FR-2).
+  let dbFlags = [];
+  try { dbFlags = await readSourcingEngineFlagsFromDb(supabase); } catch { dbFlags = []; }
+  if (!resolveAutoRefillEnabled(dbFlags, process.env)) {
+    console.log('[SKIP] auto-refill dormant (sourcing_engine_activation_state arm "auto-refill" disabled / fail-closed, or SOURCING_AUTO_REFILL_V1 force-off). No action.');
     process.exit(0);
   }
-
-  const supabase = await createSupabaseServiceClient('engineer', { verbose: false });
 
   // Staged = item_disposition='pending' AND not yet promoted.
   const { data: rows, error } = await supabase
