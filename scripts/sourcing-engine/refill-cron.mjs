@@ -20,7 +20,7 @@
  * not merely reachable (per the INVOCATION-PATH-PROOF lesson). Mirrors the sibling -B CLI refill-verify.mjs.
  */
 import { createSupabaseServiceClient } from '../lib/supabase-connection.js';
-import { selectRefillBatch, promoteStagedCandidate } from '../../lib/sourcing-engine/refill-auto-promote.js';
+import { selectRefillBatch, promoteStagedCandidate, isDistilledOnly } from '../../lib/sourcing-engine/refill-auto-promote.js';
 import { pathToFileURL } from 'node:url';
 import { normalizeTitleForCompare, crossRefShippedTitleAdvisory } from '../../lib/sourcing-engine/refill-candidate-validity.js';
 import { readSourcingEngineFlagsFromDb } from '../lib/sourcing-engine-awareness.mjs';
@@ -114,7 +114,10 @@ async function main() {
     shippedTitleSet = new Set((shipped || []).map((s) => normalizeTitleForCompare(s.title)).filter(Boolean));
   } catch { /* fail-open: empty set -> lookalike axis no-ops */ }
 
-  const sel = selectRefillBatch(rows || [], { limit, shippedTitleSet });
+  // SD-LEO-INFRA-CORPUS-PROMOTE-ONLY-VIA-DISTILL-001 (FR-2): forward the distilled-only flag so the
+  // batch selector applies CHECK #11 — only /distill build-dispositioned items promote. Now fail-closed
+  // by default (isDistilledOnly), so an un-distilled raw corpus item is never minted onto the belt.
+  const sel = selectRefillBatch(rows || [], { limit, shippedTitleSet, distilledOnly: isDistilledOnly() });
   const results = [];
   // SD-LEO-INFRA-WIRE-ALREADY-SHIPPED-001 (Phase 1 — ADVISORY): wire the exported-but-unused
   // crossRefShippedTitleAdvisory into the live promotion caller (its only production call site). It
