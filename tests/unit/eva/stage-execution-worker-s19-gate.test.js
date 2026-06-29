@@ -15,6 +15,9 @@ const convertSprintToSDs = vi.fn();
 vi.mock('../../../lib/eva/lifecycle-sd-bridge.js', () => ({
   convertSprintToSDs: (...args) => convertSprintToSDs(...args),
   buildBridgeArtifactRecord: vi.fn(() => ({ lifecycle_stage: 19, artifact_type: 'x', title: 't', content: {}, metadata: {} })),
+  // SD-LEO-INFRA-S19-DUPLICATE-ORCHESTRATOR-TREE-001: _runS19Bridge now imports sprintSignature for the
+  // deterministic sprint_name fallback (replacing the literal 'unknown').
+  sprintSignature: vi.fn(() => 'sigtest12'),
 }));
 vi.mock('../../../lib/eva/artifact-persistence-service.js', () => ({ writeArtifact: vi.fn() }));
 
@@ -49,6 +52,7 @@ function createMockSupabase({ ventureName = 'CronGenius', buildModel = 'leo_brid
     const chain = {
       select: vi.fn(() => chain),
       eq: vi.fn((col, val) => { eqArgs.push({ col, val }); return chain; }),
+      neq: vi.fn(() => chain), // SD-LEO-INFRA-S19-DUPLICATE-ORCHESTRATOR-TREE-001: bridge excludes its own output
       in: vi.fn(() => chain),
       order: vi.fn(() => chain),
       limit: vi.fn(() => chain),
