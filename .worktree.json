@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-AUTO-REFILL-CONTENT-SUBSTANCE-GATE-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-AUTO-REFILL-CONTENT-SUBSTANCE-GATE-001",
-  "createdAt": "2026-06-29T15:42:48.745Z",
+  "sdKey": "SD-LEO-INFRA-S19-CLONE-VISION-PROMOTE-ORDER-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-S19-CLONE-VISION-PROMOTE-ORDER-001",
+  "createdAt": "2026-06-29T15:37:24.185Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
