@@ -1,14 +1,26 @@
 /**
- * SD-LEO-INFRA-CLONE-SEED-L2-VISION-PROMOTE-001 (FR-4)
+ * SD-LEO-INFRA-CLONE-SEED-L2-VISION-PROMOTE-001 (FR-4) + SD-LEO-INFRA-CLONE-VISION-AUTOPROMOTE-QUALITY-REPAIR-001 (FR-4)
  *
- * _autoApproveCloneVision promotes a CLONE's enriched L2 vision to active+chairman_approved (attributed
- * to the testing agent) so the clone passes the S19 vision_approval gate. REAL ventures are never
- * auto-approved; the promotion is a TARGETED UPDATE that never writes extracted_dimensions/content
- * (which would NULL-clobber the dims and violate eva_vision_documents_active_rich_check); idempotent.
+ * _autoApproveCloneVision promotes a CLONE's enriched L2 vision to active+chairman_approved (testing agent)
+ * so the clone passes the S19 vision_approval gate. A status='active' UPDATE is blocked by
+ * trg_enforce_vision_quality_advancement when quality_checked=false, so a draft_seed with <8 standard
+ * sections is first repaired (existing bounded loop) to quality_checked=true, then promoted. REAL ventures
+ * are never auto-approved; the promotion is a TARGETED UPDATE that never writes extracted_dimensions/content;
+ * idempotent; repair-exhaustion falls through to the gate (no bad 'active' row).
  */
-import { describe, it, expect } from 'vitest';
-import { StageExecutionWorker } from '../../../lib/eva/stage-execution-worker.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Mock the existing repair loop so the repair path is deterministic (vi.hoisted — factory-safe).
+const repairMocks = vi.hoisted(() => ({
+  isRepairLoopEnabled: vi.fn(),
+  repairVision: vi.fn(),
+}));
+vi.mock('../../../lib/eva/vision-repair-loop.js', () => ({
+  isRepairLoopEnabled: repairMocks.isRepairLoopEnabled,
+  repairVision: repairMocks.repairVision,
+}));
+
+const { StageExecutionWorker } = await import('../../../lib/eva/stage-execution-worker.js');
 const autoApprove = StageExecutionWorker.prototype._autoApproveCloneVision;
 
 // Chainable mock supabase: SELECTs resolve from `config`; UPDATEs are recorded in `updates`.
@@ -45,85 +57,99 @@ function makeSb(config) {
 }
 
 const silentLogger = { log() {}, warn() {}, error() {} };
-const run = (config) => autoApprove.call({ _supabase: makeSb(config), _logger: silentLogger }, 'venture-1');
-const enriched = { vision_key: 'V-1', extracted_dimensions: { a: 1 }, content: 'x'.repeat(600) };
+const clone = { id: 'venture-1', seeded_from_venture_id: 'src-1' };
+const enrichedSeed = (extra = {}) => ({ vision_key: 'V-1', extracted_dimensions: { a: 1 }, content: 'x'.repeat(600), ...extra });
+
+beforeEach(() => {
+  repairMocks.isRepairLoopEnabled.mockReset();
+  repairMocks.repairVision.mockReset();
+});
 
 describe('_autoApproveCloneVision (FR-1/FR-2)', () => {
-  it('CLONE + active-unapproved enriched L2 -> FLIPS approval only (no status churn, no dims/content)', async () => {
-    const sb = makeSb({
-      venture: { id: 'venture-1', seeded_from_venture_id: 'src-1' },
-      activeL2: { vision_key: 'V-1', chairman_approved: false },
-    });
+  it('CLONE + active-unapproved enriched L2 -> FLIPS approval only (no status/dims/content, no repair)', async () => {
+    const sb = makeSb({ venture: clone, activeL2: { vision_key: 'V-1', chairman_approved: false } });
     const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-1');
     expect(r.promoted).toBe(true);
     expect(r.mode).toBe('approve_active');
     expect(sb.updates).toHaveLength(1);
-    const u = sb.updates[0];
-    expect(u.table).toBe('eva_vision_documents');
-    expect(u.payload.chairman_approved).toBe(true);
-    expect(u.payload.created_by).toBe('testing-agent-clone-autoapprove');
-    expect('status' in u.payload).toBe(false);                 // no status churn for an already-active row
-    expect('extracted_dimensions' in u.payload).toBe(false);   // never NULL-clobber dims
-    expect('content' in u.payload).toBe(false);
-    expect(u.filters.vision_key).toBe('V-1');
-    expect(u.filters.level).toBe('L2');
+    expect('status' in sb.updates[0].payload).toBe(false);
+    expect('extracted_dimensions' in sb.updates[0].payload).toBe(false);
+    expect(sb.updates[0].payload.created_by).toBe('testing-agent-clone-autoapprove');
+    expect(repairMocks.repairVision).not.toHaveBeenCalled();
   });
 
-  it('CLONE + draft_seed enriched L2 (no active) -> PROMOTES draft_seed -> active+approved', async () => {
-    const sb = makeSb({
-      venture: { id: 'venture-1', seeded_from_venture_id: 'src-1' },
-      activeL2: null,
-      draftSeed: enriched,
-    });
+  it('CLONE + draft_seed already quality_checked -> PROMOTES directly (no repair)', async () => {
+    const sb = makeSb({ venture: clone, activeL2: null, draftSeed: enrichedSeed({ quality_checked: true }) });
     const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-1');
     expect(r.promoted).toBe(true);
     expect(r.mode).toBe('promote_draft');
-    expect(sb.updates).toHaveLength(1);
-    const u = sb.updates[0];
-    expect(u.payload.status).toBe('active');
-    expect(u.payload.chairman_approved).toBe(true);
-    expect(u.payload.created_by).toBe('testing-agent-clone-autoapprove');
-    expect('extracted_dimensions' in u.payload).toBe(false);   // never NULL-clobber dims
-    expect('content' in u.payload).toBe(false);
+    expect(sb.updates[0].payload.status).toBe('active');
+    expect('extracted_dimensions' in sb.updates[0].payload).toBe(false);
+    expect(repairMocks.repairVision).not.toHaveBeenCalled();
   });
 
-  it('REAL venture (seeded_from_venture_id NULL) -> NO update (chairman-manual preserved)', async () => {
-    const sb = makeSb({ venture: { id: 'venture-1', seeded_from_venture_id: null }, draftSeed: enriched });
+  it('REAL venture (seeded_from_venture_id NULL) -> NO update, NO repair', async () => {
+    const sb = makeSb({ venture: { id: 'venture-1', seeded_from_venture_id: null }, draftSeed: enrichedSeed() });
+    const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-1');
+    expect(r.reason).toBe('real_venture');
+    expect(sb.updates).toHaveLength(0);
+    expect(repairMocks.repairVision).not.toHaveBeenCalled();
+  });
+});
+
+describe('_autoApproveCloneVision (QUALITY-REPAIR FR-1): repair-then-promote', () => {
+  it('quality_checked=false + repair flag ON + repair succeeds -> repairs then PROMOTES', async () => {
+    repairMocks.isRepairLoopEnabled.mockResolvedValue(true);
+    repairMocks.repairVision.mockResolvedValue({ finalQualityChecked: true, attempts: 1, exitReason: 'quality_ok' });
+    const sb = makeSb({ venture: clone, activeL2: null, draftSeed: enrichedSeed({ quality_checked: false, quality_issues: [{ check: 'section_coverage', message: '0/10' }], sections: {} }) });
+    const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-1');
+    expect(repairMocks.repairVision).toHaveBeenCalledTimes(1);
+    expect(repairMocks.repairVision.mock.calls[0][0].createdBy).toBe('testing-agent-clone-autoapprove');
+    expect(r.promoted).toBe(true);
+    expect(r.mode).toBe('promote_draft');
+    expect(sb.updates[0].payload.status).toBe('active');
+  });
+
+  it('quality_checked=false + repair EXHAUSTS (finalQualityChecked=false) -> NO promote, falls through', async () => {
+    repairMocks.isRepairLoopEnabled.mockResolvedValue(true);
+    repairMocks.repairVision.mockResolvedValue({ finalQualityChecked: false, attempts: 2, exitReason: 'attempt_cap' });
+    const sb = makeSb({ venture: clone, activeL2: null, draftSeed: enrichedSeed({ quality_checked: false, quality_issues: [{ check: 'section_coverage' }], sections: {} }) });
     const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-1');
     expect(r.promoted).toBe(false);
-    expect(r.reason).toBe('real_venture');
+    expect(r.reason).toBe('repair_exhausted_quality');
+    expect(sb.updates).toHaveLength(0); // no bad 'active' row
+  });
+
+  it('quality_checked=false + repair flag OFF -> NO promote, NO repair (quality_not_checked)', async () => {
+    repairMocks.isRepairLoopEnabled.mockResolvedValue(false);
+    const sb = makeSb({ venture: clone, activeL2: null, draftSeed: enrichedSeed({ quality_checked: false, quality_issues: [{ check: 'section_coverage' }], sections: {} }) });
+    const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-1');
+    expect(r.promoted).toBe(false);
+    expect(r.reason).toBe('quality_not_checked');
+    expect(repairMocks.repairVision).not.toHaveBeenCalled();
     expect(sb.updates).toHaveLength(0);
   });
 });
 
 describe('_autoApproveCloneVision — idempotent + constraint-safe no-ops', () => {
   it('idempotent: an already-approved active L2 -> no update', async () => {
-    const sb = makeSb({
-      venture: { id: 'venture-1', seeded_from_venture_id: 'src-1' },
-      activeL2: { vision_key: 'V-1', chairman_approved: true },
-    });
+    const sb = makeSb({ venture: clone, activeL2: { vision_key: 'V-1', chairman_approved: true } });
     const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-1');
-    expect(r.promoted).toBe(false);
     expect(r.reason).toBe('already_approved');
     expect(sb.updates).toHaveLength(0);
   });
 
-  it('not-enriched draft_seed (dims null / short content) -> no update (would violate active_rich_check)', async () => {
-    const sb = makeSb({
-      venture: { id: 'venture-1', seeded_from_venture_id: 'src-1' },
-      activeL2: null,
-      draftSeed: { vision_key: 'V-1', extracted_dimensions: null, content: 'short' },
-    });
+  it('not-enriched draft_seed (dims null) -> no update, no repair', async () => {
+    const sb = makeSb({ venture: clone, activeL2: null, draftSeed: { vision_key: 'V-1', extracted_dimensions: null, content: 'short' } });
     const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-1');
-    expect(r.promoted).toBe(false);
     expect(r.reason).toBe('not_enriched');
     expect(sb.updates).toHaveLength(0);
+    expect(repairMocks.repairVision).not.toHaveBeenCalled();
   });
 
-  it('clone with NO L2 row -> no update (still hard-holds; enrichment gap out of scope)', async () => {
-    const sb = makeSb({ venture: { id: 'venture-1', seeded_from_venture_id: 'src-1' }, activeL2: null, draftSeed: null });
+  it('clone with NO L2 row -> no update', async () => {
+    const sb = makeSb({ venture: clone, activeL2: null, draftSeed: null });
     const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-1');
-    expect(r.promoted).toBe(false);
     expect(r.reason).toBe('no_l2_vision');
     expect(sb.updates).toHaveLength(0);
   });
@@ -131,7 +157,6 @@ describe('_autoApproveCloneVision — idempotent + constraint-safe no-ops', () =
   it('missing deps / venture not found -> safe no-op', async () => {
     expect((await autoApprove.call({ _supabase: null, _logger: silentLogger }, 'v')).promoted).toBe(false);
     const sb = makeSb({ venture: null });
-    const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-1');
-    expect(r.reason).toBe('venture_not_found');
+    expect((await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-1')).reason).toBe('venture_not_found');
   });
 });
