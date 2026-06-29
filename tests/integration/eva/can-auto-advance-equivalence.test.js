@@ -73,6 +73,19 @@ async function readCdc() {
 
 const SKIP = !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+// SD-LEO-INFRA-CAN-AUTO-ADVANCE-WITNESS-CONFIG-COUPLING-001 (FR-1): read the live chairman_dashboard_config
+// ONCE at module scope so the witness guards below can be expressed as test.skipIf — which is evaluated at
+// COLLECTION time, before beforeAll populates `cdc`. The 3 live-RPC witnesses validate governance layers
+// 2/4 + the S8 opt-in override, which are only REACHABLE when global_auto_proceed===true. The chairman's
+// controlled-walk config-panel mode can set it FALSE, in which case the RPC correctly short-circuits every
+// stage at layer-1 (global_off) and the witnesses would false-fail RED on every PR. The main 26-stage
+// test.each already proves RPC==frozen-snapshot in ALL config states (incl. global_off), so guarding these
+// deeper-layer witnesses loses no equivalence coverage; the FR-2 snapshot witnesses re-cover the layer
+// semantics config-independently. The read is SKIP-guarded so it never throws without env.
+const cdc0 = SKIP ? null : await readCdc();
+const GLOBAL_ON = cdc0?.global_auto_proceed === true;
+const S8_OPT_IN = GLOBAL_ON && cdc0?.stage_overrides?.stage_8?.auto_proceed === true;
+
 describe.skipIf(SKIP)('can_auto_advance RPC == pre-refactor frozen snapshot', () => {
   let cdc;
   const gov = makeGov();
@@ -113,18 +126,45 @@ describe.skipIf(SKIP)('can_auto_advance RPC == pre-refactor frozen snapshot', ()
     expect(data[0]).toEqual({ can: false, reason: 'stage_not_found', layer: 0 });
   });
 
-  test('NameSignal witness — S11 returns review_default_pause layer=4', async () => {
+  // SD-LEO-INFRA-CAN-AUTO-ADVANCE-WITNESS-CONFIG-COUPLING-001 (FR-1): the 3 live-RPC witnesses assert
+  // governance layers REACHABLE only when global_auto_proceed===true. Skip them when the live config has
+  // global off (the chairman's controlled-walk mode) — the RPC then correctly short-circuits at layer-1 and
+  // these would false-fail. Equivalence is still fully proven by the 26-stage test.each (all config states)
+  // above; the layer semantics are re-covered config-independently by the FR-2 snapshot witnesses below.
+  test.skipIf(!GLOBAL_ON)('NameSignal witness — S11 returns review_default_pause layer=4', async () => {
     const { data } = await supabase.rpc('can_auto_advance', { p_stage_number: 11 });
     expect(data[0]).toMatchObject({ can: false, reason: 'review_default_pause', layer: 4 });
   });
 
-  test('Hard-gate-stages drift witness — S16 returns kill_promotion_gate layer=2', async () => {
+  test.skipIf(!GLOBAL_ON)('Hard-gate-stages drift witness — S16 returns kill_promotion_gate layer=2', async () => {
     const { data } = await supabase.rpc('can_auto_advance', { p_stage_number: 16 });
     expect(data[0]).toMatchObject({ can: false, reason: 'kill_promotion_gate', layer: 2 });
   });
 
-  test('S8 opt-in witness — returns approved (stage_overrides.stage_8.auto_proceed=true)', async () => {
+  test.skipIf(!S8_OPT_IN)('S8 opt-in witness — returns approved (stage_overrides.stage_8.auto_proceed=true)', async () => {
     const { data } = await supabase.rpc('can_auto_advance', { p_stage_number: 8 });
     expect(data[0]).toMatchObject({ can: true, reason: 'approved' });
+  });
+
+  // SD-LEO-INFRA-CAN-AUTO-ADVANCE-WITNESS-CONFIG-COUPLING-001 (FR-2): config-INDEPENDENT regression
+  // coverage of the deeper-layer semantics via the FROZEN snapshot fn under a synthetic global-on cdcRow.
+  // Pure (no DB, no RPC, never skipped), so the layer-2 / layer-4 / override-approved contracts the live
+  // witnesses checked stay covered even when ambient global_auto_proceed=false. The synthetic cdcRow is a
+  // TEST-LOCAL literal — chairman_dashboard_config is never written, and the frozen snapshot is never edited.
+  const SYNTHETIC_GLOBAL_ON = { global_auto_proceed: true, stage_overrides: { stage_8: { auto_proceed: true } } };
+
+  test('snapshot witness — S16 kill_promotion_gate layer=2 (synthetic global-on)', async () => {
+    const v = await preRefactorCanAutoAdvanceVerdict(16, { cdcRow: SYNTHETIC_GLOBAL_ON, gov });
+    expect(v).toMatchObject({ can: false, reason: 'kill_promotion_gate', layer: 2 });
+  });
+
+  test('snapshot witness — S11 review_default_pause layer=4 (synthetic global-on)', async () => {
+    const v = await preRefactorCanAutoAdvanceVerdict(11, { cdcRow: SYNTHETIC_GLOBAL_ON, gov });
+    expect(v).toMatchObject({ can: false, reason: 'review_default_pause', layer: 4 });
+  });
+
+  test('snapshot witness — S8 approved (synthetic global-on + stage_8 opt-in)', async () => {
+    const v = await preRefactorCanAutoAdvanceVerdict(8, { cdcRow: SYNTHETIC_GLOBAL_ON, gov });
+    expect(v).toMatchObject({ can: true, reason: 'approved' });
   });
 });
