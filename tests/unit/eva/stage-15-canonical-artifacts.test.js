@@ -1,11 +1,13 @@
 /**
  * Unit test for SD-LEO-INFRA-S15-USER-STORY-PACK-GAP-001 (FR-1/FR-3).
  *
- * Stage 15 must emit the canonical blueprint_user_story_pack + blueprint_wireframes
- * artifacts (via the typed { artifacts:[...] } contract) so the orchestrator
- * persists the FULL canonical set — not just wireframe_screens. wireframe_screens
- * is owned by the daemon S15 post-hook, so it is intentionally NOT in the typed
- * set (avoids duplicate rows).
+ * Stage 15 must emit the FULL canonical set — blueprint_user_story_pack +
+ * blueprint_wireframes + wireframe_screens — via the typed { artifacts:[...] } contract.
+ *
+ * SD-LEO-INFRA-S15-WIREFRAME-SCREENS-REGRESSION-001: wireframe_screens MUST be in the typed set.
+ * The prior fix omitted it (assuming the daemon post-hook owned it), but that left it to a
+ * post-ADVANCEMENT hook while the 15->16 boundary requires it pre-advance — a deadlock. The producer
+ * now owns it (the post-hook is an idempotent fallback); this test guards against the omission.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -32,7 +34,7 @@ import TEMPLATE from '../../../lib/eva/stage-templates/stage-15.js';
 describe('Stage 15 canonical artifacts (SD-LEO-INFRA-S15-USER-STORY-PACK-GAP-001)', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('emits blueprint_user_story_pack + blueprint_wireframes as typed artifacts (not wireframe_screens)', async () => {
+  it('emits the FULL canonical set incl. wireframe_screens as typed artifacts, each exactly once', async () => {
     const ctx = {
       logger: { log() {}, warn() {}, error() {} },
       ventureId: 'v1',
@@ -46,13 +48,22 @@ describe('Stage 15 canonical artifacts (SD-LEO-INFRA-S15-USER-STORY-PACK-GAP-001
     const types = result.artifacts.map((a) => a.artifactType);
     expect(types).toContain('blueprint_user_story_pack');
     expect(types).toContain('blueprint_wireframes');
-    // wireframe_screens is owned by the daemon post-hook — must NOT be duplicated here
-    expect(types).not.toContain('wireframe_screens');
+    // SD-LEO-INFRA-S15-WIREFRAME-SCREENS-REGRESSION-001: wireframe_screens MUST be present (the
+    // 15->16 boundary requires it pre-advance; the producer owns it, post-hook is a fallback).
+    expect(types).toContain('wireframe_screens');
+    // each canonical type EXACTLY once (no double-emission)
+    for (const t of ['blueprint_user_story_pack', 'blueprint_wireframes', 'wireframe_screens']) {
+      expect(types.filter((x) => x === t)).toHaveLength(1);
+    }
 
     const pack = result.artifacts.find((a) => a.artifactType === 'blueprint_user_story_pack');
     expect(pack.payload).toEqual(userStoryResult);
     const wf = result.artifacts.find((a) => a.artifactType === 'blueprint_wireframes');
     expect(wf.payload).toEqual(wireframeResult);
+    const screens = result.artifacts.find((a) => a.artifactType === 'wireframe_screens');
+    expect(Array.isArray(screens.payload.screens)).toBe(true);
+    expect(screens.payload.screenCount).toBe(screens.payload.screens.length);
+    expect(screens.payload.screens.length).toBeGreaterThan(0);
 
     // back-compat fields preserved
     expect(result.user_story_pack).toEqual(userStoryResult);
