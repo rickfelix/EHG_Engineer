@@ -1,0 +1,94 @@
+{
+  "executive_summary": "Stage 15 (Design Studio: User Stories + Wireframes) reliably persists only the wireframe_screens artifact and omits the canonical blueprint_user_story_pack + blueprint_wireframes artifacts that artifact-types.js ARTIFACT_TYPE_BY_STAGE[15] declares. The Stage-17 Devil's Advocate flags the missing user-story pack as a HIGH risk (development stalls / rework). It is non-blocking at the 15->16 boundary so it slips through silently. Empirically (venture_artifacts, lifecycle_stage=15): wireframe_screens 6/6 current, blueprint_wireframes 2 current, blueprint_user_story_pack 2 current — i.e. the pack/wireframes are inconsistent. Root cause: the stage15 analysisStep (lib/eva/stage-templates/stage-15.js:92 stage15DesignStudio) returns a PLAIN object { wireframes, wireframe_convergence, user_story_pack, ia_sitemap } (NOT the typed { artifacts:[...] } contract), and the daemon (lib/eva/stage-execution-worker.js:3146) special-cases stage 15 to write ONLY wireframe_screens — so the user_story_pack and wireframes are never reliably persisted as their canonical types. This SD makes stage 15 persist the FULL canonical set and makes the 15->16 boundary contract explicit about the user-story pack. Backend-only; no UI.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Stage 15 persists the full canonical artifact set (user_story_pack + wireframes + wireframe_screens)",
+      "description": "Make stage 15 persist all three canonical types per ARTIFACT_TYPE_BY_STAGE[15] (blueprint_user_story_pack, blueprint_wireframes, wireframe_screens) as is_current rows. Preferred mechanism: have the stage15 analysisStep return the typed { artifacts:[{artifactType, payload}] } contract — { artifactType:'blueprint_user_story_pack', payload:userStoryResult }, { artifactType:'blueprint_wireframes', payload:wireframeResult }, { artifactType:'wireframe_screens', payload:{screens:...} } — so persistArtifact's typed-array branch (stage-execution-engine.js / writeArtifactBatch) writes all three. Reconcile with the daemon's stage-15 wireframe_screens special-case (stage-execution-worker.js:3146) so wireframe_screens is written exactly once (no duplicate rows). Preserve the existing back-compat fields the analysisStep returns. Reproduce + confirm the omission first (the consistent wireframe_screens-only persist).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A stage-15 run persists blueprint_user_story_pack + blueprint_wireframes + wireframe_screens (is_current)",
+        "No duplicate wireframe_screens rows (daemon special-case reconciled)",
+        "Persisted set == ARTIFACT_TYPE_BY_STAGE[15] canonical set",
+        "Existing back-compat return fields preserved"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Make the 15->16 boundary contract explicit about blueprint_user_story_pack",
+      "description": "Decide and encode whether the 15->16 boundary REQUIRES blueprint_user_story_pack (so the omission stops being silent) or is acceptably optional, aligned with the registry + the S17 Devil's-Advocate HIGH risk weighting. If required, add it to the boundary's required-artifact check (the same mechanism that gates other boundaries); if optional, document why and ensure S17's DA risk surfaces it. Either way the contract is explicit, not implicit.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "The 15->16 boundary contract explicitly states whether blueprint_user_story_pack is required",
+        "Decision aligns with the artifact registry + the S17 DA risk weighting",
+        "The omission is no longer silent"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Tests + audit",
+      "description": "Add a test asserting a stage-15 run persists all three canonical types (is_current) and that the boundary contract is explicit. Document the RCA (analysisStep returns a plain object; daemon special-cases wireframe_screens-only) and confirm this is the artifact-completeness class also seen in S12-GTM (#5229) / S14 (SD-LEO-FIX-S14-WORKER-OMITS-001).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Test asserts all three stage-15 canonical types persisted is_current",
+        "Test/contract asserts the boundary requirement is explicit",
+        "RCA documented; class linkage noted"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Backend-only, reconcile producer + daemon persist paths",
+      "description": "Changes in lib/eva/stage-templates/stage-15.js (typed-artifacts return) + reconcile lib/eva/stage-execution-worker.js stage-15 wireframe_screens special-case, plus the boundary contract + a test. No schema change (the artifact types + venture_artifacts already exist). No UI."
+    }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "stage-15 persists all 3 canonical types", "type": "integration", "expected": "blueprint_user_story_pack + blueprint_wireframes + wireframe_screens is_current, no dup wireframe_screens" },
+    { "id": "TS-2", "scenario": "15->16 boundary contract explicit on user_story_pack", "type": "unit", "expected": "required/optional decision encoded + asserted" }
+  ],
+  "acceptance_criteria": [
+    "Stage 15 persists the full canonical artifact set (user_story_pack + wireframes + wireframe_screens)",
+    "The 15->16 boundary contract is explicit about the user-story pack",
+    "The silent omission the S17 DA flags is closed"
+  ],
+  "risks": [
+    {
+      "risk": "Adding typed-artifact persistence could duplicate wireframe_screens (daemon special-case already writes it)",
+      "mitigation": "Reconcile the two paths so wireframe_screens is written exactly once (drop the daemon special-case OR exclude wireframe_screens from the typed set). Verified by the no-duplicate acceptance criterion.",
+      "severity": "medium"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": ["S17 Devil's Advocate (reads the user-story pack)", "S18+ read-time consumers of wireframe_screens", "the 15->16 boundary contract"],
+    "dependencies": ["artifact-types.js ARTIFACT_TYPE_BY_STAGE[15]", "persistArtifact / writeArtifactBatch", "stage-execution-worker stage-15 special-case"],
+    "data_contracts": ["venture_artifacts: blueprint_user_story_pack + blueprint_wireframes + wireframe_screens (is_current) — no schema change"],
+    "runtime_config": ["EVA_WIREFRAME_GATING_ENABLED (existing) unaffected"],
+    "observability_rollout": ["test + live venture_artifacts query confirms all 3 types present per venture"]
+  },
+  "system_architecture": {
+    "summary": "Return the typed artifacts contract from the stage-15 analysisStep so all canonical types persist, and reconcile the daemon's wireframe_screens special-case to avoid duplicates.",
+    "components": [
+      { "name": "lib/eva/stage-templates/stage-15.js", "change": "return typed { artifacts:[...] } with all 3 canonical types" },
+      { "name": "lib/eva/stage-execution-worker.js", "change": "reconcile the stage-15 wireframe_screens special-case (no duplicate)" },
+      { "name": "the 15->16 boundary contract", "change": "explicit user_story_pack requirement (FR-2)" },
+      { "name": "tests/...stage-15...", "change": "NEW — canonical-set + boundary tests" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Confirm omission -> typed-artifacts return -> reconcile daemon -> boundary contract -> test.",
+    "steps": [
+      "Reproduce the wireframe_screens-only persist (venture_artifacts query done: 6/6 vs 2/2)",
+      "Return the typed { artifacts:[...] } contract (all 3 canonical types) from stage15DesignStudio",
+      "Reconcile the daemon stage-15 wireframe_screens special-case (write once)",
+      "Make the 15->16 boundary contract explicit about user_story_pack",
+      "Add the test + document the RCA"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run stage 15 for a venture and inspect its venture_artifacts rows", "expected_outcome": "is_current rows for ALL three canonical types — blueprint_user_story_pack + blueprint_wireframes + wireframe_screens — not just wireframe_screens" },
+    { "step_number": 2, "instruction": "Compare the stage-15 canonical set (ARTIFACT_TYPE_BY_STAGE[15]) to what stage 15 persists", "expected_outcome": "Persisted set == canonical set" },
+    { "step_number": 3, "instruction": "Check the 15->16 boundary contract for blueprint_user_story_pack", "expected_outcome": "Contract is explicit about whether it is required (no longer silent)" }
+  ],
+  "metadata": { "sd_key": "SD-LEO-INFRA-S15-USER-STORY-PACK-GAP-001" }
+}

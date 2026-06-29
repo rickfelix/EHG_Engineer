@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-S12-GTM-ARTIFACT-TYPE-MISPERSIST-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-S12-GTM-ARTIFACT-TYPE-MISPERSIST-001",
-  "createdAt": "2026-06-29T00:49:34.954Z",
+  "sdKey": "SD-LEO-INFRA-S15-USER-STORY-PACK-GAP-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-S15-USER-STORY-PACK-GAP-001",
+  "createdAt": "2026-06-29T02:38:39.977Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
