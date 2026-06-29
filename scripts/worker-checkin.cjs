@@ -38,6 +38,8 @@ const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cj
 const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, parentLeadPending } = require('../lib/fleet/claim-eligibility.cjs');
 // SD-LEO-INFRA-COMPLEXITY-TIERED-WORKER-ASSIGNMENT-001 (FR-3): WORK-DOWN-NEVER-UP on the PULL path.
 const { resolveWorkerTierRank, isTieringActive } = require('../lib/fleet/tier-ladder.cjs');
+// SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-2): tier-aware "claimable-to-MY-rung" rollup.
+const { claimableForTier } = require('../lib/fleet/tier-claimable.cjs');
 // SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: reuse the coordinator cron's pool + picker + ghost guard so
 // check-in-time self-assign and the 5-min cron allocate identities identically (see assignFleetIdentityAtCheckin).
 const { NATO, COLORS, nextAvailable, isTestSessionId, tierRankOf, pickCallsignForTier, callsignInTierBand } = require('./assign-fleet-identities.cjs');
@@ -1115,6 +1117,25 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
         tiering_active: await isTieringActive(sb),
       };
     } catch { /* fail-open: no tier ctx */ }
+    // SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-2): belt_ranked_claimable above is the
+    // tier-AGNOSTIC ranked pool — a below-rung worker sees it non-zero even when every ranked SD is
+    // above its rung, then idles for hours on false "ranked" hope. Expose belt_claimable_at_my_tier:
+    // of the ranked pool, how many are base-eligible AND reachable at THIS worker's rung (shared
+    // tier-claimable rollup, reusing the gate). One batched fetch supplies the metadata the view-sourced
+    // baselined candidates lack. Fail-open to the agnostic count so a fault never under-reports.
+    base.belt_claimable_at_my_tier = base.belt_ranked_claimable;
+    try {
+      const ids = ranked.filter((x) => x.kind === 'baselined').map((x) => x.key);
+      const keys = ranked.filter((x) => x.kind === 'draft').map((x) => x.key);
+      const cols = 'sd_key,id,sd_type,status,description,title,metadata,target_application';
+      const pool = [];
+      if (ids.length) { const { data } = await sb.from('strategic_directives_v2').select(cols).in('id', ids); pool.push(...(data || [])); }
+      if (keys.length) { const { data } = await sb.from('strategic_directives_v2').select(cols).in('sd_key', keys); pool.push(...(data || [])); }
+      base.belt_claimable_at_my_tier = claimableForTier(pool, {
+        workerTierRank: tierCtx.worker_tier_rank,
+        tieringActive: tierCtx.tiering_active === true,
+      }).length;
+    } catch { /* fail-open: keep the agnostic count */ }
     for (const x of ranked) {
       if (x.kind === 'baselined') {
         // SD-FDBK-FIX-WORKER-SELF-CLAIM-001: skip dependency-blocked SDs and orchestrator PARENTS
@@ -1143,11 +1164,19 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
   if (qfClaimed) return qfClaimed;
 
   // 7. idle -> recommend a wakeup (ScheduleWakeup is a HARNESS tool, not Node-callable)
+  // SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-2): when the ranked pool is non-empty but NONE of
+  // it is claimable at this worker's rung, say so explicitly — otherwise the agnostic count reads as
+  // "work exists for me" and the idle looks like a bug rather than a tier deficit.
+  const rankedAgnostic = base.belt_ranked_claimable ?? 0;
+  const claimableAtTier = base.belt_claimable_at_my_tier ?? rankedAgnostic;
+  const tierNote = (rankedAgnostic > 0 && claimableAtTier === 0)
+    ? ` (${rankedAgnostic} ranked, but 0 claimable at your tier — all above your rung; a higher-tier worker must take them.)`
+    : '';
   return {
     ...base,
     action: 'idle',
     recommended_wakeup_seconds: DEFAULT_IDLE_WAKEUP_SECONDS,
-    message: `No assignment and nothing claimable. IDLE. The /checkin skill must now call ScheduleWakeup(~${DEFAULT_IDLE_WAKEUP_SECONDS}s) and proceed — never wait on a human.`,
+    message: `No assignment and nothing claimable. IDLE.${tierNote} The /checkin skill must now call ScheduleWakeup(~${DEFAULT_IDLE_WAKEUP_SECONDS}s) and proceed — never wait on a human.`,
   };
 }
 
