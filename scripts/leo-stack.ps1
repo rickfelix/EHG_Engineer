@@ -78,7 +78,7 @@ function Write-Log {
 # Function to check if port is in use
 function Test-PortInUse {
     param([int]$Port)
-    # Only check Listen state — TimeWait/CloseWait are stale sockets that will clear on their own
+    # Only check Listen state - TimeWait/CloseWait are stale sockets that will clear on their own
     $connection = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
     return $null -ne $connection
 }
@@ -208,7 +208,7 @@ function Start-App {
         }
     }
 
-    # No auto git-pull here — keeps parity with leo-stack.sh and avoids clobbering peer-worktree state.
+    # No auto git-pull here - keeps parity with leo-stack.sh and avoids clobbering peer-worktree state.
 
     # Auto-install if node_modules missing (fleet ops can clobber them)
     $viteBin = Join-Path $AppDir "node_modules\.bin\vite.cmd"
@@ -280,12 +280,16 @@ function Start-Workers {
             $skipWorkerIds = @()
         }
         # FAIL-CLOSED for the daemon set: a present sentinel + a helper that returned nothing must NOT
-        # silently revive the daemon — fall back to the EVA regex and skip all of them.
+        # silently revive the daemon - fall back to the EVA regex and skip all of them.
+        # SD-LEO-INFRA-LEO-STACK-PS-ENCODING-WALKMODE-FIX-001 FR-2: match on $_.name (config/workers.json
+        # has NO `id` field) so the skip set agrees with walk-mode.cjs skipWorkerIds, which emits name.
         if ($skipWorkerIds.Count -eq 0) {
             $evaRe = 'stage-zero-queue-processor|start-stage-worker|stage-execution-worker|eva-master-scheduler|subagent-worker|lib[\\/]eva[\\/]workers'
-            $skipWorkerIds = @($workers | Where-Object { ($_.command -match $evaRe) -or ($_.id -match $evaRe) } | ForEach-Object { $_.id })
+            $skipWorkerIds = @($workers | Where-Object { ($_.command -match $evaRe) -or ($_.name -match $evaRe) } | ForEach-Object { $_.name })
         }
-        Write-Log "WARN" "[WALK-MODE] Daemon-down controlled walk active (.leo-stack-walk-mode) — leaving EVA stage workers STOPPED. Remove the sentinel + restart to resume the daemon." "Yellow"
+        # FR-4: the canonical controlled walk is daemon-UP + global_auto_proceed=false (the worker honors
+        # the flag); this sentinel is the restart-time backstop that keeps the EVA daemon set STOPPED.
+        Write-Log "WARN" "[WALK-MODE] Daemon-down controlled walk active (.leo-stack-walk-mode) - holding EVA stage workers STOPPED. Remove the sentinel + restart to resume the daemon." "Yellow"
     }
 
     Write-Log "INFO" "[WORKERS] Starting enabled workers..." "Blue"
@@ -293,8 +297,8 @@ function Start-Workers {
     foreach ($worker in $workers) {
         if (-not $worker.enabled) { continue }
 
-        if ($walkActive -and ($skipWorkerIds -contains $worker.id)) {
-            Write-Log "WARN" "[WALK-MODE] Skipping $($worker.display_name) — daemon-down controlled walk." "Yellow"
+        if ($walkActive -and ($skipWorkerIds -contains $worker.name)) {
+            Write-Log "WARN" "[WALK-MODE] Skipping $($worker.display_name) - daemon-down controlled walk." "Yellow"
             continue
         }
 
@@ -352,7 +356,7 @@ function Stop-Workers {
 
     # SD-LEO-INFRA-REVIVE-EVA-HOST-AND-ARM-001 FR-5: when the EVA scheduler is hosted as a
     # registered Windows scheduled task ('EHG EVA Scheduler Watcher'), the watcher cron owns the
-    # daemon's lifecycle — a leo-stack stop/restart must NOT reap it as an orphan (doing so kills
+    # daemon's lifecycle - a leo-stack stop/restart must NOT reap it as an orphan (doing so kills
     # the deliberately-hosted daemon every restart; the watcher would revive it within 5 min, but
     # that is churn, not correctness). On hosts WITHOUT the task, a stray eva-master-scheduler is a
     # genuine session orphan and is still swept. schtasks /Query exits 0 iff the task exists.
@@ -411,7 +415,7 @@ function Stop-Server {
             $process = Get-Process -Id $pidValue -ErrorAction SilentlyContinue
             if ($process) {
                 Write-Log "INFO" "Stopping $Name (PID: $pidValue)..." "Yellow"
-                # Use taskkill /T to kill entire process tree (cmd → node supervisor → forked child)
+                # Use taskkill /T to kill entire process tree (cmd -> node supervisor -> forked child)
                 # Stop-Process only kills the target PID; child processes become orphans on Windows
                 $taskKillResult = & taskkill /T /F /PID $pidValue 2>&1
                 Write-Log "INFO" "   taskkill: $taskKillResult" "Gray"
@@ -558,13 +562,13 @@ function Test-StackHealth {
     }
 }
 
-# Git freshness — ensure a repo serves the latest origin/main before the server
+# Git freshness - ensure a repo serves the latest origin/main before the server
 # starts. leo-stack restart restarts the *processes* but historically never pulled,
 # so the dev servers served whatever the local working tree happened to be on. That
 # is why merged work could be invisible in the running app (e.g. CronLinter showed
 # the retired Stage-19 build-method UI because the ehg tree was behind the commit
 # that removed it). Fast-forward only when safely on a clean `main`; otherwise warn
-# and serve local — never clobber a feature branch or uncommitted work. Opt out via
+# and serve local - never clobber a feature branch or uncommitted work. Opt out via
 # LEO_STACK_NO_PULL=1.
 function Sync-Repo {
     param([string]$Dir, [string]$Name)
@@ -585,16 +589,16 @@ function Sync-Repo {
         }
         # Only pull a genuinely-idle primary tree. Three layers:
         #  (1) skip if there are uncommitted *tracked* changes beyond the auto-churn
-        #      safelist (.claude/.protocol-sync) — protects a session actively editing
+        #      safelist (.claude/.protocol-sync) - protects a session actively editing
         #      in the primary tree, without the safelisted file blocking every pull.
         #      Untracked files are ignored: ff-only can't harm them and the tree
         #      always carries many (scripts/one-off/, etc.).
-        #  (2) skip if another live Claude Code session is on this branch — a clean
+        #  (2) skip if another live Claude Code session is on this branch - a clean
         #      tree can still have a session reading/about-to-edit it, and ff-merge
         #      rewrites tracked files under it (the concurrent-session corruption
         #      class). safe-to-pull-tree.mjs prints BUSY/IDLE; key on the token so a
         #      crash/missing-creds prints neither and fails OPEN to ff-only safety.
-        #  (3) `merge --ff-only` as the backstop — never clobbers; aborts on conflict.
+        #  (3) `merge --ff-only` as the backstop - never clobbers; aborts on conflict.
         git fetch origin main --quiet 2>$null
         $behind = (git rev-list --count HEAD..origin/main 2>$null)
         if (-not ($behind -match '^\d+$' -and [int]$behind -gt 0)) {

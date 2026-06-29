@@ -227,11 +227,15 @@ start_workers() {
         walk_active=1
         skip_ids=$(node "$ENGINEER_DIR/lib/leo-stack/walk-mode.cjs" skip-ids 2>/dev/null || true)
         # FAIL-CLOSED for the daemon set: a present sentinel + empty helper output must NOT revive
-        # the daemon — fall back to the EVA regex over the registry.
+        # the daemon - fall back to the EVA regex over the registry.
+        # SD-LEO-INFRA-LEO-STACK-PS-ENCODING-WALKMODE-FIX-001 FR-2: match/emit w.name (config/workers.json
+        # has NO id field) so this agrees with walk-mode.cjs skipWorkerIds, which emits name.
         if [ -z "$skip_ids" ]; then
-            skip_ids=$(get_workers | while IFS= read -r wj; do node -e 'const w=JSON.parse(process.argv[1]); const re=/stage-zero-queue-processor|start-stage-worker|stage-execution-worker|eva-master-scheduler|subagent-worker|lib[\\/]eva[\\/]workers/; if(re.test(w.command||"")||re.test(w.id||"")) console.log(w.id)' "$wj"; done)
+            skip_ids=$(get_workers | while IFS= read -r wj; do node -e 'const w=JSON.parse(process.argv[1]); const re=/stage-zero-queue-processor|start-stage-worker|stage-execution-worker|eva-master-scheduler|subagent-worker|lib[\\/]eva[\\/]workers/; if(re.test(w.command||"")||re.test(w.name||"")) console.log(w.name)' "$wj"; done)
         fi
-        log "WARN" "${YELLOW}[WALK-MODE] Daemon-down controlled walk active (.leo-stack-walk-mode) — leaving EVA stage workers STOPPED. Remove the sentinel + restart to resume the daemon.${NC}"
+        # FR-4: canonical controlled walk is daemon-UP + global_auto_proceed=false; this sentinel is the
+        # restart-time backstop that holds the EVA daemon set STOPPED.
+        log "WARN" "${YELLOW}[WALK-MODE] Daemon-down controlled walk active (.leo-stack-walk-mode) - holding EVA stage workers STOPPED. Remove the sentinel + restart to resume the daemon.${NC}"
     fi
 
     log "INFO" "${BLUE}[WORKERS] Starting enabled workers...${NC}"
@@ -240,7 +244,7 @@ start_workers() {
         local enabled=$(node -e "console.log(JSON.parse(process.argv[1]).enabled)" "$worker_json")
         if [ "$enabled" != "true" ]; then continue; fi
 
-        local wid=$(node -e "console.log(JSON.parse(process.argv[1]).id || '')" "$worker_json")
+        local wid=$(node -e "console.log(JSON.parse(process.argv[1]).name || '')" "$worker_json")
         if [ "$walk_active" = "1" ] && printf '%s\n' "$skip_ids" | grep -qxF "$wid"; then
             log "WARN" "${YELLOW}[WALK-MODE] Skipping $wid — daemon-down controlled walk.${NC}"
             continue
