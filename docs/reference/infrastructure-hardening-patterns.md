@@ -597,6 +597,31 @@ return await validator(context);
 
 ---
 
+## Pattern: Wire a per-stage precondition at the SHARED CALLEE, not one call site (PAT-EVA-S19-PROMOTE-ORDER-001)
+
+**Symptom**: A per-stage promote/approve/normalize helper added before a shared callee runs covers
+only the entry path it was wired into, and silently misses the callee's other entry points.
+
+**Root cause (SD-LEO-INFRA-S19-CLONE-VISION-PROMOTE-ORDER-001)**: `_autoApproveCloneVision` (promote a
+clone's L2 vision so it passes the S19 vision gate) was invoked at ONLY the synchronous S19 entry gate.
+`_runS19Bridge` has four entry points — the entry-gate fast-path/primary, the S19 hard-gate
+run-then-recheck, and the fire-and-forget `_postStageHook_S19_Bridge`. A clone reaching the bridge via
+the hard-gate or post-hook path hit `assertVentureVisionReady` un-promoted → blocked on `vision_missing`.
+
+**Fix**: move the precondition to the TOP of the shared callee (`_runS19Bridge`) so every entry inherits
+it; delete the redundant single-site call. (Distinct from #5237, which fixed the promote's *internals*
+and deliberately kept the `isRepairLoopEnabled` kill-switch — call-ordering was a separate gap.)
+
+### PR-review checklist line
+
+> When a PR adds a per-stage promote/approve/normalize step **before** a shared callee runs, verify it
+> is wired at the **top of that shared callee** (so ALL entry points inherit it), not at a single caller.
+> Enumerate every call site of the callee (grep the method name) — especially fire-and-forget hooks and
+> hard-gate recheck paths that bypass the primary gate — and confirm a reachability test exercises an
+> entry path the original single call site did NOT cover (it must FAIL on the pre-fix ordering).
+
+---
+
 ## Cross-References
 
 - **Database Patterns**: [database-agent-patterns.md](./database-agent-patterns.md)
