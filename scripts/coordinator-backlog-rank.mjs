@@ -95,6 +95,19 @@ export function claimableDbFreeReason(d) {
 // metadata.fleet_critical===true marks work whose ABSENCE blocks ALL fleet progress. Exported pure so
 // the band ordering is unit-testable. STRICT === true so a stray truthy value can't silently enrol.
 export function isFleetCritical(d) { return (d && d.metadata || {}).fleet_critical === true; }
+// SD-LEO-INFRA-CRITICAL-WALK-BLOCKER-OUTRANKS-PRODUCT-PIVOT-001 (FR-1/FR-3): the CRITICAL-WALK-BLOCKER
+// band predicate — a SUPERSET of isFleetCritical that also honors two DURABLE SOURCING-TIME signals an
+// Adam-sourced walk-blocker carries in its proposal metadata, so the coordinator no longer hand-sets
+// fleet_critical at runtime for each one:
+//   - fleet_critical          (legacy, coordinator-set; retained for the dispatch-lane audit/cap)
+//   - convergence_caught      (Adam sets at sourcing when the clone-convergence loop caught a blocker)
+//   - blocks_active_mission   (Adam sets at sourcing when the SD blocks the active fleet mission/walk)
+// STRICT === true on every key so a stray truthy value cannot silently enrol (anti-gaming, mirrors
+// isFleetCritical). Exported pure so the band ordering is unit-testable against real code.
+export function isCriticalWalkBlocker(d) {
+  const m = (d && d.metadata) || {};
+  return m.fleet_critical === true || m.convergence_caught === true || m.blocks_active_mission === true;
+}
 // SD-LEO-INFRA-BELT-RANKER-PIVOT-AWARENESS-001 (FR-3): product-vs-harness class detection for the
 // pivot-aware product-priority band. Pure + exported so the band ordering is unit-testable against
 // real code (like isFleetCritical). Classification is by sd_key prefix; an SD that is neither is
@@ -268,7 +281,11 @@ async function main() {
   // ABOVE unlock+needle so a fleet_critical SD reaches a worker WITHOUT polluting the gauge or
   // requiring a WORK_ASSIGNMENT. It stays BELOW the bare-shell/quarantine quality gates (a
   // fleet_critical stub still cannot pass LEAD). FR-3 anti-gaming: rationed + audited below.
-  const fleetCritical = isFleetCritical;   // module-level exported predicate (unit-tested)
+  const fleetCritical = isFleetCritical;   // narrower subset — used ONLY by the FR-3 audit/cap below
+  // SD-LEO-INFRA-CRITICAL-WALK-BLOCKER-OUTRANKS-PRODUCT-PIVOT-001 (FR-1): the comparator BAND uses the
+  // generalized critical-walk-blocker predicate (fleet_critical | convergence_caught | blocks_active_mission)
+  // so a sourcing-time walk-blocker outranks the product-pivot band WITHOUT a runtime fleet_critical hand-set.
+  const criticalWalkBlocker = isCriticalWalkBlocker; // module-level exported predicate (unit-tested)
 
   // ── needle-movement context (FR-2) ── REUSE the FR-1 rollup for the active rung + per-rung progress,
   // and roadmap_wave_items→waves for each SD's rung. Best-effort: any failure leaves needle scores at 0
@@ -321,11 +338,15 @@ async function main() {
     if (bs !== 0) return bs;                                // authored (non-bare-shell) first
     const qa = quarantined(a) ? 1 : 0, qb = quarantined(b) ? 1 : 0;
     if (qa !== qb) return qa - qb;                          // human-authored first
-    // SD-LEO-INFRA-FLEET-CRITICAL-DISPATCH-LANE-001 (FR-2): the fleet-critical operational band —
-    // ABOVE unlock+needle (so a needle-0 fleet-health SD outranks MED wave backlog without a fake
-    // rung or manual dispatch), BELOW the bare-shell/quarantine quality gates.
-    const fa = fleetCritical(a) ? 1 : 0, fb = fleetCritical(b) ? 1 : 0;
-    if (fa !== fb) return fb - fa;                          // fleet-critical first
+    // SD-LEO-INFRA-FLEET-CRITICAL-DISPATCH-LANE-001 (FR-2) + SD-LEO-INFRA-CRITICAL-WALK-BLOCKER-OUTRANKS-
+    // PRODUCT-PIVOT-001 (FR-1): the critical-walk-blocker operational band — ABOVE unlock+needle AND ABOVE
+    // the product-pivot band (so a HIGH critical walk-blocker outranks a MED product note without a runtime
+    // fleet_critical hand-set), BELOW the bare-shell/quarantine quality gates. The band predicate is the
+    // generalized critical-walk-blocker (fleet_critical | convergence_caught | blocks_active_mission, all
+    // sourcing-time). Routine (non-critical-walk-blocker) harness SDs are unaffected and keep the product-
+    // pivot ordering below.
+    const fa = criticalWalkBlocker(a) ? 1 : 0, fb = criticalWalkBlocker(b) ? 1 : 0;
+    if (fa !== fb) return fb - fa;                          // critical-walk-blocker first
     const ua = unlockScore(a.sd_key), ub = unlockScore(b.sd_key);
     if (ub !== ua) return ub - ua;
     // SD-LEO-INFRA-BELT-RANKER-PIVOT-AWARENESS-001 (FR-1): the pivot-aware product-priority band.
