@@ -9,7 +9,7 @@ import {
   hasBuildDisposition,
   REFILL_INVALID_REASONS,
 } from '../../lib/sourcing-engine/refill-candidate-validity.js';
-import { isDistilledOnly, promoteStagedCandidate } from '../../lib/sourcing-engine/refill-auto-promote.js';
+import { isDistilledOnly, promoteStagedCandidate, selectRefillBatch } from '../../lib/sourcing-engine/refill-auto-promote.js';
 
 // A structurally-VALID staged candidate (passes every pre-existing check) so CHECK #11 is the only
 // variable under test. disposition overrides per case.
@@ -73,12 +73,34 @@ describe('evaluateRefillCandidate CHECK #11 (RETAINED-TEETH proofs)', () => {
   });
 });
 
-describe('isDistilledOnly flag', () => {
-  it('true only when SOURCING_AUTO_REFILL_DISTILLED_ONLY === "on"', () => {
+describe('isDistilledOnly flag (SD-LEO-INFRA-CORPUS-PROMOTE-ONLY-VIA-DISTILL-001: FAIL-CLOSED by default)', () => {
+  it('defaults to TRUE (distilled-only enforced); only an explicit "off" break-glass disables it', () => {
+    // chairman-authoritative: raw corpus must NEVER auto-promote — so unset/anything-but-"off" enforces.
+    expect(isDistilledOnly({})).toBe(true);                                         // unset -> enforced
     expect(isDistilledOnly({ SOURCING_AUTO_REFILL_DISTILLED_ONLY: 'on' })).toBe(true);
-    expect(isDistilledOnly({ SOURCING_AUTO_REFILL_DISTILLED_ONLY: 'off' })).toBe(false);
-    expect(isDistilledOnly({ SOURCING_AUTO_REFILL_DISTILLED_ONLY: 'true' })).toBe(false);
-    expect(isDistilledOnly({})).toBe(false);
+    expect(isDistilledOnly({ SOURCING_AUTO_REFILL_DISTILLED_ONLY: 'true' })).toBe(true);
+    expect(isDistilledOnly({ SOURCING_AUTO_REFILL_DISTILLED_ONLY: 'off' })).toBe(false); // explicit escape only
+  });
+});
+
+describe('FR-2 cron wiring: the batch selector enforces distilled-only by default', () => {
+  it('an UNDISTILLED raw-corpus item is excluded from the promote batch while a build-dispositioned one passes', () => {
+    const undistilled = validItem({ source_id: 'rw-undistilled', title: 'Track P-Doom calculation methods for AI opportunities' });
+    const built = validItem({ source_id: 'rw-built', disposition: 'build', title: 'Wire the pending-proposals gauge into the belt-low forecast path' });
+    // the cron now passes distilledOnly: isDistilledOnly() (default true)
+    const sel = selectRefillBatch([undistilled, built], { distilledOnly: isDistilledOnly({}) });
+    const ids = sel.batch.map((b) => b.source_id);
+    expect(ids).toContain('rw-built');
+    expect(ids).not.toContain('rw-undistilled');
+  });
+
+  it('with /distill off (no build-dispositioned items), the engine promotes NOTHING', () => {
+    const rows = [
+      validItem({ source_id: 'a', title: 'See how we can use Mercury for banking' }),
+      validItem({ source_id: 'b', title: 'Anticipate legal attacks and be prepared' }),
+    ];
+    const sel = selectRefillBatch(rows, { distilledOnly: isDistilledOnly({}) });
+    expect(sel.batch).toHaveLength(0);
   });
 });
 
