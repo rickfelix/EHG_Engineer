@@ -33,7 +33,7 @@ import { guardMutation, resolveOwnSessionId } from '../lib/coordinator-mutation-
 // demotes bare-shell stubs. FIXTURE_RE catches epoch-stamped TEST-E2E keys; the
 // bare-shell demotion uses the shared bareShellLastCompare so the test suite
 // exercises the real comparator, not a re-implementation.
-import { isFixtureSd, isBareShell, bareShellLastCompare, isStartedSd, stripDispatchRank } from '../lib/coordinator/sd-exclusion.mjs';
+import { isFixtureSd, isBareShell, bareShellLastCompare, isStartedSd, stripDispatchRank, isUnactionableRemediationSd } from '../lib/coordinator/sd-exclusion.mjs';
 // SD-LEO-INFRA-FORECASTER-DEP-SENTINEL-BELTDEPTH-001: resolve dependency keys via the canonical
 // blocker rule (the same SSOT coordinator-audit.mjs imports) so the ranker and the capacity
 // forecaster AGREE on the 'no dependencies' sentinel ({sd_key:'none'} / bare 'none') and on
@@ -78,6 +78,17 @@ export function claimableDbFreeReason(d) {
   if (d.claiming_session_id) return 'claimed';
   if (isStartedSd(d)) return 'in_flight';
   if (isFixtureSd(d.sd_key, d.metadata)) return 'fixture';
+  // SD-FDBK-INFRA-RANKER-FORECAST-EXCLUSION-PARITY-001: an un-actionable auto-filed venture-remediation
+  // SD (SD-LEO-FIX-REMEDIATION-* targeting a venture repo, not EHG_Engineer) cannot be actioned by any
+  // fleet worker, so it must not earn a real dispatch_rank. The capacity-forecaster already excludes
+  // these from belt depth via isExcludedFromBelt -> isUnactionableRemediationSd; the ranker previously
+  // demoted ONLY bare-shell stubs (isBareShell), so a ~345-char remediation stub slipped through and
+  // even outranked a real walk-blocker. Calling the SAME shared predicate here makes the two belts agree
+  // by construction (SSOT, can't diverge). NOTE: FR-1 described a 'generated_by fr-c' criterion, but the
+  // forecaster's actual detector is this key-prefix+target predicate — parity (FR-4) requires the SAME
+  // predicate in both paths, so we reuse the existing SSOT rather than introduce a divergent new one
+  // (spec-conflict signaled 2cde0ce8).
+  if (isUnactionableRemediationSd(d)) return 'unactionable_venture_remediation';
   return classifyDispatchIneligibility(d); // null => eligible on the DB-free axes
 }
 // SD-LEO-INFRA-FLEET-CRITICAL-DISPATCH-LANE-001 (FR-1): the narrow, explicit fleet-critical predicate.
