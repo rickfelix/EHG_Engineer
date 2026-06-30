@@ -180,6 +180,12 @@
       "role_partnership_contract"
     ]
   },
+  "CLAUDE_SOLOMON.md": {
+    "description": "Solomon oracle role contract — deep-reasoning oracle session. Loaded by the /solomon skill or when orienting a deep-reasoning oracle session.",
+    "sections": [
+      "solomon_role_contract"
+    ]
+  },
   "SHARED": {
     "description": "Sections that appear in multiple files or are general reference",
     "sections": [

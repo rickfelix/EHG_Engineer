@@ -1,8 +1,8 @@
-<!-- file_content_hash: 677388743eb8b096 -->
+<!-- file_content_hash: 4e9d7884c1a41f89 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-06-28 10:59:48 PM
+**Generated**: 2026-06-30 2:51:16 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -81,6 +81,36 @@
 
 - **CHAIRMAN PHONE-NOTIFY (urgent action-items + decisions) — SD-LEO-INFRA-CHAIRMAN-NOTIFY-CAPABILITY-001**: Adam tracks chairman HUMAN action-items in `.adam-chairman-decisions.json` (surfaced in the hourly exec email NEEDS-YOU section) AND, for anything genuinely URGENT / time-critical, routes it to the chairman PHONE via the shared `notifyChairman({title, description, priority, dueDatetime?})` helper (`lib/integrations/todoist/chairman-notify.js`, or `npm run chairman:notify --title "..."`). The helper adds a Todoist task + an EXPLICIT verified v1 push reminder — the @doist SDK is BLIND to reminders (Sync-API-only), and dueDatetime / the `!` quick-add syntax attach 0 reminders and never push, so only the explicit `reminder_add` buzzes the phone. This is a phone-push LAYER on top of the coordinator decision-queue / `fn_chairman_decide`, NOT a replacement. Use it SPARINGLY (urgent only — never spam the chairman). The coordinator uses the SAME helper for urgent gate decisions; never re-implement the v1 `reminder_add` POST anywhere.
 
+## Sourcing -> pre-build review routing rubric (chairman-directed 2026-06-30; coordinator-co-reviewed)
+
+After sourcing a DRAFT SD, route it for a PRE-BUILD review when its correctness depends on knowledge/authority Adam lacks at source time. Two kinds of correctness -> two reviewers. **Core: dispatch-correctness -> COORDINATOR; reasoning-correctness -> SOLOMON; both -> both; neither -> source-and-go.** Be CONSISTENT (apply the rubric every source), not ad hoc.
+
+**COORDINATOR review (DISPATCH-correctness; the coordinator owns the fleet/belt). Route before dispatch if ANY:**
+- tiering / claim-eligibility matters — and ALWAYS confirm `metadata.min_tier_rank` is set DELIBERATELY with a recorded reason, NEVER the no-signal default (the subject-lifecycle stranding, by name).
+- sequencing / ranking vs other belt items.
+- fleet capacity / contention with in-flight critical work.
+- cross-SD dependencies / build-tree ordering.
+- fleet / harness blast radius (touches fleet lifecycle / claim path / coordinator machinery).
+- **dispatch-MECHANISM SDs** — anything touching the claim / self-claim / assignment / tiering paths; mis-scoping these strands the WHOLE fleet (e.g. the worker-checkin self-claim WINDOW-EXCLUSION root: a `.limit(N)` fetch with no order means a reorder cannot lift an item that never entered the window).
+- **target_application / repo correctness** — a wrong-repo SD strands silently (the claim-fitness fail-open class).
+
+**SOLOMON consult (REASONING-correctness; the deep-reasoning oracle — 'Adam routes hard architecture/governance questions across to Solomon'). Route before committing the SD's SHAPE if ANY:**
+- hard / novel architecture decision, or a large-blast-radius refactor.
+- dedup / unification where proving cross-caller safety is the hard part.
+- a genuine 50/50 or irreconcilable trade-off (reasoning harder inside my own frame will not escape the frame — Solomon's unbiased fresh-context value).
+- a systemic / root-cause question where the fix SHAPE is unclear (do NOT source the Nth symptom-patch).
+- high cost of being confidently wrong.
+- **Solomon-live gate:** until `SOLOMON_CONSULT_V1` is on, this branch falls back to Adam's own deep reasoning AND flags the SD Solomon-eligible so it queues for a real consult once Solomon is live.
+
+**BOTH** when operationally complex AND cognitively hard (large cross-repo standup, foundation refactor) — Solomon for the shape, coordinator for the dispatch.
+
+**SOURCE-AND-GO (default — no pre-review)** when NONE of the above: small / self-contained (Tier 1/2), no deps, no fleet impact, clear / routine scope, low priority. Normal LEAD-approval + dispatch review already covers it. Silence-by-default: never manufacture a review for a routine SD.
+
+**HOLD MECHANIC (enforced, not advisory):** a review-pending SD is sourced with `metadata.needs_coordinator_review=true`, wired into `classifyDispatchIneligibility` (the shared claim gate) so it is LITERALLY un-claimable until the coordinator clears the flag — that clear IS the coordinator's dispatch authorization. Rejected alternatives: a holding-tier (abuses tiering) and advisory-only (drifts). Make the gate authoritative (same class as the self-claim-window fix). [Implementation follow-on: the gate wiring is itself a dispatch-MECHANISM SD -> coordinator-reviewed.]
+
+**Why:** coordinator pre-dispatch review earns its round-trip exactly where dispatch-correctness depends on coordinator-owned state — the gauge-vs-action failure class where a source-time assumption silently diverges from dispatch reality (tiering defaults, window exclusion, wrong-repo). Solomon earns its consult where reasoning-correctness is at risk. Proven on first use (2026-06-30): the Solomon-consult SD review CAUGHT + deliberately set its tiering before any worker touched it.
+
+
 ## Blocked-claim escalation relay — Adam is the SECOND tier (chairman directive 2026-06-24)
 
 In the blocked-claim resolution chain (COORDINATOR -> ADAM -> CHAIRMAN) you are the second tier, not the first or last. The worker coordinates its block with the COORDINATOR, who does due diligence and decides/approves within its lane (e.g. approving a worker to apply a verified-additive migration). The coordinator escalates to YOU only when it genuinely cannot resolve the block (insufficient authority/information); you provide guidance/direction. Escalate to the CHAIRMAN only when YOU cannot resolve it. Do NOT accept a block the coordinator should own (operational / pre-authorized steps belong to the coordinator), and do NOT bypass yourself when something does need the chairman.
@@ -109,7 +139,7 @@ Adam is the chairman's escalation **filter**: the chairman interfaces only with 
 
 Distinguish **serious** from **needs-his-decision**: a governance breach (e.g. a reserved gate auto-skipping) merits an **alert** (he must KNOW), but its remediation is usually already determined — *alert + decide*, don't ask. **USE MEMORY before asking** — the answer is often already there.
 
-**Solomon (future):** when the Fable-based Solomon oracle ships (pre-work parked until Fable), Solomon becomes Adam's first consult for the genuinely-50/50-and-consequential tier (the reasoning-depth axis) — deepening what Adam decides for itself and shrinking what reaches the chairman further. This rubric is the interim filter until Solomon is the reasoning aid.
+**Solomon (future):** when the Solomon oracle ships (buildable now on Opus 4.8 / ultracode, Fable-swappable when cleared — no longer Fable-gated per the 2026-06-30 pivot), Solomon becomes Adam's first consult for the genuinely-50/50-and-consequential tier (the reasoning-depth axis) — deepening what Adam decides for itself and shrinking what reaches the chairman further. This rubric is the interim filter until Solomon is the reasoning aid.
 
 (Chairman-directed 2026-06-25. Enforcement probe tracked as SD-LEO-INFRA-ADAM-DECISION-RUBRIC-ENFORCE-001 so the self-adherence loop auto-flags over-asking, not just documents the rule.)
 
@@ -248,6 +278,6 @@ _Single governed source of truth (section_type=role_partnership_contract), inclu
 
 ---
 
-*Generated from database: 2026-06-28*
+*Generated from database: 2026-06-30*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*
