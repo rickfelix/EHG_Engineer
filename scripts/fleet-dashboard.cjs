@@ -1275,6 +1275,81 @@ async function printAdamInbox() {
   console.log('');
 }
 
+// ── Section: PENDING SOLOMON CONSULTS (SD-LEO-INFRA-SOLOMON-CONSULT-001F) ──
+// Read-only dashboard surface for the Solomon oracle consult lane
+// (payload.kind='solomon_consult'). Mirrors printAdamInbox's intent but is
+// deliberately PURE-READ — it does NOT stamp read_at. Why: solomon-advisory.cjs
+// drainInbox filters on `read_at IS NULL` and stamps read_at on delivery, so a
+// dashboard render that stamped read_at would HIDE an unactioned consult from the
+// oracle's own inbox drain (the parked-render-hides-consult bug class the Adam lane
+// fixed by gating re-surfacing on actioned state, not read_at). We therefore gate
+// on `acknowledged_at IS NULL` (the ACTIONED signal — a consult is retired only when
+// the oracle answers it) so this view shows genuinely-pending consults regardless of
+// delivery, and never perturbs the oracle's drain. Dormant-safe: when
+// SOLOMON_CONSULT_V1 is off no solomon_consult rows are ever written, so this renders
+// "(no pending Solomon consults)" silently.
+async function printSolomonInbox() {
+  console.log('PENDING SOLOMON CONSULTS');
+  console.log('─'.repeat(72));
+
+  let solomonId = null;
+  try {
+    const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
+    solomonId = await getActiveSolomonId(supabase);
+  } catch { solomonId = null; } // fail-open: identity resolver unavailable → buffer view only
+
+  // Consults target the live Solomon when one is registered, else buffer to the
+  // 'broadcast-solomon' sentinel (drained on /solomon register). Surface both.
+  const targets = ['broadcast-solomon'];
+  if (solomonId) targets.push(solomonId);
+
+  let rows = [];
+  try {
+    const { data, error } = await supabase
+      .from('session_coordination')
+      .select('id, payload, body, sender_session, created_at')
+      .in('target_session', targets)
+      .eq('message_type', 'INFO')
+      .is('acknowledged_at', null) // pending = not yet actioned/answered (survives the read_at stamp)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) {
+      console.log('  (solomon consult query failed: ' + error.message + ')');
+      console.log('');
+      return;
+    }
+    // payload.kind discriminates the consult lane from any other broadcast-solomon row.
+    rows = (data || []).filter((r) => r.payload && r.payload.kind === 'solomon_consult');
+  } catch (e) {
+    console.log('  (solomon consult query failed: ' + (e && e.message ? e.message : e) + ')');
+    console.log('');
+    return;
+  }
+
+  if (rows.length === 0) {
+    console.log('  (no pending Solomon consults)');
+    console.log('');
+    return;
+  }
+
+  console.log('  ' + rows.length + ' pending consult(s)' +
+    (solomonId ? '' : ' — no live Solomon (buffered to broadcast-solomon, drains on /solomon register)'));
+  console.log('');
+  console.log('  ' + pad('Callsign', 12) + pad('Severity', 10) + pad('Age', 8) + 'Body');
+  console.log('  ' + '─'.repeat(68));
+
+  for (const r of rows) {
+    const callsign = r.payload?.sender_callsign || '(none)';
+    const severity = r.payload?.severity || 'medium';
+    const ageMin = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
+    const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
+    const bodyPreview = (r.body || r.payload?.body || '').replace(/\n/g, ' ').substring(0, 32);
+    console.log('  ' + pad(callsign, 12) + pad(severity, 10) + pad(ageStr, 8) + bodyPreview);
+  }
+  // PURE READ — intentionally no read_at/acknowledged_at mutation here (see header).
+  console.log('');
+}
+
 // ── Section: Working context (FR-3, SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001) ──
 // Dual-render of both operators' standing working_context (claude_sessions.metadata.working_context)
 // so neither Adam nor the coordinator mistakes the other's heads-down silence for being ignored.
@@ -1511,6 +1586,7 @@ async function main() {
       await printAdamInbox();
     },
     adam:          async () => await printAdamInbox(), // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B
+    solomon:       async () => await printSolomonInbox(), // SD-LEO-INFRA-SOLOMON-CONSULT-001F — Solomon oracle consult lane
     context:       async () => await printWorkingContext(), // SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001 (FR-3)
     feedback:      async () => await printFeedback(d), // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001
     team:          () => printTeam(d), // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B
@@ -1528,6 +1604,7 @@ async function main() {
       await printUndeliveredOutbound(); // FR-2 SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001
       await printDeadLetters(); // FR-4 SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001
       await printAdamInbox(); // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B — Adam advisory lane
+      await printSolomonInbox(); // SD-LEO-INFRA-SOLOMON-CONSULT-001F — Solomon oracle consult lane (dormant until SOLOMON_CONSULT_V1)
       await printWorkingContext(); // SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001 (FR-3) — standing context dual-render
       await printFeedback(d); // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001 — feedback work-store
       await printCoaching(d);
@@ -1541,7 +1618,7 @@ async function main() {
   const fn = sections[section];
   if (!fn) {
     console.log('Usage: node scripts/fleet-dashboard.cjs [section]');
-    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, qa, forecast, predictions, inbox, adam, context, feedback, team, all');
+    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, qa, forecast, predictions, inbox, adam, solomon, context, feedback, team, all');
     process.exit(1);
   }
 
