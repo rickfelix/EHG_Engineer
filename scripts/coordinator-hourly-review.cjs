@@ -26,6 +26,9 @@ require('dotenv').config();
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs');
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
+// SD-LEO-INFRA-SOLOMON-HOURLY-ROLE-REFRESHER-001: resolve the LIVE Solomon session at fire time
+// (metadata.role='solomon', fresh heartbeat) via the canonical resolver — NO hardcoded UUID.
+const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const ADAM_FRESH_S = Number(process.env.ADAM_FRESH_SECONDS || 600);
@@ -46,6 +49,49 @@ const ADAM_REMINDER =
   'Hourly responsibilities review: re-read your role contract — CONST-002 (PROPOSE, never execute/accept/graduate), ' +
   'silence-by-default, one-advisory-per-tick, the hard rationale bar (cite a LIVE KR + counterfactual + dedup + CONST self-check), ' +
   'and your 8-dim self-rubric (D1_proactive_sourcing..D8_interface_clarity). Stay silent unless you have ONE ranked, defensible advisory.';
+
+// SD-LEO-INFRA-SOLOMON-HOURLY-ROLE-REFRESHER-001: Solomon role-contract reminder — mirrors CLAUDE_SOLOMON.md
+// / CONST-002 propose-only, silence-by-default, the consult triage gate, and Solomon's 5-dim self-rubric.
+const SOLOMON_REMINDER =
+  'Hourly responsibilities review: re-read your Solomon role contract (CLAUDE_SOLOMON.md) — CONST-002 ' +
+  '(PROPOSE, never execute/accept/graduate), silence-by-default, the consult triage gate (answer routed ' +
+  'solomon_consult only — do not poll for problems), the per-sweep task_budget at ENTRY before any Read/Grep, ' +
+  'and your 5-dim self-rubric. Stay silent unless you have a deep, defensible oracle answer.';
+
+// SD-LEO-INFRA-SOLOMON-HOURLY-ROLE-REFRESHER-001: the Solomon leg — mirrors the Adam leg but resolves the
+// live Solomon via getActiveSolomonId (no hardcoded UUID), reuses the SAME hourly cadence, dispatch guard,
+// and cycle-down gate (the caller checks assessFleetActivity ONCE before invoking this). Self-contained
+// (returns a verdict; does NOT exit main) so it composes alongside the Adam leg. Fail-open / non-fatal.
+// Exported for tests. @returns {Promise<{dispatched:boolean, reason?:string, target?:string}>}
+async function dispatchSolomonReminder(sb, { dryRun = DRY_RUN, resolveSolomon = getActiveSolomonId, insert = insertCoordinationRow } = {}) {
+  try {
+    const solomonId = await resolveSolomon(sb);
+    if (!solomonId) {
+      console.log('\n[HOURLY-REVIEW] Solomon: no live session — skipping Solomon reminder (itself a cycle-down).');
+      return { dispatched: false, reason: 'no_live_solomon' };
+    }
+    if (dryRun) {
+      console.log('\n[HOURLY-REVIEW] Solomon: would dispatch reminder to ' + String(solomonId).slice(0, 8) + '. [dry-run, not sent]');
+      return { dispatched: false, reason: 'dry_run', target: solomonId };
+    }
+    const row = {
+      sender_session: process.env.CLAUDE_SESSION_ID || null,
+      sender_type: 'coordinator',
+      target_session: solomonId,
+      message_type: 'INFO',
+      subject: 'Hourly: review your Solomon responsibilities',
+      body: SOLOMON_REMINDER,
+      payload: { kind: 'coordinator_reminder', topic: 'solomon_responsibilities', sent_at: new Date().toISOString() },
+      expires_at: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
+    };
+    await insert(sb, row, { logger: console });
+    console.log('\n[HOURLY-REVIEW] Solomon: reminder dispatched to ' + String(solomonId).slice(0, 8) + '.');
+    return { dispatched: true, target: solomonId };
+  } catch (e) {
+    console.log('[HOURLY-REVIEW] Solomon reminder skipped (non-fatal): ' + e.message);
+    return { dispatched: false, reason: 'error' };
+  }
+}
 
 async function resolveLiveAdam(sb, freshS) {
   // Filter role=adam SERVER-SIDE + order by heartbeat — an unfiltered select hits
@@ -78,6 +124,10 @@ async function main() {
   console.log('[HOURLY-REVIEW] fleet ' + activity.reason + ' — running reminders.' + (DRY_RUN ? ' (dry-run)' : ''));
   console.log('\n-- Coordinator responsibilities (SRE charter) --');
   COORDINATOR_DUTIES.forEach(function (d, i) { console.log('  ' + (i + 1) + '. ' + d); });
+
+  // SD-LEO-INFRA-SOLOMON-HOURLY-ROLE-REFRESHER-001: the Solomon leg runs BEFORE the Adam leg because the
+  // Adam leg `return`s from main on no-Adam/dry-run; the cycle-down gate above already guards both legs.
+  await dispatchSolomonReminder(sb);
 
   // Adam leg
   try {
@@ -139,4 +189,10 @@ async function main() {
   }
 }
 
-main().catch(function (e) { console.error('[HOURLY-REVIEW] error (non-fatal): ' + e.message); }).finally(function () { process.exit(0); });
+// SD-LEO-INFRA-SOLOMON-HOURLY-ROLE-REFRESHER-001: guard the main() invocation so the Solomon leg can be
+// imported + unit-tested without running the whole hourly review.
+if (require.main === module) {
+  main().catch(function (e) { console.error('[HOURLY-REVIEW] error (non-fatal): ' + e.message); }).finally(function () { process.exit(0); });
+}
+
+module.exports = { dispatchSolomonReminder, SOLOMON_REMINDER };

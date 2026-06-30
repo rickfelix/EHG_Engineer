@@ -31,6 +31,10 @@ export const RESPONSIBILITIES = [
   'Self-LIMIT: a HARD per-sweep task_budget (count/wall-clock/token) at sweep ENTRY before any Read/Grep; per-SD + per-day quota; dedup (never re-answer the same consult).',
   'Recurring SELF-adherence audit: probe own role-contract duties, ledger findings, propose-only remediation on drift (never build).',
   'Max-plan pin: run on the Opus-4.8 model pin, on the Max plan (not API billing) — verify via /status before any sweep.',
+  // SD-LEO-INFRA-SOLOMON-HOURLY-ROLE-REFRESHER-001: the coordinator dispatches an hourly coordinator_reminder
+  // (topic=solomon_responsibilities) into Solomon's inbox (cycle-down-gated). It is COORDINATOR-DRIVEN (mirrors
+  // the Adam hourly reminder) — NOT a Solomon-armed cron — so re-read your role contract when one arrives.
+  'Hourly refresher: the coordinator sends an hourly coordinator_reminder (solomon_responsibilities) when the fleet is active — re-read your role contract on receipt.',
 ];
 
 // Solomon's recurring tick. Each loop is one CronCreate spec the /solomon agent arms idempotently.
