@@ -1362,6 +1362,15 @@
       "linked_ref": "sd:SD-LEO-INFRA-CI-UNIT-TIER-INSTALL-CASCADE-001",
       "quarantined_at": "2026-06-28T22:30:00.000Z",
       "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+    },
+    {
+      "file": "scripts/lib/branch-resolver.test.js",
+      "reason_class": "ci-env-dependent",
+      "error_signature": "fatal: ambiguous argument 'main': unknown revision — fileExistsOnBranch(repoPath, 'main') requires main to be a local ref; fails on feature-branch CI shallow checkouts where main is not fetched",
+      "linked_ref": "feedback:512fe224-bf90-4900-90a3-590808dbb7f3",
+      "quarantined_at": "2026-06-30T21:15:00.000Z",
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e",
+      "triage_note": "3 tests (lines 221,234,238) hardcode 'main' branch ref — passes on main CI checkout, fails on every feature-branch CI (shallow clone). Fix: mock git ops or parametrize branch ref in test."
     }
   ]
 }
