@@ -4,7 +4,7 @@
  * surfaced finding that it BLOCKS at the S19 vision_approval gate (the clone auto-promote is clone-only).
  */
 import { describe, it, expect, vi } from 'vitest';
-import { launchNonCloneDummy, BLUEPRINT_BROWSE_PATH, SEEDED_FROM_VENTURE_PATH } from '../../../lib/eva/clean-clone/launch.js';
+import { launchNonCloneDummy, BLUEPRINT_BROWSE_PATH, DISCOVERY_MODE_PATH, DEFAULT_NONCLONE_STRATEGY, SEEDED_FROM_VENTURE_PATH } from '../../../lib/eva/clean-clone/launch.js';
 import { isCloneVenture, isPilotFixtureVenture } from '../../../lib/eva/lifecycle-sd-bridge.js';
 
 const silent = { log() {}, warn() {}, error() {} };
@@ -24,16 +24,43 @@ function makeSb(ventureRow) {
 }
 
 describe('FR-1: launchNonCloneDummy creates via the REAL S0 path (not the reseed path)', () => {
-  it('routes executeStageZero to the blueprint_browse path, NOT seeded_from_venture', async () => {
+  // SD-LEO-INFRA-NONCLONE-DUMMY-S0-PATH-DISCOVERY-001: the DEFAULT path is now discovery_mode (a real
+  // from-scratch S0 create with NO pre-seeded data), NOT blueprint_browse (which needs a curated
+  // blueprint to exist — 0 do, so the old default always failed 'No blueprints available').
+  it('routes executeStageZero to discovery_mode with a valid strategy by DEFAULT (not blueprint_browse, not seeded)', async () => {
     const executeStageZero = vi.fn(async () => ({ success: true, venture_id: null }));
-    const r = await launchNonCloneDummy({ blueprintId: 'bp-1', dryRun: true }, { supabase: makeSb(null), logger: silent, executeStageZero });
+    const r = await launchNonCloneDummy({ dryRun: true }, { supabase: makeSb(null), logger: silent, executeStageZero });
     expect(executeStageZero).toHaveBeenCalledTimes(1);
     const [arg] = executeStageZero.mock.calls[0];
-    expect(arg.path).toBe(BLUEPRINT_BROWSE_PATH);
-    expect(arg.path).not.toBe(SEEDED_FROM_VENTURE_PATH);
+    expect(arg.path).toBe(DISCOVERY_MODE_PATH);
+    expect(arg.path).not.toBe(BLUEPRINT_BROWSE_PATH);   // the old default that always failed
+    expect(arg.path).not.toBe(SEEDED_FROM_VENTURE_PATH); // not a clone reseed
+    expect(arg.pathParams.strategy).toBe(DEFAULT_NONCLONE_STRATEGY); // a FALLBACK_STRATEGIES value -> no 'No blueprints'
     expect(arg.options.dryRun).toBe(true);
     expect(r.dryRun).toBe(true);
     expect(r.stage).toBe('created');
+  });
+
+  it('the default create produces ok:true on a clean from-scratch create (no pre-seeded data needed)', async () => {
+    // mock executeStageZero as a successful from-scratch discovery create (no "No blueprints available")
+    const executeStageZero = vi.fn(async () => ({ success: true, venture_id: 'v-discovery' }));
+    const sb = makeSb({ seeded_from_venture_id: null, is_demo: false, is_scaffolding: false });
+    const r = await launchNonCloneDummy({ dryRun: false }, { supabase: sb, logger: silent, executeStageZero });
+    expect(r.ok).toBe(true);
+    expect(r.newVentureId).toBe('v-discovery');
+    expect(executeStageZero.mock.calls[0][0].path).toBe(DISCOVERY_MODE_PATH);
+  });
+
+  it('a custom strategy is threaded through; path=blueprint_browse is still reachable for a seeded caller', async () => {
+    const exec1 = vi.fn(async () => ({ success: true, venture_id: null }));
+    await launchNonCloneDummy({ dryRun: true, strategy: 'trend_scanner' }, { supabase: makeSb(null), logger: silent, executeStageZero: exec1 });
+    expect(exec1.mock.calls[0][0].pathParams.strategy).toBe('trend_scanner');
+
+    const exec2 = vi.fn(async () => ({ success: true, venture_id: null }));
+    await launchNonCloneDummy({ dryRun: true, path: BLUEPRINT_BROWSE_PATH, blueprintId: 'bp-1', category: 'saas' }, { supabase: makeSb(null), logger: silent, executeStageZero: exec2 });
+    const [arg2] = exec2.mock.calls[0];
+    expect(arg2.path).toBe(BLUEPRINT_BROWSE_PATH);                 // override still works
+    expect(arg2.pathParams).toEqual({ blueprintId: 'bp-1', category: 'saas' });
   });
 
   it('dry-run does NOT run the non-clone-invariant DB read / persist', async () => {
