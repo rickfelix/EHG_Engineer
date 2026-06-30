@@ -47,6 +47,10 @@ export const SOLOMON_LOOPS = [
   },
   {
     key: 'self-adherence',
+    // SD-LEO-INFRA-SOLOMON-STARTUP-PARITY-RECALIBRATE-001: the contract marker is "SOLOMON SELF-ADHERENCE
+    // DUTY (durable)" -> slug 'solomon-self-adherence'; alias it to this loop key so parity reconciles
+    // (the 1 prior cry-wolf false positive — the loop IS armed).
+    aliases: ['solomon-self-adherence'],
     label: 'Solomon self-adherence audit (role-contract probes -> propose-only remediation)',
     script: 'solomon-self-adherence-review.mjs',
     cron: '0 */12 * * *',
@@ -54,6 +58,28 @@ export const SOLOMON_LOOPS = [
   },
   {
     key: 'deep-sweep',
+    // SD-LEO-INFRA-SOLOMON-STARTUP-PARITY-RECALIBRATE-001: the single deep-sweep tick SUBSUMES the Mode-B
+    // deep-reasoning duties by contract design (§3/§4) rather than materializing each as its own cron.
+    // It DECLARES them here via covers[] so the contract↔tooling parity check counts them as wired (the
+    // prior ~7 blind/cry-wolf duties). Adding a duty to the contract requires adding its slug here.
+    covers: [
+      'harness-improvement-depth-sweep',
+      'self-improvement-of-the-self-improvement-loop',
+      'coordination-loop-observation',
+      'adam-grounding-completeness-oversight',
+      'adam-autonomy-oversight-reporting',
+      'retro-learn-integration',
+      'reinforcement-learning-signal',
+      'deep-architecture-review',
+      'deep-thinking-target-scan',
+      'taste-judgement',
+      'flaky-test-deep-rca',
+      'dedup-unification-sweep',
+      'autonomy-support',
+      'reality-simulation',
+      'model-effort-evaluation',
+      'higher-order-effort-distribution-tier-design',
+    ],
     label: 'Solomon Mode-B deep-reasoning sweep (agent judgment; HARD task_budget at entry, before any Read/Grep)',
     script: null, // agent-prompt tick — the deep sweep is reasoning, not a script
     cron: '0 */6 * * *',
@@ -76,24 +102,56 @@ export function parseArmedSet(argv = [], env = {}) {
   return { provided, set };
 }
 
-// Parse the contract's DURABLE recurring-duty markers from CLAUDE_SOLOMON.md. A durable duty is
-// bolded as `**<NAME> DUTY (durable)**`; the captured NAME is slugged (lowercase, spaces→hyphens)
-// so it can be matched against a SOLOMON_LOOPS key. Forgiving regex (a false negative = an
-// unenforced duty, the exact failure this guards). Pure; no I/O. Mirrors adam-startup-check.
+// Slug a duty NAME deterministically: lowercase, collapse every run of non-alphanumerics (spaces,
+// '&', '/', '(', ')', backticks, punctuation) to a single hyphen, trim leading/trailing hyphens. So
+// "ADAM AUTONOMY OVERSIGHT & REPORTING" -> "adam-autonomy-oversight-reporting" and
+// "HARNESS-IMPROVEMENT (DEPTH) SWEEP" -> "harness-improvement-depth-sweep". Pure.
+export function slugifyDuty(name) {
+  return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+// Parse the contract's DURABLE recurring-duty markers from CLAUDE_SOLOMON.md. A durable duty is bolded
+// as `**<NAME> DUTY (durable[; <qualifier>])**`. SD-LEO-INFRA-SOLOMON-STARTUP-PARITY-RECALIBRATE-001:
+// the regex is BROADENED so a false-negative (an unenforced duty silently dropped — the exact failure
+// this guards) cannot happen on a real contract marker:
+//   - the NAME accepts ANY non-`*` chars (so '(DEPTH)', '&', '/', '`/learn`' qualifiers are captured),
+//     lazily up to ' DUTY (durable';
+//   - the qualifier accepts `(durable; ...)` / `(durable, ...)` / `(durable)` (content after 'durable').
+// The captured NAME is slugified via slugifyDuty. Pure; no I/O.
 export function parseDurableDutyMarkers(markdown) {
   const slugs = new Set();
-  const re = /\*\*\s*([A-Za-z0-9][A-Za-z0-9 -]*?)\s+DUTY\s*\(\s*durable\s*\)\s*\*\*/gi;
+  const re = /\*\*\s*([^*]+?)\s+DUTY\s*\(\s*durable\b[^)]*\)\s*\*\*/gi;
   let m;
   while ((m = re.exec(String(markdown || ''))) !== null) {
-    slugs.add(m[1].trim().toLowerCase().replace(/\s+/g, '-'));
+    const slug = slugifyDuty(m[1]);
+    if (slug) slugs.add(slug);
   }
   return [...slugs];
 }
 
-// Which contract-named durable duties are MISSING from SOLOMON_LOOPS. [] === parity holds.
+// SD-LEO-INFRA-SOLOMON-STARTUP-PARITY-RECALIBRATE-001: the set of duty slugs a loop registry WIRES.
+// A duty is "wired" if it is a loop KEY, an alias of a loop (loop.aliases — e.g. the contract slug
+// 'solomon-self-adherence' aliases loop key 'self-adherence'), OR a declared COVER of a loop
+// (loop.covers — the Mode-B duties the single deep-sweep tick subsumes by contract design §3/§4, rather
+// than materializing each as its own cron). Pure.
+export function wiredDutySlugs(loops = SOLOMON_LOOPS) {
+  const wired = new Set();
+  for (const l of loops) {
+    if (l.key) wired.add(slugifyDuty(l.key));
+    for (const a of (Array.isArray(l.aliases) ? l.aliases : [])) wired.add(slugifyDuty(a));
+    for (const c of (Array.isArray(l.covers) ? l.covers : [])) wired.add(slugifyDuty(c));
+  }
+  return wired;
+}
+
+// Which contract-named durable duties are MISSING from the loop registry. [] === parity holds.
+// Parity is now loopKeys ∪ aliases ∪ covers >= durable-markers (a duty is wired if it is a key OR an
+// alias OR a declared cover of a loop) — so the single deep-sweep tick that subsumes the Mode-B duties
+// no longer reads as ~7 unwired duties (cry-wolf), and the 'solomon-self-adherence' marker reconciles
+// with loop key 'self-adherence' via the alias (the 1 prior false positive).
 export function missingDurableDuties(markdown, loops = SOLOMON_LOOPS) {
-  const keys = new Set(loops.map((l) => l.key));
-  return parseDurableDutyMarkers(markdown).filter((slug) => !keys.has(slug));
+  const wired = wiredDutySlugs(loops);
+  return parseDurableDutyMarkers(markdown).filter((slug) => !wired.has(slug));
 }
 
 // A loop is "armed" when an armed-set was provided AND it contains the loop's KEY, full prompt, or

@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-NONCLONE-VISION-S19-ACTIVATION-BLOCK-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-NONCLONE-VISION-S19-ACTIVATION-BLOCK-001",
-  "createdAt": "2026-06-30T22:49:32.203Z",
+  "sdKey": "SD-LEO-INFRA-SOLOMON-STARTUP-PARITY-RECALIBRATE-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-SOLOMON-STARTUP-PARITY-RECALIBRATE-001",
+  "createdAt": "2026-06-30T23:21:32.847Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
