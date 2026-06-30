@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-CLONE-TREE-EXCLUSION-FAIL-OPEN-LEAK-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-CLONE-TREE-EXCLUSION-FAIL-OPEN-LEAK-001",
-  "createdAt": "2026-06-30T05:54:35.410Z",
+  "sdKey": "SD-LEO-INFRA-CONVERGENCE-LEDGER-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-CONVERGENCE-LEDGER-001",
+  "createdAt": "2026-06-30T06:30:29.951Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
