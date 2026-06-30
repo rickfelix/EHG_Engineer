@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-NEEDS-COORDINATOR-REVIEW-HOLD-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-NEEDS-COORDINATOR-REVIEW-HOLD-001",
-  "createdAt": "2026-06-30T15:04:49.190Z",
+  "sdKey": "SD-LEO-INFRA-SOLOMON-CONSULT-001E-A",
+  "expectedBranch": "feat/SD-LEO-INFRA-SOLOMON-CONSULT-001E-A",
+  "createdAt": "2026-06-30T16:21:18.771Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
