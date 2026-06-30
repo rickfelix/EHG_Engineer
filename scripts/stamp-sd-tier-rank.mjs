@@ -9,7 +9,17 @@
 // Additive: writes only the metadata.min_tier_rank JSONB key (no schema change). Idempotent.
 
 import { createClient } from '@supabase/supabase-js';
+import { pathToFileURL } from 'url';
 import { computeMinTierRank } from '../lib/fleet/sd-tier-rank.mjs';
+
+// SD-LEO-INFRA-TIER-RANK-STARVATION-DURABLE-FIX-001 (FR-1): the SELECT columns for the stamper.
+// estimated_loc is NOT a column on strategic_directives_v2 — selecting it errored on EVERY SD (PostgREST
+// "column does not exist"), so no SD ever got stamped -> min_tier_rank=UNDEFINED -> the 6cf5c558 tier-idle
+// bug treated every SD as above-rung -> the fleet starved on unclaimable work (RCA: Adam 47b15430).
+// computeMinTierRank already falls back to metadata.estimated_loc (sd-tier-rank.mjs:64), so the LOC
+// contribution still works for SDs that carry it in metadata. Exported so a regression test can pin it to
+// real columns and fail loudly if a phantom column is ever re-added.
+export const STAMP_SELECT_COLS = 'sd_key, sd_type, title, description, scope, strategic_intent, metadata';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -41,7 +51,7 @@ async function main() {
     process.exit(1);
   }
   const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
-  const cols = 'sd_key, sd_type, title, description, scope, strategic_intent, metadata, estimated_loc';
+  const cols = STAMP_SELECT_COLS;
 
   if (all) {
     const { data, error } = await sb
@@ -64,7 +74,12 @@ async function main() {
   await stampOne(sb, sd, dry);
 }
 
-main().catch((e) => {
-  console.error(`❌ ${e.message}`);
-  process.exit(1);
-});
+// SD-LEO-INFRA-TIER-RANK-STARVATION-DURABLE-FIX-001 (FR-1): run main() ONLY when invoked directly, so a
+// test can import STAMP_SELECT_COLS (and the helpers) without triggering a DB run / process.exit.
+const invokedDirectly = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (invokedDirectly) {
+  main().catch((e) => {
+    console.error(`❌ ${e.message}`);
+    process.exit(1);
+  });
+}

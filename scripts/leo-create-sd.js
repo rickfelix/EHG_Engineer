@@ -2026,6 +2026,20 @@ async function createSD(options) {
     console.warn(`   ⚠️  structured FR derivation skipped (non-blocking): ${frErr.message}`);
   }
 
+  // SD-LEO-INFRA-TIER-RANK-STARVATION-DURABLE-FIX-001 (FR-3): stamp metadata.min_tier_rank at CREATION so
+  // every new SD is born tiered. Previously new SDs came out UNDEFINED (the creation path never stamped),
+  // depending on the out-of-band stamp-sd-tier-rank.mjs — and when that stamper broke (estimated_loc
+  // phantom column), the whole fleet starved on "unclaimable" unstamped work. GAP-FILL only: never
+  // overwrite an Adam-sourced / child-inherited finite rank. Non-fatal (mirrors the FR derivation guard).
+  try {
+    if (!Number.isFinite(Number(sdData.metadata?.min_tier_rank))) {
+      const { stampPayload } = await import('../lib/fleet/sd-tier-rank.mjs');
+      sdData.metadata = { ...sdData.metadata, ...stampPayload(sdData) };
+    }
+  } catch (tierErr) {
+    console.warn(`   ⚠️  min_tier_rank stamp skipped (non-blocking): ${tierErr.message}`);
+  }
+
   // CONST-014 Enforcement: Decomposition check at creation time
   // SDs with 3+ phases or 8+ FRs must use orchestrator pattern
   if (!parentId) {
