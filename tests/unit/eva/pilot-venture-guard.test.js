@@ -66,10 +66,16 @@ describe('fetchVentureFlags', () => {
     expect(flags).toBeNull();
     expect(client.from).not.toHaveBeenCalled();
   });
-  it('returns null (fail-safe) when the query throws', async () => {
+  // SD-LEO-INFRA-CLONE-TREE-EXCLUSION-FAIL-OPEN-LEAK-001 (FR-1): a persistent query fault now FAILS CLOSED.
+  // It used to return null ('not a clone' -> a clone tree leaked onto the belt on a DB fault). It now
+  // retries and, when STILL unresolved, returns the {unresolved:true} sentinel so the bridge clone decision
+  // marks the tree (excluded) instead of leaking it. The pilot-skip guard is UNAFFECTED (the sentinel has
+  // no is_demo/is_scaffolding, so isPilotFixtureVenture stays false -> a real venture is never un-built).
+  it('returns the {unresolved:true} sentinel (fail-CLOSED) when the query persistently throws', async () => {
     const throwingClient = { from: () => { throw new Error('db down'); } };
-    const flags = await fetchVentureFlags(throwingClient, 'v-err');
-    expect(flags).toBeNull();
+    const flags = await fetchVentureFlags(throwingClient, 'v-err', { backoffMs: [0, 0], retries: 2 });
+    expect(flags).toEqual({ unresolved: true });
+    expect(isPilotFixtureVenture(flags)).toBe(false); // pilot-skip guard unaffected by the sentinel
   });
 });
 
