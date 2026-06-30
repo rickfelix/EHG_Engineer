@@ -1,11 +1,11 @@
-# leo_auto_exec_forbidden Table
+# sourcing_engine_activation_state Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-06-30T01:11:55.962Z
-**Rows**: 5
+**Rows**: 3
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -18,29 +18,30 @@
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
-| action_class | `text` | **NO** | - | - |
-| reason | `text` | YES | - | - |
-| outward_facing | `boolean` | YES | `false` | - |
-| created_at | `timestamp with time zone` | **NO** | `now()` | - |
+| arm | `text` | **NO** | - | - |
+| enabled | `boolean` | **NO** | `false` | - |
+| updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+| updated_by | `text` | YES | - | - |
 
 ## Constraints
 
 ### Primary Key
-- `leo_auto_exec_forbidden_pkey`: PRIMARY KEY (action_class)
+- `sourcing_engine_activation_state_pkey`: PRIMARY KEY (arm)
 
 ## Indexes
 
-- `leo_auto_exec_forbidden_pkey`
+- `sourcing_engine_activation_state_pkey`
   ```sql
-  CREATE UNIQUE INDEX leo_auto_exec_forbidden_pkey ON public.leo_auto_exec_forbidden USING btree (action_class)
+  CREATE UNIQUE INDEX sourcing_engine_activation_state_pkey ON public.sourcing_engine_activation_state USING btree (arm)
   ```
 
 ## RLS Policies
 
-### 1. engine_ro_select_leo_auto_exec_forbidden (SELECT)
+### 1. service_role_all (ALL)
 
-- **Roles**: {leo_engine_ro}
+- **Roles**: {service_role}
 - **Using**: `true`
+- **With Check**: `true`
 
 ---
 
