@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-ADAM-INBOX-KINDS-SOURCE-REQUEST-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-ADAM-INBOX-KINDS-SOURCE-REQUEST-001",
-  "createdAt": "2026-06-30T12:31:13.981Z",
+  "sdKey": "SD-LEO-INFRA-CONVERGENCE-SUBJECT-LIFECYCLE-001-A",
+  "expectedBranch": "feat/SD-LEO-INFRA-CONVERGENCE-SUBJECT-LIFECYCLE-001-A",
+  "createdAt": "2026-06-30T13:01:21.820Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
