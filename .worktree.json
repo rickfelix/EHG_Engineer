@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-S19-DUPLICATE-ORCHESTRATOR-TREE-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-S19-DUPLICATE-ORCHESTRATOR-TREE-001",
-  "createdAt": "2026-06-29T20:19:52.978Z",
+  "sdKey": "SD-LEO-INFRA-S19-NC7-ESCALATION-DIVERGENT-REDERIVATION-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-S19-NC7-ESCALATION-DIVERGENT-REDERIVATION-001",
+  "createdAt": "2026-06-30T00:04:48.214Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
