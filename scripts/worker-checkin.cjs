@@ -1131,9 +1131,16 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       // strings => 0 rows => baselined candidates dropped from the tier pool => belt_claimable_at_my_tier
       // under-counted to 0. One fetch keyed by sd_key is correct for both kinds.
       const allKeys = ranked.map((x) => x.key).filter(Boolean);
-      const cols = 'sd_key,id,sd_type,status,description,title,metadata,target_application';
+      const cols = 'sd_key,id,sd_type,status,description,title,metadata,target_application,claiming_session_id';
       let pool = [];
-      if (allKeys.length) { const { data } = await sb.from('strategic_directives_v2').select(cols).in('sd_key', allKeys); pool = data || []; }
+      if (allKeys.length) {
+        const { data } = await sb.from('strategic_directives_v2').select(cols).in('sd_key', allKeys);
+        // QF-20260629-047: drop SDs already claimed by ANOTHER session — they are not claimable-to-me, so
+        // counting them inflates belt_claimable_at_my_tier and suppresses the tier-deficit idle message
+        // (which only fires at 0). Mirrors the forecaster's `if (d.claiming_session_id) continue;`. Keep
+        // rows claimed by THIS session (resume) and unclaimed rows.
+        pool = (data || []).filter((r) => !r.claiming_session_id || r.claiming_session_id === sessionId);
+      }
       base.belt_claimable_at_my_tier = claimableForTier(pool, {
         workerTierRank: tierCtx.worker_tier_rank,
         tieringActive: tierCtx.tiering_active === true,
