@@ -506,6 +506,52 @@ async function fetchDraftCandidates(sb) {
   );
 }
 
+/**
+ * SD-LEO-INFRA-SELF-CLAIM-WINDOW-FLEET-CRITICAL-001 (FR-1): a THIRD self-claim candidate source.
+ * The fleet_critical reorder (sortByDispatchRank -> orderByFleetCriticalThenRank) can only LIFT a
+ * fleet_critical SD that is already in the merged step-6 pool — but that pool is built from two
+ * fleet_critical-BLIND windows: v_sd_next_candidates (SELF_CLAIM_CANDIDATE_LIMIT, no fleet-aware order)
+ * and fetchDraftCandidates (created_at-ASC, DRAFT_CANDIDATE_LIMIT, draft/active). A claimable
+ * fleet_critical SD sitting OUTSIDE both windows (witnessed live at view position 20 + draft 13/13) is
+ * never in the pool, so the reorder has nothing to lift and the SD starves. This source fetches
+ * UNCLAIMED fleet_critical SDs DIRECTLY by metadata flag, bypassing the view + both windows.
+ *
+ * Hard requirements (each guards a re-seeded bug class):
+ *  - POSITIVE status allowlist status IN ('draft','active') mirroring fetchDraftCandidates:498 — NOT a
+ *    negative denylist (a .not(status,in,(completed,cancelled,deferred)) denylist admits
+ *    blocked/archived/superseded/pending_approval, which neither classifyDispatchIneligibility nor the
+ *    claim_sd terminal guard reject -> a pending_approval fleet_critical SD that never passed LEAD would
+ *    be surfaced, pass eligibility, pass claim_sd, and wrongly start EXEC).
+ *  - DETERMINISTIC .order(priority then created_at) so the bounded fetch is never a SILENT truncation
+ *    (the very no-order-limit class this SD fixes).
+ *  - STRICT-boolean predicate (FR-3): the DB-side metadata->>fleet_critical text-match returns 'true'
+ *    for BOTH a JSON boolean true AND a JSON string 'true', but the lift (sortByDispatchRank) only
+ *    lifts strict m.fleet_critical === true. JS-filter to === true so a string 'true' is not
+ *    surfaced-but-not-lifted (in the pool yet never fleet-prioritized).
+ * Selects the same columns as fetchDraftCandidates so an injected entry carries what the downstream
+ * eligibility gates read. Never claims here — the caller unions these into the merged pool so each
+ * routes through the COMPLETE eligibility SSOT + claim path. Exported for the FR-4 regression tests.
+ */
+async function fetchFleetCriticalCandidates(sb) {
+  const { data: rows } = await sb
+    .from('strategic_directives_v2')
+    .select('sd_key, status, sd_type, priority, created_at, dependencies, metadata, target_application, parent_sd_id')
+    .eq('metadata->>fleet_critical', 'true')                 // DB text-match: admits boolean true AND string 'true'
+    .in('status', ['draft', 'active'])                       // POSITIVE allowlist (never a denylist)
+    .is('claiming_session_id', null)
+    .neq('sd_type', 'orchestrator')
+    .order('priority', { ascending: true })                  // deterministic — never a silent truncation
+    .order('created_at', { ascending: true })
+    .limit(DRAFT_CANDIDATE_LIMIT);
+  // FR-3 reconcile: keep only STRICT boolean true so a string 'true' is not surfaced-but-not-lifted
+  // (matches the lift's `m.fleet_critical === true` in sortByDispatchRank), then priority-first stable
+  // sort mirroring fetchDraftCandidates (the DB order is a hint; the JS sort is authoritative).
+  return (rows || [])
+    .filter((r) => r.metadata && r.metadata.fleet_critical === true)
+    .slice()
+    .sort((a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9));
+}
+
 /** Per-row claim attempt for an un-baselined draft candidate (shared by the merged
  *  step-6 tier and the legacy selfClaimDraftSd wrapper). Returns a result or null. */
 async function tryClaimDraftCandidate(sb, sessionId, base, d, tierCtx = {}) {
@@ -1090,6 +1136,11 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       .limit(SELF_CLAIM_CANDIDATE_LIMIT);
     let draftRows = [];
     try { draftRows = await fetchDraftCandidates(sb); } catch { /* fail-open: drafts absent */ }
+    // SD-LEO-INFRA-SELF-CLAIM-WINDOW-FLEET-CRITICAL-001 (FR-2): a THIRD source for fleet_critical SDs
+    // that sit OUTSIDE both windows above, so the downstream fleet_critical lift has them in the pool to
+    // reorder. Placed here, inside the step-6 try and downstream of ALL acquisition guards (4.5/5.7/5.8/5.9).
+    let fcRows = [];
+    try { fcRows = await fetchFleetCriticalCandidates(sb); } catch { /* fail-open: window-only behavior */ }
 
     const seen = new Set();
     const merged = [];
@@ -1098,6 +1149,15 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
     }
     for (const d of draftRows) {
       if (d.sd_key && !seen.has(d.sd_key)) { seen.add(d.sd_key); merged.push({ kind: 'draft', key: d.sd_key, row: d }); }
+    }
+    // FR-2: union the fleet_critical source LAST so an SD already surfaced by the view/draft windows keeps
+    // its existing entry (dedup via the SAME seen-set). kind:'baselined' routes each injected entry through
+    // baselinedCandidateEligible -> the COMPLETE eligibility SSOT (classifyDispatchIneligibility incl. the
+    // WORK-DOWN-NEVER-UP tier axis + parentLeadPending + refillSourceIneligibility + draftDepsSatisfied),
+    // then isSdInFlight, then tryClaim — NO eligibility/claim bypass. sortByDispatchRank then lifts these
+    // (strict-boolean fleet_critical) to the front of the merged pool.
+    for (const f of fcRows) {
+      if (f.sd_key && !seen.has(f.sd_key)) { seen.add(f.sd_key); merged.push({ kind: 'baselined', key: f.sd_key }); }
     }
 
     // duty-6: honor the coordinator's fresh dispatch_rank across the WHOLE pool (fail-open).
@@ -1217,7 +1277,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective };
+module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, fetchFleetCriticalCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective };
 
 if (require.main === module) {
   main().catch(err => {
