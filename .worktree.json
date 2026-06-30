@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-CONVERGENCE-CIRCUIT-BREAKERS-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-CONVERGENCE-CIRCUIT-BREAKERS-001",
-  "createdAt": "2026-06-30T10:50:33.497Z",
+  "sdKey": "SD-LEO-INFRA-CLAIM-FITNESS-FAILOPEN-BYPASS-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-CLAIM-FITNESS-FAILOPEN-BYPASS-001",
+  "createdAt": "2026-06-30T12:02:28.345Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
