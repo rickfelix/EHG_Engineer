@@ -8,6 +8,13 @@ import {
 } from '../../../lib/sourcing-engine/refill-auto-promote.js';
 
 // A valid staged candidate per the -A predicate (pending, unpromoted, titled, traceable, non-fixture).
+// SD-LEO-INFRA-UNIT-TIER-STALE-TEST-REGRESSION-001 (FR-1): disposition:'build' so the candidate also
+// PASSES the #5245 distilled-only gate (hasBuildDisposition true). promoteStagedCandidate now enforces
+// that gate via isDistilledOnly() (the SOURCING_AUTO_REFILL_DISTILLED_ONLY env flag, currently ON), so a
+// fixture with no build disposition would hit UNDISPOSITIONED_OR_NON_BUILD before the promote-path
+// assertions. Build-dispositioning the base fixture makes the promote-path tests env-flag-independent;
+// the selectRefillBatch invalid-row tests fail on OTHER axes (not_staged / already_promoted /
+// missing_title / test_fixture), which a build disposition does not change.
 const validRow = (over = {}) => ({
   id: 'rwi-1',
   title: 'Real candidate',
@@ -16,6 +23,7 @@ const validRow = (over = {}) => ({
   item_disposition: 'pending',
   promoted_to_sd_key: null,
   lane: 'belt',
+  disposition: 'build',
   ...over,
 });
 
@@ -222,5 +230,18 @@ describe('promoteStagedCandidate (only writer)', () => {
     const r = await promoteStagedCandidate(client, {}, { apply: true });
     expect(r.promoted).toBe(false);
     expect(r.reason).toBe('missing_item_id');
+  });
+
+  // SD-LEO-INFRA-UNIT-TIER-STALE-TEST-REGRESSION-001 (FR-1): the #5245 fail-closed contract — when
+  // distilled-only mode is on, a candidate NOT dispositioned as buildable is refused with zero writes.
+  // Covers the gate explicitly (distilledOnly injected true so the test is env-flag-independent), not
+  // just the happy path the build-dispositioned fixture restores.
+  it('fail-closed: a non-build-dispositioned candidate + distilledOnly is refused (undispositioned_or_non_build, zero writes)', async () => {
+    const { client, writes } = makeStub();
+    const r = await promoteStagedCandidate(client, validRow({ disposition: null }), { apply: true, distilledOnly: true });
+    expect(r.promoted).toBe(false);
+    expect(r.reason).toBe('undispositioned_or_non_build');
+    expect(writes.inserts).toHaveLength(0);
+    expect(writes.updates).toHaveLength(0);
   });
 });
