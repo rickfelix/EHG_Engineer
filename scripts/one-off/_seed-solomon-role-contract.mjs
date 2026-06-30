@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @wire-check-exempt one-shot DB seed (lives under scripts/one-off/, the recognized one-shot home).
 // One-shot (idempotent): seed/refresh the solomon_role_contract section in leo_protocol_sections.
 // FR-5 of SD-LEO-INFRA-SOLOMON-CONSULT-001E-B.
 //
@@ -12,26 +13,39 @@
 // id handling: leo_protocol_sections has NO usable pkey sequence default (the sequence lags max(id),
 // so a bare insert collides). We hand-assign id = max(id)+1 like one-off/_role-partnership-contract-
 // section.mjs. Re-running UPDATES the existing row's content (idempotent + reproducible).
+//
+// Path resolution: walks UP from this script to the first ancestor containing the target — works
+// from the main repo root (scripts/one-off/) AND from a worktree (docs/ live only in the main root).
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import fs from 'fs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-config({ path: join(__dirname, '../.env') });
+const HERE = dirname(fileURLToPath(import.meta.url));
+
+/** First ancestor dir (incl. HERE) that contains relPath, else null. Bounded walk (no infinite loop). */
+function findUp(relPath, startDir = HERE) {
+  let dir = startDir;
+  for (let i = 0; i < 10; i++) {
+    const candidate = join(dir, relPath);
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+const envPath = findUp('.env');
+if (envPath) config({ path: envPath });
 
 import { createClient } from '@supabase/supabase-js';
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-// docs/ lives in the main repo root (3 levels up from a worktree's scripts/; 2 levels in the main repo).
-const candidatePaths = [
-  join(__dirname, '../docs/architecture/solomon-agent-definition.md'),
-  join(__dirname, '../../..', 'docs/architecture/solomon-agent-definition.md'),
-];
-const sourcePath = candidatePaths.find((p) => fs.existsSync(p));
+const sourcePath = findUp('docs/architecture/solomon-agent-definition.md');
 if (!sourcePath) {
-  console.error('Could not locate solomon-agent-definition.md in:', candidatePaths);
+  console.error('Could not locate docs/architecture/solomon-agent-definition.md upward from', HERE);
   process.exit(1);
 }
 const raw = fs.readFileSync(sourcePath, 'utf8');
