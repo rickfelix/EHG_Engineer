@@ -1365,7 +1365,7 @@
     },
     {
       "file": "scripts/lib/branch-resolver.test.js",
-      "reason_class": "ci-env-dependent",
+      "reason_class": "missing-fixture",
       "error_signature": "fatal: ambiguous argument 'main': unknown revision — fileExistsOnBranch(repoPath, 'main') requires main to be a local ref; fails on feature-branch CI shallow checkouts where main is not fetched",
       "linked_ref": "feedback:512fe224-bf90-4900-90a3-590808dbb7f3",
       "quarantined_at": "2026-06-30T21:15:00.000Z",
