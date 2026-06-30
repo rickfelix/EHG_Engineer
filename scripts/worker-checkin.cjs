@@ -1117,6 +1117,10 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
         tiering_active: await isTieringActive(sb),
       };
     } catch { /* fail-open: no tier ctx */ }
+    // QF-20260630-761: snapshot whether tiering is active so the idle message (below, outside this
+    // scope) only attributes a 0-claimable belt to TIER when tiering is actually on. With tiering off
+    // the 0 is non-tier ineligibility (orchestrator parents / clone trees / human-action / held).
+    base.belt_tiering_active = tierCtx.tiering_active === true;
     // SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-2): belt_ranked_claimable above is the
     // tier-AGNOSTIC ranked pool — a below-rung worker sees it non-zero even when every ranked SD is
     // above its rung, then idles for hours on false "ranked" hope. Expose belt_claimable_at_my_tier:
@@ -1179,8 +1183,14 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
   // "work exists for me" and the idle looks like a bug rather than a tier deficit.
   const rankedAgnostic = base.belt_ranked_claimable ?? 0;
   const claimableAtTier = base.belt_claimable_at_my_tier ?? rankedAgnostic;
+  // QF-20260630-761: only blame TIER when tiering is actually active. When tiering is OFF (degrade-to-1,
+  // <2 live workers) the tier axis is inert, so a 0-claimable belt with ranked>0 means the ranked items
+  // are ineligible for NON-tier reasons (orchestrator parents / clone build-trees / human-action / held)
+  // — a higher-tier worker could not take them either. Attributing it to "your rung" misdirects.
   const tierNote = (rankedAgnostic > 0 && claimableAtTier === 0)
-    ? ` (${rankedAgnostic} ranked, but 0 claimable at your tier — all above your rung; a higher-tier worker must take them.)`
+    ? (base.belt_tiering_active === true
+        ? ` (${rankedAgnostic} ranked, but 0 claimable at your tier — all above your rung; a higher-tier worker must take them.)`
+        : ` (${rankedAgnostic} ranked, but 0 claimable by any worker — they are orchestrator parents / clone build-trees / human-action / held, not tier-blocked.)`)
     : '';
   return {
     ...base,
