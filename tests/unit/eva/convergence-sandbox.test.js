@@ -48,6 +48,18 @@ describe('FR-1: provisionSandboxRepo', () => {
     expect(calls.inserted[0].sandbox_repo).toBe('rickfelix/conv-sandbox-1'); // ledger recorded
   });
 
+  it('FR-3 (SD-LEO-INFRA-CONVERGENCE-DUMMYKIND-CHECK-DIVERGENCE-001): ledger startRun receives dummy_kind non_clone, not convergence_subject', async () => {
+    const run = vi.fn(() => '');
+    const { sb, calls } = makeLedgerStub();
+    await provisionSandboxRepo(
+      { ventureId: 'v-2', repoName: 'rickfelix/conv-dummykind-test', dryRun: false },
+      { run, log: silent, supabase: sb }
+    );
+    const inserted = calls.inserted[0];
+    expect(inserted.dummy_kind).toBe('non_clone');
+    expect(inserted.dummy_kind).not.toBe('convergence_subject');
+  });
+
   it('refuses an invalid/unsafe slug WITHOUT invoking run', async () => {
     const run = vi.fn(() => '');
     const r = await provisionSandboxRepo({ repoName: 'not a/valid slug; rm -rf', dryRun: false }, { run, log: silent });
