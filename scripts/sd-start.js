@@ -14,6 +14,10 @@
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { execSync } from 'child_process';
+// SD-LEO-INFRA-CLAIM-FITNESS-FAILOPEN-BYPASS-001 (FR-1): no-throw best-effort claim release. Replaces the
+// `await supabase.rpc('release_sd', {...}).catch(() => {})` calls — the PostgREST builder has no .catch, so
+// that .catch threw a TypeError before the blocking process.exit(1) and the outer catch swallowed it (fail-OPEN).
+import { bestEffortReleaseSd } from '../lib/fleet/best-effort-release.mjs';
 // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR5): getRepoRoot resolves the
 // canonical main repo regardless of cwd; isInsideWorktree is used as an
 // early guard to prevent nested-worktree creation when sd-start is
@@ -1376,10 +1380,10 @@ async function main() {
     if (crosscheck.verdict === 'BLOCK') {
       console.error(`${colors.red}   ❌  Cross-check BLOCK: refusing worktree creation.${colors.reset}`);
       console.error(`${colors.dim}   Fix: correct target_application or revise SD scope text.${colors.reset}`);
-      await supabase.rpc('release_sd', {
-        p_session_id: session.session_id,
-        p_reason: 'manual'
-      }).catch(() => {});
+      // SD-LEO-INFRA-CLAIM-FITNESS-FAILOPEN-BYPASS-001 (FR-1/FR-3): best-effort release (never throws),
+      // then UNCONDITIONALLY block the claim. (Was `.rpc(...).catch(() => {})` — the .catch threw on the
+      // non-.catch-able builder before this exit, and the outer catch swallowed it as fail-open.)
+      await bestEffortReleaseSd(supabase, session.session_id);
       process.exit(1);
     }
   } catch (ccErr) {
@@ -1413,15 +1417,23 @@ async function main() {
           }
         }
       } catch { /* triage is advisory — never block the release on it */ }
-      await supabase.rpc('release_sd', {
-        p_session_id: session.session_id,
-        p_reason: 'manual'
-      }).catch(() => {});
+      // SD-LEO-INFRA-CLAIM-FITNESS-FAILOPEN-BYPASS-001 (FR-1): best-effort release (never throws), then
+      // UNCONDITIONALLY block the claim + exit. The prior `.rpc(...).catch(() => {})` threw on the
+      // non-.catch-able PostgREST builder BEFORE this exit, the outer catch swallowed it as 'fail-open',
+      // and a positively-determined UNFIT (e.g. wrong-target_application) SD got claimed anyway.
+      await bestEffortReleaseSd(supabase, session.session_id);
       process.exit(1);
     }
   } catch (fitErr) {
-    // Non-blocking — fitness fail-fast is defense-in-depth and must fail open.
-    console.log(`${colors.dim}[fitness] skipped (fail-open): ${fitErr.message}${colors.reset}`);
+    // SD-LEO-INFRA-CLAIM-FITNESS-FAILOPEN-BYPASS-001 (FR-2): FAIL CLOSED on an UNEXPECTED error in the
+    // fitness path — never fall through to claim an SD we could not confirm is fit. This is SAFE because
+    // the predicate isSdExecutableHere (lib/fleet/sd-executable-here.cjs) is fail-open INTERNALLY: any
+    // internal error or indeterminate signal (e.g. absent target_application) returns fit:true and it
+    // NEVER throws, so that fail-open is the fleet-wide-stall guard. This outer catch therefore only fires
+    // on a truly-novel error, where blocking the claim (not silently claiming wrong work) is correct.
+    console.error(`${colors.red}   ❌ [fitness] UNEXPECTED error — failing CLOSED (blocking the claim): ${fitErr.message}${colors.reset}`);
+    await bestEffortReleaseSd(supabase, session.session_id);
+    process.exit(1);
   }
 
   // 4.5. Resolve worktree (creates if needed in claim mode)
