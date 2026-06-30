@@ -19,6 +19,10 @@ require('dotenv').config();
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const { getActiveCoordinatorId, isTwoWayV2Enabled } = require('../lib/coordinator/resolve.cjs');
+// SD-LEO-INFRA-SOLOMON-CONSULT-001D: Solomon oracle consult lane (flag-gated, dormant by default).
+const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
+const { evaluateSolomonTriage } = require('../lib/coordinator/solomon-triage.cjs');
+const { PAYLOAD_KINDS } = require('../lib/fleet/worker-status.cjs');
 
 // SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-4): 'unfit' — a worker reporting an assignment it cannot
 // execute HERE/NOW (repo mismatch / closed premise / missing input precondition). Replaces the
@@ -412,12 +416,168 @@ async function requestMain(flags, positional) {
   console.log('  reply:', (result.reply.payload && result.reply.payload.body) || result.reply.body || '(empty)');
 }
 
+// ============================================================================
+// SD-LEO-INFRA-SOLOMON-CONSULT-001D — worker→Solomon oracle consult lane.
+// DORMANT by default behind SOLOMON_CONSULT_V1 (read IN-BODY, never at module
+// scope, so flag-off is byte-identical and tests can toggle it). The consult is
+// counter-gated by the Phase-B triage SSOT (isSolomonEligible) — the worker must
+// have exhausted the cheaper tiers — and the reply travels back under the EXISTING
+// adam_advisory kind (+oracle:true), matched by awaitCoordinatorReply's allowlist.
+// Targets the live Solomon, else buffers to the 'broadcast-solomon' sentinel.
+// ============================================================================
+
+/** In-body flag read (NEVER module scope): dormant unless SOLOMON_CONSULT_V1==='on'. */
+function isSolomonConsultEnabled() {
+  return process.env.SOLOMON_CONSULT_V1 === 'on';
+}
+
+/** Pure + exported: the exact consult payload the worker emits. */
+function buildSolomonConsultPayload({ correlationId, body, senderCallsign, repo, severity, sdKey, triageScore, triageReason }) {
+  const payload = {
+    kind: PAYLOAD_KINDS.SOLOMON_CONSULT,   // 'solomon_consult' (SSOT constant, never a literal)
+    correlation_id: correlationId,
+    expects_reply: true,
+    sender_callsign: senderCallsign || null,
+    repo: repo || null,
+    severity: severity || 'medium',
+    sd_key: sdKey || null,
+    triage_score: (typeof triageScore === 'number') ? triageScore : null,
+    triage_reason: triageReason || null,
+    oracle_consult: true
+  };
+  if (body) payload.body = redact(String(body)).slice(0, BODY_HARD_CAP);
+  // INVARIANT: no signal_type / no intent_action on consult rows (off the friction router + intent sweep).
+  return payload;
+}
+
+// Usage: node scripts/worker-signal.cjs solomon-consult "<packet>" [--severity high]
+//        [--rca-count N] [--tool-attempts N] [--self-resolution-logged] [--type spec-conflict]
+//        [--sd-key SD-XXX] [--await] [--timeout <ms>]
+async function solomonConsultMain(flags, positional) {
+  // FLAG-GATE (in-body): dormant by default — insert NOTHING, byte-identical to today.
+  if (!isSolomonConsultEnabled()) {
+    console.log('Solomon dormant — handle locally (SOLOMON_CONSULT_V1 is off).');
+    process.exit(0);
+  }
+
+  const body = positional.slice(1).join(' ').trim();
+  if (!body) {
+    console.error('ERROR: solomon-consult requires a "<packet>" body.');
+    console.error('Usage: node scripts/worker-signal.cjs solomon-consult "<packet>" [--severity high] [--rca-count N] [--tool-attempts N] [--self-resolution-logged] [--type spec-conflict] [--await]');
+    process.exit(2);
+  }
+
+  const sessionId = process.env.CLAUDE_SESSION_ID;
+  if (!sessionId) {
+    console.error('ERROR: CLAUDE_SESSION_ID env var required (set by SessionStart hook).');
+    process.exit(1);
+  }
+
+  // TRIAGE GATE (Phase-B SSOT): counter-gated eligibility. The worker supplies its
+  // ladder evidence via flags (it has already exhausted local reasoning + rca-agent).
+  const state = {
+    rcaCount: Number(flags['rca-count']) || 0,
+    toolAttempts: Number(flags['tool-attempts']) || 0,
+    selfResolutionAttemptLogged: flags['self-resolution-logged'] === true || flags['self-resolution-logged'] === 'true',
+  };
+  const context = { type: flags.type || undefined };
+  const signature = flags.signature || `${flags.type || 'consult'}:${sessionId}`;
+  const triage = evaluateSolomonTriage(signature, state, context);
+  if (!triage.eligible) {
+    // Not an error — the cognitive ladder simply is not exhausted yet.
+    console.log(`Not eligible for Solomon — continue the ladder / handle locally: ${triage.reason}`);
+    console.log(`  triage_score: ${triage.triage_score}`);
+    process.exit(0);
+  }
+
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    console.error('ERROR: SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY required.');
+    process.exit(1);
+  }
+  const supabase = createClient(url, key);
+
+  // Resolve the live Solomon, else buffer to the sentinel (drained on /solomon register).
+  let solomonId = null;
+  try { solomonId = await getActiveSolomonId(supabase); } catch { solomonId = null; }
+  const target = solomonId || 'broadcast-solomon';
+
+  let senderCallsign = null;
+  try {
+    const { data: senderRow } = await supabase
+      .from('claude_sessions')
+      .select('metadata')
+      .eq('session_id', sessionId)
+      .maybeSingle();
+    senderCallsign = senderRow?.metadata?.fleet_identity?.callsign || null;
+  } catch { /* best-effort */ }
+
+  const correlationId = crypto.randomUUID();
+  const timeoutMs = Number(flags.timeout) > 0 ? Number(flags.timeout) : REQUEST_DEFAULT_TIMEOUT_MS;
+  const payload = buildSolomonConsultPayload({
+    correlationId, body, senderCallsign, repo: process.cwd(),
+    severity: flags.severity, sdKey: flags['sd-key'],
+    triageScore: triage.triage_score, triageReason: triage.reason
+  });
+  const subject = `[SOLOMON_CONSULT] ${payload.body.slice(0, 80)}`;
+  const expiresAt = new Date(Date.now() + timeoutMs + 5 * 60_000).toISOString();
+
+  const { error: insErr } = await supabase
+    .from('session_coordination')
+    .insert({
+      sender_session: sessionId,
+      sender_type: 'worker',
+      target_session: target,
+      message_type: 'INFO',
+      subject,
+      body: payload.body,
+      payload,
+      expires_at: expiresAt
+    });
+  if (insErr) {
+    console.error('ERROR: failed to insert solomon-consult:', insErr.message);
+    process.exit(1);
+  }
+
+  console.log('✓ Solomon consult sent (oracle is propose-only; you remain the actor)');
+  console.log('  correlation_id:', correlationId);
+  console.log('  target:', target);
+  console.log('  triage_score:', triage.triage_score);
+
+  // Fire-and-forget by default (the worker keeps working, drains the reply later).
+  // --await opts into a synchronous wait. The reply arrives under adam_advisory+oracle:true,
+  // which awaitCoordinatorReply's allowlist already accepts.
+  if (!flags.await) {
+    console.log('  (fire-and-forget — drain the reply later; pass --await to block.)');
+    process.exit(0);
+  }
+  const result = await awaitCoordinatorReply(supabase, { sessionId, correlationId, timeoutMs });
+  if (result.timedOut) {
+    console.log('⌛ No oracle reply within timeout; it will arrive later as an adam_advisory (oracle:true) row.');
+    process.exit(0);
+  }
+  try {
+    await supabase
+      .from('session_coordination')
+      .update({ read_at: new Date().toISOString(), acknowledged_at: new Date().toISOString() })
+      .eq('id', result.reply.id);
+  } catch { /* best-effort */ }
+  console.log('✓ Oracle reply received');
+  console.log('  reply:', (result.reply.payload && result.reply.payload.body) || result.reply.body || '(empty)');
+}
+
 async function main() {
   const { flags, positional } = parseArgs(process.argv);
 
   // FR-1: route the `intent` subcommand before the legacy signal path.
   if (positional[0] === 'intent') {
     return intentMain(flags, positional);
+  }
+
+  // SD-LEO-INFRA-SOLOMON-CONSULT-001D: route the `solomon-consult` subcommand (flag-gated dormant).
+  if (positional[0] === 'solomon-consult') {
+    return solomonConsultMain(flags, positional);
   }
 
   // SD-LEO-INFRA-COMPLETE-TWO-WAY-001 / FR-7: route the `request` subcommand
@@ -551,7 +711,9 @@ module.exports = {
   // FR-1 (SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001)
   INTENT_ACTIONS, INTENT_PAYLOAD_KEYS, buildIntentPayload, DECONFLICTION_ENABLED,
   // FR-7 (SD-LEO-INFRA-COMPLETE-TWO-WAY-001) — request/await round-trip
-  buildRequestPayload, awaitCoordinatorReply, REQUEST_DEFAULT_TIMEOUT_MS, REQUEST_DEFAULT_POLL_MS
+  buildRequestPayload, awaitCoordinatorReply, REQUEST_DEFAULT_TIMEOUT_MS, REQUEST_DEFAULT_POLL_MS,
+  // SD-LEO-INFRA-SOLOMON-CONSULT-001D — Solomon oracle consult lane (flag-gated dormant)
+  isSolomonConsultEnabled, buildSolomonConsultPayload, solomonConsultMain
 };
 
 if (require.main === module) {
