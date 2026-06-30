@@ -8,7 +8,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 import {
   SOLOMON_LOOPS, ROLE_CONTEXT_DOC, parseDurableDutyMarkers, missingDurableDuties,
-  loopStatus, parseArmedSet, renderContractParity,
+  loopStatus, parseArmedSet, renderContractParity, slugifyDuty, wiredDutySlugs,
 } from '../../scripts/solomon-startup-check.mjs';
 import { buildSelfAdherenceVerdict } from '../../scripts/solomon-self-adherence-review.mjs';
 
@@ -52,6 +52,57 @@ describe('contract↔tooling parity (fails loud on a missing durable duty)', () 
     // renderContractParity is fail-open when the contract file is absent (ships before E-B seeds it).
     const out = renderContractParity('/no/such/root');
     expect(out).toMatch(/parity check skipped \(fail-open\)/);
+  });
+});
+
+describe('SD-LEO-INFRA-SOLOMON-STARTUP-PARITY-RECALIBRATE-001: recalibrated parity (no cry-wolf, no blindness)', () => {
+  it('broadened regex parses qualified/punctuated markers the old regex was BLIND to', () => {
+    // (DEPTH) parens in the name, '&' and '/' in the name, and a '(durable; ...)' qualifier.
+    const md = [
+      '**HARNESS-IMPROVEMENT (DEPTH) SWEEP DUTY (durable)**',
+      '**ADAM AUTONOMY OVERSIGHT & REPORTING DUTY (durable; chairman-directed 2026-06-30)**',
+      '**RETRO / `/learn` INTEGRATION DUTY (durable)**',
+    ].join('\n');
+    const slugs = parseDurableDutyMarkers(md);
+    expect(slugs).toContain('harness-improvement-depth-sweep');
+    expect(slugs).toContain('adam-autonomy-oversight-reporting'); // '&' collapsed, qualifier ignored
+    expect(slugs).toContain('retro-learn-integration');           // '/' + backticks collapsed
+  });
+
+  it('slugifyDuty collapses non-alphanumerics to single hyphens', () => {
+    expect(slugifyDuty('ADAM AUTONOMY OVERSIGHT & REPORTING')).toBe('adam-autonomy-oversight-reporting');
+    expect(slugifyDuty('HARNESS-IMPROVEMENT (DEPTH) SWEEP')).toBe('harness-improvement-depth-sweep');
+  });
+
+  it('covers[]: a Mode-B duty the deep-sweep tick SUBSUMES is wired (not cry-wolf)', () => {
+    const wired = wiredDutySlugs(SOLOMON_LOOPS);
+    expect(wired.has('deep-architecture-review')).toBe(true);   // a declared deep-sweep cover
+    expect(wired.has('taste-judgement')).toBe(true);
+    // and it is NOT reported missing when the contract declares it
+    expect(missingDurableDuties('**DEEP ARCHITECTURE REVIEW DUTY (durable)**', SOLOMON_LOOPS)).toEqual([]);
+  });
+
+  it('alias: the "SOLOMON SELF-ADHERENCE" marker reconciles with loop key self-adherence (the 1 false positive)', () => {
+    expect(wiredDutySlugs(SOLOMON_LOOPS).has('solomon-self-adherence')).toBe(true);
+    expect(missingDurableDuties('**SOLOMON SELF-ADHERENCE DUTY (durable)**', SOLOMON_LOOPS)).toEqual([]);
+  });
+
+  it('parity HOLDS against the full real contract marker set (0 missing)', () => {
+    // the 17 durable markers from the live CLAUDE_SOLOMON.md
+    const realMarkers = [
+      'HARNESS-IMPROVEMENT (DEPTH) SWEEP', 'SELF-IMPROVEMENT-OF-THE-SELF-IMPROVEMENT-LOOP',
+      'COORDINATION-LOOP OBSERVATION', 'ADAM GROUNDING-COMPLETENESS OVERSIGHT',
+      'ADAM AUTONOMY OVERSIGHT & REPORTING', 'RETRO / `/learn` INTEGRATION', 'REINFORCEMENT-LEARNING SIGNAL',
+      'DEEP ARCHITECTURE REVIEW', 'DEEP-THINKING TARGET SCAN', 'TASTE & JUDGEMENT', 'FLAKY-TEST DEEP-RCA',
+      'DEDUP / UNIFICATION SWEEP', 'AUTONOMY-SUPPORT', 'REALITY-SIMULATION', 'MODEL/EFFORT EVALUATION',
+      'HIGHER-ORDER EFFORT-DISTRIBUTION TIER DESIGN', 'SOLOMON SELF-ADHERENCE',
+    ].map((n) => `**${n} DUTY (durable)**`).join('\n');
+    expect(parseDurableDutyMarkers(realMarkers)).toHaveLength(17);
+    expect(missingDurableDuties(realMarkers, SOLOMON_LOOPS)).toEqual([]); // no cry-wolf, no blindness
+  });
+
+  it('a genuinely-unwired NEW duty IS still reported (the guard is not defanged)', () => {
+    expect(missingDurableDuties('**SOME BRAND NEW DUTY (durable)**', SOLOMON_LOOPS)).toEqual(['some-brand-new']);
   });
 });
 
