@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-SOLOMON-CONSULT-001E-B",
-  "expectedBranch": "feat/SD-LEO-INFRA-SOLOMON-CONSULT-001E-B",
-  "createdAt": "2026-06-30T17:03:51.657Z",
+  "sdKey": "SD-LEO-INFRA-NONCLONE-DUMMY-S0-PATH-DISCOVERY-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-NONCLONE-DUMMY-S0-PATH-DISCOVERY-001",
+  "createdAt": "2026-06-30T19:43:10.342Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
