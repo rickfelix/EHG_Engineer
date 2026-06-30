@@ -1,8 +1,8 @@
-<!-- file_content_hash: 363d88b8419e9305 -->
+<!-- file_content_hash: 279b3fc211a981fb -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-06-28 10:59:48 PM
+**Generated**: 2026-06-30 2:51:16 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1470,6 +1470,34 @@ Workers signal mid-execution friction back to the active coordinator via session
 
 **How to send:** `/signal <type> "<body>"` slash command — see /signal --help. Or directly: `node scripts/worker-signal.cjs <type> "<body>"`. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. SD-LEO-INFRA-TWO-WAY-COORDINATOR-001.
 
+## Solomon Consultation Protocol
+
+**Solomon Consultation Protocol** — the deep-reasoning oracle on the cognitive ladder.
+
+> Discoverability: when local reasoning AND the rca-agent are exhausted on a genuinely hard
+> *cognitive* problem, escalate to **Solomon** (the propose-only deep-reasoning oracle) — do not
+> spin. Solomon advises; you remain the actor. **Dormant by default** behind `SOLOMON_CONSULT_V1`
+> (flag-off = byte-identical; the flip is chairman-only).
+
+**Cognitive escalation ladder:** local reasoning → rca-agent → **Solomon** → Chairman.
+Solomon sits between Canonical Pause Point #3 (RCA after 2 retries) and human escalation.
+
+**How to consult** (flag-gated, dormant until `SOLOMON_CONSULT_V1=on`):
+```bash
+node scripts/worker-signal.cjs solomon-consult "<packet>" --severity high \
+  --rca-count <N> --tool-attempts <N> [--type spec-conflict] [--await]
+```
+Counter-gated by the triage SSOT (`lib/coordinator/solomon-triage.cjs` `isSolomonEligible`): eligible
+only when rca-agent ran ≥2× OR a gate failed ≥3× (Pause-Point-#3 exhausted), or a first-encounter
+spec-conflict/arch-ambiguity WITH a logged self-resolution attempt. Flag OFF → prints
+"Solomon dormant — handle locally" and inserts nothing. The reply returns under the existing
+`adam_advisory` kind (+`oracle:true`). Solomon is propose-only: it NEVER claims, edits, gates, or sources.
+
+**Observe pending consults:** `node scripts/fleet-dashboard.cjs solomon` (PENDING SOLOMON CONSULTS).
+**Model:** Opus 4.8 (`claude-opus-4-8`) at high effort; no Fable dependency (Fable-swappable later).
+**Activation:** chairman-gated, graduated (Mode A reactive consults, then Mode B sweeps) —
+see `docs/architecture/solomon-activation-runbook.md`.
+
 ## Strategic Governance Hierarchy
 
 The EHG platform operates under a 7-layer strategic governance stack. Each layer has a database table, CLI command, and clear purpose.
@@ -1680,7 +1708,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-06-28*
+*Generated from database: 2026-06-30*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

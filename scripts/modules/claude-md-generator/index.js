@@ -35,7 +35,8 @@ import {
   generatePlan,
   generateExec,
   generateAdam,
-  generateCoordinator
+  generateCoordinator,
+  generateSolomon
 } from './file-generators.js';
 
 import {
@@ -45,7 +46,8 @@ import {
   generatePlanDigest,
   generateExecDigest,
   generateAdamDigest,
-  generateCoordinatorDigest
+  generateCoordinatorDigest,
+  generateSolomonDigest
 } from './digest-generators.js';
 
 // SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-5): every generated file carries a
@@ -171,6 +173,7 @@ class CLAUDEMDGeneratorV3 {
       ['CLAUDE_EXEC.md', (d) => generateExec(d, this.fileMapping), 'full'],
       ['CLAUDE_ADAM.md', (d) => generateAdam(d, this.fileMapping), 'full'],
       ['CLAUDE_COORDINATOR.md', (d) => generateCoordinator(d, this.fileMapping), 'full'],
+      ['CLAUDE_SOLOMON.md', (d) => generateSolomon(d, this.fileMapping), 'full'],
     ];
     if (this.options.generateDigest) {
       specs.push(
@@ -181,6 +184,7 @@ class CLAUDEMDGeneratorV3 {
         ['CLAUDE_EXEC_DIGEST.md', (d) => generateExecDigest(d, this.digestMapping, digestMetadata), 'digest'],
         ['CLAUDE_ADAM_DIGEST.md', (d) => generateAdamDigest(d, this.digestMapping, digestMetadata), 'digest'],
         ['CLAUDE_COORDINATOR_DIGEST.md', (d) => generateCoordinatorDigest(d, this.digestMapping, digestMetadata), 'digest'],
+        ['CLAUDE_SOLOMON_DIGEST.md', (d) => generateSolomonDigest(d, this.digestMapping, digestMetadata), 'digest'],
       );
     }
     return specs;
@@ -408,8 +412,8 @@ export { CLAUDEMDGeneratorV3 };
 // SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001 (FR-4): the complete generated-file
 // set, used to validate --only targets (unknown names fail loud listing these).
 export const KNOWN_GENERATED_FILES = [
-  'CLAUDE.md', 'CLAUDE_CORE.md', 'CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_EXEC.md', 'CLAUDE_ADAM.md', 'CLAUDE_COORDINATOR.md',
-  'CLAUDE_DIGEST.md', 'CLAUDE_CORE_DIGEST.md', 'CLAUDE_LEAD_DIGEST.md', 'CLAUDE_PLAN_DIGEST.md', 'CLAUDE_EXEC_DIGEST.md', 'CLAUDE_ADAM_DIGEST.md', 'CLAUDE_COORDINATOR_DIGEST.md',
+  'CLAUDE.md', 'CLAUDE_CORE.md', 'CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_EXEC.md', 'CLAUDE_ADAM.md', 'CLAUDE_COORDINATOR.md', 'CLAUDE_SOLOMON.md',
+  'CLAUDE_DIGEST.md', 'CLAUDE_CORE_DIGEST.md', 'CLAUDE_LEAD_DIGEST.md', 'CLAUDE_PLAN_DIGEST.md', 'CLAUDE_EXEC_DIGEST.md', 'CLAUDE_ADAM_DIGEST.md', 'CLAUDE_COORDINATOR_DIGEST.md', 'CLAUDE_SOLOMON_DIGEST.md',
 ];
 
 // SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001 (FR-3): verify a generated file's

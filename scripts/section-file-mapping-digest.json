@@ -70,5 +70,11 @@
     "sections": [
       "coordinator_role_contract"
     ]
+  },
+  "CLAUDE_SOLOMON_DIGEST.md": {
+    "description": "Solomon oracle role contract essentials (~2-3k chars) - deep-reasoning oracle session, activation via SOLOMON_CONSULT_V1.",
+    "sections": [
+      "solomon_role_contract"
+    ]
   }
 }

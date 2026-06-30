@@ -502,6 +502,38 @@ ${coordinatorContent}
 `;
 }
 
+function generateSolomon(data, fileMapping) {
+  const { protocol } = data;
+  const sections = protocol.sections;
+  const { today, time } = getMetadata(protocol);
+
+  const solomonSections = getSectionsByMapping(sections, 'CLAUDE_SOLOMON.md', fileMapping);
+  // FR-1 guard: missing section → fallback header, never throw (section may not yet be seeded)
+  const solomonContent = solomonSections.length > 0
+    ? solomonSections.map(s => formatSection(s)).join('\n\n')
+    : '*(solomon_role_contract section not yet seeded — run the seed script to populate)*';
+
+  return `# CLAUDE_SOLOMON.md - Solomon Role Contract
+
+**Generated**: ${today} ${time}
+**Protocol**: LEO ${protocol.version}
+**Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
+**Load when**: Running /solomon, or orienting a deep-reasoning oracle session
+
+> Solomon is a deep-reasoning oracle role (Opus 4.8). For the LEAD→PLAN→EXEC workflow itself, see CLAUDE_CORE.md and the phase files. Activation is controlled by SOLOMON_CONSULT_V1.
+
+---
+
+${solomonContent}
+
+---
+
+*Generated from database: ${today}*
+*Protocol Version: ${protocol.version}*
+*Source of truth: leo_protocol_sections (section_type=solomon_role_contract). Do not hand-edit — edit the DB section and regenerate.*
+`;
+}
+
 export {
   getSectionsByMapping,
   generateRouter,
@@ -510,5 +542,6 @@ export {
   generatePlan,
   generateExec,
   generateAdam,
-  generateCoordinator
+  generateCoordinator,
+  generateSolomon
 };

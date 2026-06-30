@@ -57,7 +57,7 @@ const EXEMPT_PATTERNS = [
   /\bsetActiveCoordinator\b/,
   /\bcoordinator[/\\]resolve\.cjs\b/,
   /\bscripts[/\\]adam-advisory\.cjs\b[^\n]*\binbox\b/,
-  /\bscripts[/\\]solomon-advisory\.cjs\b[^\n]*\binbox\b/, // SOLOMON_LOOPS inbox-monitor (*/15) — mutating-but-idempotent tick (SD-LEO-INFRA-SOLOMON-CONSULT-001E-C)
+  /\bscripts[/\\]solomon-advisory\.cjs\b[^\n]*\binbox\b/, // SOLOMON_LOOPS inbox-monitor (*/15) — mutating-but-idempotent tick (SD-LEO-INFRA-SOLOMON-CONSULT-001E-C); answer path (send/request) NOT exempt
   /\bscripts[/\\]worker-checkin\.cjs\b/,
   /\bscripts[/\\]coordinator-backlog-rank\.mjs\b/,
   /\bscripts[/\\]coordinator-capacity-forecast\.mjs\b/,
