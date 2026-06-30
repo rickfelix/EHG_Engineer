@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-VENTURE-PROVISIONING-NAME-COLLISION-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-VENTURE-PROVISIONING-NAME-COLLISION-001",
-  "createdAt": "2026-06-30T00:48:55.822Z",
+  "sdKey": "SD-LEO-INFRA-UNIT-TIER-STALE-TEST-REGRESSION-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-UNIT-TIER-STALE-TEST-REGRESSION-001",
+  "createdAt": "2026-06-30T01:49:28.659Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }

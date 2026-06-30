@@ -53,7 +53,11 @@ describe('emitValidationAuditLog FAIL-CLOSED-WITH-RETRY', () => {
     const elapsed = Date.now() - start;
     expect(res.id).toBe('audit-row-id');
     expect(mock.callCount()).toBe(3);
-    expect(elapsed).toBeGreaterThanOrEqual(30); // 10 + 20 between retries
+    // SD-LEO-INFRA-UNIT-TIER-STALE-TEST-REGRESSION-001 (FR-2): callCount===3 already proves the two
+    // retries occurred; this line only needs to prove meaningful backoff was applied. The exact 30ms
+    // boundary (10+20) flaked when a timer fired ~1ms early (29 < 30). Use a tolerant bound that still
+    // rejects a near-zero / no-backoff path but survives sub-millisecond timer imprecision.
+    expect(elapsed).toBeGreaterThanOrEqual(25); // ~30ms expected (10+20), minus a small timer-slop tolerance
   });
 
   it('THROWS after 3 retry exhaustion — caller MUST rollback (FAIL-CLOSED)', async () => {
