@@ -15,7 +15,7 @@ function createMockSupabase(overrides = {}) {
     order: vi.fn().mockReturnThis(),
     limit: vi.fn().mockResolvedValue({ data: [] }),
     upsert: vi.fn().mockResolvedValue(defaultResult),
-    catch: vi.fn().mockReturnThis(),
+    then: vi.fn((onFulfilled, onRejected) => Promise.resolve({ data: [] }).then(onFulfilled, onRejected)),
   });
 
   return {
@@ -183,5 +183,23 @@ describe('getRecoveryStatus', () => {
     expect(status).toHaveProperty('sagas');
     expect(status.dlq).toHaveProperty('total');
     expect(status.dlq).toHaveProperty('pending');
+  });
+
+  it('should return empty fallbacks when queries fail (no .catch on PostgREST builder)', async () => {
+    // Simulate a thenable-but-no-.catch builder that rejects — the real PostgREST builder
+    // has .then but NOT .catch; verify getRecoveryStatus degrades gracefully.
+    const rejectingChain = () => ({
+      select: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnValue({
+        then: vi.fn((_, onRejected) => onRejected(new Error('DB unavailable'))),
+      }),
+      then: vi.fn((_, onRejected) => (onRejected ? onRejected(new Error('DB unavailable')) : Promise.reject(new Error('DB unavailable')))),
+    });
+    const supabase = { from: vi.fn(() => rejectingChain()) };
+    const status = await getRecoveryStatus(supabase);
+    expect(status.circuitBreakers).toEqual([]);
+    expect(status.dlq.total).toBe(0);
+    expect(status.sagas.total).toBe(0);
   });
 });
