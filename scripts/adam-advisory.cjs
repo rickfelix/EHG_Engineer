@@ -269,6 +269,12 @@ const ADAM_INBOX_KINDS = Object.freeze([
   'coordinator_adam_feedback',
   'assist_request',
   'reconcile_consult',
+  // SD-LEO-INFRA-ADAM-INBOX-KINDS-SOURCE-REQUEST-001: the coordinator's belt-low source-to-capacity
+  // handshake dispatches Adam a payload.kind='coordinator_source_request'. Without it in this allowlist,
+  // isAdamInboxRow returned false and the normal drain skipped it — it only reached Adam via the degraded
+  // orphan/visibility-recovery fallback. A coordinator->Adam directive-to-action (sibling of
+  // coordinator_advisory / coordinator_adam_feedback), so it belongs here, NOT in EXCLUDED_KINDS.
+  'coordinator_source_request',
 ]);
 
 /**
