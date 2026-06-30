@@ -408,6 +408,36 @@ ${coordinatorContent}
 `;
 }
 
+function generateSolomonDigest(data, fileMapping, metadata) {
+  const { protocol } = data;
+  const sections = protocol.sections;
+
+  const solomonSections = getSectionsByMapping(sections, 'CLAUDE_SOLOMON_DIGEST.md', fileMapping);
+  // Guard: missing section → fallback, never throw
+  const solomonContent = solomonSections.length > 0
+    ? solomonSections.map(s => formatSectionCompact(s)).join('\n\n')
+    : '*(solomon_role_contract section not yet seeded)*';
+
+  const header = generateDigestHeader('CLAUDE_SOLOMON_DIGEST.md', metadata);
+  const fullLoadInstr = generateFullLoadInstructions('CLAUDE_SOLOMON.md');
+
+  return `${header}# CLAUDE_SOLOMON_DIGEST.md - Solomon Role (Oracle)
+
+**Protocol**: LEO ${protocol.version}
+**Purpose**: Solomon oracle role contract essentials — deep-reasoning session (<3k chars)
+
+${fullLoadInstr}
+
+---
+
+${solomonContent}
+
+---
+*Solomon is NOT a worker and NOT the coordinator. Full contract in CLAUDE_SOLOMON.md.*
+*Protocol: ${protocol.version}*
+`;
+}
+
 export {
   getSectionsByMapping,
   formatSectionCompact,
@@ -419,5 +449,6 @@ export {
   generatePlanDigest,
   generateExecDigest,
   generateAdamDigest,
-  generateCoordinatorDigest
+  generateCoordinatorDigest,
+  generateSolomonDigest
 };
