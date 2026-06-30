@@ -360,6 +360,7 @@
     "stage-contracts:check": "node scripts/validate-stage-contract-connectivity.mjs",
     "fr:descope": "node scripts/record-fr-descope.js",
     "adam:register": "node scripts/adam-register.cjs",
+    "solomon:register": "node scripts/solomon-register.cjs",
     "adam:restart": "node scripts/adam-restart.cjs",
     "adam:advisory": "node scripts/adam-advisory.cjs",
     "working-context": "node scripts/working-context.cjs",
