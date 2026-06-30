@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-TIER-RANK-STARVATION-DURABLE-FIX-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-TIER-RANK-STARVATION-DURABLE-FIX-001",
-  "createdAt": "2026-06-30T05:25:26.434Z",
+  "sdKey": "SD-LEO-INFRA-CLONE-TREE-EXCLUSION-FAIL-OPEN-LEAK-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-CLONE-TREE-EXCLUSION-FAIL-OPEN-LEAK-001",
+  "createdAt": "2026-06-30T05:54:35.410Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
