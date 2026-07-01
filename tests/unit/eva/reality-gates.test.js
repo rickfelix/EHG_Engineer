@@ -14,6 +14,7 @@ import {
   _internal,
   _resetBoundaryCacheForTest,
 } from '../../../lib/eva/reality-gates.js';
+import { createFaithfulRealtimeChannelMock } from '../../helpers/faithful-supabase-realtime-mock.js';
 
 function createMockDb(artifacts = []) {
   return {
@@ -323,34 +324,22 @@ describe('RealityGates', () => {
     // the callback. These tests use a mock whose unsubscribe()/removeChannel() WOULD
     // recursively re-invoke the callback (reproducing the real vendored-client
     // behavior) and assert neither is ever called -- proving the recursion never gets
-    // a chance to start.
+    // a chance to start. Uses the shared faithful mock
+    // (tests/helpers/faithful-supabase-realtime-mock.js), wrapped with this file's own
+    // `from()` shape.
     function makeMockDbWithRecursiveTeardown() {
-      let capturedStatusCallback = null;
-      let unsubscribeCallCount = 0;
-      let removeChannelCallCount = 0;
-      const channelMock = {
-        on: function () { return this; },
-        subscribe: function (cb) { capturedStatusCallback = cb; return this; },
-        unsubscribe: function () {
-          unsubscribeCallCount++;
-          if (unsubscribeCallCount > 100) throw new Error('unsubscribe recursion guard tripped -- test itself would overflow');
-          capturedStatusCallback?.('CLOSED'); // simulates phoenix's synchronous Channel.leave() re-firing CLOSED
-        },
-      };
+      const { channelMock, removeChannel, getStatusCallback, getUnsubscribeCallCount, getRemoveChannelCallCount } =
+        createFaithfulRealtimeChannelMock();
       const sb = {
         from: vi.fn(() => ({ select: () => Promise.resolve({ data: [], error: null }) })),
         channel: () => channelMock,
-        removeChannel: function () {
-          removeChannelCallCount++;
-          if (removeChannelCallCount > 100) throw new Error('removeChannel recursion guard tripped -- test itself would overflow');
-          channelMock.unsubscribe(); // real RealtimeClient.removeChannel() calls channel.unsubscribe() internally
-        },
+        removeChannel,
       };
       return {
         sb,
-        getStatusCallback: () => capturedStatusCallback,
-        getUnsubscribeCallCount: () => unsubscribeCallCount,
-        getRemoveChannelCallCount: () => removeChannelCallCount,
+        getStatusCallback,
+        getUnsubscribeCallCount,
+        getRemoveChannelCallCount,
       };
     }
 
