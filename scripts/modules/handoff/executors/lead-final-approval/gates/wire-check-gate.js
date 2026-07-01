@@ -8,7 +8,7 @@
  * Phase: LEAD-FINAL-APPROVAL
  */
 
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -171,14 +171,13 @@ export function discoverEntryPoints(rootDir) {
   const normalize = (p) => p.replace(/\\/g, '/');
 
   // 1. Extract script targets from package.json
+  // harness_backlog 7967256e (security-agent, 2026-07-01): this previously shelled
+  // out to `node -e "...readFileSync('${path}')..."` via execSync with string
+  // interpolation -- a command-injection smell even though pkgPath is not currently
+  // attacker-controlled. Read the file directly; no subprocess needed at all.
   try {
     const pkgPath = path.join(rootDir, 'package.json');
-    const pkg = JSON.parse(
-      execSync(`node -e "process.stdout.write(require('fs').readFileSync('${normalize(pkgPath)}','utf8'))"`, {
-        encoding: 'utf8',
-        timeout: 5000,
-      })
-    );
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 
     if (pkg.scripts) {
       for (const cmd of Object.values(pkg.scripts)) {
@@ -310,8 +309,12 @@ export function createWireCheckGate(_supabase) {
       const mainRef = refResult.ref;
       const refWarnings = refResult.warning ? [refResult.warning] : [];
       try {
-        const diff = execSync(
-          `git diff --name-only --diff-filter=A ${mainRef}...HEAD -- "*.js" "*.mjs" "*.cjs"`,
+        // harness_backlog 7967256e: execFileSync (argv array, no shell) instead of
+        // execSync with a template-string command -- defense-in-depth even though
+        // mainRef is always one of getMainRef()'s fixed literal refs today.
+        const diff = execFileSync(
+          'git',
+          ['diff', '--name-only', '--diff-filter=A', `${mainRef}...HEAD`, '--', '*.js', '*.mjs', '*.cjs'],
           { encoding: 'utf8', cwd: rootDir, timeout: 10000 }
         );
         newFiles = diff
