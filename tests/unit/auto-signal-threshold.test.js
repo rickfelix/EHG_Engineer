@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { shouldEmitAutoSignal, buildAutoSignalArgs, shouldEmitGateAutoSignal, buildGateAutoSignalArgs } = require('../../lib/hooks/auto-signal-threshold.cjs');
+const { shouldEmitAutoSignal, buildAutoSignalArgs, shouldEmitGateAutoSignal, buildGateAutoSignalArgs, shouldHardBlock } = require('../../lib/hooks/auto-signal-threshold.cjs');
 
 const SID = '11111111-2222-4333-8444-555555555555';
 
@@ -104,6 +104,39 @@ describe('buildAutoSignalArgs (FR-1)', () => {
   it('omits the SD clause when no sdKey is known', () => {
     const args = buildAutoSignalArgs({ toolName: 'Bash', signature: 'sig', attempts: 2 });
     expect(args[1]).not.toContain('(SD ');
+  });
+});
+
+// SD-LEO-INFRA-RCA-ENFORCEMENT-PROGRESS-STALL-NOT-REPETITION-001: the hard-block decision must
+// gate on PROGRESS-STALL, not bare repetition count.
+describe('shouldHardBlock (SD-LEO-INFRA-RCA-ENFORCEMENT-PROGRESS-STALL-NOT-REPETITION-001)', () => {
+  it('blocks at attempts>=3 when progress is unknown (progressStalled=undefined, fail-closed — pre-existing behavior preserved)', () => {
+    expect(shouldHardBlock({ attempts: 3 })).toBe(true);
+    expect(shouldHardBlock({ attempts: 5 })).toBe(true);
+  });
+
+  it('blocks at attempts>=3 when progress is genuinely stalled (progressStalled=true)', () => {
+    expect(shouldHardBlock({ attempts: 3, progressStalled: true })).toBe(true);
+  });
+
+  it('does NOT block at attempts>=3 when the session is demonstrably advancing (progressStalled=false)', () => {
+    expect(shouldHardBlock({ attempts: 3, progressStalled: false })).toBe(false);
+    expect(shouldHardBlock({ attempts: 5, progressStalled: false })).toBe(false);
+  });
+
+  it('never blocks below the attempts>=3 threshold, regardless of progressStalled', () => {
+    expect(shouldHardBlock({ attempts: 2, progressStalled: true })).toBe(false);
+    expect(shouldHardBlock({ attempts: 1 })).toBe(false);
+  });
+
+  it('the EMERGENCY_RCA_BYPASS override still wins over a stalled/unknown progress state', () => {
+    expect(shouldHardBlock({ attempts: 3, bypassed: true })).toBe(false);
+    expect(shouldHardBlock({ attempts: 3, bypassed: true, progressStalled: true })).toBe(false);
+  });
+
+  it('ignores non-integer attempts (fail-safe — never blocks on a malformed count)', () => {
+    expect(shouldHardBlock({ attempts: NaN })).toBe(false);
+    expect(shouldHardBlock({ attempts: undefined })).toBe(false);
   });
 });
 

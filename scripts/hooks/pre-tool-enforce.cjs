@@ -1220,7 +1220,12 @@ async function main() {
           }
         } catch { /* fail-open: auto-signal must never block tool execution */ }
 
-        if (attempts >= 3 && !bypassed) {
+        // SD-LEO-INFRA-RCA-ENFORCEMENT-PROGRESS-STALL-NOT-REPETITION-001: gate the hard block on
+        // PROGRESS-STALL, not bare repetition count. progressStalled===false (the session is
+        // demonstrably advancing — different migration file, advancing phase/percent, etc.)
+        // suppresses the block; true/undefined preserves the exact pre-existing behavior.
+        const { shouldHardBlock } = require('../../lib/hooks/auto-signal-threshold.cjs');
+        if (shouldHardBlock({ attempts, bypassed, progressStalled })) {
           process.stderr.write(
             `\nRCA TIERED ENFORCEMENT (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-129):\n` +
             `  Blocked: ${TOOL_NAME} invoked ${attempts}x on the same target within 10 minutes.\n` +

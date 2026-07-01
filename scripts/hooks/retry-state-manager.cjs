@@ -61,6 +61,12 @@ const EXEMPT_PATTERNS = [
   /\bscripts[/\\]worker-checkin\.cjs\b/,
   /\bscripts[/\\]coordinator-backlog-rank\.mjs\b/,
   /\bscripts[/\\]coordinator-capacity-forecast\.mjs\b/,
+  // SD-LEO-INFRA-RCA-ENFORCEMENT-PROGRESS-STALL-NOT-REPETITION-001: apply-migration.js is one
+  // invocation PER migration file — legitimately repeated (3 migrations applied in a row is
+  // progress, not a stuck loop), but that per-file progress isn't visible to the SD-level
+  // phase/percent progressFingerprint (Control 3), so it needs this allowlist backstop the same
+  // way the other mutating-but-idempotent scheduled scripts above do.
+  /\bscripts[/\\]apply-migration\.js\b/,
 ];
 
 /**
