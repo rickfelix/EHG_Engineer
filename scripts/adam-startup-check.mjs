@@ -372,6 +372,34 @@ export async function renderSourcingState({ supabase = null, env = process.env }
 }
 
 // ── Main (fail-open: always exit 0) ──
+/**
+ * SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DISCIPLINE-001-A (Child A / FR-4): rehydrate the
+ * durable Adam task board (adam_task_ledger) on a cold /adam start (and post-compaction), BEFORE
+ * Adam works its threads, so the session reconstructs its open items from the live sources. FAIL-SOFT
+ * -- a rehydrate error (or missing DB creds / not-yet-applied migration) never blocks startup; it
+ * degrades to a skip line. Surfaces a one-line 'board: N open threads (M parents)' summary.
+ * Accepts an injected supabase client for tests; otherwise builds one from env creds.
+ */
+export async function renderBoardRehydrate({ supabase = null, env = process.env } = {}) {
+  const head = '═══ ADAM TASK BOARD (rehydrate) ═══\n  ';
+  try {
+    let client = supabase;
+    if (!client) {
+      const url = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
+      const key = env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!url || !key) return head + 'rehydrate skipped (no DB creds, fail-open)';
+      const { createClient } = await import('@supabase/supabase-js');
+      client = createClient(url, key);
+    }
+    const { rehydrateBoard } = await import('../lib/adam/task-rehydrate.js');
+    const summary = await rehydrateBoard(client);
+    const note = summary.errors && summary.errors.length ? ` (${summary.errors.length} source issue(s), fail-soft)` : '';
+    return head + `board: ${summary.threads} open threads (${summary.parents} parents)${note}`;
+  } catch (err) {
+    return head + 'rehydrate skipped (fail-open): ' + (err?.message || String(err));
+  }
+}
+
 async function main() {
   try {
     console.log('[ADAM-STARTUP] ' + (process.env.CLAUDE_SESSION_ID ? 'session=' + process.env.CLAUDE_SESSION_ID : 'session=unknown'));
@@ -379,6 +407,9 @@ async function main() {
     // FR-2: the read-only Sourcing SSOT state probe (DB-backed, fail-open).
     console.log('');
     console.log(await renderSourcingState({ env: process.env }));
+    // FR-4: rehydrate the durable Adam task board (fail-soft -- never blocks startup).
+    console.log('');
+    console.log(await renderBoardRehydrate({ env: process.env }));
   } catch (err) {
     console.warn('⚠️  adam-startup-check hiccup (non-blocking, fail-open): ' + (err && err.message ? err.message : String(err)));
   }
