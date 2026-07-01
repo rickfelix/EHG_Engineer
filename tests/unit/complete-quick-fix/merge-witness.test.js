@@ -166,6 +166,18 @@ describe('verifyQFMergeWitness — verified (completable) cases', () => {
     expect(w.prUrl).toBe(own.url);
   });
 
+  it('falls through to self-derive when the supplied pr_url is UNRESOLVABLE (gh view errors)', () => {
+    const own = OWN('QF-H-001', { url: 'https://github.com/rickfelix/EHG_Engineer/pull/6600' });
+    mockExec({
+      prView: new Error('gh pr view 404: not found'), // supplied pr_url cannot be resolved
+      prList: [own],                                   // ...but the own branch has a merged PR
+      reachable: true,
+    });
+    const w = verifyQFMergeWitness({ qfId: 'QF-H-001', prUrl: 'https://github.com/rickfelix/EHG_Engineer/pull/404', testDir: TEST_DIR });
+    expect(w.verified).toBe(true);
+    expect(w.prUrl).toBe(own.url);
+  });
+
   it('self-derives the OWN PR even when a FOREIGN merged pr_url is supplied (never trusts the foreign PR)', () => {
     const own = OWN('QF-G-001', { url: 'https://github.com/rickfelix/EHG_Engineer/pull/6500' });
     mockExec({
