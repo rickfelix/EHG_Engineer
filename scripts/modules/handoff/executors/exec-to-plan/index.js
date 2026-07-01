@@ -37,6 +37,8 @@ import {
   createWiringValidationGate,
   // Advisory wire-reachability check (SD-FDBK-ENH-WIRE-CHECK-GATE-002)
   createWireCheckAdvisoryGate,
+  // Consumer Impact advisory (SD-LEO-INFRA-FIRST-PARTY-CODEBASE-STRUCTURAL-ANALYSIS-001)
+  createConsumerImpactGate,
   // UI Interactivity Check (SD-MAN-INFRA-LEO-GATE-IMPROVEMENTS-001)
   createUiInteractivityCheckGate
 } from './gates/index.js';
@@ -355,6 +357,11 @@ export class ExecToPlanExecutor extends BaseExecutor {
     // wiring it sees the gap here (and can fix it in the same PR) instead of being
     // blocked at the FINAL handoff and forced to open a 2nd PR.
     gates.push(createWireCheckAdvisoryGate(this.supabase));
+
+    // Consumer Impact advisory (SD-LEO-INFRA-FIRST-PARTY-CODEBASE-STRUCTURAL-ANALYSIS-001)
+    // Non-blocking (required:false): blast-radius of modified/removed exported
+    // symbols, flags any consumer not touched in the same diff for PR review.
+    gates.push(createConsumerImpactGate(this.supabase));
 
     // UI Interactivity Check (SD-MAN-INFRA-LEO-GATE-IMPROVEMENTS-001)
     // Blocks display-only EHG frontend components — must have onClick/onSubmit

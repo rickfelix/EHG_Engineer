@@ -67,6 +67,22 @@ describe('module-resolver', () => {
     const result = resolveModulePath('acorn', fromFile, tmpDir);
     expect(result).toBeNull();
   });
+
+  // SD-LEO-INFRA-FIRST-PARTY-CODEBASE-STRUCTURAL-ANALYSIS-001 (FR-5): .ts/.tsx resolution
+  it('should resolve .ts extension', () => {
+    fs.writeFileSync(path.join(tmpDir, 'baz.ts'), 'export default 4;');
+    const fromFile = path.join(tmpDir, 'entry.js');
+    const result = resolveModulePath('./baz', fromFile, tmpDir);
+    expect(result).toBe(path.join(tmpDir, 'baz.ts').replace(/\\/g, '/'));
+  });
+
+  it('should resolve directory with index.ts', () => {
+    fs.mkdirSync(path.join(tmpDir, 'sub-ts'));
+    fs.writeFileSync(path.join(tmpDir, 'sub-ts', 'index.ts'), 'export default 5;');
+    const fromFile = path.join(tmpDir, 'entry.js');
+    const result = resolveModulePath('./sub-ts', fromFile, tmpDir);
+    expect(result).toBe(path.join(tmpDir, 'sub-ts', 'index.ts').replace(/\\/g, '/'));
+  });
 });
 
 // ─── Call Graph Builder ──────────────────────────────────────────────
