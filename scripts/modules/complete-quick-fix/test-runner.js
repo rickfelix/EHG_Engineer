@@ -25,10 +25,17 @@ export const WHOLE_SUITE_UNIT_COMMAND = 'npm run test:unit';
  * TARGETED run of explicit test-file paths does NOT build the full graph and is
  * clean/fast. So we resolve the QF's actual unit-test files (see
  * getScopedUnitTestFiles in git-operations.js) and run exactly those:
- *   `npx vitest run --project unit <testFiles> --passWithNoTests`
- * --passWithNoTests keeps an empty/already-filtered set a pass, not a hard fail
- * (FR-3). When no test files are supplied, fall back to the whole-suite command
- * (used only for the diff-unknown last-resort path; FR-1 backward-compat).
+ *   `npx vitest run --project unit <testFiles>`
+ * When no test files are supplied, fall back to the whole-suite command (used
+ * only for the diff-unknown last-resort path; FR-1 backward-compat).
+ *
+ * RCA a15122006891b019b (2026-07-01): --passWithNoTests was previously appended
+ * to the SCOPED branch too. When every resolved path is excluded by the unit
+ * project's own filters (quarantine manifest / SHARED_EXCLUDE / DB_INCLUDE),
+ * vitest finds zero test files but --passWithNoTests still exits 0 — a
+ * gate-fail-open false-verification-witness (tests_passing=true with zero
+ * tests ever executed). Dropped here; runTests() also asserts summary.total>0
+ * for scoped runs as defense-in-depth (see below).
  *
  * Pure (no side effects) for unit-testability (FR-5). Each path is double-quoted
  * so a path with a space — or a shell metacharacter — cannot break or inject.
@@ -47,7 +54,7 @@ export function buildUnitTestCommand(testFiles) {
   if (!quoted) {
     return WHOLE_SUITE_UNIT_COMMAND;
   }
-  return `npx vitest run --project unit ${quoted} --passWithNoTests`;
+  return `npx vitest run --project unit ${quoted}`;
 }
 
 /**
@@ -90,11 +97,22 @@ export function runTests(testType, options = {}) {
       cwd: testDir
     });
 
+    const summary = extractTestSummary(output, testType);
+    // RCA a15122006891b019b: a scoped unit run (explicit testFiles) that executes
+    // zero tests is NOT a pass, even though the process exited 0 — the scoped
+    // files were likely excluded by the unit project's own filters. Whole-suite
+    // runs (no testFiles) are unaffected.
+    const scopedZeroExecution =
+      testType === 'unit' && Array.isArray(options.testFiles) && options.testFiles.length > 0 && summary.total === 0;
+
     return {
-      passed: true,
+      passed: !scopedZeroExecution,
       output: output.substring(0, 2000),
       exitCode: 0,
-      summary: extractTestSummary(output, testType)
+      summary,
+      ...(scopedZeroExecution && {
+        falseVerificationGuard: 'scoped testFiles resolved to zero executed tests — treated as non-pass'
+      })
     };
   } catch (err) {
     const output = err.stdout?.toString() || err.stderr?.toString() || err.message;
