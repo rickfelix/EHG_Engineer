@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 
-const { extractSdFromAssignment, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS } = require('./worker-checkin.cjs');
+const { extractSdFromAssignment, runCheckin, isAutoStartableQF, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS } = require('./worker-checkin.cjs');
 
 describe('FR-2: extractSdFromAssignment', () => {
   it('prefers payload.sd_key', () => {
@@ -812,11 +812,45 @@ describe('SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: runCheckin names a freshly-cla
     expect(r.callsign).toBe('Alpha'); // named immediately on first claim, not one cycle later
   });
 
-  it('does NOT assign a name when the worker idles (no claim -> no pool burn)', async () => {
+  it('names a worker on ARRIVAL even when it idles (SD-LEO-INFRA-CHECKIN-NAME-ON-ARRIVAL-001 FR-1)', async () => {
     const sb = makeStub({ session: { metadata: {}, sd_key: null }, messages: [], candidates: [] });
     const r = await runCheckin(sb, 'sess-1', noCoord);
     expect(r.action).toBe('idle');
-    expect(r.callsign).toBeFalsy(); // idle/never-claimed sessions are never named at check-in
+    expect(r.callsign).toBe('Alpha'); // FR-1: naming is an arrival property, not a reward for holding a claim
+  });
+});
+
+describe('SD-LEO-INFRA-CHECKIN-NAME-ON-ARRIVAL-001: name on arrival + preserved exclusions', () => {
+  it('FR-2: an already-named idle worker keeps its name (idempotent, no rename)', async () => {
+    const sb = makeStub({ session: { metadata: { fleet_identity: { callsign: 'Delta', color: 'red' } }, sd_key: null }, messages: [], candidates: [] });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('idle');
+    expect(r.callsign).toBe('Delta'); // surfaced by resolveCheckin -> naming branch skipped
+  });
+
+  it('FR-4: a coordinator session stays nameless on an idle check-in', async () => {
+    const sb = makeStub({ session: { metadata: { is_coordinator: true }, sd_key: null }, messages: [], candidates: [] });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('idle');
+    expect(r.callsign).toBeFalsy(); // coordinators never join the worker name pool
+  });
+
+  it('FR-4: an Adam role session stays nameless on an idle check-in', async () => {
+    const sb = makeStub({ session: { metadata: { role: 'adam' }, sd_key: null }, messages: [], candidates: [] });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.callsign).toBeFalsy(); // role sessions run the fleet; they are not worker-pool members
+  });
+
+  it('FR-4: a Solomon role session stays nameless on an idle check-in', async () => {
+    const sb = makeStub({ session: { metadata: { role: 'solomon' }, sd_key: null }, messages: [], candidates: [] });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.callsign).toBeFalsy();
+  });
+
+  it('FR-4: a probe fixture id the narrow isTestSessionId misses stays nameless (isFixtureSession superset)', async () => {
+    const sb = makeStub({ session: { metadata: {}, sd_key: null }, messages: [], candidates: [] });
+    const r = await runCheckin(sb, 'qf-route-probe-A', noCoord);
+    expect(r.callsign).toBeFalsy(); // *-probe-* is caught by the shared isFixtureSession superset, not isTestSessionId
   });
 });
 

@@ -39,9 +39,13 @@ describe('QF-20260627-108: tier-encoded callsign assignment', () => {
     expect(pickCallsignForTier(4, new Set(['Alpha', 'Bravo']))).toBe('Charlie');
   });
 
-  it('wraps with a numeric suffix only when the band is exhausted', () => {
-    const used = new Set(['Golf']);
-    expect(pickCallsignForTier(2, used)).toBe('Golf-' + (used.size + 1)); // tier-2 band has one slot
+  it('wraps to the first FREE numeric suffix only when the band is exhausted (SD-LEO-INFRA-CHECKIN-NAME-ON-ARRIVAL-001 FR-3)', () => {
+    // tier-2 band has one slot (Golf); exhaustion extends deterministically to the first free base-N (N>=2).
+    expect(pickCallsignForTier(2, new Set(['Golf']))).toBe('Golf-2');
+    // Collision honesty: never re-issue an already-used suffix — skip Golf-2, return Golf-3.
+    expect(pickCallsignForTier(2, new Set(['Golf', 'Golf-2']))).toBe('Golf-3');
+    // A vacated mid-index (Golf-2 free but Golf-3 used) is filled first, NOT re-colliding Golf-3.
+    expect(pickCallsignForTier(2, new Set(['Golf', 'Golf-3']))).toBe('Golf-2');
   });
 
   it('callsignInTierBand detects a wrong-band callsign so the cron self-heals it', () => {

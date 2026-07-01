@@ -860,6 +860,18 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
       .select('metadata').eq('session_id', sessionId).maybeSingle();
     const myMeta = (cur && cur.metadata) || {};
     if (myMeta.is_coordinator === true) return null; // coordinators stay nameless in the worker pool (QF-20260508-648)
+    // SD-LEO-INFRA-CHECKIN-NAME-ON-ARRIVAL-001 (FR-4): role sessions (Adam/Solomon) run the fleet but
+    // are NOT worker-pool members. Adam short-circuits to action=idle — exactly what the FR-1-relaxed
+    // gate now names — so exclude them here at the authoritative metadata read too.
+    if (myMeta.role === 'adam' || myMeta.role === 'solomon') return null;
+    // FR-4: widen the ghost guard to the shared isFixtureSession superset so *-probe-* / QF-TEST-*
+    // sessions (which the narrow isTestSessionId prefix list misses, bug 7b59dac8) never burn a pool
+    // slot on an idle check-in. Fail-open: if the .mjs import fails, the gate's isTestSessionId
+    // pre-filter + the role/coordinator guards above still apply — naming NEVER becomes action=error.
+    try {
+      const { isFixtureSession } = await import('../lib/fleet/session-predicates.mjs');
+      if (isFixtureSession(sessionId)) return null;
+    } catch { /* superset unavailable — retained isTestSessionId pre-filter still guards */ }
     const existing = myMeta.fleet_identity;
     // QF-20260627-108: idempotent ONLY when the existing callsign is in this worker's tier band
     // (effort-encoded SoT). A wrong-band callsign (e.g. a tier-2 worker still holding "Bravo") falls
@@ -910,26 +922,27 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
   } catch { return null; }
 }
 
-// SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: actions whose result carries a freshly-held claim — every
-// path where a worker ends a check-in owning work and therefore deserves a name NOW.
-const CLAIMED_CHECKIN_ACTIONS = new Set(['resume', 'resume_final', 'resume_orphan', 'claimed_assignment', 'self_claimed', 'self_claimed_qf']);
-
-// Public check-in entrypoint: resolve the action, then name a freshly-claimed, identity-less worker
-// before returning so the SAME response reports the callsign. Naming is a thin fail-open wrapper over
-// the resolution logic (resolveCheckin) so it covers ALL claim paths (resume / assignment / self-claim
-// SD / self-claim draft / self-claim QF) at one site, without threading naming through each return.
+// Public check-in entrypoint: resolve the action, then name an identity-less worker before returning
+// so the SAME response reports the callsign. Naming is a thin fail-open wrapper over resolveCheckin so
+// it covers ALL paths at one site, without threading naming through each return.
+//
+// SD-LEO-INFRA-CHECKIN-NAME-ON-ARRIVAL-001 (FR-1): name a worker on ARRIVAL — every SUCCESSFUL
+// (non-error) check-in INCLUDING action=idle — not only when it holds a claim. Naming is an arrival
+// property of a fleet member, not a reward for holding work (a freshly-swapped fleet was looking
+// half-anonymous). Idempotent via !result.callsign; the coordinator / role (adam|solomon) / fixture
+// exclusions live in the isTestSessionId pre-filter + assignFleetIdentityAtCheckin. claimedId is null
+// for an idle arrival and flows through cleanly (SET_IDENTITY target_sd becomes null).
 async function runCheckin(sb, sessionId, opts = {}) {
   const result = await resolveCheckin(sb, sessionId, opts);
   try {
-    const claimedId = result && (result.sd || result.qf); // SD actions carry .sd; a QF self-claim carries .qf
+    const claimedId = result && (result.sd || result.qf); // SD actions carry .sd; a QF self-claim carries .qf; null when idle
     if (
       result &&
-      CLAIMED_CHECKIN_ACTIONS.has(result.action) &&
-      claimedId &&
+      result.action !== 'error' &&        // FR-1: name on any SUCCESSFUL action (incl. idle)
       !result.callsign &&                 // already named -> nothing to do (idempotent)
-      !isTestSessionId(sessionId)         // ghost/test sessions never burn the 8-name pool (QF-20260528-581)
+      !isTestSessionId(sessionId)         // cheap ghost/test pre-filter (QF-20260528-581); helper widens to isFixtureSession
     ) {
-      const assigned = await assignFleetIdentityAtCheckin(sb, sessionId, claimedId);
+      const assigned = await assignFleetIdentityAtCheckin(sb, sessionId, claimedId || null);
       if (assigned && assigned.callsign) result.callsign = assigned.callsign;
     }
   } catch { /* fail-open: naming must NEVER turn a check-in into action=error */ }
