@@ -1,0 +1,54 @@
+name: "Backlog rank (cron)"
+
+# SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-A (FR-2) — durable, coordinator-independent
+# net for coordinator-backlog-rank.mjs (persists metadata.dispatch_rank that worker self-claim
+# ordering honors). The ONLY other paths that run this script are (a) coordinator-quiet-tick.mjs's
+# composed core and (b) a harness-level CronCreate loop armed by a LIVE coordinator session — both
+# of which can go dark together (quiescent skip + the coordinator's own teardown-discipline
+# CronDelete sweep). This workflow runs in always-on GitHub Actions (mirroring
+# fleet-down-alert-cron.yml), independent of any coordinator session or CronCreate arming state, so
+# a claimable-but-unranked SD is never stuck for longer than one ~15min run.
+#
+# coordinator-backlog-rank.mjs fail-opens its mutation guard when no session id is resolvable (see
+# lib/coordinator-mutation-guard.mjs assertCanonicalCoordinator: no_session_id_fail_open), so this
+# workflow needs no CLAUDE_SESSION_ID to write ranks.
+
+on:
+  schedule:
+    # Every 15 minutes, offset to dodge the other ~15min crons (fleet-down-alert 11,26,41,56;
+    # coordinator STANDARD_LOOPS backlog-rank 6,21,36,51; charter-audit 8,23,38,53).
+    - cron: '9,24,39,54 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  rank:
+    name: Rank the claimable backlog
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Rank the claimable backlog
+        run: node scripts/coordinator-backlog-rank.mjs
