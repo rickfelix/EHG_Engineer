@@ -395,7 +395,7 @@ function extractTableName(command) {
 }
 
 /**
- * QF-20260609-547: split a command into per-`.from('table')` segments so column checks are scoped
+ * QF-20260609-547: split a command into per-`.from('table')` segments so column checks are scoped (schema-lint-disable-line: doc comment, not a real table reference)
  * to the NEAREST preceding `.from()`. Previously a compound `node -e` touching two tables attributed
  * every extracted column to ONE table → cross-table false blocks (e.g. user_stories columns blamed
  * on product_requirements_v2). Falls back to extractTableName (rpc / other Supabase patterns) when no
