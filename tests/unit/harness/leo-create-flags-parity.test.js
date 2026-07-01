@@ -51,6 +51,28 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
     });
   });
 
+  describe('--from-qf path (SD-LEO-FIX-LEO-CREATE-ROUTE-001)', () => {
+    it('createFromQF accepts an opts param and destructures securityReviewed', () => {
+      const idx = src.indexOf('async function createFromQF');
+      expect(idx).toBeGreaterThan(0);
+      const header = src.slice(idx, idx + 100);
+      expect(header).toMatch(/async function createFromQF\(qfId,\s*opts\s*=\s*\{\}\)/);
+    });
+
+    it('createFromQF metadata propagates security_reviewed=true when the flag is set', () => {
+      const idx = src.indexOf('async function createFromQF');
+      const body = src.slice(idx, idx + 3000);
+      expect(body).toMatch(/opts\.securityReviewed\s*\?\s*\{\s*security_reviewed:\s*true\s*\}/);
+    });
+
+    it('CLI passes args.includes(--security-reviewed) to createFromQF', () => {
+      const idx = src.indexOf("args[0] === '--from-qf'");
+      expect(idx).toBeGreaterThan(0);
+      const block = src.slice(idx, idx + 900);
+      expect(block).toMatch(/await createFromQF\(args\[1\],\s*\{\s*securityReviewed:\s*args\.includes\(['"]--security-reviewed['"]\)\s*\}\)/);
+    });
+  });
+
   describe('direct-args mode', () => {
     it('knownDirectFlags Set includes --migration-reviewed / --security-reviewed / --yes / -y', () => {
       const idx = src.indexOf('const knownDirectFlags = new Set');
