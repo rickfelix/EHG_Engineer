@@ -117,6 +117,27 @@ describe('symbol-diff', () => {
     expect(modifiedExports).toEqual([{ file: 'brand-new.js', exportName: 'created', changeType: 'added' }]);
   });
 
+  it('does not flag a export as modified when only line-ending style differs (CRLF working tree vs LF git-show)', () => {
+    // git show reads LF-normalized content straight from the object store;
+    // a real Windows checkout (core.autocrlf=true) writes CRLF to the working
+    // tree. Reproduce that mismatch directly without depending on this test
+    // runner's own autocrlf setting.
+    const filePath = path.join(tmpDir, 'a.js');
+    const lfContent = 'export function foo() {\n  return 1;\n}\n';
+    fs.writeFileSync(filePath, lfContent);
+    git(['add', '.'], tmpDir);
+    git(['commit', '-q', '-m', 'base'], tmpDir);
+    const baseRef = git(['rev-parse', 'HEAD'], tmpDir).trim();
+
+    // Same logical content, CRLF line endings — simulates a checked-out
+    // working tree on Windows with autocrlf=true.
+    fs.writeFileSync(filePath, lfContent.replace(/\n/g, '\r\n'));
+
+    const { modifiedExports, warnings } = detectModifiedExports(baseRef, ['a.js'], tmpDir);
+    expect(warnings).toEqual([]);
+    expect(modifiedExports).toEqual([]);
+  });
+
   it('skips an oversized working-tree file without throwing (TS-4)', () => {
     const filePath = path.join(tmpDir, 'a.js');
     fs.writeFileSync(filePath, 'export function foo() { return 1; }\n');
