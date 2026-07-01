@@ -124,6 +124,17 @@ export function productPivotCompare(a, b, active) {
   if (!active) return 0;
   return productPivotRank(a) - productPivotRank(b);
 }
+// SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: pure helpers for the atomic JSONB merge
+// write path. Extracted so the query shape is unit-testable without a live pg connection.
+export function buildRankPatch(rank, nowIso, sessionId) {
+  return { dispatch_rank: rank, dispatch_rank_at: nowIso, dispatch_rank_by: sessionId };
+}
+export function buildRankMergeQuery(rankPatch, sdKey) {
+  return {
+    sql: 'UPDATE strategic_directives_v2 SET metadata = metadata || $1::jsonb WHERE sd_key = $2',
+    params: [JSON.stringify(rankPatch), sdKey],
+  };
+}
 // SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-C (FR-2): needle-movement prioritization.
 // Reuse FR-1's rollup (active rung + per-rung progress) and the pure needle scorer to order remaining
 // work active-rung-first among same-unlock candidates. Loaded fail-soft — any read error leaves the
@@ -407,12 +418,46 @@ async function main() {
   // (the SELECT/ranking reads above are always allowed). Skip the write if this session
   // is not the canonical coordinator. Fail-open on resolver error / no session_id.
   // Finding 1: env-first with disk-pointer fallback so an out-of-band run still resolves.
+  //
+  // SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: RANK_EVENT_TRIGGER=1 (set ONLY on the
+  // spawned child's env by lib/coordinator/trigger-rank-pass.mjs, never on an interactive
+  // process.env) bypasses this guard entirely. The guard exists to stop a rogue NON-canonical
+  // coordinator daemon from double-acting on STATEFUL duties; this pass is a deterministic,
+  // idempotent full re-rank, so redundant concurrent runs converge to the same output instead
+  // of corrupting state. Without this bypass, an event-triggered run from a worker session is
+  // blocked whenever ANY coordinator is live — the normal fleet state, not an edge case
+  // (prospective testing-agent finding, PLAN phase).
   const me = resolveOwnSessionId();
+  const eventTriggered = process.env.RANK_EVENT_TRIGGER === '1';
   if (!DRY) {
-    const _rankGuard = await guardMutation(sb, me, 'coordinator-backlog-rank');
-    if (!_rankGuard.allowed) {
-      console.log('[BACKLOG-RANK] mutation blocked by coordinator guard — not the canonical coordinator; skipping writes.');
-      return;
+    if (eventTriggered) {
+      console.log('[BACKLOG-RANK] event-triggered invocation (RANK_EVENT_TRIGGER=1) — bypassing coordinator mutation guard.');
+    } else {
+      const _rankGuard = await guardMutation(sb, me, 'coordinator-backlog-rank');
+      if (!_rankGuard.allowed) {
+        console.log('[BACKLOG-RANK] mutation blocked by coordinator guard — not the canonical coordinator; skipping writes.');
+        return;
+      }
+    }
+  }
+
+  // SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: an atomic JSONB partial-merge pg Client,
+  // used below instead of supabase-js's read-spread-write full-blob update. The prior pattern
+  // (`{ ...(d.metadata||{}), dispatch_rank, ... }` then `.update({metadata: meta})`) read the
+  // whole table once at the top of this function, then wrote a full metadata blob per row —
+  // any OTHER writer (e.g. lib/coordinator/clear-coordinator-review.js) that changed a different
+  // metadata key on the same row during that window was silently clobbered by this pass's stale
+  // snapshot (database-agent finding, PLAN phase). A `metadata || '{...}'::jsonb` merge touches
+  // only the 3 dispatch_rank* keys, so it can no longer clobber a concurrent unrelated write.
+  // Falls back to the legacy full-blob write if the pg Client cannot connect — never lets a
+  // DB-connectivity issue hard-fail the whole ranking pass.
+  let pgClient = null;
+  if (!DRY) {
+    try {
+      const { createDatabaseClient } = await import('./lib/supabase-connection.js');
+      pgClient = await createDatabaseClient('engineer', { verify: false });
+    } catch (connErr) {
+      console.error(`[BACKLOG-RANK] ! atomic-merge DB client unavailable, falling back to full-blob writes: ${connErr.message}`);
     }
   }
 
@@ -422,13 +467,21 @@ async function main() {
     const rank = i + 1;
     console.log(`  #${String(rank).padStart(2)}  unlocks=${String(unlockScore(d.sd_key)).padStart(2)}  ${String(d.priority || '-').padEnd(8)} ${d.sd_key}`);
     if (DRY) continue;
+    const rankPatch = buildRankPatch(rank, now, process.env.CLAUDE_SESSION_ID || 'coordinator');
     try {
-      const meta = { ...(d.metadata || {}), dispatch_rank: rank, dispatch_rank_at: now, dispatch_rank_by: process.env.CLAUDE_SESSION_ID || 'coordinator' };
-      const { error: e } = await sb.from('strategic_directives_v2').update({ metadata: meta }).eq('sd_key', d.sd_key);
-      if (e) console.error(`  ! write failed for ${d.sd_key}: ${e.message}`);
-      else writes++;
+      if (pgClient) {
+        const { sql, params } = buildRankMergeQuery(rankPatch, d.sd_key);
+        await pgClient.query(sql, params);
+        writes++;
+      } else {
+        const meta = { ...(d.metadata || {}), ...rankPatch };
+        const { error: e } = await sb.from('strategic_directives_v2').update({ metadata: meta }).eq('sd_key', d.sd_key);
+        if (e) console.error(`  ! write failed for ${d.sd_key}: ${e.message}`);
+        else writes++;
+      }
     } catch (e) { console.error(`  ! ${d.sd_key}: ${e.message}`); } // fail-soft per item
   }
+  if (pgClient) { try { await pgClient.end(); } catch { /* best-effort close */ } }
 
   // ── clear stale ranks on rows no longer claimable (claimed/blocked now) ──
   if (!DRY) {
@@ -463,6 +516,20 @@ async function main() {
     } catch { /* fail-soft: terminal-sweep query error never kills the pass */ }
   }
   console.log(`[BACKLOG-RANK] done — ${DRY ? 'no writes (dry-run)' : `${writes} rank(s) written, ${clears} stale rank(s) cleared`}`);
+
+  // SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C (FR-4d): event-triggered runs are spawned
+  // detached with stdio:'ignore' (trigger-rank-pass.mjs), so child.on('error') only catches
+  // spawn-level failures — an internal failure mid-pass would otherwise be silently invisible.
+  // One fail-soft appended line closes that gap without changing the fire-and-forget contract.
+  if (eventTriggered) {
+    try {
+      const fs = await import('node:fs');
+      const logDir = new URL('../logs/', import.meta.url);
+      fs.mkdirSync(logDir, { recursive: true });
+      fs.appendFileSync(new URL('rank-pass-events.log', logDir),
+        `${JSON.stringify({ at: now, writes, clears, dry: DRY })}\n`);
+    } catch { /* observability line must never fail the pass */ }
+  }
 }
 
 // SD-REFILL-00AH2L4Q: guard the entrypoint so the module is importable for unit tests
