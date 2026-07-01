@@ -216,11 +216,10 @@ describe('Branch Resolver - Discovery Domain Logic', () => {
 });
 
 describe('Branch Resolver - File Operations Domain Logic', () => {
-  // Quick-fix QF-20260701-058: git show/ls-tree/cat-file have no origin/ fallback
-  // (unlike validateBranchExists), so a literal 'main' ref fails on shallow
-  // feature-branch CI checkouts where 'main' isn't a resolvable local ref.
-  // HEAD always resolves, regardless of which branch is checked out.
-  it('should read existing file from checked-out ref', () => {
+  // QF-20260701-485: use HEAD, not 'main' - feature-branch CI checkouts have
+  // no local 'main' ref, and these tests exercise the generic file-op
+  // functions rather than main-specific resolution.
+  it('should read existing file from main branch', () => {
     const result = readFileFromBranch(repoPath, 'HEAD', 'package.json');
     expect(result.success).toBe(true);
     expect(result.content).toContain('name');
