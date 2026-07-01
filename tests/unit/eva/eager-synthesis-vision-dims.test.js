@@ -103,3 +103,31 @@ describe('Eager-synthesis vision dims (SD-LEO-INFRA-EAGER-SYNTHESIS-VISION-DIMS-
   // fail-soft at source and never throws) — asserted above. The writer additionally wraps the call
   // in try/catch as defense-in-depth against an unexpected throw (verified by code inspection).
 });
+
+describe('SD-LEO-INFRA-S19-HELD-STATE-NOT-IDEMPOTENT-CLOBBER-001: idempotency guard (no clobber of an active+approved vision)', () => {
+  beforeEach(() => extractSpy.mockReset());
+
+  it('SKIPS the re-synthesis write for an already active+chairman_approved vision (the held-S19 clobber)', async () => {
+    extractSpy.mockResolvedValue(DIMS);
+    const a = makeSupabase({ id: 'x', version: 5, addendums: [], extracted_dimensions: DIMS, status: 'active', chairman_approved: true });
+    await upsertEvaVisionFromArtifacts(a.client, 'VISION-TEST-L2-001', 'v-1', 19);
+    expect(a.updates).toHaveLength(0);   // NO update -> content/sections not clobbered back to 3/10
+    expect(a.inserts).toHaveLength(0);
+    expect(extractSpy).not.toHaveBeenCalled(); // no wasted LLM extraction on the held tick
+  });
+
+  it('STILL updates a pre-active (draft) vision — the going-forward synthesis path is unchanged', async () => {
+    extractSpy.mockResolvedValue(DIMS);
+    const d = makeSupabase({ id: 'x', version: 2, addendums: [], extracted_dimensions: DIMS, status: 'draft', chairman_approved: false });
+    await upsertEvaVisionFromArtifacts(d.client, 'VISION-TEST-L2-001', 'v-1', 15);
+    expect(d.updates).toHaveLength(1);   // draft still synthesizes/updates normally
+    expect(d.updates[0].content).toBeTruthy();
+  });
+
+  it('STILL updates an active-but-UNapproved vision (only a fully activated vision is frozen)', async () => {
+    extractSpy.mockResolvedValue(DIMS);
+    const u = makeSupabase({ id: 'x', version: 3, addendums: [], extracted_dimensions: DIMS, status: 'active', chairman_approved: false });
+    await upsertEvaVisionFromArtifacts(u.client, 'VISION-TEST-L2-001', 'v-1', 17);
+    expect(u.updates).toHaveLength(1);   // active+UNapproved is not yet the frozen final state
+  });
+});
