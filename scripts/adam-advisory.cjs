@@ -37,6 +37,9 @@ const { PAYLOAD_KINDS, DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.c
 // SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001: reuse the canonical Adam-session resolver for the unattended
 // full-lane tick (env vars are not reliably propagated to cron subprocesses).
 const { resolveAdamSessionId } = require('./read-adam-directives.cjs');
+// SD-LEO-INFRA-COMMS-PRESENCE-GROUNDING-SIGNALS-001 — shared presence/read-receipt/working-signal lane.
+const { getFleetPresence, getReadReceipts, getWorkingSignal } = require('../lib/coordinator/presence-grounding-signals.cjs');
+const { writeWorkingSignal } = require('../lib/coordinator/working-signal-store.cjs');
 
 /**
  * Pure: build the advisory payload. INVARIANT: carries payload.kind=adam_advisory
@@ -388,11 +391,53 @@ async function drainInbox(supabase, sessionId, { quiet = false } = {}) {
     .is('read_at', null);
 }
 
+// SD-LEO-INFRA-COMMS-PRESENCE-GROUNDING-SIGNALS-001 (FR-6) — presence + read-receipt + working-signal
+// status verb. `status` prints the coordinator's presence + Adam's own sent-message read-receipts +
+// Adam's current working-signal; `status --working "<body>" [--eta <ms>]` stamps a new working-signal
+// (via the atomic RPC — see lib/coordinator/working-signal-store.cjs, never a raw metadata update).
+function formatPresence(p) {
+  if (!p) return 'unknown';
+  if (p.state === 'active_now') return 'active now';
+  if (p.state === 'parked') return `parked (~${Math.round((p.expectationWindowMs || 0) / 60000)}min)`;
+  return 'away';
+}
+
+async function printStatus(supabase, sessionId, argv) {
+  const workingIdx = argv.indexOf('--working');
+  if (workingIdx >= 0) {
+    const etaIdx = argv.indexOf('--eta');
+    const etaMs = etaIdx >= 0 ? Number(argv[etaIdx + 1]) || null : null;
+    const flagValueIdxs = new Set([etaIdx, etaIdx + 1].filter(i => i >= 0));
+    const body = argv.slice(workingIdx + 1).filter((a, i) => !flagValueIdxs.has(i + 1 + workingIdx)).join(' ').trim();
+    const res = await writeWorkingSignal(supabase, sessionId, { body, etaMs });
+    console.log(res.persisted
+      ? `Working-signal set: "${body}"${etaMs ? ` (ETA ~${Math.round(etaMs / 60000)}min)` : ''}`
+      : (res.warn || `Working-signal not persisted: ${res.reason}`));
+    return;
+  }
+
+  const coordinatorId = await getActiveCoordinatorId(supabase).catch(() => null);
+  const presenceMap = await getFleetPresence(supabase, [coordinatorId, sessionId].filter(Boolean));
+  console.log(coordinatorId
+    ? `Coordinator presence: ${formatPresence(presenceMap.get(coordinatorId))}`
+    : 'Coordinator presence: no active coordinator resolved');
+
+  const receipts = await getReadReceipts(supabase, sessionId, { limit: 10 });
+  console.log(receipts.length === 0
+    ? 'Read receipts: none of your recent sent messages have been read yet'
+    : `Read receipts (${receipts.length} recently read):`);
+  for (const r of receipts) console.log(`  - "${r.subject || '(no subject)'}" read at ${r.read_at}`);
+
+  const { data: ownRow } = await supabase.from('claude_sessions').select('metadata').eq('session_id', sessionId).maybeSingle();
+  const workingSignal = getWorkingSignal(ownRow, {});
+  console.log(`Your working-signal: ${workingSignal ? `"${workingSignal.body}"` : 'none set'}`);
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const mode = argv[0];
-  if (mode !== 'send' && mode !== 'request' && mode !== 'replies' && mode !== 'inbox') {
-    console.error('Usage: node scripts/adam-advisory.cjs send "<body>" [--reply-to <correlation_or_row_id>]  |  request "<question>" [--timeout <ms>]  |  replies  |  inbox');
+  if (mode !== 'send' && mode !== 'request' && mode !== 'replies' && mode !== 'inbox' && mode !== 'status') {
+    console.error('Usage: node scripts/adam-advisory.cjs send "<body>" [--reply-to <correlation_or_row_id>]  |  request "<question>" [--timeout <ms>]  |  replies  |  inbox  |  status [--working "<body>" [--eta <ms>]]');
     process.exit(2);
   }
 
@@ -416,6 +461,14 @@ async function main() {
   if (mode === 'inbox') {
     const adamId = (await resolveAdamSessionId(supabase)) || sessionId;
     await drainInbox(supabase, adamId, { quiet: argv.includes('--quiet') });
+    return;
+  }
+
+  // SD-LEO-INFRA-COMMS-PRESENCE-GROUNDING-SIGNALS-001 — same canonical-identity resolution as `inbox`
+  // (a cron tick's env var is not reliably propagated).
+  if (mode === 'status') {
+    const adamId = (await resolveAdamSessionId(supabase)) || sessionId;
+    await printStatus(supabase, adamId, argv.slice(1));
     return;
   }
 

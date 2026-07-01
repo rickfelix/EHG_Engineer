@@ -171,3 +171,46 @@ replacement for, the documented `*/15` inbox-monitor cadence.
 
 **Preserves silence-by-default**: the helper computes an interval only — it never itself sends
 a message, so message volume/chattiness is completely unaffected; only receipt latency changes.
+
+## Presence + grounding signals — a SHARED protocol capability
+
+`lib/coordinator/presence-grounding-signals.cjs` (SD-LEO-INFRA-COMMS-PRESENCE-GROUNDING-SIGNALS-001)
+is the single shared module any role-session (Adam, coordinator, Solomon) calls for three
+complementary grounding signals — resolving the DISRUPTION of ambiguous silence (not latency: a
+slow responder feels fine if the sender can SEE they are present + working; Clark & Brennan
+grounding-in-communication). Complements the adaptive-comms-cadence helper above, which fixed
+RECEIPT LATENCY; this fixes PRESENCE/ACKNOWLEDGMENT/BACKCHANNEL.
+
+- **Read-receipt echo** — `getReadReceipts(supabase, sessionId, opts)` surfaces
+  `session_coordination.read_at` back to the SENDER of a message (rows this session sent that
+  have since been read). Builds ON the existing two-stage-ACK contract above rather than adding a
+  parallel receipt mechanism.
+- **Presence / expectation indicator** — `derivePresence(session, opts)` (PURE) +
+  `getFleetPresence(supabase, sessionIds, opts)` (I/O). Derives `active_now` / `parked` (+ the
+  expectation window, e.g. "next self-check ~8min") / `away` by reusing `isSessionAlive` +
+  `hasExpectedSilence` from `lib/fleet/session-liveness.cjs` — **never a new liveness derivation**.
+  `getFleetPresence` follows the SAME fetch-then-pure-filter shape every existing
+  `claude_sessions` liveness call site already uses (ordered + capped fetch, pure predicate in JS)
+  — never an unfiltered select, never a bespoke server-side filter chain.
+- **Ephemeral working/thinking backchannel** — `getWorkingSignal(session, opts)` (PURE read) +
+  `lib/coordinator/working-signal-store.cjs` (write). The signal (e.g. "investigating your S17
+  handoff, ETA ~5min") lives on `claude_sessions.metadata.working_signal`, deliberately **OFF**
+  the durable `session_coordination` log — fire-and-forget, self-expiring (embeds `expires_at`,
+  ~30min), never a chat message. **Writes go EXCLUSIVELY through the atomic
+  `set_session_working_signal` RPC** (`jsonb_build_object` merge) — never a JS read-modify-write
+  of the whole `metadata` object, which would clobber concurrent writers of sibling keys
+  (`working_context`, role-handoff flags, `current_tool` — the same lost-update race the
+  `working_context` RPC already fixed once for this table). Fail-soft: if the chairman-gated
+  migration is unapplied, the writer reports `rpc_absent` and does nothing — never an unsafe RMW
+  fallback.
+
+**Wired consumers:** `scripts/adam-advisory.cjs status` and `scripts/solomon-advisory.cjs status`
+(identical subcommand, same shared helper — no per-role reimplementation) print the target's
+presence + the caller's own read-receipts + working-signal, and accept
+`status --working "<body>" [--eta <ms>]` to stamp a new working-signal. `fleet-dashboard.cjs`'s
+`ADAM ADVISORY INBOX` and `PENDING SOLOMON CONSULTS` renders add a `Presence` column sourced from
+ONE batched `getFleetPresence()` call per render (not a per-row query).
+
+**Preserves silence-by-default**: none of the three signals send a new `session_coordination`
+message — they augment existing renders/queries only. Presence/working signals are ambient/
+on-demand, not new chat spam.
