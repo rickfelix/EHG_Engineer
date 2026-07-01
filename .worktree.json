@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-CONVERGENCE-BUILDTREE-CHILDREN-UNMARKED-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-CONVERGENCE-BUILDTREE-CHILDREN-UNMARKED-001",
-  "createdAt": "2026-07-01T04:49:44.738Z",
+  "sdKey": "SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001",
+  "createdAt": "2026-07-01T11:15:34.967Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }

@@ -1350,6 +1350,72 @@ async function printSolomonInbox() {
   console.log('');
 }
 
+// ── Section: Solomon advice-outcome rollup (SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001, FR-5) ──
+// Read-only accuracy + cost-per-accepted-proposal rollup over solomon_advice_outcome_ledger. Pending
+// (undecided) rows are excluded from the accuracy denominator so an in-flight advisory never counts
+// as a failure. Dormant-safe: an absent table or empty ledger renders "(no data yet)" rather than
+// crashing or dividing by zero.
+/**
+ * Pure: compute the accuracy + cost-per-accepted-proposal rollup from raw ledger rows.
+ * Pending (undecided) rows are excluded from the accuracy denominator. Returns null when there is
+ * no decided data yet (renderer prints "no data yet" rather than dividing by zero). Exported for tests.
+ */
+function computeSolomonLedgerRollup(rows) {
+  const decided = (rows || []).filter((r) => r.decision && r.decision !== 'pending');
+  if (decided.length === 0) return null;
+
+  const acceptedShippedClean = decided.filter((r) => r.decision === 'accepted' && r.outcome === 'shipped_clean').length;
+  const accuracyPct = Math.round((acceptedShippedClean / decided.length) * 100);
+
+  const accepted = decided.filter((r) => r.decision === 'accepted');
+  const acceptedCostSum = accepted.reduce((sum, r) => sum + (Number.isFinite(r.cost_tokens) ? r.cost_tokens : 0), 0);
+  const costPerAccepted = accepted.length > 0 ? Math.round(acceptedCostSum / accepted.length) : null;
+
+  return {
+    decidedCount: decided.length,
+    pendingCount: (rows || []).length - decided.length,
+    acceptedShippedClean,
+    accuracyPct,
+    acceptedCount: accepted.length,
+    costPerAccepted,
+  };
+}
+
+async function printSolomonLedgerRollup() {
+  console.log('SOLOMON ADVICE-OUTCOME LEDGER');
+  console.log('─'.repeat(72));
+
+  let rows = [];
+  try {
+    const { data, error } = await supabase
+      .from('solomon_advice_outcome_ledger')
+      .select('decision, outcome, cost_tokens')
+      .limit(5000);
+    if (error) {
+      console.log('  (ledger query failed: ' + error.message + ')');
+      console.log('');
+      return;
+    }
+    rows = data || [];
+  } catch (e) {
+    console.log('  (ledger query failed: ' + (e && e.message ? e.message : e) + ')');
+    console.log('');
+    return;
+  }
+
+  const rollup = computeSolomonLedgerRollup(rows);
+  if (!rollup) {
+    console.log('  (no data yet)');
+    console.log('');
+    return;
+  }
+
+  console.log('  ' + rollup.decidedCount + ' decided proposal(s) (' + rollup.pendingCount + ' pending, excluded)');
+  console.log('  accuracy: ' + rollup.accuracyPct + '% (' + rollup.acceptedShippedClean + '/' + rollup.decidedCount + ' accepted+shipped_clean)');
+  console.log('  cost-per-accepted-proposal: ' + (rollup.costPerAccepted !== null ? rollup.costPerAccepted + ' tokens' : 'n/a (0 accepted)'));
+  console.log('');
+}
+
 // ── Section: Working context (FR-3, SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001) ──
 // Dual-render of both operators' standing working_context (claude_sessions.metadata.working_context)
 // so neither Adam nor the coordinator mistakes the other's heads-down silence for being ignored.
@@ -1586,7 +1652,7 @@ async function main() {
       await printAdamInbox();
     },
     adam:          async () => await printAdamInbox(), // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B
-    solomon:       async () => await printSolomonInbox(), // SD-LEO-INFRA-SOLOMON-CONSULT-001F — Solomon oracle consult lane
+    solomon:       async () => { await printSolomonInbox(); await printSolomonLedgerRollup(); }, // SD-LEO-INFRA-SOLOMON-CONSULT-001F + SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001
     context:       async () => await printWorkingContext(), // SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001 (FR-3)
     feedback:      async () => await printFeedback(d), // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001
     team:          () => printTeam(d), // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B
@@ -1605,6 +1671,7 @@ async function main() {
       await printDeadLetters(); // FR-4 SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001
       await printAdamInbox(); // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B — Adam advisory lane
       await printSolomonInbox(); // SD-LEO-INFRA-SOLOMON-CONSULT-001F — Solomon oracle consult lane (dormant until SOLOMON_CONSULT_V1)
+      await printSolomonLedgerRollup(); // SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001 (FR-5) — accuracy + cost-per-accepted rollup
       await printWorkingContext(); // SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001 (FR-3) — standing context dual-render
       await printFeedback(d); // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001 — feedback work-store
       await printCoaching(d);
@@ -1641,7 +1708,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, reconcilePAliveWithLiveness };
+module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.
