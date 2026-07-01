@@ -620,6 +620,17 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       console.warn(`   ⚠️  QF resolution-link advisory failed (non-blocking): ${qfAdvisoryError.message}`);
     }
 
+    // SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C (FR-3): trigger an event-driven rank
+    // pass so any dependent/child SD newly unblocked by this completion gets ranked within
+    // seconds instead of waiting for the next 15-min cron tick. Fire-and-forget, never blocks.
+    try {
+      const { runRankOnCompletionHook } = await import('./hooks/rank-on-completion-hook.js');
+      const rankResult = await runRankOnCompletionHook(sd, this.supabase);
+      console.log(`   [rank-on-completion] ${rankResult.outcome}`);
+    } catch (rankHookError) {
+      console.warn(`   ⚠️  Rank-on-completion hook failed (non-blocking): ${rankHookError.message}`);
+    }
+
     // SD-LEO-INFRA-PROGRAMMATIC-TOOL-CALLING-001: Auto-populate retrospective via programmatic scorer.
     // Generates SD-specific insights with real file references — avoids RETROSPECTIVE_QUALITY_GATE failures.
     // Fail-safe: non-blocking, never prevents SD completion.

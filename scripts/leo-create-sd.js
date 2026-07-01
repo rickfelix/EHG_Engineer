@@ -2160,6 +2160,17 @@ async function createSD(options) {
     });
   } catch { /* CLI tracking is fire-and-forget */ }
 
+  // SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C (FR-1): trigger an event-driven rank pass so
+  // this freshly-created SD gets metadata.dispatch_rank within seconds instead of waiting for the
+  // next 15-min coordinator-backlog-rank.mjs cron tick. Mirrors the min_tier_rank stamp above —
+  // fire-and-forget, never blocks SD creation.
+  try {
+    const { triggerRankPass } = await import('../lib/coordinator/trigger-rank-pass.mjs');
+    triggerRankPass({ reason: 'sd_created', sdKey: data.sd_key });
+  } catch (rankTriggerErr) {
+    console.warn(`   ⚠️  rank-pass trigger skipped (non-blocking): ${rankTriggerErr.message}`);
+  }
+
   // FR-005 (SD-LEO-INFRA-BRAINSTORM-SD-PIPELINE-001): Backfill brainstorm_sessions.created_sd_id
   // When an SD is created with a vision_key from a brainstorm, link it back to the originating session
   if (metadata?.vision_key) {
