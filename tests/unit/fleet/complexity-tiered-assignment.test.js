@@ -138,8 +138,26 @@ function stubSupabase({ liveWorkers = 2, workerTierRank = 1, sdMinRank = 3, coor
           return { data: null, error: null };
         },
         then(resolve) {
-          // bare `await supabase.from('claude_sessions').select(...)` (the isTieringActive list read)
+          // bare `await supabase.from('claude_sessions').select(...)` (the isTieringActive list read,
+          // and SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-E's fetchLowerTierBacklogData live-session read).
           if (table === 'claude_sessions') return resolve({ data: sessions, error: null });
+          // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-E (FR-6): fetchLowerTierBacklogData's bulk
+          // strategic_directives_v2 read (the claimable-pool half of the backlog gate). A single
+          // generic unclaimed row at sdMinRank keeps every pre-FR-6 test in this file's original
+          // above/below-tier intent unaffected (none of these auto-generated sessions are stamped
+          // at sdMinRank, so claimable > idle at that rank -> backlogged=true -> admit, matching
+          // the pre-FR-6 WORK-DOWN-ALWAYS expectation these tests assert). Tests targeting the
+          // reservation behavior itself live in tier-backlog-reservation.test.js.
+          if (table === 'strategic_directives_v2') {
+            return resolve({
+              data: [{
+                sd_key: 'SD-BACKLOG-FILLER-001', sd_type: 'infrastructure', status: 'in_progress',
+                title: 'Filler backlog SD', description: 'Keeps pre-FR-6 dispatch tests admitting downward claims.',
+                metadata: { min_tier_rank: sdMinRank }, target_application: 'EHG_Engineer', claiming_session_id: null,
+              }],
+              error: null,
+            });
+          }
           return resolve({ data: [], error: null });
         },
       };

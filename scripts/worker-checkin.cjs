@@ -48,6 +48,10 @@ const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligib
 const { resolveWorkerTierRank, isTieringActive, normalizeModel, normalizeEffort, rankForModelEffort, clamp: clampTierRank } = require('../lib/fleet/tier-ladder.cjs');
 // SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-2): tier-aware "claimable-to-MY-rung" rollup.
 const { claimableForTier } = require('../lib/fleet/tier-claimable.cjs');
+// SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-E (FR-6): backlog-gated downward claims. The fetcher is
+// SHARED with lib/coordinator/dispatch.cjs's assertWorkerTierAllowed so the pull path (here) and
+// the directed-dispatch path compute an IDENTICAL backlog verdict — never two re-derivations.
+const { fetchLowerTierBacklogData } = require('../lib/fleet/tier-backlog.cjs');
 // SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: reuse the coordinator cron's pool + picker + ghost guard so
 // check-in-time self-assign and the 5-min cron allocate identities identically (see assignFleetIdentityAtCheckin).
 const { NATO, COLORS, nextAvailable, isTestSessionId, tierRankOf, pickCallsignForTier, callsignInTierBand } = require('./assign-fleet-identities.cjs');
@@ -1310,6 +1314,18 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
         tiering_active: await isTieringActive(sb),
       };
     } catch { /* fail-open: no tier ctx */ }
+    // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-E (FR-6): precompute the backlog verdict inputs ONCE
+    // per tick — lowerTierBacklog() itself is pure/sync (runs inside classifyDispatchIneligibility),
+    // but its two halves (claimable-by-tier, idle-by-tier) are DB-dependent, so fetchLowerTierBacklogData
+    // does the fetch here and the result is threaded into tierCtx.lower_tier_backlog_data. Only when
+    // tiering is active (mirrors every other tier-axis fetch in this function) — with < 2 live workers
+    // the whole tier axis, including this gate, must stay inert (degrade-to-1). Fail-open: a null
+    // return leaves the field unset, which is the classifier's documented byte-identical
+    // WORK-DOWN-ALWAYS fallback.
+    if (tierCtx.tiering_active === true) {
+      const backlogData = await fetchLowerTierBacklogData(sb);
+      if (backlogData) tierCtx.lower_tier_backlog_data = backlogData;
+    }
     // QF-20260630-761: snapshot whether tiering is active so the idle message (below, outside this
     // scope) only attributes a 0-claimable belt to TIER when tiering is actually on. With tiering off
     // the 0 is non-tier ineligibility (orchestrator parents / clone trees / human-action / held).
