@@ -88,12 +88,23 @@ async function provisionCanary() {
         // documented fallback when no Stage 0 artifact exists). The canary gets
         // a fixed synthetic synthesis so Stage 1 onward exercises the REAL
         // machinery deterministically.
+        //
+        // QF-20260701-201: the canary's probe environment has no cloud LLM API
+        // key, so stage-01-hydration.js's LLM call returns a placeholder and
+        // falls back to reading synthesis.description / .reframedProblem /
+        // .valueProp / .targetMarket (camelCase). Those keys must be present
+        // here (alongside the original narrative fields) or Stage 1 hydrates
+        // 4 empty fields and Stage 2's pre-check blocks.
         stage_zero: {
           intent: 'Probe the venture-factory stage machinery end to end on a schedule.',
           reframed_problem: 'Stage pipeline regressions (config drift, RPC failures, renderer crashes, contract mismatches) are discovered reactively by real ventures instead of proactively by synthetic monitoring.',
+          reframedProblem: 'Stage pipeline regressions (config drift, RPC failures, renderer crashes, contract mismatches) are discovered reactively by real ventures instead of proactively by synthetic monitoring.',
           synthesis: 'A synthetic, permanently-isolated canary venture is driven through every feasible lifecycle stage weekly. Each stage transition is a probe assertion; failures alert the coordinator before any real venture encounters the regression.',
+          description: 'A synthetic, permanently-isolated canary venture is driven through every feasible lifecycle stage weekly to probe the venture-factory stage machinery end to end, so pipeline regressions surface before any real venture encounters them.',
           target_user: 'EHG platform operators and the fleet coordinator',
+          targetMarket: 'EHG platform operators and the fleet coordinator',
           value_hypothesis: 'Proactive detection of stage-machinery regressions reduces venture-blocking incidents to near zero.',
+          valueProp: 'Proactive detection of stage-machinery regressions reduces venture-blocking incidents to near zero.',
           constraints: ['fully isolated (is_demo)', 'net-zero artifacts per run', 'no external service calls (stages 18/19/23-26 skipped)'],
           source: 'synthetic-canary-fixture',
         },

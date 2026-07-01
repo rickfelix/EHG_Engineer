@@ -1,7 +1,9 @@
 {
-  "sdKey": "SD-LEO-INFRA-CONVERGENCE-BUILDTREE-CHILDREN-UNMARKED-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-CONVERGENCE-BUILDTREE-CHILDREN-UNMARKED-001",
-  "createdAt": "2026-07-01T04:49:44.738Z",
-  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
-  "baseRef": "origin/main"
+  "sdKey": "QF-20260701-201",
+  "workType": "QF",
+  "workKey": "QF-20260701-201",
+  "expectedBranch": "qf/QF-20260701-201",
+  "createdAt": "2026-07-01T12:10:29.248Z",
+  "hostname": "Legion-Laptop",
+  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
 }
