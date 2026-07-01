@@ -70,7 +70,7 @@ async function main() {
   catch (e) { console.error('ERROR: supabase client unavailable:', e.message); process.exit(1); }
 
   const { data: pending, error } = await supabase
-    .from('solomon_advice_outcome_ledger')
+    .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
     .select('id, outcome_sd_key')
     .eq('outcome', 'unknown')
     .not('outcome_sd_key', 'is', null)
@@ -90,7 +90,7 @@ async function main() {
 
   for (const r of toUpdate) {
     const { error: uErr } = await supabase
-      .from('solomon_advice_outcome_ledger')
+      .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
       .update({ outcome: r.outcome })
       .eq('id', r.id);
     if (uErr) console.error(`  WARN: failed to write outcome for ${r.id}: ${uErr.message}`);
