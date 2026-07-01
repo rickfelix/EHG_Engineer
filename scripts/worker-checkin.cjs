@@ -598,6 +598,40 @@ async function fetchFleetCriticalCandidates(sb) {
     .sort((a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9));
 }
 
+/**
+ * SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-B (FR-1): a FIFTH self-claim candidate source.
+ * sortByDispatchRank/orderByFleetCriticalThenRank can only REORDER an item already in the merged
+ * pool — it cannot inject one. A claimable SD the coordinator HAS ranked (metadata.dispatch_rank
+ * set) but that sits outside every existing window (not in the baselined view, not in the oldest-10
+ * or newest-10 draft windows, not fleet_critical) is therefore invisible to self-claim even though
+ * it is ranked — the coordinator's own ranking work (SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-A)
+ * is wasted for it. This source fetches UNCLAIMED SDs directly by "has a dispatch_rank", bypassing
+ * the age windows, mirroring fetchFleetCriticalCandidates's shape.
+ *
+ * The `.not(...)` filter is a DB-side hint only (Postgres/PostgREST honors it; some in-memory test
+ * doubles no-op unimplemented filters) — the JS-side `!= null` re-filter below is authoritative,
+ * matching this file's established fleet_critical-source pattern. Numeric dispatch_rank sort is
+ * done in JS (not via DB `.order()`) because ordering a jsonb/text extraction lexically would sort
+ * "10" before "2" — the DB `.order('created_at')` below is only a deterministic tiebreak hint.
+ */
+async function fetchRankedCandidates(sb) {
+  const { data: rows } = await sb
+    .from('strategic_directives_v2')
+    .select('sd_key, status, sd_type, priority, created_at, dependencies, metadata, target_application, parent_sd_id')
+    .not('metadata->dispatch_rank', 'is', null)               // DB-side hint: has a dispatch_rank
+    .in('status', ['draft', 'active'])                        // POSITIVE allowlist (never a denylist)
+    .is('claiming_session_id', null)
+    .neq('sd_type', 'orchestrator')
+    .order('created_at', { ascending: true })                 // deterministic tiebreak — never a silent truncation
+    .limit(DRAFT_CANDIDATE_LIMIT);
+  // Authoritative JS filter (mirrors the fleet_critical source's DB-hint + JS-authoritative pattern):
+  // keep only rows with a real dispatch_rank, then sort numerically ascending (lowest rank first).
+  return (rows || [])
+    .filter((r) => r.metadata && r.metadata.dispatch_rank != null)
+    .slice()
+    .sort((a, b) => Number(a.metadata.dispatch_rank) - Number(b.metadata.dispatch_rank));
+}
+
 /** Per-row claim attempt for an un-baselined draft candidate (shared by the merged
  *  step-6 tier and the legacy selfClaimDraftSd wrapper). Returns a result or null. */
 async function tryClaimDraftCandidate(sb, sessionId, base, d, tierCtx = {}) {
@@ -1271,6 +1305,11 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
     // reorder. Placed here, inside the step-6 try and downstream of ALL acquisition guards (4.5/5.7/5.8/5.9).
     let fcRows = [];
     try { fcRows = await fetchFleetCriticalCandidates(sb); } catch { /* fail-open: window-only behavior */ }
+    // SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-B (FR-1/FR-2): a FIFTH source for SDs the
+    // coordinator has ranked (metadata.dispatch_rank set) that sit OUTSIDE every window above, so a
+    // ranked-but-not-fleet_critical, middle-of-the-backlog SD is not wasted ranking work.
+    let rankedRows = [];
+    try { rankedRows = await fetchRankedCandidates(sb); } catch { /* fail-open: window-only behavior */ }
 
     const seen = new Set();
     const merged = [];
@@ -1295,6 +1334,13 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
     // (strict-boolean fleet_critical) to the front of the merged pool.
     for (const f of fcRows) {
       if (f.sd_key && !seen.has(f.sd_key)) { seen.add(f.sd_key); merged.push({ kind: 'baselined', key: f.sd_key }); }
+    }
+    // FR-2 (SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-B): union the ranked-direct source LAST so
+    // an SD already surfaced by any prior source keeps its existing entry (SAME seen-set dedup).
+    // kind:'baselined' routes each injected entry through baselinedCandidateEligible -> the COMPLETE
+    // eligibility SSOT, exactly like the fleet_critical union above — no eligibility/claim bypass.
+    for (const r of rankedRows) {
+      if (r.sd_key && !seen.has(r.sd_key)) { seen.add(r.sd_key); merged.push({ kind: 'baselined', key: r.sd_key }); }
     }
 
     // duty-6: honor the coordinator's fresh dispatch_rank across the WHOLE pool (fail-open).
@@ -1460,7 +1506,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
+module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
 
 if (require.main === module) {
   main().catch(err => {
