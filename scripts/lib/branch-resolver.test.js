@@ -216,26 +216,30 @@ describe('Branch Resolver - Discovery Domain Logic', () => {
 });
 
 describe('Branch Resolver - File Operations Domain Logic', () => {
-  it('should read existing file from main branch', () => {
-    const result = readFileFromBranch(repoPath, 'main', 'package.json');
+  // Quick-fix QF-20260701-058: git show/ls-tree/cat-file have no origin/ fallback
+  // (unlike validateBranchExists), so a literal 'main' ref fails on shallow
+  // feature-branch CI checkouts where 'main' isn't a resolvable local ref.
+  // HEAD always resolves, regardless of which branch is checked out.
+  it('should read existing file from checked-out ref', () => {
+    const result = readFileFromBranch(repoPath, 'HEAD', 'package.json');
     expect(result.success).toBe(true);
     expect(result.content).toContain('name');
   });
 
   it('should fail for non-existent file', () => {
-    const result = readFileFromBranch(repoPath, 'main', 'non-existent-file-xyz.txt');
+    const result = readFileFromBranch(repoPath, 'HEAD', 'non-existent-file-xyz.txt');
     expect(result.success).toBe(false);
     expect(result.error).toContain('File not found');
   });
 
   it('should list files matching pattern', () => {
-    const files = listFilesFromBranch(repoPath, 'main', '\\.js$');
+    const files = listFilesFromBranch(repoPath, 'HEAD', '\\.js$');
     expect(Array.isArray(files)).toBe(true);
     expect(files.length).toBeGreaterThan(0);
   });
 
   it('should check file existence on branch', () => {
-    expect(fileExistsOnBranch(repoPath, 'main', 'package.json')).toBe(true);
-    expect(fileExistsOnBranch(repoPath, 'main', 'non-existent-xyz.txt')).toBe(false);
+    expect(fileExistsOnBranch(repoPath, 'HEAD', 'package.json')).toBe(true);
+    expect(fileExistsOnBranch(repoPath, 'HEAD', 'non-existent-xyz.txt')).toBe(false);
   });
 });
