@@ -17,6 +17,12 @@
  * role='adam', fresh heartbeat_at) and dispatches via the validated dispatch guard —
  * NO hardcoded UUID, so it survives Adam restarts and silently skips when Adam is absent.
  *
+ * SD-LEO-INFRA-SOLOMON-REFRESHER-FOUNDATIONS-EXTENSION-001: the Solomon leg's re-affirmation SET is
+ * {role contract, Constitution, Mission/Vision, operating model} — not just the role contract — via
+ * buildFoundationsPointer(), which POINTS at the canonical sources (protocol_constitution table,
+ * docs/vision/ehg-mission-vision-canonical.md, eva_vision_documents, the two operating-model docs) rather
+ * than embedding a paraphrase, so the grounding is first-hand + current.
+ *
  * Flags:
  *   --dry-run   assess + print, but do NOT dispatch to Adam (for arming/testing).
  *
@@ -58,12 +64,46 @@ const SOLOMON_REMINDER =
   'solomon_consult only — do not poll for problems), the per-sweep task_budget at ENTRY before any Read/Grep, ' +
   'and your 5-dim self-rubric. Stay silent unless you have a deep, defensible oracle answer.';
 
+// SD-LEO-INFRA-SOLOMON-REFRESHER-FOUNDATIONS-EXTENSION-001: widens the Solomon re-affirmation SET from
+// {role contract} to {role contract, Constitution, Mission/Vision, operating model}. This POINTS Solomon at
+// the CANONICAL sources rather than embedding a paraphrase — Solomon's higher-order-framing and Adam-
+// grounding-completeness duties both require FIRST-HAND, CURRENT grounding, not a copy baked into this
+// script that goes stale the moment the Constitution/Vision changes. Kept CHEAP: a single lightweight
+// protocol_constitution row-count query (fail-open to a static pointer) + fixed, small doc paths — no full
+// text is fetched or embedded. Exported for tests.
+const CANONICAL_CONSTITUTION_TABLE = 'protocol_constitution';
+const CANONICAL_MISSION_VISION_DOC = 'docs/vision/ehg-mission-vision-canonical.md';
+const CANONICAL_OPERATING_MODEL_DOCS = [
+  'docs/03_protocols_and_standards/venture-hosting-standard.md',
+  'docs/03_protocols_and_standards/only-the-chairman-can.md',
+];
+
+async function buildFoundationsPointer(sb) {
+  let constPart = 'Constitution: re-read ' + CANONICAL_CONSTITUTION_TABLE + ' (CONST-001..014) directly.';
+  try {
+    const { data } = await sb.from(CANONICAL_CONSTITUTION_TABLE).select('rule_code').order('rule_code');
+    const codes = (data || []).map(function (r) { return r.rule_code; }).filter(Boolean);
+    if (codes.length > 0) {
+      constPart = 'Constitution: re-read ' + CANONICAL_CONSTITUTION_TABLE + ' — ' + codes.length +
+        ' live rule(s) (' + codes[0] + '..' + codes[codes.length - 1] + ').';
+    }
+  } catch (e) {
+    // fail-open to the static pointer above — a foundations refresh must never block the reminder
+  }
+  return (
+    constPart + ' ' +
+    'Mission/Vision: re-read ' + CANONICAL_MISSION_VISION_DOC + ' (chairman-approved canonical) plus your ' +
+    'current eva_vision_documents entries. ' +
+    'Operating model: re-read ' + CANONICAL_OPERATING_MODEL_DOCS.join(' and ') + '.'
+  );
+}
+
 // SD-LEO-INFRA-SOLOMON-HOURLY-ROLE-REFRESHER-001: the Solomon leg — mirrors the Adam leg but resolves the
 // live Solomon via getActiveSolomonId (no hardcoded UUID), reuses the SAME hourly cadence, dispatch guard,
 // and cycle-down gate (the caller checks assessFleetActivity ONCE before invoking this). Self-contained
 // (returns a verdict; does NOT exit main) so it composes alongside the Adam leg. Fail-open / non-fatal.
 // Exported for tests. @returns {Promise<{dispatched:boolean, reason?:string, target?:string}>}
-async function dispatchSolomonReminder(sb, { dryRun = DRY_RUN, resolveSolomon = getActiveSolomonId, insert = insertCoordinationRow } = {}) {
+async function dispatchSolomonReminder(sb, { dryRun = DRY_RUN, resolveSolomon = getActiveSolomonId, insert = insertCoordinationRow, buildFoundations = buildFoundationsPointer } = {}) {
   try {
     const solomonId = await resolveSolomon(sb);
     if (!solomonId) {
@@ -74,13 +114,19 @@ async function dispatchSolomonReminder(sb, { dryRun = DRY_RUN, resolveSolomon = 
       console.log('\n[HOURLY-REVIEW] Solomon: would dispatch reminder to ' + String(solomonId).slice(0, 8) + '. [dry-run, not sent]');
       return { dispatched: false, reason: 'dry_run', target: solomonId };
     }
+    // SD-LEO-INFRA-SOLOMON-REFRESHER-FOUNDATIONS-EXTENSION-001: only build the foundations pointer on the
+    // real-dispatch path (not on the no-Solomon / dry-run early returns) — cheap, and "re-read only when
+    // not idle" per the SD's cycle-down preservation requirement.
+    const foundationsPointer = await buildFoundations(sb);
+    const body = SOLOMON_REMINDER + '\n\nAlso re-affirm the FOUNDATIONS first-hand (your higher-order-' +
+      'framing and Adam-grounding-completeness duties require current C/M/V grounding): ' + foundationsPointer;
     const row = {
       sender_session: process.env.CLAUDE_SESSION_ID || null,
       sender_type: 'coordinator',
       target_session: solomonId,
       message_type: 'INFO',
       subject: 'Hourly: review your Solomon responsibilities',
-      body: SOLOMON_REMINDER,
+      body: body,
       payload: { kind: 'coordinator_reminder', topic: 'solomon_responsibilities', sent_at: new Date().toISOString() },
       expires_at: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
     };
@@ -195,4 +241,4 @@ if (require.main === module) {
   main().catch(function (e) { console.error('[HOURLY-REVIEW] error (non-fatal): ' + e.message); }).finally(function () { process.exit(0); });
 }
 
-module.exports = { dispatchSolomonReminder, SOLOMON_REMINDER };
+module.exports = { dispatchSolomonReminder, SOLOMON_REMINDER, buildFoundationsPointer };
