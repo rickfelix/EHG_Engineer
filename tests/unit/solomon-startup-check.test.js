@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url);
 import {
   SOLOMON_LOOPS, ROLE_CONTEXT_DOC, parseDurableDutyMarkers, missingDurableDuties,
   loopStatus, parseArmedSet, renderContractParity, slugifyDuty, wiredDutySlugs,
+  solomonSweepMode, isProactiveSweepEnabled,
 } from '../../scripts/solomon-startup-check.mjs';
 import { buildSelfAdherenceVerdict } from '../../scripts/solomon-self-adherence-review.mjs';
 
@@ -133,5 +134,28 @@ describe('retry-state-manager EXEMPT_PATTERNS includes the solomon inbox command
     const { isExempt } = require('../../scripts/hooks/retry-state-manager.cjs');
     expect(isExempt('node scripts/solomon-advisory.cjs inbox --quiet')).toBe(true);
     expect(isExempt('node scripts/solomon-advisory.cjs send "x"')).toBe(false); // only the inbox tick is exempt
+  });
+});
+
+describe('SD-LEO-INFRA-SOLOMON-MODEB-FABLE-PIN-TRIGGER-001: solomonSweepMode Fable-pin trigger', () => {
+  const noEnv = {}; // isolate from the ambient process.env override
+  it('a Fable pin flips the deep-sweep tick to proactive-sweep mode', () => {
+    expect(solomonSweepMode('claude-fable-5', noEnv)).toBe('proactive');
+    expect(isProactiveSweepEnabled('claude-fable-5', noEnv)).toBe(true);
+  });
+  it('the Opus 4.8 pin (and any non-Fable id) stays consult-only', () => {
+    expect(solomonSweepMode('claude-opus-4-8', noEnv)).toBe('consult');
+    expect(solomonSweepMode('claude-sonnet-5', noEnv)).toBe('consult');
+    expect(isProactiveSweepEnabled('claude-opus-4-8', noEnv)).toBe(false);
+  });
+  it('an empty/undefined pin fails safe to consult (Mode-B off)', () => {
+    expect(solomonSweepMode('', noEnv)).toBe('consult');
+    expect(solomonSweepMode(null, noEnv)).toBe('consult');
+  });
+  it('SOLOMON_SWEEP_MODE overrides the pin-derived result in BOTH directions', () => {
+    expect(solomonSweepMode('claude-opus-4-8', { SOLOMON_SWEEP_MODE: 'proactive' })).toBe('proactive');
+    expect(solomonSweepMode('claude-fable-5', { SOLOMON_SWEEP_MODE: 'consult' })).toBe('consult');
+    expect(solomonSweepMode('claude-opus-4-8', { SOLOMON_SWEEP_MODE: 'PROACTIVE' })).toBe('proactive'); // case-insensitive
+    expect(solomonSweepMode('claude-fable-5', { SOLOMON_SWEEP_MODE: 'garbage' })).toBe('proactive'); // invalid override ignored
   });
 });

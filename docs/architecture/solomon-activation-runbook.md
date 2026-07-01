@@ -54,13 +54,18 @@ Confirm ALL before the first flip:
 
 ## 3. Graduated activation — "canary the canary"
 
-Do **not** switch fully on. Stage it, watching the advice-outcome ledger + accuracy review
-(agent-definition §11) between stages:
+Do **not** switch fully on. Stage it. The advice-outcome ledger + accuracy review (agent-definition
+§11) still inform the §6 success metrics, but — per the chairman decision 2026-07-01
+(SD-LEO-INFRA-SOLOMON-MODEB-FABLE-PIN-TRIGGER-001) — **Mode-B activation is now COUPLED to the Fable-5
+model-pin swap, not the ledger**: when Solomon's pin (`CLAUDE_MODEL_SOLOMON` /
+`MODEL_DEFAULTS.claude.solomon`) is a Fable id, the deep-sweep tick auto-detects it
+(`solomonSweepMode()` in `scripts/solomon-startup-check.mjs`) and flips from consult-only to
+proactive-sweep on the next tick — no ledger wait. The actual pin flip stays a chairman/operator action.
 
 | Stage | Flag action (Chairman) | What it enables | Gate to advance |
 |------|------------------------|-----------------|-----------------|
-| **A** | `SOLOMON_CONSULT_V1=on` | **Mode A only** — reactive consults (workers/Adam `solomon-consult`); Mode B stays gated | Mode-A advice demonstrably trusted + correct (uptake + accuracy hold) |
-| **B** | enable Mode-B sweeps | proactive backlog deep-sweeps — still quota- and `task_budget`-bounded | both modes stable |
+| **A** | `SOLOMON_CONSULT_V1=on` | **Mode A only** — reactive consults (workers/Adam `solomon-consult`); Mode B stays gated | **Solomon model pin swapped to a Fable id** (`CLAUDE_MODEL_SOLOMON` / `MODEL_DEFAULTS.claude.solomon`) — the deep-sweep tick auto-enables Mode-B; ledger accuracy is no longer the gate (override: `SOLOMON_SWEEP_MODE=proactive`) |
+| **B** | enable Mode-B sweeps (auto on the Fable pin) | proactive backlog deep-sweeps — one §4 item + ONE propose-only finding per tick, still quota- and `task_budget`-bounded, never executes (CONST-002) | both modes stable |
 | **C** | `ADAM_SOLOMON_TWOWAY_V1=on` | the Adam↔Solomon two-way channel (`-G`, ship-dormant follow-on) | — |
 
 **Observe activation on the dashboard:** `node scripts/fleet-dashboard.cjs solomon` (or the `all`

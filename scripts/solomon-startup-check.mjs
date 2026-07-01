@@ -18,9 +18,31 @@ import 'dotenv/config';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { getClaudeModel } from '../lib/config/model-config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
+
+// SD-LEO-INFRA-SOLOMON-MODEB-FABLE-PIN-TRIGGER-001: deterministic deep-sweep mode trigger.
+// Chairman decision (2026-07-01): Mode-B (proactive backlog sweeps) activation is DECOUPLED from the
+// §11 advice-outcome ledger and COUPLED to the Fable-5 model-pin swap — when Solomon's model pin is a
+// Fable id, the deep-sweep tick flips from consult-only to proactive-sweep AT THE SAME TIME, no ledger
+// wait. The pin is resolved via getClaudeModel('solomon') (the canonical CLAUDE_MODEL_SOLOMON →
+// CLAUDE_MODEL → MODEL_DEFAULTS.claude.solomon chain — NOT re-implemented here). An explicit
+// SOLOMON_SWEEP_MODE env value ('proactive'|'consult') overrides the pin-derived result (a
+// deterministic escape hatch against a future Fable id that lacks the literal 'fable' substring).
+// Pure function of its argument + env; resolve it at TICK time so a mid-session pin swap takes effect
+// on the next tick without a code change. This gates ONLY which mode the tick runs — Solomon still
+// proposes and never executes in either mode (CONST-002 unchanged).
+export function solomonSweepMode(pin = getClaudeModel('solomon'), env = process.env) {
+  const override = String(env.SOLOMON_SWEEP_MODE || '').trim().toLowerCase();
+  if (override === 'proactive' || override === 'consult') return override;
+  return /fable/i.test(String(pin || '')) ? 'proactive' : 'consult';
+}
+
+export function isProactiveSweepEnabled(pin = getClaudeModel('solomon'), env = process.env) {
+  return solomonSweepMode(pin, env) === 'proactive';
+}
 
 // The Solomon role contract (durable). Loaded on /solomon startup; referenced here for the summary.
 export const ROLE_CONTEXT_DOC = 'CLAUDE_SOLOMON.md';
@@ -87,7 +109,10 @@ export const SOLOMON_LOOPS = [
     label: 'Solomon Mode-B deep-reasoning sweep (agent judgment; HARD task_budget at entry, before any Read/Grep)',
     script: null, // agent-prompt tick — the deep sweep is reasoning, not a script
     cron: '0 */6 * * *',
-    prompt: 'Solomon deep-sweep tick: FIRST enforce the per-sweep task_budget at ENTRY (node -e require("./scripts/solomon-advisory.cjs").enforceSweepBudget — count/wall-clock/token) BEFORE any Read/Grep; if over budget, STOP. Else drain the consult inbox and answer the highest-value open solomon_consult with deep analysis via node scripts/solomon-advisory.cjs send "<answer>" --reply-to <consult-correlation> (dedup + quota enforced). Propose, never execute.',
+    // SD-LEO-INFRA-SOLOMON-MODEB-FABLE-PIN-TRIGGER-001: the tick resolves its MODE at tick time from the
+    // LIVE Solomon pin (solomonSweepMode). Fable pin -> proactive backlog sweep; else -> consult-only
+    // (today's behavior). Mode-B activation is coupled to the Fable-5 pin swap, not the §11 ledger.
+    prompt: 'Solomon deep-sweep tick: (1) FIRST enforce the per-sweep task_budget at ENTRY (node -e require("./scripts/solomon-advisory.cjs").enforceSweepBudget — count/wall-clock/token) BEFORE any Read/Grep; if over budget, STOP. (2) Resolve the sweep MODE at TICK TIME from the LIVE Solomon model pin and log it: node -e "import(\'./scripts/solomon-startup-check.mjs\').then(m=>process.stdout.write(m.solomonSweepMode()))". (3a) If mode===proactive (Fable pin — SD-LEO-INFRA-SOLOMON-MODEB-FABLE-PIN-TRIGGER-001): pull ONE §4 backlog item, investigate the LIVE codebase with deep analysis, and surface EXACTLY ONE propose-only finding via node scripts/solomon-advisory.cjs send "<finding>" (dedup + quota + silence-by-default enforced). (3b) Else (consult mode, default): drain the consult inbox and answer the highest-value open solomon_consult with deep analysis via node scripts/solomon-advisory.cjs send "<answer>" --reply-to <consult-correlation> (dedup + quota enforced). Propose, NEVER execute/build in either mode (CONST-002).',
   },
 ];
 
