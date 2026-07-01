@@ -54,6 +54,17 @@ const supabase = createClient(
 
 const log = (...a) => { if (!AS_JSON) console.log(...a); };
 
+// QF-20260701-421: reality-gates.js and stage-governance.js each open a process-
+// lifetime Realtime channel on this same client; an abrupt exit with one still open
+// races Phoenix's phx_close teardown into mutual recursion (RangeError: Maximum call
+// stack size exceeded). Disconnect them in an orderly fashion before the exit backstop.
+async function disconnectRealtime() {
+  try {
+    await supabase.removeAllChannels();
+    await supabase.realtime.disconnect();
+  } catch { /* best-effort — never block exit on teardown */ }
+}
+
 async function flagEnabled() {
   const { data } = await supabase
     .from('leo_feature_flags')
@@ -209,6 +220,7 @@ const runId = buildRunId(startedAt, randomUUID().slice(0, 8));
 const admission = probeAdmission({ flagEnabled: await flagEnabled(), forceLocal: FORCE_LOCAL });
 if (!admission.allowed) {
   console.error(`canary-probe: refused — ${admission.reason}`);
+  await disconnectRealtime();
   await armCliTeardown(2); // SWEEP-CLI-EXIT-001 pattern: drain or backstop, never hang
 } else {
   log(`🐤 canary probe ${runId} (admission: ${admission.reason}; max-stages ${MAX_STAGES}; ${TEARDOWN ? 'teardown' : 'keep'})`);
@@ -336,5 +348,6 @@ if (!admission.allowed) {
   // The StageExecutionWorker holds heartbeats/subscriptions that block a
   // natural drain — arm the SWEEP-CLI-EXIT-001 teardown (undici close +
   // unref'd backstop) so the probe can never ride to an external SIGTERM.
+  await disconnectRealtime();
   await armCliTeardown(report.outcome === 'FAIL' ? 1 : 0);
 }
