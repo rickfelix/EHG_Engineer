@@ -22,7 +22,8 @@ const { selectUnactionedAdvisories } = require('../../../lib/coordinator/adam-ad
 
 // Real-cadence constants (from the live system, cited inline):
 const SWEEP_CADENCE_MS = 5 * 60_000;       // cleanup_expired_coordination runs ~every 5 min (stale-session-sweep.cjs)
-const COORDINATOR_POLL_MS = 15 * 60_000;   // inbox-monitor cron '*/15 * * * *' (adam-startup-check.mjs)
+// QF-20260701-062: chairman-directed 15min -> 5min durable baseline (adam-startup-check.mjs inbox-monitor).
+const COORDINATOR_POLL_MS = 5 * 60_000;
 
 // Minimal thenable supabase stub that records the query chain (mirrors resilient-symmetric-adam.test.js).
 function makeSupabase(result, captured) {
@@ -85,8 +86,8 @@ describe('FR1+FR3 round-trip: a sent advisory survives a coordinator poll-gap un
   // Producer writes the row with the REAL TTL helper.
   const advisory = { id: 'adv-1', expires_at: advisoryExpiresAt(now0), payload: { kind: 'adam_advisory' } };
 
-  it('is NOT swept and IS returned by the reader after a >15min poll-gap', () => {
-    const atPoll = now0 + COORDINATOR_POLL_MS + 1; // coordinator's next poll, just past 15 min
+  it('is NOT swept and IS returned by the reader after a >1-poll-gap', () => {
+    const atPoll = now0 + COORDINATOR_POLL_MS + 1; // coordinator's next poll, just past one interval
     expect(sweptAway(advisory, atPoll)).toBe(false);
     expect(readerReturns(advisory, atPoll)).toBe(true);
   });
@@ -101,8 +102,11 @@ describe('FR1+FR3 round-trip: a sent advisory survives a coordinator poll-gap un
   it('COUNTERFACTUAL: the OLD request-mode TTL (now+timeoutMs+5min) WAS swept before the poll (the bug)', () => {
     const oldTtlMs = 30_000 + 5 * 60_000; // default timeoutMs(30s) + 5min ≈ 5.5min
     const oldRow = { id: 'adv-old', expires_at: new Date(now0 + oldTtlMs).toISOString(), payload: { kind: 'adam_advisory' } };
-    const atPoll = now0 + COORDINATOR_POLL_MS + 1;
-    expect(sweptAway(oldRow, atPoll)).toBe(true);       // deleted ~9.5 min before the 15-min poll
+    // QF-20260701-062: the poll cadence tightened to 5min, so the old ~5.5min TTL now
+    // outlives a SINGLE poll interval — poll 2 cycles out to keep demonstrating the bug
+    // (the old TTL is still far too short to survive to any poll a coordinator missed one tick on).
+    const atPoll = now0 + 2 * COORDINATOR_POLL_MS + 1;
+    expect(sweptAway(oldRow, atPoll)).toBe(true);       // deleted well before the 2nd poll
     expect(readerReturns(oldRow, atPoll)).toBe(false);  // gone — the exact loss this SD fixes
   });
 });
@@ -115,7 +119,9 @@ describe('FR1+FR3 round-trip: a sent advisory survives a coordinator poll-gap un
 // actual function returns exactly the surviving, unactioned advisories.
 describe('FR1+FR3 end-to-end: the REAL selectUnactionedAdvisories returns only surviving, unactioned advisories', () => {
   const now0 = 1_000_000_000_000;
-  const atPoll = now0 + COORDINATOR_POLL_MS + 1;
+  // QF-20260701-062: 2 poll cycles out, so the 'old-swept' seed row's ~5.5min old-style TTL
+  // (line below) is reliably expired regardless of the tightened 5min poll cadence.
+  const atPoll = now0 + 2 * COORDINATOR_POLL_MS + 1;
   const seed = [
     { id: 'fresh', expires_at: advisoryExpiresAt(now0), payload: { kind: 'adam_advisory' } },                                              // durable TTL, unactioned → survives + returned
     { id: 'actioned', expires_at: advisoryExpiresAt(now0), payload: { kind: 'adam_advisory', actioned_at: new Date(atPoll).toISOString() } }, // durable but actioned → gated out

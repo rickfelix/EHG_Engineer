@@ -14,10 +14,11 @@ import {
 import { buildSelfAdherenceVerdict } from '../../scripts/solomon-self-adherence-review.mjs';
 
 describe('SOLOMON_LOOPS shape', () => {
-  it('declares inbox-monitor (solomon-advisory.cjs inbox, */15) + self-adherence (*/12h) + deep-sweep', () => {
+  it('declares inbox-monitor (solomon-advisory.cjs inbox, 5min) + self-adherence (*/12h) + deep-sweep', () => {
     const byKey = Object.fromEntries(SOLOMON_LOOPS.map((l) => [l.key, l]));
     expect(byKey['inbox-monitor'].script).toBe('solomon-advisory.cjs');
-    expect(byKey['inbox-monitor'].cron).toBe('*/15 * * * *');
+    // QF-20260701-062: chairman-directed 15min -> 5min durable baseline.
+    expect(byKey['inbox-monitor'].cron).toBe('3,8,13,18,23,28,33,38,43,48,53,58 * * * *');
     expect(byKey['inbox-monitor'].prompt).toMatch(/solomon-advisory\.cjs inbox/);
     expect(byKey['self-adherence'].script).toBe('solomon-self-adherence-review.mjs');
     expect(byKey['self-adherence'].cron).toBe('0 */12 * * *');

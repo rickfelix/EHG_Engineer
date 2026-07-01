@@ -68,7 +68,9 @@ export const SOLOMON_LOOPS = [
     key: 'inbox-monitor',
     label: 'Solomon inbox — drain solomon_consult + coordinator-directed kinds (full-lane reader)',
     script: 'solomon-advisory.cjs',
-    cron: '*/15 * * * *',
+    // QF-20260701-062: chairman-directed 15min -> 5min durable baseline (tighter comms
+    // responsiveness on the advisory lane). Off-round minutes avoid fleet-wide :00/:05 collision.
+    cron: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *',
     prompt: 'node scripts/solomon-advisory.cjs inbox --quiet',
   },
   {
