@@ -47,6 +47,22 @@ node scripts/worker-checkin.cjs
 
 The CLI prints **one JSON object** describing the resolved action. It does the whole handshake itself: resolve the active coordinator (`lib/coordinator/resolve.cjs`), confirm callsign, register availability with an idempotent `payload.kind=roll_call` row (off the friction channel), then resolve work.
 
+### `--model` / `--effort` (SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B)
+
+Self-report your model/effort at check-in so the fleet's automatic tier ladder can rank
+you against the live fleet:
+
+```bash
+node scripts/worker-checkin.cjs --model sonnet --effort xhigh
+```
+
+- `--model`: one of `haiku`, `sonnet`, `opus`, `fable` (unrecognized values map conservative-UP to `fable`).
+- `--effort`: one of `low`, `medium`, `high`, `xhigh` (the legacy `max` spelling is folded into `xhigh`; unrecognized values map conservative-UP to `xhigh`).
+- Both flags are **optional** — omitting either (or both) is byte-identical to running `worker-checkin.cjs` with no flags at all (no-op).
+- The merge is **idempotent**: running the same flags again produces the same `metadata.model`/`metadata.effort`/`metadata.tier_rank`, not a duplicate or drifted value.
+- A chairman/coordinator-set `metadata.effort_source` (anything other than `worker_self_report`) **always wins** over your `--effort` flag — effort is not reliably self-detectable by the worker LLM, so an authoritative external stamp is never silently overwritten. `--model` has no equivalent protection (models ARE reliably self-reportable).
+- `metadata.model` is also captured automatically at `SessionStart` (a secondary, lower-priority auto-source) — `--model` at check-in is the more explicit, authoritative signal.
+
 ## Act on the result (NEVER stop to ask the human)
 
 | `action` | What the CLI did | What you do next | Then |
