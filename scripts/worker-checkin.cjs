@@ -507,6 +507,40 @@ async function fetchDraftCandidates(sb) {
 }
 
 /**
+ * SD-LEO-INFRA-SELF-CLAIM-WINDOW-NEWEST-FIT-DRAFT-001 (FR-1): a FOURTH self-claim candidate source,
+ * the NEWEST-N counterpart of fetchDraftCandidates. fetchDraftCandidates is a single created_at-ASC
+ * .limit(DRAFT_CANDIDATE_LIMIT=10) window = the OLDEST 10 drafts only, and fetchFleetCriticalCandidates
+ * is gated on metadata fleet_critical=true. So a fresh NON-fleet_critical draft that is a genuine fit
+ * for an idle worker but sits at draft age-position 11+ (10+ older drafts ahead of it by age) is in
+ * NEITHER window and has NO direct source — it starves across idle-worker cycles until enough older
+ * drafts drain (the exact starvation class #5268 fixed for fleet_critical, left open for everything
+ * else). This source fetches the NEWEST DRAFT_CANDIDATE_LIMIT drafts (created_at DESC) so a fresh
+ * fit-draft is claimable regardless of age position.
+ *
+ * ADDITIVE-ONLY: an EXACT mirror of fetchDraftCandidates except the created_at order is DESC. SAME
+ * columns (so a newest-window entry carries everything the downstream eligibility + fitness gates read),
+ * SAME positive status allowlist / claiming_session_id-null / neq-orchestrator guards, SAME
+ * DRAFT_CANDIDATE_LIMIT and priority-first stable sort. Never claims here — the caller UNIONs these into
+ * the merged step-6 pool (deduped by sd_key), so each routes through the COMPLETE eligibility SSOT +
+ * claim path unchanged. The explicit .order + .limit means the bounded fetch is never a SILENT
+ * truncation (the same hard-requirement pattern #5268 established). Exported for the FR-2 regression test.
+ */
+async function fetchNewestDraftCandidates(sb) {
+  const { data: drafts } = await sb
+    .from('strategic_directives_v2')
+    .select('sd_key, status, sd_type, priority, created_at, dependencies, metadata, target_application, parent_sd_id')
+    .in('status', ['draft', 'active'])
+    .is('claiming_session_id', null)
+    .neq('sd_type', 'orchestrator')
+    .order('created_at', { ascending: false })   // NEWEST-N — the only difference from fetchDraftCandidates
+    .limit(DRAFT_CANDIDATE_LIMIT);
+  // priority-first; newest-first within a priority (stable sort preserves the created_at DESC order).
+  return (drafts || []).slice().sort(
+    (a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9)
+  );
+}
+
+/**
  * SD-LEO-INFRA-SELF-CLAIM-WINDOW-FLEET-CRITICAL-001 (FR-1): a THIRD self-claim candidate source.
  * The fleet_critical reorder (sortByDispatchRank -> orderByFleetCriticalThenRank) can only LIFT a
  * fleet_critical SD that is already in the merged step-6 pool — but that pool is built from two
@@ -1136,6 +1170,12 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       .limit(SELF_CLAIM_CANDIDATE_LIMIT);
     let draftRows = [];
     try { draftRows = await fetchDraftCandidates(sb); } catch { /* fail-open: drafts absent */ }
+    // SD-LEO-INFRA-SELF-CLAIM-WINDOW-NEWEST-FIT-DRAFT-001 (FR-1): a FOURTH source — the NEWEST-N drafts
+    // (created_at DESC), so a fresh non-fleet_critical fit-draft at age-position 11+ (outside the oldest-10
+    // fetchDraftCandidates window and not fleet_critical) is in the pool instead of starving. Fail-open,
+    // mirroring the draft/fleet_critical fetches.
+    let newestRows = [];
+    try { newestRows = await fetchNewestDraftCandidates(sb); } catch { /* fail-open: newest window absent */ }
     // SD-LEO-INFRA-SELF-CLAIM-WINDOW-FLEET-CRITICAL-001 (FR-2): a THIRD source for fleet_critical SDs
     // that sit OUTSIDE both windows above, so the downstream fleet_critical lift has them in the pool to
     // reorder. Placed here, inside the step-6 try and downstream of ALL acquisition guards (4.5/5.7/5.8/5.9).
@@ -1148,6 +1188,13 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       if (c.sd_id && !seen.has(c.sd_id)) { seen.add(c.sd_id); merged.push({ kind: 'baselined', key: c.sd_id, track: c.track }); }
     }
     for (const d of draftRows) {
+      if (d.sd_key && !seen.has(d.sd_key)) { seen.add(d.sd_key); merged.push({ kind: 'draft', key: d.sd_key, row: d }); }
+    }
+    // SD-LEO-INFRA-SELF-CLAIM-WINDOW-NEWEST-FIT-DRAFT-001 (FR-1/FR-3): union the NEWEST-N drafts as
+    // kind:'draft' rows (so each routes through tryClaimDraftCandidate -> the COMPLETE eligibility SSOT),
+    // deduped by the SAME seen-set so an SD already surfaced by the oldest-10 window keeps its existing
+    // entry (no double-count). Widens the POOL only; changes NO eligibility/ordering semantics.
+    for (const d of newestRows) {
       if (d.sd_key && !seen.has(d.sd_key)) { seen.add(d.sd_key); merged.push({ kind: 'draft', key: d.sd_key, row: d }); }
     }
     // FR-2: union the fleet_critical source LAST so an SD already surfaced by the view/draft windows keeps
@@ -1277,7 +1324,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, fetchFleetCriticalCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective };
+module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective };
 
 if (require.main === module) {
   main().catch(err => {
