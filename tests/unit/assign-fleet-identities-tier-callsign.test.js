@@ -4,7 +4,7 @@
 // Bravo/Charlie, tier3=Delta/Echo/Foxtrot, tier2=Golf, tier1=Hotel. The picker is shared with
 // worker-checkin.cjs so both writers honor the scheme identically.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -13,6 +13,9 @@ const {
   tierRankOf,
   pickCallsignForTier,
   callsignInTierBand,
+  nextAvailable,
+  extendCallsign,
+  NATO,
 } = require('../../scripts/assign-fleet-identities.cjs');
 
 describe('QF-20260627-108: tier-encoded callsign assignment', () => {
@@ -55,5 +58,28 @@ describe('QF-20260627-108: tier-encoded callsign assignment', () => {
     expect(callsignInTierBand('Alpha', 4)).toBe(true);
     expect(callsignInTierBand('Golf-2', 2)).toBe(true); // suffix-wrapped still in band
     expect(callsignInTierBand(null, 2)).toBe(false);
+  });
+});
+
+describe('SD-LEO-INFRA-CHECKIN-NAME-ON-ARRIVAL-001 FR-3: deterministic pool exhaustion', () => {
+  it('extendCallsign returns the first FREE base-N (>=2) and never an already-used suffix', () => {
+    expect(extendCallsign('Alpha', new Set(['Alpha']), 't')).toBe('Alpha-2');
+    expect(extendCallsign('Alpha', new Set(['Alpha', 'Alpha-2', 'Alpha-3']), 't')).toBe('Alpha-4');
+    expect(extendCallsign('Alpha', new Set(['Alpha', 'Alpha-3']), 't')).toBe('Alpha-2'); // fill vacated
+  });
+
+  it('logs a deterministic "pool exhausted" line on extension (never silent)', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    extendCallsign('Golf', new Set(['Golf']), 'tier-2');
+    expect(spy).toHaveBeenCalledWith(expect.stringMatching(/pool exhausted.*Golf-2/));
+    spy.mockRestore();
+  });
+
+  it('nextAvailable shares the identical first-free format so both writers reconcile in lockstep', () => {
+    // NATO pool fully used -> extend deterministically, matching pickCallsignForTier's format.
+    const used = new Set(NATO);
+    expect(nextAvailable(NATO, used)).toBe('Alpha-2');
+    // And it skips an already-used extended suffix rather than colliding.
+    expect(nextAvailable(NATO, new Set([...NATO, 'Alpha-2']))).toBe('Alpha-3');
   });
 });
