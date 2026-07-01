@@ -219,10 +219,11 @@ describe('Branch Resolver - Discovery Domain Logic', () => {
 });
 
 describe('Branch Resolver - File Operations Domain Logic', () => {
-  // QF-20260701-104: use 'HEAD' (always resolvable) instead of the literal
-  // 'main' — these tests validate the git-read functions, not main-specific
-  // behavior, and 'main' is not guaranteed local/remote-resolvable on a
-  // shallow PR checkout (unit-tier.yml has no fetch-depth:0 workaround).
+  // QF-20260701-104 / QF-20260701-485: use 'HEAD' (always resolvable) instead
+  // of the literal 'main' — these tests validate the git-read functions, not
+  // main-specific behavior, and 'main' is not guaranteed local/remote-
+  // resolvable on a shallow PR checkout (unit-tier.yml has no fetch-depth:0
+  // workaround).
   it('should read existing file from HEAD', () => {
     const result = readFileFromBranch(repoPath, 'HEAD', 'package.json');
     expect(result.success).toBe(true);
