@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-07-01](#2026-07-01)
+  - [Bugfix](#bugfix)
 - [2026-06-20](#2026-06-20)
   - [Infrastructure](#infrastructure)
 - [2026-06-19](#2026-06-19)
@@ -63,6 +65,13 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-07-01
+
+### Bugfix
+- **Chairman decision watcher no longer crashes on a Realtime channel error** - PR #5305 (SD-FDBK-ENH-CANARY-VENTURE-PROBE-001)
+  - **What shipped**: `waitForDecision()` (`lib/eva/chairman-decision-watcher.js`) fell straight to its polling fallback on Realtime `CHANNEL_ERROR`/`TIMED_OUT` without ever tearing down the errored channel via `supabase.removeChannel()`. The still-subscribed-but-errored channel triggered the vendored `@supabase/realtime-js` phoenix client's `Channel.trigger`/`onClose` to recurse infinitely, crashing the process with `RangeError: Maximum call stack size exceeded` — reproduced twice in the Canary Venture Probe CI workflow. The fix removes the channel and nulls the reference before polling begins.
+  - **Verification**: 16/16 tests pass in `tests/unit/eva/chairman-decision-watcher.test.js`, including 2 new fake-timer regression tests; independently confirmed by the TESTING sub-agent (PASS, 92% confidence). Backend-only, no schema/dependency changes. A post-merge re-run of the Canary Venture Probe workflow is the remaining real-world confirmation step.
 
 ## 2026-06-20
 
