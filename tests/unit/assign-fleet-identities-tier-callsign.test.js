@@ -3,13 +3,19 @@
 // 5-min assign-fleet-identities cron re-clobbers the effort names every pass. tier4=Alpha/
 // Bravo/Charlie, tier3=Delta/Echo/Foxtrot, tier2=Golf, tier1=Hotel. The picker is shared with
 // worker-checkin.cjs so both writers honor the scheme identically.
+//
+// SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-C: the static TIER_CALLSIGNS map was replaced with
+// buildTierCallsignBands(topRank), derived dynamically from lib/fleet/tier-ladder.cjs's
+// ladderTopRank() so the band count is never assumed to be 4. At the default K=4 it must
+// reproduce the legacy split byte-for-byte (assertions below); at other K it must still
+// produce exactly K non-empty bands.
 
 import { describe, it, expect, vi } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const {
-  TIER_CALLSIGNS,
+  buildTierCallsignBands,
   tierRankOf,
   pickCallsignForTier,
   callsignInTierBand,
@@ -19,11 +25,12 @@ const {
 } = require('../../scripts/assign-fleet-identities.cjs');
 
 describe('QF-20260627-108: tier-encoded callsign assignment', () => {
-  it('maps each tier to its effort-encoded band', () => {
-    expect(TIER_CALLSIGNS[4]).toEqual(['Alpha', 'Bravo', 'Charlie']);
-    expect(TIER_CALLSIGNS[3]).toEqual(['Delta', 'Echo', 'Foxtrot']);
-    expect(TIER_CALLSIGNS[2]).toEqual(['Golf']);
-    expect(TIER_CALLSIGNS[1]).toEqual(['Hotel']);
+  it('buildTierCallsignBands(4) reproduces the legacy effort-encoded band map', () => {
+    const bands = buildTierCallsignBands(4);
+    expect(bands[4]).toEqual(['Alpha', 'Bravo', 'Charlie']);
+    expect(bands[3]).toEqual(['Delta', 'Echo', 'Foxtrot']);
+    expect(bands[2]).toEqual(['Golf']);
+    expect(bands[1]).toEqual(['Hotel']);
   });
 
   it('tierRankOf reads metadata.tier_rank and defaults unstamped workers to tier 4', () => {
@@ -81,5 +88,35 @@ describe('SD-LEO-INFRA-CHECKIN-NAME-ON-ARRIVAL-001 FR-3: deterministic pool exha
     expect(nextAvailable(NATO, used)).toBe('Alpha-2');
     // And it skips an already-used extended suffix rather than colliding.
     expect(nextAvailable(NATO, new Set([...NATO, 'Alpha-2']))).toBe('Alpha-3');
+  });
+});
+
+describe('SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-C: dynamic band count (K != 4)', () => {
+  it('a K=2 fleet produces exactly 2 callsign bands, not 4', () => {
+    const bands = buildTierCallsignBands(2);
+    expect(Object.keys(bands).sort((a, b) => a - b)).toEqual(['1', '2']);
+    expect(bands[1]).toEqual(['Hotel']);
+    expect(bands[2]).toEqual(['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf']);
+  });
+
+  it('a K=1 fleet produces exactly 1 band covering the whole pool', () => {
+    const bands = buildTierCallsignBands(1);
+    expect(Object.keys(bands)).toEqual(['1']);
+    expect(bands[1]).toEqual(NATO);
+  });
+
+  it('every band is non-empty even when K exceeds the NATO pool size (safety floor)', () => {
+    const bands = buildTierCallsignBands(10);
+    for (let rank = 1; rank <= 10; rank += 1) {
+      expect(bands[rank]).toBeDefined();
+      expect(bands[rank].length).toBeGreaterThan(0);
+    }
+  });
+
+  it('bands partition the pool with no overlap at K=3', () => {
+    const bands = buildTierCallsignBands(3);
+    expect(Object.keys(bands).sort((a, b) => a - b)).toEqual(['1', '2', '3']);
+    const flat = [...bands[1], ...bands[2], ...bands[3]];
+    expect(new Set(flat).size).toBe(flat.length); // no duplicates across bands
   });
 });

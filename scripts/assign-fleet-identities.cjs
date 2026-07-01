@@ -15,22 +15,56 @@
 const COLORS = ['blue', 'green', 'purple', 'orange', 'cyan', 'pink', 'yellow', 'red'];
 const NATO = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel'];
 
+// SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-C (FR-4): this file used to carry its OWN
+// hardcoded 4-rung TIER_CALLSIGNS map + a tierRankOf() that defaulted any unrecognized
+// value to 4 — a THIRD independent hardcoded-4-rung assumption alongside tier-ladder.cjs's
+// LADDER and sd-tier-rank.mjs's rung literals. Both are now derived from the shared
+// lib/fleet/tier-ladder.cjs module so K (ladderTopRank()) is never assumed to be 4.
+const { resolveWorkerTierRank, ladderTopRank, deriveWorkerTierRank } = require('../lib/fleet/tier-ladder.cjs');
+
 // QF-20260627-108 (FR-1): the chairman effort-encoded callsign scheme. A worker's callsign is
 // derived from its metadata.tier_rank (the source-of-truth), NOT flat first-available NATO order —
-// otherwise the 5-min cron re-clobbers the effort names every pass. tier4=high, tier3=medium,
-// tier2=low, tier1=sonnet/max. Shared by the cron AND worker-checkin self-assign so both honor it.
-const TIER_CALLSIGNS = {
-  4: ['Alpha', 'Bravo', 'Charlie'],
-  3: ['Delta', 'Echo', 'Foxtrot'],
-  2: ['Golf'],
-  1: ['Hotel'],
-};
+// otherwise the 5-min cron re-clobbers the effort names every pass. Shared by the cron AND
+// worker-checkin self-assign so both honor it.
+//
+// buildTierCallsignBands(topRank) partitions the fixed 8-letter NATO pool into `topRank` bands,
+// top-heavy: the bottom floor(K/2) bands get 1 letter each (reserved from the END of the pool,
+// so the LOWEST rank gets the LAST letter), and the remaining upper bands split what's left as
+// evenly as possible (extra letters going to the TOP band(s) first). At K=4 this reproduces the
+// legacy map byte-for-byte: {4:[Alpha,Bravo,Charlie], 3:[Delta,Echo,Foxtrot], 2:[Golf], 1:[Hotel]}.
+// Every band is guaranteed >=1 letter (cycling the pool) even when K exceeds the pool size.
+function buildTierCallsignBands(topRank) {
+  const K = Math.max(1, Math.trunc(Number(topRank)) || 1);
+  const bands = {};
+  const lowerCount = Math.floor(K / 2);
+  const upperCount = K - lowerCount;
+  const pool = NATO.slice();
+  const reserved = lowerCount > 0 ? pool.splice(pool.length - lowerCount, lowerCount) : [];
+  const base = Math.floor(pool.length / upperCount);
+  let remainder = pool.length % upperCount;
+  let idx = 0;
+  for (let rank = K; rank > lowerCount; rank--) {
+    let size = base + (remainder > 0 ? 1 : 0);
+    if (remainder > 0) remainder--;
+    bands[rank] = pool.slice(idx, idx + size);
+    idx += size;
+  }
+  for (let i = 0; i < lowerCount; i++) {
+    bands[i + 1] = [reserved[lowerCount - 1 - i]];
+  }
+  // Safety floor: K > NATO.length can leave a band empty (e.g. upperCount > pool.length).
+  // pickCallsignForTier/callsignInTierBand index pool[0], so an empty band must never occur.
+  for (let rank = 1; rank <= K; rank++) {
+    if (!bands[rank] || bands[rank].length === 0) bands[rank] = [NATO[(rank - 1) % NATO.length]];
+  }
+  return bands;
+}
 
-// Resolve a worker's effort tier from metadata.tier_rank. Default 4 (top band) for an unstamped
-// worker — matches the conservative-UP dispatch default (workers default to the top rung).
+// Resolve a worker's tier rank from metadata.tier_rank, delegating to the shared
+// lib/fleet/tier-ladder.cjs resolver (bounds against the CURRENT ladderTopRank(), defaults an
+// unstamped/invalid value to the top rung — conservative-UP, matching dispatch's default).
 function tierRankOf(worker) {
-  const t = worker?.metadata?.tier_rank;
-  return (t === 1 || t === 2 || t === 3 || t === 4) ? t : 4;
+  return resolveWorkerTierRank(worker);
 }
 
 // SD-LEO-INFRA-CHECKIN-NAME-ON-ARRIVAL-001 (FR-3): deterministic + unique + logged pool extension.
@@ -50,8 +84,12 @@ function extendCallsign(base, usedSet, poolLabel) {
 
 // Pick the first FREE callsign within the worker's tier band (effort-encoded SoT), wrapping with a
 // numeric suffix only when the band is exhausted. Drop-in replacement for nextAvailable(NATO, ...).
+// Bands are computed fresh from the CURRENT ladderTopRank() on every call (SD-LEO-INFRA-AUTO-TIERING-
+// ACTIVATION-001-C) so a live fleet resize (K != 4) is picked up without a code change here.
 function pickCallsignForTier(tierRank, usedSet) {
-  const pool = TIER_CALLSIGNS[tierRank] || TIER_CALLSIGNS[4];
+  const topRank = ladderTopRank();
+  const bands = buildTierCallsignBands(topRank);
+  const pool = bands[tierRank] || bands[topRank];
   for (const c of pool) {
     if (!usedSet.has(c)) return c;
   }
@@ -63,7 +101,9 @@ function pickCallsignForTier(tierRank, usedSet) {
 // "Bravo") returns false → it is re-derived, so the chairman scheme self-heals.
 function callsignInTierBand(callsign, tierRank) {
   if (!callsign) return false;
-  const pool = TIER_CALLSIGNS[tierRank] || TIER_CALLSIGNS[4];
+  const topRank = ladderTopRank();
+  const bands = buildTierCallsignBands(topRank);
+  const pool = bands[tierRank] || bands[topRank];
   const base = String(callsign).split('-')[0];
   return pool.includes(base);
 }
@@ -292,6 +332,30 @@ async function main() {
     }
   }
 
+  // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-C (FR-4): this cron is the only reader that sees the
+  // WHOLE live fleet, so it is the authoritative writer of the fleet-relative dense tier_rank. A
+  // lone worker's own check-in self-report (worker-checkin.cjs mergeCheckinModelEffort) only knows
+  // its own capabilityScore against a cached ladder; this refresh corrects every worker to the true
+  // 1..K dense rank across all CURRENTLY live workers, before tierRankOf()/callsignInTierBand() below
+  // read it for banding decisions.
+  const liveFleet = uniqueWorkers.map(w => ({ model: w.metadata?.model, effort: w.metadata?.effort }));
+  for (const worker of uniqueWorkers) {
+    const freshRank = deriveWorkerTierRank(worker, liveFleet);
+    if (worker.metadata?.tier_rank !== freshRank) {
+      const metadata = { ...(worker.metadata || {}), tier_rank: freshRank };
+      const { error: rankErr } = await supabase
+        .from('claude_sessions')
+        .update({ metadata })
+        .eq('session_id', worker.session_id);
+
+      if (rankErr) {
+        console.error(`  Failed to refresh tier_rank for ${worker.session_id.substring(0, 12)}: ${rankErr.message}`);
+      } else {
+        worker.metadata = metadata; // keep in-memory copy fresh for this run's banding decisions
+      }
+    }
+  }
+
   // Separate workers into already-assigned and new
   const assignedRaw = [];
   const needsAssignment = [];
@@ -470,7 +534,7 @@ async function main() {
   console.log('');
 }
 
-module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, TIER_CALLSIGNS, tierRankOf, pickCallsignForTier, callsignInTierBand };
+module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, buildTierCallsignBands, tierRankOf, pickCallsignForTier, callsignInTierBand };
 
 if (require.main === module) {
   main().catch(err => {

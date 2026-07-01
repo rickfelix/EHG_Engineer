@@ -14,11 +14,11 @@
  *   (e) an otherwise-ineligible SD (deferred / orchestrator / fixture / bare-shell) is excluded
  *       regardless of tier.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { claimableForTier, tierClaimableBreakdown, isBaseEligible, sdMinTierRank } = require('../../../lib/fleet/tier-claimable.cjs');
-const { ladderTopRank } = require('../../../lib/fleet/tier-ladder.cjs');
+const { ladderTopRank, deriveLiveLadder, __resetLadderCacheForTests } = require('../../../lib/fleet/tier-ladder.cjs');
 
 const TOP = ladderTopRank(); // 4
 
@@ -146,5 +146,64 @@ describe('preFiltered passthrough', () => {
     const pool = [sd('A', 1), sd('DEF', 1, { status: 'deferred' })];
     expect(tierClaimableBreakdown(pool, { tieringActive: true, preFiltered: true }).aggregate).toBe(2);
     expect(tierClaimableBreakdown(pool, { tieringActive: true, preFiltered: false }).aggregate).toBe(1);
+  });
+});
+
+// SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-C: tier-claimable.cjs already reads ladderTopRank()
+// dynamically (never hardcoded 4), but no prior test exercised K != 4. These prove the
+// partition/cumulative invariants hold when a live fleet resizes the ladder, and that the
+// module-level ladder cache is restored afterward so it doesn't leak into other test files.
+describe('K != 4 — invariants hold when the live fleet resizes the ladder (FR-4)', () => {
+  afterEach(() => {
+    __resetLadderCacheForTests();
+  });
+
+  it('a 2-distinct-score live fleet resizes ladderTopRank() to 2, and breakdown invariants still hold', () => {
+    const { topRank } = deriveLiveLadder([
+      { model: 'sonnet', effort: 'max' },
+      { model: 'opus', effort: 'high' },
+    ]);
+    expect(topRank).toBe(2);
+    expect(ladderTopRank()).toBe(2);
+
+    const pool = [sd('A', 1), sd('B', 2), sd('U')]; // 1 unscored
+    const bd = tierClaimableBreakdown(pool, { tieringActive: true });
+    expect(bd.aggregate).toBe(3);
+    const partitionSum = bd.unscored + bd.aboveTop + Object.values(bd.exact).reduce((a, b) => a + b, 0);
+    expect(partitionSum).toBe(bd.aggregate);
+    expect(bd.partitionSumsToAggregate).toBe(true);
+
+    let running = bd.unscored;
+    for (let r = 1; r <= 2; r += 1) {
+      running += bd.exact[r];
+      expect(bd.cumulative[r]).toBe(running);
+      expect(claimableForTier(pool, { workerTierRank: r, tieringActive: true })).toHaveLength(running);
+    }
+    expect(bd.cumulative[2]).toBe(bd.aggregate);
+  });
+
+  it('a 6-distinct-score live fleet resizes ladderTopRank() to 6, and a rank-6 SD is claimable only at the top rung', () => {
+    const { topRank } = deriveLiveLadder([
+      { model: 'sonnet', effort: 'low' },
+      { model: 'sonnet', effort: 'medium' },
+      { model: 'sonnet', effort: 'high' },
+      { model: 'sonnet', effort: 'max' },
+      { model: 'opus', effort: 'high' },
+      { model: 'opus', effort: 'max' },
+    ]);
+    expect(topRank).toBe(6);
+    expect(ladderTopRank()).toBe(6);
+
+    const pool = [sd('A', 1), sd('F', 6), sd('U')];
+    expect(keys(claimableForTier(pool, { workerTierRank: 5, tieringActive: true }))).toBe('A,U');
+    expect(keys(claimableForTier(pool, { workerTierRank: 6, tieringActive: true }))).toBe('A,F,U');
+
+    const bd = tierClaimableBreakdown(pool, { tieringActive: true });
+    expect(bd.partitionSumsToAggregate).toBe(true);
+    expect(bd.cumulative[6]).toBe(bd.aggregate);
+  });
+
+  it('restores the default K=4 ladder after the cache reset (no cross-test leakage)', () => {
+    expect(ladderTopRank()).toBe(TOP);
   });
 });
