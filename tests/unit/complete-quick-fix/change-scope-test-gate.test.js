@@ -12,13 +12,20 @@
  * ERR_LOAD_URL during project-wide collection on a pre-existing baseline file —
  * the very baseline-poisoning this SD escapes. A targeted run avoids that graph.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import os from 'os';
 import path from 'path';
+
+let execSyncMock;
+vi.mock('child_process', () => ({
+  execSync: (...args) => execSyncMock(...args),
+}));
+
 import {
   buildUnitTestCommand,
   WHOLE_SUITE_UNIT_COMMAND,
+  runTests,
 } from '../../../scripts/modules/complete-quick-fix/test-runner.js';
 import {
   isFrontendPath,
@@ -37,7 +44,12 @@ describe('buildUnitTestCommand (FR-1, FR-3, FR-5)', () => {
     expect(cmd).not.toContain('--changed');
     expect(cmd).toContain('"tests/unit/foo.test.js"');
     expect(cmd).toContain('--project unit'); // FR-5: pin to no-DB unit project
-    expect(cmd).toContain('--passWithNoTests'); // FR-3: empty match is a pass
+    // RCA a15122006891b019b: --passWithNoTests on a scoped run masks a
+    // zero-tests-executed false-pass when every path is filtered out by the
+    // unit project's own excludes (quarantine manifest / SHARED_EXCLUDE /
+    // DB_INCLUDE). Dropped from the scoped branch; runTests() asserts
+    // summary.total>0 instead (see the runTests describe block below).
+    expect(cmd).not.toContain('--passWithNoTests');
     expect(cmd).not.toBe(WHOLE_SUITE_UNIT_COMMAND);
   });
 
@@ -176,5 +188,44 @@ describe('getScopedUnitTestFiles (FR-1, TR-2) — fs fixture', () => {
   it('does not include a candidate path that does not exist on disk', () => {
     // lib/foo.js sibling exists, but a non-existent source yields nothing
     expect(getScopedUnitTestFiles(['lib/nope.js'], dir)).toEqual([]);
+  });
+});
+
+describe('runTests — scoped zero-execution guard (RCA a15122006891b019b)', () => {
+  beforeEach(() => {
+    execSyncMock = vi.fn();
+  });
+
+  it('treats exit-0 with zero executed tests as non-pass when testFiles were scoped', () => {
+    // Simulates vitest exiting 0 with no "Tests: N passed" summary line at all
+    // (the false-pass this RCA closes, previously masked by --passWithNoTests).
+    execSyncMock.mockReturnValue('No test files found, exiting with code 0\n');
+    const result = runTests('unit', { testFiles: ['tests/unit/quarantined.test.js'] });
+    expect(result.passed).toBe(false);
+    expect(result.summary.total).toBe(0);
+    expect(result.falseVerificationGuard).toMatch(/zero executed tests/);
+  });
+
+  it('is a real pass when a scoped run actually executes tests', () => {
+    execSyncMock.mockReturnValue('Tests: 3 passed (3)\n');
+    const result = runTests('unit', { testFiles: ['tests/unit/real.test.js'] });
+    expect(result.passed).toBe(true);
+    expect(result.summary.total).toBe(3);
+    expect(result.falseVerificationGuard).toBeUndefined();
+  });
+
+  it('does not apply the guard to a whole-suite run (no testFiles)', () => {
+    // Zero executed tests with no scoped files is not this class of bug — leave as-is.
+    execSyncMock.mockReturnValue('No test files found, exiting with code 0\n');
+    const result = runTests('unit', {});
+    expect(result.passed).toBe(true);
+    expect(result.falseVerificationGuard).toBeUndefined();
+  });
+
+  it('does not apply the guard to e2e runs', () => {
+    execSyncMock.mockReturnValue('0 passed\n');
+    const result = runTests('e2e', { testFiles: ['tests/e2e/foo.spec.ts'] });
+    expect(result.passed).toBe(true);
+    expect(result.falseVerificationGuard).toBeUndefined();
   });
 });
