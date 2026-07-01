@@ -43,6 +43,11 @@ export { createWiringValidationGate } from './wiring-validation.js';
 // new CLIs at EXEC-TO-PLAN so they are fixed before the blocking final gate.
 export { createWireCheckAdvisoryGate } from './wire-check-advisory.js';
 
+// Consumer Impact advisory (SD-LEO-INFRA-FIRST-PARTY-CODEBASE-STRUCTURAL-ANALYSIS-001)
+// Blast-radius of modified/removed exported symbols — flags consumers not
+// touched in the same diff. Advisory only, never blocks the handoff.
+export { createConsumerImpactGate } from './consumer-impact-gate.js';
+
 // UI Interactivity Check (SD-MAN-INFRA-LEO-GATE-IMPROVEMENTS-001)
 export { createUiInteractivityCheckGate } from './ui-interactivity-check.js';
 
