@@ -74,6 +74,88 @@ describe('waitForDecision', () => {
       waitForDecision({ decisionId: 'd1', supabase, logger, timeoutMs: 50 }),
     ).rejects.toThrow('timed out');
   }, 5000);
+
+  // SD-FDBK-ENH-CANARY-VENTURE-PROBE-001: CHANNEL_ERROR/TIMED_OUT must tear down the
+  // errored channel via removeChannel before polling starts, or the vendored phoenix
+  // client's Channel.trigger/onClose can recurse into a stack-overflow crash.
+  it('removes the errored channel before falling back to polling on CHANNEL_ERROR, with no duplicate removeChannel when later resolved via polling', async () => {
+    vi.useFakeTimers();
+    try {
+      const channelMock = { on: vi.fn().mockReturnThis() };
+      channelMock.subscribe = vi.fn((cb) => {
+        setTimeout(() => cb('CHANNEL_ERROR'), 0);
+        return channelMock;
+      });
+      const supabase = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn()
+            .mockResolvedValueOnce({ data: { status: 'pending' } })
+            .mockResolvedValue({ data: { status: 'approved', rationale: null, decision: 'approve' } }),
+        }),
+        channel: vi.fn().mockReturnValue(channelMock),
+        removeChannel: vi.fn(),
+      };
+      const logger = createMockLogger();
+
+      const promise = waitForDecision({ decisionId: 'd1', supabase, logger });
+
+      // Let the deferred CHANNEL_ERROR callback fire (subscription is already assigned by now).
+      await vi.advanceTimersByTimeAsync(0);
+      expect(supabase.removeChannel).toHaveBeenCalledTimes(1);
+      expect(supabase.removeChannel).toHaveBeenCalledWith(channelMock);
+
+      // Advance past the polling interval so the decision resolves via the fallback.
+      await vi.advanceTimersByTimeAsync(10_000);
+      const result = await promise;
+
+      expect(result.status).toBe('approved');
+      // cleanup() must not double-remove — subscription was already nulled by the error branch.
+      expect(supabase.removeChannel).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('removes the errored channel on TIMED_OUT as well as CHANNEL_ERROR', async () => {
+    vi.useFakeTimers();
+    try {
+      const channelMock = { on: vi.fn().mockReturnThis() };
+      channelMock.subscribe = vi.fn((cb) => {
+        setTimeout(() => cb('TIMED_OUT'), 0);
+        return channelMock;
+      });
+      const supabase = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({ data: { status: 'pending' } }),
+        }),
+        channel: vi.fn().mockReturnValue(channelMock),
+        removeChannel: vi.fn(),
+      };
+      const logger = createMockLogger();
+
+      // 3000ms deliberately avoids colliding with waitForDecision's own 5000ms polling
+      // safety-net setTimeout, which would otherwise also fire in the same timer flush.
+      const promise = waitForDecision({ decisionId: 'd1', supabase, logger, timeoutMs: 3000 });
+      // Attach the rejection expectation immediately so it isn't flagged as briefly
+      // unhandled once fake-timer advancement causes the promise to actually reject.
+      const rejection = expect(promise).rejects.toThrow('timed out');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(supabase.removeChannel).toHaveBeenCalledTimes(1);
+      expect(supabase.removeChannel).toHaveBeenCalledWith(channelMock);
+
+      await vi.advanceTimersByTimeAsync(3000);
+      await rejection;
+      // cleanup() from the timeout handler must not double-remove the already-nulled subscription.
+      expect(supabase.removeChannel).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('createOrReusePendingDecision', () => {
