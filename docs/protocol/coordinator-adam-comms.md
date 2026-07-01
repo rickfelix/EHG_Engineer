@@ -133,3 +133,41 @@ It stamps `payload.dead_letter=true` (+ `dead_letter_at`, `dead_letter_reason`,
 `original_target`), stamps `read_at` (drain marker), and backfills `expires_at = now+7d`
 when NULL so the audit trail is reaped after a week. Surfaced by the coordinator inbox
 section 'DEAD-LETTERED (24h)' — re-send to the successor session if still relevant.
+
+## Adaptive comms cadence — a SHARED protocol capability
+
+`lib/coordinator/adaptive-comms-cadence.cjs` (SD-LEO-INFRA-ADAPTIVE-COMMS-CADENCE-SHARED-PROTOCOL-001)
+is the single shared decision any session (Adam, coordinator, Solomon, or an opted-in worker)
+calls to compute its own next self-scheduled check-in interval, instead of always waiting a
+full fixed baseline tick even during a live back-and-forth:
+
+- `computeAdaptiveCadence({ sentPendingReply, receivedUnactioned, lastActivityMs, threadOpenedAtMs, nowMs, opts })`
+  — PURE, no I/O. Returns `{ intervalMs, reason, tight }`: **TIGHT** (default 2.5min) while a
+  thread is genuinely open, **BASELINE** (default 15min) when quiet. A hard **CAP** (default
+  30min) forces a fallback to baseline once a thread has been open longer than that, so a
+  never-resolving thread can't pin a session in tight-poll forever (defeats cycle-down).
+- `getCommsActivitySignals(supabase, sessionId, opts)` — the companion I/O helper. Detects: a
+  sent `payload.reply_requested=true` row with no later row echoing `payload.reply_to` back to
+  it (sentPendingReply); a received row with `acknowledged_at IS NULL` inside the recent window
+  (receivedUnactioned); the most recent bidirectional activity timestamp. **Fail-open**: any
+  query error resolves to signals that compute to baseline — never blocks the caller's tick,
+  never accidentally pins a session tight on an error.
+
+**Tightening is SELF-SCHEDULED RE-CHECK, not a retuned cron.** A `CronCreate`-armed cadence
+can't be retuned mid-flight from Node, so each consumer reads the recommendation and re-arms
+its own next wakeup on top of its existing baseline-armed tick — this is layered on, not a
+replacement for, the documented `*/15` inbox-monitor cadence.
+
+**Wired consumers:**
+- `scripts/worker-checkin.cjs` (live, opt-in): the idle-path `recommended_wakeup_seconds` the
+  `/checkin` skill reads for its `ScheduleWakeup` tightens when this worker's own session has an
+  active reply-pending thread — e.g. awaiting a coordinator reply on a blocked-item question.
+  **Additive only**: never loosens the existing belt/claim-driven recommendation, never touches
+  claim acquisition or heartbeat cadence.
+- Adam's / Solomon's inbox-monitor ticks and the coordinator's own comms loop are documented
+  consumers of the same shared helper — each self-schedules a tighter re-check on top of its
+  baseline-armed cron while a thread is open, using the identical `computeAdaptiveCadence` +
+  `getCommsActivitySignals` pair (never a per-role reimplementation).
+
+**Preserves silence-by-default**: the helper computes an interval only — it never itself sends
+a message, so message volume/chattiness is completely unaffected; only receipt latency changes.
