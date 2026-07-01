@@ -193,8 +193,11 @@ describe('Branch Resolver - Validation Domain Logic', () => {
     expect(result.exists).toBe(false);
   });
 
-  it('should return exists:true for main branch', () => {
-    const result = validateBranchExists(repoPath, 'main');
+  it('should return exists:true for HEAD', () => {
+    // QF-20260701-104: 'main' is not guaranteed to be a resolvable local/remote
+    // ref on shallow PR checkouts (unit-tier.yml has no fetch-depth:0 workaround).
+    // 'HEAD' always resolves regardless of which ref CI checked out.
+    const result = validateBranchExists(repoPath, 'HEAD');
     expect(result.exists).toBe(true);
     expect(result.commitHash).toBeDefined();
     expect(result.lastCommitDate).toBeDefined();
@@ -216,10 +219,12 @@ describe('Branch Resolver - Discovery Domain Logic', () => {
 });
 
 describe('Branch Resolver - File Operations Domain Logic', () => {
-  // QF-20260701-485: use HEAD, not 'main' - feature-branch CI checkouts have
-  // no local 'main' ref, and these tests exercise the generic file-op
-  // functions rather than main-specific resolution.
-  it('should read existing file from main branch', () => {
+  // QF-20260701-104 / QF-20260701-485: use 'HEAD' (always resolvable) instead
+  // of the literal 'main' — these tests validate the git-read functions, not
+  // main-specific behavior, and 'main' is not guaranteed local/remote-
+  // resolvable on a shallow PR checkout (unit-tier.yml has no fetch-depth:0
+  // workaround).
+  it('should read existing file from HEAD', () => {
     const result = readFileFromBranch(repoPath, 'HEAD', 'package.json');
     expect(result.success).toBe(true);
     expect(result.content).toContain('name');
