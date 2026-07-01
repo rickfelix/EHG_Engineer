@@ -95,7 +95,7 @@ describe('FR-3 above_worker_tier eligibility verdict', () => {
 // ---- TS-4/TS-5: FR-4 dispatch guard + FR-5 degrade-to-1 -------------------
 /** Minimal supabase stub: serves claude_sessions (workers), strategic_directives_v2 (SD), and a
  *  live-worker list so isTieringActive can resolve. */
-function stubSupabase({ liveWorkers = 2, workerTierRank = 1, sdMinRank = 3, coordinatorRpc = null } = {}) {
+function stubSupabase({ liveWorkers = 2, workerTierRank = 1, sdMinRank = 3, coordinatorRpc = null, extraSessions = [] } = {}) {
   const sessions = [];
   for (let i = 0; i < liveWorkers; i++) {
     sessions.push({
@@ -103,15 +103,25 @@ function stubSupabase({ liveWorkers = 2, workerTierRank = 1, sdMinRank = 3, coor
       sd_key: `SD-LIVE-${i}`, claimed_at: new Date().toISOString(), worktree_path: `/wt/${i}`, continuous_sds_completed: 1,
     });
   }
+  sessions.push(...extraSessions);
   const targetSession = { session_id: 'target-worker', metadata: { tier_rank: workerTierRank } };
+  const lastQuery = { in: null, gte: null, order: null, limit: null };
   return {
     rpc: async () => ({ data: coordinatorRpc, error: null }),
+    _lastQuery: lastQuery,
     from(table) {
       const api = {
         _table: table, _filters: {},
         select() { return api; },
         not() { return api; },
         eq(col, val) { api._filters[col] = val; return api; },
+        // FR-3 (SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-A): pass-through no-ops so the bounded
+        // isTieringActive() query chain (.in/.gte/.order/.limit) doesn't throw "api.X is not a
+        // function"; each call is recorded on lastQuery so tests can assert bounding shape.
+        in(col, vals) { lastQuery.in = { col, vals }; return api; },
+        gte(col, val) { lastQuery.gte = { col, val }; return api; },
+        order(col, opts) { lastQuery.order = { col, opts }; return api; },
+        limit(n) { lastQuery.limit = n; return api; },
         async maybeSingle() {
           if (table === 'claude_sessions') {
             if (api._filters.session_id === 'target-worker') return { data: targetSession, error: null };
@@ -168,5 +178,44 @@ describe('FR-5 isTieringActive', () => {
     expect(await isTieringActive(stubSupabase({ liveWorkers: 2 }))).toBe(true);
     expect(await isTieringActive(stubSupabase({ liveWorkers: 1 }))).toBe(false);
     expect(await isTieringActive(stubSupabase({ liveWorkers: 0 }))).toBe(false);
+  });
+});
+
+// ---- SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-A (FR-1: bounded live-worker query) ----
+describe('FR-1 isTieringActive() bounded claude_sessions query', () => {
+  it('detects >=2 live workers even with a >1000-row simulated claude_sessions page', async () => {
+    // Simulate the real-world shape the bug hit: a large table where the 2 genuinely live
+    // workers are not guaranteed to be at the front of an unbounded/unordered page. The stub
+    // itself doesn't truncate (no real pagination to model), so this also exercises the query
+    // being called with a bounding shape below, not just the raw count.
+    const staleFiller = Array.from({ length: 1200 }, (_, i) => ({
+      session_id: `stale-${i}`, status: 'released', metadata: {},
+      heartbeat_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+      sd_key: null, claimed_at: null, worktree_path: null, continuous_sds_completed: 0,
+    }));
+    const sb = stubSupabase({ liveWorkers: 2, extraSessions: staleFiller });
+    expect(await isTieringActive(sb)).toBe(true);
+  });
+
+  it('constructs a bounded query: status in active/idle, heartbeat >= now-15min, ordered desc, limit 200', async () => {
+    const nowMs = Date.now();
+    const sb = stubSupabase({ liveWorkers: 2 });
+    await isTieringActive(sb, { nowMs });
+    expect(sb._lastQuery.in).toMatchObject({ col: 'status', vals: ['active', 'idle'] });
+    expect(sb._lastQuery.gte.col).toBe('heartbeat_at');
+    expect(new Date(sb._lastQuery.gte.val).getTime()).toBe(nowMs - 900000);
+    expect(sb._lastQuery.order).toMatchObject({ col: 'heartbeat_at', opts: { ascending: false } });
+    expect(sb._lastQuery.limit).toBe(200);
+  });
+
+  it('inertness invariant (risk-agent GO-WITH-CONDITIONS): tiering active + all workers unstamped => zero above_worker_tier blocks', async () => {
+    const sb = stubSupabase({ liveWorkers: 2, workerTierRank: undefined, sdMinRank: 4 });
+    expect(await isTieringActive(sb)).toBe(true);
+    // An unstamped worker resolves to the TOP rung (resolveWorkerTierRank), and clamp() caps
+    // every SD's min_tier_rank at that same top rung — so above_worker_tier is unreachable.
+    const unstampedWorkerRank = resolveWorkerTierRank({ metadata: {} });
+    expect(unstampedWorkerRank).toBe(TOP);
+    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: clamp(999) } };
+    expect(classifyDispatchIneligibility(sd, { worker_tier_rank: unstampedWorkerRank, tiering_active: true })).toBeNull();
   });
 });
