@@ -23,6 +23,12 @@
  *
  * Usage: node scripts/worker-checkin.cjs            (CLAUDE_SESSION_ID from env)
  *        node scripts/worker-checkin.cjs --json      (same; JSON is the default)
+ *        node scripts/worker-checkin.cjs --model <haiku|sonnet|opus|fable> --effort <low|medium|high|xhigh>
+ *          (SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B FR-3: self-report model/effort at
+ *          check-in; merged into claude_sessions.metadata and used to derive tier_rank for
+ *          THIS check-in call. No-op — byte-identical to today — when both flags are absent.
+ *          A chairman/coordinator-set metadata.effort_source='chairman' always wins over a
+ *          worker's own --effort self-report.)
  */
 
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
@@ -37,7 +43,8 @@ const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cj
 // scripts/stale-session-sweep.cjs CLAIM_FIX (closes the self_claim-vs-sweep writer-consumer-asymmetry).
 const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, parentLeadPending } = require('../lib/fleet/claim-eligibility.cjs');
 // SD-LEO-INFRA-COMPLEXITY-TIERED-WORKER-ASSIGNMENT-001 (FR-3): WORK-DOWN-NEVER-UP on the PULL path.
-const { resolveWorkerTierRank, isTieringActive } = require('../lib/fleet/tier-ladder.cjs');
+// SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B (FR-3): --model/--effort capture at check-in.
+const { resolveWorkerTierRank, isTieringActive, normalizeModel, normalizeEffort, rankForModelEffort, clamp: clampTierRank } = require('../lib/fleet/tier-ladder.cjs');
 // SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-2): tier-aware "claimable-to-MY-rung" rollup.
 const { claimableForTier } = require('../lib/fleet/tier-claimable.cjs');
 // SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: reuse the coordinator cron's pool + picker + ghost guard so
@@ -949,7 +956,60 @@ async function runCheckin(sb, sessionId, opts = {}) {
   return result;
 }
 
-async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordinatorId } = {}) {
+/**
+ * SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B (FR-3, FR-7): read-modify-merge a worker's
+ * --model/--effort self-report into its session metadata. Pure (no I/O) — the caller
+ * persists the result. Returns { metadata, changed } where `changed` is false (and
+ * `metadata` is the UNTOUCHED input) when both cliModel and cliEffort are absent (TR-2:
+ * byte-identical no-op) OR when the merge would not actually alter any field (idempotent
+ * diff-guard — a repeated identical call never re-writes the same values).
+ *
+ * effort_source='chairman' (or any coordinator-stamped source other than the worker's own
+ * self-report) WINS over a worker's --effort flag — effort is not reliably self-detectable
+ * by the worker LLM, so an authoritative external stamp is never silently overwritten.
+ * Self-report only fills metadata.effort when effort_source is unset or already
+ * 'worker_self_report'. model has no analogous protection (models ARE reliably
+ * self-reportable).
+ *
+ * @param {object|null} sessionMetadata current claude_sessions.metadata (may be null)
+ * @param {{ model?: string|null, effort?: string|null }} cli parsed --model/--effort
+ * @returns {{ metadata: object|null, changed: boolean }}
+ */
+function mergeCheckinModelEffort(sessionMetadata, { model: cliModel = null, effort: cliEffort = null } = {}) {
+  if (!cliModel && !cliEffort) return { metadata: sessionMetadata, changed: false }; // TR-2 no-op
+
+  const current = sessionMetadata || {};
+  const next = { ...current };
+  let changed = false;
+
+  if (cliModel) {
+    const normalized = normalizeModel(cliModel);
+    if (next.model !== normalized) { next.model = normalized; changed = true; }
+  }
+
+  if (cliEffort) {
+    const effortSource = current.effort_source;
+    const chairmanWins = effortSource && effortSource !== 'worker_self_report';
+    if (!chairmanWins) {
+      const normalized = normalizeEffort(cliEffort);
+      if (next.effort !== normalized) { next.effort = normalized; changed = true; }
+      if (next.effort_source !== 'worker_self_report') { next.effort_source = 'worker_self_report'; changed = true; }
+    }
+  }
+
+  if (changed) {
+    const finalModel = next.model || current.model;
+    const finalEffort = next.effort || current.effort;
+    if (finalModel && finalEffort) {
+      const rank = clampTierRank(rankForModelEffort(finalModel, finalEffort));
+      if (next.tier_rank !== rank) next.tier_rank = rank;
+    }
+  }
+
+  return changed ? { metadata: next, changed: true } : { metadata: sessionMetadata, changed: false };
+}
+
+async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordinatorId, model: cliModel = null, effort: cliEffort = null } = {}) {
   // 1. resolve coordinator (fail-open to null -> broadcast)
   let coordinatorId = null;
   try { coordinatorId = await getCoordinator(sb); } catch { coordinatorId = null; }
@@ -967,6 +1027,18 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       sessionRole = (data.metadata && data.metadata.role) || null;
     }
   } catch { /* fail-open */ }
+
+  // 2c. SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B (FR-3): merge --model/--effort into
+  // sessionMetadata BEFORE it is used below (tierCtx.worker_tier_rank at the resolveWorkerTierRank
+  // call further down reads sessionMetadata, so this call's own fresh values must land here first).
+  // Fail-open: a persist error never blocks the check-in itself.
+  try {
+    const { metadata: mergedMetadata, changed } = mergeCheckinModelEffort(sessionMetadata, { model: cliModel, effort: cliEffort });
+    if (changed) {
+      sessionMetadata = mergedMetadata;
+      await sb.from('claude_sessions').update({ metadata: mergedMetadata }).eq('session_id', sessionId);
+    }
+  } catch { /* fail-open: check-in proceeds with whatever metadata was already read */ }
 
   // 2b. FR-2: re-hydrate callsign from the durable SET_IDENTITY row if metadata lost it (survives
   // release/sweep). Runs BEFORE registerRollCall so the re-hydrated callsign flows into the roll-call
@@ -1320,12 +1392,30 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
   };
 }
 
+/**
+ * SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B (FR-3): parse --model <value> / --effort <value>
+ * from argv. Pure, no validation beyond presence — normalizeModel/normalizeEffort in
+ * mergeCheckinModelEffort handle unknown-value conservative-UP mapping. Absent flags
+ * resolve to null (the TR-2 no-op signal). Exported for tests.
+ * @param {string[]} argv process.argv.slice(2)
+ * @returns {{ model: string|null, effort: string|null }}
+ */
+function parseCheckinArgs(argv) {
+  const args = Array.isArray(argv) ? argv : [];
+  const get = (flag) => {
+    const i = args.indexOf(flag);
+    return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : null;
+  };
+  return { model: get('--model'), effort: get('--effort') };
+}
+
 async function main() {
   const sessionId = process.env.CLAUDE_SESSION_ID;
   if (!sessionId) {
     console.log(JSON.stringify({ ok: false, action: 'error', error: 'CLAUDE_SESSION_ID env var required (set by the SessionStart hook).' }, null, 2));
     process.exit(1);
   }
+  const { model: cliModel, effort: cliEffort } = parseCheckinArgs(process.argv.slice(2));
   let sb;
   try {
     sb = ws.getServiceClient();
@@ -1333,11 +1423,11 @@ async function main() {
     console.log(JSON.stringify({ ok: false, action: 'error', error: `supabase client unavailable: ${e.message}` }, null, 2));
     process.exit(1);
   }
-  const result = await runCheckin(sb, sessionId);
+  const result = await runCheckin(sb, sessionId, { model: cliModel, effort: cliEffort });
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective };
+module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
 
 if (require.main === module) {
   main().catch(err => {

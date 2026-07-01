@@ -36,4 +36,28 @@ describe('QF-20260627-531: buildSessionMetadata merge-preserves stamped fields',
     // An array/other non-object is ignored (treated as empty base) — never spreads garbage.
     expect(buildSessionMetadata(['x'], '9', 's')).toEqual({ cc_pid: '9', source: 's' });
   });
+
+  // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B (FR-8): persist model to the DB, not just the
+  // local marker file.
+  it('FR-8: persists model into metadata when provided', () => {
+    const merged = buildSessionMetadata({}, '9', 'sessionstart', 'sonnet');
+    expect(merged.model).toBe('sonnet');
+  });
+
+  it('FR-8: omitting model (4th arg absent) does NOT add a model key — backward compatible with pre-FR-8 call sites', () => {
+    const merged = buildSessionMetadata({}, '9', 'sessionstart');
+    expect(merged).not.toHaveProperty('model');
+  });
+
+  it('FR-8: an already-DB-stamped metadata.model is never clobbered by an absent/null model this call', () => {
+    const existing = { model: 'opus', callsign: 'Golf' };
+    const merged = buildSessionMetadata(existing, '9', 'recapture', null);
+    expect(merged.model).toBe('opus'); // preserved, not overwritten by the null 4th arg
+  });
+
+  it('FR-8: a fresh model self-report DOES update a previously-stamped model', () => {
+    const existing = { model: 'opus' };
+    const merged = buildSessionMetadata(existing, '9', 'sessionstart', 'fable');
+    expect(merged.model).toBe('fable');
+  });
 });

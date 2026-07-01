@@ -278,14 +278,20 @@ function findClaudeCodePid(entryPath = 'unknown') {
 // QF-20260627-531: pure metadata merge for the session upsert. Spreads the existing row's
 // metadata first so coordinator-stamped fields (callsign, tier_rank, fleet_identity, …) survive,
 // then stamps the telemetry fields. Exported for unit testing.
-function buildSessionMetadata(existingMetadata, ccPid, source) {
+// SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B (FR-8): also persists `model` (previously written
+// only to the local marker file, never the DB) as a secondary auto-source alongside the
+// worker-checkin.cjs --model self-report. get-then-merge (base spread first) means an
+// already-DB-stamped metadata.model is never clobbered by an absent/null model here.
+function buildSessionMetadata(existingMetadata, ccPid, source, model) {
   const base = (existingMetadata && typeof existingMetadata === 'object' && !Array.isArray(existingMetadata))
     ? existingMetadata
     : {};
-  return { ...base, cc_pid: ccPid, source: source || 'unknown' };
+  const merged = { ...base, cc_pid: ccPid, source: source || 'unknown' };
+  if (model) merged.model = model;
+  return merged;
 }
 
-async function upsertSessionRow(sessionId, ccPid, source) {
+async function upsertSessionRow(sessionId, ccPid, source, model) {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !supabaseKey) {
@@ -330,7 +336,7 @@ async function upsertSessionRow(sessionId, ccPid, source) {
     heartbeat_at: now,
     pid: Number.isFinite(pidNum) ? pidNum : null,
     hostname: require('os').hostname(),
-    metadata: buildSessionMetadata(existingMetadata, ccPid, source),
+    metadata: buildSessionMetadata(existingMetadata, ccPid, source, model),
   });
 
   const MAX_ATTEMPTS = 3;
@@ -560,7 +566,7 @@ function main() {
         // silently no-ops and the identity chain between env var, markers, and DB
         // breaks. Insert-if-not-exists here so tick has a target. Uses PostgREST
         // directly (no supabase-js dep) to match session-tick.cjs pattern.
-        await upsertSessionRow(sessionId, ccPid, data.source);
+        await upsertSessionRow(sessionId, ccPid, data.source, data.model);
 
         // ── SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: spawn detached session-tick ──
         // Writes process_alive_at every 30s until the parent CC exits.

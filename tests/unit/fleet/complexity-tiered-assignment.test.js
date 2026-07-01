@@ -46,6 +46,11 @@ describe('FR-1 computeMinTierRank rubric', () => {
 describe('FR-2 tier ladder + worker tier resolution', () => {
   it('reads ladder cardinality from config, not a hardcoded 4', () => {
     expect(LADDER.length).toBe(ladderTopRank());
+    // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B: LADDER is now the static SAFE-DEFAULT
+    // ladder (K=4 before any live fleet is observed) rather than the sole ranking source
+    // -- a live fleet's dense rank comes from deriveLiveLadder/deriveWorkerTierRank
+    // instead (see tests/unit/fleet/tier-ladder-strength-engine.test.js). LADDER[0] itself
+    // is unchanged by the rewrite, so this shape assertion still holds by design.
     expect(LADDER[0]).toMatchObject({ rank: 1, model: 'sonnet', effort: 'max' });
   });
 
