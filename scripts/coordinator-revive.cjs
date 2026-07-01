@@ -20,6 +20,7 @@ const { createClient } = require('@supabase/supabase-js');
 // (the SPAWN_REQUEST broadcast below uses the 'broadcast' sentinel, which the
 // guard short-circuits — exercising the sentinel-allowlist path).
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
+const { liveActiveSessionsView } = require('../lib/fleet/live-fleet-sessions.cjs');
 
 const NATO = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel'];
 
@@ -38,10 +39,12 @@ function getSupabase() {
  * @returns {Promise<string[]>} Sorted list of idle callsigns (subset of NATO).
  */
 async function findIdleCallsigns(supabase) {
-  const { data: sessions, error } = await supabase
-    .from('v_active_sessions')
-    .select('session_id, metadata, computed_status, heartbeat_age_seconds');
-  if (error) throw new Error(`v_active_sessions query failed: ${error.message}`);
+  // ROWCAP-CANONICAL-001: bounded via the canonical view helper (freshest-first + .limit) so the
+  // 1000-row cap can't hide the newest active callsigns. The helper throws on a query error,
+  // preserving the previous fail-loud behavior of this revival path.
+  const sessions = await liveActiveSessionsView(supabase, {
+    columns: 'session_id, metadata, computed_status, heartbeat_age_seconds',
+  });
 
   const activeCallsigns = new Set();
   for (const s of sessions || []) {

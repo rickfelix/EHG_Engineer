@@ -1,0 +1,41 @@
+name: Fleet Liveness Select Lint
+
+# SD-LEO-INFRA-LIVE-FLEET-SESSIONS-ROWCAP-CANONICAL-001 (FR-4)
+# Bans UNFILTERED claude_sessions / v_active_sessions selects (the PostgREST 1000-row-cap blind
+# spot: an unfiltered .select() returns the OLDEST 1000 rows and drops the newest live workers ->
+# liveness/count reads 0/undercount). A read is safe if it carries any server-side narrowing:
+# a filter, an .order() (order by heartbeat desc => newest 1000), a .limit(), a single-row read,
+# or a count-head query. Route liveness/count through lib/fleet/live-fleet-sessions.cjs
+# (liveFleetSessions / liveActiveSessionsView) or add a bound; or allowlist "<file>:<line>" with a
+# reason in scripts/lint/fleet-liveness-select-allowlist.json.
+#
+# ADVISORY-FIRST: the lint step is `continue-on-error: true` so it CANNOT turn an in-flight PR red
+# on day one. The report is always surfaced in the job log. Flip to blocking (run with --enforce
+# and drop continue-on-error) once the baseline has settled.
+
+on:
+  pull_request:
+    paths:
+      - '**/*.js'
+      - '**/*.mjs'
+      - '**/*.cjs'
+      - '**/*.ts'
+      - 'scripts/lint/fleet-liveness-select-lint.mjs'
+      - 'scripts/lint/fleet-liveness-select-allowlist.json'
+      - '.github/workflows/fleet-liveness-select-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fleet-liveness-select-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Detect unfiltered claude_sessions/v_active_sessions liveness selects (advisory)
+        continue-on-error: true
+        run: node scripts/lint/fleet-liveness-select-lint.mjs
