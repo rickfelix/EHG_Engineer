@@ -1184,7 +1184,11 @@ async function main() {
 
       if (signature && attempts >= 2) {
         const bypassed = process.env.EMERGENCY_RCA_BYPASS === 'true';
-        const outcome = attempts >= 3 && !bypassed ? 'block' : 'warn';
+        // SD-LEO-INFRA-RCA-ENFORCEMENT-PROGRESS-STALL-NOT-REPETITION-001: the audit-log outcome
+        // label must match the actual block decision below (shouldHardBlock), else a
+        // progressStalled===false suppression (tool proceeds) gets mis-recorded as outcome='block'.
+        const { shouldHardBlock } = require('../../lib/hooks/auto-signal-threshold.cjs');
+        const outcome = shouldHardBlock({ attempts, bypassed, progressStalled }) ? 'block' : 'warn';
         const auditPromise = auditPermissionDecision(
           _SESSION_ID, TOOL_NAME, 'RCA-TIERED-ENFORCEMENT',
           'Repeated tool invocation without intervening RCA',
@@ -1221,11 +1225,9 @@ async function main() {
         } catch { /* fail-open: auto-signal must never block tool execution */ }
 
         // SD-LEO-INFRA-RCA-ENFORCEMENT-PROGRESS-STALL-NOT-REPETITION-001: gate the hard block on
-        // PROGRESS-STALL, not bare repetition count. progressStalled===false (the session is
-        // demonstrably advancing — different migration file, advancing phase/percent, etc.)
-        // suppresses the block; true/undefined preserves the exact pre-existing behavior.
-        const { shouldHardBlock } = require('../../lib/hooks/auto-signal-threshold.cjs');
-        if (shouldHardBlock({ attempts, bypassed, progressStalled })) {
+        // PROGRESS-STALL, not bare repetition count (reuses the same shouldHardBlock() verdict
+        // already computed above for the audit-log outcome label, so the two never diverge).
+        if (outcome === 'block') {
           process.stderr.write(
             `\nRCA TIERED ENFORCEMENT (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-129):\n` +
             `  Blocked: ${TOOL_NAME} invoked ${attempts}x on the same target within 10 minutes.\n` +
