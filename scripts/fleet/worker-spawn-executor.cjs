@@ -117,11 +117,12 @@ async function loadPendingRequests(sb, nowIso) {
 
 /** Callsigns already backed by a live session (from claude_sessions.metadata.fleet_identity.callsign). */
 async function deriveLiveCallsigns(sb) {
+  const { liveActiveSessionsView } = require('../../lib/fleet/live-fleet-sessions.cjs');
   const set = new Set();
   try {
-    const { data } = await sb
-      .from('v_active_sessions')
-      .select('session_id, metadata, computed_status');
+    // ROWCAP-CANONICAL-001: bounded via the canonical view helper (freshest-first + .limit) so the
+    // 1000-row cap can't hide live callsigns. The helper throws on error -> caught below (fail-soft).
+    const data = await liveActiveSessionsView(sb, { columns: 'session_id, metadata, computed_status' });
     for (const s of data || []) {
       const cs = s && s.metadata && s.metadata.fleet_identity && s.metadata.fleet_identity.callsign;
       if (cs && s.computed_status === 'active') set.add(cs);

@@ -25,8 +25,17 @@ function mockSupabase({ activeSessions = [], insertResult = null, insertError = 
   return {
     from: (table) => {
       if (table === 'v_active_sessions') {
+        // ROWCAP-CANONICAL-001: findIdleCallsigns now routes through liveActiveSessionsView(),
+        // which chains .select().order().limit(); make the mock chainable + awaitable.
         return {
-          select: () => Promise.resolve({ data: activeSessions, error: null })
+          select: () => {
+            const chain = {
+              order: () => chain,
+              limit: () => chain,
+              then: (resolve) => resolve({ data: activeSessions, error: null }),
+            };
+            return chain;
+          },
         };
       }
       if (table === 'worker_spawn_requests') {

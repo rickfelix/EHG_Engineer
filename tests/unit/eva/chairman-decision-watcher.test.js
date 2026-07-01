@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createFaithfulRealtimeChannelMock } from '../../helpers/faithful-supabase-realtime-mock.js';
 
 // Mock shared-services
 vi.mock('../../../lib/eva/shared-services.js', () => ({
@@ -82,19 +83,13 @@ describe('waitForDecision', () => {
   // reproducing the identical RangeError: Maximum call stack size exceeded (proven by
   // ae499d9957 / QF-20260701-709 on the sibling reality-gates.js/stage-governance.js
   // channels). The correct fix drops the local reference only and calls NEITHER
-  // unsubscribe() NOR removeChannel() from inside the callback. These tests use a mock
-  // whose removeChannel() WOULD recursively re-invoke the callback (reproducing the
-  // real vendored-client behavior) and assert it is never called.
+  // unsubscribe() NOR removeChannel() from inside the callback. These tests use the
+  // shared faithful mock (tests/helpers/faithful-supabase-realtime-mock.js), whose
+  // removeChannel() WOULD recursively re-invoke the callback (reproducing the real
+  // vendored-client behavior), and assert it is never called.
   function makeMockSupabaseWithRecursiveTeardown(singleResults) {
-    let capturedStatusCallback = null;
-    let removeChannelCallCount = 0;
-    const channelMock = {
-      on: vi.fn().mockReturnThis(),
-      subscribe: vi.fn((cb) => {
-        capturedStatusCallback = cb;
-        return channelMock;
-      }),
-    };
+    const { channelMock, removeChannel, getStatusCallback, getRemoveChannelCallCount } =
+      createFaithfulRealtimeChannelMock();
     const singleMock = vi.fn();
     singleResults.forEach((r) => singleMock.mockResolvedValueOnce(r));
     singleMock.mockResolvedValue(singleResults[singleResults.length - 1]);
@@ -105,18 +100,12 @@ describe('waitForDecision', () => {
         single: singleMock,
       }),
       channel: vi.fn().mockReturnValue(channelMock),
-      removeChannel: vi.fn(() => {
-        removeChannelCallCount++;
-        if (removeChannelCallCount > 100) {
-          throw new Error('removeChannel recursion guard tripped -- test itself would overflow');
-        }
-        capturedStatusCallback?.('CLOSED'); // simulates phoenix's synchronous Channel.leave() re-fire
-      }),
+      removeChannel: vi.fn(removeChannel),
     };
     return {
       supabase,
-      getStatusCallback: () => capturedStatusCallback,
-      getRemoveChannelCallCount: () => removeChannelCallCount,
+      getStatusCallback,
+      getRemoveChannelCallCount,
     };
   }
 

@@ -90,6 +90,13 @@ export const STANDARD_LOOPS = [
   // by default, not correction-by-dispatch.
   { key: 'backlog-rank', label: 'Backlog prioritization pass (dispatch_rank for self-claim ordering)', script: 'coordinator-backlog-rank.mjs', cron: '6,21,36,51 * * * *',
     prompt: 'node scripts/coordinator-backlog-rank.mjs' },
+  // SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-D: the observability leg for the belt-and-suspenders
+  // above (rank-on-transition + this cron + the worker-checkin pool-window fix) — counts claimable leaf
+  // SDs with no fresh dispatch_rank right now (>0 = drift: the guarantees above didn't hold). Cheap
+  // (reuses backlog-rank's own claimable computation); offset from backlog-rank's own cadence so it
+  // always observes a just-refreshed rank rather than racing it.
+  { key: 'unranked-gauge', label: 'Eligible-but-unranked-leaf-count invariant gauge', script: 'gauge-unranked-claimable-leaves.mjs', cron: '9,24,39,54 * * * *',
+    prompt: 'node scripts/gauge-unranked-claimable-leaves.mjs' },
   // SD-LEO-INFRA-ENABLE-WIRE-AUTOMATIC-001 (FR-2a): restore the worker fleet-retro to a schedule
   // (it had drifted to manual — last ran ~2.5d ago). Re-arms the existing, idempotent capture/
   // synthesis script (reuses the feedback/issue_patterns pipeline; dedups on metadata.retro_key).

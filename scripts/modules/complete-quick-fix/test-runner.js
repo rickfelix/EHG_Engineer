@@ -145,12 +145,21 @@ export function extractTestSummary(output, testType) {
   const summary = { passed: 0, failed: 0, skipped: 0, total: 0 };
 
   if (testType === 'unit') {
-    const testsMatch = output.match(/Tests:\s+(\d+)\s+passed(?:,\s+(\d+)\s+failed)?(?:,\s+(\d+)\s+skipped)?(?:,\s+(\d+)\s+total)?/i);
-    if (testsMatch) {
-      summary.passed = parseInt(testsMatch[1]) || 0;
-      summary.failed = parseInt(testsMatch[2]) || 0;
-      summary.skipped = parseInt(testsMatch[3]) || 0;
-      summary.total = parseInt(testsMatch[4]) || summary.passed + summary.failed;
+    // QF-20260701-533: vitest v4 dropped the colon and switched to a pipe-separated
+    // list — "Tests  1 failed | 1 passed | 1 skipped (3)" — instead of the legacy
+    // "Tests:  1 passed, 1 failed (2)". Match the summary line loosely (colon
+    // optional) then pull each count by keyword so either format parses correctly.
+    const lineMatch = output.match(/^[ \t]*Tests:?[ \t]+.+$/im);
+    if (lineMatch) {
+      const line = lineMatch[0];
+      const passedMatch = line.match(/(\d+)\s+passed/i);
+      const failedMatch = line.match(/(\d+)\s+failed/i);
+      const skippedMatch = line.match(/(\d+)\s+skipped/i);
+      const totalMatch = line.match(/\((\d+)\)/) || line.match(/(\d+)\s+total/i);
+      summary.passed = passedMatch ? parseInt(passedMatch[1]) || 0 : 0;
+      summary.failed = failedMatch ? parseInt(failedMatch[1]) || 0 : 0;
+      summary.skipped = skippedMatch ? parseInt(skippedMatch[1]) || 0 : 0;
+      summary.total = totalMatch ? parseInt(totalMatch[1]) || 0 : summary.passed + summary.failed + summary.skipped;
     }
   } else if (testType === 'e2e') {
     const passedMatch = output.match(/(\d+)\s+passed/i);
