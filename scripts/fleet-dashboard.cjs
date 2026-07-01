@@ -1240,17 +1240,31 @@ async function printAdamInbox() {
   console.log('  ' + advisories.length + ' unactioned (' + actionRows.length +
     ' action-required, ' + statusRows.length + ' status relay(s))');
   console.log('');
-  console.log('  ' + pad('Callsign', 12) + pad('Reply?', 8) + pad('Age', 8) + 'Body');
+
+  // SD-LEO-INFRA-COMMS-PRESENCE-GROUNDING-SIGNALS-001 (FR-8) — ONE batched presence lookup for
+  // all senders about to render, not a per-row query.
+  const { getFleetPresence } = require('../lib/coordinator/presence-grounding-signals.cjs');
+  const senderIds = [...new Set(advisories.map((a) => a.sender_session).filter(Boolean))];
+  const presenceMap = await getFleetPresence(supabase, senderIds);
+  const formatPresence = (p) => {
+    if (!p) return '?';
+    if (p.state === 'active_now') return 'active';
+    if (p.state === 'parked') return `parked+${Math.round((p.expectationWindowMs || 0) / 60000)}m`;
+    return 'away';
+  };
+
+  console.log('  ' + pad('Callsign', 12) + pad('Presence', 12) + pad('Reply?', 8) + pad('Age', 8) + 'Body');
   console.log('  ' + '─'.repeat(68));
 
   const ids = [];
   const renderRow = (a) => {
     const callsign = a.payload?.sender_callsign || '(none)';
+    const presence = formatPresence(presenceMap.get(a.sender_session));
     const wantsReply = a.payload?.expects_reply ? 'yes' : '-';
     const ageMin = Math.floor((Date.now() - new Date(a.created_at).getTime()) / 60_000);
     const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
     const bodyPreview = (a.body || a.payload?.body || '').replace(/\n/g, ' ').substring(0, 32);
-    console.log('  ' + pad(callsign, 12) + pad(wantsReply, 8) + pad(ageStr, 8) + bodyPreview);
+    console.log('  ' + pad(callsign, 12) + pad(presence, 12) + pad(wantsReply, 8) + pad(ageStr, 8) + bodyPreview);
     ids.push(a.id);
   };
 
@@ -1335,16 +1349,30 @@ async function printSolomonInbox() {
   console.log('  ' + rows.length + ' pending consult(s)' +
     (solomonId ? '' : ' — no live Solomon (buffered to broadcast-solomon, drains on /solomon register)'));
   console.log('');
-  console.log('  ' + pad('Callsign', 12) + pad('Severity', 10) + pad('Age', 8) + 'Body');
+
+  // SD-LEO-INFRA-COMMS-PRESENCE-GROUNDING-SIGNALS-001 (FR-8) — ONE batched presence lookup,
+  // same helper printAdamInbox uses (no per-role reimplementation).
+  const { getFleetPresence } = require('../lib/coordinator/presence-grounding-signals.cjs');
+  const senderIds = [...new Set(rows.map((r) => r.sender_session).filter(Boolean))];
+  const presenceMap = await getFleetPresence(supabase, senderIds);
+  const formatPresence = (p) => {
+    if (!p) return '?';
+    if (p.state === 'active_now') return 'active';
+    if (p.state === 'parked') return `parked+${Math.round((p.expectationWindowMs || 0) / 60000)}m`;
+    return 'away';
+  };
+
+  console.log('  ' + pad('Callsign', 12) + pad('Presence', 12) + pad('Severity', 10) + pad('Age', 8) + 'Body');
   console.log('  ' + '─'.repeat(68));
 
   for (const r of rows) {
     const callsign = r.payload?.sender_callsign || '(none)';
+    const presence = formatPresence(presenceMap.get(r.sender_session));
     const severity = r.payload?.severity || 'medium';
     const ageMin = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
     const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
     const bodyPreview = (r.body || r.payload?.body || '').replace(/\n/g, ' ').substring(0, 32);
-    console.log('  ' + pad(callsign, 12) + pad(severity, 10) + pad(ageStr, 8) + bodyPreview);
+    console.log('  ' + pad(callsign, 12) + pad(presence, 12) + pad(severity, 10) + pad(ageStr, 8) + bodyPreview);
   }
   // PURE READ — intentionally no read_at/acknowledged_at mutation here (see header).
   console.log('');

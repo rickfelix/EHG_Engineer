@@ -29,6 +29,14 @@ The consult is routed by the Phase-B/D triage SSOT (`lib/coordinator/solomon-tri
 
 Solomon is a singleton role-session (like the coordinator and Adam). `solomon-register.cjs` enforces single-Solomon (refuse-new-on-fresh-prior; retire only a STALE prior) and re-targets a retired prior's unread inbound to the new session (`drainSolomonOutbound`, idempotent). Identity is keyed on `metadata.role='solomon'` + `metadata.solomon_since` via the atomic `set_solomon_flag`/`clear_solomon_flag` RPCs.
 
+## Presence + grounding signals
+
+Solomon's `status` verb (`node scripts/solomon-advisory.cjs status [--working "<body>" [--eta <ms>]]`)
+is wired to the SAME shared `lib/coordinator/presence-grounding-signals.cjs` helper Adam and the
+coordinator use — see `docs/protocol/coordinator-adam-comms.md` § "Presence + grounding signals a
+SHARED protocol capability" for the full contract (read-receipt echo, presence/expectation
+indicator, ephemeral working-signal). No per-role reimplementation.
+
 ## Self-adherence
 
 Every 12 h, `solomon-self-adherence-review.mjs` checks that each durable duty declared in `CLAUDE_SOLOMON.md` is present in `SOLOMON_LOOPS`; drift is surfaced as a propose-only remediation (Solomon never builds the fix). The same parity check (`renderContractParity`) prints at every `/solomon` startup.
