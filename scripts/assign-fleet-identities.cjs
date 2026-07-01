@@ -33,6 +33,21 @@ function tierRankOf(worker) {
   return (t === 1 || t === 2 || t === 3 || t === 4) ? t : 4;
 }
 
+// SD-LEO-INFRA-CHECKIN-NAME-ON-ARRIVAL-001 (FR-3): deterministic + unique + logged pool extension.
+// The old `base + '-' + (usedSet.size + 1)` seeded the suffix from set CARDINALITY, which is neither
+// unique nor deterministic vs existing suffixes — two concurrent exhausted picks both returned e.g.
+// "Golf-6", and used={Golf,Golf-3} regenerated the already-present "Golf-3" (the Alpha-6/Alpha-7
+// artifact). Instead pick the FIRST FREE `base-N` (N>=2) not in usedSet, and LOG so pool exhaustion is
+// visible, never silent. Shared by BOTH allocators below so pickCallsignForTier and nextAvailable stay
+// byte-identical in format (or dedupeAssignedCallsigns string-equality stops reconciling duplicates).
+function extendCallsign(base, usedSet, poolLabel) {
+  let n = 2;
+  while (usedSet.has(`${base}-${n}`)) n++;
+  const extended = `${base}-${n}`;
+  console.error(`[fleet-identity] ${poolLabel} pool exhausted — extended deterministically to ${extended}`);
+  return extended;
+}
+
 // Pick the first FREE callsign within the worker's tier band (effort-encoded SoT), wrapping with a
 // numeric suffix only when the band is exhausted. Drop-in replacement for nextAvailable(NATO, ...).
 function pickCallsignForTier(tierRank, usedSet) {
@@ -40,7 +55,7 @@ function pickCallsignForTier(tierRank, usedSet) {
   for (const c of pool) {
     if (!usedSet.has(c)) return c;
   }
-  return pool[0] + '-' + (usedSet.size + 1);
+  return extendCallsign(pool[0], usedSet, `tier-${tierRank}`);
 }
 
 // True when a callsign already belongs to the worker's correct tier band, so the cron KEEPS it
@@ -61,8 +76,9 @@ function nextAvailable(pool, usedSet) {
   for (const item of pool) {
     if (!usedSet.has(item)) return item;
   }
-  // All used — wrap around with suffix
-  return pool[0] + '-' + (usedSet.size + 1);
+  // All used — extend deterministically (SD-LEO-INFRA-CHECKIN-NAME-ON-ARRIVAL-001 FR-3):
+  // first FREE base-N, identical format to pickCallsignForTier so both writers reconcile.
+  return extendCallsign(pool[0], usedSet, 'nato');
 }
 
 // QF-20260508-648: writer/consumer asymmetry — lib/coordinator/resolve.cjs
@@ -454,7 +470,7 @@ async function main() {
   console.log('');
 }
 
-module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, TIER_CALLSIGNS, tierRankOf, pickCallsignForTier, callsignInTierBand };
+module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, TIER_CALLSIGNS, tierRankOf, pickCallsignForTier, callsignInTierBand };
 
 if (require.main === module) {
   main().catch(err => {
