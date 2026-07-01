@@ -75,83 +75,95 @@ describe('waitForDecision', () => {
     ).rejects.toThrow('timed out');
   }, 5000);
 
-  // SD-FDBK-ENH-CANARY-VENTURE-PROBE-001: CHANNEL_ERROR/TIMED_OUT must tear down the
-  // errored channel via removeChannel before polling starts, or the vendored phoenix
-  // client's Channel.trigger/onClose can recurse into a stack-overflow crash.
-  it('removes the errored channel before falling back to polling on CHANNEL_ERROR, with no duplicate removeChannel when later resolved via polling', async () => {
+  // QF-20260701-762: PR #5305's original fix (calling supabase.removeChannel() from
+  // inside the status callback) was INEFFECTIVE -- removeChannel() also calls
+  // unsubscribe() internally, which under a no-reachable-Realtime-server condition
+  // synchronously re-fires this same status callback via phoenix's Channel.leave(),
+  // reproducing the identical RangeError: Maximum call stack size exceeded (proven by
+  // ae499d9957 / QF-20260701-709 on the sibling reality-gates.js/stage-governance.js
+  // channels). The correct fix drops the local reference only and calls NEITHER
+  // unsubscribe() NOR removeChannel() from inside the callback. These tests use a mock
+  // whose removeChannel() WOULD recursively re-invoke the callback (reproducing the
+  // real vendored-client behavior) and assert it is never called.
+  function makeMockSupabaseWithRecursiveTeardown(singleResults) {
+    let capturedStatusCallback = null;
+    let removeChannelCallCount = 0;
+    const channelMock = {
+      on: vi.fn().mockReturnThis(),
+      subscribe: vi.fn((cb) => {
+        capturedStatusCallback = cb;
+        return channelMock;
+      }),
+    };
+    const singleMock = vi.fn();
+    singleResults.forEach((r) => singleMock.mockResolvedValueOnce(r));
+    singleMock.mockResolvedValue(singleResults[singleResults.length - 1]);
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: singleMock,
+      }),
+      channel: vi.fn().mockReturnValue(channelMock),
+      removeChannel: vi.fn(() => {
+        removeChannelCallCount++;
+        if (removeChannelCallCount > 100) {
+          throw new Error('removeChannel recursion guard tripped -- test itself would overflow');
+        }
+        capturedStatusCallback?.('CLOSED'); // simulates phoenix's synchronous Channel.leave() re-fire
+      }),
+    };
+    return {
+      supabase,
+      getStatusCallback: () => capturedStatusCallback,
+      getRemoveChannelCallCount: () => removeChannelCallCount,
+    };
+  }
+
+  it('CHANNEL_ERROR/TIMED_OUT/CLOSED drops the reference WITHOUT calling removeChannel() (which would recurse), then resolves via polling', async () => {
     vi.useFakeTimers();
     try {
-      const channelMock = { on: vi.fn().mockReturnThis() };
-      channelMock.subscribe = vi.fn((cb) => {
-        setTimeout(() => cb('CHANNEL_ERROR'), 0);
-        return channelMock;
-      });
-      const supabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn()
-            .mockResolvedValueOnce({ data: { status: 'pending' } })
-            .mockResolvedValue({ data: { status: 'approved', rationale: null, decision: 'approve' } }),
-        }),
-        channel: vi.fn().mockReturnValue(channelMock),
-        removeChannel: vi.fn(),
-      };
+      const { supabase, getStatusCallback, getRemoveChannelCallCount } = makeMockSupabaseWithRecursiveTeardown([
+        { data: { status: 'pending' } },
+        { data: { status: 'approved', rationale: null, decision: 'approve' } },
+      ]);
       const logger = createMockLogger();
 
       const promise = waitForDecision({ decisionId: 'd1', supabase, logger });
+      await vi.advanceTimersByTimeAsync(0); // let the initial lookup + subscribe() registration settle
 
-      // Let the deferred CHANNEL_ERROR callback fire (subscription is already assigned by now).
-      await vi.advanceTimersByTimeAsync(0);
-      expect(supabase.removeChannel).toHaveBeenCalledTimes(1);
-      expect(supabase.removeChannel).toHaveBeenCalledWith(channelMock);
+      expect(() => getStatusCallback()('CHANNEL_ERROR')).not.toThrow();
+      expect(getRemoveChannelCallCount()).toBe(0);
 
-      // Advance past the polling interval so the decision resolves via the fallback.
-      await vi.advanceTimersByTimeAsync(10_000);
+      await vi.advanceTimersByTimeAsync(10_000); // advance past the polling interval
       const result = await promise;
 
       expect(result.status).toBe('approved');
-      // cleanup() must not double-remove — subscription was already nulled by the error branch.
-      expect(supabase.removeChannel).toHaveBeenCalledTimes(1);
+      expect(getRemoveChannelCallCount()).toBe(0);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('removes the errored channel on TIMED_OUT as well as CHANNEL_ERROR', async () => {
+  it('a genuinely re-entrant CLOSED/TIMED_OUT re-fire (simulating phoenix Channel.leave()) does not throw and calls removeChannel zero times', async () => {
     vi.useFakeTimers();
     try {
-      const channelMock = { on: vi.fn().mockReturnThis() };
-      channelMock.subscribe = vi.fn((cb) => {
-        setTimeout(() => cb('TIMED_OUT'), 0);
-        return channelMock;
-      });
-      const supabase = {
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ data: { status: 'pending' } }),
-        }),
-        channel: vi.fn().mockReturnValue(channelMock),
-        removeChannel: vi.fn(),
-      };
+      const { supabase, getStatusCallback, getRemoveChannelCallCount } = makeMockSupabaseWithRecursiveTeardown([
+        { data: { status: 'pending' } },
+      ]);
       const logger = createMockLogger();
 
-      // 3000ms deliberately avoids colliding with waitForDecision's own 5000ms polling
-      // safety-net setTimeout, which would otherwise also fire in the same timer flush.
-      const promise = waitForDecision({ decisionId: 'd1', supabase, logger, timeoutMs: 3000 });
-      // Attach the rejection expectation immediately so it isn't flagged as briefly
-      // unhandled once fake-timer advancement causes the promise to actually reject.
-      const rejection = expect(promise).rejects.toThrow('timed out');
+      waitForDecision({ decisionId: 'd1', supabase, logger }).catch(() => {});
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(supabase.removeChannel).toHaveBeenCalledTimes(1);
-      expect(supabase.removeChannel).toHaveBeenCalledWith(channelMock);
+      const statusCallback = getStatusCallback();
+      expect(() => {
+        statusCallback('CLOSED');
+        statusCallback('TIMED_OUT');
+        statusCallback('CHANNEL_ERROR');
+      }).not.toThrow();
 
-      await vi.advanceTimersByTimeAsync(3000);
-      await rejection;
-      // cleanup() from the timeout handler must not double-remove the already-nulled subscription.
-      expect(supabase.removeChannel).toHaveBeenCalledTimes(1);
+      expect(getRemoveChannelCallCount()).toBe(0);
     } finally {
       vi.useRealTimers();
     }
