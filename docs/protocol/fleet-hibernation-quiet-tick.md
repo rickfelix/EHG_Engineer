@@ -22,8 +22,18 @@ live in [`lib/coordinator/quiet-tick.cjs`](../../lib/coordinator/quiet-tick.cjs)
 Mode (QUIESCENT vs ACTIVE) is sourced from the canonical gate
 `assessFleetActivity`/`decideQuiescence` in `lib/coordinator/fleet-quiescence.cjs` — it is
 not re-derived. In QUIESCENT mode the expensive cores (charter-audit, capacity-forecast,
-backlog-rank, audit) are **skipped**; the safety cores (stale-session-sweep, inbox) always
-run.
+audit) are **skipped**; the safety cores (stale-session-sweep, inbox) and **backlog-rank**
+always run.
+
+**backlog-rank is not quiescent-skipped** (SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-A):
+unlike the other expensive cores, ranking the claimable belt (`coordinator-backlog-rank.mjs`,
+persists `metadata.dispatch_rank`) is cheap and highest-value exactly when the fleet is quiet
+— a fresh draft SD needs a rank before the next worker wakes and self-claims. The mechanism's
+only other trigger, a harness `CronCreate` loop armed by a live coordinator session, is
+deleted by the coordinator's own teardown-discipline rule on sustained idle; a durable,
+coordinator-session-independent net for this gap now also runs at
+[`.github/workflows/backlog-rank-cron.yml`](../../.github/workflows/backlog-rank-cron.yml)
+(~15min GHA cron, mirrors `fleet-down-alert-cron.yml`).
 
 ## FR-6: the 15-minute responsiveness cap and the bounded-latency tradeoff
 
