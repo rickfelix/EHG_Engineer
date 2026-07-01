@@ -57,7 +57,9 @@ export const ADAM_LOOPS = [
     key: 'inbox-monitor',
     label: 'Adam inbox — drain ALL coordinator-directed kinds (full-lane reader)',
     script: 'adam-advisory.cjs',
-    cron: '*/15 * * * *',
+    // QF-20260701-062: chairman-directed 15min -> 5min durable baseline (tighter comms
+    // responsiveness on the advisory lane). Off-round minutes avoid fleet-wide :00/:05 collision.
+    cron: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *',
     // SD-REFILL-00YJS6VB: --quiet suppresses the no-op "(no unread...)" line on a fully-empty
     // lane so the recurring tick is SILENT when there's nothing to drain (real rows + orphaned
     // WARNINGs still surface). Reduces narration churn during quiescent/chairman-attached work.
