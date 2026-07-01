@@ -1,0 +1,6 @@
+{
+  "_doc": "SD-LEO-INFRA-LIVE-FLEET-SESSIONS-ROWCAP-CANONICAL-001 (FR-4). Keys are '<repo-relative-file>:<line>' (or a bare '<file>' to exempt a whole file) for an UNBOUNDED claude_sessions/v_active_sessions multi-row select that is intentionally exempt from the 1000-row-cap guard. Every entry MUST carry a non-empty reason. Prefer FIXING (route through lib/fleet/live-fleet-sessions.cjs or add .gte(heartbeat_at)/.order+.limit) over allowlisting.",
+  "allow": {
+    "tests/unit/lint/fleet-liveness-select-lint.test.js": "The guard's OWN unit test — it contains deliberately-buggy unfiltered-select string literals as fixtures to prove the extractor flags them. Not real queries; exempt so the guard does not flag its own test (important once the workflow flips to --enforce)."
+  }
+}
