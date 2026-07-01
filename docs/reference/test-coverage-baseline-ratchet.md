@@ -39,7 +39,7 @@ After the existing `Run tests with coverage` step parses `test-results.json`, a 
 
 1. Reads `numFailedTests` from `test-results.json`.
 2. On `push` events: INSERTs a row into `codebase_health_snapshots` with the current count and a `trend_direction` derived from the prior snapshot (`improving` / `stable` / `declining` / `new`).
-3. On `pull_request` events: SELECTs the most recent snapshot for the PR's base branch where `dimension='ci_test_failure_count' AND target_application='EHG_Engineer'`. If the current PR's failure count exceeds the baseline by ≥ 1, the step exits 1 with three GitHub Actions annotations:
+3. On `pull_request` events: SELECTs the most recent snapshot for the PR's base branch where `dimension='ci_test_failure_count' AND target_application='EHG_Engineer'`. **QF-20260701-833 (identity-based, not count-based):** the check compares the SET of failing-test identities (`file::fullName`) in the PR run against the set recorded in the base snapshot — a test that was already failing on main never blocks the PR, regardless of the raw count. Only a genuinely NEW failing identity (not present in the base snapshot's set) trips the gate. (A base snapshot written before this shipped has no recorded identity set — that one comparison falls back to the old raw-count delta until the next push to that branch records a full baseline.) On a regression, the step exits 1 with GitHub Actions annotations:
    - `::error::BASELINE_REGRESSION: N new test failure(s) vs main snapshot.`
    - `Reproduce locally: node scripts/audit-test-failures.mjs --pr-only --format=json | jq .new_failures`
    - `See docs/reference/test-coverage-baseline-ratchet.md for triage steps.`
@@ -59,7 +59,7 @@ The ratchet uses only the `ci_test_failure_count` dimension. Conventions for tha
 - `dimension`: literal string `ci_test_failure_count`
 - `target_application`: literal string `EHG_Engineer`
 - `score`: pass-rate as `0–100` (computed as `(passed / total) * 100`, NUMERIC(5,2))
-- `findings`: JSONB **array with exactly one element** — `[{failed_count, branch, commit_sha}]`. The single-element-array shape matches existing `dead_code` and `complexity` dimension consumers; bare-object shape is incompatible.
+- `findings`: JSONB **array with exactly one element** — `[{failed_count, skipped_count, failing_test_ids, branch, commit_sha}]`. `failing_test_ids` (QF-20260701-833) is the array of `file::fullName` identities for that run's failures — the input to the identity-based regression diff. The single-element-array shape matches existing `dead_code` and `complexity` dimension consumers; bare-object shape is incompatible.
 - `trend_direction`: one of `improving` | `stable` | `declining` | `new` per the table CHECK constraint
 - `metadata.workflow_run_id`: GitHub Actions run id for traceability
 - `scanned_at` and `created_at`: defaults to `now()`
@@ -84,6 +84,10 @@ SELECT findings->0->>'failed_count' AS baseline_failed
 2. Run `node scripts/audit-test-failures.mjs --results test-results.json --summary` to see the bucket counts.
 3. Diff against the previous run on main to identify the new failures (use `--by-category=<bucket>` to narrow scope).
 4. Either fix the new failure (preferred), gate it behind `it.skipIf(...)` with a one-line rationale, or — if the failure was already present on main and the snapshot is stale — push an empty commit to main to regenerate the snapshot.
+
+### `BASELINE_REGRESSION` fires with the SAME failing test(s) as a prior unrelated PR
+
+Before QF-20260701-833, the check was count-based: any rise in the raw failed-test count blocked the PR, even when the "new" failures were unrelated flaky tests already failing on main (or a live-DB/CI-secret hiccup). Symptom: the `New failing test(s) not present on main:` list in the annotation is empty or lists tests clearly unrelated to your diff — that means the base snapshot predates identity tracking and the check degraded to the old count-based comparison (see Schema Reference). Push an empty commit to main (or wait for the next push) to record a fresh baseline with `failing_test_ids`, which resolves it going forward.
 
 ### Workflow exits 1 with no failure count printed
 

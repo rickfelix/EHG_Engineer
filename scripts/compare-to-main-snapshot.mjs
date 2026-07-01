@@ -11,14 +11,20 @@
  *                  current failed_tests + skipped_tests counts and trend_direction
  *                  relative to the prior snapshot.
  *   pull_request → SELECT the most recent snapshot for the PR's base branch.
- *                  If current failed_tests > baseline by ≥1, write
+ *                  QF-20260701-833: the regression check is IDENTITY-based, not
+ *                  count-based — a failing test only counts as a regression if its
+ *                  identity (file::fullName) is NOT already in the base branch's
+ *                  recorded failing set, so an unrelated flaky/pre-existing failure
+ *                  never false-blocks the PR. If any NEW identity is found, write
  *                  test-failures-pr.json (for the upload-artifact step) and
  *                  exit 1 with ::error:: annotations on stderr. Otherwise, if the
  *                  skipped-test count has drifted outside the baseline's ±10% band
  *                  (FR-5 vacuous-green guard), exit 1 with a SKIP_DRIFT annotation.
  *
  * Cold start (no prior snapshot for base branch, or a snapshot predating the
- * skipped_count field): pass — the next push to that branch records the baseline.
+ * skipped_count/failing_test_ids fields): pass, or fall back to the old
+ * count-based comparison for failing_test_ids specifically — the next push to
+ * that branch records the full baseline.
  *
  * Env vars required:
  *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
@@ -105,6 +111,60 @@ function detectContext() {
   return { mode: 'push', branch, sha, runId };
 }
 
+/**
+ * Extract the SET of failing-test identities (file::fullName) from a vitest JSON
+ * reporter payload. Pure. Shared by insertSnapshot() (records the baseline's
+ * failing set) and decideRegression() (diffs it against the PR's failing set).
+ */
+export function extractFailingIds(raw) {
+  const ids = [];
+  for (const file of (raw?.testResults || [])) {
+    for (const test of (file.assertionResults || [])) {
+      if (test.status === 'failed') ids.push(`${file.name || file.testFilePath}::${test.fullName}`);
+    }
+  }
+  return ids;
+}
+
+/**
+ * QF-20260701-833: IDENTITY-based regression decision, not COUNT-based.
+ *
+ * compare-to-main-snapshot.mjs previously flagged BASELINE_REGRESSION on ANY rise
+ * in the raw failed-test COUNT vs the base-branch snapshot — so an unrelated flaky
+ * test bouncing (or a live-DB/CI-secret hiccup) on a PR run false-blocks the PR even
+ * though the diff introduced no new failure. Evidenced on PR #5330 (worker 1d49c728):
+ * the same 107 failures, byte-identical across reruns, in 29 files unrelated to the
+ * diff. Recurred on PR #5334 and #5337 this session — same 2 unrelated tests both
+ * times (tests/unit/gates/consumer-impact-gate.test.js TS-6, a worker-crash artifact).
+ *
+ * Fix: compare the SET of failing test identities. Only a test that is NOT in the
+ * base branch's recorded failing set counts as a regression — a pre-existing/flaky
+ * failure that was already red on main never blocks the PR, regardless of the raw
+ * count. Pure (no I/O) for unit-testability, mirrors red-merge-detector.mjs's
+ * decide() pattern.
+ *
+ * Graceful degradation: `priorFailingIds` is null for a snapshot written before this
+ * shipped (identity list wasn't recorded yet) — fall back to the old count-based
+ * comparison for that single comparison, matching the existing skipped_count
+ * cold-start pattern in fetchPriorSnapshot().
+ *
+ * @param {string[]} currentIds - failing-test identities in this run (PR or push)
+ * @param {string[]|null} priorFailingIds - failing-test identities recorded in the
+ *   base branch's snapshot, or null if that snapshot predates identity tracking
+ * @param {{failed: number, priorFailedCount: number}} counts - fallback inputs for
+ *   the degraded count-based path
+ * @returns {{regression: boolean, newIds: string[], mode: 'identity'|'count-fallback'}}
+ */
+export function decideRegression(currentIds, priorFailingIds, { failed, priorFailedCount }) {
+  if (Array.isArray(priorFailingIds)) {
+    const priorSet = new Set(priorFailingIds);
+    const newIds = currentIds.filter((id) => !priorSet.has(id));
+    return { regression: newIds.length > 0, newIds, mode: 'identity' };
+  }
+  const newFailures = failed - priorFailedCount;
+  return { regression: newFailures >= 1, newIds: [], mode: 'count-fallback' };
+}
+
 function trendFor(currentFailed, priorFailed) {
   if (priorFailed == null) return 'new';
   if (currentFailed < priorFailed) return 'improving';
@@ -129,9 +189,13 @@ async function fetchPriorSnapshot(supabase, branch) {
       // leave it null so the skip-drift check cold-starts (passes) until the
       // next push to this branch records it.
       const rawSkipped = row.findings[0].skipped_count;
+      // QF-20260701-833: absent on a snapshot written before this shipped — null
+      // signals decideRegression() to fall back to the count-based comparison.
+      const rawFailingIds = row.findings[0].failing_test_ids;
       return {
         failed_count: Number(row.findings[0].failed_count),
         skipped_count: rawSkipped == null ? null : Number(rawSkipped),
+        failing_test_ids: Array.isArray(rawFailingIds) ? rawFailingIds : null,
         scanned_at: row.scanned_at,
       };
     }
@@ -139,7 +203,7 @@ async function fetchPriorSnapshot(supabase, branch) {
   return null;
 }
 
-async function insertSnapshot(supabase, { failed, total, skipped, branch, sha, runId, priorFailed }) {
+async function insertSnapshot(supabase, { failed, total, skipped, branch, sha, runId, priorFailed, failingIds }) {
   const score = total === 0 ? 0 : Number(((total - failed) / total * 100).toFixed(2));
   const trend = trendFor(failed, priorFailed);
   const row = {
@@ -148,7 +212,9 @@ async function insertSnapshot(supabase, { failed, total, skipped, branch, sha, r
     score,
     // FR-5: skipped_count is recorded alongside failed_count so the next PR's
     // skip-drift band has a baseline (the ratchet rewrites it on every push).
-    findings: [{ failed_count: failed, skipped_count: skipped, branch, commit_sha: sha }],
+    // QF-20260701-833: failing_test_ids recorded alongside so the next PR's
+    // regression check can diff by identity, not just raw count.
+    findings: [{ failed_count: failed, skipped_count: skipped, failing_test_ids: failingIds, branch, commit_sha: sha }],
     trend_direction: trend,
     metadata: { workflow_run_id: runId },
   };
@@ -173,8 +239,13 @@ function writePrFailuresArtifact(path, raw, failed) {
   writeFileSync(path, JSON.stringify({ summary: { numFailed: failed }, failures }, null, 2));
 }
 
-function annotateRegression(newFailures) {
+function annotateRegression(newFailures, newIds = []) {
   stderr.write(`::error::BASELINE_REGRESSION: ${newFailures} new test failure(s) vs main snapshot.\n`);
+  if (newIds.length > 0) {
+    stderr.write(`New failing test(s) not present on main:\n`);
+    for (const id of newIds.slice(0, 10)) stderr.write(`  - ${id}\n`);
+    if (newIds.length > 10) stderr.write(`  ... and ${newIds.length - 10} more\n`);
+  }
   stderr.write(`Reproduce locally: node scripts/audit-test-failures.mjs --pr-only --format=json | jq .new_failures\n`);
   stderr.write(`See docs/reference/test-coverage-baseline-ratchet.md for triage steps.\n`);
 }
@@ -203,6 +274,7 @@ async function main() {
     await insertSnapshot(supabase, {
       failed, total, skipped, branch: ctx.branch, sha: ctx.sha, runId: ctx.runId,
       priorFailed: prior?.failed_count,
+      failingIds: extractFailingIds(raw),
     });
     return 0;
   }
@@ -213,10 +285,14 @@ async function main() {
     stdout.write(`No prior snapshot for base branch '${ctx.baseBranch}' — cold start, passing.\n`);
     return 0;
   }
-  const newFailures = failed - prior.failed_count;
-  if (newFailures >= 1) {
+  // QF-20260701-833: identity-based (falls back to count-based only for a
+  // pre-QF baseline snapshot that never recorded failing_test_ids).
+  const decision = decideRegression(extractFailingIds(raw), prior.failing_test_ids, {
+    failed, priorFailedCount: prior.failed_count,
+  });
+  if (decision.regression) {
     writePrFailuresArtifact(args.prFailuresPath, raw, failed);
-    annotateRegression(newFailures);
+    annotateRegression(decision.mode === 'identity' ? decision.newIds.length : failed - prior.failed_count, decision.newIds);
     return 1;
   }
   // FR-5: failure count is stable — now guard against a vacuous green where the
@@ -229,8 +305,12 @@ async function main() {
   const skipNote = skip.status === 'NEW'
     ? 'skip baseline not yet recorded (cold start)'
     : `skipped=${skipped} within band ${skip.lowerBound}–${skip.upperBound}`;
-  stdout.write(`Snapshot baseline=${prior.failed_count}, current=${failed}, delta=${newFailures}; ${skipNote} — passing.\n`);
+  stdout.write(`Snapshot baseline=${prior.failed_count}, current=${failed}, delta=${failed - prior.failed_count} (${decision.mode}, 0 new failing identities); ${skipNote} — passing.\n`);
   return 0;
 }
 
-main().then(code => exit(code)).catch(e => die(`unhandled error: ${e.stack || e.message}`));
+// QF-20260701-833: guard so the pure exports (extractFailingIds, decideRegression)
+// can be imported for unit testing without triggering main()'s process.exit() side
+// effects — mirrors scripts/ci/red-merge-detector.mjs's isMain pattern.
+const isMain = process.argv[1] && import.meta.url.endsWith('compare-to-main-snapshot.mjs') && process.argv[1].endsWith('compare-to-main-snapshot.mjs');
+if (isMain) main().then(code => exit(code)).catch(e => die(`unhandled error: ${e.stack || e.message}`));
