@@ -38,12 +38,13 @@ describe('Phase F — printSolomonInbox dashboard surface', () => {
   });
 
   it('is wired into the `all` view, a `solomon` command, and the usage list', () => {
-    // dedicated command alias
-    expect(SRC).toMatch(/solomon:\s*async \(\) => await printSolomonInbox\(\)/);
+    // dedicated command alias (SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001: now also renders the ledger rollup)
+    expect(SRC).toMatch(/solomon:\s*async \(\) => \{ await printSolomonInbox\(\); await printSolomonLedgerRollup\(\); \}/);
     // present in the `all` aggregate render
     const allIdx = SRC.indexOf('all:');
     expect(allIdx).toBeGreaterThan(-1);
     expect(SRC.indexOf('await printSolomonInbox()', allIdx)).toBeGreaterThan(allIdx);
+    expect(SRC.indexOf('await printSolomonLedgerRollup()', allIdx)).toBeGreaterThan(allIdx);
     // discoverable in the usage string
     expect(SRC).toMatch(/Sections:[^\n]*\bsolomon\b/);
   });

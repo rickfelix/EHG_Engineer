@@ -11,9 +11,16 @@
  * invented payload.kind. The --reply leg is gated behind COORDINATOR_TWOWAY_V2=on; the
  * ack-stamp works regardless.
  *
+ * `--disposition <accepted|rejected|partial>` records the coordinator's/chairman's decision on the
+ * advisory into solomon_advice_outcome_ledger (SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001,
+ * FR-3), keyed on the advisory's payload.correlation_id (or the explicit --correlation-id override).
+ * Idempotent (ON CONFLICT correlation_id DO UPDATE — re-running never duplicates a row). Fail-open:
+ * a ledger write failure is logged but never blocks the advisory ack/retire above.
+ *
  * Usage:
  *   node scripts/coordinator-ack-adam.cjs --advisory <id>
  *   node scripts/coordinator-ack-adam.cjs --advisory <id> --reply "<reply body>"
+ *   node scripts/coordinator-ack-adam.cjs --advisory <id> --disposition accepted [--correlation-id <id>]
  */
 require('dotenv').config();
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
@@ -22,6 +29,34 @@ const { isFullUuid } = require('../lib/coordinator/dispatch.cjs');
 const { fetchAdvisory, stampActioned } = require('../lib/coordinator/adam-advisory-store.cjs');
 const { sendCoordinatorReply } = require('./coordinator-reply.cjs');
 const { resolveAdamReplyTarget, retargetStaleAdamInbound, verifyReplyDelivered } = require('../lib/coordinator/adam-identity.cjs');
+
+const VALID_DISPOSITIONS = Object.freeze(['accepted', 'rejected', 'partial']);
+
+/**
+ * Fail-open: record a coordinator/chairman decision into solomon_advice_outcome_ledger, keyed on
+ * correlation_id (idempotent upsert). Never throws — returns { recorded, reason }. Exported for tests.
+ */
+async function recordLedgerDecision(supabase, { correlationId, disposition, decidedBy }) {
+  if (!correlationId) return { recorded: false, reason: 'no correlation_id' };
+  if (!VALID_DISPOSITIONS.includes(disposition)) return { recorded: false, reason: `invalid disposition: ${disposition}` };
+  try {
+    const { error } = await supabase
+      .from('solomon_advice_outcome_ledger')
+      .upsert(
+        {
+          correlation_id: correlationId,
+          decision: disposition,
+          decision_by: decidedBy || null,
+          decision_at: new Date().toISOString(),
+        },
+        { onConflict: 'correlation_id' }
+      );
+    if (error) return { recorded: false, reason: error.message };
+    return { recorded: true };
+  } catch (e) {
+    return { recorded: false, reason: (e && e.message) || String(e) };
+  }
+}
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -71,6 +106,21 @@ async function main() {
   console.log('  advisory_id:', advisoryId);
   console.log('  actioned_at:', nowIso);
 
+  const disposition = typeof flags.disposition === 'string' ? flags.disposition : null;
+  if (disposition) {
+    const correlationId = typeof flags['correlation-id'] === 'string'
+      ? flags['correlation-id']
+      : (adv.payload && adv.payload.correlation_id);
+    const result = await recordLedgerDecision(supabase, { correlationId, disposition, decidedBy: coordinatorSession });
+    if (result.recorded) {
+      console.log('✓ Ledger decision recorded');
+      console.log('  correlation_id:', correlationId);
+      console.log('  decision:', disposition);
+    } else {
+      console.warn(`⚠ Ledger decision NOT recorded (advisory still actioned): ${result.reason}`);
+    }
+  }
+
   if (wantsReply) {
     if (!isTwoWayV2Enabled()) {
       console.error('NOTE: --reply skipped — COORDINATOR_TWOWAY_V2 is OFF (advisory was still actioned).');
@@ -102,7 +152,7 @@ async function main() {
   }
 }
 
-module.exports = { parseArgs };
+module.exports = { parseArgs, recordLedgerDecision, VALID_DISPOSITIONS };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });
