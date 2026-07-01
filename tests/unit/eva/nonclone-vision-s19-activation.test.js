@@ -28,8 +28,11 @@ function makeSb(config = {}) {
   const resolveSelect = (ctx) => {
     if (ctx.table === 'ventures') return config.venture || null;
     if (ctx.table === 'eva_vision_documents') {
-      if (ctx.filters.status === 'active') return config.activeL2 || null;
-      if (ctx.filters.status === 'draft_seed') return config.draftSeed || null;
+      const st = ctx.filters.status;
+      if (st === 'active') return config.activeL2 || null;
+      // SD-LEO-INFRA-NONCLONE-VISION-S19-DRAFT-DOC-SHAPE-001: Case B now .in('status',['draft_seed','draft']).
+      if (Array.isArray(st) && (st.includes('draft_seed') || st.includes('draft'))) return config.draftSeed || config.draftDoc || null;
+      if (st === 'draft_seed') return config.draftSeed || null; // back-compat
     }
     if (ctx.table === 'eva_venture_config') {
       // the convergence-subject marker read
@@ -46,6 +49,7 @@ function makeSb(config = {}) {
         update(p) { ctx.op = 'update'; ctx.payload = p; return b; },
         upsert(p) { ctx.op = 'upsert'; upserts.push({ table, payload: p }); return b; },
         eq(c, v) { ctx.filters[c] = v; return b; },
+        in(c, arr) { ctx.filters[c] = arr; return b; },
         order() { return b; },
         limit() { return b; },
         async maybeSingle() { return { data: resolveSelect(ctx), error: null }; },

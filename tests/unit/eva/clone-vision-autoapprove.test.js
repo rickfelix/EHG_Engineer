@@ -29,9 +29,16 @@ function makeSb(config) {
   const resolveSelect = (ctx) => {
     if (ctx.table === 'ventures') return config.venture || null;
     if (ctx.table === 'eva_vision_documents') {
-      if (ctx.filters.status === 'active') return config.activeL2 || null;
-      if (ctx.filters.status === 'draft_seed') return config.draftSeed || null;
+      const st = ctx.filters.status;
+      if (st === 'active') return config.activeL2 || null;
+      // SD-LEO-INFRA-NONCLONE-VISION-S19-DRAFT-DOC-SHAPE-001: Case B now queries .in('status',
+      // ['draft_seed','draft']); return the configured pre-active doc (draftSeed = the clone seed shape,
+      // draftDoc = a non-clone convergence subject's 'draft' eager-synthesis shape).
+      if (Array.isArray(st) && (st.includes('draft_seed') || st.includes('draft'))) return config.draftSeed || config.draftDoc || null;
+      if (st === 'draft_seed') return config.draftSeed || null; // back-compat
     }
+    // the convergence-subject marker read (isConvergenceSubject) — a non-clone with the marker is eligible.
+    if (ctx.table === 'eva_venture_config') return config.convergenceMarker ? { value: true } : null;
     return null;
   };
   const sb = {
@@ -42,6 +49,7 @@ function makeSb(config) {
         select() { ctx.op = 'select'; return builder; },
         update(payload) { ctx.op = 'update'; ctx.payload = payload; return builder; },
         eq(col, val) { ctx.filters[col] = val; return builder; },
+        in(col, arr) { ctx.filters[col] = arr; return builder; },
         order() { return builder; },
         limit() { return builder; },
         async maybeSingle() { return { data: resolveSelect(ctx), error: null }; },
@@ -128,6 +136,52 @@ describe('_autoApproveCloneVision (QUALITY-REPAIR FR-1): repair-then-promote', (
     expect(r.reason).toBe('quality_not_checked');
     expect(repairMocks.repairVision).not.toHaveBeenCalled();
     expect(sb.updates).toHaveLength(0);
+  });
+});
+
+describe('SD-LEO-INFRA-NONCLONE-VISION-S19-DRAFT-DOC-SHAPE-001: the non-clone convergence subject draft doc-shape', () => {
+  // The from-scratch pipeline produces a NON-CLONE convergence subject's L2 as status='draft' (not
+  // draft_seed). Before this fix, Case B queried only draft_seed -> the draft doc fell through to
+  // no_l2_vision -> repair never fired -> S19 stalled (eligibility fixed in #5284, reachability not).
+  const convergenceVenture = { id: 'venture-conv', seeded_from_venture_id: null }; // NON-clone
+  const draftDoc = (extra = {}) => ({ vision_key: 'V-conv', status: 'draft', extracted_dimensions: { a: 1 }, content: 'x'.repeat(600), ...extra });
+
+  it("a convergence subject's status='draft' L2 is FOUND (not no_l2_vision) and promoted", async () => {
+    const sb = makeSb({ venture: convergenceVenture, convergenceMarker: true, activeL2: null, draftDoc: draftDoc({ quality_checked: true }) });
+    const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-conv');
+    expect(r.reason).not.toBe('no_l2_vision');   // the doc-shape is now matched
+    expect(r.reason).not.toBe('real_venture');   // eligibility carve-out (#5284) admits it
+    expect(r.promoted).toBe(true);
+    expect(r.mode).toBe('promote_draft');
+    expect(sb.updates[0].payload.status).toBe('active');
+    expect(sb.updates[0].payload.chairman_approved).toBe(true);
+  });
+
+  it("a convergence subject's under-quality 'draft' L2 REPAIRS (flag on) then promotes", async () => {
+    repairMocks.isRepairLoopEnabled.mockResolvedValue(true);
+    repairMocks.repairVision.mockResolvedValue({ finalQualityChecked: true, attempts: 1 });
+    const sb = makeSb({ venture: convergenceVenture, convergenceMarker: true, activeL2: null, draftDoc: draftDoc({ quality_checked: false, quality_issues: [{ check: 'section_coverage' }], sections: {} }) });
+    const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-conv');
+    expect(repairMocks.repairVision).toHaveBeenCalledTimes(1); // repair NOW fires for the draft shape
+    expect(r.promoted).toBe(true);
+  });
+
+  it("a REAL venture's status='draft' L2 still returns real_venture (chairman-manual preserved; no marker)", async () => {
+    const sb = makeSb({ venture: { id: 'venture-real', seeded_from_venture_id: null }, convergenceMarker: false, activeL2: null, draftDoc: draftDoc({ quality_checked: true }) });
+    const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-real');
+    expect(r.reason).toBe('real_venture');       // NOT reached Case B — the real_venture gate holds
+    expect(sb.updates).toHaveLength(0);
+    expect(repairMocks.repairVision).not.toHaveBeenCalled();
+  });
+
+  it("repair EXHAUSTS on a 'draft' doc -> NO promote, falls through (no force-approve backdoor)", async () => {
+    repairMocks.isRepairLoopEnabled.mockResolvedValue(true);
+    repairMocks.repairVision.mockResolvedValue({ finalQualityChecked: false, attempts: 2, exitReason: 'attempt_cap' });
+    const sb = makeSb({ venture: convergenceVenture, convergenceMarker: true, activeL2: null, draftDoc: draftDoc({ quality_checked: false, quality_issues: [{ check: 'section_coverage' }], sections: {} }) });
+    const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-conv');
+    expect(r.promoted).toBe(false);
+    expect(r.reason).toBe('repair_exhausted_quality');
+    expect(sb.updates).toHaveLength(0); // no bad 'active' row
   });
 });
 
