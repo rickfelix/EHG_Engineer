@@ -22,22 +22,26 @@ describe('coordinator quiet-tick — folded-core accounting', () => {
     }
   });
 
-  it('expensive cores are quiescent-skipped; safety cores always run', () => {
+  it('expensive cores are quiescent-skipped; safety + backlog-rank always run', () => {
     const byKey = Object.fromEntries(COORD_CORES.map((c) => [c.key, c]));
     // Claim-reaping + inbox arrival must never be suppressed by quiescence.
     expect(byKey.sweep.quiescentSkip).toBe(false);
     expect(byKey.inbox.quiescentSkip).toBe(false);
+    // backlog-rank (SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-A): cheap, and exactly the
+    // state where a fresh draft SD needs a rank before the next worker self-claims — must not
+    // be quiescent-skipped like the genuinely expensive predictive/audit cores below.
+    expect(byKey['backlog-rank'].quiescentSkip).toBe(false);
     // Expensive predictive/audit cores skip when nothing is moving.
     expect(byKey['charter-audit'].quiescentSkip).toBe(true);
     expect(byKey['capacity-forecast'].quiescentSkip).toBe(true);
-    expect(byKey['backlog-rank'].quiescentSkip).toBe(true);
     expect(byKey.audit.quiescentSkip).toBe(true);
   });
 
-  it('buildCores(quiescent=true) skips exactly the expensive cores', () => {
+  it('buildCores(quiescent=true) skips the expensive cores but keeps backlog-rank running', () => {
     const cores = buildCoordCores(true);
     const skipped = cores.filter((c) => c.skip).map((c) => c.key).sort();
-    expect(skipped).toEqual(['audit', 'backlog-rank', 'capacity-forecast', 'charter-audit']);
+    expect(skipped).toEqual(['audit', 'capacity-forecast', 'charter-audit']);
+    expect(cores.find((c) => c.key === 'backlog-rank').skip).toBe(false);
   });
 
   it('buildCores(quiescent=false) runs the full set (no skips)', () => {

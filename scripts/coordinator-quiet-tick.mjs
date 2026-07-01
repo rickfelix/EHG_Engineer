@@ -57,7 +57,11 @@ export const COMPOSED_CORES = [
   { key: 'inbox', script: 'fleet-dashboard.cjs', args: ['scripts/fleet-dashboard.cjs', 'inbox'], quiescentSkip: false, safety: true },
   { key: 'charter-audit', script: 'coordinator-charter-audit.mjs', args: ['scripts/coordinator-charter-audit.mjs'], quiescentSkip: true },
   { key: 'capacity-forecast', script: 'coordinator-capacity-forecast.mjs', args: ['scripts/coordinator-capacity-forecast.mjs', '--dispatch'], quiescentSkip: true },
-  { key: 'backlog-rank', script: 'coordinator-backlog-rank.mjs', args: ['scripts/coordinator-backlog-rank.mjs'], quiescentSkip: true },
+  // NOT quiescentSkip (SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-A): a cheap single-table
+  // scan+write, and exactly the state where a fresh draft SD needs a rank before the next worker
+  // wakes and self-claims — skipping it here left claimable-but-unranked SDs stuck whenever this
+  // tick's STANDARD_LOOPS sibling cron was also unarmed (coordinator teardown-discipline gap).
+  { key: 'backlog-rank', script: 'coordinator-backlog-rank.mjs', args: ['scripts/coordinator-backlog-rank.mjs'], quiescentSkip: false },
   { key: 'audit', script: 'coordinator-audit.mjs', args: ['scripts/coordinator-audit.mjs'], quiescentSkip: true },
 ];
 
