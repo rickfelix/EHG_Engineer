@@ -12,6 +12,7 @@ import {
   REASON_CODES,
   MODULE_VERSION,
   _internal,
+  _resetBoundaryCacheForTest,
 } from '../../../lib/eva/reality-gates.js';
 
 function createMockDb(artifacts = []) {
@@ -308,6 +309,109 @@ describe('RealityGates', () => {
 
     it('should export all REASON_CODES', () => {
       expect(Object.keys(REASON_CODES)).toHaveLength(6);
+    });
+  });
+
+  describe('Realtime channel teardown safety (SD-FDBK-FIX-EVA-STAGE-GOVERNANCE-001)', () => {
+    function makeMockDbWithChannelSpy() {
+      let capturedStatusCallback = null;
+      const unsubscribeSpy = vi.fn();
+      const removeChannelSpy = vi.fn();
+      const channelMock = {
+        on: function () { return this; },
+        subscribe: function (cb) { capturedStatusCallback = cb; return this; },
+        unsubscribe: unsubscribeSpy,
+      };
+      const sb = {
+        from: vi.fn(() => ({ select: () => Promise.resolve({ data: [], error: null }) })),
+        channel: () => channelMock,
+        removeChannel: removeChannelSpy,
+      };
+      return { sb, unsubscribeSpy, removeChannelSpy, getStatusCallback: () => capturedStatusCallback, channelMock };
+    }
+
+    it('CHANNEL_ERROR/CLOSED/TIMED_OUT status tears down via supabase.removeChannel(), never via channel.unsubscribe()', async () => {
+      _resetBoundaryCacheForTest();
+      const { sb, unsubscribeSpy, removeChannelSpy, getStatusCallback, channelMock } = makeMockDbWithChannelSpy();
+
+      // Unconfigured transition (999->1000) -- evaluateRealityGate returns NOT_APPLICABLE
+      // immediately after _loadBoundaryFromDB runs, isolating the channel-teardown path
+      // from unrelated artifact-lookup logic.
+      await evaluateRealityGate({
+        ventureId: 'v1',
+        fromStage: 999,
+        toStage: 1000,
+        supabase: sb,
+        logger: silentLogger,
+      });
+
+      const statusCallback = getStatusCallback();
+      expect(statusCallback).toBeTypeOf('function');
+
+      statusCallback('CHANNEL_ERROR');
+
+      expect(removeChannelSpy).toHaveBeenCalledTimes(1);
+      expect(removeChannelSpy).toHaveBeenCalledWith(channelMock);
+      expect(unsubscribeSpy).not.toHaveBeenCalled();
+
+      _resetBoundaryCacheForTest();
+    });
+
+    it('a second (re-entrant) status callback firing after teardown does not re-invoke removeChannel or throw', async () => {
+      _resetBoundaryCacheForTest();
+      const { sb, removeChannelSpy, getStatusCallback } = makeMockDbWithChannelSpy();
+
+      await evaluateRealityGate({
+        ventureId: 'v1',
+        fromStage: 999,
+        toStage: 1000,
+        supabase: sb,
+        logger: silentLogger,
+      });
+
+      const statusCallback = getStatusCallback();
+      expect(() => {
+        statusCallback('CLOSED');
+        statusCallback('CLOSED');
+      }).not.toThrow();
+
+      // Reference is nulled after the first teardown, so the second firing is a safe no-op.
+      expect(removeChannelSpy).toHaveBeenCalledTimes(1);
+
+      _resetBoundaryCacheForTest();
+    });
+
+    it('a channel whose unsubscribe() recursively re-invokes its own status callback would previously overflow the stack -- proves removeChannel() is used instead', async () => {
+      _resetBoundaryCacheForTest();
+      let capturedStatusCallback = null;
+      let unsubscribeCallCount = 0;
+      const recursiveChannelMock = {
+        on: function () { return this; },
+        subscribe: function (cb) { capturedStatusCallback = cb; return this; },
+        unsubscribe: function () {
+          unsubscribeCallCount++;
+          if (unsubscribeCallCount > 100) throw new Error('unsubscribe recursion guard tripped -- test itself would overflow');
+          capturedStatusCallback?.('CLOSED'); // simulates phoenix's synchronous re-entrant trigger(close)
+        },
+      };
+      const sb = {
+        from: vi.fn(() => ({ select: () => Promise.resolve({ data: [], error: null }) })),
+        channel: () => recursiveChannelMock,
+        removeChannel: () => { /* real removeChannel is terminal -- does not re-trigger the callback */ },
+      };
+
+      await evaluateRealityGate({
+        ventureId: 'v1',
+        fromStage: 999,
+        toStage: 1000,
+        supabase: sb,
+        logger: silentLogger,
+      });
+
+      expect(() => capturedStatusCallback('TIMED_OUT')).not.toThrow();
+      expect(unsubscribeCallCount).toBe(0);
+
+      _resetBoundaryCacheForTest();
     });
   });
 });
