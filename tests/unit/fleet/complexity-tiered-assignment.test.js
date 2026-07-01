@@ -224,3 +224,24 @@ describe('FR-1 isTieringActive() bounded claude_sessions query', () => {
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: unstampedWorkerRank, tiering_active: true })).toBeNull();
   });
 });
+
+describe('SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-D: ladder-relative mid rung (guardrail-preserving)', () => {
+  it('preserves the Opus-med floor: feature / mid-LOC / tier_hint=2 -> the mid rung (3 on the default K=4 ladder)', () => {
+    expect(ladderTopRank()).toBe(4); // v1 static safe-default ladder
+    expect(computeMinTierRank({ sd_type: 'feature' })).toBe(3);       // NOT 2 (ceil would loosen the guardrail)
+    expect(computeMinTierRank({ estimated_loc: 50 })).toBe(3);        // 31..75 mid-LOC band
+    expect(computeMinTierRank({ metadata: { tier_hint: 2 } })).toBe(3);
+  });
+  it('is ladder-relative, not a fixed literal: the mid rung equals floor(ladderTopRank()/2)+1', () => {
+    const midExpected = Math.floor(ladderTopRank() / 2) + 1;
+    expect(computeMinTierRank({ sd_type: 'feature' })).toBe(midExpected);
+    // Upper-middle scaling (documented): K=4->3, K=6->4, K=8->5 (ceil(K/2) would give the loosening 2 at K=4).
+    expect(Math.floor(4 / 2) + 1).toBe(3);
+    expect(Math.floor(6 / 2) + 1).toBe(4);
+    expect(Math.floor(8 / 2) + 1).toBe(5);
+  });
+  it('floor and ceiling stay at the ladder extremes', () => {
+    expect(computeMinTierRank({ estimated_loc: 10 })).toBe(1);                                   // small-LOC -> floor
+    expect(computeMinTierRank({ sd_type: 'feature', estimated_loc: 999 })).toBe(ladderTopRank()); // large-LOC MAX -> ceiling
+  });
+});
