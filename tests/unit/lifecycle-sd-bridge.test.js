@@ -197,6 +197,20 @@ describe('convertSprintToSDs', () => {
             }),
           };
         }
+        // SD-LEO-INFRA-CONVERGENCE-BUILDTREE-CHILDREN-UNMARKED-001 added isConvergenceSubject
+        // (.from('eva_venture_config').select('value').eq('key').maybeSingle()) that runs BEFORE
+        // findExistingOrchestrator — table-aware here (like the ventures pilot fetch) so it does NOT
+        // consume the strategic_directives_v2 callCount sequence. Return null -> not a convergence
+        // subject -> real-venture behavior (no throwaway marker), which this idempotency test expects.
+        if (table === 'eva_venture_config') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              }),
+            }),
+          };
+        }
         return {
           insert: vi.fn().mockResolvedValue({ error: null }),
           select: vi.fn().mockImplementation(() => {

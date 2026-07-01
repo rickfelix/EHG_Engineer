@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-S19-HELD-STATE-NOT-IDEMPOTENT-CLOBBER-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-S19-HELD-STATE-NOT-IDEMPOTENT-CLOBBER-001",
-  "createdAt": "2026-07-01T04:15:30.234Z",
+  "sdKey": "SD-LEO-INFRA-CONVERGENCE-BUILDTREE-CHILDREN-UNMARKED-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-CONVERGENCE-BUILDTREE-CHILDREN-UNMARKED-001",
+  "createdAt": "2026-07-01T04:49:44.738Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
