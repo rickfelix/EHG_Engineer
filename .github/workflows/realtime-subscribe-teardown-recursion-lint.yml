@@ -1,0 +1,43 @@
+name: Realtime Subscribe Teardown Recursion Lint
+
+# SD-LEO-INFRA-REALTIME-REMOVECHANNEL-RECURSION-CLASSGUARD-001
+#
+# Blocks any PR that (re)introduces a proven, recurring crash class: calling
+# <ref>.removeChannel(...) or <ref>.unsubscribe() synchronously from inside the
+# callback passed to a .subscribe(...) call. Supabase's vendored phoenix client
+# re-fires that same callback from inside Channel.leave(), so a teardown call
+# made there recurses unboundedly -> RangeError: Maximum call stack size
+# exceeded. Fixed independently 3x (ae499d9957/QF-709, PR #5305/QF-762) before
+# this class-guard existed — each fix's own regression test mocked the
+# teardown call as a no-op, so the anti-pattern shipped green through the full
+# LEO gate pipeline every time.
+#
+# GENUINELY BLOCKING (no continue-on-error): this repo's `npm run lint`
+# (eslint.config.js flat-config run) is not invoked by any other CI workflow,
+# so registering the rule only in eslint.config.js would not actually enforce
+# anything — this dedicated workflow is the real enforcement mechanism.
+
+on:
+  pull_request:
+    paths:
+      - 'lib/**/*.{js,mjs,cjs,ts,tsx}'
+      - 'server/**/*.{js,mjs,cjs,ts,tsx}'
+      - 'eslint-rules/no-realtime-teardown-in-subscribe-callback.js'
+      - 'scripts/lint/realtime-subscribe-teardown-recursion-lint.mjs'
+      - '.github/workflows/realtime-subscribe-teardown-recursion-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  realtime-subscribe-teardown-recursion-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Detect removeChannel/unsubscribe called inside a .subscribe() callback
+        run: node scripts/lint/realtime-subscribe-teardown-recursion-lint.mjs

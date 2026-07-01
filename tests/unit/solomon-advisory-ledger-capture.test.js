@@ -49,3 +49,29 @@ describe('FR-2/TR-2: captureLedgerRow — fail-open ledger capture', () => {
     expect(result.reason).toMatch(/correlation_id/);
   });
 });
+
+// QF-20260701-289: the "not-flying-blind" instrument was itself flying blind — captureLedgerRow's
+// result was discarded at the call site, so a capture gap (e.g. the ledger table not yet applied)
+// produced zero signal. checkLedgerCaptureHealth is the cheap gauge that makes it observable.
+describe('QF-20260701-289: checkLedgerCaptureHealth — the ledger capture gauge', () => {
+  it('reports healthy with the current row count when the table is reachable', async () => {
+    const sb = { from: () => ({ select: () => Promise.resolve({ count: 42, error: null }) }) };
+    const result = await m.checkLedgerCaptureHealth(sb);
+    expect(result.healthy).toBe(true);
+    expect(result.rowCount).toBe(42);
+  });
+
+  it('reports unhealthy with the reason when the table is missing (e.g. PGRST205)', async () => {
+    const sb = { from: () => ({ select: () => Promise.resolve({ count: null, error: { message: 'PGRST205: table not found' } }) }) };
+    const result = await m.checkLedgerCaptureHealth(sb);
+    expect(result.healthy).toBe(false);
+    expect(result.reason).toMatch(/PGRST205/);
+  });
+
+  it('is fail-open — a thrown query never propagates', async () => {
+    const sb = { from: () => { throw new Error('boom'); } };
+    const result = await m.checkLedgerCaptureHealth(sb);
+    expect(result.healthy).toBe(false);
+    expect(result.reason).toMatch(/boom/);
+  });
+});

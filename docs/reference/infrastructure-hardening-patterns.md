@@ -1,9 +1,9 @@
 ---
 category: reference
 status: draft
-version: 1.0.0
+version: 1.1.0
 author: Rick Felix
-last_updated: 2026-02-28
+last_updated: 2026-07-01
 tags: [reference, auto-generated]
 ---
 # Infrastructure Hardening Patterns
@@ -622,6 +622,52 @@ and deliberately kept the `isRepairLoopEnabled` kill-switch — call-ordering wa
 
 ---
 
+## Pattern: Class-guard a recurring bug via a lint rule + a FAITHFUL shared test double, not another per-instance fix (SD-LEO-INFRA-REALTIME-REMOVECHANNEL-RECURSION-CLASSGUARD-001)
+
+**Symptom**: The same crash class gets fixed independently 3 times in 3 different files, and each fix's
+own regression test passes even when the anti-pattern is reintroduced elsewhere.
+
+**Root cause**: Calling `<channel>.removeChannel(...)` or `<channel>.unsubscribe()` synchronously from
+inside the callback passed to `.subscribe(status => {...})` recurses unboundedly — Supabase's vendored
+phoenix client's `Channel.leave()` (invoked by both methods; `removeChannel()` wraps `unsubscribe()`
+internally) synchronously re-fires that same callback before settling, causing
+`RangeError: Maximum call stack size exceeded`. Fixed independently at `ae499d9957`/QF-20260701-709
+(`lib/eva/reality-gates.js`, `lib/eva/stage-governance.js`), then reintroduced and fixed again at PR
+#5305/QF-20260701-762 (`lib/eva/chairman-decision-watcher.js`) — a SD that had gone through the full LEO
+gate pipeline (5 accepted handoffs, TESTING sub-agent, 98% LEAD-FINAL) and shipped a passing regression
+test. Each time, the test's own mock made `removeChannel()`/`unsubscribe()` a no-op that never re-fires
+the callback — the mock encoded the same false premise as the bug, so the recursion never had a chance
+to start and the test could not fail.
+
+**Fix**: a structural class-guard, not a 4th per-instance patch:
+1. **Lint rule**: `eslint-rules/no-realtime-teardown-in-subscribe-callback.js` — an AST rule that flags
+   the teardown-call-inside-callback shape (including nested in conditional branches), reused via
+   ESLint's programmatic `Linter` API by a standalone script,
+   `scripts/lint/realtime-subscribe-teardown-recursion-lint.mjs`, wired into a **dedicated, genuinely
+   blocking** GitHub Actions workflow. This repo's shared `npm run lint` (`eslint.config.js` flat config)
+   is not invoked by ANY existing CI workflow — verified by `grep -rl "npm run lint" .github/workflows/*.yml`
+   returning zero matches — so a rule registered only in `eslint.config.js` would repeat the same
+   "looks enforced, isn't" gap already present for the one prior custom-rule precedent
+   (`no-process-cwd-in-sub-agents.js`, exercised only by its own RuleTester test, never by a real lint
+   pass over production files).
+2. **Faithful shared test double**: `tests/helpers/faithful-supabase-realtime-mock.js` — a single,
+   canonical mock whose `removeChannel()`/`unsubscribe()` genuinely re-fire the captured status callback
+   (mirroring the real recursive behavior), replacing 2 independently-duplicated ad-hoc "faithful" mocks
+   and closing a 3rd file's (`stage-governance.test.js`) complete absence of error-path coverage.
+
+### PR-review checklist line
+
+> When a fix targets a recursion/reentrancy bug in a vendored dependency's callback, verify the
+> regression test's mock actually reproduces the dependency's re-entrant behavior (re-fires the
+> callback) rather than treating the teardown call as an inert no-op — a mock that can't reproduce the
+> crash can't catch a regression, no matter how many assertions surround it. Prove it via a negative
+> control: temporarily revert the fix and confirm the new test fails before trusting it.
+
+### Files Modified/Created
+`eslint-rules/no-realtime-teardown-in-subscribe-callback.js` (new), `scripts/lint/realtime-subscribe-teardown-recursion-lint.mjs` (new), `.github/workflows/realtime-subscribe-teardown-recursion-lint.yml` (new), `tests/helpers/faithful-supabase-realtime-mock.js` (new), `tests/unit/eva/chairman-decision-watcher.test.js`, `tests/unit/eva/reality-gates.test.js`, `tests/unit/eva/stage-governance.test.js`
+
+---
+
 ## Cross-References
 
 - **Database Patterns**: [database-agent-patterns.md](./database-agent-patterns.md)
@@ -635,3 +681,4 @@ and deliberately kept the `isRepairLoopEnabled` kill-switch — call-ordering wa
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-01-30 | Initial documentation from SD-LEO-INFRA-HARDENING-001 |
+| 1.1.0 | 2026-07-01 | Added Realtime subscribe-teardown class-guard pattern from SD-LEO-INFRA-REALTIME-REMOVECHANNEL-RECURSION-CLASSGUARD-001 |

@@ -11,6 +11,7 @@
  */
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import { getStageGovernance, _resetCacheForTest } from '../../../lib/eva/stage-governance.js';
+import { createFaithfulRealtimeChannelMock } from '../../helpers/faithful-supabase-realtime-mock.js';
 
 // venture_stages rows carry gate_type + work_type + review_mode together.
 // work_type='decision_gate' is required for kill/promotion classification;
@@ -128,6 +129,42 @@ describe('stage-governance', () => {
     const gov = await getStageGovernance(supabase);
     expect(gov.isKill(3)).toBe(true);
     expect(gov.isReview(8)).toBe(true);
+  });
+
+  // SD-LEO-INFRA-REALTIME-REMOVECHANNEL-RECURSION-CLASSGUARD-001 FR-2: this file's
+  // mockSupabase() only ever fires 'SUBSCRIBED' (line 52), so the CHANNEL_ERROR/
+  // CLOSED/TIMED_OUT branch (line 104 of stage-governance.js) was never actually
+  // exercised by a faithful mock, despite that branch being the exact null-only fix
+  // shipped in ae499d9957/QF-20260701-709. Uses the shared faithful mock (whose
+  // unsubscribe()/removeChannel() WOULD recursively re-invoke the callback) to prove
+  // the fixed code never calls either teardown method from inside the callback.
+  test('Realtime channel teardown safety: CHANNEL_ERROR/CLOSED/TIMED_OUT drops the reference without calling unsubscribe()/removeChannel() (both would recurse)', async () => {
+    const { channelMock, removeChannel, getStatusCallback, getUnsubscribeCallCount, getRemoveChannelCallCount } =
+      createFaithfulRealtimeChannelMock();
+    const supabase = {
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          order: vi.fn(async () => ({ data: VENTURE_STAGES_FIXTURE, error: null })),
+        })),
+      })),
+      channel: vi.fn(() => channelMock),
+      removeChannel,
+    };
+
+    const gov = await getStageGovernance(supabase);
+    expect(gov.isKill(3)).toBe(true);
+
+    const statusCallback = getStatusCallback();
+    expect(statusCallback).toBeTypeOf('function');
+
+    expect(() => {
+      statusCallback('CHANNEL_ERROR');
+      statusCallback('CLOSED');
+      statusCallback('TIMED_OUT');
+    }).not.toThrow();
+
+    expect(getUnsubscribeCallCount()).toBe(0);
+    expect(getRemoveChannelCallCount()).toBe(0);
   });
 
   test('propagates DB read errors instead of returning empty sets', async () => {
