@@ -91,6 +91,52 @@ describe('withCircuitBreaker', () => {
   });
 });
 
+describe('withCircuitBreaker / recoverEventFailure — no .catch on the PostgREST builder (QF-20260701-510)', () => {
+  // A faithful stand-in for a real PostgREST query builder: has .then (it's a thenable) but
+  // NO .catch method at all — calling .catch(fn) on it throws
+  // "TypeError: ...catch is not a function" synchronously, regardless of whether the
+  // underlying query would have succeeded or failed. The old `.upsert(fn).catch(fn)`) /
+  // `.single().catch(fn)` code shape crashed on every real invocation. This mock has no
+  // `catch` property defined anywhere, so it fails loud if the fix regresses.
+  function faithfulChain({ singleResult, upsertResult } = {}) {
+    return {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn(() => ({ then: (onF) => Promise.resolve(singleResult ?? { data: null }).then(onF) })),
+      upsert: vi.fn(() => ({ then: (onF) => Promise.resolve(upsertResult ?? { data: null, error: null }).then(onF) })),
+    };
+  }
+
+  it('withCircuitBreaker success path does not throw on a real (no-.catch) builder', async () => {
+    const supabase = {
+      from: vi.fn(() => faithfulChain({
+        singleResult: { data: { circuit_breaker_state: 'CLOSED', failure_count: 0 } },
+      })),
+    };
+    const result = await withCircuitBreaker(supabase, 'test-service', async () => 'ok');
+    expect(result).toBe('ok');
+  });
+
+  it('withCircuitBreaker failure path does not throw on a real (no-.catch) builder', async () => {
+    const supabase = {
+      from: vi.fn(() => faithfulChain({
+        singleResult: { data: { circuit_breaker_state: 'CLOSED', failure_count: 0 } },
+      })),
+    };
+    await expect(withCircuitBreaker(supabase, 'test-service', async () => {
+      throw new Error('service down');
+    })).rejects.toThrow('service down'); // the ORIGINAL error, not a TypeError from a bad .catch
+  });
+
+  it('recoverEventFailure does not throw on a real (no-.catch) builder', async () => {
+    const supabase = { from: vi.fn(() => faithfulChain({ singleResult: { data: null } })) };
+    const result = await recoverEventFailure({
+      supabase, eventId: 'evt-1', eventType: 'test.event', payload: {}, error: new Error('test'),
+    });
+    expect(result.outcome).toBe('escalated');
+  });
+});
+
 describe('recoverEventFailure', () => {
   it('should attempt DLQ replay when entry exists', async () => {
     const supabase = createMockSupabase({
