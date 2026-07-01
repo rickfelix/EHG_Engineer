@@ -24,7 +24,6 @@ import { verifyTestCoverage } from '../../../scripts/modules/complete-quick-fix/
 import { parseArguments } from '../../../scripts/modules/complete-quick-fix/cli.js';
 
 const MOD = path.resolve(process.cwd(), 'scripts/modules/complete-quick-fix');
-const CONSTANTS_PATH = path.join(MOD, 'constants.js');
 const VERIF_PATH = path.join(MOD, 'verification.js');
 const GITOPS_PATH = path.join(MOD, 'git-operations.js');
 const ORCH_PATH = path.join(MOD, 'orchestrator.js');
@@ -129,33 +128,45 @@ describe('FR-3 --skip-coverage CLI flag', () => {
   });
 });
 
-// ── FR-4: early already-MERGED probe (source-assertion; embedded in completeQuickFix) ─
-describe('FR-4 already-MERGED probe', () => {
+// ── FR-4: early already-MERGED reconcile probe — now WITNESS-GATED ─────────────
+// SD-LEO-INFRA-QF-FALSE-COMPLETION-WITNESS-GAP-001 (FR-3) routed the reconcile decision through
+// verifyQFMergeWitness so it only completes on the QF's OWN merged+reachable branch (never a
+// foreign / most-recent merged pr_url — the QF-20260701-989 / #5290 mis-attribution). The FR-4
+// guarantees are preserved: bounded external calls (now inside merge-witness.js via
+// EXTERNAL_STEP_TIMEOUT_MS), idempotent early-return, and best-effort fall-through.
+describe('FR-4 already-MERGED probe (witness-gated)', () => {
   const orchSrc = readFileSync(ORCH_PATH, 'utf8');
+  const witnessSrc = readFileSync(path.join(MOD, 'merge-witness.js'), 'utf8');
 
-  it('imports fetchPRMetadata for the bounded probe', () => {
-    expect(orchSrc).toMatch(/import\s*\{[^}]*\bfetchPRMetadata\b[^}]*\}\s*from\s*'\.\/git-operations\.js'/);
+  it('imports verifyQFMergeWitness for the own-branch-gated probe', () => {
+    expect(orchSrc).toMatch(/import\s*\{[^}]*\bverifyQFMergeWitness\b[^}]*\}\s*from\s*'\.\/merge-witness\.js'/);
   });
 
-  it('resolves a PR number from --pr-url or qf.pr_url and checks MERGED state', () => {
+  it('the witness bounds its gh/git calls with the shared timeout constant', () => {
+    expect(witnessSrc).toMatch(/import\s*\{\s*EXTERNAL_STEP_TIMEOUT_MS\s*\}\s*from\s*'\.\/constants\.js'/);
+    expect(witnessSrc).toMatch(/timeout:\s*EXTERNAL_STEP_TIMEOUT_MS/);
+  });
+
+  it('resolves from --pr-url or qf.pr_url and gates the reconcile on the witness verdict', () => {
     expect(orchSrc).toMatch(/options\.prUrl\s*\|\|\s*qf\.pr_url/);
-    expect(orchSrc).toMatch(/meta\.state\s*===\s*'MERGED'/);
+    expect(orchSrc).toMatch(/verifyQFMergeWitness\(\{[\s\S]{0,120}\}\)/);
+    expect(orchSrc).toMatch(/probeWitness\.verified/);
   });
 
-  it('reconciles the QF to completed and returns early on MERGED', () => {
-    // SD-REFILL-00QQ60BN: the reconcile UPDATE payload is now built by buildMergedReconcileUpdate
-    // (which stamps the verification columns the completed_requires_verification CHECK demands) and
-    // applied via .update(reconcileUpdate). Pin the call + the targeting clauses.
+  it('reconciles the QF to completed and returns early when the witness verifies', () => {
+    // SD-REFILL-00QQ60BN: the reconcile UPDATE payload is built by buildMergedReconcileUpdate
+    // (stamping the verification columns the completed_requires_verification CHECK demands) and
+    // applied via .update(reconcileUpdate) — now with the SELF-DERIVED pr_url.
     expect(orchSrc).toMatch(/buildMergedReconcileUpdate\(\{[\s\S]{0,160}qf,[\s\S]{0,160}\}\)/);
     expect(orchSrc).toMatch(/\.update\(reconcileUpdate\)[\s\S]{0,80}\.eq\('id',\s*qfId\)[\s\S]{0,80}\.neq\('status',\s*'completed'\)/);
     // The probe must return BEFORE autoDetectGitInfo (which is the next major step).
-    const probeIdx = orchSrc.indexOf("meta.state === 'MERGED'");
+    const probeIdx = orchSrc.indexOf('probeWitness.verified');
     const autodetectIdx = orchSrc.indexOf('autoDetectGitInfo(testDir, options)');
     expect(probeIdx).toBeGreaterThan(-1);
     expect(autodetectIdx).toBeGreaterThan(probeIdx);
   });
 
   it('is best-effort: a probe failure falls through to the normal pipeline', () => {
-    expect(orchSrc).toMatch(/Already-merged probe skipped \(will run normal pipeline\)/);
+    expect(orchSrc).toMatch(/Already-merged witness probe skipped \(will run normal pipeline\)/);
   });
 });
