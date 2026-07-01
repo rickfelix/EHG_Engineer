@@ -157,7 +157,7 @@ There is a SEPARATE failure mode (feedback `34113d39`, `category='harness_backlo
 | Chairman email (post-cutover 2026-06-10: Adam exec-summary, NOT the retired coordinator email) | `.github/workflows/adam-exec-email-cron.yml` → `scripts/adam-exec-summary.mjs` |
 | Recurring 3-source audit | `scripts/coordinator-audit.mjs` |
 | Capacity forecasting + predictive belt refill (duty 5) | `scripts/coordinator-capacity-forecast.mjs` (armed cron `3,13,…`, `--dispatch`) |
-| Backlog prioritization + dispatch ordering (duty 6) | `scripts/coordinator-backlog-rank.mjs` (armed cron `6,21,…`) → `metadata.dispatch_rank`, honored by `scripts/worker-checkin.cjs` `sortByDispatchRank` |
+| Backlog prioritization + dispatch ordering (duty 6) | `scripts/coordinator-backlog-rank.mjs` (armed cron `9,24,39,54 * * * *`, ~15min) → `metadata.dispatch_rank`, honored by `scripts/worker-checkin.cjs` `sortByDispatchRank`. Event-driven refresh (SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C) also fires on SD creation, `needs_coordinator_review` clearance (`lib/coordinator/clear-coordinator-review.js` / `scripts/clear-coordinator-review.mjs`), and predecessor SD completion, via `lib/coordinator/trigger-rank-pass.mjs` — so a freshly-claimable SD is ranked within seconds instead of waiting for the next cron tick |
 | Question→operator escalation (durable row; rendered by the Adam exec email / operator conversation) | `scripts/coordinator-escalate-question.mjs` (writes `operator_question` row) |
 | Teardown ordering / flag | `lib/coordinator/teardown-coordinator.cjs` (`COORD_TEARDOWN_SAFETY_V2`) |
 
