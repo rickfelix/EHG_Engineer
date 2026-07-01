@@ -193,8 +193,11 @@ describe('Branch Resolver - Validation Domain Logic', () => {
     expect(result.exists).toBe(false);
   });
 
-  it('should return exists:true for main branch', () => {
-    const result = validateBranchExists(repoPath, 'main');
+  it('should return exists:true for HEAD', () => {
+    // QF-20260701-104: 'main' is not guaranteed to be a resolvable local/remote
+    // ref on shallow PR checkouts (unit-tier.yml has no fetch-depth:0 workaround).
+    // 'HEAD' always resolves regardless of which ref CI checked out.
+    const result = validateBranchExists(repoPath, 'HEAD');
     expect(result.exists).toBe(true);
     expect(result.commitHash).toBeDefined();
     expect(result.lastCommitDate).toBeDefined();
@@ -216,26 +219,31 @@ describe('Branch Resolver - Discovery Domain Logic', () => {
 });
 
 describe('Branch Resolver - File Operations Domain Logic', () => {
-  it('should read existing file from main branch', () => {
-    const result = readFileFromBranch(repoPath, 'main', 'package.json');
+  // QF-20260701-104 / QF-20260701-485: use 'HEAD' (always resolvable) instead
+  // of the literal 'main' — these tests validate the git-read functions, not
+  // main-specific behavior, and 'main' is not guaranteed local/remote-
+  // resolvable on a shallow PR checkout (unit-tier.yml has no fetch-depth:0
+  // workaround).
+  it('should read existing file from HEAD', () => {
+    const result = readFileFromBranch(repoPath, 'HEAD', 'package.json');
     expect(result.success).toBe(true);
     expect(result.content).toContain('name');
   });
 
   it('should fail for non-existent file', () => {
-    const result = readFileFromBranch(repoPath, 'main', 'non-existent-file-xyz.txt');
+    const result = readFileFromBranch(repoPath, 'HEAD', 'non-existent-file-xyz.txt');
     expect(result.success).toBe(false);
     expect(result.error).toContain('File not found');
   });
 
   it('should list files matching pattern', () => {
-    const files = listFilesFromBranch(repoPath, 'main', '\\.js$');
+    const files = listFilesFromBranch(repoPath, 'HEAD', '\\.js$');
     expect(Array.isArray(files)).toBe(true);
     expect(files.length).toBeGreaterThan(0);
   });
 
   it('should check file existence on branch', () => {
-    expect(fileExistsOnBranch(repoPath, 'main', 'package.json')).toBe(true);
-    expect(fileExistsOnBranch(repoPath, 'main', 'non-existent-xyz.txt')).toBe(false);
+    expect(fileExistsOnBranch(repoPath, 'HEAD', 'package.json')).toBe(true);
+    expect(fileExistsOnBranch(repoPath, 'HEAD', 'non-existent-xyz.txt')).toBe(false);
   });
 });
