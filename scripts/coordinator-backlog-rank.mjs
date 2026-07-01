@@ -141,7 +141,16 @@ const sb = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
-async function main() {
+/**
+ * SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-D (FR-4): the claimable-leaf computation, extracted
+ * out of main() so the eligible-but-unranked-leaf-count gauge (scripts/gauge-unranked-claimable-leaves.mjs)
+ * reuses the SAME claimable set the ranker itself acts on — never a second re-derivation that could drift
+ * from what the ranker (and therefore worker-checkin) actually considers claimable. main() below is
+ * byte-identical in behavior; it now calls this function instead of inlining the fetch+filter.
+ * @param {object} sb - supabase service-role client
+ * @returns {Promise<{ error?: object, sds: object[], byKey: Map, depStatus: object, claimable: object[] }>}
+ */
+export async function computeClaimableLeaves(sb) {
   const { data: sds, error } = await sb.from('strategic_directives_v2')
     // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + title, description to classify bare-shell stubs.
     // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: + current_phase for the in-flight (started) guard.
@@ -149,7 +158,7 @@ async function main() {
     // whose parent has not yet passed LEAD (else the field is undefined → the gate silently no-ops).
     .select('sd_key, title, description, status, sd_type, priority, created_at, current_phase, claiming_session_id, dependencies, metadata, parent_sd_id')
     .not('status', 'in', '("completed","cancelled","deferred")');
-  if (error) { console.error('[BACKLOG-RANK] load failed:', error.message); return; }
+  if (error) { console.error('[BACKLOG-RANK] load failed:', error.message); return { error, sds: [], byKey: new Map(), depStatus: {}, claimable: [] }; }
 
   // ── dependency graph: edges dep -> dependents (over non-terminal set + completed deps resolved) ──
   const byKey = new Map((sds || []).map(d => [d.sd_key, d]));
@@ -159,26 +168,6 @@ async function main() {
   if (depKeys.size) {
     const { data: deps } = await sb.from('strategic_directives_v2').select('sd_key,status').in('sd_key', Array.from(depKeys));
     (deps || []).forEach(d => { depStatus[d.sd_key] = d.status; });
-  }
-  // dependents[dep] = [sd_keys that list dep and are not terminal]
-  const dependents = new Map();
-  for (const d of (sds || [])) {
-    for (const k of blockerKeysFor(d)) {
-      if (!dependents.has(k)) dependents.set(k, []);
-      dependents.get(k).push(d.sd_key);
-    }
-  }
-  // unlock score: transitive count of non-terminal SDs downstream of key (DFS, cycle-safe)
-  function unlockScore(key) {
-    const seen = new Set();
-    const stack = [...(dependents.get(key) || [])];
-    while (stack.length) {
-      const k = stack.pop();
-      if (seen.has(k) || k === key) continue;
-      seen.add(k);
-      stack.push(...(dependents.get(k) || []));
-    }
-    return seen.size;
   }
 
   // ── claimable leaves ──
@@ -244,6 +233,33 @@ async function main() {
   if (awaitingConvergenceSkips) console.log(`[BACKLOG-RANK] ${awaitingConvergenceSkips} SD(s) awaiting co-author convergence (excluded from claimable depth)`);
   if (humanActionSkips) console.log(`[BACKLOG-RANK] ${humanActionSkips} SD(s) requiring human action excluded from claimable depth (not worker-claimable)`);
   if (ineligibleSkips) console.log(`[BACKLOG-RANK] ${ineligibleSkips} SD(s) dispatch-ineligible (orchestrator-parent / deferred / terminal) excluded from claimable depth`);
+  return { sds, byKey, depStatus, claimable };
+}
+
+async function main() {
+  const { error, sds, byKey, depStatus, claimable } = await computeClaimableLeaves(sb);
+  if (error) return;
+  // dependents[dep] = [sd_keys that list dep and are not terminal]
+  const dependents = new Map();
+  for (const d of (sds || [])) {
+    for (const k of blockerKeysFor(d)) {
+      if (!dependents.has(k)) dependents.set(k, []);
+      dependents.get(k).push(d.sd_key);
+    }
+  }
+  // unlock score: transitive count of non-terminal SDs downstream of key (DFS, cycle-safe)
+  function unlockScore(key) {
+    const seen = new Set();
+    const stack = [...(dependents.get(key) || [])];
+    while (stack.length) {
+      const k = stack.pop();
+      if (seen.has(k) || k === key) continue;
+      seen.add(k);
+      stack.push(...(dependents.get(k) || []));
+    }
+    return seen.size;
+  }
+
   // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: bare-shell stubs (empty/title-only description)
   // cannot pass LEAD-TO-PLAN; log them so the demote-to-last below is auditable. The sort
   // below (bareShellLastCompare as the dominant key) is what actually places them last.

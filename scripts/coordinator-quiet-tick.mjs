@@ -62,6 +62,11 @@ export const COMPOSED_CORES = [
   // wakes and self-claims — skipping it here left claimable-but-unranked SDs stuck whenever this
   // tick's STANDARD_LOOPS sibling cron was also unarmed (coordinator teardown-discipline gap).
   { key: 'backlog-rank', script: 'coordinator-backlog-rank.mjs', args: ['scripts/coordinator-backlog-rank.mjs'], quiescentSkip: false },
+  // NOT quiescentSkip (SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-D): observability for the
+  // belt-and-suspenders above — cheap (reuses backlog-rank's own claimable computation), and most
+  // valuable exactly when the fleet is quiet (a parked fleet is when rank-on-transition gaps and
+  // periodic-cron lag are most likely to have gone unnoticed).
+  { key: 'unranked-gauge', script: 'gauge-unranked-claimable-leaves.mjs', args: ['scripts/gauge-unranked-claimable-leaves.mjs'], quiescentSkip: false },
   { key: 'audit', script: 'coordinator-audit.mjs', args: ['scripts/coordinator-audit.mjs'], quiescentSkip: true },
 ];
 
