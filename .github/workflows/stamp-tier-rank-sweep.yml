@@ -1,0 +1,51 @@
+# SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-D (FR-3)
+#
+# Periodic safety-net sweep that stamps metadata.min_tier_rank on any
+# strategic_directives_v2 rows that were created WITHOUT it (an unstamped SD is
+# treated as above-rung by the tier-idle predicate -> silently unclaimable, the
+# 6cf5c558 starvation class). FR-2 stamps at creation on the known paths; this
+# sweep is the backstop for any creation path that still leaks an unstamped SD.
+#
+# Complements the at-creation stamps in scripts/leo-create-sd.js (createSD FR-3)
+# and lib/eva/create-orchestrator-from-plan.js (FR-2). The stamper is gap-fill /
+# idempotent, so this never downgrades an explicit stamp.
+
+name: Stamp Tier-Rank Sweep
+
+on:
+  schedule:
+    # Every 6 hours — a backstop, not the primary path (creation stamps that).
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stamp-tier-rank-sweep
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install minimal deps
+        # Matches the canonical peer-workflow pattern (orphan-qf-reaper.yml):
+        # --ignore-scripts avoids the husky prepare lifecycle failing in CI.
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+
+      - name: Stamp all unstamped SDs
+        run: npm run stamp:tier-rank -- --all
