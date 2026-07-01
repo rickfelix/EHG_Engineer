@@ -20,6 +20,8 @@ function makeSb(resolver) {
       eq(col, val) { ctx.filters.push(['eq', col, val]); return b; },
       gte(col, val) { ctx.filters.push(['gte', col, val]); return b; },
       in(col, val) { ctx.filters.push(['in', col, val]); return b; },
+      order(col, opts) { ctx.filters.push(['order', col, opts]); return b; },
+      limit(n) { ctx.filters.push(['limit', n]); return b; },
       then(onF, onR) {
         let result;
         try { result = resolver(ctx); } catch (e) { return Promise.resolve().then(() => { throw e; }).then(onF, onR); }
