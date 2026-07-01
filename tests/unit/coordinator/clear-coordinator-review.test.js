@@ -35,7 +35,7 @@ describe('SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: clearCoordinatorRevi
 
     expect(result).toEqual({ cleared: true, sdKey: 'SD-TEST-001' });
     expect(client.queries).toHaveLength(1);
-    expect(client.queries[0].sql).toMatch(/metadata\s*\|\|/);
+    expect(client.queries[0].sql).toMatch(/\|\|/);
     expect(client.queries[0].sql).not.toMatch(/SELECT/i); // no read-then-write round trip
     expect(client.queries[0].params).toEqual(['SD-TEST-001']);
     expect(client.end).toHaveBeenCalledOnce();
@@ -92,7 +92,12 @@ describe('SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: clearCoordinatorRevi
 describe('SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: buildClearReviewQuery', () => {
   it('is a pure function returning the exact atomic-merge SQL/params', () => {
     const { sql, params } = buildClearReviewQuery('SD-ABC-001');
-    expect(sql).toBe("UPDATE strategic_directives_v2 SET metadata = metadata || '{\"needs_coordinator_review\": false}'::jsonb WHERE sd_key = $1");
+    expect(sql).toBe("UPDATE strategic_directives_v2 SET metadata = COALESCE(metadata, '{}'::jsonb) || '{\"needs_coordinator_review\": false}'::jsonb WHERE sd_key = $1");
     expect(params).toEqual(['SD-ABC-001']);
+  });
+
+  it('guards against NULL metadata via COALESCE (Postgres NULL || jsonb = NULL, verified live in adversarial review)', () => {
+    const { sql } = buildClearReviewQuery('SD-ABC-001');
+    expect(sql).toMatch(/COALESCE\(metadata,\s*'\{\}'::jsonb\)\s*\|\|/);
   });
 });

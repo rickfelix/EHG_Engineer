@@ -21,10 +21,20 @@ describe('SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: buildRankPatch/build
 
   it('buildRankMergeQuery uses a JSONB || merge, not a full-column overwrite', () => {
     const { sql, params } = buildRankMergeQuery({ dispatch_rank: 1, dispatch_rank_at: 'now', dispatch_rank_by: 'x' }, 'SD-TEST-001');
-    expect(sql).toMatch(/metadata\s*\|\|\s*\$1::jsonb/);
+    expect(sql).toMatch(/\|\|\s*\$1::jsonb/);
     expect(sql).not.toMatch(/SET metadata = \$1/); // guards against regressing to a full-blob SET
     expect(params[0]).toBe(JSON.stringify({ dispatch_rank: 1, dispatch_rank_at: 'now', dispatch_rank_by: 'x' }));
     expect(params[1]).toBe('SD-TEST-001');
+  });
+
+  // Adversarial review (ship gate): NULL::jsonb || '{...}'::jsonb evaluates to NULL in real
+  // Postgres, verified live — an unguarded merge on a NULL-metadata row would silently WIPE
+  // the whole blob while reporting success. This asserts the SQL TEXT carries the COALESCE
+  // guard; a plain-JS spread simulation (as used below for the disjoint-key proof) would NOT
+  // have caught this, since `{...null, ...patch}` silently no-ops instead of nulling out.
+  it('buildRankMergeQuery guards against NULL metadata via COALESCE (Postgres NULL || jsonb = NULL)', () => {
+    const { sql } = buildRankMergeQuery({ dispatch_rank: 1, dispatch_rank_at: 'now', dispatch_rank_by: 'x' }, 'SD-TEST-001');
+    expect(sql).toMatch(/COALESCE\(metadata,\s*'\{\}'::jsonb\)\s*\|\|/);
   });
 });
 
@@ -59,7 +69,27 @@ describe('SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: TS-3 concurrency-saf
 
   it('buildClearReviewQuery uses the same `||`-merge shape (no full-blob overwrite)', () => {
     const { sql, params } = buildClearReviewQuery('SD-TEST-002');
-    expect(sql).toMatch(/metadata\s*\|\|\s*'\{"needs_coordinator_review":\s*false\}'::jsonb/);
+    expect(sql).toMatch(/\|\|\s*'\{"needs_coordinator_review":\s*false\}'::jsonb/);
     expect(params).toEqual(['SD-TEST-002']);
+  });
+
+  it('buildClearReviewQuery also guards against NULL metadata via COALESCE', () => {
+    const { sql } = buildClearReviewQuery('SD-TEST-002');
+    expect(sql).toMatch(/COALESCE\(metadata,\s*'\{\}'::jsonb\)\s*\|\|/);
+  });
+
+  // Adversarial review (ship gate): documents exactly why the "applying both patches via
+  // JSONB || semantics" test above cannot substitute for a NULL-safety check. JS object
+  // spread on a null base silently no-ops (the spread is just skipped) — Postgres
+  // `NULL::jsonb || '{...}'::jsonb` instead evaluates the WHOLE expression to NULL, wiping
+  // the row. The two are NOT equivalent, which is why NULL-safety is asserted against the
+  // SQL TEXT (COALESCE) above rather than via a JS-level merge simulation.
+  it('documents the JS-spread-vs-Postgres-NULL semantics gap that motivated the COALESCE fix', () => {
+    const patch = { needs_coordinator_review: false };
+    const jsSimulatedResult = { ...null, ...patch }; // JS: silently ignores the null base
+    expect(jsSimulatedResult).toEqual(patch); // looks "safe" in JS...
+    // ...but real Postgres `NULL::jsonb || '{"needs_coordinator_review":false}'::jsonb` is NULL,
+    // not `{"needs_coordinator_review":false}` — a JS-only proof would have missed this class
+    // of bug entirely, which is exactly what the adversarial review flagged.
   });
 });

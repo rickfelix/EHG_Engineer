@@ -130,8 +130,12 @@ export function buildRankPatch(rank, nowIso, sessionId) {
   return { dispatch_rank: rank, dispatch_rank_at: nowIso, dispatch_rank_by: sessionId };
 }
 export function buildRankMergeQuery(rankPatch, sdKey) {
+  // Adversarial review (ship gate): NULL::jsonb || '{...}'::jsonb evaluates to NULL in Postgres —
+  // an unguarded merge on a row whose metadata is ever SQL NULL would silently WIPE the entire
+  // blob while still reporting success. metadata is nullable (default '{}'::jsonb); COALESCE
+  // makes the merge safe regardless of the column's current value.
   return {
-    sql: 'UPDATE strategic_directives_v2 SET metadata = metadata || $1::jsonb WHERE sd_key = $2',
+    sql: 'UPDATE strategic_directives_v2 SET metadata = COALESCE(metadata, \'{}\'::jsonb) || $1::jsonb WHERE sd_key = $2',
     params: [JSON.stringify(rankPatch), sdKey],
   };
 }
@@ -449,15 +453,16 @@ async function main() {
   // metadata key on the same row during that window was silently clobbered by this pass's stale
   // snapshot (database-agent finding, PLAN phase). A `metadata || '{...}'::jsonb` merge touches
   // only the 3 dispatch_rank* keys, so it can no longer clobber a concurrent unrelated write.
-  // Falls back to the legacy full-blob write if the pg Client cannot connect — never lets a
-  // DB-connectivity issue hard-fail the whole ranking pass.
+  // If the pg Client cannot connect, per-row writes are SKIPPED below (not degraded to the
+  // legacy full-blob write — that would silently reintroduce the exact race this closes;
+  // adversarial review, ship gate) — never lets a DB-connectivity issue hard-fail the whole pass.
   let pgClient = null;
   if (!DRY) {
     try {
       const { createDatabaseClient } = await import('./lib/supabase-connection.js');
       pgClient = await createDatabaseClient('engineer', { verify: false });
     } catch (connErr) {
-      console.error(`[BACKLOG-RANK] ! atomic-merge DB client unavailable, falling back to full-blob writes: ${connErr.message}`);
+      console.error(`[BACKLOG-RANK] ! atomic-merge DB client unavailable, writes will be skipped this pass: ${connErr.message}`);
     }
   }
 
@@ -474,10 +479,13 @@ async function main() {
         await pgClient.query(sql, params);
         writes++;
       } else {
-        const meta = { ...(d.metadata || {}), ...rankPatch };
-        const { error: e } = await sb.from('strategic_directives_v2').update({ metadata: meta }).eq('sd_key', d.sd_key);
-        if (e) console.error(`  ! write failed for ${d.sd_key}: ${e.message}`);
-        else writes++;
+        // Adversarial review (ship gate): the previous fallback here was the original
+        // read-spread-write full-blob update — it silently reintroduced the exact
+        // stale-snapshot race this SD closes (a concurrent clearCoordinatorReview() write
+        // landing in this window would be clobbered back). SKIPPING is the safe fail-soft
+        // choice: this row simply misses a rank refresh this pass and is picked up by the
+        // next cron tick or event trigger, rather than corrupting concurrent state.
+        console.error(`  ! skipped ${d.sd_key}: no atomic-merge DB client available (would reintroduce a stale-write race)`);
       }
     } catch (e) { console.error(`  ! ${d.sd_key}: ${e.message}`); } // fail-soft per item
   }
