@@ -1,8 +1,10 @@
 # ADKAR change-adoption framework
 
 **Status**: Framework definition (this doc) + shape module shipped by
-`SD-LEO-INFRA-ADKAR-CHANGE-ADOPTION-FRAMEWORK-001-A`. The completion gate that
-enforces this shape is owned by sibling child `-B`; pilot-tagging a real SD is owned by
+`SD-LEO-INFRA-ADKAR-CHANGE-ADOPTION-FRAMEWORK-001-A`. The completion gate that enforces
+this shape (`scripts/modules/handoff/executors/lead-final-approval/gates/adkar-adoption-gate.js`,
+feature-flagged via `ENFORCE_ADKAR_GATE`, default off/warn-only) shipped by sibling child
+`-B`. Pilot-tagging a real SD (`docs/protocol/adkar-pilot-worked-example.md`) shipped by
 sibling child `-C`. This document does not itself gate anything.
 
 ## Why
@@ -73,10 +75,11 @@ as an instance of that pattern).
 supposed to consume the change actually consumes it, verified by exercising the real
 path (not a mock of the seam).
 
-**Existing mechanism reused**: none dedicated yet — this is the stage sibling child
-`-B`'s completion gate enforces directly, and the one stage most likely to require real
-evidence rather than a waiver, since "wired in but unverified" is exactly the drift this
-framework exists to catch.
+**Existing mechanism reused**: `scripts/modules/handoff/executors/lead-final-approval/gates/adkar-adoption-gate.js`
+(sibling child `-B`) is the mechanism — it enforces this stage directly at
+LEAD-FINAL-APPROVAL, and is the one stage most likely to require real evidence rather
+than a waiver, since "wired in but unverified" is exactly the drift this framework exists
+to catch.
 
 ### Reinforcement — the change sustains and regression-to-non-use is caught
 
@@ -96,14 +99,16 @@ standalone checker.
   `false`/unset and the checklist is never evaluated).
 - Heavy change-ceremony or human-org-change tooling — this is a lightweight,
   agent-context checklist, not a Prosci human-change program.
-- The completion gate implementation (sibling child `-B`) and pilot tagging (sibling
-  child `-C`).
 
 ## Related
 
 - `lib/governance/adkar-checklist.js` — the shape module (`ADKAR_STAGES`,
   `validateAdkarChecklist`, `isValidAdkarEntry`).
-- `scripts/modules/handoff/executors/lead-final-approval/gates/learning-or-bypass-resolved-gate.js`
-  — the structural template the future ADKAR completion gate mirrors
-  (evidence-or-resolved-bypass, feature-flag-gated rollout, central `gates.js`
+- `scripts/modules/handoff/executors/lead-final-approval/gates/adkar-adoption-gate.js`
+  — the LEAD-FINAL-APPROVAL completion gate (sibling child `-B`), feature-flagged via
+  `ENFORCE_ADKAR_GATE` (default off/warn-only), mirroring the structural template of
+  `learning-or-bypass-resolved-gate.js` (evidence-or-resolved-bypass, central `gates.js`
   registration).
+- `docs/protocol/adkar-pilot-worked-example.md` — the first `requires_adoption`-tagged
+  pilot mapping (sibling child `-C`), applied to
+  `SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DISCIPLINE-001`.
