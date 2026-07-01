@@ -45,6 +45,10 @@ import { createPhantomTestAuditGate } from './gates/phantom-test-audit-gate.js';
 export { createPhantomTestAuditGate };
 import { createLearningOrBypassResolvedGate } from './gates/learning-or-bypass-resolved-gate.js';
 export { createLearningOrBypassResolvedGate };
+// SD-LEO-INFRA-ADKAR-CHANGE-ADOPTION-FRAMEWORK-001-B: block completion of a
+// metadata.requires_adoption=true SD until all 5 ADKAR stages are evidenced or waived.
+import { createAdkarAdoptionGate } from './gates/adkar-adoption-gate.js';
+export { createAdkarAdoptionGate };
 // SD-LEO-INFRA-COMPLETION-GATE-DEFERRED-HOME-001: block completion when declared deferred
 // follow-up work has no live home SD (stop deferred scope from evaporating).
 import { createDeferredFollowupsGate } from './gates/deferred-followups-gate.js';
@@ -1223,6 +1227,12 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // set ENFORCE_LEARNING_GATE=true to block.
   gates.push(createLearningOrBypassResolvedGate(supabase));
 
+  // ADKAR Adoption Gate — completion safeguard (SD-LEO-INFRA-ADKAR-CHANGE-ADOPTION-FRAMEWORK-001-B)
+  // No-op for any SD without metadata.requires_adoption=true. Blocks/warns (per
+  // ENFORCE_ADKAR_GATE) on missing ADKAR stage evidence-or-waiver for SDs that set it.
+  // Default warn-only; set ENFORCE_ADKAR_GATE=true to block.
+  gates.push(createAdkarAdoptionGate(supabase));
+
   // Deferred-Followups Home — SD-LEO-INFRA-COMPLETION-GATE-DEFERRED-HOME-001
   // Blocks completion when metadata.deferred_followups[] references a follow-up SD that does
   // not exist (or is cancelled). Heuristic-warns on unstructured deferral phrases. Blocking by
@@ -1263,6 +1273,7 @@ export default {
   createWireCheckGate,
   createPhantomTestAuditGate,
   createLearningOrBypassResolvedGate,
+  createAdkarAdoptionGate,
   createDeferredFollowupsGate,
   createCrossSdFileOverlapTemporalShipGate,
   createActivationInvariantGate,
