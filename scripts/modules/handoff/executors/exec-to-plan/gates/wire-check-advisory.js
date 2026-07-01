@@ -25,7 +25,7 @@
  * Phase: EXEC-TO-PLAN (advisory)
  */
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { buildCallGraph } from '../../../../../../lib/static-analysis/call-graph-builder.js';
@@ -94,8 +94,12 @@ export function createWireCheckAdvisoryGate(_supabase) {
       const mainRef = refResult.ref;
       let newFiles = [];
       try {
-        const diff = execSync(
-          `git diff --name-only --diff-filter=A ${mainRef}...HEAD -- "*.js" "*.mjs" "*.cjs"`,
+        // harness_backlog 7967256e: execFileSync (argv array, no shell) instead of
+        // execSync with a template-string command -- defense-in-depth even though
+        // mainRef is always one of getMainRef()'s fixed literal refs today.
+        const diff = execFileSync(
+          'git',
+          ['diff', '--name-only', '--diff-filter=A', `${mainRef}...HEAD`, '--', '*.js', '*.mjs', '*.cjs'],
           { encoding: 'utf8', cwd: rootDir, timeout: 10000 }
         );
         newFiles = diff
