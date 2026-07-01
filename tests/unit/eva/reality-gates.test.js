@@ -312,27 +312,51 @@ describe('RealityGates', () => {
     });
   });
 
-  describe('Realtime channel teardown safety (SD-FDBK-FIX-EVA-STAGE-GOVERNANCE-001)', () => {
-    function makeMockDbWithChannelSpy() {
+  describe('Realtime channel teardown safety (QF-20260701-709)', () => {
+    // QF-20260701-709: SD-FDBK-FIX-EVA-STAGE-GOVERNANCE-001's original fix (calling
+    // supabase.removeChannel() instead of channel.unsubscribe()) was INEFFECTIVE --
+    // removeChannel() also calls unsubscribe() internally, which under CI's
+    // no-reachable-Realtime-server condition synchronously re-fires this same status
+    // callback via phoenix's Channel.leave(), reproducing the identical
+    // RangeError: Maximum call stack size exceeded. The correct fix drops the local
+    // reference only and calls NEITHER unsubscribe() NOR removeChannel() from inside
+    // the callback. These tests use a mock whose unsubscribe()/removeChannel() WOULD
+    // recursively re-invoke the callback (reproducing the real vendored-client
+    // behavior) and assert neither is ever called -- proving the recursion never gets
+    // a chance to start.
+    function makeMockDbWithRecursiveTeardown() {
       let capturedStatusCallback = null;
-      const unsubscribeSpy = vi.fn();
-      const removeChannelSpy = vi.fn();
+      let unsubscribeCallCount = 0;
+      let removeChannelCallCount = 0;
       const channelMock = {
         on: function () { return this; },
         subscribe: function (cb) { capturedStatusCallback = cb; return this; },
-        unsubscribe: unsubscribeSpy,
+        unsubscribe: function () {
+          unsubscribeCallCount++;
+          if (unsubscribeCallCount > 100) throw new Error('unsubscribe recursion guard tripped -- test itself would overflow');
+          capturedStatusCallback?.('CLOSED'); // simulates phoenix's synchronous Channel.leave() re-firing CLOSED
+        },
       };
       const sb = {
         from: vi.fn(() => ({ select: () => Promise.resolve({ data: [], error: null }) })),
         channel: () => channelMock,
-        removeChannel: removeChannelSpy,
+        removeChannel: function () {
+          removeChannelCallCount++;
+          if (removeChannelCallCount > 100) throw new Error('removeChannel recursion guard tripped -- test itself would overflow');
+          channelMock.unsubscribe(); // real RealtimeClient.removeChannel() calls channel.unsubscribe() internally
+        },
       };
-      return { sb, unsubscribeSpy, removeChannelSpy, getStatusCallback: () => capturedStatusCallback, channelMock };
+      return {
+        sb,
+        getStatusCallback: () => capturedStatusCallback,
+        getUnsubscribeCallCount: () => unsubscribeCallCount,
+        getRemoveChannelCallCount: () => removeChannelCallCount,
+      };
     }
 
-    it('CHANNEL_ERROR/CLOSED/TIMED_OUT status tears down via supabase.removeChannel(), never via channel.unsubscribe()', async () => {
+    it('CHANNEL_ERROR/CLOSED/TIMED_OUT status drops the reference WITHOUT calling unsubscribe() or removeChannel() (both would recurse)', async () => {
       _resetBoundaryCacheForTest();
-      const { sb, unsubscribeSpy, removeChannelSpy, getStatusCallback, channelMock } = makeMockDbWithChannelSpy();
+      const { sb, getStatusCallback, getUnsubscribeCallCount, getRemoveChannelCallCount } = makeMockDbWithRecursiveTeardown();
 
       // Unconfigured transition (999->1000) -- evaluateRealityGate returns NOT_APPLICABLE
       // immediately after _loadBoundaryFromDB runs, isolating the channel-teardown path
@@ -348,18 +372,17 @@ describe('RealityGates', () => {
       const statusCallback = getStatusCallback();
       expect(statusCallback).toBeTypeOf('function');
 
-      statusCallback('CHANNEL_ERROR');
+      expect(() => statusCallback('CHANNEL_ERROR')).not.toThrow();
 
-      expect(removeChannelSpy).toHaveBeenCalledTimes(1);
-      expect(removeChannelSpy).toHaveBeenCalledWith(channelMock);
-      expect(unsubscribeSpy).not.toHaveBeenCalled();
+      expect(getUnsubscribeCallCount()).toBe(0);
+      expect(getRemoveChannelCallCount()).toBe(0);
 
       _resetBoundaryCacheForTest();
     });
 
-    it('a second (re-entrant) status callback firing after teardown does not re-invoke removeChannel or throw', async () => {
+    it('a genuinely re-entrant CLOSED re-fire (simulating phoenix Channel.leave()) does not throw and calls no teardown method', async () => {
       _resetBoundaryCacheForTest();
-      const { sb, removeChannelSpy, getStatusCallback } = makeMockDbWithChannelSpy();
+      const { sb, getStatusCallback, getUnsubscribeCallCount, getRemoveChannelCallCount } = makeMockDbWithRecursiveTeardown();
 
       await evaluateRealityGate({
         ventureId: 'v1',
@@ -375,30 +398,15 @@ describe('RealityGates', () => {
         statusCallback('CLOSED');
       }).not.toThrow();
 
-      // Reference is nulled after the first teardown, so the second firing is a safe no-op.
-      expect(removeChannelSpy).toHaveBeenCalledTimes(1);
+      expect(getUnsubscribeCallCount()).toBe(0);
+      expect(getRemoveChannelCallCount()).toBe(0);
 
       _resetBoundaryCacheForTest();
     });
 
-    it('a channel whose unsubscribe() recursively re-invokes its own status callback would previously overflow the stack -- proves removeChannel() is used instead', async () => {
+    it('a channel whose unsubscribe()/removeChannel() recursively re-invoke the status callback would overflow the stack if either were called -- proves neither is', async () => {
       _resetBoundaryCacheForTest();
-      let capturedStatusCallback = null;
-      let unsubscribeCallCount = 0;
-      const recursiveChannelMock = {
-        on: function () { return this; },
-        subscribe: function (cb) { capturedStatusCallback = cb; return this; },
-        unsubscribe: function () {
-          unsubscribeCallCount++;
-          if (unsubscribeCallCount > 100) throw new Error('unsubscribe recursion guard tripped -- test itself would overflow');
-          capturedStatusCallback?.('CLOSED'); // simulates phoenix's synchronous re-entrant trigger(close)
-        },
-      };
-      const sb = {
-        from: vi.fn(() => ({ select: () => Promise.resolve({ data: [], error: null }) })),
-        channel: () => recursiveChannelMock,
-        removeChannel: () => { /* real removeChannel is terminal -- does not re-trigger the callback */ },
-      };
+      const { sb, getStatusCallback, getUnsubscribeCallCount, getRemoveChannelCallCount } = makeMockDbWithRecursiveTeardown();
 
       await evaluateRealityGate({
         ventureId: 'v1',
@@ -408,8 +416,10 @@ describe('RealityGates', () => {
         logger: silentLogger,
       });
 
-      expect(() => capturedStatusCallback('TIMED_OUT')).not.toThrow();
-      expect(unsubscribeCallCount).toBe(0);
+      const statusCallback = getStatusCallback();
+      expect(() => statusCallback('TIMED_OUT')).not.toThrow();
+      expect(getUnsubscribeCallCount()).toBe(0);
+      expect(getRemoveChannelCallCount()).toBe(0);
 
       _resetBoundaryCacheForTest();
     });

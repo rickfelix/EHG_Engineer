@@ -223,80 +223,93 @@ describe('stage-governance — cache behavior', () => {
   });
 });
 
-describe('stage-governance — Realtime channel teardown safety (SD-FDBK-FIX-EVA-STAGE-GOVERNANCE-001)', () => {
-  function makeMockSupabaseWithChannelSpy(rows = STAGE_FIXTURE) {
-    let capturedStatusCallback = null;
-    const unsubscribeSpy = vi.fn();
-    const removeChannelSpy = vi.fn();
-    const channelMock = {
-      on: function () { return this; },
-      subscribe: function (cb) { capturedStatusCallback = cb; return this; },
-      unsubscribe: unsubscribeSpy,
-    };
-    const sb = {
-      from: () => ({ select: () => ({ order: () => Promise.resolve({ data: rows, error: null }) }) }),
-      channel: () => channelMock,
-      removeChannel: removeChannelSpy,
-    };
-    return { sb, unsubscribeSpy, removeChannelSpy, getStatusCallback: () => capturedStatusCallback, channelMock };
-  }
-
-  it('CHANNEL_ERROR/CLOSED/TIMED_OUT status tears down via supabase.removeChannel(), never via channel.unsubscribe()', async () => {
-    const mod = await import('../../../lib/eva/stage-governance.js');
-    mod._resetCacheForTest();
-    const { sb, unsubscribeSpy, removeChannelSpy, getStatusCallback, channelMock } = makeMockSupabaseWithChannelSpy();
-
-    await mod.getStageGovernance(sb);
-    const statusCallback = getStatusCallback();
-    expect(statusCallback).toBeTypeOf('function');
-
-    statusCallback('CHANNEL_ERROR');
-
-    expect(removeChannelSpy).toHaveBeenCalledTimes(1);
-    expect(removeChannelSpy).toHaveBeenCalledWith(channelMock);
-    expect(unsubscribeSpy).not.toHaveBeenCalled();
-  });
-
-  it('a second (re-entrant) status callback firing after teardown does not re-invoke removeChannel or throw', async () => {
-    const mod = await import('../../../lib/eva/stage-governance.js');
-    mod._resetCacheForTest();
-    const { sb, removeChannelSpy, getStatusCallback } = makeMockSupabaseWithChannelSpy();
-
-    await mod.getStageGovernance(sb);
-    const statusCallback = getStatusCallback();
-
-    expect(() => {
-      statusCallback('CLOSED');
-      statusCallback('CLOSED');
-    }).not.toThrow();
-
-    // Reference is nulled after the first teardown, so the second firing is a safe no-op.
-    expect(removeChannelSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it('a channel whose unsubscribe() recursively re-invokes its own status callback would previously overflow the stack -- proves removeChannel() is used instead', async () => {
-    const mod = await import('../../../lib/eva/stage-governance.js');
-    mod._resetCacheForTest();
-
+describe('stage-governance — Realtime channel teardown safety (QF-20260701-709)', () => {
+  // QF-20260701-709: SD-FDBK-FIX-EVA-STAGE-GOVERNANCE-001's original fix (calling
+  // supabase.removeChannel() instead of channel.unsubscribe()) was INEFFECTIVE --
+  // removeChannel() also calls unsubscribe() internally, which under CI's
+  // no-reachable-Realtime-server condition synchronously re-fires this same status
+  // callback via phoenix's Channel.leave(), reproducing the identical
+  // RangeError: Maximum call stack size exceeded. The correct fix drops the local
+  // reference only and calls NEITHER unsubscribe() NOR removeChannel() from inside
+  // the callback. These tests use a mock whose unsubscribe()/removeChannel() WOULD
+  // recursively re-invoke the callback (reproducing the real vendored-client
+  // behavior) and assert neither is ever called -- proving the recursion never gets
+  // a chance to start.
+  function makeMockSupabaseWithRecursiveTeardown(rows = STAGE_FIXTURE) {
     let capturedStatusCallback = null;
     let unsubscribeCallCount = 0;
-    const recursiveChannelMock = {
+    let removeChannelCallCount = 0;
+    const channelMock = {
       on: function () { return this; },
       subscribe: function (cb) { capturedStatusCallback = cb; return this; },
       unsubscribe: function () {
         unsubscribeCallCount++;
         if (unsubscribeCallCount > 100) throw new Error('unsubscribe recursion guard tripped -- test itself would overflow');
-        capturedStatusCallback?.('CLOSED'); // simulates phoenix's synchronous re-entrant trigger(close)
+        capturedStatusCallback?.('CLOSED'); // simulates phoenix's synchronous Channel.leave() re-firing CLOSED
       },
     };
     const sb = {
-      from: () => ({ select: () => ({ order: () => Promise.resolve({ data: STAGE_FIXTURE, error: null }) }) }),
-      channel: () => recursiveChannelMock,
-      removeChannel: () => { /* real removeChannel is terminal -- does not re-trigger the callback */ },
+      from: () => ({ select: () => ({ order: () => Promise.resolve({ data: rows, error: null }) }) }),
+      channel: () => channelMock,
+      removeChannel: function () {
+        removeChannelCallCount++;
+        if (removeChannelCallCount > 100) throw new Error('removeChannel recursion guard tripped -- test itself would overflow');
+        channelMock.unsubscribe(); // real RealtimeClient.removeChannel() calls channel.unsubscribe() internally
+      },
     };
+    return {
+      sb,
+      getStatusCallback: () => capturedStatusCallback,
+      getUnsubscribeCallCount: () => unsubscribeCallCount,
+      getRemoveChannelCallCount: () => removeChannelCallCount,
+    };
+  }
+
+  it('CHANNEL_ERROR/CLOSED/TIMED_OUT status drops the reference WITHOUT calling unsubscribe() or removeChannel() (both would recurse)', async () => {
+    const mod = await import('../../../lib/eva/stage-governance.js');
+    mod._resetCacheForTest();
+    const { sb, getStatusCallback, getUnsubscribeCallCount, getRemoveChannelCallCount } = makeMockSupabaseWithRecursiveTeardown();
 
     await mod.getStageGovernance(sb);
-    expect(() => capturedStatusCallback('TIMED_OUT')).not.toThrow();
-    expect(unsubscribeCallCount).toBe(0); // fixed code never calls channel.unsubscribe() from the callback
+    const statusCallback = getStatusCallback();
+    expect(statusCallback).toBeTypeOf('function');
+
+    expect(() => statusCallback('CHANNEL_ERROR')).not.toThrow();
+
+    expect(getUnsubscribeCallCount()).toBe(0);
+    expect(getRemoveChannelCallCount()).toBe(0);
+  });
+
+  it('a genuinely re-entrant CLOSED re-fire (simulating phoenix Channel.leave()) does not throw and calls no teardown method', async () => {
+    const mod = await import('../../../lib/eva/stage-governance.js');
+    mod._resetCacheForTest();
+    const { sb, getStatusCallback, getUnsubscribeCallCount, getRemoveChannelCallCount } = makeMockSupabaseWithRecursiveTeardown();
+
+    await mod.getStageGovernance(sb);
+    const statusCallback = getStatusCallback();
+
+    // Simulate the real recursion trigger directly: the callback fires CLOSED,
+    // and (as phoenix would) immediately fires CLOSED again before the first
+    // invocation returns.
+    expect(() => {
+      statusCallback('CLOSED');
+      statusCallback('CLOSED');
+    }).not.toThrow();
+
+    expect(getUnsubscribeCallCount()).toBe(0);
+    expect(getRemoveChannelCallCount()).toBe(0);
+  });
+
+  it('a channel whose unsubscribe()/removeChannel() recursively re-invoke the status callback would overflow the stack if either were called -- proves neither is', async () => {
+    const mod = await import('../../../lib/eva/stage-governance.js');
+    mod._resetCacheForTest();
+    const { sb, getStatusCallback, getUnsubscribeCallCount, getRemoveChannelCallCount } = makeMockSupabaseWithRecursiveTeardown();
+
+    await mod.getStageGovernance(sb);
+    const statusCallback = getStatusCallback();
+
+    expect(() => statusCallback('TIMED_OUT')).not.toThrow();
+    expect(getUnsubscribeCallCount()).toBe(0);
+    expect(getRemoveChannelCallCount()).toBe(0);
   });
 });
