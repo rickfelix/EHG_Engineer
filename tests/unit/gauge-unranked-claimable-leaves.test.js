@@ -37,6 +37,16 @@ describe('isFreshlyRanked', () => {
     expect(isFreshlyRanked(sd, NOW)).toBe(false);
   });
 
+  it('is NOT fresh at exactly the TTL boundary (strict <, not <=) — fails toward drift, not silence', () => {
+    const sd = leaf('SD-F', { dispatch_rank: 1, dispatch_rank_at: new Date(NOW - DISPATCH_RANK_TTL_MS).toISOString() });
+    expect(isFreshlyRanked(sd, NOW)).toBe(false);
+  });
+
+  it('an invalid dispatch_rank_at string is treated as NOT fresh (fails toward drift, never masks it)', () => {
+    const sd = leaf('SD-G', { dispatch_rank: 1, dispatch_rank_at: 'not-a-timestamp' });
+    expect(isFreshlyRanked(sd, NOW)).toBe(false);
+  });
+
   it('handles a missing metadata object without throwing', () => {
     expect(isFreshlyRanked({ sd_key: 'SD-E' }, NOW)).toBe(false);
   });
