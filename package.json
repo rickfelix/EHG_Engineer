@@ -389,6 +389,7 @@
     "coordinator:audit": "node scripts/coordinator-audit.mjs",
     "coordinator:charter-audit": "node scripts/coordinator-charter-audit.mjs",
     "coordinator:backlog-rank": "node scripts/coordinator-backlog-rank.mjs",
+    "coordinator:unranked-gauge": "node scripts/gauge-unranked-claimable-leaves.mjs",
     "coordinator:capacity-forecast": "node scripts/coordinator-capacity-forecast.mjs",
     "sd:start": "node scripts/sd-start.js",
     "sd:drain": "node scripts/sd-drain.mjs",
