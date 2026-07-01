@@ -395,7 +395,7 @@ function extractTableName(command) {
 }
 
 /**
- * QF-20260609-547: split a command into per-`.from('table')` segments so column checks are scoped
+ * QF-20260609-547: split a command into per-`.from('table')` segments so column checks are scoped (schema-lint-disable-line: doc comment, not a real table reference)
  * to the NEAREST preceding `.from()`. Previously a compound `node -e` touching two tables attributed
  * every extracted column to ONE table → cross-table false blocks (e.g. user_stories columns blamed
  * on product_requirements_v2). Falls back to extractTableName (rpc / other Supabase patterns) when no
@@ -1184,7 +1184,11 @@ async function main() {
 
       if (signature && attempts >= 2) {
         const bypassed = process.env.EMERGENCY_RCA_BYPASS === 'true';
-        const outcome = attempts >= 3 && !bypassed ? 'block' : 'warn';
+        // SD-LEO-INFRA-RCA-ENFORCEMENT-PROGRESS-STALL-NOT-REPETITION-001: the audit-log outcome
+        // label must match the actual block decision below (shouldHardBlock), else a
+        // progressStalled===false suppression (tool proceeds) gets mis-recorded as outcome='block'.
+        const { shouldHardBlock } = require('../../lib/hooks/auto-signal-threshold.cjs');
+        const outcome = shouldHardBlock({ attempts, bypassed, progressStalled }) ? 'block' : 'warn';
         const auditPromise = auditPermissionDecision(
           _SESSION_ID, TOOL_NAME, 'RCA-TIERED-ENFORCEMENT',
           'Repeated tool invocation without intervening RCA',
@@ -1220,7 +1224,10 @@ async function main() {
           }
         } catch { /* fail-open: auto-signal must never block tool execution */ }
 
-        if (attempts >= 3 && !bypassed) {
+        // SD-LEO-INFRA-RCA-ENFORCEMENT-PROGRESS-STALL-NOT-REPETITION-001: gate the hard block on
+        // PROGRESS-STALL, not bare repetition count (reuses the same shouldHardBlock() verdict
+        // already computed above for the audit-log outcome label, so the two never diverge).
+        if (outcome === 'block') {
           process.stderr.write(
             `\nRCA TIERED ENFORCEMENT (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-129):\n` +
             `  Blocked: ${TOOL_NAME} invoked ${attempts}x on the same target within 10 minutes.\n` +
