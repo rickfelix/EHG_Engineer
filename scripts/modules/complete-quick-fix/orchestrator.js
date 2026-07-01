@@ -20,7 +20,10 @@ import os from 'os';
 
 import { REPO_PATHS, EHG_ROOT } from './constants.js';
 import { runTests, runTypeScriptCheck, displayTestResults } from './test-runner.js';
-import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff, canSkipTestGate, reconcileDeclaredTypeVsFiles, touchesFrontend, getScopedUnitTestFiles, isEmptyDiff, fetchPRMetadata } from './git-operations.js';
+import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff, canSkipTestGate, reconcileDeclaredTypeVsFiles, touchesFrontend, getScopedUnitTestFiles, isEmptyDiff } from './git-operations.js';
+// SD-LEO-INFRA-QF-FALSE-COMPLETION-WITNESS-GAP-001: merge-verification witness so a
+// quick_fixes row cannot reach status=completed while its change is absent from origin/main.
+import { verifyQFMergeWitness } from './merge-witness.js';
 import {
   validateLOC,
   validateTests,
@@ -152,42 +155,36 @@ export async function completeQuickFix(qfId, options = {}) {
     return qf;
   }
 
-  // SD-FDBK-INFRA-RCA-FIRST-HARD-001 (FR-4): early already-MERGED probe.
-  // Only status==='completed'/'escalated' short-circuits above, so a /checkin re-run on a
-  // QF whose PR is ALREADY MERGED (the f32a6df5 residual) would otherwise re-run the entire
-  // pipeline — including the now-bounded but still-wasteful external steps. When a PR id is
-  // resolvable (from --pr-url or the persisted qf.pr_url) ask gh for PR state (bounded by
-  // EXTERNAL_STEP_TIMEOUT_MS via fetchPRMetadata); if MERGED, reconcile the QF to terminal
-  // and return so the re-run is a fast idempotent no-op. gh (not local git) is authoritative
-  // here because after a worktree removal the local refs are gone but PR state survives.
-  // Best-effort: any failure/timeout falls through to the normal (now-bounded) pipeline and
-  // never blocks a genuinely-incomplete QF.
-  const probePrUrl = options.prUrl || qf.pr_url;
-  const probePrNumber = probePrUrl && String(probePrUrl).match(/\/pull\/(\d+)/)?.[1];
-  if (probePrNumber) {
-    try {
-      const meta = fetchPRMetadata(probePrNumber, testDir);
-      if (meta && meta.state === 'MERGED') {
-        console.log(`\n✅ PR #${probePrNumber} is already MERGED — reconciling ${qfId} to completed (idempotent re-run short-circuit).\n`);
-        const mergeSha = meta.mergeCommit?.oid || qf.commit_sha || null;
-        // SD-REFILL-00QQ60BN: stamp the verification columns the completed_requires_verification
-        // CHECK demands so this reconcile no longer fails forever for an un-stamped QF.
-        const reconcileUpdate = buildMergedReconcileUpdate({
-          qf, prUrl: probePrUrl, mergeSha, nowIso: new Date().toISOString()
-        });
-        const { error: reconcileErr } = await supabase
-          .from('quick_fixes')
-          .update(reconcileUpdate)
-          .eq('id', qfId)
-          .neq('status', 'completed');
-        if (reconcileErr) {
-          console.log(`   ⚠️  Could not reconcile QF record (non-fatal): ${reconcileErr.message}`);
-        }
-        return { ...qf, ...reconcileUpdate };
+  // SD-FDBK-INFRA-RCA-FIRST-HARD-001 (FR-4) + SD-LEO-INFRA-QF-FALSE-COMPLETION-WITNESS-GAP-001 (FR-3):
+  // early already-MERGED reconcile probe, now GATED by the merge-verification witness. A /checkin
+  // re-run on a QF whose OWN qf/<QF-ID> branch is merged + on origin/main short-circuits to a fast
+  // idempotent completion. Crucially the witness self-derives the PR from the QF's own branch and
+  // requires headRefName === qf/<QF-ID> — so an arbitrary / most-recent / FOREIGN merged pr_url
+  // (the QF-20260701-989 / #5290 mis-attribution) no longer reconciles the QF to completed. Bounded
+  // (fetchPRMetadata / gh via EXTERNAL_STEP_TIMEOUT_MS) and fail-closed: any failure or an
+  // unverified witness falls through to the normal pipeline and never false-completes.
+  try {
+    const probeWitness = verifyQFMergeWitness({ qfId, prUrl: options.prUrl || qf.pr_url, testDir });
+    if (probeWitness.verified) {
+      console.log(`\n✅ QF own PR ${probeWitness.prUrl} (head ${probeWitness.headBranch}) is MERGED + reachable from origin/main — reconciling ${qfId} to completed (idempotent short-circuit).\n`);
+      const mergeSha = probeWitness.mergeSha || qf.commit_sha || null;
+      // SD-REFILL-00QQ60BN: preserve the verification-column stamping the
+      // completed_requires_verification CHECK demands, now with the SELF-DERIVED pr_url.
+      const reconcileUpdate = buildMergedReconcileUpdate({
+        qf, prUrl: probeWitness.prUrl, mergeSha, nowIso: new Date().toISOString()
+      });
+      const { error: reconcileErr } = await supabase
+        .from('quick_fixes')
+        .update(reconcileUpdate)
+        .eq('id', qfId)
+        .neq('status', 'completed');
+      if (reconcileErr) {
+        console.log(`   ⚠️  Could not reconcile QF record (non-fatal): ${reconcileErr.message}`);
       }
-    } catch (e) {
-      console.log(`   ℹ️  Already-merged probe skipped (will run normal pipeline): ${e.message}`);
+      return { ...qf, ...reconcileUpdate };
     }
+  } catch (e) {
+    console.log(`   ℹ️  Already-merged witness probe skipped (will run normal pipeline): ${e.message}`);
   }
 
   // Auto-detect git info. autoDetectGitInfo NOW throws on PR-metadata failure
@@ -569,6 +566,35 @@ export async function completeQuickFix(qfId, options = {}) {
     }
   }
 
+  // SD-LEO-INFRA-QF-FALSE-COMPLETION-WITNESS-GAP-001 (FR-2): merge THEN verify, BEFORE writing
+  // status=completed. Previously the completed write happened first and mergeToMain ran AFTER —
+  // so under --non-interactive (mergeToMain deliberately skips the direct merge, deferring to
+  // `gh pr merge --auto`/CI) a QF was written completed with its change still OFF origin/main
+  // (the QF-20260701-989 false-completion class). Merge here so the witness can confirm the QF's
+  // OWN qf/<QF-ID> branch actually landed before we mark it done.
+  await mergeToMain(testDir, qf, finalPrUrl, prompt, { forceComplete: options.forceComplete, reason: options.reason, nonInteractive: options.nonInteractive });
+
+  // Merge-verification WITNESS: a quick_fixes row may only reach status=completed when its own
+  // qf/<QF-ID> branch has a MERGED PR reachable from origin/main. Self-derives pr_url from the
+  // QF's own branch (never a foreign/most-recent merged PR — closes the #5290 mis-attribution).
+  // Fail-closed. --force-complete stays the audited escape hatch (records the unverified witness).
+  const mergeWitness = verifyQFMergeWitness({ qfId, prUrl: finalPrUrl, testDir });
+  if (!mergeWitness.verified) {
+    if (!options.forceComplete) {
+      console.error(`\n❌ [QF_MERGE_UNVERIFIED] Refusing to mark ${qfId} completed: ${mergeWitness.reason}`);
+      console.error('   A QF completes only after its own qf/<QF-ID> branch PR is MERGED and on origin/main.');
+      console.error('   This is a DEFERRAL, not a failure: merge the PR (gh pr merge --merge / /ship, or let');
+      console.error('   `gh pr merge --auto` + CI land it), then re-run complete-quick-fix to reconcile.');
+      console.error('   Override (audited): --force-complete --reason "<why>".\n');
+      process.exit(1);
+    }
+    console.log(`\n⚠️  [QF_MERGE_UNVERIFIED] ${mergeWitness.reason} — completing anyway under --force-complete (recorded in verification_notes).`);
+  } else {
+    // Self-derive the correct pr_url from the QF's OWN merged PR — never the passed-in foreign one.
+    finalPrUrl = mergeWitness.prUrl;
+    console.log(`   ✅ Merge witness verified: ${mergeWitness.prUrl} (head ${mergeWitness.headBranch}) MERGED + reachable from origin/main.`);
+  }
+
   // Update record
   console.log('🔄 Updating quick-fix record...\n');
 
@@ -583,7 +609,12 @@ export async function completeQuickFix(qfId, options = {}) {
       reason: options.reason,
       operator: process.env.CLAUDE_SESSION_ID || 'unknown',
       timestamp: new Date().toISOString(),
-      operator_supplied_notes: verificationNotes || null
+      operator_supplied_notes: verificationNotes || null,
+      // SD-LEO-INFRA-QF-FALSE-COMPLETION-WITNESS-GAP-001: record the merge witness so a forced
+      // completion of an unverified/unmerged QF is loudly auditable, not silent.
+      merge_witness: mergeWitness.verified
+        ? { verified: true, pr_url: mergeWitness.prUrl, merge_sha: mergeWitness.mergeSha }
+        : { verified: false, code: mergeWitness.code, reason: mergeWitness.reason }
     });
   } else if (options.overCapReason) {
     // SD-FDBK-ENH-SOURCE-LOC-CAP-001: audit-trail the LOC-only bypass. Distinct from
@@ -638,9 +669,8 @@ export async function completeQuickFix(qfId, options = {}) {
 
   displayCompletionSummary(qf, actualLoc, commitSha, branchName, finalPrUrl, filesChanged);
 
-  // Merge to Main (QF-20260509-552: forward {forceComplete,reason} flags)
-  // QF-20260529-168: thread nonInteractive so mergeToMain's skip-under-non-interactive guard (QF-888) fires.
-  await mergeToMain(testDir, qf, finalPrUrl, prompt, { forceComplete: options.forceComplete, reason: options.reason, nonInteractive: options.nonInteractive });
+  // NOTE: mergeToMain now runs BEFORE the completed write (above) so the merge-verification
+  // witness can gate the completion — SD-LEO-INFRA-QF-FALSE-COMPLETION-WITNESS-GAP-001.
 
   // SD-LEO-INFRA-WIRE-FEEDBACK-TABLE-001 FR-1: post-merge feedback auto-resolve.
   // Parse "Closes (feedback|harness backlog) <uuid>" footers from PR body and
