@@ -41,8 +41,15 @@ jobs:
           PR_TITLE="${{ github.event.pull_request.title }}"
           PR_BRANCH="${{ github.event.pull_request.head.ref }}"
 
-          # Try to extract SD-XXX-NNN pattern
-          SD_ID=$(echo "$PR_TITLE $PR_BRANCH" | grep -oE 'SD-[A-Z]+-[A-Z0-9]+-[0-9]+|SD-[A-Z]+-[0-9]+' | head -1 || true)
+          # Try to extract the SD key. QF-20260701-088: the old two-alternative pattern required
+          # EXACTLY 1-2 hyphenated segments before a mandatory trailing number, so a real
+          # multi-segment key (SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-A) never matched at its
+          # true start and grep instead matched a coincidentally-embedded shorter "SD-..." substring
+          # further into the string. Reuses the already-proven pattern from .husky/pre-commit
+          # (QF-20260621-393): SD- + one-or-more additional hyphenated alnum segments, greedily
+          # capturing the WHOLE run (also fixes alnum-terminal keys like SD-REFILL-00XUUGXQ, which
+          # the old mandatory "-[0-9]+" suffix would have truncated).
+          SD_ID=$(echo "$PR_TITLE $PR_BRANCH" | grep -oE 'SD-[A-Z0-9]+(-[A-Z0-9]+)+' | head -1 || true)
 
           if [ -z "$SD_ID" ]; then
             echo "No SD reference found in PR title or branch name"
