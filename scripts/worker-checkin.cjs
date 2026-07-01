@@ -32,6 +32,7 @@
  */
 
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
+const { getCommsActivitySignals, computeAdaptiveCadence } = require('../lib/coordinator/adaptive-comms-cadence.cjs');
 const ws = require('../lib/fleet/worker-status.cjs');
 const { stampClaim } = require('../lib/fleet/claim-stamp.cjs');
 // SD-FDBK-FIX-SELF-ONLY-AUTHORIZATION-001: acquisition-time guard so a propose-only
@@ -1384,11 +1385,27 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
         ? ` (${rankedAgnostic} ranked, but 0 claimable at your tier — all above your rung; a higher-tier worker must take them.)`
         : ` (${rankedAgnostic} ranked, but 0 claimable by any worker — they are orchestrator parents / clone build-trees / human-action / held, not tier-blocked.)`)
     : '';
+  // SD-LEO-INFRA-ADAPTIVE-COMMS-CADENCE-SHARED-PROTOCOL-001 (FR-6): opt-in tightening. A worker
+  // idling on the belt but awaiting a reply on a live comms thread (e.g. a blocked-item question
+  // to the coordinator) shouldn't wait a full baseline interval to notice the reply. ADDITIVE
+  // ONLY — never loosens the existing belt-driven recommendation, never touches claim/heartbeat.
+  // Fail-open: any error here falls through to the unchanged baseline recommendation.
+  let idleWakeupSeconds = DEFAULT_IDLE_WAKEUP_SECONDS;
+  let adaptiveCadenceNote = '';
+  try {
+    const signals = await getCommsActivitySignals(sb, sessionId);
+    const cadence = computeAdaptiveCadence(signals);
+    if (cadence.tight && cadence.intervalMs / 1000 < idleWakeupSeconds) {
+      idleWakeupSeconds = Math.round(cadence.intervalMs / 1000);
+      adaptiveCadenceNote = ` (tightened to ${idleWakeupSeconds}s — live comms thread: ${cadence.reason})`;
+    }
+  } catch { /* fail-open: keep the baseline recommendation */ }
+
   return {
     ...base,
     action: 'idle',
-    recommended_wakeup_seconds: DEFAULT_IDLE_WAKEUP_SECONDS,
-    message: `No assignment and nothing claimable. IDLE.${tierNote} The /checkin skill must now call ScheduleWakeup(~${DEFAULT_IDLE_WAKEUP_SECONDS}s) and proceed — never wait on a human.`,
+    recommended_wakeup_seconds: idleWakeupSeconds,
+    message: `No assignment and nothing claimable. IDLE.${tierNote} The /checkin skill must now call ScheduleWakeup(~${idleWakeupSeconds}s)${adaptiveCadenceNote} and proceed — never wait on a human.`,
   };
 }
 
