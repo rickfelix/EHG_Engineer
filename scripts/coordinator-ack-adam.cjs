@@ -41,7 +41,7 @@ async function recordLedgerDecision(supabase, { correlationId, disposition, deci
   if (!VALID_DISPOSITIONS.includes(disposition)) return { recorded: false, reason: `invalid disposition: ${disposition}` };
   try {
     const { error } = await supabase
-      .from('solomon_advice_outcome_ledger')
+      .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
       .upsert(
         {
           correlation_id: correlationId,

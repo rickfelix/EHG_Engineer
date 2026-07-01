@@ -1388,7 +1388,7 @@ async function printSolomonLedgerRollup() {
   let rows = [];
   try {
     const { data, error } = await supabase
-      .from('solomon_advice_outcome_ledger')
+      .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
       .select('decision, outcome, cost_tokens')
       .limit(5000);
     if (error) {
