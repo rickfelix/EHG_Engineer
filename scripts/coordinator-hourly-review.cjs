@@ -254,6 +254,21 @@ async function main() {
   } catch (e) {
     console.log('[HOURLY-REVIEW] gauge-runner liveness check skipped (non-fatal): ' + e.message);
   }
+
+  // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-3: surface the
+  // relay/decision/review drop gauge. Read-only + fail-open (planRelayDrops never throws).
+  try {
+    const { planRelayDrops } = require('../lib/coordinator/relay-drop-gauge.cjs');
+    const gauge = await planRelayDrops(sb);
+    if (gauge.flagged > 0) {
+      console.log('\n[HOURLY-REVIEW] RELAY/DECISION/REVIEW DROPS — ' + gauge.flagged + ' row(s) with no matching outbound within the window:');
+      gauge.decisions.filter(function (d) { return d.action === 'flag'; }).slice(0, 10).forEach(function (d) {
+        console.log('  • [' + String(d.id).slice(0, 8) + '] correlation=' + String(d.correlationId).slice(0, 8) + ' | unactioned ' + Math.floor(d.ageMs / 60000) + 'm | ' + d.reason);
+      });
+    }
+  } catch (e) {
+    console.log('[HOURLY-REVIEW] relay-drop-gauge check skipped (non-fatal): ' + e.message);
+  }
 }
 
 // SD-LEO-INFRA-SOLOMON-HOURLY-ROLE-REFRESHER-001: guard the main() invocation so the Solomon leg can be

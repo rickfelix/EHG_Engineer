@@ -31,6 +31,12 @@
  * a DIRECT 1-hop write to Solomon's own session (no coordinator relay hop), gated by
  * ADAM_SOLOMON_TWOWAY_V1=on (default OFF). Omitting --to is byte-identical unchanged behavior —
  * the existing coordinator-relay path is the permanent fallback, never removed.
+ *   node scripts/adam-advisory.cjs send --direct "<body>"                          (shorthand for --to solomon)
+ *
+ * SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-4: `--to` also accepts the
+ * relay-class peers eva/ceo (lib/coordinator/peer-target.cjs's PEER_KINDS registry) — these have no
+ * live session, so they enqueue a tracked FR-1 relay-request instead of a direct write:
+ *   node scripts/adam-advisory.cjs send --to eva "<body>"                          (relay-class peer: enqueues a tracked FR-1 relay-request instead of a direct insert)
  */
 
 const crypto = require('crypto');
@@ -39,6 +45,8 @@ const { redact, BODY_HARD_CAP, awaitCoordinatorReply } = require('./worker-signa
 const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled } = require('../lib/coordinator/resolve.cjs');
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
+const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
+const { enqueueRelayRequest } = require('../lib/coordinator/relay-queue.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
 // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class SSOT.
 const { REPLY_CLASSES, isValidReplyClass, computeReplyExpectedBy, checkAndPingOverdueReplies } = require('../lib/coordinator/reply-class.cjs');
@@ -532,24 +540,53 @@ async function main() {
   }
   // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: `send/request --to solomon` — direct
   // 1-hop channel, gated by ADAM_SOLOMON_TWOWAY_V1 (default OFF; omitting --to is unchanged).
+  // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-4: --to also accepts
+  // the relay-class peers eva/ceo (lib/coordinator/peer-target.cjs's PEER_KINDS registry) —
+  // these enqueue a tracked FR-1 relay-request instead of a direct write. --direct is
+  // shorthand for --to solomon (Adam's one lateral session-class peer).
   const toIdx = argv.indexOf('--to');
   const toArg = toIdx >= 0 ? argv[toIdx + 1] || null : null;
-  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1, toIdx, toIdx + 1].filter(i => i >= 0));
+  const directIdx = argv.indexOf('--direct');
+  const peerArg = toArg || (directIdx >= 0 ? 'solomon' : null);
+  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1, toIdx, toIdx + 1, directIdx].filter(i => i >= 0));
   const body = argv.slice(1).filter((a, i) => !flagValueIdxs.has(i + 1)).join(' ').trim();
   if (!body) { console.error('ERROR: advisory body required.'); process.exit(2); }
 
-  if (toArg && toArg !== 'solomon') {
-    console.error(`ERROR: --to ${toArg} is not supported (only "solomon" — omit --to for the default coordinator-relay target).`);
+  const isRelayClassPeer = !!(peerArg && PEER_KINDS[peerArg] && PEER_KINDS[peerArg].class === 'relay');
+  if (peerArg && peerArg !== 'solomon' && !isRelayClassPeer) {
+    const relayPeers = Object.keys(PEER_KINDS).filter((k) => PEER_KINDS[k].class === 'relay').join(', ');
+    console.error(`ERROR: --to ${peerArg} is not supported (one of "solomon", ${relayPeers} — omit --to for the default coordinator-relay target).`);
     process.exit(2);
   }
   const twoWayV1On = isAdamSolomonTwoWayV1Enabled();
-  if (toArg === 'solomon' && !twoWayV1On) {
+  if (peerArg === 'solomon' && !twoWayV1On) {
     console.error('ERROR: --to solomon is gated by ADAM_SOLOMON_TWOWAY_V1=on (currently OFF). Omit --to to route via the coordinator.');
     process.exit(3);
   }
 
+  // FR-4 relay-class path: eva/ceo have no live session, so a relay-class --to enqueues a
+  // tracked FR-1 relay_request via the coordinator queue instead of a direct insert — the
+  // coordinator's relay-drain tick (FR-1/FR-2) performs the actual delivery + writes the
+  // CONFIRM-ON-RELAY receipt. This is a fundamentally different row shape than a direct
+  // advisory, so it short-circuits here, before any target/session resolution below.
+  if (isRelayClassPeer) {
+    const relayCorrelationId = crypto.randomUUID();
+    const { data, error } = await enqueueRelayRequest(supabase, {
+      senderSession: sessionId,
+      relayTo: peerArg,
+      body,
+      correlationId: relayCorrelationId,
+    });
+    if (error) { console.error('ERROR: failed to enqueue relay-request:', error); process.exit(1); }
+    console.log('✓ Relay-request enqueued (tracked -- coordinator will drain + confirm)');
+    console.log('  relay_request_id:', data.id);
+    console.log('  relay_to:', peerArg);
+    console.log('  correlation_id:', relayCorrelationId);
+    return;
+  }
+
   const coordinatorId = await getActiveCoordinatorId(supabase);
-  const toSolomon = toArg === 'solomon';
+  const toSolomon = peerArg === 'solomon';
   const solomonId = toSolomon && twoWayV1On ? await getActiveSolomonId(supabase).catch(() => null) : null;
   const { target, via } = resolveAdamAdvisoryTarget({ toSolomon, flagOn: twoWayV1On, coordinatorId, solomonId });
   const senderCallsign = await snapshotSender(supabase, sessionId);

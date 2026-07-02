@@ -154,6 +154,23 @@ try {
   console.warn('[coordinator-email] cost panel skipped:', e.message);
 }
 
+// ── relay/decision/review drop-gauge panel (SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-
+//    DELIVERY-GUARANTEE-001 / FR-3) — this away-mode email is the durable instrument for
+//    exactly the failure class confirmed incident #1 was: a relay-request dropped ~2h with
+//    nothing surfacing it until the chairman happened to notice. Fail-soft, isolated,
+//    never blocks the email. ──
+let relayDropHtml = '', relayDropText = '';
+try {
+  const { planRelayDrops } = await import('../lib/coordinator/relay-drop-gauge.cjs');
+  const gauge = await planRelayDrops(db);
+  if (gauge.flagged > 0) {
+    relayDropHtml = `<p style="font-size:15px;margin:0 0 10px;padding:10px 12px;background:#fdecea;border-left:4px solid #e74c3c;border-radius:3px"><b>⚠️ ${gauge.flagged} relay/decision/review row(s) unactioned past the drop window</b></p>`;
+    relayDropText = `⚠️ ${gauge.flagged} relay/decision/review row(s) unactioned past the drop window\n\n`;
+  }
+} catch (e) {
+  console.warn('[coordinator-email] relay-drop-gauge panel skipped:', e.message);
+}
+
 // ── render ──
 const dot = { red: '🔴', yellow: '🟡', green: '🟢' }[overall];
 const word = { red: 'RED', yellow: 'YELLOW', green: 'GREEN' }[overall];
@@ -180,12 +197,12 @@ const subject = flag + (workable === 0
 const qHtml = qN ? `<p style="font-size:15px;margin:0 0 10px;padding:10px 12px;background:#fff8e1;border-left:4px solid #f5a623;border-radius:3px"><b>❓ ${qN} question${qN > 1 ? 's' : ''} need${qN > 1 ? '' : 's'} your input</b><br>${questions.map(q => { const l = qLabel(q); return `• ${esc(l.text)} <span style="color:#999;font-size:13px">— ${esc(l.who)}${esc(l.sd)}</span>`; }).join('<br>')}</p>` : '';
 const liveHtml = incognito ? `<p style="font-size:14px;margin:0 0 8px;padding:8px 10px;background:#fdecea;border-left:4px solid #d9534f;border-radius:3px"><b>🔔 Needs you:</b> ${incognito} worker${incognito > 1 ? 's' : ''} went incognito — a wake-prompt re-paste (or a relaunch for an orphaned-identity window) refills the fleet.</p>` : '';
 const html = `<p style="font-size:17px;margin:0 0 10px"><b>${dot} ${word}</b> — ${meaning} <span style="color:#777;font-size:14px">(${trendWord} ${trendArrow})</span></p>
-${qHtml}${liveHtml}<p style="font-size:14px;margin:0 0 6px"><b>Active workers:</b> ${gauge}${workable ? ` · ${workable} item${workable > 1 ? 's' : ''} in play` : ''}</p>
+${qHtml}${liveHtml}${relayDropHtml}<p style="font-size:14px;margin:0 0 6px"><b>Active workers:</b> ${gauge}${workable ? ` · ${workable} item${workable > 1 ? 's' : ''} in play` : ''}</p>
 <p style="font-size:13px;color:#777;margin:0 0 6px">📦 Since last email: <b>+${shippedSince}</b> shipped</p>
 ${costHtml}<p style="font-size:11px;color:#999;margin:14px 0 0">${when} ET</p>`;
 const qText = qN ? `❓ ${qN} question${qN > 1 ? 's' : ''} need${qN > 1 ? '' : 's'} your input:\n${questions.map(q => { const l = qLabel(q); return `  • ${l.text} — ${l.who}${l.sd}`; }).join('\n')}\n\n` : '';
 const liveText = incognito ? `🔔 Needs you: ${incognito} worker${incognito > 1 ? 's' : ''} went incognito — a wake re-paste/relaunch refills the fleet.\n\n` : '';
-const text = `${dot} ${word} — ${meaning} (${trendWord} ${trendArrow})\n\n${qText}${liveText}Active workers: ${gauge}${workable ? ` · ${workable} item(s) in play` : ''}\nSince last email: +${shippedSince} shipped\n${costText}\n${when} ET`;
+const text = `${dot} ${word} — ${meaning} (${trendWord} ${trendArrow})\n\n${qText}${liveText}${relayDropText}Active workers: ${gauge}${workable ? ` · ${workable} item(s) in play` : ''}\nSince last email: +${shippedSince} shipped\n${costText}\n${when} ET`;
 
 // QF-20260609-738: skip-if-unchanged + max-staleness heartbeat. The */30 cron used to
 // send EVERY run even when nothing material changed (the chairman is usually away), so the
