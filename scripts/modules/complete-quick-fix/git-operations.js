@@ -927,6 +927,62 @@ function displayManualCommitInstructions(qf, currentBranch) {
 }
 
 /**
+ * Classify one entry from `gh pr view --json statusCheckRollup` as pending or not.
+ * Handles both CheckRun shape ({status,conclusion}) and legacy StatusContext shape ({state}).
+ */
+export function isCheckPending(check) {
+  if (check.status !== undefined) return check.status !== 'COMPLETED';
+  if (check.state !== undefined) return check.state === 'PENDING' || check.state === 'EXPECTED';
+  return false;
+}
+
+/** Classify a COMPLETED/non-pending check as failed. */
+export function isCheckFailed(check) {
+  if (check.conclusion != null) return ['FAILURE', 'TIMED_OUT', 'CANCELLED'].includes(check.conclusion);
+  if (check.state !== undefined) return check.state === 'FAILURE' || check.state === 'ERROR';
+  return false;
+}
+
+/** Pure summary of a PR's statusCheckRollup — no IO, fully unit-testable. */
+export function summarizeCIStatus(statusCheckRollup) {
+  const checks = Array.isArray(statusCheckRollup) ? statusCheckRollup : [];
+  const pending = checks.filter(isCheckPending);
+  const failed = checks.filter(c => !isCheckPending(c) && isCheckFailed(c));
+  return { total: checks.length, pending: pending.length, failed: failed.length,
+    isPending: pending.length > 0, hasFailed: failed.length > 0 };
+}
+
+const CI_POLL_INTERVAL_MS = 15_000;
+const CI_POLL_TIMEOUT_MS = 20 * 60_000;
+
+/**
+ * Poll a PR's CI checks until none are pending. Throws on timeout or a failed
+ * required check — never merges an unknown or red CI state. QF-20260702-515.
+ */
+async function waitForCIChecks(testDir, prNumber) {
+  const start = Date.now();
+  console.log('   ⏳ --force-complete: waiting for CI checks to complete before merging...');
+  for (;;) {
+    const raw = execSync(`gh pr view ${prNumber} --json statusCheckRollup`, { encoding: 'utf-8', cwd: testDir });
+    const summary = summarizeCIStatus(JSON.parse(raw).statusCheckRollup);
+    if (!summary.isPending) {
+      if (summary.hasFailed) {
+        throw new Error(`[CI_CHECKS_FAILED] ${summary.failed} of ${summary.total} CI check(s) failed on PR #${prNumber}. ` +
+          'Refusing to merge. Fix the failures, or re-run with --skip-ci-wait --reason "<justification>" to force merge anyway.');
+      }
+      console.log(`   ✅ All ${summary.total} CI check(s) completed successfully.`);
+      return;
+    }
+    if (Date.now() - start > CI_POLL_TIMEOUT_MS) {
+      throw new Error(`[CI_WAIT_TIMEOUT] ${summary.pending} CI check(s) still pending on PR #${prNumber} after ${CI_POLL_TIMEOUT_MS / 60000} minutes. ` +
+        'Refusing to merge with unknown CI state. Re-run once checks complete, or use --skip-ci-wait --reason "<justification>" to force merge now.');
+    }
+    console.log(`   ⏳ ${summary.pending} check(s) pending, ${summary.total - summary.pending}/${summary.total} done — polling again in ${CI_POLL_INTERVAL_MS / 1000}s...`);
+    await new Promise(r => setTimeout(r, CI_POLL_INTERVAL_MS));
+  }
+}
+
+/**
  * Merge to main branch
  * @param {string} testDir - Directory to run git commands in
  * @param {object} qf - Quick-fix record
@@ -950,13 +1006,25 @@ export async function mergeToMain(testDir, qf, prUrl, prompt, flags = {}) {
     // direct merge rather than prompting (which rejects). Auto-merging via `gh pr merge
     // --merge` immediately is unsafe without a CI gate, so the safe default is to let
     // `gh pr merge --auto` / CI handle it (or re-run with --force-complete to force).
+    // QF-20260702-515: --force-complete bypasses self-verification WARNINGS only; it no
+    // longer skips the CI-completion wait (that conflation let PR #5406 admin-merge while
+    // 8+ checks were IN_PROGRESS). --skip-ci-wait is the separate, audited escape hatch.
     const shouldMerge = flags.forceComplete
-      ? (console.log(`   ⚠️  --force-complete: auto-confirm merge (reason="${flags.reason}")`), 'yes')
+      ? (flags.skipCiWait
+          ? (console.log(`   ⚠️  --force-complete --skip-ci-wait: auto-confirm merge WITHOUT waiting for CI (reason="${flags.reason}")`), 'yes')
+          : (console.log(`   ⚠️  --force-complete: auto-confirm merge, but will wait for CI to complete first (reason="${flags.reason}")`), 'yes'))
       : flags.nonInteractive
         ? (console.log('   ℹ️  --non-interactive: skipping direct merge (use `gh pr merge --auto` / CI, or re-run with --force-complete).'), 'no')
         : await prompt('   Merge to main now? (yes/no): ');
 
     if (shouldMerge.toLowerCase().startsWith('y')) {
+      if (flags.forceComplete && !flags.skipCiWait && prUrl) {
+        const waitPrNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
+        if (waitPrNumber && /^\d+$/.test(waitPrNumber)) {
+          await waitForCIChecks(testDir, waitPrNumber);
+        }
+      }
+
       console.log('\n   🔀 Merging to main...');
 
       if (prUrl) {

@@ -33,6 +33,22 @@ describe('SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 — CLI flags', () => {
         .toThrow(/FORCE_COMPLETE_NO_REASON/);
     });
 
+    it('parses --skip-ci-wait + --reason as a pair (QF-20260702-515)', () => {
+      const { options } = parseArguments(['QF-X', '--force-complete', '--skip-ci-wait', '--reason', 'CI known-good already']);
+      expect(options.skipCiWait).toBe(true);
+      expect(options.reason).toBe('CI known-good already');
+    });
+
+    it('throws when --skip-ci-wait is passed without --reason (checked independently of --force-complete)', () => {
+      expect(() => parseArguments(['QF-X', '--skip-ci-wait']))
+        .toThrow(/SKIP_CI_WAIT_NO_REASON/);
+    });
+
+    it('defaults skipCiWait to false when --force-complete is used alone', () => {
+      const { options } = parseArguments(['QF-X', '--force-complete', '--reason', 'x']);
+      expect(options.skipCiWait).toBe(false);
+    });
+
     it('parses --non-interactive and persists module-level flag', () => {
       _setNonInteractiveMode(false);
       const { options } = parseArguments(['QF-X', '--non-interactive', '--pr-url', 'https://github.com/foo/bar/pull/1']);

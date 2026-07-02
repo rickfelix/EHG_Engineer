@@ -102,6 +102,10 @@ export function parseArguments(args) {
       'uat-verified':       { type: 'string' },
       'verification-notes': { type: 'string' },
       'force-complete':     { type: 'boolean' },
+      // QF-20260702-515: separate, explicit CI-wait bypass. --force-complete alone no
+      // longer skips waiting for CI to go green before merging — this is the narrow,
+      // audited escape hatch for the rare case that still needs to merge immediately.
+      'skip-ci-wait':       { type: 'boolean' },
       'reason':             { type: 'string' },
       // QF-20260604-479: explicit override to complete a QF with an EMPTY branch diff
       // (false-completion guard). The ONLY way past the guard; NOT bypassable by --force-complete.
@@ -157,6 +161,17 @@ export function parseArguments(args) {
     );
   }
 
+  // QF-20260702-515: --skip-ci-wait REQUIRES --reason. It bypasses ONLY the wait-for-CI
+  // gate that --force-complete now enforces before merging (not self-verification, the
+  // LOC cap, or compliance) — the merge itself still requires --force-complete to auto-run.
+  if (values['skip-ci-wait'] && !values['reason']) {
+    throw new Error(
+      '[SKIP_CI_WAIT_NO_REASON] --skip-ci-wait requires --reason "<text>". ' +
+      'It bypasses the wait-for-CI-completion gate before an auto-merge — the reason is recorded ' +
+      'in verification_notes as a structured audit trail.'
+    );
+  }
+
   // QF-20260524-587: --accept-compliance-warn REQUIRES --reason. It clears ONLY the
   // WARN-verdict compliance prompt (so completion works under --non-interactive) and does
   // NOT bypass FAIL-verdict, the LOC cap, or self-verification — unlike --force-complete.
@@ -197,6 +212,8 @@ export function parseArguments(args) {
     uatVerified:       values['uat-verified']     != null ? values['uat-verified'].toLowerCase().startsWith('y') : undefined,
     verificationNotes: values['verification-notes'],
     forceComplete:     values['force-complete']   || false,
+    // QF-20260702-515: separate CI-wait bypass; only takes effect alongside forceComplete.
+    skipCiWait:        values['skip-ci-wait']     || false,
     reason:            values['reason'],
     overCapReason:     values['over-cap-reason']   || undefined,
     acceptComplianceWarn: values['accept-compliance-warn'] || false,
@@ -248,7 +265,11 @@ Options:
   --verification-notes  Optional notes about verification
   --force-complete      Bypass self-verification + LOC-cap blocks; sets quick_fixes.force_completed=true.
                         REQUIRES --reason "<text>". Used for already-merged PRs or audit-trailed exceptions.
-  --reason              Required with --force-complete. Recorded in verification_notes JSON audit trail.
+                        Does NOT skip waiting for CI to complete before an auto-merge — see --skip-ci-wait.
+  --skip-ci-wait        Skip the wait-for-CI-completion gate that --force-complete otherwise enforces
+                        before auto-merging (only has an effect together with --force-complete).
+                        REQUIRES --reason. Rare — use only when CI status is already known-good/irrelevant.
+  --reason              Required with --force-complete / --skip-ci-wait / etc. Recorded in verification_notes JSON audit trail.
   --non-interactive     Fail-fast on any prompt (instead of hanging under piped stdin). Use in CI / scripts.
                         When set without --pr-url, --auto-pr is auto-enabled to avoid mid-run prompt failure.
   --auto-pr             Auto-create the PR via 'gh pr create' if --pr-url is not provided.
