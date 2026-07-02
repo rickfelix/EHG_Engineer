@@ -138,8 +138,15 @@ describe('insertCoordinationRow + getThreadByTopicId: topic_id thread primitive'
     }, { logger: silentLog });
 
     expect(sb._rows).toHaveLength(2);
-    expect(sb._rows[0].payload).toEqual({ body: 'no topic here', foo: 'bar' });
+    // Original payload keys survive unchanged; no topic_id key is added. protocol_comms_version is
+    // a SEPARATE, unrelated stamp from sibling SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-C (FR-2)
+    // that insertCoordinationRow also applies to any row with a payload object -- not this test's
+    // concern, so assert its presence rather than pretending it doesn't exist.
+    expect(sb._rows[0].payload).toMatchObject({ body: 'no topic here', foo: 'bar' });
     expect(Object.prototype.hasOwnProperty.call(sb._rows[0].payload, 'topic_id')).toBe(false);
+    expect(sb._rows[0].payload).toHaveProperty('protocol_comms_version');
+    // A payload-less row stays payload-less -- protocol_comms_version stamping only stamps INTO an
+    // existing payload object, never invents one (some rows are payload-less by design).
     expect(sb._rows[1].payload).toBeUndefined();
   });
 });

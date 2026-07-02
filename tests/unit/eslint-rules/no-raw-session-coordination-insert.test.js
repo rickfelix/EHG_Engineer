@@ -29,15 +29,15 @@ ruleTester.run('no-raw-session-coordination-insert', rule, {
   valid: [
     // TS-1: routed through the canonical choke point.
     {
-      code: `await insertCoordinationRow(supabase, { target_session: 'x', subject: 'y' });`,
+      code: 'await insertCoordinationRow(supabase, { target_session: \'x\', subject: \'y\' });',
     },
     // TS-2: .insert() on a different table entirely.
     {
-      code: `await supabase.from('feedback').insert({ category: 'harness_backlog' });`,
+      code: 'await supabase.from(\'feedback\').insert({ category: \'harness_backlog\' });',
     },
     // TS-3: .from('session_coordination') without a chained .insert() (e.g. a .select() read).
     {
-      code: `await supabase.from('session_coordination').select('*').eq('target_session', sid);`,
+      code: 'await supabase.from(\'session_coordination\').select(\'*\').eq(\'target_session\', sid);',
     },
     // TS-4: escape-hatch pragma with a non-empty reason.
     {
@@ -50,12 +50,12 @@ ruleTester.run('no-raw-session-coordination-insert', rule, {
   invalid: [
     // TS-5: the raw anti-pattern this rule exists to catch.
     {
-      code: `await supabase.from('session_coordination').insert(row);`,
+      code: 'await supabase.from(\'session_coordination\').insert(row);',
       errors: [{ messageId: 'noRawInsert' }],
     },
     // TS-6: same anti-pattern via a differently-named client variable.
     {
-      code: `await sb.from('session_coordination').insert({ target_sd: sdKey, subject: 'x' });`,
+      code: 'await sb.from(\'session_coordination\').insert({ target_sd: sdKey, subject: \'x\' });',
       errors: [{ messageId: 'noRawInsert' }],
     },
     // TS-7: pragma present but missing the `--` REASON marker entirely -- ESLint's native
