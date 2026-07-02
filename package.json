@@ -15,6 +15,7 @@
     "vision:seed-v2-autonomous-marketing": "node scripts/okr/seed-v2-autonomous-marketing-criteria.mjs",
     "vision:gauge": "node scripts/vision-gauge-refresh.mjs",
     "vision:s19-coverage-gauge": "node scripts/s19-vision-coverage-gauge.mjs",
+    "gauges:run": "node scripts/gauge-runner.mjs",
     "vision:build-forecast": "node scripts/vision/build-completion-forecast.mjs",
     "vision:build-forecast:apply": "node scripts/vision/build-completion-forecast.mjs --apply",
     "vision:rung-rollup": "node scripts/vision/rung-progress-rollup.mjs",
