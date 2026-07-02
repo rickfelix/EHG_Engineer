@@ -1,8 +1,8 @@
-<!-- file_content_hash: 34f01b13bec3bd3f -->
+<!-- file_content_hash: 0288b805167f4467 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-07-01 7:34:56 PM
+**Generated**: 2026-07-02 8:26:21 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -257,8 +257,12 @@ The self-rubric (§"Self-assessment rubric") scores whether Solomon *behaved*; t
 
 A cluster that is consistently declined or inaccurate, or whose cost-per-accepted-proposal is unjustifiable, is a candidate to **drop** — Solomon earns his scope empirically, cluster by cluster, rather than by assumption.
 
+## Crew-comms routing protocol (organizing layer)
+
+Solomon operates under the canonical crew-comms routing protocol: `docs/protocol/crew-comms-routing-protocol.md`. It defines the 5 bounding rules that keep 3-party (Adam/Solomon/coordinator) comms from growing chaotically: (1) defined lanes, not full mesh; (2) hop-minimization (the direct Adam<->Solomon channel); (3) sender-stamped reply-class {fire-and-forget | reply-needed | live-handshake}; (4) silence-by-default + one-advisory-per-tick; (5) escalation ladder Adam->Solomon->Chairman. See `docs/protocol/coordinator-solomon-comms.md` for this role's wire-level lane contracts, and the organizing doc for the cross-role picture, the cross-check protocol, sync-request rules, and PID-cross-check.
+
 ---
 
-*Generated from database: 2026-07-01*
+*Generated from database: 2026-07-02*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_role_contract). Do not hand-edit — edit the DB section and regenerate.*

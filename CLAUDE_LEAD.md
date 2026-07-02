@@ -1,8 +1,8 @@
-<!-- file_content_hash: 82b6317e181fcdbd -->
+<!-- file_content_hash: 44f81c5b731862a3 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-07-01 7:34:56 PM
+**Generated**: 2026-07-02 8:26:21 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: LEAD agent operations and strategic validation
 **Effort**: high (strategic framing, scope bounding, and sub-agent routing require full reasoning depth)
@@ -1584,6 +1584,6 @@ At LEAD-phase scope-lock, before running `add-prd-to-database.js`, invoke `testi
 
 ---
 
-*Generated from database: 2026-07-01*
+*Generated from database: 2026-07-02*
 *Protocol Version: 4.4.1*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

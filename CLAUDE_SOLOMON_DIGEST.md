@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-07-01T23:34:55.992Z -->
-<!-- git_commit: fe3bbdc1 -->
-<!-- db_snapshot_hash: d38407bccd2a4670 -->
-<!-- file_content_hash: 0f31ef790ab90cca -->
+<!-- generated_at: 2026-07-02T00:26:21.321Z -->
+<!-- git_commit: 0a7a703f -->
+<!-- db_snapshot_hash: 8eb2912b9dff05a2 -->
+<!-- file_content_hash: c9e3fdf9b8ad15b4 -->
 
 # CLAUDE_SOLOMON_DIGEST.md - Solomon Role (Oracle)
 
@@ -39,6 +39,10 @@
 A Solomon session self-sc
 
 *...truncated. Read full file for complete section.*
+
+## Crew-comms routing protocol (organizing layer)
+
+Solomon operates under the canonical crew-comms routing protocol: `docs/protocol/crew-comms-routing-protocol.md`. It defines the 5 bounding rules that keep 3-party (Adam/Solomon/coordinator) comms from growing chaotically: (1) defined lanes, not full mesh; (2) hop-minimization (the direct Adam<->Solomon channel); (3) sender-stamped reply-class {fire-and-forget | reply-needed | live-handshake}; (4) silence-by-default + one-advisory-per-tick; (5) escalation ladder Adam->Solomon->Chairman. See `docs/protocol/coordinator-solomon-comms.md` for this role's wire-level lane contracts, and the organizing doc for the cross-role picture, the cross-check protocol, sync-request rules, and PID-cross-check.
 
 ---
 *Solomon is NOT a worker and NOT the coordinator. Full contract in CLAUDE_SOLOMON.md.*
