@@ -19,6 +19,7 @@
     "singleton-relaunch:run": "node scripts/singleton-relaunch-scheduler.mjs",
     "coordinator:relay-drain": "node scripts/coordinator-relay-drain.cjs",
     "coordinator:relay-drop-gauge": "node scripts/coordinator-relay-drop-gauge.cjs",
+    "comms:three-way-drill": "node scripts/three-way-comms-drill.mjs",
     "chairman:directive:issue": "node scripts/issue-chairman-directive.cjs",
     "chairman:directive:ack": "node scripts/ack-chairman-directive.cjs",
     "chairman:directive:gauge": "node lib/coordinator/chairman-directive-gauge.cjs",
