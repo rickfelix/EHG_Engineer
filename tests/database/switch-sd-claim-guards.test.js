@@ -35,6 +35,15 @@ const PROBE_SESSION = 'test-switch-claim-guards-session';
 // claude_sessions for the old side (the old-side UPDATE is a no-op WHERE clause for this key),
 // so using a phantom old id keeps the old side net-zero without touching any real SD.
 const OLD_PHANTOM = 'SD-SWITCH-OLD-PROBE-000';
+// QF-20260702-290: the happy-path test used to pick "any real unclaimed draft/active SD" off
+// the live table — a TOCTOU race against the concurrent fleet (a real worker can claim that
+// exact row between the SELECT and the switch_sd_claim RPC call), which flipped success->false
+// and red-merged main (105->106) with no code regression involved. Same class + same fix as
+// QF-20260612-167 (tests/database/claim-sd-refuse-live-foreign.test.js): a hermetic per-run
+// scratch SD only this suite knows about, instead of a shared live candidate.
+const RUN_SUFFIX = `${process.pid}-${Date.now().toString(36)}`;
+const HAPPY_TARGET = `SD-TEST-SWITCH-HAPPY-${RUN_SUFFIX}`.toUpperCase();
+let happyFixtureReady = false;
 
 async function firstSdWithStatus(status) {
   const { data } = await supabase.from('strategic_directives_v2')
@@ -52,11 +61,25 @@ describe.skipIf(!HAS_REAL_DB)('switch_sd_claim rejects phantom/terminal NEW targ
       status: 'active',
       track: 'C',
     });
+    // Hermetic scratch target for the happy-path switch — no other session can contend for it.
+    const { error: fixtureError } = await supabase.from('strategic_directives_v2').insert({
+      sd_key: HAPPY_TARGET,
+      id: HAPPY_TARGET,
+      title: 'TEST FIXTURE (QF-20260702-290): switch_sd_claim happy-path scenario — safe to delete',
+      description: 'Scratch SD created by tests/database/switch-sd-claim-guards.test.js; deleted in afterAll.',
+      rationale: 'Test fixture for QF-20260702-290 — auto-cleaned',
+      status: 'draft',
+      sd_type: 'bugfix',
+      category: 'test_fixture',
+      priority: 'low',
+    });
+    happyFixtureReady = !fixtureError;
   });
 
   afterAll(async () => {
     // Hard-delete the probe session row → net-zero (we created it).
     await supabase.from('claude_sessions').delete().eq('session_id', PROBE_SESSION);
+    await supabase.from('strategic_directives_v2').delete().eq('sd_key', HAPPY_TARGET);
   });
 
   async function switchTo(newId) {
@@ -133,11 +156,9 @@ describe.skipIf(!HAS_REAL_DB)('switch_sd_claim rejects phantom/terminal NEW targ
   });
 
   it('still switches onto a real unclaimed draft/active SD (guards do not break the happy path)', async () => {
-    const { data: cand } = await supabase.from('strategic_directives_v2')
-      .select('sd_key, claiming_session_id, active_session_id, is_working_on')
-      .is('claiming_session_id', null).in('status', ['draft', 'active']).limit(1);
-    if (!cand || !cand[0]) return; // env-dependent
-    const key = cand[0].sd_key;
+    if (!happyFixtureReady) return; // env-dependent (fixture insert blocked)
+    // Fixture is inserted unclaimed in beforeAll — no live-table race to contend with.
+    const key = HAPPY_TARGET;
     const { data, error } = await switchTo(key);
     expect(error).toBeNull();
     expect(data?.success).toBe(true);
@@ -148,11 +169,11 @@ describe.skipIf(!HAS_REAL_DB)('switch_sd_claim rejects phantom/terminal NEW targ
     expect(sess?.sd_key).toBe(key);
 
     // ---- restore (net-zero) ----
-    // 1) reset the NEW SD's claim columns to their captured pre-state
+    // 1) reset the fixture's claim columns back to unclaimed (afterAll deletes it regardless)
     await supabase.from('strategic_directives_v2').update({
-      claiming_session_id: cand[0].claiming_session_id,
-      active_session_id: cand[0].active_session_id,
-      is_working_on: cand[0].is_working_on,
+      claiming_session_id: null,
+      active_session_id: null,
+      is_working_on: false,
     }).eq('sd_key', key);
     // 2) put the probe session back onto the phantom OLD claim for any subsequent assertions/teardown
     await supabase.from('claude_sessions').update({ sd_key: OLD_PHANTOM })
