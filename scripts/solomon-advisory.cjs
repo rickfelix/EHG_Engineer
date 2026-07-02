@@ -27,15 +27,21 @@
  *   node scripts/solomon-advisory.cjs send "<advisory body>" [--reply-to <correlation_or_row_id>]
  *   node scripts/solomon-advisory.cjs request "<question>" [--timeout 30000]   (needs COORDINATOR_TWOWAY_V2=on)
  *   node scripts/solomon-advisory.cjs inbox [--quiet]                          (the recurring inbox-monitor tick)
+ *
+ * SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: `send`/`request` accept `--to adam` for a
+ * DIRECT 1-hop write to Adam's own session (no coordinator relay hop), gated by
+ * ADAM_SOLOMON_TWOWAY_V1=on (default OFF). Omitting --to is byte-identical unchanged behavior — the
+ * existing coordinator-relay path is the permanent fallback, never removed.
  */
 
 const crypto = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { redact, BODY_HARD_CAP, awaitCoordinatorReply } = require('./worker-signal.cjs');
-const { getActiveCoordinatorId, isTwoWayV2Enabled } = require('../lib/coordinator/resolve.cjs');
+const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled } = require('../lib/coordinator/resolve.cjs');
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
+const { getActiveAdamId } = require('../lib/coordinator/adam-identity.cjs');
 // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class SSOT.
 const {
   REPLY_CLASSES, isValidReplyClass, computeReplyExpectedBy, checkAndPingOverdueReplies,
@@ -71,7 +77,7 @@ const SOLOMON_PER_DAY_MAX = Number(process.env.SOLOMON_PER_DAY_MAX) || 20; // an
  * intent_action. correlation_id makes the answer replyable; a reply_to (the consult's correlation)
  * is echoed under BOTH keys so the asking side's matcher pairs the answer to its consult. Exported.
  */
-function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, replyTo, replyClass, replyWindowMs, now }) {
+function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, replyTo, via, replyClass, replyWindowMs, now }) {
   // An answer to a consult (replyTo set) is terminal -- always fire-and-forget. Otherwise: request
   // mode (expectsReply) is live-handshake; send mode defaults fire-and-forget unless the sender
   // opts into reply-needed via --reply-class (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
@@ -90,9 +96,28 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
     payload.reply_to = replyTo;
     payload.correlation_id = replyTo; // a reply correlates to its consult, not to itself
   }
+  // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: 'direct' marks a row written straight to
+  // Adam's session_id (--to adam, ADAM_SOLOMON_TWOWAY_V1=on) instead of the default coordinator-relay
+  // target. Additive/optional — undefined for every existing send path.
+  if (via) payload.via = via;
   if (resolvedReplyClass === 'reply-needed') payload.reply_expected_by = computeReplyExpectedBy(now, replyWindowMs);
   // INVARIANT: no signal_type, no intent_action.
   return payload;
+}
+
+/**
+ * SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: pure target-resolution decision for the
+ * new direct Solomon->Adam lane — mirrors scripts/adam-advisory.cjs's resolveAdamAdvisoryTarget.
+ * `--to adam` + the flag ON routes DIRECT to the live Adam session (or the broadcast-adam fallback
+ * sentinel); every other combination is the UNCHANGED coordinator-relay default.
+ * @param {{toAdam: boolean, flagOn: boolean, coordinatorId: string|null, adamId: string|null}} args
+ * @returns {{target: string, via: string|null}}
+ */
+function resolveSolomonAdvisoryTarget({ toAdam, flagOn, coordinatorId, adamId }) {
+  if (toAdam && flagOn) {
+    return { target: adamId || 'broadcast-adam', via: 'direct' };
+  }
+  return { target: coordinatorId || 'broadcast-coordinator', via: null };
 }
 
 // ── consult classification (mirrors the Adam inbox lane, scoped to Solomon) ─────────────────────────
@@ -381,7 +406,7 @@ async function main() {
   const argv = process.argv.slice(2);
   const mode = argv[0];
   if (mode !== 'send' && mode !== 'request' && mode !== 'inbox' && mode !== 'status') {
-    console.error('Usage: node scripts/solomon-advisory.cjs send "<body>" [--reply-to <id>]  |  request "<q>" [--timeout <ms>]  |  inbox [--quiet]  |  status [--working "<body>" [--eta <ms>]]');
+    console.error('Usage: node scripts/solomon-advisory.cjs send "<body>" [--reply-to <id>] [--to adam]  |  request "<q>" [--timeout <ms>] [--to adam]  |  inbox [--quiet]  |  status [--working "<body>" [--eta <ms>]]');
     process.exit(2);
   }
   const sessionId = process.env.CLAUDE_SESSION_ID;
@@ -433,7 +458,11 @@ async function main() {
     console.error(`ERROR: --reply-class must be one of ${REPLY_CLASSES.join(', ')} (got "${replyClassArg}").`);
     process.exit(2);
   }
-  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1].filter((i) => i >= 0));
+  // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: `send/request --to adam` — direct 1-hop
+  // channel, gated by ADAM_SOLOMON_TWOWAY_V1 (default OFF; omitting --to is unchanged).
+  const toIdx = argv.indexOf('--to');
+  const toArg = toIdx >= 0 ? argv[toIdx + 1] || null : null;
+  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1, toIdx, toIdx + 1].filter((i) => i >= 0));
   const body = argv.slice(1).filter((a, i) => !flagValueIdxs.has(i + 1)).join(' ').trim();
   if (!body) { console.error('ERROR: advisory body required.'); process.exit(2); }
 
@@ -441,9 +470,20 @@ async function main() {
     console.error('ERROR: request/await is gated by COORDINATOR_TWOWAY_V2=on (currently OFF). Use `send` for fire-and-forget.');
     process.exit(3);
   }
+  if (toArg && toArg !== 'adam') {
+    console.error(`ERROR: --to ${toArg} is not supported (only "adam" — omit --to for the default coordinator-relay target).`);
+    process.exit(2);
+  }
+  const twoWayV1On = isAdamSolomonTwoWayV1Enabled();
+  if (toArg === 'adam' && !twoWayV1On) {
+    console.error('ERROR: --to adam is gated by ADAM_SOLOMON_TWOWAY_V1=on (currently OFF). Omit --to to route via the coordinator.');
+    process.exit(3);
+  }
 
   const coordinatorId = await getActiveCoordinatorId(supabase);
-  const target = coordinatorId || 'broadcast-coordinator';
+  const toAdam = toArg === 'adam';
+  const adamId = toAdam && twoWayV1On ? await getActiveAdamId(supabase).catch(() => null) : null;
+  const { target, via } = resolveSolomonAdvisoryTarget({ toAdam, flagOn: twoWayV1On, coordinatorId, adamId });
   const senderCallsign = await snapshotSender(supabase, sessionId);
   const correlationId = crypto.randomUUID();
   const expectsReply = mode === 'request';
@@ -457,7 +497,7 @@ async function main() {
     console.log(`(dedup) consult ${String(replyTo).slice(0, 8)} already answered — not re-sending.`);
     return;
   }
-  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, replyClass: replyClassArg, replyWindowMs });
+  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via, replyClass: replyClassArg, replyWindowMs });
   const subject = `[SOLOMON_ORACLE] ${payload.body.slice(0, 80)}`;
   const expiresAt = advisoryExpiresAt(Date.now());
 
@@ -511,7 +551,7 @@ module.exports = {
   isReplyRow, isSolomonInboxRow, isOrphanedSolomonRow, SOLOMON_INBOX_KINDS, EXCLUDED_KINDS, SOLOMON_CONSULT_KIND,
   computeConsultSignature, enforceSweepBudget, SOLOMON_SWEEP_BUDGET, alreadyAnswered, checkConsultQuota,
   drainInbox, resolveReplyToCorrelation, drainSolomonOutbound, captureLedgerRow,
-  checkLedgerCaptureHealth,
+  checkLedgerCaptureHealth, resolveSolomonAdvisoryTarget,
 };
 
 if (require.main === module) {

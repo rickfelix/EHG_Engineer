@@ -26,12 +26,18 @@
  *   node scripts/adam-advisory.cjs request "<question>" [--timeout 30000]          (awaits a coordinator reply; needs COORDINATOR_TWOWAY_V2=on)
  *   node scripts/adam-advisory.cjs replies                                         (drain ONLY the reply lane — kept for back-compat)
  *   node scripts/adam-advisory.cjs inbox                                           (FULL-LANE drain: replies + coordinator directives — the recurring inbox-monitor tick)
+ *
+ * SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: `send`/`request` accept `--to solomon` for
+ * a DIRECT 1-hop write to Solomon's own session (no coordinator relay hop), gated by
+ * ADAM_SOLOMON_TWOWAY_V1=on (default OFF). Omitting --to is byte-identical unchanged behavior —
+ * the existing coordinator-relay path is the permanent fallback, never removed.
  */
 
 const crypto = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { redact, BODY_HARD_CAP, awaitCoordinatorReply } = require('./worker-signal.cjs');
-const { getActiveCoordinatorId, isTwoWayV2Enabled } = require('../lib/coordinator/resolve.cjs');
+const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled } = require('../lib/coordinator/resolve.cjs');
+const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
 // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class SSOT.
@@ -82,7 +88,24 @@ function sanityCheckUrgentAdvisory(body) {
   return { tripped: reasons.length > 0, reasons };
 }
 
-function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, replyClass, replyWindowMs, now }) {
+/**
+ * SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: pure target-resolution decision for the
+ * new direct Adam->Solomon lane. Given the resolved live IDs (already fetched by the caller — no
+ * I/O here), decides target_session and payload.via. `--to solomon` + the flag ON routes DIRECT to
+ * the live Solomon session (or the broadcast-solomon fallback sentinel); every other combination
+ * (flag off, or --to omitted) is the UNCHANGED coordinator-relay default — via stays null so
+ * buildAdvisoryPayload never stamps the field.
+ * @param {{toSolomon: boolean, flagOn: boolean, coordinatorId: string|null, solomonId: string|null}} args
+ * @returns {{target: string, via: string|null}}
+ */
+function resolveAdamAdvisoryTarget({ toSolomon, flagOn, coordinatorId, solomonId }) {
+  if (toSolomon && flagOn) {
+    return { target: solomonId || 'broadcast-solomon', via: 'direct' };
+  }
+  return { target: coordinatorId || 'broadcast-coordinator', via: null };
+}
+
+function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass, replyWindowMs, now }) {
   // request mode (expectsReply) is always live-handshake (synchronous, bounded-timeout await);
   // send mode defaults to fire-and-forget unless the sender opts into reply-needed via --reply-class
   // (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
@@ -100,6 +123,10 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
   // (scope_local | cross_scope); applies_to_scopes lists the scopes a cross-scope advisory
   // covers. The two-stage actioned_at ACK is unchanged.
   if (scopeKey) payload.scope_key = scopeKey;
+  // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: 'direct' marks a row written straight
+  // to the peer's session_id (--to solomon, ADAM_SOLOMON_TWOWAY_V1=on) instead of the default
+  // coordinator-relay target. Additive/optional — undefined for every existing send path.
+  if (via) payload.via = via;
   if (reuseClass) payload.reuse_class = reuseClass;
   if (Array.isArray(appliesToScopes) && appliesToScopes.length) payload.applies_to_scopes = appliesToScopes;
   if (body) {
@@ -445,7 +472,7 @@ async function main() {
   const argv = process.argv.slice(2);
   const mode = argv[0];
   if (mode !== 'send' && mode !== 'request' && mode !== 'replies' && mode !== 'inbox' && mode !== 'status') {
-    console.error('Usage: node scripts/adam-advisory.cjs send "<body>" [--reply-to <correlation_or_row_id>]  |  request "<question>" [--timeout <ms>]  |  replies  |  inbox  |  status [--working "<body>" [--eta <ms>]]');
+    console.error('Usage: node scripts/adam-advisory.cjs send "<body>" [--reply-to <correlation_or_row_id>] [--to solomon]  |  request "<question>" [--timeout <ms>] [--to solomon]  |  replies  |  inbox  |  status [--working "<body>" [--eta <ms>]]');
     process.exit(2);
   }
 
@@ -503,12 +530,28 @@ async function main() {
     console.error(`ERROR: --reply-class must be one of ${REPLY_CLASSES.join(', ')} (got "${replyClassArg}").`);
     process.exit(2);
   }
-  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1].filter(i => i >= 0));
+  // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: `send/request --to solomon` — direct
+  // 1-hop channel, gated by ADAM_SOLOMON_TWOWAY_V1 (default OFF; omitting --to is unchanged).
+  const toIdx = argv.indexOf('--to');
+  const toArg = toIdx >= 0 ? argv[toIdx + 1] || null : null;
+  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1, toIdx, toIdx + 1].filter(i => i >= 0));
   const body = argv.slice(1).filter((a, i) => !flagValueIdxs.has(i + 1)).join(' ').trim();
   if (!body) { console.error('ERROR: advisory body required.'); process.exit(2); }
 
+  if (toArg && toArg !== 'solomon') {
+    console.error(`ERROR: --to ${toArg} is not supported (only "solomon" — omit --to for the default coordinator-relay target).`);
+    process.exit(2);
+  }
+  const twoWayV1On = isAdamSolomonTwoWayV1Enabled();
+  if (toArg === 'solomon' && !twoWayV1On) {
+    console.error('ERROR: --to solomon is gated by ADAM_SOLOMON_TWOWAY_V1=on (currently OFF). Omit --to to route via the coordinator.');
+    process.exit(3);
+  }
+
   const coordinatorId = await getActiveCoordinatorId(supabase);
-  const target = coordinatorId || 'broadcast-coordinator';
+  const toSolomon = toArg === 'solomon';
+  const solomonId = toSolomon && twoWayV1On ? await getActiveSolomonId(supabase).catch(() => null) : null;
+  const { target, via } = resolveAdamAdvisoryTarget({ toSolomon, flagOn: twoWayV1On, coordinatorId, solomonId });
   const senderCallsign = await snapshotSender(supabase, sessionId);
 
   if (mode === 'request' && !isTwoWayV2Enabled()) {
@@ -529,7 +572,7 @@ async function main() {
   }
   // FR-1: scope-tag the advisory from the sending repo (reuse-first, fail-soft).
   const { scopeKey, reuseClass, appliesToScopes } = await resolveScopeForSend(supabase, process.cwd());
-  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, replyClass: replyClassArg, replyWindowMs });
+  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass: replyClassArg, replyWindowMs });
   // SD-REFILL-00XK256L: the 2-hypothesis-bar GATE. Block an UNATTESTED urgent model-availability
   // broadcast — Adam's research sweep has twice fabricated a fleet-wide "model cutoff" and broadcast it
   // before running the cheap discriminator. The sender attests the bar was cleared with --alarm-verified.
@@ -626,7 +669,7 @@ async function drainAdamOutbound(supabase, { newSessionId, oldSessionIds } = {})
   }
 }
 
-module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS };
+module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS, resolveAdamAdvisoryTarget };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });

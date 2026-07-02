@@ -66,7 +66,7 @@ proactive-sweep on the next tick — no ledger wait. The actual pin flip stays a
 |------|------------------------|-----------------|-----------------|
 | **A** | `SOLOMON_CONSULT_V1=on` | **Mode A only** — reactive consults (workers/Adam `solomon-consult`); Mode B stays gated | **Solomon model pin swapped to a Fable id** (`CLAUDE_MODEL_SOLOMON` / `MODEL_DEFAULTS.claude.solomon`) — the deep-sweep tick auto-enables Mode-B; ledger accuracy is no longer the gate (override: `SOLOMON_SWEEP_MODE=proactive`) |
 | **B** | enable Mode-B sweeps (auto on the Fable pin) | proactive backlog deep-sweeps — one §4 item + ONE propose-only finding per tick, still quota- and `task_budget`-bounded, never executes (CONST-002) | both modes stable |
-| **C** | `ADAM_SOLOMON_TWOWAY_V1=on` | the Adam↔Solomon two-way channel (`-G`, ship-dormant follow-on) | — |
+| **C** | `ADAM_SOLOMON_TWOWAY_V1=on` | the Adam↔Solomon two-way channel — **built** (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B): `adam-advisory.cjs send/request --to solomon` and `solomon-advisory.cjs send/request --to adam` write directly to the peer's live session (falling back to `broadcast-solomon` / `broadcast-adam` when transiently unresolvable), skipping the coordinator relay hop. Additive — omitting `--to` is the unchanged coordinator-relay default. Flag is OFF by default; flip it on to activate. | — |
 
 **Observe activation on the dashboard:** `node scripts/fleet-dashboard.cjs solomon` (or the `all`
 view) renders `PENDING SOLOMON CONSULTS` — pending, un-actioned consults targeted at the live Solomon
