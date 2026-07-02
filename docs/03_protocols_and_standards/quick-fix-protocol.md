@@ -3,7 +3,7 @@ category: protocol
 status: draft
 version: 1.0.0
 author: Rick Felix
-last_updated: 2026-02-28
+last_updated: 2026-07-02
 tags: [protocol, auto-generated]
 ---
 # Quick-Fix Protocol Documentation
@@ -648,6 +648,25 @@ CREATE TABLE quick_fixes (
   completed_at TIMESTAMPTZ
 );
 ```
+
+### Escalating a QF to an SD (`--from-qf`)
+
+`node scripts/leo-create-sd.js --from-qf <QF-ID>` (`createFromQF()`) is the canonical
+escalation path once a QF meets the "Escalate to SD For" criteria above. It creates the SD
+and writes a bidirectional link + retires the QF as one logical operation
+(SD-LEO-INFRA-QF-SD-ESCALATION-LINK-CANONICAL-TRACK-001):
+
+- The new SD's `metadata.escalated_from_qf` is set to the QF id.
+- The source QF's `status` flips to `escalated`, `escalated_to_sd_id` points at the new SD,
+  and `escalation_reason` names the SD key. This write is retried (up to 3 attempts) and, if
+  it still fails, the whole operation throws loudly with the SD key and a manual-recovery
+  `UPDATE` statement — it never silently leaves the QF open while an unlinked SD exists.
+- `quick_fixes` has **no `metadata` column** — do not add one. `escalated_to_sd_id` is the
+  correct, already-indexed QF-side pointer (a prior PR, #3606, already reverted an attempt to
+  write a nonexistent `quick_fixes.metadata` field).
+- Once escalated, the QF is excluded from every claim/belt surface (`rankItems()`,
+  `loadOpenQuickFixes()`, `selfClaimQuickFix()`) by its `status` alone — the SD becomes the
+  sole canonical, claimable track for that fix.
 
 ---
 
