@@ -12,6 +12,7 @@ import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { SOLOMON_LOOPS, ROLE_CONTEXT_DOC, missingDurableDuties } from './solomon-startup-check.mjs';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -47,6 +48,6 @@ function main() {
   process.exit(0);
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('solomon-self-adherence-review.mjs')) {
+if (isMainModule(import.meta.url)) {
   main();
 }

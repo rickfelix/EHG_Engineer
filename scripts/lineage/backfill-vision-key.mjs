@@ -25,6 +25,7 @@ import {
   BACKFILL_TARGET_CAP,
   APP_CONFIG_KEYS,
 } from './constants.mjs';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 config();
 
@@ -160,7 +161,7 @@ export async function backfillVisionKey({ supabase, target = BACKFILL_TARGET_CAP
   return { protocol_pre_registered: true, results, cap_reached: results.length >= target };
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('backfill-vision-key.mjs')) {
+if (isMainModule(import.meta.url)) {
   const args = process.argv.slice(2);
   const targetIdx = args.indexOf('--target');
   const target = targetIdx >= 0 ? parseInt(args[targetIdx + 1], 10) : BACKFILL_TARGET_CAP;

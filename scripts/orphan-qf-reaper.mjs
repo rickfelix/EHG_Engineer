@@ -33,6 +33,7 @@
 import 'dotenv/config';
 import { execSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const SAFETY_WINDOW_MINUTES = Number(process.env.ORPHAN_QF_REAPER_SAFETY_WINDOW_MINUTES || 5);
 const DRY_RUN = process.env.ORPHAN_QF_REAPER_DRY_RUN === 'true';
@@ -288,7 +289,7 @@ export async function main() {
   process.exit(0);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   main().catch((err) => {
     console.error('orphan-qf-reaper: unhandled error:', err.message);
     console.error(err.stack);

@@ -5,6 +5,7 @@ import process from 'node:process';
 import { parseMemoryFrontmatter } from './frontmatter.js';
 import { clusterByPrefix, buildTopicFilename, buildTopicContent } from './clustering.mjs';
 import { atomicWriteFileSync, withMemoryIndexLock } from '../../../lib/memory/atomic-write.mjs';
+import { isMainModule } from '../../../lib/utils/is-main-module.js';
 
 const INDEX_FILENAME = 'MEMORY.md';
 const TOPIC_PREFIX = 'topic_';
@@ -163,8 +164,7 @@ function indexFileLineCount(indexPath) {
   }
 }
 
-const isMain = import.meta.url === `file://${process.argv[1]}` ||
-               import.meta.url.endsWith(process.argv[1]?.replace(/\\/g, '/'));
+const isMain = isMainModule(import.meta.url);
 if (isMain) {
   const args = process.argv.slice(2);
   const dryRun = args.includes('--preview') || args.includes('--dry-run');

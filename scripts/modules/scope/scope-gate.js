@@ -23,6 +23,7 @@ import { appendFileSync, mkdirSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { minimatch } from 'minimatch';
+import { isMainModule } from '../../../lib/utils/is-main-module.js';
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 
@@ -265,7 +266,7 @@ export async function main(argv = process.argv.slice(2)) {
 // Use process.exitCode (not process.exit) to avoid Windows libuv UV_HANDLE_CLOSING
 // assertion when Supabase HTTP keep-alive sockets are still open during teardown.
 // Setting exitCode lets Node finish cleanup naturally before exiting.
-const isDirectRun = import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('scope-gate.js');
+const isDirectRun = isMainModule(import.meta.url);
 if (isDirectRun) {
   main().then(code => { process.exitCode = code; }).catch(err => {
     process.stderr.write(`[scope-gate] ERROR: ${err.message}\n`);

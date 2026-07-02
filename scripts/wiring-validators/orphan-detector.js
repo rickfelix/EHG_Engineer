@@ -26,6 +26,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { resolve, relative, join, extname, sep, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const REPO_ROOT_DEFAULT = resolve(__filename, '..', '..', '..');
@@ -291,7 +292,7 @@ export async function persistResults(supabase, result) {
 // ---------------------------------------------------------------------------
 // CLI entry
 // ---------------------------------------------------------------------------
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('orphan-detector.js')) {
+if (isMainModule(import.meta.url)) {
   const opts = parseArgs(process.argv);
   const results = runDetector(opts);
   process.stdout.write(JSON.stringify(results, null, 2) + '\n');
