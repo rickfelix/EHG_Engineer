@@ -1557,6 +1557,38 @@ async function printRelayDropGauge() {
   console.log('');
 }
 
+// ── Section: Chairman-directive compliance lane (SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B / FR-1) ──
+// Surfaces broadcast chairman_directive rows FIRST (a chairman baseline directive must never silently
+// die at any role's last hop — the incident had Solomon run 2h non-compliant). This lane BYPASSES the
+// printInbox signal_type gate (which filters .not('payload->>signal_type','is',null)): a chairman_directive
+// carries NO signal_type, so printInbox would never show it. It reads the broadcast lane directly via the
+// gauge's pure core, applies SUPERSEDES (latest issued_at per directive_id), and reports per-role
+// OUTSTANDING vs ACKED so non-compliance is VISIBLE. READ-ONLY (never mutates target_session — the
+// broadcast row must survive for every role).
+async function printChairmanDirectives() {
+  const { planChairmanDirectiveCompliance } = require('../lib/coordinator/chairman-directive-gauge.cjs');
+
+  console.log('CHAIRMAN DIRECTIVE COMPLIANCE');
+  console.log('─'.repeat(72));
+
+  const gauge = await planChairmanDirectiveCompliance(supabase);
+  if (gauge.rows.length === 0) {
+    console.log('  (no chairman directives in the last 24h)');
+    console.log('');
+    return;
+  }
+
+  const outstanding = gauge.rows.filter((r) => r.status === 'outstanding');
+  console.log('  ' + gauge.rows.length + ' (directive × role) tracked — ' + outstanding.length + ' OUTSTANDING, ' + gauge.acked + ' ACKED:');
+  for (const r of gauge.rows) {
+    const ageMin = Math.floor((r.ageMs || 0) / 60_000);
+    const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
+    const mark = r.status === 'outstanding' ? '⚠ OUTSTANDING' : '✓ acked';
+    console.log('  • [' + String(r.directiveId).slice(0, 16) + '] role=' + pad(r.role, 12) + mark + ' | issued ' + ageStr + ' ago');
+  }
+  console.log('');
+}
+
 // FR-4 surfacing: rows the stale-session sweep dead-lettered (payload.dead_letter=true)
 // in the last 24h — undelivered traffic no longer vanishes tracelessly; the coordinator
 // can re-send to the successor session. Read-only.
@@ -1696,6 +1728,9 @@ async function main() {
     predictions:   async () => await printPredictions(d),
     drain:         () => printDrainAgents(d),
     inbox:         async () => {
+      // FR-1 (SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B): chairman directives surface FIRST —
+      // bypasses the printInbox signal_type gate (chairman_directive carries no signal_type).
+      await printChairmanDirectives();
       await printInbox();
       // FR-2/FR-4 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): sender-side receipts.
       await printUndeliveredOutbound();
@@ -1720,6 +1755,7 @@ async function main() {
       printQuickFixes(d); // QF-20260525-836
       printRevivalPending(d); // SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001
       printCoordination(d);
+      await printChairmanDirectives(); // SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B / FR-1 — chairman-directive compliance FIRST (bypasses the printInbox signal_type gate)
       await printInbox(); // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a
       await printUndeliveredOutbound(); // FR-2 SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001
       await printDeadLetters(); // FR-4 SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001
