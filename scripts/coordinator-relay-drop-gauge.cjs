@@ -44,6 +44,8 @@ async function recordFlags(supabase, decisions) {
         category: 'relay_drop',
         type: 'issue',
         status: 'new',
+        source_application: 'EHG_Engineer',
+        source_type: 'auto_capture',
         title: `Relay/decision/review drop: correlation ${String(d.correlationId).slice(0, 8)}`,
         description: d.reason,
         metadata: { correlation_id: d.correlationId, row_id: d.id, age_ms: d.ageMs },

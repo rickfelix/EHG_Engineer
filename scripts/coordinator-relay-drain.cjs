@@ -27,12 +27,21 @@ function getSupabase() {
 }
 
 /**
- * Perform the actual relay: resolve the target peer's live session, then insert a
- * direct advisory row. Session-class peers only reach this point (a relay-class
- * peer's own advisory-script insert already IS the enqueue -- this tick only drains
- * to a resolvable session). Fail loud on an unresolvable peer so the row stays
- * undrained (and eventually surfaces via the FR-3 drop gauge) rather than silently
- * discarding a queued relay.
+ * Perform the actual relay. Two peer classes, two delivery contracts:
+ *   session — resolve the target peer's live session, then insert a direct advisory row.
+ *   relay   — eva/ceo NEVER have a live session (peer-target.cjs's PEER_KINDS registry,
+ *             TS-2). There is nothing to insert TO. In production the relay-class path is
+ *             the ONLY one ever enqueued (adam-advisory.cjs / solomon-advisory.cjs only call
+ *             enqueueRelayRequest for relay-class peers; session-class --to targets go via a
+ *             direct insert and never touch this queue). Treating "no live session" as a
+ *             drain FAILURE here would mean the row perpetually un-claims and retries every
+ *             tick, forever, and gets wrongly flagged by the FR-3 drop gauge as a real drop
+ *             (VALIDATION-caught during PLAN_VERIFICATION, TS-7 was the integration scenario
+ *             that would have caught this but was never implemented in EXEC). The correct
+ *             contract for a permanently-dormant peer: the durable, FR-3-surfaced
+ *             relay_request + relay_confirm pair in session_coordination IS the delivery —
+ *             there is no live-session insert to perform, so this returns ok:true without
+ *             attempting one, and drainOne proceeds to write both FR-2 receipt markers.
  * @param {object} supabase
  * @returns {(row:object) => Promise<{ok:boolean, error?:string}>}
  */
@@ -42,7 +51,10 @@ function makeSendRelay(supabase) {
     if (!peer) return { ok: false, error: 'row has no payload.relay_to' };
     try {
       const resolved = await resolvePeerTarget(supabase, peer, {});
-      if (resolved.kind === 'relay' || !resolved.target) {
+      if (resolved.kind === 'relay') {
+        return { ok: true };
+      }
+      if (!resolved.target) {
         return { ok: false, error: `relay_to "${peer}" has no resolvable live session` };
       }
       const { error } = await supabase
