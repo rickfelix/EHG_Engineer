@@ -10,7 +10,7 @@
  * isPatchEquivalentToMain pattern.
  */
 import { describe, it, expect } from 'vitest';
-import { classifyShipReason, verifyShippedOnOriginMain, decideCancelRefusal } from '../../scripts/cancel-sd.js';
+import { classifyShipReason, verifyShippedOnOriginMain, decideCancelRefusal, parseArgs } from '../../scripts/cancel-sd.js';
 
 describe('classifyShipReason', () => {
   it('classifies already-shipped/superseded/duplicate-of-merged phrasing as requiring verification', () => {
@@ -175,5 +175,42 @@ describe('decideCancelRefusal — CLI refuse-path decision (FR-4, TS-7)', () => 
     const result = decideCancelRefusal('duplicate work, killing this one', {}, { runGit: () => ({ code: 0 }), runGh: () => ({ code: 0 }) });
     expect(result.refuse).toBe(false);
     expect(result.reasons).toEqual([]);
+  });
+});
+
+// PLAN_VERIFICATION regression (independently caught by VALIDATION + REGRESSION
+// sub-agents): consumedIdx unconditionally seeded reasonIdx/prIdx even when a flag
+// was absent (indexOf() = -1, so "+1" = index 0) — poisoning the SD-key position in
+// the primary documented invocation form and breaking a real production caller
+// (scripts/eva/retire-pilot-ventures.mjs, which calls with the SD key first and no
+// --pr). These tests pin the exact regressed shapes.
+describe('parseArgs — sdInput resolution (PLAN_VERIFICATION regression fix)', () => {
+  it('resolves the SD key when it is first and --pr is absent (the documented common form)', () => {
+    const result = parseArgs(['SD-LEO-FIX-FOO-001', '--reason', 'deprioritized, no longer needed']);
+    expect(result.sdInput).toBe('SD-LEO-FIX-FOO-001');
+    expect(result.reason).toBe('deprioritized, no longer needed');
+    expect(result.pr).toBeNull();
+  });
+
+  it('resolves the SD key when it is first, matching the real retire-pilot-ventures.mjs caller shape', () => {
+    const result = parseArgs(['SD-LEO-INFRA-PILOT-VENTURE-GUARD-001', '--reason', 'pilot/test-fixture venture build-out gated']);
+    expect(result.sdInput).toBe('SD-LEO-INFRA-PILOT-VENTURE-GUARD-001');
+  });
+
+  it('still resolves the SD key when it is first AND --pr is present', () => {
+    const result = parseArgs(['SD-LEO-FIX-FOO-001', '--reason', 'already shipped via PR #999', '--pr', '999']);
+    expect(result.sdInput).toBe('SD-LEO-FIX-FOO-001');
+    expect(result.pr).toBe('999');
+  });
+
+  it('still resolves the SD key when it is last', () => {
+    const result = parseArgs(['--reason', 'deprioritized', 'SD-LEO-FIX-FOO-001']);
+    expect(result.sdInput).toBe('SD-LEO-FIX-FOO-001');
+  });
+
+  it('resolves the SD key alongside a repeated --evidence-file, --pr absent', () => {
+    const result = parseArgs(['SD-LEO-FIX-FOO-001', '--reason', 'duplicate of merged fix', '--evidence-file', 'a.js', '--evidence-file', 'b.js']);
+    expect(result.sdInput).toBe('SD-LEO-FIX-FOO-001');
+    expect(result.evidenceFiles).toEqual(['a.js', 'b.js']);
   });
 });

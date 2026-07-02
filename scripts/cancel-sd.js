@@ -26,8 +26,12 @@ dotenv.config();
 
 const supabase = createSupabaseServiceClient();
 
-function parseArgs() {
-  const args = process.argv.slice(2);
+// SD-LEO-INFRA-CANCEL-SD-VERIFY-ORIGIN-MAIN-NOT-LOCAL-HEAD-001 (PLAN_VERIFICATION
+// regression fix): exported + argv-injectable so the sdInput-resolution regression
+// (see consumedIdx fix below) is directly testable without mutating process.argv or
+// spawning a subprocess.
+export function parseArgs(argv = process.argv.slice(2)) {
+  const args = argv;
   if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
     console.log(`Usage: node scripts/cancel-sd.js <SD-KEY-or-UUID> --reason "<reason>" [--pr <number>] [--evidence-file <path>]
 
@@ -49,7 +53,8 @@ Optional (REQUIRED when --reason indicates already-shipped/superseded/duplicate-
    neither flag, or whose evidence fails verification, is REFUSED and the SD is left unchanged.)
 
 Examples:
-  node scripts/cancel-sd.js SD-LEO-FIX-FOO-001 --reason "Superseded by SD-BAR-001"
+  node scripts/cancel-sd.js SD-LEO-FIX-FOO-001 --reason "deprioritized, no longer needed"
+  node scripts/cancel-sd.js SD-LEO-FIX-FOO-001 --reason "Superseded by SD-BAR-001" --pr 999
   node scripts/cancel-sd.js SD-LEO-FIX-FOO-001 --reason "already shipped via PR #999" --pr 999
   node scripts/cancel-sd.js --help
 `);
@@ -63,7 +68,15 @@ Examples:
   const evidenceFiles = [];
   args.forEach((a, i) => { if (a === '--evidence-file' && args[i + 1]) evidenceFiles.push(args[i + 1]); });
 
-  const consumedIdx = new Set([reasonIdx, reasonIdx + 1, prIdx, prIdx + 1]);
+  // REGRESSION FIX (PLAN_VERIFICATION, independently caught by VALIDATION + REGRESSION
+  // sub-agents): an ABSENT flag's indexOf() is -1, so its "+1" companion is index 0 —
+  // exactly where the SD key conventionally sits (`cancel-sd.js <SD-KEY> --reason ...`).
+  // Unconditionally seeding the Set with reasonIdx/prIdx (even when -1) poisoned index 0
+  // whenever --pr was omitted, breaking the primary documented invocation form. Only add
+  // an index pair for a flag that was ACTUALLY found.
+  const consumedIdx = new Set();
+  if (reasonIdx !== -1) { consumedIdx.add(reasonIdx); consumedIdx.add(reasonIdx + 1); }
+  if (prIdx !== -1) { consumedIdx.add(prIdx); consumedIdx.add(prIdx + 1); }
   args.forEach((a, i) => { if (a === '--evidence-file') { consumedIdx.add(i); consumedIdx.add(i + 1); } });
   const sdInput = args.find((a, i) => !a.startsWith('-') && !consumedIdx.has(i));
 
