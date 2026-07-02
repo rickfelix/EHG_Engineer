@@ -8,7 +8,10 @@
 
 import { describe, it, expect } from 'vitest';
 import { GAUGE_REGISTRY } from '../../../lib/governance/gauge-registry.js';
-import { selectEnabledEntries, tripsThreshold, buildFindingRow } from '../../../scripts/gauge-runner.mjs';
+import {
+  selectEnabledEntries, tripsThreshold, buildFindingRow,
+  shapeRelayDropResult, shapeStaleTreeResult,
+} from '../../../scripts/gauge-runner.mjs';
 
 // feedback.type is constrained by feedback_type_check (database/migrations/391_quality_lifecycle_schema.sql)
 // to these values -- mirrored here (not imported) so this test independently guards the insert
@@ -20,24 +23,25 @@ describe('GAUGE_REGISTRY shape', () => {
     expect(GAUGE_REGISTRY).toHaveLength(3);
   });
 
-  it('has exactly 1 live entry and 2 stub entries', () => {
+  it('all 3 entries are activated — both former stubs adopted their sibling SDs\' detectors (QF-20260702-222)', () => {
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
-    expect(live).toHaveLength(1);
-    expect(stubs).toHaveLength(2);
+    expect(live).toHaveLength(3);
+    expect(stubs).toHaveLength(0);
   });
 
-  it('the live entry has a non-null detectorFn key', () => {
-    const live = GAUGE_REGISTRY.find((e) => e.enabled === true);
-    expect(typeof live.detectorFn).toBe('string');
-    expect(live.detectorFn.length).toBeGreaterThan(0);
-  });
-
-  it('both stub entries have detectorFn:null', () => {
-    const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
-    for (const stub of stubs) {
-      expect(stub.detectorFn).toBeNull();
+  it('every entry has a non-null, non-empty detectorFn key', () => {
+    for (const entry of GAUGE_REGISTRY) {
+      expect(typeof entry.detectorFn).toBe('string');
+      expect(entry.detectorFn.length).toBeGreaterThan(0);
     }
+  });
+
+  it('each entry\'s detectorFn key matches its id (the resolver map convention)', () => {
+    const relayDrop = GAUGE_REGISTRY.find((e) => e.id === 'relay-drop');
+    const staleTree = GAUGE_REGISTRY.find((e) => e.id === 'stale-tree');
+    expect(relayDrop.detectorFn).toBe('relay-drop');
+    expect(staleTree.detectorFn).toBe('stale-tree');
   });
 
   it('every entry has the required fields', () => {
@@ -51,7 +55,7 @@ describe('GAUGE_REGISTRY shape', () => {
     }
   });
 
-  it('stub entries name the sibling SD that owns their detector in the prevent field', () => {
+  it('the two adopted entries still name the sibling SD that shipped their detector in the prevent field', () => {
     const relayDrop = GAUGE_REGISTRY.find((e) => e.id === 'relay-drop');
     const staleTree = GAUGE_REGISTRY.find((e) => e.id === 'stale-tree');
     expect(relayDrop.prevent).toContain('SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001');
@@ -80,10 +84,59 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(selectEnabledEntries(undefined)).toEqual([]);
   });
 
-  it('the real GAUGE_REGISTRY selects exactly the 1 live entry', () => {
+  it('the real GAUGE_REGISTRY selects all 3 entries now that every stub is activated', () => {
     const selected = selectEnabledEntries(GAUGE_REGISTRY);
-    expect(selected).toHaveLength(1);
-    expect(selected[0].id).toBe('unranked-claimable-leaves');
+    expect(selected).toHaveLength(3);
+    expect(selected.map((e) => e.id).sort()).toEqual(['relay-drop', 'stale-tree', 'unranked-claimable-leaves']);
+  });
+});
+
+describe('shapeRelayDropResult (relay-drop resolver shaping)', () => {
+  it('reports count = flagged when the gauge is enabled', () => {
+    expect(shapeRelayDropResult({ enabled: true, flagged: 3, ok: 1, pending: 0 })).toMatchObject({ count: 3 });
+  });
+
+  it('reports count:0 when flagged:0, even while enabled', () => {
+    expect(shapeRelayDropResult({ enabled: true, flagged: 0, ok: 2, pending: 1 })).toMatchObject({ count: 0 });
+  });
+
+  it('forces count:0 when the module\'s own kill-switch (enabled) is false, regardless of flagged', () => {
+    expect(shapeRelayDropResult({ enabled: false, flagged: 5 })).toMatchObject({ count: 0 });
+  });
+
+  it('preserves the original result fields alongside the added count', () => {
+    const shaped = shapeRelayDropResult({ enabled: true, flagged: 2, ok: 1, pending: 0, decisions: [] });
+    expect(shaped.flagged).toBe(2);
+    expect(shaped.decisions).toEqual([]);
+  });
+
+  it('handles a missing/undefined result without throwing', () => {
+    expect(shapeRelayDropResult(undefined)).toMatchObject({ count: 0 });
+  });
+});
+
+describe('shapeStaleTreeResult (stale-tree resolver shaping)', () => {
+  it('reports count:0 for a FRESH verdict', () => {
+    expect(shapeStaleTreeResult({ verdict: 'FRESH', behind: 0 })).toMatchObject({ count: 0 });
+  });
+
+  it('reports count:1 for a STALE verdict', () => {
+    expect(shapeStaleTreeResult({ verdict: 'STALE', behind: 4 })).toMatchObject({ count: 1 });
+  });
+
+  it('reports count:1 for a STALE-CRITICAL verdict', () => {
+    expect(shapeStaleTreeResult({ verdict: 'STALE-CRITICAL', behind: 2, criticalDiff: ['CLAUDE.md'] })).toMatchObject({ count: 1 });
+  });
+
+  it('preserves the original verdict fields alongside the added count', () => {
+    const shaped = shapeStaleTreeResult({ verdict: 'STALE', behind: 7, role: 'fleet-gauge-runner' });
+    expect(shaped.verdict).toBe('STALE');
+    expect(shaped.behind).toBe(7);
+    expect(shaped.role).toBe('fleet-gauge-runner');
+  });
+
+  it('handles a missing/undefined result without throwing (fails toward count:1, not a silent 0)', () => {
+    expect(shapeStaleTreeResult(undefined)).toMatchObject({ count: 1 });
   });
 });
 
