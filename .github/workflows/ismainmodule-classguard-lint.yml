@@ -1,0 +1,41 @@
+name: isMainModule Raw-Pattern Class Guard Lint
+
+# SD-LEO-INFRA-ISMAINMODULE-WINDOWS-GUARD-CLASSFIX-001-B
+#
+# Blocks any PR that (re)introduces the proven, recurring "raw isMainModule comparison"
+# anti-pattern: `import.meta.url === `file://${process.argv[1]}`` silently no-ops the
+# direct-execution guard on Windows (argv[1] is a backslash path; import.meta.url is a
+# proper file:// URL -- they never match). Use isMainModule(import.meta.url) from
+# lib/utils/is-main-module.js instead. 21 confirmed-live pre-existing instances are
+# grandfathered in scripts/lint/ismainmodule-classguard-allowlist.json pending conversion
+# by sibling child -A (SD-LEO-INFRA-ISMAINMODULE-WINDOWS-GUARD-CLASSFIX-001-A) -- this
+# workflow blocks any NEW/unallowlisted instance from day one.
+#
+# GENUINELY BLOCKING (no continue-on-error): matches the posture of
+# count-delta-gate-lint.yml and realtime-subscribe-teardown-recursion-lint.yml, not the
+# older continue-on-error advisory scanners (metadata-flag-lint, alter-default-override-lint).
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**/*.{js,mjs,cjs,ts,tsx}'
+      - 'eslint-rules/no-raw-ismainmodule-comparison.js'
+      - 'scripts/lint/ismainmodule-classguard-lint.mjs'
+      - 'scripts/lint/ismainmodule-classguard-allowlist.json'
+      - '.github/workflows/ismainmodule-classguard-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ismainmodule-classguard-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Detect raw isMainModule comparisons
+        run: node scripts/lint/ismainmodule-classguard-lint.mjs

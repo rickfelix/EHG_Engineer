@@ -1,0 +1,26 @@
+{
+  "_doc": "Grandfather allow-list for ismainmodule-classguard-lint.mjs (SD-LEO-INFRA-ISMAINMODULE-WINDOWS-GUARD-CLASSFIX-001-B). Keys are repo-relative file paths (the whole file is exempted, since the raw pattern is the file's own direct-execution guard, one instance per file). Each entry REQUIRES a non-empty reason. These 21 entries are the confirmed-live (non-archived) files still carrying the raw `import.meta.url === `file://${process.argv[1]}`` pattern as of this SD's landing -- conversion to isMainModule(import.meta.url) is sibling child -A's scope (SD-LEO-INFRA-ISMAINMODULE-WINDOWS-GUARD-CLASSFIX-001-A), not this SD's. This allowlist is a TEMPORARY grandfather: as -A converts each file, remove its entry here so the guard's coverage tightens back to 100% of scripts/**. Prefer removing an entry (once converted) over leaving it indefinitely.",
+  "allow": {
+    "scripts/wiring-validators/vision-traceability-checker.js": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/wiring-validators/orphan-detector.js": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/vision/rung-progress-rollup.mjs": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/sourcing-engine/gauge-gap-miner-sweep.mjs": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/sourcing-engine-deferred-watcher-sweep.mjs": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/solomon-self-adherence-review.mjs": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/solomon-startup-check.mjs": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/repo-cleanup.js": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/promote-child-0-2.mjs": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/orphan-qf-reaper.mjs": "Pending conversion by sibling child -A (file-conversion SD) -- highest priority (zero fallback, matches QF-533's reported symptom).",
+    "scripts/modules/scope/scope-gate.js": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/modules/memory/reindex.mjs": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/lint/metadata-flag-lint.mjs": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/lint/alter-default-override-lint.mjs": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/lineage/backfill-vision-key.mjs": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/glide-path/add-income-dimension.mjs": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/create-orchestrator-from-plan.js": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/continuity/spike-rehearsal.mjs": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/claim-orchestrator-for-rollup.mjs": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/breakage/active-breakage-canary.mjs": "Pending conversion by sibling child -A (file-conversion SD).",
+    "scripts/backfill-chairman-decisions-missing-rows.mjs": "Pending conversion by sibling child -A (file-conversion SD)."
+  }
+}
