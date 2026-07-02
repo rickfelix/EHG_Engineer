@@ -16,6 +16,7 @@
     "vision:gauge": "node scripts/vision-gauge-refresh.mjs",
     "vision:s19-coverage-gauge": "node scripts/s19-vision-coverage-gauge.mjs",
     "gauges:run": "node scripts/gauge-runner.mjs",
+    "singleton-relaunch:run": "node scripts/singleton-relaunch-scheduler.mjs",
     "coordinator:relay-drain": "node scripts/coordinator-relay-drain.cjs",
     "coordinator:relay-drop-gauge": "node scripts/coordinator-relay-drop-gauge.cjs",
     "vision:build-forecast": "node scripts/vision/build-completion-forecast.mjs",
