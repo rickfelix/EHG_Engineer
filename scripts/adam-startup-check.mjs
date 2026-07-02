@@ -37,6 +37,7 @@ export const RESPONSIBILITIES = [
   'Daily deep governance-scan (one scope per tick, weighted round-robin); gated on ADAM_GOVERNANCE_HEARTBEAT_V1.',
   'Drain coordinator replies/reminders (the inbox); offer the coordinator concise analysis when it helps.',
   'Recurring SELF-adherence audit: probe own role-contract duties, ledger findings, source propose-only remediation on drift (never build — CONST-002).',
+  'Reconcile the durable PM board against live reality every tick; alert the chairman ONLY on a genuine critical-path stall (never on an intended hold) via the verified escalation-email channel.',
 ];
 
 // Adam's recurring tick. Each loop is one CronCreate spec the /adam agent arms idempotently.
@@ -114,6 +115,17 @@ export const ADAM_LOOPS = [
     script: 'adam-github-assessment.mjs',
     cron: '30 9 */3 * *',
     prompt: 'node scripts/adam-github-assessment.mjs',
+  },
+  {
+    // SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DISCIPLINE-001-B (Child B / FR-1+FR-5): the
+    // contract-named BOARD RECONCILE DUTY. Reconciles the durable task ledger against live reality
+    // every recurring tick (scripts/adam-quiet-tick.mjs's reconcileBoard()), not only at /adam cold
+    // start — closing the same "durable but session-fragile" gap the belt-countdown duty closed.
+    key: 'board-reconcile',
+    label: 'Board<->reality reconcile every tick (adam_task_ledger via rehydrateBoard)',
+    script: 'adam-quiet-tick.mjs',
+    cron: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *',
+    prompt: 'node scripts/adam-quiet-tick.mjs',
   },
 ];
 

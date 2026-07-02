@@ -22,6 +22,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
 import 'dotenv/config';
+import { rehydrateBoard } from '../lib/adam/task-rehydrate.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
@@ -71,6 +73,19 @@ function scriptCore(key, args, { skip = false } = {}) {
   };
 }
 
+// FR-1 (Child B): board<->reality RECONCILE on every tick, not only at /adam cold start
+// (scripts/adam-startup-check.mjs's renderBoardRehydrate() calls rehydrateBoard() once, on cold
+// start only). Reuses Child A's rehydrateBoard() as-is — no new upsert logic. rehydrateBoard()
+// is already fail-soft per source internally; this wrapper adds an outer fail-soft layer so a
+// synchronous throw (e.g. a malformed client) never aborts the tick.
+export async function reconcileBoard(sb) {
+  try {
+    return await rehydrateBoard(sb);
+  } catch (e) {
+    return { threads: 0, parents: 0, sds: 0, awaited: 0, errors: [`reconcile failed: ${e && e.message}`] };
+  }
+}
+
 async function readSalientState(sb) {
   const state = { beltZero: true, openSignalCount: 0, venture1State: null };
   try {
@@ -110,6 +125,9 @@ async function main() {
   // is delta-gated below, so only the inbox core needs composing here.
   const tick = await runCoresFailSoft(buildCores());
 
+  // Child B FR-1: reconcile the durable task board against live reality every tick.
+  const boardReconcile = await reconcileBoard(sb);
+
   // FR-4: belt-countdown + offer-help collapse to a salient-delta check — Adam only
   // reaches the coordinator on a real belt/venture delta, never a "still idle" status.
   const salient = await readSalientState(sb);
@@ -124,6 +142,7 @@ async function main() {
     modeReason,
     cores: tick.summary,
     failedCount: tick.failedCount,
+    boardReconcile,
     crossPartyPing: delta.changed,
     pingFields: delta.fields,
     nextWakeSeconds: delaySeconds,
@@ -135,6 +154,7 @@ async function main() {
     console.log(
       `QUIET_TICK=adam mode=${result.mode} cores=[${tick.summary}] ` +
       `fail=${tick.failedCount} ` +
+      `reconcile=parents:${boardReconcile.parents},errors:${boardReconcile.errors.length} ` +
       `ping=${delta.changed ? delta.fields.join(',') : 'suppressed'} ` +
       `nextWakeSeconds=${delaySeconds} :: ${modeReason}`
     );
@@ -145,7 +165,14 @@ async function main() {
   return result;
 }
 
-main().then(() => process.exit(0)).catch((e) => {
-  console.error('QUIET_TICK_ERROR=adam', e && e.message ? e.message : e);
-  process.exit(1);
-});
+// SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DISCIPLINE-001-B (Child B / FR-1): main() previously
+// ran unconditionally at import time (no entry-point guard) — importing this module for its exports
+// (reconcileBoard, buildCores, COMPOSED_CORES) would trigger a full tick execution, including a real
+// subprocess spawn and process.exit(0), corrupting any importer/test. Guarded to match the established
+// pattern (lib/utils/is-main-module.js) already used by sibling scripts.
+if (isMainModule(import.meta.url)) {
+  main().then(() => process.exit(0)).catch((e) => {
+    console.error('QUIET_TICK_ERROR=adam', e && e.message ? e.message : e);
+    process.exit(1);
+  });
+}
