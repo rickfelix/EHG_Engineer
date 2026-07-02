@@ -804,6 +804,80 @@ unrelated `import.meta.url`/`process.argv[1]` usage):
 
 ---
 
+## Pattern: Sub-agent evidence rows must never hand-type Windows path literals in inline shell/JS INSERT scripts (SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001)
+
+**Symptom**: `sub_agent_execution_results.metadata->>'repo_path'`, `metadata->>'executed_from_cwd'`, and
+the separate top-level `executed_from_cwd` column intermittently contain silently-corrupted Windows
+paths — some fields corrupted while sibling fields in the SAME row stay clean, proving independent
+per-write typing rather than a deterministic code bug. Corrupted `repo_path` values silently fail the
+`SUB_AGENT_REPO_RESOLUTION` gate's exact-match comparison against `applications.local_path`, producing
+confusing gate-failure investigations (this exact bug blocked
+`SD-LEO-INFRA-COORDINATOR-ORCHESTRATED-SINGLETON-REFRESH-001-B` EXEC-TO-PLAN on 2026-07-02, requiring a
+manual DB fix). A live full-table scan found 63 corrupted rows out of 34,246, dated across a multi-week
+range including the day of authoring — an active, ongoing corruption class, not a historical one-off.
+
+**Root cause**: sub-agents spawned via the Task tool are told (by `leo_protocol_sections` rows that
+generate `CLAUDE_PLAN.md`'s Task-tool prompt templates) to "Store results in sub_agent_execution_results
+table" with ZERO guidance on HOW — so each spawned agent freelances its own approach, and several
+hand-typed inline `node -e "..."`/heredoc `INSERT` scripts containing literal Windows path strings (e.g.
+`"C:\Users\rickf\..."` written directly into a JS/shell string). The literal passes through JS
+string-escape parsing at PARSE TIME, before the value ever reaches the database or the canonical
+`lib/sub-agents/resolve-repo.js` writer (confirmed correct and unmodified by this SD): `\U`, `\P`, `\_`,
+`\E` are not recognized JS escapes, so the backslash is silently dropped while the letter survives; `\r`
+IS a recognized escape and becomes a literal embedded carriage-return control byte (`0x0D`) in the stored
+string. The same mechanism corrupts `\n` (embedded LF, `0x0A`) in any path containing a directory name
+starting with `n` (e.g. `\node_modules`) — a related instance this SD's own trigger regex initially
+missed (caught by an independent TESTING-perspective verification pass before the migration was applied;
+see the Files list below for the fixed version, not a since-superseded draft).
+
+**Fix**: prevention + repair, not a single patch:
+1. **A deterministic evidence-writer CLI already exists** (`scripts/store-sub-agent-repo-evidence.js`,
+   QF-20260702-679, shipped independently and reused as-is here) — it chains
+   `resolveSubAgentRepo → applySubAgentRepoVerdict → storeSubAgentResults` so evidence content comes from
+   `--content @<file>|-`, never an inline path literal. This SD does not reimplement it.
+2. **Point the leak-vector templates at it**: `leo_protocol_sections` rows `id=290`
+   (`lead_explore_integration`) and `id=291` (`plan_multi_perspective`) — the only two rows in the table
+   containing the bare "Store results in sub_agent_execution_results table" phrase — now explicitly
+   instruct agents to use the CLI and forbid hand-typed path literals. Regenerated via
+   `node scripts/generate-claude-md-from-db.js`, verified zero-drift via `check-claude-md-drift.cjs`.
+3. **DB-level BLOCKING guard** (fail-closed at the source, unlike the advisory-only
+   `session_coordination_insert_lint` precedent): `trg_subagent_evidence_reject_control_chars`
+   `RAISE EXCEPTION`s on any C0 control character except tab (`[\x00-\x08\x0A-\x1F]`) in
+   `metadata->>'repo_path'`, `metadata->>'executed_from_cwd'`, or the top-level `executed_from_cwd`
+   column — catches every producer regardless of code path, not just the ones updated in step 2.
+4. **Historical backfill**: `scripts/backfill-corrupted-subagent-repo-paths.mjs` — `repo_path` is
+   deterministically recovered via `sd_id → strategic_directives_v2.target_application →
+   applications.local_path` (the corrupted string itself is NOT algorithmically un-corruptible —
+   information is destructively lost — so recovery is a DB join, not string repair); `executed_from_cwd`
+   in both locations is set to `NULL` rather than fabricated, since the exact original worktree path is
+   unrecoverable. `--dry-run` by default; `--apply` required to write.
+
+**Verification lesson**: the migration's first draft used reject-class `[\x00-\x08\x0B-\x1F]`, intending
+to exclude only tab (`\x09`) — but the range skip from `\x08` to `\x0B` also silently excluded newline
+(`\x0A`), undermining the "BLOCKING" guarantee for exactly the corruption pattern this SD exists to catch.
+An independent TESTING-perspective verification pass (re-deriving the regex behavior live against
+Postgres rather than trusting the implementer's report) caught this before the migration was applied to
+production. Fixed to `[\x00-\x08\x0A-\x1F]` in both the SQL trigger and the JS `detectCorruption()`
+before deployment; a regression test for the newline case was added to the test suite.
+
+### PR-review checklist line
+
+> When a sub-agent (or a Task-tool prompt template) needs to persist evidence to
+> `sub_agent_execution_results`, verify it routes through `scripts/store-sub-agent-repo-evidence.js` or
+> `lib/sub-agents/resolve-repo.js` — never a hand-typed Windows path literal inside an inline
+> `node -e`/heredoc `INSERT` script. The JS string-escape parser silently corrupts backslash sequences
+> before the value ever reaches the database.
+
+### Files Modified/Created
+`database/migrations/20260702_subagent_evidence_control_char_trigger.sql` (new),
+`scripts/backfill-corrupted-subagent-repo-paths.mjs` (new),
+`tests/database/subagent-evidence-control-char-trigger.test.js` (new),
+`tests/unit/scripts/backfill-corrupted-subagent-repo-paths.test.js` (new),
+`leo_protocol_sections` rows `id=290`, `id=291` (DB content update, not a file),
+`CLAUDE_PLAN.md`, `CLAUDE_LEAD.md` (regenerated)
+
+---
+
 ## Cross-References
 
 - **Database Patterns**: [database-agent-patterns.md](./database-agent-patterns.md)
@@ -820,3 +894,4 @@ unrelated `import.meta.url`/`process.argv[1]` usage):
 | 1.1.0 | 2026-07-01 | Added Realtime subscribe-teardown class-guard pattern from SD-LEO-INFRA-REALTIME-REMOVECHANNEL-RECURSION-CLASSGUARD-001 |
 | 1.2.0 | 2026-07-01 | Added Count-delta-vs-identity-diff gate class-guard pattern from SD-LEO-INFRA-COUNT-VS-IDENTITY-GATE-CLASSGUARD-001 |
 | 1.3.0 | 2026-07-02 | Added isMainModule raw-pattern class-guard from SD-LEO-INFRA-ISMAINMODULE-WINDOWS-GUARD-CLASSFIX-001-B |
+| 1.4.0 | 2026-07-02 | Added sub-agent evidence control-character corruption pattern from SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001 |
