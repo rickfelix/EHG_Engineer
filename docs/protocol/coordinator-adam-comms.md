@@ -238,9 +238,12 @@ triggers. Full rationale + live evidence: `docs/protocol/crew-comms-routing-prot
 
 Every message on this lane is sender-stamped with a reply-class: `fire-and-forget`
 (no reply expected), `reply-needed` (async, PING-ON-SILENCE applies), or
-`live-handshake` (sync-request eligible — see below). See
+`live-handshake` (sync-request eligible — see below). **Implemented**
+(SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C) — Adam opts a `send` into
+`reply-needed` via `node scripts/adam-advisory.cjs send "<body>" --reply-class reply-needed
+[--reply-window-ms <ms>]`; `request` mode is always `live-handshake`. See
 `docs/protocol/crew-comms-routing-protocol.md` § "Rule 3 — Sender-stamped reply-class"
-for the full contract.
+for the full contract and `lib/coordinator/reply-class.cjs` for the implementation.
 
 ## Sync-request (live-handshake only)
 

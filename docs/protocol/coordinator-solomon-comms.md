@@ -65,9 +65,14 @@ triggers. Full rationale + live evidence: `docs/protocol/crew-comms-routing-prot
 
 Every message on this lane is sender-stamped with a reply-class: `fire-and-forget`
 (no reply expected), `reply-needed` (async, PING-ON-SILENCE applies), or
-`live-handshake` (sync-request eligible — see below). See
-`docs/protocol/crew-comms-routing-protocol.md` § "Rule 3 — Sender-stamped reply-class"
-for the full contract.
+`live-handshake` (sync-request eligible — see below). **Implemented**
+(SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C) — Solomon opts a `send` into
+`reply-needed` via `node scripts/solomon-advisory.cjs send "<body>" --reply-class
+reply-needed [--reply-window-ms <ms>]`; `request` mode and a `solomon-consult` answer with
+`--await` are always `live-handshake`; a consult without `--await` defaults to
+`reply-needed`. See `docs/protocol/crew-comms-routing-protocol.md` § "Rule 3 —
+Sender-stamped reply-class" for the full contract and `lib/coordinator/reply-class.cjs`
+for the implementation.
 
 ## Sync-request (live-handshake only)
 
