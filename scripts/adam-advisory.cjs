@@ -45,6 +45,7 @@ const { redact, BODY_HARD_CAP, awaitCoordinatorReply } = require('./worker-signa
 const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled } = require('../lib/coordinator/resolve.cjs');
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
+const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
 const { enqueueRelayRequest } = require('../lib/coordinator/relay-queue.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
@@ -421,6 +422,10 @@ async function drainInbox(supabase, sessionId, { quiet = false } = {}) {
     const kind = (r.payload && r.payload.kind) || r.message_type || '?';
     const text = (r.payload && r.payload.body) || r.body || r.subject || '(empty)';
     const ageMin = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
+    // FR-2 (SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-C): detect a stale-singleton version skew
+    // instead of silently misreading the row — surfaced, not consumed-differently (still drained).
+    const skew = detectVersionSkew(r.payload);
+    if (skew) console.warn(`  ⚠ PROTOCOL VERSION SKEW: sender v${skew.senderVersion}, receiver v${skew.receiverVersion} (id=${r.id})`);
     console.log(`  • [${lane}/${kind}] (${ageMin}m) ${text}`);
     ids.push(r.id);
   }
