@@ -50,6 +50,7 @@ function makeBridgeSb({ calls, venture, activeL2 = null, draftSeed = null, updat
         select() { ctx.op = 'select'; return builder; },
         update(payload) { ctx.op = 'update'; ctx.payload = payload; return builder; },
         eq(col, val) { ctx.filters[col] = val; return builder; },
+        in(col, arr) { ctx.filters[col] = arr; return builder; },
         order() { return builder; },
         limit() { return builder; },
         async upsert() { return { error: null }; },
@@ -72,6 +73,7 @@ function makeBridgeSb({ calls, venture, activeL2 = null, draftSeed = null, updat
     if (ctx.table === 'eva_vision_documents') {
       if (ctx.filters.status === 'active') return activeL2;
       if (ctx.filters.status === 'draft_seed') return draftSeed;
+      if (Array.isArray(ctx.filters.status) && (ctx.filters.status.includes('draft_seed') || ctx.filters.status.includes('draft'))) return draftSeed;
     }
     return null;
   }
@@ -133,7 +135,9 @@ describe('FR-1/FR-2: _runS19Bridge promotes a clone vision at the TOP (before an
 
     const result = await runS19Bridge.call(ctx, 'real-1');
 
-    // The real promote was reached (it runs for every venture) but early-returned real_venture:
+    // The real promote was reached (it runs for every venture); this fixture has no L2 doc at all,
+    // so it stops at no_l2_vision (SD-...-S19-001-B: a real venture WITH a doc would now reach the
+    // repair loop, covered by clone-vision-autoapprove.test.js and nonclone-vision-s19-activation.test.js) —
     // no eva_vision_documents UPDATE, and the bridge proceeded unchanged.
     const visionUpdates = updates.filter((u) => u.table === 'eva_vision_documents');
     expect(visionUpdates).toHaveLength(0);
