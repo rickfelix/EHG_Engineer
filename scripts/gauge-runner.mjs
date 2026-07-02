@@ -20,14 +20,43 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
 import { GAUGE_REGISTRY } from '../lib/governance/gauge-registry.js';
 import { computeClaimableLeaves } from './coordinator-backlog-rank.mjs';
 import { countUnrankedClaimableLeaves } from './gauge-unranked-claimable-leaves.mjs';
+import { checkoutFreshness } from '../lib/governance/checkout-freshness.js';
+
+// relay-drop-gauge.cjs is CommonJS -- createRequire is this codebase's established ESM-import-CJS
+// seam (mirrors gauge-unranked-claimable-leaves.mjs's own worker-checkin.cjs import).
+const require = createRequire(import.meta.url);
+const { planRelayDrops } = require('../lib/coordinator/relay-drop-gauge.cjs');
 
 const JSON_MODE = process.argv.includes('--json');
 const MAX_DETECTORS_PER_RUN = 50; // budget-bound: far above the current 3-entry registry, a backstop against runaway growth
 
 const HEARTBEAT_DIMENSION = 'gauge_runner_heartbeat';
+
+/**
+ * Pure: shapes a relay-drop-gauge result into the runner's generic {count,...} convention,
+ * respecting the module's own RELAY_DROP_GAUGE_V1 kill-switch (result.enabled) — a disabled
+ * gauge always reports count:0 rather than routing findings the module itself says are off.
+ * @param {{enabled?: boolean, flagged?: number}} result
+ * @returns {{count: number}}
+ */
+export function shapeRelayDropResult(result) {
+  return { ...result, count: result?.enabled ? (result.flagged || 0) : 0 };
+}
+
+/**
+ * Pure: shapes a checkout-freshness verdict into the runner's generic {count,...} convention.
+ * count:0 only for VERDICT.FRESH; STALE and STALE-CRITICAL both count as 1 (a single tree is
+ * either fresh or it isn't — the verdict field, not count, carries the severity distinction).
+ * @param {{verdict?: string}} result
+ * @returns {{count: number}}
+ */
+export function shapeStaleTreeResult(result) {
+  return { ...result, count: result?.verdict === 'FRESH' ? 0 : 1 };
+}
 
 /**
  * Maps a registry entry's string detectorFn key to an actual callable. Keeps gauge-registry.js
@@ -41,6 +70,8 @@ function buildDetectorResolvers(supabase) {
       if (error) throw new Error('computeClaimableLeaves failed: ' + error.message);
       return countUnrankedClaimableLeaves(claimable, Date.now());
     },
+    'relay-drop': async () => shapeRelayDropResult(await planRelayDrops(supabase)),
+    'stale-tree': async () => shapeStaleTreeResult(checkoutFreshness(process.cwd(), { role: 'fleet-gauge-runner' })),
   };
 }
 
