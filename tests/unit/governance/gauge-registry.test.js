@@ -8,7 +8,12 @@
 
 import { describe, it, expect } from 'vitest';
 import { GAUGE_REGISTRY } from '../../../lib/governance/gauge-registry.js';
-import { selectEnabledEntries, tripsThreshold } from '../../../scripts/gauge-runner.mjs';
+import { selectEnabledEntries, tripsThreshold, buildFindingRow } from '../../../scripts/gauge-runner.mjs';
+
+// feedback.type is constrained by feedback_type_check (database/migrations/391_quality_lifecycle_schema.sql)
+// to these values -- mirrored here (not imported) so this test independently guards the insert
+// shape rather than trusting the same constant the code under test might drift from.
+const VALID_FEEDBACK_TYPES = ['issue', 'enhancement'];
 
 describe('GAUGE_REGISTRY shape', () => {
   it('exports exactly 3 seed entries', () => {
@@ -98,5 +103,30 @@ describe('tripsThreshold', () => {
     const entry = { thresholdConfig: { tripWhen: () => { throw new Error('boom'); } } };
     expect(() => tripsThreshold(entry, {})).not.toThrow();
     expect(tripsThreshold(entry, {})).toBe(false);
+  });
+});
+
+describe('buildFindingRow (FR-3 alerting row shape)', () => {
+  it('produces a type value that satisfies the feedback_type_check constraint', () => {
+    const entry = { id: 'unranked-claimable-leaves', name: 'Unranked claimable leaf SDs', ownerRole: 'coordinator', remediation: 'x', prevent: 'y' };
+    const row = buildFindingRow(entry, { count: 3, keys: ['SD-A'] });
+    expect(VALID_FEEDBACK_TYPES).toContain(row.type);
+  });
+
+  it('carries the gauge discriminator in category/metadata, not in type', () => {
+    const entry = { id: 'unranked-claimable-leaves', name: 'Unranked claimable leaf SDs', ownerRole: 'coordinator', remediation: 'x', prevent: 'y' };
+    const row = buildFindingRow(entry, { count: 3, keys: ['SD-A'] });
+    expect(row.category).toBe('invariant_gauge_finding');
+    expect(row.metadata.gauge_id).toBe('unranked-claimable-leaves');
+    expect(row.metadata.owner_role).toBe('coordinator');
+  });
+
+  it('title and description reference the entry name/id/remediation', () => {
+    const entry = { id: 'gid', name: 'Gauge Name', ownerRole: 'adam', remediation: 'do the thing', prevent: 'p' };
+    const row = buildFindingRow(entry, { count: 1 });
+    expect(row.title).toContain('Gauge Name');
+    expect(row.title).toContain('adam');
+    expect(row.description).toContain('gid');
+    expect(row.description).toContain('do the thing');
   });
 });

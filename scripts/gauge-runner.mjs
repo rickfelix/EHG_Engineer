@@ -66,9 +66,20 @@ export function tripsThreshold(entry, result) {
   try { return !!tripWhen(result); } catch { return false; }
 }
 
-async function routeFinding(supabase, entry, result) {
-  const { error } = await supabase.from('feedback').insert({
-    type: 'gauge_finding',
+/**
+ * Pure: builds the feedback-table insert row for a tripped gauge finding. Exported so the row
+ * shape (critically, `type: 'issue'`) can be unit-tested against the feedback_type_check
+ * constraint's known-valid values without a live DB round-trip.
+ * @param {object} entry
+ * @param {object} result
+ * @returns {object}
+ */
+export function buildFindingRow(entry, result) {
+  // feedback.type is constrained to ('issue', 'enhancement') by feedback_type_check
+  // (database/migrations/391_quality_lifecycle_schema.sql) -- a tripped gauge is an issue; the
+  // gauge-specific discriminator lives in category/metadata.gauge_id instead.
+  return {
+    type: 'issue',
     source_application: 'EHG_Engineer',
     source_type: 'auto_capture',
     category: 'invariant_gauge_finding',
@@ -77,7 +88,11 @@ async function routeFinding(supabase, entry, result) {
     title: `[GAUGE] ${entry.name} tripped (owner: ${entry.ownerRole})`,
     description: `Detector "${entry.id}" tripped its threshold. Remediation: ${entry.remediation}`,
     metadata: { gauge_id: entry.id, owner_role: entry.ownerRole, result, prevent: entry.prevent, routed_at: new Date().toISOString() },
-  });
+  };
+}
+
+async function routeFinding(supabase, entry, result) {
+  const { error } = await supabase.from('feedback').insert(buildFindingRow(entry, result));
   if (error) console.error(`[gauge-runner] finding-route failed for ${entry.id} (non-fatal): ${error.message}`);
 }
 
