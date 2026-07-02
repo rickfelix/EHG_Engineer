@@ -202,6 +202,16 @@ live Solomon).
   per connection). Do not stake a load-bearing decision on a single REST read.
 - **OS/on-disk marker is the authoritative tiebreaker** whenever DB liveness/existence is
   ambiguous. A `heartbeat_at` timestamp in a row is not proof of a live process.
+- **Protocol-version skew is a detectable signal, not a silent orphan.** Every
+  `session_coordination` row inserted via `insertCoordinationRow` (`lib/coordinator/dispatch.cjs`)
+  is stamped with `PROTOCOL_COMMS_VERSION` (`lib/coordinator/protocol-comms-version.cjs`). A
+  long-lived singleton running boot-time code while a payload-shape fix ships to origin would
+  otherwise misread or drop the newer-shaped row as a mystery orphan; `detectVersionSkew(payload)`
+  instead surfaces an explicit sender/receiver version mismatch in both `scripts/adam-advisory.cjs`
+  and `scripts/solomon-advisory.cjs`. An unstamped (pre-versioning) payload is NOT itself treated
+  as skew — only an explicit differing stamp is. Bump the version only when payload SHAPE changes
+  in a way a stale reader could misclassify, not for routine additive fields.
+  (SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-C)
 
 ## Provenance
 
