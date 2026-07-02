@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-FIX-LEO-CREATE-ROUTE-001",
-  "expectedBranch": "feat/SD-LEO-FIX-LEO-CREATE-ROUTE-001",
-  "createdAt": "2026-07-01T23:12:29.140Z",
+  "sdKey": "SD-LEO-INFRA-COUNT-VS-IDENTITY-GATE-CLASSGUARD-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-COUNT-VS-IDENTITY-GATE-CLASSGUARD-001",
+  "createdAt": "2026-07-01T23:07:49.526Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }

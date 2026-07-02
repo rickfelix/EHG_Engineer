@@ -17,6 +17,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execSync } = require('child_process');
+// SD-LEO-INFRA-COUNT-VS-IDENTITY-GATE-CLASSGUARD-001 (FR-2): capture WHICH tests failed, not just
+// how many, so compare-test-baseline.cjs can diff identities instead of a raw count delta.
+const { extractFailingIds } = require('../../lib/gates/identity-diff-gate.cjs');
 
 const SESSION_STATE_FILE = path.join(process.env.HOME || '/tmp', '.claude-session-state.json');
 const ENGINEER_DIR = '.';
@@ -92,6 +95,9 @@ function captureUnitTestState(workingDir, testScript = 'test') {
       total: json.numTotalTests ?? 0,
       test_files_failed: json.numFailedTestSuites ?? 0,
       project: testScript,
+      // FR-2: additive alongside the existing counts (backward-compatible) — the identity set
+      // compare-test-baseline.cjs diffs against, instead of a raw failed-count subtraction.
+      failing_ids: extractFailingIds(json),
     };
   } catch (error) {
     try { fs.unlinkSync(outFile); } catch { /* best-effort cleanup */ }

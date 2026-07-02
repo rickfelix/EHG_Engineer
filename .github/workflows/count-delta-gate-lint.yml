@@ -1,0 +1,41 @@
+name: Count-Delta Gate Assertion Lint
+
+# SD-LEO-INFRA-COUNT-VS-IDENTITY-GATE-CLASSGUARD-001
+#
+# Blocks any PR that (re)introduces the proven, recurring "count-delta gate" anti-pattern: a
+# gate flagging on a raw failure-COUNT delta (e.g. "failures rose 105 -> 107") rather than an
+# identity-set diff of WHICH specific tests/files changed. A count-delta gate false-positives on
+# unrelated flaky / CI-secret / shared-DB-drift noise. Proven instances: scripts/ci/
+# red-merge-detector.mjs, scripts/compare-to-main-snapshot.mjs (BASELINE_REGRESSION), and —
+# converted in this SD — scripts/hooks/compare-test-baseline.cjs.
+#
+# GENUINELY BLOCKING (no continue-on-error): this repo's `npm run lint` (eslint.config.js
+# flat-config run) is not invoked by any other CI workflow, so registering the rule only in
+# eslint.config.js would not actually enforce anything — this dedicated workflow is the real
+# enforcement mechanism (same posture as realtime-subscribe-teardown-recursion-lint.yml).
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/ci/**/*.{js,mjs,cjs,ts,tsx}'
+      - 'scripts/hooks/**/*.{js,mjs,cjs,ts,tsx}'
+      - 'scripts/modules/**/*.{js,mjs,cjs,ts,tsx}'
+      - 'eslint-rules/no-count-delta-gate-assertion.js'
+      - 'scripts/lint/count-delta-gate-lint.mjs'
+      - '.github/workflows/count-delta-gate-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  count-delta-gate-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Detect raw count-delta gate assertions
+        run: node scripts/lint/count-delta-gate-lint.mjs

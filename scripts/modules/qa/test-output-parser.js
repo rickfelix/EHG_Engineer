@@ -158,6 +158,7 @@ export function parsePlaywrightOutput(output) {
       if (results.failures.length === 0) {
         const simpleFailRegex = /Error:\s*(.+?)(?:\n|$)/g;
         let errorCount = 0;
+        // eslint-disable-next-line no-count-delta-gate-assertion -- parsing-loop bound, not a regression gate
         while ((match = simpleFailRegex.exec(output)) !== null && errorCount < results.failed) {
           results.failures.push({
             error_message: match[1].trim().substring(0, 200)

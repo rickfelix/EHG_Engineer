@@ -668,6 +668,67 @@ to start and the test could not fail.
 
 ---
 
+## Pattern: Count-delta gate should be identity-diff (+ diff-reachability), not a raw count comparison (SD-LEO-INFRA-COUNT-VS-IDENTITY-GATE-CLASSGUARD-001)
+
+**Symptom**: A gate compares a raw failure COUNT main-vs-PR or baseline-vs-current ("failures rose
+105 -> 107") and flags a regression on any rise — even when the delta is unrelated flaky / CI-secret /
+shared-prod-DB-drift noise that has nothing to do with the change under test. This false-blocks PRs,
+false-files QFs (wasting worker cycles), and trains workers to override/ignore the gate — eroding gate
+trust, adjacent to the test-masking anti-pattern.
+
+**Root cause**: comparing two SCALARS (a count) discards WHICH specific identities (test names, files)
+changed. The same failing tests can produce a higher raw count on a re-run with no change under test
+(retries, shared-DB drift, CI-secret expiry) — a count-delta gate cannot distinguish that from a
+genuine regression.
+
+**Audit — every count-delta gate instance found** (grep/AST sweep of `scripts/ci/`, `scripts/hooks/`,
+`scripts/modules/`, `scripts/gate-health-check.js`, plus a manual read of borderline candidates):
+
+| Class | File | Disposition |
+|-------|------|-------------|
+| GATE-THAT-FLAGS (in-scope anti-pattern) | `scripts/hooks/compare-test-baseline.cjs` `compareTestCounts()` | **CONVERTED** in this SD — see Fix below |
+| GATE-THAT-FLAGS | `scripts/compare-to-main-snapshot.mjs` BASELINE_REGRESSION | **Deliberately deferred** — unmerged branch `qf/QF-20260701-833` (commit `b65b18e2c8`) already prototypes an identity-diff conversion for it; follow-up consolidation SD should have it adopt `lib/gates/identity-diff-gate.cjs` |
+| GATE-THAT-FLAGS | `scripts/ci/red-merge-detector.mjs` `decide()` + `detectBaselineRot()` | **Deliberately deferred** — a separate durable fix is sourced elsewhere; same follow-up-consolidation note. Underlying `codebase_health_snapshots` rows carry only a scalar `failed_count` today (no per-test identity), so converting this instance also needs a snapshot-schema extension, not just a comparator swap |
+| COUNT READER (not a gate, out of scope) | `scripts/hooks/capture-baseline-test-state.cjs`, `lib/sub-agents/regression.js`, `lib/eva/bridge/build-feedback-collector.js` | Reads/reports a count, does not flag on a delta |
+| ABSOLUTE-THRESHOLD (not the anti-pattern, out of scope) | `scripts/modules/shipping/TestExecutionVerifier.js` (`failed>0`), `lib/sub-agents/github.js:575` (`failed_count>0`) | No main-vs-PR/expected-vs-actual delta semantics — an existence/cap check |
+| CONTRASTIVE (already identity-scoped, reference shape) | `scripts/row-growth-snapshot.cjs` (table-name-scoped), `scripts/lib/ci-recurrence-detector.mjs` (classSignature-clustered) | Good examples of the target shape for future conversions |
+
+**Fix**: a structural class-guard, mirroring the shipped `SD-LEO-INFRA-REALTIME-REMOVECHANNEL-
+RECURSION-CLASSGUARD-001` shape exactly, not another per-instance patch:
+1. **Shared comparator**: `lib/gates/identity-diff-gate.cjs` — `computeIdentityRegression(currentIds,
+   priorFailingIds)` (a SET diff of failing identities, not a count subtraction), `extractFailingIds(raw)`
+   (parses a vitest JSON report into `file::fullName` identities), `filterReachable(newIds, changedFiles)`
+   (the diff-reachability half). Shaped as a drop-in superset of QF-20260701-833's inline primitive so
+   the two deferred instances above can adopt it later with zero behavior change.
+2. **One instance actually converted**: `scripts/hooks/compare-test-baseline.cjs` now diffs
+   `failing_ids` (captured additively by `scripts/hooks/capture-baseline-test-state.cjs`) instead of
+   subtracting `current_failed - baseline_failed` — proving the pattern end-to-end.
+3. **Lint rule**: `eslint-rules/no-count-delta-gate-assertion.js` — NAME-ANCHORED (matches a
+   failure-count lexicon: `numFailedTests`, `failed_count`, `baseline_failed`, `current_failed`,
+   `new_failures`, or `/(^|_)(failed|failing|failure)_?(count|tests|total)?$/i`), not a general
+   count-comparison AST match (which would false-positive on every ordinary numeric threshold check —
+   confirmed empirically: an initial general pass over `scripts/modules/**` flagged 9 false positives,
+   all existence checks (`failed > 0`) or absolute-cap checks (`< MIN_FAILURES_FOR_PATTERN`); refining
+   to skip relational comparisons against a numeric literal or an ALL_CAPS constant brought it to zero).
+   Reused via ESLint's programmatic `Linter` API by `scripts/lint/count-delta-gate-lint.mjs`, wired into
+   a dedicated, genuinely blocking GitHub Actions workflow (same "`npm run lint` is never invoked by any
+   CI workflow" rationale as the sibling class-guard).
+
+### PR-review checklist line
+
+> When a gate compares main-vs-PR or baseline-vs-current, verify it diffs a SET of identities (test
+> names, file paths) rather than a raw scalar count — a count-delta comparison cannot distinguish a
+> genuine regression from unrelated flaky/CI-secret/shared-DB-drift noise. Use
+> `lib/gates/identity-diff-gate.cjs`'s `computeIdentityRegression`, not `currentCount - baselineCount`.
+
+### Files Modified/Created
+`lib/gates/identity-diff-gate.cjs` (new), `eslint-rules/no-count-delta-gate-assertion.js` (new),
+`scripts/lint/count-delta-gate-lint.mjs` (new), `.github/workflows/count-delta-gate-lint.yml` (new),
+`scripts/hooks/compare-test-baseline.cjs`, `scripts/hooks/capture-baseline-test-state.cjs`,
+`scripts/modules/qa/test-output-parser.js` (pragma-exempted parsing-loop bound), `package.json`
+
+---
+
 ## Cross-References
 
 - **Database Patterns**: [database-agent-patterns.md](./database-agent-patterns.md)
@@ -682,3 +743,4 @@ to start and the test could not fail.
 |---------|------|---------|
 | 1.0.0 | 2026-01-30 | Initial documentation from SD-LEO-INFRA-HARDENING-001 |
 | 1.1.0 | 2026-07-01 | Added Realtime subscribe-teardown class-guard pattern from SD-LEO-INFRA-REALTIME-REMOVECHANNEL-RECURSION-CLASSGUARD-001 |
+| 1.2.0 | 2026-07-01 | Added Count-delta-vs-identity-diff gate class-guard pattern from SD-LEO-INFRA-COUNT-VS-IDENTITY-GATE-CLASSGUARD-001 |

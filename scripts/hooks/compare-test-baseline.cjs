@@ -24,6 +24,9 @@ const path = require('path');
 // since the local gate's skip-awareness can't run until the module loads.
 const { captureBaseline, captureUnitTestState, captureTypeCheckState } = require('./capture-baseline-test-state.cjs');
 const { skipDriftStatus } = require('../lib/skip-drift.cjs');
+// SD-LEO-INFRA-COUNT-VS-IDENTITY-GATE-CLASSGUARD-001 (FR-2): identity-set diff instead of a raw
+// failed-count subtraction — a count rise from the SAME flaky identities is not a regression.
+const { computeIdentityRegression } = require('../../lib/gates/identity-diff-gate.cjs');
 
 const SESSION_STATE_FILE = path.join(process.env.HOME || '/tmp', '.claude-session-state.json');
 
@@ -65,10 +68,18 @@ function compareTestCounts(baseline, current, label) {
     status: 'UNKNOWN'
   };
 
-  result.new_failures = Math.max(0, result.current_failed - result.baseline_failed);
+  // FR-2: identity-set diff (which specific tests are newly failing), not a raw count subtraction
+  // — the same flaky identities repeating across runs must never read as a regression.
+  const idResult = computeIdentityRegression(current?.failing_ids, baseline?.failing_ids, {
+    failed: result.current_failed,
+    priorFailedCount: result.baseline_failed,
+  });
+  result.new_failures = idResult.newIds.length;
+  result.new_failing_ids = idResult.newIds;
+  result.regression_mode = idResult.mode;
   result.fixed = Math.max(0, result.baseline_failed - result.current_failed);
 
-  if (result.new_failures > 0) {
+  if (idResult.regression) {
     result.status = 'REGRESSION';
   } else if (result.fixed > 0) {
     result.status = 'IMPROVED';
@@ -216,6 +227,9 @@ function printReport(report) {
 
     if (comparison.new_failures > 0) {
       console.log(`   NEW FAILURES: ${comparison.new_failures}`);
+      if (Array.isArray(comparison.new_failing_ids)) {
+        for (const id of comparison.new_failing_ids) console.log(`     - ${id}`);
+      }
     }
     if (comparison.new_errors > 0) {
       console.log(`   NEW ERRORS: ${comparison.new_errors}`);
