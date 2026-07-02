@@ -1,7 +1,8 @@
 // Record Explore evidence for SD-LEO-INFRA-COORDINATOR-ORCHESTRATED-SINGLETON-REFRESH-001-B.
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-const s = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const s = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const KEY = 'SD-LEO-INFRA-COORDINATOR-ORCHESTRATED-SINGLETON-REFRESH-001-B';
 
 const { data: sd } = await s.from('strategic_directives_v2').select('id, metadata').eq('sd_key', KEY).single();
