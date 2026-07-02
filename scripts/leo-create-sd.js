@@ -682,7 +682,7 @@ async function createFromRoadmapItem(itemId, options = {}) {
  * Mirrors createFromFeedback contract; updates the source quick_fixes row with
  * status='escalated' + escalated_to_sd_id so the queue stops recommending it.
  */
-async function createFromQF(qfId) {
+async function createFromQF(qfId, opts = {}) {
   console.log(`\n📋 Creating SD from quick-fix: ${qfId}`);
 
   if (!qfId) {
@@ -734,7 +734,8 @@ async function createFromQF(qfId) {
       qf_type: qf.type,
       qf_severity: qf.severity,
       qf_estimated_loc: qf.estimated_loc,
-      qf_target_application: qf.target_application
+      qf_target_application: qf.target_application,
+      ...(opts.securityReviewed ? { security_reviewed: true } : {})
     }
   });
 
@@ -2160,6 +2161,17 @@ async function createSD(options) {
     });
   } catch { /* CLI tracking is fire-and-forget */ }
 
+  // SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C (FR-1): trigger an event-driven rank pass so
+  // this freshly-created SD gets metadata.dispatch_rank within seconds instead of waiting for the
+  // next 15-min coordinator-backlog-rank.mjs cron tick. Mirrors the min_tier_rank stamp above —
+  // fire-and-forget, never blocks SD creation.
+  try {
+    const { triggerRankPass } = await import('../lib/coordinator/trigger-rank-pass.mjs');
+    triggerRankPass({ reason: 'sd_created', sdKey: data.sd_key });
+  } catch (rankTriggerErr) {
+    console.warn(`   ⚠️  rank-pass trigger skipped (non-blocking): ${rankTriggerErr.message}`);
+  }
+
   // FR-005 (SD-LEO-INFRA-BRAINSTORM-SD-PIPELINE-001): Backfill brainstorm_sessions.created_sd_id
   // When an SD is created with a vision_key from a brainstorm, link it back to the originating session
   if (metadata?.vision_key) {
@@ -2891,7 +2903,12 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         targetRepos: riTargetReposIdx !== -1 ? parseTargetReposArg(args[riTargetReposIdx + 1]) : null,
       });
     } else if (args[0] === '--from-qf') {
-      await createFromQF(args[1]);
+      // QF-20260701-833 follow-up: honor --security-reviewed on this route too (was
+      // previously silently ignored here, unlike --from-feedback/--from-roadmap-item/
+      // --child/--from-proposal), so a QF whose DESCRIPTION merely mentions security-
+      // adjacent keywords (e.g. "CI DB secrets") isn't unescapably blocked by
+      // GR-SECURITY-BASELINE when the actual code change touches no security-sensitive scope.
+      await createFromQF(args[1], { securityReviewed: args.includes('--security-reviewed') });
     } else if (args[0] === '--from-proposal') {
       // SD-LEO-INFRA-FROM-PROPOSAL-INGEST-001: materialize PROPOSAL-*.json into DRAFT SDs.
       // path/glob = first non-flag positional after --from-proposal; --dry-run = no writes.

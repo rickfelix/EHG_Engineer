@@ -1,8 +1,8 @@
-<!-- file_content_hash: 4e9d7884c1a41f89 -->
+<!-- file_content_hash: f03ff96593d095f1 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-06-30 2:51:16 PM
+**Generated**: 2026-07-01 7:34:56 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -106,7 +106,7 @@ After sourcing a DRAFT SD, route it for a PRE-BUILD review when its correctness 
 
 **SOURCE-AND-GO (default — no pre-review)** when NONE of the above: small / self-contained (Tier 1/2), no deps, no fleet impact, clear / routine scope, low priority. Normal LEAD-approval + dispatch review already covers it. Silence-by-default: never manufacture a review for a routine SD.
 
-**HOLD MECHANIC (enforced, not advisory):** a review-pending SD is sourced with `metadata.needs_coordinator_review=true`, wired into `classifyDispatchIneligibility` (the shared claim gate) so it is LITERALLY un-claimable until the coordinator clears the flag — that clear IS the coordinator's dispatch authorization. Rejected alternatives: a holding-tier (abuses tiering) and advisory-only (drifts). Make the gate authoritative (same class as the self-claim-window fix). [Implementation follow-on: the gate wiring is itself a dispatch-MECHANISM SD -> coordinator-reviewed.]
+**HOLD MECHANIC (enforced, not advisory):** a review-pending SD is sourced with `metadata.needs_coordinator_review=true`, wired into `classifyDispatchIneligibility` (the shared claim gate) so it is LITERALLY un-claimable until the coordinator clears the flag — that clear IS the coordinator's dispatch authorization. Rejected alternatives: a holding-tier (abuses tiering) and advisory-only (drifts). Make the gate authoritative (same class as the self-claim-window fix). [Implementation follow-on: the gate wiring is itself a dispatch-MECHANISM SD -> coordinator-reviewed.] **Clear path (SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C):** `node scripts/clear-coordinator-review.mjs <SD-KEY>` clears the flag via an atomic write (`lib/coordinator/clear-coordinator-review.js`) and immediately triggers a rank-pass refresh so the newly-authorized SD is claimable within seconds, not the next ~15min cron tick.
 
 **Why:** coordinator pre-dispatch review earns its round-trip exactly where dispatch-correctness depends on coordinator-owned state — the gauge-vs-action failure class where a source-time assumption silently diverges from dispatch reality (tiering defaults, window exclusion, wrong-repo). Solomon earns its consult where reasoning-correctness is at risk. Proven on first use (2026-06-30): the Solomon-consult SD review CAUGHT + deliberately set its tiering before any worker touched it.
 
@@ -278,6 +278,6 @@ _Single governed source of truth (section_type=role_partnership_contract), inclu
 
 ---
 
-*Generated from database: 2026-06-30*
+*Generated from database: 2026-07-01*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*

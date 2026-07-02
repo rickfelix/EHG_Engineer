@@ -18,6 +18,7 @@ vi.mock('../../../lib/eva/vision-dimensions-extractor.js', () => ({
 import {
   upsertEvaVisionFromArtifacts,
   synthesizeFromArtifacts,
+  mergeVisionSections,
 } from '../../../lib/eva/artifact-persistence-service.js';
 import { extractDimensions, MAX_LLM_CONTENT_CHARS } from '../../../lib/eva/vision-dimensions-extractor.js';
 
@@ -129,5 +130,71 @@ describe('SD-LEO-INFRA-S19-HELD-STATE-NOT-IDEMPOTENT-CLOBBER-001: idempotency gu
     const u = makeSupabase({ id: 'x', version: 3, addendums: [], extracted_dimensions: DIMS, status: 'active', chairman_approved: false });
     await upsertEvaVisionFromArtifacts(u.client, 'VISION-TEST-L2-001', 'v-1', 17);
     expect(u.updates).toHaveLength(1);   // active+UNapproved is not yet the frozen final state
+  });
+});
+
+describe('mergeVisionSections (pure function)', () => {
+  it('keeps an existing substantive (>=50 char) section untouched even when new synthesis offers a different value for the same key', () => {
+    const existing = { problem_statement: 'A'.repeat(200) };
+    const incoming = { problem_statement: 'a much shorter replacement that would be a regression' };
+    const merged = mergeVisionSections(existing, incoming);
+    expect(merged.problem_statement).toBe(existing.problem_statement);
+  });
+
+  it('fills a genuinely missing key from the new synthesis', () => {
+    const existing = { problem_statement: 'A'.repeat(200) };
+    const incoming = { personas: 'B'.repeat(200) };
+    const merged = mergeVisionSections(existing, incoming);
+    expect(merged.problem_statement).toBe(existing.problem_statement);
+    expect(merged.personas).toBe(incoming.personas);
+  });
+
+  it('replaces a stub (<50 char) existing key with a substantive new one', () => {
+    const existing = { personas: 'stub' }; // 4 chars, well under the 50-char floor
+    const incoming = { personas: 'C'.repeat(200) };
+    const merged = mergeVisionSections(existing, incoming);
+    expect(merged.personas).toBe(incoming.personas);
+  });
+
+  it('handles null/undefined existing (insert-shaped call) by returning the new sections as-is', () => {
+    const incoming = { problem_statement: 'D'.repeat(200) };
+    expect(mergeVisionSections(null, incoming)).toEqual(incoming);
+    expect(mergeVisionSections(undefined, incoming)).toEqual(incoming);
+  });
+
+  it('returns null when both sides are empty/absent', () => {
+    expect(mergeVisionSections(null, null)).toBeNull();
+    expect(mergeVisionSections({}, {})).toBeNull();
+  });
+});
+
+describe('SD-LEO-INFRA-REAL-VENTURE-VISION-ENRICH-UNDERPRODUCTION-S19-001-A: repaired-but-unpromoted vision survives a subsequent eager-synthesis tick', () => {
+  beforeEach(() => extractSpy.mockReset());
+
+  it('a repaired draft vision with substantive sections is NOT clobbered by the next eager-synthesis write (the Resilient AI thrash)', async () => {
+    extractSpy.mockResolvedValue(DIMS);
+    // Reproduces the real Resilient AI shape: draft, repaired to several substantive standard
+    // sections, but not yet promoted to active+approved (so the freeze at L846 does not apply).
+    const repairedSections = {
+      executive_summary: 'E'.repeat(200),
+      problem_statement: 'F'.repeat(200),
+      success_criteria: 'G'.repeat(200),
+      personas: 'H'.repeat(200),
+      out_of_scope: 'I'.repeat(200),
+      evolution_plan: 'J'.repeat(200),
+      information_architecture: 'K'.repeat(200),
+      key_decision_points: 'L'.repeat(200),
+    };
+    const stuck = makeSupabase({
+      id: 'resilient-ai', version: 38, addendums: [], extracted_dimensions: DIMS,
+      status: 'draft', chairman_approved: false, sections: repairedSections,
+    });
+    await upsertEvaVisionFromArtifacts(stuck.client, 'VISION-RESILIENT-AI-L2-001', 'v-resilient-ai', 19);
+    expect(stuck.updates).toHaveLength(1);
+    // Every repaired section survives byte-identical — this is the assertion that would FAIL
+    // against the pre-fix wholesale-replace write (verified via negative-control revert-and-retest).
+    for (const [key, value] of Object.entries(repairedSections)) {
+      expect(stuck.updates[0].sections[key]).toBe(value);
+    }
   });
 });

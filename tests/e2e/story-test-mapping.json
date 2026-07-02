@@ -79,10 +79,10 @@
     }
   ],
   "statistics": {
-    "totalTestFiles": 36,
+    "totalTestFiles": 63,
     "mappedFiles": 5,
-    "unmappedFiles": 31,
-    "coveragePercentage": 13.9,
-    "lastValidated": "2025-12-22T05:18:28.636Z"
+    "unmappedFiles": 58,
+    "coveragePercentage": 7.9,
+    "lastValidated": "2026-07-01T23:25:39.880Z"
   }
 }
