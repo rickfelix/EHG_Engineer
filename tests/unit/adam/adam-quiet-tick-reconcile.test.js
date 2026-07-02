@@ -10,7 +10,7 @@
  * this FR — the module previously ran main() unconditionally at import time).
  */
 import { describe, it, expect } from 'vitest';
-import { reconcileBoard } from '../../../scripts/adam-quiet-tick.mjs';
+import { reconcileBoard, readCriticalPathParents } from '../../../scripts/adam-quiet-tick.mjs';
 
 /** Read builder: chainable no-op filters, thenable to the seeded rows. */
 function readBuilder(data) {
@@ -82,5 +82,37 @@ describe('reconcileBoard', () => {
     await reconcileBoard(sb);
     await reconcileBoard(sb);
     expect(sb._ledger).toHaveLength(1);
+  });
+});
+
+/**
+ * Unit pins for Child B FR-2/FR-3's tick-side wiring: readCriticalPathParents() is the
+ * function main() now calls (SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DISCIPLINE-001-B)
+ * to feed lib/adam/stall-alert.js's checkAndAlertStalls(). Proves the inFlightNextStep
+ * derivation (status==='in_progress' -> intended hold, everything else -> stall candidate)
+ * and the fail-soft contract, independent of stall-alert.js's own (already-covered) logic.
+ */
+describe('readCriticalPathParents', () => {
+  function ledgerSelect(rows) {
+    const b = { select: () => b, eq: () => b, then: (resolve, reject) => Promise.resolve({ data: rows, error: null }).then(resolve, reject) };
+    return b;
+  }
+
+  it('derives inFlightNextStep=true only for status==="in_progress"', async () => {
+    const rows = [
+      { id: 'p1', title: 'A', updated_at: 'x', status: 'in_progress' },
+      { id: 'p2', title: 'B', updated_at: 'x', status: 'blocked' },
+      { id: 'p3', title: 'C', updated_at: 'x', status: 'open' },
+    ];
+    const sb = { from: (table) => (table === 'adam_task_ledger' ? ledgerSelect(rows) : ledgerSelect([])) };
+    const parents = await readCriticalPathParents(sb);
+    expect(parents.find((p) => p.id === 'p1').inFlightNextStep).toBe(true);
+    expect(parents.find((p) => p.id === 'p2').inFlightNextStep).toBe(false);
+    expect(parents.find((p) => p.id === 'p3').inFlightNextStep).toBe(false);
+  });
+
+  it('is fail-soft: a throwing/malformed client returns an empty array, never throws', async () => {
+    const sb = { from: () => { throw new Error('boom'); } };
+    await expect(readCriticalPathParents(sb)).resolves.toEqual([]);
   });
 });
