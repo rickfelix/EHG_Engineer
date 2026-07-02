@@ -233,6 +233,27 @@ async function main() {
   } catch (e) {
     console.log('[HOURLY-REVIEW] undelivered-receipt check skipped (non-fatal): ' + e.message);
   }
+
+  // SD-LEO-INFRA-INVARIANT-GAUGES-FRAMEWORK-001 FR-4 (invariant #0, who-watches-the-watchmen):
+  // an EXTERNAL check (this process is independently cron'd, separate from gauge-runner.mjs
+  // itself) that the gauge-runner is observably alive. A dead runner is a worse failure than any
+  // single invariant drifting (false all-clear) -- so a stale/missing heartbeat alarms here.
+  try {
+    const { checkGaugeRunnerLiveness } = await import('../lib/governance/gauge-runner-liveness.js');
+    const { data: hb } = await sb.from('codebase_health_snapshots')
+      .select('scanned_at')
+      .eq('dimension', 'gauge_runner_heartbeat')
+      .order('scanned_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const liveness = checkGaugeRunnerLiveness(hb?.scanned_at, Date.now());
+    if (liveness.alarm) {
+      const ageNote = liveness.ageMs == null ? 'no heartbeat ever recorded' : Math.floor(liveness.ageMs / 60000) + 'm stale';
+      console.log('\n[HOURLY-REVIEW] GAUGE-RUNNER LIVENESS ALARM — invariant gauges may be silently NOT running (' + ageNote + '). Investigate scripts/gauge-runner.mjs.');
+    }
+  } catch (e) {
+    console.log('[HOURLY-REVIEW] gauge-runner liveness check skipped (non-fatal): ' + e.message);
+  }
 }
 
 // SD-LEO-INFRA-SOLOMON-HOURLY-ROLE-REFRESHER-001: guard the main() invocation so the Solomon leg can be
