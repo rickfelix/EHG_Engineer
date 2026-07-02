@@ -1,0 +1,179 @@
+{
+  "executive_summary": "Long-lived Adam/Solomon/coordinator singleton sessions relaunch with no standardized handoff-memory artifact and no fresh-checkout mechanism -- a documented prior incident (scripts/temp/ux9-solomon-relaunch-exec.cjs) shows the coordinator ad hoc instructing Solomon to 'WRITE YOUR HANDOFF-STATE MEMORY NOW' with no schema, write path, or read path behind it, and relaunches historically ran in-place `git pull` against a messy shared tree carrying ~1400 uncommitted files. This SD delivers: (1) a handoff-memory artifact schema scoped to state NOT already DB-backed via claude_sessions.metadata.working_context or session_coordination (mid-reasoning context, replies the old session intended to send but had not, items read but not yet actioned); (2) an atomic write path the retiring singleton calls before relaunch, modeled byte-for-byte on the proven set_session_working_context RPC pattern; (3) a read path the new session calls on boot to restore it; (4) a role-agnostic fresh-checkout relaunch step that reuses lib/worktree-manager.js's createWorkTypeWorktree (already fetches origin/main fail-closed, refuses drifted-branch reuse, guards node_modules junction removal) plus lib/governance/checkout-freshness.js as a post-boot freshness canary, extending the proven adam-restart.cjs FRESHNESS->REGENERATE->REGISTER->CANARY orchestration pattern rather than building a parallel one. Verification is via a self-contained smoke script that writes memory to a synthetic session, restores it from a simulated new session, and drives the relaunch step end-to-end, asserting the new worktree's HEAD matches origin/main (not the stale shared tree).",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Handoff-memory schema + atomic write path",
+      "description": "Add lib/coordinator/handoff-memory.cjs (pure, injectable, mirrors lib/coordinator/working-context.cjs's structure): normalizeHandoffMemory(hm) validates/normalizes a { items: [{ kind, correlation_id?, session_coordination_row_id?, counterpart?, summary, opened_at }], captured_at, predecessor_session_id } shape where kind is one of 'consult'|'directive'|'reply_owed'|'reasoning_context'; items MUST reference an existing session_coordination.id via session_coordination_row_id where one exists (cross-reference, never duplicate the row's content) or omit it for genuinely non-DB-backed state (e.g. reasoning_context). Add database/migrations/<date>_set_session_handoff_memory.sql: a SECURITY DEFINER RPC set_session_handoff_memory(p_session_id, p_hm) performing metadata = COALESCE(metadata,'{}') || jsonb_build_object('handoff_memory', p_hm) in one UPDATE (byte-for-byte pattern of 20260615_set_session_working_context.sql, including the in-migration DO $verify$ self-check block); write it WITHOUT an --@approved-by attestation (chairman-gated for prod-apply, consistent with the working_context migration's own convention -- flag metadata.requires_chairman_apply=true on this SD). Add lib/coordinator/handoff-memory-store.cjs: writeHandoffMemory(supabase, sessionId, hm) calling the RPC exclusively (never a JS read-modify-write), fail-soft with { persisted:false, reason:'rpc_absent' } when the migration is unapplied -- mirrors working-context-store.cjs's isMissingFunctionError detection exactly.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "lib/coordinator/handoff-memory.cjs exports normalizeHandoffMemory that never throws on garbage input and preserves an item's session_coordination_row_id when present",
+        "Migration RPC set_session_handoff_memory preserves sibling metadata keys (is_coordinator, working_context, fleet_identity) when writing handoff_memory -- verified by the migration's own DO $verify$ block, same assertions style as 20260615_set_session_working_context.sql",
+        "writeHandoffMemory returns { persisted:false, reason:'rpc_absent' } (not a throw, not a JS fallback write) when the RPC does not exist"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Read path: restore handoff memory on new-session boot",
+      "description": "Add readHandoffMemory(supabase, sessionId) to lib/coordinator/handoff-memory-store.cjs: SELECT metadata->handoff_memory for the PREDECESSOR session_id (passed in, not the new session's own id -- the new session does not yet have a row) and return it normalized via normalizeHandoffMemory. Add a thin CLI wrapper (scripts/singleton-relaunch-restore.cjs) that a newly-booted singleton can invoke directly: `node scripts/singleton-relaunch-restore.cjs --predecessor-session-id <id>` prints the normalized handoff_memory as JSON (or `{ items: [] }` if the predecessor row/key is absent) so the new session can fold it into its own working_context / initial-context read without a bespoke DB query.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "readHandoffMemory returns the exact items array written by writeHandoffMemory for the same session_id (round-trip fidelity)",
+        "readHandoffMemory returns an empty-but-valid normalized shape (never throws, never returns null) when the predecessor session_id has no handoff_memory key or does not exist",
+        "scripts/singleton-relaunch-restore.cjs --predecessor-session-id <id> exits 0 and prints valid JSON in both the present and absent cases"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Role-agnostic fresh-checkout relaunch step",
+      "description": "Add lib/singleton-relaunch.js: relaunchOntoFreshCheckout({ role, workKey, repoRoot }) -> calls createWorkTypeWorktree({ workType: 'ADHOC', workKey: `singleton-${role}-${workKey}`, repoRoot }) from lib/worktree-manager.js (reused as-is, NOT reimplemented -- this already fetches origin/main fail-closed via fetchBaseRef/WorktreeBaseFetchFailedError and refuses drifted-branch reuse via checkBranchForkDrift/WorktreeForkDriftError), then runs checkoutFreshness(newWorktreePath, { baseRef: 'origin/main' }) from lib/governance/checkout-freshness.js as a post-boot verification canary, returning { worktreePath, branch, freshness } or throwing on a STALE-CRITICAL result. This function does NOT perform session registration, retirement of the old session, or worktree removal -- those are explicitly out of scope (owned by sibling children A and C).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "relaunchOntoFreshCheckout creates a genuinely new worktree checked out from origin/main -- verified via `git log -1 --format=%H` inside the new worktree matching `git rev-parse origin/main` at invocation time, never an in-place `git pull` on the caller's cwd",
+        "relaunchOntoFreshCheckout throws (does not silently proceed) when checkoutFreshness returns STALE-CRITICAL",
+        "relaunchOntoFreshCheckout never calls any registration/retirement/removal function -- verified by a unit test asserting no adam-register.cjs / removeWorktree call occurs"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Generalize the restart-orchestration template beyond Adam",
+      "description": "scripts/adam-restart.cjs's runAdamRestart(deps) (FRESHNESS->REGENERATE->REGISTER->CANARY) is Adam-specific and has no Solomon/coordinator equivalent. Extract the step-runner shape into a small, role-parameterized helper this SD's own relaunch step composes with (deps.relaunch = () => relaunchOntoFreshCheckout({ role, workKey })), inserted as a new step BETWEEN freshness and register. Do NOT rewrite adam-restart.cjs's existing REGISTER/CANARY logic (out of scope -- Child C owns register/retire); only add the relaunch step as an optional, injectable extension point and document (in code comments, not a new script) how a future solomon-restart.cjs / coordinator-restart.cjs would compose it.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "adam-restart.cjs continues to pass its existing test suite unchanged after the extension point is added",
+        "A new unit test demonstrates relaunchOntoFreshCheckout composes into the runAdamRestart step shape (injected as deps.relaunch) without modifying REGISTER/CANARY behavior"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No new database table",
+      "description": "handoff_memory lives exclusively at claude_sessions.metadata.handoff_memory (JSONB sub-key), following the established team convention (working_context, fleet_identity, adam_since/solomon_since/coordinator_since all live in metadata). session_lifecycle_events (existing table, no schema change) is used for HANDOFF_MEMORY_WRITTEN / HANDOFF_MEMORY_CONSUMED audit events."
+    },
+    {
+      "id": "TR-2",
+      "title": "Atomic writes only, no JS read-modify-write",
+      "description": "All metadata.handoff_memory writes go exclusively through the set_session_handoff_memory RPC (jsonb `||` merge in a single UPDATE). No code path may SELECT metadata, mutate it in JS, and write the whole object back -- this is the exact lost-update race the working_context/coordinator-flag RPCs were built to close."
+    },
+    {
+      "id": "TR-3",
+      "title": "Reuse, do not duplicate, existing infra",
+      "description": "lib/worktree-manager.js (fresh-checkout mechanics), lib/governance/checkout-freshness.js (freshness canary), and lib/coordinator/working-context.cjs's normalize/atomic-RPC pattern are REUSED as dependencies, not reimplemented. New code is additive: 2 new lib files, 1 new CLI wrapper, 1 new migration, plus an extension point in adam-restart.cjs."
+    },
+    {
+      "id": "TR-4",
+      "title": "Chairman-gated migration",
+      "description": "The set_session_handoff_memory migration ships WITHOUT an @approved-by attestation (dormant-but-safe pattern matching 20260615_set_session_working_context.sql exactly) -- writeHandoffMemory fail-softs when the RPC is absent, so the feature is inert until the chairman applies it. metadata.requires_chairman_apply=true is set on this SD."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "normalizeHandoffMemory tolerates garbage and preserves session_coordination_row_id",
+      "type": "unit",
+      "expected": "null/undefined/malformed input returns a valid empty-items shape; a well-formed item with session_coordination_row_id round-trips unchanged"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Write-then-read round trip via the RPC",
+      "type": "integration",
+      "expected": "writeHandoffMemory followed by readHandoffMemory for the same session_id returns byte-identical items; a session_lifecycle_events row with event_type=HANDOFF_MEMORY_WRITTEN exists"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Fail-soft when migration unapplied",
+      "type": "unit",
+      "expected": "writeHandoffMemory against a Supabase stub that returns a PGRST202/42883 error returns { persisted:false, reason:'rpc_absent' } without throwing"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Fresh-checkout relaunch produces a worktree at current origin/main HEAD",
+      "type": "integration",
+      "expected": "relaunchOntoFreshCheckout's returned worktreePath has git log -1 matching git rev-parse origin/main; the caller's original cwd/tree is untouched (no git pull/fetch executed against it)"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "relaunchOntoFreshCheckout does not touch registration",
+      "type": "unit",
+      "expected": "A spy/mock on registerAdam / removeWorktree confirms zero calls during relaunchOntoFreshCheckout execution"
+    }
+  ],
+  "acceptance_criteria": [
+    "A retiring singleton session can write non-DB-backed in-flight state via one atomic call and a freshly-booted successor can restore it via one read call, with zero data loss on round trip",
+    "The relaunch mechanism never performs an in-place git pull/reset on a shared working tree -- every relaunch lands on a brand-new worktree checked out from origin/main",
+    "No new parallel thread-schema, register/retire path, or worktree-removal code was introduced (scope stays inside the B boundary; A and C's ownership is respected)"
+  ],
+  "risks": [
+    {
+      "risk": "vitest excludes **/.worktrees/** (memory: reference_vitest_worktree_exclude_harness) -- if a singleton ends up building/testing its OWN code from inside a worktree, its tests silently do not run in CI",
+      "mitigation": "This SD's own code (lib/, scripts/, database/migrations/) is pinned to the main tree, not worktree-resident -- confirmed no test files are added under .worktrees/. Document the general risk in a code comment on relaunchOntoFreshCheckout for future SDs that DO place singleton code in a worktree.",
+      "severity": "medium"
+    },
+    {
+      "risk": "Sibling Child C (SD-LEO-INFRA-COORDINATOR-ORCHESTRATED-SINGLETON-REFRESH-001-C) is concurrently in EXEC and owns the register/retire seam this SD's read path hands off to -- an interface mismatch could require rework on either side",
+      "mitigation": "A sibling-interface note was sent to Child C's session (session_coordination row 4518e128-0afc-410d-acf6-5d360f4a3009) at LEAD time stating the exact handoff contract (B stops once the new session is live with memory restored; C owns everything after). No blocking response required to proceed; re-check before EXEC-TO-PLAN.",
+      "severity": "low"
+    },
+    {
+      "risk": "The chairman-gated migration means the write/read path is inert in production until manually applied, so end-to-end verification in this SD's own EXEC phase must exercise the RPC directly (e.g. via a local/staging apply) rather than relying on it being live",
+      "mitigation": "Smoke test steps explicitly call the RPC and assert on claude_sessions.metadata directly, not on production behavior; the fail-soft path (TS-3) is tested independently so the feature is provably safe pre-apply.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Child A (quiescent-window trigger/scheduler) -- will call relaunchOntoFreshCheckout as part of its scheduled relaunch sequence, and call writeHandoffMemory on the retiring session before doing so",
+      "Child C (sequenced re-register/retire) -- consumes the live new-session/worktree this SD produces, then performs register-before-retire sequencing reusing adam-register.cjs's core",
+      "Future solomon-restart.cjs / coordinator-restart.cjs (do not yet exist) -- would compose relaunchOntoFreshCheckout the same way adam-restart.cjs's extension point demonstrates"
+    ],
+    "dependencies": [
+      "lib/worktree-manager.js (createWorkTypeWorktree, fetchBaseRef, checkBranchForkDrift)",
+      "lib/governance/checkout-freshness.js (checkoutFreshness)",
+      "lib/coordinator/working-context.cjs / working-context-store.cjs (pattern reused, not imported)",
+      "claude_sessions table (metadata JSONB column, existing)",
+      "session_lifecycle_events table (existing, no schema change)"
+    ],
+    "data_contracts": [
+      "New metadata.handoff_memory JSONB sub-key on claude_sessions -- additive, no existing key touched",
+      "New RPC set_session_handoff_memory(p_session_id TEXT, p_hm JSONB) RETURNS VOID"
+    ],
+    "runtime_config": [
+      "none -- no new env vars; reuses LEO_WORKTREE_BASE_REF if already set for base-ref override"
+    ],
+    "observability_rollout": [
+      "session_lifecycle_events rows (HANDOFF_MEMORY_WRITTEN / HANDOFF_MEMORY_CONSUMED) provide an audit trail queryable without touching claude_sessions directly",
+      "Migration is chairman-gated; rollout is verified pre-apply via the fail-soft unit tests (TS-3) and post-apply via the round-trip integration test (TS-2) run manually once applied"
+    ]
+  },
+  "system_architecture": {
+    "summary": "Two small CJS lib modules (pure normalize + atomic-RPC store, mirroring the proven working_context pattern) plus one role-agnostic relaunch-mechanics module (thin wrapper composing existing worktree-manager.js and checkout-freshness.js), plus one chairman-gated migration and one CLI restore wrapper.",
+    "components": [
+      { "name": "lib/coordinator/handoff-memory.cjs", "change": "NEW -- pure normalize/shape functions, mirrors working-context.cjs" },
+      { "name": "lib/coordinator/handoff-memory-store.cjs", "change": "NEW -- atomic write via RPC + read, mirrors working-context-store.cjs" },
+      { "name": "database/migrations/<date>_set_session_handoff_memory.sql", "change": "NEW -- SECURITY DEFINER RPC + in-migration DO $verify$ block, mirrors 20260615_set_session_working_context.sql" },
+      { "name": "lib/singleton-relaunch.js", "change": "NEW -- relaunchOntoFreshCheckout(), composes createWorkTypeWorktree + checkoutFreshness" },
+      { "name": "scripts/singleton-relaunch-restore.cjs", "change": "NEW -- thin CLI wrapper around readHandoffMemory for a newly-booted singleton" },
+      { "name": "scripts/adam-restart.cjs", "change": "EXTENDED -- add an optional deps.relaunch injection point between freshness and register; no change to existing register/canary logic" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build the write/read schema layer first (FR-1/FR-2, directly modeled on working_context), then the relaunch-mechanics layer (FR-3, thin composition of existing worktree code), then wire the extension point into adam-restart.cjs (FR-4) last so it can be verified against the existing test suite without behavior change.",
+    "steps": [
+      "Write lib/coordinator/handoff-memory.cjs (normalizeHandoffMemory) + unit tests (TS-1)",
+      "Write database/migrations/<date>_set_session_handoff_memory.sql modeled on 20260615_set_session_working_context.sql, including its DO $verify$ self-check block",
+      "Write lib/coordinator/handoff-memory-store.cjs (writeHandoffMemory/readHandoffMemory) + unit tests (TS-2, TS-3) against a Supabase stub",
+      "Write lib/singleton-relaunch.js (relaunchOntoFreshCheckout) + integration test (TS-4) that actually invokes createWorkTypeWorktree in a throwaway ADHOC worktree and asserts HEAD matches origin/main, then cleans up",
+      "Write scripts/singleton-relaunch-restore.cjs CLI wrapper",
+      "Add the deps.relaunch extension point to scripts/adam-restart.cjs; add unit test (TS-5 equivalent) confirming no register/removal call occurs from relaunchOntoFreshCheckout, and re-run adam-restart.cjs's existing test suite to confirm no regression"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "node -e \"require('./lib/coordinator/handoff-memory-store.cjs').writeHandoffMemory(supabase, 'test-session-b', { items: [{ kind: 'reply_owed', correlation_id: 'test-1', summary: 'demo' }] })\" against a real/staging DB with the migration applied", "expected_outcome": "claude_sessions row for test-session-b has metadata.handoff_memory.items[0].summary === 'demo'; a session_lifecycle_events row with event_type=HANDOFF_MEMORY_WRITTEN exists" },
+    { "step_number": 2, "instruction": "node scripts/singleton-relaunch-restore.cjs --predecessor-session-id test-session-b", "expected_outcome": "Prints JSON containing the same item written in step 1" },
+    { "step_number": 3, "instruction": "node -e \"require('./lib/singleton-relaunch.js').relaunchOntoFreshCheckout({ role: 'demo', workKey: 'smoke-test' }).then(r => console.log(r))\"", "expected_outcome": "Prints a worktreePath under .worktrees/adhoc/; `git -C <worktreePath> log -1 --format=%H` equals `git rev-parse origin/main` run at the same time; the original repo's working tree is unchanged (git status --short in the main tree shows no new modifications caused by this call)" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-COORDINATOR-ORCHESTRATED-SINGLETON-REFRESH-001-B"
+  }
+}

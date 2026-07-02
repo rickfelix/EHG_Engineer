@@ -6,6 +6,15 @@
  *   1. FRESHNESS  — sync/freshness vs origin/main (REUSE lib/governance/checkout-freshness.js).
  *                   Advisory: a stale checkout is recorded + warned, never a hard fail (step 2
  *                   regenerates the contract, which is the Adam-relevant staleness).
+ *   1.5 RELAUNCH  — OPTIONAL (SD-LEO-INFRA-COORDINATOR-ORCHESTRATED-SINGLETON-REFRESH-001-B FR-4):
+ *                   only runs if deps.relaunch is provided. Produces a brand-new worktree checked
+ *                   out from origin/main (lib/singleton-relaunch.js relaunchOntoFreshCheckout) —
+ *                   for callers that want a FRESH-CHECKOUT relaunch rather than an in-place
+ *                   restart against the current cwd. Advisory-recorded, never blocks: the
+ *                   remaining steps still run against process.cwd() as before (the caller/scheduler
+ *                   decides whether/when to boot a new process at the returned worktreePath).
+ *                   Absent by default (backward-compatible; zero behavior change for existing
+ *                   callers that don't pass deps.relaunch).
  *   2. REGENERATE — node scripts/generate-claude-md-from-db.js --only CLAUDE_ADAM.md (HARD: the
  *                   restarting Adam must read a current contract).
  *   3. REGISTER   — re-register + the single-Adam guard (FR-3). A 'refused' (a fresh prior Adam
@@ -33,6 +42,16 @@ async function runAdamRestart(deps) {
     rec('freshness', true, { verdict: (f && f.verdict) || 'UNKNOWN', advisory: stale ? 'checkout is stale vs origin/main — sync recommended (step 2 still regenerates the contract)' : 'fresh' });
   } catch (e) {
     rec('freshness', true, { warn: `fail-soft: ${e && e.message ? e.message : e}` }); // never blocks
+  }
+
+  // 1.5 RELAUNCH (optional, advisory — no behavior change unless deps.relaunch is provided)
+  if (typeof deps.relaunch === 'function') {
+    try {
+      const r = await deps.relaunch();
+      rec('relaunch', true, { worktreePath: r && r.worktreePath, branch: r && r.branch, freshness: r && r.freshness && r.freshness.verdict });
+    } catch (e) {
+      rec('relaunch', false, { warn: `fail-soft: ${e && e.message ? e.message : e}` }); // never blocks
+    }
   }
 
   // 2. REGENERATE (hard)
