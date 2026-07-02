@@ -488,6 +488,24 @@ grep "SD-Type Threshold" <handoff-log-file>
 - Adjust threshold if too strict for SD type
 - Fix failing gates to improve score
 
+### Issue: SUB_AGENT_REPO_RESOLUTION gate fails with a plausible-looking repo_path
+
+**Symptoms**: A sub-agent's evidence row has a `metadata.repo_path` that LOOKS like a valid path but
+fails the gate's exact-match comparison against `applications.local_path`, or the value renders with
+a stray line break / control character when viewed raw.
+
+**Diagnosis**: The value was corrupted by JS string-escape parsing — a Windows path literal was
+hand-typed inline into a `node -e`/heredoc `INSERT` script instead of going through the canonical
+writer. See the full mechanism writeup and fix (DB-level rejection trigger + historical backfill) in
+[infrastructure-hardening-patterns.md § Sub-agent evidence control-character corruption](../reference/infrastructure-hardening-patterns.md#pattern-sub-agent-evidence-rows-must-never-hand-type-windows-path-literals-in-inline-shelljs-insert-scripts-sd-leo-infra-fix-systemic-windows-001)
+(SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001). `trg_subagent_evidence_reject_control_chars` now rejects new
+occurrences at insert time; `node scripts/backfill-corrupted-subagent-repo-paths.mjs --dry-run` re-scans
+for any that slip through a not-yet-covered field.
+
+**Resolution**:
+- Persist evidence via `node scripts/store-sub-agent-repo-evidence.js <SD-ID> <SUB-AGENT-CODE> --content @results.json` (never a hand-typed path literal).
+- If the trigger rejects a legitimate write, the insert attempt itself was the bug (a real control character reached the DB layer) — fix the producer, do not weaken the trigger.
+
 ---
 
 ## Performance Tuning
