@@ -27,7 +27,19 @@ function getSupabase() {
   return createClient(url, key);
 }
 
-/** Fail-soft: write a durable feedback row for each newly-flagged drop, skipping dupes. */
+/**
+ * Fail-soft: write a durable feedback row for each newly-flagged drop, skipping dupes.
+ *
+ * KNOWN RACE (adversarial-review finding, deep-tier PR review, accepted -- no migration in
+ * this SD's scope): the select-then-insert dedup below is not atomic. This script is fired by
+ * two independent schedulers (coordinator-quiet-tick.mjs's COMPOSED_CORES + coordinator-
+ * startup-check.mjs's cron), so two overlapping invocations racing on the same newly-aged-out
+ * correlationId can both pass the `existing.length===0` check before either insert lands,
+ * producing duplicate feedback rows for the same drop. Impact is bounded to a cosmetic
+ * duplicate "issue" row -- it never loses a flag (the failure mode this SD exists to close),
+ * only occasionally doubles one. A proper fix (a unique index on metadata->>correlation_id +
+ * an upsert) requires a migration, out of scope here.
+ */
 async function recordFlags(supabase, decisions) {
   const flagged = decisions.filter((d) => d.action === 'flag' && d.correlationId);
   let written = 0;
@@ -62,6 +74,13 @@ async function main() {
   console.log(`flagged=${result.flagged} ok=${result.ok} pending=${result.pending}${result.error ? ' error=' + result.error : ''}`);
   if (DRY_RUN) {
     console.log('[coordinator-relay-drop-gauge] --dry-run: no writes performed.');
+    return;
+  }
+  // The RELAY_DROP_GAUGE_V1 kill-switch gates the write side ONLY (read/report above always
+  // runs) -- adversarial-review finding, deep-tier PR review: `result.enabled` was previously
+  // computed but never checked here, so setting the flag to 'false' had no actual effect.
+  if (!result.enabled) {
+    console.log('[coordinator-relay-drop-gauge] RELAY_DROP_GAUGE_V1=false: write side disabled, skipping recordFlags.');
     return;
   }
   const written = await recordFlags(supabase, result.decisions);

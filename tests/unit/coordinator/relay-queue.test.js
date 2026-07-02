@@ -10,6 +10,8 @@ import {
   selectUndrained,
   buildRelayRequestPayload,
   buildRelayConfirmPayload,
+  enqueueRelayRequest,
+  loadQueuedRelayRequests,
   drainOne,
   drainRelayQueue,
 } from '../../../lib/coordinator/relay-queue.cjs';
@@ -51,6 +53,68 @@ describe('buildRelayRequestPayload / buildRelayConfirmPayload — pure builders'
     expect(payload.kind).toBe(PAYLOAD_KINDS.RELAY_CONFIRM);
     expect(payload.correlation_id).toBe('c1');
     expect(payload.confirm_relay_of).toBe('r1');
+  });
+});
+
+describe('enqueueRelayRequest — senderType provenance (adversarial-review finding, deep-tier PR review)', () => {
+  function makeEnqueueStub() {
+    const calls = { inserts: [] };
+    return {
+      calls,
+      from(table) {
+        return {
+          insert(row) {
+            calls.inserts.push({ table, row });
+            return { select: () => ({ single: () => Promise.resolve({ data: { id: 'req-1', created_at: '2026-07-01T00:00:00Z' }, error: null }) }) };
+          },
+        };
+      },
+    };
+  }
+
+  it('stamps sender_type from the caller-provided senderType (adam)', async () => {
+    const supabase = makeEnqueueStub();
+    await enqueueRelayRequest(supabase, { senderSession: 's1', senderType: 'adam', relayTo: 'eva', body: 'hi', correlationId: 'c1' });
+    expect(supabase.calls.inserts[0].row.sender_type).toBe('adam');
+  });
+
+  it('stamps sender_type from the caller-provided senderType (solomon)', async () => {
+    const supabase = makeEnqueueStub();
+    await enqueueRelayRequest(supabase, { senderSession: 's1', senderType: 'solomon', relayTo: 'ceo', body: 'hi', correlationId: 'c2' });
+    expect(supabase.calls.inserts[0].row.sender_type).toBe('solomon');
+  });
+
+  it('falls back to "coordinator" if senderType is omitted (back-compat, not the correct value for a real caller)', async () => {
+    const supabase = makeEnqueueStub();
+    await enqueueRelayRequest(supabase, { senderSession: 's1', relayTo: 'eva', body: 'hi', correlationId: 'c3' });
+    expect(supabase.calls.inserts[0].row.sender_type).toBe('coordinator');
+  });
+});
+
+describe('loadQueuedRelayRequests — server-side undrained filter (CRITICAL, adversarial-review finding, deep-tier PR review)', () => {
+  it('filters acknowledged_at IS NULL server-side, applied BEFORE order+limit', async () => {
+    const calls = [];
+    const supabase = {
+      from(table) {
+        const builder = {
+          select(cols) { calls.push(['select', cols]); return builder; },
+          eq(col, val) { calls.push(['eq', col, val]); return builder; },
+          is(col, val) { calls.push(['is', col, val]); return builder; },
+          order(col, opts) { calls.push(['order', col, opts]); return builder; },
+          limit(n) { calls.push(['limit', n]); return builder; },
+          then(resolve) { return Promise.resolve({ data: [] }).then(resolve); },
+        };
+        return builder;
+      },
+    };
+    await loadQueuedRelayRequests(supabase);
+    const isCall = calls.find((c) => c[0] === 'is');
+    expect(isCall).toEqual(['is', 'acknowledged_at', null]);
+    // Without this filter applied server-side (before limit), a >50-row lifetime backlog would
+    // permanently hide any new relay_request once the oldest 50 rows are all drained.
+    const isIdx = calls.findIndex((c) => c[0] === 'is');
+    const limitIdx = calls.findIndex((c) => c[0] === 'limit');
+    expect(isIdx).toBeLessThan(limitIdx);
   });
 });
 
@@ -132,6 +196,18 @@ describe('drainOne — FR-2 CONFIRM-ON-RELAY (TS-7)', () => {
     const sendRelay = vi.fn().mockResolvedValue({ ok: false, error: 'delivery failed' });
     const result = await drainOne(supabase, row, sendRelay);
     expect(result.ok).toBe(false);
+    expect(supabase.calls.updates).toHaveLength(2); // claim, then un-claim
+    expect(supabase.calls.updates[1].patch.acknowledged_at).toBeNull();
+    expect(supabase.calls.inserts).toHaveLength(0);
+  });
+
+  it('un-claims the row if sendRelay THROWS instead of resolving {ok:false} (adversarial-review finding, deep-tier PR review)', async () => {
+    const supabase = makeSupabaseStub();
+    const row = { id: 'r1', sender_session: 's1', target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
+    const sendRelay = vi.fn().mockRejectedValue(new Error('unexpected throw'));
+    const result = await drainOne(supabase, row, sendRelay);
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/sendRelay threw/);
     expect(supabase.calls.updates).toHaveLength(2); // claim, then un-claim
     expect(supabase.calls.updates[1].patch.acknowledged_at).toBeNull();
     expect(supabase.calls.inserts).toHaveLength(0);

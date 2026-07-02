@@ -472,7 +472,10 @@ async function main() {
   // these enqueue a tracked FR-1 relay-request instead of a direct write. --direct is
   // shorthand for --to adam (Solomon's one lateral session-class peer).
   const toIdx = argv.indexOf('--to');
-  const toArg = toIdx >= 0 ? argv[toIdx + 1] || null : null;
+  // Lowercased at the CLI boundary so `--to EVA`/`--to Eva` aren't rejected here while
+  // resolvePeerTarget() would have resolved them fine (it's explicitly case-insensitive) --
+  // adversarial-review finding, deep-tier PR review: the two layers previously disagreed.
+  const toArg = toIdx >= 0 ? (argv[toIdx + 1] || '').toLowerCase() || null : null;
   const directIdx = argv.indexOf('--direct');
   const peerArg = toArg || (directIdx >= 0 ? 'adam' : null);
   const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1, toIdx, toIdx + 1, directIdx].filter((i) => i >= 0));
@@ -504,6 +507,7 @@ async function main() {
     const relayCorrelationId = crypto.randomUUID();
     const { data, error } = await enqueueRelayRequest(supabase, {
       senderSession: sessionId,
+      senderType: 'solomon',
       relayTo: peerArg,
       body,
       correlationId: relayCorrelationId,
