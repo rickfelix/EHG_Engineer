@@ -572,7 +572,7 @@ export async function completeQuickFix(qfId, options = {}) {
   // `gh pr merge --auto`/CI) a QF was written completed with its change still OFF origin/main
   // (the QF-20260701-989 false-completion class). Merge here so the witness can confirm the QF's
   // OWN qf/<QF-ID> branch actually landed before we mark it done.
-  await mergeToMain(testDir, qf, finalPrUrl, prompt, { forceComplete: options.forceComplete, reason: options.reason, nonInteractive: options.nonInteractive });
+  await mergeToMain(testDir, qf, finalPrUrl, prompt, { forceComplete: options.forceComplete, skipCiWait: options.skipCiWait, reason: options.reason, nonInteractive: options.nonInteractive });
 
   // Merge-verification WITNESS: a quick_fixes row may only reach status=completed when its own
   // qf/<QF-ID> branch has a MERGED PR reachable from origin/main. Self-derives pr_url from the
