@@ -84,11 +84,26 @@ Examples:
  * Pure classifier: does this cancellation reason claim the SD is
  * already-shipped/superseded/duplicate-of-merged (and therefore requires
  * origin/main verification before cancelling)?
+ *
+ * Deliberately broad (UAT finding, EXEC phase): the original adjacent-phrase-only
+ * regex missed realistic rephrasings of the same underlying claim ("merged in
+ * #999", "fixed in #999", "resolved by PR 999", "already fixed and merged
+ * upstream" — "already" and the verb non-adjacent). Over-classifying is the SAFE
+ * direction here (it only asks for --pr/--evidence-file that then must verify;
+ * it can never let an unverified already-shipped claim through), so this
+ * matches "already" + a ship-style verb ANYWHERE in the text, or a ship-style
+ * verb co-occurring with a PR/issue reference (#123 / "PR 123") even without
+ * the word "already".
  * @param {string} reason
  * @returns {boolean}
  */
 export function classifyShipReason(reason) {
-  return /already[\s-]?(shipped|merged)|superseded|duplicate[\s-]?of[\s-]?merged/i.test(reason || '');
+  const text = reason || '';
+  if (/superseded|duplicate[\s-]?of[\s-]?merged/i.test(text)) return true;
+  const hasShipVerb = /\b(shipped|merged|fixed|resolved|closed|landed)\b/i.test(text);
+  if (!hasShipVerb) return false;
+  if (/\balready\b/i.test(text)) return true;
+  return /#\d+|\bPR\s*\d+\b/i.test(text);
 }
 
 /**
@@ -109,29 +124,49 @@ export function verifyShippedOnOriginMain({ pr, evidenceFiles = [] } = {}, { run
 
   if (pr) {
     anyCheckRan = true;
-    try {
-      const out = runGh(['pr', 'view', String(pr), '--json', 'state,mergedAt'], { cwd: repoRoot });
-      if (out.code !== 0) {
-        reasons.push(`--pr ${pr}: gh pr view failed (exit ${out.code}): ${(out.stderr || '').trim()}`);
-      } else {
-        const parsed = JSON.parse(out.stdout || '{}');
-        if (parsed.state === 'MERGED' && parsed.mergedAt) {
-          // verified
+    // SECURITY (SEC-F1): a bare-digits PR number only — rejects URLs / branch
+    // names / anything gh's <number>|<url>|<branch> selector would also accept,
+    // which would let a MERGED PR from an unrelated repo satisfy this guardrail.
+    if (!/^\d+$/.test(String(pr))) {
+      reasons.push(`--pr ${pr}: must be a bare PR number (not a URL or branch name)`);
+    } else {
+      try {
+        const out = runGh(['pr', 'view', String(pr), '--json', 'state,mergedAt'], { cwd: repoRoot });
+        if (out.code !== 0) {
+          reasons.push(`--pr ${pr}: gh pr view failed (exit ${out.code}): ${(out.stderr || '').trim()}`);
         } else {
-          reasons.push(`--pr ${pr}: not merged (state=${parsed.state || 'unknown'}, mergedAt=${parsed.mergedAt || 'null'}) — a local/open PR head does not count as shipped`);
+          const parsed = JSON.parse(out.stdout || '{}');
+          if (parsed.state === 'MERGED' && parsed.mergedAt) {
+            // verified
+          } else {
+            reasons.push(`--pr ${pr}: not merged (state=${parsed.state || 'unknown'}, mergedAt=${parsed.mergedAt || 'null'}) — a local/open PR head does not count as shipped`);
+          }
         }
+      } catch (err) {
+        reasons.push(`--pr ${pr}: gh pr view threw: ${err?.message || err}`);
       }
-    } catch (err) {
-      reasons.push(`--pr ${pr}: gh pr view threw: ${err?.message || err}`);
     }
   }
 
   for (const file of evidenceFiles) {
     anyCheckRan = true;
+    // SECURITY (SEC-F2): reject empty/whitespace paths here too (defense in
+    // depth vs. the CLI parser) — an empty path resolves to the root TREE,
+    // which `cat-file -t` below would otherwise happily confirm as present.
+    if (!file || !file.trim()) {
+      reasons.push('--evidence-file: empty path is not valid evidence');
+      continue;
+    }
     try {
-      const out = runGit(['cat-file', '-e', `origin/main:${file}`], { cwd: repoRoot });
+      // SECURITY (SEC-F2): `-t` + require 'blob', not `-e` (which exit-0s for
+      // trees/directories too) — "this FILE shipped" must mean a blob, not
+      // "some path exists", or any always-present directory (e.g. "scripts")
+      // would pass as evidence.
+      const out = runGit(['cat-file', '-t', `origin/main:${file}`], { cwd: repoRoot });
       if (out.code !== 0) {
         reasons.push(`--evidence-file ${file}: not found on origin/main`);
+      } else if (out.stdout.trim() !== 'blob') {
+        reasons.push(`--evidence-file ${file}: not a file on origin/main (type=${out.stdout.trim() || 'unknown'})`);
       }
     } catch (err) {
       reasons.push(`--evidence-file ${file}: git cat-file threw: ${err?.message || err}`);
@@ -162,9 +197,15 @@ export function decideCancelRefusal(reason, evidence, runners) {
   return { refuse: !verified, reasons };
 }
 
+// SECURITY (SEC-F3): a bounded timeout/maxBuffer so a hung/misbehaving git/gh
+// process (network stall on `gh pr view`, a huge repo response) can't hang this
+// otherwise-synchronous CLI indefinitely.
+const RUNNER_TIMEOUT_MS = 15000;
+const RUNNER_MAX_BUFFER = 1024 * 1024;
+
 function defaultRunGit(args, opts = {}) {
   try {
-    const stdout = execFileSync('git', args, { encoding: 'utf-8', cwd: opts.cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    const stdout = execFileSync('git', args, { encoding: 'utf-8', cwd: opts.cwd, stdio: ['ignore', 'pipe', 'pipe'], timeout: RUNNER_TIMEOUT_MS, maxBuffer: RUNNER_MAX_BUFFER });
     return { stdout, stderr: '', code: 0 };
   } catch (err) {
     return { stdout: err.stdout ? String(err.stdout) : '', stderr: err.stderr ? String(err.stderr) : String(err.message || err), code: typeof err.status === 'number' ? err.status : 1 };
@@ -173,7 +214,7 @@ function defaultRunGit(args, opts = {}) {
 
 function defaultRunGh(args, opts = {}) {
   try {
-    const stdout = execFileSync('gh', args, { encoding: 'utf-8', cwd: opts.cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    const stdout = execFileSync('gh', args, { encoding: 'utf-8', cwd: opts.cwd, stdio: ['ignore', 'pipe', 'pipe'], timeout: RUNNER_TIMEOUT_MS, maxBuffer: RUNNER_MAX_BUFFER });
     return { stdout, stderr: '', code: 0 };
   } catch (err) {
     return { stdout: err.stdout ? String(err.stdout) : '', stderr: err.stderr ? String(err.stderr) : String(err.message || err), code: typeof err.status === 'number' ? err.status : 1 };

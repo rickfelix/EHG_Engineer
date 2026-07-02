@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-REAL-VENTURE-VISION-ENRICH-UNDERPRODUCTION-S19-001-C",
-  "expectedBranch": "feat/SD-LEO-INFRA-REAL-VENTURE-VISION-ENRICH-UNDERPRODUCTION-S19-001-C",
-  "createdAt": "2026-07-02T00:10:01.645Z",
-  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
+  "sdKey": "SD-LEO-INFRA-CANCEL-SD-VERIFY-ORIGIN-MAIN-NOT-LOCAL-HEAD-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-CANCEL-SD-VERIFY-ORIGIN-MAIN-NOT-LOCAL-HEAD-001",
+  "createdAt": "2026-07-02T00:29:39.515Z",
+  "repoRoot": "C:\Users\rickf\Projects\_EHG\EHG_Engineer",
   "baseRef": "origin/main"
 }
