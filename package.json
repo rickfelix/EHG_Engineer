@@ -104,6 +104,8 @@
     "test:integration:cross-sd-gate": "vitest run tests/integration/cross-sd-overlap-gate/",
     "test:pipeline": "vitest run tests/integration/pipeline-s0-s17.test.js --testTimeout 1200000",
     "test:coverage": "vitest run --coverage",
+    "coverage:compare-baseline": "node scripts/compare-to-main-snapshot.mjs",
+    "coverage:audit-failures": "node scripts/audit-test-failures.mjs",
     "test:watch": "vitest watch",
     "test:e2e": "playwright test --config=playwright.config.js",
     "test:e2e:accessibility": "npm run test:e2e -- tests/e2e/accessibility/",
