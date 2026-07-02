@@ -24,6 +24,17 @@
 --   database/migrations/20260615_set_session_working_context.sql's own convention: the JS writer
 --   (lib/coordinator/handoff-memory-store.cjs) FAIL-SOFTS when this function is absent, so the
 --   feature is dormant-but-safe until the chairman applies the migration.
+--
+-- PRIVILEGE SCOPE (adversarial review finding, closed here rather than left to a future sweep):
+--   Supabase grants EXECUTE to anon/authenticated by default on every new public-schema function
+--   (see database/migrations/20260603_03_revoke_secdef_execute_from_anon_authenticated.sql's
+--   118-function live audit of this exact database) -- a genuine privilege-escalation surface for
+--   a SECURITY DEFINER function, since claude_sessions itself is a fully-open-RLS table
+--   ("Allow all for anon/authenticated" per 20251204_multi_session_coordination.sql). This function
+--   is never in the anon/authenticated allowlist (it is not referenced by any RLS policy and has no
+--   auth-primitive role), so its access is explicitly revoked below. Server-side callers use the
+--   service_role key (lib/coordinator/handoff-memory-store.cjs via createSupabaseServiceClient()),
+--   which bypasses this revoke entirely -- no legitimate caller is affected.
 
 CREATE OR REPLACE FUNCTION set_session_handoff_memory(p_session_id TEXT, p_hm JSONB)
 RETURNS VOID
@@ -50,6 +61,11 @@ $$;
 
 COMMENT ON FUNCTION set_session_handoff_memory(TEXT, JSONB) IS
   'SD-LEO-INFRA-COORDINATOR-ORCHESTRATED-SINGLETON-REFRESH-001-B: atomically set metadata.handoff_memory for one session (jsonb ||), preserving all sibling metadata keys. Race-safe replacement for a JS read-modify-write. Create-if-absent mirrors set_session_working_context.';
+
+-- Revoke the Supabase-default anon/authenticated/PUBLIC EXECUTE grant. Idempotent (REVOKE on an
+-- already-revoked function is a no-op). service_role EXECUTE is untouched (not revocable via these
+-- role names; the server always calls through service_role).
+REVOKE EXECUTE ON FUNCTION set_session_handoff_memory(TEXT, JSONB) FROM PUBLIC, anon, authenticated;
 
 -- In-migration self-verification (runs inside the apply transaction; aborts on any ASSERT)
 DO $verify$
