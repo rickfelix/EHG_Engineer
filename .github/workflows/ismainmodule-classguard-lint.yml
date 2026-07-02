@@ -6,10 +6,11 @@ name: isMainModule Raw-Pattern Class Guard Lint
 # anti-pattern: `import.meta.url === `file://${process.argv[1]}`` silently no-ops the
 # direct-execution guard on Windows (argv[1] is a backslash path; import.meta.url is a
 # proper file:// URL -- they never match). Use isMainModule(import.meta.url) from
-# lib/utils/is-main-module.js instead. 21 confirmed-live pre-existing instances are
-# grandfathered in scripts/lint/ismainmodule-classguard-allowlist.json pending conversion
-# by sibling child -A (SD-LEO-INFRA-ISMAINMODULE-WINDOWS-GUARD-CLASSFIX-001-A) -- this
-# workflow blocks any NEW/unallowlisted instance from day one.
+# lib/utils/is-main-module.js instead. scripts/lint/ismainmodule-classguard-allowlist.json
+# exists for grandfathering pre-existing debt but is currently EMPTY -- sibling child -A
+# (SD-LEO-INFRA-ISMAINMODULE-WINDOWS-GUARD-CLASSFIX-001-A, PR #5373) landed before this SD
+# and converted all originally-confirmed-live sites, so this workflow blocks ANY
+# raw-pattern instance in scripts/** from day one, with zero exceptions.
 #
 # GENUINELY BLOCKING (no continue-on-error): matches the posture of
 # count-delta-gate-lint.yml and realtime-subscribe-teardown-recursion-lint.yml, not the

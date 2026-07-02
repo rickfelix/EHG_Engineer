@@ -40,15 +40,28 @@ ruleTester.run('no-raw-ismainmodule-comparison', rule, {
         }
       `,
     },
-    // lib/utils/is-main-module.js's own internal implementation — compares an ALIASED
-    // variable (arg), not a bare process.argv[1] MemberExpression, against a template
-    // literal. Structurally different from the banned inline pattern.
+    // An ALIASED variable (arg), not a bare process.argv[1] MemberExpression, compared
+    // against a file:// template literal — structurally different from the banned inline
+    // pattern (this was lib/utils/is-main-module.js's own partial-fix-era internal shape).
     {
       code: `
         export function isMainModule(importMetaUrl) {
           const arg = process.argv[1];
           if (!arg) return false;
           return importMetaUrl === \`file://\${arg}\`;
+        }
+      `,
+    },
+    // lib/utils/is-main-module.js's CURRENT implementation (post SD-LEO-INFRA-ISMAINMODULE-
+    // WINDOWS-GUARD-CLASSFIX-001-A): pathToFileURL(arg).href — a CallExpression chain, not a
+    // TemplateLiteral/+-concatenation at all, so trivially out of this rule's match shape.
+    {
+      code: `
+        import { pathToFileURL } from 'node:url';
+        export function isMainModule(importMetaUrl) {
+          const arg = process.argv[1];
+          if (!arg) return false;
+          return importMetaUrl === pathToFileURL(arg).href;
         }
       `,
     },

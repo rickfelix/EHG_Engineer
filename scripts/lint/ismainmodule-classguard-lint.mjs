@@ -12,11 +12,11 @@
  * drift out of sync.
  *
  * scripts/archive/** is NEVER scanned — it holds ~140 dead one-time/archived instances that are
- * explicitly out of scope (per the parent SD and sibling child -A, which convert only confirmed-
- * live sites). A reason-required allowlist (ismainmodule-classguard-allowlist.json) grandfathers
- * the 21 confirmed-live files still pending conversion by sibling child -A, so this guard is
- * genuinely blocking for any NEW/reintroduced instance without red-lining CI on pre-existing,
- * already-tracked debt that belongs to a different child SD.
+ * explicitly out of scope (per the parent SD and sibling child -A, which converts only confirmed-
+ * live sites). A reason-required allowlist (ismainmodule-classguard-allowlist.json) exists for
+ * grandfathering pre-existing debt without red-lining CI — currently EMPTY, since sibling child -A
+ * (PR #5373) landed before this SD and converted all 21 originally-confirmed-live sites, so this
+ * guard covers 100% of scripts/** (excluding archive/) with zero exceptions from day one.
  *
  * Usage:
  *   node scripts/lint/ismainmodule-classguard-lint.mjs [--json] [--root <dir>]
