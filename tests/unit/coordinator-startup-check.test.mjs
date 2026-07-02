@@ -29,9 +29,14 @@ test('STANDARD_LOOPS has the expected standard loops with the expected keys', ()
   // SD-MAN-INFRA-RETENTION-OPS-FINISHER-001 added 'retention' (this pin had drifted — it was never added here).
   // SD-LEO-INFRA-COORDINATOR-CHARTER-SELF-AUDIT-001 added the durable charter-compliance self-audit (after 'audit').
   // SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-D added the unranked-claimable-leaf-count gauge (after 'backlog-rank').
-  assert.equal(STANDARD_LOOPS.length, 17);
+  // QF-20260702-976 added the singleton-relaunch quiescent-window scheduler (after 'unranked-gauge').
+  // NOTE: this assertion had drifted (previously pinned at 17, missing 'relay-drain' and
+  // 'relay-drop-gauge' from SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001,
+  // which were already live in STANDARD_LOOPS but never reflected here) — corrected to the
+  // actual 20-entry array while adding 'singleton-relaunch'.
+  assert.equal(STANDARD_LOOPS.length, 20);
   const keys = STANDARD_LOOPS.map((l) => l.key);
-  assert.deepEqual(keys, ['sweep', 'dashboard', 'identity', 'inbox', 'audit', 'charter-audit', 'flag-review', 'self-review', 'hourly-review', 'capacity-forecast', 'backlog-rank', 'unranked-gauge', 'fleet-retro', 'row-growth', 'review-rotation', 'scripts-reachability', 'retention']);
+  assert.deepEqual(keys, ['sweep', 'dashboard', 'identity', 'inbox', 'audit', 'charter-audit', 'flag-review', 'self-review', 'hourly-review', 'capacity-forecast', 'backlog-rank', 'unranked-gauge', 'singleton-relaunch', 'relay-drain', 'relay-drop-gauge', 'fleet-retro', 'row-growth', 'review-rotation', 'scripts-reachability', 'retention']);
 });
 
 test('every loop carries a non-empty label, script, cron, and CronCreate prompt', () => {
@@ -99,7 +104,7 @@ test('loopStatus marks armed|MISSING|unverified, distinguishing inbox vs dashboa
 test('renderLoops emits CronCreate spec for missing/unverified loops', () => {
   const none = parseArmedSet([], {});
   const out = renderLoops(none);
-  assert.match(out, /STANDARD CRON LOOPS \(17\)/);
+  assert.match(out, /STANDARD CRON LOOPS \(20\)/);
   // All prompts emitted as CronCreate specs when nothing is armed
   for (const loop of STANDARD_LOOPS) {
     assert.ok(out.includes(loop.prompt), `expected CronCreate prompt for ${loop.key}`);
@@ -117,7 +122,7 @@ test('renderLoops reports all-armed cleanly when every loop is armed', () => {
   ];
   const armed = parseArmedSet(['--armed', armedTokens.join(',')], {});
   const out = renderLoops(armed);
-  assert.match(out, /All 17 standard loops armed/);
+  assert.match(out, /All 20 standard loops armed/);
 });
 
 test('buildReport combines responsibilities + loop sections', () => {
