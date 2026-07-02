@@ -23,6 +23,8 @@ const { getActiveCoordinatorId, isTwoWayV2Enabled } = require('../lib/coordinato
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 const { evaluateSolomonTriage } = require('../lib/coordinator/solomon-triage.cjs');
 const { PAYLOAD_KINDS } = require('../lib/fleet/worker-status.cjs');
+// SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class SSOT.
+const { computeReplyExpectedBy } = require('../lib/coordinator/reply-class.cjs');
 
 // SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-4): 'unfit' — a worker reporting an assignment it cannot
 // execute HERE/NOW (repo mismatch / closed premise / missing input precondition). Replaces the
@@ -74,7 +76,10 @@ function buildIntentPayload({ action, targetSdKey, targetTree, targetFiles, send
     [K.tree]: targetTree || null,
     [K.files]: files,
     [K.callsign]: senderCallsign || null,
-    [K.repo]: repo || null
+    [K.repo]: repo || null,
+    // A broadcast to the 'broadcast-coordinator' sentinel has no single recipient to
+    // chase — always fire-and-forget (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
+    reply_class: 'fire-and-forget'
   };
   if (body) payload.body = redact(String(body)).slice(0, BODY_HARD_CAP);
   // INVARIANT: payload.signal_type must be ABSENT on INTENT rows.
@@ -278,6 +283,9 @@ function buildRequestPayload({ correlationId, body, senderCallsign, repo }) {
     kind: 'coordinator_request',
     correlation_id: correlationId,
     expects_reply: true,
+    // A synchronous, bounded-timeout await (awaitCoordinatorReply below) is exactly
+    // the live-handshake class (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
+    reply_class: 'live-handshake',
     sender_callsign: senderCallsign || null,
     repo: repo || null
   };
@@ -431,12 +439,20 @@ function isSolomonConsultEnabled() {
   return process.env.SOLOMON_CONSULT_V1 === 'on';
 }
 
-/** Pure + exported: the exact consult payload the worker emits. */
-function buildSolomonConsultPayload({ correlationId, body, senderCallsign, repo, severity, sdKey, triageScore, triageReason }) {
+/**
+ * Pure + exported: the exact consult payload the worker emits. `isAwait` mirrors the
+ * caller's --await flag: true -> live-handshake (synchronous, bounded-timeout);
+ * false/omitted -> reply-needed (fire-and-forget-by-default today, but the worker DOES
+ * expect an eventual answer, so it is chase-eligible) + a computed reply_expected_by
+ * window (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
+ */
+function buildSolomonConsultPayload({ correlationId, body, senderCallsign, repo, severity, sdKey, triageScore, triageReason, isAwait, replyWindowMs, now }) {
+  const replyClass = isAwait ? 'live-handshake' : 'reply-needed';
   const payload = {
     kind: PAYLOAD_KINDS.SOLOMON_CONSULT,   // 'solomon_consult' (SSOT constant, never a literal)
     correlation_id: correlationId,
     expects_reply: true,
+    reply_class: replyClass,
     sender_callsign: senderCallsign || null,
     repo: repo || null,
     severity: severity || 'medium',
@@ -446,6 +462,7 @@ function buildSolomonConsultPayload({ correlationId, body, senderCallsign, repo,
     oracle_consult: true
   };
   if (body) payload.body = redact(String(body)).slice(0, BODY_HARD_CAP);
+  if (replyClass === 'reply-needed') payload.reply_expected_by = computeReplyExpectedBy(now, replyWindowMs);
   // INVARIANT: no signal_type / no intent_action on consult rows (off the friction router + intent sweep).
   return payload;
 }
@@ -518,7 +535,8 @@ async function solomonConsultMain(flags, positional) {
   const payload = buildSolomonConsultPayload({
     correlationId, body, senderCallsign, repo: process.cwd(),
     severity: flags.severity, sdKey: flags['sd-key'],
-    triageScore: triage.triage_score, triageReason: triage.reason
+    triageScore: triage.triage_score, triageReason: triage.reason,
+    isAwait: flags.await === true, replyWindowMs: Number(flags['reply-window-ms']) || undefined
   });
   const subject = `[SOLOMON_CONSULT] ${payload.body.slice(0, 80)}`;
   const expiresAt = new Date(Date.now() + timeoutMs + 5 * 60_000).toISOString();

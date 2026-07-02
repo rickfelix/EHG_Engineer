@@ -35,7 +35,10 @@ function buildReplyPayload({ correlationId, body, coordinatorSession }) {
     kind: 'coordinator_reply',
     reply_to: correlationId,
     correlation_id: correlationId,
-    sender: coordinatorSession || null
+    sender: coordinatorSession || null,
+    // A reply is terminal -- this codebase does not model reply-to-reply chains, so it is
+    // always fire-and-forget (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
+    reply_class: 'fire-and-forget'
   };
   if (body) payload.body = redact(String(body)).slice(0, BODY_HARD_CAP);
   // INVARIANT: no signal_type (would be scooped by signal-router) / no intent_action.

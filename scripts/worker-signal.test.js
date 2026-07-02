@@ -2,7 +2,7 @@
 // scripts/worker-signal.cjs — type validation, redaction (M1), body slice (M2), CLI parsing
 
 import { describe, it, expect } from 'vitest';
-import { redact, parseArgs, REDACTION_PATTERNS, SIGNAL_TYPES, SEVERITIES, BODY_HARD_CAP } from './worker-signal.cjs';
+import { redact, parseArgs, REDACTION_PATTERNS, SIGNAL_TYPES, SEVERITIES, BODY_HARD_CAP, buildRequestPayload, buildSolomonConsultPayload, buildIntentPayload } from './worker-signal.cjs';
 
 describe('WS-1: redact strips AWS access keys', () => {
   it('replaces AKIA pattern with REDACTED:AWS_KEY', () => {
@@ -103,5 +103,28 @@ describe('WS-12: redact + slice round-trip respects 4096 cap', () => {
     expect(sliced.length).toBeLessThanOrEqual(BODY_HARD_CAP);
     expect(sliced).toContain('[REDACTED:AWS_KEY]');
     expect(sliced).not.toContain('AKIAIOSFODNN7');
+  });
+});
+
+// SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class.
+describe('WS-13: reply_class stamping', () => {
+  it('buildRequestPayload is always live-handshake (synchronous, bounded-timeout await)', () => {
+    const p = buildRequestPayload({ correlationId: 'c1', body: 'q?' });
+    expect(p.reply_class).toBe('live-handshake');
+  });
+  it('buildIntentPayload is always fire-and-forget (broadcast, no single recipient to chase)', () => {
+    const p = buildIntentPayload({ action: 'cancel-tree', targetSdKey: 'SD-X-001' });
+    expect(p.reply_class).toBe('fire-and-forget');
+  });
+  it('buildSolomonConsultPayload defaults to reply-needed + a computed reply_expected_by', () => {
+    const p = buildSolomonConsultPayload({ correlationId: 'c2', body: 'deep q?' });
+    expect(p.reply_class).toBe('reply-needed');
+    expect(typeof p.reply_expected_by).toBe('string');
+    expect(Date.parse(p.reply_expected_by)).toBeGreaterThan(Date.now());
+  });
+  it('buildSolomonConsultPayload with isAwait=true is live-handshake, no reply_expected_by', () => {
+    const p = buildSolomonConsultPayload({ correlationId: 'c3', body: 'deep q?', isAwait: true });
+    expect(p.reply_class).toBe('live-handshake');
+    expect(p.reply_expected_by).toBeUndefined();
   });
 });

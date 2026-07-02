@@ -42,6 +42,11 @@ const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 const { getActiveAdamId } = require('../lib/coordinator/adam-identity.cjs');
+// SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class SSOT.
+const {
+  REPLY_CLASSES, isValidReplyClass, computeReplyExpectedBy, checkAndPingOverdueReplies,
+  alreadyAnswered: sharedAlreadyAnswered,
+} = require('../lib/coordinator/reply-class.cjs');
 // SD-LEO-INFRA-COMMS-PRESENCE-GROUNDING-SIGNALS-001 — same shared presence/read-receipt/working-signal
 // lane Adam wires (lib/coordinator/presence-grounding-signals.cjs) — no per-role reimplementation.
 const { getFleetPresence, getReadReceipts, getWorkingSignal } = require('../lib/coordinator/presence-grounding-signals.cjs');
@@ -72,12 +77,17 @@ const SOLOMON_PER_DAY_MAX = Number(process.env.SOLOMON_PER_DAY_MAX) || 20; // an
  * intent_action. correlation_id makes the answer replyable; a reply_to (the consult's correlation)
  * is echoed under BOTH keys so the asking side's matcher pairs the answer to its consult. Exported.
  */
-function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, replyTo, via }) {
+function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, replyTo, via, replyClass, replyWindowMs, now }) {
+  // An answer to a consult (replyTo set) is terminal -- always fire-and-forget. Otherwise: request
+  // mode (expectsReply) is live-handshake; send mode defaults fire-and-forget unless the sender
+  // opts into reply-needed via --reply-class (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
+  const resolvedReplyClass = replyTo ? 'fire-and-forget' : (expectsReply ? 'live-handshake' : (replyClass || 'fire-and-forget'));
   const payload = {
     kind: PAYLOAD_KINDS.ADAM_ADVISORY, // reuse the advisory inbox lane
     oracle: true,                       // Solomon marker (distinguishes an oracle answer from an Adam advisory)
     sender_callsign: senderCallsign || null,
     repo: repo || null,
+    reply_class: resolvedReplyClass,
   };
   if (body) payload.body = redact(String(body)).slice(0, BODY_HARD_CAP);
   if (correlationId) payload.correlation_id = correlationId; // replyable (always)
@@ -90,6 +100,7 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
   // Adam's session_id (--to adam, ADAM_SOLOMON_TWOWAY_V1=on) instead of the default coordinator-relay
   // target. Additive/optional — undefined for every existing send path.
   if (via) payload.via = via;
+  if (resolvedReplyClass === 'reply-needed') payload.reply_expected_by = computeReplyExpectedBy(now, replyWindowMs);
   // INVARIANT: no signal_type, no intent_action.
   return payload;
 }
@@ -168,21 +179,13 @@ function enforceSweepBudget(budget, spent) {
 
 /**
  * Durable dedup: has this consult already been answered? True when an advisory row already echoes the
- * consult's correlation under payload.reply_to. Fail-open to NOT-answered on a query error (better to
- * risk a rare duplicate answer than to silently drop a real consult). Exported.
+ * consult's correlation under payload.reply_to. Delegates to the shared reply-class module
+ * (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C) -- this is no longer a separate
+ * implementation, just a locally-named re-export so existing call sites/imports are unchanged.
+ * Fail-open to NOT-answered on a query error (better to risk a rare duplicate answer than to
+ * silently drop a real consult). Exported.
  */
-async function alreadyAnswered(supabase, correlationId) {
-  if (!correlationId) return false;
-  try {
-    const { data, error } = await supabase
-      .from('session_coordination')
-      .select('id')
-      .eq('payload->>reply_to', correlationId)
-      .limit(1);
-    if (error) return false;
-    return Array.isArray(data) && data.length > 0;
-  } catch { return false; }
-}
+const alreadyAnswered = sharedAlreadyAnswered;
 
 /**
  * Quota: may the oracle answer another consult for this SD today? Counts emitted Solomon answers
@@ -424,6 +427,13 @@ async function main() {
       console.error(`WARN: solomon_advice_outcome_ledger capture gauge UNHEALTHY — ${ledgerHealth.reason} (advisories are NOT being captured; QF-20260701-289)`);
     }
     await drainInbox(supabase, solomonId, { quiet: argv.includes('--quiet') });
+    // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: PING-ON-SILENCE — check MY OWN sent
+    // reply-needed advisories for ones left unanswered past their window. Never suppressed by
+    // --quiet (a real overdue reply is a genuine delivery, not routine tick noise).
+    const pingResult = await checkAndPingOverdueReplies(supabase, { sessionId: solomonId, senderType: 'solomon' });
+    if (pingResult.pinged > 0) {
+      console.warn(`⚠ PING-ON-SILENCE: ${pingResult.pinged} reply-needed advisor${pingResult.pinged === 1 ? 'y' : 'ies'} unanswered past window — pinged (ids: ${pingResult.pingedIds.join(', ')})`);
+    }
     return;
   }
 
@@ -438,11 +448,21 @@ async function main() {
   const timeoutMs = tIdx >= 0 ? Number(argv[tIdx + 1]) || 30000 : 30000;
   const rIdx = argv.indexOf('--reply-to');
   const replyToArg = rIdx >= 0 ? argv[rIdx + 1] || null : null;
+  // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: `send` opt-in to reply-needed
+  // (default remains fire-and-forget when omitted — byte-identical to pre-fix behavior).
+  const rcIdx = argv.indexOf('--reply-class');
+  const replyClassArg = rcIdx >= 0 ? argv[rcIdx + 1] || null : null;
+  const rwIdx = argv.indexOf('--reply-window-ms');
+  const replyWindowMs = rwIdx >= 0 ? Number(argv[rwIdx + 1]) || undefined : undefined;
+  if (replyClassArg && !isValidReplyClass(replyClassArg)) {
+    console.error(`ERROR: --reply-class must be one of ${REPLY_CLASSES.join(', ')} (got "${replyClassArg}").`);
+    process.exit(2);
+  }
   // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: `send/request --to adam` — direct 1-hop
   // channel, gated by ADAM_SOLOMON_TWOWAY_V1 (default OFF; omitting --to is unchanged).
   const toIdx = argv.indexOf('--to');
   const toArg = toIdx >= 0 ? argv[toIdx + 1] || null : null;
-  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, toIdx, toIdx + 1].filter((i) => i >= 0));
+  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1, toIdx, toIdx + 1].filter((i) => i >= 0));
   const body = argv.slice(1).filter((a, i) => !flagValueIdxs.has(i + 1)).join(' ').trim();
   if (!body) { console.error('ERROR: advisory body required.'); process.exit(2); }
 
@@ -477,7 +497,7 @@ async function main() {
     console.log(`(dedup) consult ${String(replyTo).slice(0, 8)} already answered — not re-sending.`);
     return;
   }
-  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via });
+  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via, replyClass: replyClassArg, replyWindowMs });
   const subject = `[SOLOMON_ORACLE] ${payload.body.slice(0, 80)}`;
   const expiresAt = advisoryExpiresAt(Date.now());
 
