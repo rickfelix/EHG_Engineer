@@ -43,7 +43,20 @@ describe('TS-4: foreign_claim reconciliation fires BEFORE the hard-fail throw', 
     expect(src).toMatch(/\.eq\(['"]claiming_session_id['"],\s*displacedOwnerSessionId\)/);
   });
 
-  it('the reconciliation is logged to session_coordination for audit (peer not silently overwritten)', () => {
+  it('a CAS miss (a fourth session raced in) throws rather than reporting a false reconciliation', () => {
+    expect(src).toMatch(/casRows\.length\s*===\s*0/);
+    expect(src).toMatch(/throw new Error\(['"]foreign_claim reconciliation CAS miss['"]\)/);
+  });
+
+  it('the reconciliation is logged to session_coordination using the REAL schema columns (sender_session/sender_type/target_session -- not a made-up sender_session_id)', () => {
+    // Regression pin: the first cut used sender_session_id (not a real column, PGRST204) and
+    // omitted sender_type/target_session (violates the valid_target CHECK, 23514) -- silently
+    // swallowed by the surrounding try/catch, so the audit trail never actually landed. Pin the
+    // real column names so a future edit can't reintroduce the same silent-failure schema drift.
+    expect(src).toMatch(/sender_session:\s*mySessionId/);
+    expect(src).toMatch(/sender_type:\s*['"]worker['"]/);
+    expect(src).toMatch(/target_session:\s*['"]broadcast-coordinator['"]/);
+    expect(src).not.toMatch(/sender_session_id:/);
     expect(src).toMatch(/kind:\s*['"]claim_reconciliation['"]/);
     expect(src).toMatch(/displaced_session:\s*displacedOwnerSessionId/);
   });
@@ -55,7 +68,7 @@ describe('TS-4: foreign_claim reconciliation fires BEFORE the hard-fail throw', 
 
   it('is fail-safe: the whole reconciliation attempt is wrapped in try/catch so any error falls through to the original hard-fail', () => {
     const idx = src.indexOf('foreign_claim reconciliation');
-    const surrounding = src.slice(idx, idx + 2600);
+    const surrounding = src.slice(idx, idx + 3600);
     expect(surrounding).toMatch(/try\s*\{/);
     expect(surrounding).toMatch(/\}\s*catch\s*\{\s*\/\*\s*fail-safe/i);
   });
