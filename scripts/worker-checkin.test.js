@@ -695,7 +695,15 @@ describe('ORPHAN-ADOPTION: adopt zero-claim in_progress SDs (resume_orphan)', ()
     expect(r.action).toBe('idle'); // both classifier-skipped despite being claimable
   });
 
-  it('skips an orphan a LIVE foreign session still points at (claim half-write)', async () => {
+  // SD-LEO-INFRA-RECLAIM-STEAL-LIVE-CLAIMANT-WIP-GUARD-001 (FR-3): a lapsed/half-write claim's
+  // live-foreign-holder probe now ALSO requires real WIP before refusing to adopt (a lapsed TTL
+  // is necessary but not sufficient to steal -- see foreignClaimantBlocksSteal, unit-tested
+  // directly in tests/unit/worker-checkin-live-claimant-wip-guard.test.js). This fixture has no
+  // worktree/branch/PR data (a bare is_alive flag, no WIP evidence at all), so under the new
+  // guard it is correctly treated as WIP-less and adoption proceeds -- this is the intentional
+  // behavior change this SD ships, not a regression: a live-but-WIP-less half-write claim no
+  // longer gets stuck unreclaimable forever.
+  it('adopts an orphan a LIVE-but-WIP-less foreign session still points at (claim half-write, no WIP evidence)', async () => {
     const sb = makeStub({
       ...sess,
       orphans: [orphan('SD-HELD-001')],
@@ -704,7 +712,7 @@ describe('ORPHAN-ADOPTION: adopt zero-claim in_progress SDs (resume_orphan)', ()
       claimResults: { 'SD-HELD-001': true },
     });
     const r = await runCheckin(sb, 'sess-1', noCoord);
-    expect(r.action).toBe('idle');
+    expect(r.action).toBe('resume_orphan');
   });
 
   it('skips an orphan younger than the age guard (mid-transition worker never raced)', async () => {

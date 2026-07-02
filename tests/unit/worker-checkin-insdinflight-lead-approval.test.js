@@ -50,7 +50,10 @@ describe('QF-20260621-219: isSdInFlight treats LEAD_APPROVAL as claimable (not i
   });
 
   it('returns TRUE when a LIVE foreign session holds it, even at LEAD_APPROVAL', async () => {
-    expect(await isSdInFlight(stub({ phase: 'LEAD_APPROVAL', liveSessions: [{ session_id: 'other' }] }), 'SD-REFILL-X', 'me')).toBe(true);
+    // SD-LEO-INFRA-RECLAIM-STEAL-LIVE-CLAIMANT-WIP-GUARD-001 (FR-3): isSdInFlight now evaluates
+    // liveness itself via isSessionAlive() (in JS) rather than trusting the query's server-side
+    // is_alive filter -- the fixture must carry an explicit liveness signal.
+    expect(await isSdInFlight(stub({ phase: 'LEAD_APPROVAL', liveSessions: [{ session_id: 'other', is_alive: true }] }), 'SD-REFILL-X', 'me')).toBe(true);
   });
 
   it('fails OPEN (returns false) so a guard error never blocks self_claim', async () => {

@@ -9,6 +9,15 @@
  * tool call (Bash/Edit/Write/Read/...) during a build refreshes the claim, THROTTLED to at most once per
  * window so we don't write on every call.
  *
+ * KNOWN LIMITATION (SD-LEO-INFRA-RECLAIM-STEAL-LIVE-CLAIMANT-WIP-GUARD-001 RCA,
+ * docs/reference/claim-steal-rca-2026-07-02.md): this is a PostToolUse hook — it can only fire
+ * AFTER a tool call completes. A single Agent/Task-tool call to a sub-agent that itself runs
+ * longer than the claim TTL provides ZERO intermediate refresh opportunity, and the claim can
+ * still lapse even though the session is fully alive and orchestrating. The stealer-side guard
+ * (scripts/worker-checkin.cjs's foreignClaimantBlocksSteal) is the belt-and-suspenders backstop
+ * for this specific gap — do not assume this hook alone guarantees no lapse during long
+ * sub-agent chains.
+ *
  * Hook contract (mirrors post-tool-loop-state.cjs):
  *   - Resolve the session id payload-first (stdin), env + identity-marker fallbacks.
  *   - CLAIM-GUARDED write: update heartbeat_at WHERE session_id=X AND sd_key IS NOT NULL — a non-claiming
