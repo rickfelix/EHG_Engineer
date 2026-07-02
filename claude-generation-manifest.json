@@ -1,123 +1,123 @@
 {
-  "generated_at": "2026-07-01T23:34:55.992Z",
-  "git_commit": "fe3bbdc1",
-  "db_snapshot_hash": "d38407bccd2a4670",
+  "generated_at": "2026-07-02T00:26:21.321Z",
+  "git_commit": "0a7a703f",
+  "db_snapshot_hash": "8eb2912b9dff05a2",
   "files": {
     "CLAUDE.md": {
       "type": "full",
       "chars": 19368,
       "estimated_tokens": 4842,
-      "content_hash": "8e0f584affac240d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE.md"
+      "content_hash": "fe524d6234f9fd45",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
       "chars": 86703,
       "estimated_tokens": 21676,
-      "content_hash": "2cd6c5c1af462ee4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE.md"
+      "content_hash": "0a4c70ad684628b2",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
       "chars": 65401,
       "estimated_tokens": 16351,
-      "content_hash": "ac9a92809a886705",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD.md"
+      "content_hash": "8a77138e5f17e5be",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
       "chars": 91103,
       "estimated_tokens": 22776,
-      "content_hash": "aaf61e87dab472bc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN.md"
+      "content_hash": "fabf2c15190e0ad0",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
       "chars": 86566,
       "estimated_tokens": 21642,
-      "content_hash": "32638a1e465c9e16",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC.md"
+      "content_hash": "eaf76fd504cae816",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 52999,
-      "estimated_tokens": 13250,
-      "content_hash": "90f871da57fe32dd",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM.md"
+      "chars": 54280,
+      "estimated_tokens": 13570,
+      "content_hash": "32f68af91433a676",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_ADAM.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 20929,
-      "estimated_tokens": 5233,
-      "content_hash": "81fa7d0534df7438",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_COORDINATOR.md"
+      "chars": 21735,
+      "estimated_tokens": 5434,
+      "content_hash": "9e8af0f3366d526d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 44108,
-      "estimated_tokens": 11027,
-      "content_hash": "9a021faeae58e94f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_SOLOMON.md"
+      "chars": 44862,
+      "estimated_tokens": 11216,
+      "content_hash": "4725ff2a8748c883",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9611,
       "estimated_tokens": 2403,
-      "content_hash": "7bfd9905f2d2f723",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_DIGEST.md"
+      "content_hash": "10e6f0c1643ad22b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 11664,
       "estimated_tokens": 2916,
-      "content_hash": "4a8fa586a27e5d03",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "eaa746407a216c7c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 5551,
       "estimated_tokens": 1388,
-      "content_hash": "11cde85b19a1c17c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "fac465e491ae6684",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 8541,
       "estimated_tokens": 2136,
-      "content_hash": "661b6905ee197026",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "9301627bc4f6619c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 10964,
       "estimated_tokens": 2741,
-      "content_hash": "0d200c103e8e0b47",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "b40d2d1a3eab9be5",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
-      "chars": 12320,
-      "estimated_tokens": 3080,
-      "content_hash": "00bbab1cb26915b6",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM_DIGEST.md"
+      "chars": 13068,
+      "estimated_tokens": 3267,
+      "content_hash": "88878b3b45f0613d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
-      "chars": 5270,
-      "estimated_tokens": 1318,
-      "content_hash": "8be2af36d85882e3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_COORDINATOR_DIGEST.md"
+      "chars": 6076,
+      "estimated_tokens": 1519,
+      "content_hash": "9cb2dd242215b64a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
-      "chars": 3951,
-      "estimated_tokens": 988,
-      "content_hash": "f4440c4100692f46",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_SOLOMON_DIGEST.md"
+      "chars": 4705,
+      "estimated_tokens": 1177,
+      "content_hash": "e248da694c6acf83",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "b7d95fe4ec1fa07d",
+    "global": "105af1849ea00016",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -371,7 +371,7 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "a405cbac19ca1d0e",
+      "601": "f5b7cffd22ce1f0e",
       "602": "ad0aecae8cdc6cb3",
       "603": "ea1eddc2cef94c83",
       "604": "a35e66b64599f81d",
@@ -383,7 +383,10 @@
       "610": "fb3813fc42f32f3a",
       "611": "8807ed27ea29e908",
       "612": "13e03eddf5300bcc",
-      "613": "1e1de64689c1ad82"
+      "613": "1e1de64689c1ad82",
+      "614": "a4d5064f0ffbe97c",
+      "615": "1ac30c8d7046c470",
+      "616": "cf03793e285951bf"
     },
     "meta": {
       "94": {
@@ -1710,6 +1713,21 @@
         "section_type": "governance",
         "target_file": "docs/protocol/adkar-change-adoption-framework.md",
         "title": "ADKAR Change-Adoption Framework"
+      },
+      "614": {
+        "section_type": "adam_role_contract",
+        "target_file": "CLAUDE_ADAM.md",
+        "title": "Crew-comms routing protocol (organizing layer)"
+      },
+      "615": {
+        "section_type": "coordinator_role_contract",
+        "target_file": "CLAUDE_COORDINATOR.md",
+        "title": "Crew-comms routing protocol (organizing layer)"
+      },
+      "616": {
+        "section_type": "solomon_role_contract",
+        "target_file": "CLAUDE_SOLOMON.md",
+        "title": "Crew-comms routing protocol (organizing layer)"
       }
     }
   }

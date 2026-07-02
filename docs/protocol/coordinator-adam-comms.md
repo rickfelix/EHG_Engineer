@@ -13,6 +13,12 @@ tags: [documentation, protocol]
 > print a summary of this lane (FR-7), so neither side has to reverse-engineer it.
 > SD-LEO-INFRA-RESILIENT-SYMMETRIC-ADAM-001.
 
+> This lane is one of the canonical channels organized under
+> `docs/protocol/crew-comms-routing-protocol.md` (the 5 bounding rules: defined lanes,
+> hop-minimization, sender-stamped reply-class, silence-by-default, escalation ladder).
+> Read that doc first for the cross-role picture; this doc is the Adam↔coordinator
+> wire-level contract.
+
 ## What this lane is
 
 A **symmetric, resilient** advisory channel over `session_coordination` `INFO` rows, kept
@@ -214,3 +220,42 @@ ONE batched `getFleetPresence()` call per render (not a per-row query).
 **Preserves silence-by-default**: none of the three signals send a new `session_coordination`
 message — they augment existing renders/queries only. Presence/working signals are ambient/
 on-demand, not new chat spam.
+
+## Cross-check protocol (SEE-SOMETHING / CONFIRM-ON-RELAY / PING-ON-SILENCE)
+
+Exception-triggered mutual verification on this lane — not every message, only on these
+triggers. Full rationale + live evidence: `docs/protocol/crew-comms-routing-protocol.md`
+§ "Cross-check protocol".
+
+- **SEE-SOMETHING** — if either side notices a claim from the other contradicts a stale
+  read, a snapshot, or ground truth, flag it immediately rather than acting on it.
+- **CONFIRM-ON-RELAY** — when the coordinator relays a message to/from Adam on behalf of a
+  third party, it confirms back to the origin that the relay landed.
+- **PING-ON-SILENCE** — a `reply-needed` message (see Reply-class below) left unanswered
+  past its expected window is pinged, not silently assumed disagreed-with.
+
+## Reply-class (sender-stamped)
+
+Every message on this lane is sender-stamped with a reply-class: `fire-and-forget`
+(no reply expected), `reply-needed` (async, PING-ON-SILENCE applies), or
+`live-handshake` (sync-request eligible — see below). See
+`docs/protocol/crew-comms-routing-protocol.md` § "Rule 3 — Sender-stamped reply-class"
+for the full contract.
+
+## Sync-request (live-handshake only)
+
+`node scripts/adam-advisory.cjs request "<question>" --timeout <ms>` is this lane's
+synchronous, bounded-timeout request mode — reserved for genuine `live-handshake`
+exchanges, never for `reply-needed`/`fire-and-forget` traffic (those stay async via
+`send`). On timeout, fall back to async rather than re-blocking — a sync-request against
+a dormant/invocation-driven peer will time out by construction, since that peer cannot
+answer until its next tick. **Never** issue a sync-request while already blocked on one
+(mutual sync-requests deadlock). Full rules:
+`docs/protocol/crew-comms-routing-protocol.md` § "Sync-request semantics".
+
+## PID-cross-check (liveness-dispute resolution)
+
+When the coordinator and Adam disagree on which session legitimately holds a role (a
+`session_id` is a label, not ground truth), resolve via OS process enumeration and
+on-disk session markers, not another DB read. Full protocol:
+`docs/protocol/crew-comms-routing-protocol.md` § "PID-cross-check".

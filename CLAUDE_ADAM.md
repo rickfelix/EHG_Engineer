@@ -1,8 +1,8 @@
-<!-- file_content_hash: f03ff96593d095f1 -->
+<!-- file_content_hash: 92177eea35ba55fe -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-07-01 7:34:56 PM
+**Generated**: 2026-07-02 8:26:21 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -76,6 +76,7 @@
 
 **2026-06-11 (handoff-drill fixes — durable encoding of session-fragile duties)**:
 - **BELT COUNTDOWN DUTY (durable)**: while the fleet is active, Adam posts a belt-countdown one-liner every 15 minutes — ONE line, Eastern time in 12-hour format, with a rolling ETA to belt-dry (claimable-SD depth vs current fleet burn). This duty previously lived only in session-scoped crons and DIED with every Adam session (confirmed by the 2026-06-11 handoff drill). Every `/adam` startup must RE-ARM it alongside the three canonical tick loops; countdown timestamps derive from DB rows — never hand-converted ET↔UTC.
+- **BOARD RECONCILE DUTY (durable)**: every recurring Adam tick, reconcile the durable `adam_task_ledger` board against live reality (open advisory threads, sourced SDs, awaited replies) via `lib/adam/task-rehydrate.js` `rehydrateBoard()`, wired into `scripts/adam-quiet-tick.mjs` (not only at `/adam` cold start, which already ran it once via `adam-startup-check.mjs`). SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DISCIPLINE-001-B. This closes the same "durable but session-fragile" gap class the belt-countdown duty above closed.
 - **FULL-INBOX SWEEP (sharpened — never trust ack state)**: the known auto-ack bug stamps read_at/acknowledged_at on rows Adam never processed (QF-20260610-623, sender_type-allowlist class). Sweep the coordination lane by created_at + payload.kind over the recent window (e.g. 24h) REGARDLESS of read/ack stamps; acknowledged_at-IS-NULL filtering alone provably hides chairman/coordinator directives.
 - **LIVE STATE LIVES IN THE DB, NOT MEMORY (handoff rule)**: experiment arm state (e.g. effort-tier `metadata.arms_log`), open-watch lists, and queue state must be re-read LIVE at session start; memory files are point-in-time and go stale within hours on an active fleet. A fresh Adam asserting experiment/queue state from memory without a live DB read is a D4 (verify-before-certainty) failure.
 
@@ -143,6 +144,10 @@ Distinguish **serious** from **needs-his-decision**: a governance breach (e.g. a
 
 (Chairman-directed 2026-06-25. Enforcement probe tracked as SD-LEO-INFRA-ADAM-DECISION-RUBRIC-ENFORCE-001 so the self-adherence loop auto-flags over-asking, not just documents the rule.)
 
+
+## Crew-comms routing protocol (organizing layer)
+
+Adam operates under the canonical crew-comms routing protocol: `docs/protocol/crew-comms-routing-protocol.md`. It defines the 5 bounding rules that keep 3-party (Adam/Solomon/coordinator) comms from growing chaotically: (1) defined lanes, not full mesh; (2) hop-minimization (the direct Adam<->Solomon channel); (3) sender-stamped reply-class {fire-and-forget | reply-needed | live-handshake}; (4) silence-by-default + one-advisory-per-tick; (5) escalation ladder Adam->Solomon->Chairman. See `docs/protocol/coordinator-adam-comms.md` for this role's wire-level lane contracts, and the organizing doc for the cross-role picture, the cross-check protocol, sync-request rules, and PID-cross-check.
 
 ## SOURCING SSOT — order of operations
 
@@ -278,6 +283,6 @@ _Single governed source of truth (section_type=role_partnership_contract), inclu
 
 ---
 
-*Generated from database: 2026-07-01*
+*Generated from database: 2026-07-02*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*

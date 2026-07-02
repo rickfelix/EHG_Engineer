@@ -2,6 +2,13 @@
 
 **Status:** Active (ships dormant until `SOLOMON_CONSULT_V1`) · **SD:** SD-LEO-INFRA-SOLOMON-CONSULT-001 (Phase E) · Modeled on `docs/protocol/coordinator-adam-comms.md` + `docs/architecture/solomon-oracle.md`.
 
+> This lane is one of the canonical channels organized under
+> `docs/protocol/crew-comms-routing-protocol.md` (the 5 bounding rules: defined lanes,
+> hop-minimization — including the direct Adam↔Solomon channel this lane's traffic
+> partially graduates to — sender-stamped reply-class, silence-by-default, escalation
+> ladder). Read that doc first for the cross-role picture; this doc is the
+> Solomon↔coordinator wire-level contract.
+
 Solomon is the deep-reasoning **oracle** — the session the fleet escalates its hardest reasoning problems to. This doc defines how a `solomon_consult` reaches Solomon and how Solomon's answer reaches the asker. Solomon **proposes, never executes** (it never claims an SD or drives a build).
 
 ## Channels & kinds
@@ -40,3 +47,44 @@ indicator, ephemeral working-signal). No per-role reimplementation.
 ## Self-adherence
 
 Every 12 h, `solomon-self-adherence-review.mjs` checks that each durable duty declared in `CLAUDE_SOLOMON.md` is present in `SOLOMON_LOOPS`; drift is surfaced as a propose-only remediation (Solomon never builds the fix). The same parity check (`renderContractParity`) prints at every `/solomon` startup.
+
+## Cross-check protocol (SEE-SOMETHING / CONFIRM-ON-RELAY / PING-ON-SILENCE)
+
+Exception-triggered mutual verification on this lane — not every message, only on these
+triggers. Full rationale + live evidence: `docs/protocol/crew-comms-routing-protocol.md`
+§ "Cross-check protocol".
+
+- **SEE-SOMETHING** — if either side notices a claim from the other contradicts a stale
+  read, a snapshot, or ground truth, flag it immediately rather than acting on it.
+- **CONFIRM-ON-RELAY** — when the coordinator relays a message to/from Solomon on behalf
+  of a third party, it confirms back to the origin that the relay landed.
+- **PING-ON-SILENCE** — a `reply-needed` consult (see Reply-class below) left unanswered
+  past its expected window is pinged, not silently assumed disagreed-with.
+
+## Reply-class (sender-stamped)
+
+Every message on this lane is sender-stamped with a reply-class: `fire-and-forget`
+(no reply expected), `reply-needed` (async, PING-ON-SILENCE applies), or
+`live-handshake` (sync-request eligible — see below). See
+`docs/protocol/crew-comms-routing-protocol.md` § "Rule 3 — Sender-stamped reply-class"
+for the full contract.
+
+## Sync-request (live-handshake only)
+
+`node scripts/solomon-advisory.cjs request "<question>" --timeout <ms>` is this lane's
+synchronous, bounded-timeout request mode — reserved for genuine `live-handshake`
+exchanges, never for `reply-needed`/`fire-and-forget` traffic (those stay async via
+`send`/`solomon_consult`). On timeout, fall back to async rather than re-blocking — Solomon
+runs scheduled sweeps and drain ticks rather than a continuous listener, so a sync-request
+against it can time out by construction between ticks; prefer async in that case. **Never**
+issue a sync-request while already blocked on one (mutual sync-requests deadlock). Full
+rules: `docs/protocol/crew-comms-routing-protocol.md` § "Sync-request semantics".
+
+## PID-cross-check (liveness-dispute resolution)
+
+When two sessions disagree on which session is the live canonical Solomon (a
+`session_id` is a label, not ground truth — Solomon's own singleton-handoff guard above
+exists for exactly this), resolve via OS process enumeration and on-disk session markers,
+not another DB read. This settled a real Solomon session-identity dispute live on
+2026-07-01. Full protocol: `docs/protocol/crew-comms-routing-protocol.md`
+§ "PID-cross-check".

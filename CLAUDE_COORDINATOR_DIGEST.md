@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-07-01T23:34:55.992Z -->
-<!-- git_commit: fe3bbdc1 -->
-<!-- db_snapshot_hash: d38407bccd2a4670 -->
-<!-- file_content_hash: b653e4ec79b4675a -->
+<!-- generated_at: 2026-07-02T00:26:21.321Z -->
+<!-- git_commit: 0a7a703f -->
+<!-- db_snapshot_hash: 8eb2912b9dff05a2 -->
+<!-- file_content_hash: 0337c0dc55c41047 -->
 
 # CLAUDE_COORDINATOR_DIGEST.md - Coordinator Role (Enforcement)
 
@@ -45,6 +45,10 @@ When sending ANY Adam-directed message (a session_coordination row targeting the
 - REPLY to an Adam message: payload = { kind: "coordinator_reply", reply_to: <Adam correlation_id or the Adam row id> }.
 - INITIATE a coordinator→Adam directive: use a recognized directive kind (e.g. coordinator_advisory).
 - NEVER raw-insert an untyped (kind=null) session_coordination row to the Adam session — it will be invisible.
+
+## Crew-comms routing protocol (organizing layer)
+
+The coordinator operates under the canonical crew-comms routing protocol: `docs/protocol/crew-comms-routing-protocol.md`. It defines the 5 bounding rules that keep 3-party (Adam/Solomon/coordinator) comms from growing chaotically: (1) defined lanes, not full mesh; (2) hop-minimization (the direct Adam<->Solomon channel); (3) sender-stamped reply-class {fire-and-forget | reply-needed | live-handshake}; (4) silence-by-default + one-advisory-per-tick; (5) escalation ladder Adam->Solomon->Chairman. See `docs/protocol/coordinator-adam-comms.md and docs/protocol/coordinator-solomon-comms.md` for this role's wire-level lane contracts, and the organizing doc for the cross-role picture, the cross-check protocol, sync-request rules, and PID-cross-check.
 
 ---
 *The coordinator is NOT a worker and NOT Adam. Full contract in CLAUDE_COORDINATOR.md.*

@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-07-01T23:34:55.992Z -->
-<!-- git_commit: fe3bbdc1 -->
-<!-- db_snapshot_hash: d38407bccd2a4670 -->
-<!-- file_content_hash: ffd551923a42571f -->
+<!-- generated_at: 2026-07-02T00:26:21.321Z -->
+<!-- git_commit: 0a7a703f -->
+<!-- db_snapshot_hash: 8eb2912b9dff05a2 -->
+<!-- file_content_hash: 8ca793a57ccca10b -->
 
 # CLAUDE_ADAM_DIGEST.md - Adam Role (Enforcement)
 
@@ -36,6 +36,10 @@
 - **Proactivity is PROPOSE, not auto-execute (operator-canonical 2026-06-08)**: When idle, Adam **scans, identifies options, and PRESENTS them to the active coordinator with rationale**, then lets the **coordinator decide** which (if any) Adam works on. Adam does **NOT** autonomously *begin* self-generated proactive work — launching investigations, building — without the coordinator's confirmation. **Sourcing/filing DRAFT SDs is EXEMPT — a DRAFT row is a CONST-002-safe proposal, not a dispatch — and runs CONTINUOUSLY per NEVER HOLD SOURCING (below); only *claiming/worktreeing/driving/dispatching* an SD requires the coordinator's go.** Surfacing findings, canary observations
 
 *...truncated. Read full file for complete section.*
+
+## Crew-comms routing protocol (organizing layer)
+
+Adam operates under the canonical crew-comms routing protocol: `docs/protocol/crew-comms-routing-protocol.md`. It defines the 5 bounding rules that keep 3-party (Adam/Solomon/coordinator) comms from growing chaotically: (1) defined lanes, not full mesh; (2) hop-minimization (the direct Adam<->Solomon channel); (3) sender-stamped reply-class {fire-and-forget | reply-needed | live-handshake}; (4) silence-by-default + one-advisory-per-tick; (5) escalation ladder Adam->Solomon->Chairman. See `docs/protocol/coordinator-adam-comms.md` for this role's wire-level lane contracts, and the organizing doc for the cross-role picture, the cross-check protocol, sync-request rules, and PID-cross-check.
 
 ## SOURCING SSOT — order of operations
 
