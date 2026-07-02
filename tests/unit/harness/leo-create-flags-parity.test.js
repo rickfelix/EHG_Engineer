@@ -73,6 +73,52 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
     });
   });
 
+  describe('--from-qf bidirectional link + hardened retirement (SD-LEO-INFRA-QF-SD-ESCALATION-LINK-CANONICAL-TRACK-001)', () => {
+    it('createFromQF metadata includes escalated_from_qf pointing back at the source QF id', () => {
+      const idx = src.indexOf('async function createFromQF');
+      const body = src.slice(idx, idx + 3000);
+      expect(body).toMatch(/escalated_from_qf:\s*qf\.id/);
+    });
+
+    it('createFromQF never writes a metadata field on quick_fixes (no metadata column exists on that table)', () => {
+      const idx = src.indexOf('async function createFromQF');
+      const end = src.indexOf('\nasync function', idx + 1);
+      const body = src.slice(idx, end > 0 ? end : idx + 4000);
+      const qfUpdateIdx = body.indexOf("status: 'escalated',");
+      expect(qfUpdateIdx).toBeGreaterThan(-1);
+      const updateBlock = body.slice(qfUpdateIdx, qfUpdateIdx + 200);
+      expect(updateBlock).not.toMatch(/metadata:/);
+    });
+
+    it('the QF retirement write is wrapped in withRetry rather than a single best-effort attempt', () => {
+      const idx = src.indexOf('async function createFromQF');
+      const body = src.slice(idx, idx + 4000);
+      expect(body).toMatch(/await withRetry\(async \(\) => \{/);
+      expect(body).toMatch(/maxRetries:\s*2/);
+    });
+
+    it('withRetry is imported from the shared retry utility', () => {
+      expect(src).toMatch(/import \{ withRetry \} from ['"]\.\.\/lib\/eva\/stage-zero\/data-pollers\/retry\.js['"]/);
+    });
+
+    it('exhausted retries throw an Error naming the already-created SD key and a manual recovery UPDATE', () => {
+      const idx = src.indexOf('async function createFromQF');
+      const body = src.slice(idx, idx + 4500);
+      const catchIdx = body.indexOf('} catch (updErr) {');
+      expect(catchIdx).toBeGreaterThan(-1);
+      const catchBlock = body.slice(catchIdx, catchIdx + 700);
+      expect(catchBlock).toMatch(/throw new Error\(/);
+      expect(catchBlock).toMatch(/SD \$\{sdKey\}/);
+      expect(catchBlock).toMatch(/UPDATE quick_fixes SET status='escalated'/);
+    });
+
+    it('the wrapped update fn throws explicitly on a Supabase error (supabase-js does not throw on its own)', () => {
+      const idx = src.indexOf('async function createFromQF');
+      const body = src.slice(idx, idx + 4000);
+      expect(body).toMatch(/if\s*\(updErr\)\s*throw new Error\(updErr\.message\);/);
+    });
+  });
+
   describe('direct-args mode', () => {
     it('knownDirectFlags Set includes --migration-reviewed / --security-reviewed / --yes / -y', () => {
       const idx = src.indexOf('const knownDirectFlags = new Set');

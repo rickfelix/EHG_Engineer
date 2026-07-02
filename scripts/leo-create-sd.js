@@ -52,6 +52,7 @@ import {
 } from './modules/plan-archiver.js';
 import { runTriageGate } from './modules/triage-gate.js';
 import { evaluateVisionReadiness, formatRubricResult } from './modules/vision-readiness-rubric.js';
+import { withRetry } from '../lib/eva/stage-zero/data-pollers/retry.js';
 import { scoreSD } from './eva/vision-scorer.js';
 import { trackWriteSource } from '../lib/eva/cli-write-gate.js';
 // SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 (FR-5) + SD-FDBK-INFRA-KEY-GENERATOR-LEAKS-001:
@@ -731,6 +732,7 @@ async function createFromQF(qfId, opts = {}) {
     metadata: {
       source: 'quick_fix',
       source_qf_id: qf.id,
+      escalated_from_qf: qf.id,
       qf_type: qf.type,
       qf_severity: qf.severity,
       qf_estimated_loc: qf.estimated_loc,
@@ -739,23 +741,32 @@ async function createFromQF(qfId, opts = {}) {
     }
   });
 
-  // Mark the QF as escalated and release any active claim so the queue/parallel sessions
-  // see the new state. Failure here is non-fatal — the SD exists and operator can reconcile.
-  const { error: updErr } = await supabase
-    .from('quick_fixes')
-    .update({
-      status: 'escalated',
-      escalated_to_sd_id: sd.id,
-      escalation_reason: `Escalated to ${sdKey} via leo-create-sd.js --from-qf`,
-      claiming_session_id: null
-    })
-    .eq('id', qf.id);
+  // Retire the QF so it stops being independently claimable now that the SD is the
+  // canonical track. supabase-js does not throw on a write error, so the wrapped fn
+  // must throw explicitly for withRetry's catch to see it. A transient failure here
+  // (after the SD already exists) would otherwise leave the QF silently claimable
+  // alongside an unlinked SD — fail loud with recovery instructions instead.
+  try {
+    await withRetry(async () => {
+      const { error: updErr } = await supabase
+        .from('quick_fixes')
+        .update({
+          status: 'escalated',
+          escalated_to_sd_id: sd.id,
+          escalation_reason: `Escalated to ${sdKey} via leo-create-sd.js --from-qf`,
+          claiming_session_id: null
+        })
+        .eq('id', qf.id);
+      if (updErr) throw new Error(updErr.message);
+    }, { maxRetries: 2, baseDelayMs: 250, timeoutMs: 5000, label: `retire QF ${qf.id}` });
 
-  if (updErr) {
-    console.warn(`   ⚠️  SD created but QF row update failed: ${updErr.message}`);
-    console.warn(`      Manually run: UPDATE quick_fixes SET status='escalated', escalated_to_sd_id='${sd.id}' WHERE id='${qf.id}';`);
-  } else {
     console.log(`   ✓ Quick-fix ${qf.id} → status='escalated', escalated_to_sd_id=${sd.id}`);
+  } catch (updErr) {
+    throw new Error(
+      `SD ${sdKey} (${sd.id}) was created, but retiring quick-fix ${qf.id} failed after 3 attempts: ${updErr.message}\n` +
+      'The QF is still claimable and NOT linked back to the SD. Manual recovery — run:\n' +
+      `  UPDATE quick_fixes SET status='escalated', escalated_to_sd_id='${sd.id}', escalation_reason='Escalated to ${sdKey} via leo-create-sd.js --from-qf (manual recovery)', claiming_session_id=NULL WHERE id='${qf.id}';`
+    );
   }
 
   return sd;

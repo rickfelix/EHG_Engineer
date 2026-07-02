@@ -339,6 +339,22 @@ describe('rankItems — Phase 3 Quick Fix interleaving', () => {
     const allIds = [...tracks.A, ...tracks.B, ...tracks.C, ...tracks.STANDALONE].map(x => x.id);
     assert.deepEqual(allIds, ['QF-OPEN']);
   });
+
+  // SD-LEO-INFRA-QF-SD-ESCALATION-LINK-CANONICAL-TRACK-001 FR-3: named regression case —
+  // a QF escalated to a companion SD (status='escalated') must never be ranked alongside
+  // that SD, so the same fix can't end up on two independently-claimable belt tracks.
+  it('QF escalated to a companion SD (status=escalated) is filtered out; only the SD remains ranked', () => {
+    const items = [
+      qf({ id: 'QF-ESCALATED', status: 'escalated' }),
+      qf({ id: 'QF-IN-PROGRESS', status: 'in_progress' }),
+      sd({ id: 'SD-CANONICAL', status: 'draft' }),
+    ];
+    const { tracks } = rankItems(items, { now: NOW });
+    const allIds = [...tracks.A, ...tracks.B, ...tracks.C, ...tracks.STANDALONE].map(x => x.id);
+    assert.ok(!allIds.includes('QF-ESCALATED'), 'escalated QF must not appear on any track');
+    assert.ok(allIds.includes('QF-IN-PROGRESS'), 'in_progress QF should still be ranked');
+    assert.ok(allIds.includes('SD-CANONICAL'), 'the canonical SD should still be ranked');
+  });
 });
 
 // SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 FR-5: venture-build queue isolation.
