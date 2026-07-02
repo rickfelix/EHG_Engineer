@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-01T23:36:16.787Z
+**Generated**: 2026-07-02T01:52:38.389Z
 **Rows**: 288
 **RLS**: Enabled (2 policies)
 
@@ -124,6 +124,11 @@
 ### trg_enforce_vision_quality_advancement
 
 - **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_vision_quality_on_advancement()`
+
+### trg_enforce_vision_quality_insert
+
+- **Timing**: BEFORE INSERT
 - **Action**: `EXECUTE FUNCTION enforce_vision_quality_on_advancement()`
 
 ### trg_vision_creation_source_advisory
