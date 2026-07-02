@@ -113,7 +113,13 @@ Examples:
 export function classifyShipReason(reason) {
   const text = reason || '';
   if (/superseded|duplicate[\s-]?of[\s-]?merged/i.test(text)) return true;
-  const hasShipVerb = /\b(shipped|merged|fixed|resolved|closed|landed)\b/i.test(text);
+  // Deep-tier adversarial review finding: the original 6-verb list missed
+  // extremely common non-git-jargon ways to claim "this is already done
+  // elsewhere" ("already implemented in PR #999", "already done in #999",
+  // "already completed and deployed via PR #123") — arguably MORE natural
+  // phrasing than "merged", and this classifier is the SOLE enforcement
+  // point (no second gate), so a miss here is a full bypass of the guardrail.
+  const hasShipVerb = /\b(shipped|merged|fixed|resolved|closed|landed|implemented|completed|delivered|done|built|handled|addressed|covered)\b/i.test(text);
   if (!hasShipVerb) return false;
   if (/\balready\b/i.test(text)) return true;
   return /#\d+|\bPR\s*\d+\b/i.test(text);

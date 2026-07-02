@@ -32,6 +32,15 @@ describe('classifyShipReason', () => {
     expect(classifyShipReason('closed by #42')).toBe(true);
   });
 
+  // Deep-tier adversarial review finding: non-git-jargon ways of claiming "already
+  // done elsewhere" (arguably MORE natural than "merged") bypassed the classifier
+  // entirely, since it's the SOLE enforcement point with no second gate.
+  it('classifies non-git-jargon "already done elsewhere" claims (adversarial review pin)', () => {
+    expect(classifyShipReason('already implemented in PR #999')).toBe(true);
+    expect(classifyShipReason('already done in #999')).toBe(true);
+    expect(classifyShipReason('already completed and deployed via PR #123')).toBe(true);
+  });
+
   it('does NOT classify ordinary kill/deprioritize/duplicate-of-open reasons as requiring verification', () => {
     expect(classifyShipReason('duplicate work, killing this one')).toBe(false);
     expect(classifyShipReason('deprioritized')).toBe(false);
