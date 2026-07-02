@@ -20,7 +20,7 @@ import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 // SD-LEO-INFRA-FLEET-FRESHNESS-GUARD-001: advisory, fail-open checkout-freshness badge.
-import { checkoutFreshness, freshnessBadge } from '../lib/governance/checkout-freshness.js';
+import { checkoutFreshness, freshnessBadge, CRITICAL_PROTOCOL_FILES } from '../lib/governance/checkout-freshness.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -228,10 +228,18 @@ export function renderLoops(armed) {
   return lines.join('\n');
 }
 
+// SD-LEO-INFRA-SINGLETON-STALE-TREE-STALENESS-GAUGE-001 (framework-seed candidate for
+// SD-LEO-INFRA-INVARIANT-GAUGES-FRAMEWORK-001, still code-free — shipped standalone per the
+// scripts/gauge-unranked-claimable-leaves.mjs precedent): the coordinator's own contract doc,
+// so drift there surfaces as STALE-CRITICAL. Unlike Adam (single adam-quiet-tick.mjs) the
+// coordinator has no single canonical "tick" script — STANDARD_LOOPS lists 15+ periodic
+// scripts — so no tick-script path is added here to avoid an arbitrary/incomplete pick.
+export const COORDINATOR_CRITICAL_PATHS = Object.freeze([...CRITICAL_PROTOCOL_FILES, ROLE_CONTEXT_DOC]);
+
 /** Advisory checkout-freshness badge (fail-open — never throws, never blocks startup). */
 export function renderFreshness(repoRoot = REPO_ROOT) {
   try {
-    return '═══ CHECKOUT FRESHNESS ═══\n  ' + freshnessBadge(checkoutFreshness(repoRoot, { role: 'coordinator' }));
+    return '═══ CHECKOUT FRESHNESS ═══\n  ' + freshnessBadge(checkoutFreshness(repoRoot, { role: 'coordinator', criticalPaths: COORDINATOR_CRITICAL_PATHS }));
   } catch (err) {
     return '═══ CHECKOUT FRESHNESS ═══\n  ✅ freshness check skipped (fail-open): ' + (err?.message || String(err));
   }

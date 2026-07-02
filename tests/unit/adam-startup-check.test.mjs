@@ -17,7 +17,10 @@ import {
   parseDurableDutyMarkers,
   missingDurableDuties,
   renderContractParity,
+  renderFreshness,
+  ADAM_CRITICAL_PATHS,
 } from '../../scripts/adam-startup-check.mjs';
+import { CRITICAL_PROTOCOL_FILES } from '../../lib/governance/checkout-freshness.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -162,4 +165,17 @@ test('buildReport composes responsibilities + the tick loops', () => {
   assert.match(report, /ADAM ROLE/);
   assert.match(report, /ADAM RECURRING TICK/);
   assert.ok(RESPONSIBILITIES.length >= 3);
+});
+
+// SD-LEO-INFRA-SINGLETON-STALE-TREE-STALENESS-GAUGE-001 (FR-2)
+test('ADAM_CRITICAL_PATHS extends the base protocol files with the Adam contract + tick script', () => {
+  CRITICAL_PROTOCOL_FILES.forEach((p) => assert.ok(ADAM_CRITICAL_PATHS.includes(p), `missing base path ${p}`));
+  assert.ok(ADAM_CRITICAL_PATHS.includes(ROLE_CONTEXT_DOC));
+  assert.ok(ADAM_CRITICAL_PATHS.includes('scripts/adam-quiet-tick.mjs'));
+});
+
+test('renderFreshness is fail-open and reports a CHECKOUT FRESHNESS section', () => {
+  assert.doesNotThrow(() => renderFreshness('/no/such/path'));
+  const out = renderFreshness(process.cwd());
+  assert.match(out, /CHECKOUT FRESHNESS/);
 });

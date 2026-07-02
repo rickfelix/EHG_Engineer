@@ -10,8 +10,10 @@ import {
   SOLOMON_LOOPS, ROLE_CONTEXT_DOC, parseDurableDutyMarkers, missingDurableDuties,
   loopStatus, parseArmedSet, renderContractParity, slugifyDuty, wiredDutySlugs,
   solomonSweepMode, isProactiveSweepEnabled,
+  renderFreshness, buildReport, SOLOMON_CRITICAL_PATHS,
 } from '../../scripts/solomon-startup-check.mjs';
 import { buildSelfAdherenceVerdict } from '../../scripts/solomon-self-adherence-review.mjs';
+import { CRITICAL_PROTOCOL_FILES } from '../../lib/governance/checkout-freshness.js';
 
 describe('SOLOMON_LOOPS shape', () => {
   it('declares inbox-monitor (solomon-advisory.cjs inbox, 5min) + self-adherence (*/12h) + deep-sweep', () => {
@@ -158,5 +160,25 @@ describe('SD-LEO-INFRA-SOLOMON-MODEB-FABLE-PIN-TRIGGER-001: solomonSweepMode Fab
     expect(solomonSweepMode('claude-fable-5', { SOLOMON_SWEEP_MODE: 'consult' })).toBe('consult');
     expect(solomonSweepMode('claude-opus-4-8', { SOLOMON_SWEEP_MODE: 'PROACTIVE' })).toBe('proactive'); // case-insensitive
     expect(solomonSweepMode('claude-fable-5', { SOLOMON_SWEEP_MODE: 'garbage' })).toBe('proactive'); // invalid override ignored
+  });
+});
+
+// SD-LEO-INFRA-SINGLETON-STALE-TREE-STALENESS-GAUGE-001: Solomon previously had NO checkout-freshness
+// check at all (Adam and the coordinator already did) — this closes that gap (FR-1/FR-2).
+describe('SD-LEO-INFRA-SINGLETON-STALE-TREE-STALENESS-GAUGE-001: checkout freshness (Solomon gains parity)', () => {
+  it('SOLOMON_CRITICAL_PATHS extends the base protocol files with CLAUDE_SOLOMON.md', () => {
+    CRITICAL_PROTOCOL_FILES.forEach((p) => expect(SOLOMON_CRITICAL_PATHS).toContain(p));
+    expect(SOLOMON_CRITICAL_PATHS).toContain(ROLE_CONTEXT_DOC);
+  });
+
+  it('renderFreshness is fail-open and reports a CHECKOUT FRESHNESS section', () => {
+    expect(() => renderFreshness('/no/such/path')).not.toThrow();
+    const out = renderFreshness(process.cwd());
+    expect(out).toMatch(/CHECKOUT FRESHNESS/);
+  });
+
+  it('buildReport now includes the freshness section (previously absent)', () => {
+    const report = buildReport([], {});
+    expect(report).toMatch(/CHECKOUT FRESHNESS/);
   });
 });
