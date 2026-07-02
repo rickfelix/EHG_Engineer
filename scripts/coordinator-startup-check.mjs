@@ -97,6 +97,19 @@ export const STANDARD_LOOPS = [
   // always observes a just-refreshed rank rather than racing it.
   { key: 'unranked-gauge', label: 'Eligible-but-unranked-leaf-count invariant gauge', script: 'gauge-unranked-claimable-leaves.mjs', cron: '9,24,39,54 * * * *',
     prompt: 'node scripts/gauge-unranked-claimable-leaves.mjs' },
+  // QF-20260702-976: the OPERATING layer for SD-LEO-INFRA-COORDINATOR-ORCHESTRATED-SINGLETON-REFRESH-001-A.
+  // The trigger + scheduler logic (lib/coordinator/singleton-relaunch-trigger.js, scripts/
+  // singleton-relaunch-scheduler.mjs, npm-wired as singleton-relaunch:run) shipped but nothing
+  // periodically invoked it — first live test 2026-07-02 DID-NOT-FIRE (0 singleton_relaunch_scheduled
+  // records despite a coordinator behind-59 + fleet-quiescent trigger window). This loop makes
+  // DETECTION + SCHEDULING operate (a durable singleton_relaunch_scheduled record + surfacing when
+  // behind-N + quiescent + target-idle) — it does NOT itself perform an end-to-end autonomous
+  // relaunch; the fresh-checkout spawn remains human-gated (see singleton-relaunch-trigger.js header
+  // for the two explicitly-deferred downstream gaps: target-idle awaiting_tick predicate handling,
+  // and the human-gated spawn step). Cheap (git + a few DB reads); offset from the other */15-ish
+  // loops so it doesn't cluster.
+  { key: 'singleton-relaunch', label: 'Singleton-relaunch quiescent-window scheduler (detection + scheduling only)', script: 'singleton-relaunch-scheduler.mjs', cron: '7,22,37,52 * * * *',
+    prompt: 'npm run singleton-relaunch:run' },
   // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-1/FR-2: drains
   // the tracked relay-request queue deliberately (never processed inline in the active
   // thread) and writes the CONFIRM-ON-RELAY receipt. Frequent — a queued relay-request is
