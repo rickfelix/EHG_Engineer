@@ -793,14 +793,10 @@ export function getScopedUnitTestFiles(filesChanged, testDir) {
 export async function commitAndPushChanges(testDir, qf, gitInfo, actualLoc, filesChanged, prUrl, testsPass, prompt, flags = {}) {
   console.log('\n🔄 Git Commit & Push\n');
 
-  // QF-20260509-552: branchName was previously assigned at line 379 without
-  // being declared — JSDoc documents gitInfo.branchName but the destructure
-  // missed it, causing ReferenceError on git status check.
-  let { commitSha, branchName } = gitInfo;
+  let { commitSha } = gitInfo;
 
   try {
     const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8', cwd: testDir }).trim();
-    branchName = currentBranch;
 
     const gitStatus = execSync('git status --short', { encoding: 'utf-8', cwd: testDir }).trim();
 
