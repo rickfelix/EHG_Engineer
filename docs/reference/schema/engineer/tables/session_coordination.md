@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T07:00:05.818Z
-**Rows**: 10,901
+**Generated**: 2026-07-02T12:48:06.275Z
+**Rows**: 11,131
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (13 total)
+## Columns (14 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -31,6 +31,7 @@
 | expires_at | `timestamp with time zone` | YES | `(now() + '01:00:00'::interval)` | - |
 | read_at | `timestamp with time zone` | YES | - | - |
 | acknowledged_at | `timestamp with time zone` | YES | - | - |
+| correlation_id | `text` | YES | - | Optional message id this row replies to / correlates with. Nullable -- no backfill for historical rows. SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-D |
 
 ## Constraints
 
@@ -69,6 +70,13 @@
 
 - **Roles**: {public}
 - **Using**: `true`
+
+## Triggers
+
+### trg_session_coordination_insert_lint
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION session_coordination_insert_lint()`
 
 ---
 
