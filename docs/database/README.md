@@ -150,6 +150,7 @@ Upcoming migration planning:
 - [20251015 Progress Fix Report](20251015_progress_fix_report.md)
 - [Column Rename Migration Notes](column-rename-migration-notes.md)
 - [Feedback Quality Config Migration Report](feedback-quality-config-migration-report.md)
+- [Leo Protocol Sections Id Seq Resync 2026 07 02](leo-protocol-sections-id-seq-resync-2026-07-02.md)
 - [Lifecycle Gap Migrations Summary](lifecycle-gap-migrations-summary.md)
 - [Loader Consolidation](loader-consolidation.md)
 - [Migration Drift Resolution 2025 10 27](migration-drift-resolution-2025-10-27.md)
