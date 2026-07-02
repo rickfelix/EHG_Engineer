@@ -44,6 +44,7 @@ const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { redact, BODY_HARD_CAP, awaitCoordinatorReply } = require('./worker-signal.cjs');
 const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled } = require('../lib/coordinator/resolve.cjs');
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
+const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 const { getActiveAdamId } = require('../lib/coordinator/adam-identity.cjs');
@@ -280,6 +281,10 @@ async function drainInbox(supabase, sessionId, { quiet = false } = {}) {
     const kind = (r.payload && r.payload.kind) || r.message_type || '?';
     const text = (r.payload && r.payload.body) || r.body || r.subject || '(empty)';
     const ageMin = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
+    // FR-2 (SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-C): Solomon is the named live example of a
+    // long-lived singleton misreading rows from boot-time-stale code — detect, don't silently drop.
+    const skew = detectVersionSkew(r.payload);
+    if (skew) console.warn(`  ⚠ PROTOCOL VERSION SKEW: sender v${skew.senderVersion}, receiver v${skew.receiverVersion} (id=${r.id})`);
     console.log(`  • [${lane}/${kind}] (${ageMin}m) ${text}`);
     ids.push(r.id);
   }
