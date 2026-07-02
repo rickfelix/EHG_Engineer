@@ -77,8 +77,28 @@ Every message is stamped by its sender with one of:
 | `live-handshake` | A synchronous, bounded-timeout reply is needed NOW | Yes (see Sync-Request below) |
 
 This bounds the back-and-forth at the **source** — most messages need no reply at all —
-and drives PING-ON-SILENCE deterministically instead of an ad-hoc guess (see
-SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
+and drives PING-ON-SILENCE deterministically instead of an ad-hoc guess.
+
+**Implemented** (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C). The taxonomy is a
+frozen SSOT (`REPLY_CLASSES`) in `lib/coordinator/reply-class.cjs`, imported by every
+payload builder that sends an inter-role message: `buildRequestPayload` /
+`buildSolomonConsultPayload` / `buildIntentPayload` (`scripts/worker-signal.cjs`),
+`buildAdvisoryPayload` (`scripts/adam-advisory.cjs`, `scripts/solomon-advisory.cjs`), and
+`buildReplyPayload` (`scripts/coordinator-reply.cjs`). Each stamps `payload.reply_class`
+from its existing mode/flag semantics (e.g. a synchronous `request`/`--await` call is
+always `live-handshake`; a reply is always `fire-and-forget`; a coordinator-relay
+broadcast is always `fire-and-forget`). Senders opt into `reply-needed` explicitly via
+`adam-advisory.cjs send "<body>" --reply-class reply-needed [--reply-window-ms <ms>]`
+(same flag on `solomon-advisory.cjs`; default window 2h, `DEFAULT_REPLY_WINDOW_MS`).
+PING-ON-SILENCE is a single-fire sweep (`findOverdueReplyNeeded` +
+`checkAndPingOverdueReplies`, same module) wired into the existing `adam-advisory.cjs
+inbox` / `solomon-advisory.cjs inbox` recurring ticks: each tick checks the sender's own
+outbound `reply-needed` rows for ones past `reply_expected_by` with no answering row yet,
+sends exactly one threaded ping (`payload.kind=ping_on_silence`, itself
+`fire-and-forget`), and stamps `payload.ping_sent_at` on the original row so it is never
+re-pinged. No schema migration — all fields ride the existing
+`session_coordination.payload` JSONB column; a legacy row with no `reply_class` reads as
+`fire-and-forget` (never retroactively chased).
 
 ### Rule 4 — Silence-by-default + one-advisory-per-tick
 
