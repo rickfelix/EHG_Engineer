@@ -1,9 +1,9 @@
 ---
 category: reference
 status: approved
-version: 1.0.0
+version: 1.1.0
 author: Rick Felix
-last_updated: 2026-05-02
+last_updated: 2026-07-02
 tags: [reference]
 ---
 
@@ -11,8 +11,8 @@ tags: [reference]
 
 ## Metadata
 
-- **Source SD**: SD-LEO-INFRA-COVERAGE-CI-TRIAGE-001 (FR-4 + FR-5)
-- **Effective Date**: 2026-05-02
+- **Source SD**: SD-LEO-INFRA-COVERAGE-CI-TRIAGE-001 (FR-4 + FR-5); identity-based comparison added by SD-LEO-FIX-COVERAGE-BASELINE-REGRESSION-001
+- **Effective Date**: 2026-05-02 (count-based); 2026-07-02 (identity-based)
 - **Status**: ACTIVE (sunsets at ≤100 main-branch test failures — see Sunset Criteria)
 
 ## Overview
@@ -33,22 +33,30 @@ The ratchet pairs with the manual triage SD: as triage commits land on main, the
 - `push` to `main` and `develop` — captures a fresh snapshot
 - `pull_request` against any base — compares to the most recent snapshot for the PR's base branch
 
-### BASELINE_REGRESSION mechanics
+### BASELINE_REGRESSION mechanics (identity-based, SD-LEO-FIX-COVERAGE-BASELINE-REGRESSION-001)
 
 After the existing `Run tests with coverage` step parses `test-results.json`, a new step `Compare to main snapshot` runs `node scripts/compare-to-main-snapshot.mjs`. It:
 
-1. Reads `numFailedTests` from `test-results.json`.
-2. On `push` events: INSERTs a row into `codebase_health_snapshots` with the current count and a `trend_direction` derived from the prior snapshot (`improving` / `stable` / `declining` / `new`).
-3. On `pull_request` events: SELECTs the most recent snapshot for the PR's base branch where `dimension='ci_test_failure_count' AND target_application='EHG_Engineer'`. If the current PR's failure count exceeds the baseline by ≥ 1, the step exits 1 with three GitHub Actions annotations:
-   - `::error::BASELINE_REGRESSION: N new test failure(s) vs main snapshot.`
+1. Reads `numFailedTests` from `test-results.json` and extracts the failing-test **identity** set (`${file}::${test}` per failure) via the shared `scripts/lib/baseline-regression-check.mjs` module.
+2. On `push` events: INSERTs a row into `codebase_health_snapshots` with the current count, the identity set (`findings[0].failed_test_ids`), and a `trend_direction` derived from the prior snapshot (`improving` / `stable` / `declining` / `new`).
+3. On `pull_request` events: SELECTs the most recent snapshot for the PR's base branch. A failure is flagged as a genuine regression only when it is **both**:
+   - not present in the baseline snapshot's `failed_test_ids` (i.e. it's a NEW failure, not a pre-existing/flaky one), **and**
+   - in a file this PR's own diff actually changed (`git diff` vs `origin/main`) — a pre-existing/flaky failure in a file the PR never touched can never be blamed on the PR.
+
+   If both conditions hold for ≥1 failure, the step exits 1 with three GitHub Actions annotations:
+   - `::error::BASELINE_REGRESSION: N new test failure(s) vs main snapshot.` (followed by up to 10 of the actual regressed test identities)
    - `Reproduce locally: node scripts/audit-test-failures.mjs --pr-only --format=json | jq .new_failures`
    - `See docs/reference/test-coverage-baseline-ratchet.md for triage steps.`
 
-If no prior snapshot exists for the base branch (cold start), the step passes and writes the first snapshot on the next push to main.
+**Why**: the original count-only comparison false-blocked PRs on pre-existing/flaky failures in files they never touched (observed on PR #5330: 107 failures across 29 unrelated files). Identity + diff-reachability fixes that class while still catching genuine regressions.
+
+**Legacy/cold-start fallback**: if the baseline snapshot predates the `failed_test_ids` field (written before 2026-07-02), the comparison falls back to the original pure count-based check rather than silently disabling the gate. If no prior snapshot exists at all for the base branch (cold start), the step passes and writes the first snapshot on the next push to main.
+
+**Bootstrap note**: a PR merging the identity-based logic itself is necessarily compared against whatever baseline snapshot already exists on `main` — if that snapshot predates this fix, the PR's own gate check runs count-based (the fallback above), same as before. The improvement takes effect starting with the next push-to-main snapshot after this fix lands.
 
 ### audit-test-failures.mjs invocation
 
-The audit script is the canonical bucketer. It is invoked locally by developers (`node scripts/audit-test-failures.mjs --summary`) and referenced in the BASELINE_REGRESSION annotation as the reproduction recipe. The script does not read from the database today — it parses `test-results.json` directly. See CLI Usage below.
+The audit script is the canonical bucketer AND (as of SD-LEO-FIX-COVERAGE-BASELINE-REGRESSION-001) the local reproduction tool for the identity-based check. `node scripts/audit-test-failures.mjs --pr-only --format=json` calls the same shared `scripts/lib/baseline-regression-check.mjs` comparator the CI gate uses (fetches the same baseline snapshot, computes the same changed-files diff), so it reproduces the CI verdict exactly — no drift between the two. Requires `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`. See CLI Usage below.
 
 ## Schema Reference
 
@@ -59,7 +67,7 @@ The ratchet uses only the `ci_test_failure_count` dimension. Conventions for tha
 - `dimension`: literal string `ci_test_failure_count`
 - `target_application`: literal string `EHG_Engineer`
 - `score`: pass-rate as `0–100` (computed as `(passed / total) * 100`, NUMERIC(5,2))
-- `findings`: JSONB **array with exactly one element** — `[{failed_count, branch, commit_sha}]`. The single-element-array shape matches existing `dead_code` and `complexity` dimension consumers; bare-object shape is incompatible.
+- `findings`: JSONB **array with exactly one element** — `[{failed_count, skipped_count, failed_test_ids, branch, commit_sha}]`. `failed_test_ids` (added 2026-07-02) is a string array of `${file}::${test}` identities for every currently-failing test; `null`/absent on snapshots written before this field existed (legacy — triggers the count-based fallback described above). The single-element-array shape matches existing `dead_code` and `complexity` dimension consumers; bare-object shape is incompatible.
 - `trend_direction`: one of `improving` | `stable` | `declining` | `new` per the table CHECK constraint
 - `metadata.workflow_run_id`: GitHub Actions run id for traceability
 - `scanned_at` and `created_at`: defaults to `now()`
@@ -97,6 +105,10 @@ The CHECK constraint on `codebase_health_snapshots.trend_direction` accepts only
 
 Annotations only render when stderr lines exactly match `::error::<message>` (no leading whitespace, no trailing comma). The helper script writes them directly via `console.error`; if you wrap that call, preserve the exact format.
 
+### `BASELINE_REGRESSION` fires with no identity list underneath the error (just a bare count)
+
+This means the comparison fell back to the legacy count-based check (`used_fallback: true`) — the baseline snapshot for this branch predates the `failed_test_ids` field. This is expected for any PR compared against a snapshot written before 2026-07-02, and for the fix's own PR (its own baseline necessarily predates itself — see the Bootstrap note above). Verify via the `test-failures-pr.json` artifact: in fallback mode it dumps every currently-failing test, not just genuine regressions — cross-check that the failures are pre-existing/unrelated (same triage steps as before this fix) before treating it as a real block. Once a push to main writes a fresh snapshot with `failed_test_ids`, subsequent PRs get the precise identity+reachability comparison.
+
 ## CLI Usage
 
 Mirrors `node scripts/audit-test-failures.mjs --help`:
@@ -112,8 +124,11 @@ OPTIONS:
   --format=csv|json         Output format (default: csv)
   --summary                 Emit category counts to stderr (CSV stays on stdout)
   --by-category=<name>      Filter rows to one bucket
-  --pr-only                 Reserved: compare to baseline snapshot (wired in PR3)
-  --branch=<name>           Reserved: DB-read source branch (default: main)
+  --pr-only                 Compare current failures to the branch's baseline snapshot;
+                            emits { new_failures, new_failure_count, used_fallback } and
+                            exits 1 if any genuine (identity+diff-reachable) regression
+                            is found. Requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.
+  --branch=<name>           Baseline branch to compare against with --pr-only (default: main)
   --no-db                   Force file-fallback (alias for default behavior today)
   --help, -h                Show this message
 
@@ -126,8 +141,8 @@ OUTPUT BUCKETS (in detection-priority order):
   other                    Unrecognized pattern
 
 EXIT CODES:
-  0  Bucketing succeeded
-  1  Reserved (PR3 baseline-regression mode)
+  0  Bucketing succeeded (or --pr-only found no new regressions)
+  1  --pr-only found new regression(s) vs baseline
   2  Invocation or parse error
 
 EXAMPLES:
@@ -135,6 +150,7 @@ EXAMPLES:
   node scripts/audit-test-failures.mjs --format=json | jq .by_category
   node scripts/audit-test-failures.mjs --summary > failures.csv
   node scripts/audit-test-failures.mjs --by-category=must-be-set --format=json
+  node scripts/audit-test-failures.mjs --pr-only --format=json | jq .new_failures
 
 DATA SOURCE:
   PRIMARY (today): Parses vitest --reporter=json output from --results path.
@@ -142,9 +158,10 @@ DATA SOURCE:
   trigger_context.branch (currently unpopulated; deferred per DATABASE sub-agent).
 
 SEE ALSO:
-  docs/reference/test-coverage-baseline-ratchet.md (ships in PR3)
+  docs/reference/test-coverage-baseline-ratchet.md
+  scripts/lib/baseline-regression-check.mjs (shared identity+reachability comparator)
   scripts/test-result-capture.js (CI step that should populate test_runs)
-  SD-LEO-INFRA-COVERAGE-CI-TRIAGE-001
+  SD-LEO-INFRA-COVERAGE-CI-TRIAGE-001, SD-LEO-FIX-COVERAGE-BASELINE-REGRESSION-001
 ```
 
 ## Sunset Criteria
@@ -154,7 +171,7 @@ The ratchet is **temporary** — it exists only while the systematic-defect clas
 Removal procedure (in order — partial removal leaves orphan references):
 
 1. **Workflow step** — delete the `Compare to main snapshot` step from `.github/workflows/test-coverage.yml`. Remove the secrets lines from the ratchet step only (the `Capture test results to database` step keeps its own secrets).
-2. **Helper script** — `git rm scripts/compare-to-main-snapshot.mjs` and any unit tests under `tests/unit/compare-to-main-snapshot.test.js`.
+2. **Helper scripts** — `git rm scripts/compare-to-main-snapshot.mjs scripts/lib/baseline-regression-check.mjs scripts/lib/vitest-report-parser.mjs` and their unit tests under `tests/unit/scripts/`. Check `scripts/lib/vitest-report-parser.mjs` isn't imported elsewhere first (it hosts `extractFailures`, re-exported from `audit-test-failures.mjs`) before removing it.
 3. **This document** — `git rm docs/reference/test-coverage-baseline-ratchet.md`.
 4. **Cross-references** — drop the `Related Documentation` bullet from `CLAUDE_EXEC.md`'s Test Coverage Quality Gate section. Drop the `SEE ALSO` line from `scripts/audit-test-failures.mjs` --help output.
 5. **Strict mode returns** — the `Run tests with coverage` step's strict-fail behavior is restored automatically (the ratchet only ever lived as a downstream step; removing it leaves the original gate intact).
