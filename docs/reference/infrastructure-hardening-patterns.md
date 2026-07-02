@@ -729,6 +729,81 @@ RECURSION-CLASSGUARD-001` shape exactly, not another per-instance patch:
 
 ---
 
+## Pattern: Class-guard a Windows-broken raw isMainModule comparison via AST lint rule + reason-required grandfather allowlist (SD-LEO-INFRA-ISMAINMODULE-WINDOWS-GUARD-CLASSFIX-001-B)
+
+**Symptom**: A script's direct-execution guard — `if (import.meta.url === `file://${process.argv[1]}`) { main(); }`
+(or the `+`-concatenation variant) — silently never fires when the script is invoked directly on Windows, so
+`main()` never runs and the script appears to do nothing, with no error.
+
+**Root cause**: `process.argv[1]` on Windows is a raw filesystem path with backslashes
+(`C:\Users\...\script.js`); `import.meta.url` is always a proper `file://` URL with forward slashes and
+percent-encoding. A template-literal or string-concat reconstruction of `file://${process.argv[1]}` can
+never equal `import.meta.url` on Windows — the comparison is always false. The correct construction requires
+`pathToFileURL(process.argv[1]).href` (Node's `node:url`), not manual string-building. The anti-pattern was
+independently present at 21 confirmed-live call sites across `scripts/**`, converted in sibling child
+SD-LEO-INFRA-ISMAINMODULE-WINDOWS-GUARD-CLASSFIX-001-A (PR #5373, commit `714c675f90`) to call a single
+shared helper, `isMainModule(import.meta.url)` (`lib/utils/is-main-module.js`), which does the
+`pathToFileURL` conversion internally.
+
+**Audit — AST match shape, banned vs. allowed** (scoped deliberately narrow to avoid false-positiving on
+unrelated `import.meta.url`/`process.argv[1]` usage):
+
+| Shape | Example | Disposition |
+|-------|---------|-------------|
+| Template-literal reconstruction | `` import.meta.url === `file://${process.argv[1]}` `` (either operand order) | **BANNED** — flagged by the rule |
+| String-concatenation reconstruction | `import.meta.url === 'file://' + process.argv[1]` (either operand order) | **BANNED** — flagged by the rule |
+| Loose-equality variant | `` import.meta.url == `file://${process.argv[1]}` `` | **BANNED** — flagged by the rule (`==` as well as `===`) |
+| Shared helper call | `isMainModule(import.meta.url)` | **ALLOWED** — the fix pattern |
+| `pathToFileURL(arg).href` comparison | `importMetaUrl === pathToFileURL(arg).href` | **ALLOWED** — a `CallExpression` chain, not a `TemplateLiteral`/`+`-concat, structurally outside the match shape (this is `is-main-module.js`'s own current internal implementation) |
+| Aliased-variable legacy shape | `` const arg = process.argv[1]; ... importMetaUrl === `file://${arg}` `` | **ALLOWED** (out of match scope) — an aliased variable, not a bare `process.argv[1]` `MemberExpression`; kept out of scope deliberately to avoid a full data-flow/taint analysis, since every real occurrence found used the bare-`argv[1]`-inline shape |
+| Unrelated `import.meta.url` usage | `path.dirname(fileURLToPath(import.meta.url))`, `import.meta.url === someOtherUrl` | **ALLOWED** (not the pattern) |
+
+**Fix**: a structural class-guard, mirroring the shipped Realtime and Count-delta class-guards' shape exactly:
+1. **Lint rule**: `eslint-rules/no-raw-ismainmodule-comparison.js` — an AST rule matching a
+   `BinaryExpression` (`===`/`==`) where one operand is `import.meta.url` and the other is a
+   `file://`-prefixed reconstruction (`TemplateLiteral` or `+`-concat) containing a bare `process.argv[1]`
+   `MemberExpression`, in either operand order. Reused via ESLint's programmatic `Linter` API by
+   `scripts/lint/ismainmodule-classguard-lint.mjs` (mirrors the sibling drivers' `walk`/`lintFile`/
+   `--json`/`--root` shape exactly, so there is exactly one detection implementation, not a second one that
+   could drift out of sync with the rule), wired into a dedicated, genuinely blocking GitHub Actions
+   workflow (`.github/workflows/ismainmodule-classguard-lint.yml`) path-scoped to `scripts/**` — same
+   "`npm run lint` is never invoked by any CI workflow" rationale as both sibling class-guards.
+2. **Reason-required grandfather allowlist**: `scripts/lint/ismainmodule-classguard-allowlist.json` — same
+   `{_doc, allow: {"<file>": "<reason>"}}` shape and `loadAllowlist()`-throws-on-empty-reason contract as the
+   Count-delta guard's allowlist precedent. Built anticipating 21 files still pending conversion at
+   branch-cut time; by the time this SD reached its retrospective step, sibling `-A` had already merged its
+   conversion to `origin/main` (`714c675f90`, before this branch merged) — so a `git merge origin/main` +
+   re-run of the driver showed 0 remaining violations, and the allowlist was pruned to an intentionally
+   empty (but still-documented, not deleted) `{}` before shipping. The guard covers 100% of `scripts/**`
+   (excluding `scripts/archive/**`, ~140 out-of-scope dead one-time/archived instances) with zero exceptions
+   from day one — a cleaner outcome than the grandfather mechanism was originally built to permit, discovered
+   and corrected during the retrospective step rather than assumed from the pre-merge plan.
+3. **Escape-hatch pragma**: `// eslint-disable-next-line <rule> -- <reason>` with a non-empty reason,
+   matching the sibling rules' convention exactly (`getDisablePragmaCommentAbove` + `classifyPragma`).
+   RuleTester gotcha for this and future class-guard rules: a test fixture for "pragma present but reason is
+   empty" must use `-- ` with trailing whitespace, not a bare `--` — a bare `--` with nothing after it
+   collides with ESLint's own native `eslint-disable-next-line <rule> -- <reason>` directive-comment parser
+   (a real built-in ESLint 7+ feature, distinct from this rule's own regex-based reason check), which
+   mis-splits the rule name and throws a spurious "unknown rule" error alongside the rule's own message. The
+   precedent (`no-count-delta-gate-assertion.test.js`'s TS-9 case) established the trailing-whitespace
+   convention; this SD's test suite follows it.
+
+### PR-review checklist line
+
+> When a PR adds or edits a direct-execution guard (`if (import.meta.url === ...) { main(); }`), verify it
+> calls `isMainModule(import.meta.url)` from `lib/utils/is-main-module.js` rather than reconstructing a
+> `file://` URL from `process.argv[1]` inline — `process.argv[1]` is a raw OS path (backslashes on Windows)
+> and can never string-equal the proper `file://` URL `import.meta.url` always is. This is enforced by a
+> genuinely-blocking CI lint (`ismainmodule-classguard-lint`), not just convention.
+
+### Files Modified/Created
+`eslint-rules/no-raw-ismainmodule-comparison.js` (new), `scripts/lint/ismainmodule-classguard-lint.mjs`
+(new), `scripts/lint/ismainmodule-classguard-allowlist.json` (new),
+`.github/workflows/ismainmodule-classguard-lint.yml` (new),
+`tests/unit/eslint-rules/no-raw-ismainmodule-comparison.test.js` (new), `package.json`
+
+---
+
 ## Cross-References
 
 - **Database Patterns**: [database-agent-patterns.md](./database-agent-patterns.md)
@@ -744,3 +819,4 @@ RECURSION-CLASSGUARD-001` shape exactly, not another per-instance patch:
 | 1.0.0 | 2026-01-30 | Initial documentation from SD-LEO-INFRA-HARDENING-001 |
 | 1.1.0 | 2026-07-01 | Added Realtime subscribe-teardown class-guard pattern from SD-LEO-INFRA-REALTIME-REMOVECHANNEL-RECURSION-CLASSGUARD-001 |
 | 1.2.0 | 2026-07-01 | Added Count-delta-vs-identity-diff gate class-guard pattern from SD-LEO-INFRA-COUNT-VS-IDENTITY-GATE-CLASSGUARD-001 |
+| 1.3.0 | 2026-07-02 | Added isMainModule raw-pattern class-guard from SD-LEO-INFRA-ISMAINMODULE-WINDOWS-GUARD-CLASSFIX-001-B |
