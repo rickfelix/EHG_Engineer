@@ -22,7 +22,7 @@
 import 'dotenv/config';
 import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { runAdherenceProbes, hasDrift, parseFingerprintsTail } from '../lib/adam/adherence-probes.js';
+import { runAdherenceProbes, hasDrift, parseFingerprintsTail, parseSnapshotTail } from '../lib/adam/adherence-probes.js';
 
 const WINDOW_DAYS = 1;
 const REMEDIATION_CATEGORY = 'adam_adherence_drift';
@@ -46,6 +46,8 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     signalsInWindow: null,
     adamAuthoredBuildsInWindow: null,
     adamChairmanDecisionQuestionsInWindow: null,
+    pmBoardSnapshot: null,
+    pmBoardPriorSnapshot: null,
   };
 
   // P3 friction-signaling (signals side): Adam-originated coordination messages within the window.
@@ -198,6 +200,37 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     facts.resolvedOverAskFingerprints = []; // fail-soft: no exclusion, but never a fabricated pass
   }
 
+  // P8 pm-board (current snapshot): every currently-open (not done/cancelled) child-tier task in
+  // Adam's PM board. tier='child' ONLY — parent.status is never auto-rolled-up anywhere in the
+  // shipped ledger code, so a parent-tier read would false-fail on parents whose children all
+  // finished without the parent's own status field being bumped. HONEST: a real empty board stays
+  // an empty array (probe reads PASS); only a query error leaves this null -> unknown.
+  try {
+    const { data: openRows, error } = await supabase
+      .from('adam_task_ledger')
+      .select('id, status')
+      .eq('tier', 'child')
+      .not('status', 'in', '(done,cancelled)');
+    if (error) throw error;
+    facts.pmBoardSnapshot = (openRows || []).map((r) => ({ id: r.id, status: r.status }));
+  } catch { /* leave null -> unknown */ }
+
+  // P8 pm-board (prior snapshot): read back the CURRENT snapshot this probe recorded on its own
+  // last run (mirrors decision_rubric's persisted-history pattern above) so the probe can diff
+  // against it rather than trusting adam_task_ledger.updated_at, which is bumped by every
+  // idempotent board-rehydrate upsert and would make a staleness threshold silently inert.
+  try {
+    const { data: lastRow, error } = await supabase
+      .from('adam_adherence_ledger')
+      .select('detail')
+      .eq('probe', 'pm_board')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    facts.pmBoardPriorSnapshot = parseSnapshotTail(lastRow && lastRow.detail);
+  } catch { /* leave null -> unknown */ }
+
   return facts;
 }
 
@@ -305,7 +338,7 @@ async function main() {
   const supabase = dryRun ? null : createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
   const runId = crypto.randomUUID();
   if (dryRun) {
-    const facts = { windowDays: WINDOW_DAYS, sourcedInWindow: null, visionGaugeReadInWindow: null, recurrencesInWindow: null, signalsInWindow: null, adamAuthoredBuildsInWindow: null, adamChairmanDecisionQuestionsInWindow: null };
+    const facts = { windowDays: WINDOW_DAYS, sourcedInWindow: null, visionGaugeReadInWindow: null, recurrencesInWindow: null, signalsInWindow: null, adamAuthoredBuildsInWindow: null, adamChairmanDecisionQuestionsInWindow: null, pmBoardSnapshot: null, pmBoardPriorSnapshot: null };
     const bars = runAdherenceProbes(facts);
     console.log(`[dry-run] run ${runId}:`);
     for (const b of bars) console.log(`  ${b.verdict.toUpperCase().padEnd(7)} ${b.probe} — ${b.detail}`);

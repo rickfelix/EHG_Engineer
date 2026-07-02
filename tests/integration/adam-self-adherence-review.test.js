@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import {
-  runSelfAdherenceReview, sourceRemediation, recordAdherence,
+  runSelfAdherenceReview, sourceRemediation, recordAdherence, resolveFacts,
 } from '../../scripts/adam-self-adherence-review.mjs';
 
 /** Mock supabase: records inserts; session_coordination count returns `signals`. */
@@ -44,7 +44,9 @@ describe('runSelfAdherenceReview (FR-3/FR-6)', () => {
   it('a real run ledgers one row per probe (run_id grouped), unknowns => no remediation', async () => {
     const sb = makeSb();
     const r = await runSelfAdherenceReview(sb, { runId: 'run-1' });
-    expect(sb.inserts.adam_adherence_ledger).toHaveLength(6); // one per probe (4 original + 2 red-flag: belt-starvation, dispatch-boundary)
+    // SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DISCIPLINE-001-C: pm_board is the 8th probe;
+    // runSelfAdherenceReview records EVERY bar (pass/fail/unknown), one ledger row per probe run.
+    expect(sb.inserts.adam_adherence_ledger).toHaveLength(8);
     expect(sb.inserts.adam_adherence_ledger.every((row) => row.run_id === 'run-1')).toBe(true);
     // current resolvers leave most facts null => unknown => no fail => no remediation
     expect(r.remediationRef).toBeNull();
@@ -89,5 +91,70 @@ describe('CONST-002 propose-only / no-build GUARD (FR-5)', () => {
     // Remediation writes ONLY to feedback (sourcing) + adam_adherence_ledger (record) — nothing else mutated.
     const writtenTables = [...src.matchAll(/\.from\('([^']+)'\)[\s\S]{0,80}?\.insert\(/g)].map((m) => m[1]);
     for (const t of writtenTables) expect(['feedback', 'adam_adherence_ledger']).toContain(t);
+  });
+});
+
+/**
+ * Purpose-built mock for the 2 new pm_board resolveFacts blocks — the generic makeSb() above
+ * doesn't implement .not()/.order()/.limit()/.maybeSingle(), so it can't distinguish success from
+ * failure for these specific query shapes. Every other table falls back to the same shape the
+ * generic mock uses ({count/data: null, error: null}) so unrelated resolvers stay unaffected.
+ */
+function makePmBoardSb({ openRows = [], priorDetail = undefined, taskLedgerError = false, ledgerReadError = false } = {}) {
+  return {
+    from(table) {
+      if (table === 'adam_task_ledger') {
+        const b = {};
+        b.select = () => b; b.eq = () => b;
+        b.not = () => Promise.resolve(taskLedgerError ? { data: null, error: { message: 'boom' } } : { data: openRows, error: null });
+        return b;
+      }
+      if (table === 'adam_adherence_ledger') {
+        const b = {};
+        b.select = () => b; b.eq = () => b; b.order = () => b; b.limit = () => b;
+        b.maybeSingle = () => Promise.resolve(
+          ledgerReadError ? { data: null, error: { message: 'boom' } }
+            : { data: priorDetail === undefined ? null : { detail: priorDetail }, error: null }
+        );
+        return b;
+      }
+      // Every other table (session_coordination, strategic_directives_v2, etc.): benign no-op.
+      const b = {};
+      b.select = () => b; b.eq = () => b; b.gte = () => b; b.in = () => b; b.not = () => b;
+      b.then = (res) => res({ count: null, data: null, error: null });
+      return b;
+    },
+  };
+}
+
+describe('resolveFacts — pm_board fact-resolution (SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DISCIPLINE-001-C)', () => {
+  it('resolves an empty current snapshot when no open child-tier rows exist', async () => {
+    const facts = await resolveFacts(makePmBoardSb({ openRows: [] }));
+    expect(facts.pmBoardSnapshot).toEqual([]);
+  });
+
+  it('resolves a non-empty current snapshot from open child-tier rows', async () => {
+    const facts = await resolveFacts(makePmBoardSb({ openRows: [{ id: 'a', status: 'open' }, { id: 'b', status: 'blocked' }] }));
+    expect(facts.pmBoardSnapshot).toEqual([{ id: 'a', status: 'open' }, { id: 'b', status: 'blocked' }]);
+  });
+
+  it('is fail-soft: a current-snapshot query error leaves pmBoardSnapshot null, never throws', async () => {
+    const facts = await resolveFacts(makePmBoardSb({ taskLedgerError: true }));
+    expect(facts.pmBoardSnapshot).toBeNull();
+  });
+
+  it('resolves pmBoardPriorSnapshot as null when no prior pm_board ledger row exists', async () => {
+    const facts = await resolveFacts(makePmBoardSb({ priorDetail: undefined }));
+    expect(facts.pmBoardPriorSnapshot).toBeNull();
+  });
+
+  it('resolves pmBoardPriorSnapshot from the prior ledger row\'s pmsnap tail', async () => {
+    const facts = await resolveFacts(makePmBoardSb({ priorDetail: '0 open child-tier item(s) ::pmsnap=a:open,b:blocked' }));
+    expect([...facts.pmBoardPriorSnapshot.entries()]).toEqual([['a', 'open'], ['b', 'blocked']]);
+  });
+
+  it('is fail-soft: a prior-snapshot query error leaves pmBoardPriorSnapshot null, never throws', async () => {
+    const facts = await resolveFacts(makePmBoardSb({ ledgerReadError: true }));
+    expect(facts.pmBoardPriorSnapshot).toBeNull();
   });
 });
