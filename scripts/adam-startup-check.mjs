@@ -23,7 +23,7 @@ import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 // SD-LEO-INFRA-FLEET-FRESHNESS-GUARD-001: advisory, fail-open checkout-freshness badge.
-import { checkoutFreshness, freshnessBadge } from '../lib/governance/checkout-freshness.js';
+import { checkoutFreshness, freshnessBadge, CRITICAL_PROTOCOL_FILES } from '../lib/governance/checkout-freshness.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -226,10 +226,16 @@ export function renderLoops(armed) {
   return lines.join('\n');
 }
 
+// SD-LEO-INFRA-SINGLETON-STALE-TREE-STALENESS-GAUGE-001 (framework-seed candidate for
+// SD-LEO-INFRA-INVARIANT-GAUGES-FRAMEWORK-001, still code-free — shipped standalone per the
+// scripts/gauge-unranked-claimable-leaves.mjs precedent): Adam's own contract + tick script,
+// so drift there surfaces as STALE-CRITICAL, not just a generic behind-count.
+export const ADAM_CRITICAL_PATHS = Object.freeze([...CRITICAL_PROTOCOL_FILES, ROLE_CONTEXT_DOC, 'scripts/adam-quiet-tick.mjs']);
+
 /** Advisory checkout-freshness badge (fail-open — never throws, never blocks startup). */
 export function renderFreshness(repoRoot = REPO_ROOT) {
   try {
-    return '═══ CHECKOUT FRESHNESS ═══\n  ' + freshnessBadge(checkoutFreshness(repoRoot, { role: 'adam' }));
+    return '═══ CHECKOUT FRESHNESS ═══\n  ' + freshnessBadge(checkoutFreshness(repoRoot, { role: 'adam', criticalPaths: ADAM_CRITICAL_PATHS }));
   } catch (err) {
     return '═══ CHECKOUT FRESHNESS ═══\n  ✅ freshness check skipped (fail-open): ' + (err?.message || String(err));
   }

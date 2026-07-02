@@ -19,6 +19,9 @@ import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { getClaudeModel } from '../lib/config/model-config.js';
+// SD-LEO-INFRA-SINGLETON-STALE-TREE-STALENESS-GAUGE-001: Solomon previously had NO checkout-freshness
+// check at all (Adam and the coordinator already did) — this closes that gap.
+import { checkoutFreshness, freshnessBadge, CRITICAL_PROTOCOL_FILES } from '../lib/governance/checkout-freshness.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -250,9 +253,25 @@ export function renderContractParity(repoRoot = REPO_ROOT) {
   }
 }
 
+// SD-LEO-INFRA-SINGLETON-STALE-TREE-STALENESS-GAUGE-001 (framework-seed candidate for
+// SD-LEO-INFRA-INVARIANT-GAUGES-FRAMEWORK-001, still code-free — shipped standalone per the
+// scripts/gauge-unranked-claimable-leaves.mjs precedent): Solomon's own contract doc, so drift
+// there surfaces as STALE-CRITICAL. Solomon's deep-sweep tick has no dedicated script (it's
+// agent-judgment, script:null in SOLOMON_LOOPS above) — no tick-script path to add here.
+export const SOLOMON_CRITICAL_PATHS = Object.freeze([...CRITICAL_PROTOCOL_FILES, ROLE_CONTEXT_DOC]);
+
+/** Advisory checkout-freshness badge (fail-open — never throws, never blocks startup). */
+export function renderFreshness(repoRoot = REPO_ROOT) {
+  try {
+    return '═══ CHECKOUT FRESHNESS ═══\n  ' + freshnessBadge(checkoutFreshness(repoRoot, { role: 'solomon', criticalPaths: SOLOMON_CRITICAL_PATHS }));
+  } catch (err) {
+    return '═══ CHECKOUT FRESHNESS ═══\n  ✅ freshness check skipped (fail-open): ' + (err?.message || String(err));
+  }
+}
+
 export function buildReport(argv = [], env = {}, repoRoot = REPO_ROOT) {
   const armed = parseArmedSet(argv, env);
-  return [renderResponsibilities(repoRoot), '', renderLoops(armed), '', renderContractParity(repoRoot)].join('\n');
+  return [renderResponsibilities(repoRoot), '', renderLoops(armed), '', renderContractParity(repoRoot), '', renderFreshness(repoRoot)].join('\n');
 }
 
 // Fail-open entry: always exit 0; a hiccup never blocks /solomon startup.
