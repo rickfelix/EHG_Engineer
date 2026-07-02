@@ -11,7 +11,10 @@ import {
   renderLoops,
   buildReport,
   ROLE_CONTEXT_DOC,
+  renderFreshness,
+  COORDINATOR_CRITICAL_PATHS,
 } from '../../scripts/coordinator-startup-check.mjs';
+import { CRITICAL_PROTOCOL_FILES } from '../../lib/governance/checkout-freshness.js';
 
 test('STANDARD_LOOPS has the expected standard loops with the expected keys', () => {
   // SD-LEO-INFRA-ACTIVATE-FEATURE-FLAG-001 (FR-5) added the daily flag-review loop.
@@ -121,4 +124,16 @@ test('buildReport combines responsibilities + loop sections', () => {
   const report = buildReport([], {});
   assert.match(report, /COORDINATOR ROLE/);
   assert.match(report, /STANDARD CRON LOOPS/);
+});
+
+// SD-LEO-INFRA-SINGLETON-STALE-TREE-STALENESS-GAUGE-001 (FR-2)
+test('COORDINATOR_CRITICAL_PATHS extends the base protocol files with the coordinator contract doc', () => {
+  CRITICAL_PROTOCOL_FILES.forEach((p) => assert.ok(COORDINATOR_CRITICAL_PATHS.includes(p), `missing base path ${p}`));
+  assert.ok(COORDINATOR_CRITICAL_PATHS.includes(ROLE_CONTEXT_DOC));
+});
+
+test('renderFreshness is fail-open and reports a CHECKOUT FRESHNESS section', () => {
+  assert.doesNotThrow(() => renderFreshness('/no/such/path'));
+  const out = renderFreshness(process.cwd());
+  assert.match(out, /CHECKOUT FRESHNESS/);
 });
