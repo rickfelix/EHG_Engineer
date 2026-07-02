@@ -23,6 +23,8 @@ import { dirname, resolve, join } from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
 import 'dotenv/config';
 import { rehydrateBoard } from '../lib/adam/task-rehydrate.js';
+import { checkAndAlertStalls } from '../lib/adam/stall-alert.js';
+import { TABLE as TASK_LEDGER_TABLE } from '../lib/adam/task-ledger.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const require = createRequire(import.meta.url);
@@ -86,6 +88,23 @@ export async function reconcileBoard(sb) {
   }
 }
 
+// FR-2/FR-3 (Child B): critical-path (chairman-parent) task_ledger rows, fail-soft — a read
+// error must never abort the tick. inFlightNextStep is derived from the row's OWN rolled-up
+// status (lib/adam/task-ledger.js rollupParentStatus already writes 'in_progress' onto a parent
+// while any child is still moving): status==='in_progress' -> treated as an intended hold (a
+// known next step is itself progressing) so it never escalates even if this exact row's
+// updated_at hasn't changed this tick; status==='blocked' (or anything else) is a genuine-stall
+// candidate, matching the locked scope's noise-avoidance bias (default to NOT escalating when
+// ambiguous, per stall-detector.js's classifyStaleness contract).
+export async function readCriticalPathParents(sb) {
+  try {
+    const { data } = await sb.from(TASK_LEDGER_TABLE).select('id, title, updated_at, status').eq('tier', 'parent');
+    return (data || []).map((row) => ({ ...row, inFlightNextStep: row.status === 'in_progress' }));
+  } catch {
+    return [];
+  }
+}
+
 async function readSalientState(sb) {
   const state = { beltZero: true, openSignalCount: 0, venture1State: null };
   try {
@@ -128,11 +147,28 @@ async function main() {
   // Child B FR-1: reconcile the durable task board against live reality every tick.
   const boardReconcile = await reconcileBoard(sb);
 
+  const priorState = loadLastState() || {};
+  // Back-compat: a state file written before this SD is a flat salient object, not
+  // {salient, stallSnapshot} — treat it as the salient half and start with no stall snapshot.
+  const priorSalient = priorState.salient !== undefined ? priorState.salient : priorState;
+  const priorStallSnapshot = priorState.stallSnapshot || {};
+
+  // Child B FR-2/FR-3: intended-hold-vs-genuine-stall check on critical-path parents every
+  // tick. Only a genuine stall (per stall-detector.js's classifier) ever calls
+  // recordPendingDecision — an intended hold or a quiet/hold period generates zero escalation.
+  let stall = { snapshot: priorStallSnapshot, alerted: [] };
+  try {
+    const parents = await readCriticalPathParents(sb);
+    stall = await checkAndAlertStalls(sb, parents, priorStallSnapshot, {});
+  } catch (e) {
+    stall = { snapshot: priorStallSnapshot, alerted: [], error: e && e.message };
+  }
+
   // FR-4: belt-countdown + offer-help collapse to a salient-delta check — Adam only
   // reaches the coordinator on a real belt/venture delta, never a "still idle" status.
   const salient = await readSalientState(sb);
-  const delta = detectSalientDelta(loadLastState(), salient);
-  saveLastState(salient);
+  const delta = detectSalientDelta(priorSalient, salient);
+  saveLastState({ salient, stallSnapshot: stall.snapshot });
 
   const delaySeconds = decideCadence({ quiescent, partyOffsetS: ADAM_PARTY_OFFSET_S });
 
@@ -143,6 +179,7 @@ async function main() {
     cores: tick.summary,
     failedCount: tick.failedCount,
     boardReconcile,
+    stallAlerted: stall.alerted,
     crossPartyPing: delta.changed,
     pingFields: delta.fields,
     nextWakeSeconds: delaySeconds,
@@ -155,11 +192,15 @@ async function main() {
       `QUIET_TICK=adam mode=${result.mode} cores=[${tick.summary}] ` +
       `fail=${tick.failedCount} ` +
       `reconcile=parents:${boardReconcile.parents},errors:${boardReconcile.errors.length} ` +
+      `stalls=${stall.alerted.length} ` +
       `ping=${delta.changed ? delta.fields.join(',') : 'suppressed'} ` +
       `nextWakeSeconds=${delaySeconds} :: ${modeReason}`
     );
     if (delta.changed) {
       console.log(`QUIET_TICK_PING=adam->coordinator reason=${delta.fields.join(',')} (real delta — offer help / sourcing)`);
+    }
+    for (const a of stall.alerted) {
+      console.log(`QUIET_TICK_STALL_ALERT=adam node=${a.id} title="${a.title}" escalated=${a.escalated}`);
     }
   }
   return result;
