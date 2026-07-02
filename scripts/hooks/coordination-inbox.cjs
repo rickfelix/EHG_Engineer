@@ -589,6 +589,14 @@ async function main() {
         'INFO': 'INFO'
       }[msg.message_type] || msg.message_type;
 
+      // SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B / FR-1: a chairman_directive rides on INFO but is
+      // FIRST-CLASS — relabel it (by payload.kind) so it never hides behind the generic 'INFO' banner.
+      // Classification (deliver-not-consume) is already handled by the DIRECTIVE_KINDS branch in
+      // classifyInboxMessage above (chairman_directive is in the imported allowlist). This is render-only.
+      const typeLabelFinal = (msg.payload && msg.payload.kind === 'chairman_directive')
+        ? '★ CHAIRMAN DIRECTIVE' + (msg.payload.directive_id ? ' ' + msg.payload.directive_id : '')
+        : typeLabel;
+
       // Handle SET_IDENTITY: write per-session identity file for statusline integration
       if (msg.message_type === 'SET_IDENTITY' && msg.payload) {
         try {
@@ -602,10 +610,14 @@ async function main() {
       }
 
       console.log('');
-      console.log('=== COORDINATION: ' + typeLabel + ' ===');
+      console.log('=== COORDINATION: ' + typeLabelFinal + ' ===');
       console.log('From: ' + (msg.sender_type || 'orchestrator'));
       console.log('Subject: ' + msg.subject);
       if (msg.body) console.log('Details: ' + msg.body);
+      // FR-1: for a chairman_directive, surface how to ACK it (per-role, keyed by directive_id).
+      if (msg.payload && msg.payload.kind === 'chairman_directive' && msg.payload.directive_id) {
+        console.log('ACK when actioned: node scripts/ack-chairman-directive.cjs --id ' + msg.payload.directive_id + ' --role <your-role>');
+      }
       if (msg.payload?.suggested_sd) {
         console.log('Suggested next SD: ' + msg.payload.suggested_sd);
       }

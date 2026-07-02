@@ -302,6 +302,10 @@ function isDirectiveRow(r) {
  */
 const ADAM_INBOX_KINDS = Object.freeze([
   ...DIRECTIVE_KINDS,
+  // SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B / FR-1: chairman_directive is ALSO a shared
+  // DIRECTIVE_KIND (spread above) — Adam drains it via the shared allowlist. It is intentionally
+  // NOT re-listed here (avoids a misleading duplicate); its FIRST-CLASS render partition below
+  // surfaces it ABOVE normal advisories so Adam actions it first.
   'chairman_heads_up',
   'chairman_handoff',
   'coordinator_advisory',
@@ -356,6 +360,25 @@ function isOrphanedAdamRow(r) {
   const k = r.payload && r.payload.kind;
   if (k != null && EXCLUDED_KINDS.includes(k)) return false; // handler-owned → never touch
   return true; // untyped, or an unknown typed kind targeting Adam → orphaned delivery
+}
+
+/**
+ * SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B / FR-1 — FIRST-CLASS chairman-directive partition.
+ * Surfaces broadcast chairman_directive rows ABOVE the normal advisory drain, with Adam's per-directive
+ * OUTSTANDING/ACKED status (latest issued_at per directive_id — SUPERSEDES). READ-ONLY / non-consuming
+ * (the broadcast row must survive so coordinator + Solomon also surface it). Adam acks a directive it
+ * has actioned via scripts/ack-chairman-directive.cjs --role adam. Fail-open (renders nothing on error).
+ */
+async function renderChairmanDirectives(supabase, role, { quiet = false } = {}) {
+  const { loadRoleDirectiveStatus } = require('../lib/coordinator/chairman-directive-gauge.cjs');
+  const rows = await loadRoleDirectiveStatus(supabase, role);
+  if (rows.length === 0) { if (!quiet) console.log('(no chairman directives outstanding for this role)'); return; }
+  const outstanding = rows.filter((r) => r.status === 'outstanding');
+  console.log(`★ ${rows.length} CHAIRMAN DIRECTIVE(s) for ${role} — ${outstanding.length} OUTSTANDING (ack via scripts/ack-chairman-directive.cjs --role ${role}):`);
+  for (const r of rows) {
+    const ageMin = Math.floor((r.ageMs || 0) / 60_000);
+    console.log(`  ★ [${r.status.toUpperCase()}] ${r.directiveId} (issued ${ageMin}m ago)`);
+  }
 }
 
 /**
@@ -503,6 +526,9 @@ async function main() {
   // if the env var didn't propagate; falls back to the env sessionId.
   if (mode === 'inbox') {
     const adamId = (await resolveAdamSessionId(supabase)) || sessionId;
+    // FR-1: surface broadcast chairman directives FIRST-CLASS (above normal advisories) with Adam's
+    // per-directive ack status, BEFORE the normal target_session-scoped drain.
+    await renderChairmanDirectives(supabase, 'adam', { quiet: argv.includes('--quiet') });
     await drainInbox(supabase, adamId, { quiet: argv.includes('--quiet') });
     // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: PING-ON-SILENCE — check MY OWN sent
     // reply-needed advisories for ones left unanswered past their window. Never suppressed by

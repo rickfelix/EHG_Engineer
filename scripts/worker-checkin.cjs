@@ -301,7 +301,11 @@ async function surfaceCoordinatorMessages(sb, sessionId, { role = null } = {}) {
     const p = m.payload || {};
     const kind = p.kind || null;
     const isDirective = !!(kind && ws.DIRECTIVE_KINDS.includes(kind));
-    out.push({ id: m.id, message_type: m.message_type, kind, subject: m.subject || null, body: m.body || null, created_at: m.created_at });
+    // SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B / FR-1: chairman_directive is in DIRECTIVE_KINDS,
+    // so isDirective is true → it is NEVER auto-acked here (waits for the per-role ack via
+    // scripts/ack-chairman-directive.cjs). Surface a first-class flag so the checkin JSON marks it.
+    const isChairmanDirective = kind === 'chairman_directive';
+    out.push({ id: m.id, message_type: m.message_type, kind, chairman_directive: isChairmanDirective, subject: m.subject || null, body: m.body || null, created_at: m.created_at });
     try {
       if (!m.read_at) {
         // first authoritative delivery — mark DELIVERED, leave unacked so it re-surfaces once
