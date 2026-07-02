@@ -135,6 +135,10 @@ function isReplyRow(r) {
 }
 
 // A Solomon-inbox row = a consult OR any shared coordinator DIRECTIVE kind, directed at the Solomon session.
+// SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B / FR-1: chairman_directive is already a shared
+// DIRECTIVE_KIND (spread below) — Solomon drains it via the shared allowlist (no re-list). Its FIRST-CLASS
+// render partition (renderChairmanDirectives, wired into the inbox mode) surfaces it above consults so a
+// chairman baseline directive can never silently die at Solomon's last hop (the 2h-non-compliant incident).
 const SOLOMON_INBOX_KINDS = Object.freeze([...DIRECTIVE_KINDS, SOLOMON_CONSULT_KIND]);
 function isSolomonInboxRow(r) {
   const k = r && r.payload && r.payload.kind;
@@ -225,6 +229,26 @@ async function checkConsultQuota(supabase, { sdKey = null, perSdMax = SOLOMON_PE
  * (WARN, not consumed); surfaced rows stamped read_at = DELIVERED (two-stage ACK — acknowledged_at
  * withheld so a delivered-but-unactioned consult stays recoverable). Mirrors drainInbox in adam-advisory.
  */
+/**
+ * SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B / FR-1 — FIRST-CLASS chairman-directive partition for
+ * Solomon. Surfaces broadcast chairman_directive rows ABOVE consults, with Solomon's per-directive
+ * OUTSTANDING/ACKED status (latest issued_at per directive_id — SUPERSEDES). READ-ONLY / non-consuming
+ * (the broadcast row must survive for Adam + coordinator too). Solomon acks via
+ * scripts/ack-chairman-directive.cjs --role solomon. Fail-open. Mirrors renderChairmanDirectives in
+ * adam-advisory. This is the SOLOMON-LAST-HOP fix: the incident had Solomon run 2h non-compliant.
+ */
+async function renderChairmanDirectives(supabase, { quiet = false } = {}) {
+  const { loadRoleDirectiveStatus } = require('../lib/coordinator/chairman-directive-gauge.cjs');
+  const rows = await loadRoleDirectiveStatus(supabase, 'solomon');
+  if (rows.length === 0) { if (!quiet) console.log('(no chairman directives outstanding for solomon)'); return; }
+  const outstanding = rows.filter((r) => r.status === 'outstanding');
+  console.log(`★ ${rows.length} CHAIRMAN DIRECTIVE(s) for solomon — ${outstanding.length} OUTSTANDING (ack via scripts/ack-chairman-directive.cjs --role solomon):`);
+  for (const r of rows) {
+    const ageMin = Math.floor((r.ageMs || 0) / 60_000);
+    console.log(`  ★ [${r.status.toUpperCase()}] ${r.directiveId} (issued ${ageMin}m ago)`);
+  }
+}
+
 async function drainInbox(supabase, sessionId, { quiet = false } = {}) {
   const { data: allRows, error } = await supabase
     .from('session_coordination')
@@ -433,6 +457,9 @@ async function main() {
     if (!ledgerHealth.healthy) {
       console.error(`WARN: solomon_advice_outcome_ledger capture gauge UNHEALTHY — ${ledgerHealth.reason} (advisories are NOT being captured; QF-20260701-289)`);
     }
+    // FR-1: surface broadcast chairman directives FIRST-CLASS (above consults) with Solomon's per-directive
+    // ack status, BEFORE the normal target_session-scoped drain — the Solomon-last-hop compliance fix.
+    await renderChairmanDirectives(supabase, { quiet: argv.includes('--quiet') });
     await drainInbox(supabase, solomonId, { quiet: argv.includes('--quiet') });
     // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: PING-ON-SILENCE — check MY OWN sent
     // reply-needed advisories for ones left unanswered past their window. Never suppressed by
