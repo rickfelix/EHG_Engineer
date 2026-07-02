@@ -1,0 +1,4 @@
+{
+  "_doc": "Grandfather allow-list for ismainmodule-classguard-lint.mjs (SD-LEO-INFRA-ISMAINMODULE-WINDOWS-GUARD-CLASSFIX-001-B). Keys are repo-relative file paths (the whole file is exempted, since the raw pattern is the file's own direct-execution guard, one instance per file). Each entry REQUIRES a non-empty reason. EMPTY as of this SD's landing: sibling child -A (SD-LEO-INFRA-ISMAINMODULE-WINDOWS-GUARD-CLASSFIX-001-A, PR #5373, commit 714c675f90) merged to main BEFORE this SD did, converting all 21 originally-confirmed-live sites to isMainModule(import.meta.url) -- so the guard needs zero grandfathering and covers 100% of scripts/** (excluding scripts/archive/**) from day one. Kept as an empty, documented allowlist (not deleted) so a future genuinely-legitimate exemption has an established, precedented place to go.",
+  "allow": {}
+}

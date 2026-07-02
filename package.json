@@ -90,6 +90,7 @@
     "lint:venture-artifacts": "node scripts/lint/venture-artifacts-write-lint.mjs",
     "lint:realtime-teardown": "node scripts/lint/realtime-subscribe-teardown-recursion-lint.mjs",
     "lint:count-delta-gate": "node scripts/lint/count-delta-gate-lint.mjs",
+    "lint:ismainmodule-classguard": "node scripts/lint/ismainmodule-classguard-lint.mjs",
     "flags:review": "node scripts/flag-governance-review.mjs",
     "flags:stale": "node scripts/flags-stale.mjs",
     "flags:enroll": "node scripts/enroll-env-var-feature-flags.mjs",
