@@ -54,7 +54,7 @@ describe('buildRelayRequestPayload / buildRelayConfirmPayload — pure builders'
   });
 });
 
-function makeSupabaseStub({ updateError = null, insertError = null } = {}) {
+function makeSupabaseStub({ updateError = null, insertError = null, claimMatches = true } = {}) {
   const calls = { updates: [], inserts: [] };
   return {
     calls,
@@ -62,10 +62,19 @@ function makeSupabaseStub({ updateError = null, insertError = null } = {}) {
       return {
         update(patch) {
           calls.updates.push({ table, patch });
-          return {
-            eq() { return this; },
-            is() { return Promise.resolve({ error: updateError }); },
+          let usedSelect = false;
+          const builder = {
+            eq() { return builder; },
+            is() { return builder; },
+            select() { usedSelect = true; return builder; },
+            then(resolve, reject) {
+              const result = usedSelect
+                ? { data: claimMatches ? [{ id: 'stub-row-id' }] : [], error: updateError }
+                : { data: null, error: updateError };
+              return Promise.resolve(result).then(resolve, reject);
+            },
           };
+          return builder;
         },
         insert(row) {
           calls.inserts.push({ table, row });
@@ -84,22 +93,68 @@ describe('drainOne — FR-2 CONFIRM-ON-RELAY (TS-7)', () => {
     const result = await drainOne(supabase, row, sendRelay, Date.parse('2026-07-01T00:00:00Z'));
     expect(result.ok).toBe(true);
     expect(result.confirmed).toBe(true);
-    expect(supabase.calls.updates).toHaveLength(1);
+    // update #1 = the atomic claim (acknowledged_at only); update #2 = payload.actioned_at
+    expect(supabase.calls.updates).toHaveLength(2);
     expect(supabase.calls.updates[0].patch.acknowledged_at).toBeTruthy();
-    expect(supabase.calls.updates[0].patch.payload.actioned_at).toBeTruthy();
+    expect(supabase.calls.updates[1].patch.payload.actioned_at).toBeTruthy();
     expect(supabase.calls.inserts).toHaveLength(1);
     expect(supabase.calls.inserts[0].row.payload.kind).toBe(PAYLOAD_KINDS.RELAY_CONFIRM);
     expect(supabase.calls.inserts[0].row.payload.correlation_id).toBe('c1');
   });
 
-  it('does not write anything if sendRelay fails', async () => {
+  it('does not call sendRelay if the row was already claimed by another tick (Q2 race fix)', async () => {
+    const supabase = makeSupabaseStub({ claimMatches: false });
+    const row = { id: 'r1', sender_session: 's1', target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
+    const sendRelay = vi.fn().mockResolvedValue({ ok: true });
+    const result = await drainOne(supabase, row, sendRelay);
+    expect(sendRelay).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+    expect(result.confirmed).toBe(false);
+    expect(supabase.calls.inserts).toHaveLength(0);
+  });
+
+  it('claims the row BEFORE calling sendRelay (ordering, Q2 race fix)', async () => {
+    const supabase = makeSupabaseStub();
+    const row = { id: 'r1', sender_session: 's1', target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
+    const sendRelay = vi.fn().mockImplementation(async () => {
+      // At the moment sendRelay runs, the claim update must already have been recorded.
+      expect(supabase.calls.updates).toHaveLength(1);
+      expect(supabase.calls.updates[0].patch.acknowledged_at).toBeTruthy();
+      return { ok: true };
+    });
+    await drainOne(supabase, row, sendRelay);
+    expect(sendRelay).toHaveBeenCalledTimes(1);
+  });
+
+  it('un-claims the row (resets acknowledged_at to null) if sendRelay fails, so a future tick retries', async () => {
     const supabase = makeSupabaseStub();
     const row = { id: 'r1', sender_session: 's1', target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
     const sendRelay = vi.fn().mockResolvedValue({ ok: false, error: 'delivery failed' });
     const result = await drainOne(supabase, row, sendRelay);
     expect(result.ok).toBe(false);
-    expect(supabase.calls.updates).toHaveLength(0);
+    expect(supabase.calls.updates).toHaveLength(2); // claim, then un-claim
+    expect(supabase.calls.updates[1].patch.acknowledged_at).toBeNull();
     expect(supabase.calls.inserts).toHaveLength(0);
+  });
+
+  it('does not insert a confirm row if sendRelay fails', async () => {
+    const supabase = makeSupabaseStub();
+    const row = { id: 'r1', sender_session: 's1', target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
+    const sendRelay = vi.fn().mockResolvedValue({ ok: false, error: 'delivery failed' });
+    const result = await drainOne(supabase, row, sendRelay);
+    expect(result.ok).toBe(false);
+    expect(supabase.calls.inserts).toHaveLength(0);
+  });
+
+  it('(Q3) still drains a row with a malformed/missing payload.relay_to -- confirm payload carries relayed_to:undefined rather than throwing', async () => {
+    const supabase = makeSupabaseStub();
+    const row = { id: 'r1', sender_session: 's1', target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1' } }; // relay_to absent
+    const sendRelay = vi.fn().mockResolvedValue({ ok: true });
+    const result = await drainOne(supabase, row, sendRelay);
+    expect(result.ok).toBe(true);
+    expect(result.confirmed).toBe(true);
+    expect(supabase.calls.inserts[0].row.payload.relayed_to).toBeUndefined();
+    expect(supabase.calls.inserts[0].row.subject).toContain('relayed to undefined');
   });
 });
 
