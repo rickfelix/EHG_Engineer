@@ -36,6 +36,8 @@ The consult is routed by the Phase-B/D triage SSOT (`lib/coordinator/solomon-tri
 
 Solomon is a singleton role-session (like the coordinator and Adam). `solomon-register.cjs` enforces single-Solomon (refuse-new-on-fresh-prior; retire only a STALE prior) and re-targets a retired prior's unread inbound to the new session (`drainSolomonOutbound`, idempotent). Identity is keyed on `metadata.role='solomon'` + `metadata.solomon_since` via the atomic `set_solomon_flag`/`clear_solomon_flag` RPCs.
 
+For the fresh-checkout relaunch pipeline (stale-tree trigger → fresh worktree + handoff-memory restore → register-then-retire sequencing), see `docs/06_deployment/singleton-relaunch.md`.
+
 ## Presence + grounding signals
 
 Solomon's `status` verb (`node scripts/solomon-advisory.cjs status [--working "<body>" [--eta <ms>]]`)

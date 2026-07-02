@@ -209,6 +209,13 @@ RECEIPT LATENCY; this fixes PRESENCE/ACKNOWLEDGMENT/BACKCHANNEL.
   `working_context` RPC already fixed once for this table). Fail-soft: if the chairman-gated
   migration is unapplied, the writer reports `rpc_absent` and does nothing — never an unsafe RMW
   fallback.
+- **Handoff memory** — a sibling pattern to `working_context`, but scoped to a singleton
+  *relaunching* onto a fresh checkout rather than an active session's rolling state:
+  `lib/coordinator/handoff-memory.cjs` normalizes items (`consult`/`directive`/`reply_owed`/
+  `reasoning_context`); `lib/coordinator/handoff-memory-store.cjs` persists them via the same
+  atomic-merge RPC shape (`set_session_handoff_memory`, `metadata || jsonb_build_object(...)`),
+  never a JS read-modify-write. The successor session reads the predecessor's row via
+  `scripts/singleton-relaunch-restore.cjs`. See `docs/06_deployment/singleton-relaunch.md`.
 
 **Wired consumers:** `scripts/adam-advisory.cjs status` and `scripts/solomon-advisory.cjs status`
 (identical subcommand, same shared helper — no per-role reimplementation) print the target's
