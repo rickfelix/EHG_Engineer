@@ -33,6 +33,10 @@
 
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
 const { getCommsActivitySignals, computeAdaptiveCadence } = require('../lib/coordinator/adaptive-comms-cadence.cjs');
+// SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-D (FR-3c): canonical session_coordination insert
+// choke point — routes both raw insert call sites below through the same validated path the
+// coordinator's dispatch code uses (target-session validation; no-op for non-WORK_ASSIGNMENT rows).
+const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 const ws = require('../lib/fleet/worker-status.cjs');
 const { stampClaim } = require('../lib/fleet/claim-stamp.cjs');
 // SD-FDBK-FIX-SELF-ONLY-AUTHORIZATION-001: acquisition-time guard so a propose-only
@@ -221,20 +225,16 @@ async function registerRollCall(sb, { sessionId, coordinatorId, callsign, mySd }
       available: !mySd,
       repo: process.cwd(),
     };
-    const { data, error } = await sb
-      .from('session_coordination')
-      .insert({
-        sender_session: sessionId,
-        sender_type: 'worker',
-        target_session: coordinatorId || 'broadcast-coordinator',
-        message_type: 'INFO',
-        subject: `[ROLL_CALL] ${callsign || 'unassigned'} ${mySd ? 'working ' + mySd : 'available'}`,
-        body: null,
-        payload,
-        expires_at: new Date(Date.now() + ROLL_CALL_TTL_MS).toISOString(),
-      })
-      .select('id')
-      .single();
+    const { data, error } = await insertCoordinationRow(sb, {
+      sender_session: sessionId,
+      sender_type: 'worker',
+      target_session: coordinatorId || 'broadcast-coordinator',
+      message_type: 'INFO',
+      subject: `[ROLL_CALL] ${callsign || 'unassigned'} ${mySd ? 'working ' + mySd : 'available'}`,
+      body: null,
+      payload,
+      expires_at: new Date(Date.now() + ROLL_CALL_TTL_MS).toISOString(),
+    }, { select: 'id', single: true });
     if (error) return { id: null, error: error.message };
     return { id: data && data.id, deduped: false };
   } catch (e) {
@@ -1016,7 +1016,7 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
     // the mechanism that makes the name VISIBLE; still fail-open — a message failure leaves the DB
     // identity authoritative and the next cron refresh re-emits the message.
     try {
-      await sb.from('session_coordination').insert({
+      await insertCoordinationRow(sb, {
         target_session: sessionId,
         target_sd: claimSd || null,
         message_type: 'SET_IDENTITY',

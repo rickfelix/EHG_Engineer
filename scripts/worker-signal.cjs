@@ -19,6 +19,9 @@ require('dotenv').config();
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const { getActiveCoordinatorId, isTwoWayV2Enabled } = require('../lib/coordinator/resolve.cjs');
+// SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-D (FR-3c): route all session_coordination inserts
+// through the validated dispatch choke point instead of raw .from().insert().
+const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 // SD-LEO-INFRA-SOLOMON-CONSULT-001D: Solomon oracle consult lane (flag-gated, dormant by default).
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 const { evaluateSolomonTriage } = require('../lib/coordinator/solomon-triage.cjs');
@@ -233,25 +236,32 @@ async function intentMain(flags, positional) {
   const subjBody = payload.body || '';
   const subject = `[INTENT:${action.toUpperCase()}] ${(targetSdKey || targetTree || '')} ${subjBody.slice(0, 60)}`.trim();
 
-  const { data: inserted, error } = await supabase
-    .from('session_coordination')
-    .insert({
-      sender_session: sessionId,
-      sender_type: 'worker',
-      // INFO is an existing coordination_message_type enum value — no new type, no ALTER.
-      // FR-2 disambiguates INTENT from FR-3a signals via payload.intent_action.
-      target_session: 'broadcast-coordinator',
-      message_type: 'INFO',
-      subject,
-      body: payload.body || null,
-      payload,
-      expires_at: expiresAt
-    })
-    .select('id, created_at')
-    .single();
-
-  if (error) {
-    console.error('ERROR: failed to insert intent:', error.message);
+  let inserted;
+  try {
+    const { data, error } = await insertCoordinationRow(
+      supabase,
+      {
+        sender_session: sessionId,
+        sender_type: 'worker',
+        // INFO is an existing coordination_message_type enum value — no new type, no ALTER.
+        // FR-2 disambiguates INTENT from FR-3a signals via payload.intent_action.
+        target_session: 'broadcast-coordinator',
+        message_type: 'INFO',
+        subject,
+        body: payload.body || null,
+        payload,
+        expires_at: expiresAt
+      },
+      { select: 'id, created_at', single: true }
+    );
+    if (error) {
+      console.error('ERROR: failed to insert intent:', error.message);
+      process.exit(1);
+    }
+    inserted = data;
+  } catch (e) {
+    const code = e && e.code ? `${e.code}: ` : '';
+    console.error(`ERROR: failed to insert intent: ${code}${(e && e.message) || e}`);
     process.exit(1);
   }
 
@@ -383,9 +393,8 @@ async function requestMain(flags, positional) {
   // Request expiry guards the coordinator's reply window (request + reply margin).
   const expiresAt = new Date(Date.now() + timeoutMs + 5 * 60_000).toISOString();
 
-  const { error: insErr } = await supabase
-    .from('session_coordination')
-    .insert({
+  try {
+    const { error: insErr } = await insertCoordinationRow(supabase, {
       sender_session: sessionId,
       sender_type: 'worker',
       target_session: coordinatorId,
@@ -395,8 +404,13 @@ async function requestMain(flags, positional) {
       payload,
       expires_at: expiresAt
     });
-  if (insErr) {
-    console.error('ERROR: failed to insert request:', insErr.message);
+    if (insErr) {
+      console.error('ERROR: failed to insert request:', insErr.message);
+      process.exit(1);
+    }
+  } catch (e) {
+    const code = e && e.code ? `${e.code}: ` : '';
+    console.error(`ERROR: failed to insert request: ${code}${(e && e.message) || e}`);
     process.exit(1);
   }
 
@@ -541,9 +555,8 @@ async function solomonConsultMain(flags, positional) {
   const subject = `[SOLOMON_CONSULT] ${payload.body.slice(0, 80)}`;
   const expiresAt = new Date(Date.now() + timeoutMs + 5 * 60_000).toISOString();
 
-  const { error: insErr } = await supabase
-    .from('session_coordination')
-    .insert({
+  try {
+    const { error: insErr } = await insertCoordinationRow(supabase, {
       sender_session: sessionId,
       sender_type: 'worker',
       target_session: target,
@@ -553,8 +566,13 @@ async function solomonConsultMain(flags, positional) {
       payload,
       expires_at: expiresAt
     });
-  if (insErr) {
-    console.error('ERROR: failed to insert solomon-consult:', insErr.message);
+    if (insErr) {
+      console.error('ERROR: failed to insert solomon-consult:', insErr.message);
+      process.exit(1);
+    }
+  } catch (e) {
+    const code = e && e.code ? `${e.code}: ` : '';
+    console.error(`ERROR: failed to insert solomon-consult: ${code}${(e && e.message) || e}`);
     process.exit(1);
   }
 
@@ -692,23 +710,30 @@ async function main() {
 
   const expiresAt = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
 
-  const { data: inserted, error } = await supabase
-    .from('session_coordination')
-    .insert({
-      sender_session: sessionId,
-      sender_type: 'worker',
-      target_session: target,
-      message_type: 'INFO',
-      subject,
-      body,
-      payload,
-      expires_at: expiresAt
-    })
-    .select('id, created_at')
-    .single();
-
-  if (error) {
-    console.error('ERROR: failed to insert signal:', error.message);
+  let inserted;
+  try {
+    const { data, error } = await insertCoordinationRow(
+      supabase,
+      {
+        sender_session: sessionId,
+        sender_type: 'worker',
+        target_session: target,
+        message_type: 'INFO',
+        subject,
+        body,
+        payload,
+        expires_at: expiresAt
+      },
+      { select: 'id, created_at', single: true }
+    );
+    if (error) {
+      console.error('ERROR: failed to insert signal:', error.message);
+      process.exit(1);
+    }
+    inserted = data;
+  } catch (e) {
+    const code = e && e.code ? `${e.code}: ` : '';
+    console.error(`ERROR: failed to insert signal: ${code}${(e && e.message) || e}`);
     process.exit(1);
   }
 
