@@ -19,9 +19,10 @@
  */
 import 'dotenv/config';
 import { mineGaugeGaps, isGaugeGapMinerFlagEnabled } from '../../lib/sourcing-engine/gauge-gap-miner.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const isMain = (() => {
-  try { return import.meta.url === `file://${process.argv[1]}` || import.meta.url.endsWith(process.argv[1]?.replace(/\\/g, '/')); }
+  try { return isMainModule(import.meta.url); }
   catch { return false; }
 })();
 

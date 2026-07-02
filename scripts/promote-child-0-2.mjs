@@ -10,6 +10,7 @@
 import { config } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { APP_CONFIG_KEYS, KILL_SWITCH_ACCURACY_THRESHOLD } from './lineage/constants.mjs';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 config();
 
@@ -28,7 +29,7 @@ export async function checkKillSwitch(supabase) {
   return { active, source: 'app_config', payload: v };
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('promote-child-0-2.mjs')) {
+if (isMainModule(import.meta.url)) {
   const supabase = createClient(
     process.env.SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY

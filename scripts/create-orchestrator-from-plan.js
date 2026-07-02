@@ -24,6 +24,7 @@ import {
   parsePhases,
   withTargetRepos,
 } from '../lib/eva/create-orchestrator-from-plan.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -207,9 +208,7 @@ async function main() {
   }
 }
 
-const _isMainModule = import.meta.url === `file://${process.argv[1]}` ||
-                     import.meta.url === `file:///${process.argv[1]?.replace(/\\\\/g, '/')}` ||
-                      import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, '/')}`;
+const _isMainModule = isMainModule(import.meta.url);
 if (_isMainModule) {
   main().catch(err => { console.error('Fatal error:', err); process.exit(1); });
 }

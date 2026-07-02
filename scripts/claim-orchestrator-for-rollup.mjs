@@ -19,6 +19,8 @@
  * Sequence: claim → (caller) run the orchestrator completion / rollup handoff → --release.
  */
 
+import { isMainModule } from '../lib/utils/is-main-module.js';
+
 const LIVE_SESSION_THRESHOLD_MS = 15 * 60 * 1000; // mirrors the claim TTL
 
 /**
@@ -95,7 +97,7 @@ export async function claimOrchestratorForRollup(supabase, { sdKey, sessionId, r
 
 // ── CLI ────────────────────────────────────────────────────────────────────
 const isMain = (() => {
-  try { return import.meta.url === `file://${process.argv[1]}` || import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/')); }
+  try { return isMainModule(import.meta.url); }
   catch { return false; }
 })();
 

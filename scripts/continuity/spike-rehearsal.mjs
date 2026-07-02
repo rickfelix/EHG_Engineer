@@ -16,6 +16,7 @@
  * Usage: node scripts/continuity/spike-rehearsal.mjs   (dry-run; prints PASS/FAIL JSON)
  */
 import { evaluateDegradationRung, isDegradedSafeMode, RUNG } from './llm-degradation-detector.mjs';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 /** A pre-registered chairman touch-count ceiling for a single away-spike incident. */
 export const DEFAULT_TOUCH_CEILING = 1; // degraded-safe-mode should require exactly ONE surface (no per-item touches)
@@ -74,7 +75,7 @@ export function runRehearsal(cfg = {}) {
 }
 
 // CLI (dry-run): runs the rehearsal against the default seeded fixtures and prints PASS/FAIL.
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('spike-rehearsal.mjs')) {
+if (isMainModule(import.meta.url)) {
   const result = runRehearsal({ seededIntakeCount: 5, breakageState: breakageCanaryState(), touchCeiling: DEFAULT_TOUCH_CEILING, nowMs: Date.parse('2026-06-13T00:00:00Z') });
   console.log(JSON.stringify(result, null, 2));
   console.log(result.passed ? '[spike-rehearsal] PASS — degraded-safe-mode reached within the touch ceiling' : '[spike-rehearsal] FAIL — ' + result.failures.join('; '));

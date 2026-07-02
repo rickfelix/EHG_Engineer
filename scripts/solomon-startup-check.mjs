@@ -22,6 +22,7 @@ import { getClaudeModel } from '../lib/config/model-config.js';
 // SD-LEO-INFRA-SINGLETON-STALE-TREE-STALENESS-GAUGE-001: Solomon previously had NO checkout-freshness
 // check at all (Adam and the coordinator already did) — this closes that gap.
 import { checkoutFreshness, freshnessBadge, CRITICAL_PROTOCOL_FILES } from '../lib/governance/checkout-freshness.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -280,6 +281,6 @@ function main() {
   process.exit(0);
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('solomon-startup-check.mjs')) {
+if (isMainModule(import.meta.url)) {
   main();
 }

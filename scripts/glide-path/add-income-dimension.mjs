@@ -23,6 +23,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
 import { INCOME_DIMENSION_KEY, DEFAULT_INCOME_WEIGHTS } from './replacement-net.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 /** Tunable default weight for the income dimension (additive; existing weights untouched). */
 export const DEFAULT_INCOME_DIMENSION_WEIGHT = 0.18;
@@ -87,6 +88,6 @@ async function main() {
 }
 
 // Run only as a script (not on import — keeps withIncomeDimension unit-testable).
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('add-income-dimension.mjs')) {
+if (isMainModule(import.meta.url)) {
   main().catch((e) => { console.error('[add-income-dimension] threw:', e.message); process.exit(1); });
 }

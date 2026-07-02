@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 import { computeBuildGauge } from '../../lib/vision/vdr-registry.js';
 import { makeDefaultGrepSeam } from '../../lib/vision/vdr-grep-seam.js';
 import { runRollup } from '../../lib/vision/rung-progress-rollup.mjs';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 async function main() {
   const apply = process.argv.includes('--apply');
@@ -36,7 +37,6 @@ async function main() {
   process.exit(0);
 }
 
-const isDirect = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/').split('/').pop());
-if (isDirect || import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('rung-progress-rollup.mjs')) {
+if (isMainModule(import.meta.url)) {
   main().catch((e) => { console.error('[rung-rollup] fatal:', e?.message || e); process.exit(1); });
 }

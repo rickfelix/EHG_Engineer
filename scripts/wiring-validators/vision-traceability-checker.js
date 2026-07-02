@@ -26,6 +26,7 @@
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve, extname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const REPO_ROOT_DEFAULT = resolve(__filename, '..', '..', '..');
@@ -377,7 +378,7 @@ async function main() {
   process.exit(anyFail ? 1 : 0);
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('vision-traceability-checker.js')) {
+if (isMainModule(import.meta.url)) {
   main().catch((err) => {
     process.stderr.write(`[vision-traceability-checker] fatal: ${err.message}\n`);
     process.exit(2);
