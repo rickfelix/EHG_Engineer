@@ -34,6 +34,8 @@ const { redact, BODY_HARD_CAP, awaitCoordinatorReply } = require('./worker-signa
 const { getActiveCoordinatorId, isTwoWayV2Enabled } = require('../lib/coordinator/resolve.cjs');
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
+// SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class SSOT.
+const { REPLY_CLASSES, isValidReplyClass, computeReplyExpectedBy, checkAndPingOverdueReplies } = require('../lib/coordinator/reply-class.cjs');
 // SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001: reuse the canonical Adam-session resolver for the unattended
 // full-lane tick (env vars are not reliably propagated to cron subprocesses).
 const { resolveAdamSessionId } = require('./read-adam-directives.cjs');
@@ -80,12 +82,18 @@ function sanityCheckUrgentAdvisory(body) {
   return { tripped: reasons.length > 0, reasons };
 }
 
-function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo }) {
+function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, replyClass, replyWindowMs, now }) {
+  // request mode (expectsReply) is always live-handshake (synchronous, bounded-timeout await);
+  // send mode defaults to fire-and-forget unless the sender opts into reply-needed via --reply-class
+  // (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
+  const resolvedReplyClass = expectsReply ? 'live-handshake' : (replyClass || 'fire-and-forget');
   const payload = {
     kind: PAYLOAD_KINDS.ADAM_ADVISORY,
     sender_callsign: senderCallsign || null,
     repo: repo || null,
+    reply_class: resolvedReplyClass,
   };
+  if (resolvedReplyClass === 'reply-needed') payload.reply_expected_by = computeReplyExpectedBy(now, replyWindowMs);
   // FR-1 (SD-LEO-INFRA-ADAM-PREFERENCE-LEARNING-001) — scope-tagged surfacing. ADDITIVE
   // routing fields (no migration); scope_key reuses the lib/adam/scope-registry.js
   // vocabulary (harness | platform | venture:<id>). reuse_class classifies applicability
@@ -461,6 +469,13 @@ async function main() {
   if (mode === 'inbox') {
     const adamId = (await resolveAdamSessionId(supabase)) || sessionId;
     await drainInbox(supabase, adamId, { quiet: argv.includes('--quiet') });
+    // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: PING-ON-SILENCE — check MY OWN sent
+    // reply-needed advisories for ones left unanswered past their window. Never suppressed by
+    // --quiet (a real overdue reply is a genuine delivery, not routine tick noise).
+    const pingResult = await checkAndPingOverdueReplies(supabase, { sessionId: adamId, senderType: 'adam' });
+    if (pingResult.pinged > 0) {
+      console.warn(`⚠ PING-ON-SILENCE: ${pingResult.pinged} reply-needed advisor${pingResult.pinged === 1 ? 'y' : 'ies'} unanswered past window — pinged (ids: ${pingResult.pingedIds.join(', ')})`);
+    }
     return;
   }
 
@@ -478,7 +493,17 @@ async function main() {
   // — answer an inbound coordinator_request, echoing its correlation (resolved below).
   const rIdx = argv.indexOf('--reply-to');
   const replyToArg = rIdx >= 0 ? argv[rIdx + 1] || null : null;
-  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1].filter(i => i >= 0));
+  // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: `send` opt-in to reply-needed
+  // (default remains fire-and-forget when omitted — byte-identical to pre-fix behavior).
+  const rcIdx = argv.indexOf('--reply-class');
+  const replyClassArg = rcIdx >= 0 ? argv[rcIdx + 1] || null : null;
+  const rwIdx = argv.indexOf('--reply-window-ms');
+  const replyWindowMs = rwIdx >= 0 ? Number(argv[rwIdx + 1]) || undefined : undefined;
+  if (replyClassArg && !isValidReplyClass(replyClassArg)) {
+    console.error(`ERROR: --reply-class must be one of ${REPLY_CLASSES.join(', ')} (got "${replyClassArg}").`);
+    process.exit(2);
+  }
+  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1].filter(i => i >= 0));
   const body = argv.slice(1).filter((a, i) => !flagValueIdxs.has(i + 1)).join(' ').trim();
   if (!body) { console.error('ERROR: advisory body required.'); process.exit(2); }
 
@@ -504,7 +529,7 @@ async function main() {
   }
   // FR-1: scope-tag the advisory from the sending repo (reuse-first, fail-soft).
   const { scopeKey, reuseClass, appliesToScopes } = await resolveScopeForSend(supabase, process.cwd());
-  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo });
+  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, replyClass: replyClassArg, replyWindowMs });
   // SD-REFILL-00XK256L: the 2-hypothesis-bar GATE. Block an UNATTESTED urgent model-availability
   // broadcast — Adam's research sweep has twice fabricated a fleet-wide "model cutoff" and broadcast it
   // before running the cheap discriminator. The sender attests the bar was cleared with --alarm-verified.

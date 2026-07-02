@@ -48,6 +48,29 @@ describe('buildAdvisoryPayload', () => {
   });
 });
 
+// SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class.
+describe('buildAdvisoryPayload — reply_class', () => {
+  it('send mode with no opt-in defaults to fire-and-forget (byte-identical to pre-fix behavior)', () => {
+    const p = buildAdvisoryPayload({ body: 'fyi', senderCallsign: 'Adam', repo: '/r' });
+    expect(p.reply_class).toBe('fire-and-forget');
+    expect(p.reply_expected_by).toBeUndefined();
+  });
+  it('request mode is ALWAYS live-handshake regardless of any replyClass arg', () => {
+    const p = buildAdvisoryPayload({ body: 'q?', expectsReply: true, replyClass: 'reply-needed' });
+    expect(p.reply_class).toBe('live-handshake');
+  });
+  it('send mode with --reply-class reply-needed stamps reply-needed + a future reply_expected_by', () => {
+    const p = buildAdvisoryPayload({ body: 'please ack', replyClass: 'reply-needed' });
+    expect(p.reply_class).toBe('reply-needed');
+    expect(Date.parse(p.reply_expected_by)).toBeGreaterThan(Date.now());
+  });
+  it('send mode with --reply-class reply-needed --reply-window-ms honors the custom window', () => {
+    const before = Date.now();
+    const p = buildAdvisoryPayload({ body: 'please ack', replyClass: 'reply-needed', replyWindowMs: 5000, now: before });
+    expect(Date.parse(p.reply_expected_by)).toBe(before + 5000);
+  });
+});
+
 describe('FR-4: durable reply reader export', () => {
   it('exports drainReplies for the persistent coordinator_reply reader', () => {
     expect(typeof drainReplies).toBe('function');

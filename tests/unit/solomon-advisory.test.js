@@ -29,6 +29,34 @@ describe('FR-E1: buildAdvisoryPayload — oracle marker + reply echo', () => {
   });
 });
 
+// SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class.
+describe('buildAdvisoryPayload — reply_class', () => {
+  it('an ANSWER (replyTo set) is always fire-and-forget — terminal, no reply-to-reply chains', () => {
+    const p = m.buildAdvisoryPayload({ body: 'answer', correlationId: 'self', replyTo: 'consult-corr', replyClass: 'reply-needed' });
+    expect(p.reply_class).toBe('fire-and-forget'); // replyTo overrides any replyClass arg
+  });
+  it('send mode with no opt-in defaults to fire-and-forget', () => {
+    const p = m.buildAdvisoryPayload({ body: 'fyi' });
+    expect(p.reply_class).toBe('fire-and-forget');
+  });
+  it('request mode is always live-handshake', () => {
+    const p = m.buildAdvisoryPayload({ body: 'q?', expectsReply: true });
+    expect(p.reply_class).toBe('live-handshake');
+  });
+  it('send mode with --reply-class reply-needed stamps reply-needed + reply_expected_by', () => {
+    const p = m.buildAdvisoryPayload({ body: 'please ack', replyClass: 'reply-needed' });
+    expect(p.reply_class).toBe('reply-needed');
+    expect(Date.parse(p.reply_expected_by)).toBeGreaterThan(Date.now());
+  });
+});
+
+describe('alreadyAnswered delegates to the shared reply-class module (no duplicate implementation)', () => {
+  it('is re-exported from lib/coordinator/reply-class.cjs, same function reference', () => {
+    const shared = require('../../lib/coordinator/reply-class.cjs');
+    expect(m.alreadyAnswered).toBe(shared.alreadyAnswered);
+  });
+});
+
 describe('FR-E1: inbox classification', () => {
   const row = (kind, extra = {}) => ({ payload: { kind, ...extra } });
   it('classifies a consult + directives as Solomon-inbox; untyped/unknown as orphan', () => {
