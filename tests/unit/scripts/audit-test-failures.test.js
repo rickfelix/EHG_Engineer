@@ -1,4 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+vi.mock('node:child_process', () => ({ execSync: vi.fn() }));
+
+const mockCreateClient = vi.fn();
+vi.mock('@supabase/supabase-js', () => ({ createClient: (...args) => mockCreateClient(...args) }));
+
+import { execSync } from 'node:child_process';
 import {
   bucketizeError,
   extractFailures,
@@ -7,7 +14,18 @@ import {
   formatCsv,
   formatJson,
   parseArgs,
+  runPrOnly,
 } from '../../../scripts/audit-test-failures.mjs';
+
+function makeSupabase(rows, error = null) {
+  const builder = {
+    select: () => builder,
+    eq: () => builder,
+    order: () => builder,
+    limit: () => Promise.resolve({ data: rows, error }),
+  };
+  return { from: () => builder };
+}
 
 describe('bucketizeError', () => {
   it('classifies cannot-find-module', () => {
@@ -296,5 +314,78 @@ describe('parseArgs', () => {
   it('--help short and long forms', () => {
     expect(parseArgs(['--help']).help).toBe(true);
     expect(parseArgs(['-h']).help).toBe(true);
+  });
+
+  it('accepts --pr-only flag (default false)', () => {
+    expect(parseArgs(['--pr-only']).prOnly).toBe(true);
+    expect(parseArgs([]).prOnly).toBe(false);
+  });
+
+  it('accepts --branch in both forms, defaults to main', () => {
+    expect(parseArgs([]).branch).toBe('main');
+    expect(parseArgs(['--branch=develop']).branch).toBe('develop');
+    expect(parseArgs(['--branch', 'develop']).branch).toBe('develop');
+  });
+});
+
+describe('runPrOnly (--pr-only wiring, SD-LEO-FIX-COVERAGE-BASELINE-REGRESSION-001)', () => {
+  let savedUrl;
+  let savedKey;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    savedUrl = process.env.SUPABASE_URL;
+    savedKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  });
+
+  afterEach(() => {
+    // Mutate keys in place (never reassign process.env wholesale) so the
+    // live `env` binding audit-test-failures.mjs captured at import time
+    // keeps seeing the same object.
+    if (savedUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = savedUrl;
+    if (savedKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = savedKey;
+  });
+
+  it('returns exit code 2 when Supabase env vars are missing', async () => {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const code = await runPrOnly({ testResults: [] }, { branch: 'main', format: 'json' });
+    expect(code).toBe(2);
+  });
+
+  it('passes cleanly on cold start (no baseline snapshot yet)', async () => {
+    process.env.SUPABASE_URL = 'https://example.test';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+    mockCreateClient.mockReturnValue(makeSupabase([]));
+    const code = await runPrOnly({ testResults: [] }, { branch: 'main', format: 'json' });
+    expect(code).toBe(0);
+  });
+
+  it('flags a genuine regression: new failure in a file the PR changed', async () => {
+    process.env.SUPABASE_URL = 'https://example.test';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+    mockCreateClient.mockReturnValue(makeSupabase([
+      { findings: [{ branch: 'main', failed_count: 0, failed_test_ids: [] }], scanned_at: 't' },
+    ]));
+    execSync.mockImplementation(() => 'src/changed.js\n');
+    const json = {
+      testResults: [{ name: 'src/changed.js', assertionResults: [{ status: 'failed', fullName: 'broke it' }] }],
+    };
+    const code = await runPrOnly(json, { branch: 'main', format: 'json' });
+    expect(code).toBe(1);
+  });
+
+  it('does NOT flag a pre-existing failure in a file the PR did not touch (the false-positive class this SD fixes)', async () => {
+    process.env.SUPABASE_URL = 'https://example.test';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+    mockCreateClient.mockReturnValue(makeSupabase([
+      { findings: [{ branch: 'main', failed_count: 1, failed_test_ids: ['src/unrelated.js::flaky'] }], scanned_at: 't' },
+    ]));
+    execSync.mockImplementation(() => 'src/some-other-file.js\n');
+    const json = {
+      testResults: [{ name: 'src/unrelated.js', assertionResults: [{ status: 'failed', fullName: 'flaky' }] }],
+    };
+    const code = await runPrOnly(json, { branch: 'main', format: 'json' });
+    expect(code).toBe(0);
   });
 });

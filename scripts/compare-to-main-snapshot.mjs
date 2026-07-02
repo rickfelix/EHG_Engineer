@@ -38,6 +38,17 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { argv, env, exit, stderr, stdout } from 'node:process';
 import { createRequire } from 'node:module';
 import { createClient } from '@supabase/supabase-js';
+import { extractFailures } from './lib/vitest-report-parser.mjs';
+import {
+  DIMENSION,
+  TARGET_APP,
+  TABLE,
+  testId,
+  extractFailingIds,
+  getChangedFiles,
+  fetchBaselineSnapshot,
+  classifyRegressions,
+} from './lib/baseline-regression-check.mjs';
 
 // FR-5 (SD-FDBK-INFRA-VITEST-PROJECT-SPLIT-001): shared skip-drift band detector,
 // authored as CommonJS so the local session hook (compare-test-baseline.cjs) and
@@ -45,11 +56,7 @@ import { createClient } from '@supabase/supabase-js';
 const require = createRequire(import.meta.url);
 const { skipDriftStatus } = require('./lib/skip-drift.cjs');
 
-const DIMENSION = 'ci_test_failure_count';
-const TARGET_APP = 'EHG_Engineer';
-const TABLE = 'codebase_health_snapshots';
-
-function die(msg, code = 2) {
+export function die(msg, code = 2) {
   stderr.write(`compare-to-main-snapshot.mjs: ${msg}\n`);
   exit(code);
 }
@@ -112,34 +119,7 @@ function trendFor(currentFailed, priorFailed) {
   return 'stable';
 }
 
-async function fetchPriorSnapshot(supabase, branch) {
-  const { data, error } = await supabase
-    .from(TABLE)
-    .select('findings, scanned_at')
-    .eq('dimension', DIMENSION)
-    .eq('target_application', TARGET_APP)
-    .order('scanned_at', { ascending: false })
-    .limit(20);
-  if (error) die(`SELECT prior snapshot failed: ${error.message}`);
-  // Filter in JS for branch since findings is JSONB and Supabase JS doesn't expose findings->0->>'branch' chain directly
-  for (const row of data || []) {
-    const branchInRow = row.findings?.[0]?.branch;
-    if (branchInRow === branch) {
-      // FR-5: skipped_count is absent on snapshots written before this shipped —
-      // leave it null so the skip-drift check cold-starts (passes) until the
-      // next push to this branch records it.
-      const rawSkipped = row.findings[0].skipped_count;
-      return {
-        failed_count: Number(row.findings[0].failed_count),
-        skipped_count: rawSkipped == null ? null : Number(rawSkipped),
-        scanned_at: row.scanned_at,
-      };
-    }
-  }
-  return null;
-}
-
-async function insertSnapshot(supabase, { failed, total, skipped, branch, sha, runId, priorFailed }) {
+async function insertSnapshot(supabase, { failed, total, skipped, failedTestIds, branch, sha, runId, priorFailed }) {
   const score = total === 0 ? 0 : Number(((total - failed) / total * 100).toFixed(2));
   const trend = trendFor(failed, priorFailed);
   const row = {
@@ -148,7 +128,10 @@ async function insertSnapshot(supabase, { failed, total, skipped, branch, sha, r
     score,
     // FR-5: skipped_count is recorded alongside failed_count so the next PR's
     // skip-drift band has a baseline (the ratchet rewrites it on every push).
-    findings: [{ failed_count: failed, skipped_count: skipped, branch, commit_sha: sha }],
+    // failed_test_ids (SD-LEO-FIX-COVERAGE-BASELINE-REGRESSION-001): the
+    // failing-test IDENTITY set, so the next PR's regression check can tell
+    // "still-failing" apart from "newly-failing" instead of comparing counts.
+    findings: [{ failed_count: failed, skipped_count: skipped, failed_test_ids: failedTestIds, branch, commit_sha: sha }],
     trend_direction: trend,
     metadata: { workflow_run_id: runId },
   };
@@ -157,24 +140,37 @@ async function insertSnapshot(supabase, { failed, total, skipped, branch, sha, r
   stdout.write(`Snapshot written: branch=${branch} failed=${failed}/${total} skipped=${skipped} score=${score} trend=${trend}\n`);
 }
 
-function writePrFailuresArtifact(path, raw, failed) {
-  const failures = [];
-  for (const file of (raw.testResults || [])) {
-    for (const test of (file.assertionResults || [])) {
-      if (test.status === 'failed') {
-        failures.push({
-          file: file.name || file.testFilePath,
-          fullName: test.fullName,
-          failureMessages: (test.failureMessages || []).map(m => m.slice(0, 500)),
-        });
-      }
-    }
-  }
-  writeFileSync(path, JSON.stringify({ summary: { numFailed: failed }, failures }, null, 2));
+/**
+ * Write the PR-mode diagnostic artifact. When the comparator ran in
+ * identity+reachability mode (`result.usedFallback === false`), the artifact
+ * lists ONLY the genuine new regressions — not every currently-failing test —
+ * so the artifact stays actionable instead of drowning real regressions in
+ * pre-existing/unrelated noise (the same false-positive class this SD fixes).
+ * Legacy fallback mode dumps the full current failure list, matching the
+ * pre-fix behavior, since there isn't enough baseline data to be precise.
+ */
+export function writePrFailuresArtifact(path, raw, failed, result) {
+  const all = extractFailures(raw).map((f) => ({
+    file: f.file,
+    fullName: f.test,
+    failureMessages: [f.error.slice(0, 500)],
+  }));
+  const failures = result.usedFallback
+    ? all
+    : all.filter((f) => result.newRegressions.includes(testId({ file: f.file, test: f.fullName })));
+  writeFileSync(path, JSON.stringify({ summary: { numFailed: failed }, new_failures: failures }, null, 2));
 }
 
-function annotateRegression(newFailures) {
-  stderr.write(`::error::BASELINE_REGRESSION: ${newFailures} new test failure(s) vs main snapshot.\n`);
+export function annotateRegression(result) {
+  stderr.write(`::error::BASELINE_REGRESSION: ${result.newFailureCount} new test failure(s) vs main snapshot.\n`);
+  if (!result.usedFallback && result.newRegressions.length > 0) {
+    for (const id of result.newRegressions.slice(0, 10)) {
+      stderr.write(`  - ${id}\n`);
+    }
+    if (result.newRegressions.length > 10) {
+      stderr.write(`  ... and ${result.newRegressions.length - 10} more\n`);
+    }
+  }
   stderr.write(`Reproduce locally: node scripts/audit-test-failures.mjs --pr-only --format=json | jq .new_failures\n`);
   stderr.write(`See docs/reference/test-coverage-baseline-ratchet.md for triage steps.\n`);
 }
@@ -188,7 +184,7 @@ function annotateSkipDrift(skip) {
   stderr.write(`Verify the DB secrets are present in CI and that describeDb suites still skip as intended. See docs/reference/test-coverage-baseline-ratchet.md.\n`);
 }
 
-async function main() {
+export async function main() {
   const args = parseArgs();
   const { failed, total, skipped, raw } = readTestResults(args.resultsPath);
   const ctx = detectContext();
@@ -199,24 +195,46 @@ async function main() {
   const supabase = createClient(url, key, { auth: { persistSession: false } });
 
   if (ctx.mode === 'push') {
-    const prior = await fetchPriorSnapshot(supabase, ctx.branch);
+    let prior;
+    try {
+      prior = await fetchBaselineSnapshot(supabase, ctx.branch);
+    } catch (err) {
+      die(err.message);
+    }
+    const failedTestIds = extractFailingIds(raw);
     await insertSnapshot(supabase, {
-      failed, total, skipped, branch: ctx.branch, sha: ctx.sha, runId: ctx.runId,
+      failed, total, skipped, failedTestIds, branch: ctx.branch, sha: ctx.sha, runId: ctx.runId,
       priorFailed: prior?.failed_count,
     });
     return 0;
   }
 
   // pull_request mode
-  const prior = await fetchPriorSnapshot(supabase, ctx.baseBranch);
+  let prior;
+  try {
+    prior = await fetchBaselineSnapshot(supabase, ctx.baseBranch);
+  } catch (err) {
+    die(err.message);
+  }
   if (!prior) {
     stdout.write(`No prior snapshot for base branch '${ctx.baseBranch}' — cold start, passing.\n`);
     return 0;
   }
-  const newFailures = failed - prior.failed_count;
-  if (newFailures >= 1) {
-    writePrFailuresArtifact(args.prFailuresPath, raw, failed);
-    annotateRegression(newFailures);
+  const currentIds = extractFailingIds(raw);
+  const { files: changedFiles, error: diffError } = getChangedFiles({ cwd: process.cwd() });
+  if (diffError) {
+    stdout.write(`Warning: could not compute changed files vs base (${diffError}) — regression check falls back to identity-only (no reachability filter).\n`);
+  }
+  const result = classifyRegressions({
+    currentFailed: failed,
+    currentIds,
+    baselineFailedCount: prior.failed_count,
+    baselineIds: prior.failed_test_ids,
+    changedFiles,
+  });
+  if (result.isRegression) {
+    writePrFailuresArtifact(args.prFailuresPath, raw, failed, result);
+    annotateRegression(result);
     return 1;
   }
   // FR-5: failure count is stable — now guard against a vacuous green where the
@@ -229,8 +247,16 @@ async function main() {
   const skipNote = skip.status === 'NEW'
     ? 'skip baseline not yet recorded (cold start)'
     : `skipped=${skipped} within band ${skip.lowerBound}–${skip.upperBound}`;
-  stdout.write(`Snapshot baseline=${prior.failed_count}, current=${failed}, delta=${newFailures}; ${skipNote} — passing.\n`);
+  stdout.write(`Snapshot baseline=${prior.failed_count}, current=${failed}, delta=${result.newFailureCount} (${result.usedFallback ? 'count-based fallback' : 'identity-based'}); ${skipNote} — passing.\n`);
   return 0;
 }
 
-main().then(code => exit(code)).catch(e => die(`unhandled error: ${e.stack || e.message}`));
+// CLI entrypoint guard — do not run main() when imported by tests.
+const invokedAsCli =
+  typeof process !== 'undefined' &&
+  process.argv[1] &&
+  process.argv[1].endsWith('compare-to-main-snapshot.mjs');
+
+if (invokedAsCli) {
+  main().then(code => exit(code)).catch(e => die(`unhandled error: ${e.stack || e.message}`));
+}

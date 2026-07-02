@@ -18,15 +18,35 @@
  *   node scripts/audit-test-failures.mjs --format=json             # JSON for jq pipelines
  *   node scripts/audit-test-failures.mjs --summary > out.csv       # CSV stdout, summary stderr
  *   node scripts/audit-test-failures.mjs --by-category=must-be-set # filter
+ *   node scripts/audit-test-failures.mjs --pr-only --format=json   # local repro of the CI gate
+ *
+ * --pr-only (SD-LEO-FIX-COVERAGE-BASELINE-REGRESSION-001): reproduces the
+ * exact identity+reachability regression check scripts/compare-to-main-snapshot.mjs
+ * runs in CI, via the shared scripts/lib/baseline-regression-check.mjs module.
+ * Requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (reads the same
+ * codebase_health_snapshots baseline the CI gate reads).
  *
  * Exit codes:
- *   0 — bucketing succeeded
- *   1 — reserved for --pr-only baseline regression mode (PR3 wires this)
+ *   0 — bucketing succeeded (or --pr-only found no new regressions)
+ *   1 — --pr-only found new regression(s) vs baseline
  *   2 — invocation/parse error
  */
 
 import { readFileSync, existsSync } from 'node:fs';
-import { argv, exit, stderr, stdout } from 'node:process';
+import { argv, env, exit, stderr, stdout } from 'node:process';
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
+import { extractFailures } from './lib/vitest-report-parser.mjs';
+import {
+  testId,
+  getChangedFiles,
+  fetchBaselineSnapshot,
+  classifyRegressions,
+} from './lib/baseline-regression-check.mjs';
+
+// Re-exported so existing imports of `extractFailures` from this file keep
+// working unchanged (canonical source: ./lib/vitest-report-parser.mjs).
+export { extractFailures };
 
 const DEFAULT_RESULTS_PATH = 'test-results.json';
 const EXCERPT_LIMIT = 200;
@@ -87,51 +107,6 @@ export function bucketizeError(errorMessage) {
     if (pattern.test(errorMessage)) return { bucket: name, action };
   }
   return { ...FALLBACK };
-}
-
-/**
- * Normalize a vitest JSON report (1.x testResults[] OR 3.x files[]) into a
- * flat list of { file, test, error } failure records.
- */
-export function extractFailures(json) {
-  const failures = [];
-
-  // Vitest 1.x reporter shape: testResults[] with assertionResults[]
-  for (const tr of json.testResults ?? []) {
-    const filePath = tr.name ?? tr.testFilePath ?? 'unknown';
-    for (const ar of tr.assertionResults ?? []) {
-      if (ar.status === 'failed') {
-        failures.push({
-          file: filePath,
-          test: ar.fullName ?? ar.title ?? 'unknown',
-          error: (ar.failureMessages ?? []).join('\n'),
-        });
-      }
-    }
-  }
-
-  // Vitest 3.x reporter shape: files[] with tasks[] (recursive describe)
-  for (const f of json.files ?? []) {
-    const filePath = f.filepath ?? f.name ?? 'unknown';
-    const visit = (tasks) => {
-      for (const t of tasks ?? []) {
-        if (t.type === 'test' && t.result?.state === 'fail') {
-          const errs = (t.result.errors ?? [])
-            .map((e) => e.stack ?? e.message ?? '')
-            .join('\n');
-          failures.push({
-            file: filePath,
-            test: t.name ?? 'unknown',
-            error: errs,
-          });
-        }
-        if (t.tasks) visit(t.tasks);
-      }
-    };
-    visit(f.tasks);
-  }
-
-  return failures;
 }
 
 /**
@@ -246,8 +221,11 @@ OPTIONS:
   --format=csv|json         Output format (default: csv)
   --summary                 Emit category counts to stderr (CSV stays on stdout)
   --by-category=<name>      Filter rows to one bucket
-  --pr-only                 Reserved: compare to baseline snapshot (wired in PR3)
-  --branch=<name>           Reserved: DB-read source branch (default: main)
+  --pr-only                 Compare current failures to the branch's baseline snapshot;
+                            emits { new_failures, new_failure_count, used_fallback } and
+                            exits 1 if any genuine (identity+diff-reachable) regression
+                            is found. Requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.
+  --branch=<name>           Baseline branch to compare against with --pr-only (default: main)
   --no-db                   Force file-fallback (alias for default behavior today)
   --help, -h                Show this message
 
@@ -260,8 +238,8 @@ OUTPUT BUCKETS (in detection-priority order):
   other                    Unrecognized pattern
 
 EXIT CODES:
-  0  Bucketing succeeded
-  1  Reserved (PR3 baseline-regression mode)
+  0  Bucketing succeeded (or --pr-only found no new regressions)
+  1  --pr-only found new regression(s) vs baseline
   2  Invocation or parse error
 
 EXAMPLES:
@@ -269,6 +247,7 @@ EXAMPLES:
   node scripts/audit-test-failures.mjs --format=json | jq .by_category
   node scripts/audit-test-failures.mjs --summary > failures.csv
   node scripts/audit-test-failures.mjs --by-category=must-be-set --format=json
+  node scripts/audit-test-failures.mjs --pr-only --format=json | jq .new_failures
 
 DATA SOURCE:
   PRIMARY (today): Parses vitest --reporter=json output from --results path.
@@ -280,6 +259,62 @@ SEE ALSO:
   scripts/test-result-capture.js (CI step that should populate test_runs)
   SD-LEO-INFRA-COVERAGE-CI-TRIAGE-001
 `;
+
+/**
+ * --pr-only: reproduce the exact regression verdict
+ * scripts/compare-to-main-snapshot.mjs computes in CI, using the shared
+ * scripts/lib/baseline-regression-check.mjs module so the two never drift.
+ */
+export async function runPrOnly(json, opts) {
+  const url = env.SUPABASE_URL;
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    stderr.write('audit-test-failures --pr-only: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY env vars are required\n');
+    return 2;
+  }
+  const supabase = createClient(url, key, { auth: { persistSession: false } });
+
+  let baseline;
+  try {
+    baseline = await fetchBaselineSnapshot(supabase, opts.branch);
+  } catch (err) {
+    stderr.write(`audit-test-failures --pr-only: ${err.message}\n`);
+    return 2;
+  }
+  if (!baseline) {
+    stdout.write(JSON.stringify({ new_failures: [], new_failure_count: 0, cold_start: true, baseline_branch: opts.branch }, null, 2) + '\n');
+    return 0;
+  }
+
+  const allFailures = extractFailures(json);
+  const currentIds = allFailures.map(testId);
+  const { files: changedFiles, error: diffError } = getChangedFiles({});
+  if (diffError) {
+    stderr.write(`Warning: could not compute changed files (${diffError}) — falling back to identity-only comparison.\n`);
+  }
+  const result = classifyRegressions({
+    currentFailed: allFailures.length,
+    currentIds,
+    baselineFailedCount: baseline.failed_count,
+    baselineIds: baseline.failed_test_ids,
+    changedFiles,
+  });
+  const newFailureRecords = result.usedFallback
+    ? allFailures
+    : allFailures.filter((f) => result.newRegressions.includes(testId(f)));
+  const { rows } = bucketize(newFailureRecords);
+
+  const output = {
+    new_failures: rows,
+    new_failure_count: result.newFailureCount,
+    used_fallback: result.usedFallback,
+    baseline_branch: opts.branch,
+    baseline_scanned_at: baseline.scanned_at,
+  };
+  const out = opts.format === 'json' ? JSON.stringify(output, null, 2) : formatCsv(rows);
+  stdout.write(out + '\n');
+  return result.isRegression ? 1 : 0;
+}
 
 export async function main(args) {
   const opts = parseArgs(args);
@@ -303,6 +338,11 @@ export async function main(args) {
     stderr.write(`audit-test-failures: failed to parse JSON at ${opts.resultsPath}: ${err.message}\n`);
     return 2;
   }
+
+  if (opts.prOnly) {
+    return runPrOnly(json, opts);
+  }
+
   const failures = extractFailures(json);
   let { rows, byCategory } = bucketize(failures);
   if (opts.byCategory) {
