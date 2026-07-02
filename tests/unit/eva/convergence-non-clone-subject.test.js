@@ -101,7 +101,7 @@ describe('FR-2: S19-gate verification — a non-clone subject blocks at S19 visi
   const subject = { seeded_from_venture_id: null, is_demo: false, is_scaffolding: false }; // the convergence dummy
 
   it('the subject is NOT a clone (so the clone auto-promote does NOT apply to it)', () => {
-    expect(isCloneVenture(subject)).toBe(false);            // not a clone -> _autoApproveCloneVision returns real_venture
+    expect(isCloneVenture(subject)).toBe(false);            // not a clone -> _autoApproveCloneVision never auto-promotes it (SD-...-S19-001-B: it may still reach the repair-only path)
     expect(isCloneVenture({ seeded_from_venture_id: 'x' })).toBe(true); // a real clone WOULD be auto-promoted
   });
 

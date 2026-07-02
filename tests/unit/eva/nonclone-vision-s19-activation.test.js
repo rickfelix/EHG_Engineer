@@ -109,11 +109,27 @@ describe('(B) S19 auto-approve carve-out ADMITS a convergence-subject non-clone'
     expect(r.promoted).toBe(true);               // repaired (quality) then promoted (activation)
   });
 
-  it('non-clone WITHOUT the marker (a REAL venture) -> real_venture, chairman-manual preserved', async () => {
+  it('non-clone WITHOUT the marker (a REAL venture), no L2 doc at all -> no_l2_vision, chairman-manual preserved (SD-...-S19-001-B: real ventures now reach Case B, but this fixture has no doc to find)', async () => {
     const sb = makeSb({ venture: { id: 'v-real', seeded_from_venture_id: null }, convergenceMarker: false });
     const r = await autoApprove.call({ _supabase: sb, _logger: silent }, 'v-real');
-    expect(r.reason).toBe('real_venture');
+    expect(r.promoted).toBe(false);
+    expect(r.reason).toBe('no_l2_vision');
     expect(repairMocks.repairVision).not.toHaveBeenCalled();
+  });
+
+  it('non-clone WITHOUT the marker (a REAL venture), with an under-quality L2 doc -> repair fires but promotion still withheld (SD-...-S19-001-B)', async () => {
+    repairMocks.isRepairLoopEnabled.mockResolvedValue(true);
+    repairMocks.repairVision.mockResolvedValue({ finalQualityChecked: true, attempts: 1 });
+    const sb = makeSb({
+      venture: { id: 'v-real', seeded_from_venture_id: null },
+      convergenceMarker: false,
+      activeL2: null,
+      draftSeed: { vision_key: 'V-real', extracted_dimensions: { a: 1 }, content: 'x'.repeat(600), quality_checked: false, quality_issues: [{ check: 'section_coverage' }], sections: {} },
+    });
+    const r = await autoApprove.call({ _supabase: sb, _logger: silent }, 'v-real');
+    expect(repairMocks.repairVision).toHaveBeenCalledTimes(1); // real venture now reaches the repair loop
+    expect(r.promoted).toBe(false);                            // but is never auto-activated
+    expect(r.reason).toBe('repaired_not_promoted');
   });
 
   it('a CLONE still works unchanged (no convergence read needed on the clone fast-path)', async () => {

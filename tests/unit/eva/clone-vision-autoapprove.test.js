@@ -96,10 +96,11 @@ describe('_autoApproveCloneVision (FR-1/FR-2)', () => {
     expect(repairMocks.repairVision).not.toHaveBeenCalled();
   });
 
-  it('REAL venture (seeded_from_venture_id NULL) -> NO update, NO repair', async () => {
-    const sb = makeSb({ venture: { id: 'venture-1', seeded_from_venture_id: null }, draftSeed: enrichedSeed() });
+  it('REAL venture (seeded_from_venture_id NULL), seed already quality_checked -> NO update, NO repair, NOT promoted (SD-...-S19-001-B)', async () => {
+    const sb = makeSb({ venture: { id: 'venture-1', seeded_from_venture_id: null }, draftSeed: enrichedSeed({ quality_checked: true }) });
     const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-1');
-    expect(r.reason).toBe('real_venture');
+    expect(r.promoted).toBe(false);
+    expect(r.reason).toBe('repaired_not_promoted');
     expect(sb.updates).toHaveLength(0);
     expect(repairMocks.repairVision).not.toHaveBeenCalled();
   });
@@ -139,6 +140,50 @@ describe('_autoApproveCloneVision (QUALITY-REPAIR FR-1): repair-then-promote', (
   });
 });
 
+describe('SD-LEO-INFRA-REAL-VENTURE-VISION-ENRICH-UNDERPRODUCTION-S19-001-B (FR-1/FR-2/FR-3): real ventures reach repair, never promotion', () => {
+  const realVenture = { id: 'venture-real', seeded_from_venture_id: null };
+
+  it('REAL venture, quality_checked=false + repair flag ON + repair succeeds -> repairVision called once, NO writes, reason=repaired_not_promoted', async () => {
+    repairMocks.isRepairLoopEnabled.mockResolvedValue(true);
+    repairMocks.repairVision.mockResolvedValue({ finalQualityChecked: true, attempts: 1, exitReason: 'quality_ok' });
+    const sb = makeSb({ venture: realVenture, activeL2: null, draftSeed: enrichedSeed({ quality_checked: false, quality_issues: [{ check: 'section_coverage', message: '3/10' }], sections: {} }) });
+    const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-real');
+    expect(repairMocks.repairVision).toHaveBeenCalledTimes(1);
+    expect(r.promoted).toBe(false);
+    expect(r.reason).toBe('repaired_not_promoted');
+    expect(sb.updates).toHaveLength(0); // repair writes via upsertVision inside repairVision, not this function's own .update()
+  });
+
+  it('REAL venture, quality_checked=false + repair EXHAUSTS -> reason=repair_exhausted_quality (unchanged)', async () => {
+    repairMocks.isRepairLoopEnabled.mockResolvedValue(true);
+    repairMocks.repairVision.mockResolvedValue({ finalQualityChecked: false, attempts: 2, exitReason: 'attempt_cap' });
+    const sb = makeSb({ venture: realVenture, activeL2: null, draftSeed: enrichedSeed({ quality_checked: false, quality_issues: [{ check: 'section_coverage' }], sections: {} }) });
+    const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-real');
+    expect(r.promoted).toBe(false);
+    expect(r.reason).toBe('repair_exhausted_quality');
+    expect(sb.updates).toHaveLength(0);
+  });
+
+  it('REAL venture, repair flag OFF -> reason=quality_not_checked (unchanged)', async () => {
+    repairMocks.isRepairLoopEnabled.mockResolvedValue(false);
+    const sb = makeSb({ venture: realVenture, activeL2: null, draftSeed: enrichedSeed({ quality_checked: false, quality_issues: [{ check: 'section_coverage' }], sections: {} }) });
+    const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-real');
+    expect(r.promoted).toBe(false);
+    expect(r.reason).toBe('quality_not_checked');
+    expect(repairMocks.repairVision).not.toHaveBeenCalled();
+    expect(sb.updates).toHaveLength(0);
+  });
+
+  it('REAL venture with an EXISTING active L2 -> NO writes, reason=real_venture_active_present (Case A short-circuit)', async () => {
+    const sb = makeSb({ venture: realVenture, activeL2: { vision_key: 'V-real', chairman_approved: false } });
+    const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-real');
+    expect(r.promoted).toBe(false);
+    expect(r.reason).toBe('real_venture_active_present');
+    expect(sb.updates).toHaveLength(0);
+    expect(repairMocks.repairVision).not.toHaveBeenCalled();
+  });
+});
+
 describe('SD-LEO-INFRA-NONCLONE-VISION-S19-DRAFT-DOC-SHAPE-001: the non-clone convergence subject draft doc-shape', () => {
   // The from-scratch pipeline produces a NON-CLONE convergence subject's L2 as status='draft' (not
   // draft_seed). Before this fix, Case B queried only draft_seed -> the draft doc fell through to
@@ -166,12 +211,13 @@ describe('SD-LEO-INFRA-NONCLONE-VISION-S19-DRAFT-DOC-SHAPE-001: the non-clone co
     expect(r.promoted).toBe(true);
   });
 
-  it("a REAL venture's status='draft' L2 still returns real_venture (chairman-manual preserved; no marker)", async () => {
+  it("a REAL venture's status='draft' L2, already quality_checked -> repaired_not_promoted (chairman-manual promotion preserved; no marker) (SD-...-S19-001-B)", async () => {
     const sb = makeSb({ venture: { id: 'venture-real', seeded_from_venture_id: null }, convergenceMarker: false, activeL2: null, draftDoc: draftDoc({ quality_checked: true }) });
     const r = await autoApprove.call({ _supabase: sb, _logger: silentLogger }, 'venture-real');
-    expect(r.reason).toBe('real_venture');       // NOT reached Case B — the real_venture gate holds
+    expect(r.promoted).toBe(false);
+    expect(r.reason).toBe('repaired_not_promoted'); // Case B IS reached (the doc-shape match + repair path), but promotion is still withheld
     expect(sb.updates).toHaveLength(0);
-    expect(repairMocks.repairVision).not.toHaveBeenCalled();
+    expect(repairMocks.repairVision).not.toHaveBeenCalled(); // already quality_checked -> no repair call needed
   });
 
   it("repair EXHAUSTS on a 'draft' doc -> NO promote, falls through (no force-approve backdoor)", async () => {

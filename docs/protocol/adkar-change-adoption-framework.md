@@ -93,6 +93,17 @@ the natural home for a new adoption's regression check. Reinforcement evidence f
 `requires_adoption` change points at (or extends) one of these three, not a new
 standalone checker.
 
+**Worked example**: `probePmBoard` (`lib/adam/adherence-probes.js`,
+SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DISCIPLINE-001-C) extends
+`adam-self-adherence-review.mjs` to catch regression-to-non-use of Adam's PM board —
+open work items exist, but none have progressed since the prior check. It is a
+snapshot-diff against the probe's own last recorded ledger row, not an
+`updated_at`-freshness threshold — a threshold was found (prospective sub-agent review)
+to be silently inert against a table whose timestamp is bumped by routine, no-op
+rehydrate upserts. Any future Reinforcement check facing the same "the obvious
+timestamp signal is noisy" problem should consider the same before/after
+snapshot-comparison pattern rather than a freshness threshold.
+
 ## Out of scope (this framework)
 
 - Non-adoption changes (a pure bugfix has no adoption need — `requires_adoption` stays
