@@ -68,6 +68,13 @@ export const COMPOSED_CORES = [
   // periodic-cron lag are most likely to have gone unnoticed).
   { key: 'unranked-gauge', script: 'gauge-unranked-claimable-leaves.mjs', args: ['scripts/gauge-unranked-claimable-leaves.mjs'], quiescentSkip: false },
   { key: 'audit', script: 'coordinator-audit.mjs', args: ['scripts/coordinator-audit.mjs'], quiescentSkip: true },
+  // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-1/FR-2: NOT
+  // quiescentSkip -- a queued relay-request is exactly as urgent when the fleet is
+  // otherwise quiet (a quiet fleet is precisely when a relay is most likely to sit
+  // undrained, per confirmed incident #1).
+  { key: 'relay-drain', script: 'coordinator-relay-drain.cjs', args: ['scripts/coordinator-relay-drain.cjs'], quiescentSkip: false },
+  // FR-3: cheap read + fail-open write; valuable exactly when quiet for the same reason.
+  { key: 'relay-drop-gauge', script: 'coordinator-relay-drop-gauge.cjs', args: ['scripts/coordinator-relay-drop-gauge.cjs'], quiescentSkip: false },
 ];
 
 /** Build the fail-soft core list for the current mode (quiescent skips the expensive cores). */

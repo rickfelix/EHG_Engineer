@@ -97,6 +97,17 @@ export const STANDARD_LOOPS = [
   // always observes a just-refreshed rank rather than racing it.
   { key: 'unranked-gauge', label: 'Eligible-but-unranked-leaf-count invariant gauge', script: 'gauge-unranked-claimable-leaves.mjs', cron: '9,24,39,54 * * * *',
     prompt: 'node scripts/gauge-unranked-claimable-leaves.mjs' },
+  // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-1/FR-2: drains
+  // the tracked relay-request queue deliberately (never processed inline in the active
+  // thread) and writes the CONFIRM-ON-RELAY receipt. Frequent — a queued relay-request is
+  // exactly as urgent when the fleet is quiet (confirmed incident #1: ~2h undrained).
+  { key: 'relay-drain', label: 'Relay-request queue drain + confirm-on-relay', script: 'coordinator-relay-drain.cjs', cron: '1,16,31,46 * * * *',
+    prompt: 'node scripts/coordinator-relay-drain.cjs' },
+  // FR-3: the drop-gauge — flags any inbound RELAY/DECISION/REVIEW row with no matching
+  // outbound within the window (default ~15min). Offset from relay-drain so it observes a
+  // just-drained queue rather than racing it.
+  { key: 'relay-drop-gauge', label: 'Unactioned relay/decision/review drop gauge', script: 'coordinator-relay-drop-gauge.cjs', cron: '11,26,41,56 * * * *',
+    prompt: 'node scripts/coordinator-relay-drop-gauge.cjs' },
   // SD-LEO-INFRA-ENABLE-WIRE-AUTOMATIC-001 (FR-2a): restore the worker fleet-retro to a schedule
   // (it had drifted to manual — last ran ~2.5d ago). Re-arms the existing, idempotent capture/
   // synthesis script (reuses the feedback/issue_patterns pipeline; dedups on metadata.retro_key).

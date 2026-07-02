@@ -1531,6 +1531,32 @@ async function printUndeliveredOutbound() {
   console.log('');
 }
 
+// SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-3: surface the
+// relay/decision/review drop gauge — mirrors printUndeliveredOutbound()'s shape. Read-only
+// + fail-open (planRelayDrops never throws).
+async function printRelayDropGauge() {
+  const { planRelayDrops } = require('../lib/coordinator/relay-drop-gauge.cjs');
+
+  console.log('RELAY/DECISION/REVIEW DROP GAUGE');
+  console.log('─'.repeat(72));
+
+  const gauge = await planRelayDrops(supabase);
+  const flagged = gauge.decisions.filter((d) => d.action === 'flag');
+  if (flagged.length === 0) {
+    console.log('  (no unactioned relay/decision/review rows past the drop-detection window)');
+    console.log('');
+    return;
+  }
+
+  console.log('  ' + flagged.length + ' row(s) flagged — no matching outbound within the window:');
+  for (const d of flagged) {
+    const ageMin = Math.floor(d.ageMs / 60_000);
+    const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
+    console.log('  • [' + String(d.id).slice(0, 8) + '] correlation=' + String(d.correlationId).slice(0, 8) + ' | unactioned ' + ageStr + ' | ' + d.reason);
+  }
+  console.log('');
+}
+
 // FR-4 surfacing: rows the stale-session sweep dead-lettered (payload.dead_letter=true)
 // in the last 24h — undelivered traffic no longer vanishes tracelessly; the coordinator
 // can re-send to the successor session. Read-only.
@@ -1697,6 +1723,7 @@ async function main() {
       await printInbox(); // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a
       await printUndeliveredOutbound(); // FR-2 SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001
       await printDeadLetters(); // FR-4 SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001
+      await printRelayDropGauge(); // FR-3 SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001
       await printAdamInbox(); // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B — Adam advisory lane
       await printSolomonInbox(); // SD-LEO-INFRA-SOLOMON-CONSULT-001F — Solomon oracle consult lane (dormant until SOLOMON_CONSULT_V1)
       await printSolomonLedgerRollup(); // SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001 (FR-5) — accuracy + cost-per-accepted rollup
