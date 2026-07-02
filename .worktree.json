@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-INVARIANT-GAUGES-FRAMEWORK-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-INVARIANT-GAUGES-FRAMEWORK-001",
-  "createdAt": "2026-07-02T03:12:00.114Z",
+  "sdKey": "SD-LEO-INFRA-COORDINATOR-ORCHESTRATED-SINGLETON-REFRESH-001-C",
+  "expectedBranch": "feat/SD-LEO-INFRA-COORDINATOR-ORCHESTRATED-SINGLETON-REFRESH-001-C",
+  "createdAt": "2026-07-02T10:34:06.891Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
