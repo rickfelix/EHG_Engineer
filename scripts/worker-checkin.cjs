@@ -55,6 +55,14 @@ const { fetchLowerTierBacklogData } = require('../lib/fleet/tier-backlog.cjs');
 // SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: reuse the coordinator cron's pool + picker + ghost guard so
 // check-in-time self-assign and the 5-min cron allocate identities identically (see assignFleetIdentityAtCheckin).
 const { NATO, COLORS, nextAvailable, isTestSessionId, tierRankOf, pickCallsignForTier, callsignInTierBand } = require('./assign-fleet-identities.cjs');
+// SD-LEO-INFRA-RECLAIM-STEAL-LIVE-CLAIMANT-WIP-GUARD-001 (FR-3): stealer-side guard. The raw
+// v_active_sessions.is_alive flag FREEZES stale between short-lived CLI invocations (each
+// handoff.js/sd-start.js call starts+stops its own heartbeat interval) -- isSessionAlive() is
+// the read-time liveness SSOT (also checks live OS PID via terminal_id, which stays accurate
+// across those gaps). hasWip() is the belt-and-suspenders half: even a genuinely lapsed-TTL
+// claim must not be stolen while the prior claimant still has real, unmerged work.
+const { isSessionAlive } = require('../lib/fleet/session-liveness.cjs');
+const { hasWip } = require('../lib/claim/wip-detector.cjs');
 
 const ROLL_CALL_TTL_MS = 60 * 60 * 1000;     // availability row lives 1h
 const ROLL_CALL_DEDUP_MS = 5 * 60 * 1000;    // don't re-register within 5m (idempotency)
@@ -743,6 +751,66 @@ async function recoverStrandedFinal(sb, sessionId, base) {
 // independently refuses live peers (already_claimed / claimed_by_live_peer) and terminal
 // statuses ({completed,cancelled,deferred} — in_progress is claimable), so the probe is
 // defense-in-depth, not the sole guard.
+// SD-LEO-INFRA-RECLAIM-STEAL-LIVE-CLAIMANT-WIP-GUARD-001 (FR-3): shared foreign-session lookup.
+// Fail-open on any lookup error (never blocks a caller on a guard error -- the pre-existing
+// claim_sd TTL check still arbitrates as the backstop).
+async function foreignSessionForSd(sb, sdKey, mySessionId) {
+  const { data: sessions } = await sb
+    .from('v_active_sessions')
+    .select('session_id, is_alive, heartbeat_at, heartbeat_age_seconds, terminal_id, current_branch')
+    .eq('sd_key', sdKey)
+    .neq('session_id', mySessionId)
+    .limit(1);
+  return sessions && sessions[0];
+}
+
+// Used by isSdInFlight's dedup guard: is a foreign session CURRENTLY, actively pointed at this SD
+// right now? No WIP requirement -- a peer that just started (no commits/PR yet) still legitimately
+// owns the in-flight work, so self-claim must not race it. Swaps the raw, frequently-stale
+// v_active_sessions.is_alive read for isSessionAlive() (see foreignClaimantBlocksSteal's comment
+// for why the raw flag under-protects). Fail-open: any error -> false -> never blocks.
+// isSessionAliveFn is injectable (defaults to the real isSessionAlive) so tests can pin the
+// decision logic without depending on live-PID/heartbeat state.
+async function isForeignSessionLive(sb, sdKey, mySessionId, isSessionAliveFn = isSessionAlive) {
+  try {
+    const session = await foreignSessionForSd(sb, sdKey, mySessionId);
+    if (!session) return false;
+    return isSessionAliveFn(session).alive;
+  } catch {
+    return false;
+  }
+}
+
+// Used by adoptOrphanInProgress's TTL-LAPSED steal decision: a lapsed claim TTL is NECESSARY but
+// not SUFFICIENT to steal -- also require the prior claimant to be dead OR WIP-less. Distinct from
+// isForeignSessionLive above: this is specifically the "is this genuinely abandoned" question for
+// an already-stale claim, not the "is someone actively working on this right now" dedup question.
+// isSessionAliveFn/hasWipFn are injectable (default to the real implementations) so tests can pin
+// the decision logic without depending on live-PID/heartbeat state or real git/gh subprocesses.
+async function foreignClaimantBlocksSteal(sb, sdKey, mySessionId, isSessionAliveFn = isSessionAlive, hasWipFn = hasWip) {
+  try {
+    const session = await foreignSessionForSd(sb, sdKey, mySessionId);
+    if (!session) return false; // no foreign session record at all -> nothing to protect
+    const { alive } = isSessionAliveFn(session);
+    if (!alive) return false; // dead -> steal proceeds
+
+    let worktreePath = null;
+    try {
+      const { data: cs } = await sb
+        .from('claude_sessions')
+        .select('worktree_path')
+        .eq('session_id', session.session_id)
+        .maybeSingle();
+      worktreePath = cs && cs.worktree_path;
+    } catch { /* fail-open on the worktree lookup -> hasWip still checks branch/PR */ }
+
+    const wip = hasWipFn(worktreePath, session.current_branch, null, { repoRoot: process.cwd() });
+    return wip.hasWip; // live AND has WIP -> refuse; live but WIP-less -> steal proceeds
+  } catch {
+    return false; // fail-open: never block a steal on a guard error
+  }
+}
+
 const ORPHAN_CANDIDATE_LIMIT = 5;
 // One full claim-TTL window (claimGuard TTL = 15 min): a mid-transition worker whose claim
 // briefly clears is never raced; sweep claim-clears also refresh updated_at, deferring adoption
@@ -772,17 +840,11 @@ async function adoptOrphanInProgress(sb, sessionId, base) {
       // adds the claim-time fitness axes so a repo-mismatched orphan is not adopted here.
       if (classifyDispatchIneligibility(sd, { cwd: process.cwd() }) !== null) continue;
       // Live-foreign-holder probe (the half-write case: SD-side claim cleared but a LIVE session
-      // still points at it via claude_sessions.sd_key). Fail-open: probe errors don't block.
-      try {
-        const { data: live } = await sb
-          .from('v_active_sessions')
-          .select('session_id')
-          .eq('sd_key', sd.sd_key)
-          .neq('session_id', sessionId)
-          .eq('is_alive', true)
-          .limit(1);
-        if (live && live.length) continue;
-      } catch { /* fail-open: claim_sd still arbitrates */ }
+      // still points at it via claude_sessions.sd_key). SD-LEO-INFRA-RECLAIM-STEAL-LIVE-CLAIMANT-
+      // WIP-GUARD-001 (FR-3): the raw is_alive flag alone under-protects (it FREEZES stale between
+      // short-lived CLI invocations) -- foreignClaimantBlocksSteal() additionally requires the
+      // live claimant to have real WIP before refusing. Fail-open: probe errors don't block.
+      if (await foreignClaimantBlocksSteal(sb, sd.sd_key, sessionId)) continue;
       const claimed = await tryClaim(sb, sd.sd_key, sessionId);
       if (claimed.ok) {
         return {
@@ -805,9 +867,12 @@ async function adoptOrphanInProgress(sb, sessionId, base) {
  * lapses (auto_stale_takeover). Returns true to SKIP when the SD is (a) past LEAD
  * (started — current_phase != 'LEAD'; phase only advances on an ACCEPTED handoff, so this
  * avoids the rejected-first-handoff false positive that raw handoff-row presence has) OR
- * (b) held by a LIVE foreign session (v_active_sessions.is_alive — a generous liveness
- * signal that covers heartbeat gaps beyond claim_sd's 900s backstop). Fails OPEN (any
- * error -> false -> never blocks self_claim). SD-FDBK-FIX-SELF-CLAIM-DEDUP-001.
+ * (b) held by a LIVE foreign session (isForeignSessionLive — the isSessionAlive-guarded check,
+ * SD-LEO-INFRA-RECLAIM-STEAL-LIVE-CLAIMANT-WIP-GUARD-001 FR-3; deliberately NO WIP requirement
+ * here — this is the "is someone actively working on this right now" dedup question, not the
+ * TTL-lapsed steal question adoptOrphanInProgress's foreignClaimantBlocksSteal answers. A peer
+ * that just started (no commits/PR yet) still legitimately owns the in-flight work). Fails OPEN
+ * (any error -> false -> never blocks self_claim). SD-FDBK-FIX-SELF-CLAIM-DEDUP-001.
  */
 async function isSdInFlight(sb, sdKey, mySessionId) {
   try {
@@ -824,15 +889,9 @@ async function isSdInFlight(sb, sdKey, mySessionId) {
     // advances past these on an ACCEPTED handoff, so LEAD and LEAD_APPROVAL are equivalent
     // un-started states for claimability.
     if (sd && sd.current_phase && sd.current_phase !== 'LEAD' && sd.current_phase !== 'LEAD_APPROVAL') return true;
-    // (b) a live foreign session already holds it
-    const { data: live } = await sb
-      .from('v_active_sessions')
-      .select('session_id')
-      .eq('sd_key', sdKey)
-      .neq('session_id', mySessionId)
-      .eq('is_alive', true)
-      .limit(1);
-    if (live && live.length) return true;
+    // (b) a live foreign session already holds it (no WIP requirement -- see isForeignSessionLive's
+    // comment for why this differs from adoptOrphanInProgress's TTL-lapsed steal guard).
+    if (await isForeignSessionLive(sb, sdKey, mySessionId)) return true;
   } catch { /* fail-open: never block self_claim on a guard error */ }
   return false;
 }
@@ -1506,7 +1565,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
+module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
 
 if (require.main === module) {
   main().catch(err => {
