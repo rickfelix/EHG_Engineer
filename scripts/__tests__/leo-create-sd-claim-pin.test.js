@@ -15,11 +15,17 @@
 //
 // Test approach: static-source assertions (mirrors leo-create-sd-smoke-detector.test.js
 // FR-3 regression guard). Assertions:
-//   1. Single occurrence of `claiming_session_id` in the file (the QF-table NULL escalation).
-//   2. That single occurrence sets the value to literal `null`.
-//   3. No occurrence of `claiming_session_id` adjacent to (within ~200 chars of)
-//      `strategic_directives_v2` to rule out stealth writes.
-//   4. No `process.env.CLAUDE_SESSION_ID` -> `claiming_session_id` propagation pattern.
+//   1. Exactly two occurrences of `claiming_session_id` in the file: the QF-table NULL
+//      escalation write, and (SD-LEO-INFRA-QF-SD-ESCALATION-LINK-CANONICAL-TRACK-001) a
+//      manual-recovery SQL snippet inside a thrown Error's message — descriptive text for
+//      a human operator, not a second programmatic write site.
+//   2. BOTH occurrences set the value to literal `null`/`NULL` (NOT a session/process
+//      expression) — the recovery text must stay consistent with the real write, since an
+//      operator may copy-paste it verbatim.
+//   3. Neither occurrence appears within ~200 chars of `strategic_directives_v2`, to rule
+//      out stealth writes (or recovery instructions implying a write) to that table.
+//   4. No `process.env.CLAUDE_SESSION_ID` -> `claiming_session_id` propagation pattern at
+//      either occurrence.
 
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
@@ -30,59 +36,72 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const SOURCE_PATH = path.resolve(__dirname, '../leo-create-sd.js');
 const SOURCE = fs.readFileSync(SOURCE_PATH, 'utf8');
 
+function allIndicesOf(haystack, needle) {
+  const indices = [];
+  let i = 0;
+  while ((i = haystack.indexOf(needle, i)) !== -1) {
+    indices.push(i);
+    i += needle.length;
+  }
+  return indices;
+}
+
 describe('QF-20260509-LEO-CREATE-CLAIM-PIN: leo-create-sd.js never writes non-null claiming_session_id', () => {
-  it('TS-1: source contains exactly one occurrence of `claiming_session_id`', () => {
+  it('TS-1: source contains exactly two occurrences of `claiming_session_id` (the QF-row write + its recovery-text echo)', () => {
     const matches = SOURCE.match(/claiming_session_id/g) || [];
-    // The single allowed occurrence is the QF-row NULL escalation (current line ~509).
-    // If this count grows, FR-2/3/4 below must be updated to bracket the new sites.
-    expect(matches.length).toBe(1);
+    // Occurrence 1: the QF-row NULL escalation write (inside the withRetry-wrapped update).
+    // Occurrence 2: the manual-recovery SQL text inside createFromQF's thrown Error message
+    // (SD-LEO-INFRA-QF-SD-ESCALATION-LINK-CANONICAL-TRACK-001 FR-2) — a string literal
+    // describing recovery for a human, not code that writes to the DB.
+    // If this count grows further, TS-2/3/4 below must be updated to bracket the new sites.
+    expect(matches.length).toBe(2);
   });
 
-  it('TS-2: the single occurrence sets the value to literal `null` (NOT a session/process expression)', () => {
-    // Match `claiming_session_id` followed by `:` and (optionally whitespace) then `null`
-    // within the next ~50 chars. Anything else (e.g. `: sessionId`, `: process.env.X`,
-    // `: getSessionId()`, etc.) fails this assertion.
-    const idx = SOURCE.indexOf('claiming_session_id');
-    expect(idx).toBeGreaterThan(-1);
-    const window = SOURCE.slice(idx, idx + 60);
-    // Must be `claiming_session_id: null` (allowing whitespace variants).
-    expect(window).toMatch(/^claiming_session_id\s*:\s*null\b/);
+  it('TS-2: every occurrence sets the value to literal `null`/`NULL` (NOT a session/process expression)', () => {
+    // Match `claiming_session_id` followed by `:` or `=` and (optionally whitespace) then
+    // null/NULL within the next ~50 chars. Anything else (e.g. `: sessionId`,
+    // `: process.env.X`, `: getSessionId()`, etc.) fails this assertion.
+    const indices = allIndicesOf(SOURCE, 'claiming_session_id');
+    expect(indices.length).toBe(2);
+    for (const idx of indices) {
+      const window = SOURCE.slice(idx, idx + 60);
+      expect(window).toMatch(/^claiming_session_id\s*[:=]\s*null\b/i);
+    }
   });
 
   it('TS-3: no `claiming_session_id` reference appears within 200 chars of `strategic_directives_v2`', () => {
     // Defense-in-depth: rule out any stealth INSERT/UPDATE to strategic_directives_v2
-    // that includes claiming_session_id. The current single occurrence is in the QF
-    // path (quick_fixes table), nowhere near strategic_directives_v2.
-    const sdvIndices = [];
-    let i = 0;
-    while ((i = SOURCE.indexOf('strategic_directives_v2', i)) !== -1) {
-      sdvIndices.push(i);
-      i += 'strategic_directives_v2'.length;
-    }
+    // that includes claiming_session_id (or recovery text implying one). Both occurrences
+    // are in the QF path (quick_fixes table), nowhere near strategic_directives_v2.
+    const sdvIndices = allIndicesOf(SOURCE, 'strategic_directives_v2');
     expect(sdvIndices.length).toBeGreaterThan(0); // sanity — file does reference the table
 
-    const claimIdx = SOURCE.indexOf('claiming_session_id');
-    expect(claimIdx).toBeGreaterThan(-1);
+    const claimIndices = allIndicesOf(SOURCE, 'claiming_session_id');
+    expect(claimIndices.length).toBe(2);
 
-    // Check distance from each strategic_directives_v2 reference to the claim site
+    // Check distance from each strategic_directives_v2 reference to each claim site
     for (const sdvIdx of sdvIndices) {
-      const distance = Math.abs(sdvIdx - claimIdx);
-      expect(distance).toBeGreaterThan(200);
+      for (const claimIdx of claimIndices) {
+        const distance = Math.abs(sdvIdx - claimIdx);
+        expect(distance).toBeGreaterThan(200);
+      }
     }
   });
 
-  it('TS-4: no propagation pattern from CLAUDE_SESSION_ID env into claiming_session_id', () => {
+  it('TS-4: no propagation pattern from CLAUDE_SESSION_ID env into claiming_session_id (either occurrence)', () => {
     // Pattern catches `claiming_session_id: process.env.CLAUDE_SESSION_ID`,
     // `claiming_session_id: ... CLAUDE_SESSION_ID`, etc.
     // This is the literal pattern called out by feedback 4c2b2e1a (sub-process node
     // identity bleeds into the SD claim).
-    const claimIdx = SOURCE.indexOf('claiming_session_id');
-    if (claimIdx === -1) return; // already covered by TS-1
-    const window = SOURCE.slice(claimIdx, claimIdx + 200);
-    expect(window).not.toMatch(/CLAUDE_SESSION_ID/);
-    expect(window).not.toMatch(/process\.env/);
-    expect(window).not.toMatch(/sessionId/);
-    expect(window).not.toMatch(/getSession/);
+    const claimIndices = allIndicesOf(SOURCE, 'claiming_session_id');
+    if (claimIndices.length === 0) return; // already covered by TS-1
+    for (const claimIdx of claimIndices) {
+      const window = SOURCE.slice(claimIdx, claimIdx + 200);
+      expect(window).not.toMatch(/CLAUDE_SESSION_ID/);
+      expect(window).not.toMatch(/process\.env/);
+      expect(window).not.toMatch(/sessionId/);
+      expect(window).not.toMatch(/getSession/);
+    }
   });
 
   it('TS-5: source does not import a session-claim helper that could write claiming_session_id', () => {
