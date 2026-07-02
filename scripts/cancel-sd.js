@@ -19,6 +19,7 @@
  */
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { execFileSync } from 'node:child_process';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -28,7 +29,7 @@ const supabase = createSupabaseServiceClient();
 function parseArgs() {
   const args = process.argv.slice(2);
   if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
-    console.log(`Usage: node scripts/cancel-sd.js <SD-KEY-or-UUID> --reason "<reason>"
+    console.log(`Usage: node scripts/cancel-sd.js <SD-KEY-or-UUID> --reason "<reason>" [--pr <number>] [--evidence-file <path>]
 
 Atomically cancels an SD:
   - status='cancelled', current_phase='CANCELLED'
@@ -41,8 +42,15 @@ Atomically cancels an SD:
 Required:
   --reason "<text>"   Cancellation reason (cannot be empty)
 
+Optional (REQUIRED when --reason indicates already-shipped/superseded/duplicate-of-merged):
+  --pr <number>            PR claimed to supersede/ship the fix — verified MERGED (mergedAt set) on origin, not merely open
+  --evidence-file <path>   File claimed present on origin/main (repeatable) — verified via origin/main, never a local branch HEAD
+  (SD-LEO-INFRA-CANCEL-SD-VERIFY-ORIGIN-MAIN-NOT-LOCAL-HEAD-001: an already-shipped-style cancel with
+   neither flag, or whose evidence fails verification, is REFUSED and the SD is left unchanged.)
+
 Examples:
   node scripts/cancel-sd.js SD-LEO-FIX-FOO-001 --reason "Superseded by SD-BAR-001"
+  node scripts/cancel-sd.js SD-LEO-FIX-FOO-001 --reason "already shipped via PR #999" --pr 999
   node scripts/cancel-sd.js --help
 `);
     process.exit(args.includes('--help') || args.includes('-h') ? 0 : 1);
@@ -50,7 +58,14 @@ Examples:
 
   const reasonIdx = args.indexOf('--reason');
   const reason = reasonIdx !== -1 ? args[reasonIdx + 1] : null;
-  const sdInput = args.find(a => !a.startsWith('-') && (reasonIdx === -1 || args.indexOf(a) !== reasonIdx + 1));
+  const prIdx = args.indexOf('--pr');
+  const pr = prIdx !== -1 ? args[prIdx + 1] : null;
+  const evidenceFiles = [];
+  args.forEach((a, i) => { if (a === '--evidence-file' && args[i + 1]) evidenceFiles.push(args[i + 1]); });
+
+  const consumedIdx = new Set([reasonIdx, reasonIdx + 1, prIdx, prIdx + 1]);
+  args.forEach((a, i) => { if (a === '--evidence-file') { consumedIdx.add(i); consumedIdx.add(i + 1); } });
+  const sdInput = args.find((a, i) => !a.startsWith('-') && !consumedIdx.has(i));
 
   if (!sdInput) {
     console.error('❌ Missing SD identifier (sd_key or UUID)');
@@ -61,7 +76,108 @@ Examples:
     process.exit(1);
   }
 
-  return { sdInput, reason: reason.trim() };
+  return { sdInput, reason: reason.trim(), pr: pr ? pr.trim() : null, evidenceFiles };
+}
+
+/**
+ * SD-LEO-INFRA-CANCEL-SD-VERIFY-ORIGIN-MAIN-NOT-LOCAL-HEAD-001 (FR-1)
+ * Pure classifier: does this cancellation reason claim the SD is
+ * already-shipped/superseded/duplicate-of-merged (and therefore requires
+ * origin/main verification before cancelling)?
+ * @param {string} reason
+ * @returns {boolean}
+ */
+export function classifyShipReason(reason) {
+  return /already[\s-]?(shipped|merged)|superseded|duplicate[\s-]?of[\s-]?merged/i.test(reason || '');
+}
+
+/**
+ * SD-LEO-INFRA-CANCEL-SD-VERIFY-ORIGIN-MAIN-NOT-LOCAL-HEAD-001 (FR-3)
+ * Verify an already-shipped claim against ORIGIN/MAIN — never a local/branch
+ * HEAD. Injectable runners (mirrors lib/worktree-reaper/detectors.js's
+ * isPatchEquivalentToMain pattern) so tests never touch live git/gh.
+ * Fails CLOSED: any runner error counts as verification failure, not
+ * fail-open — the entire point is not trusting an unverifiable claim.
+ *
+ * @param {{pr?: string|null, evidenceFiles?: string[]}} evidence
+ * @param {{runGit: Function, runGh: Function, repoRoot?: string}} runners
+ * @returns {{verified: boolean, reasons: string[]}}
+ */
+export function verifyShippedOnOriginMain({ pr, evidenceFiles = [] } = {}, { runGit, runGh, repoRoot } = {}) {
+  const reasons = [];
+  let anyCheckRan = false;
+
+  if (pr) {
+    anyCheckRan = true;
+    try {
+      const out = runGh(['pr', 'view', String(pr), '--json', 'state,mergedAt'], { cwd: repoRoot });
+      if (out.code !== 0) {
+        reasons.push(`--pr ${pr}: gh pr view failed (exit ${out.code}): ${(out.stderr || '').trim()}`);
+      } else {
+        const parsed = JSON.parse(out.stdout || '{}');
+        if (parsed.state === 'MERGED' && parsed.mergedAt) {
+          // verified
+        } else {
+          reasons.push(`--pr ${pr}: not merged (state=${parsed.state || 'unknown'}, mergedAt=${parsed.mergedAt || 'null'}) — a local/open PR head does not count as shipped`);
+        }
+      }
+    } catch (err) {
+      reasons.push(`--pr ${pr}: gh pr view threw: ${err?.message || err}`);
+    }
+  }
+
+  for (const file of evidenceFiles) {
+    anyCheckRan = true;
+    try {
+      const out = runGit(['cat-file', '-e', `origin/main:${file}`], { cwd: repoRoot });
+      if (out.code !== 0) {
+        reasons.push(`--evidence-file ${file}: not found on origin/main`);
+      }
+    } catch (err) {
+      reasons.push(`--evidence-file ${file}: git cat-file threw: ${err?.message || err}`);
+    }
+  }
+
+  if (!anyCheckRan) {
+    reasons.push('no evidence supplied (--pr or --evidence-file required for an already-shipped/superseded/duplicate-of-merged cancellation)');
+  }
+
+  return { verified: anyCheckRan && reasons.length === 0, reasons };
+}
+
+/**
+ * SD-LEO-INFRA-CANCEL-SD-VERIFY-ORIGIN-MAIN-NOT-LOCAL-HEAD-001 (FR-4, TS-7)
+ * Pure decision composing classifyShipReason + verifyShippedOnOriginMain: should
+ * this cancellation be refused before touching the SD? A reason that doesn't
+ * classify as ship-style is never refused here (FR-5 backward-compat path) —
+ * cancelSD() proceeds unchanged for kill/deprioritize/duplicate-of-open reasons.
+ * @param {string} reason
+ * @param {{pr?: string|null, evidenceFiles?: string[]}} evidence
+ * @param {{runGit: Function, runGh: Function, repoRoot?: string}} runners
+ * @returns {{refuse: boolean, reasons: string[]}}
+ */
+export function decideCancelRefusal(reason, evidence, runners) {
+  if (!classifyShipReason(reason)) return { refuse: false, reasons: [] };
+  const { verified, reasons } = verifyShippedOnOriginMain(evidence, runners);
+  return { refuse: !verified, reasons };
+}
+
+function defaultRunGit(args, opts = {}) {
+  try {
+    const stdout = execFileSync('git', args, { encoding: 'utf-8', cwd: opts.cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    return { stdout, stderr: '', code: 0 };
+  } catch (err) {
+    return { stdout: err.stdout ? String(err.stdout) : '', stderr: err.stderr ? String(err.stderr) : String(err.message || err), code: typeof err.status === 'number' ? err.status : 1 };
+  }
+}
+
+function defaultRunGh(args, opts = {}) {
+  try {
+    const stdout = execFileSync('gh', args, { encoding: 'utf-8', cwd: opts.cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    return { stdout, stderr: '', code: 0 };
+  } catch (err) {
+    return { stdout: err.stdout ? String(err.stdout) : '', stderr: err.stderr ? String(err.stderr) : String(err.message || err), code: typeof err.status === 'number' ? err.status : 1 };
+  }
 }
 
 async function resolveSD(input) {
@@ -235,8 +351,8 @@ async function cancelSD(sd, reason) {
   return true;
 }
 
-(async () => {
-  const { sdInput, reason } = parseArgs();
+async function main() {
+  const { sdInput, reason, pr, evidenceFiles } = parseArgs();
   const sd = await resolveSD(sdInput);
 
   console.log(`SD: ${sd.sd_key} — ${sd.title?.slice(0, 80)}`);
@@ -245,11 +361,38 @@ async function cancelSD(sd, reason) {
   console.log(`  Reason: ${reason}`);
   console.log('');
 
+  // SD-LEO-INFRA-CANCEL-SD-VERIFY-ORIGIN-MAIN-NOT-LOCAL-HEAD-001 (FR-2/FR-3/FR-4):
+  // an already-shipped/superseded/duplicate-of-merged reason must verify against
+  // ORIGIN/MAIN before the SD is touched — never trust a local/branch HEAD.
+  if (classifyShipReason(reason)) {
+    const { refuse, reasons } = decideCancelRefusal(
+      reason,
+      { pr, evidenceFiles },
+      { runGit: defaultRunGit, runGh: defaultRunGh }
+    );
+    if (refuse) {
+      console.error('❌ REFUSED: cancellation reason claims already-shipped/superseded/duplicate-of-merged, but verification against origin/main failed:');
+      for (const r of reasons) console.error(`   - ${r}`);
+      console.error('\nSupply --pr <merged-PR-number> and/or --evidence-file <path-present-on-origin/main>. The SD is unchanged.');
+      process.exit(1);
+    }
+    console.log('✓ Ship verification passed against origin/main (not a local/branch HEAD)');
+  }
+
   const changed = await cancelSD(sd, reason);
   if (changed) {
     console.log('\n✅ Cancellation complete.');
   }
-})().catch(err => {
-  console.error('Fatal error:', err);
-  process.exit(1);
-});
+}
+
+// SD-LEO-INFRA-CANCEL-SD-VERIFY-ORIGIN-MAIN-NOT-LOCAL-HEAD-001: guard so the pure
+// exports (classifyShipReason, verifyShippedOnOriginMain) can be imported for unit
+// testing without triggering main()'s process.exit() side effects — mirrors
+// scripts/ci/red-merge-detector.mjs's isMain pattern.
+const isMain = process.argv[1] && import.meta.url.endsWith('cancel-sd.js') && process.argv[1].endsWith('cancel-sd.js');
+if (isMain) {
+  main().catch(err => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+  });
+}
