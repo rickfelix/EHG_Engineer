@@ -1,8 +1,8 @@
-<!-- file_content_hash: 44f81c5b731862a3 -->
+<!-- file_content_hash: 711c9059fd9186a0 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-07-02 8:26:21 PM
+**Generated**: 2026-07-02 9:46:58 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: LEAD agent operations and strategic validation
 **Effort**: high (strategic framing, scope bounding, and sub-agent routing require full reasoning depth)
@@ -147,6 +147,8 @@ Claude: "Found existing user preferences in the EHG app. Let me now run formal v
 
 Task(subagent_type="validation-agent", prompt="Execute VALIDATION analysis for SD-XXX...")
 ```
+
+> **Evidence persistence**: sub-agents MUST persist `sub_agent_execution_results` rows via `node scripts/store-sub-agent-repo-evidence.js <SD-ID> <SUB-AGENT-CODE> --content @results.json` (QF-20260702-679) or the canonical `lib/sub-agents/resolve-repo.js` helpers — NEVER hand-type a Windows path literal inside an inline `node -e`/heredoc INSERT statement. The JS string-escape parser silently corrupts backslash sequences before the value ever reaches the database (e.g. `\U`, `\P`, `\_`, `\E` are dropped as unrecognized escapes; `\r` becomes a literal embedded carriage-return control byte).
 
 ## SD to Quick Fix Reverse Rubric (LEO v4.3.3)
 

@@ -1,123 +1,123 @@
 {
-  "generated_at": "2026-07-02T00:26:21.321Z",
-  "git_commit": "0a7a703f",
+  "generated_at": "2026-07-02T13:46:58.449Z",
+  "git_commit": "6541c213",
   "db_snapshot_hash": "8eb2912b9dff05a2",
   "files": {
     "CLAUDE.md": {
       "type": "full",
       "chars": 19368,
       "estimated_tokens": 4842,
-      "content_hash": "fe524d6234f9fd45",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE.md"
+      "content_hash": "71cae0605084f3b3",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
       "chars": 86703,
       "estimated_tokens": 21676,
-      "content_hash": "0a4c70ad684628b2",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_CORE.md"
+      "content_hash": "917ed70f6e94c4ad",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 65401,
-      "estimated_tokens": 16351,
-      "content_hash": "8a77138e5f17e5be",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_LEAD.md"
+      "chars": 65998,
+      "estimated_tokens": 16500,
+      "content_hash": "003d77824ad67372",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 91103,
-      "estimated_tokens": 22776,
-      "content_hash": "fabf2c15190e0ad0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_PLAN.md"
+      "chars": 91700,
+      "estimated_tokens": 22925,
+      "content_hash": "33b38381fefbbe97",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
       "chars": 86566,
       "estimated_tokens": 21642,
-      "content_hash": "eaf76fd504cae816",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_EXEC.md"
+      "content_hash": "d9bf368da6531394",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
       "chars": 54280,
       "estimated_tokens": 13570,
-      "content_hash": "32f68af91433a676",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_ADAM.md"
+      "content_hash": "3634cc3252d1834e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
       "chars": 21735,
       "estimated_tokens": 5434,
-      "content_hash": "9e8af0f3366d526d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_COORDINATOR.md"
+      "content_hash": "50a107ca12c6ebfa",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
       "chars": 44862,
       "estimated_tokens": 11216,
-      "content_hash": "4725ff2a8748c883",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_SOLOMON.md"
+      "content_hash": "db8faa25718f8d00",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9611,
       "estimated_tokens": 2403,
-      "content_hash": "10e6f0c1643ad22b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_DIGEST.md"
+      "content_hash": "a7c5cd04f78daef4",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 11664,
       "estimated_tokens": 2916,
-      "content_hash": "eaa746407a216c7c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "5339238c989e5665",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 5551,
       "estimated_tokens": 1388,
-      "content_hash": "fac465e491ae6684",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "d0a0035900d9a7f2",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 8541,
       "estimated_tokens": 2136,
-      "content_hash": "9301627bc4f6619c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "fb650cebe0174e84",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 10964,
       "estimated_tokens": 2741,
-      "content_hash": "b40d2d1a3eab9be5",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "2058e4cff92be2d4",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 13068,
       "estimated_tokens": 3267,
-      "content_hash": "88878b3b45f0613d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "759ca4aa05a8098f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 6076,
       "estimated_tokens": 1519,
-      "content_hash": "9cb2dd242215b64a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "d3d1f80900ac415f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
       "chars": 4705,
       "estimated_tokens": 1177,
-      "content_hash": "e248da694c6acf83",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-A\\CLAUDE_SOLOMON_DIGEST.md"
+      "content_hash": "7476ceb4db2e949d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "105af1849ea00016",
+    "global": "780f36abe5cf5047",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -200,8 +200,8 @@
       "287": "9cd7f602ff4fecd8",
       "288": "c7f7324a8090c87e",
       "289": "38e17ba9d7a8d144",
-      "290": "ecc81495351e7611",
-      "291": "12e28b9bffda36db",
+      "290": "1185719c66c3e85c",
+      "291": "4ca45c0da7371419",
       "292": "3af0fb5d3a3e5774",
       "293": "8a5a7eb0b9a694f9",
       "294": "9bfc656114c59db0",

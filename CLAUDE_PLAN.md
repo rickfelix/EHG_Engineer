@@ -1,8 +1,8 @@
-<!-- file_content_hash: 026f24c7b4482849 -->
+<!-- file_content_hash: 75379ccbaeb2a5a1 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-07-02 8:26:21 PM
+**Generated**: 2026-07-02 9:46:58 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 **Effort**: high (architecture decisions and PRD rubrics require full reasoning depth)
@@ -137,6 +137,8 @@ Launch 1-3 Plan agents based on complexity:
 
 Do NOT launch 3 agents for every task—that wastes time on simple decisions.
 > Why: Three perspectives costs 3× the context. For a decision where the answer is clear, the extra agents produce noise without signal. Match the number of perspectives to the actual uncertainty in the decision.
+
+> **Evidence persistence**: sub-agents MUST persist `sub_agent_execution_results` rows via `node scripts/store-sub-agent-repo-evidence.js <SD-ID> <SUB-AGENT-CODE> --content @results.json` (QF-20260702-679) or the canonical `lib/sub-agents/resolve-repo.js` helpers — NEVER hand-type a Windows path literal inside an inline `node -e`/heredoc INSERT statement. The JS string-escape parser silently corrupts backslash sequences before the value ever reaches the database (e.g. `\U`, `\P`, `\_`, `\E` are dropped as unrecognized escapes; `\r` becomes a literal embedded carriage-return control byte).
 
 ## Friction signaling
 
