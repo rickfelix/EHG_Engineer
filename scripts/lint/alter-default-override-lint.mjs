@@ -25,7 +25,7 @@
  *
  * Writer→table attribution (the precision/recall tradeoff, made explicit):
  *   STRONG  — an enclosing `INSERT INTO t (...)` (SQL) or a nearest-preceding
- *             `.from('t')` (JS) whose table actually carries the column.
+ *             `.from('t')` (JS) whose table actually carries the column. (schema-lint-disable-line: 't' here is a doc placeholder, not a real table)
  *   NAME    — for a DISTINCTIVE column (in-class on exactly one table and not in
  *             COMMON_COLUMNS), a literal write of that column name is attributed
  *             to that single table even without a .from()/INSERT (covers the
@@ -43,6 +43,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -67,7 +68,7 @@ export const COMMON_COLUMNS = new Set([
   'category', 'role', 'level', 'mode', 'source', 'priority', 'title', 'label',
 ]);
 
-const JS_FROM_WINDOW = 800; // chars to look back for a governing .from('t')
+const JS_FROM_WINDOW = 800; // chars to look back for a governing .from('t') (schema-lint-disable-line: doc placeholder)
 
 // ── Comment stripping (doc/example mentions never count as code) ──────────────
 export function stripComments(src, ext) {
@@ -190,7 +191,7 @@ export function extractSqlWriters(src, columnNames) {
   return out;
 }
 
-/** Nearest preceding `.from('t')` within JS_FROM_WINDOW chars of `idx`. */
+/** Nearest preceding `.from('t')` within JS_FROM_WINDOW chars of `idx`. (schema-lint-disable-line: doc placeholder) */
 function nearestFrom(code, idx) {
   const start = Math.max(0, idx - JS_FROM_WINDOW);
   const slice = code.slice(start, idx);
@@ -395,6 +396,6 @@ function main() {
   process.exit(failing.length > 0 || allowErrors.length > 0 ? 1 : 0);
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url.endsWith(process.argv[1]?.replace(/\\/g, '/'))) {
+if (isMainModule(import.meta.url)) {
   main();
 }

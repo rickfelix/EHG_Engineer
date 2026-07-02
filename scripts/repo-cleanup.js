@@ -19,6 +19,7 @@ import { groupReviewItems } from './modules/cleanup/group-review.js';
 import { deriveRulesFromGitLog } from './modules/cleanup/derive-rules.js';
 import { appendAuditEntry } from './modules/cleanup/audit-log.js';
 import { parseCliFlags as parseAutoProceedCli, parseEnvVar as parseAutoProceedEnv } from './modules/handoff/auto-proceed-resolver.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -378,8 +379,7 @@ async function main() {
   }
 }
 
-const isMain = import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}` ||
-               import.meta.url === `file://${process.argv[1]}`;
+const isMain = isMainModule(import.meta.url);
 if (isMain) {
   main().catch(e => { console.error(e.message); process.exit(1); });
 }

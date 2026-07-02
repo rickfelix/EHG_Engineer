@@ -22,6 +22,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const APPLY = process.argv.includes('--apply');
 
@@ -164,7 +165,7 @@ async function main() {
 }
 
 // Only run main() when invoked directly — allows tests to import deriveDecisionType
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/'))) {
+if (isMainModule(import.meta.url)) {
   main().catch(err => {
     console.error('Backfill failed:', err);
     process.exit(1);

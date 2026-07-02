@@ -28,6 +28,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -251,6 +252,6 @@ function main() {
   process.exit(failing.length > 0 || allowErrors.length > 0 ? 1 : 0);
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url.endsWith(process.argv[1]?.replace(/\\/g, '/'))) {
+if (isMainModule(import.meta.url)) {
   main();
 }

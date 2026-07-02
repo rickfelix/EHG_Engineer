@@ -18,6 +18,7 @@
  */
 import { createRequire } from 'node:module';
 import { detectFromDb as detectLlmDegradation } from '../continuity/llm-degradation-detector.mjs';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const require = createRequire(import.meta.url);
 const {
@@ -136,6 +137,6 @@ export async function run(deps = {}) {
   return summary;
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || (process.argv[1] && process.argv[1].endsWith('active-breakage-canary.mjs'))) {
+if (isMainModule(import.meta.url)) {
   run().then(() => process.exit(0)).catch((e) => { console.error(`[canary] FAILED (fail-loud): ${e.message}`); process.exit(1); });
 }

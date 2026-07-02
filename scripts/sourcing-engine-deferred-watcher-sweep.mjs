@@ -18,6 +18,7 @@
  */
 import { reEvaluateBlockedCandidate, isWatcherFlagEnabled } from '../lib/sourcing-engine/deferred-watcher.js';
 import { ledgerLaneColumnExists } from '../lib/sourcing-engine/dedup-autostamp.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 /**
  * Run the sweep. Pure-DI (supabase + env injected) so it unit-tests without a live DB.
@@ -90,7 +91,7 @@ export async function runDeferredWatcherSweep({ supabase, env = process.env, dry
 
 // CLI tail (FR-2): default-off, prints SUPPRESSED_FLAG_OFF + exits 0 when the flag is off.
 const isMain = (() => {
-  try { return import.meta.url === `file://${process.argv[1]}` || import.meta.url.endsWith(process.argv[1]?.replace(/\\/g, '/')); }
+  try { return isMainModule(import.meta.url); }
   catch { return false; }
 })();
 
