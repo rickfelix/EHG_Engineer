@@ -21,7 +21,9 @@ function makeRunner(responses) {
 
 const argvMatchers = {
   prViewIsDraft: (args) => args[0] === 'pr' && args[1] === 'view' && args.includes('isDraft'),
-  prViewMergedAt: (args) => args[0] === 'pr' && args[1] === 'view' && args.includes('mergedAt'),
+  // QF-20260703-197: verifyMerged now issues ONE repo-scoped call requesting
+  // 'mergedAt,mergeCommit,state' together — substring match.
+  prViewMergedAt: (args) => args[0] === 'pr' && args[1] === 'view' && args.some((a) => typeof a === 'string' && a.includes('mergedAt')),
   prViewState: (args) => args[0] === 'pr' && args[1] === 'view' && args.includes('state'),
   apiProtection: (args) => args[0] === 'api' && args[1]?.includes('/protection'),
   prMerge: (args) => args[0] === 'pr' && args[1] === 'merge',
@@ -32,8 +34,10 @@ function makeHappyPathRunner() {
     { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
     { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
     { match: argvMatchers.prMerge, result: { stdout: '' } },
-    { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-07-03T00:00:00Z\n' } },
-    { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
+    {
+      match: argvMatchers.prViewMergedAt,
+      result: { stdout: JSON.stringify({ mergedAt: '2026-07-03T00:00:00Z', mergeCommit: { oid: 'deadbeef' }, state: 'MERGED' }) },
+    },
   ]);
 }
 

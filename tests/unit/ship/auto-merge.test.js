@@ -38,8 +38,12 @@ function makeRunner(responses) {
 const argvMatchers = {
   prViewIsDraft: (args) =>
     args[0] === 'pr' && args[1] === 'view' && args.includes('isDraft'),
+  // QF-20260703-197: verifyMerged now issues ONE repo-scoped call requesting
+  // 'mergedAt,mergeCommit,state' together (not a bare 'mergedAt' element) —
+  // substring match keeps this matcher hitting both the pre-fix shape (any
+  // legacy callers) and the new combined-JSON call.
   prViewMergedAt: (args) =>
-    args[0] === 'pr' && args[1] === 'view' && args.includes('mergedAt'),
+    args[0] === 'pr' && args[1] === 'view' && args.some((a) => typeof a === 'string' && a.includes('mergedAt')),
   prViewState: (args) =>
     args[0] === 'pr' && args[1] === 'view' && args.includes('state'),
   prViewHeadRef: (args) =>
@@ -51,6 +55,10 @@ const argvMatchers = {
   apiRefHead: (args) =>
     args[0] === 'api' && /repos\/[^/]+\/[^/]+\/git\/refs\/heads\//.test(args[1]),
 };
+
+/** QF-20260703-197: verifyMerged's authoritative combined JSON payload. */
+const mergedJson = (mergedAt, { mergeCommitOid = 'deadbeef', state = 'MERGED' } = {}) =>
+  JSON.stringify({ mergedAt, mergeCommit: mergeCommitOid ? { oid: mergeCommitOid } : null, state });
 
 describe('buildMergeArgs', () => {
   it('omits --admin when admin=false', () => {
@@ -124,7 +132,7 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
       { match: argvMatchers.prReady, result: { stdout: '' } },
       { match: argvMatchers.apiProtection, result: { stdout: 'true\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
-      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-04T22:23:28Z\n' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-05-04T22:23:28Z') } },
       { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
     ]);
 
@@ -143,8 +151,8 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
     // unmatched-call default returns code=1 → verifyBranchDeleted returns
     // null → "branch deletion not verified" advisory is logged. No
     // additional gh api call is made when the headRefName lookup fails.
-    // QF-20260516-082: verifyMerged cross-checks state==='MERGED' after
-    // mergedAt, adding one more pr-view call to the happy path.
+    // QF-20260703-197: verifyMerged is now ONE consolidated repo-scoped call
+    // (mergedAt+mergeCommit+state together), not two separate pr-view calls.
     // SD-LEO-INFRA-SHIP-WITNESS-MERGEWORK-001 FR-4: the mergeWork() P1-P5
     // ladder observes every merge attempt in shadow mode, adding one final
     // read-only pr-view (statusCheckRollup, for the P3 rung) after the merge
@@ -154,7 +162,6 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
       ['pr', 'ready'],
       ['api', 'repos/rickfelix/EHG_Engineer/branches/main/protection'],
       ['pr', 'merge'],
-      ['pr', 'view'],
       ['pr', 'view'],
       ['pr', 'view'],
       ['pr', 'view'],
@@ -168,7 +175,7 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
       { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
       { match: argvMatchers.apiProtection, result: { stdout: 'true\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
-      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-04T22:23:28Z\n' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-05-04T22:23:28Z') } },
       { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
     ]);
 
@@ -190,7 +197,7 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
       { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
       { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
-      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-04T22:23:28Z\n' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-05-04T22:23:28Z') } },
       { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
     ]);
 
@@ -209,32 +216,59 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
   });
 });
 
-describe('verifyMerged (QF-20260504-195, QF-20260516-082)', () => {
-  it('returns true when mergedAt is populated AND state===MERGED', () => {
-    const { runner } = makeRunner([
-      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-04T22:23:28Z\n' } },
-      { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
+describe('verifyMerged (QF-20260504-195, QF-20260516-082, QF-20260703-197)', () => {
+  it('returns true when mergedAt AND mergeCommit are populated AND state===MERGED, for the exact repo requested', () => {
+    const { runner, calls } = makeRunner([
+      { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-05-04T22:23:28Z') } },
     ]);
-    expect(verifyMerged(568, runner)).toBe(true);
+    expect(verifyMerged(568, 'rickfelix', 'ehg', runner)).toBe(true);
+    expect(calls[0]).toEqual(
+      expect.arrayContaining(['pr', 'view', '568', '-R', 'rickfelix/ehg', '--json', 'mergedAt,mergeCommit,state']),
+    );
   });
 
-  it('returns false when gh emits the literal string "null" (PR not merged)', () => {
+  // QF-20260703-197: the actual root cause. An unscoped `gh pr view <N>` resolves
+  // against the process's ambient CWD repo, not (repoOwner, repoName) — which
+  // produced a false PASS against an unrelated, already-merged PR of the same
+  // number in the wrong repo on the witness's first live venture-repo exercise
+  // (rickfelix/marketlens PR #2). Never a false pass without an authoritative target.
+  it('returns false (never a false pass) when repoOwner or repoName is missing — no ambient-repo fallback', () => {
+    const noopRunner = () => { throw new Error('must never shell out without an explicit repo target'); };
+    expect(verifyMerged(2, '', 'marketlens', noopRunner)).toBe(false);
+    expect(verifyMerged(2, 'rickfelix', '', noopRunner)).toBe(false);
+    expect(verifyMerged(2, null, null, noopRunner)).toBe(false);
+  });
+
+  it('returns false when mergeCommit is null even though mergedAt+state say MERGED (no derived/expected state ever satisfies P5)', () => {
     const { runner } = makeRunner([
-      { match: argvMatchers.prViewMergedAt, result: { stdout: 'null\n' } },
+      {
+        match: argvMatchers.prViewMergedAt,
+        result: { stdout: mergedJson('2026-05-04T22:23:28Z', { mergeCommitOid: null }) },
+      },
     ]);
-    expect(verifyMerged(568, runner)).toBe(false);
+    expect(verifyMerged(568, 'rickfelix', 'ehg', runner)).toBe(false);
+  });
+
+  it('returns false when gh reports mergedAt=null (PR not merged) — regression for the venture-repo open-PR case (marketlens #2)', () => {
+    const { runner } = makeRunner([
+      {
+        match: argvMatchers.prViewMergedAt,
+        result: { stdout: mergedJson(null, { mergeCommitOid: null, state: 'OPEN' }) },
+      },
+    ]);
+    expect(verifyMerged(2, 'rickfelix', 'marketlens', runner)).toBe(false);
   });
 
   it('returns false on lookup failure (safer fallback)', () => {
     const runner = () => ({ code: 1, stdout: '', stderr: 'auth required' });
-    expect(verifyMerged(568, runner)).toBe(false);
+    expect(verifyMerged(568, 'rickfelix', 'ehg', runner)).toBe(false);
   });
 
-  it('returns false on empty stdout', () => {
+  it('returns false on unparseable stdout', () => {
     const { runner } = makeRunner([
       { match: argvMatchers.prViewMergedAt, result: { stdout: '' } },
     ]);
-    expect(verifyMerged(568, runner)).toBe(false);
+    expect(verifyMerged(568, 'rickfelix', 'ehg', runner)).toBe(false);
   });
 
   it('QF-20260516-082 (closes harness 72a3a5f1): returns false when mergedAt populated but state===OPEN (queued-but-not-merged race)', () => {
@@ -242,18 +276,9 @@ describe('verifyMerged (QF-20260504-195, QF-20260516-082)', () => {
     // gh while pulls REST endpoint showed merged=false, mergeable_state=unstable.
     // state==='OPEN' is the authoritative tie-breaker that catches this race.
     const { runner } = makeRunner([
-      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-13T23:25:00Z\n' } },
-      { match: argvMatchers.prViewState, result: { stdout: 'OPEN\n' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-05-13T23:25:00Z', { state: 'OPEN' }) } },
     ]);
-    expect(verifyMerged(600, runner)).toBe(false);
-  });
-
-  it('QF-20260516-082: returns false when state lookup itself fails', () => {
-    const { runner } = makeRunner([
-      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-04T22:23:28Z\n' } },
-      // No prViewState matcher → runner returns code=1 → verifyMerged false.
-    ]);
-    expect(verifyMerged(568, runner)).toBe(false);
+    expect(verifyMerged(600, 'rickfelix', 'ehg', runner)).toBe(false);
   });
 });
 
@@ -281,14 +306,27 @@ describe('attemptAutoMerge — silent-success regression (QF-20260504-195)', () 
     expect(r.reason).toMatch(/state=OPEN/);
   });
 
-  it('recovers as already-merged when exit-0-mergedAt-null but state is MERGED (race)', async () => {
-    const { runner } = makeRunner([
-      { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
-      { match: argvMatchers.apiProtection, result: { stdout: 'true\n' } },
-      { match: argvMatchers.prMerge, result: { code: 0, stdout: '' } },
-      { match: argvMatchers.prViewMergedAt, result: { stdout: 'null\n' } },
-      { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
-    ]);
+  // QF-20260703-197: verifyMerged is now ONE consolidated repo-scoped call reused
+  // identically by both step 3 (post-merge check) and step 4 (race-recovery) — so
+  // the "second look confirms merged" race is simulated with a stateful mock
+  // (not two independently-mockable calls) to prove the retry genuinely re-checks
+  // authoritative evidence rather than trusting a stale/derived state.
+  it('recovers as already-merged when not-yet-visible on the first check but confirmed merged on retry (race)', async () => {
+    let mergedAtCalls = 0;
+    const runner = (args) => {
+      if (argvMatchers.prViewIsDraft(args)) return { code: 0, stdout: 'false\n', stderr: '' };
+      if (argvMatchers.apiProtection(args)) return { code: 0, stdout: 'true\n', stderr: '' };
+      if (argvMatchers.prMerge(args)) return { code: 0, stdout: '', stderr: '' };
+      if (argvMatchers.prViewMergedAt(args)) {
+        mergedAtCalls += 1;
+        const stdout = mergedAtCalls === 1
+          ? mergedJson(null, { mergeCommitOid: null, state: 'OPEN' })
+          : mergedJson('2026-05-04T22:23:28Z');
+        return { code: 0, stdout, stderr: '' };
+      }
+      if (argvMatchers.prViewState(args)) return { code: 0, stdout: 'MERGED\n', stderr: '' };
+      return { code: 1, stdout: '', stderr: 'unmatched gh call' };
+    };
 
     const r = await attemptAutoMerge({
       prNumber: 568,
@@ -299,6 +337,7 @@ describe('attemptAutoMerge — silent-success regression (QF-20260504-195)', () 
     });
 
     expect(r).toEqual({ ok: true, action: 'already-merged', adminUsed: true });
+    expect(mergedAtCalls).toBe(2);
   });
 });
 
@@ -338,9 +377,11 @@ describe('attemptAutoMerge — race recovery (FR-4, TS-5)', () => {
         match: argvMatchers.prMerge,
         result: { code: 1, stderr: 'pull request not found in mergeable state' },
       },
-      // Non-zero exit short-circuits past verifyMerged into the race-recovery
-      // state check; no prViewMergedAt entry needed in this path.
+      // Non-zero merge exit short-circuits past step 3 into race-recovery, which
+      // now re-runs the SAME consolidated verifyMerged() check (QF-20260703-197)
+      // — so the combined mergedAt+mergeCommit+state payload must be mocked here.
       { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-05-04T22:23:28Z') } },
     ]);
 
     const r = await attemptAutoMerge({
@@ -441,7 +482,7 @@ describe('attemptAutoMerge — branch-deletion verification (QF-20260509-VERIFY-
       { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
       { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
-      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-06T10:00:00Z\n' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-05-06T10:00:00Z') } },
       { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
       { match: argvMatchers.prViewHeadRef, result: { stdout: 'qf/QF-foo\n' } },
       { match: argvMatchers.apiRefHead, result: { code: 0, stdout: '{"ref":"refs/heads/qf/QF-foo"}' } },
@@ -476,7 +517,7 @@ describe('attemptAutoMerge — branch-deletion verification (QF-20260509-VERIFY-
       { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
       { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
-      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-06T10:00:00Z\n' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-05-06T10:00:00Z') } },
       { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
       { match: argvMatchers.prViewHeadRef, result: { stdout: 'qf/QF-bar\n' } },
       { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'gh: Not Found (HTTP 404)' } },
@@ -505,7 +546,7 @@ describe('attemptAutoMerge — branch-deletion verification (QF-20260509-VERIFY-
       { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
       { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
-      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-06T10:00:00Z\n' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-05-06T10:00:00Z') } },
       { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
       // headRefName lookup fails → verifyBranchDeleted returns null →
       // attemptAutoMerge logs the "not verified" advisory.
@@ -569,7 +610,7 @@ describe('attemptAutoMerge — C2 external-repo merge-gate (SECURITY VB-2)', () 
       { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
       { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
-      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-25T00:00:00Z\n' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-05-25T00:00:00Z') } },
       { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
       { match: argvMatchers.prViewHeadRef, result: { stdout: 'feat/x\n' } },
       { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'Not Found (404)' } },
@@ -584,7 +625,7 @@ describe('attemptAutoMerge — C2 external-repo merge-gate (SECURITY VB-2)', () 
       { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
       { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
-      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-25T00:00:00Z\n' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-05-25T00:00:00Z') } },
       { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
       { match: argvMatchers.prViewHeadRef, result: { stdout: 'feat/x\n' } },
       { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'Not Found (404)' } },
@@ -598,7 +639,7 @@ describe('attemptAutoMerge — C2 external-repo merge-gate (SECURITY VB-2)', () 
       { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
       { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
-      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-25T00:00:00Z\n' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-05-25T00:00:00Z') } },
       { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
       { match: argvMatchers.prViewHeadRef, result: { stdout: 'feat/x\n' } },
       { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'Not Found (404)' } },
@@ -618,7 +659,7 @@ describe('attemptAutoMerge — C2 external-repo merge-gate (SECURITY VB-2)', () 
       { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
       { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
-      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-07-03T00:00:00Z\n' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-07-03T00:00:00Z') } },
       { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
       { match: argvMatchers.prViewHeadRef, result: { stdout: 'feat/x\n' } },
       { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'Not Found (404)' } },
@@ -646,7 +687,7 @@ describe('attemptAutoMerge — C2 external-repo merge-gate (SECURITY VB-2)', () 
         { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
         { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
         { match: argvMatchers.prMerge, result: { stdout: '' } },
-        { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-07-03T00:00:00Z\n' } },
+        { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-07-03T00:00:00Z') } },
         { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
         { match: argvMatchers.prViewHeadRef, result: { stdout: 'feat/x\n' } },
         { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'Not Found (404)' } },
@@ -681,7 +722,7 @@ describe('attemptAutoMerge — C2 external-repo merge-gate (SECURITY VB-2)', () 
         { match: (a) => a[0] === 'pr' && a.includes('statusCheckRollup'), result: { stdout: '[]\n' } },
         { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
         { match: argvMatchers.prMerge, result: { stdout: '' } },
-        { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-07-03T00:00:00Z\n' } },
+        { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-07-03T00:00:00Z') } },
         { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
         { match: argvMatchers.prViewHeadRef, result: { stdout: 'feat/x\n' } },
         { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'Not Found (404)' } },
