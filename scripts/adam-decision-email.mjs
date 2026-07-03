@@ -14,7 +14,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import { resolve } from 'path';
-import { renderLeanDecisionEmail } from '../lib/chairman/decision-layman.mjs';
+import { renderLeanDecisionEmail, filterStaleLeanDecisions, DEAD_VENTURE_STATUSES } from '../lib/chairman/decision-layman.mjs';
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const DRY = !!process.env.ADAM_EMAIL_DRYRUN || process.argv.includes('--dry-run');
@@ -49,7 +49,24 @@ if (rows.length === 0) {
   process.exit(0);
 }
 
-const { subject, lines } = renderLeanDecisionEmail(rows, new Date(), { primaryId });
+// QF-20260702-241: drop stale/superseded venture-linked rows (cancelled/killed/archived venture, or
+// an earlier stage superseded by a later stage on the same venture) before rendering — verified live
+// 2026-07-02: 9 of 12 pending rows were such noise. Fail-soft: a venture-status lookup error simply
+// skips the filter (show all), mirroring adam-exec-summary.mjs's dead-venture pattern.
+let deadVentureIds = new Set();
+try {
+  const vids = [...new Set(rows.filter((r) => r.venture_id).map((r) => r.venture_id))];
+  if (vids.length) {
+    const { data: vrows, error: vErr } = await db.from('ventures').select('id, status').in('id', vids);
+    if (!vErr) {
+      const found = new Set((vrows || []).map((v) => v.id));
+      deadVentureIds = new Set(vids.filter((id) => !found.has(id) || (vrows || []).some((v) => v.id === id && DEAD_VENTURE_STATUSES.has(String(v.status || '').toLowerCase()))));
+    }
+  }
+} catch (e) { console.warn('[adam-decision-email] venture-status filter skipped (fail-soft): ' + (e?.message || e)); }
+const { kept, excludedCount } = filterStaleLeanDecisions(rows, { deadVentureIds, primaryId });
+
+const { subject, lines } = renderLeanDecisionEmail(kept, new Date(), { primaryId });
 
 // ── Body: the DECISION content + the copy-paste-to-Claude-Code action block. NO status block. ──
 const LEAD_IN = "I have received the following executive decision(s) via email and I'm ready to address them:";
@@ -57,6 +74,7 @@ const numbered = lines.map((l, i) => `${i + 1}. ${l}`);
 const copyBlock = [LEAD_IN, '', ...numbered].join('\n');
 const n = lines.length;
 const when = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' });
+const footer = `as of ${when} ET ${EM} Adam ${EM} LEO Fleet Advisor` + (excludedCount > 0 ? ` ${EM} ${excludedCount} stale suppressed` : '');
 
 const text = [
   `${n} decision${n === 1 ? '' : 's'} need${n === 1 ? 's' : ''} you.`,
@@ -65,7 +83,7 @@ const text = [
   '',
   copyBlock,
   '',
-  `as of ${when} ET ${EM} Adam ${EM} LEO Fleet Advisor`,
+  footer,
 ].join('\n');
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -73,7 +91,7 @@ const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px
   `<p style="font-size:14px;margin:0 0 2px"><b>${n} decision${n === 1 ? '' : 's'} need${n === 1 ? 's' : ''} you.</b></p>` +
   `<p style="font-size:12px;color:#888;margin:0 0 6px">On your phone, press and hold the box below, tap "Select All", then "Copy" — then paste it into Claude Code.</p>` +
   `<pre style="font-size:13px;background:#f6f8fa;border:1px solid #e1e4e8;border-radius:4px;padding:12px;white-space:pre-wrap;margin:0;font-family:ui-monospace,Menlo,Consolas,monospace;-webkit-user-select:all;user-select:all">${esc(copyBlock)}</pre>` +
-  `<p style="font-size:11px;color:#999;margin:14px 0 0">as of ${esc(when)} ET ${EM} Adam ${EM} LEO Fleet Advisor</p></div>`;
+  `<p style="font-size:11px;color:#999;margin:14px 0 0">${esc(footer)}</p></div>`;
 
 if (DRY) {
   console.log('=== [ADAM DECISION EMAIL — DRY RUN] no email sent ===\nSUBJECT: ' + subject + '\n---\n' + text + '\n---');
