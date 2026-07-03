@@ -130,9 +130,6 @@ npm run handoff:compliance SD-ID
 
 ```bash
 # View all handoffs for an SD
-node scripts/check-handoff-chain.js SD-XXX-001
-
-# Or query directly
 node -e "
 import { createSupabaseClient } from './lib/supabase-client.js';
 const supabase = createSupabaseClient();
@@ -236,7 +233,7 @@ ORDER BY bypass_count DESC;
 
 ### Reference
 - Emergency bypass docs: CLAUDE_CORE.md (Emergency Bypass section)
-- Rate limit enforcement: `scripts/modules/handoff/validation/bypass-limiter.js`
+- Rate limit enforcement: `scripts/modules/handoff/cli/execution-helpers.js` (`checkBypassRateLimits`)
 - Audit log table: `database/schema/audit_log`
 
 ---

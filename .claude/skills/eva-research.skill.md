@@ -162,18 +162,10 @@ Display the research skill output directly, prefixed with:
 
 ### Step 6: Save Research Session
 
-Save the session to `brainstorm_sessions` with vision linkage metadata:
-
-```bash
-node scripts/eva/save-research-session.mjs \
-  --topic "<question>" \
-  --tier <L1|L2|L3> \
-  --summary "<one-sentence summary of findings>" \
-  [--vision-key <key>]
-```
-
-The script will print the session ID on success. If it fails, show a warning but do not block the
-user — research results are already displayed.
+No automated persistence is currently available — `scripts/eva/save-research-session.mjs` was
+retired (archived) with no direct successor. Do not attempt to run it. Research results are
+already displayed to the user in Step 5; if durable tracking is needed, note the finding via
+the normal SD/feedback channels instead.
 
 ---
 
