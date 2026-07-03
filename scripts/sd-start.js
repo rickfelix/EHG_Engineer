@@ -78,6 +78,10 @@ import sdFit from '../lib/fleet/sd-executable-here.cjs';
 // SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-5): propose-only partial-block triage surfaced on an unfit
 // fail-fast (a missing-precondition block proposes a code/run split — never created here).
 import unfitTriage from '../lib/fleet/unfit-triage.cjs';
+// QF-20260703-295: reuse the SAME human_action_required predicate the self-claim/sweep paths already
+// enforce (classifyDispatchIneligibility is the SSOT for this axis) instead of re-deriving it, so the
+// direct sd-start.js claim path can no longer bypass a HELD (requires_human_action) SD.
+import { classifyDispatchIneligibility } from '../lib/fleet/claim-eligibility.cjs';
 
 dotenv.config();
 
@@ -157,6 +161,17 @@ async function enforceDependencyGate(sd, effectiveId) {
     console.log(`\n${colors.yellow}⚠️  Proceeding despite unmet dependencies (${why}) for ${effectiveId}:${colors.reset}`);
     console.log(`${colors.yellow}${formatDependencyRefusal(result.blocking, result.unresolved)}${colors.reset}`);
   }
+}
+
+// QF-20260703-295: HELD-SD claim gate, at parity with classifyDispatchIneligibility (already
+// enforced by the self-claim/sweep paths). Idempotent — safe to call again after orchestrator
+// routing reassigns `sd` to a leaf child, mirroring enforceCadenceGate's re-check pattern.
+function enforceHumanActionGate(sd, effectiveId) {
+  if (classifyDispatchIneligibility(sd) !== 'human_action_required') return;
+  console.log(`\n${colors.red}❌ ${effectiveId} requires HUMAN ACTION — cannot be claimed${colors.reset}`);
+  console.log('   metadata.requires_human_action=true — held for chairman/coordinator review.');
+  console.log(`\n${colors.bold}Action:${colors.reset} Pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
+  process.exit(1);
 }
 
 const MAX_FALLBACK_ATTEMPTS = 3;
@@ -791,6 +806,9 @@ async function main() {
     process.exit(1);
   }
 
+  // 1.2. QF-20260703-295: reject direct claims on HELD SDs (metadata.requires_human_action).
+  enforceHumanActionGate(sd, effectiveId);
+
   // 1.4. SD-LEO-INFRA-PR-CADENCE-PRECLAIM-GATE-001: Pre-claim cadence gate.
   // Refuses claim if SD is in a stability window. Re-runs after orchestrator
   // leaf routing so a cadence-blocked leaf is not silently claimed via the parent.
@@ -931,6 +949,10 @@ async function main() {
       // Without this re-check, a cadence-blocked leaf is silently claimed via
       // the parent (the parent has no next_workable_after of its own).
       await enforceCadenceGate(sd, effectiveId);
+      // QF-20260703-295: same re-check for a HELD leaf — the child selector
+      // (findUnclaimedChild) does not filter on requires_human_action, so a HELD
+      // child routed to via the parent must still be refused here.
+      enforceHumanActionGate(sd, effectiveId);
       } // close else (route-to-leaf)
     }
   }
