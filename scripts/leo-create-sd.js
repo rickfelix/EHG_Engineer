@@ -31,6 +31,7 @@ import {
 } from './modules/sd-key-generator.js';
 import { VentureContextManager } from '../lib/eva/venture-context-manager.js';
 import { checkPremiseLiveness } from '../lib/eva/premise-liveness.js';
+import { checkFeedbackPremiseLiveness, logForceLivenessOverride } from '../lib/eva/feedback-premise-adapter.js';
 import { getCurrentVenture, getVentureConfig } from '../lib/venture-resolver.js';
 import {
   checkGate,
@@ -483,6 +484,24 @@ async function createFromFeedback(feedbackId, options = {}) {
     console.log(`\n⚠️  Feedback already linked to SD: ${linkedId}`);
     console.log('   Skipping SD creation to prevent duplicates.\n');
     process.exit(0);
+  }
+
+  // SD-FDBK-ENH-UAT-AGENT-FEEDBACK-001 FR-1: liveness re-check (b6594220 class). Fails OPEN.
+  if (!options.forceLiveness) {
+    try {
+      const verdict = await checkFeedbackPremiseLiveness(feedback, { supabase });
+      if (verdict.status === 'STALE') {
+        console.log(`\n⚠️  [STALE_PREMISE] feedback ${feedback.id} already fixed:`);
+        for (const e of verdict.evidence || []) console.log(`     ${e}`);
+        console.log('   Skipping SD creation. Override (audited): --force-liveness "<reason>"\n');
+        return { sdKey: null, feedbackId: feedback.id, action: 'skipped-stale-premise', verdict };
+      }
+    } catch (e) {
+      console.warn(`\n⚠️  [LIVENESS_CHECK_DEGRADED] failed-open (${e?.message || e})`);
+    }
+  } else {
+    await logForceLivenessOverride({ supabase, entityId: feedback.id, reason: options.forceLiveness });
+    console.warn(`\n⚠️  [FORCE_LIVENESS] skipping premise re-check: ${options.forceLiveness}`);
   }
 
   // Map feedback type to SD type. --type flag (options.typeOverride) wins
@@ -2872,13 +2891,15 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // The feedback ID is the first non-flag positional after --from-feedback.
       const fbTypeIdx = args.indexOf('--type');
       const fbTitleIdx = args.indexOf('--title');
+      const fbForceLivenessIdx = args.indexOf('--force-liveness');
       const fbFlagValuePositions = new Set(
         [fbTypeIdx !== -1 ? fbTypeIdx + 1 : -1,
-         fbTitleIdx !== -1 ? fbTitleIdx + 1 : -1].filter(i => i > 0)
+         fbTitleIdx !== -1 ? fbTitleIdx + 1 : -1,
+         fbForceLivenessIdx !== -1 ? fbForceLivenessIdx + 1 : -1].filter(i => i > 0)
       );
       // QF-20260509-LEO-CREATE-FLAGS: include review flags so they're not
       // mistaken for the feedback ID positional. Closes 8a640d32 sibling parity.
-      const fbKnownFlags = new Set(['--from-feedback', '--type', '--title', '--migration-reviewed', '--security-reviewed']);
+      const fbKnownFlags = new Set(['--from-feedback', '--type', '--title', '--migration-reviewed', '--security-reviewed', '--force-liveness']);
       const feedbackId = args.find((arg, i) =>
         i > 0 && !arg.startsWith('-') && !fbFlagValuePositions.has(i) && !fbKnownFlags.has(arg)
       ) || args[1];
@@ -2887,6 +2908,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         titleOverride: fbTitleIdx !== -1 ? args[fbTitleIdx + 1] : null,
         migrationReviewed: args.includes('--migration-reviewed'),
         securityReviewed: args.includes('--security-reviewed'),
+        forceLiveness: fbForceLivenessIdx !== -1 ? args[fbForceLivenessIdx + 1] : null,
       });
     } else if (args[0] === '--from-roadmap-item') {
       // SD-LEO-INFRA-SOURCING-ENGINE-REGISTER-FIRST-001 (FR-1): promote a roadmap_wave_items row to an

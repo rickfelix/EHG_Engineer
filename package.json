@@ -153,6 +153,7 @@
     "continuity:cloud-cap-feeder": "node scripts/continuity/cloud-cap-feeder.mjs",
     "glide:add-income-dimension": "node scripts/glide-path/add-income-dimension.mjs",
     "qf:link": "node scripts/qf-link-resolution.mjs",
+    "feedback:link": "node scripts/feedback-link-resolution.mjs",
     "session:prologue": "node scripts/generate-session-prologue.js",
     "db:size-monitor": "node scripts/db-retention/db-size-monitor.mjs",
     "db:create": "node scripts/execute-database-sql.js",

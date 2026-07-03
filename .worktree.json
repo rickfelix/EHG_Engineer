@@ -1,9 +1,7 @@
 {
-  "sdKey": "QF-20260703-816",
-  "workType": "QF",
-  "workKey": "QF-20260703-816",
-  "expectedBranch": "qf/QF-20260703-816",
-  "createdAt": "2026-07-03T21:03:37.643Z",
-  "hostname": "Legion-Laptop",
-  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
+  "sdKey": "SD-FDBK-ENH-UAT-AGENT-FEEDBACK-001",
+  "expectedBranch": "feat/SD-FDBK-ENH-UAT-AGENT-FEEDBACK-001",
+  "createdAt": "2026-07-03T19:59:53.749Z",
+  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
+  "baseRef": "origin/main"
 }
