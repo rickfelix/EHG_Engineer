@@ -84,6 +84,7 @@
     "build:loader": "tsc -p tsconfig.json",
     "test:loader:dry": "node dist/services/database-loader/index.js --dry-run",
     "venture:prove": "node scripts/venture-proving-companion.js",
+    "venture:build:consume": "node lib/eva/bridge/venture-build-consumer.js",
     "test": "vitest run --project unit",
     "resync:safe": "node scripts/safe-root-resync.mjs",
     "protocol:lint": "node scripts/protocol-lint/cli.mjs audit",
