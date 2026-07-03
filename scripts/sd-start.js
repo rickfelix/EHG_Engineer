@@ -34,6 +34,7 @@ import { hasRecentClaimReleased, formatClaimReleasedAbort, detectSdKeyDrift } fr
 import sessionIdentitySot from '../lib/session-identity-sot.js';
 import { findClaudeCodePid } from '../lib/terminal-identity.js';
 import { claimGuard, formatClaimFailure } from '../lib/claim-guard.mjs';
+import { checkClaimGateFreshness } from '../lib/claim/gate-freshness-check.mjs';
 // SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001 — pre-claim multi-signal evidence-of-life gate.
 // Wraps claimGuard's heartbeat/inactive auto-release to prevent hostile reclaim
 // when the prior session has been released but its CC conversation is still active
@@ -767,6 +768,18 @@ async function main() {
     console.log(`\n  ${colors.cyan}cd ${worktreeGuard.repoRoot}${colors.reset}`);
     console.log(`  ${colors.cyan}node scripts/sd-start.js ${sdId}${colors.reset}`);
     console.log(`\n  ${colors.dim}(No claim changes made — safe to retry.)${colors.reset}`);
+    process.exit(1);
+  }
+
+  // QF-20260703-758: refuse a claim from a checkout missing an upstream fix to this
+  // very gate script — closes the window where yesterday's code claims through
+  // a gate that was fixed hours earlier on origin/main.
+  const gateFreshness = checkClaimGateFreshness(worktreeGuard.repoRoot, ['scripts/sd-start.js']);
+  if (gateFreshness.stale) {
+    console.log(`\n${colors.red}${colors.bold}🚫 RESYNC_REQUIRED${colors.reset}`);
+    console.log(`   Your checkout is ${gateFreshness.missingCommitCount} commit(s) behind origin/main for ${gateFreshness.file}.`);
+    console.log('   Claiming now risks bypassing a claim-gate fix merged upstream.');
+    console.log(`   ${colors.cyan}git pull${colors.reset} in the main repo root, then retry.`);
     process.exit(1);
   }
 
