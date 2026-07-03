@@ -224,6 +224,20 @@ function reserveParkedIdentities(usedCallsigns, usedColors, recentSessions, acti
   return { usedCallsigns, usedColors };
 }
 
+// QF-20260703-040: SET_IDENTITY was only ever sent to a NEWLY-assigning worker, so a session whose
+// identity changed via some OTHER path (e.g. dedupeAssignedCallsigns demoting it but the resulting
+// message never being consumed by a dead/dormant session) kept a stale local statusline file
+// forever — the chairman saw 3x "Charlie". Compares the CURRENTLY-desired identity against the
+// last one actually broadcast (metadata.fleet_identity_last_sent, distinct from fleet_identity
+// itself so a partially-failed send is retried next tick) — true means re-send is due.
+function identityNeedsRebroadcast(worker, expectedIdentity) {
+  const lastSent = worker?.metadata?.fleet_identity_last_sent;
+  if (!lastSent) return true;
+  return lastSent.callsign !== expectedIdentity.callsign
+    || lastSent.color !== expectedIdentity.color
+    || lastSent.display_name !== expectedIdentity.display_name;
+}
+
 const ANSI = {
   red: '\x1b[31m', blue: '\x1b[34m', green: '\x1b[32m', yellow: '\x1b[33m',
   purple: '\x1b[35m', orange: '\x1b[38;5;208m', pink: '\x1b[38;5;213m', cyan: '\x1b[36m',
@@ -407,15 +421,20 @@ async function main() {
 
   // nextAvailable is now module-scoped (hoisted above) and shared with worker-checkin.cjs.
 
-  // Refresh display_name for assigned workers whose SD changed
+  // Refresh display_name for assigned workers whose SD changed, AND re-affirm SET_IDENTITY to
+  // ANY assigned worker whose current identity differs from what was last actually broadcast
+  // (QF-20260703-040) — covers the case where fleet_identity changed via a path other than this
+  // loop (e.g. a dedupe demotion) but the worker never consumed that SET_IDENTITY message.
   let refreshed = 0;
   for (const w of assigned) {
     const id = w.metadata.fleet_identity;
     const currentSdLabel = w.sd_id || 'idle';
     const expectedDisplayName = `${id.callsign} | ${currentSdLabel}`;
-    if (id.display_name !== expectedDisplayName) {
+    const expectedIdentity = { callsign: id.callsign, color: id.color, display_name: expectedDisplayName };
+    if (identityNeedsRebroadcast(w, expectedIdentity)) {
       const metadata = { ...(w.metadata || {}) };
       metadata.fleet_identity = { ...id, display_name: expectedDisplayName };
+      metadata.fleet_identity_last_sent = expectedIdentity;
       await supabase
         .from('claude_sessions')
         .update({ metadata })
@@ -494,6 +513,8 @@ async function main() {
       display_name: displayName,
       assigned_at: new Date().toISOString()
     };
+    // QF-20260703-040: stamp what we're about to broadcast so a later tick can detect drift.
+    metadata.fleet_identity_last_sent = { callsign, color, display_name: displayName };
 
     const { error: updateErr } = await supabase
       .from('claude_sessions')
@@ -534,7 +555,7 @@ async function main() {
   console.log('');
 }
 
-module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, buildTierCallsignBands, tierRankOf, pickCallsignForTier, callsignInTierBand };
+module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, buildTierCallsignBands, tierRankOf, pickCallsignForTier, callsignInTierBand, identityNeedsRebroadcast };
 
 if (require.main === module) {
   main().catch(err => {
