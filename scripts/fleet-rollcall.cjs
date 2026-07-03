@@ -77,11 +77,15 @@ async function main() {
   if (error) { console.error('ERROR:', error.message); process.exit(1); }
 
   const ids = (sessions || []).map(s => s.session_id);
-  const { data: msgs } = await supabase
+  const { data: msgs, error: msgsError } = await supabase
     .from('session_coordination')
     .select('sender_session, created_at')
     .in('sender_session', ids)
     .order('created_at', { ascending: false });
+  // Fail-open (don't abort the whole roll-call over the coordination-signal query alone) but
+  // VISIBLE: silently swallowing this would degrade every verdict back to updated_at/heartbeat_at
+  // only — reintroducing the exact Specimen-2 blind spot this signal exists to close.
+  if (msgsError) console.error(`WARNING: session_coordination lookup failed (${msgsError.message}) — recent-send liveness signal is unavailable this run`);
   const lastSent = new Map();
   for (const m of msgs || []) if (!lastSent.has(m.sender_session)) lastSent.set(m.sender_session, m.created_at);
 
