@@ -90,10 +90,11 @@ required for a pass — they aren't evaluable yet at all (see
 
 - **A** — SD-LEO-INFRA-SHIP-WITNESS-MERGEWORK-001 (completed): the P1-P5
   observe-only ladder + `merge_witness_telemetry` substrate this SD reads.
-- **B** — SD-LEO-INFRA-SHIP-WITNESS-APPLICATIONS-001 (this SD): the
+- **B** — SD-LEO-INFRA-SHIP-WITNESS-APPLICATIONS-001 (completed): the
   `trust_tier` hook described here.
-- **C** — SD-LEO-INFRA-SHIP-WITNESS-VENTURE-001 (draft): venture-build walker
-  completion gates on a merged PR.
-- **D** — SD-LEO-INFRA-SHIP-WITNESS-ENFORCE-001 (draft): flips the ladder's
-  `overall` field from observe-to-fail-closed once telemetry shows 100% lane
-  adoption for 7 days.
+- **C** — SD-LEO-INFRA-SHIP-WITNESS-VENTURE-001 (completed): venture-build
+  walker completion gates on a merged PR.
+- **D** — SD-LEO-INFRA-SHIP-WITNESS-ENFORCE-001 (completed): the
+  adoption-readiness gauge + gated enforce-flip capability. See
+  `docs/reference/ship-witness-enforce-flip-readiness.md` for the readiness
+  bar and what D deliberately did NOT activate.

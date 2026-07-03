@@ -636,4 +636,61 @@ describe('attemptAutoMerge — C2 external-repo merge-gate (SECURITY VB-2)', () 
     expect(calls[0][2]).toBe(42);
     expect(calls[0][3]).toEqual({ workKey: 'SD-XXX-001', tier: 'standard' });
   });
+
+  // SD-LEO-INFRA-SHIP-WITNESS-ENFORCE-001 (FR-3, FR-4): the optional enforcementDecision hook
+  // must be a true no-op when omitted (regression guard) and must refuse the merge BEFORE any
+  // gh pr merge call when a caller-supplied decision returns action='block'.
+  describe('enforcementDecision (Ship-witness D, optional pre-merge gate)', () => {
+    it('omitting enforcementDecision behaves byte-identical to before this SD (no extra gh calls, merge proceeds)', async () => {
+      const { runner, calls } = makeRunner([
+        { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
+        { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
+        { match: argvMatchers.prMerge, result: { stdout: '' } },
+        { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-07-03T00:00:00Z\n' } },
+        { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
+        { match: argvMatchers.prViewHeadRef, result: { stdout: 'feat/x\n' } },
+        { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'Not Found (404)' } },
+      ]);
+      const r = await attemptAutoMerge({ prNumber: 55, repoOwner: 'rickfelix', repoName: 'ehg', runner, logger: silentLogger });
+      expect(r.ok).toBe(true);
+      // Sibling A's post-merge shadow-mode observe still fetches statusCheckRollup once
+      // (pre-existing, unrelated to this SD) — the D pre-merge gate must NOT add a second
+      // fetch when enforcementDecision is omitted.
+      const rollupCalls = calls.filter((c) => c[0] === 'pr' && c.includes('statusCheckRollup'));
+      expect(rollupCalls).toHaveLength(1);
+    });
+
+    it('refuses the merge BEFORE calling gh pr merge when enforcementDecision returns action=block', async () => {
+      const { runner, calls } = makeRunner([
+        { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
+        { match: (a) => a[0] === 'pr' && a.includes('statusCheckRollup'), result: { stdout: '[]\n' } },
+      ]);
+      const enforcementDecision = async () => ({ action: 'block', reason: 'fixture block' });
+      const r = await attemptAutoMerge({
+        prNumber: 56, repoOwner: 'rickfelix', repoName: 'ehg', runner, logger: silentLogger, enforcementDecision,
+      });
+      expect(r.ok).toBe(false);
+      expect(r.requiresHumanMerge).toBe(true);
+      expect(r.reason).toMatch(/fixture block/);
+      expect(calls.some((c) => c[0] === 'pr' && c[1] === 'merge')).toBe(false);
+    });
+
+    it('proceeds to merge when enforcementDecision returns action=observe or action=allow', async () => {
+      const { runner } = makeRunner([
+        { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
+        { match: (a) => a[0] === 'pr' && a.includes('statusCheckRollup'), result: { stdout: '[]\n' } },
+        { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
+        { match: argvMatchers.prMerge, result: { stdout: '' } },
+        { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-07-03T00:00:00Z\n' } },
+        { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
+        { match: argvMatchers.prViewHeadRef, result: { stdout: 'feat/x\n' } },
+        { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'Not Found (404)' } },
+      ]);
+      const enforcementDecision = async () => ({ action: 'observe' });
+      const r = await attemptAutoMerge({
+        prNumber: 57, repoOwner: 'rickfelix', repoName: 'ehg', runner, logger: silentLogger, enforcementDecision,
+      });
+      expect(r.ok).toBe(true);
+    });
+  });
 });

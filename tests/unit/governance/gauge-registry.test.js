@@ -19,14 +19,14 @@ import {
 const VALID_FEEDBACK_TYPES = ['issue', 'enhancement'];
 
 describe('GAUGE_REGISTRY shape', () => {
-  it('exports exactly 3 seed entries', () => {
-    expect(GAUGE_REGISTRY).toHaveLength(3);
+  it('exports exactly 4 seed entries (3 original + ship-witness-unwitnessed-merge, SD-LEO-INFRA-SHIP-WITNESS-ENFORCE-001)', () => {
+    expect(GAUGE_REGISTRY).toHaveLength(4);
   });
 
-  it('all 3 entries are activated — both former stubs adopted their sibling SDs\' detectors (QF-20260702-222)', () => {
+  it('all 4 entries are activated — no stub entries remain', () => {
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
-    expect(live).toHaveLength(3);
+    expect(live).toHaveLength(4);
     expect(stubs).toHaveLength(0);
   });
 
@@ -84,10 +84,18 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(selectEnabledEntries(undefined)).toEqual([]);
   });
 
-  it('the real GAUGE_REGISTRY selects all 3 entries now that every stub is activated', () => {
+  it('the real GAUGE_REGISTRY selects all 4 entries now that every stub is activated', () => {
     const selected = selectEnabledEntries(GAUGE_REGISTRY);
-    expect(selected).toHaveLength(3);
-    expect(selected.map((e) => e.id).sort()).toEqual(['relay-drop', 'stale-tree', 'unranked-claimable-leaves']);
+    expect(selected).toHaveLength(4);
+    expect(selected.map((e) => e.id).sort()).toEqual(['relay-drop', 'ship-witness-unwitnessed-merge', 'stale-tree', 'unranked-claimable-leaves']);
+  });
+
+  it('SD-LEO-INFRA-SHIP-WITNESS-ENFORCE-001: the new entry has a resolvable detectorFn and the >0-count tripWhen convention', () => {
+    const entry = GAUGE_REGISTRY.find((e) => e.id === 'ship-witness-unwitnessed-merge');
+    expect(entry).toBeTruthy();
+    expect(entry.detectorFn).toBe('ship-witness-unwitnessed-merge');
+    expect(entry.thresholdConfig.tripWhen({ count: 1 })).toBe(true);
+    expect(entry.thresholdConfig.tripWhen({ count: 0 })).toBe(false);
   });
 });
 
