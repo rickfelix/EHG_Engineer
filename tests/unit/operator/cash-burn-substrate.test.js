@@ -138,6 +138,24 @@ describe('computeRunway — honest degrade', () => {
     expect(attestedZero.partials.cash.value_usd).toBe(0);
   });
 
+  it('a fresh sync timestamp with a null value withholds runway rather than fabricating 0 (regression)', () => {
+    // cash_last_synced_at is fresh, but cash_usd was never actually recorded (null) -- this must
+    // NOT be treated as a live $0 cash balance, since null/burn would otherwise coerce to 0 and
+    // produce a fabricated "0 months of runway" headline.
+    const row = {
+      cash_usd: null, cash_last_synced_at: fresh(1),
+      ai_burn_usd: 800, ai_burn_last_synced_at: fresh(1), ai_burn_is_lower_bound: true,
+      other_burn_usd: null, other_burn_last_synced_at: null,
+      revenue_usd: null, revenue_last_synced_at: null,
+    };
+    const v = computeRunway(row, { nowMs: NOW });
+    expect(v.partials.cash.status).toBe('unattested');
+    expect(v.partials.cash.value_usd).toBeNull();
+    expect(v.partials.cash.label).toBe('not yet measured');
+    expect(v.months_of_runway).toBeNull();
+    expect(v.headline).toBe('awaiting cash source');
+  });
+
   it('exposes per-input liveness windows (ai_burn/revenue hourly-tight, cash generous)', () => {
     expect(LIVENESS_WINDOWS_MS.ai_burn).toBeLessThan(LIVENESS_WINDOWS_MS.cash);
     expect(LIVENESS_WINDOWS_MS.revenue).toBe(LIVENESS_WINDOWS_MS.ai_burn);
