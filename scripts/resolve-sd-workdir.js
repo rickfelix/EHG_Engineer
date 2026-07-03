@@ -280,50 +280,25 @@ function recoverOrphanWorktree(sdKey, worktreePath, repoRoot, worktreesDir, opts
   return { path: worktreePath, branch, created: true, recovered: 'force-add' };
 }
 
-/**
- * Resolve an already-existing feature branch for sdKey, or null if none exists.
- * Exact match FIRST: SD-key namespaces are hierarchical (a child key like "-F1" is
- * an alphanumeric continuation of a parent key like "-F"), so an unanchored
- * `feat/${sdKey}*` glob can match a DESCENDANT's branch instead of the SD's own,
- * stealing its worktree. QF-20260703-130. The variant-discovery fallback (kept for
- * branches with a non-alphanumeric suffix, e.g. renamed variants) is anchored on a
- * separator so an alphanumeric continuation can never match.
- */
+// Exact-ref match first: an unanchored glob can match a DESCENDANT's branch
+// (e.g. "-F1") instead of the SD's own ("-F"). QF-20260703-130.
 function resolveExistingBranch(sdKey, repoRoot) {
+  const opts = { cwd: repoRoot, encoding: 'utf8', stdio: 'pipe' };
   try {
-    execSync(`git show-ref --verify --quiet refs/heads/feat/${sdKey}`, {
-      cwd: repoRoot, stdio: 'pipe'
-    });
+    execSync(`git show-ref --verify --quiet refs/heads/feat/${sdKey}`, { cwd: repoRoot, stdio: 'pipe' });
     return `feat/${sdKey}`;
   } catch { /* no exact local branch */ }
-
   try {
-    const branches = execSync('git branch --list "feat/' + sdKey + '[-._]*"', {
-      cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
-    }).trim();
-    if (branches) {
-      return branches.split('\n')[0].replace(/^[*+]?\s*/, '').trim();
-    }
+    const branches = execSync(`git branch --list "feat/${sdKey}[-._]*"`, opts).trim();
+    if (branches) return branches.split('\n')[0].replace(/^[*+]?\s*/, '').trim();
   } catch { /* no match */ }
-
   try {
-    const remoteExact = execSync(`git ls-remote --heads origin "feat/${sdKey}"`, {
-      cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
-    }).trim();
-    if (remoteExact) {
-      return `feat/${sdKey}`;
-    }
+    if (execSync(`git ls-remote --heads origin "feat/${sdKey}"`, opts).trim()) return `feat/${sdKey}`;
   } catch { /* no exact remote branch */ }
-
   try {
-    const remote = execSync('git ls-remote --heads origin "feat/' + sdKey + '[-._]*"', {
-      cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
-    }).trim();
-    if (remote) {
-      return remote.split('\n')[0].split('\t')[1].replace('refs/heads/', '');
-    }
+    const remote = execSync(`git ls-remote --heads origin "feat/${sdKey}[-._]*"`, opts).trim();
+    if (remote) return remote.split('\n')[0].split('\t')[1].replace('refs/heads/', '');
   } catch { /* no match */ }
-
   return null;
 }
 
