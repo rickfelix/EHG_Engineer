@@ -165,6 +165,15 @@ export const STANDARD_LOOPS = [
   // self-review; coordinator itself requested this as sourceable candidate #1 (advisory 444cdd65 ref).
   { key: 'roles-review', label: 'Coordinator roles/duties self-review (twice-daily, durable)', script: 'coordinator-startup-check.mjs', cron: '41 6,18 * * *',
     prompt: 'Re-read the coordinator role contract (leo_protocol_sections id=605 + docs/protocol/fleet-coordinator-and-worker-behavior.md, rendered by `node scripts/coordinator-startup-check.mjs`) and self-audit duty execution against RESPONSIBILITIES: for each duty, confirm evidence of recent execution and REMEDIATE any drift found (e.g. idle workers with claimable work, a stale sourcing gap) rather than observe-only.' },
+  // QF-20260703-563: the gauge-runner (SD-LEO-INFRA-INVARIANT-GAUGES-FRAMEWORK-001, the
+  // invariant-gauges execution surface) had NO scheduled venue anywhere — 29h stale until an
+  // interim session-only cron was hand-armed. Session crons die with sessions, the same
+  // fragility class already fixed for Adam's belt-countdown and this coordinator's own
+  // roles-review duty (QF-433/QF-272). Class 6b for the ledger: the instrument that watches
+  // for unwired machinery was itself unwired. Hourly cadence — cheap, and the gauges'
+  // detector functions are internally due-gated/idempotent, so an extra run is a no-op.
+  { key: 'gauge-runner', label: 'Invariant-gauges execution surface (hourly, durable)', script: 'gauge-runner.mjs', cron: '0 * * * *',
+    prompt: 'node scripts/gauge-runner.mjs --json' },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.
