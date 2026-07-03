@@ -66,12 +66,26 @@
       "registered_by": "venture-provisioner",
       "local_path": "C:/Users/rickf/Projects/_EHG/commitcraft-ai",
       "note": "CONSOLIDATED: Uses same DB as EHG_Engineer until production"
+    },
+    "APP006": {
+      "id": "APP006",
+      "name": "MarketLens",
+      "github_repo": "rickfelix/marketlens",
+      "supabase_project_id": "consolidated",
+      "supabase_url": "https://dedlbzhpgkmetvhbkyzq.supabase.co",
+      "status": "active",
+      "environment": "development",
+      "registered_at": "2026-07-02T22:00:00.000Z",
+      "registered_by": "venture-provisioner",
+      "local_path": "C:/Users/rickf/Projects/_EHG/marketlens",
+      "note": "MarketLens venture — canary pilot SD-MARKETLENS-LEO-ORCH-SPRINT-2026-001-A1",
+      "venture_id": "ecbba50e-3c98-4493-9e77-1719cf6b6f00"
     }
   },
   "metadata": {
-    "total_apps": 5,
-    "active_apps": 5,
-    "last_updated": "2026-03-29T00:17:06.529Z",
+    "total_apps": 6,
+    "active_apps": 6,
+    "last_updated": "2026-07-02T22:00:00.000Z",
     "last_sync": null
   },
   "settings": {
