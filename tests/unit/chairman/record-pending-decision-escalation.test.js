@@ -197,9 +197,11 @@ describe('recordPendingDecision — deterministic escalation wiring (FR-2/FR-5)'
     }
     expect(sb.rows.length).toBe(20); // decision rows are NEVER affected by the rate cap
     expect(spawn).toHaveBeenCalledTimes(4); // 3 standout emails + exactly 1 digest
-    const standoutCount = sb.rows.filter(r => r.brief_data?.escalation_email_sent_at).length;
     const digestCount = sb.rows.filter(r => r.brief_data?.digest_sent_at).length;
-    expect(standoutCount).toBe(3);
+    // The digest row also carries escalation_email_sent_at (dedup-contract parity — see
+    // escalateChairmanDecision), so "pure standout" excludes it from the escalation_email_sent_at count.
+    const pureStandoutCount = sb.rows.filter(r => r.brief_data?.escalation_email_sent_at && !r.brief_data?.digest_sent_at).length;
+    expect(pureStandoutCount).toBe(3);
     expect(digestCount).toBe(1);
   });
 });
