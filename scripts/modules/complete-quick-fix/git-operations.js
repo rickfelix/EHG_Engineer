@@ -922,31 +922,12 @@ function displayManualCommitInstructions(qf, currentBranch) {
   console.log(`      git push -u origin ${currentBranch}\n`);
 }
 
-/**
- * Classify one entry from `gh pr view --json statusCheckRollup` as pending or not.
- * Handles both CheckRun shape ({status,conclusion}) and legacy StatusContext shape ({state}).
- */
-export function isCheckPending(check) {
-  if (check.status !== undefined) return check.status !== 'COMPLETED';
-  if (check.state !== undefined) return check.state === 'PENDING' || check.state === 'EXPECTED';
-  return false;
-}
-
-/** Classify a COMPLETED/non-pending check as failed. */
-export function isCheckFailed(check) {
-  if (check.conclusion != null) return ['FAILURE', 'TIMED_OUT', 'CANCELLED'].includes(check.conclusion);
-  if (check.state !== undefined) return check.state === 'FAILURE' || check.state === 'ERROR';
-  return false;
-}
-
-/** Pure summary of a PR's statusCheckRollup — no IO, fully unit-testable. */
-export function summarizeCIStatus(statusCheckRollup) {
-  const checks = Array.isArray(statusCheckRollup) ? statusCheckRollup : [];
-  const pending = checks.filter(isCheckPending);
-  const failed = checks.filter(c => !isCheckPending(c) && isCheckFailed(c));
-  return { total: checks.length, pending: pending.length, failed: failed.length,
-    isPending: pending.length > 0, hasFailed: failed.length > 0 };
-}
+// SD-LEO-INFRA-SHIP-WITNESS-MERGEWORK-001 FR-1: isCheckPending/isCheckFailed/
+// summarizeCIStatus moved to lib/ship/ci-status.mjs so every merge lane (not just
+// quick-fix) shares one CI-status implementation. Re-exported here so existing
+// imports of this module are unaffected.
+export { isCheckPending, isCheckFailed, summarizeCIStatus } from '../../../lib/ship/ci-status.mjs';
+import { summarizeCIStatus } from '../../../lib/ship/ci-status.mjs';
 
 const CI_POLL_INTERVAL_MS = 15_000;
 const CI_POLL_TIMEOUT_MS = 20 * 60_000;
