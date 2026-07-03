@@ -17,7 +17,9 @@ describe('SD-FDBK-ENH-UAT-AGENT-FEEDBACK-001: create-quick-fix.js STALE_PREMISE 
   const FORCE_LIVENESS_FLAG_RE = /arg\s*===\s*['"]--force-liveness['"]/;
 
   it('imports the shared checkFeedbackPremiseLiveness helper (reuse, not reinvention)', () => {
-    expect(code).toMatch(/import\s*\{\s*checkFeedbackPremiseLiveness\s*\}\s*from\s*['"].*feedback-premise-adapter\.js['"]/);
+    // Permissive on co-imported names (e.g. logForceLivenessOverride) — the assertion is
+    // that checkFeedbackPremiseLiveness is reused from the shared adapter, not reinvented.
+    expect(code).toMatch(/import\s*\{[^}]*\bcheckFeedbackPremiseLiveness\b[^}]*\}\s*from\s*['"].*feedback-premise-adapter\.js['"]/);
   });
 
   it('[STALE_PREMISE] marker is present and precedes the quick_fixes insert', () => {

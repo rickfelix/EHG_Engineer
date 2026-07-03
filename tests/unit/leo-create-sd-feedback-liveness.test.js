@@ -26,7 +26,9 @@ describe('SD-FDBK-ENH-UAT-AGENT-FEEDBACK-001: leo-create-sd.js --from-feedback S
   const GAP008_GUARD_RE = /GAP-008.*duplicate guard/s;
 
   it('imports the shared checkFeedbackPremiseLiveness helper (reuse, not reinvention)', () => {
-    expect(code).toMatch(/import\s*\{\s*checkFeedbackPremiseLiveness\s*\}\s*from\s*['"].*feedback-premise-adapter\.js['"]/);
+    // Permissive on co-imported names (e.g. logForceLivenessOverride) — the assertion is
+    // that checkFeedbackPremiseLiveness is reused from the shared adapter, not reinvented.
+    expect(code).toMatch(/import\s*\{[^}]*\bcheckFeedbackPremiseLiveness\b[^}]*\}\s*from\s*['"].*feedback-premise-adapter\.js['"]/);
   });
 
   it('locates createFromFeedback() as a distinct function body', () => {

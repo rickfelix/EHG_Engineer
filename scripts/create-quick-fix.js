@@ -27,7 +27,7 @@ import { getRepoPaths, ENGINEER_ROOT } from '../lib/repo-paths.js';
 import { preclaimFeedbackRows, resolveFeedbackIds, findFeedbackRefConflicts } from '../lib/feedback/preclaim-feedback-rows.js';
 import { releasePreclaim } from '../lib/feedback/release-preclaim.js';
 import { armCliTeardown } from '../lib/cli-graceful-exit.js';
-import { checkFeedbackPremiseLiveness } from '../lib/eva/feedback-premise-adapter.js';
+import { checkFeedbackPremiseLiveness, logForceLivenessOverride } from '../lib/eva/feedback-premise-adapter.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -236,15 +236,7 @@ async function createQuickFix(options = {}) {
         console.warn(`\n⚠️  [LIVENESS_CHECK_DEGRADED] STALE_PREMISE check failed-open (${e?.message || e}); proceeding without it.`);
       }
     } else {
-      const { error: forceLivenessAuditErr } = await supabase.from('audit_log').insert({
-        event_type: 'force_liveness_override',
-        entity_type: 'feedback',
-        entity_id: (resolvedFeedbackIds || []).join(','),
-        created_by: process.env.CLAUDE_SESSION_ID || null,
-        severity: 'warning',
-        metadata: { feedback_ids: resolvedFeedbackIds, reason: options.forceLiveness, message: `force-liveness override on ${(resolvedFeedbackIds || []).length} feedback row(s): ${options.forceLiveness}` },
-      });
-      if (forceLivenessAuditErr) console.warn(`⚠️  [AUDIT_WRITE_FAILED] force_liveness_override audit row not persisted (non-fatal): ${forceLivenessAuditErr.message}`);
+      await logForceLivenessOverride({ supabase, entityId: (resolvedFeedbackIds || []).join(','), reason: options.forceLiveness });
       console.warn(`\n⚠️  [FORCE_LIVENESS] skipping premise re-check: ${options.forceLiveness}`);
     }
   } else {

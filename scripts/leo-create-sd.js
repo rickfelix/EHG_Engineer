@@ -31,7 +31,7 @@ import {
 } from './modules/sd-key-generator.js';
 import { VentureContextManager } from '../lib/eva/venture-context-manager.js';
 import { checkPremiseLiveness } from '../lib/eva/premise-liveness.js';
-import { checkFeedbackPremiseLiveness } from '../lib/eva/feedback-premise-adapter.js';
+import { checkFeedbackPremiseLiveness, logForceLivenessOverride } from '../lib/eva/feedback-premise-adapter.js';
 import { getCurrentVenture, getVentureConfig } from '../lib/venture-resolver.js';
 import {
   checkGate,
@@ -486,11 +486,7 @@ async function createFromFeedback(feedbackId, options = {}) {
     process.exit(0);
   }
 
-  // SD-FDBK-ENH-UAT-AGENT-FEEDBACK-001 FR-1: promotion-time liveness re-check.
-  // Re-verify this feedback row's named defect still reproduces before materializing
-  // an SD -- the GAP-008 guard above only catches feedback ALREADY linked to an SD;
-  // it can't catch a defect fixed by an unrelated SD that never linked back (the
-  // b6594220 incident). Fails OPEN (never blocks a genuinely live defect).
+  // SD-FDBK-ENH-UAT-AGENT-FEEDBACK-001 FR-1: liveness re-check (b6594220 class). Fails OPEN.
   if (!options.forceLiveness) {
     try {
       const verdict = await checkFeedbackPremiseLiveness(feedback, { supabase });
@@ -501,19 +497,10 @@ async function createFromFeedback(feedbackId, options = {}) {
         return { sdKey: null, feedbackId: feedback.id, action: 'skipped-stale-premise', verdict };
       }
     } catch (e) {
-      // Fail-OPEN: a lookup/liveness-check error must never block SD creation.
-      console.warn(`\n⚠️  [LIVENESS_CHECK_DEGRADED] STALE_PREMISE check failed-open (${e?.message || e}); proceeding without it.`);
+      console.warn(`\n⚠️  [LIVENESS_CHECK_DEGRADED] failed-open (${e?.message || e})`);
     }
   } else {
-    const { error: forceLivenessAuditErr } = await supabase.from('audit_log').insert({
-      event_type: 'force_liveness_override',
-      entity_type: 'feedback',
-      entity_id: feedback.id,
-      created_by: process.env.CLAUDE_SESSION_ID || null,
-      severity: 'warning',
-      metadata: { feedback_id: feedback.id, reason: options.forceLiveness, message: `force-liveness override on feedback ${feedback.id}: ${options.forceLiveness}` },
-    });
-    if (forceLivenessAuditErr) console.warn(`⚠️  [AUDIT_WRITE_FAILED] force_liveness_override audit row not persisted (non-fatal): ${forceLivenessAuditErr.message}`);
+    await logForceLivenessOverride({ supabase, entityId: feedback.id, reason: options.forceLiveness });
     console.warn(`\n⚠️  [FORCE_LIVENESS] skipping premise re-check: ${options.forceLiveness}`);
   }
 
