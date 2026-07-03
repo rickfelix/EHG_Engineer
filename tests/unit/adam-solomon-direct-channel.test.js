@@ -110,3 +110,17 @@ describe('payload.via is additive-only (byte-unaffected default path)', () => {
     expect(p.via).toBe('direct');
   });
 });
+
+// QF-20260703-964 (R1): payload.addressee is the WRITTEN addressee, stamped alongside
+// target_session, so a reader (and the dispatch choke-point's mismatch WARN) can see who this
+// was explicitly sent to without re-deriving it from the resolved UUID.
+describe('payload.addressee is additive-only (QF-20260703-964)', () => {
+  it('buildAdvisoryPayload (Adam) omits payload.addressee entirely when not passed', () => {
+    const p = buildAdamPayload({ body: 'hi', senderCallsign: 'Delta', repo: '/x', correlationId: 'c1' });
+    expect('addressee' in p).toBe(false);
+  });
+  it('buildAdvisoryPayload (Adam) stamps the written addressee when passed', () => {
+    const p = buildAdamPayload({ body: 'hi', senderCallsign: 'Delta', repo: '/x', correlationId: 'c1', addressee: 'solomon' });
+    expect(p.addressee).toBe('solomon');
+  });
+});
