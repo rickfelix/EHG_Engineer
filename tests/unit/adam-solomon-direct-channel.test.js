@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { resolveAdamAdvisoryTarget, buildAdvisoryPayload: buildAdamPayload } = require('../../scripts/adam-advisory.cjs');
+const { resolveAdamAdvisoryTarget, buildAdvisoryPayload: buildAdamPayload, classifyDirectTarget } = require('../../scripts/adam-advisory.cjs');
 const { resolveSolomonAdvisoryTarget, buildAdvisoryPayload: buildSolomonPayload } = require('../../scripts/solomon-advisory.cjs');
 const { isAdamSolomonTwoWayV1Enabled } = require('../../lib/coordinator/resolve.cjs');
 const { assertValidTarget } = require('../../lib/coordinator/dispatch.cjs');
@@ -122,5 +122,52 @@ describe('payload.addressee is additive-only (QF-20260703-964)', () => {
   it('buildAdvisoryPayload (Adam) stamps the written addressee when passed', () => {
     const p = buildAdamPayload({ body: 'hi', senderCallsign: 'Delta', repo: '/x', correlationId: 'c1', addressee: 'solomon' });
     expect(p.addressee).toBe('solomon');
+  });
+});
+
+// SD-LEO-INFRA-CLOSE-ADAM-SOLOMON-001: adversarial-review finding, deep-tier PR review
+// (QF-20260703-964). This exact decision shipped un-unit-tested and silently admitted a
+// SENTINEL_TARGETS value (broadcast-solomon) as a "direct target", completely bypassing the
+// ADAM_SOLOMON_TWOWAY_V1 gate --to solomon is deliberately subject to. This test would have
+// caught it.
+describe('classifyDirectTarget — sentinels and reserved words are NEVER a direct target', () => {
+  it('a SENTINEL_TARGETS value (broadcast-solomon) is blocked, not admitted as direct', () => {
+    const r = classifyDirectTarget('broadcast-solomon', false);
+    expect(r.isBlockedPeerWord).toBe(true);
+    expect(r.isDirectTarget).toBe(false);
+  });
+  it('every SENTINEL_TARGETS value is blocked (broadcast, broadcast-coordinator, broadcast-adam)', () => {
+    for (const s of ['broadcast', 'broadcast-coordinator', 'broadcast-adam']) {
+      const r = classifyDirectTarget(s, false);
+      expect(r.isBlockedPeerWord).toBe(true);
+      expect(r.isDirectTarget).toBe(false);
+    }
+  });
+  it('RESERVED_PEER_WORDS (coordinator, adam) are still blocked (regression)', () => {
+    for (const w of ['coordinator', 'adam']) {
+      const r = classifyDirectTarget(w, false);
+      expect(r.isBlockedPeerWord).toBe(true);
+      expect(r.isDirectTarget).toBe(false);
+    }
+  });
+  it('a raw session_id (not a keyword, not a sentinel) IS a direct target', () => {
+    const r = classifyDirectTarget('0f8d45d8-9531-4ab8-a1b9-6961c405e1ec', false);
+    expect(r.isBlockedPeerWord).toBe(false);
+    expect(r.isDirectTarget).toBe(true);
+  });
+  it('"solomon" itself is neither blocked nor a direct target (handled by its own dedicated gate)', () => {
+    const r = classifyDirectTarget('solomon', false);
+    expect(r.isBlockedPeerWord).toBe(false);
+    expect(r.isDirectTarget).toBe(false);
+  });
+  it('a relay-class peer is neither blocked nor a direct target (handled by its own enqueue path)', () => {
+    const r = classifyDirectTarget('eva', true);
+    expect(r.isBlockedPeerWord).toBe(false);
+    expect(r.isDirectTarget).toBe(false);
+  });
+  it('null peerArg (no --to flag) is neither blocked nor a direct target', () => {
+    const r = classifyDirectTarget(null, false);
+    expect(r.isBlockedPeerWord).toBe(false);
+    expect(r.isDirectTarget).toBe(false);
   });
 });
