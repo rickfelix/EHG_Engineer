@@ -26,6 +26,7 @@
  *   node scripts/adam-advisory.cjs request "<question>" [--timeout 30000]          (awaits a coordinator reply; needs COORDINATOR_TWOWAY_V2=on)
  *   node scripts/adam-advisory.cjs replies                                         (drain ONLY the reply lane — kept for back-compat)
  *   node scripts/adam-advisory.cjs inbox                                           (FULL-LANE drain: replies + coordinator directives — the recurring inbox-monitor tick)
+ *   node scripts/adam-advisory.cjs inbox --sweep [--window 24h]                    (QF-20260703-946: read-only window sweep, ALL directed rows regardless of read/ack stamps + unacked count — recovers a re-targeted backlog the normal drain's read_at filter would hide)
  *
  * SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: `send`/`request` accept `--to solomon` for
  * a DIRECT 1-hop write to Solomon's own session (no coordinator relay hop), gated by
@@ -502,6 +503,69 @@ async function drainInbox(supabase, sessionId, { quiet = false } = {}) {
     .is('read_at', null);
 }
 
+const DEFAULT_SWEEP_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * QF-20260703-946 — parse `--window <Nh|Nm|Nd>` into ms; defaults to 24h. Fail-open on garbage
+ * (falls back to the default rather than throwing), since the sweep is a visibility tool.
+ */
+function parseSweepWindowMs(argv) {
+  const idx = argv.indexOf('--window');
+  if (idx < 0) return DEFAULT_SWEEP_WINDOW_MS;
+  const raw = argv[idx + 1] || '';
+  const m = /^(\d+)(h|m|d)$/.exec(raw.trim());
+  if (!m) return DEFAULT_SWEEP_WINDOW_MS;
+  const n = Number(m[1]);
+  const unitMs = { m: 60_000, h: 3_600_000, d: 86_400_000 }[m[2]];
+  return n * unitMs;
+}
+
+/**
+ * QF-20260703-946 — CLAUDE_ADAM.md FULL-INBOX SWEEP mandate: the known auto-ack bug
+ * (QF-20260610-623) stamps read_at/acknowledged_at on rows Adam never actually processed, so
+ * `drainInbox`'s read_at-IS-NULL filter can silently hide a re-targeted backlog (live 2026-07-03:
+ * 1020 rows stranded on a dead prior Adam session read as "no unread inbox rows"). This lists
+ * EVERY directed row in the window by created_at, REGARDLESS of read/ack stamps, with those stamps
+ * shown, plus an unacked-count so accumulation is visible (D6 close-loops signal). Read-only —
+ * never consumes rows (`--sweep` is a visibility tool, not a drain lane).
+ */
+const SWEEP_ROW_LIMIT = 2000;
+
+async function windowSweep(supabase, sessionId, { windowMs = DEFAULT_SWEEP_WINDOW_MS, quiet = false } = {}) {
+  const cutoffIso = new Date(Date.now() - windowMs).toISOString();
+  // Newest-first + limit: if the window ever exceeds SWEEP_ROW_LIMIT, truncation drops the
+  // OLDEST rows (still-visible recent activity), never the newest (which ascending+limit would).
+  const { data: descRows, error } = await supabase
+    .from('session_coordination')
+    .select('id, payload, message_type, subject, created_at, read_at, acknowledged_at')
+    .eq('target_session', sessionId)
+    .gte('created_at', cutoffIso)
+    .order('created_at', { ascending: false })
+    .limit(SWEEP_ROW_LIMIT);
+  if (error) { console.error('ERROR: window sweep query failed:', error.message); process.exit(1); }
+
+  const windowHuman = `${Math.round(windowMs / 3_600_000 * 10) / 10}h`;
+  if (!descRows || descRows.length === 0) {
+    if (!quiet) console.log(`(window sweep: no directed rows in the last ${windowHuman})`);
+    return;
+  }
+  if (descRows.length === SWEEP_ROW_LIMIT) {
+    console.warn(`⚠ window sweep hit the ${SWEEP_ROW_LIMIT}-row cap — oldest rows in this window were dropped; narrow --window to see them.`);
+  }
+  const rows = [...descRows].reverse(); // display oldest-first within the (possibly capped) set
+
+  const unacked = rows.filter((r) => !r.acknowledged_at);
+  console.log(`WINDOW SWEEP (last ${windowHuman}): ${rows.length} directed row${rows.length === 1 ? '' : 's'}, ${unacked.length} unacked`);
+  for (const r of rows) {
+    const kind = (r.payload && r.payload.kind) || r.message_type || '(untyped)';
+    const ageMin = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
+    const readStamp = r.read_at ? 'read' : 'UNREAD';
+    const ackStamp = r.acknowledged_at ? 'acked' : 'UNACKED';
+    const text = (r.payload && r.payload.body) || r.subject || '(empty)';
+    console.log(`  • [${kind}] (${ageMin}m) ${readStamp}/${ackStamp} id=${r.id} ${text}`);
+  }
+}
+
 // SD-LEO-INFRA-COMMS-PRESENCE-GROUNDING-SIGNALS-001 (FR-6) — presence + read-receipt + working-signal
 // status verb. `status` prints the coordinator's presence + Adam's own sent-message read-receipts +
 // Adam's current working-signal; `status --working "<body>" [--eta <ms>]` stamps a new working-signal
@@ -548,7 +612,7 @@ async function main() {
   const argv = process.argv.slice(2);
   const mode = argv[0];
   if (mode !== 'send' && mode !== 'request' && mode !== 'replies' && mode !== 'inbox' && mode !== 'status') {
-    console.error('Usage: node scripts/adam-advisory.cjs send "<body>" [--reply-to <correlation_or_row_id>] [--to solomon|<session_id>]  |  request "<question>" [--timeout <ms>] [--to solomon|<session_id>]  |  replies  |  inbox  |  status [--working "<body>" [--eta <ms>]]');
+    console.error('Usage: node scripts/adam-advisory.cjs send "<body>" [--reply-to <correlation_or_row_id>] [--to solomon|<session_id>]  |  request "<question>" [--timeout <ms>] [--to solomon|<session_id>]  |  replies  |  inbox [--sweep [--window 24h]]  |  status [--working "<body>" [--eta <ms>]]');
     process.exit(2);
   }
 
@@ -581,6 +645,12 @@ async function main() {
     const pingResult = await checkAndPingOverdueReplies(supabase, { sessionId: adamId, senderType: 'adam' });
     if (pingResult.pinged > 0) {
       console.warn(`⚠ PING-ON-SILENCE: ${pingResult.pinged} reply-needed advisor${pingResult.pinged === 1 ? 'y' : 'ies'} unanswered past window — pinged (ids: ${pingResult.pingedIds.join(', ')})`);
+    }
+    // QF-20260703-946: `--sweep [--window 24h]` — CLAUDE_ADAM.md FULL-INBOX SWEEP mandate.
+    // Additive, read-only: lists ALL directed rows in the window regardless of read/ack stamps,
+    // so a re-targeted-but-already-stamped backlog can't hide behind the normal read_at filter.
+    if (argv.includes('--sweep')) {
+      await windowSweep(supabase, adamId, { windowMs: parseSweepWindowMs(argv), quiet: argv.includes('--quiet') });
     }
     return;
   }
@@ -796,7 +866,7 @@ async function drainAdamOutbound(supabase, { newSessionId, oldSessionIds } = {})
   }
 }
 
-module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS, resolveAdamAdvisoryTarget, classifyDirectTarget };
+module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS, resolveAdamAdvisoryTarget, classifyDirectTarget, windowSweep, parseSweepWindowMs, DEFAULT_SWEEP_WINDOW_MS };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });
