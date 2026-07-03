@@ -1,7 +1,9 @@
 {
-  "sdKey": "SD-LEO-INFRA-CLOSE-ADAM-SOLOMON-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-CLOSE-ADAM-SOLOMON-001",
-  "createdAt": "2026-07-03T05:38:27.235Z",
-  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
-  "baseRef": "origin/main"
+  "sdKey": "QF-20260703-394",
+  "workType": "QF",
+  "workKey": "QF-20260703-394",
+  "expectedBranch": "qf/QF-20260703-394",
+  "createdAt": "2026-07-03T06:06:08.704Z",
+  "hostname": "Legion-Laptop",
+  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
 }

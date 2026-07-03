@@ -60,7 +60,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
  * Extract insights from handoff records in sd_phase_handoffs table
  * (SD-LEARN-FIX-ADDRESS-PAT-AUTO-010: Replaced markdown file reading with database queries)
  */
-async function analyzeHandoffs(sdKey) {
+async function analyzeHandoffs(sdUuid) {
   const insights = {
     achievements: [],
     challenges: [],
@@ -70,10 +70,13 @@ async function analyzeHandoffs(sdKey) {
   };
 
   try {
+    // QF-20260703-394: sd_phase_handoffs.sd_id is a UUID column that joins on
+    // strategic_directives_v2.id, NOT sd_key (reference_sd_phase_handoffs_joins_on_id_not_uuid_id) —
+    // passing the text sd_key here always silently returned zero rows.
     const { data: handoffs, error } = await supabase
       .from('sd_phase_handoffs')
       .select('from_phase, to_phase, handoff_type, status, executive_summary, deliverables_manifest, key_decisions, known_issues, action_items, validation_score, validation_details')
-      .eq('sd_id', sdKey)
+      .eq('sd_id', sdUuid)
       .order('created_at', { ascending: true });
 
     if (error || !handoffs || handoffs.length === 0) {
@@ -395,7 +398,7 @@ async function generateComprehensiveRetrospective(sdId) {
   // Gather comprehensive data
   console.log('\n📊 Analyzing implementation artifacts...');
 
-  const handoffInsights = await analyzeHandoffs(sd.sd_key);
+  const handoffInsights = await analyzeHandoffs(sdId);
   console.log(`   ✅ Analyzed handoff records (${handoffInsights.achievements.length} achievements, ${handoffInsights.learnings.length} learnings)`);
 
   // Secondary content source: SD metadata fields
