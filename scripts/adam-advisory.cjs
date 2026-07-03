@@ -44,7 +44,7 @@ const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { redact, BODY_HARD_CAP, awaitCoordinatorReply } = require('./worker-signal.cjs');
 const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled } = require('../lib/coordinator/resolve.cjs');
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
-const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
+const { insertCoordinationRow, isSentinelTarget } = require('../lib/coordinator/dispatch.cjs');
 const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
 const { enqueueRelayRequest } = require('../lib/coordinator/relay-queue.cjs');
@@ -112,6 +112,25 @@ function resolveAdamAdvisoryTarget({ toSolomon, flagOn, coordinatorId, solomonId
     return { target: solomonId || 'broadcast-solomon', via: 'direct' };
   }
   return { target: coordinatorId || 'broadcast-coordinator', via: null };
+}
+
+/**
+ * R1 (QF-20260703-964): pure --to <peerArg> classification for the direct-target path. No I/O.
+ * Exported for testing — adversarial-review finding, deep-tier PR review: this exact decision
+ * shipped un-unit-tested and silently admitted a SENTINEL_TARGETS value (e.g. broadcast-solomon)
+ * as a "direct target", completely bypassing the ADAM_SOLOMON_TWOWAY_V1 gate that --to solomon is
+ * deliberately subject to. Sentinels are NOT raw session_ids — isSentinelTarget() short-circuits
+ * dispatch.cjs's live-session check, so they get the SAME hard-error treatment as
+ * RESERVED_PEER_WORDS (role/sentinel resolution is out of R1 scope, raw session_id targets only).
+ * @param {string|null} peerArg
+ * @param {boolean} isRelayClassPeer
+ * @returns {{isDirectTarget: boolean, isBlockedPeerWord: boolean}}
+ */
+function classifyDirectTarget(peerArg, isRelayClassPeer) {
+  const RESERVED_PEER_WORDS = new Set(['coordinator', 'adam']);
+  const isBlockedPeerWord = !!(peerArg && (RESERVED_PEER_WORDS.has(peerArg) || isSentinelTarget(peerArg)));
+  const isDirectTarget = !!(peerArg && peerArg !== 'solomon' && !isRelayClassPeer && !isBlockedPeerWord);
+  return { isDirectTarget, isBlockedPeerWord };
 }
 
 function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass, replyWindowMs, now, addressee }) {
@@ -608,19 +627,18 @@ async function main() {
   if (!body) { console.error('ERROR: advisory body required.'); process.exit(2); }
 
   const isRelayClassPeer = !!(peerArg && PEER_KINDS[peerArg] && PEER_KINDS[peerArg].class === 'relay');
-  // R1 (QF-20260703-964, crew-comms audit finding-008): 'coordinator'/'adam' need proper
+  // R1 (QF-20260703-964, crew-comms audit finding-008): 'coordinator'/'adam'/sentinels need proper
   // role-alias resolution (out of R1 scope — no live-lookup wiring here); any OTHER --to value
   // (e.g. a reasoner's raw session_id) is now accepted as a DIRECT target instead of hard-erroring
   // — the root incident: Adam had no way to address a specific reasoner/Solomon-bound session
   // directly, so those messages silently misrouted to the coordinator via the old hardcoded default.
   // insertCoordinationRow already REFUSES a non-UUID/non-sentinel target_session (DISPATCH_TARGET_INVALID),
-  // so a mistyped nickname fails loud rather than dead-lettering silently.
-  const RESERVED_PEER_WORDS = new Set(['coordinator', 'adam']);
-  if (peerArg && peerArg !== 'solomon' && !isRelayClassPeer && RESERVED_PEER_WORDS.has(peerArg)) {
+  // so a mistyped nickname fails loud rather than dead-lettering silently. See classifyDirectTarget.
+  const { isDirectTarget, isBlockedPeerWord } = classifyDirectTarget(peerArg, isRelayClassPeer);
+  if (peerArg && peerArg !== 'solomon' && !isRelayClassPeer && isBlockedPeerWord) {
     console.error(`ERROR: --to ${peerArg} needs role-alias resolution not yet supported (R1 scope: raw session_id targets only). Omit --to for the default coordinator relay.`);
     process.exit(2);
   }
-  const isDirectTarget = !!(peerArg && peerArg !== 'solomon' && !isRelayClassPeer && !RESERVED_PEER_WORDS.has(peerArg));
   const twoWayV1On = isAdamSolomonTwoWayV1Enabled();
   if (peerArg === 'solomon' && !twoWayV1On) {
     console.error('ERROR: --to solomon is gated by ADAM_SOLOMON_TWOWAY_V1=on (currently OFF). Omit --to to route via the coordinator.');
@@ -778,7 +796,7 @@ async function drainAdamOutbound(supabase, { newSessionId, oldSessionIds } = {})
   }
 }
 
-module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS, resolveAdamAdvisoryTarget };
+module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS, resolveAdamAdvisoryTarget, classifyDirectTarget };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });
