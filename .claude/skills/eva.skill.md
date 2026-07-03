@@ -21,7 +21,6 @@ Entry point for all EVA governance commands. Routes `/eva <subcommand>` to the a
 /eva score [options]          Vision alignment scoring
 /eva research [question]      Tiered research queries
 /eva review [options]         Post-creation vision/arch review
-/eva dashboard                Aggregated EVA metrics
 ```
 
 ## Instructions for Claude
@@ -34,7 +33,6 @@ From `$ARGUMENTS`, extract the first word as the subcommand. Everything after it
 - `/eva` → subcommand = none (show help)
 - `/eva mission view` → subcommand = `mission`, args = `view`
 - `/eva score --sd-id SD-XXX` → subcommand = `score`, args = `--sd-id SD-XXX`
-- `/eva dashboard` → subcommand = `dashboard`, args = none
 
 ---
 
@@ -72,8 +70,6 @@ EVA Governance CLI
 
   /eva research       Tiered research queries
                       Options: <question> [--tier L1|L2|L3]
-
-  /eva dashboard      Aggregated EVA governance metrics
 ```
 
 ---
@@ -93,22 +89,9 @@ Use the Skill tool to invoke the corresponding individual skill:
 | `score` | `eva-score` | Yes |
 | `review` | `review-vision` | Yes |
 | `research` | `eva-research` | Yes |
-| `dashboard` | `eva-dashboard` | Yes |
 
 **Delegation example:**
 If user runs `/eva mission view`, invoke the `eva-mission` skill with args `view`.
-
----
-
-### If subcommand is "dashboard":
-
-Run the dashboard command directly:
-
-```bash
-node scripts/eva/dashboard-command.mjs
-```
-
-Display the output directly to the user.
 
 ---
 
