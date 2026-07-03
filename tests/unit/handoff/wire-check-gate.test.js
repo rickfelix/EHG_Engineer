@@ -189,6 +189,24 @@ describe('EXCLUSION_PATTERNS (FR-1)', () => {
       expect(isExcludedFromWireCheck('lib/agents/auto-selector.js')).toBe(false);
     });
   });
+
+  // QF-20260702-806: lib/ship/auto-merge.mjs (and its helper modules) is loaded ONLY via
+  // a dynamic `import('./lib/ship/auto-merge.mjs')` embedded in .claude/commands/ship.md
+  // prose, which static AST cannot trace, so every newly-added lib/ship/ module appears
+  // unreachable to WIRE_CHECK.
+  describe('KNOWN_DYNAMIC_PATTERNS — lib/ship markdown-invoked tree (QF-20260702-806)', () => {
+    it('excludes lib/ship/** modules', () => {
+      expect(isExcludedFromWireCheck('lib/ship/auto-merge.mjs')).toBe(true);
+      expect(isExcludedFromWireCheck('lib/ship/ci-status.mjs')).toBe(true);
+      expect(isExcludedFromWireCheck('lib/ship/merge-witness-ladder.mjs')).toBe(true);
+      expect(isExcludedFromWireCheck('lib/ship/merge-witness-telemetry.mjs')).toBe(true);
+    });
+
+    it('does NOT over-match lookalike paths (boundary-safe)', () => {
+      expect(isExcludedFromWireCheck('lib/shipping/x.js')).toBe(false);
+      expect(isExcludedFromWireCheck('scripts/ship/x.js')).toBe(false);
+    });
+  });
 });
 
 describe('call-graph-builder barrel re-export resolution (FR-2 AC-1)', () => {

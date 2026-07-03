@@ -143,7 +143,17 @@ export const KNOWN_DYNAMIC_PATTERNS = [
   // sub-agents exemptions (config-registered, not require-reachable).
   // SD-FDBK-ENH-FLEET-WORKER-ATTRITION-001 (stop-loop-wakeup-reminder.cjs was the first new
   // hook to hit this false-positive at LEAD-FINAL).
-  /(^|\/)scripts\/hooks\//
+  /(^|\/)scripts\/hooks\//,
+  // lib/ship/ — auto-merge.mjs (and its helper modules) is invoked exclusively via a
+  // dynamic `import('./lib/ship/auto-merge.mjs')` embedded in .claude/commands/ship.md
+  // prose (the /ship Step 6 hardened auto-merge sequence), never from a package.json
+  // script or any static JS entry point. Same architectural shape as the eva-support /
+  // sub-agents / hooks exemptions above (markdown-invoked, no static reachability from
+  // the current entry-point set). Predates SD-LEO-INFRA-SHIP-WITNESS-MERGEWORK-001
+  // (auto-merge.mjs itself shipped via SD-LEO-INFRA-SHIP-AUTO-MERGE-001) but no SD had
+  // added a NEW file to lib/ship/ since WIRE_CHECK_GATE went required:true until then.
+  // QF-20260702-806.
+  /(^|\/)lib\/ship\//
 ];
 
 /**
