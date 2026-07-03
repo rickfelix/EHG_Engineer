@@ -1,0 +1,91 @@
+{
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Pure recursion-governor detectors in a new lib/governance/recursion-governor.js, reusing the existing taper-rule classifier",
+      "description": "New pure functions, generalized from the chairman taper rule already computed ad-hoc for the exec-summary email (lib/fleet/exec-email-alignment.mjs's isMetaSd + META_PREFIX regex, consumed READ-ONLY, zero modifications): computeRecursionRatio(items, {windowDays=30}) classifies each item ({key}) via the reused isMetaSd() and returns {meta, product, ratio, windowDays} -- ratio = meta/product (null when product=0, matching the existing exec-email convention rather than a divide-by-zero). isBandBreach(result, {maxRatio=3}) is pure: breach=true when product===0 && meta>0 (all-meta, zero product is the worst case of the taper rule, not a null-safe pass), or when ratio!==null && ratio>maxRatio. detectSustainedBreach(recentSnapshots, {requiredConsecutive=3}) is pure: given the most recent N gauge-runner snapshot rows (each carrying a `breach` boolean, newest first), returns {sustained: boolean, streak: number} -- sustained=true only when the streak of consecutive breaches (counting from the newest snapshot backward) reaches requiredConsecutive; a single-tick blip (breach not yet repeated requiredConsecutive times) never trips the gate, matching the SD's own 'alert only on sustained breach' contract (mirrors the N-consecutive-days pattern in lib/ship/witness-adoption.mjs's computeAdoptionReadiness, generalized from calendar-days to snapshot-count since gauge-runner's cadence, not the calendar, is the natural tick)."
+    },
+    {
+      "id": "FR-2",
+      "title": "Wire a new GAUGE_REGISTRY entry with durable snapshot history in codebase_health_snapshots (existing table, no migration)",
+      "description": "New additive GAUGE_REGISTRY entry ('recursion-governor-ratio', ownerRole: 'chairman' -- per the SD's own framing, 'a number the chairman sees without asking', the 5 pre-existing entries all route to coordinator/chairman already so this follows precedent) in lib/governance/gauge-registry.js; the 4 pre-existing + 3 leaf-5 entries (7 total) are untouched. scripts/gauge-runner.mjs's buildDetectorResolvers gets one new resolver: fetches completed strategic_directives_v2 (status='completed', completion_date within windowDays) UNION completed quick_fixes (status='completed', completed_at within windowDays) via a new I/O helper fetchThroughputItems(supabase, {windowDays}) (both tables' key columns -- sd_key and id respectively -- already carry the QF-/SD-LEO- prefixes isMetaSd() classifies on, so quick_fixes rows need no separate classifier), computes the ratio (FR-1), reads back the last N snapshot rows for dimension='recursion-governor-ratio' from codebase_health_snapshots via a new fetchRecentSnapshots(supabase, {dimension, limit}) I/O helper, evaluates detectSustainedBreach, WRITES the current run's own {breach, ratio, meta, product} as a new codebase_health_snapshots row (dimension='recursion-governor-ratio') via a new writeThroughputSnapshot(supabase, result) I/O helper (so every run both reads history and extends it -- the durable log IS the gauge's own accumulated evidence, no new table), and returns {count: sustained ? 1 : 0, ...} matching the runner's generic tripWhen convention. No new migration -- codebase_health_snapshots is the EXISTING table gauge-runner.mjs's own writeHeartbeat() already writes to (dimension='gauge_runner_heartbeat')."
+    },
+    {
+      "id": "FR-3",
+      "title": "Tests",
+      "description": "New tests/unit/governance/recursion-governor.test.js: computeRecursionRatio classifies meta (SD-LEO-*, SD-LEARN-FIX-*, SD-MAN-INFRA-*, QF-*) vs product correctly via the reused isMetaSd, ratio math (including the product=0 null case), windowDays passthrough. isBandBreach: breaches when ratio>maxRatio, breaches on all-meta-zero-product, does NOT breach when ratio<=maxRatio or when there are zero items (product=0 && meta=0). detectSustainedBreach: sustained=true only at exactly requiredConsecutive consecutive breaches counting from newest, NOT sustained on a single blip (one breach then a pass), NOT sustained when the streak is broken partway through, handles an empty/short snapshot history defensively (fewer rows than requiredConsecutive never sustains). Extend tests/unit/governance/gauge-registry.test.js's hard-coded counts (7 -> 8) and sorted-id list to include 'recursion-governor-ratio', with the same per-entry detectorFn/ownerRole/tripWhen assertion pattern used for the leaf-5 entries."
+    }
+  ],
+  "technical_requirements": [
+    { "requirement": "No new migration or table -- reuses the EXISTING codebase_health_snapshots table (already written by gauge-runner.mjs's writeHeartbeat) as the durable rolling-history store for sustained-breach evaluation" },
+    { "requirement": "lib/fleet/exec-email-alignment.mjs's isMetaSd is consumed read-only -- zero modifications; computeMetaToProductRatio is NOT reused directly (it counts FILED items by created_at; this SD needs SHIPPED/completed throughput, a different query, so FR-1 defines its own computeRecursionRatio using the same classifier but different row semantics)" },
+    { "requirement": "gauge-registry.js's 7 pre-existing entries (4 original + 3 from SD-LEO-INFRA-009-LEAF-WORK-001) are untouched -- purely additive" },
+    { "requirement": "New module is ESM (import/export), matching gauge-runner.mjs's existing ESM-import convention for pure-logic sibling modules" }
+  ],
+  "test_scenarios": [
+    { "scenario": "computeRecursionRatio classifies SD-LEO-*, SD-LEARN-FIX-*, SD-MAN-INFRA-*, QF-* as meta and everything else as product, computing ratio=meta/product" },
+    { "scenario": "computeRecursionRatio returns ratio=null (not divide-by-zero) when product=0 and meta>0" },
+    { "scenario": "isBandBreach breaches when ratio exceeds maxRatio, and breaches on the all-meta/zero-product edge case even though ratio is null" },
+    { "scenario": "isBandBreach does not breach when ratio is within band, or when there are zero items at all" },
+    { "scenario": "detectSustainedBreach requires an unbroken streak of exactly requiredConsecutive breaches from the newest snapshot backward -- a single blip or a broken streak never sustains" },
+    { "scenario": "detectSustainedBreach handles a snapshot history shorter than requiredConsecutive defensively (never sustains)" },
+    { "scenario": "gauge-registry.test.js's entry-count assertion updated from 7 to 8, sorted-id list includes 'recursion-governor-ratio', enabled:true, ownerRole:'chairman', resolvable detectorFn" }
+  ],
+  "acceptance_criteria": [
+    "All 3 FRs traced to file:line in the diff",
+    "The 7 pre-existing gauge-registry entries and their own tests are unmodified in behavior -- purely additive",
+    "lib/fleet/exec-email-alignment.mjs's isMetaSd is consumed read-only, zero modifications",
+    "All 3 new detectors (computeRecursionRatio, isBandBreach, detectSustainedBreach) are pure functions independently unit-testable without a DB round-trip",
+    "No new migration -- codebase_health_snapshots is reused as-is",
+    "gauge-registry.test.js and recursion-governor.test.js both pass; existing governance suite passes unmodified"
+  ],
+  "risks": [
+    {
+      "risk": "The declared band (maxRatio=3, requiredConsecutive=3) is an initial, reasoned default with no prior chairman-specified number to anchor against",
+      "impact": "low",
+      "likelihood": "medium",
+      "mitigation": "Both constants are named, single-source-of-truth values in the new module (not scattered magic numbers) so a future SD can retune them from real observed data with a one-line change; the gauge fails open (never trips) on any query error, matching every other gauge-registry entry's contract"
+    },
+    {
+      "risk": "codebase_health_snapshots could accumulate unbounded rows over time as every gauge-runner tick appends one more dimension='recursion-governor-ratio' row",
+      "impact": "low",
+      "likelihood": "low",
+      "mitigation": "fetchRecentSnapshots only ever reads the last N (requiredConsecutive, small) rows via an ORDER BY scanned_at DESC LIMIT N query -- unbounded growth affects storage, not correctness or read latency; matches the existing gauge_runner_heartbeat dimension's own already-accepted growth pattern in the same table"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "scripts/gauge-runner.mjs (1 new registry entry) -- existing cron/duty-loop cadence, no new scheduling infra",
+      "chairman-facing signal via the existing feedback-table routeFinding pipeline when sustained breach trips, same as every other gauge-registry entry"
+    ],
+    "dependencies": [
+      "lib/fleet/exec-email-alignment.mjs's isMetaSd (existing, read-only)",
+      "lib/governance/gauge-registry.js, scripts/gauge-runner.mjs (existing invariant-gauge framework, additively extended)",
+      "codebase_health_snapshots (existing table, read+write -- already written by gauge-runner's own heartbeat)",
+      "strategic_directives_v2, quick_fixes (existing tables, read-only)"
+    ],
+    "data_contracts": ["No schema changes"],
+    "runtime_config": ["None -- no new env vars; maxRatio/requiredConsecutive/windowDays are named constants in the new module"],
+    "observability_rollout": [
+      "Sustained-breach findings surface through the existing gauge-runner -> feedback table -> chairman pipeline, same as the stale-tree entry (also ownerRole:'chairman')",
+      "Every gauge-runner tick's ratio reading is itself now durable evidence in codebase_health_snapshots, independent of whether it breaches -- the chairman (or a future dashboard) can query the raw trend directly"
+    ]
+  },
+  "implementation_approach": {
+    "phases": [
+      "Phase 1: FR-1 pure detectors (computeRecursionRatio, isBandBreach, detectSustainedBreach) in lib/governance/recursion-governor.js",
+      "Phase 2: FR-2 gauge-registry.js entry + gauge-runner.mjs resolver wiring (fetchThroughputItems, fetchRecentSnapshots, writeThroughputSnapshot)",
+      "Phase 3: FR-3 unit tests (new + gauge-registry.test.js extension)"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run computeRecursionRatio against a fixture of 3 meta items and 1 product item", "expected_outcome": "meta=3, product=1, ratio=3.0" },
+    { "step_number": 2, "instruction": "Run isBandBreach against ratio=3.0 with maxRatio=3, then against ratio=4.0", "expected_outcome": "First call: breach=false (at, not over, the band); second call: breach=true" },
+    { "step_number": 3, "instruction": "Run detectSustainedBreach against a fixture of [breach, breach, breach, pass] (newest first) with requiredConsecutive=3", "expected_outcome": "sustained=true, streak=3" },
+    { "step_number": 4, "instruction": "Run node scripts/gauge-runner.mjs --json against a live/dev DB", "expected_outcome": "GAUGE line prints for 'recursion-governor-ratio' alongside the 7 existing ids, with no thrown errors, and a new codebase_health_snapshots row is written" },
+    { "step_number": 5, "instruction": "Run npx vitest run tests/unit/governance/", "expected_outcome": "All governance tests pass, including the updated gauge-registry.test.js counts (8)" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-009-LEAF-RECURSION-001"
+  }
+}

@@ -19,14 +19,14 @@ import {
 const VALID_FEEDBACK_TYPES = ['issue', 'enhancement'];
 
 describe('GAUGE_REGISTRY shape', () => {
-  it('exports exactly 7 seed entries (4 prior + 3 work-boundary gauges, SD-LEO-INFRA-009-LEAF-WORK-001)', () => {
-    expect(GAUGE_REGISTRY).toHaveLength(7);
+  it('exports exactly 8 seed entries (7 prior + recursion-governor-ratio, SD-LEO-INFRA-009-LEAF-RECURSION-001)', () => {
+    expect(GAUGE_REGISTRY).toHaveLength(8);
   });
 
-  it('all 7 entries are activated — no stub entries remain', () => {
+  it('all 8 entries are activated — no stub entries remain', () => {
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
-    expect(live).toHaveLength(7);
+    expect(live).toHaveLength(8);
     expect(stubs).toHaveLength(0);
   });
 
@@ -84,12 +84,13 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(selectEnabledEntries(undefined)).toEqual([]);
   });
 
-  it('the real GAUGE_REGISTRY selects all 7 entries now that every stub is activated', () => {
+  it('the real GAUGE_REGISTRY selects all 8 entries now that every stub is activated', () => {
     const selected = selectEnabledEntries(GAUGE_REGISTRY);
-    expect(selected).toHaveLength(7);
+    expect(selected).toHaveLength(8);
     expect(selected.map((e) => e.id).sort()).toEqual([
       'adam-claimed-or-built-sd',
       'coordinator-sourced-sd',
+      'recursion-governor-ratio',
       'relay-drop',
       'ship-witness-unwitnessed-merge',
       'solomon-dispatched-sd',
@@ -115,6 +116,15 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
       expect(entry.thresholdConfig.tripWhen({ count: 1 })).toBe(true);
       expect(entry.thresholdConfig.tripWhen({ count: 0 })).toBe(false);
     }
+  });
+
+  it('SD-LEO-INFRA-009-LEAF-RECURSION-001: the recursion-governor entry has a resolvable detectorFn, ownerRole chairman, and the >0-count tripWhen convention', () => {
+    const entry = GAUGE_REGISTRY.find((e) => e.id === 'recursion-governor-ratio');
+    expect(entry).toBeTruthy();
+    expect(entry.detectorFn).toBe('recursion-governor-ratio');
+    expect(entry.ownerRole).toBe('chairman');
+    expect(entry.thresholdConfig.tripWhen({ count: 1 })).toBe(true);
+    expect(entry.thresholdConfig.tripWhen({ count: 0 })).toBe(false);
   });
 });
 
