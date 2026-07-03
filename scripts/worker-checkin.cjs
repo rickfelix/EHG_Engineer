@@ -305,7 +305,10 @@ async function surfaceCoordinatorMessages(sb, sessionId, { role = null } = {}) {
     // so isDirective is true → it is NEVER auto-acked here (waits for the per-role ack via
     // scripts/ack-chairman-directive.cjs). Surface a first-class flag so the checkin JSON marks it.
     const isChairmanDirective = kind === 'chairman_directive';
-    out.push({ id: m.id, message_type: m.message_type, kind, chairman_directive: isChairmanDirective, subject: m.subject || null, body: m.body || null, created_at: m.created_at });
+    // QF-20260703-672: coordinator_reply/work_assignment writers put content in payload.body only —
+    // the top-level body column stays null for those kinds. Fall back to payload so /checkin's JSON
+    // (the worker's actual decision input) carries the real text instead of forcing a side DB query.
+    out.push({ id: m.id, message_type: m.message_type, kind, chairman_directive: isChairmanDirective, subject: m.subject || p.subject || null, body: m.body || p.body || null, created_at: m.created_at });
     try {
       if (!m.read_at) {
         // first authoritative delivery — mark DELIVERED, leave unacked so it re-surfaces once
