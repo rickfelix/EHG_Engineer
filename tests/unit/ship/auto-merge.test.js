@@ -609,4 +609,31 @@ describe('attemptAutoMerge — C2 external-repo merge-gate (SECURITY VB-2)', () 
     });
     expect(r.ok).toBe(true);
   });
+
+  // SD-LEO-INFRA-SHIP-WITNESS-APPLICATIONS-001 (FR-2, FR-4): isTrustedRepo must
+  // receive prNumber + {workKey, tier} so a per-PR witness predicate can be
+  // evaluated, not just a repo-level allowlist check.
+  it('invokes a custom isTrustedRepo predicate with (repoOwner, repoName, prNumber, {workKey, tier})', async () => {
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
+      { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
+      { match: argvMatchers.prMerge, result: { stdout: '' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-07-03T00:00:00Z\n' } },
+      { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
+      { match: argvMatchers.prViewHeadRef, result: { stdout: 'feat/x\n' } },
+      { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'Not Found (404)' } },
+    ]);
+    const calls = [];
+    const isTrustedRepo = (...args) => { calls.push(args); return true; };
+    const r = await attemptAutoMerge({
+      prNumber: 42, repoOwner: 'rickfelix', repoName: 'marketlens', runner, logger: silentLogger,
+      isTrustedRepo, workKey: 'SD-XXX-001', tier: 'standard',
+    });
+    expect(r.ok).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toBe('rickfelix');
+    expect(calls[0][1]).toBe('marketlens');
+    expect(calls[0][2]).toBe(42);
+    expect(calls[0][3]).toEqual({ workKey: 'SD-XXX-001', tier: 'standard' });
+  });
 });

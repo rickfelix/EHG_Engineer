@@ -493,14 +493,26 @@ The bare `gh pr merge <PR#> --merge --delete-branch` call silently failed for mo
 
 ```bash
 node -e "
-import('./lib/ship/auto-merge.mjs').then(async ({ attemptAutoMerge }) => {
+require('dotenv').config();
+Promise.all([
+  import('./lib/ship/auto-merge.mjs'),
+  import('./lib/ship/venture-trust-gate.mjs'),
+  import('@supabase/supabase-js'),
+]).then(async ([{ attemptAutoMerge, fetchStatusCheckRollup }, { createVentureTrustGate }, { createClient }]) => {
   const owner = (await import('node:child_process')).execSync('gh repo view --json owner --jq .owner.login').toString().trim();
   const name = (await import('node:child_process')).execSync('gh repo view --json name --jq .name').toString().trim();
-  const result = await attemptAutoMerge({ prNumber: <PR#>, repoOwner: owner, repoName: name });
+  const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const isTrustedRepo = createVentureTrustGate({ supabase, fetchStatusCheckRollup });
+  const result = await attemptAutoMerge({
+    prNumber: <PR#>, repoOwner: owner, repoName: name,
+    isTrustedRepo, witnessSupabase: supabase, workKey: '<SD-KEY or null>',
+  });
   if (!result.ok) process.exit(result.exitCode || 1);
 });
 "
 ```
+
+SD-LEO-INFRA-SHIP-WITNESS-APPLICATIONS-001 (Ship-witness B): `isTrustedRepo` here now also admits a venture repo whose `applications.trust_tier='trusted'` AND whose PR has independently passed the P1 admission + P2 witness + P3 CI subset of the mergeWork() ladder (`lib/ship/venture-trust-gate.mjs`) — platform repos (EHG/EHG_Engineer) are unaffected, still fast-pathed with zero DB lookup. `<SD-KEY or null>` is the same value passed to Step 5's `logFindings` call.
 
 If the call exits non-zero, `/ship` MUST hard-fail and skip Step 6.3 / Step 6.5 / `/learn` / next-SD selection. Do NOT rescue the exit code.
 
