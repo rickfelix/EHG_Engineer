@@ -1,7 +1,7 @@
 {
- "generated_at": "2026-07-02T01:11:18.893Z",
+ "generated_at": "2026-07-03T02:18:31.866Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 758,
+ "table_count": 759,
  "view_count": 170,
  "tables": {
   "_migration_metadata": "{key,value}",
@@ -394,6 +394,7 @@
   "mental_model_archetype_affinity": "{id,model_id,archetype,path,affinity_score,sample_size,confidence_level,updated_at}",
   "mental_model_effectiveness": "{id,model_id,stage_number,path,strategy,venture_archetype,application_count,avg_evaluation_score,avg_operator_rating,stage_progression_correlation,revenue_correlation,composite_effectiveness_score,last_calculated_at}",
   "mental_models": "{id,name,slug,category,description,core_concept,applicable_stages,applicable_paths,applicable_strategies,applicable_archetypes,difficulty_level,exercise_template,evaluation_rubric,artifact_template,prompt_context_block,is_active,created_at,updated_at}",
+  "merge_witness_telemetry": "{id,pr_number,repo,work_key,tier,lane,via_mergework,overall,rungs,evaluated_at,created_at}",
   "missions": "{id,venture_id,mission_text,version,status,proposed_by,approved_by,reasoning,created_at,updated_at}",
   "model_usage_log": "{id,session_id,sd_id,phase,subagent_type,subagent_configured_model,reported_model_name,reported_model_id,config_matches_reported,captured_at,metadata,provider_source}",
   "modeling_requests": "{id,subject,request_type,time_horizon_months,data_sources,input_parameters,status,projections,confidence_interval,actual_outcome,prediction_accuracy,venture_id,brief_id,nursery_id,requested_by,created_at,completed_at}",
@@ -583,7 +584,7 @@
   "service_tasks": "{id,venture_id,service_id,task_type,status,priority,artifacts,confidence_score,input_params,claimed_at,completed_at,error_message,metadata,created_at,updated_at}",
   "service_telemetry": "{id,task_id,venture_id,service_id,pr_url,pr_status,outcomes,venture_agent_version,reported_at,outcome,agent_version,processing_time_ms,feedback,service_key,event_type,confidence_score,routing_decision,metadata,created_at}",
   "service_versions": "{id,service_id,version,artifact_schema,changelog,deprecated_at,created_at}",
-  "session_coordination": "{id,target_session,target_sd,message_type,subject,body,payload,sender_session,sender_type,created_at,expires_at,read_at,acknowledged_at}",
+  "session_coordination": "{id,target_session,target_sd,message_type,subject,body,payload,sender_session,sender_type,created_at,expires_at,read_at,acknowledged_at,correlation_id}",
   "session_lifecycle_events": "{id,event_type,session_id,machine_id,terminal_id,pid,reason,latency_ms,metadata,created_at}",
   "ship_review_findings": "{id,pr_number,review_tier,risk_score,finding_count,finding_categories,verdict,sd_key,branch,multi_agent,reviewed_at,created_at,synthesized_at}",
   "shipping_decisions": "{id,sd_id,handoff_type,decision_type,decision,confidence,confidence_score,reasoning,context_snapshot,executed_at,execution_result,execution_duration_ms,escalated_to_human,human_decision,human_decision_at,human_notes,model,tokens_used,cost_usd,created_at,updated_at}",
