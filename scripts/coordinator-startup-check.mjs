@@ -157,6 +157,14 @@ export const STANDARD_LOOPS = [
   // (~513k workflow_trace_log + ~484k governance_audit_log) only progresses while this is armed.
   { key: 'retention', label: 'Weekly retention enforcement (archive-not-delete)', script: 'retention-enforce.js', cron: '0 3 * * 0',
     prompt: 'Run `npm run retention:apply` in EHG_Engineer and report the per-table archived/deleted counts; if the command exits non-zero or `npm run retention:check -- --liveness` reports STALE, surface to the coordinator.' },
+  // QF-20260702-272: durable twice-daily roles/duties self-review — replaces a session-only CronCreate
+  // (d5f7e707, 41 6,18 * * *) that DIED with its session, the same session-fragility class as Adam's
+  // belt-countdown duty (already durably encoded). It caught a real live drift (Duty-5 let-workers-idle
+  // miss, chairman-flagged 2026-07-02), so every coordinator startup now re-arms it. Same off-minute
+  // twice-daily cadence as the original. Chairman endorsed each crew member keeping a recurring
+  // self-review; coordinator itself requested this as sourceable candidate #1 (advisory 444cdd65 ref).
+  { key: 'roles-review', label: 'Coordinator roles/duties self-review (twice-daily, durable)', script: 'coordinator-startup-check.mjs', cron: '41 6,18 * * *',
+    prompt: 'Re-read the coordinator role contract (leo_protocol_sections id=605 + docs/protocol/fleet-coordinator-and-worker-behavior.md, rendered by `node scripts/coordinator-startup-check.mjs`) and self-audit duty execution against RESPONSIBILITIES: for each duty, confirm evidence of recent execution and REMEDIATE any drift found (e.g. idle workers with claimable work, a stale sourcing gap) rather than observe-only.' },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.
