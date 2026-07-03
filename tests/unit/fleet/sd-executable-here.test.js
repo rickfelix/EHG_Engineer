@@ -38,6 +38,27 @@ describe('isSdExecutableHere (FR-1)', () => {
     expect(v.blockClass).toBe('repo_mismatch');
   });
 
+  // QF-20260703-775: a bare shared-root cwd (no /.worktrees/<sd> segment) has no committed
+  // per-SD context — this is exactly what an idle worker's checkin runs from, and every directed
+  // WORK_ASSIGNMENT for a venture/cross-repo target SD was unconditionally rejected before this
+  // fix. repo-match should only apply once the caller is actually checked into a specific worktree.
+  it('bare shared-root cwd (idle worker, no worktree segment): FIT regardless of target', () => {
+    const v = isSdExecutableHere(
+      { sd_key: 'SD-MARKETLENS-1', target_application: 'MarketLens', status: 'draft' },
+      { cwd: 'C:/Users/x/Projects/_EHG/EHG_Engineer' }
+    );
+    expect(v).toEqual({ fit: true, blockClass: null, reasons: [] });
+  });
+
+  it('repo_mismatch still applies once checked into a specific (wrong-app) worktree', () => {
+    const v = isSdExecutableHere(
+      { sd_key: 'SD-MARKETLENS-1', target_application: 'MarketLens', status: 'draft' },
+      { cwd: 'C:/Users/x/Projects/_EHG/EHG_Engineer/.worktrees/qf/QF-999' }
+    );
+    expect(v.fit).toBe(false);
+    expect(v.blockClass).toBe('repo_mismatch');
+  });
+
   it('absent/ambiguous target => FIT (no constraint; fail-open)', () => {
     expect(isSdExecutableHere({ sd_key: 'SD-N', status: 'draft' }, ctx).fit).toBe(true);
     expect(isSdExecutableHere({ sd_key: 'SD-N', target_application: '', status: 'draft' }, ctx).fit).toBe(true);

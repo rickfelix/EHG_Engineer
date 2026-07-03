@@ -4,7 +4,7 @@
  * Seam 1: resolveCheckin surfaces a pending WORK_ASSIGNMENT on the resume path
  *         without dropping the held claim.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { classifyInboxMessage } = require('../../scripts/hooks/coordination-inbox.cjs');
@@ -194,7 +194,16 @@ describe('resolveCheckin — surface pending WORK_ASSIGNMENT on resume (seam 1)'
 // BEFORE calling tryClaim — previously it claimed unconditionally and relied on sd-start.js to
 // catch a repo-mismatched SD one step later, after the claim had already churned.
 describe('resolveCheckin — directed WORK_ASSIGNMENT claim path skips an ineligible SD (no held claim)', () => {
-  it('repo-mismatched directed assignment is ACKed and skipped, NOT claimed (falls through to idle)', async () => {
+  // QF-20260703-775: repo-match is only meaningful once the caller is checked into a COMMITTED
+  // per-SD worktree (a /.worktrees/<sd> segment in cwd) — a bare shared-root cwd (relied on
+  // implicitly by this test before, via ambient process.cwd()) has no committed context, and is
+  // exactly what an idle worker's checkin runs from by convention. Relying on ambient process.cwd()
+  // made this test's outcome depend on wherever the suite happened to run from (a real git-worktree
+  // checkout locally vs. a plain CI checkout with no /.worktrees/ segment at all) — an
+  // ambient-environment-coupled false-positive/negative class. Mock process.cwd() explicitly so the
+  // test is deterministic and exercises the scenario the fitness gate is actually meant to protect:
+  // a worker mid-build in one repo's worktree, redirected to a different-repo target.
+  it('repo-mismatched directed assignment FROM A COMMITTED WORKTREE is ACKed and skipped, NOT claimed', async () => {
     const assignmentSd = 'SD-MARKETLENS-MISMATCH-001';
     const sb = fakeSb({
       heldSd: null,
@@ -203,6 +212,7 @@ describe('resolveCheckin — directed WORK_ASSIGNMENT claim path skips an inelig
     const ws = require('../../lib/fleet/worker-status.cjs');
     const orig = ws.getMessagesForSession;
     ws.getMessagesForSession = async () => [{ id: 'msg-mismatch', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd } }];
+    const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue('C:/Users/x/Projects/_EHG/EHG_Engineer/.worktrees/qf/QF-OTHER-001');
     try {
       const res = await resolveCheckin(sb, 'sess-idle', { getCoordinator: async () => null });
       expect(res.action).not.toBe('claimed_assignment');
@@ -210,6 +220,28 @@ describe('resolveCheckin — directed WORK_ASSIGNMENT claim path skips an inelig
       expect(res.assignment_ineligible_purged).toEqual({ sd: assignmentSd, reason: 'unfit_repo_mismatch' });
     } finally {
       ws.getMessagesForSession = orig;
+      cwdSpy.mockRestore();
+    }
+  });
+
+  it('repo-mismatched directed assignment FROM THE BARE SHARED ROOT still claims (idle worker, no committed context)', async () => {
+    const assignmentSd = 'SD-MARKETLENS-MISMATCH-002';
+    const sb = fakeSb({
+      heldSd: null,
+      sdRow: { status: 'draft', sd_type: 'feature', sd_key: assignmentSd, metadata: {}, target_application: 'MarketLens' },
+    });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [{ id: 'msg-mismatch2', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd } }];
+    const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue('C:/Users/x/Projects/_EHG/EHG_Engineer');
+    try {
+      const res = await resolveCheckin(sb, 'sess-idle', { getCoordinator: async () => null });
+      expect(res.action).toBe('claimed_assignment');
+      expect(res.sd).toBe(assignmentSd);
+      expect(res.assignment_ineligible_purged).toBeUndefined();
+    } finally {
+      ws.getMessagesForSession = orig;
+      cwdSpy.mockRestore();
     }
   });
 
