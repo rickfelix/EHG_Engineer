@@ -10,6 +10,7 @@ import {
   classifyMerges,
   detectUnwitnessedMerges,
   computeAdoptionReadiness,
+  isInvalidated,
 } from '../../../lib/ship/witness-adoption.mjs';
 
 function isoDay(date) {
@@ -84,6 +85,46 @@ describe('classifyMerges / detectUnwitnessedMerges (identity matching)', () => {
   });
 });
 
+describe('isInvalidated (QF-20260703-979)', () => {
+  it('true for a row carrying a synthetic INVALIDATED rung', () => {
+    const row = { repo: 'rickfelix/marketlens', pr_number: 2, rungs: [{ id: 'P5', status: 'pass' }, { id: 'INVALIDATED', status: 'fail', reason: 'false specimen' }] };
+    expect(isInvalidated(row)).toBe(true);
+  });
+
+  it('false for a row with no INVALIDATED rung', () => {
+    const row = { repo: 'rickfelix/marketlens', pr_number: 2, rungs: [{ id: 'P5', status: 'pass' }] };
+    expect(isInvalidated(row)).toBe(false);
+  });
+
+  it('false for a row with no rungs array at all', () => {
+    expect(isInvalidated({ repo: 'rickfelix/ehg', pr_number: 1 })).toBe(false);
+    expect(isInvalidated(null)).toBe(false);
+    expect(isInvalidated(undefined)).toBe(false);
+  });
+});
+
+describe('classifyMerges / detectUnwitnessedMerges exclude invalidated rows (QF-20260703-979)', () => {
+  it('an invalidated-only telemetry row does NOT mark the merge witnessed — a false P5 specimen is never credited', () => {
+    const merges = [{ repo: 'rickfelix/marketlens', prNumber: 2, mergedAt: '2026-07-03T12:25:54Z' }];
+    const telemetryRows = [
+      { repo: 'rickfelix/marketlens', pr_number: 2, rungs: [{ id: 'P5', status: 'pass' }, { id: 'INVALIDATED', status: 'fail', reason: 'false specimen' }] },
+    ];
+    const result = detectUnwitnessedMerges(merges, telemetryRows);
+    expect(result.count).toBe(1);
+    expect(result.unwitnessed[0].prNumber).toBe(2);
+  });
+
+  it('a legitimate sibling row for the same (repo, prNumber) still marks it witnessed even when an invalidated row also exists', () => {
+    const merges = [{ repo: 'rickfelix/marketlens', prNumber: 2, mergedAt: '2026-07-03T12:25:54Z' }];
+    const telemetryRows = [
+      { repo: 'rickfelix/marketlens', pr_number: 2, rungs: [{ id: 'P5', status: 'pass' }, { id: 'INVALIDATED', status: 'fail', reason: 'false specimen' }] },
+      { repo: 'rickfelix/marketlens', pr_number: 2, rungs: [{ id: 'P5', status: 'pass' }] },
+    ];
+    const classified = classifyMerges(merges, telemetryRows);
+    expect(classified[0].witnessed).toBe(true);
+  });
+});
+
 describe('computeAdoptionReadiness', () => {
   const TODAY = '2026-08-01';
 
@@ -131,6 +172,23 @@ describe('computeAdoptionReadiness', () => {
     const readiness = computeAdoptionReadiness({ merges, telemetryRows, today: TODAY, requiredConsecutiveDays: 7 });
     expect(readiness.ready).toBe(true);
     expect(readiness.consecutiveDays).toBe(7);
+  });
+
+  it('an invalidated row alone does not count toward the readiness streak (QF-20260703-979)', () => {
+    const merges = [];
+    const telemetryRows = [];
+    for (let i = 0; i < 7; i++) {
+      const day = dayOffset(TODAY, i);
+      merges.push({ repo: 'rickfelix/ehg', prNumber: 300 + i, mergedAt: `${day}T12:00:00Z` });
+      // Day 3's row is invalidated -- must NOT count as witnessed evidence for that day.
+      const rungs = i === 3
+        ? [{ id: 'P5', status: 'pass' }, { id: 'INVALIDATED', status: 'fail', reason: 'false specimen' }]
+        : [{ id: 'P5', status: 'pass' }];
+      telemetryRows.push({ repo: 'rickfelix/ehg', pr_number: 300 + i, rungs });
+    }
+    const readiness = computeAdoptionReadiness({ merges, telemetryRows, today: TODAY, requiredConsecutiveDays: 7 });
+    expect(readiness.ready).toBe(false);
+    expect(readiness.consecutiveDays).toBe(3); // days 0,1,2 clean; day 3's invalidated row breaks the streak
   });
 
   it('reflects real production state: 1 historical telemetry row is far short of 7 days — not ready', () => {
