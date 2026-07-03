@@ -5,7 +5,7 @@
  * .eq(sdUuid) query then came back clean-empty (valid UUID, zero matches) rather
  * than erroring, so checkParentOrchestrator treated it as "not a parent."
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createPrerequisiteCheckGate } from '../../../../../scripts/modules/handoff/executors/plan-to-lead/gates/prerequisite-check.js';
 
 // Simulates a real Supabase client: the sd_key->id lookup returns the CANONICAL
@@ -66,5 +66,56 @@ describe('QF-20260703-906: PREREQUISITE_HANDOFF_CHECK id-mismatch resilience', (
     expect(result.wait).toBe(true);
     expect(result.wait_reason).toContain('1 child SD');
     expect(result.issues).toEqual([]);
+  });
+});
+
+// Simulates a genuine DB error on the parent_sd_id lookup (e.g. connectivity blip) — must
+// be surfaced distinctly, NOT silently treated the same as "zero children" (QF-20260703-906
+// fix 1/2). Falls through to the standard EXEC-TO-PLAN check like a real not-a-parent SD;
+// with no accepted handoff seeded, the gate correctly hard-fails on the actual missing
+// prerequisite rather than misreporting a parent-detection outage as that failure.
+function makeChildErrorSupabase() {
+  // A chainable eq()...eq().order().limit() tail that always resolves clean-empty
+  // (used for every query except the one under test — the parent_sd_id lookup).
+  const emptyTail = {
+    eq: () => emptyTail,
+    order: () => ({ limit: async () => ({ data: [], error: null }) }),
+  };
+  return {
+    from(table) {
+      return {
+        select() {
+          return {
+            eq(column, value) {
+              if (table === 'strategic_directives_v2' && column === 'parent_sd_id') {
+                return { async then(resolve) { resolve({ data: null, error: { message: 'connection reset' } }); return Promise.resolve(); } };
+              }
+              return { async maybeSingle() { return { data: null, error: null }; }, ...emptyTail };
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
+describe('QF-20260703-906: checkParentOrchestrator surfaces childError distinctly', () => {
+  let logSpy;
+  beforeEach(() => { logSpy = vi.spyOn(console, 'log').mockImplementation(() => {}); });
+  afterEach(() => { logSpy.mockRestore(); });
+
+  it('logs the DB error and falls through (not a silent "not a parent")', async () => {
+    const supabase = makeChildErrorSupabase();
+    const gate = createPrerequisiteCheckGate(supabase);
+    const ctx = { sd: { id: 'some-id', sd_key: 'SD-NO-SDKEY-QUERY' }, sdId: 'some-id' };
+
+    const result = await gate.validator(ctx);
+
+    const loggedWarning = logSpy.mock.calls.flat().some((a) => String(a).includes('Parent-detection query failed'));
+    expect(loggedWarning).toBe(true);
+    // Falls through to the standard prerequisite path (no accepted handoff seeded -> hard fail),
+    // proving the error was surfaced rather than masked as a false pass.
+    expect(result.passed).toBe(false);
+    expect(result.issues[0]).toContain('No accepted EXEC-TO-PLAN handoff found');
   });
 });

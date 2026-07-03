@@ -197,7 +197,15 @@ async function checkParentOrchestrator(supabase, sdUuid, _ctx) {
     .select('id, sd_key, status')
     .eq('parent_sd_id', sdUuid);
 
-  if (!childError && childSDs && childSDs.length > 0) {
+  // QF-20260703-906 (fix 1/2): a genuine query error must never be treated the same as
+  // "zero children" — both previously fell through silently to "not a parent," hiding a
+  // DB/connectivity problem behind a misleading EXEC-TO-PLAN-required failure.
+  if (childError) {
+    console.log(`   ⚠️  Parent-detection query failed: ${childError.message} — cannot determine parent status`);
+    return null;
+  }
+
+  if (childSDs && childSDs.length > 0) {
     console.log(`   ℹ️  Parent SD detected with ${childSDs.length} children`);
 
     const terminalStatuses = ['completed', 'cancelled'];
