@@ -25,7 +25,24 @@ export function createPrerequisiteCheckGate(supabase) {
       console.log('-'.repeat(50));
 
       // Use UUID (ctx.sd.id) not legacy_id (ctx.sdId) - handoffs are stored by UUID
-      const sdUuid = ctx.sd?.id || ctx.sdId;
+      let sdUuid = ctx.sd?.id || ctx.sdId;
+
+      // QF-20260703-906: ctx.sd.id has been observed carrying the SD's legacy
+      // uuid_id column instead of its canonical id, making every .eq(sdUuid) below
+      // come back clean-empty (valid UUID, zero matches) rather than erroring —
+      // which silently downgraded a parent-orchestrator WAIT into a hard FAIL.
+      // Re-resolve via sd_key (unaffected by the id/uuid_id ambiguity) whenever available.
+      if (ctx.sd?.sd_key) {
+        const { data: canonical } = await supabase
+          .from('strategic_directives_v2')
+          .select('id')
+          .eq('sd_key', ctx.sd.sd_key)
+          .maybeSingle();
+        if (canonical?.id && canonical.id !== sdUuid) {
+          console.log(`   ⚠️  sdUuid mismatch (${sdUuid} vs canonical ${canonical.id}) — using canonical id`);
+          sdUuid = canonical.id;
+        }
+      }
 
       // Auto-resolve previous failed PLAN-TO-LEAD attempts on retry
       const resolveResult = await autoResolveFailedHandoffs(supabase, sdUuid, 'PLAN-TO-LEAD');
