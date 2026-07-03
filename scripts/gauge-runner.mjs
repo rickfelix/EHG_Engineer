@@ -25,6 +25,13 @@ import { GAUGE_REGISTRY } from '../lib/governance/gauge-registry.js';
 import { computeClaimableLeaves } from './coordinator-backlog-rank.mjs';
 import { countUnrankedClaimableLeaves } from './gauge-unranked-claimable-leaves.mjs';
 import { checkoutFreshness } from '../lib/governance/checkout-freshness.js';
+import {
+  PLATFORM_REPOS,
+  WITNESS_CUTOVER_ISO,
+  defaultFetchMergedPlatformPRs,
+  detectUnwitnessedMerges,
+} from '../lib/ship/witness-adoption.mjs';
+import { spawnSync } from 'node:child_process';
 
 // relay-drop-gauge.cjs is CommonJS -- createRequire is this codebase's established ESM-import-CJS
 // seam (mirrors gauge-unranked-claimable-leaves.mjs's own worker-checkin.cjs import).
@@ -72,6 +79,16 @@ function buildDetectorResolvers(supabase) {
     },
     'relay-drop': async () => shapeRelayDropResult(await planRelayDrops(supabase)),
     'stale-tree': async () => shapeStaleTreeResult(checkoutFreshness(process.cwd(), { role: 'fleet-gauge-runner' })),
+    'ship-witness-unwitnessed-merge': async () => {
+      const ghRunner = (args) => {
+        const r = spawnSync('gh', args, { encoding: 'utf8' });
+        return { code: r.status ?? 1, stdout: r.stdout || '', stderr: r.stderr || '' };
+      };
+      const merges = PLATFORM_REPOS.flatMap((r) => defaultFetchMergedPlatformPRs(r.owner, r.name, WITNESS_CUTOVER_ISO, ghRunner));
+      const { data: telemetryRows, error } = await supabase.from('merge_witness_telemetry').select('repo, pr_number');
+      if (error) throw new Error('merge_witness_telemetry query failed: ' + error.message);
+      return detectUnwitnessedMerges(merges, telemetryRows);
+    },
   };
 }
 
