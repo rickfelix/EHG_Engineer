@@ -32,18 +32,23 @@ const when = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', 
 // (lib/chairman/decision-layman.mjs). His Gmail alerting keys on these literal strings —
 // never change either token without chairman sign-off.
 const subject = `[ALL GOOD - ADAM] heartbeat ${when} ET`;
-const text = `${body.trim()}\n\nas of ${when} ET ${EM} Adam ${EM} LEO Fleet Advisor`;
+const mod = await import(pathToFileURL(resolve('lib/notifications/resend-adapter.js')).href);
+// QF-20260703-195: stateless quiet-window-resume note — if the previous ~30min tick would have
+// been suppressed but now isn't, this is the first heartbeat back after 23:00-05:00 ET.
+const thirtyMinAgo = new Date(Date.now() - 30 * 60_000);
+const resumeNote = mod.isWithinChairmanQuietWindow(thirtyMinAgo) && !mod.isWithinChairmanQuietWindow()
+  ? 'Resuming after the overnight quiet window (23:00-05:00 ET). ' : '';
+const text = `${resumeNote}${body.trim()}\n\nas of ${when} ET ${EM} Adam ${EM} LEO Fleet Advisor`;
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px">' +
-  `<p style="font-size:14px;margin:0 0 8px">${esc(body.trim())}</p>` +
+  `<p style="font-size:14px;margin:0 0 8px">${esc(resumeNote)}${esc(body.trim())}</p>` +
   `<p style="font-size:11px;color:#999;margin:14px 0 0">as of ${when} ET ${EM} Adam ${EM} LEO Fleet Advisor</p></div>`;
 
 if (DRY) {
   console.log('=== [ADAM HEARTBEAT EMAIL — DRY RUN] no email sent ===\nSUBJECT: ' + subject + '\n---\n' + text + '\n---');
 } else {
   try {
-    const mod = await import(pathToFileURL(resolve('lib/notifications/resend-adapter.js')).href);
     const r = await mod.sendEmail({ from: 'Adam ' + EM + ' LEO Fleet Advisor <onboarding@resend.dev>', to: process.env.CLAUDE_NOTIFY_EMAIL, subject, html, text });
     console.log('ADAM-HEARTBEAT-EMAIL', JSON.stringify(r));
   } catch (e) {
