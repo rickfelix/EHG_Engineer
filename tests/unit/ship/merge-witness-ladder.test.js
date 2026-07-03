@@ -90,8 +90,31 @@ describe('evaluateP3CI', () => {
 });
 
 describe('evaluateP4ProtectionIntegrity', () => {
-  it('always not_applicable pre-P0', () => {
+  it('not_applicable when no repo/checker is supplied (backward-compat, pre-P0 stub)', () => {
     expect(evaluateP4ProtectionIntegrity().status).toBe(RUNG_STATUS.NOT_APPLICABLE);
+  });
+
+  // QF-20260703-744: regression fixture reproducing the exact false-negative —
+  // protection genuinely live on the repo must report PASS, never a fail/stub.
+  it('pass/enabled — marketlens-shaped fixture with protection confirmed live', () => {
+    const r = evaluateP4ProtectionIntegrity({
+      repoOwner: 'rickfelix', repoName: 'marketlens', checkProtection: () => true,
+    });
+    expect(r.status).toBe(RUNG_STATUS.PASS);
+  });
+
+  it('fail — checker authoritatively confirms protection is NOT enabled', () => {
+    const r = evaluateP4ProtectionIntegrity({
+      repoOwner: 'o', repoName: 'r', checkProtection: () => false,
+    });
+    expect(r.status).toBe(RUNG_STATUS.FAIL);
+  });
+
+  it('not_evaluable — checker returns null (403/scope/network), never reported as disabled', () => {
+    const r = evaluateP4ProtectionIntegrity({
+      repoOwner: 'o', repoName: 'r', checkProtection: () => null,
+    });
+    expect(r.status).toBe(RUNG_STATUS.NOT_EVALUABLE);
   });
 });
 

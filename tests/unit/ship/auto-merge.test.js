@@ -11,6 +11,7 @@ import {
   attemptAutoMerge,
   detectDraftState,
   detectEnforceAdmins,
+  detectBranchProtectionEnabled,
   buildMergeArgs,
   verifyMerged,
   verifyBranchDeleted,
@@ -122,6 +123,31 @@ describe('detectEnforceAdmins', () => {
   it('defaults to false (safer fallback) on API lookup failure', () => {
     const runner = () => ({ code: 1, stdout: '', stderr: 'token scope' });
     expect(detectEnforceAdmins('o', 'r', runner)).toBe(false);
+  });
+});
+
+// QF-20260703-744: the retro witness evaluator's P4 rung needs a check that never
+// collapses a read failure into "disabled" — the false-negative that under-reported
+// coverage on rickfelix/marketlens (protection live, P4 wrongly reported NOT-ENABLED).
+describe('detectBranchProtectionEnabled', () => {
+  it('returns true (enabled) — marketlens-shaped fixture with protection live', () => {
+    const runner = () => ({ code: 0, stdout: '{"required_status_checks":{}}', stderr: '' });
+    expect(detectBranchProtectionEnabled('rickfelix', 'marketlens', 'main', runner)).toBe(true);
+  });
+
+  it('returns false (confirmed disabled) on a genuine 404 "Branch not protected"', () => {
+    const runner = () => ({ code: 1, stdout: '', stderr: 'GraphQL: Branch not protected (branch)' });
+    expect(detectBranchProtectionEnabled('o', 'r', 'main', runner)).toBe(false);
+  });
+
+  it('returns null (not_evaluable) on 403/scope failure — never folded into disabled', () => {
+    const runner = () => ({ code: 1, stdout: '', stderr: 'HTTP 403: Resource not accessible by integration' });
+    expect(detectBranchProtectionEnabled('o', 'r', 'main', runner)).toBeNull();
+  });
+
+  it('returns null (not_evaluable) on a network/unknown failure', () => {
+    const runner = () => ({ code: 1, stdout: '', stderr: 'connection reset' });
+    expect(detectBranchProtectionEnabled('o', 'r', 'main', runner)).toBeNull();
   });
 });
 
