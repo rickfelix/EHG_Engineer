@@ -281,6 +281,53 @@ function recoverOrphanWorktree(sdKey, worktreePath, repoRoot, worktreesDir, opts
 }
 
 /**
+ * Resolve an already-existing feature branch for sdKey, or null if none exists.
+ * Exact match FIRST: SD-key namespaces are hierarchical (a child key like "-F1" is
+ * an alphanumeric continuation of a parent key like "-F"), so an unanchored
+ * `feat/${sdKey}*` glob can match a DESCENDANT's branch instead of the SD's own,
+ * stealing its worktree. QF-20260703-130. The variant-discovery fallback (kept for
+ * branches with a non-alphanumeric suffix, e.g. renamed variants) is anchored on a
+ * separator so an alphanumeric continuation can never match.
+ */
+function resolveExistingBranch(sdKey, repoRoot) {
+  try {
+    execSync(`git show-ref --verify --quiet refs/heads/feat/${sdKey}`, {
+      cwd: repoRoot, stdio: 'pipe'
+    });
+    return `feat/${sdKey}`;
+  } catch { /* no exact local branch */ }
+
+  try {
+    const branches = execSync('git branch --list "feat/' + sdKey + '[-._]*"', {
+      cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
+    }).trim();
+    if (branches) {
+      return branches.split('\n')[0].replace(/^[*+]?\s*/, '').trim();
+    }
+  } catch { /* no match */ }
+
+  try {
+    const remoteExact = execSync(`git ls-remote --heads origin "feat/${sdKey}"`, {
+      cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
+    }).trim();
+    if (remoteExact) {
+      return `feat/${sdKey}`;
+    }
+  } catch { /* no exact remote branch */ }
+
+  try {
+    const remote = execSync('git ls-remote --heads origin "feat/' + sdKey + '[-._]*"', {
+      cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
+    }).trim();
+    if (remote) {
+      return remote.split('\n')[0].split('\t')[1].replace('refs/heads/', '');
+    }
+  } catch { /* no match */ }
+
+  return null;
+}
+
+/**
  * Create a new worktree for the SD
  */
 function createWorktree(sdKey, repoRoot, opts = {}) {
@@ -331,34 +378,8 @@ function createWorktree(sdKey, repoRoot, opts = {}) {
   // preserved by `createQuotaExceededError` inside the helper.
   enforceWorktreeQuota(repoRoot, worktreesDir);
 
-  // Look for an existing feature branch
-  const _branchPrefix = `feat/${sdKey}`;
-  let branch = null;
-
-  try {
-    const branches = execSync('git branch --list "feat/' + sdKey + '*"', {
-      cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
-    }).trim();
-    if (branches) {
-      branch = branches.split('\n')[0].replace(/^[*+]?\s*/, '').trim();
-    }
-  } catch { /* no match */ }
-
-  if (!branch) {
-    // Check remote
-    try {
-      const remote = execSync('git ls-remote --heads origin "feat/' + sdKey + '*"', {
-        cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
-      }).trim();
-      if (remote) {
-        branch = remote.split('\n')[0].split('\t')[1].replace('refs/heads/', '');
-      }
-    } catch { /* no match */ }
-  }
-
-  if (!branch) {
-    branch = `feat/${sdKey}`;
-  }
+  // Look for an existing feature branch (exact match first — QF-20260703-130).
+  const branch = resolveExistingBranch(sdKey, repoRoot) || `feat/${sdKey}`;
 
   // Sanitize branch name before git operations (SD-LEO-INFRA-AUTO-WORKTREE-START-001 US-004)
   const branchCheck = sanitizeBranchName(branch);
@@ -753,4 +774,4 @@ if (isMainScript) {
   });
 }
 
-export { resolve, resolveFromDB, resolveFromScan, validateWorktreePath, resolveVentureRepoRoot };
+export { resolve, resolveFromDB, resolveFromScan, validateWorktreePath, resolveVentureRepoRoot, resolveExistingBranch };
