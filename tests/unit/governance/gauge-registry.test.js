@@ -19,14 +19,14 @@ import {
 const VALID_FEEDBACK_TYPES = ['issue', 'enhancement'];
 
 describe('GAUGE_REGISTRY shape', () => {
-  it('exports exactly 4 seed entries (3 original + ship-witness-unwitnessed-merge, SD-LEO-INFRA-SHIP-WITNESS-ENFORCE-001)', () => {
-    expect(GAUGE_REGISTRY).toHaveLength(4);
+  it('exports exactly 7 seed entries (4 prior + 3 work-boundary gauges, SD-LEO-INFRA-009-LEAF-WORK-001)', () => {
+    expect(GAUGE_REGISTRY).toHaveLength(7);
   });
 
-  it('all 4 entries are activated — no stub entries remain', () => {
+  it('all 7 entries are activated — no stub entries remain', () => {
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
-    expect(live).toHaveLength(4);
+    expect(live).toHaveLength(7);
     expect(stubs).toHaveLength(0);
   });
 
@@ -84,10 +84,18 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(selectEnabledEntries(undefined)).toEqual([]);
   });
 
-  it('the real GAUGE_REGISTRY selects all 4 entries now that every stub is activated', () => {
+  it('the real GAUGE_REGISTRY selects all 7 entries now that every stub is activated', () => {
     const selected = selectEnabledEntries(GAUGE_REGISTRY);
-    expect(selected).toHaveLength(4);
-    expect(selected.map((e) => e.id).sort()).toEqual(['relay-drop', 'ship-witness-unwitnessed-merge', 'stale-tree', 'unranked-claimable-leaves']);
+    expect(selected).toHaveLength(7);
+    expect(selected.map((e) => e.id).sort()).toEqual([
+      'adam-claimed-or-built-sd',
+      'coordinator-sourced-sd',
+      'relay-drop',
+      'ship-witness-unwitnessed-merge',
+      'solomon-dispatched-sd',
+      'stale-tree',
+      'unranked-claimable-leaves',
+    ]);
   });
 
   it('SD-LEO-INFRA-SHIP-WITNESS-ENFORCE-001: the new entry has a resolvable detectorFn and the >0-count tripWhen convention', () => {
@@ -96,6 +104,17 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(entry.detectorFn).toBe('ship-witness-unwitnessed-merge');
     expect(entry.thresholdConfig.tripWhen({ count: 1 })).toBe(true);
     expect(entry.thresholdConfig.tripWhen({ count: 0 })).toBe(false);
+  });
+
+  it('SD-LEO-INFRA-009-LEAF-WORK-001: all 3 work-boundary entries have a resolvable detectorFn, ownerRole coordinator, and the >0-count tripWhen convention', () => {
+    for (const id of ['coordinator-sourced-sd', 'adam-claimed-or-built-sd', 'solomon-dispatched-sd']) {
+      const entry = GAUGE_REGISTRY.find((e) => e.id === id);
+      expect(entry).toBeTruthy();
+      expect(entry.detectorFn).toBe(id);
+      expect(entry.ownerRole).toBe('coordinator');
+      expect(entry.thresholdConfig.tripWhen({ count: 1 })).toBe(true);
+      expect(entry.thresholdConfig.tripWhen({ count: 0 })).toBe(false);
+    }
   });
 });
 
