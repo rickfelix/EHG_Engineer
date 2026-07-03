@@ -1,7 +1,9 @@
 {
-  "sdKey": "SD-LEO-INFRA-SHIP-WITNESS-MERGEWORK-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-SHIP-WITNESS-MERGEWORK-001",
-  "createdAt": "2026-07-03T00:33:29.205Z",
-  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
-  "baseRef": "origin/main"
+  "sdKey": "QF-20260702-806",
+  "workType": "QF",
+  "workKey": "QF-20260702-806",
+  "expectedBranch": "qf/QF-20260702-806",
+  "createdAt": "2026-07-03T02:48:31.286Z",
+  "hostname": "Legion-Laptop",
+  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
 }
