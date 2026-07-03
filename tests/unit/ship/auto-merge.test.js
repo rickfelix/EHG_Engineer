@@ -145,11 +145,16 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
     // additional gh api call is made when the headRefName lookup fails.
     // QF-20260516-082: verifyMerged cross-checks state==='MERGED' after
     // mergedAt, adding one more pr-view call to the happy path.
+    // SD-LEO-INFRA-SHIP-WITNESS-MERGEWORK-001 FR-4: the mergeWork() P1-P5
+    // ladder observes every merge attempt in shadow mode, adding one final
+    // read-only pr-view (statusCheckRollup, for the P3 rung) after the merge
+    // succeeds. It never affects `r` above — only appends to the call log.
     expect(calls.map((c) => c.slice(0, 2))).toEqual([
       ['pr', 'view'],
       ['pr', 'ready'],
       ['api', 'repos/rickfelix/EHG_Engineer/branches/main/protection'],
       ['pr', 'merge'],
+      ['pr', 'view'],
       ['pr', 'view'],
       ['pr', 'view'],
       ['pr', 'view'],
