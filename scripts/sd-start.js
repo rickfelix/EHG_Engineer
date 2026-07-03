@@ -78,10 +78,6 @@ import sdFit from '../lib/fleet/sd-executable-here.cjs';
 // SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-5): propose-only partial-block triage surfaced on an unfit
 // fail-fast (a missing-precondition block proposes a code/run split — never created here).
 import unfitTriage from '../lib/fleet/unfit-triage.cjs';
-// QF-20260703-295: reuse the SAME human_action_required predicate the self-claim/sweep paths already
-// enforce (classifyDispatchIneligibility is the SSOT for this axis) instead of re-deriving it, so the
-// direct sd-start.js claim path can no longer bypass a HELD (requires_human_action) SD.
-import { classifyDispatchIneligibility } from '../lib/fleet/claim-eligibility.cjs';
 
 dotenv.config();
 
@@ -163,11 +159,16 @@ async function enforceDependencyGate(sd, effectiveId) {
   }
 }
 
-// QF-20260703-295: HELD-SD claim gate, at parity with classifyDispatchIneligibility (already
-// enforced by the self-claim/sweep paths). Idempotent — safe to call again after orchestrator
-// routing reassigns `sd` to a leaf child, mirroring enforceCadenceGate's re-check pattern.
+// QF-20260703-295: HELD-SD claim gate, at parity with classifyDispatchIneligibility's
+// human_action_required axis (already enforced by the self-claim/sweep paths). Idempotent —
+// safe to call again after orchestrator routing reassigns `sd` to a leaf child, mirroring
+// enforceCadenceGate's re-check pattern. Checks the metadata field directly rather than the
+// full classifier's return value — classifyDispatchIneligibility short-circuits on the FIRST
+// matching axis (orchestrator_parent / test_fixture_key are checked before human_action_required),
+// so an == 'human_action_required' equality check would silently miss a HELD SD that is ALSO an
+// orchestrator parent or test-fixture key (adversarial review finding, ship-gate self-review).
 function enforceHumanActionGate(sd, effectiveId) {
-  if (classifyDispatchIneligibility(sd) !== 'human_action_required') return;
+  if (!sd?.metadata?.requires_human_action) return;
   console.log(`\n${colors.red}❌ ${effectiveId} requires HUMAN ACTION — cannot be claimed${colors.reset}`);
   console.log('   metadata.requires_human_action=true — held for chairman/coordinator review.');
   console.log(`\n${colors.bold}Action:${colors.reset} Pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
