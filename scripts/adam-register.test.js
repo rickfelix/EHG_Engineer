@@ -1,7 +1,7 @@
 // Tests for SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-A
 // scripts/adam-register.cjs — idempotent verify-first Adam role tagger.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 const { computeAdamTag, registerAdam, ADAM_ROLE } = require('./adam-register.cjs');
 
