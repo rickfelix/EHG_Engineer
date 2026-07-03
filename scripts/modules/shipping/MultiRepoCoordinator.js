@@ -13,12 +13,19 @@
  * @version 2.0.0 - Uses centralized lib/multi-repo module
  */
 
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { existsSync } from 'fs';
 import {
   discoverRepos as discoverReposFromLib,
   getPrimaryRepos
 } from '../../../lib/multi-repo/index.js';
+
+// QF-20260703-388: per-repo git/gh calls use execFileSync (no shell) so a timeout's
+// kill signal reaches the real process directly -- execSync's shell:true default wraps
+// the command in cmd.exe on Windows, and killing that wrapper on timeout leaves the
+// actual git/gh child running, which is why preflight survived SIGTERM at 60s/180s.
+const PER_REPO_TIMEOUT_MS = 15000;
+const SCAN_DEADLINE_MS = 60000;
 
 export class MultiRepoCoordinator {
   /**
@@ -65,6 +72,8 @@ export class MultiRepoCoordinator {
     // Discover repos
     this.repos = this.discoverRepos();
     console.log(`   Found ${Object.keys(this.repos).length} repositories`);
+    this._deadlineAt = Date.now() + SCAN_DEADLINE_MS;
+    this.partial = false;
 
     // Find SD branches in all repos
     await this.findSDBranches();
@@ -80,6 +89,7 @@ export class MultiRepoCoordinator {
 
     return {
       passed: this.branchStatus.filter(b => b.needsAction).length === 0,
+      partial: this.partial,
       repos: this.repos,
       branches: this.branchStatus,
       coordinationPlan
@@ -100,23 +110,28 @@ export class MultiRepoCoordinator {
     ];
 
     for (const [repoName, repoInfo] of Object.entries(this.repos)) {
+      if (Date.now() > this._deadlineAt) {
+        console.log(`   ⚠️  PREFLIGHT_PARTIAL: multi-repo scan deadline (${SCAN_DEADLINE_MS / 1000}s) exceeded, skipping remaining repos`);
+        this.partial = true;
+        break;
+      }
       if (!existsSync(repoInfo.path)) {
         continue;
       }
 
       try {
         // Fetch latest
-        execSync('git fetch --prune', {
+        execFileSync('git', ['fetch', '--prune'], {
           cwd: repoInfo.path,
-          timeout: 30000,
+          timeout: PER_REPO_TIMEOUT_MS,
           stdio: 'pipe'
         });
 
         // Get remote branches
-        const branchList = execSync('git branch -r', {
+        const branchList = execFileSync('git', ['branch', '-r'], {
           encoding: 'utf8',
           cwd: repoInfo.path,
-          timeout: 10000
+          timeout: PER_REPO_TIMEOUT_MS
         });
 
         for (const pattern of branchPatterns) {
@@ -133,9 +148,9 @@ export class MultiRepoCoordinator {
             // Get commit count ahead of main
             let commitsAhead = 0;
             try {
-              const count = execSync(
-                `git rev-list --count origin/main..${branch}`,
-                { encoding: 'utf8', cwd: repoInfo.path, timeout: 10000 }
+              const count = execFileSync(
+                'git', ['rev-list', '--count', `origin/main..${branch}`],
+                { encoding: 'utf8', cwd: repoInfo.path, timeout: PER_REPO_TIMEOUT_MS }
               ).trim();
               commitsAhead = parseInt(count);
             } catch {
@@ -145,9 +160,9 @@ export class MultiRepoCoordinator {
             // Check if branch is fully merged
             let isMerged = false;
             try {
-              execSync(`git merge-base --is-ancestor ${branch} origin/main`, {
+              execFileSync('git', ['merge-base', '--is-ancestor', branch, 'origin/main'], {
                 cwd: repoInfo.path,
-                timeout: 10000,
+                timeout: PER_REPO_TIMEOUT_MS,
                 stdio: 'pipe'
               });
               isMerged = true;
@@ -181,11 +196,16 @@ export class MultiRepoCoordinator {
   async checkPRStatus() {
     for (const branch of this.branchStatus) {
       if (!branch.needsAction) continue;
+      if (Date.now() > this._deadlineAt) {
+        console.log(`   ⚠️  PREFLIGHT_PARTIAL: multi-repo scan deadline (${SCAN_DEADLINE_MS / 1000}s) exceeded, skipping remaining PR checks`);
+        this.partial = true;
+        break;
+      }
 
       try {
-        const result = execSync(
-          `gh pr list --repo ${branch.repoInfo.github} --head ${branch.branch} --state all --json number,state,url --limit 1`,
-          { encoding: 'utf8', timeout: 30000 }
+        const result = execFileSync(
+          'gh', ['pr', 'list', '--repo', branch.repoInfo.github, '--head', branch.branch, '--state', 'all', '--json', 'number,state,url', '--limit', '1'],
+          { encoding: 'utf8', timeout: PER_REPO_TIMEOUT_MS }
         );
 
         const prs = JSON.parse(result || '[]');
