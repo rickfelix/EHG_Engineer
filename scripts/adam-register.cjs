@@ -131,26 +131,41 @@ async function registerAdam(supabase, sessionId, opts = {}) {
     // holds even under a race). Residual: two simultaneous STALE restarts can both register briefly
     // — surfaced by the MULTIPLE_ADAMS detector + refused on the next register (eventual convergence).
     const retired = [];
+    const retireFallbackUsed = []; // QF-20260703-883: priors retired via JS-merge (clear_adam_flag RPC absent)
+    let retireBlocked = false;
     if (decision.retire.length) {
       const nowMs2 = Date.now();
       const current = await fetchAllAdams(supabase);
+      const bySessionId = new Map(current.map((a) => [a.session_id, a]));
       const freshNow = new Set(current.filter((a) => isFresh(a.heartbeat_at, nowMs2)).map((a) => a.session_id));
       for (const sid of decision.retire) {
         if (freshNow.has(sid)) continue; // became fresh since the decision — do NOT clear a restarting Adam
         const r = await supabase.rpc('clear_adam_flag', { p_session_id: sid }).then((x) => x, (e) => ({ error: e }));
-        if (!(r && r.error)) retired.push(sid); // best-effort: a failed stale-clear is swept later
+        if (!(r && r.error)) { retired.push(sid); continue; }
+        if (!isMissingFunctionError(r.error)) { retireBlocked = true; continue; } // real error — swept later
+        // RPC absent (migration unapplied) — fall back to the same JS-merge tagging uses, so the prior
+        // is actually retired instead of silently staying role=adam forever (QF-20260703-883).
+        const priorMeta = (bySessionId.get(sid) || {}).metadata || {};
+        const { error: mergeErr } = await supabase.from('claude_sessions')
+          .update({ metadata: { ...priorMeta, role: 'adam_retired', non_fleet: true } }).eq('session_id', sid);
+        if (mergeErr) { retireBlocked = true; continue; }
+        retired.push(sid);
+        retireFallbackUsed.push(sid);
       }
     }
     if (retired.length) action = action === 'tagged_fallback' ? 'tagged_after_retire_fallback' : 'tagged_after_retire';
     // FR-4: re-target the retired prior Adam(s)' unread inbound to this new session (comms survive
-    // the handoff). Fail-open + idempotent; a drain error never fails the registration.
+    // the handoff) — including priors retired via the JS-merge fallback above. Fail-open + idempotent;
+    // a drain error never fails the registration.
     let drained = 0;
     if (retired.length) {
       const d = await drainAdamOutbound(supabase, { newSessionId: sessionId, oldSessionIds: retired });
       drained = (d && d.moved) || 0;
     }
     return { ok: true, action, session_id: sessionId, role: ADAM_ROLE, non_fleet: true, retired, drained,
-      message: `Registered as the single Adam${retired.length ? ` (retired stale prior(s): ${retired.join(', ')}; re-targeted ${drained} inbound row(s))` : ''}${fallbackReason ? ` — fail-soft JS merge (set_adam_flag RPC ${fallbackReason}; apply the chairman-gated migration for atomic writes)` : ' via atomic set_adam_flag'}.` };
+      retire_fallback_used: retireFallbackUsed.length ? retireFallbackUsed : undefined,
+      retire_blocked: retireBlocked || undefined,
+      message: `Registered as the single Adam${retired.length ? ` (retired stale prior(s): ${retired.join(', ')}; re-targeted ${drained} inbound row(s))` : ''}${retireFallbackUsed.length ? ` [clear_adam_flag RPC absent — retired via JS-merge fallback; apply the chairman-gated migration for atomic clears]` : ''}${retireBlocked ? ' — WARNING: a stale prior could NOT be retired (see retire_blocked)' : ''}${fallbackReason ? ` — fail-soft JS merge (set_adam_flag RPC ${fallbackReason}; apply the chairman-gated migration for atomic writes)` : ' via atomic set_adam_flag'}.` };
   }
 
   const { alreadyTagged, merged } = computeAdamTag(row.metadata);

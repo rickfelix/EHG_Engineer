@@ -228,6 +228,24 @@ describe('registerAdam (FR-3 flag-gated single-Adam guard)', () => {
     expect(calls.rpc.map((c) => c.fn)).toEqual(expect.arrayContaining(['clear_adam_flag', 'set_adam_flag']));
     expect(calls.drainSelect).toBe(1); // FR-4 drain ran (re-targeted old->new)
   });
+
+  // QF-20260703-883: clear_adam_flag RPC absent (migration unapplied) must NOT silently leave
+  // retired:[] forever — falls back to the JS-merge used for tagging, and still drains the prior's
+  // stranded inbound. Loud reporting via retire_fallback_used (no more silent no-op).
+  it('flag ON: RPC absent + STALE prior => JS-merge retire fallback (no silent retired:[])', async () => {
+    process.env.ROLE_HANDOFF_ADAM_V1 = 'on';
+    const { supabase, calls } = regStub({
+      allAdams: [{ session_id: 'staleprior', heartbeat_at: fresh(999), metadata: { role: 'adam', non_fleet: true } }],
+      rpcError: { code: 'PGRST202', message: 'Could not find the function' },
+      drainRows: [{ id: 'm1' }],
+    });
+    const r = await registerAdam(supabase, 'self', { nowMs: NOW });
+    expect(r).toMatchObject({ ok: true, action: 'tagged_after_retire_fallback', drained: 1 });
+    expect(r.retired).toEqual(['staleprior']);
+    expect(r.retire_fallback_used).toEqual(['staleprior']);
+    expect(r.retire_blocked).toBeUndefined();
+    expect(calls.drainSelect).toBe(1); // FR-4 drain still ran for the JS-merge-retired prior
+  });
 });
 
 describe('drainAdamOutbound (FR-4 idempotent re-target)', () => {
