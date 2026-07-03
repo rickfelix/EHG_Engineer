@@ -40,6 +40,7 @@ const { assertSdDispatchable, isFullUuid } = require('../lib/coordinator/dispatc
 // they cannot drift. Absorbs QF-20260526-577.
 const { CLAIM_HOLDING_STATUSES, computeClaimedSdKeys } = require('../lib/claim/holding-statuses.cjs');
 const { SILENCE_HARD_CAP_MS } = require('../lib/fleet/silence-cap.cjs'); // FR-4: shared writer<=reader cap
+const { detectDormantWorkers } = require('../lib/fleet/dormancy-watchdog.cjs'); // QF-20260703-076
 // SD-LEO-INFRA-STALE-SWEEP-PID-LIVENESS-GUARD-001: PID-liveness guard for the conflict-eviction path.
 const { shouldHoldClaim } = require('../lib/fleet/claim-release-guard.cjs');
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3b — top-level require so wire-check
@@ -672,6 +673,33 @@ async function main() {
   // QF-20260525-211 (early-exit gap): reap orphaned QF claims BEFORE the early-return below,
   // so a stale QF claim is cleared even when zero SD-claiming sessions remain (fleet wound down).
   await clearStaleQfClaims(supabase, now, actions, warnings);
+
+  // QF-20260703-076: session-independent dormancy watchdog -- prior backstops run INSIDE
+  // a turn and can't observe a worker whose armed wakeup never fired. Detector-only.
+  try {
+    const { data: allTracked } = await supabase
+      .from('claude_sessions')
+      .select('session_id, loop_state, expected_silence_until, process_alive_at')
+      .eq('status', 'active');
+    const dormant = detectDormantWorkers(allTracked || [], now.getTime());
+    const DORMANCY_ALERT_THRESHOLD = 2;
+    if (dormant.length >= DORMANCY_ALERT_THRESHOLD) {
+      const { emitFeedback } = await import('../lib/governance/emit-feedback.js');
+      const hourBucket = now.toISOString().slice(0, 13);
+      await emitFeedback({
+        supabase,
+        title: `Fleet dormancy: ${dormant.length} worker(s) armed a wakeup that never fired`,
+        description: `Dormant session_ids: ${dormant.map((d) => d.session_id).join(', ')}. Each has an elapsed expected_silence_until and a stale/absent process_alive_at -- the native ScheduleWakeup did not re-invoke the loop. See QF-20260703-076 RCA.`,
+        category: 'fleet_dormancy',
+        severity: 'high',
+        dedup_key: `dormancy:${hourBucket}`,
+      });
+    }
+  } catch (watchdogErr) {
+    if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+      console.error('[sweep] dormancy watchdog swallowed: ' + watchdogErr.message);
+    }
+  }
 
   if (!sessions || sessions.length === 0) {
     if (actions.length > 0) {
