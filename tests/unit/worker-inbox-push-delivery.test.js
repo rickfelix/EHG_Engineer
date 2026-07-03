@@ -59,7 +59,7 @@ function recordingSb({ setIdentityRow = null, sessionMeta = { role: 'worker' }, 
         update(patch) { return { eq: (col, val) => { updates.push({ id: col === 'id' ? val : _eqId, patch }); return Promise.resolve({ error: null }); } }; },
       };
       // registerRollCall uses .insert().select().single()
-      api.insert = (row) => ({ select: () => ({ single: () => Promise.resolve({ data: { id: 'rc-1' }, error: null }) }) });
+      api.insert = (_row) => ({ select: () => ({ single: () => Promise.resolve({ data: { id: 'rc-1' }, error: null }) }) });
       return api;
     },
   };
@@ -155,6 +155,40 @@ describe('surfaceCoordinatorMessages — non-draining bounded delivery (FR-1/FR-
     ws.getMessagesForSession = async () => { throw new Error('db down'); };
     try {
       expect(await surfaceCoordinatorMessages(sb, 'sess-1', {})).toEqual([]);
+    } finally { ws.getMessagesForSession = orig; }
+  });
+
+  it('QF-20260703-672: a coordinator_reply row with body:null falls back to payload.body (the real content)', async () => {
+    const sb = recordingSb();
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [
+      {
+        id: 'cr1', message_type: 'COACHING', body: null,
+        payload: { kind: 'coordinator_reply', body: 'the actual reply text lives here' },
+        created_at: '2026-07-03T00:00:00Z', read_at: null,
+      },
+    ];
+    try {
+      const out = await surfaceCoordinatorMessages(sb, 'sess-1', { role: 'worker' });
+      expect(out).toHaveLength(1);
+      expect(out[0].body).toBe('the actual reply text lives here'); // NOT null
+    } finally { ws.getMessagesForSession = orig; }
+  });
+
+  it('a populated top-level body still wins over payload.body (no regression on the common case)', async () => {
+    const sb = recordingSb();
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [
+      {
+        id: 'c1', message_type: 'COACHING', subject: 'top subject', body: 'top-level body',
+        payload: { subject: 'payload subject', body: 'payload body' },
+        created_at: '2026-07-03T00:00:00Z', read_at: null,
+      },
+    ];
+    try {
+      const out = await surfaceCoordinatorMessages(sb, 'sess-1', { role: 'worker' });
+      expect(out[0].subject).toBe('top subject');
+      expect(out[0].body).toBe('top-level body');
     } finally { ws.getMessagesForSession = orig; }
   });
 });
