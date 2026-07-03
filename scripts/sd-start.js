@@ -159,6 +159,22 @@ async function enforceDependencyGate(sd, effectiveId) {
   }
 }
 
+// QF-20260703-295: HELD-SD claim gate, at parity with classifyDispatchIneligibility's
+// human_action_required axis (already enforced by the self-claim/sweep paths). Idempotent —
+// safe to call again after orchestrator routing reassigns `sd` to a leaf child, mirroring
+// enforceCadenceGate's re-check pattern. Checks the metadata field directly rather than the
+// full classifier's return value — classifyDispatchIneligibility short-circuits on the FIRST
+// matching axis (orchestrator_parent / test_fixture_key are checked before human_action_required),
+// so an == 'human_action_required' equality check would silently miss a HELD SD that is ALSO an
+// orchestrator parent or test-fixture key (adversarial review finding, ship-gate self-review).
+function enforceHumanActionGate(sd, effectiveId) {
+  if (!sd?.metadata?.requires_human_action) return;
+  console.log(`\n${colors.red}❌ ${effectiveId} requires HUMAN ACTION — cannot be claimed${colors.reset}`);
+  console.log('   metadata.requires_human_action=true — held for chairman/coordinator review.');
+  console.log(`\n${colors.bold}Action:${colors.reset} Pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
+  process.exit(1);
+}
+
 const MAX_FALLBACK_ATTEMPTS = 3;
 
 /**
@@ -791,6 +807,9 @@ async function main() {
     process.exit(1);
   }
 
+  // 1.2. QF-20260703-295: reject direct claims on HELD SDs (metadata.requires_human_action).
+  enforceHumanActionGate(sd, effectiveId);
+
   // 1.4. SD-LEO-INFRA-PR-CADENCE-PRECLAIM-GATE-001: Pre-claim cadence gate.
   // Refuses claim if SD is in a stability window. Re-runs after orchestrator
   // leaf routing so a cadence-blocked leaf is not silently claimed via the parent.
@@ -931,6 +950,10 @@ async function main() {
       // Without this re-check, a cadence-blocked leaf is silently claimed via
       // the parent (the parent has no next_workable_after of its own).
       await enforceCadenceGate(sd, effectiveId);
+      // QF-20260703-295: same re-check for a HELD leaf — the child selector
+      // (findUnclaimedChild) does not filter on requires_human_action, so a HELD
+      // child routed to via the parent must still be refused here.
+      enforceHumanActionGate(sd, effectiveId);
       } // close else (route-to-leaf)
     }
   }
