@@ -280,6 +280,28 @@ function recoverOrphanWorktree(sdKey, worktreePath, repoRoot, worktreesDir, opts
   return { path: worktreePath, branch, created: true, recovered: 'force-add' };
 }
 
+// Exact-ref match first: an unanchored glob can match a DESCENDANT's branch
+// (e.g. "-F1") instead of the SD's own ("-F"). QF-20260703-130.
+function resolveExistingBranch(sdKey, repoRoot) {
+  const opts = { cwd: repoRoot, encoding: 'utf8', stdio: 'pipe' };
+  try {
+    execSync(`git show-ref --verify --quiet refs/heads/feat/${sdKey}`, { cwd: repoRoot, stdio: 'pipe' });
+    return `feat/${sdKey}`;
+  } catch { /* no exact local branch */ }
+  try {
+    const branches = execSync(`git branch --list "feat/${sdKey}[-._]*"`, opts).trim();
+    if (branches) return branches.split('\n')[0].replace(/^[*+]?\s*/, '').trim();
+  } catch { /* no match */ }
+  try {
+    if (execSync(`git ls-remote --heads origin "feat/${sdKey}"`, opts).trim()) return `feat/${sdKey}`;
+  } catch { /* no exact remote branch */ }
+  try {
+    const remote = execSync(`git ls-remote --heads origin "feat/${sdKey}[-._]*"`, opts).trim();
+    if (remote) return remote.split('\n')[0].split('\t')[1].replace('refs/heads/', '');
+  } catch { /* no match */ }
+  return null;
+}
+
 /**
  * Create a new worktree for the SD
  */
@@ -331,34 +353,8 @@ function createWorktree(sdKey, repoRoot, opts = {}) {
   // preserved by `createQuotaExceededError` inside the helper.
   enforceWorktreeQuota(repoRoot, worktreesDir);
 
-  // Look for an existing feature branch
-  const _branchPrefix = `feat/${sdKey}`;
-  let branch = null;
-
-  try {
-    const branches = execSync('git branch --list "feat/' + sdKey + '*"', {
-      cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
-    }).trim();
-    if (branches) {
-      branch = branches.split('\n')[0].replace(/^[*+]?\s*/, '').trim();
-    }
-  } catch { /* no match */ }
-
-  if (!branch) {
-    // Check remote
-    try {
-      const remote = execSync('git ls-remote --heads origin "feat/' + sdKey + '*"', {
-        cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
-      }).trim();
-      if (remote) {
-        branch = remote.split('\n')[0].split('\t')[1].replace('refs/heads/', '');
-      }
-    } catch { /* no match */ }
-  }
-
-  if (!branch) {
-    branch = `feat/${sdKey}`;
-  }
+  // Look for an existing feature branch (exact match first — QF-20260703-130).
+  const branch = resolveExistingBranch(sdKey, repoRoot) || `feat/${sdKey}`;
 
   // Sanitize branch name before git operations (SD-LEO-INFRA-AUTO-WORKTREE-START-001 US-004)
   const branchCheck = sanitizeBranchName(branch);
@@ -753,4 +749,4 @@ if (isMainScript) {
   });
 }
 
-export { resolve, resolveFromDB, resolveFromScan, validateWorktreePath, resolveVentureRepoRoot };
+export { resolve, resolveFromDB, resolveFromScan, validateWorktreePath, resolveVentureRepoRoot, resolveExistingBranch };
