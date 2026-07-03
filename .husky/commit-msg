@@ -21,6 +21,9 @@ if [ "$SKIP_STRUNKIAN" = "1" ]; then
   exit 0
 fi
 
+# Stamp a fleet attribution trailer (QF-20260703-311) — fail-open, never blocks
+node scripts/append-fleet-commit-trailer.js "$1"
+
 # Run EXEC commit gate
 node scripts/exec-commit-gate.js "$1"
 
