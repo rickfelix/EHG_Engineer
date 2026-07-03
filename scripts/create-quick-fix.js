@@ -27,6 +27,7 @@ import { getRepoPaths, ENGINEER_ROOT } from '../lib/repo-paths.js';
 import { preclaimFeedbackRows, resolveFeedbackIds, findFeedbackRefConflicts } from '../lib/feedback/preclaim-feedback-rows.js';
 import { releasePreclaim } from '../lib/feedback/release-preclaim.js';
 import { armCliTeardown } from '../lib/cli-graceful-exit.js';
+import { checkFeedbackPremiseLiveness } from '../lib/eva/feedback-premise-adapter.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -210,6 +211,27 @@ async function createQuickFix(options = {}) {
         }
         console.warn(`\n⚠️  [ALLOW_DUPLICATE] proceeding anyway: ${options.allowDuplicate}`);
       }
+    }
+
+    // SD-FDBK-ENH-UAT-AGENT-FEEDBACK-001 FR-1: promotion-time liveness re-check.
+    // A feedback row can outlive its own defect (fixed by an SD that never linked
+    // back to it -- the b6594220/QF-20260703-769 incident). Re-verify each named
+    // defect still reproduces before filing a QF; fails OPEN (never blocks a live one).
+    if (!options.forceLiveness) {
+      const { data: freshFb } = await supabase
+        .from('feedback').select('id, title, description, category, severity')
+        .in('id', resolvedFeedbackIds);
+      for (const fb of freshFb || []) {
+        const verdict = await checkFeedbackPremiseLiveness(fb, { supabase });
+        if (verdict.status === 'STALE') {
+          console.error(`\n❌ [STALE_PREMISE] feedback ${fb.id} (${(fb.title || '').slice(0, 60)}) already fixed:`);
+          for (const e of verdict.evidence || []) console.error(`     ${e}`);
+          console.error('   Override (audited): --force-liveness "<reason>"');
+          process.exit(1);
+        }
+      }
+    } else {
+      console.warn(`\n⚠️  [FORCE_LIVENESS] skipping premise re-check: ${options.forceLiveness}`);
     }
   } else {
     // SD-FDBK-INFRA-MAKE-FEEDBACK-BASED-001 FR-1: even without --feedback-id, a QF whose
@@ -634,6 +656,13 @@ for (let i = 0; i < args.length; i++) {
       console.error('❌ --allow-duplicate requires a non-empty reason');
       process.exit(1);
     }
+  } else if (arg === '--force-liveness') {
+    // SD-FDBK-ENH-UAT-AGENT-FEEDBACK-001: audited override for the STALE_PREMISE gate.
+    options.forceLiveness = args[++i];
+    if (!options.forceLiveness || !String(options.forceLiveness).trim()) {
+      console.error('❌ --force-liveness requires a non-empty reason');
+      process.exit(1);
+    }
   } else if (arg === '--help' || arg === '-h') {
     console.log(`
 LEO Quick-Fix Workflow - Create Issue
@@ -654,6 +683,7 @@ Options:
   --estimated-loc        Estimated lines of code (default: 10)
   --target-application   Target repo: 'EHG' or 'EHG_Engineer' (auto-detected from cwd)
   --allow-duplicate      Audited override for dedup gate; requires non-empty <reason>
+  --force-liveness       Audited override for STALE_PREMISE gate; requires non-empty <reason>
   --help, -h             Show this help
 
 Examples:
