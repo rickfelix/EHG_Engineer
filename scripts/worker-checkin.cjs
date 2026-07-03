@@ -1314,16 +1314,25 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       // terminal status (completed/cancelled/deferred) AFTER the assignment was created — the
       // in_progress->terminal race. claim_sd now refuses terminal claims, but a never-ACKed
       // assignment would re-fire every tick (the "retried on every tick" symptom), so ACK it
-      // here and fall through to self-claim. Fail-open: a query error skips the purge and lets
-      // the normal claim path (now guarded by the RPC) handle it.
+      // here and fall through to self-claim.
       let terminalStatus = null;
       let assignedSdRow = null;
+      let assignedSdFetchFailed = false;
       try {
-        const { data: tgt } = await sb.from('strategic_directives_v2')
+        const { data: tgt, error: tgtErr } = await sb.from('strategic_directives_v2')
           .select('status, sd_type, sd_key, metadata, target_application').eq('sd_key', sdKey).maybeSingle();
-        assignedSdRow = tgt || null;
-        if (tgt && ['completed', 'cancelled', 'deferred'].includes(tgt.status)) terminalStatus = tgt.status;
-      } catch { /* fail-open: leave terminalStatus null, attempt the claim below */ }
+        // QF-20260703-151: a query ERROR is distinct from a genuine not-found and must NOT be
+        // silently discarded — the prior code destructured only `data`, so a failed fetch left
+        // assignedSdRow=null, which the ineligibleReason ternary below then treated as "nothing
+        // to check" (fail-open), admitting an orchestrator-parent / repo-mismatched SD straight
+        // through to tryClaim (live-hit: SD-EHG-PRODUCT-UIUX-REMEDIATION-001, audit flag c71c3a54).
+        if (tgtErr) {
+          assignedSdFetchFailed = true;
+        } else {
+          assignedSdRow = tgt || null;
+          if (tgt && ['completed', 'cancelled', 'deferred'].includes(tgt.status)) terminalStatus = tgt.status;
+        }
+      } catch { assignedSdFetchFailed = true; }
       // QF-20260703-091 (RCA-confirmed): mirror the self-claim paths' shared fitness/premise gate
       // (classifyDispatchIneligibility, incl. the repo-match axis) onto this DIRECTED-assignment
       // path too. Previously only sd-start.js caught a repo-mismatched directed assignment, AFTER
@@ -1334,7 +1343,12 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       const ineligibleReason = (!terminalStatus && assignedSdRow)
         ? classifyDispatchIneligibility(assignedSdRow, { cwd: process.cwd() })
         : null;
-      if (terminalStatus) {
+      if (assignedSdFetchFailed) {
+        // QF-20260703-151: FAIL CLOSED — could not confirm fitness for this assignment. Never
+        // ack (the assignment stays live for a retry once the transient fetch issue clears) and
+        // never fall through to tryClaim on an unconfirmed target.
+        base.assignment_claim_error = 'fitness_check_query_failed';
+      } else if (terminalStatus) {
         await ackMessage(sb, assignment.id, { role: sessionRole, kind: assignment.payload?.kind, messageType: assignment.message_type });
         base.stale_assignment_purged = { sd: sdKey, status: terminalStatus };
       } else if (ineligibleReason) {

@@ -265,6 +265,43 @@ describe('resolveCheckin — directed WORK_ASSIGNMENT claim path skips an inelig
       ws.getMessagesForSession = orig;
     }
   });
+
+  // QF-20260703-151: a query ERROR fetching the assigned SD's fitness row must fail CLOSED —
+  // never silently discard `error` and fall through to tryClaim as if nothing needed checking
+  // (the bug that let an orchestrator-parent / repo-mismatched SD get claimed, live-hit:
+  // SD-EHG-PRODUCT-UIUX-REMEDIATION-001).
+  it('a query error fetching the assignment target fails CLOSED — no claim, no ack, retryable', async () => {
+    const assignmentSd = 'SD-FETCH-ERROR-001';
+    const sb = {
+      rpc: () => Promise.resolve({ data: { success: true }, error: null }),
+      from(table) {
+        return {
+          select() { return this; }, eq() { return this; }, gte() { return this; },
+          order() { return this; }, limit() { return this; },
+          maybeSingle() {
+            if (table === 'claude_sessions') return Promise.resolve({ data: { metadata: { role: 'worker' }, sd_key: null }, error: null });
+            if (table === 'strategic_directives_v2') return Promise.resolve({ data: null, error: { message: 'connection reset' } });
+            return Promise.resolve({ data: null, error: null });
+          },
+          insert() { return Promise.resolve({ error: null }); },
+          update() { return { eq() { return Promise.resolve({ error: null }); } }; },
+        };
+      },
+    };
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [{ id: 'msg-fetch-error', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd } }];
+    try {
+      const res = await resolveCheckin(sb, 'sess-idle', { getCoordinator: async () => null });
+      expect(res.action).not.toBe('claimed_assignment');
+      expect(res.sd).not.toBe(assignmentSd);
+      expect(res.assignment_claim_error).toBe('fitness_check_query_failed');
+      expect(res.assignment_ineligible_purged).toBeUndefined();
+      expect(res.stale_assignment_purged).toBeUndefined();
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
 });
 
 // QF-20260703-476: a WORK_ASSIGNMENT whose read_at got stamped by some other delivery path
