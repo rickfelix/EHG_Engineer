@@ -61,7 +61,7 @@ node scripts/solomon-startup-check.mjs
 ```
 
 `CronCreate`/`CronList` are **HARNESS tools** (not Node-callable), so the script only EMITS specs — YOU arm them. Solomon's tick is **three loops**:
-1. **inbox-monitor** (every 15 min) — drain `solomon_consult` + coordinator-directed kinds (`node scripts/solomon-advisory.cjs inbox --quiet`).
+1. **inbox-monitor** (every 5 min) — drain `solomon_consult` + coordinator-directed kinds (`node scripts/solomon-advisory.cjs inbox --quiet`).
 2. **self-adherence** (every 12 h) — Solomon audits its OWN role-contract adherence (`node scripts/solomon-self-adherence-review.mjs`): contract-duty parity → propose-only remediation on drift (never builds).
 3. **deep-sweep** (every 6 h) — an agent-judgment Mode-B deep-reasoning tick: enforce the `task_budget` at ENTRY first, then answer the highest-value open consult; stay silent if over budget or nothing pending.
 
