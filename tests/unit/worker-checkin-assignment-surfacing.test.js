@@ -59,7 +59,7 @@ describe('extractDirectedSd — structured directed fields only (finding #2)', (
 
 // resolveCheckin seam 1 — fake sb: session holds mySd; an unread WORK_ASSIGNMENT targets a
 // different SD. The assignment must surface on the resume result without dropping the claim.
-function fakeSb({ heldSd, assignmentSd, windDown }) {
+function fakeSb({ heldSd, assignmentSd, windDown, sdRow }) {
   return {
     rpc: () => Promise.resolve({ data: { success: true }, error: null }),
     from(table) {
@@ -68,7 +68,7 @@ function fakeSb({ heldSd, assignmentSd, windDown }) {
         order() { return this; }, limit() { return this; },
         maybeSingle() {
           if (table === 'claude_sessions') return Promise.resolve({ data: { metadata: { role: 'worker', ...(windDown ? { wind_down: windDown } : {}) }, sd_key: heldSd }, error: null });
-          if (table === 'strategic_directives_v2') return Promise.resolve({ data: { status: 'in_progress' }, error: null });
+          if (table === 'strategic_directives_v2') return Promise.resolve({ data: sdRow || { status: 'in_progress' }, error: null });
           return Promise.resolve({ data: null, error: null });
         },
         insert() { return Promise.resolve({ error: null }); },
@@ -183,6 +183,50 @@ describe('resolveCheckin — surface pending WORK_ASSIGNMENT on resume (seam 1)'
       expect(res.sd).toBe(heldSd);
       expect(res.pending_work_assignment?.sd).toBe('SD-REDIRECT-009');
       expect(res.pending_work_assignment?.message_id).toBe('directed-1');
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+});
+
+// QF-20260703-091 (RCA-confirmed): a NO-held-claim session with a directed WORK_ASSIGNMENT must
+// run the same repo-fitness/premise gate (classifyDispatchIneligibility) the self-claim paths use
+// BEFORE calling tryClaim — previously it claimed unconditionally and relied on sd-start.js to
+// catch a repo-mismatched SD one step later, after the claim had already churned.
+describe('resolveCheckin — directed WORK_ASSIGNMENT claim path skips an ineligible SD (no held claim)', () => {
+  it('repo-mismatched directed assignment is ACKed and skipped, NOT claimed (falls through to idle)', async () => {
+    const assignmentSd = 'SD-MARKETLENS-MISMATCH-001';
+    const sb = fakeSb({
+      heldSd: null,
+      sdRow: { status: 'draft', sd_type: 'feature', sd_key: assignmentSd, metadata: {}, target_application: 'MarketLens' },
+    });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [{ id: 'msg-mismatch', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd } }];
+    try {
+      const res = await resolveCheckin(sb, 'sess-idle', { getCoordinator: async () => null });
+      expect(res.action).not.toBe('claimed_assignment');
+      expect(res.sd).not.toBe(assignmentSd);
+      expect(res.assignment_ineligible_purged).toEqual({ sd: assignmentSd, reason: 'unfit_repo_mismatch' });
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+
+  it('a FIT directed assignment still claims normally (regression guard)', async () => {
+    const assignmentSd = 'SD-EHG-ENGINEER-FIT-002';
+    const sb = fakeSb({
+      heldSd: null,
+      sdRow: { status: 'draft', sd_type: 'feature', sd_key: assignmentSd, metadata: {}, target_application: null },
+    });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [{ id: 'msg-fit', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd } }];
+    try {
+      const res = await resolveCheckin(sb, 'sess-idle', { getCoordinator: async () => null });
+      expect(res.action).toBe('claimed_assignment');
+      expect(res.sd).toBe(assignmentSd);
+      expect(res.assignment_ineligible_purged).toBeUndefined();
     } finally {
       ws.getMessagesForSession = orig;
     }

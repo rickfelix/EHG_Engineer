@@ -1281,14 +1281,29 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       // here and fall through to self-claim. Fail-open: a query error skips the purge and lets
       // the normal claim path (now guarded by the RPC) handle it.
       let terminalStatus = null;
+      let assignedSdRow = null;
       try {
         const { data: tgt } = await sb.from('strategic_directives_v2')
-          .select('status').eq('sd_key', sdKey).maybeSingle();
+          .select('status, sd_type, sd_key, metadata, target_application').eq('sd_key', sdKey).maybeSingle();
+        assignedSdRow = tgt || null;
         if (tgt && ['completed', 'cancelled', 'deferred'].includes(tgt.status)) terminalStatus = tgt.status;
       } catch { /* fail-open: leave terminalStatus null, attempt the claim below */ }
+      // QF-20260703-091 (RCA-confirmed): mirror the self-claim paths' shared fitness/premise gate
+      // (classifyDispatchIneligibility, incl. the repo-match axis) onto this DIRECTED-assignment
+      // path too. Previously only sd-start.js caught a repo-mismatched directed assignment, AFTER
+      // the claim had already churned (coordinator re-dispatch -> checkin claims unconditionally ->
+      // sd-start releases -> repeats every tick). No tierCtx: an explicit coordinator directive
+      // should not be second-guessed by the WORK-DOWN-NEVER-UP self-claim preference, only the hard
+      // fitness/premise axes (repo mismatch, terminal/superseded premise, orchestrator parent, etc).
+      const ineligibleReason = (!terminalStatus && assignedSdRow)
+        ? classifyDispatchIneligibility(assignedSdRow, { cwd: process.cwd() })
+        : null;
       if (terminalStatus) {
         await ackMessage(sb, assignment.id, { role: sessionRole, kind: assignment.payload?.kind, messageType: assignment.message_type });
         base.stale_assignment_purged = { sd: sdKey, status: terminalStatus };
+      } else if (ineligibleReason) {
+        await ackMessage(sb, assignment.id, { role: sessionRole, kind: assignment.payload?.kind, messageType: assignment.message_type });
+        base.assignment_ineligible_purged = { sd: sdKey, reason: ineligibleReason };
       } else {
         const claimed = await tryClaim(sb, sdKey, sessionId);
         if (claimed.ok) {
