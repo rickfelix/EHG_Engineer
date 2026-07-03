@@ -114,7 +114,7 @@ function resolveAdamAdvisoryTarget({ toSolomon, flagOn, coordinatorId, solomonId
   return { target: coordinatorId || 'broadcast-coordinator', via: null };
 }
 
-function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass, replyWindowMs, now }) {
+function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass, replyWindowMs, now, addressee }) {
   // request mode (expectsReply) is always live-handshake (synchronous, bounded-timeout await);
   // send mode defaults to fire-and-forget unless the sender opts into reply-needed via --reply-class
   // (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
@@ -136,6 +136,9 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
   // to the peer's session_id (--to solomon, ADAM_SOLOMON_TWOWAY_V1=on) instead of the default
   // coordinator-relay target. Additive/optional — undefined for every existing send path.
   if (via) payload.via = via;
+  // R1 (QF-20260703-964): the WRITTEN addressee, stamped alongside target_session, so a reader
+  // can see who this was explicitly sent to without re-deriving it from the resolved UUID.
+  if (addressee) payload.addressee = addressee;
   if (reuseClass) payload.reuse_class = reuseClass;
   if (Array.isArray(appliesToScopes) && appliesToScopes.length) payload.applies_to_scopes = appliesToScopes;
   if (body) {
@@ -526,7 +529,7 @@ async function main() {
   const argv = process.argv.slice(2);
   const mode = argv[0];
   if (mode !== 'send' && mode !== 'request' && mode !== 'replies' && mode !== 'inbox' && mode !== 'status') {
-    console.error('Usage: node scripts/adam-advisory.cjs send "<body>" [--reply-to <correlation_or_row_id>] [--to solomon]  |  request "<question>" [--timeout <ms>] [--to solomon]  |  replies  |  inbox  |  status [--working "<body>" [--eta <ms>]]');
+    console.error('Usage: node scripts/adam-advisory.cjs send "<body>" [--reply-to <correlation_or_row_id>] [--to solomon|<session_id>]  |  request "<question>" [--timeout <ms>] [--to solomon|<session_id>]  |  replies  |  inbox  |  status [--working "<body>" [--eta <ms>]]');
     process.exit(2);
   }
 
@@ -605,11 +608,19 @@ async function main() {
   if (!body) { console.error('ERROR: advisory body required.'); process.exit(2); }
 
   const isRelayClassPeer = !!(peerArg && PEER_KINDS[peerArg] && PEER_KINDS[peerArg].class === 'relay');
-  if (peerArg && peerArg !== 'solomon' && !isRelayClassPeer) {
-    const relayPeers = Object.keys(PEER_KINDS).filter((k) => PEER_KINDS[k].class === 'relay').join(', ');
-    console.error(`ERROR: --to ${peerArg} is not supported (one of "solomon", ${relayPeers} — omit --to for the default coordinator-relay target).`);
+  // R1 (QF-20260703-964, crew-comms audit finding-008): 'coordinator'/'adam' need proper
+  // role-alias resolution (out of R1 scope — no live-lookup wiring here); any OTHER --to value
+  // (e.g. a reasoner's raw session_id) is now accepted as a DIRECT target instead of hard-erroring
+  // — the root incident: Adam had no way to address a specific reasoner/Solomon-bound session
+  // directly, so those messages silently misrouted to the coordinator via the old hardcoded default.
+  // insertCoordinationRow already REFUSES a non-UUID/non-sentinel target_session (DISPATCH_TARGET_INVALID),
+  // so a mistyped nickname fails loud rather than dead-lettering silently.
+  const RESERVED_PEER_WORDS = new Set(['coordinator', 'adam']);
+  if (peerArg && peerArg !== 'solomon' && !isRelayClassPeer && RESERVED_PEER_WORDS.has(peerArg)) {
+    console.error(`ERROR: --to ${peerArg} needs role-alias resolution not yet supported (R1 scope: raw session_id targets only). Omit --to for the default coordinator relay.`);
     process.exit(2);
   }
+  const isDirectTarget = !!(peerArg && peerArg !== 'solomon' && !isRelayClassPeer && !RESERVED_PEER_WORDS.has(peerArg));
   const twoWayV1On = isAdamSolomonTwoWayV1Enabled();
   if (peerArg === 'solomon' && !twoWayV1On) {
     console.error('ERROR: --to solomon is gated by ADAM_SOLOMON_TWOWAY_V1=on (currently OFF). Omit --to to route via the coordinator.');
@@ -641,7 +652,13 @@ async function main() {
   const coordinatorId = await getActiveCoordinatorId(supabase);
   const toSolomon = peerArg === 'solomon';
   const solomonId = toSolomon && twoWayV1On ? await getActiveSolomonId(supabase).catch(() => null) : null;
-  const { target, via } = resolveAdamAdvisoryTarget({ toSolomon, flagOn: twoWayV1On, coordinatorId, solomonId });
+  const { target: defaultTarget, via: defaultVia } = resolveAdamAdvisoryTarget({ toSolomon, flagOn: twoWayV1On, coordinatorId, solomonId });
+  // R1: an explicit non-solomon/non-relay --to overrides the coordinator-relay default with a
+  // direct session_id target. Additive — every existing caller (no --to, or --to solomon) is
+  // byte-identical to before.
+  const target = isDirectTarget ? peerArg : defaultTarget;
+  const via = isDirectTarget ? 'direct' : defaultVia;
+  const addressee = peerArg || 'coordinator';
   const senderCallsign = await snapshotSender(supabase, sessionId);
 
   if (mode === 'request' && !isTwoWayV2Enabled()) {
@@ -662,7 +679,17 @@ async function main() {
   }
   // FR-1: scope-tag the advisory from the sending repo (reuse-first, fail-soft).
   const { scopeKey, reuseClass, appliesToScopes } = await resolveScopeForSend(supabase, process.cwd());
-  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass: replyClassArg, replyWindowMs });
+  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass: replyClassArg, replyWindowMs, addressee });
+  // R1 writer-side check: warn (never block) when the body's own "[ADAM -> X]" header disagrees
+  // with the actual resolved addressee — the audit's addressee-vs-target divergence gauge.
+  const headerMatch = /^\[ADAM\s*->\s*([^\]]+)\]/i.exec(body);
+  if (headerMatch) {
+    const written = headerMatch[1].trim().toLowerCase();
+    const resolved = addressee.toLowerCase();
+    if (!written.includes(resolved) && !resolved.includes(written)) {
+      console.warn(`⚠ ADDRESSEE MISMATCH: body header says "[ADAM -> ${headerMatch[1].trim()}]" but this advisory is routed to "${addressee}". Pass --to ${written.replace(/\s+/g, '-')} if that was the intent.`);
+    }
+  }
   // SD-REFILL-00XK256L: the 2-hypothesis-bar GATE. Block an UNATTESTED urgent model-availability
   // broadcast — Adam's research sweep has twice fabricated a fleet-wide "model cutoff" and broadcast it
   // before running the cheap discriminator. The sender attests the bar was cleared with --alarm-verified.
