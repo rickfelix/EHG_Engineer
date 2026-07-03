@@ -232,3 +232,60 @@ describe('resolveCheckin — directed WORK_ASSIGNMENT claim path skips an inelig
     }
   });
 });
+
+// QF-20260703-476: a WORK_ASSIGNMENT whose read_at got stamped by some other delivery path
+// (e.g. a stale/legacy poll) but was never genuinely actioned (acknowledged_at still NULL, no
+// claim recorded) must still reach the claim step -- an unreadOnly pull hides it forever.
+// These stubs assert on the OPTIONS resolveCheckin actually passes (unackedOnly, not unreadOnly),
+// simulating real Postgres filter semantics: a row only "exists" in the returned set when the
+// options it was called with are the ones that would truly select it.
+function makeFilteringStub(row) {
+  return async (sb, sessionId, opts = {}) => {
+    if (opts.unackedOnly) return row.acknowledged_at == null ? [row] : [];
+    if (opts.unreadOnly) return row.read_at == null ? [row] : [];
+    return [row];
+  };
+}
+
+describe('resolveCheckin — a stamped-but-unclaimed assignment still reaches the claim step', () => {
+  it('no held claim: a read_at-set/acknowledged_at-null row is still claimed (not hidden by unreadOnly)', async () => {
+    const assignmentSd = 'SD-EHG-ENGINEER-STAMPED-003';
+    const sb = fakeSb({
+      heldSd: null,
+      sdRow: { status: 'draft', sd_type: 'feature', sd_key: assignmentSd, metadata: {}, target_application: null },
+    });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = makeFilteringStub({
+      id: 'msg-stamped', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd },
+      read_at: '2026-07-03T10:00:00.000Z', acknowledged_at: null,
+    });
+    try {
+      const res = await resolveCheckin(sb, 'sess-idle', { getCoordinator: async () => null });
+      expect(res.action).toBe('claimed_assignment');
+      expect(res.sd).toBe(assignmentSd);
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+
+  it('held claim (seam 1): a read_at-set/acknowledged_at-null row still surfaces as pending_work_assignment', async () => {
+    const heldSd = 'SD-CURRENT-004';
+    const assignmentSd = 'SD-REDIRECT-005';
+    const sb = fakeSb({ heldSd, assignmentSd });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = makeFilteringStub({
+      id: 'msg-stamped-busy', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd },
+      read_at: '2026-07-03T10:00:00.000Z', acknowledged_at: null,
+    });
+    try {
+      const res = await resolveCheckin(sb, 'sess-busy', { getCoordinator: async () => null });
+      expect(res.action).toBe('resume');
+      expect(res.sd).toBe(heldSd);
+      expect(res.pending_work_assignment?.sd).toBe(assignmentSd);
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+});
