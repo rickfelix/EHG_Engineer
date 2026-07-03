@@ -680,16 +680,8 @@ async function main() {
   // FR-1: scope-tag the advisory from the sending repo (reuse-first, fail-soft).
   const { scopeKey, reuseClass, appliesToScopes } = await resolveScopeForSend(supabase, process.cwd());
   const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass: replyClassArg, replyWindowMs, addressee });
-  // R1 writer-side check: warn (never block) when the body's own "[ADAM -> X]" header disagrees
-  // with the actual resolved addressee — the audit's addressee-vs-target divergence gauge.
-  const headerMatch = /^\[ADAM\s*->\s*([^\]]+)\]/i.exec(body);
-  if (headerMatch) {
-    const written = headerMatch[1].trim().toLowerCase();
-    const resolved = addressee.toLowerCase();
-    if (!written.includes(resolved) && !resolved.includes(written)) {
-      console.warn(`⚠ ADDRESSEE MISMATCH: body header says "[ADAM -> ${headerMatch[1].trim()}]" but this advisory is routed to "${addressee}". Pass --to ${written.replace(/\s+/g, '-')} if that was the intent.`);
-    }
-  }
+  // R1 (QF-20260703-964): the addressee-vs-target divergence WARN lives ONE place — the
+  // insertCoordinationRow choke point (lib/coordinator/dispatch.cjs) — not duplicated here.
   // SD-REFILL-00XK256L: the 2-hypothesis-bar GATE. Block an UNATTESTED urgent model-availability
   // broadcast — Adam's research sweep has twice fabricated a fleet-wide "model cutoff" and broadcast it
   // before running the cheap discriminator. The sender attests the bar was cleared with --alarm-verified.
