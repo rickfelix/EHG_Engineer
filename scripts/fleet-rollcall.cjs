@@ -43,6 +43,22 @@ function fmtAge(ts, nowMs) {
   return `${Math.round(ms / 3_600_000)}h ago`;
 }
 
+/**
+ * Multi-signal verdict for one session: ALIVE (via the shared isSessionAlive SSOT, or a
+ * recent outbound session_coordination send — the Specimen-2 signal that SSOT doesn't cover),
+ * STALE (updated recently but no live signal fired), or DEAD.
+ * Pure — takes the already-fetched isSessionAlive result + lastSentAt so it's unit-testable
+ * without a live DB/heartbeat clock.
+ */
+function computeVerdict(session, { nowMs, lastSentAt, liveResult }) {
+  const live = liveResult || isSessionAlive(session, { nowMs });
+  if (live.alive) return { v: 'ALIVE', reason: live.reason };
+  if (lastSentAt && nowMs - Date.parse(lastSentAt) < RECENT_SEND_MS) return { v: 'ALIVE', reason: 'recent_coordination_send' };
+  const lastSeenMs = nowMs - Date.parse(session.updated_at || session.heartbeat_at || 0);
+  if (Number.isFinite(lastSeenMs) && lastSeenMs < STALE_WINDOW_MS) return { v: 'STALE', reason: 'no_live_signal' };
+  return { v: 'DEAD', reason: null };
+}
+
 const LOOKBACK_MS = 72 * 60 * 60 * 1000; // roll-call is about "who's here now" — bound out ancient history
 
 async function main() {
@@ -70,13 +86,7 @@ async function main() {
   for (const m of msgs || []) if (!lastSent.has(m.sender_session)) lastSent.set(m.sender_session, m.created_at);
 
   function verdict(s) {
-    const live = isSessionAlive(s, { nowMs });
-    if (live.alive) return { v: 'ALIVE', reason: live.reason };
-    const sentAt = lastSent.get(s.session_id);
-    if (sentAt && nowMs - Date.parse(sentAt) < RECENT_SEND_MS) return { v: 'ALIVE', reason: 'recent_coordination_send' };
-    const lastSeenMs = nowMs - Date.parse(s.updated_at || s.heartbeat_at || 0);
-    if (Number.isFinite(lastSeenMs) && lastSeenMs < STALE_WINDOW_MS) return { v: 'STALE', reason: 'no_live_signal' };
-    return { v: 'DEAD', reason: null };
+    return computeVerdict(s, { nowMs, lastSentAt: lastSent.get(s.session_id) });
   }
 
   console.log(`\nFLEET ROLL-CALL — ${new Date(nowMs).toISOString()} (considering activity since ${cutoff})\n`);
@@ -117,4 +127,8 @@ async function main() {
   console.log(`\nSUMMARY: workers alive=${tally.ALIVE} stale=${tally.STALE} dead=${tally.DEAD}${orphanPids.length ? `, unregistered=${orphanPids.length}` : ''}\n`);
 }
 
-main().catch(err => { console.error('fleet-rollcall failed:', err.message); process.exit(1); });
+module.exports = { fmtAge, computeVerdict, ROLE_SINGLETONS, RECENT_SEND_MS, STALE_WINDOW_MS };
+
+if (require.main === module) {
+  main().catch(err => { console.error('fleet-rollcall failed:', err.message); process.exit(1); });
+}
