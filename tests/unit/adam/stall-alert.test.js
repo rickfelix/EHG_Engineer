@@ -17,7 +17,26 @@ vi.mock('../../../lib/chairman/record-pending-decision.mjs', () => ({
 }));
 import { recordPendingDecision } from '../../../lib/chairman/record-pending-decision.mjs';
 
-beforeEach(() => { recordPendingDecision.mockClear(); });
+vi.mock('../../../lib/adam/task-ledger.js', () => ({ setStatus: vi.fn(async () => ({})) }));
+import { setStatus } from '../../../lib/adam/task-ledger.js';
+
+beforeEach(() => { recordPendingDecision.mockClear(); setStatus.mockClear(); });
+
+/** Minimal supabase stub for strategic_directives_v2 status lookups (isSdTerminal). */
+function sbWithSdStatus(statusBySdKey) {
+  return {
+    from: (table) => {
+      if (table !== 'strategic_directives_v2') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) };
+      return {
+        select: () => ({
+          eq: (_col, val) => ({
+            maybeSingle: async () => ({ data: val in statusBySdKey ? { status: statusBySdKey[val] } : null }),
+          }),
+        }),
+      };
+    },
+  };
+}
 
 describe('bumpMovementTicks', () => {
   it('resets to 0 when updated_at differs from the snapshot (real movement)', () => {
@@ -75,5 +94,70 @@ describe('checkAndAlertStalls', () => {
     const parents = [{ id: 'p4', title: 'x', updated_at: 'v1', inFlightNextStep: false }];
     const { snapshot } = await checkAndAlertStalls(sb, parents, {});
     expect(snapshot.p4).toEqual({ updated_at: 'v1', ticks: 0 });
+  });
+});
+
+describe('QF-20260703-229: false-stall flood fix', () => {
+  const sb = {};
+
+  it('skips a node whose board status is already terminal (done/cancelled) — never a stall', async () => {
+    const parents = [
+      { id: 'd1', title: 'Done thread', updated_at: 'fixed', status: 'done', inFlightNextStep: false },
+      { id: 'c1', title: 'Cancelled thread', updated_at: 'fixed', status: 'cancelled', inFlightNextStep: false },
+    ];
+    const prevSnapshot = {
+      d1: { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 },
+      c1: { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 },
+    };
+    const { alerted } = await checkAndAlertStalls(sb, parents, prevSnapshot);
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+    expect(alerted).toEqual([]);
+  });
+
+  it('self-heals a sourced_sd node whose linked SD already completed — closes it, does not alert', async () => {
+    const stubSb = sbWithSdStatus({ 'SD-DONE-001': 'completed' });
+    const parents = [{
+      id: 'sd1', title: 'Ship SD-DONE-001', updated_at: 'fixed',
+      source_kind: 'sourced_sd', source_ref: 'SD-DONE-001', inFlightNextStep: false,
+    }];
+    const prevSnapshot = { sd1: { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 } };
+
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+
+    expect(setStatus).toHaveBeenCalledWith(stubSb, 'sd1', 'done');
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+    expect(alerted).toEqual([]);
+  });
+
+  it('still alerts a sourced_sd node whose linked SD is genuinely still open', async () => {
+    const stubSb = sbWithSdStatus({ 'SD-OPEN-001': 'in_progress' });
+    const parents = [{
+      id: 'sd2', title: 'Ship SD-OPEN-001', updated_at: 'fixed',
+      source_kind: 'sourced_sd', source_ref: 'SD-OPEN-001', inFlightNextStep: false,
+    }];
+    const prevSnapshot = { sd2: { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 } };
+
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+
+    expect(setStatus).not.toHaveBeenCalled();
+    expect(recordPendingDecision).toHaveBeenCalledTimes(1);
+    expect(alerted).toEqual([{ id: 'sd2', title: 'Ship SD-OPEN-001', escalated: true }]);
+  });
+
+  it('caps escalation at ONE digest decision for multiple genuine stalls — never per-node (the 82-row flood)', async () => {
+    const parents = [
+      { id: 'a', title: 'Thread A', updated_at: 'fixed', inFlightNextStep: false },
+      { id: 'b', title: 'Thread B', updated_at: 'fixed', inFlightNextStep: false },
+      { id: 'c', title: 'Thread C', updated_at: 'fixed', inFlightNextStep: false },
+    ];
+    const prevSnapshot = Object.fromEntries(parents.map((p) => [p.id, { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 }]));
+
+    const { alerted } = await checkAndAlertStalls(sb, parents, prevSnapshot);
+
+    expect(recordPendingDecision).toHaveBeenCalledTimes(1);
+    const call = recordPendingDecision.mock.calls[0][1];
+    expect(call.context.node_ids).toEqual(['a', 'b', 'c']);
+    expect(alerted).toHaveLength(3);
+    expect(alerted.every((a) => a.escalated === true)).toBe(true);
   });
 });

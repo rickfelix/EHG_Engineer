@@ -98,7 +98,15 @@ export async function reconcileBoard(sb) {
 // ambiguous, per stall-detector.js's classifyStaleness contract).
 export async function readCriticalPathParents(sb) {
   try {
-    const { data } = await sb.from(TASK_LEDGER_TABLE).select('id, title, updated_at, status').eq('tier', 'parent');
+    // QF-20260703-229: pre-filter to OPEN nodes at the query — a done/cancelled parent has
+    // stopped moving BY DEFINITION and is never a stall candidate. source_kind/source_ref are
+    // read here too so checkAndAlertStalls can self-heal a sourced_sd node whose linked SD
+    // already finished, instead of escalating a stale board row.
+    const { data } = await sb
+      .from(TASK_LEDGER_TABLE)
+      .select('id, title, updated_at, status, source_kind, source_ref')
+      .eq('tier', 'parent')
+      .in('status', ['open', 'in_progress', 'blocked']);
     return (data || []).map((row) => ({ ...row, inFlightNextStep: row.status === 'in_progress' }));
   } catch {
     return [];

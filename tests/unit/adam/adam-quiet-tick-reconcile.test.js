@@ -94,7 +94,7 @@ describe('reconcileBoard', () => {
  */
 describe('readCriticalPathParents', () => {
   function ledgerSelect(rows) {
-    const b = { select: () => b, eq: () => b, then: (resolve, reject) => Promise.resolve({ data: rows, error: null }).then(resolve, reject) };
+    const b = { select: () => b, eq: () => b, in: () => b, then: (resolve, reject) => Promise.resolve({ data: rows, error: null }).then(resolve, reject) };
     return b;
   }
 
