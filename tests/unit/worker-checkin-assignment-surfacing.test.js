@@ -68,7 +68,9 @@ function fakeSb({ heldSd, assignmentSd, windDown, sdRow }) {
         order() { return this; }, limit() { return this; },
         maybeSingle() {
           if (table === 'claude_sessions') return Promise.resolve({ data: { metadata: { role: 'worker', ...(windDown ? { wind_down: windDown } : {}) }, sd_key: heldSd }, error: null });
-          if (table === 'strategic_directives_v2') return Promise.resolve({ data: sdRow || { status: 'in_progress' }, error: null });
+          // QF-20260703-780: sdRow === null must mean "genuinely no row" (a QF-keyed or
+          // phantom/typo'd-SD-keyed lookup), distinct from sdRow left unspecified (undefined).
+          if (table === 'strategic_directives_v2') return Promise.resolve({ data: sdRow === undefined ? { status: 'in_progress' } : sdRow, error: null });
           return Promise.resolve({ data: null, error: null });
         },
         insert() { return Promise.resolve({ error: null }); },
@@ -347,6 +349,67 @@ describe('resolveCheckin — QF-20260703-806: acked-but-never-claimed assignment
       const res = await resolveCheckin(sb, 'sess-idle', { getCoordinator: async () => null });
       expect(res.action).toBe('claimed_assignment');
       expect(res.sd).toBe(assignmentSd);
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+});
+
+// QF-20260703-780: a WORK_ASSIGNMENT whose key resolves to zero rows in strategic_directives_v2
+// (a QF key, or a typo'd/deleted SD key) skips both the terminal-purge and ineligibility-purge
+// branches (assignedSdRow is null) and falls to tryClaim(). If the RPC itself then reports a
+// terminal verdict, the message must still be acked -- else it re-fires every tick forever, which
+// is exactly what was observed live (session cb2bfe72, 30+ min / 5+ ticks against a completed QF).
+describe('resolveCheckin — QF-20260703-780: terminal-class claim rejection acks the message', () => {
+  it('a QF-keyed assignment whose target is now completed (sd_terminal_status) is ACKed and purged', async () => {
+    const assignmentSd = 'QF-20260703-197';
+    const sb = fakeSb({ heldSd: null, sdRow: null }); // no strategic_directives_v2 row for a QF key
+    sb.rpc = () => Promise.resolve({ data: { success: false, error: 'sd_terminal_status' }, error: null });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [{ id: 'msg-qf-terminal', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd } }];
+    try {
+      const res = await resolveCheckin(sb, 'sess-idle', { getCoordinator: async () => null });
+      expect(res.action).not.toBe('claimed_assignment');
+      expect(res.assignment_claim_terminal_purged).toEqual({ sd: assignmentSd, error: 'sd_terminal_status' });
+      expect(res.assignment_claim_error).toBeUndefined();
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+
+  it('a phantom/typo\'d SD key whose claim RPC reports sd_not_found is ACKed and purged', async () => {
+    const assignmentSd = 'SD-DOES-NOT-EXIST-999';
+    const sb = fakeSb({ heldSd: null, sdRow: null }); // no strategic_directives_v2 row
+    sb.rpc = () => Promise.resolve({ data: { success: false, error: 'sd_not_found' }, error: null });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [{ id: 'msg-phantom', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd } }];
+    try {
+      const res = await resolveCheckin(sb, 'sess-idle', { getCoordinator: async () => null });
+      expect(res.action).not.toBe('claimed_assignment');
+      expect(res.assignment_claim_terminal_purged).toEqual({ sd: assignmentSd, error: 'sd_not_found' });
+      expect(res.assignment_claim_error).toBeUndefined();
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+
+  it('a TRANSIENT claim rejection (claimed_by_live_peer) is NOT acked -- stays retryable', async () => {
+    const assignmentSd = 'SD-EHG-ENGINEER-LIVEPEER-007';
+    const sb = fakeSb({
+      heldSd: null,
+      sdRow: { status: 'draft', sd_type: 'feature', sd_key: assignmentSd, metadata: {}, target_application: null },
+    });
+    sb.rpc = () => Promise.resolve({ data: { success: false, error: 'claimed_by_live_peer', claimed_by: 'other-session' }, error: null });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [{ id: 'msg-livepeer', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd } }];
+    try {
+      const res = await resolveCheckin(sb, 'sess-idle', { getCoordinator: async () => null });
+      expect(res.action).not.toBe('claimed_assignment');
+      expect(res.assignment_claim_error).toBe('claimed_by_live_peer');
+      expect(res.assignment_claim_terminal_purged).toBeUndefined();
     } finally {
       ws.getMessagesForSession = orig;
     }

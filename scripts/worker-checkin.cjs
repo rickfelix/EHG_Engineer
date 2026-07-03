@@ -84,6 +84,16 @@ const DEFAULT_IDLE_WAKEUP_SECONDS = 600;      // ~10m, matches the tightened fle
 // truly ancient, abandoned assignment while covering the observed hours-long stuck window.
 const ASSIGNMENT_RECENCY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+// QF-20260703-780: closed allowlist of claim_sd RPC errors that mean "this target is
+// PERMANENTLY unclaimable" (as opposed to a transient/retryable conflict like
+// claimed_by_live_peer). The terminal/fitness pre-checks above only resolve
+// strategic_directives_v2, so a QF-keyed or phantom/typo'd-SD-keyed WORK_ASSIGNMENT skips
+// both purge branches and falls through here -- if the RPC itself then reports a terminal
+// verdict, the message must still be acked or it re-fires every tick forever. CLOSED
+// allowlist (never a denylist): claim_sd has gained new transient codes across recent
+// migrations, and an unrecognized error must fail safe to "retry", not "silently purge".
+const TERMINAL_CLAIM_ERRORS = new Set(['sd_terminal_status', 'sd_not_found']);
+
 // SD-LEO-INFRA-WORKER-ANTI-PREMATURE-WINDDOWN-001 (Mode B, the DOMINANT wind-down failure 3/4):
 // the enforceable lever. When a worker holds/just-claimed RANKED claimable work, this directive
 // rides the check-in payload to kill the false "drained" feeling with data and to surface — AT the
@@ -1341,8 +1351,18 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
             ...(effortRec ? { effort_recommendation: effortRec, effort_recommendation_reason: assignment.payload?.effort_recommendation_reason || null } : {}),
             message: `Claimed assigned ${sdKey} via claim_sd.${effortRec ? ` Recommended effort: ${effortRec} (advisory).` : ''} Run: node scripts/sd-start.js ${sdKey}. ${antiWinddownDirective(base.belt_ranked_claimable)}` };
         }
-        // could not claim the assigned SD -> fall through to self-claim
-        base.assignment_claim_error = claimed.error;
+        // QF-20260703-780: a terminal-class RPC verdict means this assignment can NEVER
+        // succeed (unlike e.g. claimed_by_live_peer, which may resolve next tick) -- ack it
+        // now so it stops being re-selected, mirroring the stale_assignment_purged /
+        // assignment_ineligible_purged branches above. Distinct breadcrumb so callers can
+        // tell "permanently resolved" apart from assignment_claim_error's "retryable" meaning.
+        if (TERMINAL_CLAIM_ERRORS.has(claimed.error)) {
+          await ackMessage(sb, assignment.id, { role: sessionRole, kind: assignment.payload?.kind, messageType: assignment.message_type });
+          base.assignment_claim_terminal_purged = { sd: sdKey, error: claimed.error };
+        } else {
+          // could not claim the assigned SD -> fall through to self-claim
+          base.assignment_claim_error = claimed.error;
+        }
       }
     }
   }
