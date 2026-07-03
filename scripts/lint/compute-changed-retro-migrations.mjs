@@ -117,6 +117,8 @@ function main() {
   process.stdout.write(result.filesToCheck.join('\n') + (result.filesToCheck.length ? '\n' : ''));
 }
 
+export { main };
+
 if (isMainModule(import.meta.url)) {
   main();
 }
