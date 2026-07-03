@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-FDBK-ENH-UAT-AGENT-FEEDBACK-001",
-  "expectedBranch": "feat/SD-FDBK-ENH-UAT-AGENT-FEEDBACK-001",
-  "createdAt": "2026-07-03T19:59:53.749Z",
+  "sdKey": "QF-20260703-347",
+  "expectedBranch": "qf/QF-20260703-347",
+  "createdAt": "2026-07-03T21:07:34.571Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
