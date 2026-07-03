@@ -1,9 +1,9 @@
 ---
 category: reference
 status: approved
-version: 1.0.0
+version: 1.0.1
 author: Rick Felix
-last_updated: 2026-04-23
+last_updated: 2026-07-03
 tags: [reference]
 ---
 
@@ -54,8 +54,15 @@ SUPABASE_POOLER_URL=postgresql://postgres.dedlbzhpgkmetvhbkyzq:PASSWORD@aws-1-us
 | `AI_PROVIDER` | Optional | `google` | Active AI provider. Values: `google`, `openai`, `anthropic`. |
 | `AI_MODEL` | Optional | `auto` | Model override. Set to `auto` for automatic selection, or specify a model like `gemini-3.1-pro-preview`, `gpt-5.2`, etc. |
 | `GEMINI_IMAGE_MODEL` | Optional | `gemini-3-pro-image-preview` | Model used for image generation tasks in `lib/marketing/ai/image-generator.js`. |
+| `GEMINI_MODEL_TIER1` | Optional | `gemini-2.5-flash-lite` | Tier-1 (cheap pre-filter) override for the opt-in Gemini ladder. Read by `getGeminiLadderModel(1)` in `lib/config/model-config.js`. Does not affect `getLLMClient()`/purpose-based routing. |
+| `GEMINI_MODEL_TIER2` | Optional | `gemini-2.5-flash` | Tier-2 (workhorse) override for the ladder. Same default as the existing `validation`/`fast` purpose routes. |
+| `GEMINI_MODEL_TIER3` | Optional | `gemini-3-flash-preview` | Tier-3 (intermediate) override for the ladder — a genuine quality step between Flash and Pro. |
+| `GEMINI_MODEL_TIER4` | Optional | `gemini-2.5-pro` | Tier-4 (escalation ceiling) override for the ladder. Same default as the existing `reasoning` purpose route. |
+| `LLM_LADDER_ENABLED` | Optional | unset (falsy) | Master opt-in flag name for ladder-aware call sites (`lib/config/model-config.js` exports the name only; individual callers are responsible for reading it — no call site reads it yet). |
 
 **Provider priority order:** Google Gemini (primary) > OpenAI (secondary) > Ollama (local).
+
+**Gemini ladder (opt-in, additive):** `getLadderClient({tier})` and `callWithLadderEscalation(...)` in `lib/llm/client-factory.js` (SD-LEO-INFRA-LLM-FACTORY-TIER-LADDER-001) provide a 4-tier cost/quality ladder for callers that want a cheap pre-filter with escalate-on-failure. This is a separate, opt-in entry point — `getLLMClient()` and all existing purpose-based routing (`GEMINI_API_KEY`, `AI_MODEL`, etc. above) are unaffected.
 
 **Example:**
 
