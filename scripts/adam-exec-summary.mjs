@@ -276,13 +276,19 @@ const visSubj = subjectNeedle
 // '(hr avg)' tag only for a CONFIDENT (non-sparse) hourly average — keep the subject honest too.
 const workerSubj = pulseSource === 'unavailable' ? 'workers n/a' : `${avgActive} active${(pulseSource === 'hourly avg' && !wc.sparse) ? ' (hr avg)' : ''}`;
 const actionsSubj = nActions ? `${nActions} ${nActions === 1 ? 'action' : 'actions'} for you` : 'all clear';
-// QF-20260627-338: when an ADAM ESCALATION is present (a routed stuck-question — decision_type
-// 'session_question' — OR an Adam-flagged blocking decision), the SUBJECT must STAND OUT from the
-// routine hourly digest so the chairman instantly distinguishes it. FR-1 standout subject leading
-// with a distinct token; FR-2 routine subject unchanged otherwise. No emojis (in-file directive).
-// FR-3: escalations are pending actions (nActions>0) so they already bypass the quiescence gate, and
-// --force still triggers an immediate send. Chairman may refine the standout token.
-const escalations = rows.filter((r) => r.decision_type === 'session_question' || r.blocking === true);
+// QF-20260627-338: when an ADAM ESCALATION is present (an Adam-flagged blocking decision), the
+// SUBJECT must STAND OUT from the routine hourly digest so the chairman instantly distinguishes it.
+// FR-1 standout subject leading with a distinct token; FR-2 routine subject unchanged otherwise.
+// No emojis (in-file directive). FR-3: escalations are pending actions (nActions>0) so they already
+// bypass the quiescence gate, and --force still triggers an immediate send. Chairman may refine the
+// standout token.
+// QF-20260703-440: dropped the decision_type==='session_question' disjunct — chairman_pending_decisions'
+// base view (chairman_unified_decisions) hardcodes decision_type to one of 'escalation' | 'gate_decision'
+// | 'chairman_approval' | 'flag_review' | 'flag_enablement' | 'okr_acceptance' across all 7 UNION arms;
+// 'session_question' can never appear in `rows` here. A routed stuck-question's standout-subject
+// escalation is already handled independently and immediately at creation time by
+// lib/chairman/record-pending-decision.mjs's own send path — this hourly digest never re-derives it.
+const escalations = rows.filter((r) => r.blocking === true);
 const escalationLine = escalations.length
   ? String(escalations[0].title || escalations[0].details || 'chairman decision needed').replace(/\s+/g, ' ').trim().slice(0, 80)
   : '';
