@@ -1,9 +1,19 @@
 // Tests for SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-A
 // scripts/adam-register.cjs — idempotent verify-first Adam role tagger.
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 const { computeAdamTag, registerAdam, ADAM_ROLE } = require('./adam-register.cjs');
+
+// These tests exercise the legacy (flag-OFF) registerAdam path, but the real .env sets
+// ROLE_HANDOFF_ADAM_V1=on for the FR-3 single-Adam guard — force it off here so the suite
+// isn't at the mercy of ambient env (mirrors tests/unit/coordination/adam-singleton.test.js).
+const PRIOR_ROLE_HANDOFF_ADAM_V1 = process.env.ROLE_HANDOFF_ADAM_V1;
+beforeEach(() => { delete process.env.ROLE_HANDOFF_ADAM_V1; });
+afterEach(() => {
+  if (PRIOR_ROLE_HANDOFF_ADAM_V1 === undefined) delete process.env.ROLE_HANDOFF_ADAM_V1;
+  else process.env.ROLE_HANDOFF_ADAM_V1 = PRIOR_ROLE_HANDOFF_ADAM_V1;
+});
 
 describe('computeAdamTag (pure)', () => {
   it('tags an untagged metadata and preserves existing keys', () => {
