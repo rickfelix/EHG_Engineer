@@ -27,7 +27,11 @@ if (!body || !body.trim()) {
 }
 
 const when = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' });
-const subject = `All good - Adam heartbeat ${when} ET`;
+// Chairman Gmail-filter contract (2026-07-03): heartbeat subjects ALWAYS start with the exact
+// token "[ALL GOOD - ADAM]"; decision/action emails ALWAYS start with "[ACTION NEEDED - ADAM]"
+// (lib/chairman/decision-layman.mjs). His Gmail alerting keys on these literal strings —
+// never change either token without chairman sign-off.
+const subject = `[ALL GOOD - ADAM] heartbeat ${when} ET`;
 const text = `${body.trim()}\n\nas of ${when} ET ${EM} Adam ${EM} LEO Fleet Advisor`;
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
