@@ -72,6 +72,20 @@ describe('findLeadAgingDrafts — DISJOINTNESS (never double-reports with the si
     ];
     expect(findLeadAgingDrafts(rows, NOW).violation).toBe(false);
   });
+
+  it('does NOT flag a durably-deferred draft (metadata.requires_human_action=true — e.g. chairman-parked)', () => {
+    const parked = agingDraft('SD-PARKED', 30, {
+      metadata: { source: 'proposal', requires_human_action: true },
+    });
+    expect(findLeadAgingDrafts([parked], NOW).violation).toBe(false);
+  });
+
+  it('does NOT flag a durably-deferred draft (metadata.not_worker_claimable_reason set)', () => {
+    const deferred = agingDraft('SD-NOT-CLAIMABLE', 30, {
+      metadata: { source: 'proposal', not_worker_claimable_reason: 'dependency-hold' },
+    });
+    expect(findLeadAgingDrafts([deferred], NOW).violation).toBe(false);
+  });
 });
 
 describe('findLeadAgingDrafts — authoritative scored signal (scoredKeys / eva-row)', () => {
