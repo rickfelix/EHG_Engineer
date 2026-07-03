@@ -492,14 +492,28 @@ async function createFromFeedback(feedbackId, options = {}) {
   // it can't catch a defect fixed by an unrelated SD that never linked back (the
   // b6594220 incident). Fails OPEN (never blocks a genuinely live defect).
   if (!options.forceLiveness) {
-    const verdict = await checkFeedbackPremiseLiveness(feedback, { supabase });
-    if (verdict.status === 'STALE') {
-      console.log(`\n⚠️  [STALE_PREMISE] feedback ${feedback.id} already fixed:`);
-      for (const e of verdict.evidence || []) console.log(`     ${e}`);
-      console.log('   Skipping SD creation. Override (audited): --force-liveness "<reason>"\n');
-      return { sdKey: null, feedbackId: feedback.id, action: 'skipped-stale-premise', verdict };
+    try {
+      const verdict = await checkFeedbackPremiseLiveness(feedback, { supabase });
+      if (verdict.status === 'STALE') {
+        console.log(`\n⚠️  [STALE_PREMISE] feedback ${feedback.id} already fixed:`);
+        for (const e of verdict.evidence || []) console.log(`     ${e}`);
+        console.log('   Skipping SD creation. Override (audited): --force-liveness "<reason>"\n');
+        return { sdKey: null, feedbackId: feedback.id, action: 'skipped-stale-premise', verdict };
+      }
+    } catch (e) {
+      // Fail-OPEN: a lookup/liveness-check error must never block SD creation.
+      console.warn(`\n⚠️  [LIVENESS_CHECK_DEGRADED] STALE_PREMISE check failed-open (${e?.message || e}); proceeding without it.`);
     }
   } else {
+    const { error: forceLivenessAuditErr } = await supabase.from('audit_log').insert({
+      event_type: 'force_liveness_override',
+      entity_type: 'feedback',
+      entity_id: feedback.id,
+      created_by: process.env.CLAUDE_SESSION_ID || null,
+      severity: 'warning',
+      metadata: { feedback_id: feedback.id, reason: options.forceLiveness, message: `force-liveness override on feedback ${feedback.id}: ${options.forceLiveness}` },
+    });
+    if (forceLivenessAuditErr) console.warn(`⚠️  [AUDIT_WRITE_FAILED] force_liveness_override audit row not persisted (non-fatal): ${forceLivenessAuditErr.message}`);
     console.warn(`\n⚠️  [FORCE_LIVENESS] skipping premise re-check: ${options.forceLiveness}`);
   }
 

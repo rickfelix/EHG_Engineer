@@ -32,12 +32,28 @@ const { data: feedback, error: fbErr } = await supabase
   .from('feedback').select('id, status').eq('id', feedbackId).maybeSingle();
 if (fbErr || !feedback) { console.error(`feedback ${feedbackId} not found${fbErr ? ': ' + fbErr.message : ''}`); process.exit(1); }
 
-// Resolve target: try an SD (by sd_key or id) first, then a QF (by id).
-const { data: sd } = await supabase
-  .from('strategic_directives_v2').select('id, sd_key, status')
-  .or(`id.eq.${targetId},sd_key.eq.${targetId}`).maybeSingle();
-const { data: qf } = sd ? { data: null } : await supabase
-  .from('quick_fixes').select('id, status').eq('id', targetId).maybeSingle();
+// Resolve target: try an SD (by sd_key, then by id) first, then a QF (by id).
+// Two separate parameterized .eq() lookups (not a string-interpolated .or() filter)
+// so a targetId containing PostgREST filter syntax (commas/operators) can't widen
+// or redirect the match to an unintended row.
+let sd = null;
+const { data: sdByKey, error: sdByKeyErr } = await supabase
+  .from('strategic_directives_v2').select('id, sd_key, status').eq('sd_key', targetId).maybeSingle();
+if (sdByKeyErr) { console.error(`SD lookup by sd_key failed: ${sdByKeyErr.message}`); process.exit(1); }
+sd = sdByKey;
+if (!sd) {
+  const { data: sdById, error: sdByIdErr } = await supabase
+    .from('strategic_directives_v2').select('id, sd_key, status').eq('id', targetId).maybeSingle();
+  if (sdByIdErr) { console.error(`SD lookup by id failed: ${sdByIdErr.message}`); process.exit(1); }
+  sd = sdById;
+}
+let qf = null;
+if (!sd) {
+  const { data: qfRow, error: qfErr } = await supabase
+    .from('quick_fixes').select('id, status').eq('id', targetId).maybeSingle();
+  if (qfErr) { console.error(`QF lookup failed: ${qfErr.message}`); process.exit(1); }
+  qf = qfRow;
+}
 
 if (!sd && !qf) { console.error(`Target ${targetId} not found as an SD or a QF`); process.exit(1); }
 

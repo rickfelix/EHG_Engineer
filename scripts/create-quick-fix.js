@@ -218,19 +218,33 @@ async function createQuickFix(options = {}) {
     // back to it -- the b6594220/QF-20260703-769 incident). Re-verify each named
     // defect still reproduces before filing a QF; fails OPEN (never blocks a live one).
     if (!options.forceLiveness) {
-      const { data: freshFb } = await supabase
-        .from('feedback').select('id, title, description, category, severity')
-        .in('id', resolvedFeedbackIds);
-      for (const fb of freshFb || []) {
-        const verdict = await checkFeedbackPremiseLiveness(fb, { supabase });
-        if (verdict.status === 'STALE') {
-          console.error(`\n❌ [STALE_PREMISE] feedback ${fb.id} (${(fb.title || '').slice(0, 60)}) already fixed:`);
-          for (const e of verdict.evidence || []) console.error(`     ${e}`);
-          console.error('   Override (audited): --force-liveness "<reason>"');
-          process.exit(1);
+      try {
+        const { data: freshFb } = await supabase
+          .from('feedback').select('id, title, description, category, severity')
+          .in('id', resolvedFeedbackIds);
+        for (const fb of freshFb || []) {
+          const verdict = await checkFeedbackPremiseLiveness(fb, { supabase });
+          if (verdict.status === 'STALE') {
+            console.error(`\n❌ [STALE_PREMISE] feedback ${fb.id} (${(fb.title || '').slice(0, 60)}) already fixed:`);
+            for (const e of verdict.evidence || []) console.error(`     ${e}`);
+            console.error('   Override (audited): --force-liveness "<reason>"');
+            process.exit(1);
+          }
         }
+      } catch (e) {
+        // Fail-OPEN: a lookup/liveness-check error must never block QF creation.
+        console.warn(`\n⚠️  [LIVENESS_CHECK_DEGRADED] STALE_PREMISE check failed-open (${e?.message || e}); proceeding without it.`);
       }
     } else {
+      const { error: forceLivenessAuditErr } = await supabase.from('audit_log').insert({
+        event_type: 'force_liveness_override',
+        entity_type: 'feedback',
+        entity_id: (resolvedFeedbackIds || []).join(','),
+        created_by: process.env.CLAUDE_SESSION_ID || null,
+        severity: 'warning',
+        metadata: { feedback_ids: resolvedFeedbackIds, reason: options.forceLiveness, message: `force-liveness override on ${(resolvedFeedbackIds || []).length} feedback row(s): ${options.forceLiveness}` },
+      });
+      if (forceLivenessAuditErr) console.warn(`⚠️  [AUDIT_WRITE_FAILED] force_liveness_override audit row not persisted (non-fatal): ${forceLivenessAuditErr.message}`);
       console.warn(`\n⚠️  [FORCE_LIVENESS] skipping premise re-check: ${options.forceLiveness}`);
     }
   } else {
