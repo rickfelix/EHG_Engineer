@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-07-03](#2026-07-03)
+  - [Bugfix](#bugfix)
 - [2026-07-01](#2026-07-01)
   - [Bugfix](#bugfix)
 - [2026-06-20](#2026-06-20)
@@ -66,9 +68,12 @@
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
 
-## 2026-07-01
+## 2026-07-03
 
 ### Bugfix
+- **Layer 4.3 "Migration File Validation" CI job no longer false-flags every PR/push on a months-old, already-merged migration** - PR #5433, #5436 (SD-LEO-FIX-DIFF-SCOPE-LAYER-001)
+  - **What shipped**: `.github/workflows/retrospective-quality-gates.yml`'s `migration-validation` job ran `find database/migrations -name "*retrospective*.sql"` repo-wide and diff-independent, so it re-checked every retrospective migration on every run regardless of what the PR/push actually touched — false-flagging on `database/migrations/20260528_retrospective_type_default_null.sql` (merged via PR #4044, missing `BEGIN;`/`COMMIT;`) and failing every subsequent PR/push through this job. Adds `scripts/lint/compute-changed-retro-migrations.mjs` (pure `resolveDiffBase`/`computeFilesToCheck` decision functions) diff-scoping the job to only the retrospective migration files actually changed in the current diff — mirroring the existing `schema-reference-lint.yml` pattern for `pull_request`, and designing the `push`-trigger case net-new since no repo precedent existed for it. Fail-safe: an unresolvable diff base (fetch failure, or a `push` event's all-zeros `before` SHA on a new branch/force-push) falls back to the original full repo-wide sweep rather than silently skipping validation, since this is a hard-blocking correctness gate, not an advisory lint. The BEGIN/COMMIT/verification/rollback grep checks themselves are unchanged.
+  - **Verification**: 15/15 unit tests pass (97.43% statement coverage) covering both the pure diff-scoping decisions and the `execSync`-mocked git/find wiring. Live-reproduced the false-flag (`20260528_retrospective_type_default_null.sql` genuinely lacks `BEGIN;`/`COMMIT;`) and confirmed the fix grandfathers it. Live-verified all 3 real event paths (`pull_request` vs `origin/main`, `push` with a real `before` SHA, `push` with the all-zeros sentinel). The exact "Layer 4.3" CI job passed on this change's own PR. Backend-only, no schema/dependency changes.
 - **Chairman decision watcher no longer crashes on a Realtime channel error** - PR #5305 (SD-FDBK-ENH-CANARY-VENTURE-PROBE-001)
   - **What shipped**: `waitForDecision()` (`lib/eva/chairman-decision-watcher.js`) fell straight to its polling fallback on Realtime `CHANNEL_ERROR`/`TIMED_OUT` without ever tearing down the errored channel via `supabase.removeChannel()`. The still-subscribed-but-errored channel triggered the vendored `@supabase/realtime-js` phoenix client's `Channel.trigger`/`onClose` to recurse infinitely, crashing the process with `RangeError: Maximum call stack size exceeded` — reproduced twice in the Canary Venture Probe CI workflow. The fix removes the channel and nulls the reference before polling begins.
   - **Verification**: 16/16 tests pass in `tests/unit/eva/chairman-decision-watcher.test.js`, including 2 new fake-timer regression tests; independently confirmed by the TESTING sub-agent (PASS, 92% confidence). Backend-only, no schema/dependency changes. A post-merge re-run of the Canary Venture Probe workflow is the remaining real-world confirmation step.
