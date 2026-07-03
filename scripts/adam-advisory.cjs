@@ -529,22 +529,30 @@ function parseSweepWindowMs(argv) {
  * shown, plus an unacked-count so accumulation is visible (D6 close-loops signal). Read-only —
  * never consumes rows (`--sweep` is a visibility tool, not a drain lane).
  */
+const SWEEP_ROW_LIMIT = 2000;
+
 async function windowSweep(supabase, sessionId, { windowMs = DEFAULT_SWEEP_WINDOW_MS, quiet = false } = {}) {
   const cutoffIso = new Date(Date.now() - windowMs).toISOString();
-  const { data: rows, error } = await supabase
+  // Newest-first + limit: if the window ever exceeds SWEEP_ROW_LIMIT, truncation drops the
+  // OLDEST rows (still-visible recent activity), never the newest (which ascending+limit would).
+  const { data: descRows, error } = await supabase
     .from('session_coordination')
     .select('id, payload, message_type, subject, created_at, read_at, acknowledged_at')
     .eq('target_session', sessionId)
     .gte('created_at', cutoffIso)
-    .order('created_at', { ascending: true })
-    .limit(2000);
+    .order('created_at', { ascending: false })
+    .limit(SWEEP_ROW_LIMIT);
   if (error) { console.error('ERROR: window sweep query failed:', error.message); process.exit(1); }
 
   const windowHuman = `${Math.round(windowMs / 3_600_000 * 10) / 10}h`;
-  if (!rows || rows.length === 0) {
+  if (!descRows || descRows.length === 0) {
     if (!quiet) console.log(`(window sweep: no directed rows in the last ${windowHuman})`);
     return;
   }
+  if (descRows.length === SWEEP_ROW_LIMIT) {
+    console.warn(`⚠ window sweep hit the ${SWEEP_ROW_LIMIT}-row cap — oldest rows in this window were dropped; narrow --window to see them.`);
+  }
+  const rows = [...descRows].reverse(); // display oldest-first within the (possibly capped) set
 
   const unacked = rows.filter((r) => !r.acknowledged_at);
   console.log(`WINDOW SWEEP (last ${windowHuman}): ${rows.length} directed row${rows.length === 1 ? '' : 's'}, ${unacked.length} unacked`);
