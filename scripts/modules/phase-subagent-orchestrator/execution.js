@@ -8,6 +8,12 @@ import { safeInsert, generateUUID } from '../safe-insert.js';
 import { createHash } from 'crypto';
 // SD-LEO-FIX-NORMALIZE-UUID-SUB-001: Import normalizeSDId to fix FK constraint violation (PAT-FK-SDKEY-001)
 import { normalizeSDId } from '../sd-id-normalizer.js';
+// QF-20260703-369: Import the QF-20260603-485 evidence synthesizer — this writer is the
+// second (orchestrated) insert path for sub_agent_execution_results and was never wired
+// to it, so CONDITIONAL_PASS producers that don't self-populate conditions/justification
+// (e.g. DESIGN) violated check_conditions_required here even though the sibling writer
+// in lib/sub-agent-executor/results-storage.js already handles the same case.
+import { deriveConditionalPassEvidence } from '../../../lib/sub-agent-executor/results-storage.js';
 
 /**
  * Generate deterministic idempotency key for sub-agent execution
@@ -217,6 +223,10 @@ async function storeSubAgentResult(supabase, sdId, result, options = {}) {
     }
   }
 
+  // QF-20260703-369: synthesize conditions/justification for a CONDITIONAL_PASS verdict
+  // that didn't self-populate them, mirroring the sibling writer's QF-20260603-485 fix.
+  const conditionalPassEvidence = deriveConditionalPassEvidence(result, result.sub_agent_code);
+
   const insertData = {
     id: generateUUID(),
     sd_id: normalizedSdId,  // SD-LEO-FIX-NORMALIZE-UUID-SUB-001: Use normalized UUID
@@ -237,8 +247,8 @@ async function storeSubAgentResult(supabase, sdId, result, options = {}) {
     },
     created_at: new Date().toISOString(),
     validation_mode: result.validation_mode || null,
-    justification: result.justification || null,
-    conditions: result.conditions || null
+    justification: conditionalPassEvidence.justification,
+    conditions: conditionalPassEvidence.conditions
   };
 
   const insertResult = await safeInsert(supabase, 'sub_agent_execution_results', insertData, {
