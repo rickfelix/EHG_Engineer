@@ -25,11 +25,16 @@ afterEach(() => {
   delete process.env.RESEND_FROM_EMAIL;
 });
 
-// Dynamic import to re-evaluate env vars each test
+// Dynamic import to re-evaluate env vars each test.
+// QF-20260703-195: sendEmail now suppresses sends during the 23:00-05:00 ET chairman quiet
+// window. These pre-existing tests are not testing that behavior, so pin `now` to a fixed
+// daytime instant (safely outside the window in any DST state) instead of letting it default
+// to the real ambient clock — otherwise every test here would flake if run overnight ET.
+const SAFE_DAYTIME_NOW = new Date('2026-01-01T18:00:00Z'); // 1pm ET (Jan = EST, unambiguous)
 async function importSendEmail() {
   // Clear the module cache so env vars are re-evaluated
   const mod = await import('../../../lib/notifications/resend-adapter.js');
-  return mod.sendEmail;
+  return (payload, opts) => mod.sendEmail(payload, { now: SAFE_DAYTIME_NOW, ...opts });
 }
 
 describe('resend-adapter', () => {
@@ -272,6 +277,60 @@ describe('resend-adapter', () => {
       expect(result.success).toBe(false);
       expect(result.errorCode).toBe('TIMEOUT');
       expect(result.errorMessage).toContain('timed out');
+    });
+  });
+
+  describe('sendEmail - chairman quiet window (QF-20260703-195)', () => {
+    it('suppresses the send at 2:00 AM ET — no provider call, SUPPRESSED_QUIET_WINDOW result', async () => {
+      const sendEmail = await importSendEmail();
+      // 2026-01-02T07:00:00Z = 2:00 AM EST (Jan = EST, unambiguous DST state)
+      const twoAmEt = new Date('2026-01-02T07:00:00Z');
+      const result = await sendEmail(basePayload, { now: twoAmEt });
+
+      expect(result.success).toBe(true);
+      expect(result.suppressed).toBe(true);
+      expect(result.errorCode).toBe('SUPPRESSED_QUIET_WINDOW');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('sends normally at 6:00 AM ET (just past the window)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: 'msg-6am' })
+      });
+      const sendEmail = await importSendEmail();
+      // 2026-01-02T11:00:00Z = 6:00 AM EST
+      const sixAmEt = new Date('2026-01-02T11:00:00Z');
+      const result = await sendEmail(basePayload, { now: sixAmEt });
+
+      expect(result.success).toBe(true);
+      expect(result.suppressed).toBeUndefined();
+      expect(result.providerMessageId).toBe('msg-6am');
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('suppresses at exactly 23:00 ET (window start, inclusive)', async () => {
+      const sendEmail = await importSendEmail();
+      // 2026-01-02T04:00:00Z = 11:00 PM EST on 2026-01-01
+      const elevenPmEt = new Date('2026-01-02T04:00:00Z');
+      const result = await sendEmail(basePayload, { now: elevenPmEt });
+
+      expect(result.suppressed).toBe(true);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('sends normally at exactly 22:59 ET (just before the window)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: 'msg-before' })
+      });
+      const sendEmail = await importSendEmail();
+      // 2026-01-02T03:59:00Z = 10:59 PM EST
+      const beforeWindow = new Date('2026-01-02T03:59:00Z');
+      const result = await sendEmail(basePayload, { now: beforeWindow });
+
+      expect(result.suppressed).toBeUndefined();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
   });
 
