@@ -59,6 +59,13 @@ const EXEMPT_PATTERNS = [
   /\bscripts[/\\]adam-advisory\.cjs\b[^\n]*\binbox\b/,
   /\bscripts[/\\]solomon-advisory\.cjs\b[^\n]*\binbox\b/, // SOLOMON_LOOPS inbox-monitor (*/15) — mutating-but-idempotent tick (SD-LEO-INFRA-SOLOMON-CONSULT-001E-C); answer path (send/request) NOT exempt
   /\bscripts[/\\]worker-checkin\.cjs\b/,
+  // QF-20260703-281: the mandated per-tick fleet-worker heartbeat (`worker-signal.cjs feedback
+  // "wakeup-armed ..."`) is a side-effect-free notification re-run every ScheduleWakeup cycle
+  // (~150-200s) -- its only "varying" content is often inside a $(date ...) substitution the
+  // hook hashes BEFORE shell expansion, so 3 ticks collapse to one signature and trip LEARN-129.
+  // Scoped to feedback+wakeup-armed ONLY: worker-signal.cjs's other paths (stuck, harness-bug,
+  // request, solomon-consult) are NOT idempotent standing cadences and must keep the 3-strikes teeth.
+  /\bscripts[/\\]worker-signal\.cjs\s+feedback\b[^\n]*wakeup-armed/,
   /\bscripts[/\\]coordinator-backlog-rank\.mjs\b/,
   /\bscripts[/\\]coordinator-capacity-forecast\.mjs\b/,
   // SD-LEO-INFRA-RCA-ENFORCEMENT-PROGRESS-STALL-NOT-REPETITION-001: apply-migration.js is one
