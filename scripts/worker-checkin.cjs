@@ -77,6 +77,13 @@ const ROLL_CALL_DEDUP_MS = 5 * 60 * 1000;    // don't re-register within 5m (ide
 // small. NOT applied to the propose-only idle branch below, which keeps its own 1200 literal.
 const DEFAULT_IDLE_WAKEUP_SECONDS = 600;      // ~10m, matches the tightened fleet idle cadence
 
+// QF-20260703-476: bounded lookback for a "consumed but unactioned" WORK_ASSIGNMENT re-pull.
+// A row can get read_at stamped by some other delivery path (poll, prior session) without ever
+// being genuinely actioned (acknowledged_at still NULL, no claim recorded) -- an unreadOnly pull
+// then hides it from the claim step forever. Bounding the re-pull to 24h avoids resurrecting a
+// truly ancient, abandoned assignment while covering the observed hours-long stuck window.
+const ASSIGNMENT_RECENCY_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 // SD-LEO-INFRA-WORKER-ANTI-PREMATURE-WINDDOWN-001 (Mode B, the DOMINANT wind-down failure 3/4):
 // the enforceable lever. When a worker holds/just-claimed RANKED claimable work, this directive
 // rides the check-in payload to kill the false "drained" feeling with data and to surface — AT the
@@ -1227,7 +1234,13 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       // until actioned. Fail-open: any error preserves today's plain resume.
       let pendingAssignment = null;
       try {
-        const msgs = await ws.getMessagesForSession(sb, sessionId, { unreadOnly: true });
+        // QF-20260703-476: unackedOnly (acknowledged_at IS NULL), not unreadOnly -- a row whose
+        // read_at got stamped by some other delivery path but was never genuinely actioned must
+        // still surface here, bounded to a recency window so an ancient row isn't resurrected.
+        const msgs = await ws.getMessagesForSession(sb, sessionId, {
+          unackedOnly: true,
+          sinceIso: new Date(Date.now() - ASSIGNMENT_RECENCY_WINDOW_MS).toISOString(),
+        });
         // Only a row carrying a STRUCTURED directed field (assigned_sd/sd_key) is a real redirect;
         // selecting on extractDirectedSd also skips past the generic sweep advisory if a directed
         // row exists beneath it (finding #3: subtype-blind newest-wins .find() could otherwise mask
@@ -1266,9 +1279,15 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
   }
 
   // 5. pending WORK_ASSIGNMENT -> claim via claim_sd RPC
+  // QF-20260703-476: unackedOnly, not unreadOnly -- see ASSIGNMENT_RECENCY_WINDOW_MS above. A
+  // consumed-but-unactioned row (read_at set, acknowledged_at NULL, no claim recorded) must still
+  // reach the claim step instead of being permanently hidden by an unreadOnly filter.
   let assignment = null;
   try {
-    const msgs = await ws.getMessagesForSession(sb, sessionId, { unreadOnly: true });
+    const msgs = await ws.getMessagesForSession(sb, sessionId, {
+      unackedOnly: true,
+      sinceIso: new Date(Date.now() - ASSIGNMENT_RECENCY_WINDOW_MS).toISOString(),
+    });
     assignment = (msgs || []).find(m => m.message_type === 'WORK_ASSIGNMENT');
   } catch { /* fail-open */ }
   if (assignment) {
