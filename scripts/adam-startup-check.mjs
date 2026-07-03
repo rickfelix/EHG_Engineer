@@ -127,6 +127,18 @@ export const ADAM_LOOPS = [
     cron: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *',
     prompt: 'node scripts/adam-quiet-tick.mjs',
   },
+  {
+    // QF-20260702-433 (Chairman directive 2026-07-02): a half-hourly reassurance email whose
+    // SUBJECT alone signals all-is-well ("All good - Adam heartbeat <time> ET"), so silence never
+    // reads as stuck. Was SESSION-ONLY (armed ad hoc, cadence 14,44 * * * *) — the exact
+    // session-fragility class the belt-countdown duty already fixed; registering here so it
+    // survives session restarts.
+    key: 'heartbeat-email',
+    label: 'Half-hourly all-good reassurance email (subject-only signal, never a false all-good)',
+    script: 'adam-heartbeat-email.mjs',
+    cron: '14,44 * * * *',
+    prompt: 'Adam heartbeat-email tick: compose ONE fresh, honest status line, then run node scripts/adam-heartbeat-email.mjs --body "<line>" — never send a false all-good; if something is actually wrong, send the decision/alert email instead (node scripts/adam-decision-email.mjs) rather than this heartbeat.',
+  },
 ];
 
 // Parse the armed-cron basenames/prompts the agent passes from its CronList output.
