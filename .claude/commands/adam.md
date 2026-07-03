@@ -58,7 +58,7 @@ node scripts/adam-startup-check.mjs
 
 `CronCreate`/`CronList` are **HARNESS tools** (not Node-callable), so the script only EMITS specs — YOU arm them. Adam's tick is **seven loops**, silence-by-default + propose-only (CONST-002):
 1. **governance-scan** (daily) — the read-only opportunity-scan (`node scripts/adam-opportunity-scan.cjs --scan --scope auto`); runs only when `ADAM_GOVERNANCE_HEARTBEAT_V1=on` (else it prints `SUPPRESSED_FLAG_OFF`).
-2. **inbox-monitor** (every 15 min) — drain ALL coordinator-directed kinds, replies + directives (`node scripts/adam-advisory.cjs inbox`).
+2. **inbox-monitor** (every 5 min) — drain ALL coordinator-directed kinds, replies + directives (`node scripts/adam-advisory.cjs inbox`).
 3. **offer-help** (every 2 h) — an agent-judgment tick: offer the coordinator concise analysis when it helps, else stay silent.
 4. **self-adherence** (every 6 h) — Adam audits its OWN role-contract adherence (`node scripts/adam-self-adherence-review.mjs`): probes → `adam_adherence_ledger` → propose-only remediation for the coordinator on drift (never builds — CONST-002). SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001.
 5. **belt-countdown** (every 15 min) — an agent-judgment tick: while the fleet is active, post ONE belt-countdown line (ET 12-hour, rolling ETA to belt-dry from DB rows via `node scripts/fleet-dashboard.cjs`); stay silent when the fleet is idle. The contract-named BELT COUNTDOWN DUTY (durable) — previously session-scoped and died every Adam session. SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001.
