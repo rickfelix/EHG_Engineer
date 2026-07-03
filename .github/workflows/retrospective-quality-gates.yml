@@ -210,16 +210,39 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # SD-LEO-FIX-DIFF-SCOPE-LAYER-001: diff-scope to files changed in THIS PR/push,
+      # not a repo-wide sweep — see scripts/lint/compute-changed-retro-migrations.mjs
+      # for the fail-safe fallback (unresolvable diff base -> full repo-wide sweep,
+      # never a silent skip).
+      - name: Determine changed retrospective migration files (diff-scoped)
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            git fetch origin "$GITHUB_BASE_REF" --depth=1 || true
+          fi
+          node scripts/lint/compute-changed-retro-migrations.mjs > /tmp/changed-retro-migrations.txt
+          echo "--- diff-scoping decision (see stderr above for reason) ---"
+          cat /tmp/changed-retro-migrations.txt
 
       - name: Validate retrospective migration files
         run: |
-          echo "🔍 Validating retrospective migration SQL files..."
+          echo "🔍 Validating retrospective migration SQL files (diff-scoped)..."
 
-          # Find all retrospective-related migrations
-          migrations=$(find database/migrations -name "*retrospective*.sql" 2>/dev/null || true)
+          migrations=$(cat /tmp/changed-retro-migrations.txt)
 
           if [ -z "$migrations" ]; then
-            echo "⚠️  No retrospective migrations found (this may be expected)"
+            echo "✅ No retrospective migration files changed in this diff — nothing to validate (pre-existing files grandfathered)."
             exit 0
           fi
 

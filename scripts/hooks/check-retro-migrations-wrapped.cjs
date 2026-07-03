@@ -81,7 +81,7 @@ if (violations.length > 0) {
   console.error('');
   console.error('   The Layer 4.3 retrospective-quality-gates CI workflow grep contract requires');
   console.error('   line-leading ^BEGIN; and ^COMMIT; in every database/migrations/*retrospective*.sql file.');
-  console.error('   See: .github/workflows/retrospective-quality-gates.yml lines 232,237');
+  console.error('   See: .github/workflows/retrospective-quality-gates.yml lines 255,260');
   console.error('');
   for (const { file, missing } of violations) {
     console.error('   File: ' + file);

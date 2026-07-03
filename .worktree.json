@@ -1,9 +1,7 @@
 {
-  "sdKey": "QF-20260703-369",
-  "workType": "QF",
-  "workKey": "QF-20260703-369",
-  "expectedBranch": "qf/QF-20260703-369",
-  "createdAt": "2026-07-03T11:17:37.986Z",
-  "hostname": "Legion-Laptop",
-  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
+  "sdKey": "SD-LEO-FIX-DIFF-SCOPE-LAYER-001",
+  "expectedBranch": "feat/SD-LEO-FIX-DIFF-SCOPE-LAYER-001",
+  "createdAt": "2026-07-03T10:52:54.533Z",
+  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
+  "baseRef": "origin/main"
 }
