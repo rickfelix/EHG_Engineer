@@ -88,9 +88,11 @@ describe('CONST-002 propose-only / no-build GUARD (FR-5)', () => {
     for (const forbidden of ['handoff.js', 'gh pr', 'git commit', 'leo-create-sd', 'add-prd-to-database', 'apply-migration', 'execSync', 'child_process']) {
       expect(src).not.toContain(forbidden);
     }
-    // Remediation writes ONLY to feedback (sourcing) + adam_adherence_ledger (record) — nothing else mutated.
+    // Remediation writes ONLY to feedback (sourcing) + adam_adherence_ledger (record) + audit_log
+    // (recordVisionGaugeRead's own observability event stamp, pre-existing on origin/main — not a
+    // build/mutate surface) — nothing else mutated.
     const writtenTables = [...src.matchAll(/\.from\('([^']+)'\)[\s\S]{0,80}?\.insert\(/g)].map((m) => m[1]);
-    for (const t of writtenTables) expect(['feedback', 'adam_adherence_ledger']).toContain(t);
+    for (const t of writtenTables) expect(['feedback', 'adam_adherence_ledger', 'audit_log']).toContain(t);
   });
 });
 

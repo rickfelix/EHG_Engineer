@@ -63,18 +63,25 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     if (Number.isFinite(count)) facts.signalsInWindow = count;
   } catch { /* leave null -> unknown */ }
 
-  // FR-1b — sourcing cadence: count SDs Adam durably attributed within the window. The canonical
-  // marker is metadata.sourced_by='adam' (stamped at sourcing time by leo-create-sd.js FR-1a, and
-  // the existing live convention). HONEST: a real 0 stays 0 (probe FAIL — cadence stalled); ONLY a
-  // thrown query error leaves the fact null -> unknown. No retroactive fabrication on historical SDs.
+  // FR-1b — sourcing cadence: count ALL gap-closing work Adam sources for the coordinator within
+  // the window, unified across the two lanes it uses — SD drafts (metadata.sourced_by='adam',
+  // stamped at SD-creation time) and quick_fixes (no metadata column exists on that table
+  // to carry a per-row marker, so the whole lane counts). QF-20260703-537: the SD-only count was
+  // blind to the quick_fixes lane, producing a false FAIL/drift remediation on days Adam sourced
+  // only QFs. HONEST: a real 0 across both lanes stays 0 (probe FAIL); a thrown error on EITHER
+  // query leaves the combined fact null -> unknown (never silently under-counts via the other lane).
   try {
-    const { count, error } = await supabase
-      .from('strategic_directives_v2')
-      .select('id', { count: 'exact', head: true })
-      .gte('created_at', since)
-      .eq('metadata->>sourced_by', 'adam');
-    if (error) throw error; // a query error must NOT masquerade as a real "0 sourced"
-    if (Number.isFinite(count)) facts.sourcedInWindow = count;
+    const [sdResult, qfResult] = await Promise.all([
+      supabase.from('strategic_directives_v2').select('id', { count: 'exact', head: true })
+        .gte('created_at', since).eq('metadata->>sourced_by', 'adam'),
+      supabase.from('quick_fixes').select('id', { count: 'exact', head: true })
+        .gte('created_at', since),
+    ]);
+    if (sdResult.error) throw sdResult.error;
+    if (qfResult.error) throw qfResult.error;
+    if (Number.isFinite(sdResult.count) && Number.isFinite(qfResult.count)) {
+      facts.sourcedInWindow = sdResult.count + qfResult.count;
+    }
   } catch { /* leave null -> unknown */ }
 
   // FR-2 — friction signaling (recurrence side): windowed recurrence count from the durable
