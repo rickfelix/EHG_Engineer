@@ -303,9 +303,34 @@ function resolveExistingBranch(sdKey, repoRoot) {
 }
 
 /**
+ * Reject a resolved variant branch (not an exact match on sdKey) if it actually belongs
+ * to a DESCENDANT SD — i.e. sdKey is a literal hyphen-separated prefix of the resolved
+ * branch (e.g. a top-level orchestrator whose own branch never existed, but whose
+ * children all share its key as a prefix). Returns the branch unchanged if safe, or
+ * null to force fresh-branch creation. QF-20260703-816.
+ */
+async function rejectDescendantBranch(sdKey, branch) {
+  try {
+    const supabase = createSupabaseServiceClient();
+    const { data: descendant } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_key')
+      .neq('sd_key', sdKey)
+      .ilike('sd_key', `${sdKey}-%`)
+      .limit(1)
+      .maybeSingle();
+    if (descendant) {
+      console.log(`   ⚠️  Resolved branch "${branch}" belongs to descendant SD ${descendant.sd_key} — creating a fresh branch instead`);
+      return null;
+    }
+  } catch { /* DB unavailable — fail open to the resolved branch (prior behavior) */ }
+  return branch;
+}
+
+/**
  * Create a new worktree for the SD
  */
-function createWorktree(sdKey, repoRoot, opts = {}) {
+async function createWorktree(sdKey, repoRoot, opts = {}) {
   const worktreesDir = path.join(repoRoot, WORKTREES_DIR);
   const worktreePath = path.join(worktreesDir, sdKey);
 
@@ -354,7 +379,11 @@ function createWorktree(sdKey, repoRoot, opts = {}) {
   enforceWorktreeQuota(repoRoot, worktreesDir);
 
   // Look for an existing feature branch (exact match first — QF-20260703-130).
-  const branch = resolveExistingBranch(sdKey, repoRoot) || `feat/${sdKey}`;
+  let branch = resolveExistingBranch(sdKey, repoRoot);
+  if (branch && branch !== `feat/${sdKey}`) {
+    branch = await rejectDescendantBranch(sdKey, branch);
+  }
+  branch = branch || `feat/${sdKey}`;
 
   // Sanitize branch name before git operations (SD-LEO-INFRA-AUTO-WORKTREE-START-001 US-004)
   const branchCheck = sanitizeBranchName(branch);
@@ -663,7 +692,7 @@ async function resolve(sdKey, mode, repoRoot, targetApp) {
   if (mode === 'claim') {
     // Create one
     try {
-      const created = createWorktree(sdKey, repoRoot, { activeSessionCount: _activeSessionCount, isVentureWorktree });
+      const created = await createWorktree(sdKey, repoRoot, { activeSessionCount: _activeSessionCount, isVentureWorktree });
       emitLog({ event: 'worktree.resolved', sdKey, source: 'created', resolvedCwd: created.path, outcome: 'success' });
 
       // Persist to DB
@@ -749,4 +778,4 @@ if (isMainScript) {
   });
 }
 
-export { resolve, resolveFromDB, resolveFromScan, validateWorktreePath, resolveVentureRepoRoot, resolveExistingBranch };
+export { resolve, resolveFromDB, resolveFromScan, validateWorktreePath, resolveVentureRepoRoot, resolveExistingBranch, rejectDescendantBranch };
