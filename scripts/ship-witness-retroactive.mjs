@@ -24,7 +24,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { evaluateMergeWorkLadder } from '../lib/ship/merge-witness-ladder.mjs';
 import { writeMergeWitnessTelemetry } from '../lib/ship/merge-witness-telemetry.mjs';
-import { verifyMerged, fetchStatusCheckRollup } from '../lib/ship/auto-merge.mjs';
+import { verifyMerged, fetchStatusCheckRollup, detectBranchProtectionEnabled } from '../lib/ship/auto-merge.mjs';
 import { defaultLookupWorkKeyReal, defaultFetchReviewFinding } from '../lib/ship/venture-trust-gate.mjs';
 
 function parseArgs(argv) {
@@ -57,6 +57,11 @@ export async function runRetroactiveEvaluation({ repo, pr, workKey, tier, reason
     statusCheckRollup,
     merged,
     verifyResult,
+    // QF-20260703-744: probe the EXACT repo's live protection state instead of
+    // leaving P4 as the always-not_applicable pre-P0 stub.
+    repoOwner,
+    repoName,
+    checkProtection: detectBranchProtectionEnabled,
   });
 
   verdict.rungs = [
