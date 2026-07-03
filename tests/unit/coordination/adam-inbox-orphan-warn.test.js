@@ -9,7 +9,7 @@ const { drainInbox, isOrphanedAdamRow, EXCLUDED_KINDS } = require('../../../scri
 
 // AND-only fetch + JS-filter stub (mirrors adam-inbox-all-classes.test.js).
 function stub(rows) {
-  const captured = { eq: {}, isNull: [], updatedIds: null, usedOr: false };
+  const captured = { eq: {}, isNull: [], updatedIds: null, usedOr: false, orphanSeenUpdates: [] };
   const selectChain = {
     select() { return selectChain; },
     eq(col, val) { captured.eq[col] = val; return selectChain; },
@@ -19,9 +19,14 @@ function stub(rows) {
     limit() { return Promise.resolve({ data: rows, error: null }); },
   };
   const updateChain = {
-    update() { return updateChain; },
+    _payload: null,
+    update(body) { updateChain._payload = body; return updateChain; },
     in(_col, ids) { captured.updatedIds = ids; return updateChain; },
     is() { return Promise.resolve({ error: null }); },
+    eq(_col, id) {
+      captured.orphanSeenUpdates.push({ id, payload: updateChain._payload && updateChain._payload.payload });
+      return Promise.resolve({ error: null });
+    },
   };
   const supabase = { from() { return new Proxy({}, { get(_t, p) { return (p in selectChain) ? selectChain[p] : updateChain[p]; } }); } };
   return { supabase, captured };
@@ -82,6 +87,37 @@ describe('drainInbox orphan WARN lane', () => {
     await drainInbox(supabase, 'adam-session');
     expect(warnSpy.mock.calls.length).toBe(0); // no orphan warning
     expect(captured.updatedIds).toBeNull();    // nothing consumed
+    warnSpy.mockRestore(); logSpy.mockRestore();
+  });
+
+  // QF-20260702-414: an orphan recirculated on EVERY tick before this fix (28 rows unchanged
+  // across 6+ drains). Each orphan must WARN once, stamp orphan_seen_at, then stay silent.
+  it('WARNs a fresh orphan once and stamps orphan_seen_at (not read_at)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const now = new Date().toISOString();
+    const { supabase, captured } = stub([
+      { id: 'fresh', payload: { kind: 'coordinator_alert', body: 'first sighting' }, created_at: now },
+    ]);
+    await drainInbox(supabase, 'adam-session');
+    expect(warnSpy.mock.calls.map(c => c.join(' ')).join('\n')).toContain('fresh');
+    expect(captured.orphanSeenUpdates).toHaveLength(1);
+    expect(captured.orphanSeenUpdates[0].id).toBe('fresh');
+    expect(captured.orphanSeenUpdates[0].payload.orphan_seen_at).toBeTruthy();
+    expect(captured.updatedIds).toBeNull(); // read_at NEVER stamped — still recoverable
+    warnSpy.mockRestore(); logSpy.mockRestore();
+  });
+
+  it('stays SILENT on an orphan already stamped orphan_seen_at (no re-print)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const now = new Date().toISOString();
+    const { supabase, captured } = stub([
+      { id: 'already-seen', payload: { kind: 'coordinator_alert', orphan_seen_at: now }, created_at: now },
+    ]);
+    await drainInbox(supabase, 'adam-session');
+    expect(warnSpy.mock.calls.length).toBe(0);
+    expect(captured.orphanSeenUpdates).toHaveLength(0); // no re-stamp of an already-seen row
     warnSpy.mockRestore(); logSpy.mockRestore();
   });
 });

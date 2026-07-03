@@ -424,7 +424,10 @@ describe('full-lane: drainInbox surfaces BOTH lanes + two-stage ACK', () => {
     const rows = [
       { id: 'dir-1', payload: { kind: 'coordinator_directive', body: 'do X' }, created_at: iso(NOW) },
       { id: 'rep-1', payload: { kind: 'coordinator_reply', reply_to: 'C-9', body: 'ack' }, created_at: iso(NOW) },
-      { id: 'noise', payload: { kind: 'adam_advisory', body: 'fyi' }, created_at: iso(NOW) }, // neither lane
+      // canary_request is handler-owned (EXCLUDED_KINDS) — never surfaced by the Adam inbox, in
+      // ANY lane, regardless of future ADAM_INBOX_KINDS widening (QF-20260702-414: adam_advisory
+      // itself is NOT "noise" any more — it drains via the normal lane when addressed to Adam).
+      { id: 'noise', payload: { kind: 'canary_request', body: 'fyi' }, created_at: iso(NOW) }, // neither lane
     ];
     const captured = {};
     await drainInbox(mockInboxSb(rows, captured), UUID_A);
@@ -436,7 +439,7 @@ describe('full-lane: drainInbox surfaces BOTH lanes + two-stage ACK', () => {
 
   it('no surfaced rows (only non-lane noise) → no DB update (idempotent / quiet)', async () => {
     const captured = {};
-    await drainInbox(mockInboxSb([{ id: 'x', payload: { kind: 'adam_advisory' }, created_at: iso(NOW) }], captured), UUID_A);
+    await drainInbox(mockInboxSb([{ id: 'x', payload: { kind: 'canary_request' }, created_at: iso(NOW) }], captured), UUID_A);
     expect(captured.ids).toBeUndefined();
     expect(captured.update).toBeUndefined();
   });
