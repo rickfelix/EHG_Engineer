@@ -183,6 +183,9 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
     // ladder observes every merge attempt in shadow mode, adding one final
     // read-only pr-view (statusCheckRollup, for the P3 rung) after the merge
     // succeeds. It never affects `r` above — only appends to the call log.
+    // QF-20260703-363: the ladder's P4 rung now also probes live branch
+    // protection (same endpoint detectEnforceAdmins already reads above),
+    // appending one more `api .../protection` call at the end.
     expect(calls.map((c) => c.slice(0, 2))).toEqual([
       ['pr', 'view'],
       ['pr', 'ready'],
@@ -191,6 +194,7 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
       ['pr', 'view'],
       ['pr', 'view'],
       ['pr', 'view'],
+      ['api', 'repos/rickfelix/EHG_Engineer/branches/main/protection'],
     ]);
     const mergeCall = calls.find(argvMatchers.prMerge);
     expect(mergeCall).toContain('--admin');
@@ -239,6 +243,42 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
     expect(r).toEqual({ ok: true, action: 'merged', adminUsed: false });
     const mergeCall = calls.find(argvMatchers.prMerge);
     expect(mergeCall).not.toContain('--admin');
+  });
+});
+
+describe('attemptAutoMerge — mergeWork() P4 rung shares the live probe (QF-20260703-363)', () => {
+  it('reports P4 pass via the SAME detectBranchProtectionEnabled probe the retro CLI uses, not the not_applicable stub', async () => {
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
+      { match: argvMatchers.apiProtection, result: { stdout: 'true\n' } },
+      { match: argvMatchers.prMerge, result: { stdout: '' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-07-03T18:29:39Z') } },
+      { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
+    ]);
+    let capturedRungs = null;
+    const witnessSupabase = {
+      from: () => ({
+        insert: (row) => {
+          capturedRungs = row.rungs;
+          return Promise.resolve({ error: null });
+        },
+      }),
+    };
+
+    await attemptAutoMerge({
+      prNumber: 9,
+      repoOwner: 'rickfelix',
+      repoName: 'marketlens',
+      allowExternalMerge: true, // mechanic test — not exercising the C2 trust gate
+      runner,
+      logger: silentLogger,
+      witnessSupabase,
+      lane: 'ship-auto-merge',
+    });
+
+    const p4 = capturedRungs.find((r) => r.id === 'P4');
+    expect(p4.status).toBe('pass');
+    expect(p4.reason).toContain('rickfelix/marketlens');
   });
 });
 
