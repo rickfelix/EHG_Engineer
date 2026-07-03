@@ -60,6 +60,7 @@ function stub(rows) {
     update() { return updateChain; },
     in(_col, ids) { captured.updatedIds = ids; return updateChain; },
     is() { return Promise.resolve({ error: null }); },
+    eq() { return Promise.resolve({ error: null }); }, // QF-20260702-414: orphan_seen_at per-row stamp
   };
   const supabase = { from() { return new Proxy({}, { get(_t, p) { return (p in selectChain) ? selectChain[p] : updateChain[p]; } }); } };
   return { supabase, captured };

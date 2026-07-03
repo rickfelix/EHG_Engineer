@@ -326,6 +326,15 @@ const ADAM_INBOX_KINDS = Object.freeze([
   // orphan/visibility-recovery fallback. A coordinator->Adam directive-to-action (sibling of
   // coordinator_advisory / coordinator_adam_feedback), so it belongs here, NOT in EXCLUDED_KINDS.
   'coordinator_source_request',
+  // QF-20260702-414: coordinator_review (the periodic every-N-SDs candid-feedback ask) and
+  // adam_advisory (reused directionally: PAYLOAD_KINDS.ADAM_ADVISORY is Adam's OWN outbound kind
+  // to the coordinator, but sprint-reasoner/worker/Solomon senders also address Adam directly with
+  // this same kind — target_session scoping in drainInbox's query already guarantees only rows
+  // TARGETING Adam match here, so widening this never causes Adam to self-consume its own sent
+  // advisories, which target the coordinator, not itself) were recirculating through the degraded
+  // orphan/visibility fallback (28 rows unchanged across 6+ drains) instead of the normal lane.
+  'coordinator_review',
+  'adam_advisory',
 ]);
 
 /**
@@ -419,16 +428,25 @@ async function drainInbox(supabase, sessionId, { quiet = false } = {}) {
   // minus the handler-owned EXCLUDED_KINDS. These are real deliveries (live 2026-06-20: untyped enforcer
   // verdicts left Adam 40m blind). WARN keeps them VISIBLE without consuming, preserving the deliberate
   // non-consume invariant (read_at stays NULL → recoverable; pinned by adam-inbox-all-classes.test.js).
+  // QF-20260702-414: an orphan that no producer ever fixes recirculates FOREVER (28 rows re-printed
+  // ~50KB every tick, unchanged across 6+ drains, risking burial of new lane traffic). Print each
+  // orphan row ONCE — payload.orphan_seen_at (a visibility marker, NEVER read_at) is stamped after
+  // the first warn so a re-run stays silent about it while it remains genuinely recoverable/unread.
   const orphaned = (allRows || []).filter(isOrphanedAdamRow);
-  if (orphaned.length > 0) {
-    console.warn(`⚠ ${orphaned.length} unread Adam-directed row${orphaned.length === 1 ? '' : 's'} with unrecognized/untyped kind NOT auto-drained (visibility — NOT consumed, still recoverable):`);
-    for (const r of orphaned) {
+  const freshOrphans = orphaned.filter((r) => !(r.payload && r.payload.orphan_seen_at));
+  if (freshOrphans.length > 0) {
+    console.warn(`⚠ ${freshOrphans.length} unread Adam-directed row${freshOrphans.length === 1 ? '' : 's'} with unrecognized/untyped kind NOT auto-drained (visibility — NOT consumed, still recoverable):`);
+    for (const r of freshOrphans) {
       const kind = (r.payload && r.payload.kind) || '(untyped)';
       const text = (r.payload && r.payload.body) || r.body || r.subject || '(empty)';
       const ageMin = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
       console.warn(`  ⚠ [orphan/${kind}] id=${r.id} (${ageMin}m) ${text}`);
     }
     console.warn('  → these target the Adam session but match no drain lane; fix the producer to use a typed ADAM_INBOX_KINDS kind, or read via the durable reader.');
+    const seenAt = new Date().toISOString();
+    for (const r of freshOrphans) {
+      await supabase.from('session_coordination').update({ payload: { ...(r.payload || {}), orphan_seen_at: seenAt } }).eq('id', r.id);
+    }
   }
 
   // SD-REFILL-00YJS6VB: the recurring inbox-monitor tick fires every few minutes and was a
