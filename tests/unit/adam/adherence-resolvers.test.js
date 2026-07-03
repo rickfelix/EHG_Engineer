@@ -103,6 +103,32 @@ describe('resolveFacts (FR-1b/2/3/4) — measured vs honestly-unknown', () => {
     expect(facts.sourcedInWindow).toBeNull();
   });
 
+  it('QF-20260703-537: zero Adam-sourced SDs but 5 quick_fixes in-window -> sourcedInWindow=5, no false FAIL', async () => {
+    const sb = makeSupabase({
+      session_coordination: COUNT(0),
+      strategic_directives_v2: COUNT(0), // no SD drafts this window
+      quick_fixes: COUNT(5), // 5 QFs filed in-window — the previously-blind lane
+      issue_patterns: ROWS([]),
+      sub_agent_execution_results: COUNT(0),
+      audit_log: COUNT(0),
+    });
+    const facts = await resolveFacts(sb, { windowDays: 1 });
+    expect(facts.sourcedInWindow).toBe(5); // unified across both lanes, not just SDs
+  });
+
+  it('QF-20260703-537: an error on the quick_fixes query alone also leaves sourcedInWindow null (never silently falls back to SD-only count)', async () => {
+    const sb = makeSupabase({
+      session_coordination: COUNT(0),
+      strategic_directives_v2: COUNT(3), // this lane resolved fine
+      quick_fixes: ERR('db down'),
+      issue_patterns: ROWS([]),
+      sub_agent_execution_results: COUNT(0),
+      audit_log: COUNT(0),
+    });
+    const facts = await resolveFacts(sb, { windowDays: 1 });
+    expect(facts.sourcedInWindow).toBeNull();
+  });
+
   it('FR-3: no per-row Adam-author marker exists -> adamAuthoredBuilds stays null (no fabricated CONST-002 pass OR fail)', async () => {
     // Even with a healthy fleet of build rows, the resolver does NOT consult
     // sub_agent_execution_results for FR-3: there is no reliable per-build Adam-author key, and
