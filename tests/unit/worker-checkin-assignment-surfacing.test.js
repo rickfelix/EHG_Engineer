@@ -289,3 +289,34 @@ describe('resolveCheckin — a stamped-but-unclaimed assignment still reaches th
     }
   });
 });
+
+// QF-20260703-806: live forensics showed a WORK_ASSIGNMENT with BOTH read_at AND acknowledged_at
+// already stamped (the ack-before-claim race QF-476 did not fully close) -- the unackedOnly pull
+// alone excludes it, orphaning the directive. Reproduces the QF's own required sequence: insert a
+// WA already acked by "the checkin generic message pass", run the assignment pull, assert it is
+// CLAIMED, not orphaned. makeFilteringStub's unconditional final branch simulates the widened
+// (no-ack-filter) fallback query the fix adds.
+describe('resolveCheckin — QF-20260703-806: acked-but-never-claimed assignment reaches the claim step', () => {
+  it('no held claim: an already read_at+acknowledged_at-stamped WA is still claimed via the widened fallback pull', async () => {
+    const assignmentSd = 'SD-EHG-ENGINEER-ACKRACE-006';
+    const sb = fakeSb({
+      heldSd: null,
+      sdRow: { status: 'draft', sd_type: 'feature', sd_key: assignmentSd, metadata: {}, target_application: null },
+    });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    // unackedOnly (the primary pull) finds nothing -- this row is already acked; the widened
+    // fallback (neither unackedOnly nor unreadOnly set) is what must resurrect it.
+    ws.getMessagesForSession = makeFilteringStub({
+      id: 'msg-ackraced', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd },
+      read_at: '2026-07-03T16:05:28.000Z', acknowledged_at: '2026-07-03T16:05:28.000Z',
+    });
+    try {
+      const res = await resolveCheckin(sb, 'sess-idle', { getCoordinator: async () => null });
+      expect(res.action).toBe('claimed_assignment');
+      expect(res.sd).toBe(assignmentSd);
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+});

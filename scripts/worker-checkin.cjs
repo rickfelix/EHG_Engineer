@@ -1283,12 +1283,19 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
   // consumed-but-unactioned row (read_at set, acknowledged_at NULL, no claim recorded) must still
   // reach the claim step instead of being permanently hidden by an unreadOnly filter.
   let assignment = null;
+  const assignmentSinceIso = new Date(Date.now() - ASSIGNMENT_RECENCY_WINDOW_MS).toISOString();
   try {
-    const msgs = await ws.getMessagesForSession(sb, sessionId, {
-      unackedOnly: true,
-      sinceIso: new Date(Date.now() - ASSIGNMENT_RECENCY_WINDOW_MS).toISOString(),
-    });
+    const msgs = await ws.getMessagesForSession(sb, sessionId, { unackedOnly: true, sinceIso: assignmentSinceIso });
     assignment = (msgs || []).find(m => m.message_type === 'WORK_ASSIGNMENT');
+    if (!assignment) {
+      // QF-20260703-806: the unacked pull can miss a row whose acknowledged_at got stamped by a
+      // path OTHER than a genuine claim outcome (the ack-before-claim race). Claim outcome, not
+      // ack, is the terminal state -- widen to the same bounded window WITHOUT the ack filter.
+      // The terminal/ineligible/tryClaim checks below already re-verify the target SD's LIVE
+      // state and are idempotent, so resurrecting an already-genuinely-resolved row is harmless.
+      const wider = await ws.getMessagesForSession(sb, sessionId, { sinceIso: assignmentSinceIso });
+      assignment = (wider || []).find(m => m.message_type === 'WORK_ASSIGNMENT');
+    }
   } catch { /* fail-open */ }
   if (assignment) {
     const sdKey = extractSdFromAssignment(assignment);
