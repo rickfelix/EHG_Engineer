@@ -587,6 +587,7 @@
     "dr:dump": "node scripts/dr/governance-dump.mjs",
     "schema:lint": "node scripts/lint/schema-reference-lint.mjs --diff",
     "schema:lint:all": "node scripts/lint/schema-reference-lint.mjs --all",
+    "retro-migrations:diff-scope": "node scripts/lint/compute-changed-retro-migrations.mjs",
     "schema:snapshot:lint": "node scripts/lint/schema-reference-snapshot.mjs",
     "canary:probe": "node scripts/canary/run-canary-probe.mjs",
     "test:quarantine": "node scripts/unit-tier-quarantine.mjs report .claude-unit-run.log",
