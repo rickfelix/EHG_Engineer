@@ -1205,6 +1205,44 @@ async function printInbox() {
   console.log('');
 }
 
+// ── Section: Review-held SDs (QF-20260704-742) ──
+// The inbox tick covered the worker-signal lane (printInbox) and the Adam advisory lane
+// (printAdamInbox), but had no surface at all for SDs parked with
+// metadata.needs_coordinator_review=true (lib/fleet/claim-eligibility.cjs) — a third
+// distinct intake surface the coordinator must drain (clearCoordinatorReview IS the
+// dispatch authorization). Without this, a whole wave of held SDs can sit invisible
+// while the coordinator reports belt-empty. Read-only: never mutates the flag.
+async function printReviewHeldSds() {
+  console.log('REVIEW-HELD SDS');
+  console.log('─'.repeat(72));
+
+  const { data: held, error } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key, title, status')
+    .eq('metadata->>needs_coordinator_review', 'true')
+    .not('status', 'in', '(completed,cancelled)');
+
+  if (error) {
+    console.log('  (review-held query failed: ' + error.message + ')');
+    console.log('');
+    return;
+  }
+
+  if (!held || held.length === 0) {
+    console.log('  (no SDs held for coordinator review)');
+    console.log('');
+    return;
+  }
+
+  console.log('  ' + held.length + ' SD(s) held for review');
+  console.log('');
+  for (const sd of held) {
+    console.log('  ' + pad(sd.sd_key, 44) + pad(sd.status, 12) + (sd.title || '').substring(0, 40));
+  }
+  console.log('  Clear a hold: node scripts/clear-coordinator-review.mjs <SD-KEY>');
+  console.log('');
+}
+
 // ── Section: Adam advisory inbox (SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B) ──
 // Surfaces Adam advisories (payload.kind=adam_advisory) in a SEPARATE section from
 // the worker-friction inbox (printInbox). Adam advisories deliberately omit
@@ -1756,6 +1794,8 @@ async function main() {
       // loop too — the ~5min 'all' loop is collapsed by FLEET_DASH_SUPPRESS during quiet
       // periods, so action-required advisories could otherwise sit unsurfaced for long stretches.
       await printAdamInbox();
+      // QF-20260704-742: third intake surface — SDs held with metadata.needs_coordinator_review.
+      await printReviewHeldSds();
     },
     adam:          async () => await printAdamInbox(), // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B
     solomon:       async () => { await printSolomonInbox(); await printSolomonLedgerRollup(); }, // SD-LEO-INFRA-SOLOMON-CONSULT-001F + SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001
@@ -1778,6 +1818,7 @@ async function main() {
       await printDeadLetters(); // FR-4 SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001
       await printRelayDropGauge(); // FR-3 SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001
       await printAdamInbox(); // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B — Adam advisory lane
+      await printReviewHeldSds(); // QF-20260704-742 — third intake surface: needs_coordinator_review holds
       await printSolomonInbox(); // SD-LEO-INFRA-SOLOMON-CONSULT-001F — Solomon oracle consult lane (dormant until SOLOMON_CONSULT_V1)
       await printSolomonLedgerRollup(); // SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001 (FR-5) — accuracy + cost-per-accepted rollup
       await printWorkingContext(); // SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001 (FR-3) — standing context dual-render
