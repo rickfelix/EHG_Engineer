@@ -1,0 +1,23 @@
+{
+  "_comment": "diagnostic-gauge-citation-lint escapes (SD-LEO-INFRA-REWARD-SPINE-ONE-001-C). files: confirmed pre-existing citations of a diagnostic-only signal (retrospectives.quality_score / feedback.quality_score / adherence-probe pass-rate / raw gate pass-rate) as a gating threshold, accepted as known debt pending a dedicated remediation SD -- NOT a permanent exemption. A --all sweep during PLAN research found this backlog is 18 files, not the single file (retrospective-quality.js) originally assumed in the SD's design brief -- documented honestly rather than minimized. Some entries are borderline (e.g. stage-17-blueprint-review.js filters for a positive value rather than a meaningful threshold, and may be a different domain's quality_score entirely) but are included rather than hand-pruned, matching schema-reference-lint.mjs's own advisory-backlog philosophy. Prefer the inline pragma (diagnostic-gauge-lint-disable-line) for a single new intentional line.",
+  "files": [
+    "lib/eva/__tests__/retro-clobber-guard.test.js",
+    "lib/eva/stage-templates/analysis-steps/stage-17-blueprint-review.js",
+    "lib/rca-runtime-triggers.js",
+    "lib/sub-agents/retro/db-operations.js",
+    "scripts/claude-gen/section-generators.js",
+    "scripts/eva/consultant-analysis-round.mjs",
+    "scripts/eva/heal-command.mjs",
+    "scripts/gate-health-check.js",
+    "scripts/generate-comprehensive-retrospective.js",
+    "scripts/modules/claude-md-generator/operational-sections.js",
+    "scripts/modules/handoff/executors/lead-final-approval/gates.js",
+    "scripts/modules/handoff/executors/lead-final-approval/gates/retrospective-exists.test.js",
+    "scripts/modules/handoff/executors/plan-to-lead/gates/retrospective-quality.js",
+    "scripts/modules/handoff/rejection-subagent-mapping.js",
+    "scripts/modules/handoff/retrospective-enricher.js",
+    "scripts/modules/leo-summary/compliance-scorer.js",
+    "scripts/uat-to-strategic-directive-ai.js",
+    "server/routes/feedback.js"
+  ]
+}
