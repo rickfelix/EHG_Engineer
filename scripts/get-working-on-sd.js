@@ -103,18 +103,56 @@ async function checkResumeEligibility(sdUuid, currentPhase) {
   };
 }
 
+const SD_COLUMNS = 'id, sd_key, title, status, priority, is_working_on, claiming_session_id, created_at, current_phase, progress, description';
+
 async function getWorkingOnSD() {
   try {
-    // SD-LEO-INFRA-CLAIM-GUARD-001: Prefer claiming_session_id, fall back to is_working_on
-    const { data: workingOn, error: workingError } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, priority, is_working_on, claiming_session_id, created_at, current_phase, progress, description')
-      .or('claiming_session_id.not.is.null,is_working_on.eq.true')
-      .lt('progress', 100);  // Less than 100% complete
+    // QF-20260703-742: resolve THIS session's own claim first. The prior global
+    // spotlight query below has no session filter, so under concurrency it could
+    // silently return another session's SD (e.g. document/heal/learn running
+    // against the wrong SD's data).
+    const sessionId = process.env.CLAUDE_SESSION_ID;
+    let workingOn = null;
 
-    if (workingError) {
-      console.error('Error querying working_on SD:', workingError);
-      return null;
+    if (sessionId) {
+      const { data: ownClaim, error: ownError } = await supabase
+        .from('strategic_directives_v2')
+        .select(SD_COLUMNS)
+        .eq('claiming_session_id', sessionId)
+        .lt('progress', 100);
+      if (!ownError && ownClaim && ownClaim.length > 0) {
+        workingOn = ownClaim;
+      }
+    }
+
+    if (!workingOn) {
+      // No claim attributable to this session — the global spotlight is only
+      // unambiguous when this is the sole live session in the fleet.
+      const { count: liveCount, error: liveError } = await supabase
+        .from('v_active_sessions')
+        .select('session_id', { count: 'exact', head: true })
+        .eq('computed_status', 'active');
+
+      if (liveError || liveCount !== 1) {
+        console.log('\n❌ Cannot resolve a Strategic Directive for this session unambiguously.');
+        console.log(`   No SD claimed by CLAUDE_SESSION_ID=${sessionId || '(unset)'}, and`);
+        console.log(`   ${liveError ? 'the live-session count is unknown' : `${liveCount} other session(s) are active`} — the global spotlight would be ambiguous under concurrency.`);
+        console.log('   Claim your SD via sd-start.js, or resolve manually.\n');
+        return null;
+      }
+
+      // SD-LEO-INFRA-CLAIM-GUARD-001: Prefer claiming_session_id, fall back to is_working_on
+      const { data: spotlight, error: workingError } = await supabase
+        .from('strategic_directives_v2')
+        .select(SD_COLUMNS)
+        .or('claiming_session_id.not.is.null,is_working_on.eq.true')
+        .lt('progress', 100);  // Less than 100% complete
+
+      if (workingError) {
+        console.error('Error querying working_on SD:', workingError);
+        return null;
+      }
+      workingOn = spotlight;
     }
 
     if (workingOn && workingOn.length > 0) {
