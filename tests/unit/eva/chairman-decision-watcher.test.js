@@ -191,6 +191,42 @@ describe('createOrReusePendingDecision', () => {
     expect(result.isNew).toBe(false);
   });
 
+  // SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001: the reuse lookup must be scoped by decision_type,
+  // not just (venture_id, lifecycle_stage, status) -- otherwise minting a NEW decision_type at a
+  // stage that already has a pending decision of a DIFFERENT type silently merges the two verdicts
+  // into one row instead of creating an independently-tracked decision.
+  it('does NOT reuse a pending decision of a DIFFERENT decision_type at the same stage', async () => {
+    const eqCalls = [];
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockImplementation((col, val) => { eqCalls.push([col, val]); return chain; }),
+        single: vi.fn().mockImplementation(() => {
+          const typeFilter = eqCalls.find(([col]) => col === 'decision_type');
+          // Only the pre-existing 'stage_gate' decision exists; a 'product_review' lookup finds nothing.
+          if (typeFilter && typeFilter[1] === 'product_review') return Promise.resolve({ data: null });
+          return Promise.resolve({ data: { id: 'existing-stage-gate-id' } });
+        }),
+        insert: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: { id: 'new-product-review-id' }, error: null }),
+          }),
+        }),
+        update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+      }),
+    };
+    const chain = supabase.from();
+
+    const result = await createOrReusePendingDecision({
+      ventureId: 'v1', stageNumber: 23, decisionType: 'product_review', supabase, logger,
+    });
+
+    expect(eqCalls).toContainEqual(['decision_type', 'product_review']);
+    expect(result.id).toBe('new-product-review-id');
+    expect(result.isNew).toBe(true);
+    expect(result.id).not.toBe('existing-stage-gate-id'); // never merged with the other type's row
+  });
+
   it('creates new decision when none exists', async () => {
     let callCount = 0;
     const supabase = {
@@ -246,6 +282,67 @@ describe('createOrReusePendingDecision', () => {
     });
     expect(result.id).toBe('raced-id');
     expect(result.isNew).toBe(false);
+  });
+
+  // SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001: the 23505 exception handler's race-check fallback
+  // must ALSO be scoped by decision_type — the same bug class as the pre-check lookup above, but
+  // living in the exception path. Simulates a pending 'stage_gate' row already occupying the stage;
+  // a 'product_review' insert that 23505s must not have its race-check reuse that unrelated row.
+  it('does NOT reuse a raced PENDING decision of a DIFFERENT decision_type (23505 exception path)', async () => {
+    let currentEqCalls = [];
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockImplementation((col, val) => { currentEqCalls.push([col, val]); return chain; }),
+      in: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      single: vi.fn().mockImplementation(() => {
+        const typeFilter = currentEqCalls.find(([col]) => col === 'decision_type');
+        currentEqCalls = [];
+        // Only a pending 'stage_gate' row exists; any query scoped to 'product_review' finds nothing.
+        if (typeFilter && typeFilter[1] === 'product_review') return Promise.resolve({ data: null });
+        return Promise.resolve({ data: { id: 'existing-stage-gate-id' } });
+      }),
+      insert: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({ data: null, error: { code: '23505', message: 'unique_violation' } }),
+        }),
+      }),
+    };
+    const supabase = { from: vi.fn().mockReturnValue(chain) };
+
+    await expect(createOrReusePendingDecision({
+      ventureId: 'v1', stageNumber: 23, decisionType: 'product_review', supabase, logger,
+    })).rejects.toThrow('Failed to create decision');
+  });
+
+  // Same bug class, resolved-decision (re-entry) fallback branch.
+  it('does NOT reuse a resolved decision of a DIFFERENT decision_type (23505 exception path)', async () => {
+    let currentEqCalls = [];
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockImplementation((col, val) => { currentEqCalls.push([col, val]); return chain; }),
+      in: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      single: vi.fn().mockImplementation(() => {
+        const typeFilter = currentEqCalls.find(([col]) => col === 'decision_type');
+        currentEqCalls = [];
+        // Only an APPROVED 'stage_gate' row exists; any query scoped to 'product_review' finds nothing.
+        if (typeFilter && typeFilter[1] === 'product_review') return Promise.resolve({ data: null });
+        return Promise.resolve({ data: { id: 'approved-stage-gate-id' } });
+      }),
+      insert: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({ data: null, error: { code: '23505', message: 'unique_violation' } }),
+        }),
+      }),
+    };
+    const supabase = { from: vi.fn().mockReturnValue(chain) };
+
+    await expect(createOrReusePendingDecision({
+      ventureId: 'v1', stageNumber: 23, decisionType: 'product_review', supabase, logger,
+    })).rejects.toThrow('Failed to create decision');
   });
 
   it('throws on non-race-condition insert error', async () => {
@@ -345,6 +442,52 @@ describe('createOrReusePendingDecision', () => {
     expect(insertFn).toHaveBeenCalledWith(
       expect.objectContaining({ health_score: 'green' }),
     );
+  });
+
+  // SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001 (FR-3): explicit attemptNumber support for
+  // multi-attempt/re-review callers, without disturbing the DB default for everyone else.
+  it('includes attempt_number in the insert when attemptNumber is explicitly provided', async () => {
+    const insertFn = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: 'new-id' }, error: null }),
+      }),
+    });
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: null }),
+        insert: insertFn,
+      }),
+    };
+
+    await createOrReusePendingDecision({
+      ventureId: 'v1', stageNumber: 23, decisionType: 'product_review', attemptNumber: 2,
+      supabase, logger,
+    });
+
+    expect(insertFn).toHaveBeenCalledWith(expect.objectContaining({ attempt_number: 2 }));
+  });
+
+  it('omits attempt_number from the insert when not provided (preserves the DB default for every other caller)', async () => {
+    const insertFn = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: 'new-id' }, error: null }),
+      }),
+    });
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: null }),
+        insert: insertFn,
+      }),
+    };
+
+    await createOrReusePendingDecision({ ventureId: 'v1', stageNumber: 10, supabase, logger });
+
+    const insertedRow = insertFn.mock.calls[0][0];
+    expect(insertedRow).not.toHaveProperty('attempt_number');
   });
 
   // SD-MAN-FIX-FIX-DUPLICATE-ARTIFACTS-001: custom decision_type is preserved
