@@ -78,6 +78,22 @@ SELECT 99;`;
     expect(stmts[1]).toContain('SELECT 99');
   });
 
+  it('preserves a standalone `--` comment line INSIDE a $$...$$ function body (QF-20260704-058)', () => {
+    // Regression for the bug this QF fixes: a whole-line filter used to strip
+    // any line starting with `--` from the flattened statement text, with no
+    // awareness that some of those lines are literal source INSIDE the
+    // dollar-quoted body (not top-level comments in the surrounding script).
+    const sql = `CREATE OR REPLACE FUNCTION f() RETURNS void AS $$
+BEGIN
+  -- this standalone comment must survive inside the function body
+  PERFORM 1;
+END;
+$$ LANGUAGE plpgsql;`;
+    const stmts = splitPostgreSQLStatements(sql);
+    expect(stmts).toHaveLength(1);
+    expect(stmts[0]).toContain('this standalone comment must survive inside the function body');
+  });
+
   it('drops comment-only segments (no SQL after stripping `--` lines)', () => {
     const sql = '-- header comment\n-- another comment\n;\nSELECT 1;';
     const stmts = splitPostgreSQLStatements(sql);
