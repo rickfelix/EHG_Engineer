@@ -440,6 +440,21 @@ INSERT INTO strategic_directives_v2 (...) VALUES (...);
 
 ## Future Phases (Not Yet Implemented)
 
+**STATUS UPDATE (2026-07-04, SD-FDBK-FIX-TRIGGER-AUDIT-MEDIUM-003 / trigger-estate audit
+F-6)**: Phase 4/5 are still not implemented, 5+ months after the Phase 1-3 migration. A
+repo-wide consumer audit found the concrete blocker: `lib/sourcing-engine/refill-auto-promote.js`
+deliberately OMITS `sd_code_user_facing`/`uuid_internal_pk` from its INSERT payload and relies
+on these triggers' INSERT null-fill branch to backfill both NOT-NULL columns from
+`id`/`uuid_id` (test-guarded by `tests/unit/sourcing-engine/refill-auto-promote.test.js`,
+which asserts these columns are excluded as "trigger-filled"). Dropping the triggers today
+(Phase 5) would break auto-refill promotion with a NOT NULL violation. Phase 5 is safe only
+after `refill-auto-promote.js` is migrated to set both columns explicitly itself, mirroring
+`scripts/leo-create-sd.js`'s existing pattern (see that file's `sdData` construction, which
+sets `id` and `sd_code_user_facing` simultaneously specifically to no-op the trigger). Until
+then, the dangerous UPDATE branch (a write to the alias column silently rewriting the real
+PK/FK-bearing column) now emits a `RAISE WARNING` (this SD) so the behavior is observable
+rather than silent, without changing it.
+
 ### Phase 4: Update Codebase
 
 **Timeline:** 2-4 weeks after migration
