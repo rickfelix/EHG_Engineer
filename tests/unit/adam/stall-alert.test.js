@@ -14,13 +14,50 @@ import { DEFAULT_STALE_TICKS } from '../../../lib/adam/stall-detector.js';
 
 vi.mock('../../../lib/chairman/record-pending-decision.mjs', () => ({
   recordPendingDecision: vi.fn(async () => ({ recorded: true, id: 'dec-1', escalated: true })),
+  escalateChairmanDecision: vi.fn(async () => ({ escalated: false, deduped: true })),
 }));
-import { recordPendingDecision } from '../../../lib/chairman/record-pending-decision.mjs';
+import { recordPendingDecision, escalateChairmanDecision } from '../../../lib/chairman/record-pending-decision.mjs';
 
 vi.mock('../../../lib/adam/task-ledger.js', () => ({ setStatus: vi.fn(async () => ({})) }));
 import { setStatus } from '../../../lib/adam/task-ledger.js';
 
-beforeEach(() => { recordPendingDecision.mockClear(); setStatus.mockClear(); });
+beforeEach(() => { recordPendingDecision.mockClear(); escalateChairmanDecision.mockClear(); setStatus.mockClear(); });
+
+/**
+ * Stateful chairman_decisions stub for the stall-digest supersede test: tracks a single "open
+ * digest" slot that recordPendingDecision's mock populates (simulating the real insert) and the
+ * findPendingStallDigest query reads back on later ticks. Only the query/update shapes
+ * checkAndAlertStalls actually issues are implemented.
+ */
+function makeStallDigestSupabase() {
+  const state = { digest: null };
+  const updates = [];
+  return {
+    state,
+    updates,
+    from(table) {
+      if (table !== 'chairman_decisions') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) };
+      return {
+        select: () => ({
+          eq: () => ({
+            like: () => ({
+              order: () => ({
+                limit: () => ({ maybeSingle: async () => ({ data: state.digest }) }),
+              }),
+            }),
+          }),
+        }),
+        update: (vals) => ({
+          eq: async (_col, id) => {
+            updates.push({ id, vals });
+            if (state.digest && state.digest.id === id) Object.assign(state.digest.brief_data, vals.brief_data);
+            return { data: null, error: null };
+          },
+        }),
+      };
+    },
+  };
+}
 
 /** Minimal supabase stub for strategic_directives_v2 status lookups (isSdTerminal). */
 function sbWithSdStatus(statusBySdKey) {
@@ -159,5 +196,29 @@ describe('QF-20260703-229: false-stall flood fix', () => {
     expect(call.context.node_ids).toEqual(['a', 'b', 'c']);
     expect(alerted).toHaveLength(3);
     expect(alerted.every((a) => a.escalated === true)).toBe(true);
+  });
+});
+
+describe('QF-20260703-860: supersede the open stall digest instead of inserting per tick', () => {
+  it('3 ticks against a persistent stale thread: exactly ONE recordPendingDecision insert, later ticks refresh the same row via update+re-attempted escalation (which dedupes)', async () => {
+    const stubSb = makeStallDigestSupabase();
+    recordPendingDecision.mockImplementationOnce(async (_sb, { title, context }) => {
+      stubSb.state.digest = { id: 'dec-1', brief_data: { title, context, escalation_email_sent_at: '2026-07-04T01:00:00Z' } };
+      return { recorded: true, id: 'dec-1', escalated: true };
+    });
+
+    const parents = [{ id: 'p1', title: 'Stuck thread', updated_at: 'fixed', inFlightNextStep: false }];
+    const prevSnapshot = { p1: { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 } };
+
+    // Tick 1: no existing digest — inserts.
+    await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+    // Ticks 2-3: the digest inserted above is now found — refresh in place, never insert again.
+    await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+    await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+
+    expect(recordPendingDecision).toHaveBeenCalledTimes(1); // exactly ONE pending digest row created
+    expect(escalateChairmanDecision).toHaveBeenCalledTimes(2); // ticks 2-3 re-attempt, both dedupe (0 new emails)
+    expect(stubSb.updates).toHaveLength(2);
+    expect(stubSb.updates.every((u) => u.id === 'dec-1')).toBe(true);
   });
 });
