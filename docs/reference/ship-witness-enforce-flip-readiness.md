@@ -1,10 +1,11 @@
-# Ship-witness: enforce-flip readiness (Ship-witness D)
+# Ship-witness: enforce-flip readiness (Ship-witness D + E)
 
-**SD**: SD-LEO-INFRA-SHIP-WITNESS-ENFORCE-001 (Ship-witness D)
+**SD**: SD-LEO-INFRA-SHIP-WITNESS-ENFORCE-001 (Ship-witness D), extended by
+SD-LEO-INFRA-SHIP-WITNESS-COVERAGE-001 (Ship-witness E)
 **Status**: Approved
 **Category**: Protocol
-**Version**: 1.0.0
-**Last Updated**: 2026-07-03
+**Version**: 1.1.0
+**Last Updated**: 2026-07-04
 
 ## What this is
 
@@ -53,6 +54,11 @@ current readiness. It only reports — it never flips anything.
 has exactly one row (from PR #5415, the merge that first wired the
 substrate into production). The 7-day bar cannot possibly be met yet.
 
+**Update (SD E, 2026-07-04):** the reason readiness stayed stuck near zero
+was structural, not incidental — see "Coverage gap closed" below. After the
+fix, readiness advanced from **0/7 to 2/7 consecutive days** in the same
+session that shipped it.
+
 ## Cutover timestamp
 
 `WITNESS_CUTOVER_ISO = '2026-07-03T03:37:35Z'` (`lib/ship/witness-adoption.mjs`)
@@ -100,6 +106,41 @@ Two specimens are already banked as the rationale for this contract
   explicit human/chairman decision that should gate a fail-closed flip on a
   shared merge path.
 
+## Coverage gap closed (SD E)
+
+**SD**: SD-LEO-INFRA-SHIP-WITNESS-COVERAGE-001 (Ship-witness E), completed 2026-07-04.
+
+Live investigation (not just code reading) found the actual reason WATCH-HOLEs
+kept recurring after D shipped: `attemptAutoMerge()` fully witnesses every
+merge it drives *synchronously*, but GitHub's native async `gh pr merge
+--auto` — the exact pattern the `/quick-fix` skill documents, and the
+dominant path for quick-fixes — completes the merge **later**, with no
+process alive to observe it and write the telemetry row. This is structural
+to async `--auto` merges in general, not a fixed enumerable set of bypass
+call sites, so enumerate-and-patch was the wrong shape of fix.
+
+**Fix**: a periodic reconciliation sweep, reusing the existing detection
+primitives rather than adding a new mechanism:
+
+- `scripts/ship-witness-reconcile.mjs` — for every merge `detectUnwitnessedMerges()`
+  flags, derives the work-key via `lib/ship/work-key-derivation.mjs` (branch
+  name first, PR title fallback, never fabricated — returns `null` rather
+  than guess) and backfills a `merge_witness_telemetry` row with
+  `lane: 'reconcile-sweep'`. Wired into the existing `gauge-runner.mjs`
+  `ship-witness-unwitnessed-merge` cadence — no new scheduler.
+- `scripts/ship-witness-retroactive-batch.mjs` — drives the pre-existing
+  `scripts/ship-witness-retroactive.mjs` (QF-20260703-401) over the
+  pre-cutover historical backlog in bulk.
+- `lib/ship/merge-witness-telemetry.mjs`'s `writeMergeWitnessTelemetry()`
+  gained an idempotency check (dedup on `repo`+`pr_number`+`lane`) as a
+  prerequisite — both writers above are re-runnable by design (a sweep that
+  can't safely re-run the same merge twice isn't safe to run periodically).
+
+**Live-verified impact, same session**: the `ship-witness-unwitnessed-merge`
+gauge dropped from 67 to 1 after one reconcile pass; a 64-PR retroactive
+backfill of the pre-cutover backlog succeeded in full; the readiness clock
+above moved from 0/7 to 2/7. None of this was simulated — see PR #5527.
+
 ## Family status
 
 - **A** — SD-LEO-INFRA-SHIP-WITNESS-MERGEWORK-001 (completed): the P1-P5
@@ -108,5 +149,9 @@ Two specimens are already banked as the rationale for this contract
   `applications.trust_tier` hook (see `ship-witness-venture-trust-tier.md`).
 - **C** — SD-LEO-INFRA-SHIP-WITNESS-VENTURE-001 (completed): venture-build
   walker completion gates on a merged PR.
-- **D** — SD-LEO-INFRA-SHIP-WITNESS-ENFORCE-001 (this SD): adoption
+- **D** — SD-LEO-INFRA-SHIP-WITNESS-ENFORCE-001 (completed): adoption
   measurement + gated, currently-inert enforce-flip capability.
+- **E** — SD-LEO-INFRA-SHIP-WITNESS-COVERAGE-001 (completed): closed the
+  structural WATCH-HOLE gap (async auto-merge) via a reconciliation sweep;
+  backfilled the historical backlog; advanced the readiness clock. See
+  "Coverage gap closed" above.
