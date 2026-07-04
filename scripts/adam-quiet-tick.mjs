@@ -24,6 +24,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import 'dotenv/config';
 import { rehydrateBoard } from '../lib/adam/task-rehydrate.js';
 import { checkAndAlertStalls } from '../lib/adam/stall-alert.js';
+import { runOutboundSilenceWatchdog } from '../lib/adam/outbound-silence-watchdog.js';
 import { TABLE as TASK_LEDGER_TABLE } from '../lib/adam/task-ledger.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 
@@ -172,6 +173,16 @@ async function main() {
     stall = { snapshot: priorStallSnapshot, alerted: [], error: e && e.message };
   }
 
+  // SD-LEO-FIX-ADAM-OUTBOUND-SILENCE-001: watch Adam's own outbound rows at a live
+  // target for reply-expected silence (probe then, on a second consecutive breach,
+  // a chairman-visible feedback row). Fail-soft — never blocks the rest of the tick.
+  let outboundSilence = { probed: [], escalated: [], laneHealth: { unactionedCount: 0, maxAgeMs: 0 } };
+  try {
+    outboundSilence = await runOutboundSilenceWatchdog(sb, {});
+  } catch (e) {
+    outboundSilence = { probed: [], escalated: [], laneHealth: { unactionedCount: 0, maxAgeMs: 0 }, error: e && e.message };
+  }
+
   // FR-4: belt-countdown + offer-help collapse to a salient-delta check — Adam only
   // reaches the coordinator on a real belt/venture delta, never a "still idle" status.
   const salient = await readSalientState(sb);
@@ -188,6 +199,7 @@ async function main() {
     failedCount: tick.failedCount,
     boardReconcile,
     stallAlerted: stall.alerted,
+    outboundSilence,
     crossPartyPing: delta.changed,
     pingFields: delta.fields,
     nextWakeSeconds: delaySeconds,
@@ -201,6 +213,7 @@ async function main() {
       `fail=${tick.failedCount} ` +
       `reconcile=parents:${boardReconcile.parents},errors:${boardReconcile.errors.length} ` +
       `stalls=${stall.alerted.length} ` +
+      `probes=${outboundSilence.probed.length} esc=${outboundSilence.escalated.length} ` +
       `ping=${delta.changed ? delta.fields.join(',') : 'suppressed'} ` +
       `nextWakeSeconds=${delaySeconds} :: ${modeReason}`
     );
@@ -209,6 +222,9 @@ async function main() {
     }
     for (const a of stall.alerted) {
       console.log(`QUIET_TICK_STALL_ALERT=adam node=${a.id} title="${a.title}" escalated=${a.escalated}`);
+    }
+    for (const p of outboundSilence.probed) {
+      console.log(`QUIET_TICK_OUTBOUND_PROBE=adam target=${p.target} row=${p.rowId}`);
     }
   }
   return result;
