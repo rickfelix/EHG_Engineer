@@ -68,7 +68,7 @@ describe('runAdherenceProbes + hasDrift', () => {
     const bars = runAdherenceProbes({
       sourcedInWindow: 1, visionGaugeReadInWindow: true, recurrencesInWindow: 0, signalsInWindow: 0,
       adamAuthoredBuildsInWindow: 0, claimableBelt: 1, idleWorkers: 0, sourceableBacklogCount: 0,
-      advisoryBody: 'ok', adamChairmanDecisionQuestionsInWindow: [],
+      advisoryBody: 'ok', adamChairmanDecisionQuestionsInWindow: [], adamMachineRaisedNoiseInWindow: [],
       pmBoardSnapshot: [], pmBoardPriorSnapshot: new Map(),
     });
     expect(bars).toHaveLength(8);

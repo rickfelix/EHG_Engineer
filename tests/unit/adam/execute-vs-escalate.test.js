@@ -98,12 +98,12 @@ describe('classifyDecisionQuestion (routed through the 3-gate classifier)', () =
 // ── TS-4: probeDecisionRubric end-to-end ─────────────────────────────────────
 describe('probeDecisionRubric', () => {
   it('PASS when there are zero over-asks', () => {
-    const facts = { adamChairmanDecisionQuestionsInWindow: [{ body: 'Irreversible launch — your call?' }] };
+    const facts = { adamChairmanDecisionQuestionsInWindow: [{ body: 'Irreversible launch — your call?' }], adamMachineRaisedNoiseInWindow: [] };
     expect(probeDecisionRubric(facts).verdict).toBe('pass');
   });
 
   it('FAIL when an over-ask is present', () => {
-    const facts = { adamChairmanDecisionQuestionsInWindow: [{ body: 'I recommend we shelve this reversible item — should I proceed?' }] };
+    const facts = { adamChairmanDecisionQuestionsInWindow: [{ body: 'I recommend we shelve this reversible item — should I proceed?' }], adamMachineRaisedNoiseInWindow: [] };
     expect(probeDecisionRubric(facts).verdict).toBe('fail');
   });
 
