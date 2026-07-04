@@ -41,6 +41,25 @@ describe('transformLegacyFinding', () => {
     expect(r.severity).toBe('medium');
   });
 
+  // QF-20260703-472: legacy producers emit severity:'info' for couldn't-run/passed
+  // conditions ("No package.json", "Tests passed", etc.) — 'info' is not a canonical
+  // SEVERITY_LEVELS value. It must remap to 'low' (excluded from FR_C_REMEDIATION_SEVERITIES),
+  // NOT fall through to 'medium' (included), or these get auto-filed as bogus remediation SDs.
+  it('remaps legacy info severity to low, not medium', () => {
+    const r = transformLegacyFinding(
+      { check: 'test_suite', title: 'No package.json', detail: 'Skipped tests', severity: 'info' },
+      ctx
+    );
+    expect(r.severity).toBe('low');
+  });
+
+  it('remaps info severity to low across every legacy check type', () => {
+    for (const check of ['npm_audit', 'test_suite', 'unit_test', 'e2e_test', 'feedback_widget_present', 'error_capture_wired']) {
+      const r = transformLegacyFinding({ check, title: 't', severity: 'info' }, ctx);
+      expect(r.severity).toBe('low');
+    }
+  });
+
   it('returns null for malformed input', () => {
     expect(transformLegacyFinding(null, ctx)).toBeNull();
     expect(transformLegacyFinding({ check: 'lint' }, {})).toBeNull(); // no venture_id
