@@ -1,0 +1,100 @@
+{
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Pure per-loop health detector in a new lib/governance/per-loop-health-gauges.js",
+      "description": "New pure function computeLoopHealth(loopId, rows) computes two KPIs per loop from pre-fetched v_improvement_ledger rows (cycle_id, stage, entered_at; stage restricted to RECORD/PREVENT by the caller): witnessesBeforePrevention = count of distinct cycle_ids with a RECORD row but no PREVENT row for that same cycle_id (an un-prevented backlog, target <=2 per the SD's historical-13 baseline); recurrenceAfterClosure = count of distinct cycle_ids where a RECORD row's entered_at is LATER than that cycle_id's own earliest PREVENT row (a reopen-after-closure signal, target 0). VALIDATION sub-agent finding A1 (per-loop PREVENT-stage density: B=5615 RECORD/0 PREVENT, C=14824/0, D=0/0 empty source, E=6/0 currently) confirms loops B and C structurally NEVER emit a PREVENT stage (frozen by the leaf-1 spine's own migration comments: 'SENSE/VERIFY/PREVENT intentionally not emitted' for B, 'covered by loop A/F' for C) -- for these two loops the KPIs are undefined, not '0 == healthy' (the no-data-as-perfect-health anti-pattern). computeLoopHealth therefore hardcodes LOOPS_WITHOUT_PREVENT = {B_signal_aggregation, C_retro_learn} (matching the frozen per-loop stage-coverage table in docs/architecture/improvement-ledger-ssot-spine.md, not a live row-count check, so a loop with zero CURRENT rows but a structurally-defined PREVENT branch -- e.g. D, E -- still reads as applicable:true/measuring-zero rather than not-applicable) and returns {applicable:false, witnessesBeforePrevention:null, recurrenceAfterClosure:null, count:0} for those two, vs {applicable:true, witnessesBeforePrevention, recurrenceAfterClosure, count} for the other four -- so a consumer (leaf-2 enforcement, a future dashboard) can always distinguish measured-healthy from not-yet-measurable. A companion async fetchLoopStageRows(supabase, loopId, {limit=5000}) does the ONE Supabase read (columns cycle_id/stage/entered_at only, filtered to loop_id + stage IN (RECORD,PREVENT), ordered by entered_at) and returns {rows, truncated: rows.length>=limit} -- the I/O-vs-pure-logic split established by work-boundary-gauges.js/recursion-governor.js is reused. truncated is surfaced (never silently dropped) because loops B/C/F have high historical row counts (5615/14824/2249) that could exceed the limit; a truncated read still computes a directionally-correct KPI over its sampled window, it is just flagged rather than silently presented as complete."
+    },
+    {
+      "id": "FR-2",
+      "title": "Wire 6 new GAUGE_REGISTRY entries (one per loop_id) + gauge-runner resolvers",
+      "description": "Six new ADDITIVE entries in lib/governance/gauge-registry.js (existing 8 entries untouched), one per loop_id (A_applied_rate, B_signal_aggregation, C_retro_learn, D_convergence_clone, E_role_self_review, F_pat_registry), generated via LOOP_IDS.map(...) rather than 6 hand-duplicated literal blocks (the sibling-established one-literal-per-entry style does not scale cleanly to 6 near-identical entries whose remediation/prevent text is intentionally identical apart from the loop_id substitution -- a future copy-edit would otherwise require 6 synchronized edits). Each entry: id=`loop-health-${loopId}`, ownerRole:'coordinator' (matches leaf 5's convention of routing measurement findings to the role responsible for fleet-wide follow-up), thresholdConfig.tripWhen: (result) => (result?.count || 0) > 0 (the established convention; a not-applicable loop's count:0 never trips, matching FR-1's intent), enabled:true (the detector ships working in this SD, not a stub). scripts/gauge-runner.mjs's buildDetectorResolvers(supabase) gets 6 new resolver entries, one per loopId, each calling FR-1's fetchLoopStageRows then computeLoopHealth and returning {...result, truncated} -- wired via a `for (const loopId of LOOP_IDS)` loop over the resolvers object (mirroring FR-2's registry generation, not 6 hand-written async arrows) since gauge-runner's existing MAX_DETECTORS_PER_RUN=50 budget and per-detector try/catch/skip-on-throw machinery already tolerate an arbitrary resolver count without change."
+    },
+    {
+      "id": "FR-3",
+      "title": "Tests",
+      "description": "New tests/unit/governance/per-loop-health-gauges.test.js: computeLoopHealth returns applicable:false/count:0 for B_signal_aggregation and C_retro_learn regardless of input rows (the hardcoded no-PREVENT loops); for an applicable loop, witnessesBeforePrevention counts a cycle_id with only a RECORD row and no PREVENT row; recurrenceAfterClosure counts a cycle_id whose RECORD entered_at is after its own PREVENT entered_at, and does NOT count a normal RECORD-then-PREVENT-forward-order cycle; count trips (1) only when applicable:true AND (witnessesBeforePrevention>2 OR recurrenceAfterClosure>0), never for an inapplicable loop. fetchLoopStageRows: truncated:true when the fetched row count equals the limit, false otherwise (mock the supabase client, no live DB in unit tests). Extend tests/unit/governance/gauge-registry.test.js's hard-coded entry-count assertion from 8 to 14 and its sorted-id list to include all 6 new `loop-health-*` ids -- both existing assertions change as an ADDITIVE, not a rewrite (the 8 pre-existing entries and their own assertions are untouched)."
+    }
+  ],
+  "technical_requirements": [
+    { "requirement": "No new migration or table -- FR-1/FR-2 read exclusively from the existing v_improvement_ledger view (leaf-1, already merged/live) and require no new storage; per the leaf-4 retrospective's explicit guidance to leaf-3, codebase_health_snapshots (existing, 1222 rows) remains available for any future rolling-history/sustained-breach need but is NOT used in this v1 (read-only point-in-time measurement, no alerting threshold beyond the single-sample trip)" },
+    { "requirement": "v_improvement_ledger is read via the existing service_role Supabase client used by every other gauge-runner detector (the view is REVOKE ALL FROM PUBLIC/anon/authenticated, GRANT SELECT TO service_role only) -- no new grants needed" },
+    { "requirement": "gauge-registry.js's 8 pre-existing entries are untouched -- purely additive" },
+    { "requirement": "New module is ESM (import/export), matching gauge-runner.mjs's own ESM imports of sibling pure-logic modules (work-boundary-gauges.js, recursion-governor.js) rather than a CJS bridge" },
+    { "requirement": "LOOPS_WITHOUT_PREVENT is a hardcoded Set keyed to the frozen spine's documented per-loop stage coverage (docs/architecture/improvement-ledger-ssot-spine.md), not a live query -- consistent with that doc's own warning that the column set/stage coverage must not change without updating LEAF-FORMALIZE-001 and LEAF-PER-001 together" }
+  ],
+  "test_scenarios": [
+    { "scenario": "computeLoopHealth('B_signal_aggregation', anyRows) and computeLoopHealth('C_retro_learn', anyRows) always return applicable:false, count:0, witnessesBeforePrevention:null, recurrenceAfterClosure:null" },
+    { "scenario": "computeLoopHealth('A_applied_rate', rows) with one cycle_id having only a RECORD stage row counts it in witnessesBeforePrevention" },
+    { "scenario": "computeLoopHealth('A_applied_rate', rows) with one cycle_id having RECORD before PREVENT (forward order) does not count it in either KPI" },
+    { "scenario": "computeLoopHealth('A_applied_rate', rows) with one cycle_id having a RECORD row entered_at AFTER its own earliest PREVENT row counts it in recurrenceAfterClosure" },
+    { "scenario": "count is 1 (trips) only when applicable:true and witnessesBeforePrevention>2 or recurrenceAfterClosure>0; count is 0 when applicable:true and both KPIs are within target" },
+    { "scenario": "fetchLoopStageRows returns truncated:true when the row count returned equals the configured limit, false when fewer rows are returned" },
+    { "scenario": "gauge-registry.test.js's entry-count assertion is updated from 8 to 14 and the sorted-id list includes all 6 new loop-health-* ids, each enabled:true with a resolvable detectorFn" },
+    { "scenario": "gauge-runner.mjs's buildDetectorResolvers wires all 6 new loop-health-* ids to callable resolvers returning the {applicable, witnessesBeforePrevention, recurrenceAfterClosure, count, truncated} shape" }
+  ],
+  "acceptance_criteria": [
+    "All 3 FRs traced to file:line in the diff",
+    "The 8 pre-existing gauge-registry entries and their own tests are unmodified in behavior -- purely additive",
+    "computeLoopHealth is a pure function independently unit-testable without a DB round-trip",
+    "B_signal_aggregation and C_retro_learn never report count:1 (not-applicable, not silently healthy)",
+    "gauge-registry.test.js and per-loop-health-gauges.test.js both pass; existing gauge-runner-liveness.test.js passes unmodified",
+    "No new database migration is introduced"
+  ],
+  "risks": [
+    {
+      "risk": "recurrenceAfterClosure is a within-cycle proxy (RECORD reappearing after that SAME cycle_id's PREVENT) because the frozen spine has no cross-cycle issue-identity column -- a genuinely recurring issue that surfaces as a NEW cycle_id after an old one closed would not be counted",
+      "impact": "medium",
+      "likelihood": "high",
+      "mitigation": "Documented explicitly in code comments and this PRD as a v1 proxy computable from the frozen 6-column spine vocabulary; cross-cycle issue-identity linking is out of scope for this leaf and is a natural candidate for leaf-2 (FORMALIZE) or a future leaf if the proxy proves insufficient once enforcement begins"
+    },
+    {
+      "risk": "Loops with high historical row counts (C=14824, B=5615, F=2249 RECORD rows) could exceed the fetch limit, under-counting witnessesBeforePrevention/recurrenceAfterClosure for those loops",
+      "impact": "low",
+      "likelihood": "medium",
+      "mitigation": "fetchLoopStageRows surfaces truncated:true rather than silently dropping rows; C is hardcoded not-applicable regardless (so its row volume never matters), leaving B (also not-applicable) and F (2249, within a 5000 limit) as the only real-volume applicable-adjacent case, and F is under the limit today"
+    },
+    {
+      "risk": "Implementation may not fully address root cause",
+      "impact": "low",
+      "likelihood": "low",
+      "mitigation": "This is explicitly a measure-before-enforce leaf (read-only); verify against the original SD evidence and re-queue via /learn if the KPI definition needs revision once leaf-2 enforcement consumes it"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "scripts/gauge-runner.mjs (6 new registry entries) -- existing cron/duty-loop cadence, no new scheduling infra",
+      "SD-LEO-INFRA-009-LEAF-FORMALIZE-001 (C-009 leaf 2, draft) -- the enforcement consumer these read-only measurements feed per the batch's measure-before-enforce ordering",
+      "coordinator inbox (via the existing feedback-table routeFinding pipeline) -- a tripped per-loop gauge surfaces exactly like the 8 existing gauges"
+    ],
+    "dependencies": [
+      "v_improvement_ledger and its 6 per-loop views (SD-LEO-INFRA-009-LEAF-IMPROVEMENT-001, leaf 1 -- completed, merged, live)",
+      "lib/governance/gauge-registry.js, scripts/gauge-runner.mjs (existing invariant-gauge framework, additively extended)"
+    ],
+    "data_contracts": ["No schema changes -- reads the frozen v_improvement_ledger column vocabulary (loop_id, cycle_id, stage, entered_at, stage_status, source_table) read-only"],
+    "runtime_config": ["None -- no new env vars"],
+    "observability_rollout": [
+      "Per-loop health findings surface through the existing gauge-runner -> feedback table -> coordinator pipeline, same as the 8 existing gauge-registry entries"
+    ]
+  },
+  "implementation_approach": {
+    "phases": [
+      "Phase 1: FR-1 pure computeLoopHealth + fetchLoopStageRows in lib/governance/per-loop-health-gauges.js",
+      "Phase 2: FR-2 gauge-registry.js's 6 additive entries + gauge-runner.mjs resolver wiring",
+      "Phase 3: FR-3 unit tests (new + gauge-registry.test.js extension)"
+    ],
+    "technical_decisions": [
+      "6 registry entries (one per loop_id), not 2 (one per metric) or 12 (2 metrics x 6 loops) -- locks the SD description's literal 'one gauge row per loop' framing; each row reports both KPIs for that loop",
+      "applicable:false is hardcoded per-loop from the frozen spine's documented stage coverage, not a live 'has any PREVENT row today' check -- avoids misclassifying a currently-empty-but-structurally-capable loop (D, E) as not-applicable"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run computeLoopHealth against a fixture for B_signal_aggregation with arbitrary rows", "expected_outcome": "applicable:false, count:0 regardless of row content" },
+    { "step_number": 2, "instruction": "Run computeLoopHealth against a fixture for A_applied_rate with one un-prevented RECORD cycle and one reopened-after-PREVENT cycle", "expected_outcome": "witnessesBeforePrevention=1, recurrenceAfterClosure=1, count=1 (tripped)" },
+    { "step_number": 3, "instruction": "Run node scripts/gauge-runner.mjs --json against a live/dev DB", "expected_outcome": "GAUGE lines print for all 6 new loop-health-* ids alongside the 8 existing ones, with no thrown errors" },
+    { "step_number": 4, "instruction": "Run npx vitest run tests/unit/governance/", "expected_outcome": "All governance tests pass, including the updated gauge-registry.test.js counts" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-009-LEAF-PER-001"
+  }
+}

@@ -1,9 +1,7 @@
 {
-  "sdKey": "QF-20260703-860",
-  "workType": "QF",
-  "workKey": "QF-20260703-860",
-  "expectedBranch": "qf/QF-20260703-860",
-  "createdAt": "2026-07-04T01:29:13.813Z",
-  "hostname": "Legion-Laptop",
-  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
+  "sdKey": "SD-LEO-INFRA-009-LEAF-PER-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-009-LEAF-PER-001",
+  "createdAt": "2026-07-04T01:12:28.756Z",
+  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
+  "baseRef": "origin/main"
 }

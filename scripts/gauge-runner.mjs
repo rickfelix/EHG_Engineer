@@ -46,6 +46,11 @@ import {
   fetchRecentSnapshots,
   writeThroughputSnapshot,
 } from '../lib/governance/recursion-governor.js';
+import {
+  LOOP_IDS as PER_LOOP_HEALTH_LOOP_IDS,
+  computeLoopHealth,
+  fetchLoopStageRows,
+} from '../lib/governance/per-loop-health-gauges.js';
 
 const RECURSION_GOVERNOR_DIMENSION = 'recursion-governor-ratio';
 
@@ -120,7 +125,19 @@ function buildDetectorResolvers(supabase) {
   let boundaryRowsPromise = null;
   const boundaryRows = () => boundaryRowsPromise || (boundaryRowsPromise = fetchSdBoundaryRows(supabase));
 
+  // SD-LEO-INFRA-009-LEAF-PER-001: 6 per-loop resolvers, generated rather than hand-written --
+  // each fetches its own loop's rows (fetchLoopStageRows is already loop-scoped, so there is no
+  // shared-fetch to memoize here, unlike the boundary detectors above).
+  const perLoopHealthResolvers = {};
+  for (const loopId of PER_LOOP_HEALTH_LOOP_IDS) {
+    perLoopHealthResolvers[`loop-health-${loopId}`] = async () => {
+      const { rows, truncated } = await fetchLoopStageRows(supabase, loopId);
+      return { ...computeLoopHealth(loopId, rows), truncated };
+    };
+  }
+
   return {
+    ...perLoopHealthResolvers,
     'adam-self-score-age': staleSelfScoreDetector(supabase, 'adam_self_assessment'),
     'coordinator-self-score-age': staleSelfScoreDetector(supabase, 'coordinator_self_assessment'),
     'solomon-self-score-age': staleSelfScoreDetector(supabase, 'solomon_self_assessment'),

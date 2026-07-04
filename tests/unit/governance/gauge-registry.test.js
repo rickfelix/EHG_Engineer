@@ -20,14 +20,14 @@ import {
 const VALID_FEEDBACK_TYPES = ['issue', 'enhancement'];
 
 describe('GAUGE_REGISTRY shape', () => {
-  it('exports exactly 11 seed entries (4 original + 4 work-boundary/recursion + 3 self-score-age stubs, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4)', () => {
-    expect(GAUGE_REGISTRY).toHaveLength(11);
+  it('exports exactly 17 seed entries (8 original + 6 loop-health-*, SD-LEO-INFRA-009-LEAF-PER-001 + 3 self-score-age stubs, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4)', () => {
+    expect(GAUGE_REGISTRY).toHaveLength(17);
   });
 
-  it('8 entries are activated; the 3 new self-score-age entries ship as stubs (writers default-OFF)', () => {
+  it('14 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
-    expect(live).toHaveLength(8);
+    expect(live).toHaveLength(14);
     expect(stubs.map((e) => e.id).sort()).toEqual(['adam_self_score_age', 'coordinator_self_score_age', 'solomon_self_score_age']);
   });
 
@@ -85,12 +85,18 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(selectEnabledEntries(undefined)).toEqual([]);
   });
 
-  it('the real GAUGE_REGISTRY selects all 8 entries now that every stub is activated', () => {
+  it('the real GAUGE_REGISTRY selects all 14 entries now that every stub is activated', () => {
     const selected = selectEnabledEntries(GAUGE_REGISTRY);
-    expect(selected).toHaveLength(8);
+    expect(selected).toHaveLength(14);
     expect(selected.map((e) => e.id).sort()).toEqual([
       'adam-claimed-or-built-sd',
       'coordinator-sourced-sd',
+      'loop-health-A_applied_rate',
+      'loop-health-B_signal_aggregation',
+      'loop-health-C_retro_learn',
+      'loop-health-D_convergence_clone',
+      'loop-health-E_role_self_review',
+      'loop-health-F_pat_registry',
       'recursion-governor-ratio',
       'relay-drop',
       'ship-witness-unwitnessed-merge',
@@ -126,6 +132,18 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(entry.ownerRole).toBe('chairman');
     expect(entry.thresholdConfig.tripWhen({ count: 1 })).toBe(true);
     expect(entry.thresholdConfig.tripWhen({ count: 0 })).toBe(false);
+  });
+
+  it('SD-LEO-INFRA-009-LEAF-PER-001: all 6 loop-health entries have a resolvable detectorFn, ownerRole coordinator, and the >0-count tripWhen convention', () => {
+    for (const loopId of ['A_applied_rate', 'B_signal_aggregation', 'C_retro_learn', 'D_convergence_clone', 'E_role_self_review', 'F_pat_registry']) {
+      const id = `loop-health-${loopId}`;
+      const entry = GAUGE_REGISTRY.find((e) => e.id === id);
+      expect(entry).toBeTruthy();
+      expect(entry.detectorFn).toBe(id);
+      expect(entry.ownerRole).toBe('coordinator');
+      expect(entry.thresholdConfig.tripWhen({ count: 1 })).toBe(true);
+      expect(entry.thresholdConfig.tripWhen({ count: 0 })).toBe(false);
+    }
   });
 });
 

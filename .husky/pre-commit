@@ -133,8 +133,15 @@ if [ ! -z "$STAGED_CLAUDE_FILES" ]; then
   echo "   'CLAUDE.md is generated, never edited directly.'"
   echo ""
 
-  # Allow if files contain generator markers (AUTO-GENERATED and Last Generated timestamp)
-  # This allows committing regenerated files while blocking manual edits
+  # Allow if files contain generator markers (GENERATED FILE banner and file_content_hash).
+  # This allows committing regenerated files while blocking manual edits.
+  #
+  # QF-20260704: the generator (scripts/modules/claude-md-generator/index.js GENERATED_BANNER +
+  # its file_content_hash line) moved to this FR-5 banner/hash scheme; this check still looked for
+  # the PRIOR "AUTO-GENERATED from the database" / "Last Generated.*:" markers, which the current
+  # generator never writes — every regenerated (drift-clean, verified via
+  # node scripts/check-claude-md-drift.cjs) CLAUDE*.md commit was false-blocked. Checking for the
+  # markers the generator actually emits closes the drift.
   ALL_REGENERATED=1
   for file in $STAGED_CLAUDE_FILES; do
     # Check for both markers that the generator adds.
@@ -142,8 +149,8 @@ if [ ! -z "$STAGED_CLAUDE_FILES" ]; then
     # `|| echo 0` fallback appended a SECOND "0" → the var became "0\n0" → `[ "0\n0" -eq 0 ]`
     # printed "[: 0 0: integer expression expected" ~28x (SD-FDBK-INFRA-HUSKY-PRE-COMMIT-001).
     # Use `|| true` (set -e safe) and a `:-0` default (covers an unreadable file → empty output).
-    HAS_AUTO_GEN=$(grep -c "AUTO-GENERATED from the database" "$file" 2>/dev/null || true)
-    HAS_TIMESTAMP=$(grep -c "Last Generated.*:" "$file" 2>/dev/null || true)
+    HAS_AUTO_GEN=$(grep -c "GENERATED FILE - DO NOT EDIT DIRECTLY" "$file" 2>/dev/null || true)
+    HAS_TIMESTAMP=$(grep -c "file_content_hash:" "$file" 2>/dev/null || true)
     HAS_AUTO_GEN=${HAS_AUTO_GEN:-0}
     HAS_TIMESTAMP=${HAS_TIMESTAMP:-0}
 
