@@ -65,6 +65,31 @@ export function shapeStaleTreeResult(result) {
   return { ...result, count: result?.verdict === 'FRESH' ? 0 : 1 };
 }
 
+// SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4: default staleness threshold shared by all three
+// self-score gauges (adam/coordinator/solomon) — a coarse wall-clock proxy independent of each
+// writer's own turn-based firing cadence. Exported for unit testing.
+export const DEFAULT_SELF_SCORE_STALE_HOURS = 48;
+
+/**
+ * Pure-ish factory: returns an async detector that reports whether the most recent `feedback`
+ * row in `category` is older than `cadenceHours` (or missing entirely). Shared by all three
+ * self-score gauge entries (adam_self_score_age / coordinator_self_score_age /
+ * solomon_self_score_age) in lib/governance/gauge-registry.js — one factory, three registry
+ * entries, per the STUB-ROW ADOPTION CONTRACT's "two additive edits" adoption story.
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {string} category
+ * @param {number} [cadenceHours]
+ */
+export function staleSelfScoreDetector(supabase, category, cadenceHours = DEFAULT_SELF_SCORE_STALE_HOURS) {
+  return async () => {
+    const { data, error } = await supabase.from('feedback').select('created_at').eq('category', category).order('created_at', { ascending: false }).limit(1);
+    if (error) throw new Error(`staleSelfScoreDetector(${category}) query failed: ` + error.message);
+    if (!data || !data.length) return { count: 1, category, reason: 'no self-score row found for this category' };
+    const ageHours = (Date.now() - new Date(data[0].created_at).getTime()) / 3600000;
+    return { count: ageHours > cadenceHours ? 1 : 0, category, ageHours: Math.round(ageHours * 10) / 10, cadenceHours };
+  };
+}
+
 /**
  * Maps a registry entry's string detectorFn key to an actual callable. Keeps gauge-registry.js
  * (CommonJS) free of ESM imports — this runner (ESM) does the resolution instead.
@@ -72,6 +97,9 @@ export function shapeStaleTreeResult(result) {
  */
 function buildDetectorResolvers(supabase) {
   return {
+    'adam-self-score-age': staleSelfScoreDetector(supabase, 'adam_self_assessment'),
+    'coordinator-self-score-age': staleSelfScoreDetector(supabase, 'coordinator_self_assessment'),
+    'solomon-self-score-age': staleSelfScoreDetector(supabase, 'solomon_self_assessment'),
     'unranked-claimable-leaves': async () => {
       const { error, claimable } = await computeClaimableLeaves(supabase);
       if (error) throw new Error('computeClaimableLeaves failed: ' + error.message);

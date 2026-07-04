@@ -11,6 +11,7 @@ import { GAUGE_REGISTRY } from '../../../lib/governance/gauge-registry.js';
 import {
   selectEnabledEntries, tripsThreshold, buildFindingRow,
   shapeRelayDropResult, shapeStaleTreeResult,
+  staleSelfScoreDetector, DEFAULT_SELF_SCORE_STALE_HOURS,
 } from '../../../scripts/gauge-runner.mjs';
 
 // feedback.type is constrained by feedback_type_check (database/migrations/391_quality_lifecycle_schema.sql)
@@ -19,15 +20,15 @@ import {
 const VALID_FEEDBACK_TYPES = ['issue', 'enhancement'];
 
 describe('GAUGE_REGISTRY shape', () => {
-  it('exports exactly 4 seed entries (3 original + ship-witness-unwitnessed-merge, SD-LEO-INFRA-SHIP-WITNESS-ENFORCE-001)', () => {
-    expect(GAUGE_REGISTRY).toHaveLength(4);
+  it('exports exactly 7 seed entries (4 activated + 3 self-score-age stubs, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4)', () => {
+    expect(GAUGE_REGISTRY).toHaveLength(7);
   });
 
-  it('all 4 entries are activated — no stub entries remain', () => {
+  it('the original 4 entries are activated; the 3 new self-score-age entries ship as stubs (writers default-OFF)', () => {
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
     expect(live).toHaveLength(4);
-    expect(stubs).toHaveLength(0);
+    expect(stubs.map((e) => e.id).sort()).toEqual(['adam_self_score_age', 'coordinator_self_score_age', 'solomon_self_score_age']);
   });
 
   it('every entry has a non-null, non-empty detectorFn key', () => {
@@ -164,6 +165,69 @@ describe('tripsThreshold', () => {
     const entry = { thresholdConfig: { tripWhen: () => { throw new Error('boom'); } } };
     expect(() => tripsThreshold(entry, {})).not.toThrow();
     expect(tripsThreshold(entry, {})).toBe(false);
+  });
+});
+
+describe('staleSelfScoreDetector (SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4)', () => {
+  const fakeSupabase = (rows, err = null) => ({
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          order: () => ({
+            limit: () => Promise.resolve({ data: rows, error: err }),
+          }),
+        }),
+      }),
+    }),
+  });
+
+  it('trips (count:1) when no self-score row exists for the category', async () => {
+    const detect = staleSelfScoreDetector(fakeSupabase([]), 'adam_self_assessment');
+    const result = await detect();
+    expect(result.count).toBe(1);
+    expect(result.reason).toMatch(/no self-score row/);
+  });
+
+  it('does not trip for a fresh row well within the cadence window', async () => {
+    const fresh = new Date(Date.now() - 2 * 3600 * 1000).toISOString(); // 2h old
+    const detect = staleSelfScoreDetector(fakeSupabase([{ created_at: fresh }]), 'coordinator_self_assessment', 48);
+    const result = await detect();
+    expect(result.count).toBe(0);
+  });
+
+  it('trips for a row older than the cadence window', async () => {
+    const stale = new Date(Date.now() - 72 * 3600 * 1000).toISOString(); // 72h old
+    const detect = staleSelfScoreDetector(fakeSupabase([{ created_at: stale }]), 'solomon_self_assessment', 48);
+    const result = await detect();
+    expect(result.count).toBe(1);
+    expect(result.cadenceHours).toBe(48);
+  });
+
+  it('defaults to DEFAULT_SELF_SCORE_STALE_HOURS when no cadence is given', async () => {
+    const stale = new Date(Date.now() - (DEFAULT_SELF_SCORE_STALE_HOURS + 1) * 3600 * 1000).toISOString();
+    const detect = staleSelfScoreDetector(fakeSupabase([{ created_at: stale }]), 'adam_self_assessment');
+    const result = await detect();
+    expect(result.count).toBe(1);
+  });
+
+  it('throws on a query error (caught non-fatally by the runner loop, not swallowed here)', async () => {
+    const detect = staleSelfScoreDetector(fakeSupabase(null, { message: 'boom' }), 'adam_self_assessment');
+    await expect(detect()).rejects.toThrow(/boom/);
+  });
+});
+
+describe('the 3 self-score-age registry entries (FR-4)', () => {
+  it('each has a detectorFn key resolvable in gauge-runner.mjs\'s buildDetectorResolvers map', () => {
+    const ids = ['adam_self_score_age', 'coordinator_self_score_age', 'solomon_self_score_age'];
+    const detectorFns = ['adam-self-score-age', 'coordinator-self-score-age', 'solomon-self-score-age'];
+    ids.forEach((id, i) => {
+      const entry = GAUGE_REGISTRY.find((e) => e.id === id);
+      expect(entry).toBeTruthy();
+      expect(entry.detectorFn).toBe(detectorFns[i]);
+      expect(entry.thresholdConfig.tripWhen({ count: 1 })).toBe(true);
+      expect(entry.thresholdConfig.tripWhen({ count: 0 })).toBe(false);
+      expect(entry.enabled).toBe(false); // ships alongside the writers' default-OFF cadence flags
+    });
   });
 });
 

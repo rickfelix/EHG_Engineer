@@ -14,6 +14,9 @@ import { createRequire } from 'module';
 const { insertCoordinationRow, isFullUuid } = createRequire(import.meta.url)('../lib/coordinator/dispatch.cjs');
 // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2: single-writer mutation guard.
 import { guardMutation, resolveOwnSessionId } from '../lib/coordinator-mutation-guard.mjs';
+// SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-2: graded coordinator self-score (shared role-agnostic core).
+import { COORDINATOR_CONFIG } from '../lib/coordinator/self-score-config.mjs';
+const roleScoreCore = createRequire(import.meta.url)('../lib/governance/role-self-score.cjs');
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const me = process.env.CLAUDE_SESSION_ID;
@@ -134,7 +137,7 @@ export async function selfReviewMain() {
   }
 
   // 3) DUE — solicit fresh critique from active workers + synthesize, then reset the counter
-  const { data: sess } = await db.from('claude_sessions').select('session_id,metadata,heartbeat_at').gte('heartbeat_at', new Date(t - 30 * 60000).toISOString());
+  const { data: sess } = await db.from('claude_sessions').select('session_id,metadata,heartbeat_at,sd_key').gte('heartbeat_at', new Date(t - 30 * 60000).toISOString());
   // SD-...-001-D / FR-4: split workers vs Adam participants (default-OFF byte-identical).
   const { workers: rawWorkers, adamParticipants: rawAdam } = partitionParticipants(sess, me, adamReviewOn);
   // Fixture/garbage guard (live crash 2026-06-10 ×2): drain-test rows leak non-UUID session_ids
@@ -175,15 +178,77 @@ export async function selfReviewMain() {
     console.log('[ACTION] Coordinator: cluster -> ADJUST + source concrete coordinator-tooling fixes as SDs; surface a digest to the operator.');
   }
 
+  // SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-2: graded coordinator self-score, DEFAULT-OFF
+  // (COORD_SELF_SCORE_V1) -> byte-identical when off, mirroring ADAM_SELF_SCORE_CADENCE's own
+  // ships-inert convention. Persists ONE feedback row (category=coordinator_self_assessment)
+  // with the common tri-party score schema, idempotent on review_key. FAIL-OPEN.
+  if (process.env.COORD_SELF_SCORE_V1 === 'on') {
+    try {
+      const { count: beltDepth } = await db.from('strategic_directives_v2').select('id', { count: 'exact', head: true }).eq('status', 'draft').is('claiming_session_id', null);
+      const activeNonCoord = (sess || []).filter(r => !(r.metadata || {}).is_coordinator && r.session_id !== me && isFullUuid(r.session_id));
+      const idleWorkersWithClaimableWork = (beltDepth || 0) > 0 ? activeNonCoord.filter(r => !r.sd_key).length : 0;
+      const signals = {
+        idle_workers_with_claimable_work: idleWorkersWithClaimableWork,
+        belt_depth: beltDepth,
+        solicit_failed_count: solicitFailed,
+      };
+
+      let coordState = {}; try { coordState = JSON.parse(readFileSync(STATE, 'utf8')); } catch { coordState = {}; }
+      const { dimensions, provenance } = roleScoreCore.scoreDimensions(signals, COORDINATOR_CONFIG);
+      const belowThreshold = roleScoreCore.classifyBelowThreshold(dimensions, COORDINATOR_CONFIG.belowThresholdAt);
+
+      const { data: priorRows } = await db.from('feedback').select('metadata').eq('category', 'coordinator_self_assessment').order('created_at', { ascending: false }).limit(1);
+      const priorScore = priorRows && priorRows[0] && priorRows[0].metadata ? priorRows[0].metadata.score : null;
+      const priorOutcomes = roleScoreCore.derivePriorOutcomes(priorScore, dimensions);
+      const committedActions = roleScoreCore.generateCommittedActions(belowThreshold, provenance, COORDINATOR_CONFIG.actionHints);
+      const newCoordCycle = (coordState.coordSelfScoreCycle || 0) + 1;
+      const date = new Date(t).toISOString().slice(0, 10);
+      const score = roleScoreCore.assembleScore({
+        dimensions, cycle: newCoordCycle, session: me, committedActions, priorOutcomes, provenance, belowThreshold, date, config: COORDINATOR_CONFIG,
+      });
+
+      const { hasBlockingViolation, validateScoreContract } = await import('../lib/fleet/verify-score-contract.mjs');
+      const csVerdict = validateScoreContract({ current: score, prior: priorScore, priorStreak: coordState.coordSelfScoreStreak || 0 });
+      score.verify_verdict = { valid: csVerdict.valid, inconclusive: csVerdict.inconclusive, violations: csVerdict.violations, escalation: csVerdict.escalation };
+
+      if (hasBlockingViolation(csVerdict.violations)) {
+        console.log('[COORD-SELF-SCORE] REFUSED cycle ' + newCoordCycle + ' — ' + csVerdict.violations.join('; '));
+        try { writeFileSync(STATE, JSON.stringify({ ...coordState, coordSelfScoreCycle: newCoordCycle })); } catch {}
+      } else {
+        const { data: existing } = await db.from('feedback').select('id').eq('category', 'coordinator_self_assessment').filter('metadata->>review_key', 'eq', score.review_key).limit(1);
+        if (existing && existing.length) {
+          console.log('[COORD-SELF-SCORE] cycle row ' + score.review_key + ' already exists — skip');
+        } else {
+          const { error: csErr } = await db.from('feedback').insert(roleScoreCore.buildFeedbackInsertRow({
+            category: 'coordinator_self_assessment',
+            score,
+            belowThreshold,
+            sessionId: me,
+            title: 'Coordinator self-assessment — cycle ' + newCoordCycle,
+          }));
+          if (csErr) console.log('[COORD-SELF-SCORE] insert failed (non-fatal): ' + csErr.message);
+          else console.log('[COORD-SELF-SCORE] wrote cycle ' + newCoordCycle + ' (' + score.overall + ') review_key=' + score.review_key);
+        }
+        try { writeFileSync(STATE, JSON.stringify({ ...coordState, coordSelfScoreCycle: newCoordCycle, coordSelfScoreStreak: csVerdict.escalation ? csVerdict.escalation.streak : 0 })); } catch {}
+      }
+    } catch (selfScoreErr) {
+      console.log('[COORD-SELF-SCORE] skipped (fail-open): ' + selfScoreErr.message);
+    }
+  }
+
   // SD-LEO-INFRA-ENABLE-WIRE-AUTOMATIC-001 (FR-3): ENFORCE the verify step. Validate the latest
   // coordinator self-score against the prior cycle and surface INVALID/escalation LOUDLY so the
   // loop is grade->commit->act->VERIFY, not a vanity metric. DEFAULT-OFF (TRI_PARTY_VERIFY_V1) ->
   // byte-identical when off; FAIL-OPEN; ARTIFACT-ONLY (prints + records the streak; NEVER blocks
-  // an SD handoff). The score rows are the JSON-`description` coordinator_review rows in `all`.
+  // an SD handoff). SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001: the score rows now come from the GRADED
+  // coordinator_self_assessment category (populated dimensions) instead of the raw-text
+  // coordinator_review capture rows in `all`, which never carried a `dimensions` map and so could
+  // never actually parse via parseScore() — this closes that silent-never-fires gap.
   if (process.env.TRI_PARTY_VERIFY_V1 === 'on') {
     try {
       const { validateScoreContract, parseScore } = await import('../lib/fleet/verify-score-contract.mjs');
-      const scores = (all || []).map(r => parseScore(r)).filter(Boolean); // newest-first; capture rows drop out
+      const { data: gradedRows } = await db.from('feedback').select('metadata,created_at').eq('category', 'coordinator_self_assessment').order('created_at', { ascending: false }).limit(30);
+      const scores = (gradedRows || []).map(r => parseScore(r.metadata ? r.metadata.score : null)).filter(Boolean); // newest-first
       if (scores.length) {
         const priorStreak = (typeof state.belowThresholdStreak === 'number') ? state.belowThresholdStreak : 0;
         const v = validateScoreContract({ current: scores[0], prior: scores[1] || null, priorStreak });

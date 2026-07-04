@@ -9,6 +9,7 @@ import {
   parseScore,
   classifyDimensions,
   validateScoreContract,
+  hasBlockingViolation,
   DEFAULT_ESCALATE_AFTER_N,
 } from '../../lib/fleet/verify-score-contract.mjs';
 
@@ -113,5 +114,35 @@ describe('validateScoreContract — Rule 3 (escalation) + INCONCLUSIVE', () => {
     expect(r.belowThreshold).toEqual([]);
     expect(r.inconclusiveDims).toEqual(['b']);
     expect(r.valid).toBe(true);
+  });
+});
+
+describe('hasBlockingViolation — scoped write-time refusal (SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-5, TS-6/7/8)', () => {
+  it('TS-6: blocks on a Rule-1 INVALID (below-threshold + empty committed_actions)', () => {
+    const r = validateScoreContract({ current: scoreRow({ a: 4, b: 2 }, { committed_actions: [] }) });
+    expect(hasBlockingViolation(r.violations)).toBe(true);
+  });
+  it('TS-7: does NOT block an escalation-eligible cycle that carries committed_actions (ESCALATE-only)', () => {
+    const r = validateScoreContract({
+      current: scoreRow({ a: 2 }, { committed_actions: [{ gap: 'a', action: 'x' }], prior_action_outcomes: [{ landed: true }] }),
+      prior: scoreRow({ a: 2 }, { committed_actions: [{ gap: 'a' }] }),
+      priorStreak: DEFAULT_ESCALATE_AFTER_N - 1,
+    });
+    expect(r.escalation.triggered).toBe(true);
+    expect(r.valid).toBe(false); // conflated boolean — proves callers must NOT gate on `valid`
+    expect(hasBlockingViolation(r.violations)).toBe(false); // but the scoped helper correctly lets it through
+  });
+  it('TS-8: does NOT block an all-inconclusive cycle (no signals available)', () => {
+    const r = validateScoreContract({ current: scoreRow({}, { committed_actions: [] }) });
+    expect(r.belowThreshold).toEqual([]);
+    expect(hasBlockingViolation(r.violations)).toBe(false);
+  });
+  it('does not block a clean VALID row', () => {
+    const r = validateScoreContract({ current: scoreRow({ a: 4, b: 5 }, { committed_actions: [] }) });
+    expect(hasBlockingViolation(r.violations)).toBe(false);
+  });
+  it('is defensive against a non-array input', () => {
+    expect(hasBlockingViolation(undefined)).toBe(false);
+    expect(hasBlockingViolation(null)).toBe(false);
   });
 });

@@ -1,8 +1,8 @@
-<!-- file_content_hash: f6d719c429268072 -->
+<!-- file_content_hash: 52418f1739dc1eb8 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-07-02 9:46:58 AM
+**Generated**: 2026-07-03 7:33:35 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -38,6 +38,8 @@ A Solomon session self-scores each cycle on five dimensions (1–5). A dimension
 | **D5 Systemic hand-off accuracy** | `systemic_flag` set only on genuine class-bugs; routed to Adam | flagged one-offs; tried to file the fix himself | Adam disposition replies |
 
 **Grade → action → verify (NON-OPTIONAL)**: after every self-score, on any below-threshold dimension Solomon (a) names the specific failure, (b) **emits a feedback flag (`category='solomon_adherence_drift'`) for Adam to source** — never builds/files the fix himself, (c) records the commitment, (d) re-checks it next cycle. A clean audit emits `[SOLOMON_OK]` and surfaces nothing.
+
+**Rubric self-score writer (durable; additive channel, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-3)**. `scripts/solomon-self-assessment-writer.cjs` persists ONE graded `feedback` row per cycle (`category='solomon_self_assessment'`) scoring the D1-D5 dimensions above via the shared tri-party score schema (dimensions, committed_actions, prior_action_outcomes, review_key) — a SEPARATE signal from `solomon_adherence_drift` above (which only flags when `SOLOMON_LOOPS` drifts out of sync with this contract's durable-duty markers — DUTY COMPLIANCE, not RUBRIC QUALITY; `scripts/solomon-self-adherence-review.mjs` is unchanged by this addition). Invoked from the deep-sweep tick's own reasoning (agent-judgment, no dedicated cron — `script: null` in `scripts/solomon-startup-check.mjs`); standalone invocation: `node scripts/solomon-self-assessment-writer.cjs --dry-run`. **SELF-ASSESSMENT DUTY (durable)**: wired as an alias of the `deep-sweep` loop in `SOLOMON_LOOPS`.
 
 ---
 
@@ -263,6 +265,6 @@ Solomon operates under the canonical crew-comms routing protocol: `docs/protocol
 
 ---
 
-*Generated from database: 2026-07-02*
+*Generated from database: 2026-07-03*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_role_contract). Do not hand-edit — edit the DB section and regenerate.*
