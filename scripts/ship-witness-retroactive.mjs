@@ -22,6 +22,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { pathToFileURL } from 'node:url';
 import { evaluateMergeWorkLadder } from '../lib/ship/merge-witness-ladder.mjs';
 import { writeMergeWitnessTelemetry } from '../lib/ship/merge-witness-telemetry.mjs';
 import { verifyMerged, fetchStatusCheckRollup, detectBranchProtectionEnabled } from '../lib/ship/auto-merge.mjs';
@@ -102,4 +103,11 @@ async function main() {
   console.log('VERDICT: witness PASS — record healed with an honest retroactive row.');
 }
 
-main();
+// SD-LEO-INFRA-SHIP-WITNESS-COVERAGE-001: was an unconditional main() call, unlike every other
+// script in this codebase -- importing runRetroactiveEvaluation (as scripts/ship-witness-
+// retroactive-batch.mjs's FR-2 driver needs to) triggered the CLI's own argv parsing and exited
+// the importing process. Guard matches the isDirectRun pattern used throughout scripts/*.mjs.
+const isDirectRun = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isDirectRun) {
+  main();
+}

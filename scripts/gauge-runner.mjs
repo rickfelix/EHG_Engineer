@@ -31,6 +31,7 @@ import {
   defaultFetchMergedPlatformPRs,
   detectUnwitnessedMerges,
 } from '../lib/ship/witness-adoption.mjs';
+import { reconcileUnwitnessedMerges } from './ship-witness-reconcile.mjs';
 import { spawnSync } from 'node:child_process';
 import {
   detectCoordinatorSourced,
@@ -156,7 +157,18 @@ function buildDetectorResolvers(supabase) {
       const merges = PLATFORM_REPOS.flatMap((r) => defaultFetchMergedPlatformPRs(r.owner, r.name, WITNESS_CUTOVER_ISO, ghRunner));
       const { data: telemetryRows, error } = await supabase.from('merge_witness_telemetry').select('repo, pr_number');
       if (error) throw new Error('merge_witness_telemetry query failed: ' + error.message);
-      return detectUnwitnessedMerges(merges, telemetryRows);
+      const result = detectUnwitnessedMerges(merges, telemetryRows);
+      // SD-LEO-INFRA-SHIP-WITNESS-COVERAGE-001 FR-1: best-effort backfill each gap this pass
+      // finds, reusing the SAME merges/telemetryRows fetch above (no duplicate gh/DB round-trip).
+      // Never affects this detector's own return value/trip decision -- the gauge still reports
+      // the PRE-sweep gap count for THIS pass (DETECT direction stays intact, TS-7); the sweep
+      // only reduces FUTURE passes' count.
+      try {
+        await reconcileUnwitnessedMerges(result.unwitnessed, { supabase });
+      } catch (e) {
+        console.error(`[gauge-runner] ship-witness reconcile sweep failed (non-fatal): ${e?.message || e}`);
+      }
+      return result;
     },
     'coordinator-sourced-sd': async () => detectCoordinatorSourced(await boundaryRows()),
     'adam-claimed-or-built-sd': async () => {
