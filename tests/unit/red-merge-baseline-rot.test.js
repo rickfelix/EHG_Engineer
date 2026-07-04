@@ -8,7 +8,7 @@
  * and that decide() itself is UNCHANGED (additive-only, TR-1).
  */
 import { describe, it, expect } from 'vitest';
-import { detectBaselineRot, decide } from '../../scripts/ci/red-merge-detector.mjs';
+import { detectBaselineRot, decide, genuineReachableRegressions } from '../../scripts/ci/red-merge-detector.mjs';
 
 // newest-first snapshot in the shape decide()/detectBaselineRot() consume.
 const snap = (failed_count, commit_sha) => ({ findings: [{ failed_count, branch: 'main', commit_sha }] });
@@ -73,5 +73,27 @@ describe('decide() regression guard — additive change must not alter it', () =
   it('still returns noop on a single transient spike (persistence preserved)', () => {
     const v = decide(seq(100, 118, 100, 100, 100), []);
     expect(v.action).toBe('noop');
+  });
+});
+
+describe('QF-20260704-047: genuineReachableRegressions (identity+reachability gate)', () => {
+  const withIds = (failed_count, ids) => ({ findings: [{ failed_count, failed_test_ids: ids }] });
+
+  it('suppresses (QF-20260704-263 repro): a newly-failing test whose file the merge never touched', () => {
+    const latest = withIds(108, ['a.test.js::x', 'sd-completed-handler.test.js::Progress Percentage']);
+    const prev = withIds(107, ['a.test.js::x']);
+    const changedFiles = ['lib/adam/adherence-probes.js', 'scripts/adam-self-adherence-review.mjs'];
+    expect(genuineReachableRegressions(latest, prev, changedFiles)).toEqual([]);
+  });
+
+  it('still returns the regression when the blamed commit touches the newly-failing test file', () => {
+    const latest = withIds(108, ['a.test.js::x', 'sd-completed-handler.test.js::Progress Percentage']);
+    const prev = withIds(107, ['a.test.js::x']);
+    const changedFiles = ['sd-completed-handler.test.js'];
+    expect(genuineReachableRegressions(latest, prev, changedFiles)).toEqual(['sd-completed-handler.test.js::Progress Percentage']);
+  });
+
+  it('returns null (fall back to count-fire) when a snapshot predates failed_test_ids', () => {
+    expect(genuineReachableRegressions({ findings: [{ failed_count: 108 }] }, withIds(107, ['a.test.js::x']), [])).toBeNull();
   });
 });
