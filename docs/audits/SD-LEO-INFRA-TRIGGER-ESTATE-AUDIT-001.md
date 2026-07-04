@@ -95,6 +95,22 @@ evidence/verified_by, last-writer-wins inside one statement chain; the two
 filters (`= 'pending'` vs `!= 'completed'`) encode subtly different vocabularies.
 Consolidation candidate: fold the GITHUB special case into the mapping table.
 
+**RESOLVED (2026-07-04, SD-FDBK-FIX-TRIGGER-AUDIT-MEDIUM-001)**: live inspection
+confirmed GITHUB had zero rows in `sd_subagent_deliverable_mapping` (the overlap
+was latent, never actively double-firing) and that 2 of the hardcoded trigger's
+5 types (`api_endpoint`, `database_change`) never matched real data (actual
+`sd_scope_deliverables.deliverable_type` values are `api`/`database`). Fix:
+seeded GITHUB's existing 5-type vocabulary into `sd_subagent_deliverable_mapping`
+and dropped `trg_complete_deliverables_on_github_pass` /
+`complete_deliverables_on_github_pass()` entirely
+(`database/migrations/20260704_consolidate_github_deliverable_completion.sql`).
+GITHUB PASS completions now flow through the single mapping-driven engine
+(`complete_deliverables_on_subagent_pass`) like every other sub-agent — one
+engine, one vocabulary. Verified via a live-DB test
+(`tests/database/github-deliverable-completion-consolidation.test.js`) confirmed
+failing pre-migration and passing post-migration, plus the full
+`tests/database/` suite (205 tests) green with zero regression.
+
 ### F-5 (MEDIUM) — `progress` vs `progress_percentage` dual-column drift on SDv2
 **Where**: both columns verified present in pg_attribute. `auto_transition_status`
 (BEFORE UPDATE) keys off **`NEW.progress`** to flip status to `pending_approval`,
