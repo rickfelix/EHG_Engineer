@@ -31,6 +31,32 @@
 --   SD/QF should audit and remove it once every consumer is confirmed migrated).
 -- =============================================================================
 
+-- ---------------------------------------------------------------------------
+-- ENFORCED pre-flight (adversarial-review finding, PLAN_PRD adjacent): the
+-- PRECONDITION documented above was previously advisory-only (a comment a
+-- chairman/operator had to manually verify). This block makes it a hard
+-- refusal: if ANY stage_number has a stage_artifact_requirements(is_blocking
+-- =true) row but an empty/NULL venture_stages.required_artifacts, applying
+-- this migration would silently WEAKEN that stage's gate (remove the only
+-- requirement it had). Fail the deploy instead of applying partial data.
+-- ---------------------------------------------------------------------------
+DO $precheck$
+DECLARE
+  v_gap_stages INTEGER[];
+BEGIN
+  SELECT array_agg(DISTINCT sar.stage_number ORDER BY sar.stage_number)
+  INTO v_gap_stages
+  FROM stage_artifact_requirements sar
+  LEFT JOIN venture_stages vs ON vs.stage_number = sar.stage_number
+  WHERE sar.is_blocking = true
+    AND (vs.required_artifacts IS NULL OR array_length(vs.required_artifacts, 1) IS NULL);
+
+  IF v_gap_stages IS NOT NULL THEN
+    RAISE EXCEPTION 'STAGE_ADVANCEMENT_FR4_PRECONDITION_UNMET: stage(s) % have a blocking stage_artifact_requirements row but an empty venture_stages.required_artifacts -- data-migrate these into venture_stages BEFORE applying this migration (see header PRECONDITION).', v_gap_stages;
+  END IF;
+END
+$precheck$;
+
 CREATE OR REPLACE FUNCTION public.fn_advance_venture_stage(
   p_venture_id UUID,
   p_from_stage INTEGER,

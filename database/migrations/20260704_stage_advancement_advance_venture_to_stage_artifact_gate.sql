@@ -26,6 +26,13 @@
 --   CREATE OR REPLACE'd here too so this file is independently appliable
 --   regardless of chairman-apply order, same idempotent-across-files pattern
 --   already used for rescan_stage_20, census #11/#12).
+--
+-- Also closes a pre-existing (not new) gap while touching this function:
+-- advance_venture_stage takes a row lock (SELECT ... FOR UPDATE) before its
+-- precondition check, serializing concurrent calls; advance_venture_to_stage
+-- did not. Adding FOR UPDATE here closes that same TOCTOU window between the
+-- precondition check and the write for this RPC too (adversarial review
+-- finding, EXEC phase).
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.fn_stage_artifact_precondition(p_venture_id uuid, p_stage integer)
@@ -130,7 +137,8 @@ AS $function$
 
       SELECT current_lifecycle_stage INTO v_current_stage
       FROM ventures
-      WHERE id = p_venture_id;
+      WHERE id = p_venture_id
+      FOR UPDATE;
 
       IF v_current_stage IS NULL THEN
         RETURN jsonb_build_object('success', false, 'error', 'Venture not found');
@@ -208,5 +216,6 @@ BEGIN
   ASSERT v_def LIKE '%fn_stage_artifact_precondition%', 'advance_venture_to_stage: artifact-precondition call missing';
   ASSERT v_def LIKE '%artifact_precondition_unmet%', 'advance_venture_to_stage: artifact_precondition_unmet error code missing';
   ASSERT v_def LIKE '%Can only advance by 1 stage%', 'advance_venture_to_stage: pre-existing single-step guard regressed';
+  ASSERT v_def LIKE '%FOR UPDATE%', 'advance_venture_to_stage: row lock (FOR UPDATE) missing';
 END
 $verify$;
