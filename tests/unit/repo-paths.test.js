@@ -97,6 +97,19 @@ describe('lib/repo-paths', () => {
     it('defaults to EHG_Engineer for null input', () => {
       expect(resolveGitHubRepo(null)).toBe('rickfelix/EHG_Engineer');
     });
+
+    // SD-LEO-INFRA-CANONICAL-REPO-APP-001 (FR-2): EHG_Engineer is never itself a
+    // registry.json entry (it's "this repo"), so resolveGitHubRepo needs an explicit
+    // self-reference branch — without it, an EXPLICIT target_application='EHG_Engineer'
+    // (630/632 of all quick_fixes rows) falsely resolved to null instead of its own repo.
+    it('resolves an explicit EHG_Engineer string to its own repo (not null)', () => {
+      expect(resolveGitHubRepo('EHG_Engineer')).toBe('rickfelix/EHG_Engineer');
+    });
+
+    it('resolves EHG_Engineer case/separator-insensitively', () => {
+      expect(resolveGitHubRepo('ehg_engineer')).toBe('rickfelix/EHG_Engineer');
+      expect(resolveGitHubRepo('EHGEngineer')).toBe('rickfelix/EHG_Engineer');
+    });
   });
 
   describe('isVentureRepo()', () => {

@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-FEAT-MARKETLENS-OWNED-AUDIENCE-001",
-  "expectedBranch": "feat/SD-LEO-FEAT-MARKETLENS-OWNED-AUDIENCE-001",
-  "createdAt": "2026-07-04T11:00:35.223Z",
+  "sdKey": "SD-LEO-INFRA-CANONICAL-REPO-APP-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-CANONICAL-REPO-APP-001",
+  "createdAt": "2026-07-04T13:29:21.988Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }

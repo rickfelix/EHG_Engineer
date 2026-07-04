@@ -16,6 +16,7 @@ import {
   verifyMerged,
   verifyBranchDeleted,
   isPlatformRepo,
+  createRegistryNarrowedTrustGate,
 } from '../../../lib/ship/auto-merge.mjs';
 
 const silentLogger = { info: () => {}, warn: () => {}, error: () => {} };
@@ -643,6 +644,63 @@ describe('isPlatformRepo (C2 trust allowlist)', () => {
     expect(isPlatformRepo('someorg', 'someventure')).toBe(false);
     expect(isPlatformRepo(null, 'ehg')).toBe(false);
     expect(isPlatformRepo('rickfelix', undefined)).toBe(false);
+  });
+});
+
+// SD-LEO-INFRA-CANONICAL-REPO-APP-001 FR-3 (TS-3, TS-4): AND-composed registry
+// narrowing gate. Must NEVER widen past the isPlatformRepo floor, even under a
+// mis-tagged registry row — this is not hypothetical: the LIVE applications
+// table tags MarketLens (an external venture repo) trust_tier='trusted', which
+// is exactly the shape of row that must never grant auto-merge eligibility.
+describe('createRegistryNarrowedTrustGate (FR-3: AND-composed, never-widen trust gate)', () => {
+  function makeSupabase(rows) {
+    return {
+      from: () => ({
+        select: () => ({
+          not: () => Promise.resolve({ data: rows, error: null }),
+        }),
+      }),
+    };
+  }
+
+  it('TS-3: a mis-tagged venture repo (trust_tier=platform/trusted) STILL fails closed — floor is non-negotiable', async () => {
+    const supabase = makeSupabase([
+      { github_repo: 'rickfelix/marketlens', trust_tier: 'trusted' },
+      { github_repo: 'rickfelix/commitcraft-ai', trust_tier: 'platform' }, // hypothetical mis-tag
+    ]);
+    const gate = createRegistryNarrowedTrustGate(supabase);
+    expect(await gate('rickfelix', 'marketlens')).toBe(false);
+    expect(await gate('rickfelix', 'commitcraft-ai')).toBe(false);
+  });
+
+  it('TS-4: rickfelix/ehg and rickfelix/EHG_Engineer remain eligible when registry confirms trust_tier=platform (no regression)', async () => {
+    const supabase = makeSupabase([
+      { github_repo: 'rickfelix/ehg.git', trust_tier: 'platform' },
+      { github_repo: 'rickfelix/EHG_Engineer.git', trust_tier: 'platform' },
+    ]);
+    const gate = createRegistryNarrowedTrustGate(supabase);
+    expect(await gate('rickfelix', 'ehg')).toBe(true);
+    expect(await gate('rickfelix', 'EHG_Engineer')).toBe(true);
+  });
+
+  it('narrows a floor-eligible repo whose registry trust_tier has been revoked away from platform', async () => {
+    const supabase = makeSupabase([
+      { github_repo: 'rickfelix/ehg.git', trust_tier: 'suspended' },
+    ]);
+    const gate = createRegistryNarrowedTrustGate(supabase);
+    expect(await gate('rickfelix', 'ehg')).toBe(false);
+  });
+
+  it('falls back to the floor alone when no registry row matches, on DB error, or when no supabase client is supplied', async () => {
+    const noMatch = createRegistryNarrowedTrustGate(makeSupabase([{ github_repo: 'rickfelix/marketlens', trust_tier: 'trusted' }]));
+    expect(await noMatch('rickfelix', 'ehg')).toBe(true); // floor-eligible, no matching row — floor stands
+
+    const dbError = createRegistryNarrowedTrustGate({ from: () => ({ select: () => ({ not: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }) }) });
+    expect(await dbError('rickfelix', 'ehg')).toBe(true);
+
+    const noSupabase = createRegistryNarrowedTrustGate(null);
+    expect(await noSupabase('rickfelix', 'ehg')).toBe(true);
+    expect(await noSupabase('rickfelix', 'marketlens')).toBe(false); // floor still applies with no registry at all
   });
 });
 

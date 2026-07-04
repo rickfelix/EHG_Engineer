@@ -101,6 +101,7 @@
     "lint:count-delta-gate": "node scripts/lint/count-delta-gate-lint.mjs",
     "lint:ismainmodule-classguard": "node scripts/lint/ismainmodule-classguard-lint.mjs",
     "lint:session-coordination-insert": "node scripts/lint/session-coordination-insert-classguard-lint.mjs",
+    "lint:repo-resolution-drift": "node scripts/lint-repo-resolution-drift.mjs",
     "flags:review": "node scripts/flag-governance-review.mjs",
     "flags:stale": "node scripts/flags-stale.mjs",
     "flags:enroll": "node scripts/enroll-env-var-feature-flags.mjs",
