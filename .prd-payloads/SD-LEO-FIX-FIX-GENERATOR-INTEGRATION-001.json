@@ -1,0 +1,87 @@
+{
+  "executive_summary": "The FR-C generator integration test (tests/unit/lib/eva/quality-findings/fr-c-generator.test.js) intentionally bypasses the fixture guard (FR_C_ALLOW_FIXTURE_FINDINGS=true) and writes REAL DRAFT strategic_directives_v2 rows via generateRemediationSdsForVenture() against phantom fc000000-* venture IDs. Its afterEach relied on a bare bulk DELETE wrapped in a silent try/catch; whenever an AFTER-INSERT governance trigger attached an FK-RESTRICT/NO-ACTION child row (feedback, sd_verification_results, etc.) to the test SD, the DELETE rolled back atomically and the error was swallowed -- leaving the phantom SD sitting in 'draft' status, self-claimable by any fleet worker. This recurred 20+ times over 2 months (SD-LEO-FIX-REMEDIATION-UNIT-TEST-001..007 and 9 other siblings), each requiring a worker to manually diagnose (confirm the venture doesn't exist, evidence is a placeholder sig) and cancel it -- pure whack-a-mole with zero root-cause fix. Root cause confirmed via RCA sub-agent (5-whys, DATABASE + TESTING expert consultation, empirically reproduced 2026-07-04): the production cron path is safe (guard active, cron never sets the bypass env, off-cron creation timestamps prove test origin) -- this is purely a test-isolation defect. Fix: the afterEach now CANCELS the SD first (an UPDATE never trips a child FK, so this always succeeds regardless of what child rows exist), making any leaked test SD immediately terminal/un-claimable, then attempts a best-effort hard-delete on top (now logging failures loudly instead of swallowing them). A discovered dependency (cancellation_reason is required by a DB-level guard whenever status transitions to 'cancelled') was found and fixed during implementation via direct empirical reproduction of the exact historical FK-block scenario -- verified both that a bare delete fails as before (red) and that the new cancel-first approach survives it (green), captured permanently as a new TS-6 regression test.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Cancel-first afterEach cleanup (root fix)",
+      "description": "tests/unit/lib/eva/quality-findings/fr-c-generator.test.js's afterEach now calls a new cancelTestSds() helper that UPDATEs every test-created SD to status='cancelled' (with the required cancellation_reason) BEFORE attempting the existing best-effort hard-delete. An UPDATE of the status column cannot trip any FK constraint referencing that row's primary key, so this succeeds unconditionally regardless of what AFTER-INSERT governance triggers have wired onto the SD. Hard-delete failures are now logged (console.warn/error) instead of silently swallowed by an empty catch block.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Every SD the test creates ends the test run in a terminal (cancelled or deleted) state, never 'draft'.",
+        "The cancel step succeeds even when a real FK-RESTRICT child row (e.g. a feedback row) is attached to the SD -- verified by direct empirical reproduction, not assumed.",
+        "A failed hard-delete is logged, not silently swallowed."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "TS-6 regression test reproducing the exact historical leak",
+      "description": "New test 'TS-6' creates a real generator SD, attaches a genuine FK-RESTRICT blocking row (feedback.strategic_directive_id), asserts the OLD bare-delete behavior fails with a foreign-key-constraint error and leaves the SD in 'draft' (reproducing the historical bug within the test itself), then asserts the NEW cancelTestSds() helper succeeds and the SD becomes 'cancelled' despite the still-attached blocking row.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "TS-6 explicitly reproduces the FK-RESTRICT block (real feedback row, real FK violation) rather than mocking it.",
+        "TS-6 asserts the pre-fix bare-delete failure mode explicitly (red proof embedded in the passing test).",
+        "TS-6 asserts the post-fix cancel success explicitly (green proof)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Clean up the one already-leaked pending finding that would imminently cause an 8th recurrence",
+      "description": "A venture_quality_findings row (id abecdb16.../eed63703..., phantom venture fc000000-0000-4000-8000-25afc7da4d66, status='pending') left over from a prior test run was deleted directly (leaf table, no FK fan-out risk) to prevent an imminent 8th leak from the SAME root cause under investigation. This is NOT the general reaping of the 10 already-cancelled historical siblings (explicitly out of scope, per RCA lower-urgency corrective action) -- only the one row that was an active, imminent continuation of this exact defect.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "The specific already-leaked pending finding row for this defect investigation is removed.",
+        "No new SD is filed against it."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Zero production code change", "description": "lib/eva/quality-findings/sd-generator.js is untouched. The fix is entirely within the test file's own cleanup logic -- the production cron path was already confirmed safe by the RCA (guard active, cron never sets the bypass env)." },
+    { "id": "TR-2", "title": "No new test-isolation convention introduced", "description": "Deliberately did NOT introduce an additional RUN_DB_INTEGRATION opt-in gate (would be inconsistent with every other tests/database/tests/integration file's sole reliance on HAS_REAL_DB) -- the cancel-first fix eliminates the actual harm (a claimable phantom SD) regardless of how often the suite runs." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-A", "scenario": "Full fr-c-generator.test.js suite (16 tests: 11 unit/fixture-discriminator + 5 live-DB integration incl. new TS-6)", "type": "regression", "expected": "all pass" },
+    { "id": "TS-B", "scenario": "Post-run DB check: zero fc000000- SDs left in any non-terminal status", "type": "verification", "expected": "0 rows" },
+    { "id": "TS-C", "scenario": "TS-6: FK-blocked SD cancel-first proof", "type": "integration", "expected": "bare delete fails (FK violation, status stays draft); cancelTestSds succeeds (status becomes cancelled)" }
+  ],
+  "acceptance_criteria": [
+    "The FR-C generator integration test never leaves a claimable ('draft') phantom SD behind, regardless of FK topology encountered.",
+    "A permanent regression test (TS-6) proves this by reproducing the exact historical FK-block failure mode.",
+    "Zero production code touched; the cron/production generator path is unaffected."
+  ],
+  "risks": [
+    { "risk": "The cancel UPDATE itself could fail for an unforeseen reason, silently leaving the SD draft again.", "mitigation": "cancelTestSds() logs any error loudly (console.error) instead of swallowing it, and TS-6 explicitly asserts the cancel error is null.", "severity": "low" },
+    { "risk": "cancellation_reason requirement could change/be removed by a future DB migration, silently breaking this fix.", "mitigation": "TS-6 is a live-DB regression test that exercises the real cancel path end-to-end every CI run with real creds -- a future incompatible DB change would fail TS-6 immediately.", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["tests/unit/lib/eva/quality-findings/fr-c-generator.test.js (self-contained)"],
+    "dependencies": ["strategic_directives_v2.status/cancellation_reason columns", "lib/eva/quality-findings/sd-generator.js (read-only, unchanged)"],
+    "data_contracts": ["No schema change"],
+    "runtime_config": ["none"],
+    "observability_rollout": ["The test suite itself is the regression guard; console.error/warn on cleanup failure surfaces future recurrences in CI logs immediately instead of silently accreting."]
+  },
+  "system_architecture": {
+    "summary": "Harden a leaking integration test's own cleanup logic so a leaked fixture SD is always made terminal, closing a 2-month-old recurring harness defect at its actual root (test isolation), not by repeatedly cancelling each new instance by hand.",
+    "components": [
+      { "name": "tests/unit/lib/eva/quality-findings/fr-c-generator.test.js", "change": "UPDATE -- cancelTestSds() helper, cancel-first afterEach, new TS-6 regression test" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "RCA sub-agent (5-whys + DATABASE/TESTING expert consultation) confirmed the root cause and recommended CAPA; implemented the cancel-first cleanup, discovered and fixed a cancellation_reason dependency via direct empirical reproduction, captured the fix as a permanent regression test, and cleaned up the one imminent-8th-leak finding row.",
+    "steps": [
+      "RCA sub-agent investigation confirmed root cause: test-isolation defect, not production bug (cron path safe).",
+      "Implemented cancel-first afterEach cleanup (UPDATE never trips FK).",
+      "Ran the suite; verified 0 phantom SDs left behind post-run.",
+      "Empirically reproduced the exact historical FK-block scenario via a manual probe script; discovered the cancel UPDATE itself needed cancellation_reason (a DB-level guard) or it would also fail.",
+      "Fixed the cancel call to include cancellation_reason; re-verified the probe succeeds.",
+      "Captured the reproduction + fix permanently as TS-6, added to the suite.",
+      "Ran the full 16-test suite; all pass. Cleaned up the one already-leaked pending finding row causing an imminent 8th recurrence."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "npx vitest run tests/unit/lib/eva/quality-findings/fr-c-generator.test.js (with real Supabase creds loaded)", "expected_outcome": "16/16 tests pass" },
+    { "step_number": 2, "instruction": "Query strategic_directives_v2 for metadata->>'venture_id' like 'fc000000-%' created in the last few minutes", "expected_outcome": "0 rows, or only rows with status='cancelled' -- never 'draft'" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-FIX-FIX-GENERATOR-INTEGRATION-001"
+  }
+}
