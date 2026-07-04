@@ -128,9 +128,9 @@ async function rediscoverParentPid() {
   const timer = setTimeout(() => controller.abort(), PARENT_REDISCOVER_TIMEOUT_MS);
   try {
     // Adversarial review: scope by status too (not just session_id), matching this file's
-    // own filtering elsewhere — a terminal (released/completed) row's stale pid should not
-    // be adopted, even though tickOnce()'s independent released-row check still forces exit
-    // within one TICK_MS regardless of what parentPid holds (defense-in-depth, not load-bearing).
+    // own filtering elsewhere — a terminal (released) row's stale pid should not be adopted,
+    // even though tickOnce()'s independent released-row check still forces exit within one
+    // TICK_MS regardless of what parentPid holds (defense-in-depth, not load-bearing).
     const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/claude_sessions` +
       `?session_id=eq.${encodeURIComponent(sessionId)}&status=in.(active,idle,stale)&select=pid`;
     const res = await fetch(url, {
@@ -257,8 +257,9 @@ async function tickOnce() {
       // recoverable via a heartbeat refresh) well before the daemon itself has any
       // reason to exit — the prior active-only filter treated both as indistinguishable
       // from a genuine release, 0-rowing the PATCH and self-exiting a healthy daemon.
-      // released/completed remain the ONLY statuses that stop the tick (18b90582 fix
-      // preserved unchanged — this widens what SURVIVES, not what STOPS).
+      // released is the only remaining legal claude_sessions.status value (per its CHECK
+      // constraint: active/idle/stale/released) and the ONLY one that stops the tick
+      // (18b90582 fix preserved unchanged — this widens what SURVIVES, not what STOPS).
       const url = `${baseUrl}?session_id=eq.${encodeURIComponent(sessionId)}&status=in.(active,idle,stale)`;
       const res = await fetch(url, {
         method: 'PATCH',
