@@ -1,0 +1,121 @@
+{
+  "executive_summary": "Fixes the root cause deferred by SD-FDBK-ENH-CONFIRMED-LIVE-TODAY-001 (interim mitigation only): scripts/session-tick.cjs's steady-state PATCH filters status=eq.active (line 202); when stale-session-sweep.cjs demotes a live-quiescent session active->idle, the next tick's PATCH affects 0 rows and cleanupAndExit(0) fires, killing a healthy daemon and freezing process_alive_at. LEAD-phase sub-agents (Explore + VALIDATION) confirmed the naive fix (reverting the filter entirely) would reintroduce a DIFFERENT, previously-fixed incident: tests/unit/session-tick-release-on-exit.test.mjs FR-2 encodes the correct behavior for incident 18b90582 (an orphan tick patching a released row for 13h) -- the filter must stop on TERMINAL statuses (released/completed), not merely widen unconditionally. The surgical fix is status=in.(active,idle,stale) (the DB-side cleanup_stale_sessions cron can further demote a live-quiescent session to stale, RCA-confirmed recoverable via heartbeat refresh, so it is included alongside idle), preserving stop-on-released while fixing stop-on-idle/stale. Two additional bugs share the file: rediscoverParentPid() (line 114) is structurally inert on Windows (greps Win32_Process.CommandLine for an SSE port that is only ever an env var, never a CLI arg) -- fixed by reusing capture-session-id.cjs's existing claude_sessions.pid refresh (written on every hook fire) instead of local WMI process scanning. And the first-tick merge-duplicates POST (line 165) writes status:'active' unconditionally, risking resurrection of a legitimately-released row under a race. This PRD also builds the new spawn-and-observe test infrastructure needed to prove these fixes under real Windows process semantics (existing tests are static regex-on-source-text only), and stages re-enabling LEO_DORMANCY_WATCHDOG_ENABLED=on (low blast radius, advisory-only) while explicitly deferring LEO_MASKED_STALL_DETECT=on (drives actual capacity decisions, higher blast radius) to a separate tracked follow-up with its own monitoring window.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Widen steady-state PATCH live-status set to survive idle",
+      "description": "scripts/session-tick.cjs line 202: change the PATCH filter from `status=eq.active` to `status=in.(active,idle,stale)`. `stale` was added during EXEC after re-verifying the live claude_sessions status distribution (active/idle/released/stale/completed) -- it is the dominant non-released status in production and, per RCA evidence, is recoverable via a heartbeat refresh, so excluding it would have reproduced this SD's own bug class for stale sessions. The 0-row Content-Range detection and cleanupAndExit(0) call are UNCHANGED -- a row that has moved to a TERMINAL status (released/completed) still correctly returns 0 rows and stops the tick, preserving the fix for incident 18b90582. The release-on-exit PATCH filter was widened to match for consistency (a demoted idle/stale session whose parent dies now still gets released promptly on exit).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A live spawn-and-observe test proves the tick survives a status transition from active to idle (does not call cleanupAndExit, keeps ticking).",
+        "A live spawn-and-observe test proves the tick STILL stops on a transition to released or completed (0-row PATCH, cleanupAndExit fires) -- the original 18b90582 fix is not regressed.",
+        "tests/unit/session-tick-release-on-exit.test.mjs FR-2's existing regex assertion (line 91-101, matching the literal `status=eq.active` filter string) is UPDATED to match the new `status=in.(active,idle,stale)` filter -- not deleted, not left failing."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Replace structurally-inert Windows rediscoverParentPid() with a DB-based re-query",
+      "description": "scripts/session-tick.cjs rediscoverParentPid() (line 114-136) currently greps Win32_Process.CommandLine for CLAUDE_CODE_SSE_PORT -- structurally incapable of matching since that value is only ever process.env, never present in any process's command line anywhere in the codebase (confirmed by repo-wide grep). Replace the local WMI/PowerShell process scan with a lightweight PostgREST GET of `claude_sessions?session_id=eq.<own session_id>&select=pid`, since scripts/hooks/capture-session-id.cjs's upsertSessionRow() already refreshes this column on every hook fire (SessionStart, /clear, reconnect) -- an already-working, already-authoritative source for the current live parent PID. Adopt the queried PID as the new parentPid if it is alive (process.kill(pid,0)) and differs from the currently-pinned one.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "rediscoverParentPid() no longer shells out to PowerShell/WMI; it performs a read-only GET against claude_sessions.",
+        "A live spawn-and-observe test simulates a PID rotation (claude_sessions.pid updated to a new live PID for the same session_id) and proves the tick adopts the new PID and continues ticking instead of exiting after MAX_PARENT_MISSES.",
+        "The fix works identically cross-platform (the DB re-query has no Windows-specific dependency) -- the prior `if (process.platform !== 'win32') return 0;` guard is removed or updated accordingly.",
+        "Repo-wide grep confirms no other production code path (besides tests) depends on the removed WMI/CommandLine matching logic before it is deleted."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Guard the first-tick merge-duplicates POST against resurrecting a released row",
+      "description": "scripts/session-tick.cjs's first-tick POST (line 161-193) uses `Prefer: resolution=merge-duplicates` with body `status: 'active'` unconditionally. Since this is a PostgREST UPSERT on UNIQUE(session_id), if a row was legitimately released between the daemon's spawn and its first tick (by releaseRowOnExitBestEffort or stale-session-sweep), this POST can resurrect it. Guard: perform the merge-duplicates POST WITHOUT unconditionally setting status, or add a follow-up conditional check that the row's status did not silently get overwritten from a terminal state -- the design must not introduce a second write path that itself risks a race; prefer the simplest sound fix (e.g. omit `status` from the first-tick body when the row may already exist, letting PostgREST's merge-duplicates preserve the existing value, and separately setting status:'active' only via a subsequent conditional PATCH filtered by NOT status=in.(released,completed)).",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "A live spawn-and-observe test creates a released row, then simulates a first-tick fire for the same session_id, and proves the row's status remains released (not resurrected to active).",
+        "A live spawn-and-observe test proves the normal case (no prior row) still correctly self-heals within one tick, unchanged from today's behavior."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "New spawn-and-observe Windows test infrastructure",
+      "description": "Existing tests/unit/session-tick-*.test.mjs files are 100% static (readFileSync + regex match against source text) -- zero coverage of actual runtime behavior. Build a harness that: makes TICK_MS and PARENT_POLL_MS env-overridable so tests run in ~1-2s not 30-60s; makes the PostgREST base URL injectable so tests target a DISPOSABLE table or a strictly-scoped disposable session_id (test-tick-<uuid> prefix) with an assert-before-mutate guard that refuses to touch any row whose session_id lacks the test prefix; hard time-boxes each test at <=10s with a deterministic completion signal (not a fixed sleep); actually spawns scripts/session-tick.cjs as a real child process and observes its behavior via the marker file and/or a mocked PostgREST endpoint. MUST be validated by running from the MAIN repo tree, not the EXEC worktree (vitest config excludes **/.worktrees/**, so a test authored only in the worktree would silently never run in CI).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "New spawn-and-observe test file(s) never touch a live/real claude_sessions row -- verified by the assert-before-mutate guard rejecting any non-test-prefixed session_id.",
+        "Full test run completes in well under 60s total (no reliance on the real 30s TICK_MS).",
+        "Tests pass when run from the main repo tree (not just the EXEC worktree)."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Stage flag re-enablement: LEO_DORMANCY_WATCHDOG_ENABLED only",
+      "description": "Once FR-1/FR-2/FR-3 are proven by FR-4's tests, flip LEO_DORMANCY_WATCHDOG_ENABLED=on (the interim-mitigation SD's gate, sole consumer scripts/stale-session-sweep.cjs:697, advisory-only -- files a feedback row, no automated action). Do NOT flip LEO_MASKED_STALL_DETECT=on in this SD -- its consumers (coordinator-capacity-forecast.mjs, lib/coordinator/detectors.cjs) drive actual capacity DECISIONS, a materially higher blast radius that deserves its own tracked follow-up SD with a proper monitoring window, not a bundled flip here.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "LEO_DORMANCY_WATCHDOG_ENABLED=on is set (in .env or the relevant runtime config) as part of this SD's completion.",
+        "A canary check confirms at least one new session's tick behavior post-merge shows no false-positive fleet_dormancy alert.",
+        "A completion flag or follow-up-SD note explicitly tracks LEO_MASKED_STALL_DETECT re-enablement as separate, deferred work -- not silently dropped."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "No mutation of live production session rows during testing", "description": "All new tests operate against a disposable table or a strictly-guarded test-prefixed session_id. 11+ live sessions (including the ones authoring this SD) depend on session-tick.cjs today; a test that touches real rows risks destabilizing the fleet mid-development." },
+    { "id": "TR-2", "title": "Preserve the 18b90582 incident fix", "description": "The stop-on-terminal-status behavior (release detection via 0-row PATCH) must remain intact and test-covered after FR-1's filter widening -- this is a hard regression-prevention requirement, not just a nice-to-have." },
+    { "id": "TR-3", "title": "Cross-platform correctness", "description": "FR-2's DB-based re-query fix has no OS-specific dependency, unlike the WMI approach it replaces -- verify the fix does not silently break on non-Windows platforms where the old Windows-only guard previously no-op'd." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Live-spawned tick survives active->idle transition", "type": "integration", "expected": "Tick continues, process_alive_at keeps updating" },
+    { "id": "TS-2", "scenario": "Live-spawned tick still stops on active->released transition", "type": "integration", "expected": "cleanupAndExit fires, tick stops (18b90582 fix preserved)" },
+    { "id": "TS-3", "scenario": "PID rotation via DB re-query", "type": "integration", "expected": "Tick adopts the new live PID from claude_sessions.pid and continues, instead of exiting after MAX_PARENT_MISSES" },
+    { "id": "TS-4", "scenario": "First-tick fire against a pre-released row", "type": "integration", "expected": "Row status remains released, not resurrected to active" },
+    { "id": "TS-5", "scenario": "Full existing session-tick test suite + new spawn-and-observe suite together", "type": "regression", "expected": "All pass, run from the main tree, under 60s total" }
+  ],
+  "acceptance_criteria": [
+    "session-tick.cjs no longer self-exits when a session's status legitimately drifts to idle.",
+    "The 18b90582 stop-on-released fix is preserved and test-covered.",
+    "rediscoverParentPid()'s Windows PID-rotation recovery actually works (proven by a live test), replacing the previously structurally-inert WMI approach.",
+    "The first-tick POST can no longer resurrect a released row.",
+    "New spawn-and-observe tests exist, never touch live data, and run in well under 60s from the main tree.",
+    "LEO_DORMANCY_WATCHDOG_ENABLED is flipped on with a canary check; LEO_MASKED_STALL_DETECT re-enablement is explicitly deferred and tracked, not silently dropped."
+  ],
+  "risks": [
+    { "risk": "Widening the status filter could still be too broad if a status value other than idle/released/completed exists in production that should also be treated as terminal.", "mitigation": "Query the live claude_sessions status distribution before finalizing the IN-list; VALIDATION sub-agent already confirmed active:8/idle:3/released:989 as the current live distribution -- re-verify at EXEC time and check for any other status values in use.", "severity": "medium" },
+    { "risk": "New spawn-and-observe tests could flake in CI if timing assumptions (env-overridden TICK_MS) do not hold under CI resource contention.", "mitigation": "Use deterministic completion signals (marker file existence/content, not fixed sleeps) and a generous but bounded (<=10s) time-box per test.", "severity": "low" },
+    { "risk": "This SD touches a daemon that live, in-flight worker sessions (including the one authoring this SD) depend on for liveness tracking.", "mitigation": "All test infrastructure is strictly isolated from live rows (TR-1); the actual code fix is small and surgical; canary-verify against one new session before declaring complete.", "severity": "medium" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["scripts/stale-session-sweep.cjs (dormancy watchdog, gated)", "scripts/coordinator-capacity-forecast.mjs (masked-stall detector, gated, unaffected by this SD)", "any script reading claude_sessions.process_alive_at"],
+    "dependencies": ["scripts/session-tick.cjs", "scripts/hooks/capture-session-id.cjs (upsertSessionRow, pid refresh)", "claude_sessions table"],
+    "data_contracts": ["claude_sessions.status IN-list widened for the steady-state PATCH filter only -- no schema change", "claude_sessions.pid remains the read source for FR-2's re-query, unchanged write contract"],
+    "runtime_config": ["LEO_DORMANCY_WATCHDOG_ENABLED=on (flipped by this SD)", "LEO_MASKED_STALL_DETECT (explicitly NOT flipped by this SD)"],
+    "observability_rollout": ["new spawn-and-observe test suite", "updated tests/unit/session-tick-release-on-exit.test.mjs", "post-merge canary check on a new session"]
+  },
+  "system_architecture": {
+    "summary": "Three surgical fixes to scripts/session-tick.cjs's steady-state loop, PID-rediscovery, and first-tick self-heal paths, backed by new real-process spawn-and-observe test infrastructure that proves runtime behavior instead of static source-text matching.",
+    "components": [
+      { "name": "scripts/session-tick.cjs", "change": "MODIFIED -- widened steady-state filter (FR-1), DB-based rediscoverParentPid (FR-2), guarded first-tick POST (FR-3)" },
+      { "name": "tests/unit/session-tick-release-on-exit.test.mjs", "change": "MODIFIED -- FR-2's filter regex updated to match the widened IN-list" },
+      { "name": "new spawn-and-observe test file(s)", "change": "NEW -- real child-process spawn tests for FR-1/FR-2/FR-3, disposable-data only" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "LEAD-phase sub-agents (Explore + VALIDATION) already confirmed exact line numbers, corrected a naive-fix hazard against an existing incident-closing test, discovered a reusable DB-based mechanism for the PID-rediscovery fix, and set explicit safety rails for test infrastructure given 11+ live dogfooding sessions.",
+    "steps": [
+      "Re-verify the live claude_sessions status distribution at EXEC time (confirm active/idle/released/completed are the only values in use before finalizing the IN-list).",
+      "Implement FR-1 (widen filter), update the existing FR-2 test regex to match.",
+      "Implement FR-2 (DB-based rediscoverParentPid), remove the WMI/PowerShell approach, confirm no other code path depends on it.",
+      "Implement FR-3 (guard first-tick POST against resurrection).",
+      "Build the spawn-and-observe test harness (FR-4) with disposable-data guards, env-overridable timing, hard time-box.",
+      "Run the full existing + new test suites from the MAIN tree (not the worktree) to confirm vitest actually picks them up.",
+      "Flip LEO_DORMANCY_WATCHDOG_ENABLED=on, canary-check one new session, explicitly defer LEO_MASKED_STALL_DETECT re-enablement via a completion flag or tracked follow-up note."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run the new spawn-and-observe test suite plus tests/unit/session-tick-release-on-exit.test.mjs and tests/unit/session-tick-heartbeat.test.mjs together", "expected_outcome": "All pass, total run time well under 60s, run from the main repo tree" },
+    { "step_number": 2, "instruction": "Grep scripts/session-tick.cjs for the widened filter string", "expected_outcome": "status=in.(active,idle) found at the steady-state PATCH URL construction" },
+    { "step_number": 3, "instruction": "Grep scripts/session-tick.cjs for any remaining Win32_Process/CommandLine WMI logic", "expected_outcome": "No match -- the WMI-based rediscoverParentPid() has been replaced by the DB re-query" },
+    { "step_number": 4, "instruction": "Check LEO_DORMANCY_WATCHDOG_ENABLED value post-merge", "expected_outcome": "Set to on" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-FIX-WINDOWS-SESSION-001"
+  }
+}

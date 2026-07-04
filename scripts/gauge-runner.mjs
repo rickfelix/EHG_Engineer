@@ -52,6 +52,8 @@ import {
   computeLoopHealth,
   fetchLoopStageRows,
 } from '../lib/governance/per-loop-health-gauges.js';
+import { getCaptureCompleteness } from '../lib/eva/venture-capture-forward.js';
+import { resolveMinExtractStage } from '../lib/eva/template-extractor.js';
 
 const RECURSION_GOVERNOR_DIMENSION = 'recursion-governor-ratio';
 
@@ -178,6 +180,25 @@ function buildDetectorResolvers(supabase) {
     'solomon-dispatched-sd': async () => {
       const solomons = await fetchAllSolomons(supabase);
       return detectRoleDispatched(await boundaryRows(), solomons.map((s) => s.session_id));
+    },
+    'venture-capture-completeness': async () => {
+      const minStage = resolveMinExtractStage();
+      const { data: ventures, error } = await supabase
+        .from('ventures')
+        .select('id, name, current_lifecycle_stage')
+        .eq('status', 'active')
+        .gte('current_lifecycle_stage', minStage);
+      if (error) throw new Error('ventures query failed: ' + error.message);
+
+      const perVenture = [];
+      let totalMissing = 0;
+      for (const venture of ventures || []) {
+        // eslint-disable-next-line no-await-in-loop -- small venture count, sequential is fine
+        const reading = await getCaptureCompleteness(supabase, venture, { minStage });
+        totalMissing += reading.missing;
+        perVenture.push({ name: venture.name, ...reading });
+      }
+      return { count: totalMissing, perVenture };
     },
     'recursion-governor-ratio': async () => {
       const items = await fetchThroughputItems(supabase);
