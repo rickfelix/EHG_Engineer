@@ -1,7 +1,8 @@
 {
-  "sdKey": "SD-LEO-INFRA-ADOPTED-RESUME-FINAL-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-ADOPTED-RESUME-FINAL-001",
-  "createdAt": "2026-07-04T16:25:32.385Z",
-  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
+  "sdKey": "SD-LEO-INFRA-ADOPTED-RESUME-FINAL-DOC",
+  "expectedBranch": "docs/SD-LEO-INFRA-ADOPTED-RESUME-FINAL-001-checkin-doc-update",
+  "createdAt": "2026-07-04T19:02:49.383Z",
+  "hostname": "Legion-Laptop",
+  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer",
   "baseRef": "origin/main"
 }
