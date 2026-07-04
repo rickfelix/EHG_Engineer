@@ -166,3 +166,47 @@ describe('getCommsActivitySignals (FR-2)', () => {
     await expect(getCommsActivitySignals({}, null)).resolves.toMatchObject({ sentPendingReply: false });
   });
 });
+
+describe('QF-20260703-642: self-signal loop regression', () => {
+  it('a bare unprompted sent row (no reply_requested, no reply_to) is NOT counted as activity', async () => {
+    // Simulates the fleet-worker loop's per-tick "wakeup-armed" telemetry: a routine outbound
+    // row with no reply-intent markers at all.
+    const sb = stubSupabase({
+      sentRows: [{ id: 'msg-1', created_at: new Date(NOW - 30000).toISOString(), payload: { signal_type: 'feedback', body: 'wakeup-armed' } }],
+      receivedRows: [],
+    });
+    const r = await getCommsActivitySignals(sb, 'sess-1', { nowMs: NOW });
+    expect(r.lastActivityMs).toBeUndefined();
+    expect(r.threadOpenedAtMs).toBeUndefined();
+    const cadence = computeAdaptiveCadence({ ...r, nowMs: NOW });
+    expect(cadence.tight).toBe(false);
+    expect(cadence.reason).toBe('no_active_thread');
+  });
+
+  it('a sent row that IS a reply/continuation (payload.reply_to set) still counts as activity', async () => {
+    const sb = stubSupabase({
+      sentRows: [{ id: 'msg-2', created_at: new Date(NOW - 30000).toISOString(), payload: { reply_to: 'some-inbound-id' } }],
+      receivedRows: [],
+    });
+    const r = await getCommsActivitySignals(sb, 'sess-1', { nowMs: NOW });
+    expect(r.lastActivityMs).toBe(NOW - 30000);
+    expect(r.threadOpenedAtMs).toBe(NOW - 30000);
+    const cadence = computeAdaptiveCadence({ ...r, nowMs: NOW });
+    expect(cadence.tight).toBe(true);
+    expect(cadence.reason).toBe('recent_activity');
+  });
+
+  it('the 30-min cap now fires for a recent_activity thread anchored via receivedUnactioned', async () => {
+    const sb = stubSupabase({
+      sentRows: [],
+      receivedRows: [{ id: 'msg-3', created_at: new Date(NOW - (DEFAULT_CAP_MS + 1000)).toISOString() }],
+    });
+    // receivedRows must be within the recent-activity window for receivedUnactioned to be true;
+    // simulate a still-open old thread by re-checking with a window wide enough to see it.
+    const r = await getCommsActivitySignals(sb, 'sess-1', { nowMs: NOW, recentActivityWindowMs: DEFAULT_CAP_MS + 60000 });
+    expect(r.threadOpenedAtMs).toBe(NOW - (DEFAULT_CAP_MS + 1000));
+    const cadence = computeAdaptiveCadence({ ...r, nowMs: NOW });
+    expect(cadence.tight).toBe(false);
+    expect(cadence.reason).toBe('cap_exceeded');
+  });
+});
