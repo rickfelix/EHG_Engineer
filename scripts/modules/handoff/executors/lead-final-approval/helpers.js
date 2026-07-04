@@ -160,18 +160,17 @@ export async function recordFailedCompletion(parentSD, errorMessage, report = nu
       .from('system_events')
       .insert({
         event_type: 'ORCHESTRATOR_COMPLETION_FAILED',
-        entity_type: 'strategic_directive',
-        entity_id: parentSD.id,
+        sd_id: parentSD.id,
         details: {
           sd_id: parentSD.id,
           title: parentSD.title,
           error: errorMessage,
           validation_report: report,
           timestamp: new Date().toISOString(),
-          remediation: `node scripts/modules/handoff/orchestrator-completion-guardian.js ${parentSD.id} --auto-fix --complete`
-        },
-        severity: 'warning',
-        created_by: 'LEAD-FINAL-APPROVAL-EXECUTOR'
+          remediation: `node scripts/modules/handoff/orchestrator-completion-guardian.js ${parentSD.id} --auto-fix --complete`,
+          severity: 'warning',
+          created_by: 'LEAD-FINAL-APPROVAL-EXECUTOR'
+        }
       });
   } catch (_e) {
     // Intentionally suppressed: silent fail for logging, don't break the flow
