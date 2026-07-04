@@ -46,6 +46,7 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     signalsInWindow: null,
     adamAuthoredBuildsInWindow: null,
     adamChairmanDecisionQuestionsInWindow: null,
+    adamMachineRaisedNoiseInWindow: null,
     pmBoardSnapshot: null,
     pmBoardPriorSnapshot: null,
   };
@@ -178,6 +179,27 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
       facts.adamChairmanDecisionQuestionsInWindow = data.map((r) => ({
         body: r && r.payload ? (r.payload.body ?? r.payload.message ?? r.payload.subject ?? '') : '',
         created_at: r ? r.created_at : null,
+      }));
+    }
+  } catch { /* leave null -> unknown */ }
+
+  // QF-20260704-748: the decision_rubric probe above only sees Adam's free-text advisory channel.
+  // The stall detector (lib/adam/stall-alert.js) raises a SEPARATE, structured escalation channel --
+  // chairman_decisions rows inserted via recordPendingDecision(raisedBy:'adam') -- that carries no
+  // free-text body to classify. A row later cancelled without real chairman action IS itself the
+  // over-ask signal (Adam auto-escalated something that resolved as noise). HONEST: only a thrown
+  // query error leaves this null -> unknown; a real 0 is a real 0.
+  try {
+    const { data, error } = await supabase
+      .from('chairman_decisions')
+      .select('id, summary, created_at')
+      .gte('created_at', since)
+      .eq('status', 'cancelled')
+      .or('brief_data->>raised_by.eq.adam,brief_data->>recorded_via.eq.record-pending-decision');
+    if (error) throw error;
+    if (Array.isArray(data)) {
+      facts.adamMachineRaisedNoiseInWindow = data.map((r) => ({
+        id: r.id, summary: r.summary, created_at: r.created_at,
       }));
     }
   } catch { /* leave null -> unknown */ }
