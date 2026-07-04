@@ -106,6 +106,22 @@ function sbWithSdStatus(statusBySdKey) {
   };
 }
 
+/** Minimal supabase stub for strategic_directives_v2 metadata lookups (isSdIntentionallyHeld). */
+function sbWithSdMetadata(metadataBySdKey) {
+  return {
+    from: (table) => {
+      if (table !== 'strategic_directives_v2') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) };
+      return {
+        select: () => ({
+          eq: (_col, val) => ({
+            maybeSingle: async () => ({ data: val in metadataBySdKey ? { metadata: metadataBySdKey[val] } : null }),
+          }),
+        }),
+      };
+    },
+  };
+}
+
 describe('bumpMovementTicks', () => {
   it('resets to 0 when updated_at differs from the snapshot (real movement)', () => {
     const node = { id: 'p1', updated_at: '2026-07-01T12:00:00Z' };
@@ -210,6 +226,36 @@ describe('QF-20260703-229: false-stall flood fix', () => {
     expect(setStatus).not.toHaveBeenCalled();
     expect(recordPendingDecision).toHaveBeenCalledTimes(1);
     expect(alerted).toEqual([{ id: 'sd2', title: 'Ship SD-OPEN-001', escalated: true }]);
+  });
+
+  it('QF-20260704-964: suppresses a sourced_sd node whose linked SD is an intended hold (requires_human_action) — no filing, no false-done', async () => {
+    const stubSb = sbWithSdMetadata({ 'SD-HELD-001': { requires_human_action: true } });
+    const parents = [{
+      id: 'sd3', title: 'UIUX-remediation orchestrator', updated_at: 'fixed',
+      source_kind: 'sourced_sd', source_ref: 'SD-HELD-001', inFlightNextStep: false,
+    }];
+    const prevSnapshot = { sd3: { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 } };
+
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+    expect(setStatus).not.toHaveBeenCalled(); // held, not finished — must not be marked done
+    expect(alerted).toEqual([]);
+  });
+
+  it('QF-20260704-964: suppresses a sourced_sd node whose linked SD needs_coordinator_review', async () => {
+    const stubSb = sbWithSdMetadata({ 'SD-HELD-002': { needs_coordinator_review: true } });
+    const parents = [{
+      id: 'sd4', title: 'Pilot-gated SD', updated_at: 'fixed',
+      source_kind: 'sourced_sd', source_ref: 'SD-HELD-002', inFlightNextStep: false,
+    }];
+    const prevSnapshot = { sd4: { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 } };
+
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+    expect(setStatus).not.toHaveBeenCalled();
+    expect(alerted).toEqual([]);
   });
 
   it('caps escalation at ONE digest decision for multiple genuine stalls — never per-node (the 82-row flood)', async () => {
