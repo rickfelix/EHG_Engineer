@@ -127,8 +127,12 @@ async function rediscoverParentPid() {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PARENT_REDISCOVER_TIMEOUT_MS);
   try {
+    // Adversarial review: scope by status too (not just session_id), matching this file's
+    // own filtering elsewhere — a terminal (released/completed) row's stale pid should not
+    // be adopted, even though tickOnce()'s independent released-row check still forces exit
+    // within one TICK_MS regardless of what parentPid holds (defense-in-depth, not load-bearing).
     const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/claude_sessions` +
-      `?session_id=eq.${encodeURIComponent(sessionId)}&select=pid`;
+      `?session_id=eq.${encodeURIComponent(sessionId)}&status=in.(active,idle,stale)&select=pid`;
     const res = await fetch(url, {
       headers: {
         apikey: supabaseKey,
@@ -174,9 +178,19 @@ async function tickOnce() {
   if (!supabaseUrl || !supabaseKey) return;
 
   const baseUrl = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/claude_sessions`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
   const debug = process.env.LEO_TELEMETRY_DEBUG === '1';
+  // SD-LEO-INFRA-FIX-WINDOWS-SESSION-001: each HTTP call gets its OWN fresh
+  // AbortController/timeout budget. Adversarial review caught that a single shared
+  // controller across the first-tick POST and its immediate PATCH fallthrough (both can
+  // now fire in the same tickOnce() invocation) would let a slow POST silently starve the
+  // PATCH's remaining timeout — a real regression from the pre-fix behavior where POST and
+  // PATCH always ran in separate tickOnce() calls, each with a full HTTP_TIMEOUT_MS budget.
+  const timers = [];
+  function freshController() {
+    const controller = new AbortController();
+    timers.push(setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS));
+    return controller;
+  }
 
   try {
     const now = new Date().toISOString();
@@ -209,7 +223,7 @@ async function tickOnce() {
           hostname: require('os').hostname(),
           metadata: { cc_parent_pid: parentPid, source: 'session-tick-first' },
         }),
-        signal: controller.signal,
+        signal: freshController().signal,
       });
       // 2xx (created) OR 409/conflict (already existed, ignored) → row is now guaranteed
       // to exist, fall through to the PATCH below in this SAME tick.
@@ -258,7 +272,7 @@ async function tickOnce() {
           process_alive_at: now,
           heartbeat_at: now,
         }),
-        signal: controller.signal,
+        signal: freshController().signal,
       });
       // Content-Range header carries `0-N/total`; total=0 means row is released.
       // Stop ticking — preserves no-op semantics today, prevents future restart-on-released.
@@ -273,7 +287,7 @@ async function tickOnce() {
   } catch {
     // swallow — next tick will retry. Never crash the tick loop.
   } finally {
-    clearTimeout(timer);
+    for (const t of timers) clearTimeout(t);
   }
 }
 
