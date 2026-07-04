@@ -68,6 +68,11 @@ import {
   peerSessionSnapshot,
   emitFractureForDiff
 } from '../lib/fleet-lock-hash.mjs';
+// SD-LEO-INFRA-START-INSTALL-SKIP-001 FR4 (security-relevant): re-provision husky's git-hook
+// shims independently of the dependency-install decision below -- a skip-path worktree must
+// never end up with core.hooksPath pointing at a directory that doesn't exist.
+import { defaultEnsureHuskyHooks } from '../lib/worktree-provision.js';
+import { existsSync } from 'node:fs';
 // SD-LEO-INFRA-SD-CREATION-TOOLING-001 Phase 4: cross-check scope vs target_application
 import { validateTargetApplication, formatCrosscheckResult } from './modules/sd-validation/target-application-crosscheck.js';
 import { shouldShowVenturePipelinePointer, VENTURE_PIPELINE_POINTER } from '../lib/leo/venture-pipeline-pointer.js';
@@ -1770,17 +1775,42 @@ async function main() {
   //         during the install window.
   if (worktreeInfo?.success && worktreeInfo.cwd) {
     try {
-      // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR5): Resolve repo root
-      // once (worktrees symlink node_modules from there). Using getRepoRoot()
-      // instead of `git rev-parse --show-toplevel` with cwd=worktreeInfo.cwd
-      // — the latter returns the worktree path, not the main repo.
-      const installRepoRoot = getRepoRoot();
+      // SD-LEO-INFRA-START-INSTALL-SKIP-001 (5th recurrence, FR1): the FR5 comment this
+      // replaces assumed every worktree's node_modules is ALWAYS a junction/symlink into the
+      // coordinator repo (getRepoRoot()), so checking the coordinator's own canary/hash was
+      // "equivalent". SD-LEO-INFRA-SMART-PER-WORKTREE-001 retired that invariant (worktrees can
+      // get a REAL isolated node_modules under concurrency), and cross-repo venture worktrees
+      // (a different repo entirely from the coordinator) were NEVER covered by that assumption
+      // in the first place -- checking getRepoRoot() there checks EHG_Engineer's own deps, not
+      // the target repo's, so a healthy coordinator install always false-positived "skip" no
+      // matter what the actual worktree contained (the 5 recurred specimens, e.g.
+      // SD-MARKETLENS-*-C1/G1). fs.existsSync follows symlinks, so resolving against the
+      // WORKTREE's own path (worktreeInfo.cwd) is correct for junction, isolated, AND
+      // cross-repo worktrees alike -- a broken/missing junction or a not-yet-installed isolated
+      // worktree now correctly reports canaryPresent=false instead of silently inheriting the
+      // coordinator's own unrelated install state.
+      const installRepoRoot = worktreeInfo.cwd;
 
       const forceInstall = process.argv.includes('--force-install');
       const decision = await evaluateInstallDecision({
         repoRoot: installRepoRoot,
         forceInstall
       });
+
+      // SD-LEO-INFRA-START-INSTALL-SKIP-001 FR4 (security-relevant): hook provisioning is
+      // independent of the dependency-install decision above. `.husky/_` (what core.hooksPath
+      // points at) is only ever created as a side-effect of npm install's `prepare` script, so
+      // on the (common) skip fast path it never gets created and every git hook -- pre-commit
+      // secret scanning, commit-msg checks, pre-push enforcement -- silently never fires. Check
+      // and re-link regardless of decision.skip; fail-open (never blocks sd-start).
+      if (!existsSync(path.join(installRepoRoot, '.husky', '_'))) {
+        const hooks = defaultEnsureHuskyHooks(installRepoRoot);
+        if (hooks.ok) {
+          console.log(`   ${colors.green}✓ git hooks provisioned (.husky/_ was missing)${colors.reset}`);
+        } else {
+          console.log(`   ${colors.yellow}⚠️  git hook provisioning failed (non-fatal): ${hooks.error}${colors.reset}`);
+        }
+      }
 
       if (decision.skip) {
         // SD-LEO-INFRA-FLEET-LOCK-HASH-001 FR-2: distinguish skip-due-to-hash-match
