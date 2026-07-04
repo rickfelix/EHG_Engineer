@@ -192,6 +192,7 @@ export async function computeClaimableLeaves(sb) {
   let awaitingConvergenceSkips = 0;
   let humanActionSkips = 0;
   let ineligibleSkips = 0;
+  let depBlockedSkips = 0;
   for (const d of (sds || [])) {
     // SD-LEO-INFRA-BACKLOG-RANK-CLAIMABLE-ELIGIBILITY-ALIGN-001: the DB-free claimable axes (claimed /
     // in-flight / fixture / the SHARED claim-eligibility predicate) are computed by one pure helper so
@@ -231,7 +232,13 @@ export async function computeClaimableLeaves(sb) {
     // SD whose blocker is not yet completed is NOT ranked/dispatched — matching worker-checkin's claim guard.
     const unmet = blockerKeysFor(d)
       .filter(k => (byKey.has(k) ? byKey.get(k).status !== 'completed' : depStatus[k] !== 'completed'));
-    if (unmet.length) continue;
+    if (unmet.length) {
+      // QF-20260703-999: this exclusion previously had NO skip-log (unlike every other exclusion
+      // reason above), so a dep-blocked SD vanished from both ranked and skip output with zero trace.
+      depBlockedSkips++;
+      console.log(`  [skip] dependency-blocked (${unmet.join(', ')}): ${d.sd_key}`);
+      continue;
+    }
     // SD-REFILL-00MFWEGZ: an orchestrator child whose PARENT has not passed LEAD is not yet
     // dispatchable (claim-eligibility blocks it via the same gate, and it would hit the hard
     // parent-LEAD EXEC-transition block) — exclude it from fresh ranking so the ranked belt
@@ -248,6 +255,7 @@ export async function computeClaimableLeaves(sb) {
   if (awaitingConvergenceSkips) console.log(`[BACKLOG-RANK] ${awaitingConvergenceSkips} SD(s) awaiting co-author convergence (excluded from claimable depth)`);
   if (humanActionSkips) console.log(`[BACKLOG-RANK] ${humanActionSkips} SD(s) requiring human action excluded from claimable depth (not worker-claimable)`);
   if (ineligibleSkips) console.log(`[BACKLOG-RANK] ${ineligibleSkips} SD(s) dispatch-ineligible (orchestrator-parent / deferred / terminal) excluded from claimable depth`);
+  if (depBlockedSkips) console.log(`[BACKLOG-RANK] ${depBlockedSkips} SD(s) dependency-blocked excluded from claimable depth`);
   return { sds, byKey, depStatus, claimable };
 }
 
