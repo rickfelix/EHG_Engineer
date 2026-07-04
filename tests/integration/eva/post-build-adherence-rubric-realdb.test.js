@@ -120,23 +120,33 @@ describeDb('post_build_adherence_v1 rubric (real DB)', () => {
   });
 
   it('the immutability function raises on non-privileged UPDATE/DELETE (source-level check)', async () => {
-    const { rows } = await pgClient.query(
-      'SELECT pg_get_functiondef(oid) AS def FROM pg_proc WHERE proname = \'adherence_rubrics_immutable\''
-    );
+    const functionDefQuery = `
+      SELECT pg_get_functiondef(oid) AS def
+      FROM pg_proc
+      WHERE proname = 'adherence_rubrics_immutable'
+    `;
+    const { rows } = await pgClient.query(functionDefQuery);
     expect(rows).toHaveLength(1);
     expect(rows[0].def).toMatch(/RAISE EXCEPTION 'adherence_rubrics_immutable/);
     expect(rows[0].def).toMatch(/service_role/);
   });
 
   it('RLS is enabled with anon-read-published + service-role-full-access policies', async () => {
-    const { rows: relRows } = await pgClient.query(
-      'SELECT relrowsecurity FROM pg_class WHERE relname = \'adherence_rubrics\''
-    );
+    const rlsEnabledQuery = `
+      SELECT relrowsecurity
+      FROM pg_class
+      WHERE relname = 'adherence_rubrics'
+    `;
+    const { rows: relRows } = await pgClient.query(rlsEnabledQuery);
     expect(relRows[0].relrowsecurity).toBe(true);
 
-    const { rows: polRows } = await pgClient.query(
-      'SELECT polname FROM pg_policy WHERE polrelid = \'adherence_rubrics\'::regclass ORDER BY polname'
-    );
+    const policyNamesQuery = `
+      SELECT polname
+      FROM pg_policy
+      WHERE polrelid = 'adherence_rubrics'::regclass
+      ORDER BY polname
+    `;
+    const { rows: polRows } = await pgClient.query(policyNamesQuery);
     const policyNames = polRows.map((r) => r.polname);
     expect(policyNames).toContain('Anon can read published adherence rubrics');
     expect(policyNames).toContain('Service role full access to adherence_rubrics');
