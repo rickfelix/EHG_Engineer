@@ -65,19 +65,19 @@ async function gatherSignals(sb) {
     sb.from('strategic_directives_v2').select('id', { count: 'exact', head: true }).eq('status', 'draft').is('claiming_session_id', null)
   );
 
-  // D2: Adam-role sessions holding a non-null sd_key (should be 0 — Adam never claims)
+  // D2: Adam-role sessions holding a non-null sd_key (should be 0 — Adam never claims).
+  // NOTE: claude_sessions has no `callsign` column (role lives only in metadata.role) — this
+  // query used to select it and threw on every call (verified against the live schema; fixed
+  // alongside the same latent bug in scripts/solomon-self-assessment-writer.cjs, caught by CI's
+  // schema-reference-lint while shipping SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001).
   signals.adam_claim_count = await (async () => {
     try {
       const { data, error } = await sb
         .from('claude_sessions')
-        .select('id, sd_key, callsign, metadata')
+        .select('id, sd_key, metadata')
         .not('sd_key', 'is', null);
       if (error || !Array.isArray(data)) return null;
-      return data.filter((r) => {
-        const cs = String(r.callsign || '').toLowerCase();
-        const role = String((r.metadata && r.metadata.role) || '').toLowerCase();
-        return cs === 'adam' || role === 'adam';
-      }).length;
+      return data.filter((r) => String((r.metadata && r.metadata.role) || '').toLowerCase() === 'adam').length;
     } catch {
       return null;
     }
@@ -199,7 +199,9 @@ async function main() {
       /* dedup check failed — proceed (a duplicate is a tolerable additive row) */
     }
 
-    const { error: insErr } = await sb.from('feedback').insert(core.buildFeedbackInsertRow({
+    // buildFeedbackInsertRow() builds the actual insert payload -- these are its own helper
+    // parameter names, not literal feedback columns. schema-lint-disable-line
+    const { error: insErr } = await sb.from('feedback').insert(core.buildFeedbackInsertRow({ // schema-lint-disable-line
       category: 'adam_self_assessment',
       score,
       belowThreshold,

@@ -171,7 +171,9 @@ async function main() {
       /* dedup check failed — proceed (a duplicate is a tolerable additive row) */
     }
 
-    const { error: insErr } = await sb.from('feedback').insert(core.buildFeedbackInsertRow({
+    // buildFeedbackInsertRow() builds the actual insert payload -- these are its own helper
+    // parameter names, not literal feedback columns. schema-lint-disable-line
+    const { error: insErr } = await sb.from('feedback').insert(core.buildFeedbackInsertRow({ // schema-lint-disable-line
       category: 'solomon_self_assessment',
       score,
       belowThreshold,

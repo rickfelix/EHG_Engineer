@@ -233,7 +233,9 @@ export async function selfReviewMain() {
         if (existing && existing.length) {
           console.log('[COORD-SELF-SCORE] cycle row ' + score.review_key + ' already exists — skip');
         } else {
-          const { error: csErr } = await db.from('feedback').insert(roleScoreCore.buildFeedbackInsertRow({
+          // buildFeedbackInsertRow() builds the actual insert payload below -- these are its own
+          // helper parameter names (sessionId etc.), not literal feedback columns.
+          const { error: csErr } = await db.from('feedback').insert(roleScoreCore.buildFeedbackInsertRow({ // schema-lint-disable-line
             category: 'coordinator_self_assessment',
             score,
             belowThreshold,
