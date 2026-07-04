@@ -1,0 +1,14 @@
+{
+  "db_table_schema_allowlist": ["public"],
+  "db_table_name_exclusions": [
+    "schema_migrations",
+    "supabase_migrations"
+  ],
+  "db_table_name_prefix_exclusions": [
+    "pg_",
+    "_realtime",
+    "staging_",
+    "tmp_",
+    "temp_"
+  ]
+}

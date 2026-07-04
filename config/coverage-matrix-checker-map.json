@@ -1,0 +1,10 @@
+{
+  "_comment": "SD-LEO-INFRA-COVERAGE-MATRIX-SURFACE-001. Human-curated (surface_class, surface_key pattern) -> checker script(s). A surface_key with no matching entry is intentionally left checker_ids=[] (checker=NONE) -- that is the loud-by-construction default THE RULE (reward-spine) requires, not a bug. Patterns are matched with a simple substring test against surface_key, not regex, to keep this file auditable by non-engineers.",
+  "entries": [
+    { "surface_class": "work_item_type", "pattern": "gauge_registry", "checker_ids": ["scripts/gauge-runner.mjs"] },
+    { "surface_class": "db_table", "pattern": "merge_witness_telemetry", "checker_ids": ["lib/ship/merge-witness-ladder.mjs"] },
+    { "surface_class": "db_table", "pattern": "issue_patterns", "checker_ids": ["lib/governance/pattern-closure.js"] },
+    { "surface_class": "db_table", "pattern": "solomon_advice_outcome_ledger", "checker_ids": ["scripts/solomon-ledger-reconcile.cjs"] },
+    { "surface_class": "db_table", "pattern": "retrospectives", "checker_ids": ["scripts/modules/handoff/executors/lead-final-approval/gates.js:retrospectiveExists"] }
+  ]
+}
