@@ -14,7 +14,19 @@
  * This file mirrors plan-to-exec/parent-orchestrator.js for the EXEC-TO-PLAN
  * direction — a reduced gate set that asserts only what's actually verifiable
  * for a parent: that its children exist and the decomposition is wired up.
+ *
+ * SD-LEO-INFRA-PARENT-SCOPE-COVERAGE-001: PARENT_DELEGATED_COMPLETION previously asserted
+ * only "children.length > 0" — it never compared the children's union against the
+ * parent's declared scope/success_criteria. A real incident shipped a parent titled
+ * "Develop MarketLens Landing Page with Hero and CTA" to completion with children that
+ * only built an API layer; no landing page was ever built. The gate now also computes a
+ * scope-coverage verdict (lib/sd/scope-coverage.js) and, when incomplete, raises a
+ * non-blocking needs_decision completion_flag naming the uncovered elements. The gate's
+ * passed/score return value is UNCHANGED by coverage — this is visibility, not enforcement.
  */
+
+import { computeScopeCoverage } from '../../../../../lib/sd/scope-coverage.js';
+import { captureCompletionFlags } from '../../../../capture-completion-flags.js';
 
 /**
  * Get reduced EXEC-TO-PLAN gates for parent orchestrator SDs.
@@ -34,7 +46,7 @@ export function getParentOrchestratorExecToPlanGates(supabase, sd) {
 
       const { data: children, error } = await supabase
         .from('strategic_directives_v2')
-        .select('id, sd_key, status, current_phase')
+        .select('id, sd_key, status, current_phase, title, scope, scope_slice')
         .eq('parent_sd_id', sd.id);
 
       if (error) {
@@ -69,6 +81,36 @@ export function getParentOrchestratorExecToPlanGates(supabase, sd) {
       console.log('   ✓ SKIPPED: SCOPE_COMPLETION_VERIFICATION (deliverables tracked by children)');
       console.log('   ✓ SKIPPED: integration/E2E/wireframe gates (no parent-owned UI/code)');
 
+      // Scope-coverage advisory (SD-LEO-INFRA-PARENT-SCOPE-COVERAGE-001): never affects
+      // passed/score above — visibility only, wrapped so a failure here cannot fail the gate.
+      let coverage = null;
+      try {
+        coverage = computeScopeCoverage(sd, children);
+        console.log(`   📊 Scope coverage: ${coverage.coverage_pct}% (${coverage.elements.length} declared element(s))`);
+
+        const baseMetadata = (sd.metadata && typeof sd.metadata === 'object' && !Array.isArray(sd.metadata)) ? sd.metadata : {};
+        const { error: metaErr } = await supabase
+          .from('strategic_directives_v2')
+          .update({ metadata: { ...baseMetadata, scope_coverage: coverage } })
+          .eq('id', sd.id);
+        if (metaErr) console.warn(`   ⚠️  scope-coverage metadata write non-fatal: ${metaErr.message}`);
+
+        if (coverage.coverage_pct < 100) {
+          const uncovered = coverage.elements.filter(e => !e.covered).map(e => e.element);
+          console.warn(`   ⚠️  ${uncovered.length} scope element(s) not covered by any child: ${uncovered.join('; ')}`);
+          await captureCompletionFlags({
+            supabase,
+            sdKey: sd.sd_key,
+            flags: [{
+              type: 'needs_decision',
+              item: `Parent scope coverage incomplete (${coverage.coverage_pct}%) — uncovered element(s): ${uncovered.join('; ')}`,
+            }],
+          });
+        }
+      } catch (covErr) {
+        console.warn(`   ⚠️  scope-coverage check failed (non-fatal, gate unaffected): ${covErr.message}`);
+      }
+
       return {
         passed: true,
         score: 100,
@@ -79,6 +121,7 @@ export function getParentOrchestratorExecToPlanGates(supabase, sd) {
           childrenCount: children.length,
           children: children.map(c => ({ sd_key: c.sd_key, status: c.status, phase: c.current_phase })),
           delegated_to_children: true,
+          scope_coverage: coverage ? { coverage_pct: coverage.coverage_pct, elementCount: coverage.elements.length } : null,
         },
       };
     },
