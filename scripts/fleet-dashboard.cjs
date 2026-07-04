@@ -744,6 +744,66 @@ function printHealth(d) {
   console.log('');
 }
 
+// ── Section: Periodic-Process Liveness (SD-LEO-INFRA-PERIODIC-PROCESS-LIVENESS-001, FR-5) ──
+async function printPeriodicLiveness() {
+  const { data: rows, error } = await supabase
+    .from('periodic_process_registry')
+    .select('process_key, display_name, process_type, currently_expected_active, last_fired_at, updated_at')
+    .order('process_type', { ascending: true });
+
+  console.log('PERIODIC-PROCESS LIVENESS');
+  console.log('─'.repeat(72));
+
+  if (error) {
+    console.log('  (unable to load periodic_process_registry: ' + error.message + ')');
+    console.log('');
+    return;
+  }
+  if (!rows || rows.length === 0) {
+    console.log('  (registry empty)');
+    console.log('');
+    return;
+  }
+
+  const self = rows.find((r) => r.process_key === '__watcher_self__');
+  const watcherAgeSec = self?.last_fired_at ? Math.round((Date.now() - Date.parse(self.last_fired_at)) / 1000) : null;
+  const watcherLine = watcherAgeSec == null
+    ? '  Watcher last-run: NEVER RUN'
+    : '  Watcher last-run: ' + watcherAgeSec + 's ago' + (watcherAgeSec > 3600 ? '  [STALE WATCHER]' : '');
+  console.log(watcherLine);
+  console.log('');
+
+  // Pull the most recent OVERDUE flags to avoid re-deriving state here (the watcher script,
+  // scripts/periodic-liveness-watcher.mjs, is the single source of truth for state evaluation --
+  // the dashboard renders its output, it does not re-implement the 2+-signal logic).
+  const { data: flags } = await supabase
+    .from('session_coordination')
+    .select('payload, created_at')
+    .eq('payload->>kind', 'periodic_liveness_flag')
+    .order('created_at', { ascending: false })
+    .limit(50);
+  const overdueByKey = new Map();
+  for (const f of flags || []) {
+    const key = f.payload?.process_key;
+    if (key && !overdueByKey.has(key)) overdueByKey.set(key, f);
+  }
+
+  const ageOfHours = (ts) => (ts ? Math.max(0, Math.round((Date.now() - Date.parse(ts)) / 3600000)) + 'h' : '—');
+
+  const others = rows.filter((r) => r.process_key !== '__watcher_self__');
+  for (const r of others) {
+    const state = !r.currently_expected_active
+      ? 'INTENTIONALLY_DOWN'
+      : overdueByKey.has(r.process_key)
+        ? 'OVERDUE'
+        : 'OK';
+    console.log('  ' + pad(state, 20) + pad(r.process_type, 16) + pad(ageOfHours(r.last_fired_at), 8) + (r.display_name || r.process_key));
+  }
+  console.log('');
+  console.log('  Run scripts/periodic-liveness-watcher.mjs to refresh state.');
+  console.log('');
+}
+
 // ── Section: QA ──
 function printQA(d) {
   const now = Date.now();
@@ -1888,6 +1948,7 @@ async function main() {
     feedback:      async () => await printFeedback(d), // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001
     team:          () => printTeam(d), // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B
     chairmanemail: async () => await printChairmanEmailChannelHealth(), // SD-LEO-INFRA-CHAIRMAN-EMAIL-CHANNEL-001
+    periodic:      async () => await printPeriodicLiveness(), // SD-LEO-INFRA-PERIODIC-PROCESS-LIVENESS-001 (FR-5)
     all:           async () => {
       // Team banner appears at top of /coordinator all when active teams exist (otherwise no-op)
       if (d.executeTeams && d.executeTeams.length > 0) printTeam(d);
@@ -1913,6 +1974,7 @@ async function main() {
       await printFeedback(d); // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001 — feedback work-store
       await printCoaching(d);
       printHealth(d);
+      await printPeriodicLiveness(); // SD-LEO-INFRA-PERIODIC-PROCESS-LIVENESS-001 (FR-5)
       printQA(d);
       await printForecast(d);
       await printPredictions(d);
@@ -1922,7 +1984,7 @@ async function main() {
   const fn = sections[section];
   if (!fn) {
     console.log('Usage: node scripts/fleet-dashboard.cjs [section]');
-    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, qa, forecast, predictions, inbox, adam, solomon, context, feedback, team, all');
+    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, periodic, qa, forecast, predictions, inbox, adam, solomon, context, feedback, team, all');
     process.exit(1);
   }
 
