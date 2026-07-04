@@ -1,0 +1,89 @@
+{
+  "executive_summary": "F-4 (MEDIUM) from the live trigger-estate audit (docs/audits/SD-LEO-INFRA-TRIGGER-ESTATE-AUDIT-001.md): a GITHUB PASS INSERT on sub_agent_execution_results fired BOTH trg_complete_deliverables_on_github_pass (hardcoded 5-type list, completion_status='pending' filter) AND trigger_complete_deliverables_on_subagent (mapping-table-driven, completion_status!='completed' filter) -- two independent completion engines with two vocabularies for the same event. Live schema inspection (2026-07-04) confirmed GITHUB had zero rows in sd_subagent_deliverable_mapping (making today's overlap latent, not active) and that 2 of the hardcoded trigger's 5 types ('api_endpoint', 'database_change') never match any real deliverable_type (production values are 'api'/'database'). This PRD retires the hardcoded special-case entirely: GITHUB's existing vocabulary is seeded into sd_subagent_deliverable_mapping, and complete_deliverables_on_github_pass()/its trigger are dropped -- one completion engine, one vocabulary, per the audit's consolidation candidate #2. Verified with a live-DB behavioral test proving completion now flows through complete_deliverables_on_subagent_pass, run both BEFORE (fails, proves old engine) and AFTER (passes) the migration.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Seed GITHUB into sd_subagent_deliverable_mapping (preserve existing vocabulary)",
+      "description": "INSERT rows into sd_subagent_deliverable_mapping for sub_agent_code='GITHUB' covering the same 5 deliverable_type values the hardcoded trigger already used (configuration, ui_feature, documentation, api_endpoint, database_change), ON CONFLICT (sub_agent_code, deliverable_type) DO NOTHING for idempotency. Preserves GITHUB's as-configured behavior 1:1 (including the 2 dead entries, which is out of scope for this consolidation -- no vocabulary redesign).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "sd_subagent_deliverable_mapping has exactly 5 rows for sub_agent_code='GITHUB' after migration.",
+        "Re-running the migration is a no-op (unique constraint + ON CONFLICT DO NOTHING)."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Retire the hardcoded GITHUB completion trigger + function",
+      "description": "DROP TRIGGER trg_complete_deliverables_on_github_pass and DROP FUNCTION complete_deliverables_on_github_pass() from sub_agent_execution_results. No other live code references either name (confirmed via repo-wide grep -- only historical migration files and the audit doc mention them).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "pg_trigger has zero rows named trg_complete_deliverables_on_github_pass after migration.",
+        "pg_proc has zero rows named complete_deliverables_on_github_pass after migration.",
+        "complete_deliverables_for_merged_sd() (an unrelated utility function that only CHECKS for a passing GITHUB result, never calls the dropped function) is unaffected."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Live-DB behavioral regression test proving single-engine completion",
+      "description": "tests/database/github-deliverable-completion-consolidation.test.js: insert a disposable pending deliverable (this SD's own row as the FK-safe sd_id) + a GITHUB PASS sub_agent_execution_results row, then assert the deliverable is completed with metadata.trigger='complete_deliverables_on_subagent_pass' (never the retired 'complete_deliverables_on_github_pass'). Verified failing pre-migration (received the OLD trigger name) and passing post-migration.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Test is gated with describe.skipIf(!HAS_REAL_DB), matching the tests/database convention.",
+        "Fixture rows are hard-deleted in afterAll (no shared/live data touched).",
+        "Confirmed FAILING against pre-migration live schema, PASSING post-migration (both runs performed)."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Idempotent, additive migration", "description": "The INSERT uses ON CONFLICT DO NOTHING against the existing UNIQUE(sub_agent_code, deliverable_type) constraint; DROP TRIGGER/FUNCTION use IF EXISTS. Safe to re-run." },
+    { "id": "TR-2", "title": "No vocabulary redesign", "description": "This PRD does not rename/rationalize the 'api_endpoint'/'database_change' dead vocabulary entries or touch any other sub_agent_code's mapping rows -- scope is strictly the F-4 trigger-overlap consolidation." },
+    { "id": "TR-3", "title": "Applied via the canonical guarded apply-migration.js path", "description": "Applied live with --prod-deploy + a single-use issued token + the @approved-by header (matching git user.email), per this repo's trust-boundary/guard model for database/migrations/*.sql." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "GITHUB PASS on a pending 'configuration' deliverable", "type": "integration", "expected": "completed via complete_deliverables_on_subagent_pass (not the retired hardcoded trigger)" },
+    { "id": "TS-2", "scenario": "GITHUB PASS on a pending 'ui_feature' deliverable (type shared by both legacy vocabularies)", "type": "integration", "expected": "completed exactly once, single evidence trail from complete_deliverables_on_subagent_pass" },
+    { "id": "TS-3", "scenario": "full tests/database/ suite (20 files, 205 tests) after migration", "type": "regression", "expected": "all pass, zero regression on unrelated trigger/table behavior" }
+  ],
+  "acceptance_criteria": [
+    "A GITHUB PASS insert completes deliverables through exactly one engine (complete_deliverables_on_subagent_pass); the hardcoded special-case no longer exists.",
+    "GITHUB's existing completion vocabulary is preserved via mapping-table rows (no behavior loss).",
+    "Zero regression across the full tests/database suite."
+  ],
+  "risks": [
+    { "risk": "Dropping the hardcoded trigger silently breaks GITHUB deliverable auto-completion.", "mitigation": "GITHUB's exact 5-type vocabulary is seeded into the mapping table BEFORE the trigger is dropped, in the same migration/transaction; live behavioral test proves completion still occurs post-migration.", "severity": "high" },
+    { "risk": "Some other script/lib hard-references the dropped function/trigger name.", "mitigation": "Repo-wide grep confirmed only historical migration files + the audit doc reference the names; no live consumer.", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["Any SD/QF completion flow relying on GITHUB PASS auto-completing deliverables"],
+    "dependencies": ["sd_subagent_deliverable_mapping", "complete_deliverables_on_subagent_pass()", "sub_agent_execution_results triggers"],
+    "data_contracts": ["sd_subagent_deliverable_mapping (sub_agent_code, deliverable_type, priority) -- 5 new GITHUB rows, additive, no schema change"],
+    "runtime_config": ["none"],
+    "observability_rollout": ["tests/database/github-deliverable-completion-consolidation.test.js", "full tests/database suite (205 tests, unaffected)"]
+  },
+  "system_architecture": {
+    "summary": "Retire a duplicate, hardcoded completion trigger by folding its vocabulary into the existing mapping-table-driven engine -- one completion engine, one vocabulary for sub_agent_execution_results GITHUB PASS events.",
+    "components": [
+      { "name": "database/migrations/20260704_consolidate_github_deliverable_completion.sql", "change": "NEW -- seeds GITHUB mapping rows, drops the hardcoded trigger + function" },
+      { "name": "tests/database/github-deliverable-completion-consolidation.test.js", "change": "NEW -- live-DB behavioral regression test" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Inspect live trigger/function defs + mapping table + real deliverable_type distribution to confirm the exact overlap and vocabulary drift, write the consolidation migration, write and pre-verify a failing behavioral test, apply the migration via the guarded canonical path, confirm the test now passes and the full tests/database suite is unaffected.",
+    "steps": [
+      "pg_get_functiondef both trigger functions + query sd_subagent_deliverable_mapping and sd_scope_deliverables.deliverable_type distribution to ground the exact overlap/vocabulary drift.",
+      "Write the migration: seed GITHUB mapping rows, DROP TRIGGER/FUNCTION.",
+      "Write tests/database/github-deliverable-completion-consolidation.test.js; run against live pre-migration schema to confirm it fails (proves the old engine is what currently fires).",
+      "Apply the migration via scripts/apply-migration.js --prod-deploy (issued token + @approved-by header).",
+      "Re-run the new test (passes) + the full tests/database suite (205/205 green, zero regression)."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "npx vitest run tests/database/github-deliverable-completion-consolidation.test.js", "expected_outcome": "2/2 pass -- GITHUB PASS completions carry metadata.trigger='complete_deliverables_on_subagent_pass'." },
+    { "step_number": 2, "instruction": "Query pg_trigger/pg_proc for trg_complete_deliverables_on_github_pass / complete_deliverables_on_github_pass", "expected_outcome": "Zero rows -- both retired." },
+    { "step_number": 3, "instruction": "Query sd_subagent_deliverable_mapping WHERE sub_agent_code='GITHUB'", "expected_outcome": "Exactly 5 rows (configuration, ui_feature, documentation, api_endpoint, database_change)." },
+    { "step_number": 4, "instruction": "npx vitest run tests/database/", "expected_outcome": "20 files / 205 tests pass, zero regression." }
+  ],
+  "metadata": {
+    "sd_key": "SD-FDBK-FIX-TRIGGER-AUDIT-MEDIUM-001"
+  }
+}
