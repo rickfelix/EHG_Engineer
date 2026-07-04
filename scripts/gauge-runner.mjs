@@ -38,6 +38,16 @@ import {
   detectRoleDispatched,
   fetchSdBoundaryRows,
 } from '../lib/governance/work-boundary-gauges.js';
+import {
+  computeRecursionRatio,
+  isBandBreach,
+  detectSustainedBreach,
+  fetchThroughputItems,
+  fetchRecentSnapshots,
+  writeThroughputSnapshot,
+} from '../lib/governance/recursion-governor.js';
+
+const RECURSION_GOVERNOR_DIMENSION = 'recursion-governor-ratio';
 
 // relay-drop-gauge.cjs, adam-identity.cjs, solomon-identity.cjs are CommonJS -- createRequire is
 // this codebase's established ESM-import-CJS seam (mirrors gauge-unranked-claimable-leaves.mjs's
@@ -111,6 +121,15 @@ function buildDetectorResolvers(supabase) {
     'solomon-dispatched-sd': async () => {
       const solomons = await fetchAllSolomons(supabase);
       return detectRoleDispatched(await boundaryRows(), solomons.map((s) => s.session_id));
+    },
+    'recursion-governor-ratio': async () => {
+      const items = await fetchThroughputItems(supabase);
+      const ratioResult = computeRecursionRatio(items);
+      const breach = isBandBreach(ratioResult);
+      await writeThroughputSnapshot(supabase, { dimension: RECURSION_GOVERNOR_DIMENSION, ratioResult, breach });
+      const recent = await fetchRecentSnapshots(supabase, { dimension: RECURSION_GOVERNOR_DIMENSION });
+      const { sustained, streak } = detectSustainedBreach(recent);
+      return { count: sustained ? 1 : 0, ...ratioResult, breach, streak };
     },
   };
 }
