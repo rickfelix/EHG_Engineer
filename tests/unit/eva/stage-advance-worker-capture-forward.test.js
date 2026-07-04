@@ -32,7 +32,7 @@ function createMockSupabase() {
         return {
           select: () => ({
             eq: () => Promise.resolve({
-              data: [{ id: 'exec-1', venture_id: 'v1', current_lifecycle_stage: 19 }],
+              data: [{ id: 'exec-1', venture_id: 'v1', current_stage: 19 }],
               error: null,
             }),
           }),
