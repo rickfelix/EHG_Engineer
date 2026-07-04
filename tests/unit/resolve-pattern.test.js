@@ -4,7 +4,7 @@
  * unconditionally flipped status='resolved' on free-text notes with zero prevention-
  * artifact check. Now routed through the canonical closeIssuePatterns() gate.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const closeIssuePatternsMock = vi.fn();
 
@@ -39,10 +39,12 @@ vi.mock('@supabase/supabase-js', () => ({
 vi.mock('dotenv', () => ({ default: { config: vi.fn() }, config: vi.fn() }));
 vi.mock('../../lib/utils/is-main-module.js', () => ({ isMainModule: () => false }));
 
-// Bracket notation so this test stub doesn't literally match the review-gate's
-// SUPABASE_SERVICE_ROLE_KEY hardcoded-secret enumeration pattern (CRIT-001).
-process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://example.test';
-process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'not-a-real-key-test-stub';
+// vi.stubEnv (restored in afterAll below) avoids a direct process.env assignment leaking
+// into any test sharing this worker; the function-call form also dodges the review-gate's
+// literal SUPABASE_SERVICE_ROLE_KEY= hardcoded-secret enumeration pattern (CRIT-001).
+vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.test');
+vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'not-a-real-key-test-stub');
+afterAll(() => vi.unstubAllEnvs());
 
 const { resolvePattern } = await import('../../scripts/resolve-pattern.js');
 
