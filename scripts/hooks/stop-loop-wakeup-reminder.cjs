@@ -145,15 +145,25 @@ async function parkSessionRecoverable(sessionId) {
 /**
  * SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001 (a): classify WHY a worker is winding down at the
  * allow/park path, for the metadata.wind_down capture + fleet-wide aggregation. Pure/total.
- *   - 'signaled'     — the worker announced a wind-down via /signal (windDownSignaled)
- *   - 'second_stop'  — the Stop hook's second-stop allow-path (stop_hook_active)
- *   - 'no_claim_idle'— neither, but a looping worker is parking with no live claim
- * @param {{ windDownSignaled?:boolean, stopHookActive?:boolean }} args
- * @returns {'signaled'|'second_stop'|'no_claim_idle'}
+ *   - 'signaled'                            — the worker announced a wind-down via /signal (windDownSignaled)
+ *   - 'second_stop'                         — the Stop hook's second-stop allow-path (stop_hook_active)
+ *   - 'turn_end_with_claim_wakeup_scheduled'— loop_state='awaiting_tick' (a ScheduleWakeup is already
+ *                                              armed) AND the session holds a live SD claim — a legitimate
+ *                                              same-turn park, NOT an idle worker (QF-20260703-347: this
+ *                                              case was previously misclassified as 'no_claim_idle',
+ *                                              contradicting its own recorded had_claim:true flag).
+ *   - 'turn_end_wakeup_scheduled'           — loop_state='awaiting_tick' but no live claim (idle worker
+ *                                              that armed its own wakeup correctly).
+ *   - 'no_claim_idle'                       — none of the above; no wakeup evidence and no live claim.
+ * @param {{ windDownSignaled?:boolean, stopHookActive?:boolean, hasActiveClaim?:boolean, loopState?:string|null }} args
+ * @returns {'signaled'|'second_stop'|'turn_end_with_claim_wakeup_scheduled'|'turn_end_wakeup_scheduled'|'no_claim_idle'}
  */
-function classifyWindDownReason({ windDownSignaled, stopHookActive } = {}) {
+function classifyWindDownReason({ windDownSignaled, stopHookActive, hasActiveClaim, loopState } = {}) {
   if (windDownSignaled) return 'signaled';
   if (stopHookActive) return 'second_stop';
+  if (loopState === LOOP_STATE_AWAITING_TICK) {
+    return hasActiveClaim ? 'turn_end_with_claim_wakeup_scheduled' : 'turn_end_wakeup_scheduled';
+  }
   return 'no_claim_idle';
 }
 
@@ -308,7 +318,7 @@ async function main() {
       // SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001 (a)+(c): capture WHY this worker wound down
       // (same worker-gate as the park, so no false telemetry on a non-worker operator session).
       await recordWindDown(supabase, sessionId, {
-        reason: classifyWindDownReason({ windDownSignaled, stopHookActive }),
+        reason: classifyWindDownReason({ windDownSignaled, stopHookActive, hasActiveClaim, loopState }),
         hadClaim: hasActiveClaim,
       });
     }

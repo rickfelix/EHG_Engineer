@@ -21,6 +21,13 @@ if [ "$SKIP_STRUNKIAN" = "1" ]; then
   exit 0
 fi
 
+# Stamp a fleet attribution trailer (QF-20260703-311) — fail-open, never blocks.
+# `|| true` is load-bearing: this hook runs under `sh -e` (husky's shim), so ANY
+# non-zero exit here would abort the rest of commit-msg (including the Strunkian
+# check below). A known Node/libuv-on-Windows quirk can make a script exit
+# non-zero on shutdown even after process.exit(0) if it opened a network client.
+node scripts/append-fleet-commit-trailer.js "$1" || true
+
 # Run EXEC commit gate
 node scripts/exec-commit-gate.js "$1"
 

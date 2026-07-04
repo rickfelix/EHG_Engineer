@@ -1,0 +1,87 @@
+{
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Work-boundary evidence detectors (pure functions) in a new lib/governance/work-boundary-gauges.js",
+      "description": "New pure functions, generalized from the coordinator lesson (coordinator never sources, Adam never claims/builds, Solomon never dispatches), each verified from durable row evidence rather than contract prose: detectCoordinatorSourced(sdRows) flags any strategic_directives_v2 row whose metadata.sourced_by string starts with 'coordinator' (case-insensitive) -- mirroring the existing 'adam'-literal sourced_by convention (lib/sourcing-engine/adam-direct-registry.js:86 `.eq('metadata->>sourced_by', 'adam')`) so a coordinator-authored row is detectable the same way an Adam-authored one already is. detectRoleClaimed(sdRows, roleSessionIds) flags any row whose claiming_session_id OR any historical metadata.claim_history[].session_id entry is a member of roleSessionIds -- checks BOTH the live claim and the full historical ledger so a role that claimed-then-released still trips the gauge (a boundary breach is a permanent finding, not erased by release). detectRoleDispatched(sdRows, roleSessionIds) flags any row whose metadata.dispatch_rank_by is a member of roleSessionIds. All three are pure (no I/O), take pre-fetched row arrays + a plain array/Set of session_ids, and return {count, flagged: [sd_key,...]} matching the gauge-runner's existing generic result shape (scripts/gauge-runner.mjs's GAUGE <id>=<count> convention). A companion async fetchSdBoundaryRows(supabase) does the ONE Supabase read (sd_key, claiming_session_id, metadata) and normalizes to {sd_key, claiming_session_id, sourced_by, dispatch_rank_by, claim_history} -- the I/O-vs-pure-logic split already established by computeClaimableLeaves/countUnrankedClaimableLeaves (scripts/coordinator-backlog-rank.mjs + scripts/gauge-unranked-claimable-leaves.mjs) is reused, not reinvented."
+    },
+    {
+      "id": "FR-2",
+      "title": "Wire 3 new GAUGE_REGISTRY entries + gauge-runner resolvers, reusing Adam/Solomon identity fetchers",
+      "description": "Three new ADDITIVE entries in lib/governance/gauge-registry.js (existing 4 entries untouched): 'coordinator-sourced-sd' (ownerRole: 'coordinator'), 'adam-claimed-or-built-sd' (ownerRole: 'coordinator'), 'solomon-dispatched-sd' (ownerRole: 'coordinator') -- all three route findings to the coordinator (the role responsible for catching and correcting a boundary breach across the fleet), all use the established thresholdConfig.tripWhen: (result) => (result?.count || 0) > 0 convention, all enabled:true (no stub rows -- the detectors ship working in this SD, unlike the STUB-ROW pattern reserved for detectors whose sibling SD hasn't shipped yet). scripts/gauge-runner.mjs's buildDetectorResolvers(supabase) gets 3 new resolver entries wired to FR-1's functions; 'adam-claimed-or-built-sd' resolves Adam's role-session-id set via lib/coordinator/adam-identity.cjs's EXISTING fetchAllAdams(supabase) (ALL adam-role sessions ever, not just fresh -- a stale/expired Adam session that historically claimed an SD is still a real boundary breach), 'solomon-dispatched-sd' resolves Solomon's set via lib/coordinator/solomon-identity.cjs's EXISTING fetchAllSolomons(supabase) -- both fetchers reused read-only, zero modifications. fetchSdBoundaryRows(supabase)'s single DB read is computed ONCE per gauge-runner.mjs run (memoized inside buildDetectorResolvers' closure) and shared across all 3 new resolvers, not re-fetched 3x."
+    },
+    {
+      "id": "FR-3",
+      "title": "Tests",
+      "description": "New tests/unit/governance/work-boundary-gauges.test.js: detectCoordinatorSourced trips on 'coordinator-xxxxx' and bare 'coordinator' sourced_by, does not trip on 'adam-xxxxx' or null/undefined; detectRoleClaimed trips when claiming_session_id matches a role session id, trips when ONLY a historical claim_history entry matches (current claiming_session_id null/different -- the released-but-still-flagged case), does not trip when no session in the row matches; detectRoleDispatched trips when dispatch_rank_by matches, does not trip on null/non-matching. Extend tests/unit/governance/gauge-registry.test.js's hard-coded entry-count assertions (currently 4) to 7, and its sorted-id list to include the 3 new ids -- both existing assertions in that file necessarily change as an ADDITIVE, not a rewrite (the 4 pre-existing entries and their own assertions are untouched)."
+    }
+  ],
+  "technical_requirements": [
+    { "requirement": "No new migration or table -- FR-1/FR-2 compute everything from existing strategic_directives_v2 rows (created_by/claiming_session_id/metadata columns already present) plus the existing claude_sessions role-session fetchers" },
+    { "requirement": "lib/coordinator/adam-identity.cjs's fetchAllAdams and lib/coordinator/solomon-identity.cjs's fetchAllSolomons are consumed read-only -- zero modifications to either" },
+    { "requirement": "gauge-registry.js's 4 pre-existing entries (unranked-claimable-leaves, relay-drop, stale-tree, ship-witness-unwitnessed-merge) are untouched -- purely additive" },
+    { "requirement": "New module is ESM (import/export), matching gauge-runner.mjs's own ESM imports of sibling pure-logic modules (e.g. lib/governance/checkout-freshness.js) rather than the createRequire-CJS-bridge pattern reserved for CJS-only modules" }
+  ],
+  "test_scenarios": [
+    { "scenario": "detectCoordinatorSourced flags a row with sourced_by='coordinator-abc12345' and a row with sourced_by='coordinator', but not 'adam-abc12345' or a row with no sourced_by" },
+    { "scenario": "detectRoleClaimed flags a row via its live claiming_session_id matching a role session id" },
+    { "scenario": "detectRoleClaimed flags a row via a historical claim_history entry even when the CURRENT claiming_session_id is null or belongs to a different session (released-but-still-flagged)" },
+    { "scenario": "detectRoleClaimed does not flag a row with no matching session anywhere" },
+    { "scenario": "detectRoleDispatched flags a row whose dispatch_rank_by matches a role session id, and does not flag null/non-matching" },
+    { "scenario": "gauge-registry.test.js's entry-count assertion is updated from 4 to 7 and the sorted-id list includes all 3 new ids, enabled:true, with a resolvable detectorFn" },
+    { "scenario": "gauge-runner.mjs's buildDetectorResolvers wires all 3 new ids to callable resolvers that return the {count, flagged} shape" }
+  ],
+  "acceptance_criteria": [
+    "All 3 FRs traced to file:line in the diff",
+    "The 4 pre-existing gauge-registry entries and their own tests are unmodified in behavior -- purely additive",
+    "fetchAllAdams/fetchAllSolomons are consumed read-only, zero modifications",
+    "All 3 new detectors are pure functions independently unit-testable without a DB round-trip",
+    "gauge-registry.test.js and work-boundary-gauges.test.js both pass; existing gauge-runner-liveness.test.js passes unmodified"
+  ],
+  "risks": [
+    {
+      "risk": "The 'coordinator' sourced_by string-prefix convention is inferred (no coordinator-authored SD has ever existed to observe the real string shape), so detectCoordinatorSourced could miss a differently-shaped future marker",
+      "impact": "low",
+      "likelihood": "medium",
+      "mitigation": "Mirrors the ALREADY-SHIPPED, load-bearing 'adam' sourced_by convention (lib/sourcing-engine/adam-direct-registry.js) exactly -- if that convention ever changes, both the Adam and coordinator checks would need updating together, and the gauge fails open (never trips) rather than false-positiving on unrelated rows"
+    },
+    {
+      "risk": "A role session_id set (fetchAllAdams/fetchAllSolomons) could be incomplete if claude_sessions rows are ever purged/archived, silently narrowing the historical claim_history check",
+      "impact": "low",
+      "likelihood": "low",
+      "mitigation": "Same fail-open contract as every existing gauge-registry detector (advisory-only, non-fatal on error, gauge-runner's own try/catch per detector) -- a narrowed historical set produces fewer findings, never a crash or false trip"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "scripts/gauge-runner.mjs (3 new registry entries) -- existing cron/duty-loop cadence, no new scheduling infra",
+      "coordinator inbox (via the existing feedback-table routeFinding pipeline) -- a tripped boundary gauge surfaces exactly like the 4 existing gauges"
+    ],
+    "dependencies": [
+      "lib/coordinator/adam-identity.cjs, lib/coordinator/solomon-identity.cjs (existing, read-only)",
+      "lib/governance/gauge-registry.js, scripts/gauge-runner.mjs (existing invariant-gauge framework, additively extended)",
+      "strategic_directives_v2 (existing table, read-only -- created_by, claiming_session_id, metadata columns)"
+    ],
+    "data_contracts": ["No schema changes"],
+    "runtime_config": ["None -- no new env vars"],
+    "observability_rollout": [
+      "Boundary-breach findings surface through the existing gauge-runner -> feedback table -> coordinator pipeline, same as the 4 existing gauge-registry entries"
+    ]
+  },
+  "implementation_approach": {
+    "phases": [
+      "Phase 1: FR-1 pure detectors + fetchSdBoundaryRows in lib/governance/work-boundary-gauges.js",
+      "Phase 2: FR-2 gauge-registry.js entries + gauge-runner.mjs resolver wiring (reusing fetchAllAdams/fetchAllSolomons)",
+      "Phase 3: FR-3 unit tests (new + gauge-registry.test.js extension)"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run detectCoordinatorSourced against a fixture with one coordinator-sourced row and one adam-sourced row", "expected_outcome": "count=1, flagged=[the coordinator-sourced sd_key only]" },
+    { "step_number": 2, "instruction": "Run detectRoleClaimed against a fixture where a role session appears only in claim_history (not the current claiming_session_id)", "expected_outcome": "Still flagged -- historical claims count" },
+    { "step_number": 3, "instruction": "Run node scripts/gauge-runner.mjs --json against a live/dev DB", "expected_outcome": "GAUGE lines print for all 3 new ids alongside the 4 existing ones, with no thrown errors" },
+    { "step_number": 4, "instruction": "Run npx vitest run tests/unit/governance/", "expected_outcome": "All governance tests pass, including the updated gauge-registry.test.js counts" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-009-LEAF-WORK-001"
+  }
+}

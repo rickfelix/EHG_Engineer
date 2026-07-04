@@ -20,14 +20,14 @@ import {
 const VALID_FEEDBACK_TYPES = ['issue', 'enhancement'];
 
 describe('GAUGE_REGISTRY shape', () => {
-  it('exports exactly 7 seed entries (4 activated + 3 self-score-age stubs, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4)', () => {
-    expect(GAUGE_REGISTRY).toHaveLength(7);
+  it('exports exactly 11 seed entries (4 original + 4 work-boundary/recursion + 3 self-score-age stubs, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4)', () => {
+    expect(GAUGE_REGISTRY).toHaveLength(11);
   });
 
-  it('the original 4 entries are activated; the 3 new self-score-age entries ship as stubs (writers default-OFF)', () => {
+  it('8 entries are activated; the 3 new self-score-age entries ship as stubs (writers default-OFF)', () => {
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
-    expect(live).toHaveLength(4);
+    expect(live).toHaveLength(8);
     expect(stubs.map((e) => e.id).sort()).toEqual(['adam_self_score_age', 'coordinator_self_score_age', 'solomon_self_score_age']);
   });
 
@@ -85,16 +85,45 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(selectEnabledEntries(undefined)).toEqual([]);
   });
 
-  it('the real GAUGE_REGISTRY selects all 4 entries now that every stub is activated', () => {
+  it('the real GAUGE_REGISTRY selects all 8 entries now that every stub is activated', () => {
     const selected = selectEnabledEntries(GAUGE_REGISTRY);
-    expect(selected).toHaveLength(4);
-    expect(selected.map((e) => e.id).sort()).toEqual(['relay-drop', 'ship-witness-unwitnessed-merge', 'stale-tree', 'unranked-claimable-leaves']);
+    expect(selected).toHaveLength(8);
+    expect(selected.map((e) => e.id).sort()).toEqual([
+      'adam-claimed-or-built-sd',
+      'coordinator-sourced-sd',
+      'recursion-governor-ratio',
+      'relay-drop',
+      'ship-witness-unwitnessed-merge',
+      'solomon-dispatched-sd',
+      'stale-tree',
+      'unranked-claimable-leaves',
+    ]);
   });
 
   it('SD-LEO-INFRA-SHIP-WITNESS-ENFORCE-001: the new entry has a resolvable detectorFn and the >0-count tripWhen convention', () => {
     const entry = GAUGE_REGISTRY.find((e) => e.id === 'ship-witness-unwitnessed-merge');
     expect(entry).toBeTruthy();
     expect(entry.detectorFn).toBe('ship-witness-unwitnessed-merge');
+    expect(entry.thresholdConfig.tripWhen({ count: 1 })).toBe(true);
+    expect(entry.thresholdConfig.tripWhen({ count: 0 })).toBe(false);
+  });
+
+  it('SD-LEO-INFRA-009-LEAF-WORK-001: all 3 work-boundary entries have a resolvable detectorFn, ownerRole coordinator, and the >0-count tripWhen convention', () => {
+    for (const id of ['coordinator-sourced-sd', 'adam-claimed-or-built-sd', 'solomon-dispatched-sd']) {
+      const entry = GAUGE_REGISTRY.find((e) => e.id === id);
+      expect(entry).toBeTruthy();
+      expect(entry.detectorFn).toBe(id);
+      expect(entry.ownerRole).toBe('coordinator');
+      expect(entry.thresholdConfig.tripWhen({ count: 1 })).toBe(true);
+      expect(entry.thresholdConfig.tripWhen({ count: 0 })).toBe(false);
+    }
+  });
+
+  it('SD-LEO-INFRA-009-LEAF-RECURSION-001: the recursion-governor entry has a resolvable detectorFn, ownerRole chairman, and the >0-count tripWhen convention', () => {
+    const entry = GAUGE_REGISTRY.find((e) => e.id === 'recursion-governor-ratio');
+    expect(entry).toBeTruthy();
+    expect(entry.detectorFn).toBe('recursion-governor-ratio');
+    expect(entry.ownerRole).toBe('chairman');
     expect(entry.thresholdConfig.tripWhen({ count: 1 })).toBe(true);
     expect(entry.thresholdConfig.tripWhen({ count: 0 })).toBe(false);
   });

@@ -62,4 +62,53 @@ describe('classifyWindDownReason (SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001)', () 
     expect(classifyWindDownReason({})).toBe('no_claim_idle');
     expect(classifyWindDownReason()).toBe('no_claim_idle');
   });
+
+  // QF-20260703-347: a worker that ends its turn with loop_state='awaiting_tick' (a ScheduleWakeup
+  // already armed by post-tool-loop-state.cjs) is NOT idle — it self-diagnosed as 'no_claim_idle'
+  // even while had_claim:true, contradicting its own recorded flag.
+  it("'turn_end_with_claim_wakeup_scheduled' when a wakeup is armed AND the worker holds a live claim", () => {
+    expect(classifyWindDownReason({
+      windDownSignaled: false,
+      stopHookActive: false,
+      hasActiveClaim: true,
+      loopState: 'awaiting_tick',
+    })).toBe('turn_end_with_claim_wakeup_scheduled');
+  });
+
+  it("'turn_end_wakeup_scheduled' when a wakeup is armed but there is no live claim", () => {
+    expect(classifyWindDownReason({
+      windDownSignaled: false,
+      stopHookActive: false,
+      hasActiveClaim: false,
+      loopState: 'awaiting_tick',
+    })).toBe('turn_end_wakeup_scheduled');
+  });
+
+  it("'signaled' and 'second_stop' still win over an armed wakeup (precedence unchanged)", () => {
+    expect(classifyWindDownReason({
+      windDownSignaled: true,
+      hasActiveClaim: true,
+      loopState: 'awaiting_tick',
+    })).toBe('signaled');
+    expect(classifyWindDownReason({
+      stopHookActive: true,
+      hasActiveClaim: true,
+      loopState: 'awaiting_tick',
+    })).toBe('second_stop');
+  });
+
+  it("still 'no_claim_idle' when hasActiveClaim is true but no wakeup evidence (loopState not awaiting_tick)", () => {
+    expect(classifyWindDownReason({
+      windDownSignaled: false,
+      stopHookActive: false,
+      hasActiveClaim: true,
+      loopState: 'active',
+    })).toBe('no_claim_idle');
+    expect(classifyWindDownReason({
+      windDownSignaled: false,
+      stopHookActive: false,
+      hasActiveClaim: true,
+      loopState: null,
+    })).toBe('no_claim_idle');
+  });
 });

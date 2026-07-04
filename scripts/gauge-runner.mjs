@@ -32,11 +32,30 @@ import {
   detectUnwitnessedMerges,
 } from '../lib/ship/witness-adoption.mjs';
 import { spawnSync } from 'node:child_process';
+import {
+  detectCoordinatorSourced,
+  detectRoleClaimed,
+  detectRoleDispatched,
+  fetchSdBoundaryRows,
+} from '../lib/governance/work-boundary-gauges.js';
+import {
+  computeRecursionRatio,
+  isBandBreach,
+  detectSustainedBreach,
+  fetchThroughputItems,
+  fetchRecentSnapshots,
+  writeThroughputSnapshot,
+} from '../lib/governance/recursion-governor.js';
 
-// relay-drop-gauge.cjs is CommonJS -- createRequire is this codebase's established ESM-import-CJS
-// seam (mirrors gauge-unranked-claimable-leaves.mjs's own worker-checkin.cjs import).
+const RECURSION_GOVERNOR_DIMENSION = 'recursion-governor-ratio';
+
+// relay-drop-gauge.cjs, adam-identity.cjs, solomon-identity.cjs are CommonJS -- createRequire is
+// this codebase's established ESM-import-CJS seam (mirrors gauge-unranked-claimable-leaves.mjs's
+// own worker-checkin.cjs import).
 const require = createRequire(import.meta.url);
 const { planRelayDrops } = require('../lib/coordinator/relay-drop-gauge.cjs');
+const { fetchAllAdams } = require('../lib/coordinator/adam-identity.cjs');
+const { fetchAllSolomons } = require('../lib/coordinator/solomon-identity.cjs');
 
 const JSON_MODE = process.argv.includes('--json');
 const MAX_DETECTORS_PER_RUN = 50; // budget-bound: far above the current 3-entry registry, a backstop against runaway growth
@@ -96,6 +115,11 @@ export function staleSelfScoreDetector(supabase, category, cadenceHours = DEFAUL
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
  */
 function buildDetectorResolvers(supabase) {
+  // SD-LEO-INFRA-009-LEAF-WORK-001: memoized within one run so the 3 work-boundary detectors
+  // below share a single strategic_directives_v2 read instead of each re-fetching it.
+  let boundaryRowsPromise = null;
+  const boundaryRows = () => boundaryRowsPromise || (boundaryRowsPromise = fetchSdBoundaryRows(supabase));
+
   return {
     'adam-self-score-age': staleSelfScoreDetector(supabase, 'adam_self_assessment'),
     'coordinator-self-score-age': staleSelfScoreDetector(supabase, 'coordinator_self_assessment'),
@@ -116,6 +140,24 @@ function buildDetectorResolvers(supabase) {
       const { data: telemetryRows, error } = await supabase.from('merge_witness_telemetry').select('repo, pr_number');
       if (error) throw new Error('merge_witness_telemetry query failed: ' + error.message);
       return detectUnwitnessedMerges(merges, telemetryRows);
+    },
+    'coordinator-sourced-sd': async () => detectCoordinatorSourced(await boundaryRows()),
+    'adam-claimed-or-built-sd': async () => {
+      const adams = await fetchAllAdams(supabase);
+      return detectRoleClaimed(await boundaryRows(), adams.map((a) => a.session_id));
+    },
+    'solomon-dispatched-sd': async () => {
+      const solomons = await fetchAllSolomons(supabase);
+      return detectRoleDispatched(await boundaryRows(), solomons.map((s) => s.session_id));
+    },
+    'recursion-governor-ratio': async () => {
+      const items = await fetchThroughputItems(supabase);
+      const ratioResult = computeRecursionRatio(items);
+      const breach = isBandBreach(ratioResult);
+      await writeThroughputSnapshot(supabase, { dimension: RECURSION_GOVERNOR_DIMENSION, ratioResult, breach });
+      const recent = await fetchRecentSnapshots(supabase, { dimension: RECURSION_GOVERNOR_DIMENSION });
+      const { sustained, streak } = detectSustainedBreach(recent);
+      return { count: sustained ? 1 : 0, ...ratioResult, breach, streak };
     },
   };
 }
