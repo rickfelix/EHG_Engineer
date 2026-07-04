@@ -155,6 +155,20 @@ describe('findEvidenceForClaim()', () => {
     expect(result.confidence).toBe('NONE');
     rmSync(repo, { recursive: true, force: true });
   });
+
+  it('accepts a pre-built fileIndex to avoid re-walking the filesystem per claim (perf fix)', () => {
+    const fileIndex = [
+      { relPath: 'src/routes/signup.js', pathLower: 'src/routes/signup.js', content: "router.post('/signup', handlesignupform);" },
+    ];
+    const result = findEvidenceForClaim({ claimText: 'As a user, I can access the signup form', fileIndex });
+    expect(result.confidence).toBe('STRONG');
+  });
+
+  it('a fileIndex with no matches returns NONE without touching the filesystem', () => {
+    const fileIndex = [{ relPath: 'src/index.js', pathLower: 'src/index.js', content: 'console.log("hello world");' }];
+    const result = findEvidenceForClaim({ claimText: 'completely unrelated persona dashboard export', fileIndex });
+    expect(result.confidence).toBe('NONE');
+  });
 });
 
 function createMockSupabase({ upsertResponse = { data: { id: 'verdict-1' }, error: null } } = {}) {

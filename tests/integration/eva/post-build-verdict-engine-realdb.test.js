@@ -30,6 +30,7 @@ import {
   runArtifactWalk,
   resolveVentureRepoPath,
 } from '../../../lib/eva/post-build-verdict-engine.js';
+import { recordDeviation } from '../../../lib/eva/deviation-ledger.js';
 
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
@@ -51,7 +52,7 @@ describeDb('post-build-verdict-engine (real DB)', () => {
         name: `__e2e_verdict_engine_${ts}__`,
         problem_statement: 'Disposable venture for SD-LEO-INFRA-POST-BUILD-ARTIFACT-001-B real-DB grain test',
         current_lifecycle_stage: 19,
-        is_demo: false,
+        is_demo: true,
         status: 'active',
       })
       .select('id')
@@ -110,28 +111,121 @@ describeDb('post-build-verdict-engine (real DB)', () => {
     expect(results.every((r) => r.disposition === 'MISSING' || r.artifactType === 'blueprint_data_model')).toBe(true);
   });
 
-  it('runArtifactWalk against the REAL MarketLens venture completes and returns dispositions for every required artifact (smoke check)', async () => {
-    const results = await runArtifactWalk(supabase, { ventureId: MARKETLENS_VENTURE_ID, throughStage: 19 });
-    expect(results.length).toBeGreaterThan(0);
-    const validDispositions = new Set(['BUILT', 'PARTIAL', 'MISSING', 'DEVIATED_WITH_DOCUMENTED_REASON', 'DEVIATED_UNDOCUMENTED']);
-    for (const r of results) {
-      expect(validDispositions.has(r.disposition), `unexpected disposition: ${r.disposition}`).toBe(true);
-    }
+  it('claimRef disambiguates by index — two stories sharing a long identical prefix do not collide (adversarial-review fix)', async () => {
+    await supabase.from('venture_artifacts').insert({
+      venture_id: ventureId,
+      lifecycle_stage: 19,
+      artifact_type: 'blueprint_user_story_pack',
+      title: 'Prefix-collision story pack',
+      is_current: true,
+      artifact_data: {
+        epics: [{
+          name: 'Shared Prefix Epic',
+          stories: [
+            { as_a: 'user', i_want_to: 'do the exact same very long shared action prefix but then diverge into outcome A', so_that: 'A happens' },
+            { as_a: 'user', i_want_to: 'do the exact same very long shared action prefix but then diverge into outcome B', so_that: 'B happens' },
+          ],
+        }],
+      },
+    });
 
-    // The full pre/post-recovery retrodiction proof is Child D's job (it runs against
-    // a pinned commit, not whatever happens to be checked out locally). This is only an
-    // early sanity confirmation, and it is ENVIRONMENT-DEPENDENT: applications.local_path
-    // points to a path on the machine that seeded it (e.g. this dev machine), which does
-    // NOT exist on a CI runner. Only assert real-evidence-found when that local repo path
-    // genuinely exists as a directory here and now -- otherwise every claim legitimately
-    // resolves to no-evidence-found, which is correct behavior, not a defect.
-    const repoPath = await resolveVentureRepoPath(supabase, { ventureId: MARKETLENS_VENTURE_ID });
-    const repoAvailableLocally = Boolean(repoPath) && existsSync(repoPath) && statSync(repoPath).isDirectory();
-    if (repoAvailableLocally) {
-      const userStoryResults = results.filter((r) => r.artifactType === 'blueprint_user_story_pack');
-      if (userStoryResults.length > 0) {
-        const anyEvidenced = userStoryResults.some((r) => r.disposition === 'BUILT' || r.disposition === 'PARTIAL');
-        expect(anyEvidenced).toBe(true);
+    const results = await runArtifactWalk(supabase, { ventureId, throughStage: 19 });
+    const storyResults = results.filter((r) => r.artifactType === 'blueprint_user_story_pack' && r.claimRef !== 'blueprint_user_story_pack');
+    expect(storyResults.length).toBe(2);
+    expect(new Set(storyResults.map((r) => r.claimRef)).size).toBe(2); // no collision on the upsert key
+
+    const { data: rows } = await supabase
+      .from('post_build_verdicts')
+      .select('claim_ref')
+      .eq('venture_id', ventureId)
+      .eq('artifact_type', 'blueprint_user_story_pack');
+    const distinctRefs = new Set((rows || []).map((r) => r.claim_ref));
+    expect(distinctRefs.size).toBeGreaterThanOrEqual(2); // both persisted as separate rows, not overwritten
+  });
+
+  it('deviation_artifact_id points to the QUALIFYING record, not blindly the chronologically-first one (adversarial-review fix)', async () => {
+    await supabase.from('venture_artifacts').insert({
+      venture_id: ventureId,
+      lifecycle_stage: 14,
+      artifact_type: 'blueprint_data_model',
+      title: 'Deviation-attribution artifact',
+      content: 'placeholder',
+      is_current: true,
+    });
+
+    // Discover the real claimRef runArtifactWalk derives for this artifact-level claim.
+    const firstPass = await runArtifactWalk(supabase, { ventureId, throughStage: 19 });
+    const target = firstPass.find((r) => r.artifactType === 'blueprint_data_model');
+    expect(target).toBeTruthy();
+    const claimRef = target.claimRef;
+
+    const thinId = await recordDeviation(supabase, { ventureId, artifactRef: claimRef, why: 'skip', weight: 'minor' });
+    const substantiveId = await recordDeviation(supabase, {
+      ventureId, artifactRef: claimRef,
+      why: 'Deliberately deferred to Child D per chairman-ratified scope sequencing decision',
+      weight: 'declared-descope',
+    });
+
+    await runArtifactWalk(supabase, { ventureId, throughStage: 19 });
+
+    const { data: verdictRow } = await supabase
+      .from('post_build_verdicts')
+      .select('disposition, deviation_artifact_id')
+      .eq('venture_id', ventureId)
+      .eq('claim_ref', claimRef)
+      .single();
+    expect(verdictRow.disposition).toBe('DEVIATED_WITH_DOCUMENTED_REASON');
+    expect(verdictRow.deviation_artifact_id).toBe(substantiveId);
+    expect(verdictRow.deviation_artifact_id).not.toBe(thinId);
+  });
+
+  it('runArtifactWalk against the REAL MarketLens venture completes and returns dispositions for every required artifact (smoke check)', async () => {
+    // This run necessarily WRITES real verdict rows via runArtifactWalk. post_build_verdicts
+    // has zero consumers today, but Child C's scoring/convergence loop will read it as
+    // authoritative input, so this test must never leave permanent side effects on the
+    // flagship venture — snapshot the pre-test state and restore it in `finally`, even on
+    // assertion failure or a mid-walk throw. (Adversarial /ship review CRITICAL finding,
+    // PR #5555 — confirmed live: 47 stale rows had already accumulated from prior dev runs
+    // before this fix, since the table was previously never restored.)
+    const { data: snapshot, error: snapshotError } = await supabase
+      .from('post_build_verdicts')
+      .select('*')
+      .eq('venture_id', MARKETLENS_VENTURE_ID);
+    if (snapshotError) throw new Error(`Failed to snapshot MarketLens verdicts: ${snapshotError.message}`);
+
+    try {
+      const results = await runArtifactWalk(supabase, { ventureId: MARKETLENS_VENTURE_ID, throughStage: 19 });
+      expect(results.length).toBeGreaterThan(0);
+      const validDispositions = new Set(['BUILT', 'PARTIAL', 'MISSING', 'DEVIATED_WITH_DOCUMENTED_REASON', 'DEVIATED_UNDOCUMENTED']);
+      for (const r of results) {
+        expect(validDispositions.has(r.disposition), `unexpected disposition: ${r.disposition}`).toBe(true);
+      }
+
+      // The full pre/post-recovery retrodiction proof is Child D's job (it runs against
+      // a pinned commit, not whatever happens to be checked out locally). This is only an
+      // early sanity confirmation, and it is ENVIRONMENT-DEPENDENT: applications.local_path
+      // points to a path on the machine that seeded it (e.g. this dev machine), which does
+      // NOT exist on a CI runner. Only assert real-evidence-found when that local repo path
+      // genuinely exists as a directory here and now -- otherwise every claim legitimately
+      // resolves to no-evidence-found, which is correct behavior, not a defect.
+      const repoPath = await resolveVentureRepoPath(supabase, { ventureId: MARKETLENS_VENTURE_ID });
+      const repoAvailableLocally = Boolean(repoPath) && existsSync(repoPath) && statSync(repoPath).isDirectory();
+      if (repoAvailableLocally) {
+        const userStoryResults = results.filter((r) => r.artifactType === 'blueprint_user_story_pack');
+        if (userStoryResults.length > 0) {
+          const anyEvidenced = userStoryResults.some((r) => r.disposition === 'BUILT' || r.disposition === 'PARTIAL');
+          expect(anyEvidenced).toBe(true);
+        }
+      }
+    } finally {
+      // Restore: delete whatever this run wrote, then re-insert the pre-test snapshot exactly
+      // (including original id/created_at/updated_at) so MarketLens's real state is untouched.
+      await supabase.from('post_build_verdicts').delete().eq('venture_id', MARKETLENS_VENTURE_ID);
+      if (snapshot && snapshot.length > 0) {
+        const { error: restoreError } = await supabase.from('post_build_verdicts').insert(snapshot);
+        if (restoreError) {
+          throw new Error(`CRITICAL: failed to restore MarketLens post_build_verdicts snapshot: ${restoreError.message}. Manual recovery required — snapshot: ${JSON.stringify(snapshot)}`);
+        }
       }
     }
   }, 60000);
