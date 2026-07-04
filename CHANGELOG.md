@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-07-04](#2026-07-04)
+  - [Bugfix](#bugfix)
 - [2026-07-03](#2026-07-03)
   - [Bugfix](#bugfix)
 - [2026-07-01](#2026-07-01)
@@ -67,6 +69,13 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-07-04
+
+### Bugfix
+- **Test-fixture ventures no longer leak into the live chairman decision queue** - PR #5510 (SD-LEO-FIX-TEST-FIXTURE-VENTURES-001)
+  - **What shipped**: Two independent leak specimens. Specimen 1: `parity-test-*`-named ventures (correctly flagged `is_demo=true`) could still trigger a real `chairman_decisions` row and advisory notification via `lib/eva/chairman-decision-watcher.js`'s `createOrReusePendingDecision()`/`createAdvisoryNotification()`, since neither checked `is_demo`/name before inserting. Specimen 2: a CI-only venture (`__citest_chairman__:<run-id>`, deliberately `is_demo=false`) reached the chairman's real email — root cause was `package.json`'s `test:coverage` script running `vitest run --coverage` with no `--project unit` filter, so `.github/workflows/test-coverage.yml` (real Supabase secrets injected) unintentionally ran the `db`-project integration suite against production on every push. Fix: new `isFixtureVenture()` + fail-open `fetchVentureForFixtureCheck()` guard (checks `is_demo===true` or a `parity-test-`/`test-stub-` name prefix, deliberately excluding `__citest*`) wired into both write functions; `test:coverage` now scopes `--project unit` matching the existing convention. A deep-tier adversarial review round found the guard's `{id:null, skipped:true}` return broke 3 existing callers that assumed a valid decision ID (`review-gate-mint.js`, and 2 call sites in `stage-execution-worker.js` including the S17 strategy-selection gate) — each now explicitly handles the skip, and the check is scoped to `reason==='fixture_venture'` specifically after a second review round found the bare `skipped` flag is also produced by an unrelated, pre-existing code path and would have silently bypassed a real chairman gate in a rare stage-classification-divergence scenario.
+  - **Verification**: 29 tests in `tests/unit/eva/chairman-decision-watcher.test.js` (16 pre-existing + 13 new) plus a new `tests/unit/eva/stage-execution-worker-fixture-venture-gate.test.js` (5 tests) covering the 3 fixed consumer call sites, including explicit regressions for the narrowed-scope fix. Full `tests/unit/eva/` suite: 428 files / 5682 tests pass, 0 regressions. Escalated from quick-fix QF-20260703-236 (exceeded the 75-LOC quick-fix cap).
 
 ## 2026-07-03
 
