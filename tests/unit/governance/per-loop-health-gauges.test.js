@@ -119,7 +119,7 @@ describe('LOOP_IDS', () => {
 });
 
 describe('fetchLoopStageRows', () => {
-  function makeSb(rows) {
+  function makeSb(rows, capturedOrderCalls) {
     return {
       from(_table) {
         return {
@@ -129,7 +129,8 @@ describe('fetchLoopStageRows', () => {
                 return {
                   in() {
                     return {
-                      order() {
+                      order(col, opts) {
+                        if (capturedOrderCalls) capturedOrderCalls.push({ col, opts });
                         return {
                           limit: async () => ({ data: rows, error: null }),
                         };
@@ -144,6 +145,12 @@ describe('fetchLoopStageRows', () => {
       },
     };
   }
+
+  it('orders by entered_at DESCENDING so a truncated read keeps the most recent activity, not the oldest', async () => {
+    const orderCalls = [];
+    await fetchLoopStageRows(makeSb([], orderCalls), 'A_applied_rate', { limit: 10 });
+    expect(orderCalls).toEqual([{ col: 'entered_at', opts: { ascending: false } }]);
+  });
 
   it('returns truncated:false when fewer rows than the limit are returned', async () => {
     const rows = [{ cycle_id: 'c1', stage: 'RECORD', entered_at: '2026-01-01T00:00:00Z' }];
