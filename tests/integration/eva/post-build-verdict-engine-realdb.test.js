@@ -143,15 +143,45 @@ describeDb('post-build-verdict-engine (real DB)', () => {
     expect(distinctRefs.size).toBeGreaterThanOrEqual(2); // both persisted as separate rows, not overwritten
   });
 
-  it('deviation_artifact_id points to the QUALIFYING record, not blindly the chronologically-first one (adversarial-review fix)', async () => {
+  it('runArtifactWalk clears a stale claim-level row when a story no longer appears in the current snapshot (adversarial-review fix)', async () => {
+    await supabase.from('venture_artifacts').update({ is_current: false })
+      .eq('venture_id', ventureId).eq('artifact_type', 'blueprint_user_story_pack').eq('is_current', true);
     await supabase.from('venture_artifacts').insert({
       venture_id: ventureId,
-      lifecycle_stage: 14,
+      lifecycle_stage: 19,
+      artifact_type: 'blueprint_user_story_pack',
+      title: 'Single-story pack (post-edit)',
+      is_current: true,
+      artifact_data: {
+        epics: [{ name: 'Solo Epic', stories: [{ as_a: 'user', i_want_to: 'do just one distinct thing now', so_that: 'the pack shrank' }] }],
+      },
+    });
+
+    const results = await runArtifactWalk(supabase, { ventureId, throughStage: 19 });
+    const storyResults = results.filter((r) => r.artifactType === 'blueprint_user_story_pack' && r.claimRef !== 'blueprint_user_story_pack');
+    expect(storyResults.length).toBe(1); // only the current single story, not the prior 2
+
+    const { data: rows } = await supabase
+      .from('post_build_verdicts')
+      .select('claim_ref, claim_description')
+      .eq('venture_id', ventureId)
+      .eq('artifact_type', 'blueprint_user_story_pack')
+      .neq('claim_ref', 'blueprint_user_story_pack');
+    expect(rows.length).toBe(1); // the two prior claim-level rows were cleared, not left as orphans
+    expect(rows[0].claim_description).toContain('do just one distinct thing now');
+  });
+
+  it('deviation_artifact_id points to the QUALIFYING record, not blindly the chronologically-first one (adversarial-review fix)', async () => {
+    const { error: setupError } = await supabase.from('venture_artifacts').insert({
+      venture_id: ventureId,
+      lifecycle_stage: 20, // distinct from TS-6's stage 14 — avoids colliding with its is_current:true row
+      // under idx_unique_current_artifact (venture_id, lifecycle_stage, artifact_type, screen).
       artifact_type: 'blueprint_data_model',
       title: 'Deviation-attribution artifact',
       content: 'placeholder',
       is_current: true,
     });
+    if (setupError) throw new Error(`Failed to insert deviation-attribution test artifact: ${setupError.message}`);
 
     // Discover the real claimRef runArtifactWalk derives for this artifact-level claim.
     const firstPass = await runArtifactWalk(supabase, { ventureId, throughStage: 19 });
@@ -220,7 +250,12 @@ describeDb('post-build-verdict-engine (real DB)', () => {
     } finally {
       // Restore: delete whatever this run wrote, then re-insert the pre-test snapshot exactly
       // (including original id/created_at/updated_at) so MarketLens's real state is untouched.
-      await supabase.from('post_build_verdicts').delete().eq('venture_id', MARKETLENS_VENTURE_ID);
+      // Both steps' errors are checked and thrown loudly — a silently-failed delete/restore
+      // here would be a narrower recurrence of the exact CRITICAL bug this fix closes.
+      const { error: clearError } = await supabase.from('post_build_verdicts').delete().eq('venture_id', MARKETLENS_VENTURE_ID);
+      if (clearError) {
+        throw new Error(`CRITICAL: failed to clear MarketLens post_build_verdicts before restoring snapshot: ${clearError.message}. Manual recovery required — snapshot: ${JSON.stringify(snapshot)}`);
+      }
       if (snapshot && snapshot.length > 0) {
         const { error: restoreError } = await supabase.from('post_build_verdicts').insert(snapshot);
         if (restoreError) {

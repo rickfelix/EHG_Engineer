@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync, rmdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import {
@@ -154,6 +154,39 @@ describe('findEvidenceForClaim()', () => {
     const result = findEvidenceForClaim({ repoPath: repo, claimText: 'a to it' });
     expect(result.confidence).toBe('NONE');
     rmSync(repo, { recursive: true, force: true });
+  });
+
+  it('does not follow a symlink/junction — no cross-boundary evidence (adversarial-review fix)', () => {
+    const repo = makeRepo({ 'src/real.js': 'export const signupHandler = 1;' });
+    const outsideDir = mkdtempSync(join(tmpdir(), 'pbve-outside-'));
+    writeFileSync(join(outsideDir, 'secret.js'), 'signup secret credential leak');
+    const linkPath = join(repo, 'src', 'looped-link');
+    let linkCreated = false;
+    try {
+      // 'junction' is the Windows-specific type (what worktree node_modules links use);
+      // POSIX ignores the type argument and creates a plain symlink — both are exactly
+      // what entry.isSymbolicLink() is meant to catch.
+      symlinkSync(outsideDir, linkPath, 'junction');
+      linkCreated = true;
+    } catch {
+      // Link creation unsupported in this environment — nothing to assert either way.
+    }
+
+    if (linkCreated) {
+      const result = findEvidenceForClaim({ repoPath: repo, claimText: 'signup handler credential leak' });
+      for (const ref of result.evidenceRefs) {
+        expect(ref.path).not.toContain('looped-link');
+      }
+      // Remove the link pointer itself (non-recursive) BEFORE any recursive delete of
+      // `repo`, so a recursive delete never has a chance to traverse through it.
+      try {
+        rmdirSync(linkPath);
+      } catch {
+        try { rmSync(linkPath, { force: true }); } catch { /* best-effort unlink of the link only */ }
+      }
+    }
+    rmSync(repo, { recursive: true, force: true });
+    rmSync(outsideDir, { recursive: true, force: true });
   });
 
   it('accepts a pre-built fileIndex to avoid re-walking the filesystem per claim (perf fix)', () => {
