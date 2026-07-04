@@ -20,6 +20,7 @@ never auto-resolve. Companion to the Anthropic-cap contingency (`anthropic-cap-c
 | 6 | **Diagnose & recover a WEDGED HARNESS** (G6) | The harness can't always self-diagnose; the human is the last-resort debugger when the loop/coordinator/sweep itself is broken | Degraded-safe-mode: freeze + surface (cannot be auto-fixed) |
 | 7 | **Authorize spend / legal / external commitments** (LLC, Stripe live mode, contracts) | Legal/financial liability attaches to the human | Hold-and-surface |
 | 8 | **Override the no-auto-override doctrine itself** | By definition only the chairman can relax their own guardrail | Never auto-relaxed |
+| 9 | **Confirm the product looks/feels right before public launch** (S23→S24 product-review gate, `decision_type='product_review'`, separate from the S23 kill-gate in row 1) | A hands-on taste/quality check an agent cannot self-certify — public launch is the outward-facing moment | Hold-and-surface (one escalation email, no reminders); enforced independently at both the daemon-walk and RPC advance paths so neither can bypass it (SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001) |
 
 ---
 
