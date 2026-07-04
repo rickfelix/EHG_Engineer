@@ -8,7 +8,7 @@
  * structural guard on the exception-safety shape (TS-3), which live-DB negative-injection
  * cannot reliably exercise via the PostgREST/supabase-js surface (see comment on that test).
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeAll, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -72,13 +72,39 @@ describe('TRIGGER-AUDIT F-3 — static exception-safety shape (TS-3)', () => {
   });
 });
 
+// QF-20260703-773: afterEach cleanup below is interruption-fragile -- its state lives only in the
+// in-memory fixtureIds array, so a hard-killed/cancelled/timed-out process (observed live: all 5
+// TEST-F3-RACE-* rows from one run leaked and were dispatched to real fleet workers) skips it
+// entirely with no durable trace. This sweep reconciles by the durable key prefix instead, run both
+// before and after the suite so a prior run's leak is caught regardless of how it died. The age
+// threshold protects a genuinely concurrent run's own in-flight fixtures on the shared dev DB.
+const FIXTURE_KEY_PREFIX = 'TEST-F3-RACE-';
+const STALE_FIXTURE_MS = 10 * 60 * 1000;
+async function purgeStaleF3Fixtures() {
+  const cutoff = new Date(Date.now() - STALE_FIXTURE_MS).toISOString();
+  const { data: stale } = await supabase
+    .from('strategic_directives_v2')
+    .select('id')
+    .like('sd_key', `${FIXTURE_KEY_PREFIX}%`)
+    .lt('created_at', cutoff);
+  const ids = (stale || []).map((r) => r.id);
+  if (!ids.length) return;
+  const { error: biErr } = await supabase.from('sd_baseline_items').delete().in('sd_id', ids);
+  const { error: sdErr } = await supabase.from('strategic_directives_v2').delete().in('id', ids);
+  if (biErr || sdErr) console.warn('F3 fixture sweep partial:', biErr?.message, sdErr?.message);
+}
+
 describe.skipIf(!HAS_REAL_DB)('TRIGGER-AUDIT F-3 — live concurrent-insert race fix (TS-1, TS-2, TS-4)', () => {
   const fixtureIds = [];
 
+  beforeAll(purgeStaleF3Fixtures);
+  afterAll(purgeStaleF3Fixtures);
+
   afterEach(async () => {
     if (fixtureIds.length > 0) {
-      await supabase.from('sd_baseline_items').delete().in('sd_id', fixtureIds);
-      await supabase.from('strategic_directives_v2').delete().in('id', fixtureIds);
+      const { error: biErr } = await supabase.from('sd_baseline_items').delete().in('sd_id', fixtureIds);
+      const { error: sdErr } = await supabase.from('strategic_directives_v2').delete().in('id', fixtureIds);
+      if (biErr || sdErr) console.warn('F3 fixture afterEach cleanup partial:', biErr?.message, sdErr?.message);
       fixtureIds.length = 0;
     }
   });
