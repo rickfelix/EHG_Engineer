@@ -6,6 +6,10 @@
 --   statement is the race-safe primitive — two concurrent callers cannot both succeed
 --   past the cap because the increment and the cap check happen atomically inside one
 --   UPDATE at the database level.
+--
+-- If no factory_guardrail_state row exists for the venture, the UPDATE matches zero
+-- rows and this fails closed (acquired=false) rather than silently creating an
+-- unmanaged guardrail row.
 
 CREATE OR REPLACE FUNCTION acquire_content_loop_instance_slot(p_venture_id UUID, p_max_instances INTEGER DEFAULT 2)
 RETURNS TABLE (acquired BOOLEAN, current_count INTEGER)
@@ -14,8 +18,6 @@ AS $$
 DECLARE
   v_new_count INTEGER;
 BEGIN
-  -- Ensure a row exists (fail-closed if it doesn't rather than silently creating an
-  -- unmanaged guardrail row for a venture with no prior factory guardrail state).
   UPDATE factory_guardrail_state
   SET active_content_loop_instances = active_content_loop_instances + 1
   WHERE venture_id = p_venture_id
