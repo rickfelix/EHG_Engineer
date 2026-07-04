@@ -34,6 +34,7 @@ import 'dotenv/config';
 import { execSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { resolveGitHubRepo } from '../lib/repo-paths.js';
 
 const SAFETY_WINDOW_MINUTES = Number(process.env.ORPHAN_QF_REAPER_SAFETY_WINDOW_MINUTES || 5);
 const DRY_RUN = process.env.ORPHAN_QF_REAPER_DRY_RUN === 'true';
@@ -48,9 +49,23 @@ function parsePrNumber(prUrl) {
   return match ? Number(match[1]) : null;
 }
 
-function fetchPrState(prNumber) {
+/**
+ * FR-2 (SD-LEO-INFRA-CANONICAL-REPO-APP-001): resolve a QF's target_application to
+ * an explicit `owner/repo` -R argument via the canonical resolver, instead of letting
+ * `gh` fall back to its ambient cwd/config default (which silently queries the wrong
+ * repo for a venture-targeted QF — the QF-726/QF-401 pattern).
+ */
+export function resolveQfGithubRepo(targetApplication) {
+  const repo = resolveGitHubRepo(targetApplication);
+  if (!repo) {
+    throw new Error(`orphan-qf-reaper: unresolvable target_application "${targetApplication}" — refusing to fall back to an ambient default repo`);
+  }
+  return repo;
+}
+
+function fetchPrState(prNumber, repo) {
   try {
-    const raw = execSync(`gh pr view ${prNumber} --json state,mergeCommit,mergedAt`, {
+    const raw = execSync(`gh pr view ${prNumber} --json state,mergeCommit,mergedAt -R ${repo}`, {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 15_000,
@@ -66,10 +81,10 @@ export function isValidQfId(id) {
   return typeof id === 'string' && /^QF-\d{8}-\d{3}$/.test(id);
 }
 
-function fetchMergedPrByBranch(branchName) {
+function fetchMergedPrByBranch(branchName, repo) {
   try {
     const raw = execSync(
-      `gh pr list --head "${branchName}" --state merged --json number,url,mergeCommit,mergedAt --limit 1`,
+      `gh pr list --head "${branchName}" --state merged --json number,url,mergeCommit,mergedAt --limit 1 -R ${repo}`,
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 15_000 },
     );
     const arr = JSON.parse(raw);
@@ -104,7 +119,7 @@ export async function main() {
 
   const { data: candidates, error: queryError } = await supabase
     .from('quick_fixes')
-    .select('id, status, pr_url, started_at, claiming_session_id')
+    .select('id, status, pr_url, started_at, claiming_session_id, target_application')
     .in('status', ['open', 'in_progress'])
     .not('pr_url', 'is', null)
     .lt('started_at', cutoffIso)
@@ -136,9 +151,18 @@ export async function main() {
       continue;
     }
 
-    const pr = fetchPrState(prNumber);
+    let repo;
+    try {
+      repo = resolveQfGithubRepo(qf.target_application);
+    } catch (err) {
+      log('error_unresolvable_repo', { qf_id: qf.id, target_application: qf.target_application, error: err.message });
+      summary.errored += 1;
+      continue;
+    }
+
+    const pr = fetchPrState(prNumber, repo);
     if (!pr.ok) {
-      log('error_gh_pr_view', { qf_id: qf.id, pr_number: prNumber, error: pr.error });
+      log('error_gh_pr_view', { qf_id: qf.id, pr_number: prNumber, repo, error: pr.error });
       summary.errored += 1;
       continue;
     }
@@ -204,7 +228,7 @@ export async function main() {
   // per QF-20260508-230 retro). Resolve via `qf/<id>` branch convention.
   const { data: orphanCandidates, error: orphanQueryError } = await supabase
     .from('quick_fixes')
-    .select('id, status, started_at, claiming_session_id')
+    .select('id, status, started_at, claiming_session_id, target_application')
     .in('status', ['open', 'in_progress'])
     .is('pr_url', null)
     .not('claiming_session_id', 'is', null)
@@ -221,10 +245,19 @@ export async function main() {
         summary.errored += 1;
         continue;
       }
+      let repo;
+      try {
+        repo = resolveQfGithubRepo(qf.target_application);
+      } catch (err) {
+        log('error_unresolvable_repo_orphan', { qf_id: qf.id, target_application: qf.target_application, error: err.message });
+        summary.errored += 1;
+        continue;
+      }
+
       const branchName = `qf/${qf.id}`;
-      const merged = fetchMergedPrByBranch(branchName);
+      const merged = fetchMergedPrByBranch(branchName, repo);
       if (!merged.ok) {
-        log('error_gh_pr_list_orphan', { qf_id: qf.id, branch: branchName, error: merged.error });
+        log('error_gh_pr_list_orphan', { qf_id: qf.id, branch: branchName, repo, error: merged.error });
         summary.errored += 1;
         continue;
       }
