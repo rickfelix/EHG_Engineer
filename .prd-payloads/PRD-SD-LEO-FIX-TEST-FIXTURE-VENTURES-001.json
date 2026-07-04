@@ -1,0 +1,100 @@
+{
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Fixture-venture guard in lib/eva/chairman-decision-watcher.js (the shared gate-creation seam)",
+      "description": "New pure exported function isFixtureVenture(venture) returns true when venture.is_demo === true (the primary signal) OR venture.name matches /^(parity-test-|test-stub)/i (defense-in-depth for a fixture factory that omits is_demo). A new I/O helper fetchVentureForFixtureCheck(supabase, ventureId, logger) does the one ventures.select('is_demo, name').eq('id', ventureId).maybeSingle() read and is fail-open (try/catch, returns null on any error, logging a warning) so a lookup fault never blocks a legitimate chairman decision -- matching this module's existing resolveDecisionHealth fail-open contract. Both createOrReusePendingDecision() and createAdvisoryNotification() call isFixtureVenture(await fetchVentureForFixtureCheck(...)) before their respective inserts and return early ({id:null, isNew:false, skipped:true, reason:'fixture_venture'} and null respectively) when true, never reaching supabase.from('chairman_decisions').insert(...). This closes the specimen-1 class (parity-test-* ventures, which already correctly set is_demo=true at creation) for the normal application write path, and provides defense-in-depth for any fixture-name pattern that omits is_demo."
+    },
+    {
+      "id": "FR-2",
+      "title": "Root-cause fix: package.json's test:coverage script never runs the db-project integration suite against production",
+      "description": "Investigation traced specimen 2 (a CI fixture venture named __citest_chairman__:<run-id>, is_demo=FALSE, whose Stage 3 gate reached the chairman's actual email) to tests/integration/chairman-decision-api.test.js -- an integration suite that DELIBERATELY calls the real createOrReusePendingDecision() end-to-end against a live database (its own header: 'every test here exercises real chairman_decisions writes'). This suite is routed to vitest's opt-in 'db' project (per vitest.config.js), which every OTHER npm script correctly scopes out via --project unit (test, test:unit, test:cold-recovery) -- except test:coverage, which ran bare `vitest run --coverage` with no --project filter. .github/workflows/test-coverage.yml injects real SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY secrets and runs `npm run test:coverage`, so this ONE workflow unintentionally ran the real-DB integration suite against production on every push. Fix: test:coverage now reads `vitest run --project unit --coverage`, matching the established convention. The __citest_chairman__ venture is deliberately NOT is_demo:true and NOT matched by FR-1's name pattern (excludes __citest by design) -- it needs to keep creating REAL decisions when this suite is run intentionally (npm run test:integration / npm run test:db), which FR-1's write-guard would otherwise break."
+    },
+    {
+      "id": "FR-3",
+      "title": "Tests",
+      "description": "New tests/unit/eva/chairman-decision-watcher.test.js additions (29 total tests in the file, up from 16): a dedicated isFixtureVenture describe block (is_demo:true trips regardless of name; parity-test-/test-stub name prefixes trip without is_demo; case-insensitive; a real venture with no flag/pattern does not trip; __citest-prefixed names are deliberately NOT tripped, with a comment explaining why; null/undefined handled defensively). A createOrReusePendingDecision fixture-venture-guard describe block using a table-aware supabase mock (from('ventures') vs from('chairman_decisions')): an is_demo:true venture is skipped with zero chairman_decisions inserts; a fixture-named venture is skipped; a real venture proceeds to insert normally; a venture-lookup that throws fails open and still creates the decision. A new createAdvisoryNotification describe block (previously untested in this file): skips for a fixture venture, creates normally for a real venture, returns null on missing args. All 16 pre-existing tests in this file verified passing unmodified (the fail-open design means an existing mock lacking maybeSingle() throws internally, is caught, and the function proceeds exactly as before the guard was added)."
+    }
+  ],
+  "technical_requirements": [
+    { "requirement": "No new migration -- FR-1 reads the existing ventures.is_demo (boolean, nullable, default false) and ventures.name columns, already present" },
+    { "requirement": "The fixture-venture guard is fail-open by design: a lookup error/exception never blocks a legitimate decision from being created, only ever adds a skip for a confirmed fixture" },
+    { "requirement": "FR-1's write-guard alone cannot stop tests/integration/s17-parity.test.js's OWN raw supabase.from('chairman_decisions').insert() call (a schema-shape assertion test, not a call through the guarded functions) -- that specimen's actual root cause is a killed-CI-run cleanup gap (documented, separate concern), not addressed by this SD" },
+    { "requirement": "__citest_chairman__-prefixed ventures are intentionally excluded from FR-1's name-pattern match -- tests/integration/chairman-decision-api.test.js requires them to still create real decisions when run intentionally; FR-2 is the actual fix for that specimen (stop the suite running unintentionally against production)" }
+  ],
+  "test_scenarios": [
+    { "scenario": "isFixtureVenture returns true for {is_demo:true}, any name" },
+    { "scenario": "isFixtureVenture returns true for a parity-test- or test-stub name prefix with no is_demo flag, case-insensitively" },
+    { "scenario": "isFixtureVenture returns false for a real venture name with is_demo false/absent" },
+    { "scenario": "isFixtureVenture returns false for a __citest-prefixed name (deliberate exclusion)" },
+    { "scenario": "createOrReusePendingDecision returns {skipped:true, reason:'fixture_venture'} and never calls insert for an is_demo:true or fixture-named venture" },
+    { "scenario": "createOrReusePendingDecision proceeds to its normal existing-check/insert flow for a real venture" },
+    { "scenario": "createOrReusePendingDecision fails open (creates the decision) if the venture lookup itself throws" },
+    { "scenario": "createAdvisoryNotification returns null and never calls insert for a fixture venture; creates normally for a real venture" },
+    { "scenario": "All 16 pre-existing chairman-decision-watcher.test.js tests pass unmodified" },
+    { "scenario": "package.json's test:coverage script includes --project unit" }
+  ],
+  "acceptance_criteria": [
+    "Both directions hold: a fixture venture (is_demo=true or parity-test-/test-stub name) reaching a gate stage creates NO chairman_decisions row via the guarded functions; a real venture still does",
+    "The 16 pre-existing tests in chairman-decision-watcher.test.js pass unmodified",
+    "test:coverage is scoped to --project unit, matching test/test:unit/test:cold-recovery's existing convention",
+    "tests/integration/chairman-decision-api.test.js's own real-write-path assertions are unaffected (its __citest_chairman__ venture still creates real decisions when the suite is run intentionally)",
+    "No new database migration is introduced"
+  ],
+  "risks": [
+    {
+      "risk": "The write-guard cannot stop a raw, application-code-bypassing insert (tests/integration/s17-parity.test.js's own schema-shape assertion test inserts directly into chairman_decisions)",
+      "impact": "low",
+      "likelihood": "low",
+      "mitigation": "That specimen's actual root cause (a killed CI run skipping afterAll cleanup, leaving an orphaned real-looking row) is a separate, already-partially-mitigated concern (cleanParityFixtures exists); out of scope for this fix, which targets the shared gate-creation seam per the QF's own framing"
+    },
+    {
+      "risk": "A future fixture-venture factory could still omit both is_demo and a recognized name pattern",
+      "impact": "low",
+      "likelihood": "low",
+      "mitigation": "is_demo=true remains the primary, recommended convention for any new fixture factory; the name-pattern list can be extended additively if a new class is observed"
+    },
+    {
+      "risk": "Implementation may not fully address root cause",
+      "impact": "low",
+      "likelihood": "low",
+      "mitigation": "Verify against the original evidence (feedback capture) and re-queue via /learn if a new leak specimen surfaces"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "lib/eva/stage-execution-worker.js (4 call sites), lib/eva/stage-templates/analysis-steps/stage-17-blueprint-review.js, lib/eva/stage-templates/stage-10.js, lib/eva/eva-orchestrator.js (2 call sites), lib/eva/review-gate-mint.js -- all inherit the guard via createOrReusePendingDecision/createAdvisoryNotification, no call-site changes needed",
+      ".github/workflows/test-coverage.yml -- no workflow file change needed, the fix is in the npm script it invokes"
+    ],
+    "dependencies": [
+      "ventures.is_demo / ventures.name (existing columns, read-only)",
+      "lib/eva/chairman-decision-watcher.js (existing module, additively extended)"
+    ],
+    "data_contracts": ["No schema changes"],
+    "runtime_config": ["None -- no new env vars"],
+    "observability_rollout": [
+      "A skipped fixture-venture decision logs '[Decision] Skipping decision creation for fixture venture ...' / '[Advisory] Skipping notification for fixture venture ...' at the existing logger, no new alerting channel"
+    ]
+  },
+  "implementation_approach": {
+    "phases": [
+      "Phase 1: FR-1 isFixtureVenture + fetchVentureForFixtureCheck + guard wiring in both write functions",
+      "Phase 2: FR-2 package.json test:coverage --project unit scoping (root cause for specimen 2)",
+      "Phase 3: FR-3 unit tests (new isFixtureVenture/guard/createAdvisoryNotification coverage, verify all pre-existing tests still pass)"
+    ],
+    "technical_decisions": [
+      "__citest* deliberately excluded from the name-pattern match, despite being named in the original QF's specimen list -- discovered mid-implementation that tests/integration/chairman-decision-api.test.js legitimately needs its __citest_chairman__ venture to create real decisions (it tests the real write path end-to-end); the actual fix for that specimen is the CI-workflow-invoked script's missing --project unit scope (FR-2), not a write-side name match that would break a legitimate test",
+      "fail-open venture lookup (try/catch) chosen both for production robustness (matches every other detector/lookup in this codebase) AND to preserve 100% backward compatibility with 16 pre-existing unit tests whose mocks do not define maybeSingle()"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run isFixtureVenture({is_demo: true, name: 'Acme Real'}) and isFixtureVenture({name: 'parity-test-cli-1'})", "expected_outcome": "Both return true" },
+    { "step_number": 2, "instruction": "Call createOrReusePendingDecision with a mocked is_demo:true venture and stage 17", "expected_outcome": "Returns {id:null, isNew:false, skipped:true, reason:'fixture_venture'}, insert never called" },
+    { "step_number": 3, "instruction": "Call createOrReusePendingDecision with a mocked real venture and a gate stage", "expected_outcome": "Proceeds to the normal existing-check/insert flow, a decision is created" },
+    { "step_number": 4, "instruction": "Run npx vitest run tests/unit/eva/chairman-decision-watcher.test.js", "expected_outcome": "All 29 tests pass" },
+    { "step_number": 5, "instruction": "Inspect package.json's test:coverage script", "expected_outcome": "Reads 'vitest run --project unit --coverage'" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-FIX-TEST-FIXTURE-VENTURES-001"
+  }
+}

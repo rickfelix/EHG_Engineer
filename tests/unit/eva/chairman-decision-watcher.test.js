@@ -5,7 +5,7 @@
  * Tests: waitForDecision, createOrReusePendingDecision
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createFaithfulRealtimeChannelMock } from '../../helpers/faithful-supabase-realtime-mock.js';
 
 // Mock shared-services
@@ -19,7 +19,7 @@ vi.mock('../../../lib/eva/shared-services.js', () => ({
   },
 }));
 
-import { waitForDecision, createOrReusePendingDecision } from '../../../lib/eva/chairman-decision-watcher.js';
+import { waitForDecision, createOrReusePendingDecision, createAdvisoryNotification, isFixtureVenture } from '../../../lib/eva/chairman-decision-watcher.js';
 
 function createMockLogger() {
   return { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -415,5 +415,175 @@ describe('createOrReusePendingDecision', () => {
     });
     expect(result.id).toBe('approved-id');
     expect(result.isNew).toBe(false);
+  });
+});
+
+// QF-20260703-236: fixture ventures must never mint a chairman decision.
+describe('isFixtureVenture', () => {
+  it('is true for is_demo:true regardless of name', () => {
+    expect(isFixtureVenture({ is_demo: true, name: 'Acme Real Venture' })).toBe(true);
+  });
+
+  it('is true for a parity-test- or test-stub name prefix even without is_demo', () => {
+    expect(isFixtureVenture({ name: 'parity-test-frontend-123' })).toBe(true);
+    expect(isFixtureVenture({ name: 'test-stub-abc' })).toBe(true);
+  });
+
+  it('is case-insensitive on the name prefix', () => {
+    expect(isFixtureVenture({ name: 'Parity-Test-Cli-1' })).toBe(true);
+  });
+
+  it('is false for a real venture name and no is_demo flag', () => {
+    expect(isFixtureVenture({ name: 'Acme Real Venture', is_demo: false })).toBe(false);
+    expect(isFixtureVenture({ name: 'Acme Real Venture' })).toBe(false);
+  });
+
+  it('deliberately does NOT match __citest-prefixed names -- chairman-decision-api.test.js relies on its __citest_chairman__ venture creating REAL decisions', () => {
+    expect(isFixtureVenture({ name: '__citest_chairman__:12345' })).toBe(false);
+  });
+
+  it('handles null/undefined venture defensively', () => {
+    expect(isFixtureVenture(null)).toBe(false);
+    expect(isFixtureVenture(undefined)).toBe(false);
+  });
+});
+
+describe('createOrReusePendingDecision: fixture-venture guard (QF-20260703-236)', () => {
+  const logger = createMockLogger();
+
+  function makeFixtureCheckSb(ventureRow, { onInsert } = {}) {
+    return {
+      from: vi.fn().mockImplementation((table) => {
+        if (table === 'ventures') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: ventureRow, error: null }),
+          };
+        }
+        // chairman_decisions -- should never be reached for a fixture venture
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({ data: null }),
+          insert: vi.fn().mockImplementation((row) => {
+            onInsert?.(row);
+            return { select: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: 'should-not-happen' }, error: null }) }) };
+          }),
+        };
+      }),
+    };
+  }
+
+  it('skips decision creation for an is_demo:true venture, never touching chairman_decisions', async () => {
+    const onInsert = vi.fn();
+    const supabase = makeFixtureCheckSb({ is_demo: true, name: 'parity-test-frontend-1' }, { onInsert });
+
+    const result = await createOrReusePendingDecision({ ventureId: 'v1', stageNumber: 17, supabase, logger });
+
+    expect(result).toEqual({ id: null, isNew: false, skipped: true, reason: 'fixture_venture' });
+    expect(onInsert).not.toHaveBeenCalled();
+  });
+
+  it('skips decision creation for a fixture-named venture even without is_demo', async () => {
+    const onInsert = vi.fn();
+    const supabase = makeFixtureCheckSb({ is_demo: false, name: 'test-stub-xyz' }, { onInsert });
+
+    const result = await createOrReusePendingDecision({ ventureId: 'v1', stageNumber: 3, supabase, logger });
+
+    expect(result.skipped).toBe(true);
+    expect(onInsert).not.toHaveBeenCalled();
+  });
+
+  it('does NOT skip a real venture -- proceeds to the normal existing-check/insert flow', async () => {
+    const onInsert = vi.fn();
+    const supabase = makeFixtureCheckSb({ is_demo: false, name: 'Acme Real Venture' }, { onInsert });
+
+    const result = await createOrReusePendingDecision({ ventureId: 'v1', stageNumber: 10, supabase, logger });
+
+    expect(result.skipped).toBeUndefined();
+    expect(onInsert).toHaveBeenCalled();
+  });
+
+  it('fails open (proceeds normally) if the venture lookup itself throws', async () => {
+    const onInsert = vi.fn();
+    const supabase = {
+      from: vi.fn().mockImplementation((table) => {
+        if (table === 'ventures') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockRejectedValue(new Error('connection reset')),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({ data: null }),
+          insert: vi.fn().mockImplementation((row) => {
+            onInsert(row);
+            return { select: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: 'new-id' }, error: null }) }) };
+          }),
+        };
+      }),
+    };
+
+    const result = await createOrReusePendingDecision({ ventureId: 'v1', stageNumber: 10, supabase, logger });
+
+    expect(result.id).toBe('new-id');
+    expect(onInsert).toHaveBeenCalled();
+  });
+});
+
+describe('createAdvisoryNotification', () => {
+  const logger = createMockLogger();
+
+  it('skips notification creation for a fixture venture (is_demo:true)', async () => {
+    const onInsert = vi.fn();
+    const supabase = {
+      from: vi.fn().mockImplementation((table) => {
+        if (table === 'ventures') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { is_demo: true, name: 'parity-test-cli-1' }, error: null }),
+          };
+        }
+        return { insert: vi.fn().mockImplementation((row) => { onInsert(row); return { select: () => ({ single: () => Promise.resolve({ data: null }) }) }; }) };
+      }),
+    };
+
+    const result = await createAdvisoryNotification({ ventureId: 'v1', stageNumber: 23, supabase, logger });
+
+    expect(result).toBeNull();
+    expect(onInsert).not.toHaveBeenCalled();
+  });
+
+  it('creates a notification for a real venture', async () => {
+    const supabase = {
+      from: vi.fn().mockImplementation((table) => {
+        if (table === 'ventures') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { is_demo: false, name: 'Acme Real Venture' }, error: null }),
+          };
+        }
+        return {
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: 'advisory-id' }, error: null }) }),
+          }),
+        };
+      }),
+    };
+
+    const result = await createAdvisoryNotification({ ventureId: 'v1', stageNumber: 23, supabase, logger });
+
+    expect(result).toEqual({ id: 'advisory-id' });
+  });
+
+  it('returns null (does not throw) on missing required args', async () => {
+    const result = await createAdvisoryNotification({ stageNumber: 23, supabase: {}, logger });
+    expect(result).toBeNull();
   });
 });
