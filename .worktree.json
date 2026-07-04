@@ -1,7 +1,8 @@
 {
-  "sdKey": "SD-LEO-FIX-TEST-FIXTURE-VENTURES-001",
-  "expectedBranch": "feat/SD-LEO-FIX-TEST-FIXTURE-VENTURES-001",
-  "createdAt": "2026-07-04T03:39:17.826Z",
-  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
+  "sdKey": "QF-20260704-491",
+  "expectedBranch": "qf/QF-20260704-491",
+  "createdAt": "2026-07-04T07:59:52.778Z",
+  "hostname": "Legion-Laptop",
+  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer",
   "baseRef": "origin/main"
 }
