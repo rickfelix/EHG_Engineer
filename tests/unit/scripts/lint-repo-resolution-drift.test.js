@@ -1,5 +1,5 @@
 // SD-LEO-INFRA-CANONICAL-REPO-APP-001 FR-4 (TS-5, TS-6)
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { writeFileSync, rmSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
