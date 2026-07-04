@@ -62,6 +62,12 @@ function startMockServer(state) {
       }
 
       if (req.method === 'POST') {
+        if (state.forcePostFailureCount > 0) {
+          state.forcePostFailureCount -= 1;
+          state.postAttempts = (state.postAttempts || 0) + 1;
+          res.writeHead(500).end();
+          return;
+        }
         const prefer = req.headers['prefer'] || '';
         const parsed = JSON.parse(body || '{}');
         if (prefer.includes('resolution=ignore-duplicates')) {
@@ -263,6 +269,29 @@ test('TS-4b: first-tick still self-heals a genuinely missing row', { timeout: 10
     const created = await waitUntil(() => state.exists && state.status === 'active');
     assert.ok(created, 'the missing row must be created with status=active within one tick');
     assert.equal(tick.exitCode, null);
+  } finally {
+    await stopAll(tick, fakeParent);
+    server.close();
+  }
+});
+
+test('TS-5: a hard-failed first-tick POST does not self-exit, and retries until it succeeds', { timeout: 10000 }, async () => {
+  // The genuine failure mode this guards: a naive implementation could fall through to the
+  // steady-state PATCH after a failed POST, 0-row against the still-missing row, and misread
+  // that as "released" -- self-exiting before the row was ever created. Force 2 POST failures,
+  // then let it succeed, and prove the tick stayed alive and eventually self-healed.
+  const state = { exists: false, status: null, pid: 0, lastPatchAt: 0, forcePostFailureCount: 2, postAttempts: 0 };
+  const server = await startMockServer(state);
+  const fakeParent = spawnFakeParent();
+  const tick = spawnTick({ port: server.address().port, ccParentPid: fakeParent.pid });
+  try {
+    const sawAtLeastOneFailure = await waitUntil(() => state.postAttempts >= 1);
+    assert.ok(sawAtLeastOneFailure, 'expected the mock to observe at least one forced POST failure');
+    assert.equal(tick.exitCode, null, 'tick must not exit while the first-tick POST is still failing');
+
+    const eventuallyHealed = await waitUntil(() => state.exists && state.status === 'active', { timeoutMs: 8000 });
+    assert.ok(eventuallyHealed, 'the tick must retry the first-tick POST on the next tick and eventually self-heal');
+    assert.equal(tick.exitCode, null, 'tick must still be running after healing, not have exited');
   } finally {
     await stopAll(tick, fakeParent);
     server.close();
