@@ -223,9 +223,13 @@ async function loadData() {
   try {
     const ids = sessions.map(s => s.session_id).filter(Boolean);
     if (ids.length > 0) {
+      // QF-20260704-737: v_active_sessions never exposed current_phase/handoff_fail_count (and its
+      // has_uncommitted_changes wasn't in sessRes's own select) — Progress/Phase/Fails/WIP rendered
+      // '?'/'-' for every worker despite the data existing on claude_sessions the whole time. Pull them
+      // through this SAME already-working telemetry-merge seam instead of a new query.
       const { data: teleRows } = await supabase
         .from('claude_sessions')
-        .select('session_id,current_tool,current_tool_expected_end_at,expected_silence_until,process_alive_at,last_activity_kind,commits_since_claim,files_modified_since_claim')
+        .select('session_id,current_tool,current_tool_expected_end_at,expected_silence_until,process_alive_at,last_activity_kind,commits_since_claim,files_modified_since_claim,current_phase,handoff_fail_count,has_uncommitted_changes')
         .in('session_id', ids);
       for (const row of teleRows || []) telemetryById.set(row.session_id, row);
     }
@@ -242,6 +246,9 @@ async function loadData() {
       last_activity_kind: t.last_activity_kind,
       commits_since_claim: t.commits_since_claim,
       files_modified_since_claim: t.files_modified_since_claim,
+      current_phase: t.current_phase,
+      handoff_fail_count: t.handoff_fail_count,
+      has_uncommitted_changes: t.has_uncommitted_changes,
     });
   }
   const hasTickAlive = (s) => {
@@ -293,7 +300,7 @@ async function loadData() {
   if (missingKeys.length > 0) {
     const { data: extraSds } = await supabase
       .from('strategic_directives_v2')
-      .select('sd_key, title, status, progress_percentage, completion_date')
+      .select('sd_key, title, status, progress_percentage, completion_date, current_phase')
       .in('sd_key', missingKeys);
     (extraSds || []).forEach(sd => { sdStatusMap[sd.sd_key] = sd; });
   }
@@ -428,7 +435,9 @@ function printWorkers(d) {
     // SD-LEO-INFRA-LOOP-STATE-SIGNAL-001: LoopState column (14 chars) added between WIP and Activity → 14-char wider separator.
     console.log('  ' + '─'.repeat(hasCollision ? (mcOk ? 150 : 134) : (mcOk ? 138 : 122)));
     for (const s of d.activeSessions) {
-      const child = d.children.find(c => c.sd_key === s.sd_key);
+      // QF-20260704-737: d.children is scoped to ONE orchestrator's children — every other worker's
+      // Progress always read as 0. d.sdStatusMap already covers any sd_key a worker is claiming.
+      const child = d.sdStatusMap[s.sd_key];
       const pct = child ? child.progress_percentage : 0;
       const phase = s.current_phase || (child ? child.current_phase : '?');
       const shortSd = s.sd_key.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
@@ -1816,7 +1825,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup };
+module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.
