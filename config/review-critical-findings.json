@@ -21,8 +21,9 @@
       "id": "CRIT-002",
       "name": "sql_injection",
       "description": "String concatenation in SQL queries without parameterization",
+      "_note": "SD-LEO-INFRA-FIX-WINDOWS-SESSION-001: added a negative lookbehind (?<![?&]) to pattern 1 so it no longer flags a PostgREST REST query-string parameter literally named select/update/etc. (e.g. `?session_id=eq.${id}&select=pid` -- a pervasive, safe convention across this Supabase-REST-heavy codebase, verified pre-existing in scripts/hooks/capture-session-id.cjs:320 and 10+ other sites) as SQL injection. Verified the refinement still flags the pattern's actual intended shape (an interpolation followed later on the same line by a hardcoded SQL keyword, e.g. `${clause} SELECT * FROM users`) via scripts/temp/verify-crit002-fix.mjs (6/6 cases, run then deleted).",
       "patterns": [
-        "\\$\\{.*\\}.*\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)\\b",
+        "\\$\\{.*\\}.*(?<![?&])\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)\\b",
         "\\+\\s*['\"]\\s*\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)\\b",
         "\\.query\\s*\\(\\s*`[^`]*\\$\\{"
       ],
