@@ -13,7 +13,7 @@
  *
  * Modes:
  *   --diff (default in CI): lint ONLY files changed vs the merge base with origin/main — the
- *       confirmed pre-existing backlog (17 files, scripts/lint/diagnostic-gauge-citation-
+ *       confirmed pre-existing backlog (18 files, scripts/lint/diagnostic-gauge-citation-
  *       allowlist.json) never blocks an unrelated PR.
  *   --all: advisory full sweep of the runtime dirs (used to confirm the allowlist suppresses
  *       the known backlog; not run in CI by default).

@@ -3,7 +3,7 @@
 # pass-rate) as a gating threshold. SD-LEO-INFRA-REWARD-SPINE-ONE-001-C. Modeled directly on
 # schema-reference-lint.yml.
 #
-# Diff-only: compares ONLY files changed vs the PR base. The pre-existing backlog (17 files,
+# Diff-only: compares ONLY files changed vs the PR base. The pre-existing backlog (18 files,
 # scripts/lint/diagnostic-gauge-citation-allowlist.json) never blocks an unrelated PR.
 #
 # ROLLOUT — ADVISORY FIRST: continue-on-error is true for a 7-day soak, mirroring
