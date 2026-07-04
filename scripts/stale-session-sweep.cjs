@@ -41,6 +41,12 @@ const { assertSdDispatchable, isFullUuid } = require('../lib/coordinator/dispatc
 const { CLAIM_HOLDING_STATUSES, computeClaimedSdKeys } = require('../lib/claim/holding-statuses.cjs');
 const { SILENCE_HARD_CAP_MS } = require('../lib/fleet/silence-cap.cjs'); // FR-4: shared writer<=reader cap
 const { detectDormantWorkers } = require('../lib/fleet/dormancy-watchdog.cjs'); // QF-20260703-076
+// SD-FDBK-ENH-CONFIRMED-LIVE-TODAY-001: pure, exported so the gate can be unit-tested without a
+// live claude_sessions table. Mirrors MASKED_STALL_DETECT_ON (coordinator-capacity-forecast.mjs) --
+// DORMANT BY DEFAULT until process_alive_at is trustworthy again (see call site below for full RCA).
+function isDormancyWatchdogEnabled(env = process.env) {
+  return env.LEO_DORMANCY_WATCHDOG_ENABLED === 'on';
+}
 // SD-LEO-INFRA-STALE-SWEEP-PID-LIVENESS-GUARD-001: PID-liveness guard for the conflict-eviction path.
 const { shouldHoldClaim } = require('../lib/fleet/claim-release-guard.cjs');
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3b — top-level require so wire-check
@@ -676,28 +682,42 @@ async function main() {
 
   // QF-20260703-076: session-independent dormancy watchdog -- prior backstops run INSIDE
   // a turn and can't observe a worker whose armed wakeup never fired. Detector-only.
-  try {
-    const { data: allTracked } = await supabase
-      .from('claude_sessions')
-      .select('session_id, loop_state, expected_silence_until, process_alive_at')
-      .eq('status', 'active');
-    const dormant = detectDormantWorkers(allTracked || [], now.getTime());
-    const DORMANCY_ALERT_THRESHOLD = 2;
-    if (dormant.length >= DORMANCY_ALERT_THRESHOLD) {
-      const { emitFeedback } = await import('../lib/governance/emit-feedback.js');
-      const hourBucket = now.toISOString().slice(0, 13);
-      await emitFeedback({
-        supabase,
-        title: `Fleet dormancy: ${dormant.length} worker(s) armed a wakeup that never fired`,
-        description: `Dormant session_ids: ${dormant.map((d) => d.session_id).join(', ')}. Each has an elapsed expected_silence_until and a stale/absent process_alive_at -- the native ScheduleWakeup did not re-invoke the loop. See QF-20260703-076 RCA.`,
-        category: 'fleet_dormancy',
-        severity: 'high',
-        dedup_key: `dormancy:${hourBucket}`,
-      });
-    }
-  } catch (watchdogErr) {
-    if (process.env.LEO_TELEMETRY_DEBUG === '1') {
-      console.error('[sweep] dormancy watchdog swallowed: ' + watchdogErr.message);
+  //
+  // SD-FDBK-ENH-CONFIRMED-LIVE-TODAY-001: DORMANT BY DEFAULT, mirroring MASKED_STALL_DETECT_ON
+  // (scripts/coordinator-capacity-forecast.mjs, SD-FDBK-INFRA-STALL-AFTER-COMPLETION-001). RCA +
+  // RISK evidence (signal 12ce5796, sub_agent_execution_results 209327fa-92aa-481c-9fa7-9edb655b20dd)
+  // confirmed process_alive_at is the SOLE liveness input to detectDormantWorkers(), and on Windows
+  // process_alive_at freezes for hours when session-tick.cjs's steady-state PATCH (status=eq.active)
+  // returns 0 rows and self-exits (QF-20260509-187) -- a live, actively-working session then
+  // false-flags as dormant (confirmed live on session 4af85f4b, 2026-07-04). No consumer takes a
+  // destructive action from this signal alone, but it was generating false-positive P1
+  // fleet_dormancy feedback noise. Gated OFF until the session-tick root-cause fix (deferred to a
+  // follow-up SD -- needs new spawn-and-observe Windows test infra) restores process_alive_at
+  // trustworthiness. Flip LEO_DORMANCY_WATCHDOG_ENABLED=on to re-enable.
+  if (isDormancyWatchdogEnabled()) {
+    try {
+      const { data: allTracked } = await supabase
+        .from('claude_sessions')
+        .select('session_id, loop_state, expected_silence_until, process_alive_at')
+        .eq('status', 'active');
+      const dormant = detectDormantWorkers(allTracked || [], now.getTime());
+      const DORMANCY_ALERT_THRESHOLD = 2;
+      if (dormant.length >= DORMANCY_ALERT_THRESHOLD) {
+        const { emitFeedback } = await import('../lib/governance/emit-feedback.js');
+        const hourBucket = now.toISOString().slice(0, 13);
+        await emitFeedback({
+          supabase,
+          title: `Fleet dormancy: ${dormant.length} worker(s) armed a wakeup that never fired`,
+          description: `Dormant session_ids: ${dormant.map((d) => d.session_id).join(', ')}. Each has an elapsed expected_silence_until and a stale/absent process_alive_at -- the native ScheduleWakeup did not re-invoke the loop. See QF-20260703-076 RCA.`,
+          category: 'fleet_dormancy',
+          severity: 'high',
+          dedup_key: `dormancy:${hourBucket}`,
+        });
+      }
+    } catch (watchdogErr) {
+      if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+        console.error('[sweep] dormancy watchdog swallowed: ' + watchdogErr.message);
+      }
     }
   }
 
@@ -2589,6 +2609,7 @@ module.exports.anyClaudeProcessRunning = anyClaudeProcessRunning;
 // touching the live ESM module). Seeding the cache is exactly what the first real call
 // does — no production behavior change.
 module.exports.isSweepResetAllowed = isSweepResetAllowed;
+module.exports.isDormancyWatchdogEnabled = isDormancyWatchdogEnabled; // SD-FDBK-ENH-CONFIRMED-LIVE-TODAY-001
 module.exports.__setExecContextGuardForTest = (mock) => { _execContextGuardCache = mock; };
 
 // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2 (Finding 3): export the guarded

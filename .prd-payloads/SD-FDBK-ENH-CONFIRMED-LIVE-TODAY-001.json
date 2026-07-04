@@ -1,0 +1,91 @@
+{
+  "executive_summary": "RCA (this SD's LEAD phase) definitively root-caused a Windows-specific tick-daemon bug: scripts/session-tick.cjs self-exits when its steady-state PATCH (filtered by status=eq.active) returns 0 affected rows (introduced by QF-20260509-187), freezing claude_sessions.process_alive_at for hours on a live, actively-working session (empirically reproduced on session 4af85f4b, 2026-07-04, confirmed disproving the older 2026-04-23 ESRCH hypothesis via a live process-liveness experiment). lib/fleet/dormancy-watchdog.cjs's detectDormantWorkers() is keyed solely on process_alive_at, so scripts/stale-session-sweep.cjs was emitting false-positive P1 fleet_dormancy feedback rows for healthy Windows workers. A RISK sub-agent (evidence 209327fa-92aa-481c-9fa7-9edb655b20dd) confirmed no consumer takes a destructive action from process_alive_at alone, found an exact in-repo precedent for gating a fleet-broken liveness signal (LEO_MASKED_STALL_DETECT in scripts/coordinator-capacity-forecast.mjs), rejected a heartbeat_at cross-check as unsound (swaps one blind spot for another -- session cb2bfe72 showed the inverse failure mode), and recommended sequencing: ship ONLY a safe, low-risk interim mitigation now (gate the emit), defer the deeper session-tick.cjs fix to a follow-up SD (needs new spawn-and-observe Windows test infrastructure that doesn't exist yet). This PRD covers exactly that interim mitigation: an env-flag gate (LEO_DORMANCY_WATCHDOG_ENABLED, default off) wrapping the entire detection+emit block, mirroring MASKED_STALL_DETECT_ON's style, plus test coverage for the gate itself. A subsequent Explore + VALIDATION sub-agent pass (PASS, confidence 88/90) confirmed the fix's blast radius is complete (single consumer, single emitter, no duplicate SD) and flagged one carry-forward risk: the precedent flag has never been flipped on, so a tracked follow-up SD should exist to prevent the same rot.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Env-flag gate on the fleet_dormancy detection+emit block",
+      "description": "scripts/stale-session-sweep.cjs: add a pure, exported function isDormancyWatchdogEnabled(env = process.env) returning env.LEO_DORMANCY_WATCHDOG_ENABLED === 'on', and wrap the existing dormancy-detection-and-emit block (the claude_sessions query, detectDormantWorkers() call, and the emitFeedback({category:'fleet_dormancy'}) call) in if (isDormancyWatchdogEnabled()) { ... }. When the flag is unset (the default), neither the query nor the emit runs at all -- mirrors MASKED_STALL_DETECT_ON in scripts/coordinator-capacity-forecast.mjs, which gates the same class of fleet-broken-signal detector the same way.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "isDormancyWatchdogEnabled() defaults to false when LEO_DORMANCY_WATCHDOG_ENABLED is unset.",
+        "isDormancyWatchdogEnabled() returns true only for the exact string 'on' (not 'true', '1', 'ON', or '').",
+        "The claude_sessions query and emitFeedback call are both unreachable when the gate is disabled (verified by code inspection, not just the predicate's own unit test)."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Function-based gate (not const-at-load) for testability without a live claude_sessions table",
+      "description": "Unlike MASKED_STALL_DETECT_ON (a top-level const evaluated once at module load), isDormancyWatchdogEnabled accepts an injectable env parameter defaulting to process.env. This lets tests exercise all branches of the gate predicate without mutating global process.env or touching the shared claude_sessions table, per risk-agent guidance to verify gate logic in isolation.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "tests/unit/stale-session-sweep-dormancy-gate.test.js covers: unset->false, 'true'/'1'/'ON'/''->false, exact 'on'->true, and process.env fallback when no env object is passed.",
+        "Pre-existing tests/unit/fleet/dormancy-watchdog.test.js (12 cases covering the pure isDormant/detectDormantWorkers predicate, including the heartbeat-masking trap) is unchanged and still passes -- this SD does not touch the detector module itself, only its call site."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Document the accepted fleet-wide advisory-loss tradeoff",
+      "description": "The gate gates the detector fleet-wide (all platforms), not Windows-specifically. VALIDATION sub-agent confirmed this is the correct call (adding a platform check would be unsound -- adversarial evidence b71d405b showed the detached session-tick 'is not running for MOST workers', so process_alive_at unreliability is not provably Windows-only) but flagged it as a real, if acceptable, regression: a genuinely-dormant worker on a platform where process_alive_at IS trustworthy would no longer get this advisory-only detector's emit while the flag is off. Record this tradeoff explicitly (this PRD + code comments) rather than silently accepting it.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "Code comment at the gate definition (scripts/stale-session-sweep.cjs) states the tradeoff and why a platform check was rejected.",
+        "This PRD's risks section records the same tradeoff for future readers."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Detector-only, no destructive downstream change", "description": "This SD touches only the emit-gating call site. lib/fleet/dormancy-watchdog.cjs's pure isDormant/detectDormantWorkers functions are unchanged and remain exported + unit-tested for future re-activation. No claim-release, no session eviction, no automated recovery logic is touched." },
+    { "id": "TR-2", "title": "Explicit scope boundary: deeper session-tick.cjs fix is OUT of scope", "description": "The steady-state PATCH filter (status=eq.active, ~line 202), the 0-row cleanupAndExit(0) block (~lines 217-225), and the Windows-specific rediscoverParentPid() WMI CommandLine-vs-environment-block bug (~line 114) are NOT modified by this SD. Explore sub-agent confirmed no duplicate/open SD exists for that work; it is deferred to a follow-up SD (tracking note: also consider re-enabling LEO_MASKED_STALL_DETECT as part of that follow-up's acceptance criteria, since it targets the same underlying signal)." },
+    { "id": "TR-3", "title": "Reversible via a single env var", "description": "Setting LEO_DORMANCY_WATCHDOG_ENABLED=on restores the pre-fix emit behavior exactly, with no code change required, once process_alive_at is proven trustworthy again." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Gate disabled (default), 2+ dormant sessions would otherwise qualify", "type": "unit", "expected": "No claude_sessions query executes, no fleet_dormancy feedback row is emitted" },
+    { "id": "TS-2", "scenario": "Gate enabled via LEO_DORMANCY_WATCHDOG_ENABLED=on", "type": "unit", "expected": "isDormancyWatchdogEnabled() returns true; prior emit behavior is restored" },
+    { "id": "TS-3", "scenario": "Pure detector regression (dormancy-watchdog.cjs unchanged)", "type": "regression", "expected": "All 12 pre-existing isDormant/detectDormantWorkers tests still pass, including the heartbeat-masking trap case" }
+  ],
+  "acceptance_criteria": [
+    "Fleet-wide, the fleet_dormancy false-positive emit is suppressed by default (LEO_DORMANCY_WATCHDOG_ENABLED unset).",
+    "The gate is fully reversible via a single env var with no code change.",
+    "Zero regression in the pure detector's existing 12-test suite.",
+    "The deeper session-tick.cjs root-cause fix is explicitly out of scope and not silently dropped -- it is documented as deferred, pending a follow-up SD."
+  ],
+  "risks": [
+    { "risk": "A genuinely-dormant worker on a platform where process_alive_at is trustworthy no longer gets this detector's advisory emit while the flag defaults off.", "mitigation": "Confirmed acceptable by VALIDATION sub-agent: detector-only (no automated recovery lost), and adversarial evidence (b71d405b) shows process_alive_at unreliability is not provably platform-specific, so a platform-conditional gate would be unsound. Documented explicitly rather than silently accepted.", "severity": "low" },
+    { "risk": "The new flag rots permanently off, the same way the precedent flag (LEO_MASKED_STALL_DETECT) has never been flipped on since its own SD shipped.", "mitigation": "Recorded as an explicit carry-forward finding for the follow-up SD (session-tick.cjs root-cause fix); that follow-up's acceptance criteria should include re-enabling both flags once process_alive_at is restored to trustworthy.", "severity": "medium" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["scripts/stale-session-sweep.cjs (the only production consumer of lib/fleet/dormancy-watchdog.cjs, confirmed by Explore sub-agent repo-wide grep)"],
+    "dependencies": ["lib/fleet/dormancy-watchdog.cjs (detectDormantWorkers, unchanged)", "lib/governance/emit-feedback.js (emitFeedback, unchanged)", "claude_sessions.process_alive_at (the underlying unreliable signal, unchanged)"],
+    "data_contracts": ["feedback.category='fleet_dormancy' rows are no longer written while the gate is off -- no schema change"],
+    "runtime_config": ["LEO_DORMANCY_WATCHDOG_ENABLED (new, default unset/off)"],
+    "observability_rollout": ["tests/unit/stale-session-sweep-dormancy-gate.test.js", "tests/unit/fleet/dormancy-watchdog.test.js (unchanged, still green)"]
+  },
+  "system_architecture": {
+    "summary": "Gate an existing detector's emit path behind an env flag at its single call site, mirroring an established in-repo precedent for the same class of currently-unreliable liveness signal.",
+    "components": [
+      { "name": "scripts/stale-session-sweep.cjs", "change": "MODIFIED -- new isDormancyWatchdogEnabled() pure function (exported); existing dormancy detection+emit block wrapped in the gate" },
+      { "name": "tests/unit/stale-session-sweep-dormancy-gate.test.js", "change": "NEW -- gate predicate unit tests" },
+      { "name": "lib/fleet/dormancy-watchdog.cjs", "change": "UNCHANGED -- pure detector remains exported and tested for future re-activation" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "RCA + RISK sub-agents established the root cause and the safe interim-mitigation sequencing during LEAD phase. Read the existing MASKED_STALL_DETECT_ON precedent to match style/semantics exactly, then read the actual fleet_dormancy-emitting code, implemented the gate at its one call site, added targeted tests, and had Explore + VALIDATION sub-agents independently confirm completeness (no other consumer/emitter, no duplicate SD, precedent fidelity) before proceeding to PLAN.",
+    "steps": [
+      "Read scripts/coordinator-capacity-forecast.mjs to confirm the exact MASKED_STALL_DETECT_ON naming/style/usage pattern.",
+      "Read scripts/stale-session-sweep.cjs's dormancy-detection block and lib/fleet/dormancy-watchdog.cjs's pure predicate to scope the minimal change.",
+      "Implement isDormancyWatchdogEnabled() and wrap the emit block; export the function alongside the file's other testable helpers.",
+      "Add tests/unit/stale-session-sweep-dormancy-gate.test.js; run it plus the pre-existing detector tests together (16/16 pass).",
+      "Populate SD success_metrics/success_criteria/smoke_test_steps with scope-accurate content (not generic boilerplate).",
+      "Invoke Explore + VALIDATION sub-agents in parallel for LEAD-TO-PLAN evidence; both returned PASS with only advisory (non-blocking) findings.",
+      "Run LEAD-TO-PLAN handoff (92%)."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "npx vitest run tests/unit/stale-session-sweep-dormancy-gate.test.js tests/unit/fleet/dormancy-watchdog.test.js", "expected_outcome": "16/16 tests pass" },
+    { "step_number": 2, "instruction": "node -e \"const m = require('./scripts/stale-session-sweep.cjs'); console.log(typeof m.isDormancyWatchdogEnabled, m.isDormancyWatchdogEnabled({}))\"", "expected_outcome": "Prints 'function false' -- module loads cleanly, gate defaults disabled" },
+    { "step_number": 3, "instruction": "grep -n \"if (isDormancyWatchdogEnabled())\" scripts/stale-session-sweep.cjs", "expected_outcome": "Match found wrapping the fleet_dormancy query + emitFeedback block" }
+  ],
+  "metadata": {
+    "sd_key": "SD-FDBK-ENH-CONFIRMED-LIVE-TODAY-001"
+  }
+}
