@@ -13,10 +13,10 @@
  *
  * Modes:
  *   --diff (default in CI): lint ONLY files changed vs the merge base with origin/main — the
- *       one confirmed pre-existing violation (retrospective-quality.js) never blocks an
- *       unrelated PR.
+ *       confirmed pre-existing backlog (17 files, scripts/lint/diagnostic-gauge-citation-
+ *       allowlist.json) never blocks an unrelated PR.
  *   --all: advisory full sweep of the runtime dirs (used to confirm the allowlist suppresses
- *       the known violation; not run in CI by default).
+ *       the known backlog; not run in CI by default).
  *
  * Escapes (each documented in the failure output):
  *   - scripts/lint/diagnostic-gauge-citation-allowlist.json — files with a confirmed,

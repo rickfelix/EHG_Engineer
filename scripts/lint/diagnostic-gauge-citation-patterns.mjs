@@ -16,6 +16,6 @@ export const QUALITY_SCORE_RE = /[\w.?]*quality_score\s*(?:>=|<=|>|<|===|==)\s*\
 // that have nothing to do with THE RULE's named "adherence-probe pass-rate" / "raw LEO gate
 // pass-rate" signals. Requiring "adherence" or "gate" in the same identifier chain keeps this
 // targeted, not a noisy blanket match that would make the lint ignorable.
-export const ADHERENCE_OR_GATE_PASS_RATE_RE = /(?:adherence|gate)[\w.]*(?:pass_rate|passRate)\s*(?:>=|<=|>|<|===|==)\s*\d/i;
+export const ADHERENCE_OR_GATE_PASS_RATE_RE = /(?:adherence|gate)[\w.?]*(?:pass_rate|passRate)\s*(?:>=|<=|>|<|===|==)\s*\d/i;
 
 export const CITATION_RE = new RegExp(`(?:${QUALITY_SCORE_RE.source})|(?:${ADHERENCE_OR_GATE_PASS_RATE_RE.source})`);

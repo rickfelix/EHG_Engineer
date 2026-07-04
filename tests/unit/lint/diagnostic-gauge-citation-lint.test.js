@@ -33,6 +33,11 @@ describe('diagnostic-gauge-citation-lint: ADHERENCE_OR_GATE_PASS_RATE_RE', () =>
     expect(ADHERENCE_OR_GATE_PASS_RATE_RE.test('if (adherenceProbe.passRate >= 90) {')).toBe(true);
   });
 
+  it('matches optional-chained access (adversarial review finding: was asymmetric with QUALITY_SCORE_RE)', () => {
+    expect(ADHERENCE_OR_GATE_PASS_RATE_RE.test('if (adherenceProbe?.passRate >= 90) {')).toBe(true);
+    expect(ADHERENCE_OR_GATE_PASS_RATE_RE.test('gateAlert?.pass_rate < 50')).toBe(true);
+  });
+
   it('does NOT match a bare passRate/pass_rate with no adherence/gate qualifier (the false-positive class found in --all research)', () => {
     expect(ADHERENCE_OR_GATE_PASS_RATE_RE.test('const qualityBadge = passRate === 100 ? "y" : "n";')).toBe(false);
     expect(ADHERENCE_OR_GATE_PASS_RATE_RE.test('if (testEvidence?.pass_rate >= 80) {')).toBe(false);
