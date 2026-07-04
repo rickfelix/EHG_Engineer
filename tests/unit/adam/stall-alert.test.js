@@ -59,6 +59,37 @@ function makeStallDigestSupabase() {
   };
 }
 
+/** Minimal supabase stub for the QF-20260704-319 correlation-terminal check
+ *  (isCorrelationTerminal): session_coordination reply lookup + chairman_decisions
+ *  ratified-decision lookup, matching only the query shapes stall-alert.js issues. */
+function sbWithCorrelationState({ hasReply = false, hasRatifiedDecision = false } = {}) {
+  return {
+    from(table) {
+      if (table === 'session_coordination') {
+        return {
+          select: () => ({
+            filter: () => ({
+              limit: async () => ({ data: hasReply ? [{ id: 'reply-1' }] : [], error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === 'chairman_decisions') {
+        return {
+          select: () => ({
+            filter: () => ({
+              neq: () => ({
+                limit: async () => ({ data: hasRatifiedDecision ? [{ id: 'dec-x' }] : [], error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) };
+    },
+  };
+}
+
 /** Minimal supabase stub for strategic_directives_v2 status lookups (isSdTerminal). */
 function sbWithSdStatus(statusBySdKey) {
   return {
@@ -196,6 +227,38 @@ describe('QF-20260703-229: false-stall flood fix', () => {
     expect(call.context.node_ids).toEqual(['a', 'b', 'c']);
     expect(alerted).toHaveLength(3);
     expect(alerted.every((a) => a.escalated === true)).toBe(true);
+  });
+});
+
+describe('QF-20260704-319: advisory_thread correlation-terminal self-heal', () => {
+  const parents = [{
+    id: 'commission-1', title: 'Standing strategist commission', updated_at: 'fixed',
+    source_kind: 'advisory_thread', source_ref: 'adam-solomon-standing-strategist-001', inFlightNextStep: false,
+  }];
+  const prevSnapshot = { 'commission-1': { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 } };
+
+  it('a correlation with a delivered reply self-heals — never files even at high tick-count', async () => {
+    const stubSb = sbWithCorrelationState({ hasReply: true });
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+    expect(setStatus).toHaveBeenCalledWith(stubSb, 'commission-1', 'done');
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+    expect(alerted).toEqual([]);
+  });
+
+  it('a correlation with a ratified (non-pending) chairman decision also self-heals', async () => {
+    const stubSb = sbWithCorrelationState({ hasReply: false, hasRatifiedDecision: true });
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+    expect(setStatus).toHaveBeenCalledWith(stubSb, 'commission-1', 'done');
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+    expect(alerted).toEqual([]);
+  });
+
+  it('a genuinely open correlation (no reply, no decision) still escalates', async () => {
+    const stubSb = sbWithCorrelationState({ hasReply: false, hasRatifiedDecision: false });
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+    expect(setStatus).not.toHaveBeenCalled();
+    expect(recordPendingDecision).toHaveBeenCalledTimes(1);
+    expect(alerted).toEqual([{ id: 'commission-1', title: 'Standing strategist commission', escalated: true }]);
   });
 });
 
