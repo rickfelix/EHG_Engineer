@@ -1605,11 +1605,12 @@ async function printUndeliveredOutbound() {
 // anywhere in this codebase, and R4's own LEAD-phase risk analysis already concluded the active
 // Todoist PUSH is the primary detection guarantee -- a second passive/pull surface is
 // confirmatory, not load-bearing. See PRD FR-4 for the full rationale.
-async function printChairmanEmailChannelHealth() {
+async function printChairmanEmailChannelHealth(d, deps = {}) {
+  const sb = (deps && deps.supabase) || supabase; // injectable for tests; defaults to module client
   console.log('CHAIRMAN-EMAIL CHANNEL HEALTH');
   console.log('─'.repeat(72));
 
-  const { data: row, error } = await supabase
+  const { data: row, error } = await sb
     .from('chairman_email_channel_health') // schema-lint-disable-line — new table (this SD's migration), chairman-apply-gated, not yet in the live snapshot
     .select('*')
     .eq('id', 'singleton')
@@ -1911,7 +1912,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers };
+module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.
