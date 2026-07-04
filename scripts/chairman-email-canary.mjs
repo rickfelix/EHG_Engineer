@@ -47,7 +47,7 @@ export async function runCanary({ supabase = getSupabase(), send = sendEmail, no
   const verified = Boolean(result.success && !result.suppressed && result.providerMessageId);
   if (verified) {
     const { error } = await supabase
-      .from('chairman_email_channel_health')
+      .from('chairman_email_channel_health') // schema-lint-disable-line — new table (this SD's migration), chairman-apply-gated, not yet in the live snapshot
       .upsert({ id: 'singleton', last_canary_verified_at: now.toISOString(), updated_at: now.toISOString() }, { onConflict: 'id' });
     if (error) console.warn(`[chairman-email-canary] last_canary_verified_at stamp failed (non-fatal): ${error.message}`);
   }
@@ -61,7 +61,7 @@ export async function runCanary({ supabase = getSupabase(), send = sendEmail, no
  * @returns {Promise<{stale:boolean, alarmResult:?object}>}
  */
 export async function checkFreshnessAndAlert({ supabase = getSupabase(), notifyChairman, now = new Date() } = {}) {
-  const { data: row } = await supabase.from('chairman_email_channel_health').select('*').eq('id', 'singleton').maybeSingle();
+  const { data: row } = await supabase.from('chairman_email_channel_health').select('*').eq('id', 'singleton').maybeSingle(); // schema-lint-disable-line — new table (this SD's migration), chairman-apply-gated, not yet in the live snapshot
   const { stale } = checkCanaryFreshness(row || {}, now);
   if (!stale) return { stale: false, alarmResult: null };
 

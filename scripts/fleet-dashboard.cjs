@@ -1598,12 +1598,19 @@ async function printUndeliveredOutbound() {
 // SD-LEO-INFRA-CHAIRMAN-EMAIL-CHANNEL-001: dead-channel banner + chairman-visible terminal
 // marker for the chairman-escalation email channel. Pull-based (mirrors printUndeliveredOutbound()'s
 // shape) -- reads the current row live on every render, no push/cache. Read-only + fail-open.
+//
+// DOCUMENTED DEVIATION (PLAN_VERIFICATION, VALIDATION sub-agent finding): the PRD named a
+// separate ambient statusline marker as a 3rd surface distinct from this dashboard banner.
+// Collapsed into one (this function) because no pluggable ambient-statusline mechanism exists
+// anywhere in this codebase, and R4's own LEAD-phase risk analysis already concluded the active
+// Todoist PUSH is the primary detection guarantee -- a second passive/pull surface is
+// confirmatory, not load-bearing. See PRD FR-4 for the full rationale.
 async function printChairmanEmailChannelHealth() {
   console.log('CHAIRMAN-EMAIL CHANNEL HEALTH');
   console.log('─'.repeat(72));
 
   const { data: row, error } = await supabase
-    .from('chairman_email_channel_health')
+    .from('chairman_email_channel_health') // schema-lint-disable-line — new table (this SD's migration), chairman-apply-gated, not yet in the live snapshot
     .select('*')
     .eq('id', 'singleton')
     .maybeSingle();
