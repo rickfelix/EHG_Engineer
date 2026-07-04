@@ -82,6 +82,34 @@ describe.skipIf(!HAS_REAL_DB)('Periodic-process liveness registry -- REAL DB', (
     expect(flags.length).toBe(1);
   });
 
+  it('regression (adversarial review, PR #5562 CRITICAL): a process that RECOVERS and later goes OVERDUE again is re-flagged, not permanently latched after its first episode', async () => {
+    const processKey = await insertFixture({ suffix: 'recovers_then_relapses' });
+
+    // Episode 1: silence it -> OVERDUE -> flagged.
+    await supabase.from('periodic_process_registry')
+      .update({ last_fired_at: new Date(Date.now() - 60_000).toISOString() })
+      .eq('process_key', processKey);
+    await runWatcher();
+    const { data: afterEpisode1 } = await supabase.from('session_coordination').select('id').eq('payload->>process_key', processKey).eq('payload->>state', 'OVERDUE');
+    expect(afterEpisode1.length).toBe(1);
+
+    // Recovery: stamp it fresh -> OK. The watcher must persist last_state=OK so a future OVERDUE
+    // is recognized as a NEW transition, not swallowed by a permanent "already flagged once" latch.
+    await stampLastFired(supabase, processKey);
+    await runWatcher();
+    const { data: row1 } = await supabase.from('periodic_process_registry').select('last_state').eq('process_key', processKey).single();
+    expect(row1.last_state).toBe(STATE.OK);
+
+    // Episode 2 (weeks later, unrelated relapse): silence it again -> must be re-flagged.
+    await supabase.from('periodic_process_registry')
+      .update({ last_fired_at: new Date(Date.now() - 60_000).toISOString() })
+      .eq('process_key', processKey);
+    await runWatcher();
+
+    const { data: afterEpisode2 } = await supabase.from('session_coordination').select('id').eq('payload->>process_key', processKey).eq('payload->>state', 'OVERDUE');
+    expect(afterEpisode2.length).toBe(2); // one row per genuine episode, not stuck at 1 forever
+  });
+
   it('TS-2: a fixture stamped fresh (within interval*grace) produces zero flags', async () => {
     const processKey = await insertFixture({ suffix: 'healthy' });
     await stampLastFired(supabase, processKey);

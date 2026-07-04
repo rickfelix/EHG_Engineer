@@ -40,11 +40,23 @@ function overdueThresholdMs(row) {
   return row.expected_interval_seconds * Number(row.grace_multiplier) * 1000;
 }
 
+// Adversarial-review finding (PR #5562, WARNING): liveness_source_ref.metadata_filter is stored
+// in a jsonb column and was previously spliced unallowlisted into a raw PostgREST .or() filter
+// string -- safe today only because RLS restricts writes to service_role and the only writer
+// (seed-periodic-process-registry.mjs) hardcodes trusted values, but a jsonb key can legally
+// contain commas/dots that would corrupt or extend the filter clause boundary if a future,
+// less-careful writer ever populated this column. Allowlist the permitted keys at the point of
+// use so this can never become exploitable even if that assumption changes later.
+const ALLOWED_METADATA_FILTER_KEYS = new Set(['role', 'is_coordinator']);
+
 async function resolveRoleSession(row) {
   const filter = row.liveness_source_ref?.metadata_filter;
   if (!filter) return { lastFiredAt: null, signals: {}, evaluableCount: 0 };
 
-  const orClauses = Object.entries(filter).map(([k, v]) => `metadata->>${k}.eq.${v}`).join(',');
+  const safeEntries = Object.entries(filter).filter(([k]) => ALLOWED_METADATA_FILTER_KEYS.has(k));
+  if (safeEntries.length === 0) return { lastFiredAt: null, signals: {}, evaluableCount: 0 };
+
+  const orClauses = safeEntries.map(([k, v]) => `metadata->>${k}.eq.${v}`).join(',');
   const { data, error } = await supabase
     .from('claude_sessions')
     .select('heartbeat_at, terminal_id, tty, process_alive_at, is_alive')
@@ -108,9 +120,11 @@ async function evaluateRow(row) {
     if (resolved.evaluableCount < 2) {
       return { process_key: row.process_key, state: STATE.UNVERIFIED, reason: 'fewer_than_2_evaluable_signals', last_fired_at: lastFiredAt };
     }
-    if (staleSignals < 2) {
-      return { process_key: row.process_key, state: STATE.UNVERIFIED, reason: 'signals_disagree_or_insufficient', last_fired_at: lastFiredAt };
-    }
+    // freshSignals===0 is guaranteed here (the freshSignals>0 branch above already returned), and
+    // evaluableCount>=2 is guaranteed here too -- so staleSignals (evaluableCount - freshSignals)
+    // is always >=2 at this point. There is no reachable "signals disagree" state with this
+    // 3-signal model (adversarial review, PR #5562 INFO): any single fresh signal short-circuits
+    // to OK above before this line is reached.
     signalNote = `${staleSignals} corroborating stale signals`;
   } else if (row.liveness_source === 'eva_scheduler_heartbeat') {
     const resolved = await resolveSchedulerRound(row);
@@ -128,26 +142,6 @@ async function evaluateRow(row) {
 }
 
 async function emitOverdueSignal(row, evaluation) {
-  // Only emit for a NEW transition into OVERDUE -- check registry.metadata for the last-known state
-  // to avoid one row per watcher tick (FR-5 acceptance criterion).
-  const { data: current } = await supabase
-    .from('periodic_process_registry')
-    .select('owner')
-    .eq('process_key', row.process_key)
-    .maybeSingle();
-
-  const { data: recentFlag } = await supabase
-    .from('session_coordination')
-    .select('id')
-    .eq('payload->>kind', 'periodic_liveness_flag')
-    .eq('payload->>process_key', row.process_key)
-    .eq('payload->>state', 'OVERDUE')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (recentFlag) return; // already flagged this transition, don't spam
-
   const coordinatorId = await getActiveCoordinatorId(supabase).catch(() => null);
 
   await supabase.from('session_coordination').insert({
@@ -159,7 +153,7 @@ async function emitOverdueSignal(row, evaluation) {
       kind: 'periodic_liveness_flag',
       process_key: row.process_key,
       display_name: row.display_name,
-      owner: current?.owner || row.owner,
+      owner: row.owner,
       state: 'OVERDUE',
       last_fired_at: evaluation.last_fired_at,
       age_ms: evaluation.age_ms,
@@ -175,9 +169,21 @@ async function main() {
   for (const row of rows || []) {
     const evaluation = await evaluateRow(row);
     results.push(evaluation);
-    if (evaluation.state === STATE.OVERDUE) {
+
+    // Adversarial-review finding (PR #5562, CRITICAL): dedup must be a per-episode STATE
+    // TRANSITION check (row.last_state !== OVERDUE -> OVERDUE), never "has this process_key ever
+    // been flagged" -- the latter is a one-shot latch that goes permanently blind to every
+    // subsequent recovery-then-relapse, reproducing the exact silent-death failure class this SD
+    // exists to prevent. last_state is persisted below on EVERY evaluation, recovered or not, so
+    // a process that goes OK and later OVERDUE again is correctly re-flagged.
+    if (evaluation.state === STATE.OVERDUE && row.last_state !== STATE.OVERDUE) {
       await emitOverdueSignal(row, evaluation);
     }
+
+    await supabase
+      .from('periodic_process_registry')
+      .update({ last_state: evaluation.state })
+      .eq('process_key', row.process_key);
   }
 
   // Self-liveness: upsert the watcher's own last-run row (self_stamped, session_bound=false).

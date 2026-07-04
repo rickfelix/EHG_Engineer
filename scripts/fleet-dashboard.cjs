@@ -748,7 +748,7 @@ function printHealth(d) {
 async function printPeriodicLiveness() {
   const { data: rows, error } = await supabase
     .from('periodic_process_registry')
-    .select('process_key, display_name, process_type, currently_expected_active, last_fired_at, updated_at')
+    .select('process_key, display_name, process_type, currently_expected_active, last_fired_at, last_state, updated_at')
     .order('process_type', { ascending: true });
 
   console.log('PERIODIC-PROCESS LIVENESS');
@@ -773,30 +773,21 @@ async function printPeriodicLiveness() {
   console.log(watcherLine);
   console.log('');
 
-  // Pull the most recent OVERDUE flags to avoid re-deriving state here (the watcher script,
-  // scripts/periodic-liveness-watcher.mjs, is the single source of truth for state evaluation --
-  // the dashboard renders its output, it does not re-implement the 2+-signal logic).
-  const { data: flags } = await supabase
-    .from('session_coordination')
-    .select('payload, created_at')
-    .eq('payload->>kind', 'periodic_liveness_flag')
-    .order('created_at', { ascending: false })
-    .limit(50);
-  const overdueByKey = new Map();
-  for (const f of flags || []) {
-    const key = f.payload?.process_key;
-    if (key && !overdueByKey.has(key)) overdueByKey.set(key, f);
-  }
-
+  // Render the watcher's own persisted last_state directly (scripts/periodic-liveness-watcher.mjs
+  // is the single source of truth for state evaluation and writes last_state on every run,
+  // regardless of outcome -- the dashboard renders that column, it does not re-implement the
+  // 2+-signal logic or re-derive state from a flags lookback. A flags-table lookback was tried
+  // first and rejected: an OVERDUE flag row does not expire when the process recovers, so
+  // rendering "is there a flag" rather than "what is the CURRENT last_state" would keep showing
+  // OVERDUE forever after a single episode (the same latch defect fixed in emitOverdueSignal,
+  // adversarial review on PR #5562).
   const ageOfHours = (ts) => (ts ? Math.max(0, Math.round((Date.now() - Date.parse(ts)) / 3600000)) + 'h' : '—');
 
   const others = rows.filter((r) => r.process_key !== '__watcher_self__');
   for (const r of others) {
     const state = !r.currently_expected_active
       ? 'INTENTIONALLY_DOWN'
-      : overdueByKey.has(r.process_key)
-        ? 'OVERDUE'
-        : 'OK';
+      : (r.last_state || 'UNVERIFIED');
     console.log('  ' + pad(state, 20) + pad(r.process_type, 16) + pad(ageOfHours(r.last_fired_at), 8) + (r.display_name || r.process_key));
   }
   console.log('');
