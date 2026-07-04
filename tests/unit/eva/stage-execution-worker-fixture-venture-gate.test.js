@@ -1,9 +1,14 @@
 /**
- * QF-20260703-236 round-2 fix: createOrReusePendingDecision now returns
- * {id: null, skipped: true} for fixture ventures. These tests verify the 3
- * stage-execution-worker.js call sites that consume that return value no
- * longer throw / permanently block / silently misreport success when the
- * decision is skipped (found by deep-tier adversarial review on PR #5510).
+ * QF-20260703-236 fix: createOrReusePendingDecision now returns
+ * {id: null, skipped: true, reason: 'fixture_venture'} for fixture ventures. These
+ * tests verify the 3 stage-execution-worker.js call sites that consume that return
+ * value no longer throw / permanently block / silently misreport success when the
+ * decision is skipped for a fixture venture (round-1 adversarial review finding on
+ * PR #5510) -- AND that the fix is scoped to reason==='fixture_venture' specifically,
+ * not the bare `skipped` flag, since a separate pre-existing code path
+ * (isDecisionCreatingStage) also returns skipped:true with no reason and must keep
+ * falling through to the original logic rather than being silently auto-approved
+ * (round-2 adversarial review finding).
  *
  * Deliberately a fresh, minimal file rather than extending
  * tests/unit/eva/stage-execution-worker.test.js, which is quarantined for an
@@ -92,6 +97,20 @@ describe('stage-execution-worker.js: fixture-venture skipped-decision consumers 
       expect(result).toEqual({ blocked: false, killed: false, approved: true });
       expect(waitForDecision).not.toHaveBeenCalled();
     });
+
+    // Round-2 adversarial review finding: `skipped:true` is overloaded -- a DIFFERENT,
+    // pre-existing code path (isDecisionCreatingStage disagreeing with this worker's own
+    // hard-gate-stage classification) also returns skipped:true with NO reason. That must
+    // NOT be treated as fixture-safe auto-approval -- it would silently bypass a real
+    // chairman gate for a real venture.
+    it('does NOT auto-approve when skipped:true has no reason (non-fixture skip source)', async () => {
+      createOrReusePendingDecision.mockResolvedValue({ id: null, isNew: false, skipped: true });
+      waitForDecision.mockRejectedValue(new Error('decisionId and supabase are required'));
+
+      const result = await worker._handleChairmanGate('real-venture-1', 10);
+
+      expect(result.approved).toBe(false);
+    });
   });
 
   describe('_ensureS17StrategySelected', () => {
@@ -102,6 +121,15 @@ describe('stage-execution-worker.js: fixture-venture skipped-decision consumers 
 
       expect(strategy).toBe('top-recommended-strategy');
       expect(waitForDecision).not.toHaveBeenCalled();
+    });
+
+    it('does NOT auto-select when skipped:true has no reason (non-fixture skip source) -- propagates the real waitForDecision failure instead', async () => {
+      createOrReusePendingDecision.mockResolvedValue({ id: null, isNew: false, skipped: true });
+      waitForDecision.mockRejectedValue(new Error('decisionId and supabase are required'));
+
+      await expect(worker._ensureS17StrategySelected('real-venture-1')).rejects.toThrow(
+        'decisionId and supabase are required',
+      );
     });
 
     it('still blocks on waitForDecision normally when the decision is NOT skipped (real venture)', async () => {
