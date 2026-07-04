@@ -98,7 +98,7 @@ async function main() {
   }
 
   const byCoverage = { witnessed: 0, unwitnessed: 0, no_data: 0 };
-  const byOutcome = { shipped_clean: 0, unproven: 0, reverted: 0, caused_rework: 0 };
+  const byOutcome = { shipped_clean: 0, unproven: 0, caused_rework: 0 };
   for (const r of results) {
     byCoverage[r.coverage] = (byCoverage[r.coverage] || 0) + 1;
     byOutcome[r.outcome] = (byOutcome[r.outcome] || 0) + 1;
@@ -112,7 +112,6 @@ async function main() {
   console.log('\n--- Outcome breakdown ---');
   console.log(`shipped_clean:  ${byOutcome.shipped_clean}`);
   console.log(`unproven:       ${byOutcome.unproven}`);
-  console.log(`reverted:       ${byOutcome.reverted}`);
   console.log(`caused_rework:  ${byOutcome.caused_rework}`);
 
   for (const r of results) {

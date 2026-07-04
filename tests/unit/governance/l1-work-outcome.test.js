@@ -21,9 +21,13 @@ function fakeSupabase({ telemetryRow = null, telemetryError = null, patternRows 
         };
       }
       if (table === 'issue_patterns') {
+        // computeL1Outcome issues two separate eq()-based queries (first_seen_sd_id,
+        // last_seen_sd_id) rather than one .or() filter. Both stub queries return the same
+        // fixture; production dedup-by-id collapses the duplication, so this keeps the stub
+        // simple without changing any test's expected result count.
         return {
           select: () => ({
-            or: () => ({
+            eq: () => ({
               eq: () => ({
                 not: () => Promise.resolve({ data: patternRows, error: patternError }),
               }),
@@ -132,5 +136,16 @@ describe('computeL1Outcome: recurrence degrades the outcome', () => {
     const result = await computeL1Outcome(sb, 'SD-TEST-007');
     expect(result.outcome).toBe('shipped_clean');
     expect(result.evidence.recurrence).toBeUndefined();
+  });
+
+  it('an issue_patterns query error fails closed to unproven, not silently falling through to the base outcome (a query failure must never read as "no recurrence")', async () => {
+    const sb = fakeSupabase({
+      telemetryRow: { lane: 'ship-auto-merge', rungs: [{ id: 'P3', status: 'pass' }] },
+      patternError: { message: 'transient issue_patterns error' },
+    });
+    const result = await computeL1Outcome(sb, 'SD-TEST-010');
+    expect(result.outcome).toBe('unproven');
+    expect(result.outcome).not.toBe('shipped_clean');
+    expect(result.evidence.error).toMatch(/transient issue_patterns error/);
   });
 });
