@@ -318,7 +318,7 @@ async function updateIssuePatterns(rcr, learningRecord) {
   // Check if pattern exists
   const { data: pattern, error: fetchError } = await supabase
     .from('issue_patterns')
-    .select('id, occurrence_count')
+    .select('id, occurrence_count, status, metadata')
     .eq('id', rcr.pattern_id)
     .maybeSingle();
 
@@ -328,16 +328,43 @@ async function updateIssuePatterns(rcr, learningRecord) {
   }
 
   if (pattern) {
-    // Increment occurrence count
+    // Increment occurrence count. SD-LEO-INFRA-009-LEAF-FORMALIZE-001: a new occurrence of a
+    // pattern that was previously closed (resolved/obsolete) means the prevention did NOT
+    // hold — auto-reopen it (status back to active) rather than silently accumulating
+    // occurrence_count under a stale 'resolved' status. resolution_date/resolution_notes are
+    // left untouched (historical audit trail of the prior closure).
+    const wasClosed = pattern.status === 'resolved' || pattern.status === 'obsolete';
+    const updatePayload = { occurrence_count: pattern.occurrence_count + 1 };
+    if (wasClosed) {
+      const prevMetadata = pattern.metadata && typeof pattern.metadata === 'object' ? pattern.metadata : {};
+      const reopenHistory = Array.isArray(prevMetadata.reopen_history) ? prevMetadata.reopen_history : [];
+      const nowIso = new Date().toISOString();
+      updatePayload.status = 'active';
+      // The prior fix didn't hold, so the prior SD no longer legitimately "owns" this
+      // pattern — clear assigned_sd_id/assignment_date rather than leaving a reopened
+      // pattern silently attributed to a completed SD (which would also let it be swept
+      // by that SD's own resolveLearningItems()/resolve_completed_sd_patterns() calls on
+      // any LATER completion, re-closing it without a fresh prevention check).
+      updatePayload.assigned_sd_id = null;
+      updatePayload.assignment_date = null;
+      updatePayload.metadata = {
+        ...prevMetadata,
+        reopened_at: nowIso,
+        reopen_count: (prevMetadata.reopen_count || 0) + 1,
+        reopen_history: [...reopenHistory.slice(-9), { at: nowIso, previous_status: pattern.status }],
+      };
+    }
+
     const { error } = await supabase
       .from('issue_patterns')
-      .update({
-        occurrence_count: pattern.occurrence_count + 1
-      })
+      .update(updatePayload)
       .eq('id', rcr.pattern_id);
 
     if (!error) {
       console.log(`  ✅ Updated pattern ${rcr.pattern_id} (count: ${pattern.occurrence_count + 1})`);
+      if (wasClosed) {
+        console.log(`  🔓 Pattern ${rcr.pattern_id} auto-reopened (was ${pattern.status}, new occurrence recorded)`);
+      }
     }
   } else {
     // Create new pattern.
@@ -397,4 +424,4 @@ if (isMainModule(import.meta.url)) {
     });
 }
 
-export { ingestRCALearnings };
+export { ingestRCALearnings, updateIssuePatterns };

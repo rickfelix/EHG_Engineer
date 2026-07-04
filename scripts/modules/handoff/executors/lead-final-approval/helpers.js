@@ -10,6 +10,7 @@ import os from 'os';
 import path from 'path';
 import { executeOrchestratorCompletionHook } from '../../orchestrator-completion-hook.js';
 import { publishVisionEvent, VISION_EVENTS } from '../../../../../lib/eva/event-bus/vision-events.js';
+import { closeIssuePatterns } from '../../../../../lib/governance/pattern-closure.js';
 
 /**
  * Check and complete parent SD when all children are done
@@ -131,8 +132,8 @@ export async function checkAndCompleteParentSD(sd, supabase, { shippingResults }
         // and other phantoms to ship. Guardian unavailability is a P0 — not permission
         // to skip the gate chain.
         console.log(`   ❌ Guardian unavailable: ${guardianError.message}`);
-        console.log(`   ❌ LEGACY DIRECT-DB COMPLETION PATH IS CLOSED (SD-LEO-INFRA-PHANTOM-COMPLETION-PROOF-001).`);
-        console.log(`   💡 Required action: invoke RCA on Guardian failure, OR explicitly bypass via:`);
+        console.log('   ❌ LEGACY DIRECT-DB COMPLETION PATH IS CLOSED (SD-LEO-INFRA-PHANTOM-COMPLETION-PROOF-001).');
+        console.log('   💡 Required action: invoke RCA on Guardian failure, OR explicitly bypass via:');
         console.log(`      node scripts/modules/handoff/orchestrator-completion-guardian.js ${parentSD.id} --auto-fix --complete`);
         await recordFailedCompletion(parentSD, `Guardian unavailable: ${guardianError.message}. Legacy fallback closed by SD-LEO-INFRA-PHANTOM-COMPLETION-PROOF-001.`, null, supabase);
         throw new Error(`PHANTOM_PROOF_LEGACY_PATH_CLOSED: Guardian failed for parent ${parentSD.id} (${parentSD.sd_key || 'no sd_key'}). Direct-DB status=completed write refused. Original error: ${guardianError.message}`);
@@ -159,18 +160,17 @@ export async function recordFailedCompletion(parentSD, errorMessage, report = nu
       .from('system_events')
       .insert({
         event_type: 'ORCHESTRATOR_COMPLETION_FAILED',
-        entity_type: 'strategic_directive',
-        entity_id: parentSD.id,
+        sd_id: parentSD.id,
         details: {
           sd_id: parentSD.id,
           title: parentSD.title,
           error: errorMessage,
           validation_report: report,
           timestamp: new Date().toISOString(),
-          remediation: `node scripts/modules/handoff/orchestrator-completion-guardian.js ${parentSD.id} --auto-fix --complete`
-        },
-        severity: 'warning',
-        created_by: 'LEAD-FINAL-APPROVAL-EXECUTOR'
+          remediation: `node scripts/modules/handoff/orchestrator-completion-guardian.js ${parentSD.id} --auto-fix --complete`,
+          severity: 'warning',
+          created_by: 'LEAD-FINAL-APPROVAL-EXECUTOR'
+        }
       });
   } catch (_e) {
     // Intentionally suppressed: silent fail for logging, don't break the flow
@@ -200,37 +200,23 @@ export async function resolveLearningItems(sd, supabase) {
     const sdId = sd.sd_key || sd.id;
     const now = new Date().toISOString();
 
-    // Resolve assigned patterns
-    const { data: patterns, error: patternQueryError } = await supabase
-      .from('issue_patterns')
-      .select('pattern_id, status')
-      .eq('assigned_sd_id', sdId)
-      .eq('status', 'assigned');
+    // Resolve assigned patterns — routed through the canonical closeIssuePatterns() gate
+    // (SD-LEO-INFRA-009-LEAF-FORMALIZE-001): a pattern without a prevention artifact is
+    // deferred (left 'assigned') when enforcement is ON, resolved as before when OFF.
+    const { resolved: resolvedPatternIds, deferred: deferredPatterns } = await closeIssuePatterns(supabase, {
+      sdId,
+      resolutionNotes: `Resolved by ${sdId} via /learn workflow`,
+    });
 
-    if (!patternQueryError && patterns && patterns.length > 0) {
-      const { error: patternUpdateError } = await supabase
-        .from('issue_patterns')
-        .update({
-          status: 'resolved',
-          resolution_date: now,
-          resolution_notes: `Resolved by ${sdId} via /learn workflow`
-        })
-        .eq('assigned_sd_id', sdId)
-        .eq('status', 'assigned');
-
-      if (!patternUpdateError) {
-        console.log(`   ✅ Resolved ${patterns.length} pattern(s)`);
-        // SD-LEO-INFRA-MEMORY-PATTERN-LIFECYCLE-001: prune resolved entries from MEMORY.md
-        const resolvedPatternIds = patterns.map(p => p.pattern_id);
-        await pruneResolvedMemory(resolvedPatternIds);
-        publishVisionEvent(VISION_EVENTS.PATTERN_RESOLVED, {
-          sdKey: sdId,
-          resolvedPatternIds,
-          resolvedCount: patterns.length,
-        });
-      } else {
-        console.log(`   ⚠️  Pattern resolution error: ${patternUpdateError.message}`);
-      }
+    if (resolvedPatternIds.length > 0) {
+      console.log(`   ✅ Resolved ${resolvedPatternIds.length} pattern(s)`);
+      // SD-LEO-INFRA-MEMORY-PATTERN-LIFECYCLE-001: prune resolved entries from MEMORY.md
+      await pruneResolvedMemory(resolvedPatternIds);
+      publishVisionEvent(VISION_EVENTS.PATTERN_RESOLVED, {
+        sdKey: sdId,
+        resolvedPatternIds,
+        resolvedCount: resolvedPatternIds.length,
+      });
     }
 
     // Resolve assigned improvements
@@ -257,8 +243,11 @@ export async function resolveLearningItems(sd, supabase) {
       }
     }
 
-    if ((!patterns || patterns.length === 0) && (!improvements || improvements.length === 0)) {
+    const totalPatternCandidates = resolvedPatternIds.length + deferredPatterns.length;
+    if (totalPatternCandidates === 0 && (!improvements || improvements.length === 0)) {
       console.log('   ℹ️  No pending items to resolve');
+    } else if (deferredPatterns.length > 0) {
+      console.log(`   ⏸️  ${deferredPatterns.length} pattern(s) deferred (missing prevention artifact): ${deferredPatterns.map((d) => d.pattern_id).join(', ')}`);
     }
   } catch (error) {
     console.log(`   ⚠️  Learning item resolution error: ${error.message}`);

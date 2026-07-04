@@ -154,6 +154,19 @@ documented source of the PR #4540 second bug (`uuid_id ≠ id` for 3,686/3,687 S
 the ledger FK silently failed for months). These twin-column bridges are standing
 foot-guns; candidate for retirement after a column-consumer audit.
 
+**PARTIALLY RESOLVED (2026-07-04, SD-FDBK-FIX-TRIGGER-AUDIT-MEDIUM-003)**: the
+column-consumer audit this finding called for is done. Result: full retirement is
+**not yet safe** (same class of surprise as the F-5 correction above) —
+`lib/sourcing-engine/refill-auto-promote.js` genuinely depends on both triggers'
+INSERT null-fill branch (test-guarded), and `uuid_id` (not `uuid_internal_pk`) is
+the real FK target for 5+ tables (`sd_wall_states`, `sd_transition_audit`,
+`sd_kickbacks`, `sd_gate_results`, `sd_corrections`, `capability_reuse_log`), so
+the sync trigger's defensive value is real. Shipped the safe half instead: both
+functions now `RAISE WARNING` on the dangerous UPDATE PK-rewrite branch (the one
+zero live consumers rely on), leaving the INSERT-branch and forward-sync behavior
+byte-for-byte unchanged. `docs/database/column-rename-migration-notes.md` records
+the concrete Phase-5 blocker for a future full-retirement SD.
+
 ### F-7 (LOW-MEDIUM) — Redundant `updated_at` stampers on SDv2
 **Where**: `update_sd_timestamp` (fn `update_updated_at`) AND
 `update_strategic_directives_v2_updated_at` (fn `update_updated_at_column`) both

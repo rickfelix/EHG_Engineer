@@ -9,6 +9,7 @@ import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { closeIssuePatterns } from '../../../lib/governance/pattern-closure.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
@@ -380,27 +381,25 @@ async function applyChecklistItemChange(improvement) {
 export async function resolvePatterns(patternIds, improvementId) {
   if (!patternIds || patternIds.length === 0) return [];
 
-  const results = [];
-  const now = new Date().toISOString();
+  // Routed through the canonical closeIssuePatterns() gate (SD-LEO-INFRA-009-LEAF-FORMALIZE-001):
+  // a pattern without a prevention artifact is deferred (left open) when enforcement is ON,
+  // resolved as before when OFF.
+  const { resolved, deferred } = await closeIssuePatterns(supabase, {
+    patternIds,
+    resolutionNotes: `Addressed by improvement ${improvementId} via /learn command`,
+  });
 
-  for (const patternId of patternIds) {
-    const { error } = await supabase
-      .from('issue_patterns')
-      .update({
-        status: 'resolved',
-        resolution_date: now,
-        resolution_notes: `Addressed by improvement ${improvementId} via /learn command`
-      })
-      .eq('pattern_id', patternId);
-
-    if (error) {
-      console.error(`Failed to resolve pattern ${patternId}:`, error.message);
-      results.push({ pattern_id: patternId, success: false, error: error.message });
-    } else {
+  const resolvedSet = new Set(resolved);
+  const deferredMap = new Map(deferred.map((d) => [d.pattern_id, d.reason]));
+  const results = patternIds.map((patternId) => {
+    if (resolvedSet.has(patternId)) {
       console.log(`✓ Resolved pattern: ${patternId}`);
-      results.push({ pattern_id: patternId, success: true });
+      return { pattern_id: patternId, success: true };
     }
-  }
+    const reason = deferredMap.get(patternId) || 'pattern not found in an open (assigned/active) state';
+    console.error(`Failed to resolve pattern ${patternId}: ${reason}`);
+    return { pattern_id: patternId, success: false, error: reason };
+  });
 
   return results;
 }
