@@ -375,9 +375,12 @@ export async function resolveMetadataBlocker(supabase, blockerSdKey) {
   }
 
   // Blocker is a leaf SD (not an orchestrator) — recommend it directly
+  // QF-20260703-999 (drive-by): strategic_directives_v2 has no `track` column (schema-reference-lint
+  // caught it live — this select would throw whenever a blocker actually had children); `track` was
+  // never read from the result, so dropping it is a pure dead-column removal, no behavior change.
   const { data: children } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, sequence_rank, track, sd_type, is_active, governance_metadata, metadata')
+    .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, sequence_rank, sd_type, is_active, governance_metadata, metadata')
     .eq('parent_sd_id', blockerSD.id)
     .eq('is_active', true);
 
