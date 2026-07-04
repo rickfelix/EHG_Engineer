@@ -1,0 +1,86 @@
+{
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Decide the install skip/require verdict from the RESOLVED WORKTREE path, not the coordinator repo",
+      "description": "Root cause (found by direct code archaeology, not guesswork): scripts/sd-start.js's install-decision block called `const installRepoRoot = getRepoRoot();` -- a function that ALWAYS resolves the coordinator repo (EHG_Engineer) root regardless of cwd, deliberately stripping any `.worktrees/<key>/` suffix. This was a DELIBERATE prior fix (SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 FR5, comment still in the diff being replaced) on the assumption that 'worktrees symlink node_modules from there' -- true ONLY under the old UNCONDITIONAL-junction architecture. SD-LEO-INFRA-SMART-PER-WORKTREE-001 retired that invariant (a worktree can get a REAL isolated node_modules under concurrency, decided by lib/worktree-provision.js's decideWorktreeProvisionMode), and cross-repo venture worktrees (a target repo entirely different from EHG_Engineer, e.g. the 5 recurred specimens SD-MARKETLENS-*-C1/G1/H1/I1/J1) were NEVER covered by the junction assumption in the first place -- checking getRepoRoot() there checks EHG_Engineer's own node_modules, which is essentially always healthy, so the check ALWAYS false-positived 'skip' no matter what the actual target-repo worktree contained. Fix: `installRepoRoot = worktreeInfo.cwd` (the already-resolved worktree path, available a few lines earlier at the `if (worktreeInfo?.success && worktreeInfo.cwd)` guard). fs.existsSync (used by evaluateInstallDecision's canaryPresent check) follows symlinks, so this ONE-LINE change is simultaneously correct for junction-mode worktrees (resolves through to the real files), isolated-mode worktrees (checks the real local directory), and cross-repo worktrees (checks the actual target repo, not the coordinator) -- no repo-type branching needed. evaluateInstallDecision() and composeInstallDecision() in lib/fleet-lock-hash.mjs are NOT modified -- they were already correctly parameterized pure functions; the bug was entirely in what the ONE caller passed as repoRoot."
+    },
+    {
+      "id": "FR-2",
+      "title": "Mandatory e2e/acceptance test driving the REAL evaluateInstallDecision() against REAL temp directories (recurred-family rule)",
+      "description": "Per the recurred-family rule (QF-476 lesson: a fix without a genuine acceptance test bounces again -- this is the 5th specimen, 4 prior logic-only patches already failed): new tests/unit/sd-start-install-decision-worktree-path.test.js drives the actual exported evaluateInstallDecision() (no fs mocking) against real fs.mkdtempSync-created temp directories. Reproduces the EXACT bug directly: a fully-healthy 'coordinator repo' temp dir alongside an empty 'worktree' temp dir -- asserts evaluateInstallDecision({repoRoot: coordinatorDir}) WOULD false-positive skip:true (proving the bug is real and reproducible, not hypothetical), then asserts evaluateInstallDecision({repoRoot: worktreeDir}) correctly returns skip:false. Also covers: node_modules missing but lockfile present (still requires install -- canary check, not just hash), a genuinely healthy worktree (inverse case, must still skip -- no false negative introduced), and an isolated worktree with only a canary and no marker (interrupted isolate-install, must still require install). scripts/sd-start.js itself is NOT unit-testable directly (its `main()` runs unconditionally at module load with no CLI guard, `process.exit()`s on completion) -- the acceptance test targets the exact decision function the script calls with the exact repoRoot values a fix does/doesn't produce, which is the real regression surface."
+    },
+    {
+      "id": "FR-3",
+      "title": "Sweep for other install-decision call sites with the same coordinator-vs-worktree confusion",
+      "description": "Confirmed via grep: evaluateInstallDecision has exactly ONE production caller (scripts/sd-start.js) -- lib/worktree-provision.js and tests are the only other references. Checked every other getRepoRoot() call site touching node_modules/install logic: scripts/session-worktree.js's `provisionWorktreeNodeModulesAuto(result.path, { repoRoot: getRepoRoot() })` is CORRECT (getRepoRoot() there is the JUNCTION TARGET the worktree symlinks TO -- that's what a junction destination is supposed to be, not the same bug). scripts/create-quick-fix.js calls provisionWorktreeNodeModulesAuto with no separate install-decision logic of its own. No other duplicated/confused call site found -- the fix in FR-1 is the complete sweep."
+    },
+    {
+      "id": "FR-4",
+      "title": "SECURITY-RELEVANT: provision git hooks (.husky/_) independently of the dependency-install decision",
+      "description": "Fold-in per Adam (pre-claim 2026-07-03 23:45Z, Alpha-verified on 2 worktrees, worker-signal 59bad7ea-...): `.husky/_` (what core.hooksPath points at) is created ONLY as a side-effect of npm install's `prepare` lifecycle script. On the (common) install-skip fast path, `.husky/_` never gets created, so pre-commit secret scanning / commit-msg checks / pre-push enforcement silently NEVER FIRE for that worktree's commits -- CI-side scanning has held as the backstop so far (no active incident), but this is a live gap. Fix: in scripts/sd-start.js, right after computing the install decision (regardless of decision.skip), check `existsSync(path.join(installRepoRoot, '.husky', '_'))`; if missing, call lib/worktree-provision.js's EXISTING defaultEnsureHuskyHooks(installRepoRoot) (read-only reuse -- already used by provisionWorktreeNodeModules for the worktree-CREATION case; this closes the gap for RESUMED worktrees created before that existed, or where hooks were later wiped). Fail-open (a hook-provisioning failure never blocks sd-start), matching the existing contract of every other advisory step in this block."
+    }
+  ],
+  "technical_requirements": [
+    { "requirement": "No new migration or table" },
+    { "requirement": "lib/fleet-lock-hash.mjs's evaluateInstallDecision/composeInstallDecision are consumed UNCHANGED -- the bug and the fix are entirely in the ONE caller (scripts/sd-start.js), not the pure decision logic" },
+    { "requirement": "lib/worktree-provision.js's defaultEnsureHuskyHooks is consumed read-only (already-shipped helper, reused not reinvented)" },
+    { "requirement": "The FR-1 change is a single-line variable reassignment (installRepoRoot = worktreeInfo.cwd instead of getRepoRoot()) -- every downstream usage (evaluateInstallDecision repoRoot, npm install cwd, writeFleetLockMarker) already references the same `installRepoRoot` variable, so the fix propagates correctly with zero other line changes" }
+  ],
+  "test_scenarios": [
+    { "scenario": "A fully-healthy coordinator-repo path reproduces the historical bug (false-positive skip) when passed as repoRoot -- proves the bug is real, not hypothetical" },
+    { "scenario": "An empty worktree path (no node_modules, no lockfile) correctly requires install when passed as repoRoot" },
+    { "scenario": "A worktree with package-lock.json but no node_modules at all still requires install (canary check catches what a pure hash-only check would miss)" },
+    { "scenario": "A genuinely healthy, freshly-populated worktree still correctly SKIPS install (no false negative introduced by the fix)" },
+    { "scenario": "An isolated worktree with only a canary and no marker (interrupted isolate-install) still requires install" },
+    { "scenario": "defaultEnsureHuskyHooks is callable against a worktree path without throwing (fail-open contract)" }
+  ],
+  "acceptance_criteria": [
+    "All 4 FRs traced to file:line in the diff",
+    "The exact historical bug (coordinator-repo path false-positives skip) is reproduced by a real, non-mocked test, per the recurred-family rule",
+    "lib/fleet-lock-hash.mjs is unmodified -- zero diff",
+    "The fix is a minimal, surgical change (1-line reassignment + independent husky-hook check), not a rewrite of the decision logic (which was already correct)",
+    "Existing tests/unit/fleet-lock-hash.test.js (43 tests) and worktree-provision test suites pass unmodified",
+    "npx tsc --noEmit passes"
+  ],
+  "risks": [
+    {
+      "risk": "This is the 5th recurrence with 4 prior failed fixes -- there is a real chance this fix also misses if the true root cause is something else entirely",
+      "impact": "high",
+      "likelihood": "low",
+      "mitigation": "Unlike the (inferred) prior attempts, this fix is grounded in the ACTUAL code (the FR5 comment explaining the getRepoRoot() choice was found directly, not inferred) and is verified against a test that reproduces the exact historical failure mode on real fs state before asserting the fix. The recurred-family rule's core lesson -- e2e acceptance baked into the spec -- is satisfied by FR-2, not deferred to a future SD."
+    },
+    {
+      "risk": "The husky-hook fast-path check (FR-4) adds an existsSync + possible npx husky spawn on every sd-start invocation where hooks are missing",
+      "impact": "low",
+      "likelihood": "low",
+      "mitigation": "existsSync is a cheap single stat call; npx husky only runs when the check fails (rare -- most worktrees already have hooks from creation-time provisioning), and it already runs in ~2s per the existing defaultEnsureHuskyHooks doc comment. Fail-open -- a failure here never blocks sd-start."
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": ["scripts/sd-start.js (every SD/QF claim) -- the ONE call site, now correct for same-repo junction, same-repo isolated, and cross-repo venture worktrees alike"],
+    "dependencies": ["lib/fleet-lock-hash.mjs (unchanged, read-only)", "lib/worktree-provision.js's defaultEnsureHuskyHooks (unchanged, read-only)"],
+    "data_contracts": ["No schema changes"],
+    "runtime_config": ["None -- no new env vars"],
+    "observability_rollout": [
+      "The existing console.log lines in the install-decision block already surface the decision reason; a new git-hook-provisioned log line is added for FR-4 visibility",
+      "The recurred-family history (5 specimens across C1/G1/H1/I1/J1) is now closed by an on-disk regression test, not just a code review claim"
+    ]
+  },
+  "implementation_approach": {
+    "phases": [
+      "Phase 1: FR-1 root-cause fix (1-line change) in scripts/sd-start.js",
+      "Phase 2: FR-4 independent husky-hook check in scripts/sd-start.js",
+      "Phase 3: FR-2 e2e acceptance test (new file) + FR-3 sweep (documented, no code changes needed)"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run npx vitest run tests/unit/sd-start-install-decision-worktree-path.test.js", "expected_outcome": "5/5 pass, including the direct reproduction of the historical bug via a healthy coordinator-repo path" },
+    { "step_number": 2, "instruction": "Run npx vitest run tests/unit/fleet-lock-hash.test.js", "expected_outcome": "43/43 pass, zero regressions (file unmodified)" },
+    { "step_number": 3, "instruction": "Run npx vitest run tests/unit/worktree-provision-husky-hooks.test.js lib/__tests__/worktree-provision.test.js", "expected_outcome": "19/19 pass, zero regressions" },
+    { "step_number": 4, "instruction": "Run npx tsc --noEmit", "expected_outcome": "Clean, no type errors" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-START-INSTALL-SKIP-001"
+  }
+}
