@@ -192,8 +192,15 @@ export async function selfReviewMain() {
   if (process.env.COORD_SELF_SCORE_V1 === 'on') {
     try {
       const { count: beltDepth } = await db.from('strategic_directives_v2').select('id', { count: 'exact', head: true }).eq('status', 'draft').is('claiming_session_id', null);
-      const activeNonCoord = (sess || []).filter(r => !(r.metadata || {}).is_coordinator && r.session_id !== me && isFullUuid(r.session_id));
-      const idleWorkersWithClaimableWork = (beltDepth || 0) > 0 ? activeNonCoord.filter(r => !r.sd_key).length : 0;
+      // Reuse the SAME `workers` set the solicitation loop above already computed (partitionParticipants
+      // + isFullUuid filter) rather than re-deriving from `sess` -- keeps this signal consistent with
+      // that loop's own Adam-exclusion behavior (adversarial review catch, 2026-07-04): when
+      // COORD_ADAM_REVIEW_V1 is on, Adam is split into adamParticipants there and must not also be
+      // counted here as an idle "worker".
+      const workerIdSet = new Set(workers);
+      const idleWorkersWithClaimableWork = (beltDepth || 0) > 0
+        ? (sess || []).filter(r => workerIdSet.has(r.session_id) && !r.sd_key).length
+        : 0;
       const signals = {
         idle_workers_with_claimable_work: idleWorkersWithClaimableWork,
         belt_depth: beltDepth,
