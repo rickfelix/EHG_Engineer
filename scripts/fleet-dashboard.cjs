@@ -1638,6 +1638,37 @@ async function printChairmanEmailChannelHealth() {
   console.log('');
 }
 
+// SD-LEO-INFRA-ADOPTED-RESUME-FINAL-001 / FR-2: surface SDs stranded at
+// pending_approval/LEAD_FINAL — one handoff from shipped but invisible to monitoring
+// without this gauge. Read-only + fail-open (planStrandAgeGauge never throws).
+async function printStrandAgeGauge() {
+  const { planStrandAgeGauge, formatAge } = require('../lib/coordinator/strand-age-gauge.cjs');
+
+  console.log('LEAD_FINAL STRAND-AGE GAUGE');
+  console.log('─'.repeat(72));
+
+  let gauge;
+  try {
+    gauge = await planStrandAgeGauge(supabase);
+  } catch {
+    console.log('  (gauge unavailable — non-fatal)');
+    console.log('');
+    return;
+  }
+
+  if (gauge.flagged.length === 0) {
+    console.log('  (no SD stranded at pending_approval/LEAD_FINAL past the threshold)');
+    console.log('');
+    return;
+  }
+
+  console.log('  ' + gauge.flagged.length + ' SD(s) stranded at pending_approval/LEAD_FINAL:');
+  for (const r of gauge.flagged) {
+    console.log('  • ' + r.sd_key + ' — stranded ' + formatAge(r.ageMs) + ' (age source: ' + r.ageSource + ')');
+  }
+  console.log('');
+}
+
 // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-3: surface the
 // relay/decision/review drop gauge — mirrors printUndeliveredOutbound()'s shape. Read-only
 // + fail-open (planRelayDrops never throws).
@@ -1834,6 +1865,7 @@ async function main() {
     forecast:      async () => await printForecast(d),
     predictions:   async () => await printPredictions(d),
     drain:         () => printDrainAgents(d),
+    strand:        async () => await printStrandAgeGauge(), // SD-LEO-INFRA-ADOPTED-RESUME-FINAL-001 (FR-2)
     inbox:         async () => {
       // FR-1 (SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B): chairman directives surface FIRST —
       // bypasses the printInbox signal_type gate (chairman_directive carries no signal_type).
@@ -1863,6 +1895,7 @@ async function main() {
       printOrchestrator(d);
       printAvailable(d);
       printQuickFixes(d); // QF-20260525-836
+      await printStrandAgeGauge(); // SD-LEO-INFRA-ADOPTED-RESUME-FINAL-001 (FR-2)
       printRevivalPending(d); // SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001
       printCoordination(d);
       await printChairmanDirectives(); // SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B / FR-1 — chairman-directive compliance FIRST (bypasses the printInbox signal_type gate)
