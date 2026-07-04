@@ -1,0 +1,68 @@
+# Diagnostic-gauge citation lint — blocks NEW code citing a diagnostic-only signal
+# (retrospectives.quality_score / feedback.quality_score / adherence-probe pass-rate / raw gate
+# pass-rate) as a gating threshold. SD-LEO-INFRA-REWARD-SPINE-ONE-001-C. Modeled directly on
+# schema-reference-lint.yml.
+#
+# Diff-only: compares ONLY files changed vs the PR base. The pre-existing backlog (17 files,
+# scripts/lint/diagnostic-gauge-citation-allowlist.json) never blocks an unrelated PR.
+#
+# ROLLOUT — ADVISORY FIRST: continue-on-error is true for a 7-day soak, mirroring
+# schema-reference-lint.yml's own rollout convention for a brand-new lint.
+# FLIP CRITERION: after 7 days (from merge of this workflow) with zero false-positive reports in
+# the harness backlog, set continue-on-error: false to make the lint blocking. Escapes (always
+# available): scripts/lint/diagnostic-gauge-citation-allowlist.json (files); inline pragma: a
+# comment containing diagnostic-gauge-lint-disable-line.
+name: Diagnostic Gauge Citation Lint
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**/*.js'
+      - 'scripts/**/*.mjs'
+      - 'scripts/**/*.cjs'
+      - 'lib/**/*.js'
+      - 'lib/**/*.mjs'
+      - 'lib/**/*.cjs'
+      - 'src/**/*.js'
+      - 'src/**/*.ts'
+      - 'src/**/*.tsx'
+      - 'server/**'
+      - 'api/**'
+      - 'app/**'
+      - 'scripts/lint/diagnostic-gauge-citation-*'
+      - '.github/workflows/diagnostic-gauge-citation-lint.yml'
+
+concurrency:
+  group: diagnostic-gauge-citation-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagnostic-gauge-citation-lint:
+    name: diagnostic-gauge-citation-lint
+    runs-on: ubuntu-latest
+    # ADVISORY SOAK — see flip criterion in the header comment.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run diagnostic-gauge-citation lint (diff vs PR base)
+        env:
+          DIAGNOSTIC_GAUGE_LINT_BASE: origin/${{ github.base_ref }}
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1 || true
+          node scripts/lint/diagnostic-gauge-citation-lint.mjs --diff | tee lint-output.txt
+          exit_code=${PIPESTATUS[0]}
+          {
+            echo "## Diagnostic Gauge Citation Lint"
+            echo ""
+            echo '```'
+            cat lint-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $exit_code
