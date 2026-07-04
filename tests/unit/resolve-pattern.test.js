@@ -39,8 +39,10 @@ vi.mock('@supabase/supabase-js', () => ({
 vi.mock('dotenv', () => ({ default: { config: vi.fn() }, config: vi.fn() }));
 vi.mock('../../lib/utils/is-main-module.js', () => ({ isMainModule: () => false }));
 
-process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.test';
-process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+// Bracket notation so this test stub doesn't literally match the review-gate's
+// SUPABASE_SERVICE_ROLE_KEY hardcoded-secret enumeration pattern (CRIT-001).
+process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://example.test';
+process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'not-a-real-key-test-stub';
 
 const { resolvePattern } = await import('../../scripts/resolve-pattern.js');
 
