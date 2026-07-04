@@ -5,7 +5,6 @@
     { "surface_class": "db_table", "pattern": "merge_witness_telemetry", "checker_ids": ["lib/ship/merge-witness-ladder.mjs"] },
     { "surface_class": "db_table", "pattern": "issue_patterns", "checker_ids": ["lib/governance/pattern-closure.js"] },
     { "surface_class": "db_table", "pattern": "solomon_advice_outcome_ledger", "checker_ids": ["scripts/solomon-ledger-reconcile.cjs"] },
-    { "surface_class": "db_table", "pattern": "retrospectives", "checker_ids": ["scripts/modules/handoff/executors/lead-final-approval/gates.js:retrospectiveExists"] },
-    { "surface_class": "db_table", "pattern": "coverage_matrix", "checker_ids": ["scripts/coverage-matrix-regenerate.mjs"] }
+    { "surface_class": "db_table", "pattern": "retrospectives", "checker_ids": ["scripts/modules/handoff/executors/lead-final-approval/gates.js:retrospectiveExists"] }
   ]
 }

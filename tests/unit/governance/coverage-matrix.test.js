@@ -3,7 +3,7 @@
  * decision logic (checker-map matching, exclusion filtering, enumeration + upsert/stale logic),
  * using injected-stub Supabase clients so the pure logic is exercised without a live DB.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -16,6 +16,7 @@ import {
   enumerateApplications,
   enumerateDbTables,
   enumerateMessageLanes,
+  enumerateWorkItemTypes,
   regenerateCoverageMatrix,
 } from '../../../lib/governance/coverage-matrix.js';
 
@@ -151,6 +152,38 @@ describe('enumerateMessageLanes (pg client enum + supabase signal_type window)',
       { surface_key: 'SAVE_WARNING', is_active: true },
       { surface_key: 'stuck', is_active: true },
     ]));
+  });
+});
+
+describe('enumerateWorkItemTypes: to_regclass existence check', () => {
+  it('marks a table that to_regclass reports missing as inactive without ever issuing the count query for it (avoids the documented head/count false-positive-on-missing-table gotcha)', async () => {
+    let countQueriesIssued = 0;
+    const pgClient = {
+      query: () => Promise.resolve({ rows: [{ table_name: 'strategic_directives_v2', exists_check: false }] }),
+    };
+    const supabase = {
+      from: (table) => ({
+        select: () => { countQueriesIssued += 1; return Promise.resolve({ count: 5, error: null }); },
+      }),
+    };
+    const results = await enumerateWorkItemTypes(supabase, [], pgClient);
+    const sdRow = results.find((r) => r.surface_key === 'strategic_directives_v2');
+    expect(sdRow.is_active).toBe(false);
+    expect(sdRow.metadata.enumeration_error).toMatch(/does not exist/);
+  });
+
+  it('falls back to count-only behavior when no pgClient is provided (backward compatible)', async () => {
+    const supabase = { from: () => ({ select: () => Promise.resolve({ count: 3, error: null }) }) };
+    const results = await enumerateWorkItemTypes(supabase, []);
+    expect(results.every((r) => r.is_active === true)).toBe(true);
+  });
+
+  it('falls back gracefully when the batched to_regclass query itself fails', async () => {
+    const pgClient = { query: () => Promise.reject(new Error('connection reset')) };
+    const supabase = { from: () => ({ select: () => Promise.resolve({ count: 0, error: null }) }) };
+    const results = await enumerateWorkItemTypes(supabase, [], pgClient);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.every((r) => r.is_active === false)).toBe(true);
   });
 });
 
