@@ -106,6 +106,28 @@ rest of the estate no longer maintains — or never fire when it should. Vocabul
 drift class. Candidate: repoint `auto_transition_status` to `progress_percentage`
 or retire it if superseded by handoff-driven transitions.
 
+**CORRECTION (2026-07-04, SD-FDBK-FIX-TRIGGER-AUDIT-MEDIUM-002, cancelled)**: this
+finding's premise was incomplete. `lib/sd-park.js` (`park()`/`unpark()`,
+SD-LEO-INFRA-PARKED-STATUS-REPLACE-001) is a real, deliberate, tested consumer
+of this EXACT trigger firing on the EXACT `progress` column — `park()` normalizes
+`progress` to 99 specifically to *avoid* an unwanted flip while parked, and
+`unpark()` restores `progress` to its original value specifically *to let the
+trigger promote* status to `pending_approval` on resume from the "100% in
+EXEC/PLAN" edge (see `tests/integration/sd-park.test.js` TS-5b). Neither
+candidate fix is safe: **repointing** to `progress_percentage` would reactivate
+an ungated side-channel for ordinary/incidental writes (9 real EXEC-phase SDs
+sit at `progress_percentage>=100` right now and would flip on next touch,
+independent of `unpark()`); **retiring/neutralizing** breaks `unpark()`'s tested
+contract outright. Two independent sub-agents (DATABASE, RISK) confirmed the
+repoint-risk correctly but neither found the `sd-park.js` dependency — their
+"who writes `pending_approval`" search covered explicit application-code writes
+but not DB-trigger side effects a caller deliberately relies on and merely reads
+back. **Conclusion: no code change.** The trigger is working as intended for its
+one real consumer and is harmlessly inert for the handoff.js-driven paths that
+don't depend on it. Future F-4/F-6 work on this table should grep `tests/` for
+the function/column name, not just `lib/`/`scripts/`, before assuming a
+DB-trigger side effect is dead weight.
+
 ### F-6 (MEDIUM) — PK-mutating sync triggers (`sync_sd_code_user_facing`, `sync_uuid_internal_pk`)
 **Where**: BEFORE INSERT/UPDATE on SDv2. `sync_sd_code_user_facing` **rewrites the
 primary key `id`** when `sd_code_user_facing` changes; `sync_uuid_internal_pk`
