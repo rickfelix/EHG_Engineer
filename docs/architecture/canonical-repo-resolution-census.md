@@ -26,6 +26,24 @@ by definition, a candidate for this class of bug.
 | `lib/ship/auto-merge.mjs` | Added `createRegistryNarrowedTrustGate(supabase)` — an opt-in, AND-composed trust predicate. The literal `AUTO_MERGE_PLATFORM_REPOS` floor (`isPlatformRepo`) always runs first and is non-negotiable; the registry's `applications.trust_tier` is consulted only to further narrow. Default wiring (`isTrustedRepo = isPlatformRepo`) is unchanged — zero behavior change to the live `/ship` path unless a caller explicitly opts in. |
 | `scripts/lint-repo-resolution-drift.mjs` (new) | Regression lint (FR-4) — AST-scoped (acorn), path-allowlisted. Stops new instances of this bug class from landing. |
 
+### Side effect of the FR-2 `resolveGitHubRepo()` fix (VALIDATION-agent finding, PLAN_VERIFICATION)
+
+`scripts/modules/shipping/ShippingPreflightVerifier.js` and
+`scripts/modules/shipping/SDGitStateReconciler.js` both build a `REPO_PATHS` map via
+`buildRepoPaths()`, which iterates `getRepoPaths()` (always has an `EHG_Engineer` key)
+and keeps only entries where `resolveGitHubRepo(name)` is truthy. Before this SD,
+`resolveGitHubRepo('EHG_Engineer')` returned `null`, so `rickfelix/EHG_Engineer` was
+**silently absent** from `REPO_PATHS` — these two shipping-preflight scanners were blind
+to the platform repo where nearly every SD's branch actually lives. The FR-2 fix
+corrects this as a side effect: `REPO_PATHS` now includes `rickfelix/EHG_Engineer` (6
+repos → 7, confirmed empirically by the VALIDATION sub-agent). This is net-positive and
+low-risk — both call sites only use the map to scan for the *current SD's own*
+unmerged branches/PRs, so the corrected behavior can only surface true positives, never
+introduce a false one. **Deferred-with-owner** (not fixed further here): a dedicated
+regression test locking in the corrected `buildRepoPaths()` output for these two
+specific callers, since it wasn't a directly-scoped component of this SD's system
+architecture (owner=fleet-worker follow-up QF).
+
 ## Deliberately-exempt (intentional anchors)
 
 | Site | Reason |
