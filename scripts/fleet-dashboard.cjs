@@ -1157,7 +1157,24 @@ async function printInbox() {
     return;
   }
 
-  console.log('  ' + signals.length + ' unread signal(s)');
+  // QF-20260704-877: signals.length is capped by .limit(20) above, so it can never report
+  // more than 20 even when the true unacknowledged backlog is larger — the label read "20
+  // unread signal(s)" indefinitely regardless of triage progress. Query the true count
+  // (same filters, no limit) so the display reflects real unread rows, not the window cap.
+  const { count: totalUnread, error: countError } = await supabase
+    .from('session_coordination')
+    .select('id', { count: 'exact', head: true })
+    .eq('target_session', coordinatorId)
+    .not('payload->>signal_type', 'is', null)
+    .is('acknowledged_at', null)
+    .gte('created_at', signalSince);
+
+  const trueCount = countError || totalUnread == null ? signals.length : totalUnread;
+  console.log('  ' + trueCount + ' unread signal(s)' +
+    (trueCount > signals.length ? ' (showing newest ' + signals.length + ')' : ''));
+  if (trueCount > 0) {
+    console.log('  Ack a signal: node scripts/coordinator-ack-signal.cjs --signal <id>');
+  }
   console.log('');
   console.log('  ' + pad('Type', 16) + pad('Severity', 10) + pad('Callsign', 12) + pad('Age', 8) + 'Body');
   console.log('  ' + '─'.repeat(68));
