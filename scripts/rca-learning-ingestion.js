@@ -340,6 +340,13 @@ async function updateIssuePatterns(rcr, learningRecord) {
       const reopenHistory = Array.isArray(prevMetadata.reopen_history) ? prevMetadata.reopen_history : [];
       const nowIso = new Date().toISOString();
       updatePayload.status = 'active';
+      // The prior fix didn't hold, so the prior SD no longer legitimately "owns" this
+      // pattern — clear assigned_sd_id/assignment_date rather than leaving a reopened
+      // pattern silently attributed to a completed SD (which would also let it be swept
+      // by that SD's own resolveLearningItems()/resolve_completed_sd_patterns() calls on
+      // any LATER completion, re-closing it without a fresh prevention check).
+      updatePayload.assigned_sd_id = null;
+      updatePayload.assignment_date = null;
       updatePayload.metadata = {
         ...prevMetadata,
         reopened_at: nowIso,

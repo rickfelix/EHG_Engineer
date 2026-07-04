@@ -51,7 +51,7 @@ describe('isPreventionRequiredEnforced', () => {
 });
 
 /** Minimal chainable supabase stub covering exactly the query shapes closeIssuePatterns() uses. */
-function makeSupabase({ enforced, candidates, updateError = null }) {
+function makeSupabase({ enforced, candidates, updateError = null, raceDropped = [] }) {
   const updateCalls = [];
   return {
     _updateCalls: updateCalls,
@@ -85,12 +85,27 @@ function makeSupabase({ enforced, candidates, updateError = null }) {
         },
         update(payload) {
           updateCalls.push(payload);
+          const filters = {};
           const chain = {
-            in() {
+            in(col, vals) {
+              filters[col] = vals;
               return chain;
             },
-            eq() {
+            eq(col, val) {
+              filters[col] = val;
               return chain;
+            },
+            select(col) {
+              return {
+                then(resolve) {
+                  const rows = updateError
+                    ? null
+                    : (filters.pattern_id || [])
+                        .filter((id) => !raceDropped.includes(id))
+                        .map((id) => ({ [col]: id }));
+                  resolve({ data: rows, error: updateError });
+                },
+              };
             },
             then(resolve) {
               resolve({ error: updateError });
@@ -129,5 +144,13 @@ describe('closeIssuePatterns', () => {
     const supabase = makeSupabase({ enforced: true, candidates: [] });
     const result = await closeIssuePatterns(supabase, { sdId: 'SD-X', resolutionNotes: 'test' });
     expect(result).toEqual({ resolved: [], deferred: [] });
+  });
+
+  it('race guard: only reports pattern_ids the UPDATE actually matched, not every id it attempted', async () => {
+    // PAT-A drops out of the UPDATE's WHERE clause between the SELECT and the UPDATE
+    // (e.g. a concurrent status change) -- must NOT be reported as resolved.
+    const supabase = makeSupabase({ enforced: false, candidates, raceDropped: ['PAT-A'] });
+    const result = await closeIssuePatterns(supabase, { sdId: 'SD-X', resolutionNotes: 'test' });
+    expect(result.resolved).toEqual(['PAT-B']);
   });
 });

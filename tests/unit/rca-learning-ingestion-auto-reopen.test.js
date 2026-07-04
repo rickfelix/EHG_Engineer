@@ -62,6 +62,9 @@ describe('updateIssuePatterns — auto-reopen on recurrence (FR-4)', () => {
     expect(payload.metadata.reopen_count).toBe(1);
     expect(payload.metadata.reopen_history).toHaveLength(1);
     expect(payload.metadata.reopen_history[0].previous_status).toBe('resolved');
+    // The prior fix didn't hold -- the prior SD no longer owns this pattern.
+    expect(payload.assigned_sd_id).toBeNull();
+    expect(payload.assignment_date).toBeNull();
     // resolution_date / resolution_notes are not part of the update payload at all —
     // the historical closure audit trail is left untouched.
     expect(payload.resolution_date).toBeUndefined();

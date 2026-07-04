@@ -204,7 +204,7 @@ export async function resolveLearningItems(sd, supabase) {
     // Resolve assigned patterns — routed through the canonical closeIssuePatterns() gate
     // (SD-LEO-INFRA-009-LEAF-FORMALIZE-001): a pattern without a prevention artifact is
     // deferred (left 'assigned') when enforcement is ON, resolved as before when OFF.
-    const { resolved: resolvedPatternIds } = await closeIssuePatterns(supabase, {
+    const { resolved: resolvedPatternIds, deferred: deferredPatterns } = await closeIssuePatterns(supabase, {
       sdId,
       resolutionNotes: `Resolved by ${sdId} via /learn workflow`,
     });
@@ -244,8 +244,11 @@ export async function resolveLearningItems(sd, supabase) {
       }
     }
 
-    if ((!patterns || patterns.length === 0) && (!improvements || improvements.length === 0)) {
+    const totalPatternCandidates = resolvedPatternIds.length + deferredPatterns.length;
+    if (totalPatternCandidates === 0 && (!improvements || improvements.length === 0)) {
       console.log('   ℹ️  No pending items to resolve');
+    } else if (deferredPatterns.length > 0) {
+      console.log(`   ⏸️  ${deferredPatterns.length} pattern(s) deferred (missing prevention artifact): ${deferredPatterns.map((d) => d.pattern_id).join(', ')}`);
     }
   } catch (error) {
     console.log(`   ⚠️  Learning item resolution error: ${error.message}`);
