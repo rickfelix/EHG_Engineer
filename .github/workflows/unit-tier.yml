@@ -37,6 +37,15 @@ jobs:
       - name: Run unit project (manifest exclusions applied)
         run: npx vitest run --project unit
 
+      - name: Run session-tick node:test suite (SD-LEO-INFRA-FIX-WINDOWS-SESSION-001)
+        # These files use node:test/node:assert directly (not vitest globals) and were
+        # never wired into any CI step before this SD — vitest's --project unit does not
+        # execute node:test-registered tests from an imported module, so they were
+        # silently never gating PRs despite existing since QF-20260509-187. Includes the
+        # new spawn-and-observe suite that proves the steady-state/PID-rediscovery/
+        # first-tick fixes under a real spawned child process.
+        run: npm run test:session-tick
+
       - name: Quarantine burn-down summary
         if: always()
         # SD-LEO-FIX-UNIT-TIER-STARTUP-001: block scalar (run: |) so the embedded

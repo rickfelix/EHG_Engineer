@@ -63,11 +63,14 @@ test('FR-1: releaseRowOnExitBestEffort PATCH body sets status=released + release
   assert.match(tickSrc, /'TICK_PARENT_ESRCH'/);
 });
 
-test('FR-1: releaseRowOnExitBestEffort PATCH WHERE filters status=eq.active (idempotent)', () => {
-  // If the row is already released (by sweep, by another path, by a prior
-  // cleanupAndExit), don\'t clobber it. status=eq.active filter makes this
-  // PATCH a 0-row no-op when the row was already moved out of active.
-  assert.match(tickSrc, /releaseRowOnExitBestEffort[\s\S]+?status=eq\.active/);
+test('FR-1: releaseRowOnExitBestEffort PATCH WHERE filters status=in.(active,idle,stale) (idempotent)', () => {
+  // If the row is already released/completed (by sweep, by another path, by a
+  // prior cleanupAndExit), don't clobber it. The filter makes this PATCH a
+  // 0-row no-op once the row has moved to a terminal status. Widened by
+  // SD-LEO-INFRA-FIX-WINDOWS-SESSION-001 from active-only so a session demoted
+  // to idle/stale whose parent then dies still gets released promptly on exit,
+  // instead of lingering until the next stale-session-sweep pass.
+  assert.match(tickSrc, /releaseRowOnExitBestEffort[\s\S]+?status=in\.\(active,idle,stale\)/);
 });
 
 test('FR-1: releaseRowOnExitBestEffort uses fire-and-forget (no await)', () => {
@@ -88,15 +91,29 @@ test('FR-1: releaseRowOnExitBestEffort uses fire-and-forget (no await)', () => {
 
 // ── FR-2: tickOnce released-row guard ────────────────────────────────────────
 
-test('FR-2: tickOnce steady-state PATCH filters status=eq.active', () => {
-  // Without this filter, an orphan tick that survives parent death would
-  // continue patching heartbeat on a row already marked released — the exact
-  // pattern witnessed for sibling 18b90582 (13h of heartbeats on a released
-  // row from a tick whose parent had been dead for hours).
-  // Match the steady-state branch (the `else` path of isFirstTick).
+test('FR-2: tickOnce steady-state PATCH filters status=in.(active,idle,stale)', () => {
+  // Without a terminal-status filter, an orphan tick that survives parent death
+  // would continue patching heartbeat on a row already marked released — the
+  // exact pattern witnessed for sibling 18b90582 (13h of heartbeats on a
+  // released row from a tick whose parent had been dead for hours). Widened by
+  // SD-LEO-INFRA-FIX-WINDOWS-SESSION-001 from active-only: a live-quiescent
+  // session legitimately drifts to idle (stale-session-sweep) or stale (DB-side
+  // cleanup cron) long before the daemon itself has any reason to exit — only
+  // released/completed are genuinely terminal and should still 0-row this PATCH.
   assert.match(
     tickSrc,
-    /const\s+url\s*=\s*`[^`]*\?session_id=eq\.\$\{[^}]+\}&status=eq\.active`/
+    /const\s+url\s*=\s*`[^`]*\?session_id=eq\.\$\{[^}]+\}&status=in\.\(active,idle,stale\)`/
+  );
+});
+
+test('FR-2: tickOnce does NOT revert to matching only status=eq.active', () => {
+  // Regression guard for the specific naive-revert hazard identified during
+  // LEAD-phase review: simply reverting to active-only would reintroduce THIS
+  // SD's own bug class (self-exit on idle/stale) even though it would still
+  // pass the "stops on released" behavioral tests.
+  assert.ok(
+    !/&status=eq\.active`/.test(tickSrc),
+    'no PATCH/GET should filter status=eq.active alone anymore'
   );
 });
 
@@ -122,4 +139,31 @@ test('FR-2: tickOnce stops the tickInterval loop on 0-row detection', () => {
   // Even with cleanupAndExit, the running tickInterval should be stopped to
   // prevent any further tick scheduling between detection and exit.
   assert.match(tickSrc, /clearInterval\(tickInterval\)/);
+});
+
+// ── FR-3 (SD-LEO-INFRA-FIX-WINDOWS-SESSION-001): first-tick resurrection guard ──
+
+test('FR-3: first-tick POST uses ignore-duplicates, not merge-duplicates', () => {
+  // merge-duplicates unconditionally overwrote status:'active' on every conflict,
+  // which could resurrect a row legitimately released between this daemon's spawn
+  // and its first tick. ignore-duplicates creates the row if missing but is a
+  // pure no-op if it already exists in ANY status — the row's actual status is
+  // then always handled by the steady-state PATCH, not this POST.
+  assert.match(tickSrc, /Prefer:\s*['"]resolution=ignore-duplicates/);
+  // Only the functional Prefer-header value matters — explanatory comments elsewhere in the
+  // file legitimately mention the retired 'merge-duplicates' string as historical context.
+  assert.ok(
+    !/Prefer:\s*['"]resolution=merge-duplicates/.test(tickSrc),
+    'no Prefer header should still request merge-duplicates'
+  );
+});
+
+test('FR-3: a failed first-tick POST does not fall through to the steady-state PATCH in the same tick', () => {
+  // A PATCH against a nonexistent session_id also 0-rows, which the steady-state
+  // branch would otherwise misread as "released" and incorrectly self-exit before
+  // the row has even been created. The first-tick branch must return early on a
+  // non-2xx/non-409 POST response instead of falling through.
+  const firstTickBlock = tickSrc.match(/if\s*\(isFirstTick\)\s*\{[\s\S]+?\n    \}/);
+  assert.ok(firstTickBlock, 'isFirstTick branch should be findable');
+  assert.match(firstTickBlock[0], /\}\s*else\s*\{[\s\S]*?return;[\s\S]*?\}/);
 });

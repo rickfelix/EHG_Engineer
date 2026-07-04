@@ -26,21 +26,23 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
 
 // SD-FDBK-ENH-SESSIONSTART-HOOK-CAPTURE-001 (FR-7): self-load .env so SUPABASE_* reads at
 // lines further below resolve regardless of parent shell. Detached tick subprocess does NOT
 // inherit other hooks' loaded env. Symmetric with capture-session-id.cjs FR-7 fix.
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
-const TICK_MS = 30 * 1000;
-const PARENT_POLL_MS = 5 * 1000;
+// SD-LEO-INFRA-FIX-WINDOWS-SESSION-001 (FR-4): env-overridable so spawn-and-observe tests can
+// run in seconds instead of the real 30s/5s cadence. Read once at module load — zero production
+// behavior change (both fall back to the prior hardcoded defaults when unset).
+const TICK_MS = Number(process.env.LEO_TICK_MS) || 30 * 1000;
+const PARENT_POLL_MS = Number(process.env.LEO_PARENT_POLL_MS) || 5 * 1000;
 const HTTP_TIMEOUT_MS = 3000;
 
 // SD-FDBK-FIX-PARKED-LOOP-WORKER-001: survive CC parent-PID rotation. When the pinned
-// CC_PARENT_PID dies, re-discover a live Claude Code parent (by SSE-port scan) before
-// concluding the session is dead. Require MAX_PARENT_MISSES consecutive failed discoveries
-// to debounce a transient process-scan miss.
+// CC_PARENT_PID dies, re-discover a live Claude Code parent (via a claude_sessions.pid
+// re-query — see rediscoverParentPid() below) before concluding the session is dead.
+// Require MAX_PARENT_MISSES consecutive failed discoveries to debounce a transient miss.
 const PARENT_REDISCOVER_TIMEOUT_MS = 3000;
 const MAX_PARENT_MISSES = 2;
 let parentMissCount = 0;
@@ -105,34 +107,54 @@ function parentAlive() {
   }
 }
 
-// SD-FDBK-FIX-PARKED-LOOP-WORKER-001: re-discover a live Claude Code parent PID by scanning
-// for a node.exe/claude.exe whose command line contains this session's SSE port. The SSE port
-// is stable across CC PID rotation (/clear, reconnect, compaction), so it correlates a live CC
-// process to THIS session without relying on ancestry — a detached tick has no CC ancestor to
-// walk. Mirrors capture-session-id.cjs findClaudeCodePid() Method 2. Built-ins only
-// (child_process + PowerShell), Windows-only. Returns a live PID (number) or 0.
-function rediscoverParentPid() {
-  if (process.platform !== 'win32') return 0;
-  const ssePort = process.env.CLAUDE_CODE_SSE_PORT;
-  if (!ssePort || !/^\d+$/.test(String(ssePort))) return 0;
+// SD-FDBK-FIX-PARKED-LOOP-WORKER-001 (original intent, re-implemented by
+// SD-LEO-INFRA-FIX-WINDOWS-SESSION-001): re-discover a live Claude Code parent PID when the
+// pinned CC_PARENT_PID dies, so a parked worker keeps ticking across PID rotation (/clear,
+// reconnect, compaction) instead of concluding the session is dead.
+//
+// The original approach (grep Win32_Process.CommandLine for the SSE port) was structurally
+// inert: CLAUDE_CODE_SSE_PORT is only ever read via process.env, never passed as a CLI arg
+// anywhere in the codebase, so no process's command line could ever contain it. Replaced with
+// a lightweight, cross-platform, read-only re-query of claude_sessions.pid — an ALREADY-
+// authoritative source, since scripts/hooks/capture-session-id.cjs's upsertSessionRow() writes
+// this column on every hook fire (SessionStart, /clear, reconnect), independent of this daemon.
+// Returns a live PID (number) or 0. Async — callers MUST await this (a bare Promise is always
+// truthy and would silently defeat the caller's liveness check).
+async function rediscoverParentPid() {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseKey) return 0;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PARENT_REDISCOVER_TIMEOUT_MS);
   try {
-    const script = [
-      'Get-CimInstance Win32_Process -Filter "Name=\'node.exe\' OR Name=\'claude.exe\'" -ErrorAction SilentlyContinue |',
-      `  Where-Object { $_.ProcessId -ne ${process.pid} -and $_.CommandLine -match '${ssePort}' } |`,
-      '  ForEach-Object { $_.ProcessId } |',
-      '  Select-Object -First 1',
-    ].join('\n');
-    const encoded = Buffer.from(script, 'utf16le').toString('base64');
-    const raw = execSync(`powershell -NoProfile -EncodedCommand ${encoded}`, {
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'ignore'],
-      timeout: PARENT_REDISCOVER_TIMEOUT_MS,
-    }).trim();
-    if (raw && /^\d+$/.test(raw)) return Number(raw);
+    const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/claude_sessions` +
+      `?session_id=eq.${encodeURIComponent(sessionId)}&select=pid`;
+    const res = await fetch(url, {
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        Accept: 'application/json',
+      },
+      signal: controller.signal,
+    });
+    if (!res.ok) return 0;
+    const rows = await res.json();
+    const candidate = Array.isArray(rows) && rows[0] ? Number(rows[0].pid) : 0;
+    if (!candidate || candidate === parentPid) return 0;
+    // Only adopt a PID that is actually alive and different from the one we already track —
+    // the caller debounces a genuine miss with MAX_PARENT_MISSES.
+    try {
+      process.kill(candidate, 0);
+      return candidate;
+    } catch (err) {
+      return err && err.code === 'EPERM' ? candidate : 0;
+    }
   } catch {
-    // discovery failure → treat as a miss; the caller debounces with MAX_PARENT_MISSES
+    // discovery failure (network, timeout, malformed response) → treat as a miss
+    return 0;
+  } finally {
+    clearTimeout(timer);
   }
-  return 0;
 }
 
 // ── Telemetry write ──────────────────────────────────────────────────────────
@@ -159,16 +181,24 @@ async function tickOnce() {
   try {
     const now = new Date().toISOString();
     if (isFirstTick) {
-      // FR-1+FR-4: insert-if-not-exists (POST + merge-duplicates) so a missing row
-      // self-heals within ~30s. UNIQUE(session_id) + 409 path treated as success
-      // gives race-on-race idempotency with capture-session-id.cjs upsertSessionRow.
+      // FR-1+FR-4: insert-if-not-exists so a missing row self-heals within ~30s.
+      //
+      // SD-LEO-INFRA-FIX-WINDOWS-SESSION-001 (FR-3): resolution=ignore-duplicates,
+      // NOT merge-duplicates. merge-duplicates unconditionally overwrote status:'active'
+      // on every conflict, which could resurrect a row legitimately released between
+      // this daemon's spawn and its first tick (releaseRowOnExitBestEffort or
+      // stale-session-sweep). ignore-duplicates creates the row if missing but is a
+      // pure no-op if it already exists in ANY status — no write, no resurrection risk.
+      // The row's heartbeat/status is then always handled by the SAME steady-state PATCH
+      // used on every other tick (falls through below on success), which is already
+      // correctly scoped to status=in.(active,idle,stale) — one write path, not two.
       const res = await fetch(baseUrl, {
         method: 'POST',
         headers: {
           apikey: supabaseKey,
           Authorization: `Bearer ${supabaseKey}`,
           'Content-Type': 'application/json',
-          Prefer: 'resolution=merge-duplicates,return=minimal',
+          Prefer: 'resolution=ignore-duplicates,return=minimal',
         },
         body: JSON.stringify({
           session_id: sessionId,
@@ -181,25 +211,41 @@ async function tickOnce() {
         }),
         signal: controller.signal,
       });
-      // 2xx OR 409/conflict → row exists, ticks can revert to PATCH.
+      // 2xx (created) OR 409/conflict (already existed, ignored) → row is now guaranteed
+      // to exist, fall through to the PATCH below in this SAME tick.
       if (res.ok || res.status === 409) {
         isFirstTick = false;
         if (debug && res.status === 409) {
-          console.error(`session-tick: first-tick POST 409 (row already existed) — race resolved, switching to PATCH`);
+          console.error(`session-tick: first-tick POST 409 (row already existed) — ignored, falling through to PATCH`);
         }
       } else {
-        // Non-success: leave isFirstTick=true so the next tick retries the POST.
+        // Non-success: the row may not exist yet. Do NOT fall through to the PATCH this
+        // tick — a PATCH against a nonexistent session_id also 0-rows, which the steady-
+        // state branch below would misread as "released" and incorrectly self-exit.
+        // Leave isFirstTick=true so the next tick retries the POST from scratch.
         if (debug) console.error(`session-tick: first-tick POST status=${res.status} — will retry on next tick`);
+        return;
       }
-    } else {
-      // Steady state — SD-LEO-INFRA-PROTOCOL-ENFORCEMENT-001 FR-4: update BOTH columns.
+    }
+    {
+      // Steady state (and immediately following a successful first-tick self-heal
+      // above, in the same tick) — SD-LEO-INFRA-PROTOCOL-ENFORCEMENT-001 FR-4: update BOTH columns.
       // claim-guard.mjs keys claim TTL on heartbeat_at (300s stale threshold).
       // QF-20260509-187 FR-2: filter `status=eq.active` so released rows are NOT
       // patched (read-modify-write hazard guard). When the row is released by FR-1
       // or by stale-session-sweep, this PATCH becomes a 0-row no-op and the
       // `Prefer: count=exact` header surfaces it. Closes sibling-phantom 18b90582
       // class (orphan tick patching released rows for hours).
-      const url = `${baseUrl}?session_id=eq.${encodeURIComponent(sessionId)}&status=eq.active`;
+      //
+      // SD-LEO-INFRA-FIX-WINDOWS-SESSION-001: widened active -> in.(active,idle,stale).
+      // stale-session-sweep.cjs demotes a live-quiescent session active->idle (and the
+      // DB-side cleanup_stale_sessions cron can further mark it stale, RCA-confirmed
+      // recoverable via a heartbeat refresh) well before the daemon itself has any
+      // reason to exit — the prior active-only filter treated both as indistinguishable
+      // from a genuine release, 0-rowing the PATCH and self-exiting a healthy daemon.
+      // released/completed remain the ONLY statuses that stop the tick (18b90582 fix
+      // preserved unchanged — this widens what SURVIVES, not what STOPS).
+      const url = `${baseUrl}?session_id=eq.${encodeURIComponent(sessionId)}&status=in.(active,idle,stale)`;
       const res = await fetch(url, {
         method: 'PATCH',
         headers: {
@@ -301,7 +347,12 @@ function releaseRowOnExitBestEffort(reason) {
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !supabaseKey) return;
   try {
-    const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/claude_sessions?session_id=eq.${encodeURIComponent(sessionId)}&status=eq.active`;
+    // SD-LEO-INFRA-FIX-WINDOWS-SESSION-001: widened to match tickOnce's steady-state
+    // filter (in.(active,idle,stale)) — a session demoted to idle/stale whose parent
+    // then dies must still get released promptly on exit, not linger until the next
+    // stale-session-sweep pass. status=eq.active alone left idle/stale rows unreleased
+    // here (a timeliness gap, not a correctness bug — sweep eventually caught them).
+    const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/claude_sessions?session_id=eq.${encodeURIComponent(sessionId)}&status=in.(active,idle,stale)`;
     const controller = new AbortController();
     setTimeout(() => controller.abort(), RELEASE_HTTP_TIMEOUT_MS);
     fetch(url, {
@@ -330,8 +381,8 @@ function cleanupAndExit(code) {
     try { emitEarlyExitTelemetry(code, lifetimeMs); } catch { /* never block exit */ }
   }
   // QF-20260509-187 FR-1: best-effort PATCH to released BEFORE deleteMarker+exit.
-  // Reason tag lets ops grep by lifecycle path. status=eq.active filter avoids
-  // clobbering rows already released by sweep or another path (idempotent).
+  // Reason tag lets ops grep by lifecycle path. status=in.(active,idle,stale) filter
+  // avoids clobbering rows already released by sweep or another path (idempotent).
   try { releaseRowOnExitBestEffort('TICK_PARENT_ESRCH'); } catch { /* never block exit */ }
   deleteMarker();
   process.exit(code);
@@ -360,12 +411,27 @@ const tickInterval = setInterval(() => { tickOnce(); }, TICK_MS);
 
 // Schedule parent liveness checks. Unref is intentional here — the parent
 // poll never holds the loop alive on its own; tickInterval does.
-const parentInterval = setInterval(() => {
+//
+// SD-LEO-INFRA-FIX-WINDOWS-SESSION-001: rediscoverParentPid() is now async (a DB re-query
+// replaces the old sync WMI call) — this callback MUST be async and await it. A bare Promise
+// is always truthy, so an un-awaited call would make `if (rediscovered)` always true and
+// silently defeat the MAX_PARENT_MISSES exit path (the tick would never exit on genuine parent
+// death). rediscoverInFlight guards re-entrancy: PARENT_REDISCOVER_TIMEOUT_MS (3s) can exceed
+// PARENT_POLL_MS (5s) under contention, so a slow discovery must not overlap the next poll tick.
+let rediscoverInFlight = false;
+const parentInterval = setInterval(async () => {
   if (parentAlive()) { parentMissCount = 0; return; }
+  if (rediscoverInFlight) return;
   // SD-FDBK-FIX-PARKED-LOOP-WORKER-001: the pinned CC parent PID is gone, but the CC session
   // may still be alive under a rotated PID (/clear, reconnect, compaction). Re-discover a live
   // CC parent before concluding the session is dead, so a parked worker keeps its heartbeat.
-  const rediscovered = rediscoverParentPid();
+  rediscoverInFlight = true;
+  let rediscovered;
+  try {
+    rediscovered = await rediscoverParentPid();
+  } finally {
+    rediscoverInFlight = false;
+  }
   if (rediscovered) {
     parentPid = rediscovered; // adopt the live PID; keep ticking
     parentMissCount = 0;
