@@ -167,7 +167,14 @@ export async function selfReviewMain() {
       } catch (e) { solicitFailed++; console.error('[COORD-REVIEW] adam solicit skip ' + a + ': ' + e.message.split('\n')[0]); }
     }
   }
-  try { writeFileSync(STATE, JSON.stringify({ lastReviewCompletedCount: completedNow, lastReviewAt: t })); } catch {}
+  // SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-2 fix: read-before-clobber. This write used to stamp a
+  // bare 2-key literal, wiping any coordSelfScoreCycle/coordSelfScoreStreak a prior DUE cycle had
+  // persisted (adversarial review catch, 2026-07-04) -- merge over the prior state and keep an
+  // in-memory snapshot (`stateSnapshot`) so the FR-2 block below reads the CURRENT truth instead
+  // of re-reading a file this same write just touched.
+  let priorState = {}; try { priorState = JSON.parse(readFileSync(STATE, 'utf8')); } catch { priorState = {}; }
+  let stateSnapshot = { ...priorState, lastReviewCompletedCount: completedNow, lastReviewAt: t };
+  try { writeFileSync(STATE, JSON.stringify(stateSnapshot)); } catch {}
 
   const since7 = new Date(t - 14 * 24 * 3600 * 1000).toISOString();
   const { data: all } = await db.from('feedback').select('description,created_at').eq('category', 'coordinator_review').gte('created_at', since7).order('created_at', { ascending: false }).limit(30);
@@ -193,7 +200,7 @@ export async function selfReviewMain() {
         solicit_failed_count: solicitFailed,
       };
 
-      let coordState = {}; try { coordState = JSON.parse(readFileSync(STATE, 'utf8')); } catch { coordState = {}; }
+      const coordState = stateSnapshot;
       const { dimensions, provenance } = roleScoreCore.scoreDimensions(signals, COORDINATOR_CONFIG);
       const belowThreshold = roleScoreCore.classifyBelowThreshold(dimensions, COORDINATOR_CONFIG.belowThresholdAt);
 
