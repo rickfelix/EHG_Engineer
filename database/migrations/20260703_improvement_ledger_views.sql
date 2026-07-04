@@ -40,15 +40,24 @@ UNION ALL
 SELECT 'A_applied_rate', id::text, 'DECIDE', reviewed_at, status, 'protocol_improvement_queue'
 FROM protocol_improvement_queue WHERE reviewed_at IS NOT NULL
 UNION ALL
-SELECT 'A_applied_rate', id::text, 'ACT', applied_at, status, 'protocol_improvement_queue'
-FROM protocol_improvement_queue WHERE applied_at IS NOT NULL
+-- ACT keyed on status (not applied_at IS NOT NULL): reviewed_fields_complete only
+-- enforces reviewed_at for non-PENDING/SD_CREATED status, NOT applied_at for
+-- APPLIED -- 11 of 82 live status='APPLIED' rows have a NULL applied_at, so an
+-- applied_at-only filter silently undercounts this loop's own namesake metric.
+-- entered_at falls back through the best available timestamp when applied_at
+-- itself is one of the missing ones.
+SELECT 'A_applied_rate', id::text, 'ACT', COALESCE(applied_at, reviewed_at, created_at), status, 'protocol_improvement_queue'
+FROM protocol_improvement_queue WHERE status = 'APPLIED'
 UNION ALL
 SELECT 'A_applied_rate', id::text, 'VERIFY', effectiveness_measured_at, effectiveness_score::text, 'protocol_improvement_queue'
 FROM protocol_improvement_queue WHERE effectiveness_measured_at IS NOT NULL
 UNION ALL
 -- PREVENT: pinned formula (verified against the live idx_protocol_improvement_rollback_expiry
 -- partial index) -- superseded, or applied and past its rollback window with no rollback taken.
-SELECT 'A_applied_rate', id::text, 'PREVENT', COALESCE(rollback_expires_at, applied_at), status, 'protocol_improvement_queue'
+-- entered_at falls back to created_at (never null) so a future SUPERSEDED row
+-- with both rollback_expires_at and applied_at NULL can't violate this file's
+-- own no-NULL-entered_at invariant.
+SELECT 'A_applied_rate', id::text, 'PREVENT', COALESCE(rollback_expires_at, applied_at, created_at), status, 'protocol_improvement_queue'
 FROM protocol_improvement_queue
 WHERE status = 'SUPERSEDED' OR (status = 'APPLIED' AND rollback_expires_at < now() AND rolled_back_at IS NULL);
 
@@ -95,15 +104,22 @@ FROM retrospectives WHERE learning_extracted_at IS NOT NULL;
 -- convergence_ledger_stages has 0 live rows today; an empty result for the
 -- stage-level rows is an honest reflection of current data, not a bug.
 -- ============================================================
+-- cycle_id is the run_id alone (NOT run_id:stage) on every branch, RECORD
+-- through PREVENT alike -- cycle_id identifies the unit of work (the
+-- convergence run), while the source table's own numbered pipeline stage
+-- (0-26, a different concept from this view's own SENSE/RECORD/.../PREVENT
+-- stage) is descriptive content folded into stage_status only. A run that
+-- passes through several numbered pipeline stages legitimately produces
+-- several RECORD rows sharing one cycle_id, distinguished by entered_at.
 CREATE OR REPLACE VIEW v_improvement_ledger_loop_d_convergence_clone WITH (security_invoker = true) AS
-SELECT 'D_convergence_clone'::text AS loop_id, (run_id::text || ':' || stage::text) AS cycle_id, 'RECORD'::text AS stage,
+SELECT 'D_convergence_clone'::text AS loop_id, run_id::text AS cycle_id, 'RECORD'::text AS stage,
        entered_at AS entered_at, ('stage ' || stage::text || ' - ' || stage_status) AS stage_status, 'convergence_ledger_stages'::text AS source_table
 FROM convergence_ledger_stages WHERE entered_at IS NOT NULL
 UNION ALL
-SELECT 'D_convergence_clone', (run_id::text || ':' || stage::text), 'ACT', entered_at, stage_status, 'convergence_ledger_stages'
+SELECT 'D_convergence_clone', run_id::text, 'ACT', entered_at, stage_status, 'convergence_ledger_stages'
 FROM convergence_ledger_stages WHERE fix_cycle_count > 0
 UNION ALL
-SELECT 'D_convergence_clone', (run_id::text || ':' || stage::text), 'VERIFY', entered_at, stage_status, 'convergence_ledger_stages'
+SELECT 'D_convergence_clone', run_id::text, 'VERIFY', entered_at, stage_status, 'convergence_ledger_stages'
 FROM convergence_ledger_stages WHERE stage_status = 'clean' AND issues_resolved >= issues_found
 UNION ALL
 SELECT 'D_convergence_clone', run_id::text, 'PREVENT', ended_at, status, 'convergence_ledger_runs'
@@ -114,6 +130,13 @@ FROM convergence_ledger_runs WHERE ended_at IS NOT NULL AND status = 'clean';
 -- Filtered by category, not a hardcoded role name, so additional roles'
 -- rows (once SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 ships more writers) appear
 -- automatically without a view change.
+-- KNOWN LIMITATION: all three stages reuse the feedback row's own created_at
+-- as entered_at -- the source JSON (metadata.score) carries no separate
+-- verified_at/escalated_at timestamps, so a VERIFY or PREVENT row will show
+-- the same instant as its RECORD row rather than when verification/escalation
+-- actually happened. Adding those timestamps would require a new column on
+-- feedback, out of scope for a no-schema-mutation SD; this is the best
+-- signal available from existing data, not a bug to silently paper over.
 -- ============================================================
 CREATE OR REPLACE VIEW v_improvement_ledger_loop_e_role_self_review WITH (security_invoker = true) AS
 SELECT 'E_role_self_review'::text AS loop_id, id::text AS cycle_id, 'RECORD'::text AS stage, created_at AS entered_at,
