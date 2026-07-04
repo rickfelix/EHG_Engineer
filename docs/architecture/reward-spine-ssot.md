@@ -59,6 +59,18 @@ the majority of merges. **Any L1 consumer (Child D) MUST print an honest coverag
 clean.** Treating `rungs = []` as "no issues found" would recreate exactly the Goodhart failure
 this spine exists to close.
 
+**⚠️ Rung-level wiring gap (verified live, Child D, 2026-07-04):** even on rows with real
+non-empty `rungs` (the `ship-auto-merge`/`ship-witness-retroactive-cli` lanes), individual
+rungs P1/P2 read `status='not_evaluable'` on every sampled row (0/139 witnessed rows had
+literal all-`pass` rungs) — a dependency-injection wiring gap in the witness ladder itself
+(`no lookupWorkKeyReal injected` / `no fetchReviewFinding injected`), not a real check failure.
+`lib/governance/l1-work-outcome.js` (Child D's delivered implementation) excludes
+`not_evaluable` rungs from the pass/fail determination while still requiring every *evaluated*
+rung to pass, and surfaces which rungs were skipped in `evidence.not_evaluable_count`. Requiring
+literal 100% pass across all rungs would make `shipped_clean` permanently unreachable given the
+ladder's current wiring — any future L1 consumer must apply the same not_evaluable exclusion,
+not a stricter all-rungs criterion.
+
 **⚠️ Ghost-completed noise:** the original reward-spine design brief cited
 `v_sd_completion_integrity` as showing 2,422/3,732 ghost-completed SDs. **That figure is
 stale/wrong.** A live query on 2026-07-04 (this SD) shows **269 ghost-completed out of 4,890
