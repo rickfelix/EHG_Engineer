@@ -11,6 +11,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { closeIssuePatterns } from '../lib/governance/pattern-closure.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -93,16 +95,24 @@ async function resolvePattern(patternId, resolutionNotes) {
   console.log('\n📝 RESOLUTION');
   console.log(`   Notes: ${resolutionNotes}`);
 
-  // Update pattern
-  const updateData = {
-    status: 'resolved',
-    trend: 'decreasing',
-    resolution_date: new Date().toISOString(),
-    resolution_notes: resolutionNotes,
-    updated_at: new Date().toISOString()
-  };
+  // Routed through the canonical closeIssuePatterns() gate (SD-LEO-INFRA-009-LEAF-FORMALIZE-001):
+  // requires a named prevention artifact (prevention_checklist) when enforcement is ON.
+  const { resolved, deferred } = await closeIssuePatterns(supabase, {
+    patternIds: [patternId],
+    resolutionNotes,
+  });
 
-  // Add resolution to proven_solutions as the final solution
+  if (!resolved.includes(patternId)) {
+    const reason = deferred.find((d) => d.pattern_id === patternId)?.reason || 'pattern not in an open (assigned/active) state';
+    console.error(`\n❌ Pattern NOT resolved: ${reason}`);
+    if (reason.includes('prevention')) {
+      console.error('   Populate prevention_checklist first (a named guard/gate/test), then retry.');
+    }
+    return false;
+  }
+
+  // Add resolution to proven_solutions as the final solution (preserved from the prior
+  // behavior; not part of the closure gate itself, a best-effort follow-up annotation).
   const provenSolutions = pattern.proven_solutions || [];
   provenSolutions.push({
     solution: `RESOLVED: ${resolutionNotes}`,
@@ -112,16 +122,13 @@ async function resolvePattern(patternId, resolutionNotes) {
     times_successful: 1,
     resolution_date: new Date().toISOString()
   });
-  updateData.proven_solutions = provenSolutions;
-
   const { error } = await supabase
     .from('issue_patterns')
-    .update(updateData)
+    .update({ trend: 'decreasing', proven_solutions: provenSolutions, updated_at: new Date().toISOString() })
     .eq('pattern_id', patternId);
 
   if (error) {
-    console.error(`\n❌ Failed to resolve pattern: ${error.message}`);
-    return false;
+    console.error(`\n⚠️  Pattern resolved, but proven_solutions annotation failed: ${error.message}`);
   }
 
   console.log('\n✅ Pattern resolved successfully!');
@@ -188,7 +195,11 @@ async function main() {
   process.exit(success ? 0 : 1);
 }
 
-main().catch(error => {
-  console.error('❌ Fatal error:', error);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch(error => {
+    console.error('❌ Fatal error:', error);
+    process.exit(1);
+  });
+}
+
+export { resolvePattern };

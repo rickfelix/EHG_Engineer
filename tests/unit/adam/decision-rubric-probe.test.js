@@ -75,25 +75,63 @@ describe('probeDecisionRubric — verdict', () => {
   const escalationBody = 'New pricing strategy proposed for venture-2 — this is your call, approve?';
 
   it('FAILs with an over-ask detail when >=1 likely over-ask is present', () => {
-    const b = probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: [{ body: overAskBody }, { body: escalationBody }] });
+    const b = probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: [{ body: overAskBody }, { body: escalationBody }], adamMachineRaisedNoiseInWindow: [] });
     expect(b.verdict).toBe(VERDICT.FAIL);
     expect(b.probe).toBe('decision_rubric');
     expect(b.detail).toMatch(/over-ask/i);
   });
 
   it('PASSes when there are no over-asks (only legitimate escalations)', () => {
-    const b = probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: [{ body: escalationBody }] });
+    const b = probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: [{ body: escalationBody }], adamMachineRaisedNoiseInWindow: [] });
     expect(b.verdict).toBe(VERDICT.PASS);
   });
 
   it('PASSes on an honest empty window (nothing to flag)', () => {
-    const b = probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: [] });
+    const b = probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: [], adamMachineRaisedNoiseInWindow: [] });
     expect(b.verdict).toBe(VERDICT.PASS);
   });
 
   it('is advisory + fail-loud: a null fact yields UNKNOWN, never a silent pass', () => {
-    expect(probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: null }).verdict).toBe(VERDICT.UNKNOWN);
+    expect(probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: null, adamMachineRaisedNoiseInWindow: [] }).verdict).toBe(VERDICT.UNKNOWN);
+    expect(probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: [], adamMachineRaisedNoiseInWindow: null }).verdict).toBe(VERDICT.UNKNOWN);
     expect(probeDecisionRubric({}).verdict).toBe(VERDICT.UNKNOWN);
+  });
+});
+
+// QF-20260704-748: the stall detector raises machine-escalations directly into chairman_decisions
+// (no free-text advisory body), so a cancelled-as-noise row must count as an over-ask even though
+// the text classifier never sees it — closing the blind spot that let a 197-row flood window PASS.
+describe('probeDecisionRubric — machine-raised noise channel (QF-20260704-748)', () => {
+  const cleanTextOnly = [{ body: 'New pricing strategy proposed for venture-2 — this is your call, approve?' }];
+
+  it('FAILs when machine-raised noise rows exist even with zero text over-asks', () => {
+    const noise = Array.from({ length: 3 }, (_, i) => ({ id: `dec-${i}`, summary: 'stall alert' }));
+    const r = probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: cleanTextOnly, adamMachineRaisedNoiseInWindow: noise });
+    expect(r.verdict).toBe(VERDICT.FAIL);
+    expect(r.detail).toMatch(/3 NEW likely over-ask\(s\) of 4/);
+  });
+
+  it('replays the flood specimen: 128 clean text questions + 197 cancelled-noise rows -> FAIL', () => {
+    const noise = Array.from({ length: 197 }, (_, i) => ({ id: `flood-${i}` }));
+    const r = probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: cleanTextOnly.slice(0).concat(Array(127).fill(cleanTextOnly[0])), adamMachineRaisedNoiseInWindow: noise });
+    expect(r.verdict).toBe(VERDICT.FAIL);
+    expect(r.detail).toMatch(/197 NEW likely over-ask\(s\) of 325/);
+  });
+
+  it('a clean window (no text over-asks, no machine noise) still PASSes', () => {
+    const r = probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: cleanTextOnly, adamMachineRaisedNoiseInWindow: [] });
+    expect(r.verdict).toBe(VERDICT.PASS);
+  });
+
+  it('a resolved machine-noise fingerprint (by row id) is excluded on replay', () => {
+    const fp = fingerprintOverAsk('dec-1');
+    const r = probeDecisionRubric({
+      adamChairmanDecisionQuestionsInWindow: [],
+      adamMachineRaisedNoiseInWindow: [{ id: 'dec-1' }],
+      resolvedOverAskFingerprints: [fp],
+    });
+    expect(r.verdict).toBe(VERDICT.PASS);
+    expect(r.detail).toMatch(/1 excluded as already-remediated/);
   });
 });
 
@@ -112,7 +150,7 @@ describe('decision_rubric resolved-exclusion (SD-LEO-INFRA-ADAM-DECISION-RUBRIC-
   });
 
   it('FAILS on a NEW over-ask and emits its fingerprint on the detail tail', () => {
-    const r = probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: [{ body: OVER_ASK }], windowDays: 1 });
+    const r = probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: [{ body: OVER_ASK }], adamMachineRaisedNoiseInWindow: [], windowDays: 1 });
     expect(r.verdict).toBe(VERDICT.FAIL);
     expect(parseFingerprintsTail(r.detail)).toEqual([fingerprintOverAsk(OVER_ASK)]);
     expect(r.detail).toMatch(/NEW/);
@@ -121,7 +159,7 @@ describe('decision_rubric resolved-exclusion (SD-LEO-INFRA-ADAM-DECISION-RUBRIC-
 
   it('PASSES when the only over-ask was already remediated (its fingerprint is in resolvedOverAskFingerprints)', () => {
     const fp = fingerprintOverAsk(OVER_ASK);
-    const r = probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: [{ body: OVER_ASK }], resolvedOverAskFingerprints: [fp], windowDays: 1 });
+    const r = probeDecisionRubric({ adamChairmanDecisionQuestionsInWindow: [{ body: OVER_ASK }], adamMachineRaisedNoiseInWindow: [], resolvedOverAskFingerprints: [fp], windowDays: 1 });
     expect(r.verdict).toBe(VERDICT.PASS);
     expect(r.detail).toMatch(/0 NEW over-asks/);
     expect(r.detail).toMatch(/1 excluded as already-remediated/);
@@ -130,6 +168,7 @@ describe('decision_rubric resolved-exclusion (SD-LEO-INFRA-ADAM-DECISION-RUBRIC-
   it('still FAILS on a NEW over-ask even when a DIFFERENT historical over-ask is resolved (improving-but-not-clean)', () => {
     const r = probeDecisionRubric({
       adamChairmanDecisionQuestionsInWindow: [{ body: OVER_ASK }],
+      adamMachineRaisedNoiseInWindow: [],
       resolvedOverAskFingerprints: ['someotherfp01'],
       windowDays: 1,
     });

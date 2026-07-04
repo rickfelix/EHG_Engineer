@@ -33,12 +33,23 @@ describe('transformLegacyFinding', () => {
     expect(r.evidence_pointer.legacy_check).toBe('mystery_check');
   });
 
-  it('defaults bad severity to medium', () => {
+  it('defaults bad severity to low (fail-safe, not escalating)', () => {
     const r = transformLegacyFinding(
       { check: 'lint', title: 't', severity: 'urgent' },
       ctx
     );
-    expect(r.severity).toBe('medium');
+    expect(r.severity).toBe('low');
+  });
+
+  it('QF-20260703-248: an info-severity skipped-check finding fails safe to low, not medium', () => {
+    // The exact live specimen: stage-20-code-quality.js emits severity='info' for a skipped
+    // npm_audit check ("No package.json found"). 'info' isn't in SEVERITY_LEVELS, so it must
+    // land in the excluded (non-filing) 'low' band, not the auto-filed 'medium' band.
+    const r = transformLegacyFinding(
+      { check: 'npm_audit', title: 'No package.json found', detail: 'Skipped npm audit', severity: 'info' },
+      ctx
+    );
+    expect(r.severity).toBe('low');
   });
 
   it('returns null for malformed input', () => {

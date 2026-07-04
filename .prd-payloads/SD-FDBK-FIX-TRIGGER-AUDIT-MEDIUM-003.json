@@ -1,0 +1,89 @@
+{
+  "executive_summary": "F-6 (MEDIUM) from the trigger-estate audit (docs/audits/SD-LEO-INFRA-TRIGGER-ESTATE-AUDIT-001.md): sync_sd_code_user_facing and sync_uuid_internal_pk BEFORE INSERT/UPDATE triggers on strategic_directives_v2 bidirectionally sync twin-column pairs (id<->sd_code_user_facing, uuid_id<->uuid_internal_pk) -- including an UPDATE branch that silently rewrites the real PK/FK-bearing columns (id, uuid_id) if anyone writes the 'alias' columns. A full consumer audit (repo-wide grep of lib/scripts/tests/migrations for all four column names, plus FK inventory) found: (1) these triggers are a deliberate transitional bridge from a 2026-01 rename migration whose Phase 4/5 (migrate consumers off the old columns, drop them) were never completed; (2) the INSERT null-fill branch of BOTH triggers is a genuine, test-guarded live dependency of lib/sourcing-engine/refill-auto-promote.js -- removing it breaks auto-refill promotion (NOT-NULL violation); (3) zero live consumers rely on the dangerous UPDATE-branch PK-rewrite behavior (the one historical case is superseded); (4) uuid_id (not uuid_internal_pk) is the actual FK target for 5+ tables (sd_wall_states, sd_transition_audit, sd_kickbacks, sd_gate_results, sd_corrections, capability_reuse_log), so the sync trigger's defensive value (preventing silent uuid_id/uuid_internal_pk divergence) is real. Per this evidence, full retirement is NOT yet safe (mirrors the F-5 precedent), but the dangerous UPDATE-branch behavior can be made OBSERVABLE without any behavior change -- closing the silent half of the foot-gun while leaving the load-bearing INSERT-branch and FK-safety behavior fully intact.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Add RAISE WARNING to the PK-rewrite UPDATE branch of both sync triggers (observability only, zero behavior change)",
+      "description": "In sync_sd_code_user_facing(), add a RAISE WARNING immediately before 'NEW.id := NEW.sd_code_user_facing' logging the SD's old/new id and the fact that a write to sd_code_user_facing just rewrote the primary key. In sync_uuid_internal_pk(), add the equivalent RAISE WARNING before 'NEW.uuid_id := NEW.uuid_internal_pk'. The INSERT null-fill branches (the branch refill-auto-promote.js depends on) and the id->alias / uuid_id->uuid_internal_pk forward-propagation branches are UNCHANGED -- only the reverse (alias-writes-mutate-PK) branch gains a warning, with no control-flow change.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Both functions' forward-sync branches (id->sd_code_user_facing, uuid_id->uuid_internal_pk) and INSERT null-fill branches are byte-for-byte behaviorally identical to before (verified by re-running the existing consumer test suites).",
+        "Writing sd_code_user_facing directly (not id) on an UPDATE still rewrites id (unchanged behavior) AND now emits a Postgres WARNING naming the trigger and both id values.",
+        "Writing uuid_internal_pk directly (not uuid_id) on an UPDATE still rewrites uuid_id (unchanged behavior) AND now emits a Postgres WARNING naming the trigger and both uuid values."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Document the Phase 4/5 rename-migration status + what blocks full retirement",
+      "description": "Update docs/database/column-rename-migration-notes.md (or add a correction note to the trigger-estate audit's F-6 section, mirroring the F-5 CORRECTION convention) recording: Phase 4 (migrate consumers off id/uuid_id) and Phase 5 (drop the old columns + triggers) were never completed after the 2026-01-24 rename migrations; lib/sourcing-engine/refill-auto-promote.js is the concrete live blocker for Phase 5 (it relies on the INSERT null-fill branch); full retirement requires first migrating that script to explicitly set sd_code_user_facing/uuid_internal_pk itself (mirroring scripts/leo-create-sd.js's existing pattern) -- scoped follow-up work, out of scope for this MEDIUM fix.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "The documentation clearly states Phase 4/5 status (incomplete) and names the specific blocking consumer (refill-auto-promote.js).",
+        "A follow-up path is named (migrate refill-auto-promote.js to explicit column-set, matching leo-create-sd.js) without being executed in this SD."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Regression test proving zero behavior change on load-bearing paths",
+      "description": "A live-DB test verifying: (a) refill-auto-promote's INSERT pattern (omitting sd_code_user_facing/uuid_internal_pk) still succeeds and both columns are null-filled correctly; (b) leo-create-sd's INSERT pattern (both columns pre-set equal) still results in id being unmutated; (c) an UPDATE that writes sd_code_user_facing directly still results in id being rewritten to match (unchanged behavior, now just also logged).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Test confirms the INSERT null-fill path used by refill-auto-promote.js is unaffected.",
+        "Test confirms the trigger-avoidant INSERT pattern used by leo-create-sd.js is unaffected.",
+        "Test confirms the PK-rewrite UPDATE-branch behavior itself is UNCHANGED (still rewrites id/uuid_id) -- only observability was added, not a behavior fix."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "No behavior change on any branch except adding a RAISE WARNING", "description": "This is deliberately NOT a full retirement or behavior fix -- per the consumer audit, retirement is unsafe until lib/sourcing-engine/refill-auto-promote.js is migrated off the INSERT null-fill dependency. Only observability is added." },
+    { "id": "TR-2", "title": "CREATE OR REPLACE FUNCTION, no trigger re-creation needed", "description": "Both triggers already exist and fire on the correct events; only the function bodies change." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "INSERT with sd_code_user_facing/uuid_internal_pk omitted (refill-auto-promote pattern)", "type": "integration", "expected": "both columns null-filled from id/uuid_id, no warning emitted (INSERT branch unchanged)" },
+    { "id": "TS-2", "scenario": "INSERT with id and sd_code_user_facing pre-set equal (leo-create-sd pattern)", "type": "integration", "expected": "no mutation, no warning (both already equal, trigger no-ops)" },
+    { "id": "TS-3", "scenario": "UPDATE writing sd_code_user_facing directly to a new value", "type": "integration", "expected": "id is rewritten to match (unchanged behavior) AND a WARNING is raised naming the trigger + old/new id" },
+    { "id": "TS-4", "scenario": "UPDATE writing uuid_internal_pk directly to a new value", "type": "integration", "expected": "uuid_id is rewritten to match (unchanged behavior) AND a WARNING is raised" }
+  ],
+  "acceptance_criteria": [
+    "The dangerous PK-rewrite UPDATE branch of both triggers now emits a visible WARNING; all other behavior (INSERT null-fill, forward id->alias sync) is provably unchanged.",
+    "refill-auto-promote.js and leo-create-sd.js's existing INSERT patterns both continue to work exactly as before.",
+    "Documentation records the Phase 4/5 incomplete-migration status and the concrete blocker for future full retirement."
+  ],
+  "risks": [
+    { "risk": "A behavior change accidentally breaks refill-auto-promote.js's INSERT null-fill dependency.", "mitigation": "Only the UPDATE PK-rewrite branch gains a RAISE WARNING; the INSERT branch is untouched. Regression test TS-1 directly proves this.", "severity": "high" },
+    { "risk": "Full retirement is attempted prematurely without migrating refill-auto-promote.js first.", "mitigation": "This SD deliberately scopes OUT full retirement; FR-2 documents the blocker so a future SD does the migration first.", "severity": "medium" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["lib/sourcing-engine/refill-auto-promote.js (INSERT null-fill, unaffected)", "scripts/leo-create-sd.js (trigger-avoidant INSERT, unaffected)"],
+    "dependencies": ["sync_sd_code_user_facing()", "sync_uuid_internal_pk()"],
+    "data_contracts": ["strategic_directives_v2 (id, sd_code_user_facing, uuid_id, uuid_internal_pk) -- no schema change, function bodies only"],
+    "runtime_config": ["none"],
+    "observability_rollout": ["Postgres WARNING log lines on the PK-rewrite branch (new)", "tests/database/ regression suite"]
+  },
+  "system_architecture": {
+    "summary": "Add observability (RAISE WARNING) to the dangerous half of two existing twin-column-sync triggers on strategic_directives_v2, without changing behavior, per a consumer audit that found full retirement unsafe today.",
+    "components": [
+      { "name": "database/migrations/20260704_pk_sync_trigger_warn_guard.sql", "change": "NEW -- CREATE OR REPLACE both trigger functions adding RAISE WARNING to the UPDATE PK-rewrite branch only" },
+      { "name": "docs/database/column-rename-migration-notes.md", "change": "UPDATE -- document Phase 4/5 incomplete status + refill-auto-promote.js blocker" },
+      { "name": "tests/database/pk-sync-trigger-warn-guard.test.js", "change": "NEW -- regression test proving zero behavior change" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Consumer audit already completed (repo-wide grep + FK inventory) confirms full retirement is unsafe; ship the safe observability-only guard plus documentation of the real blocker.",
+    "steps": [
+      "Consumer audit (DONE): grepped lib/scripts/tests/migrations for sd_code_user_facing/uuid_internal_pk/uuid_id/id; found refill-auto-promote.js's live INSERT-branch dependency + leo-create-sd.js's trigger-avoidant pattern + 5+ real FKs on uuid_id.",
+      "Write the migration: CREATE OR REPLACE both functions, adding RAISE WARNING only to the PK-rewrite UPDATE branch.",
+      "Write the regression test proving all 4 scenarios (INSERT null-fill, INSERT pre-set, UPDATE warn+rewrite x2).",
+      "Update column-rename-migration-notes.md with the Phase 4/5 status correction.",
+      "Apply the migration live, run the regression test + full tests/database suite for zero-regression."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "npx vitest run tests/database/pk-sync-trigger-warn-guard.test.js", "expected_outcome": "All 4 scenarios pass -- INSERT paths unaffected, UPDATE PK-rewrite paths unchanged but now warn." },
+    { "step_number": 2, "instruction": "npx vitest run tests/unit/sourcing-engine/refill-auto-promote.test.js", "expected_outcome": "Unaffected -- still asserts sd_code_user_facing/uuid_internal_pk excluded from the insert payload." },
+    { "step_number": 3, "instruction": "npx vitest run tests/database/", "expected_outcome": "Full suite green, zero regression." }
+  ],
+  "metadata": {
+    "sd_key": "SD-FDBK-FIX-TRIGGER-AUDIT-MEDIUM-003"
+  }
+}
