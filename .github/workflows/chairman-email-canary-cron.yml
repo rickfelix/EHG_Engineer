@@ -1,0 +1,59 @@
+name: "Chairman-email channel canary (cron)"
+
+# SD-LEO-INFRA-CHAIRMAN-EMAIL-CHANNEL-001 — daily delivery-verified canary + a more frequent
+# freshness/absence check, both on always-on GitHub Actions (NOT scripts/gauge-runner.mjs, which
+# has no independent schedule and dies with the coordinator process — defeating the point of an
+# independent watchdog for the channel that carries chairman-only escalations).
+#
+# Two cron entries drive ONE workflow; the job branches on github.event.schedule:
+#   - 14:00 UTC daily (10am ET, outside the 23:00-05:00 ET quiet window): send + verify delivery.
+#   - Every 6 hours: freshness/absence check — a GH Actions cron is best-effort, so a dropped
+#     daily-send run looks identical to a passing run from the outside; this catches that by
+#     checking staleness of last_canary_verified_at rather than trusting "the job ran".
+
+on:
+  schedule:
+    - cron: '0 14 * * *'
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  canary:
+    name: Send/verify canary or check freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
+      CHAIRMAN_EMAIL: ${{ secrets.CLAUDE_NOTIFY_EMAIL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run daily canary send
+        if: github.event.schedule == '0 14 * * *' || github.event_name == 'workflow_dispatch'
+        run: node scripts/chairman-email-canary.mjs
+
+      - name: Run freshness/absence check
+        if: github.event.schedule == '0 */6 * * *'
+        run: node scripts/chairman-email-canary.mjs --check-freshness
