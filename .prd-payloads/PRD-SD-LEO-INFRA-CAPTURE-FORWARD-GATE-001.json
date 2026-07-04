@@ -1,0 +1,99 @@
+{
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Per-stage capture-forward extraction for venture-1 (MarketLens), retroactive + forward",
+      "description": "Add a new migration creating `venture_capture_snapshots` (id uuid pk, venture_id uuid references ventures(id), lifecycle_stage int, captured_at timestamptz default now(), snapshot jsonb, provenance text default 'unvalidated' check in ('unvalidated','validated'), unique(venture_id, lifecycle_stage)) with RLS enabled and a service_role-only policy (mirrors the pattern other venture-scoped tables use). Add lib/eva/venture-capture-forward.js exporting captureVentureStage(supabase, ventureId, stage) which reuses the existing PURE read/compute sub-extractors already exported from lib/eva/template-extractor.js (extractScoringThresholds, extractArchitecturePatterns, extractDFECalibrations, extractPricingParams, extractGTMEffectiveness) to build the same shape of snapshot data extractTemplate() would compute, then UPSERTs it into venture_capture_snapshots keyed on (venture_id, lifecycle_stage) -- NOT into venture_templates. Add captureVentureRetroactive(supabase, ventureId, fromStage, toStage) that loops captureVentureStage for a stage range, and a thin CLI scripts/capture-forward-venture.mjs (--venture <id> --from <n> --to <n>) to run the retroactive backfill for MarketLens (venture id 4e710bb2-d521-4154-85f4-37300761b090 or ecbba50e-3c98-4493-9e77-1719cf6b6f00 -- verify against ventures table which is the live one at build time, do not hard-code without checking) covering its already-completed stages 19-23 NOW. Wire captureVentureStage into lib/eva/workers/stage-advance-worker.js's existing stage-transition point so future stage completions (24, 25, 26) for any venture at/above resolveMinExtractStage()'s threshold auto-capture going forward, reusing template-extractor.js's own resolveMinExtractStage() so the two gates never drift out of sync."
+    },
+    {
+      "id": "FR-2",
+      "title": "Hard fence: zero writes to venture_templates or any application surface",
+      "description": "lib/eva/venture-capture-forward.js MUST NOT import, reference, or write to the venture_templates table, call extractTemplate(), call updateEffectivenessScore(), or perform any funnel-recalibration/promotion logic. Add a unit test asserting captureVentureStage/captureVentureRetroactive never invoke supabase.from('venture_templates') (spy/mock assertion on the injected supabase client) and an integration-style test that runs the retroactive backfill against a test venture and then asserts the venture_templates row count is unchanged before/after. This is the acceptance-critical fence per the chairman-ratified collect-without-promote scope -- application (template promotion) remains deferred to first-revenue exactly as ratified."
+    },
+    {
+      "id": "FR-3",
+      "title": "Capture-completeness gauge (composes with existing C-009 leaf 3 gauge runner, no new registry framework)",
+      "description": "Add ONE new entry to the existing GAUGE_REGISTRY array in lib/governance/gauge-registry.js (id: 'venture-capture-completeness', detectorFn: 'venture-capture-completeness', ownerRole: 'coordinator', thresholdConfig.tripWhen: (result) => (result?.missingCount || 0) > 0) -- reusing the SAME registry/runner/alerting/heartbeat machinery C-009 leaf 3's per-loop-health entries already ride on, NOT a new parallel gauge subsystem. Add the matching resolver in scripts/gauge-runner.mjs's buildDetectorResolvers() that: for each active venture at/above resolveMinExtractStage()'s threshold, compares venture.current_lifecycle_stage against rows present in venture_capture_snapshots and reports { missingCount, coveragePct, perVenture: [...] }. A non-zero missingCount trips the gauge, making per-stage extraction coverage for venture-1 (and any future qualifying venture) visible on the existing gauge-runner surface instead of remaining dark data."
+    }
+  ],
+  "technical_requirements": [
+    { "requirement": "New migration is additive-only (CREATE TABLE + RLS policy) -- no ALTER of any existing table, no schema mutation of ventures/venture_templates/venture_artifacts" },
+    { "requirement": "lib/eva/venture-capture-forward.js imports ONLY the pure sub-extractor functions from template-extractor.js (already side-effect-free, already exported) -- it does not import or call extractTemplate/updateEffectivenessScore" },
+    { "requirement": "captureVentureStage is idempotent: re-running it for a (venture_id, lifecycle_stage) pair already captured UPSERTs (updates captured_at/snapshot), never duplicates a row -- enforced by the unique(venture_id, lifecycle_stage) constraint" },
+    { "requirement": "The stage-advance-worker.js hook is additive and fail-open: a capture error is logged and swallowed, never blocks or fails the underlying stage-advance transaction it is attached to" },
+    { "requirement": "gauge-runner.mjs's new resolver follows the existing buildDetectorResolvers() map-of-async-functions shape used by every other entry (per REGISTRY file's STUB-ROW-ADOPTION-CONTRACT header) -- no new runner entry point" }
+  ],
+  "test_scenarios": [
+    { "scenario": "Retroactive backfill for MarketLens (stages 19-23) creates one venture_capture_snapshots row per completed stage, each provenance='unvalidated'" },
+    { "scenario": "Re-running the retroactive backfill is idempotent -- row count for the venture is unchanged, existing rows are updated not duplicated" },
+    { "scenario": "captureVentureStage never calls supabase.from('venture_templates') -- verified via spy/mock assertion" },
+    { "scenario": "venture_templates row count is 0 before and after the retroactive backfill runs" },
+    { "scenario": "stage-advance-worker.js's capture hook does not throw or block stage advancement when captureVentureStage itself throws (fail-open)" },
+    { "scenario": "The new gauge-runner detector reports missingCount=0 once MarketLens's completed stages are all captured, and missingCount>0 before the backfill runs" },
+    { "scenario": "gauge-registry.js's GAUGE_REGISTRY array gains exactly one new entry; all pre-existing entries (unranked-claimable-leaves, relay-drop, stale-tree, ship-witness-unwitnessed-merge, coordinator-sourced-sd, adam-claimed-or-built-sd, solomon-dispatched-sd, recursion-governor-ratio, the per-loop-health entries, the three self-score-age stub entries) are unchanged" }
+  ],
+  "acceptance_criteria": [
+    "Extraction rows exist in venture_capture_snapshots for each of MarketLens's completed stages (19 through its current_lifecycle_stage at build time, verified live against the ventures table, not hard-coded to 23)",
+    "venture_templates remains at 0 rows after this SD ships (verified by direct count query pre/post)",
+    "The gauge-runner surfaces per-stage extraction coverage for venture-1 without a second parallel gauge framework -- exactly one new GAUGE_REGISTRY entry, reusing the existing runner",
+    "Zero regression: all pre-existing tests for template-extractor.js, gauge-registry.js, and gauge-runner.mjs continue to pass unmodified",
+    "The forward-capture hook in stage-advance-worker.js is additive and does not change that worker's existing stage-advancement behavior or tests"
+  ],
+  "risks": [
+    {
+      "risk": "The stage-advance-worker.js hook point is misidentified and capture silently never fires forward for stages 24-26",
+      "impact": "medium",
+      "likelihood": "low",
+      "mitigation": "Verify by manually invoking the hook path (or its nearest test) against a test venture crossing the minStage threshold before considering FR-1's forward half done; the retroactive backfill (this session's immediate need) does not depend on this wiring succeeding"
+    },
+    {
+      "risk": "A future engineer confuses venture_capture_snapshots (collect-only) with venture_templates (application surface) and starts consuming the new table from the promotion/funnel-recalibration path",
+      "impact": "medium",
+      "likelihood": "low",
+      "mitigation": "Table and module naming (capture_snapshots / capture-forward) plus the FR-2 hard-fence test suite make the distinction explicit and test-enforced; a docstring at the top of venture-capture-forward.js states the collect-without-promote contract"
+    },
+    {
+      "risk": "MarketLens has already advanced past stage 23 by the time EXEC runs (it was at S23 when sourced, S24 when this SD was claimed a few hours later) and the retroactive range needs re-verifying live rather than trusting the SD description's stage numbers",
+      "impact": "low",
+      "likelihood": "medium",
+      "mitigation": "FR-1 explicitly requires verifying the live ventures table for the current MarketLens row/stage before running the backfill, rather than hard-coding stages 19-23 from the SD text"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "scripts/capture-forward-venture.mjs (manual/scheduled retroactive backfill CLI)",
+      "lib/eva/workers/stage-advance-worker.js (forward auto-capture hook)",
+      "scripts/gauge-runner.mjs (capture-completeness visibility)"
+    ],
+    "dependencies": [
+      "lib/eva/template-extractor.js's exported pure sub-extractors and resolveMinExtractStage()",
+      "lib/governance/gauge-registry.js's GAUGE_REGISTRY array + scripts/gauge-runner.mjs's buildDetectorResolvers() map"
+    ],
+    "data_contracts": [
+      "New table venture_capture_snapshots (additive migration, RLS enabled, service_role-only) -- no existing schema altered"
+    ],
+    "runtime_config": [
+      "Reuses LEO_TEMPLATE_EXTRACT_MIN_STAGE (existing env var from template-extractor.js) for gate-threshold consistency -- no new env var introduced"
+    ],
+    "observability_rollout": [
+      "New GAUGE_REGISTRY entry surfaces capture completeness/gaps through the existing gauge-runner alerting/heartbeat path -- no new telemetry system"
+    ]
+  },
+  "implementation_approach": {
+    "phases": [
+      "Phase 1 (FR-1 retroactive): migration + venture-capture-forward.js + capture-forward-venture.mjs CLI; run the backfill live for MarketLens's completed stages now (time-critical, signal is perishable)",
+      "Phase 2 (FR-2 hard fence): unit + integration tests proving zero venture_templates writes",
+      "Phase 3 (FR-1 forward + FR-3 gauge): stage-advance-worker.js hook for stages 24-26 going forward; gauge-registry.js + gauge-runner.mjs wiring for completeness visibility"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Query the live ventures table for MarketLens and confirm its current_lifecycle_stage before running anything", "expected_outcome": "Confirms the true stage range to backfill (do not trust the SD text's S19-23 without re-verifying)" },
+    { "step_number": 2, "instruction": "Run node scripts/capture-forward-venture.mjs --venture <marketlens-id> --from 19 --to <current-stage-minus-1> against the live DB", "expected_outcome": "One venture_capture_snapshots row is created per completed stage, each provenance='unvalidated'" },
+    { "step_number": 3, "instruction": "Query venture_templates row count", "expected_outcome": "0 -- unchanged by the backfill" },
+    { "step_number": 4, "instruction": "Run node scripts/gauge-runner.mjs (or its dry-run mode) and locate the new venture-capture-completeness reading", "expected_outcome": "Shows MarketLens's coverage (missingCount 0 post-backfill) without any new standalone gauge tool" },
+    { "step_number": 5, "instruction": "Run the full new + pre-existing test suites (template-extractor, gauge-registry, gauge-runner, venture-capture-forward)", "expected_outcome": "All pass, zero regressions" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-CAPTURE-FORWARD-GATE-001"
+  }
+}
