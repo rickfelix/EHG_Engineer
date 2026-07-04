@@ -97,6 +97,36 @@ describe('FR-3 above_worker_tier eligibility verdict', () => {
   });
 });
 
+// ---- QF-20260703-242: fail-closed (not fail-open) on a missing/non-finite worker tier stamp ----
+describe('QF-20260703-242 tier_stamp_missing fail-closed verdict', () => {
+  it('refuses a tier-gated SD when tiering is active but worker_tier_rank is absent', () => {
+    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 2 } };
+    expect(classifyDispatchIneligibility(sd, { tiering_active: true })).toBe('tier_stamp_missing');
+  });
+
+  it('refuses a tier-gated SD when worker_tier_rank is present but non-finite (NaN)', () => {
+    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 2 } };
+    expect(classifyDispatchIneligibility(sd, { worker_tier_rank: NaN, tiering_active: true })).toBe('tier_stamp_missing');
+  });
+
+  it('does not fire for an unscored SD (no min_tier_rank) even with a missing stamp — nothing to gate', () => {
+    const sd = { sd_key: 'SD-X-001', metadata: {} };
+    expect(classifyDispatchIneligibility(sd, { tiering_active: true })).toBeNull();
+  });
+
+  it('stays inert when tiering_active is not true, even with a missing stamp (degrade-to-1 preserved)', () => {
+    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 2 } };
+    expect(classifyDispatchIneligibility(sd, { tiering_active: false })).toBeNull();
+    expect(classifyDispatchIneligibility(sd, {})).toBeNull();
+  });
+
+  it('leaves the finite worker_tier_rank paths (above_worker_tier / null) byte-unchanged', () => {
+    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 3 } };
+    expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 1, tiering_active: true })).toBe('above_worker_tier');
+    expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 3, tiering_active: true })).toBeNull();
+  });
+});
+
 // ---- TS-4/TS-5: FR-4 dispatch guard + FR-5 degrade-to-1 -------------------
 /** Minimal supabase stub: serves claude_sessions (workers), strategic_directives_v2 (SD), and a
  *  live-worker list so isTieringActive can resolve. */
