@@ -111,6 +111,10 @@ export const SOLOMON_LOOPS = [
       'reality-simulation',
       'model-effort-evaluation',
       'higher-order-effort-distribution-tier-design',
+      // SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-3: the graded D1-D5 rubric self-score writer
+      // (scripts/solomon-self-assessment-writer.cjs) is invoked from this tick's own reasoning —
+      // additive to (not replacing) the 'self-adherence' duty-parity loop above.
+      'self-assessment',
     ],
     label: 'Solomon Mode-B deep-reasoning sweep (agent judgment; HARD task_budget at entry, before any Read/Grep)',
     script: null, // agent-prompt tick — the deep sweep is reasoning, not a script

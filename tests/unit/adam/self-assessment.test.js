@@ -116,6 +116,82 @@ describe('validateScoreContract integration (valid by construction)', () => {
   });
 });
 
+describe('golden snapshot — locks in current Adam behavior before shared-core extraction (SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 TS-1)', () => {
+  it('produces the exact assembled score object for a fixed full-signal fixture', () => {
+    const signals = {
+      belt_depth: 6,
+      adam_claim_count: 0,
+      coordinator_autonomy_rate: 0.5,
+      false_claim_rate: 0.15,
+      advisory_citation_rate: 0.9,
+      ack_latency_min: 10,
+      adam_sd_pass_rate: 0.6,
+      advisory_deliverability: 0.99,
+    };
+    const { dimensions, provenance, inconclusive } = core.scoreDimensions(signals);
+    expect(inconclusive).toEqual([]);
+    expect(dimensions).toEqual({
+      D1_proactive_sourcing: 4,
+      D2_propose_first: 5,
+      D3_reviewer_not_safetynet: 2,
+      D4_verify_before_certainty: 2,
+      D5_vision_alignment: 4,
+      D6_close_loops_ack: 5,
+      D7_sd_quality: 2,
+      D8_interface_clarity: 5,
+    });
+
+    const below = core.classifyBelowThreshold(dimensions);
+    expect(below.sort()).toEqual(['D3_reviewer_not_safetynet', 'D4_verify_before_certainty', 'D7_sd_quality']);
+
+    const committedActions = core.generateCommittedActions(below, provenance);
+    expect(committedActions).toHaveLength(3);
+    expect(committedActions.map((a) => a.gap).sort()).toEqual(below.slice().sort());
+
+    const priorOutcomes = core.derivePriorOutcomes(null, dimensions);
+    expect(priorOutcomes).toEqual([]);
+
+    const score = core.assembleScore({
+      dimensions, cycle: 7, session: 'golden-sess', committedActions, priorOutcomes,
+      provenance, belowThreshold: below, date: '2026-06-09',
+    });
+
+    expect(score).toEqual({
+      cycle: 7,
+      session: 'golden-sess',
+      threshold: 4,
+      overall: '29/40 (3.6/5)',
+      dimensions,
+      below_threshold: below,
+      committed_actions: committedActions,
+      prior_action_outcomes: [],
+      review_key: 'adam:cycle7:2026-06-09',
+      provenance,
+      generated_by: 'adam-self-assessment-writer',
+    });
+  });
+});
+
+describe('buildFeedbackInsertRow — guards the feedback table NOT-NULL column shape', () => {
+  // feedback.type is constrained by feedback_type_check (database/migrations/391_quality_lifecycle_schema.sql);
+  // source_application/source_type/severity/title were a pre-existing silent-insert-failure gap
+  // (missing NOT NULL columns) found live-testing SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 — this test
+  // guards against that regression recurring.
+  it('always includes every NOT-NULL column the feedback table requires', () => {
+    const score = { overall: '5/5 (5.0/5)', review_key: 'adam:cycle1:2026-07-03' };
+    const row = core.buildFeedbackInsertRow({ category: 'adam_self_assessment', score, belowThreshold: [], sessionId: 'sess-1', title: 'Adam self-assessment — cycle 1' });
+    expect(row.type).toBe('enhancement');
+    expect(row.source_application).toBe('EHG_Engineer');
+    expect(row.source_type).toBe('auto_capture');
+    expect(row.status).toBe('new');
+    expect(row.severity).toBe('low');
+    expect(row.title).toBe('Adam self-assessment — cycle 1');
+    expect(row.category).toBe('adam_self_assessment');
+    expect(row.metadata).toMatchObject({ score, review_key: score.review_key, sender_session: 'sess-1' });
+    expect(JSON.parse(row.description)).toEqual({ overall: score.overall, below_threshold: [] });
+  });
+});
+
 describe('isFlagEnabled (ADAM_SELF_SCORE_CADENCE)', () => {
   it('is OFF for unset/off/garbage, ON only for on/1/true', () => {
     expect(isFlagEnabled({})).toBe(false);

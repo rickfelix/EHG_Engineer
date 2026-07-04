@@ -1,0 +1,137 @@
+{
+  "executive_summary": "C-009 composition row: role self-review is one of finding-009's six improvement loops, and today its trigger lives in agent session memory so it silently dies (Adam went 3 weeks unscored 06-14 to 07-03; the coordinator has ZERO durable rubric-score rows ever; Solomon has adherence activity but no score trail). This PRD extracts Adam's existing self-assessment scaffolding (lib/adam/self-assessment.cjs) into a role-agnostic shared core, wires the coordinator and Solomon onto it as their own emitters (additive to their existing duty-parity/adherence probes, not a replacement), adds a gauge-registry entry per role checking latest-score age vs cadence so a lapsed loop surfaces instead of dying silently, and narrowly scopes the existing grade-action-verify contract (lib/fleet/verify-score-contract.mjs) to REFUSE (not just advisory-log) a below-threshold score with empty committed_actions. No new table, scheduler, or alert channel — composition into the ONE existing gauge-registry/gauge-runner/feedback-table spine only.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Extract a role-agnostic self-score core; Adam's writer is byte-identical after the refactor",
+      "description": "Create lib/governance/role-self-score.cjs, extracting classifyBelowThreshold, derivePriorOutcomes, generateCommittedActions, overallString, and assembleScore from lib/adam/self-assessment.cjs into pure functions parameterized by a RoleConfig {role, dimensions, scorers, actionHints, target, belowThresholdAt}. Refactor lib/adam/self-assessment.cjs to define ADAM_CONFIG and delegate to the shared core. scripts/adam-self-assessment-writer.cjs, the ADAM_SELF_SCORE_CADENCE gate, and .adam-self-assessment-state.json turn-counter state are UNCHANGED (they live in the writer, not the pure core).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A golden-snapshot test feeds a fixed signals object through both the pre-refactor lib/adam/self-assessment.cjs and the post-refactor shared-core-backed version and asserts byte-identical assembleScore() output",
+        "scripts/adam-self-assessment-writer.cjs requires no changes to its own logic (cadence gate, state file, review_key) beyond importing the refactored module"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Coordinator emits its own graded self-score on its existing self-review DUE branch",
+      "description": "Add a COORDINATOR_CONFIG (dimensions sourced from the already-documented coordinator rubric in .claude/commands/coordinator.md, ~line 839 — do not invent new dimension names) to scripts/coordinator-self-review.mjs. On the DUE branch (delta >= REVIEW_EVERY), assemble a score via the shared core and insert a feedback row with category='coordinator_self_assessment' (dimensions + committed_actions + prior_action_outcomes). This is a NEW category distinct from the existing category='coordinator_review' (raw captured worker-feedback text) — update the TRI_PARTY_VERIFY_V1 read path to read the new graded category instead of trying (and failing) to parseScore() raw capture rows.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Running coordinator-self-review.mjs against a fixture at/after the DUE threshold inserts exactly one feedback row with category=coordinator_self_assessment containing populated dimensions and committed_actions",
+        "TRI_PARTY_VERIFY_V1 successfully parses a score from the new category (previously always empty against category=coordinator_review)"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Solomon emits a rubric self-score, additive to its existing duty-parity adherence probe",
+      "description": "Add a SOLOMON_CONFIG (D1-D5 rubric from leo_protocol_sections section_type='solomon_role_contract', the DB source of CLAUDE_SOLOMON.md) and a new scripts/solomon-self-assessment-writer.cjs mirroring adam-self-assessment-writer.cjs's shape, emitting feedback category='solomon_self_assessment'. This is ADDITIVE to (not a replacement for) the existing scripts/solomon-self-adherence-review.mjs, which measures duty PARITY/compliance — a different concept from rubric quality self-scoring. Wire the emission by adding an explicit instruction to Solomon's deep-sweep procedure via a leo_protocol_sections DB edit (section_type='solomon_role_contract') + node scripts/generate-claude-md-from-db.js regeneration — Solomon's deep-sweep tick is agent-prompt-driven (script: null in solomon-startup-check.mjs), not code-driven, so this half of the wiring is a documented instruction, not a function call.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "scripts/solomon-self-assessment-writer.cjs, invoked standalone with a fixture signals object, inserts a feedback row with category=solomon_self_assessment containing dimensions + committed_actions + prior_action_outcomes",
+        "CLAUDE_SOLOMON.md's deep-sweep section (post-regeneration) explicitly instructs invoking the writer at the end of each deep-sweep, and explicitly distinguishes this from the existing duty-parity adherence probe",
+        "solomon-self-adherence-review.mjs is untouched (still emits category=solomon_adherence_drift unchanged)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Gauge-registry entry per role: latest-score age vs cadence surfaces a lapsed loop",
+      "description": "Add 3 entries to lib/governance/gauge-registry.js (adam_self_score_age, coordinator_self_score_age, solomon_self_score_age), each with a distinct detectorFn key. Add ONE shared factory in scripts/gauge-runner.mjs's buildDetectorResolvers map — e.g. staleSelfScoreDetector(category, cadenceHours) — that queries the latest feedback row for the given category, computes its age, and trips (tripWhen) when age exceeds cadence. 3 distinct keys each delegate to this one factory (the detectorFn map is key->fn, so 'one shared resolver' means one shared implementation behind 3 keys, per the existing stub-then-two-additive-edits adoption contract).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A fixture with no coordinator_self_assessment feedback row (or one older than cadence) causes node scripts/gauge-runner.mjs to log GAUGE coordinator_self_score_age=true and insert a feedback row with category=invariant_gauge_finding",
+        "A fixture with a fresh (within-cadence) score row does NOT trip the gauge for that role",
+        "gauge-runner-liveness.js's 2h staleness check and MAX_DETECTORS_PER_RUN cap are unaffected (verified against current values, well under the 50-detector limit)"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Emitter refuses an invalid score row, narrowly scoped (never refuses inconclusive-only or escalation-eligible cycles)",
+      "description": "Wire lib/fleet/verify-score-contract.mjs's validateScoreContract() into the shared core's write path (lib/governance/role-self-score.cjs) so a payload violating Rule 1 (below-threshold dimension + empty committed_actions) or Rule 2 (missing prior_action_outcomes when the prior cycle had committed_actions) is REFUSED: log-and-skip (fail-soft, never throw, matching this subsystem's fail-open ethos elsewhere) with NO feedback row inserted. This applies uniformly to Adam, coordinator, and Solomon emitters (retrofitting Adam's current advisory-only annotate-and-still-write behavior). Per risk-agent mitigation: NEVER refuse when the contract verdict is inconclusive (valid===null, e.g. all-dimensions-inconclusive cycles) or when the cycle is escalation-eligible (streak>=3) but otherwise contract-valid — those rows are the ones that most need recording and must always write.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A fixture payload with a below-threshold dimension and committed_actions=[] is refused: no feedback row inserted, a SUPPRESSED/REFUSED reason is logged naming the failing rule",
+        "A fixture payload representing an escalation-eligible cycle (streak>=3) with populated committed_actions still WRITES its feedback row (does not regress from 'some data' to 'no data')",
+        "A fixture payload where all 8 (or role-equivalent) dimensions are inconclusive still WRITES its feedback row (never refused for lack of signal)"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No new table, scheduler, or alert channel",
+      "description": "All emission uses the existing feedback table category convention; all staleness detection uses the existing gauge-registry.js array + gauge-runner.mjs execution surface; no cron/scheduler is added anywhere."
+    },
+    {
+      "id": "TR-2",
+      "title": "CLAUDE_SOLOMON.md is DB-generated — never hand-edit",
+      "description": "Edit leo_protocol_sections rows where section_type='solomon_role_contract', then regenerate via node scripts/generate-claude-md-from-db.js. .claude/commands/coordinator.md is read-only reference for dimension names in this PRD (not edited) — coordinator wiring is entirely inside coordinator-self-review.mjs."
+    },
+    {
+      "id": "TR-3",
+      "title": "Adam's refactor is regression-protected by a golden-snapshot test",
+      "description": "The FR-1 extraction must not change any observable Adam behavior — enforced by a byte-identical pre/post assembleScore() comparison test, run before the PR merges."
+    }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Golden-snapshot: Adam's assembleScore is byte-identical pre/post shared-core refactor", "type": "unit", "expected": "Deep-equal output for a fixed signals fixture" },
+    { "id": "TS-2", "scenario": "Coordinator DUE-branch emission", "type": "integration", "expected": "One feedback row, category=coordinator_self_assessment, with dimensions+committed_actions" },
+    { "id": "TS-3", "scenario": "Solomon writer standalone invocation", "type": "unit", "expected": "One feedback row, category=solomon_self_assessment" },
+    { "id": "TS-4", "scenario": "Gauge trips on stale/missing score row", "type": "unit", "expected": "detector returns tripped=true; gauge-runner inserts invariant_gauge_finding" },
+    { "id": "TS-5", "scenario": "Gauge does NOT trip on fresh score row", "type": "unit", "expected": "detector returns tripped=false; no finding inserted" },
+    { "id": "TS-6", "scenario": "Refusal: below-threshold + empty committed_actions", "type": "unit", "expected": "Write refused, no row inserted, reason logged" },
+    { "id": "TS-7", "scenario": "Non-refusal: escalation-eligible cycle with committed_actions still writes", "type": "unit", "expected": "Row IS inserted" },
+    { "id": "TS-8", "scenario": "Non-refusal: all-inconclusive cycle still writes", "type": "unit", "expected": "Row IS inserted" }
+  ],
+  "acceptance_criteria": [
+    "Stop a role's tick for N cadences in a test fixture (no/stale feedback row for that category) — the corresponding gauge-registry entry flags the lapse (FR-4)",
+    "Emit a below-threshold score with no committed_actions through the shared writer core — it is refused, no row inserted (FR-5)",
+    "Adam's existing self-assessment behavior is unchanged (golden-snapshot proof, FR-1)",
+    "Coordinator and Solomon each gain their own durable graded score trail where today they have none or only adjacent adherence-probe data (FR-2, FR-3)"
+  ],
+  "risks": [
+    { "risk": "Refuse-at-write silently drops legitimate low-signal cycles, regressing from 'some data' to 'no data' for Adam (5/8 dimensions are routinely inconclusive; escalation cycles are the ones most needing a durable row)", "mitigation": "Refusal scoped strictly to Rule-1/Rule-2 contract violations; explicit tests (TS-7, TS-8) prove escalation-eligible and all-inconclusive cycles still write", "severity": "medium" },
+    { "risk": "New Solomon self-score channel is mistaken for / duplicates the existing solomon-self-adherence-review.mjs duty-parity probe", "mitigation": "PRD and the CLAUDE_SOLOMON.md deep-sweep instruction explicitly name both channels and state the distinction (adherence=duty compliance, self-assessment=rubric quality score); solomon-self-adherence-review.mjs is untouched", "severity": "low" },
+    { "risk": "Hand-editing CLAUDE_SOLOMON.md directly instead of via leo_protocol_sections DB gets silently reverted on the next generate-claude-md-from-db.js run", "mitigation": "TR-2 mandates the DB-section edit path; verified against generate-claude-md-from-db.js section-file-mapping before implementation", "severity": "low" },
+    { "risk": "Coordinator's new category=coordinator_self_assessment breaks the existing TRI_PARTY_VERIFY_V1 read path if not updated in the same change", "mitigation": "FR-2 explicitly includes updating the read path in the same PR, with TS-2 proving the new category parses", "severity": "medium" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["gauge-runner.mjs (reads gauge-registry.js entries)", "TRI_PARTY_VERIFY_V1 in coordinator-self-review.mjs (reads coordinator_self_assessment rows)", "scripts/adam-self-assessment-writer.cjs (imports the refactored shared core)"],
+    "dependencies": ["lib/fleet/verify-score-contract.mjs (existing, unmodified logic, new call site)", "lib/governance/gauge-registry.js + scripts/gauge-runner.mjs (existing framework, additive entries)", "leo_protocol_sections (solomon_role_contract section, DB edit + regenerate)"],
+    "data_contracts": ["feedback table: 2 new category values (coordinator_self_assessment, solomon_self_assessment), same JSON shape as the existing adam_self_assessment convention — no schema/migration change"],
+    "runtime_config": ["ADAM_SELF_SCORE_CADENCE (existing, unchanged)", "none new"],
+    "observability_rollout": ["Gauge trips surface as feedback rows (category=invariant_gauge_finding) — same existing surface as all other gauges, visible via the coordinator inbox/dashboard"]
+  },
+  "system_architecture": {
+    "summary": "A role-agnostic self-score core (extracted from Adam's existing implementation) is reused by three per-role emitters; a shared gauge-runner resolver checks each role's latest-score age; the existing grade-action-verify contract gates all three emitters at write time.",
+    "components": [
+      { "name": "lib/governance/role-self-score.cjs", "change": "NEW — pure scaffolding extracted from lib/adam/self-assessment.cjs" },
+      { "name": "lib/adam/self-assessment.cjs", "change": "Refactored to delegate to the shared core via ADAM_CONFIG (behavior-identical)" },
+      { "name": "scripts/coordinator-self-review.mjs", "change": "DUE branch now emits a graded coordinator_self_assessment row; TRI_PARTY_VERIFY_V1 read path updated" },
+      { "name": "scripts/solomon-self-assessment-writer.cjs", "change": "NEW — mirrors adam-self-assessment-writer.cjs for Solomon" },
+      { "name": "lib/governance/gauge-registry.js", "change": "3 new entries: adam/coordinator/solomon self_score_age" },
+      { "name": "scripts/gauge-runner.mjs", "change": "1 new shared detector factory (staleSelfScoreDetector) behind 3 registry keys" },
+      { "name": "lib/fleet/verify-score-contract.mjs", "change": "Unmodified — new call site in the shared core's write path applies refuse-at-write" },
+      { "name": "leo_protocol_sections (section_type=solomon_role_contract)", "change": "Adds the deep-sweep self-score-emission instruction, regenerates CLAUDE_SOLOMON.md" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Extract-and-reuse, not rebuild: generalize Adam's existing, already-shipped emitter into a shared core, then wire coordinator (code) and Solomon (prompt instruction + new small writer) onto it, add the gauge entries, and narrow-scope the refusal enforcement with explicit non-regression tests.",
+    "steps": [
+      "1. Extract lib/governance/role-self-score.cjs from lib/adam/self-assessment.cjs; refactor Adam's module to use it via ADAM_CONFIG; add the golden-snapshot regression test (TS-1) FIRST to lock in Adam's current behavior before touching anything else.",
+      "2. Define COORDINATOR_CONFIG (dimensions from coordinator.md) and SOLOMON_CONFIG (dimensions from leo_protocol_sections solomon_role_contract); wire coordinator-self-review.mjs's DUE branch and a new solomon-self-assessment-writer.cjs onto the shared core.",
+      "3. Add the refuse-at-write call (validateScoreContract) inside the shared core's write path, scoped per FR-5, with TS-6/TS-7/TS-8 proving the scope boundary.",
+      "4. Add the 3 gauge-registry entries + the shared staleSelfScoreDetector factory in gauge-runner.mjs; verify against gauge-runner-liveness.js's existing staleness check.",
+      "5. Update TRI_PARTY_VERIFY_V1's read path in coordinator-self-review.mjs to the new category.",
+      "6. Edit leo_protocol_sections (solomon_role_contract) to add the deep-sweep emission instruction; regenerate CLAUDE_SOLOMON.md.",
+      "7. Run the full test suite (unit + the golden-snapshot regression) and the 2 e2e acceptance scenarios from the SD description."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Seed a fixture with no coordinator_self_assessment feedback row, run node scripts/gauge-runner.mjs", "expected_outcome": "Console shows GAUGE coordinator_self_score_age=true and a new feedback row category=invariant_gauge_finding appears" },
+    { "step_number": 2, "instruction": "Call the shared writer core with a below-threshold dimension and committed_actions=[]", "expected_outcome": "The call is refused; no feedback row is written; the refusal reason names the failing grade-action-verify rule" },
+    { "step_number": 3, "instruction": "Run node scripts/coordinator-self-review.mjs in DUE mode against a fixture at/after the review-every threshold", "expected_outcome": "A new feedback row (category=coordinator_self_assessment) appears with populated dimensions + committed_actions" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001"
+  }
+}

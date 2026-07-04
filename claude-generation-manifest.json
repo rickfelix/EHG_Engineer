@@ -1,123 +1,123 @@
 {
-  "generated_at": "2026-07-02T13:46:58.449Z",
-  "git_commit": "6541c213",
+  "generated_at": "2026-07-04T02:03:19.549Z",
+  "git_commit": "a1a8a58f",
   "db_snapshot_hash": "8eb2912b9dff05a2",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 19368,
-      "estimated_tokens": 4842,
-      "content_hash": "71cae0605084f3b3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE.md"
+      "chars": 19369,
+      "estimated_tokens": 4843,
+      "content_hash": "4f9d16e1165ecd4d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 86703,
-      "estimated_tokens": 21676,
-      "content_hash": "917ed70f6e94c4ad",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_CORE.md"
+      "chars": 87097,
+      "estimated_tokens": 21775,
+      "content_hash": "8fcde8b9152ff6e8",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 65998,
+      "chars": 65999,
       "estimated_tokens": 16500,
-      "content_hash": "003d77824ad67372",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_LEAD.md"
+      "content_hash": "a3c1bb5dea2120a4",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 91700,
-      "estimated_tokens": 22925,
-      "content_hash": "33b38381fefbbe97",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_PLAN.md"
+      "chars": 91701,
+      "estimated_tokens": 22926,
+      "content_hash": "bb0d0aca62e1530d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 86566,
+      "chars": 86567,
       "estimated_tokens": 21642,
-      "content_hash": "d9bf368da6531394",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_EXEC.md"
+      "content_hash": "466994cc205b63f8",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 54280,
-      "estimated_tokens": 13570,
-      "content_hash": "3634cc3252d1834e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_ADAM.md"
+      "chars": 54281,
+      "estimated_tokens": 13571,
+      "content_hash": "efce6cc435d0adbe",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 21735,
-      "estimated_tokens": 5434,
-      "content_hash": "50a107ca12c6ebfa",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_COORDINATOR.md"
+      "chars": 22135,
+      "estimated_tokens": 5534,
+      "content_hash": "417fae6f72192a6d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 44862,
-      "estimated_tokens": 11216,
-      "content_hash": "db8faa25718f8d00",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_SOLOMON.md"
+      "chars": 45829,
+      "estimated_tokens": 11458,
+      "content_hash": "4b55bc50f3b41618",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
-      "chars": 9611,
+      "chars": 9612,
       "estimated_tokens": 2403,
-      "content_hash": "a7c5cd04f78daef4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_DIGEST.md"
+      "content_hash": "6c27d0851cb04cf2",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 11664,
-      "estimated_tokens": 2916,
-      "content_hash": "5339238c989e5665",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_CORE_DIGEST.md"
+      "chars": 11665,
+      "estimated_tokens": 2917,
+      "content_hash": "94cfb487f07619a9",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
-      "chars": 5551,
+      "chars": 5552,
       "estimated_tokens": 1388,
-      "content_hash": "d0a0035900d9a7f2",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "0a421137d0336705",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
-      "chars": 8541,
+      "chars": 8542,
       "estimated_tokens": 2136,
-      "content_hash": "fb650cebe0174e84",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "117f37746dc826b3",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
-      "chars": 10964,
-      "estimated_tokens": 2741,
-      "content_hash": "2058e4cff92be2d4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_EXEC_DIGEST.md"
+      "chars": 10965,
+      "estimated_tokens": 2742,
+      "content_hash": "0bc8d2e46e86a201",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 13068,
       "estimated_tokens": 3267,
-      "content_hash": "759ca4aa05a8098f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "46bc59dbf2c45e08",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 6076,
       "estimated_tokens": 1519,
-      "content_hash": "d3d1f80900ac415f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "5bd33b9d5bf03af3",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
       "chars": 4705,
       "estimated_tokens": 1177,
-      "content_hash": "7476ceb4db2e949d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001\\CLAUDE_SOLOMON_DIGEST.md"
+      "content_hash": "506e8195295a18f8",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "780f36abe5cf5047",
+    "global": "6c703ae8f8f20518",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -375,13 +375,13 @@
       "602": "ad0aecae8cdc6cb3",
       "603": "ea1eddc2cef94c83",
       "604": "a35e66b64599f81d",
-      "605": "a2c192531833423f",
+      "605": "6c6ad347a458ae69",
       "606": "25aa68b575c66d07",
       "607": "82e04c0cc0ffb28f",
       "608": "7f99a4321502367e",
       "609": "9790a74a362ff0ca",
       "610": "fb3813fc42f32f3a",
-      "611": "8807ed27ea29e908",
+      "611": "49d0728059b6f810",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
       "614": "a4d5064f0ffbe97c",

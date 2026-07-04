@@ -1,32 +1,37 @@
 #!/usr/bin/env node
 /**
- * Adam self-assessment writer — the programmatic per-dimension self-score.
- * SD-LEO-INFRA-ADAM-SELF-ASSESSMENT-001.
+ * Solomon self-assessment writer — the programmatic per-dimension rubric self-score.
+ * SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-3.
  *
- * Flag-gated (ADAM_SELF_SCORE_CADENCE, default OFF — ships INERT; the live-enablement
- * child flips it). On a ~ADAM_SELF_SCORE_EVERY_TURNS cadence it: gathers observable
- * signals, scores the 8 dimensions (numeric where a signal exists, inconclusive
+ * Flag-gated (SOLOMON_SELF_SCORE_CADENCE, default OFF — ships INERT, mirrors
+ * ADAM_SELF_SCORE_CADENCE's convention). Invoked from the deep-sweep tick's own reasoning
+ * (scripts/solomon-startup-check.mjs SOLOMON_LOOPS 'deep-sweep' entry covers 'self-assessment';
+ * no dedicated cron — the tick is agent-judgment, script:null). Scores the D1-D5 dimensions from
+ * CLAUDE_SOLOMON.md's "Self-assessment rubric" (numeric where a signal exists, inconclusive
  * otherwise — never fabricated), verifies the prior cycle + validates via the shipped
  * lib/fleet/verify-score-contract.mjs, and persists ONE feedback row
- * (category=adam_self_assessment) with the common score schema, idempotent on review_key.
- * Fail-OPEN on every error so it can never break Adam's tick.
+ * (category=solomon_self_assessment) with the common tri-party score schema, idempotent on
+ * review_key. ADDITIVE to (never a replacement for) solomon-self-adherence-review.mjs, which
+ * scores duty-parity (SOLOMON_LOOPS drift), a DIFFERENT concept from rubric quality. Fail-OPEN
+ * on every error so it can never break a Solomon tick.
  *
  * Flags: --dry-run (compute + print, write nothing) | --force (ignore flag + cadence gate).
  *
- * ESM note: the pure core (lib/adam/self-assessment.cjs) is required directly (CJS); the
- * only ESM dep (verify-score-contract.mjs) is loaded via a string-LITERAL dynamic import
- * so the WIRE_CHECK static call-graph can trace it.
+ * ESM note: the pure core (lib/governance/role-self-score.cjs) is required directly (CJS); the
+ * only ESM dep (verify-score-contract.mjs) is loaded via a string-LITERAL dynamic import so the
+ * WIRE_CHECK static call-graph can trace it (mirrors adam-self-assessment-writer.cjs).
  */
 const path = require('path');
 const fs = require('fs');
-const core = require('../lib/adam/self-assessment.cjs');
+const core = require('../lib/governance/role-self-score.cjs');
+const { SOLOMON_CONFIG } = require('../lib/solomon/self-score-config.cjs');
 
 const REPO_ROOT = path.join(__dirname, '..');
-const STATE_PATH = path.join(REPO_ROOT, '.adam-self-assessment-state.json');
+const STATE_PATH = path.join(REPO_ROOT, '.solomon-self-assessment-state.json');
 
 /** on|1|true => enabled; everything else (incl. undefined) => OFF. */
 function isFlagEnabled(env = process.env) {
-  const v = String(env.ADAM_SELF_SCORE_CADENCE || 'off').toLowerCase();
+  const v = String(env.SOLOMON_SELF_SCORE_CADENCE || 'off').toLowerCase();
   return v === 'on' || v === '1' || v === 'true';
 }
 
@@ -44,67 +49,34 @@ function writeState(state) {
   try {
     fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2) + '\n');
   } catch (e) {
-    process.stderr.write(`[adam-self-score] state write failed (non-fatal): ${e.message}\n`);
+    process.stderr.write(`[solomon-self-score] state write failed (non-fatal): ${e.message}\n`);
   }
 }
 
 /** Gather observable signals (read-only, defensive: each failure => null = inconclusive). */
 async function gatherSignals(sb) {
   const signals = {};
-  const safeCount = async (fn) => {
-    try {
-      const { count, error } = await fn();
-      return error ? null : count;
-    } catch {
-      return null;
-    }
-  };
 
-  // D1: belt depth = unclaimed workable (draft) SDs
-  signals.belt_depth = await safeCount(() =>
-    sb.from('strategic_directives_v2').select('id', { count: 'exact', head: true }).eq('status', 'draft').is('claiming_session_id', null)
-  );
-
-  // D2: Adam-role sessions holding a non-null sd_key (should be 0 — Adam never claims).
-  // NOTE: claude_sessions has no `callsign` column (role lives only in metadata.role) — this
-  // query used to select it and threw on every call (verified against the live schema; fixed
-  // alongside the same latent bug in scripts/solomon-self-assessment-writer.cjs, caught by CI's
-  // schema-reference-lint while shipping SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001).
-  signals.adam_claim_count = await (async () => {
+  // D1: Solomon-role sessions holding a non-null sd_key (should be 0 — Solomon never claims).
+  // NOTE: claude_sessions has no `callsign` column (role lives only in metadata.role) — verified
+  // directly against the live schema; do not add a `callsign` select (42703 undefined_column).
+  signals.solomon_claim_count = await (async () => {
     try {
       const { data, error } = await sb
         .from('claude_sessions')
         .select('id, sd_key, metadata')
         .not('sd_key', 'is', null);
       if (error || !Array.isArray(data)) return null;
-      return data.filter((r) => String((r.metadata && r.metadata.role) || '').toLowerCase() === 'adam').length;
+      return data.filter((r) => String((r.metadata && r.metadata.role) || '').toLowerCase() === 'solomon').length;
     } catch {
       return null;
     }
   })();
 
-  // D8: advisory deliverability = adam_advisory rows read / total (last 7d)
-  signals.advisory_deliverability = await (async () => {
-    try {
-      const { data, error } = await sb
-        .from('session_coordination')
-        .select('read_at, payload')
-        .eq('sender_type', 'adam')
-        .limit(500);
-      if (error || !Array.isArray(data) || data.length === 0) return null;
-      const adv = data.filter((r) => r.payload && r.payload.kind === 'adam_advisory');
-      if (adv.length === 0) return null;
-      const delivered = adv.filter((r) => r.read_at != null).length;
-      return delivered / adv.length;
-    } catch {
-      return null;
-    }
-  })();
-
-  // The remaining signals (D3 coordinator_autonomy_rate, D4 false_claim_rate,
-  // D5 advisory_citation_rate, D6 ack_latency_min, D7 adam_sd_pass_rate) have no
-  // reliable live source yet — left undefined so the scorers emit INCONCLUSIVE
-  // rather than a fabricated number.
+  // D2 (unbiased-perspective), D4 (judgment quality), D5 (systemic hand-off accuracy) require
+  // reading verdict/consult reasoning content, not a count -- left undefined (inconclusive).
+  // D3 (silence/cost-discipline quota breaches) has no durable quota-ledger table yet -- left
+  // undefined rather than querying a table that doesn't exist.
   return signals;
 }
 
@@ -118,31 +90,31 @@ async function main() {
   const force = argv.includes('--force');
 
   if (!isFlagEnabled() && !force) {
-    process.stdout.write('adam-self-assessment: ADAM_SELF_SCORE_CADENCE off — no-op\n');
+    process.stdout.write('solomon-self-assessment: SOLOMON_SELF_SCORE_CADENCE off — no-op\n');
     process.exit(0);
   }
 
   try {
-    const everyTurns = Number(process.env.ADAM_SELF_SCORE_EVERY_TURNS) || core.DEFAULT_EVERY_TURNS;
+    const everyTurns = Number(process.env.SOLOMON_SELF_SCORE_EVERY_TURNS) || core.DEFAULT_EVERY_TURNS;
     const state = readState();
     const invocations = (Number.isFinite(state.invocations) ? state.invocations : 0) + 1;
 
     if (!core.shouldFire({ last_fired_turn: state.last_fired_turn }, invocations, everyTurns) && !force) {
       writeState({ ...state, invocations });
       const due = (Number.isFinite(state.last_fired_turn) ? state.last_fired_turn : 0) + everyTurns;
-      process.stdout.write(`adam-self-assessment: turn ${invocations}/${due} — not due, skip\n`);
+      process.stdout.write(`solomon-self-assessment: turn ${invocations}/${due} — not due, skip\n`);
       process.exit(0);
     }
 
     const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
     const sb = createSupabaseServiceClient('engineer');
-    const sessionId = process.env.CLAUDE_SESSION_ID || 'adam';
+    const sessionId = process.env.CLAUDE_SESSION_ID || 'solomon';
     const date = new Date().toISOString().slice(0, 10);
     const newCycle = (state.cycle || 0) + 1;
 
     const signals = await gatherSignals(sb);
-    const { dimensions, provenance } = core.scoreDimensions(signals);
-    const belowThreshold = core.classifyBelowThreshold(dimensions);
+    const { dimensions, provenance } = core.scoreDimensions(signals, SOLOMON_CONFIG);
+    const belowThreshold = core.classifyBelowThreshold(dimensions, SOLOMON_CONFIG.belowThresholdAt);
 
     // prior cycle (most recent self-assessment row)
     let priorScore = null;
@@ -150,7 +122,7 @@ async function main() {
       const { data: priorRows } = await sb
         .from('feedback')
         .select('metadata')
-        .eq('category', 'adam_self_assessment')
+        .eq('category', 'solomon_self_assessment')
         .order('created_at', { ascending: false })
         .limit(1);
       priorScore = priorRows && priorRows[0] && priorRows[0].metadata ? priorRows[0].metadata.score : null;
@@ -159,9 +131,9 @@ async function main() {
     }
 
     const priorOutcomes = core.derivePriorOutcomes(priorScore, dimensions);
-    const committedActions = core.generateCommittedActions(belowThreshold, provenance);
+    const committedActions = core.generateCommittedActions(belowThreshold, provenance, SOLOMON_CONFIG.actionHints);
     const score = core.assembleScore({
-      dimensions, cycle: newCycle, session: sessionId, committedActions, priorOutcomes, provenance, belowThreshold, date,
+      dimensions, cycle: newCycle, session: sessionId, committedActions, priorOutcomes, provenance, belowThreshold, date, config: SOLOMON_CONFIG,
     });
 
     // validate via the shipped contract (literal dynamic import — WIRE_CHECK-traceable)
@@ -178,7 +150,7 @@ async function main() {
     // escalation-only or all-inconclusive cycle (see lib/fleet/verify-score-contract.mjs hasBlockingViolation).
     if (hasBlockingViolation(verdict.violations)) {
       writeState({ ...state, invocations, last_fired_turn: invocations });
-      process.stdout.write(`adam-self-assessment: REFUSED cycle ${newCycle} — ${verdict.violations.join('; ')}\n`);
+      process.stdout.write(`solomon-self-assessment: REFUSED cycle ${newCycle} — ${verdict.violations.join('; ')}\n`);
       process.exit(0);
     }
 
@@ -187,11 +159,11 @@ async function main() {
       const { data: existing } = await sb
         .from('feedback')
         .select('id')
-        .eq('category', 'adam_self_assessment')
+        .eq('category', 'solomon_self_assessment')
         .filter('metadata->>review_key', 'eq', score.review_key)
         .limit(1);
       if (existing && existing.length) {
-        process.stdout.write(`adam-self-assessment: cycle row ${score.review_key} already exists — skip\n`);
+        process.stdout.write(`solomon-self-assessment: cycle row ${score.review_key} already exists — skip\n`);
         writeState({ ...state, invocations, last_fired_turn: invocations });
         process.exit(0);
       }
@@ -202,20 +174,20 @@ async function main() {
     // buildFeedbackInsertRow() builds the actual insert payload -- these are its own helper
     // parameter names, not literal feedback columns. schema-lint-disable-line
     const { error: insErr } = await sb.from('feedback').insert(core.buildFeedbackInsertRow({ // schema-lint-disable-line
-      category: 'adam_self_assessment',
+      category: 'solomon_self_assessment',
       score,
       belowThreshold,
       sessionId,
-      title: `Adam self-assessment — cycle ${newCycle}`,
+      title: `Solomon self-assessment — cycle ${newCycle}`,
     }));
     if (insErr) throw new Error(`feedback insert failed: ${insErr.message}`);
 
     writeState({ invocations, last_fired_turn: invocations, cycle: newCycle, streak: verdict.escalation ? verdict.escalation.streak : 0 });
-    process.stdout.write(`adam-self-assessment: wrote cycle ${newCycle} (${score.overall}) review_key=${score.review_key}${verdict.escalation && verdict.escalation.triggered ? ' [ESCALATE]' : ''}\n`);
+    process.stdout.write(`solomon-self-assessment: wrote cycle ${newCycle} (${score.overall}) review_key=${score.review_key}${verdict.escalation && verdict.escalation.triggered ? ' [ESCALATE]' : ''}\n`);
     process.exit(0);
   } catch (e) {
-    // FAIL OPEN — never break Adam's tick.
-    process.stderr.write(`[adam-self-score] degraded to no-op: ${e.message}\n`);
+    // FAIL OPEN — never break a Solomon tick.
+    process.stderr.write(`[solomon-self-score] degraded to no-op: ${e.message}\n`);
     process.exit(0);
   }
 }
