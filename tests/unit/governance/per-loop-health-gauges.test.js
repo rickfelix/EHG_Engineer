@@ -121,7 +121,7 @@ describe('LOOP_IDS', () => {
 describe('fetchLoopStageRows', () => {
   function makeSb(rows) {
     return {
-      from(table) {
+      from(_table) {
         return {
           select() {
             return {
