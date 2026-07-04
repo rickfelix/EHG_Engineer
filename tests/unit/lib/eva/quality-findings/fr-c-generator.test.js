@@ -306,18 +306,43 @@ describe.skipIf(!HAS_REAL_DB)('FR-C generator — integration (HAS_REAL_DB)', ()
     createdFindingIds = [];
   });
 
+  // SD-LEO-FIX-FIX-GENERATOR-INTEGRATION-001: a bare DELETE on strategic_directives_v2
+  // rolls back atomically (and was silently swallowed by the old try/catch) whenever an
+  // AFTER-INSERT governance trigger has wired an FK-RESTRICT/NO-ACTION child row (feedback,
+  // sd_verification_results, etc.) onto the test SD -- that's how 20+ fc000000- phantom SDs
+  // leaked into the live, self-claimable belt over 2 months. Cancel FIRST: an UPDATE never
+  // trips a child FK, so the SD becomes terminal/un-claimable immediately regardless of what
+  // child rows exist. cancellation_reason is required by a DB-level guard whenever status
+  // transitions to 'cancelled' -- omitting it makes the cancel itself fail (empirically
+  // verified 2026-07-04), which would silently defeat this fix.
+  async function cancelTestSds(sdKeys) {
+    if (!sdKeys.length) return { error: null };
+    const { error } = await supabase
+      .from('strategic_directives_v2')
+      .update({ status: 'cancelled', cancellation_reason: 'test fixture cleanup (fr-c-generator.test.js)' })
+      .in('sd_key', sdKeys);
+    if (error) {
+      console.error(`[fr-c-generator.test] FAILED to cancel test SD(s) ${sdKeys.join(',')}: ${error.message}`);
+    }
+    return { error };
+  }
+
   afterEach(async () => {
-    // Best-effort cleanup. Order matters: SDs first (no FK to findings), then findings.
+    // Hard-delete is attempted best-effort on top of the cancel above; a failure there is
+    // now logged loudly instead of silently swallowed, but no longer matters for safety.
     if (supabase && testVentureId) {
-      try {
-        await supabase.from('strategic_directives_v2').delete().eq('metadata->>venture_id', testVentureId);
-      } catch { /* noop */ }
-      try {
-        await supabase.from('venture_quality_findings').delete().eq('venture_id', testVentureId);
-      } catch { /* noop */ }
+      await cancelTestSds(createdSdKeys);
+      const { error: deleteErr } = await supabase.from('strategic_directives_v2').delete().eq('metadata->>venture_id', testVentureId);
+      if (deleteErr) {
+        console.warn(`[fr-c-generator.test] hard-delete skipped (non-fatal -- SD already cancelled above): ${deleteErr.message}`);
+      }
+      const { error: findingsErr } = await supabase.from('venture_quality_findings').delete().eq('venture_id', testVentureId);
+      if (findingsErr) {
+        console.error(`[fr-c-generator.test] FAILED to delete test finding(s) for venture ${testVentureId}: ${findingsErr.message}`);
+      }
       try {
         await supabase.from('audit_log').delete().eq('metadata->>venture_id', testVentureId);
-      } catch { /* noop */ }
+      } catch { /* audit_log cleanup is cosmetic only */ }
     }
     if (prevFixtureEnv === undefined) delete process.env.FR_C_ALLOW_FIXTURE_FINDINGS;
     else process.env.FR_C_ALLOW_FIXTURE_FINDINGS = prevFixtureEnv;
@@ -507,5 +532,40 @@ describe.skipIf(!HAS_REAL_DB)('FR-C generator — integration (HAS_REAL_DB)', ()
       .update({ status: 'pending' })
       .eq('id', f.id);
     expect(e4).not.toBeNull();
+  }, 30000);
+
+  test('TS-6 (SD-LEO-FIX-FIX-GENERATOR-INTEGRATION-001): a test SD with an FK-blocking child row still becomes cancelled, not left draft', async () => {
+    // Reproduces the exact historical leak: a real generator-created SD gets an
+    // FK-RESTRICT child (feedback.strategic_directive_id) attached, so a bare DELETE
+    // rolls back and the SD would be silently left 'draft' (self-claimable) forever.
+    const finding = await seedFinding({ category: 'unit_test', severity: 'high', sig: 'ts6-fk-block' });
+    const result = await generateRemediationSdsForVenture(testVentureId, { supabase, rateLimit: 20 });
+    expect(result.created.length).toBe(1);
+    const sdKey = result.created[0].sd_key;
+    createdSdKeys.push(sdKey);
+
+    const { error: fbErr } = await supabase.from('feedback').insert({
+      type: 'issue', source_application: 'EHG_Engineer', source_type: 'manual_feedback',
+      title: 'TS-6 blocking feedback row', category: 'harness_backlog',
+      strategic_directive_id: sdKey,
+    });
+    expect(fbErr).toBeNull();
+
+    // Old behavior (pre-fix): this bare delete fails with an FK-RESTRICT violation,
+    // and the SD is left in 'draft' -- reproducing the historical leak exactly.
+    const { error: bareDeleteErr } = await supabase.from('strategic_directives_v2').delete().eq('sd_key', sdKey);
+    expect(bareDeleteErr).not.toBeNull();
+    expect(bareDeleteErr.message).toMatch(/foreign key constraint/i);
+    const { data: stillDraft } = await supabase.from('strategic_directives_v2').select('status').eq('sd_key', sdKey).single();
+    expect(stillDraft.status).toBe('draft');
+
+    // New behavior (this fix): cancelTestSds succeeds despite the blocking child row.
+    const { error: cancelErr } = await cancelTestSds([sdKey]);
+    expect(cancelErr).toBeNull();
+    const { data: afterCancel } = await supabase.from('strategic_directives_v2').select('status').eq('sd_key', sdKey).single();
+    expect(afterCancel.status).toBe('cancelled');
+
+    // Clean up the blocking row so the real afterEach's hard-delete can fully succeed.
+    await supabase.from('feedback').delete().eq('strategic_directive_id', sdKey);
   }, 30000);
 });
