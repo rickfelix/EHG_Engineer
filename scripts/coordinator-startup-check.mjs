@@ -291,6 +291,26 @@ export function buildReport(argv = [], env = {}, repoRoot = REPO_ROOT) {
   return [renderResponsibilities(repoRoot), '', renderAdamLane(), '', renderLoops(armed), '', renderFreshness(repoRoot)].join('\n');
 }
 
+// SD-LEO-INFRA-BOOTSTRAPPABLE-SURVIVOR-AGNOSTIC-001: coordinator-cold-recovery.cjs shipped +
+// npm-wired but was never invoked from the startup ritual, leaving the survivor-agnostic
+// cold-recovery path unreachable. Dry-run by default; --execute (or COORD_COLD_RECOVERY_
+// EXECUTE=1) releases + resume-redispatches orphaned claims. Fail-open: never throws.
+export async function renderColdRecovery(argv = [], env = {}) {
+  const dryRun = !(argv.includes('--execute') || env.COORD_COLD_RECOVERY_EXECUTE === '1');
+  try {
+    const { coldRecover } = await import('./coordinator-cold-recovery.cjs');
+    const { createSupabaseServiceClient } = await import('../lib/supabase-client.cjs');
+    const report = await coldRecover({ supabase: createSupabaseServiceClient(), dryRun });
+    const lines = [`═══ COLD-RECOVERY SWEEP (${dryRun ? 'dry-run' : 'EXECUTE'}) ═══`];
+    lines.push(`  in-flight: ${report.reconstructed}   orphaned: ${report.orphaned.length}`);
+    if (report.orphaned.length) lines.push(`  ${dryRun ? 'would release+resume' : 'released+resume-redispatched'}: ${report.orphaned.join(', ')}`);
+    if (report.errors.length) lines.push(`  ⚠️  errors: ${report.errors.join('; ')}`);
+    return lines.join('\n');
+  } catch (err) {
+    return '═══ COLD-RECOVERY SWEEP ═══\n  ✅ skipped (fail-open): ' + (err?.message || String(err));
+  }
+}
+
 // ── Main (fail-open: always exit 0) ──
 function main() {
   try {
@@ -299,7 +319,9 @@ function main() {
   } catch (err) {
     console.warn('⚠️  coordinator-startup-check hiccup (non-blocking, fail-open): ' + (err && err.message ? err.message : String(err)));
   }
-  process.exit(0);
+  renderColdRecovery(process.argv.slice(2), process.env)
+    .then((out) => console.log(out))
+    .finally(() => process.exit(0));
 }
 
 // Only run main when invoked directly (not when imported by tests).
