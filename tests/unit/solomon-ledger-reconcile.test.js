@@ -24,6 +24,12 @@ describe('FR-4: reconcileBatch — reads the actual downstream SD, not Solomon s
     expect(results[0]).toMatchObject({ id: 'row-1', updated: true, outcome: 'shipped_clean' });
   });
 
+  it('carries the resolving sdKey through for closer-of-record stamping (SD-LEO-INFRA-REWARD-SPINE-ONE-001-B)', async () => {
+    const sb = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { status: 'completed' }, error: null }) }) }) }) };
+    const results = await reconcileBatch(sb, [{ id: 'row-1', outcome_sd_key: 'SD-X-001' }]);
+    expect(results[0].sdKey).toBe('SD-X-001');
+  });
+
   it('leaves a row unresolved (unknown) when the SD is not yet terminal', async () => {
     const sb = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { status: 'in_progress' }, error: null }) }) }) }) };
     const results = await reconcileBatch(sb, [{ id: 'row-2', outcome_sd_key: 'SD-Y-001' }]);

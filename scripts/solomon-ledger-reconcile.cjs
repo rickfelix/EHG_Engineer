@@ -18,11 +18,17 @@
  * downstream fix constitutes "rework caused by the original proposal") — it is set manually via a
  * direct ledger update when that judgment is made, not inferred by this script.
  *
+ * Closer-of-record (SD-LEO-INFRA-REWARD-SPINE-ONE-001-B): every auto-close stamps closed_by/
+ * closed_at/outcome_ref so the closure is durably attributable to this mechanism, never a
+ * self-report — the anti-Goodhart mechanic named in docs/architecture/reward-spine-ssot.md.
+ *
  * Usage:
  *   node scripts/solomon-ledger-reconcile.cjs [--dry-run]
  */
 require('dotenv').config();
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
+
+const CLOSER_OF_RECORD = 'solomon-ledger-reconcile.cjs';
 
 /**
  * Pure: map a downstream SD's terminal status to a ledger outcome value.
@@ -58,7 +64,7 @@ async function reconcileBatch(supabase, rows) {
     if (!sd) { results.push({ id: row.id, updated: false, reason: `SD ${row.outcome_sd_key} not found` }); continue; }
     const outcome = mapSdStatusToOutcome(sd.status);
     if (!outcome) { results.push({ id: row.id, updated: false, reason: `SD status '${sd.status}' not yet terminal` }); continue; }
-    results.push({ id: row.id, updated: true, outcome, sdStatus: sd.status });
+    results.push({ id: row.id, updated: true, outcome, sdStatus: sd.status, sdKey: row.outcome_sd_key });
   }
   return results;
 }
@@ -69,6 +75,11 @@ async function main() {
   try { supabase = createSupabaseServiceClient(); }
   catch (e) { console.error('ERROR: supabase client unavailable:', e.message); process.exit(1); }
 
+  const { count: unknownBefore } = await supabase
+    .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
+    .select('*', { count: 'exact', head: true })
+    .eq('outcome', 'unknown');
+
   const { data: pending, error } = await supabase
     .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
     .select('id, outcome_sd_key')
@@ -76,6 +87,7 @@ async function main() {
     .not('outcome_sd_key', 'is', null)
     .limit(500);
   if (error) { console.error('ERROR: ledger query failed:', error.message); process.exit(1); }
+  console.log(`Ledger state before this run: ${unknownBefore ?? '?'} row(s) outcome='unknown'; ${pending ? pending.length : 0} eligible (have an outcome_sd_key).`);
   if (!pending || pending.length === 0) { console.log('(no ledger rows pending reconciliation)'); return; }
 
   const results = await reconcileBatch(supabase, pending);
@@ -91,11 +103,22 @@ async function main() {
   for (const r of toUpdate) {
     const { error: uErr } = await supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
-      .update({ outcome: r.outcome })
+      .update({
+        outcome: r.outcome,
+        closed_by: CLOSER_OF_RECORD,
+        closed_at: new Date().toISOString(),
+        outcome_ref: r.sdKey,
+      })
       .eq('id', r.id);
     if (uErr) console.error(`  WARN: failed to write outcome for ${r.id}: ${uErr.message}`);
   }
   console.log(`✓ ${toUpdate.length} row(s) updated.`);
+
+  const { count: unknownAfter } = await supabase
+    .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
+    .select('*', { count: 'exact', head: true })
+    .eq('outcome', 'unknown');
+  console.log(`Ledger state after this run: ${unknownAfter ?? '?'} row(s) outcome='unknown' (was ${unknownBefore ?? '?'}).`);
 }
 
 module.exports = { mapSdStatusToOutcome, reconcileBatch };
