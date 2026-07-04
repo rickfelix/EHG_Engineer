@@ -353,6 +353,22 @@ async function rehydrateCallsign(sb, sessionId, currentMeta) {
       .maybeSingle();
     const cs = data && data.payload && data.payload.callsign;
     if (!cs) return null;
+    // QF-20260703-665 (a): refuse to resurrect a callsign a DIFFERENT live session currently
+    // holds -- a stale SET_IDENTITY row can name an identity long since reassigned elsewhere
+    // (live-repro: Echo ccdd0c1c resurrected while another session already held it). Fail-open
+    // on a lookup fault: proceed with the pre-fix behavior rather than leave the worker nameless.
+    try {
+      const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+      const { data: holder } = await sb.from('claude_sessions')
+        .select('session_id')
+        .neq('session_id', sessionId)
+        .gte('heartbeat_at', fiveMinAgo)
+        .neq('status', 'terminated')
+        .filter('metadata->fleet_identity->>callsign', 'eq', cs)
+        .limit(1)
+        .maybeSingle();
+      if (holder) return null;
+    } catch { /* fail-open -- uniqueness check unavailable, fall through to legacy rehydrate */ }
     const prevFi = (currentMeta && currentMeta.fleet_identity) || {};
     const color = (data.payload && data.payload.color) || prevFi.color || null;
     const display_name = (data.payload && data.payload.display_name) || `${cs} | idle`;
@@ -1009,6 +1025,11 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
         && callsignInTierBand(existing.callsign, tierRankOf({ metadata: myMeta }))) {
       return { callsign: existing.callsign, color: existing.color };
     }
+    // QF-20260703-665 (b): a re-band (existing callsign present but wrong tier band) is about to
+    // vacate its current label. Stamp it below so OTHER sessions' next self-assign reserves it for
+    // a grace window instead of an instant free-for-all claim (the "3x Charlie" collision class) --
+    // reuses the reserveParkedIdentities parked-label pattern from assign-fleet-identities.cjs.
+    const vacating = (existing && existing.callsign) ? existing.callsign : null;
     // Seed used-sets from currently-live assigned identities so we pick a FREE slot (not blindly Alpha).
     const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
     const { data: live } = await sb.from('claude_sessions')
@@ -1021,6 +1042,8 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
       const id = r.metadata && r.metadata.fleet_identity;
       if (id && id.callsign) usedCallsigns.add(id.callsign);
       if (id && id.color) usedColors.add(id.color);
+      const vac = r.metadata && r.metadata.fleet_identity_vacated;
+      if (vac && vac.callsign && vac.vacated_at >= fiveMinAgo) usedCallsigns.add(vac.callsign);
     }
     const callsign = pickCallsignForTier(tierRankOf({ metadata: myMeta }), usedCallsigns);
     const color = nextAvailable(COLORS, usedColors);
@@ -1029,7 +1052,11 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
     // 'idle'. We match `${callsign} | idle` so the cron's 5-min refresh loop sees no mismatch and
     // never churns the row. The statusline reads callsign/color only, so the label is user-invisible.
     const display_name = `${callsign} | idle`;
-    const metadata = { ...myMeta, fleet_identity: { color, callsign, display_name, assigned_at: new Date().toISOString() } };
+    const metadata = {
+      ...myMeta,
+      fleet_identity: { color, callsign, display_name, assigned_at: new Date().toISOString() },
+      ...(vacating ? { fleet_identity_vacated: { callsign: vacating, vacated_at: new Date().toISOString() } } : {}),
+    };
     const { error } = await sb.from('claude_sessions').update({ metadata }).eq('session_id', sessionId);
     if (error) return null;
     // Emit SET_IDENTITY so the coordination-inbox hook writes the per-session statusline file. This is
