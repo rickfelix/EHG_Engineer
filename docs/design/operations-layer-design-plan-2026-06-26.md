@@ -9,7 +9,7 @@ The deeper dive confirms the operations layer is **largely unbuilt** — but the
 
 1. **Source ZERO SDs now.** The v2 plan recommended one small "kill-safety guard." Ground truth refutes it: live DB shows **0 venture-scoped `agent_registry` rows and 0 `service_tasks`**, and `kill_venture` **already cancels** a killed venture's non-terminal SDs (migration `20260528113000`). The guard would operate on empty sets — a no-op, and sourcing it would repeat the exact verify-before-source error that just withdrew item B (the gauge). The honest pre-launch sourcing count is **zero**.
 
-2. **The single highest-leverage move is a DECISION, not a build: un-defer the compounding loop's *capture-forward* half.** It is the only machine-improving item in the entire dive (the agentic-capital multiplier exists precisely to let it jump the queue), and venture-1's first-run signal is **perishable — permanently lost every stage it passes without extraction.** Freeze-then-calibrate forbids building speculative *machinery*; it does **not** forbid *collecting signal* — capture is the substrate calibration will later need. This is a ratified-deviation (compounding is currently chairman-deferred to first-revenue), so it is the **one** thing that goes to the chairman.
+2. **The single highest-impact move is a DECISION, not a build: un-defer the compounding loop's *capture-forward* half.** It is the only machine-improving item in the entire dive (the agentic-capital multiplier exists precisely to let it jump the queue), and venture-1's first-run signal is **perishable — permanently lost every stage it passes without extraction.** Freeze-then-calibrate forbids building speculative *machinery*; it does **not** forbid *collecting signal* — capture is the substrate calibration will later need. This is a ratified-deviation (compounding is currently chairman-deferred to first-revenue), so it is the **one** thing that goes to the chairman.
 
 Everything else is launch-gated and deferred with explicit triggers. Net: **0 SDs sourced now, 1 chairman decision, 2 decide-and-inform FYIs, 1 deferral register.**
 
@@ -39,7 +39,7 @@ Two scopes: **RUN-THE-VENTURE** (per live venture: monitoring, incident, support
 ## 3. The reframe — launch-gated triggers + the two things that DON'T wait
 The dive's severities are *architectural*; operational priority is set by **when a live venture (or the machine) actually needs it.**
 
-- **Nothing in the RUN-phase runtime is needed before venture-1 launches** (it's at S16). Command-bus execution, CEO runtimes, portfolio concurrency, exit machinery, kill-cleanup — all key off *live* ventures/agents that don't exist yet.
+- **Venture-1 (currently at S16) requires nothing from the RUN-phase runtime before it launches.** Command-bus execution, CEO runtimes, portfolio concurrency, exit machinery, kill-cleanup — all key off *live* ventures/agents that don't exist yet.
 - **Two things do NOT wait (both machine-improvement, both signal/measurement, neither a speculative runtime):**
   - **(A) Compounding capture-forward** — venture-1's first-run signal is perishable (the chairman's own "gold hunt" framing). Collect-without-promote now. → the one chairman decision.
   - **(B) Token accounting** — "tokens are capital" is a NOW principle the plan previously operationalized only at Phase 3. The dominant token sink *today* is the harness/fleet + venture-1's build run, none of which are "live ventures." A token-attribution view over the existing `model_usage_log` (rollup by venture / harness / fleet-role) creates the Phase-3 allocation baseline, turns the operating-model SSOT `ai_operations` band from a static ESTIMATE into a DERIVED actual, and is itself machine-improving. Defer *allocation/enforcement*; do *accounting* now. → decide-and-inform candidate.
@@ -56,7 +56,7 @@ The dive's severities are *architectural*; operational priority is set by **when
 **PHASE 0 — NOW (pre-launch). Source 0 SDs. Do exactly this:**
 - **Escalate ONE decision** to the chairman: D-COMPOUND (un-defer capture-forward) — §6.
 - **Decide-and-inform** (standing authorization, no chairman sign-off): D-CEO = PARK-AND-RECLAIM; D-CMD = defer broad runtime, flag the narrow auto-SD-creation slice; flag the token-accounting view as the top machine-improvement candidate.
-- **Hard precondition going forward:** a ground-truth premise-check (does the thing the SD targets actually exist / is the gap real?) is REQUIRED before sourcing ANY ops SD. (This is the B-gauge + kill-safety lesson, now a rule.)
+- **Hard precondition going forward:** sourcing ANY ops SD REQUIRES a ground-truth premise-check first (does the thing the SD targets actually exist / is the gap real?). (This is the B-gauge + kill-safety lesson, now a rule.)
 
 **PHASE 1 — TRIGGER: venture-1 first live customer-facing deploy.**
 - Extend the existing health-monitor to venture infra (observability ≠ autonomy — safe). 
