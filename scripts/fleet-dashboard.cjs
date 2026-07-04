@@ -1595,6 +1595,42 @@ async function printUndeliveredOutbound() {
   console.log('');
 }
 
+// SD-LEO-INFRA-CHAIRMAN-EMAIL-CHANNEL-001: dead-channel banner + chairman-visible terminal
+// marker for the chairman-escalation email channel. Pull-based (mirrors printUndeliveredOutbound()'s
+// shape) -- reads the current row live on every render, no push/cache. Read-only + fail-open.
+async function printChairmanEmailChannelHealth() {
+  console.log('CHAIRMAN-EMAIL CHANNEL HEALTH');
+  console.log('─'.repeat(72));
+
+  const { data: row, error } = await supabase
+    .from('chairman_email_channel_health')
+    .select('*')
+    .eq('id', 'singleton')
+    .maybeSingle();
+  if (error) {
+    console.log('  (channel-health query failed: ' + error.message + ')');
+    console.log('');
+    return;
+  }
+  if (!row) {
+    console.log('  (no channel-health row yet — migration may be unapplied)');
+    console.log('');
+    return;
+  }
+
+  if (row.alarm_state === 'raised') {
+    console.log('  🔴 ALARM: channel DOWN — consecutive_failures=' + row.consecutive_failures
+      + ' last_error_class=' + (row.last_error_class || '?')
+      + ' raised_at=' + (row.alarm_raised_at || '?'));
+  } else if (row.alarm_state === 'cooldown') {
+    console.log('  🟡 RECOVERING (cooldown) — cleared_at=' + (row.alarm_cleared_at || '?'));
+  } else {
+    console.log('  🟢 healthy — last_success_at=' + (row.last_success_at || 'never'));
+  }
+  console.log('  last_canary_verified_at=' + (row.last_canary_verified_at || 'never'));
+  console.log('');
+}
+
 // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-3: surface the
 // relay/decision/review drop gauge — mirrors printUndeliveredOutbound()'s shape. Read-only
 // + fail-open (planRelayDrops never throws).
@@ -1811,6 +1847,7 @@ async function main() {
     context:       async () => await printWorkingContext(), // SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001 (FR-3)
     feedback:      async () => await printFeedback(d), // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001
     team:          () => printTeam(d), // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B
+    chairmanemail: async () => await printChairmanEmailChannelHealth(), // SD-LEO-INFRA-CHAIRMAN-EMAIL-CHANNEL-001
     all:           async () => {
       // Team banner appears at top of /coordinator all when active teams exist (otherwise no-op)
       if (d.executeTeams && d.executeTeams.length > 0) printTeam(d);
@@ -1826,6 +1863,7 @@ async function main() {
       await printUndeliveredOutbound(); // FR-2 SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001
       await printDeadLetters(); // FR-4 SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001
       await printRelayDropGauge(); // FR-3 SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001
+      await printChairmanEmailChannelHealth(); // SD-LEO-INFRA-CHAIRMAN-EMAIL-CHANNEL-001
       await printAdamInbox(); // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B — Adam advisory lane
       await printReviewHeldSds(); // QF-20260704-742 — third intake surface: needs_coordinator_review holds
       await printSolomonInbox(); // SD-LEO-INFRA-SOLOMON-CONSULT-001F — Solomon oracle consult lane (dormant until SOLOMON_CONSULT_V1)
