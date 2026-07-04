@@ -13,6 +13,8 @@ tags: [analysis, audits]
 **Evidence base:** `.claude/data-layer-scan-results.json` (chairman-directed data-layer review 2026-06-10; 7,640 files vs 708 live tables + 166 views), three parallel verification sweeps (EHG_Engineer classification grep, EHG-app cross-repo grep, module live-importer analysis), committed-SQL re-grep.
 **Action taken by this SD: NONE.** Zero drops, zero module deletions, zero provisioning. Every row below is a routed decision.
 
+> **Update (2026-07-04):** the `okr_alignments` PROVISION decision (row below, `lib/eva/intelligence-loader.js`) has been executed — see SD-LEO-INFRA-PROVISION-OKR-ALIGNMENTS-001. Table is live in production with a schema-contract regression test.
+
 ---
 
 ## Part A — 91 "dead" tables, classified

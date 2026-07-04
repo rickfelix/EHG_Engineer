@@ -1,7 +1,7 @@
 {
- "generated_at": "2026-07-04T12:14:48.038Z",
+ "generated_at": "2026-07-04T14:05:23.589Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 763,
+ "table_count": 765,
  "view_count": 177,
  "tables": {
   "_migration_metadata": "{key,value}",
@@ -406,6 +406,7 @@
   "north_star": "{id,definition,metric,target,sustain,measurement_source,cadence,status,provenance,created_at,updated_at}",
   "nursery_evaluation_log": "{id,nursery_id,trigger_type,trigger_details,previous_score,new_score,previous_maturity,new_maturity,evaluation_notes,evaluated_by,created_at}",
   "objectives": "{id,vision_id,code,title,description,owner,cadence,period,sequence,is_active,created_by,created_at,updated_at,generation_id,vision_version_aligned_to,needs_review_since,eva_vision_id}",
+  "okr_alignments": "{id,sd_id,key_result_id,contribution_type,impact_weight,created_at}",
   "okr_generation_log": "{id,generation_date,period,vision_id,top_down_count,bottom_up_count,total_krs_generated,top_down_ratio,bottom_up_ratio,source_breakdown,status,error_message,created_by,created_at,eva_vision_id}",
   "okr_snapshots": "{id,key_result_id,snapshot_date,current_value,target_value,confidence,status,created_at}",
   "okr_vision_alignment_records": "{id,objective_id,key_result_id,vision_document_id,alignment_score,alignment_notes,scored_by,created_at,updated_at}",
@@ -690,6 +691,7 @@
   "venture_artifacts": "{id,venture_id,lifecycle_stage,artifact_type,title,content,file_url,version,is_current,metadata,created_at,created_by,updated_at,quality_score,validation_status,validated_at,validated_by,epistemic_classification,epistemic_evidence,artifact_embedding,embedding_model,embedding_updated_at,indexing_status,source,artifact_data,supports_vision_key,supports_plan_key,platform}",
   "venture_artifacts_qparity20260610": "{id,venture_id,lifecycle_stage,artifact_type,title,content,file_url,version,is_current,metadata,created_at,created_by,updated_at,quality_score,validation_status,validated_at,validated_by,epistemic_classification,epistemic_evidence,artifact_embedding,embedding_model,embedding_updated_at,indexing_status,source,artifact_data,supports_vision_key,supports_plan_key,platform}",
   "venture_artifacts_storm_quarantine_20260610": "{id,venture_id,lifecycle_stage,artifact_type,title,content,file_url,version,is_current,metadata,created_at,created_by,updated_at,quality_score,validation_status,validated_at,validated_by,epistemic_classification,epistemic_evidence,artifact_embedding,embedding_model,embedding_updated_at,indexing_status,source,artifact_data,supports_vision_key,supports_plan_key,platform}",
+  "venture_artifacts_storm_quarantine_20260704": "{id,venture_id,lifecycle_stage,artifact_type,title,content,file_url,version,is_current,metadata,created_at,created_by,updated_at,quality_score,validation_status,validated_at,validated_by,epistemic_classification,epistemic_evidence,artifact_embedding,embedding_model,embedding_updated_at,indexing_status,source,artifact_data,supports_vision_key,supports_plan_key,platform}",
   "venture_asset_registry": "{id,venture_id,asset_name,asset_type,description,estimated_value,provenance,created_by,created_at,updated_at}",
   "venture_audience_weekly": "{id,venture_id,week_start,clicks,impressions,engagement_rate,post_count,computed_at}",
   "venture_blueprints": "{id,blueprint_key,name,description,category,template,tags,archetype_hint,times_used,success_rate,version,is_active,created_by,created_at,updated_at}",

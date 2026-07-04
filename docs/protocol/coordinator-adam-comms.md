@@ -122,6 +122,20 @@ for 10+ minutes is UNDELIVERED — surfaced by `node scripts/fleet-dashboard.cjs
 ('UNDELIVERED OUTBOUND') and the hourly review. Pure selector:
 `lib/coordinator/receipts.cjs findUndelivered`.
 
+**Adam-side outbound-silence watchdog (SD-LEO-FIX-ADAM-OUTBOUND-SILENCE-001):** a
+dashboard surface is only useful if someone acts on it. Chairman-caught gap 2026-07-04:
+a backlog of Adam->coordinator messages sat unprocessed despite both UNDELIVERED OUTBOUND
+and the ADAM ADVISORY INBOX unactioned-count already flagging it. `lib/adam/outbound-
+silence-watchdog.js`, wired into `scripts/adam-quiet-tick.mjs`, closes the loop by having
+Adam actively watch its own reply-expected outbound (`payload.kind` in `coordinator_request`
+/ `solomon_consult`, or `payload.expects_reply=true`) at a live target: unread >=30m or
+read-but-unacknowledged >=60m is a breach. First breach -> one alternate-kind channel-health
+probe (`payload.kind='adam_channel_health_probe'`, `reply_class='fire-and-forget'` so it
+never becomes a `task-rehydrate` board node). A target still breaching after a prior probe
+(second consecutive breach) -> a chairman-visible `feedback` row (`category=harness_backlog`).
+Deduped 2h/target, plus an absolute per-tick cap (`MAX_PROBES_PER_TICK=5`) as an independent
+second storm guard.
+
 ## Correlation echo — replies carry BOTH keys
 
 Every reply writer echoes the request's correlation under **both** `payload.reply_to`

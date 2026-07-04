@@ -261,6 +261,65 @@ describe('LifecycleSDBridge', () => {
     });
   });
 
+  describe('selectApplicableLayers — SD-LEO-INFRA-S19-DECOMPOSITION-COVERAGE-001 coverage assertion', () => {
+    it('throws when a feature item implies user interaction but resolves to no ui layer', () => {
+      expect(() => selectApplicableLayers({
+        type: 'feature',
+        title: 'Develop Landing Page with Hero and CTA',
+        architectureLayer: 'backend',
+        decomposition_strategy: 'leaf',
+      })).toThrow(/implies user interaction/);
+    });
+
+    it('throws when architecture_layers explicitly omits ui for a user-facing feature', () => {
+      expect(() => selectApplicableLayers({
+        type: 'feature',
+        title: 'User Registration and Login Flow',
+        architecture_layers: ['api', 'data'],
+      })).toThrow(/implies user interaction/);
+    });
+
+    it('does not throw when decomposition_strategy=layered resolves all 4 layers (ui included)', () => {
+      const layers = selectApplicableLayers({
+        type: 'feature',
+        title: 'Develop Landing Page with Hero and CTA',
+        architectureLayer: 'backend',
+        decomposition_strategy: 'layered',
+      });
+      expect(layers.map(l => l.key)).toContain('ui');
+    });
+
+    it('does not throw when the single mapped layer already resolves to ui', () => {
+      const layers = selectApplicableLayers({
+        type: 'feature',
+        title: 'Develop Landing Page with Hero and CTA',
+        architectureLayer: 'frontend',
+        decomposition_strategy: 'leaf',
+      });
+      expect(layers.map(l => l.key)).toEqual(['ui']);
+    });
+
+    it('does not throw for a genuinely backend-only feature item (no user-interaction signal)', () => {
+      const layers = selectApplicableLayers({
+        type: 'feature',
+        title: 'Wire Error Capture Middleware',
+        architectureLayer: 'backend',
+        decomposition_strategy: 'leaf',
+      });
+      expect(layers.map(l => l.key)).toEqual(['api']);
+    });
+
+    it('does not throw for a non-feature item even if the title implies user interaction', () => {
+      const layers = selectApplicableLayers({
+        type: 'bugfix',
+        title: 'Fix landing page CTA button click handler',
+        architectureLayer: 'backend',
+        decomposition_strategy: 'leaf',
+      });
+      expect(layers.map(l => l.key)).toEqual(['api']);
+    });
+  });
+
   describe('filterLayersByCapability — target_application capability gate', () => {
     it('should suppress api layer when target_application=ehg (Vite SPA, no serverless API)', () => {
       const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
