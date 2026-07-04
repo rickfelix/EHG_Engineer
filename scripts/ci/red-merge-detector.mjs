@@ -21,6 +21,7 @@
 import 'dotenv/config';
 import { execFileSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
+import { classifyRegressions } from '../lib/baseline-regression-check.mjs';
 
 const DIMENSION = 'ci_test_failure_count'; // must match compare-to-main-snapshot.mjs
 const TABLE = 'codebase_health_snapshots';
@@ -222,6 +223,29 @@ export function detectBaselineRot(snapshots = [], opts = {}) {
   };
 }
 
+/**
+ * IDENTITY + REACHABILITY gate on a count-based file_qf verdict (RCA a34446da,
+ * QF-20260704-263 — 4th confirmed count-vs-identity false positive). decide()'s
+ * count rule is a cheap pre-filter; a +1 from a flaky test in a file the merge
+ * never touched is not a red merge. Delegates to the already-shipped PR-leg
+ * comparator so the two gates never drift. Returns null (not []) when either
+ * snapshot predates failed_test_ids (legacy) — the caller must fall back to
+ * the count verdict rather than treat that as "zero regressions".
+ * @param {{findings?: Array<{failed_test_ids?: string[]}>}} latestSnap
+ * @param {{findings?: Array<{failed_test_ids?: string[]}>}} prevSnap
+ * @param {string[]|null} changedFiles
+ * @returns {string[]|null}
+ */
+export function genuineReachableRegressions(latestSnap, prevSnap, changedFiles) {
+  const currentIds = latestSnap?.findings?.[0]?.failed_test_ids;
+  const baselineIds = prevSnap?.findings?.[0]?.failed_test_ids;
+  if (!Array.isArray(currentIds) || !Array.isArray(baselineIds)) return null;
+  return classifyRegressions({
+    currentFailed: currentIds.length, currentIds,
+    baselineFailedCount: baselineIds.length, baselineIds, changedFiles,
+  }).newRegressions;
+}
+
 async function main() {
   const dryRun = process.argv.includes('--dry-run');
   const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -274,11 +298,32 @@ async function main() {
   console.log(`[red-merge-detector] ${verdict.action}: ${verdict.reason}`);
   if (verdict.action !== 'file_qf') return;
 
+  // IDENTITY+REACHABILITY GATE (RCA a34446da, QF-20260704-263): suppress unless a
+  // NEW failing identity is reachable from the merge's own diff — same rule as the
+  // PR-leg gate (shared module, no drift). Fails open to the count-fire when either
+  // snapshot lacks failed_test_ids or the diff can't be computed.
+  let changedFiles = null;
+  try {
+    changedFiles = execFileSync('git', ['show', '--name-only', '--format=', verdict.sha], { encoding: 'utf8' })
+      .split('\n').map((s) => s.trim()).filter(Boolean).map((s) => s.replace(/\\/g, '/'));
+  } catch { /* diff hiccup — fall open to identity-only (still better than count-only) */ }
+  const genuine = genuineReachableRegressions(mainSnaps[0], mainSnaps[1], changedFiles);
+  if (Array.isArray(genuine)) {
+    if (genuine.length === 0) {
+      console.log(`[red-merge-detector] noop: count ${verdict.prevFailed}->${verdict.newFailed} at ${verdict.sha.slice(0, 10)} has no NEW failing test reachable from its diff — flaky-count jitter, not a red merge`);
+      return;
+    }
+    verdict.newRegressions = genuine;
+  }
+
   if (dryRun) { console.log('[red-merge-detector] dry-run — would file QF with signature', verdict.signature); return; }
 
   // File the ci-blocking QF via the canonical creation script.
   const title = `CI red-merge: main test failures rose ${verdict.prevFailed} -> ${verdict.newFailed} at ${verdict.sha.slice(0, 10)}`;
-  const description = `${verdict.signature}\n\nA merge to main increased the unit-test failure count from ${verdict.prevFailed} to ${verdict.newFailed} (commit ${verdict.sha}). ` +
+  const namedTests = Array.isArray(verdict.newRegressions) && verdict.newRegressions.length
+    ? `\n\nNewly-failing test(s) reachable from this commit's diff:\n- ${verdict.newRegressions.join('\n- ')}`
+    : '';
+  const description = `${verdict.signature}\n\nA merge to main increased the unit-test failure count from ${verdict.prevFailed} to ${verdict.newFailed} (commit ${verdict.sha}).${namedTests}\n\n` +
     `Reproduce: node scripts/audit-test-failures.mjs --pr-only --format=json | jq .new_failures. ` +
     `Fix the regression — do NOT regenerate the baseline snapshot to absorb it. Auto-filed by scripts/ci/red-merge-detector.mjs (SD-MAN-INFRA-MEDIUM-EFFORT-HARDENING-001 FR-3).`;
   let out = '';
