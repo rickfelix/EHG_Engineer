@@ -8,7 +8,7 @@
  * worktree provisioning itself if hook re-linking fails.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { provisionWorktreeNodeModules } from '../../lib/worktree-provision.js';
+import { provisionWorktreeNodeModules, defaultEnsureHuskyHooks } from '../../lib/worktree-provision.js';
 
 function makeDeps(overrides = {}) {
   return {
@@ -44,5 +44,32 @@ describe('provisionWorktreeNodeModules — husky hook re-link (QF-20260703-311)'
     const result = provisionWorktreeNodeModules('/fake/wt', { deps });
     expect(result.strategy).toBe('junction');
     expect(deps.log).toHaveBeenCalledWith(expect.stringContaining('husky hook re-link failed'));
+  });
+});
+
+describe('defaultEnsureHuskyHooks (SD-FDBK-ENH-SECURITY-FOLLOW-NON-001)', () => {
+  it('invokes husky via a direct node call, never via npx (registry-fallthrough hardening)', () => {
+    const execSyncImpl = vi.fn(() => '');
+    defaultEnsureHuskyHooks('/fake/wt', { execSyncImpl });
+    expect(execSyncImpl).toHaveBeenCalledTimes(1);
+    const [command, options] = execSyncImpl.mock.calls[0];
+    expect(command).not.toMatch(/npx/i);
+    expect(command).toMatch(/node\s+node_modules[\\/]husky[\\/]bin\.js/);
+    expect(options.cwd).toBe('/fake/wt');
+  });
+
+  it('is fail-open: returns {ok:false, error} instead of throwing when the local husky binary is missing', () => {
+    const execSyncImpl = vi.fn(() => {
+      throw new Error("Cannot find module 'node_modules/husky/bin.js'");
+    });
+    const result = defaultEnsureHuskyHooks('/fake/wt', { execSyncImpl });
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/husky/);
+  });
+
+  it('returns {ok:true} on success', () => {
+    const execSyncImpl = vi.fn(() => '');
+    const result = defaultEnsureHuskyHooks('/fake/wt', { execSyncImpl });
+    expect(result).toEqual({ ok: true });
   });
 });

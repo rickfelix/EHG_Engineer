@@ -90,9 +90,10 @@ describe('FR1 acceptance: install decision must be resolved against the WORKTREE
 describe('FR4 acceptance: git hooks must be provisioned independently of the install-skip decision', () => {
   it('defaultEnsureHuskyHooks provisions .husky/_ in a worktree that has no npm install at all (skip-path parity)', () => {
     // This proves hook provisioning does not depend on npm install having run --
-    // `npx husky` alone recreates the shims in any git-initialized directory.
-    // Skipped in CI environments without a real git binary / npx on PATH is acceptable
-    // (fail-open is the documented contract); we only assert the call never throws.
+    // `node node_modules/husky/bin.js` recreates the shims when a local husky is
+    // present. This temp dir has no node_modules at all, so the call is expected
+    // to fail cleanly (fail-open is the documented contract); we only assert it
+    // never throws, regardless of the underlying failure mode.
     const worktreeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'install-decision-husky-'));
     tmpDirs.push(worktreeDir);
     expect(() => defaultEnsureHuskyHooks(worktreeDir)).not.toThrow();
