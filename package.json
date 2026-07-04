@@ -114,7 +114,7 @@
     "test:integration:sd-creation": "vitest run tests/integration/sd-creation/",
     "test:integration:cross-sd-gate": "vitest run tests/integration/cross-sd-overlap-gate/",
     "test:pipeline": "vitest run tests/integration/pipeline-s0-s17.test.js --testTimeout 1200000",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --project unit --coverage",
     "coverage:compare-baseline": "node scripts/compare-to-main-snapshot.mjs",
     "coverage:audit-failures": "node scripts/audit-test-failures.mjs",
     "test:watch": "vitest watch",

@@ -52,6 +52,12 @@ describe.skipIf(!HAS_REAL_DB)('Chairman Decision API', () => {
   beforeAll(async () => {
     // Create a dedicated, ephemeral venture this suite exclusively owns, so no
     // concurrent writer can pre-populate a pending decision at our (venture, stage).
+    // NOT is_demo:true / a fixture-pattern name -- this suite deliberately exercises
+    // createOrReusePendingDecision's REAL write path end-to-end (QF-20260703-236's
+    // fixture-venture guard would skip decision creation entirely, breaking every
+    // assertion below). Root-caused instead via the CI-workflow fix (package.json
+    // test:coverage now scopes --project unit) so this suite never runs unintentionally
+    // against production; it remains valid to run intentionally (npm run test:integration).
     const { data, error } = await supabase
       .from('ventures')
       .insert({ name: RUN_MARKER, problem_statement: RUN_MARKER })
