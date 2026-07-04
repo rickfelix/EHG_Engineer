@@ -38,4 +38,19 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
   it('STILL flags an interpolated SQL keyword (real injection shape)', () => {
     expect(names('+ const sql = `${prefix} DELETE FROM users`;')).toContain('sql_injection');
   });
+
+  // CRIT-002 sql_injection — SD-LEO-INFRA-FIX-WINDOWS-SESSION-001 (PostgREST `select=`
+  // query-string parameter false positive). A `?`/`&`-prefixed REST query param whose
+  // name happens to spell a SQL keyword (e.g. `select=pid`) is a REST convention, not SQL.
+  it('does NOT flag a PostgREST `&select=` query param after an interpolation', () => {
+    expect(names(
+      '+ const url = `${baseUrl}?session_id=eq.${encodeURIComponent(id)}&select=pid`;'
+    )).not.toContain('sql_injection');
+  });
+  it('does NOT flag a PostgREST `?select=` query param (leading separator)', () => {
+    expect(names('+ const url = `${base}?select=${cols}`;')).not.toContain('sql_injection');
+  });
+  it('STILL flags an interpolated SQL keyword immediately preceded by a non-separator character', () => {
+    expect(names('+ const sql = `${schema}.DELETE FROM t`;')).toContain('sql_injection');
+  });
 });

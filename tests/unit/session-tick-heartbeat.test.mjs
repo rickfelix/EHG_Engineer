@@ -77,14 +77,34 @@ test('PARKED-LOOP FR-1: parentPid is reassignable (let) so a re-discovered PID c
   assert.doesNotMatch(tickSrc, /const\s+parentPid\s*=/);
 });
 
-test('PARKED-LOOP FR-1: rediscoverParentPid() exists and correlates by SSE port (capture-session-id Method 2)', () => {
-  assert.match(tickSrc, /function\s+rediscoverParentPid\s*\(/);
-  assert.match(tickSrc, /CLAUDE_CODE_SSE_PORT/);
+test('SD-LEO-INFRA-FIX-WINDOWS-SESSION-001: rediscoverParentPid() exists and re-queries claude_sessions.pid (not SSE-port WMI matching)', () => {
+  // The original SSE-port/WMI CommandLine approach was structurally inert (the
+  // port is only ever process.env, never a CLI arg — no command line could ever
+  // match it). Replaced with a read-only DB re-query of claude_sessions.pid,
+  // which scripts/hooks/capture-session-id.cjs's upsertSessionRow() already
+  // keeps fresh on every hook fire.
+  assert.match(tickSrc, /async\s+function\s+rediscoverParentPid\s*\(/);
+  // Only the functional env read matters — an explanatory comment elsewhere in
+  // the file legitimately names the retired mechanism as historical context.
+  assert.ok(
+    !/process\.env\.CLAUDE_CODE_SSE_PORT/.test(tickSrc),
+    'the retired SSE-port env read should be fully removed, not just dormant'
+  );
+  assert.match(tickSrc, /select=pid/);
 });
 
 test('PARKED-LOOP FR-1: parent-liveness poll re-discovers and adopts a live CC parent before exiting', () => {
   assert.match(tickSrc, /rediscoverParentPid\(\)/);
   assert.match(tickSrc, /parentPid\s*=\s*rediscovered/);
+});
+
+test('SD-LEO-INFRA-FIX-WINDOWS-SESSION-001: the parent-liveness poll callback awaits rediscoverParentPid()', () => {
+  // rediscoverParentPid() is now async (a fetch replaces the sync WMI call). A bare
+  // Promise is always truthy, so an un-awaited call would make the caller's
+  // `if (rediscovered)` check always pass — silently defeating the MAX_PARENT_MISSES
+  // exit path (the tick would never correctly exit on genuine parent death).
+  assert.match(tickSrc, /await\s+rediscoverParentPid\(\)/);
+  assert.match(tickSrc, /setInterval\(async\s*\(\)\s*=>/, 'the parent-poll setInterval callback must be async');
 });
 
 test('PARKED-LOOP FR-2: exit is debounced by MAX_PARENT_MISSES consecutive discovery misses', () => {
@@ -98,6 +118,9 @@ test('PARKED-LOOP FR-2: a successful re-discovery resets the miss counter (no fa
 });
 
 test('PARKED-LOOP TR-2: released-row stop semantics preserved (re-discovery must not resurrect a released row)', () => {
-  assert.match(tickSrc, /status=eq\.active/);
+  // Widened by SD-LEO-INFRA-FIX-WINDOWS-SESSION-001 from active-only to
+  // in.(active,idle,stale) -- released/completed remain the only statuses that
+  // still stop the tick loop; re-discovery does not change that boundary.
+  assert.match(tickSrc, /status=in\.\(active,idle,stale\)/);
   assert.match(tickSrc, /Content-Range/);
 });
