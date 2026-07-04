@@ -1,9 +1,7 @@
 {
-  "sdKey": "QF-20260703-070",
-  "workType": "QF",
-  "workKey": "QF-20260703-070",
-  "expectedBranch": "qf/QF-20260703-070",
-  "createdAt": "2026-07-04T00:20:19.123Z",
-  "hostname": "Legion-Laptop",
-  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
+  "sdKey": "SD-LEO-INFRA-LAUNCH-MODE-POLICY-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-LAUNCH-MODE-POLICY-001",
+  "createdAt": "2026-07-03T21:29:51.107Z",
+  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
+  "baseRef": "origin/main"
 }
