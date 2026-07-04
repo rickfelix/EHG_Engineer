@@ -115,4 +115,47 @@ describe('rehydrateBoard — reconstruct from the 3 live sources', () => {
     expect(summary.threads).toBe(0);
     expect(summary.errors.length).toBeGreaterThan(0);
   });
+
+  // QF-20260703-070: a fire-and-forget broadcast (belt-countdowns, status relays) must never
+  // mirror as an open thread that matures into a false stall.
+  it('mirrors a fire-and-forget countdown advisory as done, not open', async () => {
+    const sb = makeSupabase({
+      coordination: [
+        {
+          id: 'sc1',
+          sender_type: 'adam',
+          payload: { correlation_id: 'corr-countdown', reply_class: 'fire-and-forget', subject: 'Belt countdown: ETA 4h' },
+        },
+      ],
+      sds: [],
+    });
+    const summary = await rehydrateBoard(sb);
+    const node = sb._ledger.find((r) => r.source_kind === 'advisory_thread' && r.source_ref === 'corr-countdown');
+    expect(node).toBeDefined();
+    expect(node.status).toBe('done');
+    // A fire-and-forget send never awaits a reply — no awaited_reply marker either.
+    expect(sb._ledger.some((r) => r.source_kind === 'awaited_reply')).toBe(false);
+    expect(summary.threads).toBe(1);
+    expect(summary.awaited).toBe(0);
+  });
+
+  it('still mirrors a reply-needed request thread open (unaffected by the fire-and-forget carve-out)', async () => {
+    const sb = makeSupabase({
+      coordination: [
+        {
+          id: 'sc1',
+          sender_type: 'adam',
+          payload: { correlation_id: 'corr-request', reply_class: 'reply-needed', reply_requested: true, subject: 'Decision needed on Y' },
+        },
+      ],
+      sds: [],
+    });
+    const summary = await rehydrateBoard(sb);
+    const node = sb._ledger.find((r) => r.source_kind === 'advisory_thread' && r.source_ref === 'corr-request');
+    expect(node).toBeDefined();
+    expect(node.status).toBe('open');
+    expect(sb._ledger.some((r) => r.source_kind === 'awaited_reply' && r.source_ref === 'corr-request')).toBe(true);
+    expect(summary.threads).toBe(1);
+    expect(summary.awaited).toBe(1);
+  });
 });

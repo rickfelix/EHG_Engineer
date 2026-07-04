@@ -1,0 +1,100 @@
+{
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "launch_mode field on ventures + read-side validator (lib/eva/launch-mode.js)",
+      "description": "New nullable-safe column `ventures.launch_mode TEXT NOT NULL DEFAULT 'simulated' CHECK (launch_mode IN ('simulated','live'))` (migration database/migrations/20260703_ventures_launch_mode.sql, marked @chairman-gated per this repo's DDL-apply convention -- staged, not auto-applied to the live DB; the chairman applies it via the existing chairman-apply flow, same as merge_witness_telemetry.sql). Reused, not reinvented: `pipeline_mode` (building/operations/growth/...) already exists on ventures but is a LIFECYCLE-STAGE axis (lib/eva/stage-execution-engine.js:89) -- launch_mode is a distinct ARTIFACT-AUTHENTICITY axis (simulated vs live observations) and gets its own column, not an overload of pipeline_mode. New lib/eva/launch-mode.js exports getLaunchMode(supabase, ventureId) -- reads ventures.launch_mode, defaults to 'simulated' (today's existing behavior) on any error INCLUDING the column-not-yet-applied case (42703 undefined_column), so nothing breaks between this SD merging and the chairman running the migration. Also exports isLiveMode(mode)/isSimulatedMode(mode) pure predicates. The chairman WRITE path is explicitly OUT of scope for this SD (single-repo EHG_Engineer fence, per the SD's own scope note) -- the chairman sets launch_mode at S23/go-live via the EXISTING decision-queue/StageSettingsSheet mechanism in the ehg repo; this SD only adds the column + the read-side consumer."
+    },
+    {
+      "id": "FR-2",
+      "title": "Live-mode external-observation gate wired into stage-24-go-live.js",
+      "description": "New lib/eva/external-observation.js: a pure verifier `verifyExternalObservation({endpointStatus, billingProductId, telemetryRowCount})` returning `{verified, checks: [{name, verified, reason}]}` -- verified is true ONLY when ALL THREE checks pass: endpoint_200 (endpointStatus === 200), billing_product_exists (a non-empty billingProductId string), telemetry_rows_arrive (telemetryRowCount > 0). Any check that cannot be evaluated (input undefined/null) reports `verified:false, reason:'NO_DATA_SOURCE'` rather than silently passing -- this closes the S16 grounding-failure class the SD names (self-authored artifacts satisfying go-live gates): with no real external evidence, live mode FAILS CLOSED, it never defaults to pass. A companion async `collectExternalObservations(application)` does the actual I/O this SD CAN ground today: fetches `application.deployment_url` (HTTP GET, 5s timeout, any network error -> endpointStatus=null) for the endpoint check, and reads `application.metadata?.billing_product_id` for the billing check. Telemetry-row-count has NO existing data source in this repo (confirmed: no telemetry/analytics table for ventures) -- collectExternalObservations passes telemetryRowCount=null (documented as a forward-dependency, not invented), so the telemetry check will legitimately fail closed under launch_mode='live' until a future SD wires a real telemetry source. lib/eva/stage-templates/analysis-steps/stage-24-go-live.js is modified to read the venture's launch_mode (FR-1) before finalizing the launch_metrics artifact: launch_mode='simulated' keeps EXACTLY today's behavior plus stamps `labeled_simulation: true` on the artifact (the SD's 'current behavior, now explicitly labeled' requirement); launch_mode='live' calls collectExternalObservations + verifyExternalObservation and REFUSES to set launch_status:'launched' unless verified===true, instead returning a HOLD-style result with the per-check reasons surfaced (mirroring stage-23-launch-readiness.js's existing HOLD/chairman_override verdict shape, so the composition with the existing S23 verdict machinery is a norm-consistent branch, not a parallel invention)."
+    },
+    {
+      "id": "FR-3",
+      "title": "Forward-compatibility contract for G3/spend-guardrail composition (scoped down -- see risk)",
+      "description": "Neither 'G3 done-means-shipped' nor a per-venture LIVE spend-guardrail exist anywhere in this codebase today (confirmed via repo search: guardrail-registry.js's GR-SPENDING-LIMIT is an SD-authoring-time cost guardrail, a different domain from venture live spend; no G3-named module or concept exists). Rather than inventing fictitious integration points to satisfy the SD's literal FR3 wording, this FR is delivered as a forward-compatibility DATA CONTRACT: the launch_metrics artifact written by stage-24-go-live.js under launch_mode='live' (FR-2) includes a stable `composable_evidence: {launch_mode, external_observation, verdict}` block, so that when a future SD formalizes 'G3 done-means-shipped' and/or a live spend-guardrail, they can consume this artifact without a schema change on this SD's side. A contract test pins the artifact shape so an accidental future rename/removal of these fields is caught immediately."
+    }
+  ],
+  "technical_requirements": [
+    { "requirement": "Migration is marked @chairman-gated (staged, not applied) per this repo's DDL-apply convention -- ADD COLUMN is additive with a DEFAULT, so existing rows and all current pipeline_mode-based logic are unaffected either way" },
+    { "requirement": "getLaunchMode fails open to 'simulated' (today's behavior) on ANY error, including the pre-chairman-apply undefined_column case -- this SD's own code must not depend on the migration having been applied yet to avoid breaking prod between merge and chairman-apply" },
+    { "requirement": "verifyExternalObservation is a pure function (no I/O) independently unit-testable; collectExternalObservations is the sole I/O boundary (fetch + a plain object field read), matching the pure-logic/IO-boundary split convention already used elsewhere in lib/governance and lib/eva" },
+    { "requirement": "stage-23-launch-readiness.js's existing verdict/chairman_override shape is reused for the live-mode HOLD result, not reinvented" },
+    { "requirement": "No new EHG (frontend) UI -- the chairman-write path for launch_mode is out of scope per the SD's own single-repo fence; StageSettingsSheet lives in the ehg repo and is unchanged" }
+  ],
+  "test_scenarios": [
+    { "scenario": "getLaunchMode returns the stored value ('simulated' or 'live') for a venture with launch_mode set" },
+    { "scenario": "getLaunchMode returns 'simulated' when the column doesn't exist yet (undefined_column error) or the query otherwise errors" },
+    { "scenario": "verifyExternalObservation returns verified:true only when endpointStatus===200 AND billingProductId is a non-empty string AND telemetryRowCount>0" },
+    { "scenario": "verifyExternalObservation fails closed (verified:false, reason NO_DATA_SOURCE on the relevant check) when any input is null/undefined -- never silently passes" },
+    { "scenario": "collectExternalObservations returns endpointStatus=null on a fetch error/timeout rather than throwing" },
+    { "scenario": "stage-24-go-live.js in launch_mode='simulated' matches today's existing artifact output plus labeled_simulation:true" },
+    { "scenario": "stage-24-go-live.js in launch_mode='live' with all 3 external checks passing sets launch_status:'launched'" },
+    { "scenario": "stage-24-go-live.js in launch_mode='live' with any external check failing returns a HOLD-style result (never launched) with per-check reasons surfaced" },
+    { "scenario": "composable_evidence block shape (launch_mode, external_observation, verdict keys present) is pinned by a contract test" }
+  ],
+  "acceptance_criteria": [
+    "All 3 FRs traced to file:line in the diff",
+    "Migration file exists, is additive-only (ADD COLUMN with DEFAULT), and is marked @chairman-gated -- not applied to the live DB by this SD",
+    "getLaunchMode never throws and never breaks existing venture-read call sites before or after the chairman applies the migration",
+    "verifyExternalObservation is independently unit-testable with zero DB/network calls",
+    "stage-24-go-live.js's simulated-mode path is behaviorally unchanged except for the added labeled_simulation:true stamp (no regression on existing S23/S24 tests)",
+    "FR-3's scope-down from a live composition test to a forward-compatibility contract test is documented in this PRD and in the shipped code comments, not silently substituted"
+  ],
+  "risks": [
+    {
+      "risk": "FR-3 as literally worded in the SD ('G3+spend-guardrail composition test') cannot be built against real code because neither G3 nor a live spend-guardrail exist yet in this repo",
+      "impact": "medium",
+      "likelihood": "high",
+      "mitigation": "Scoped down to a forward-compatibility data contract (composable_evidence block + a pinning test) so a future SD that formalizes G3/spend-guardrail can compose without a schema change here, instead of inventing a fictitious integration against non-existent modules"
+    },
+    {
+      "risk": "The 'real telemetry rows arrive' external-observation check has no existing data source (no telemetry/analytics table for ventures) -- it will always fail closed under launch_mode='live' until a future SD wires one",
+      "impact": "medium",
+      "likelihood": "high",
+      "mitigation": "This is the CORRECT behavior per the SD's own principle (LIVE-gates verify EXTERNAL observations only, never self-authored) -- failing closed on missing evidence is safer than fabricating a pass; documented explicitly as a forward dependency rather than stubbed to always-pass"
+    },
+    {
+      "risk": "The migration is chairman-gated and may sit unapplied for a while; any code path that assumes launch_mode exists before that point would break",
+      "impact": "low",
+      "likelihood": "low",
+      "mitigation": "getLaunchMode fails open to 'simulated' (today's behavior) on the undefined_column error specifically, verified by a dedicated test case"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "lib/eva/stage-templates/analysis-steps/stage-24-go-live.js (launch_mode-aware branch)",
+      "Future SDs formalizing G3 done-means-shipped / live spend-guardrail (consume composable_evidence, no schema change needed)"
+    ],
+    "dependencies": [
+      "ventures table (existing, additive column via chairman-gated migration)",
+      "applications table (existing deployment_url, metadata columns -- read-only)",
+      "lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js (existing verdict/chairman_override shape, reused not modified)"
+    ],
+    "data_contracts": [
+      "ventures.launch_mode TEXT DEFAULT 'simulated' CHECK IN ('simulated','live')",
+      "launch_metrics artifact gains labeled_simulation (simulated mode) or composable_evidence:{launch_mode, external_observation, verdict} (live mode)"
+    ],
+    "runtime_config": ["None -- no new env vars"],
+    "observability_rollout": [
+      "Live-mode HOLD results surface through the existing S23/S24 stage-artifact pipeline, same as any other stage-23 HOLD verdict"
+    ]
+  },
+  "implementation_approach": {
+    "phases": [
+      "Phase 1: FR-1 migration (chairman-gated, staged) + lib/eva/launch-mode.js",
+      "Phase 2: FR-2 lib/eva/external-observation.js + stage-24-go-live.js launch_mode branch",
+      "Phase 3: FR-3 composable_evidence contract + pinning test"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run npx vitest run tests/unit/eva/launch-mode.test.js", "expected_outcome": "getLaunchMode tests pass, including the undefined_column fail-open case" },
+    { "step_number": 2, "instruction": "Run npx vitest run tests/unit/eva/external-observation.test.js", "expected_outcome": "verifyExternalObservation + collectExternalObservations tests pass, including fail-closed-on-missing-data cases" },
+    { "step_number": 3, "instruction": "Run npx vitest run tests/unit/eva/stage-24-go-live-launch-mode.test.js", "expected_outcome": "simulated-mode parity + live-mode pass/HOLD scenarios all pass" },
+    { "step_number": 4, "instruction": "node --check database/migrations/20260703_ventures_launch_mode.sql via psql --dry-run or a syntax linter (no live apply)", "expected_outcome": "Migration is syntactically valid and is NOT applied to the live DB by this SD" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-LAUNCH-MODE-POLICY-001"
+  }
+}

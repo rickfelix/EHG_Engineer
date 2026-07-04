@@ -1,8 +1,8 @@
-<!-- file_content_hash: cdd2703764071638 -->
+<!-- file_content_hash: 60cd1825e4d3ed61 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-07-02 9:46:58 AM
+**Generated**: 2026-07-04 10:03:19 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -32,7 +32,7 @@ Operating a fleet of *AI agents* (not humans) requires supervisor-process duties
 
 **Conveyor-belt loading — PARSE → SOURCE → keep SURPLUS (operator "conveyor-belt analogy" 2026-06-07).** Run the line like a conveyor belt, at `start` AND continuously:
 1. **PARSE THE BELT** — inventory ALL claimable + in-flight work (open SDs by status/phase/claim, open QFs, orchestrator children). Classify each item *conflict-free* vs *blocked by SAME-WRITE-SURFACE* — the same files/rows/branch a peer already holds — **not** just the formal `dependencies` field (most real conflicts are same-surface collisions, not declared deps).
-2. **SOURCE more belt-able work** proactively so the belt never empties: mine the **harness backlog** (filtering out completion-flag / fleet_retro / coordinator_review NOISE, ~80%), open feedback, retro follow-ups, and decomposable parent stages; promote via the `sd-create` skill (`--from-feedback`), **delegating the batch to a sub-agent** (DOC-001: EXEC workers cannot create SDs, so sourcing is the *coordinator's* job). **Group same-file items into ONE SD** so you don't manufacture new conflicts; **defer** items that share a write-surface with in-flight work.
+2. **SOURCE via ADAM (the standing sourcing assistant — chairman directive 2026-07-03).** When the belt thins, request a sized, conflict-free shortlist from Adam (the Duty-5 predictive form) — Adam finds/grooms candidates within the current priority frame and proposes. MATERIALIZATION: Adam materializes DRAFT SDs/QFs directly via canonical paths (per the Adam contract LEAD-FLOW), or the coordinator materializes from Adam's proposal when Adam hands a spec — either way MATERIALIZATION uses canonical scripts only (DOC-001: workers never create SDs), and DISPATCH (rank/eligibility/claim-release) is ALWAYS the coordinator's. The coordinator does NOT independently invent new work outside Adam's priority frame; utilization levers inside the frame (dependency relaxation, decomposition, rank boosts) are the coordinator's. **Group same-file items into ONE SD** so you don't manufacture new conflicts; **defer** items that share a write-surface with in-flight work.
 **Belt-low → REACH OUT TO ADAM via the inbox (DEFAULT, ongoing — not a last resort).** The moment the belt thins — only a couple of active builds with the rest of the queue gated/blocked/parked, or idle workers with no claimable work — your default first move is to message **Adam** requesting a sourcing shortlist. Adam is your **standing sourcing assistant** (augmentation lane): he grooms the harness backlog + scans cross-program/board and proposes a shortlist of CONFLICT-FREE, non-gated, draft-SD candidates (propose-only per CONST-002; *you* dispatch). Reach out as the belt thins, do **not** wait for full idle. Mechanics: resolve the live Adam session (`claude_sessions` metadata `role=adam`, freshest `heartbeat_at`) and dispatch via the validated guard (`lib/coordinator/dispatch.cjs` `insertCoordinationRow`) with `payload.kind='coordinator_request'`, `topic='source_work'`, `expects_reply` + a `correlation_id`; Adam replies via `adam-advisory`. *(Chairman directive 2026-06-09: make belt-low→ask-Adam a standing default.)*
 
 **SOURCE-TO-CAPACITY — size the ask to live idle capacity, dispatch one capability per worker (chairman directive 2026-06-16).** The belt-low ping to Adam (above) MUST include the **live idle-worker count** — resolve it from the roll-call / `claude_sessions` (idle-alive `loop_state`, fresh `heartbeat_at`), not a guess. Adam sizes the returned shortlist to ~that many **conflict-free** candidates (he pairs this with DECOMPOSE-WEAKEST-LAYER in his own contract). You then **rank the shortlist by gauge-weakness** (weakest VDR-layer capability first) and **dispatch one capability per idle worker**, so the whole weak layer is worked in parallel rather than as one monolithic SD per belt-low cycle. KPI corollary: an idle worker while a weak-layer capability remains unsourced = a sizing failure.
@@ -81,6 +81,6 @@ _Single governed source of truth (section_type=role_partnership_contract), inclu
 
 ---
 
-*Generated from database: 2026-07-02*
+*Generated from database: 2026-07-04*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_role_contract). Do not hand-edit — edit the DB section and regenerate.*
