@@ -30,9 +30,17 @@ let sentinelSdId = null;
 
 async function cleanup() {
   if (!supabase) return;
-  if (sentinelSdId) {
-    await supabase.from('okr_alignments').delete().eq('sd_id', sentinelSdId);
-    await supabase.from('strategic_directives_v2').delete().eq('id', sentinelSdId);
+  // Look up by sd_key (unique), not sentinelSdId -- sentinelSdId is null on the
+  // pre-insert cleanup() call, so keying off it silently no-ops the exact case
+  // this exists for: reaping an orphaned row left by a prior crashed/concurrent run.
+  const { data: existing } = await supabase
+    .from('strategic_directives_v2')
+    .select('id')
+    .eq('sd_key', SENTINEL_SD_KEY);
+
+  for (const row of existing || []) {
+    await supabase.from('okr_alignments').delete().eq('sd_id', row.id);
+    await supabase.from('strategic_directives_v2').delete().eq('id', row.id);
   }
 }
 
