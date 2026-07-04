@@ -143,6 +143,19 @@ describe('maybeMintReviewGate', () => {
     expect(r.error).toContain('insert failed');
   });
 
+  // QF-20260703-236: fixture-venture guard round-2 fix -- a skipped decision must
+  // never be reported as minted:true with a null decisionId (false success).
+  it('does NOT report minted:true when createOrReusePendingDecision skips a fixture venture', async () => {
+    const mint = vi.fn(async () => ({ id: null, isNew: false, skipped: true, reason: 'fixture_venture' }));
+    const r = await maybeMintReviewGate(baseParams, {
+      getStageGovernance: async () => gov(),
+      createOrReusePendingDecision: mint,
+    });
+    expect(r.minted).toBe(false);
+    expect(r.reason).toBe('fixture_venture');
+    expect(mint).toHaveBeenCalledTimes(1);
+  });
+
   it('does NOT throw and skips when supabase is absent', async () => {
     const mint = vi.fn();
     const r = await maybeMintReviewGate({ ...baseParams, supabase: null }, {
