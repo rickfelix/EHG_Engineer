@@ -19,8 +19,12 @@
  * direct ledger update when that judgment is made, not inferred by this script.
  *
  * Closer-of-record (SD-LEO-INFRA-REWARD-SPINE-ONE-001-B): every auto-close stamps closed_by/
- * closed_at/outcome_ref so the closure is durably attributable to this mechanism, never a
- * self-report — the anti-Goodhart mechanic named in docs/architecture/reward-spine-ssot.md.
+ * closed_at so the closure is durably attributable to this mechanism, never a self-report —
+ * the anti-Goodhart mechanic named in docs/architecture/reward-spine-ssot.md. This guarantee
+ * covers ONLY the auto-close path in this file; the manual caused_rework update path (line 18
+ * above) is NOT enforced at the DB level (no CHECK constraint) and can leave closed_by/closed_at
+ * NULL if whoever performs that manual update doesn't also set them — a known, accepted scope
+ * boundary (a hard CHECK would break pre-existing closed rows that predate this column).
  *
  * Usage:
  *   node scripts/solomon-ledger-reconcile.cjs [--dry-run]
@@ -101,13 +105,15 @@ async function main() {
   if (dryRun || toUpdate.length === 0) return;
 
   for (const r of toUpdate) {
+    // outcome_ref is NOT stamped here — it is documented (20260701_solomon_advice_outcome_ledger.sql)
+    // as "e.g. PR URL or CI run reference", and r.sdKey duplicates outcome_sd_key already on the same
+    // row, adding no information. closed_by/closed_at are the closer-of-record for this auto-close path.
     const { error: uErr } = await supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
       .update({
         outcome: r.outcome,
         closed_by: CLOSER_OF_RECORD,
         closed_at: new Date().toISOString(),
-        outcome_ref: r.sdKey,
       })
       .eq('id', r.id);
     if (uErr) console.error(`  WARN: failed to write outcome for ${r.id}: ${uErr.message}`);
