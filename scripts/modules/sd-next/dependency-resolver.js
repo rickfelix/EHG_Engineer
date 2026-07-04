@@ -159,6 +159,14 @@ export function checkMetadataDependency(metadata) {
     return { hasMetadataDep: false, blockerSdKey: null, conditionalNote: null };
   }
 
+  // QF-20260703-999: leo-create-sd's 'no blocking dependencies' sentinel ({sd_key:'none'} /
+  // bare 'none') is not a real blocker — require the same SD-key shape parseSdDependencies()
+  // already enforces for the `dependencies` column, so a sentinel here doesn't get treated as
+  // an unresolvable blocker (the sentinel's own emitter is a separate, in-flight fix).
+  if (!/^SD-[A-Z0-9-]+/.test(metadata.blocked_by_sd_key)) {
+    return { hasMetadataDep: false, blockerSdKey: null, conditionalNote: null };
+  }
+
   return {
     hasMetadataDep: true,
     blockerSdKey: metadata.blocked_by_sd_key,
@@ -367,9 +375,12 @@ export async function resolveMetadataBlocker(supabase, blockerSdKey) {
   }
 
   // Blocker is a leaf SD (not an orchestrator) — recommend it directly
+  // QF-20260703-999 (drive-by): strategic_directives_v2 has no `track` column (schema-reference-lint
+  // caught it live — this select would throw whenever a blocker actually had children); `track` was
+  // never read from the result, so dropping it is a pure dead-column removal, no behavior change.
   const { data: children } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, sequence_rank, track, sd_type, is_active, governance_metadata, metadata')
+    .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, sequence_rank, sd_type, is_active, governance_metadata, metadata')
     .eq('parent_sd_id', blockerSD.id)
     .eq('is_active', true);
 

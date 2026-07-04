@@ -10,6 +10,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { blockerKeysFor } from '../../scripts/coordinator-backlog-rank.mjs';
+import { checkMetadataDependency } from '../../scripts/modules/sd-next/dependency-resolver.js';
 
 describe('SD-REFILL-00AH2L4Q: backlog-rank honors metadata.blocked_by_sd_key (blockerKeysFor)', () => {
   it('no dependencies and no metadata blocker -> no blockers (claimable leaf)', () => {
@@ -42,5 +43,28 @@ describe('SD-REFILL-00AH2L4Q: backlog-rank honors metadata.blocked_by_sd_key (bl
   it('module imported without running the DB pass (entrypoint guard) — reaching here proves it', () => {
     // If main() had run on import, this suite would have errored/hung on a DB call before asserting.
     expect(typeof blockerKeysFor).toBe('function');
+  });
+});
+
+describe("QF-20260703-999: the leo-create-sd 'none' sentinel is NOT a real blocker", () => {
+  it('checkMetadataDependency treats blocked_by_sd_key:"none" as no metadata dependency', () => {
+    expect(checkMetadataDependency({ blocked_by_sd_key: 'none' })).toEqual({
+      hasMetadataDep: false, blockerSdKey: null, conditionalNote: null,
+    });
+  });
+
+  it('checkMetadataDependency still treats a real SD-key as a genuine blocker', () => {
+    const r = checkMetadataDependency({ blocked_by_sd_key: 'SD-REAL-001' });
+    expect(r).toEqual({ hasMetadataDep: true, blockerSdKey: 'SD-REAL-001', conditionalNote: null });
+  });
+
+  it('blockerKeysFor does not surface the sentinel — the bug: it used to leak "none" into unmet-dep filtering', () => {
+    const keys = blockerKeysFor({ dependencies: null, metadata: { blocked_by_sd_key: 'none' } });
+    expect(keys).toEqual([]);
+  });
+
+  it('blockerKeysFor combines a real dependencies-column blocker with a sentinel metadata field correctly (only the real one survives)', () => {
+    const keys = blockerKeysFor({ dependencies: ['SD-DEP-999'], metadata: { blocked_by_sd_key: 'none' } });
+    expect(keys).toEqual(['SD-DEP-999']);
   });
 });
