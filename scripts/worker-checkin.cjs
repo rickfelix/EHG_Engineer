@@ -107,7 +107,25 @@ function antiWinddownDirective(beltRankedClaimable) {
   return `ANTI-WIND-DOWN (Mode B): ${depth} Releasing claimable RANKED work to wind down is FORBIDDEN — "scope size / design-heaviness / chairman-gated / context length / session-tail / felt drained" are CLAUDE.md's explicitly-forbidden non-pause-triggers, NOT reasons to release. Build this SD; if it is too large/design-heavy, DECOMPOSE it into children (orchestrator path) — do not release. Only a GENUINELY-BLOCKED SD may be deferred, and only with a logged blocker reason (e.g. a verified spec-conflict). Otherwise keep working.`;
 }
 const SELF_CLAIM_CANDIDATE_LIMIT = 5;
-const QF_CANDIDATE_LIMIT = 25;               // open quick_fixes to consider for self-claim
+const QF_CANDIDATE_LIMIT = 100;              // open quick_fixes to consider for self-claim
+// QF-20260704-602 (groom addendum leg 2): severity rank for the self-claim picker sort.
+// Unranked/unknown severities sort last (below 'low'), never ahead of a ranked item.
+const QF_SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
+
+/**
+ * Pure: stable-sort open QFs so higher severity always comes first (critical > high >
+ * medium > low > unranked), then by created_at ascending within the same severity.
+ * Fixes the "medium self-claimed while a critical sat beside it" specimen (717/726) —
+ * the picker was previously unordered by severity, purely filing-order (created_at).
+ */
+function sortQfCandidatesBySeverity(qfs) {
+  return (qfs || []).slice().sort((a, b) => {
+    const rankA = QF_SEVERITY_RANK[a?.severity] ?? 99;
+    const rankB = QF_SEVERITY_RANK[b?.severity] ?? 99;
+    if (rankA !== rankB) return rankA - rankB;
+    return Date.parse(a?.created_at || 0) - Date.parse(b?.created_at || 0);
+  });
+}
 const STALE_QF_DAYS = Number(process.env.SD_NEXT_QF_STALE_DAYS) || 3;  // verify-first freshness boundary (shared with sd-next display)
 // SD-LEO-FEAT-WORKER-CHECKIN-SELF-001 (FR-2): gap before confirmRowGone's confirming read so it lands
 // genuinely later than the first (defends a momentary stale-replica null). Env-overridable; tests set 0.
@@ -166,6 +184,14 @@ function extractSdFromAssignment(msg) {
   const p = msg.payload || {};
   if (typeof p.assigned_sd === 'string' && p.assigned_sd) return p.assigned_sd;
   if (typeof p.sd_key === 'string' && p.sd_key) return p.sd_key;
+  // QF-20260704-602: some dispatch paths emit a QF-specific directed assignment as
+  // payload.qf_id instead of sd_key/assigned_sd (confirmed live on QF-20260704-726's
+  // dispatch history: 4 of 6 WORK_ASSIGNMENTs carried ONLY qf_id, so this function
+  // returned null and the entire directed-assignment branch below was silently
+  // skipped -- no ack, no claim attempt -- until a later redispatch happened to use
+  // sd_key instead). claim_sd itself is already QF-aware (p_sd_id LIKE 'QF-%'); the
+  // gap was purely in this extraction step.
+  if (typeof p.qf_id === 'string' && p.qf_id) return p.qf_id;
   if (Array.isArray(p.available_sds) && p.available_sds.length) return p.available_sds[0];
   // current_sd is what the worker is ALREADY on — only use it as a last resort
   // when nothing else names a target (an assignment can reference the same SD).
@@ -417,14 +443,14 @@ async function selfClaimQuickFix(sb, sessionId, base) {
   try {
     const { data: qfs } = await sb
       .from('quick_fixes')
-      .select('id, status, pr_url, commit_sha, created_at, routing_tier, title')
+      .select('id, status, pr_url, commit_sha, created_at, routing_tier, title, severity')
       .eq('status', 'open')
       .is('pr_url', null)
       .is('commit_sha', null)
       .order('created_at', { ascending: true })
       .limit(QF_CANDIDATE_LIMIT);
     const nowMs = Date.now();
-    for (const qf of (qfs || [])) {
+    for (const qf of sortQfCandidatesBySeverity(qfs)) {
       if (!isAutoStartableQF(qf, nowMs)) continue;
       const claimed = await tryClaim(sb, qf.id, sessionId);
       if (claimed.ok) {
@@ -1350,6 +1376,12 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       // in_progress->terminal race. claim_sd now refuses terminal claims, but a never-ACKed
       // assignment would re-fire every tick (the "retried on every tick" symptom), so ACK it
       // here and fall through to self-claim.
+      // QF-20260704-602: this strategic_directives_v2 lookup is intentionally SD-only. A
+      // directed QF key (sdKey starting 'QF-') always misses here (assignedSdRow stays null),
+      // which correctly skips terminalStatus/ineligibleReason below (both SD-specific concerns
+      // with no QF equivalent yet) and falls straight to tryClaim() — the claim_sd RPC is
+      // already QF-aware (p_sd_id LIKE 'QF-%' branches to the quick_fixes table) and does not
+      // need this fetch to succeed.
       let terminalStatus = null;
       let assignedSdRow = null;
       let assignedSdFetchFailed = false;
@@ -1682,7 +1714,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
+module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
 
 if (require.main === module) {
   main().catch(err => {
