@@ -174,6 +174,12 @@ export const STANDARD_LOOPS = [
   // detector functions are internally due-gated/idempotent, so an extra run is a no-op.
   { key: 'gauge-runner', label: 'Invariant-gauges execution surface (hourly, durable)', script: 'gauge-runner.mjs', cron: '0 * * * *',
     prompt: 'node scripts/gauge-runner.mjs --json' },
+  // QF-20260704-493: feedback-consumption SLA gauge daily reminder (Solomon referent-audit
+  // cell [4]) — actionable feedback categories (adam_adherence_drift, completion_flag,
+  // coordinator_review, harness_backlog escalations) had no consumption deadline. Internally
+  // rate-limited/deduped per category per day (metadata.sla_key), so an extra run is a no-op.
+  { key: 'feedback-sla', label: 'Feedback-consumption SLA breach reminder (daily)', script: 'coordinator-feedback-sla-gauge.cjs', cron: '45 9 * * *',
+    prompt: 'node scripts/coordinator-feedback-sla-gauge.cjs' },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.
