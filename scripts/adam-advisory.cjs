@@ -711,7 +711,7 @@ async function main() {
   }
   const twoWayV1On = isAdamSolomonTwoWayV1Enabled();
   if (peerArg === 'solomon' && !twoWayV1On) {
-    console.error('ERROR: --to solomon is gated by ADAM_SOLOMON_TWOWAY_V1=on (currently OFF). Omit --to to route via the coordinator.');
+    console.error('ERROR: --to solomon is disabled by ADAM_SOLOMON_TWOWAY_V1=off (direct lane is ON by default since QF-20260705-488). Omit --to to route via the coordinator.');
     process.exit(3);
   }
 

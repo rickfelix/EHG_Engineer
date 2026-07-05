@@ -323,6 +323,37 @@ async function resolveReplyToCorrelation(supabase, value) {
 }
 
 /**
+ * QF-20260705-488: resolve the session that ORIGINATED a consult, from the same value
+ * `--reply-to` accepts (a consult row id OR a bare correlation id). Prefers an explicit
+ * payload.origin_session (set by relay paths that preserve the true originator), else the
+ * consult row's sender_session. Null when unresolvable — the caller treats that as
+ * "no CC" (fail-open). Exported for tests.
+ */
+async function resolveConsultOriginator(supabase, value) {
+  if (!value) return null;
+  try {
+    const { data: byId } = await supabase
+      .from('session_coordination')
+      .select('sender_session, payload')
+      .eq('id', value)
+      .maybeSingle();
+    if (byId) return (byId.payload && byId.payload.origin_session) || byId.sender_session || null;
+  } catch { /* fall through to correlation match */ }
+  try {
+    const { data } = await supabase
+      .from('session_coordination')
+      .select('sender_session, payload, created_at')
+      .eq('payload->>correlation_id', String(value))
+      .eq('payload->>kind', SOLOMON_CONSULT_KIND)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const row = Array.isArray(data) && data[0] ? data[0] : null;
+    if (row) return (row.payload && row.payload.origin_session) || row.sender_session || null;
+  } catch { /* fail-open: no CC */ }
+  return null;
+}
+
+/**
  * Fail-open capture: upsert a solomon_advice_outcome_ledger row for this advisory send/request,
  * keyed on payload.correlation_id (idempotent — ON CONFLICT DO NOTHING). NEVER throws or blocks the
  * advisory send — a ledger write failure (table not yet applied, transient DB error) must not
@@ -526,7 +557,7 @@ async function main() {
   }
   const twoWayV1On = isAdamSolomonTwoWayV1Enabled();
   if (peerArg === 'adam' && !twoWayV1On) {
-    console.error('ERROR: --to adam is gated by ADAM_SOLOMON_TWOWAY_V1=on (currently OFF). Omit --to to route via the coordinator.');
+    console.error('ERROR: --to adam is disabled by ADAM_SOLOMON_TWOWAY_V1=off (direct lane is ON by default since QF-20260705-488). Omit --to to route via the coordinator.');
     process.exit(3);
   }
 
@@ -603,6 +634,26 @@ async function main() {
     console.error(`WARN: ledger capture failed (${ledgerCaptureFailures} this run) — ${ledgerResult.reason}`);
   }
 
+  // QF-20260705-488 (chairman-caught): a consult ANSWER must also land in the ORIGINATOR's
+  // inbox — answer d7f5401c targeted only the coordinator while the consult came from Adam,
+  // and the chairman had to hand-relay the verdict. When replying to a consult, CC the
+  // consult's originating session whenever it differs from the answer target and from
+  // Solomon itself. Fail-open: a CC failure warns, never blocks the primary send.
+  if (replyTo) {
+    try {
+      const originator = await resolveConsultOriginator(supabase, replyToArg || replyTo);
+      if (originator && originator !== target && originator !== sessionId) {
+        const { error: ccErr } = await insertCoordinationRow(
+          supabase,
+          { sender_session: sessionId, sender_type: 'solomon', target_session: originator, message_type: 'INFO', subject, body: payload.body, payload: { ...payload, via: 'cc_originator' }, expires_at: expiresAt },
+          { select: 'id', single: true }
+        );
+        if (ccErr) console.error('WARN: originator CC failed (primary send unaffected):', ccErr.message || ccErr);
+        else console.log('  cc_originator:', originator);
+      }
+    } catch (e) { console.error('WARN: originator CC failed (primary send unaffected):', (e && e.message) || e); }
+  }
+
   console.log('✓ Solomon oracle advisory sent');
   console.log('  advisory_id:', inserted.id);
   console.log('  target:', target);
@@ -623,7 +674,7 @@ module.exports = {
   isReplyRow, isSolomonInboxRow, isOrphanedSolomonRow, SOLOMON_INBOX_KINDS, EXCLUDED_KINDS, SOLOMON_CONSULT_KIND,
   computeConsultSignature, enforceSweepBudget, SOLOMON_SWEEP_BUDGET, alreadyAnswered, checkConsultQuota,
   drainInbox, resolveReplyToCorrelation, drainSolomonOutbound, captureLedgerRow,
-  checkLedgerCaptureHealth, resolveSolomonAdvisoryTarget,
+  checkLedgerCaptureHealth, resolveSolomonAdvisoryTarget, resolveConsultOriginator,
 };
 
 if (require.main === module) {
