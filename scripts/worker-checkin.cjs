@@ -239,6 +239,22 @@ function extractDirectedSd(msg) {
   return null;
 }
 
+// QF-20260705-914: an INFORMATIONAL sweep completion nudge ("Next work available when X
+// completes") must never reach the step-5 assignment-claim path. Those rows name the
+// worker's CURRENT sd in body/payload.current_sd, and extractSdFromAssignment's broad
+// fallbacks turned them into a directed claim for the very QF the worker just released —
+// a perpetual release->reclaim loop (live: QF-20260704-348, 2 cycles in 90s). The sweep
+// now stamps payload.kind='completion_nudge' + informational:true; the subject-literal
+// match keeps OLD-shape rows still inside ASSIGNMENT_RECENCY_WINDOW_MS inert too (the
+// literal is owned by dispatchWorkAssignmentsIfAllowed in stale-session-sweep.cjs —
+// keep the two in sync).
+function isInformationalNudge(msg) {
+  if (!msg) return false;
+  const p = msg.payload || {};
+  if (p.kind === 'completion_nudge' || p.informational === true) return true;
+  return /^Next work available when /.test(msg.subject || '');
+}
+
 async function resolveTrack(sb, sdKey, fallback) {
   if (fallback) return fallback;
   try {
@@ -1382,7 +1398,8 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
   const assignmentSinceIso = new Date(Date.now() - ASSIGNMENT_RECENCY_WINDOW_MS).toISOString();
   try {
     const msgs = await ws.getMessagesForSession(sb, sessionId, { unackedOnly: true, sinceIso: assignmentSinceIso });
-    assignment = (msgs || []).find(m => m.message_type === 'WORK_ASSIGNMENT');
+    // QF-20260705-914: informational completion nudges are never claimable assignments.
+    assignment = (msgs || []).find(m => m.message_type === 'WORK_ASSIGNMENT' && !isInformationalNudge(m));
     if (!assignment) {
       // QF-20260703-806: the unacked pull can miss a row whose acknowledged_at got stamped by a
       // path OTHER than a genuine claim outcome (the ack-before-claim race). Claim outcome, not
@@ -1390,7 +1407,7 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       // The terminal/ineligible/tryClaim checks below already re-verify the target SD's LIVE
       // state and are idempotent, so resurrecting an already-genuinely-resolved row is harmless.
       const wider = await ws.getMessagesForSession(sb, sessionId, { sinceIso: assignmentSinceIso });
-      assignment = (wider || []).find(m => m.message_type === 'WORK_ASSIGNMENT');
+      assignment = (wider || []).find(m => m.message_type === 'WORK_ASSIGNMENT' && !isInformationalNudge(m));
     }
   } catch { /* fail-open */ }
   if (assignment) {
@@ -1805,7 +1822,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
+module.exports = { extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
 
 if (require.main === module) {
   main().catch(err => {
