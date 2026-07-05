@@ -13,6 +13,8 @@ import fs from 'fs';
 import path from 'path';
 import { createSupabaseServiceClient } from '../../../../lib/supabase-client.js';
 import { isParentOrchestrator } from '../../../../lib/handoff/parent-detection.js';
+// Observe-only witness rung (SD-LEO-INFRA-INDEPENDENT-GATE-WITNESS-001-D)
+import { withObserveOnlyWitness } from '../../../../lib/eva/observe-gate-witness.js';
 
 import { execSync } from 'child_process';
 // PROJECT_ROOT prefers `git rev-parse --show-toplevel` (worktree-aware) over
@@ -436,7 +438,7 @@ export async function validateScopeCompletion(sdKey) {
  * Create the Scope Completion Verification Gate for use in handoff system.
  */
 export function createScopeCompletionGate() {
-  return {
+  return withObserveOnlyWitness('SCOPE_COMPLETION_VERIFICATION', {
     name: 'SCOPE_COMPLETION_VERIFICATION',
     validator: async (ctx) => {
       const sdKey = ctx.sdKey || ctx.sdId;
@@ -445,7 +447,7 @@ export function createScopeCompletionGate() {
     required: true,
     blocking: false, // Advisory by default — warns but doesn't block
     remediation: 'Review missing deliverables and implement them before marking SD complete.'
-  };
+  });
 }
 
 export { extractDeliverables, checkDeliverable, grepRecursive, filterBySlice, globToRegExp, isInheritedWithoutSlice };

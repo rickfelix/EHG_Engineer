@@ -6,6 +6,8 @@
  */
 
 import { isInfrastructureSDSync } from '../../../../sd-type-checker.js';
+// Observe-only witness rung (SD-LEO-INFRA-INDEPENDENT-GATE-WITNESS-001-D)
+import { withObserveOnlyWitness } from '../../../../../../lib/eva/observe-gate-witness.js';
 
 /**
  * Create the GATE5_GIT_COMMIT_ENFORCEMENT gate validator
@@ -25,7 +27,7 @@ export function createGitCommitEnforcementGate(supabase, sd, appPath) {
   // this is type-agnostic and covers refactor/database/security/etc. on EHG target.
   if (isNonCodeSD || isBugfixSD) {
     const sdTypeLabel = isBugfixSD ? 'Bugfix' : 'Documentation/Infrastructure';
-    return {
+    return withObserveOnlyWitness('GATE5_GIT_COMMIT_ENFORCEMENT', {
       name: 'GATE5_GIT_COMMIT_ENFORCEMENT',
       validator: async () => {
         console.log('\n🔒 GATE 5: Git Commit Enforcement');
@@ -48,11 +50,11 @@ export function createGitCommitEnforcementGate(supabase, sd, appPath) {
         };
       },
       required: true
-    };
+    });
   }
 
   // Standard SDs get full commit enforcement, UNLESS the target repo has no usable git.
-  return {
+  return withObserveOnlyWitness('GATE5_GIT_COMMIT_ENFORCEMENT', {
     name: 'GATE5_GIT_COMMIT_ENFORCEMENT',
     validator: async (ctx) => {
       // Self-skip when the target repo has no usable git (e.g. EHG consolidated repo).
@@ -167,5 +169,5 @@ export function createGitCommitEnforcementGate(supabase, sd, appPath) {
       };
     },
     required: true
-  };
+  });
 }
