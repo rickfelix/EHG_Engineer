@@ -12,7 +12,11 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { createSupabaseChainMock } from '../../helpers/supabase-chain-mock.js';
+
+vi.mock('../../../lib/eva/chairman-product-review.js', () => ({ requestProductReview: vi.fn().mockResolvedValue({ id: 'decision-x', isNew: true }) }));
+
 import { resetStaleStageWork, advanceStage } from '../../../lib/eva/artifact-persistence-service.js';
+import { requestProductReview } from '../../../lib/eva/chairman-product-review.js';
 
 const VENTURE_ID = '94856fc6-9ba9-4f56-9a5c-85041031a0fc'; // LexiGuard
 const TO_STAGE = 20;
@@ -186,5 +190,53 @@ describe('advanceStage() — invokes resetStaleStageWork after RPC success', () 
         handoffData: {},
       })
     ).rejects.toThrow(/sentinel-failure/);
+  });
+
+  // SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001: the RPC choke point (23->24) can't itself mint/email
+  // the chairman decision (plpgsql) — a manual-advance/clone-run caller must trigger the ask here.
+  describe('advanceStage() — product_review_required RPC failure', () => {
+    it('calls requestProductReview then still throws (never masks the original block)', async () => {
+      vi.clearAllMocks();
+      const { supabase } = createMockSupabase({
+        stageWorkRow: null,
+        ventureRow: { orchestrator_state: 'idle', orchestrator_lock_id: null },
+        rpcResult: { success: false, error: 'product_review_required' },
+      });
+
+      await expect(
+        advanceStage(supabase, { ventureId: VENTURE_ID, fromStage: 23, toStage: 24, handoffData: {} }),
+      ).rejects.toThrow(/product_review_required/);
+
+      expect(requestProductReview).toHaveBeenCalledWith(supabase, VENTURE_ID);
+    });
+
+    it('does not call requestProductReview for an unrelated RPC failure', async () => {
+      vi.clearAllMocks();
+      const { supabase } = createMockSupabase({
+        stageWorkRow: null,
+        ventureRow: { orchestrator_state: 'idle', orchestrator_lock_id: null },
+        rpcResult: { success: false, error: 'gate_blocked' },
+      });
+
+      await expect(
+        advanceStage(supabase, { ventureId: VENTURE_ID, fromStage: 23, toStage: 24, handoffData: {} }),
+      ).rejects.toThrow(/gate_blocked/);
+
+      expect(requestProductReview).not.toHaveBeenCalled();
+    });
+
+    it('still throws the original RPC error even if requestProductReview itself fails', async () => {
+      vi.clearAllMocks();
+      requestProductReview.mockRejectedValueOnce(new Error('escalation transport down'));
+      const { supabase } = createMockSupabase({
+        stageWorkRow: null,
+        ventureRow: { orchestrator_state: 'idle', orchestrator_lock_id: null },
+        rpcResult: { success: false, error: 'product_review_required' },
+      });
+
+      await expect(
+        advanceStage(supabase, { ventureId: VENTURE_ID, fromStage: 23, toStage: 24, handoffData: {} }),
+      ).rejects.toThrow(/product_review_required/);
+    });
   });
 });

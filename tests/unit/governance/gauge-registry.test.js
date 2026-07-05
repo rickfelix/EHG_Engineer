@@ -62,6 +62,22 @@ describe('GAUGE_REGISTRY shape', () => {
     expect(relayDrop.prevent).toContain('SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001');
     expect(staleTree.prevent).toContain('SD-LEO-INFRA-SINGLETON-STALE-TREE-STALENESS-GAUGE-001');
   });
+
+  it('SD-LEO-INFRA-REWARD-SPINE-ONE-001-C: every entry carries a tracesToLayer field (not undefined)', () => {
+    for (const entry of GAUGE_REGISTRY) {
+      expect(entry).toHaveProperty('tracesToLayer');
+      expect(['L1', 'L2', 'L3', null]).toContain(entry.tracesToLayer);
+    }
+  });
+
+  it('SD-LEO-INFRA-REWARD-SPINE-ONE-001-C: entries that read a real outcome-layer carrier are classified non-null', () => {
+    const shipWitness = GAUGE_REGISTRY.find((e) => e.id === 'ship-witness-unwitnessed-merge');
+    const ventureCapture = GAUGE_REGISTRY.find((e) => e.id === 'venture-capture-completeness');
+    const loopHealth = GAUGE_REGISTRY.find((e) => e.id === 'loop-health-A_applied_rate');
+    expect(shipWitness.tracesToLayer).toBe('L1');
+    expect(ventureCapture.tracesToLayer).toBe('L3');
+    expect(loopHealth.tracesToLayer).toBe('L2');
+  });
 });
 
 describe('selectEnabledEntries (TS-1/TS-2)', () => {

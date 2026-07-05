@@ -391,7 +391,7 @@ export function createRetrospectiveExistsGate(supabase) {
       // Handoff-time retros share retro_type='SD_COMPLETION' so the timestamp filter
       // is what distinguishes them from true SD-completion retrospectives.
       const { retrospective, leadToPlanAcceptedAt } =
-        await getFilteredRetrospective(ctx.sd.id, ctx.sd.created_at || null, supabase);
+        await getFilteredRetrospective(ctx.sd.id, ctx.sd.created_at || null, supabase, ctx.sd.sd_key || null);
 
       if (!retrospective) {
         const sdKey = ctx.sd?.sd_key || ctx.sdId || 'unknown';
@@ -922,6 +922,64 @@ export function createPipelineFlowGate() {
   };
 }
 
+/** The real validation body — separated so the fail-open wrapper below stays trivial. */
+async function runFRDeliveryVerification(ctx, supabase, prdRepo) {
+  console.log('\n🔒 GATE 6: FR Delivery Verification (CONST-012)');
+  console.log('-'.repeat(50));
+
+  const prd = await prdRepo?.getBySdUuid(ctx.sd.id);
+
+  if (!prd) {
+    const { data: children } = await supabase
+      .from('strategic_directives_v2')
+      .select('id')
+      .eq('parent_sd_id', ctx.sd.id);
+
+    if (children && children.length > 0) {
+      console.log('   ℹ️  Orchestrator SD — FR verification delegated to children');
+      return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['Orchestrator SD — FR verification delegated to children'] };
+    }
+
+    console.log('   ⚠️  No PRD found — skipping FR verification');
+    return { passed: true, score: 80, max_score: 100, issues: [], warnings: ['No PRD found — FR delivery verification skipped'] };
+  }
+
+  const frs = prd.functional_requirements || [];
+  if (frs.length === 0) {
+    console.log('   ℹ️  No functional requirements in PRD');
+    return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['No FRs defined in PRD'] };
+  }
+
+  console.log(`   📋 Checking ${frs.length} functional requirements (per-FR mapping)...`);
+
+  // SD-LEO-INFRA-HARDEN-LEO-COMPLETION-001: real per-FR classification (validated story
+  // REFERENCING the FR id, or approver-gated descope) — NOT the prior any-completed-story
+  // proxy that marked every FR delivered if any story existed. Enforcement is gated by
+  // LEO_FR_TRACEABILITY_ENFORCE (default OFF = warn-only) so this strict path cannot brick
+  // the ~every in-flight SD whose stories do not yet reference FR ids.
+  const classification = await classifyFrDelivery(supabase, {
+    sdId: ctx.sd.id,
+    sdMetadata: ctx.sd.metadata || {},
+    functionalRequirements: frs,
+    requesterSessionId: ctx.sessionId || ctx.session_id || null,
+  });
+  for (const f of classification.frs) {
+    const mark = f.status === 'delivered' ? '✅' : f.status === 'descoped' ? '🔵' : '❌';
+    console.log(`   ${mark} ${f.id} [${f.status}]: ${safeTruncate(f.description || '', 56)}`);
+  }
+  const enforced = isFrTraceabilityEnforced();
+  console.log(`\n   📊 FR delivery: ${classification.delivered} delivered, ${classification.descoped} descoped, ${classification.undelivered} undelivered (enforce=${enforced ? 'ON' : 'OFF/warn-only'})`);
+  const result = projectGateResult(classification, { enforced, gateName: 'FR_DELIVERY_VERIFICATION' });
+  if (!result.passed) {
+    console.log(`   ❌ FR delivery FAILED — ${classification.undelivered}/${classification.total} undelivered`);
+  } else if (result.warnings.length) {
+    console.log('   ⚠️  FR delivery passed (warn-only) with undelivered FRs');
+  } else {
+    console.log('   ✅ All FRs delivered or approver-descoped');
+  }
+  return result;
+}
+
 /**
  * Create Gate 6: FR Delivery Verification (CONST-012)
  * Verifies all PRD functional requirements have delivery evidence before SD completion.
@@ -934,60 +992,22 @@ export function createFRDeliveryVerificationGate(supabase, prdRepo) {
   return {
     name: 'FR_DELIVERY_VERIFICATION',
     validator: async (ctx) => {
-      console.log('\n🔒 GATE 6: FR Delivery Verification (CONST-012)');
-      console.log('-'.repeat(50));
-
-      const prd = await prdRepo?.getBySdUuid(ctx.sd.id);
-
-      if (!prd) {
-        const { data: children } = await supabase
-          .from('strategic_directives_v2')
-          .select('id')
-          .eq('parent_sd_id', ctx.sd.id);
-
-        if (children && children.length > 0) {
-          console.log('   ℹ️  Orchestrator SD — FR verification delegated to children');
-          return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['Orchestrator SD — FR verification delegated to children'] };
-        }
-
-        console.log('   ⚠️  No PRD found — skipping FR verification');
-        return { passed: true, score: 80, max_score: 100, issues: [], warnings: ['No PRD found — FR delivery verification skipped'] };
+      // QF-20260704-468 (pattern-port of SD-LEO-FIX-RECONCILE-DEAD-ARRIVAL-001 FR-2):
+      // ValidationOrchestrator blocks on the STATIC gate.required=true whenever a validator
+      // THROWS — so a transient classifier error would hard-fail every LEAD-FINAL even in
+      // warn-only mode. Off => thrown errors resolve to a passing warn result; ON => strict
+      // propagation preserved (a genuine FR-delivery failure still fails via projectGateResult,
+      // which never throws).
+      try {
+        return await runFRDeliveryVerification(ctx, supabase, prdRepo);
+      } catch (err) {
+        if (isFrTraceabilityEnforced()) throw err;
+        console.log(`   ⚠️  FR delivery verification errored in warn-only mode (fail-open): ${err.message}`);
+        return {
+          passed: true, score: 100, max_score: 100, issues: [],
+          warnings: [`FR delivery verification errored (warn-only, fail-open): ${err.message}`],
+        };
       }
-
-      const frs = prd.functional_requirements || [];
-      if (frs.length === 0) {
-        console.log('   ℹ️  No functional requirements in PRD');
-        return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['No FRs defined in PRD'] };
-      }
-
-      console.log(`   📋 Checking ${frs.length} functional requirements (per-FR mapping)...`);
-
-      // SD-LEO-INFRA-HARDEN-LEO-COMPLETION-001: real per-FR classification (validated story
-      // REFERENCING the FR id, or approver-gated descope) — NOT the prior any-completed-story
-      // proxy that marked every FR delivered if any story existed. Enforcement is gated by
-      // LEO_FR_TRACEABILITY_ENFORCE (default OFF = warn-only) so this strict path cannot brick
-      // the ~every in-flight SD whose stories do not yet reference FR ids.
-      const classification = await classifyFrDelivery(supabase, {
-        sdId: ctx.sd.id,
-        sdMetadata: ctx.sd.metadata || {},
-        functionalRequirements: frs,
-        requesterSessionId: ctx.sessionId || ctx.session_id || null,
-      });
-      for (const f of classification.frs) {
-        const mark = f.status === 'delivered' ? '✅' : f.status === 'descoped' ? '🔵' : '❌';
-        console.log(`   ${mark} ${f.id} [${f.status}]: ${safeTruncate(f.description || '', 56)}`);
-      }
-      const enforced = isFrTraceabilityEnforced();
-      console.log(`\n   📊 FR delivery: ${classification.delivered} delivered, ${classification.descoped} descoped, ${classification.undelivered} undelivered (enforce=${enforced ? 'ON' : 'OFF/warn-only'})`);
-      const result = projectGateResult(classification, { enforced, gateName: 'FR_DELIVERY_VERIFICATION' });
-      if (!result.passed) {
-        console.log(`   ❌ FR delivery FAILED — ${classification.undelivered}/${classification.total} undelivered`);
-      } else if (result.warnings.length) {
-        console.log('   ⚠️  FR delivery passed (warn-only) with undelivered FRs');
-      } else {
-        console.log('   ✅ All FRs delivered or approver-descoped');
-      }
-      return result;
     },
     // `required` is decided dynamically inside the validator result (projectGateResult sets it
     // from the enforcement flag). Keep the static flag true so the orchestrator consults the

@@ -47,6 +47,20 @@ const { detectDormantWorkers } = require('../lib/fleet/dormancy-watchdog.cjs'); 
 function isDormancyWatchdogEnabled(env = process.env) {
   return env.LEO_DORMANCY_WATCHDOG_ENABLED === 'on';
 }
+
+const HEADLESS_ZOMBIE_MIN_MS = 15 * 60 * 1000;
+
+// QF-20260704-081: pure predicate, exported so it can be unit-tested without a live
+// claude_sessions table. See call site (classification loop) for full context/RCA.
+// is_virtual sessions (lib/virtual-session-factory.mjs) are excluded: they legitimately never
+// set terminal_id/tty/worktree_path at all (no window to bind to), so without this guard every
+// virtual/drain session would false-positive as headless after 15 minutes.
+function isHeadlessZombie(session, telemetry, nowMs) {
+  if (!session || session.is_virtual) return false;
+  if (session.terminal_id || session.tty || telemetry?.worktree_path) return false;
+  const claimAgeMs = session.claimed_at ? nowMs - Date.parse(session.claimed_at) : 0;
+  return claimAgeMs > HEADLESS_ZOMBIE_MIN_MS;
+}
 // SD-LEO-INFRA-STALE-SWEEP-PID-LIVENESS-GUARD-001: PID-liveness guard for the conflict-eviction path.
 const { shouldHoldClaim } = require('../lib/fleet/claim-release-guard.cjs');
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3b — top-level require so wire-check
@@ -756,7 +770,9 @@ async function main() {
     if (sessionIds.length > 0) {
       const { data: telemetryRows } = await supabase
         .from('claude_sessions')
-        .select('session_id,process_alive_at,expected_silence_until,current_tool,current_tool_expected_end_at,last_activity_kind')
+        // worktree_path: not exposed by v_active_sessions -- needed for the QF-20260704-081
+        // HEADLESS_ZOMBIE discriminator (fresh heartbeat + terminal_id/tty/worktree_path all null).
+        .select('session_id,process_alive_at,expected_silence_until,current_tool,current_tool_expected_end_at,last_activity_kind,worktree_path')
         .in('session_id', sessionIds);
       for (const row of telemetryRows || []) {
         telemetryMap.set(row.session_id, row);
@@ -866,6 +882,16 @@ async function main() {
       status = 'STALE_UNKNOWN'; // Between 5-15min, no PID match = might be on another host
     }
 
+    // QF-20260704-081: a session with a fresh heartbeat (never ages into DEAD via the
+    // staleness path above) but terminal_id, tty, AND worktree_path ALL null for 15min+ is a
+    // binding signature no real windowed session has -- its parked loop keeps
+    // heartbeating/rescheduling while the window itself is gone (confirmed specimen: PID 23348
+    // survived windowless 14.7h holding a claim). Detected here, released below -- never auto-kill
+    // the OS process; surfaced for a coordinator kill decision.
+    if (status === 'ACTIVE' && isHeadlessZombie(s, telemetryMap.get(s.session_id), now.getTime())) {
+      status = 'HEADLESS_ZOMBIE';
+    }
+
     return {
       ...s,
       isStale: isStale && !hasPidAlive && !(sourceSide && sourceSide.alive),
@@ -876,6 +902,28 @@ async function main() {
   });
   if (collisions.length > 0) {
     await splitCollidingSessions(supabase, collisions, actions, warnings);
+  }
+
+  // 2b-2. QF-20260704-081: release HEADLESS_ZOMBIE claims. Verify PID, release the claim, mark
+  // released -- NEVER auto-kill the OS process; surface via session_coordination so a coordinator
+  // makes the kill decision (the process may be doing unrelated harmless work post-window-death).
+  const headlessZombies = classified.filter(s => s.status === 'HEADLESS_ZOMBIE');
+  for (const s of headlessZombies) {
+    const pidLive = s.pid ? isProcessRunning(Number(s.pid)) : false;
+    // QF-20260508-230: ck_claude_sessions_worktree_state_consistency requires sd_key IS NOT NULL
+    // OR (worktree_path IS NULL AND worktree_branch IS NULL) -- every release site must clear both.
+    await supabase.from('claude_sessions').update({
+      sd_key: null, status: 'released', released_at: now.toISOString(), released_reason: 'SWEEP_HEADLESS_ZOMBIE',
+      worktree_path: null, worktree_branch: null, has_uncommitted_changes: false, current_branch: null,
+    }).eq('session_id', s.session_id);
+    actions.push('HEADLESS_ZOMBIE: released ' + s.session_id + ' (sd=' + (s.sd_key || 'none') + ', pid=' + s.pid + ', pid_live=' + pidLive + ')');
+    await supabase.from('session_coordination').insert({
+      message_type: 'INFO',
+      subject: 'HEADLESS_ZOMBIE released: ' + s.session_id,
+      body: 'Fresh heartbeat but terminal_id/tty/worktree_path all null for 15min+ -- claim released. pid=' + s.pid + ' live=' + pidLive + '. Verify and kill the OS process if still live and truly orphaned.',
+      sender_type: 'sweep',
+      payload: { kind: 'headless_zombie_released', session_id: s.session_id, pid: s.pid, pid_live: pidLive },
+    });
   }
 
   // 2c. npm install lock cleanup (Layer 3)
@@ -2610,6 +2658,8 @@ module.exports.anyClaudeProcessRunning = anyClaudeProcessRunning;
 // does — no production behavior change.
 module.exports.isSweepResetAllowed = isSweepResetAllowed;
 module.exports.isDormancyWatchdogEnabled = isDormancyWatchdogEnabled; // SD-FDBK-ENH-CONFIRMED-LIVE-TODAY-001
+module.exports.isHeadlessZombie = isHeadlessZombie; // QF-20260704-081
+module.exports.HEADLESS_ZOMBIE_MIN_MS = HEADLESS_ZOMBIE_MIN_MS; // QF-20260704-081
 module.exports.__setExecContextGuardForTest = (mock) => { _execContextGuardCache = mock; };
 
 // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2 (Finding 3): export the guarded

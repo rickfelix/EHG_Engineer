@@ -113,4 +113,46 @@ describe('Intelligence Loader', () => {
       expect(result).toHaveProperty('meta');
     });
   });
+
+  describe('QF-20260704-225: _loadPatterns queries real issue_patterns columns', () => {
+    // pattern_key/frequency/last_seen don't exist on issue_patterns (real columns:
+    // pattern_id, occurrence_count, updated_at) -- the query used to 42703 on every
+    // call and silently degrade to []. These pin the corrected select/order columns
+    // and the issue_summary-based keyword filter that replaced pattern_key matching.
+    it('selects real issue_patterns columns (pattern_id, occurrence_count, issue_summary, updated_at) — not pattern_key/frequency/last_seen', async () => {
+      const supabase = createMockSupabase({ patterns: [] });
+      await loadIntelligenceSignals(supabase, 'SD-TEST-001');
+
+      const selectCall = supabase.from('issue_patterns').select.mock.calls[0][0];
+      expect(selectCall).toContain('pattern_id');
+      expect(selectCall).toContain('occurrence_count');
+      expect(selectCall).toContain('issue_summary');
+      expect(selectCall).toContain('updated_at');
+      expect(selectCall).not.toContain('pattern_key');
+      expect(selectCall).not.toContain('frequency');
+      expect(selectCall).not.toContain('last_seen');
+    });
+
+    it('surfaces no patterns error when the query succeeds (regression guard for the 42703)', async () => {
+      const supabase = createMockSupabase({
+        patterns: [{ id: '1', pattern_id: 'PAT-1', severity: 'high', occurrence_count: 3, status: 'active', category: 'eva_drift', issue_summary: 'EVA vision drift detected', updated_at: '2026-07-01T00:00:00Z' }],
+      });
+      const result = await loadIntelligenceSignals(supabase, 'SD-TEST-001');
+
+      expect(result.meta.errors.some(e => e.startsWith('patterns:'))).toBe(false);
+      expect(result.patterns).toHaveLength(1);
+    });
+
+    it('keyword-filters the fallback set using issue_summary (the pattern_key replacement)', async () => {
+      const supabase = createMockSupabase({
+        patterns: [
+          { id: '1', pattern_id: 'PAT-1', severity: 'high', occurrence_count: 5, status: 'active', category: 'handoff_failure', issue_summary: 'EVA vision alignment gap' },
+          { id: '2', pattern_id: 'PAT-2', severity: 'high', occurrence_count: 4, status: 'active', category: 'handoff_failure', issue_summary: 'Unrelated gate timeout' },
+        ],
+      });
+      const result = await loadIntelligenceSignals(supabase, 'SD-TEST-001');
+
+      expect(result.patterns.map(p => p.id)).toEqual(['1']);
+    });
+  });
 });

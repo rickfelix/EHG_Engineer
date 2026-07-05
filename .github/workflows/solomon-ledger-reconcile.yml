@@ -1,0 +1,74 @@
+# SD-LEO-INFRA-REWARD-SPINE-ONE-001-B
+#
+# Scheduled reconciliation of solomon_advice_outcome_ledger -- the L2 LESSON
+# outcome carrier named in docs/architecture/reward-spine-ssot.md. Reads each
+# pending row's downstream SD terminal status and closes it, stamping a
+# durable closer-of-record (never a self-report -- the anti-Goodhart mechanic
+# the spine doc requires).
+#
+# Daily cadence, deliberately less frequent than orphan-qf-reaper.yml's
+# every-15-minutes: this table has a low write volume (under 100 rows as of
+# 2026-07-04), so a tighter schedule would burn CI minutes for no benefit.
+
+name: Solomon Ledger Reconcile
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'If true, log would-close actions without updating DB'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solomon-ledger-reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install minimal deps
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+
+      - name: Run reconcile
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            node scripts/solomon-ledger-reconcile.cjs --dry-run 2>&1 | tee reconcile.log
+          else
+            node scripts/solomon-ledger-reconcile.cjs 2>&1 | tee reconcile.log
+          fi
+
+      - name: Job summary
+        if: always()
+        run: |
+          echo "## Solomon Ledger Reconcile — $(date -u +%Y-%m-%dT%H:%MZ)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat reconcile.log >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solomon-ledger-reconcile-log-${{ github.run_id }}
+          path: reconcile.log
+          retention-days: 7

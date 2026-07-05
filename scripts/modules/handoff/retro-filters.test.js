@@ -230,6 +230,79 @@ function buildHandoffPredicateSupabase({ handoffRows = [], rows = [] } = {}) {
   };
 }
 
+/**
+ * QF-20260704-127 — id/uuid_id canonicalization regression.
+ *
+ * Same corruption class as QF-20260703-906 (PREREQUISITE_HANDOFF_CHECK): ctx.sd.id
+ * has been observed carrying the SD's uuid_id column instead of its canonical id,
+ * for child SDs specifically. A corrupted sdUuid makes .eq('sd_id', sdUuid) come
+ * back clean-empty (valid UUID, zero matches) rather than erroring, so a real
+ * retrospective silently reads as missing. getFilteredRetrospective must re-resolve
+ * via sd_key whenever provided.
+ */
+function buildCanonicalizingSupabase({ handoffRow = null, retrospective = null, canonicalId = null } = {}) {
+  const makeChainable = (resolveValue) => {
+    const c = {
+      select: () => c, eq: () => c, or: () => c, gt: () => c, is: () => c, order: () => c, limit: () => c,
+      maybeSingle: () => Promise.resolve(resolveValue),
+      single: () => Promise.resolve(resolveValue),
+      then: (fn) => Promise.resolve(resolveValue).then(fn),
+    };
+    return c;
+  };
+  return {
+    from: vi.fn((table) => {
+      if (table === 'strategic_directives_v2') {
+        return { select: () => makeChainable({ data: canonicalId ? { id: canonicalId } : null, error: null }) };
+      }
+      if (table === 'sd_phase_handoffs') {
+        return { select: () => makeChainable({ data: handoffRow, error: null }) };
+      }
+      if (table === 'retrospectives') {
+        return { select: () => makeChainable({ data: retrospective, error: null }) };
+      }
+      return { select: () => makeChainable({ data: null, error: null }) };
+    }),
+  };
+}
+
+describe('getFilteredRetrospective — id/uuid_id canonicalization (QF-20260704-127)', () => {
+  it('re-resolves a corrupted sdUuid via sd_key and finds the retro under the canonical id', async () => {
+    const corruptedId = 'uuid_id-value';
+    const canonicalId = 'true-id-value';
+    const retro = { id: 'r1', sd_id: canonicalId, retro_type: 'SD_COMPLETION', created_at: '2026-04-10T00:00:00.000Z' };
+    const supabase = buildCanonicalizingSupabase({
+      handoffRow: { accepted_at: '2026-04-01T00:00:00.000Z' },
+      retrospective: retro,
+      canonicalId,
+    });
+    const { retrospective } = await getFilteredRetrospective(corruptedId, null, supabase, 'SD-CHILD-001-A');
+    expect(retrospective).toBe(retro);
+  });
+
+  it('leaves sdUuid unchanged when no sdKey is provided (back-compat, no regression)', async () => {
+    const retro = { id: 'r1', retro_type: 'SD_COMPLETION', created_at: '2026-04-10T00:00:00.000Z' };
+    const supabase = buildCanonicalizingSupabase({
+      handoffRow: { accepted_at: '2026-04-01T00:00:00.000Z' },
+      retrospective: retro,
+    });
+    const { retrospective } = await getFilteredRetrospective('sd-uuid', null, supabase);
+    expect(retrospective).toBe(retro);
+  });
+
+  it('leaves sdUuid unchanged when the sd_key lookup finds no mismatch', async () => {
+    const sameId = 'consistent-id';
+    const retro = { id: 'r1', retro_type: 'SD_COMPLETION', created_at: '2026-04-10T00:00:00.000Z' };
+    const supabase = buildCanonicalizingSupabase({
+      handoffRow: { accepted_at: '2026-04-01T00:00:00.000Z' },
+      retrospective: retro,
+      canonicalId: sameId,
+    });
+    const { retrospective } = await getFilteredRetrospective(sameId, null, supabase, 'SD-CHILD-001-B');
+    expect(retrospective).toBe(retro);
+  });
+});
+
 describe('retro-gate freshness boundary is pinned to LEAD-TO-PLAN (SD-FDBK-INFRA-RETROSPECTIVE-EXISTS-GATE-001)', () => {
   const sdUuid = 'sd-uuid';
   const leadToPlanAccepted = '2026-04-01T00:00:00.000Z';   // T1 — the correct boundary

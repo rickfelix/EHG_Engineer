@@ -58,6 +58,7 @@ import { randomUUID } from 'crypto';
 import { spawn as realSpawn } from 'child_process';
 import { createClient } from '@supabase/supabase-js';
 import { getRepoRoot } from '../../lib/repo-paths.js';
+import { stampLastFired } from '../../lib/periodic-liveness/stamp-last-fired.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -65,6 +66,12 @@ const __dirname = path.dirname(__filename);
 const DEFAULT_STALE_MS = 300000;       // 5 minutes — ~5x the daemon's 60s poll interval
 const CONFIRM_TIMEOUT_MS = 8000;       // wait up to 8s for the daemon to stamp its instance
 const CONFIRM_INTERVAL_MS = 500;       // poll the heartbeat every 500ms during confirm
+
+// QF-20260704-390: registered-verifier-never-dispatched class — this watcher's own detect+revive
+// path is proven functional, but nothing durably invoked it (13 days silent). Self-stamps its own
+// liveness (periodic_process_registry, self_stamped source) so the WATCHER's silent death is also
+// visible, not just the scheduler's.
+export const WATCHER_SELF_PROCESS_KEY = '__eva_scheduler_watcher_self__';
 
 const USAGE = 'eva-scheduler-watcher --once|--dry-run   (revives a dead EvaMasterScheduler)';
 
@@ -227,6 +234,14 @@ export async function main(argv = process.argv, deps = {}) {
   catch (err) {
     logger.error?.(`${tag} supabase client unavailable: ${err.message}`);
     return { exitCode: 2, action: 'no_supabase' };
+  }
+
+  // Self-stamp BEFORE any liveness/revive logic so a genuine invocation is always recorded, even
+  // if the scheduler-liveness check itself errors below. Dry-run stays fully read-only (per its
+  // own contract) — never stamps.
+  if (!args.dryRun) {
+    try { await (deps.stampLastFired || stampLastFired)(supabase, WATCHER_SELF_PROCESS_KEY); }
+    catch (err) { logger.warn?.(`${tag} self-liveness stamp failed (non-fatal): ${err.message}`); }
   }
 
   // 1. Liveness by heartbeat age.

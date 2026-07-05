@@ -195,10 +195,16 @@ async function getVentureState() {
 }
 
 async function getPendingDecision(stage) {
+  // QF-20260704-968: SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001 widened chairman_decisions
+  // uniqueness so a 'stage_gate' and a 'product_review' decision can both be pending at the
+  // same venture+stage. This ops CLI only auto-approves the blocking stage-gate lane (the
+  // one that halts the daemon walk) -- product_review is a separate human taste-review lane
+  // that must never be auto-approved here -- so decision_type is now explicit, not implicit.
   const { data } = await sb.from('chairman_decisions')
     .select('id, status, decision, lifecycle_stage, decision_type')
     .eq('venture_id', VENTURE_ID)
     .eq('lifecycle_stage', stage)
+    .eq('decision_type', 'stage_gate')
     .eq('status', 'pending')
     .is('deleted_at', null)
     .limit(1);
@@ -435,9 +441,13 @@ async function poll() {
       }
     } else {
       // Check if there are older pending decisions (from re-entry attempts)
+      // QF-20260704-968: same decision_type scoping as getPendingDecision() -- this
+      // cross-stage fallback also feeds approveDecision(), so it must not surface a
+      // product_review row (see note above).
       const { data: allPending } = await sb.from('chairman_decisions')
         .select('id, lifecycle_stage, status, decision_type, attempt_number')
         .eq('venture_id', VENTURE_ID)
+        .eq('decision_type', 'stage_gate')
         .eq('status', 'pending')
         .is('deleted_at', null)
         .order('created_at', { ascending: false })

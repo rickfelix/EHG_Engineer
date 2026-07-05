@@ -35,7 +35,7 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
     });
 
     it('CLI args parser includes --migration-reviewed / --security-reviewed in fbKnownFlags', () => {
-      const idx = src.indexOf("const fbKnownFlags = new Set");
+      const idx = src.indexOf('const fbKnownFlags = new Set');
       expect(idx).toBeGreaterThan(0);
       const block = src.slice(idx, idx + 200);
       expect(block).toMatch(/--migration-reviewed/);
@@ -65,11 +65,19 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
       expect(body).toMatch(/opts\.securityReviewed\s*\?\s*\{\s*security_reviewed:\s*true\s*\}/);
     });
 
-    it('CLI passes args.includes(--security-reviewed) to createFromQF', () => {
+    // QF-20260705-395: --migration-reviewed had the identical sibling-parity gap as
+    // --security-reviewed above -- it was silently dropped before reaching createFromQF.
+    it('createFromQF metadata propagates migration_reviewed=true when the flag is set', () => {
+      const idx = src.indexOf('async function createFromQF');
+      const body = src.slice(idx, idx + 3000);
+      expect(body).toMatch(/opts\.migrationReviewed\s*\?\s*\{\s*migration_reviewed:\s*true\s*\}/);
+    });
+
+    it('CLI passes args.includes(--security-reviewed) and args.includes(--migration-reviewed) to createFromQF', () => {
       const idx = src.indexOf("args[0] === '--from-qf'");
       expect(idx).toBeGreaterThan(0);
-      const block = src.slice(idx, idx + 900);
-      expect(block).toMatch(/await createFromQF\(args\[1\],\s*\{\s*securityReviewed:\s*args\.includes\(['"]--security-reviewed['"]\)\s*\}\)/);
+      const block = src.slice(idx, idx + 1200);
+      expect(block).toMatch(/await createFromQF\(args\[1\],\s*\{\s*securityReviewed:\s*args\.includes\(['"]--security-reviewed['"]\),\s*migrationReviewed:\s*args\.includes\(['"]--migration-reviewed['"]\),?\s*\}\)/);
     });
   });
 

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 4,990
+**Generated**: 2026-07-04T23:07:17.175Z
+**Rows**: 5,584
 **RLS**: Enabled (8 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -20,7 +20,7 @@
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
 | type | `character varying(20)` | **NO** | - | - |
-| source_application | `character varying(50)` | **NO** | - | - |
+| source_application | `character varying(255)` | **NO** | - | - |
 | source_type | `character varying(30)` | **NO** | - | - |
 | source_id | `uuid` | YES | - | - |
 | title | `character varying(255)` | **NO** | - | - |
@@ -112,7 +112,7 @@ END)
 - `chk_wont_fix_requires_notes`: CHECK ((((status)::text <> 'wont_fix'::text) OR ((resolution_notes IS NOT NULL) AND (length(TRIM(BOTH FROM resolution_notes)) > 0))))
 - `feedback_auto_correction_status_check`: CHECK ((auto_correction_status = ANY (ARRAY['pending'::text, 'in_progress'::text, 'resolved'::text, 'failed'::text])))
 - `feedback_effort_estimate_check`: CHECK (((effort_estimate)::text = ANY ((ARRAY['small'::character varying, 'medium'::character varying, 'large'::character varying])::text[])))
-- `feedback_feedback_type_check`: CHECK (((feedback_type)::text = ANY ((ARRAY['sentry_error'::character varying, 'user_bug'::character varying, 'user_feature_request'::character varying, 'user_usability'::character varying, 'user_other'::character varying])::text[])))
+- `feedback_feedback_type_check`: CHECK (((feedback_type)::text = ANY ((ARRAY['sentry_error'::character varying, 'user_bug'::character varying, 'user_feature_request'::character varying, 'user_usability'::character varying, 'user_other'::character varying, 'venture_error'::character varying])::text[])))
 - `feedback_rubric_score_check`: CHECK (((rubric_score >= 0) AND (rubric_score <= 100)))
 - `feedback_severity_check`: CHECK (((severity)::text = ANY ((ARRAY['critical'::character varying, 'high'::character varying, 'medium'::character varying, 'low'::character varying])::text[])))
 - `feedback_source_type_check`: CHECK (((source_type)::text = ANY ((ARRAY['manual_feedback'::character varying, 'auto_capture'::character varying, 'uat_failure'::character varying, 'error_capture'::character varying, 'uncaught_exception'::character varying, 'unhandled_rejection'::character varying, 'manual_capture'::character varying, 'todoist_intake'::character varying, 'youtube_intake'::character varying, 'claude_code_intake'::character varying, 'telegram'::character varying, 'user_feedback'::character varying])::text[])))
@@ -226,6 +226,14 @@ END)
   ```sql
   CREATE INDEX idx_feedback_venture_dedup ON public.feedback USING btree (venture_id, lower((title)::text), created_at) WHERE ((feedback_type)::text ~~ 'user_%'::text)
   ```
+- `idx_feedback_venture_error_created`
+  ```sql
+  CREATE INDEX idx_feedback_venture_error_created ON public.feedback USING btree (venture_id, created_at DESC) WHERE ((feedback_type)::text = 'venture_error'::text)
+  ```
+- `idx_feedback_venture_error_hash`
+  ```sql
+  CREATE UNIQUE INDEX idx_feedback_venture_error_hash ON public.feedback USING btree (venture_id, error_hash) WHERE (((feedback_type)::text = 'venture_error'::text) AND (venture_id IS NOT NULL))
+  ```
 
 ## RLS Policies
 
@@ -262,9 +270,7 @@ END)
 ### 7. venture_user_insert_feedback (INSERT)
 
 - **Roles**: {anon}
-- **With Check**: `(((feedback_type)::text ~~ 'user_%'::text) AND (venture_id IS NOT NULL) AND (EXISTS ( SELECT 1
-   FROM ventures v
-  WHERE ((v.id = feedback.venture_id) AND (v.deleted_at IS NULL)))) AND (NOT check_feedback_rate_limit(venture_id)))`
+- **With Check**: `(((feedback_type)::text ~~ 'user_%'::text) AND (venture_id IS NOT NULL) AND venture_exists_and_active(venture_id) AND (NOT check_feedback_rate_limit(venture_id)))`
 
 ### 8. venture_user_select_feedback (SELECT)
 

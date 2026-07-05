@@ -107,7 +107,43 @@ function antiWinddownDirective(beltRankedClaimable) {
   return `ANTI-WIND-DOWN (Mode B): ${depth} Releasing claimable RANKED work to wind down is FORBIDDEN — "scope size / design-heaviness / chairman-gated / context length / session-tail / felt drained" are CLAUDE.md's explicitly-forbidden non-pause-triggers, NOT reasons to release. Build this SD; if it is too large/design-heavy, DECOMPOSE it into children (orchestrator path) — do not release. Only a GENUINELY-BLOCKED SD may be deferred, and only with a logged blocker reason (e.g. a verified spec-conflict). Otherwise keep working.`;
 }
 const SELF_CLAIM_CANDIDATE_LIMIT = 5;
-const QF_CANDIDATE_LIMIT = 25;               // open quick_fixes to consider for self-claim
+const QF_CANDIDATE_LIMIT = 100;              // open quick_fixes to consider for self-claim
+// QF-20260704-602 (groom addendum leg 2): severity rank for the self-claim picker sort.
+// Unranked/unknown severities sort last (below 'low'), never ahead of a ranked item.
+const QF_SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
+
+/**
+ * Pure: stable-sort open QFs so higher severity always comes first (critical > high >
+ * medium > low > unranked), then by created_at ascending within the same severity.
+ * Fixes the "medium self-claimed while a critical sat beside it" specimen (717/726) —
+ * the picker was previously unordered by severity, purely filing-order (created_at).
+ */
+function sortQfCandidatesBySeverity(qfs) {
+  return (qfs || []).slice().sort((a, b) => {
+    const rankA = QF_SEVERITY_RANK[a?.severity] ?? 99;
+    const rankB = QF_SEVERITY_RANK[b?.severity] ?? 99;
+    if (rankA !== rankB) return rankA - rankB;
+    return Date.parse(a?.created_at || 0) - Date.parse(b?.created_at || 0);
+  });
+}
+// QF-20260704-244 (leg 3 of the QF-lane fix family; legs 1-2 = QF-20260704-602): a CRITICAL
+// open QF outranks SD self-claim, but tightly fenced against reverse starvation of the SD
+// belt -- only 'critical' jumps (high/medium/low keep the existing SD-first order), only
+// after sitting open long enough to give directed dispatch (leg 1) a chance to route it
+// first, and at most ONE consecutive jump per worker (claude_sessions.metadata.
+// last_claim_was_qf_jump gates the NEXT pull, not this one -- see isCriticalQfJumpEligible /
+// the step-6-minus-1 block in runCheckin).
+const CRITICAL_QF_JUMP_GRACE_MS = 10 * 60 * 1000;
+
+/** Pure: is this QF eligible to jump ahead of SD self-claim (severity=critical, aged past grace)? */
+function isCriticalQfJumpEligible(qf, nowMs) {
+  if (!isAutoStartableQF(qf, nowMs)) return false;
+  if (qf.severity !== 'critical') return false;
+  const created = Date.parse(qf.created_at);
+  if (!Number.isFinite(created)) return false;
+  return (nowMs - created) >= CRITICAL_QF_JUMP_GRACE_MS;
+}
+
 const STALE_QF_DAYS = Number(process.env.SD_NEXT_QF_STALE_DAYS) || 3;  // verify-first freshness boundary (shared with sd-next display)
 // SD-LEO-FEAT-WORKER-CHECKIN-SELF-001 (FR-2): gap before confirmRowGone's confirming read so it lands
 // genuinely later than the first (defends a momentary stale-replica null). Env-overridable; tests set 0.
@@ -166,6 +202,14 @@ function extractSdFromAssignment(msg) {
   const p = msg.payload || {};
   if (typeof p.assigned_sd === 'string' && p.assigned_sd) return p.assigned_sd;
   if (typeof p.sd_key === 'string' && p.sd_key) return p.sd_key;
+  // QF-20260704-602: some dispatch paths emit a QF-specific directed assignment as
+  // payload.qf_id instead of sd_key/assigned_sd (confirmed live on QF-20260704-726's
+  // dispatch history: 4 of 6 WORK_ASSIGNMENTs carried ONLY qf_id, so this function
+  // returned null and the entire directed-assignment branch below was silently
+  // skipped -- no ack, no claim attempt -- until a later redispatch happened to use
+  // sd_key instead). claim_sd itself is already QF-aware (p_sd_id LIKE 'QF-%'); the
+  // gap was purely in this extraction step.
+  if (typeof p.qf_id === 'string' && p.qf_id) return p.qf_id;
   if (Array.isArray(p.available_sds) && p.available_sds.length) return p.available_sds[0];
   // current_sd is what the worker is ALREADY on — only use it as a last resort
   // when nothing else names a target (an assignment can reference the same SD).
@@ -397,6 +441,13 @@ function isAutoStartableQF(qf, nowMs) {
   if (qf.pr_url || qf.commit_sha) return false;        // already in PR/commit (verify-first / merge-race guard)
   if (qf.routing_tier != null && Number(qf.routing_tier) >= 3) return false;  // persisted Tier-3 -> full SD, not auto-QF
   if (TIER3_RISK_RE.test(qf.title || '')) return false;                        // risk-keyword drift -> hold for triage/human
+  // SD-LEO-FIX-QUICK-FIXES-NEEDS-001: durable time-gated defer -- a QF genuinely not ready
+  // yet (e.g. needs a clean 24h observation window) stays status='open' but is ineligible
+  // for claim until not_before passes. Prevents the same worker re-claiming it every cycle.
+  if (qf.not_before) {
+    const notBefore = Date.parse(qf.not_before);
+    if (Number.isFinite(notBefore) && notBefore > nowMs) return false;
+  }
   const created = qf.created_at ? Date.parse(qf.created_at) : NaN;
   if (!Number.isFinite(created)) return false;
   const ageDays = (nowMs - created) / (24 * 60 * 60 * 1000);
@@ -417,14 +468,14 @@ async function selfClaimQuickFix(sb, sessionId, base) {
   try {
     const { data: qfs } = await sb
       .from('quick_fixes')
-      .select('id, status, pr_url, commit_sha, created_at, routing_tier, title')
+      .select('id, status, pr_url, commit_sha, created_at, routing_tier, title, severity, not_before')
       .eq('status', 'open')
       .is('pr_url', null)
       .is('commit_sha', null)
       .order('created_at', { ascending: true })
       .limit(QF_CANDIDATE_LIMIT);
     const nowMs = Date.now();
-    for (const qf of (qfs || [])) {
+    for (const qf of sortQfCandidatesBySeverity(qfs)) {
       if (!isAutoStartableQF(qf, nowMs)) continue;
       const claimed = await tryClaim(sb, qf.id, sessionId);
       if (claimed.ok) {
@@ -1350,6 +1401,12 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       // in_progress->terminal race. claim_sd now refuses terminal claims, but a never-ACKed
       // assignment would re-fire every tick (the "retried on every tick" symptom), so ACK it
       // here and fall through to self-claim.
+      // QF-20260704-602: this strategic_directives_v2 lookup is intentionally SD-only. A
+      // directed QF key (sdKey starting 'QF-') always misses here (assignedSdRow stays null),
+      // which correctly skips terminalStatus/ineligibleReason below (both SD-specific concerns
+      // with no QF equivalent yet) and falls straight to tryClaim() — the claim_sd RPC is
+      // already QF-aware (p_sd_id LIKE 'QF-%' branches to the quick_fixes table) and does not
+      // need this fetch to succeed.
       let terminalStatus = null;
       let assignedSdRow = null;
       let assignedSdFetchFailed = false;
@@ -1453,6 +1510,49 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
   //      and self-claim silently idles with a full queue. Fail-open: a failure here degrades to
   //      today's behavior (read returns [] -> idle), never an error action.
   try { await ensureActiveBaseline(sb); } catch { /* fail-open: never block the checkin */ }
+
+  // 5.95 QF-20260704-244 (leg 3): a CRITICAL open QF, aged past the directed-dispatch grace
+  // window, outranks SD self-claim. Fenced to prevent reverse SD-belt starvation: only
+  // 'critical' jumps, and at most ONE consecutive jump per worker -- if the LAST pull was a
+  // jump (metadata.last_claim_was_qf_jump), this pull consumes/clears that flag and falls
+  // through to the normal SD-first order instead of jumping again immediately.
+  if (sessionMetadata?.last_claim_was_qf_jump === true) {
+    try {
+      await sb.from('claude_sessions')
+        .update({ metadata: { ...sessionMetadata, last_claim_was_qf_jump: false } })
+        .eq('session_id', sessionId);
+    } catch { /* fail-open: worst case is one extra consecutive jump */ }
+  } else {
+    try {
+      const { data: criticalQfs } = await sb
+        .from('quick_fixes')
+        .select('id, status, pr_url, commit_sha, created_at, routing_tier, title, severity, not_before')
+        .eq('status', 'open')
+        .eq('severity', 'critical')
+        .is('pr_url', null)
+        .is('commit_sha', null)
+        .order('created_at', { ascending: true })
+        .limit(QF_CANDIDATE_LIMIT);
+      const nowMs = Date.now();
+      for (const qf of (criticalQfs || [])) {
+        if (!isCriticalQfJumpEligible(qf, nowMs)) continue;
+        const claimed = await tryClaim(sb, qf.id, sessionId);
+        if (claimed.ok) {
+          try {
+            await sb.from('claude_sessions')
+              .update({ metadata: { ...sessionMetadata, last_claim_was_qf_jump: true } })
+              .eq('session_id', sessionId);
+          } catch { /* fail-open: worst case the one-consecutive bound doesn't hold once */ }
+          return {
+            ...base,
+            action: 'self_claimed_qf',
+            qf: qf.id,
+            message: `Self-claimed CRITICAL quick-fix ${qf.id} (priority jump ahead of SD self-claim, QF-20260704-244). Load it: node scripts/read-quick-fix.js ${qf.id} — then run the /quick-fix workflow (implement <=50 LOC on branch qf/${qf.id}, run tests, then node scripts/complete-quick-fix.js ${qf.id}). Do NOT run sd-start.js for a QF. On completion, re-run /checkin.`,
+          };
+        }
+      }
+    } catch { /* fail-open: proceed to normal SD-first order */ }
+  }
 
   // 6. self-claim from ONE merged SD pool: baselined sd:next candidates + claimable
   //    UN-BASELINED drafts, rank-sorted TOGETHER (QF-20260610-986, feedback dc87039d).
@@ -1682,7 +1782,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
+module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
 
 if (require.main === module) {
   main().catch(err => {

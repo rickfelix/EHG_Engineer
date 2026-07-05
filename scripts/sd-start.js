@@ -383,7 +383,7 @@ async function getSDDetails(sdId) {
   // Note: legacy_id column was deprecated and removed - using sd_key instead
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type, created_at, target_application, venture_id, scope, governance_metadata, metadata')
+    .select('id, sd_key, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type, created_at, target_application, venture_id, scope, governance_metadata, metadata, completion_date, updated_at, updated_by')
     .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
     .single();
 
@@ -1153,6 +1153,20 @@ async function main() {
   const forceReclaim = process.argv.includes('--force-reclaim');
   let claimResult = await claimGuard(effectiveId, session.session_id, { autoFallback: fallbackEnabled });
   const skippedSDs = [];
+
+  // QF-20260704-825: an explicit-target invocation on a terminal (completed/deferred) SD
+  // must NEVER silently fall through to auto-fallback selection -- that claims an unrelated
+  // SD while the operator believes they hold the one they named. This is not a claim
+  // conflict (no owner to wait on or evict); exit loud regardless of fallbackEnabled.
+  if (!claimResult.success && claimResult.error === 'sd_terminal_status') {
+    console.log(`\n${colors.red}${colors.bold}🚫 TARGET_ALREADY_TERMINAL${colors.reset}`);
+    console.log(`   ${effectiveId} has status=${claimResult.status} — already finished, cannot be (re)claimed.`);
+    console.log(`   Completed: ${sd.completion_date || sd.updated_at || 'unknown'}${sd.updated_by ? ` (updated_by: ${sd.updated_by})` : ''}`);
+    console.log(`\n   ${colors.bold}Action:${colors.reset} This was NOT a claim conflict — no fallback SD will be selected.`);
+    console.log(`   Run ${colors.cyan}npm run sd:next${colors.reset} to pick a different, workable SD.`);
+    console.log('═'.repeat(50));
+    process.exit(1);
+  }
 
   if (!claimResult.success) {
     // SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001 (FR2): Evidence-of-life pre-claim gate.
@@ -2016,7 +2030,41 @@ async function main() {
   // 8. Show next action
   const nextHandoff = await getNextHandoff(sd);
 
-  if (needsBrainstorm && sd.status === 'draft') {
+  // SD-LEO-INFRA-ADOPTED-RESUME-FINAL-001 (FR-1): close the strand relay. Printing the
+  // next-action command as a suggestion has failed 3x for the pending_approval/LEAD_FINAL
+  // strand class (a worker adopts a stranded SD, then idles/TTL-releases without ever
+  // running the final handoff). This is the ONLY seam where claim-ownership + worktree-cwd
+  // + phase co-hold (claim-validity-gate.js requires cwd inside worktree_path;
+  // worker-checkin.cjs runs before the worktree is attached and would always fail that
+  // gate) — so auto-chain the execution here instead of only printing it. Every other
+  // phase/status keeps the existing print-only behavior below, unchanged.
+  const wtCwdForFinal = worktreeInfo?.cwd || worktreeInfo?.worktree?.path || null;
+  const isStrandedAtLeadFinal = sd.status === 'pending_approval' && sd.current_phase === 'LEAD_FINAL';
+
+  if (isStrandedAtLeadFinal && wtCwdForFinal) {
+    console.log(`\n${colors.bold}${colors.bgYellow} AUTO-CHAINING ${nextHandoff} ${colors.reset}`);
+    console.log(`${colors.dim}   This SD was stranded at pending_approval/LEAD_FINAL — executing the final handoff now instead of only printing it.${colors.reset}`);
+    try {
+      const output = execSync(`node scripts/handoff.js execute ${nextHandoff} ${effectiveId}`, {
+        cwd: wtCwdForFinal,
+        encoding: 'utf8',
+        timeout: 300000,
+        env: { ...process.env, CLAUDE_SESSION_ID: session.session_id },
+      });
+      console.log(output);
+      console.log(`${colors.green}   ✅ ${nextHandoff} auto-chain completed.${colors.reset}`);
+    } catch (finalErr) {
+      const combined = `${finalErr.stdout || ''}\n${finalErr.stderr || ''}\n${finalErr.message || ''}`;
+      console.log(combined);
+      if (/PR_MERGE_VERIFICATION/.test(combined)) {
+        console.log(`${colors.yellow}   ⏸  ${nextHandoff} blocked on PR_MERGE_VERIFICATION — merge the open PR, then re-run:${colors.reset}`);
+        console.log(`${colors.cyan}   node scripts/sd-start.js ${effectiveId}${colors.reset}`);
+      } else {
+        console.log(`${colors.red}   ⚠ ${nextHandoff} auto-chain failed — retry manually:${colors.reset}`);
+        console.log(`${colors.cyan}   CLAUDE_SESSION_ID=${session.session_id} node scripts/handoff.js execute ${nextHandoff} ${effectiveId}${colors.reset}`);
+      }
+    }
+  } else if (needsBrainstorm && sd.status === 'draft') {
     console.log(`\n${colors.bold}Next Action:${colors.reset}`);
     console.log(`   ${colors.cyan}/brainstorm ${sd.title}${colors.reset}`);
     console.log(`${colors.dim}   After brainstorm completes with vision+arch, then:${colors.reset}`);

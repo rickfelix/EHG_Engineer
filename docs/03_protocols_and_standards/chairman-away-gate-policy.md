@@ -28,6 +28,7 @@ proceeds on the live-true set so the away-behavior is defined for what actually 
 | 6 | Promotion — scale commit | S18 | PROMOTION | `PROMOTION_GATE_STAGES` |
 | 7 | Promotion — launch advance | S23 | PROMOTION | `PROMOTION_GATE_STAGES` |
 | 8 | LEO LEAD-FINAL chairman approval | — | PROMOTION (SD ship) | `handoff.js` LEAD-FINAL-APPROVAL |
+| 9 | Product-review — pre-launch taste/quality check | S23→S24 | PROMOTION (`decision_type='product_review'`, separate from gate 7's decision) | `lib/eva/stage-execution-worker.js::_advanceStage()` + `fn_advance_venture_stage` RPC (SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001) |
 
 > Future-state (EHG-VISION "11→5"): the surviving 5 = S3/S5/S23 KILL + S10/S25 PROMOTION. When the
 > code converges on that set, update this table; the away-policy *principles* below are stable.
@@ -61,6 +62,7 @@ HOLD-AND-SURFACE. Ambiguity always resolves to hold (the conservative, reversibl
 | **S18 PROMOTION (scale commit)** | **HOLD-AND-SURFACE.** | Largest resource commitment; explicitly non-delegable. |
 | **S23 PROMOTION (launch advance)** | **HOLD-AND-SURFACE.** | Launch is outward-facing + hard to reverse; surface. |
 | **LEAD-FINAL (SD ship)** | **SPLIT:** non-chairman SDs follow AUTO-PROCEED (safe default = the loop's existing auto-approval); **chairman-required SDs (those whose own spec mandates chairman visibility, e.g. fleet-wide migrations) HOLD-AND-SURFACE.** | Mirrors how SD-LEO-INFRA-CLAIM-RPC-HONOR-001 was correctly held at its chairman gate this cohort. |
+| **S23→S24 product-review** | **HOLD-AND-SURFACE** (one escalation email per review, no reminders; re-armed automatically on send-back/re-review). Enforced independently at both the daemon-walk and RPC advance paths, and bypassed only for fixture/demo ventures so a test venture can never be stranded waiting on a decision nobody real will ever make. | A taste/quality check an agent cannot self-certify; separate from gate 7's launch-advance decision so the two verdicts are never conflated. |
 
 **Net:** KILL gates default to *no auto-kill* (safe — the venture waits); PROMOTION + pre-launch
 KILL + chairman-required SD-ship gates *hold-and-surface*. No gate auto-decides the chairman's call.

@@ -158,7 +158,10 @@ async function main() {
 
   const { data: inserted, error: e3 } = await supabase
     .from('chairman_decisions')
-    .upsert(rows, { onConflict: 'venture_id,lifecycle_stage,attempt_number', ignoreDuplicates: true })
+    // SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001: uq_chairman_decision_attempt was widened to
+    // (venture_id, lifecycle_stage, decision_type, attempt_number) -- the old 3-column onConflict
+    // target no longer matches any unique index/constraint and would 42P10.
+    .upsert(rows, { onConflict: 'venture_id,lifecycle_stage,decision_type,attempt_number', ignoreDuplicates: true })
     .select('id,venture_id,lifecycle_stage');
   if (e3) throw e3;
   console.error(`\n[APPLY] Inserted ${inserted?.length || 0} chairman_decisions rows.`);

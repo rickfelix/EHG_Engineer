@@ -247,8 +247,12 @@ async function analyzePRD(sdId, sdUuid) {
  * Analyze sub-agent executions
  */
 async function analyzeSubAgents(sdId) {
+  // QF-20260704-434: sub_agent_executions is a legacy table (keyed by prd_id, no sd_id
+  // column, unpopulated by current tooling) -- every retrospective got sub_agents_involved:[]
+  // regardless of real evidence. sub_agent_execution_results is the actively-written table
+  // (CLAUDE.md prologue #2); its sd_id column holds the SD's UUID for current rows.
   const { data: executions } = await supabase
-    .from('sub_agent_executions')
+    .from('sub_agent_execution_results')
     .select('*')
     .eq('sd_id', sdId);
 
@@ -261,7 +265,7 @@ async function analyzeSubAgents(sdId) {
     verdicts: executions.map(e => ({
       agent: e.sub_agent_code,
       verdict: e.verdict,
-      confidence: e.confidence_score
+      confidence: e.confidence
     }))
   };
 }

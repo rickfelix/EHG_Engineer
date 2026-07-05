@@ -91,6 +91,14 @@ export async function validateTraceabilityMapping(sd_id, sdUuid, designAnalysis,
   console.log('\n   [C1] PRD -> Implementation Mapping...');
 
   try {
+    // QF-20260704-440: gitRepoPath is null when resolveSDContext couldn't resolve
+    // target_application's repo -- fail loud into the catch below instead of running
+    // git log against process.cwd(), which silently greps the wrong repo and reports
+    // a false "0 commits found" (worse than an honest "cannot verify").
+    if (!gitRepoPath) {
+      throw new Error('target_application repo path unresolved');
+    }
+
     const { stdout: gitLog } = await execAsync(
       `git log --all --grep="${sd_id}" --oneline`,
       { cwd: gitRepoPath, timeout: 10000 }
@@ -109,6 +117,7 @@ export async function validateTraceabilityMapping(sd_id, sdUuid, designAnalysis,
     }
   } catch (err) {
     sectionScore += 3;
+    validation.warnings.push(`[C1] Could not verify commits: ${err.message}`);
     console.log('   WARN Cannot verify git commits (3/7)');
     console.log(`   DEBUG: Git error: ${err.message} | cwd: ${gitRepoPath}`);
   }

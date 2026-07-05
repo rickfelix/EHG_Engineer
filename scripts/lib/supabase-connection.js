@@ -470,13 +470,18 @@ export function splitPostgreSQLStatements(sql) {
     if (ch === ';') {
       const trimmed = current.trim();
       if (trimmed.length > 0) {
-        // Strip comment-only lines so the executor doesn't get a no-op statement.
-        const lines = trimmed.split('\n').filter(line => {
+        // Push the chunk verbatim if it has any real (non-comment) content;
+        // drop it only if it's entirely blank/comment lines. Line-by-line
+        // stripping would also mutate comment lines INSIDE a $$...$$ function
+        // body (dollar-quote state isn't preserved once flattened here) --
+        // whole-chunk keep/drop has no such blast radius since a statement
+        // like CREATE FUNCTION always has a non-comment line.
+        const hasRealContent = trimmed.split('\n').some(line => {
           const l = line.trim();
           return l.length > 0 && !l.startsWith('--');
         });
-        if (lines.length > 0) {
-          statements.push(lines.join('\n'));
+        if (hasRealContent) {
+          statements.push(trimmed);
         }
       }
       current = '';

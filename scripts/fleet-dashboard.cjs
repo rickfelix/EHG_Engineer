@@ -744,6 +744,57 @@ function printHealth(d) {
   console.log('');
 }
 
+// ── Section: Periodic-Process Liveness (SD-LEO-INFRA-PERIODIC-PROCESS-LIVENESS-001, FR-5) ──
+async function printPeriodicLiveness() {
+  const { data: rows, error } = await supabase
+    .from('periodic_process_registry')
+    .select('process_key, display_name, process_type, currently_expected_active, last_fired_at, last_state, updated_at')
+    .order('process_type', { ascending: true });
+
+  console.log('PERIODIC-PROCESS LIVENESS');
+  console.log('─'.repeat(72));
+
+  if (error) {
+    console.log('  (unable to load periodic_process_registry: ' + error.message + ')');
+    console.log('');
+    return;
+  }
+  if (!rows || rows.length === 0) {
+    console.log('  (registry empty)');
+    console.log('');
+    return;
+  }
+
+  const self = rows.find((r) => r.process_key === '__watcher_self__');
+  const watcherAgeSec = self?.last_fired_at ? Math.round((Date.now() - Date.parse(self.last_fired_at)) / 1000) : null;
+  const watcherLine = watcherAgeSec == null
+    ? '  Watcher last-run: NEVER RUN'
+    : '  Watcher last-run: ' + watcherAgeSec + 's ago' + (watcherAgeSec > 3600 ? '  [STALE WATCHER]' : '');
+  console.log(watcherLine);
+  console.log('');
+
+  // Render the watcher's own persisted last_state directly (scripts/periodic-liveness-watcher.mjs
+  // is the single source of truth for state evaluation and writes last_state on every run,
+  // regardless of outcome -- the dashboard renders that column, it does not re-implement the
+  // 2+-signal logic or re-derive state from a flags lookback. A flags-table lookback was tried
+  // first and rejected: an OVERDUE flag row does not expire when the process recovers, so
+  // rendering "is there a flag" rather than "what is the CURRENT last_state" would keep showing
+  // OVERDUE forever after a single episode (the same latch defect fixed in emitOverdueSignal,
+  // adversarial review on PR #5562).
+  const ageOfHours = (ts) => (ts ? Math.max(0, Math.round((Date.now() - Date.parse(ts)) / 3600000)) + 'h' : '—');
+
+  const others = rows.filter((r) => r.process_key !== '__watcher_self__');
+  for (const r of others) {
+    const state = !r.currently_expected_active
+      ? 'INTENTIONALLY_DOWN'
+      : (r.last_state || 'UNVERIFIED');
+    console.log('  ' + pad(state, 20) + pad(r.process_type, 16) + pad(ageOfHours(r.last_fired_at), 8) + (r.display_name || r.process_key));
+  }
+  console.log('');
+  console.log('  Run scripts/periodic-liveness-watcher.mjs to refresh state.');
+  console.log('');
+}
+
 // ── Section: QA ──
 function printQA(d) {
   const now = Date.now();
@@ -1442,19 +1493,41 @@ async function printSolomonInbox() {
   console.log('');
 }
 
-// ── Section: Solomon advice-outcome rollup (SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001, FR-5) ──
+// ── Section: Solomon advice-outcome rollup (SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001, FR-5;
+//    pending-visibility extended QF-20260704-598 — decay was invisible until a decided row existed) ──
 // Read-only accuracy + cost-per-accepted-proposal rollup over solomon_advice_outcome_ledger. Pending
 // (undecided) rows are excluded from the accuracy denominator so an in-flight advisory never counts
 // as a failure. Dormant-safe: an absent table or empty ledger renders "(no data yet)" rather than
 // crashing or dividing by zero.
 /**
- * Pure: compute the accuracy + cost-per-accepted-proposal rollup from raw ledger rows.
- * Pending (undecided) rows are excluded from the accuracy denominator. Returns null when there is
- * no decided data yet (renderer prints "no data yet" rather than dividing by zero). Exported for tests.
+ * Pure: compute the accuracy + cost-per-accepted-proposal rollup from raw ledger rows, plus
+ * pending-count + oldest-pending-age (QF-20260704-598 — pending decay was archaeology-only before
+ * this, since the old contract returned null whenever there were zero DECIDED rows, hiding an
+ * all-pending ledger from the dashboard entirely). Returns null only when there are literally zero
+ * ledger rows at all; an all-pending ledger now returns decidedCount=0 with pending fields populated
+ * so decay is visible from day one. Exported for tests.
  */
-function computeSolomonLedgerRollup(rows) {
-  const decided = (rows || []).filter((r) => r.decision && r.decision !== 'pending');
-  if (decided.length === 0) return null;
+function computeSolomonLedgerRollup(rows, nowMs = Date.now()) {
+  const all = rows || [];
+  if (all.length === 0) return null;
+
+  const decided = all.filter((r) => r.decision && r.decision !== 'pending');
+  const pending = all.filter((r) => !r.decision || r.decision === 'pending');
+  const oldestPendingAgeMs = pending.length > 0
+    ? Math.max(...pending.map((r) => nowMs - new Date(r.created_at).getTime()))
+    : null;
+
+  if (decided.length === 0) {
+    return {
+      decidedCount: 0,
+      pendingCount: pending.length,
+      oldestPendingAgeMs,
+      acceptedShippedClean: 0,
+      accuracyPct: null,
+      acceptedCount: 0,
+      costPerAccepted: null,
+    };
+  }
 
   const acceptedShippedClean = decided.filter((r) => r.decision === 'accepted' && r.outcome === 'shipped_clean').length;
   const accuracyPct = Math.round((acceptedShippedClean / decided.length) * 100);
@@ -1465,7 +1538,8 @@ function computeSolomonLedgerRollup(rows) {
 
   return {
     decidedCount: decided.length,
-    pendingCount: (rows || []).length - decided.length,
+    pendingCount: pending.length,
+    oldestPendingAgeMs,
     acceptedShippedClean,
     accuracyPct,
     acceptedCount: accepted.length,
@@ -1481,7 +1555,7 @@ async function printSolomonLedgerRollup() {
   try {
     const { data, error } = await supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
-      .select('decision, outcome, cost_tokens')
+      .select('decision, outcome, cost_tokens, created_at')
       .limit(5000);
     if (error) {
       console.log('  (ledger query failed: ' + error.message + ')');
@@ -1502,7 +1576,16 @@ async function printSolomonLedgerRollup() {
     return;
   }
 
-  console.log('  ' + rollup.decidedCount + ' decided proposal(s) (' + rollup.pendingCount + ' pending, excluded)');
+  const oldestPendingStr = rollup.oldestPendingAgeMs !== null
+    ? Math.floor(rollup.oldestPendingAgeMs / (60 * 60 * 1000)) + 'h'
+    : 'n/a';
+  if (rollup.decidedCount === 0) {
+    console.log('  0 decided proposal(s) yet (' + rollup.pendingCount + ' pending, oldest ' + oldestPendingStr + ')');
+    console.log('');
+    return;
+  }
+
+  console.log('  ' + rollup.decidedCount + ' decided proposal(s) (' + rollup.pendingCount + ' pending, oldest ' + oldestPendingStr + ')');
   console.log('  accuracy: ' + rollup.accuracyPct + '% (' + rollup.acceptedShippedClean + '/' + rollup.decidedCount + ' accepted+shipped_clean)');
   console.log('  cost-per-accepted-proposal: ' + (rollup.costPerAccepted !== null ? rollup.costPerAccepted + ' tokens' : 'n/a (0 accepted)'));
   console.log('');
@@ -1595,6 +1678,81 @@ async function printUndeliveredOutbound() {
   console.log('');
 }
 
+// SD-LEO-INFRA-CHAIRMAN-EMAIL-CHANNEL-001: dead-channel banner + chairman-visible terminal
+// marker for the chairman-escalation email channel. Pull-based (mirrors printUndeliveredOutbound()'s
+// shape) -- reads the current row live on every render, no push/cache. Read-only + fail-open.
+//
+// DOCUMENTED DEVIATION (PLAN_VERIFICATION, VALIDATION sub-agent finding): the PRD named a
+// separate ambient statusline marker as a 3rd surface distinct from this dashboard banner.
+// Collapsed into one (this function) because no pluggable ambient-statusline mechanism exists
+// anywhere in this codebase, and R4's own LEAD-phase risk analysis already concluded the active
+// Todoist PUSH is the primary detection guarantee -- a second passive/pull surface is
+// confirmatory, not load-bearing. See PRD FR-4 for the full rationale.
+async function printChairmanEmailChannelHealth(d, deps = {}) {
+  const sb = (deps && deps.supabase) || supabase; // injectable for tests; defaults to module client
+  console.log('CHAIRMAN-EMAIL CHANNEL HEALTH');
+  console.log('─'.repeat(72));
+
+  const { data: row, error } = await sb
+    .from('chairman_email_channel_health') // schema-lint-disable-line — new table (this SD's migration), chairman-apply-gated, not yet in the live snapshot
+    .select('*')
+    .eq('id', 'singleton')
+    .maybeSingle();
+  if (error) {
+    console.log('  (channel-health query failed: ' + error.message + ')');
+    console.log('');
+    return;
+  }
+  if (!row) {
+    console.log('  (no channel-health row yet — migration may be unapplied)');
+    console.log('');
+    return;
+  }
+
+  if (row.alarm_state === 'raised') {
+    console.log('  🔴 ALARM: channel DOWN — consecutive_failures=' + row.consecutive_failures
+      + ' last_error_class=' + (row.last_error_class || '?')
+      + ' raised_at=' + (row.alarm_raised_at || '?'));
+  } else if (row.alarm_state === 'cooldown') {
+    console.log('  🟡 RECOVERING (cooldown) — cleared_at=' + (row.alarm_cleared_at || '?'));
+  } else {
+    console.log('  🟢 healthy — last_success_at=' + (row.last_success_at || 'never'));
+  }
+  console.log('  last_canary_verified_at=' + (row.last_canary_verified_at || 'never'));
+  console.log('');
+}
+
+// SD-LEO-INFRA-ADOPTED-RESUME-FINAL-001 / FR-2: surface SDs stranded at
+// pending_approval/LEAD_FINAL — one handoff from shipped but invisible to monitoring
+// without this gauge. Read-only + fail-open (planStrandAgeGauge never throws).
+async function printStrandAgeGauge() {
+  const { planStrandAgeGauge, formatAge } = require('../lib/coordinator/strand-age-gauge.cjs');
+
+  console.log('LEAD_FINAL STRAND-AGE GAUGE');
+  console.log('─'.repeat(72));
+
+  let gauge;
+  try {
+    gauge = await planStrandAgeGauge(supabase);
+  } catch {
+    console.log('  (gauge unavailable — non-fatal)');
+    console.log('');
+    return;
+  }
+
+  if (gauge.flagged.length === 0) {
+    console.log('  (no SD stranded at pending_approval/LEAD_FINAL past the threshold)');
+    console.log('');
+    return;
+  }
+
+  console.log('  ' + gauge.flagged.length + ' SD(s) stranded at pending_approval/LEAD_FINAL:');
+  for (const r of gauge.flagged) {
+    console.log('  • ' + r.sd_key + ' — stranded ' + formatAge(r.ageMs) + ' (age source: ' + r.ageSource + ')');
+  }
+  console.log('');
+}
+
 // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-3: surface the
 // relay/decision/review drop gauge — mirrors printUndeliveredOutbound()'s shape. Read-only
 // + fail-open (planRelayDrops never throws).
@@ -1649,6 +1807,31 @@ async function printChairmanDirectives() {
     const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
     const mark = r.status === 'outstanding' ? '⚠ OUTSTANDING' : '✓ acked';
     console.log('  • [' + String(r.directiveId).slice(0, 16) + '] role=' + pad(r.role, 12) + mark + ' | issued ' + ageStr + ' ago');
+  }
+  console.log('');
+}
+
+// QF-20260704-493: feedback-consumption SLA gauge — actionable categories with no
+// consumption deadline (adam_adherence_drift, completion_flag, coordinator_review,
+// harness_backlog escalations) can rot unconsumed indefinitely. Recomputes fresh every
+// render (primary-state check); the daily reminder itself lives in the cron-scheduled
+// scripts/coordinator-feedback-sla-gauge.cjs, not here — this is read-only visibility.
+async function printFeedbackSlaGauge() {
+  const { planSlaBreaches } = require('../lib/coordinator/feedback-sla-gauge.cjs');
+
+  console.log('FEEDBACK-CONSUMPTION SLA GAUGE');
+  console.log('─'.repeat(72));
+
+  const breaches = await planSlaBreaches(supabase);
+  if (breaches.length === 0) {
+    console.log('  (all actionable feedback categories consumed within SLA)');
+    console.log('');
+    return;
+  }
+
+  console.log('  ' + breaches.length + ' categor' + (breaches.length === 1 ? 'y' : 'ies') + ' breaching consumption SLA:');
+  for (const b of breaches) {
+    console.log('  • ' + pad(b.category, 22) + b.count + ' unconsumed, oldest ' + b.oldestAgeDays + 'd');
   }
   console.log('');
 }
@@ -1791,6 +1974,7 @@ async function main() {
     forecast:      async () => await printForecast(d),
     predictions:   async () => await printPredictions(d),
     drain:         () => printDrainAgents(d),
+    strand:        async () => await printStrandAgeGauge(), // SD-LEO-INFRA-ADOPTED-RESUME-FINAL-001 (FR-2)
     inbox:         async () => {
       // FR-1 (SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B): chairman directives surface FIRST —
       // bypasses the printInbox signal_type gate (chairman_directive carries no signal_type).
@@ -1810,7 +1994,10 @@ async function main() {
     solomon:       async () => { await printSolomonInbox(); await printSolomonLedgerRollup(); }, // SD-LEO-INFRA-SOLOMON-CONSULT-001F + SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001
     context:       async () => await printWorkingContext(), // SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001 (FR-3)
     feedback:      async () => await printFeedback(d), // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001
+    slagauge:      async () => await printFeedbackSlaGauge(), // QF-20260704-493
     team:          () => printTeam(d), // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B
+    chairmanemail: async () => await printChairmanEmailChannelHealth(), // SD-LEO-INFRA-CHAIRMAN-EMAIL-CHANNEL-001
+    periodic:      async () => await printPeriodicLiveness(), // SD-LEO-INFRA-PERIODIC-PROCESS-LIVENESS-001 (FR-5)
     all:           async () => {
       // Team banner appears at top of /coordinator all when active teams exist (otherwise no-op)
       if (d.executeTeams && d.executeTeams.length > 0) printTeam(d);
@@ -1819,6 +2006,7 @@ async function main() {
       printOrchestrator(d);
       printAvailable(d);
       printQuickFixes(d); // QF-20260525-836
+      await printStrandAgeGauge(); // SD-LEO-INFRA-ADOPTED-RESUME-FINAL-001 (FR-2)
       printRevivalPending(d); // SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001
       printCoordination(d);
       await printChairmanDirectives(); // SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B / FR-1 — chairman-directive compliance FIRST (bypasses the printInbox signal_type gate)
@@ -1826,6 +2014,8 @@ async function main() {
       await printUndeliveredOutbound(); // FR-2 SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001
       await printDeadLetters(); // FR-4 SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001
       await printRelayDropGauge(); // FR-3 SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001
+      await printChairmanEmailChannelHealth(); // SD-LEO-INFRA-CHAIRMAN-EMAIL-CHANNEL-001
+      await printFeedbackSlaGauge(); // SD-LEO-FIX-FEEDBACK-CONSUMPTION-SLA-001 (escalated from QF-20260704-493) — feedback-consumption SLA gauge
       await printAdamInbox(); // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B — Adam advisory lane
       await printReviewHeldSds(); // QF-20260704-742 — third intake surface: needs_coordinator_review holds
       await printSolomonInbox(); // SD-LEO-INFRA-SOLOMON-CONSULT-001F — Solomon oracle consult lane (dormant until SOLOMON_CONSULT_V1)
@@ -1834,6 +2024,7 @@ async function main() {
       await printFeedback(d); // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001 — feedback work-store
       await printCoaching(d);
       printHealth(d);
+      await printPeriodicLiveness(); // SD-LEO-INFRA-PERIODIC-PROCESS-LIVENESS-001 (FR-5)
       printQA(d);
       await printForecast(d);
       await printPredictions(d);
@@ -1843,7 +2034,7 @@ async function main() {
   const fn = sections[section];
   if (!fn) {
     console.log('Usage: node scripts/fleet-dashboard.cjs [section]');
-    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, qa, forecast, predictions, inbox, adam, solomon, context, feedback, team, all');
+    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, periodic, qa, forecast, predictions, inbox, adam, solomon, context, feedback, slagauge, team, all');
     process.exit(1);
   }
 
@@ -1866,7 +2057,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers };
+module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.

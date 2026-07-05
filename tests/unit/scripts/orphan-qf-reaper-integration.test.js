@@ -314,8 +314,8 @@ describe('FR-5: malformed qf.id rejection (shell-injection defense)', () => {
 });
 
 describe('FR-6: execSync argv shape regex pin', () => {
-  const PR_VIEW_RE = /^gh pr view \d+ --json state,mergeCommit,mergedAt$/;
-  const PR_LIST_RE = /^gh pr list --head "qf\/QF-\d{8}-\d{3}" --state merged --json number,url,mergeCommit,mergedAt --limit 1$/;
+  const PR_VIEW_RE = /^gh pr view \d+ --json state,mergeCommit,mergedAt -R [\w.-]+\/[\w.-]+$/;
+  const PR_LIST_RE = /^gh pr list --head "qf\/QF-\d{8}-\d{3}" --state merged --json number,url,mergeCommit,mergedAt --limit 1 -R [\w.-]+\/[\w.-]+$/;
 
   it('pr_url path invokes gh pr view with exact argv shape', async () => {
     supabaseInstance = makeSupabaseMock({
@@ -367,5 +367,108 @@ describe('FR-6: execSync argv shape regex pin', () => {
       .find(c => typeof c === 'string' && c.startsWith('gh pr list'));
     expect(ghListCmd).toBeDefined();
     expect(ghListCmd).toMatch(PR_LIST_RE);
+  });
+});
+
+// SD-LEO-INFRA-CANONICAL-REPO-APP-001 FR-2 (TS-1, TS-2): both gh calls must be
+// explicitly repo-scoped via the canonical resolver, for BOTH an EHG_Engineer QF
+// and a venture-repo QF — proving the fix generalizes beyond the historical
+// two-repo happy path (the exact QF-726/QF-401 pattern this SD exists to kill).
+describe('FR-2 (SD-LEO-INFRA-CANONICAL-REPO-APP-001): -R repo scoping via canonical resolver', () => {
+  it('TS-1: pr_url path scopes -R to rickfelix/EHG_Engineer for an EHG_Engineer-targeted QF', async () => {
+    supabaseInstance = makeSupabaseMock({
+      firstQuery: [{ id: 'QF-20260704-101', status: 'open', pr_url: 'https://github.com/rickfelix/EHG_Engineer/pull/5000', started_at: '2026-07-04T00:00:00Z', target_application: 'EHG_Engineer' }],
+      secondQuery: [],
+    });
+    execSyncMock.mockImplementation((cmd) => {
+      if (cmd === 'gh auth status') return '';
+      if (cmd.startsWith('gh pr view')) return JSON.stringify({ state: 'OPEN' });
+      return '{}';
+    });
+
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
+    try {
+      const { main } = await importMain();
+      await main();
+    } finally {
+      exitSpy.mockRestore();
+    }
+
+    const ghViewCmd = execSyncMock.mock.calls.map(c => c[0]).find(c => typeof c === 'string' && c.startsWith('gh pr view'));
+    expect(ghViewCmd).toBeDefined();
+    expect(ghViewCmd).toContain('-R rickfelix/EHG_Engineer');
+  });
+
+  it('TS-2: pr_url path scopes -R to rickfelix/marketlens for a venture-targeted QF (generalizes beyond the two-repo world)', async () => {
+    supabaseInstance = makeSupabaseMock({
+      firstQuery: [{ id: 'QF-20260704-102', status: 'open', pr_url: 'https://github.com/rickfelix/marketlens/pull/14', started_at: '2026-07-04T00:00:00Z', target_application: 'MarketLens' }],
+      secondQuery: [],
+    });
+    execSyncMock.mockImplementation((cmd) => {
+      if (cmd === 'gh auth status') return '';
+      if (cmd.startsWith('gh pr view')) return JSON.stringify({ state: 'OPEN' });
+      return '{}';
+    });
+
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
+    try {
+      const { main } = await importMain();
+      await main();
+    } finally {
+      exitSpy.mockRestore();
+    }
+
+    const ghViewCmd = execSyncMock.mock.calls.map(c => c[0]).find(c => typeof c === 'string' && c.startsWith('gh pr view'));
+    expect(ghViewCmd).toBeDefined();
+    expect(ghViewCmd).toContain('-R rickfelix/marketlens');
+  });
+
+  it('branch-derived path scopes -R to the venture repo for a venture-targeted orphan QF', async () => {
+    supabaseInstance = makeSupabaseMock({
+      firstQuery: [],
+      secondQuery: [{ id: 'QF-20260704-103', status: 'open', started_at: '2026-07-04T00:00:00Z', claiming_session_id: 'sess', target_application: 'MarketLens' }],
+    });
+    execSyncMock.mockImplementation((cmd) => {
+      if (cmd === 'gh auth status') return '';
+      if (cmd.startsWith('gh pr list')) return '[]';
+      return '{}';
+    });
+
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
+    try {
+      const { main } = await importMain();
+      await main();
+    } finally {
+      exitSpy.mockRestore();
+    }
+
+    const ghListCmd = execSyncMock.mock.calls.map(c => c[0]).find(c => typeof c === 'string' && c.startsWith('gh pr list'));
+    expect(ghListCmd).toBeDefined();
+    expect(ghListCmd).toContain('-R rickfelix/marketlens');
+  });
+
+  it('an unresolvable target_application errors the row instead of falling back to an ambient default', async () => {
+    supabaseInstance = makeSupabaseMock({
+      firstQuery: [{ id: 'QF-20260704-104', status: 'open', pr_url: 'https://github.com/x/y/pull/1', started_at: '2026-07-04T00:00:00Z', target_application: 'TotallyUnknownApp12345' }],
+      secondQuery: [],
+    });
+    execSyncMock.mockImplementation((cmd) => {
+      if (cmd === 'gh auth status') return '';
+      // If main() reaches gh pr view despite an unresolvable target_application, the fail-loud contract is broken.
+      if (cmd.startsWith('gh pr view')) throw new Error('Reached gh with an unresolvable target_application — TR-2 fail-loud broken');
+      return '{}';
+    });
+
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
+    try {
+      const { main } = await importMain();
+      await main();
+    } finally {
+      exitSpy.mockRestore();
+    }
+
+    const ghViewCalls = execSyncMock.mock.calls.filter(c => typeof c[0] === 'string' && c[0].startsWith('gh pr view'));
+    expect(ghViewCalls.length).toBe(0);
+    expect(supabaseInstance._calls.updateCalls.length).toBe(0);
   });
 });

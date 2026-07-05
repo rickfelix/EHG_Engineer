@@ -756,7 +756,8 @@ async function createFromQF(qfId, opts = {}) {
       qf_severity: qf.severity,
       qf_estimated_loc: qf.estimated_loc,
       qf_target_application: qf.target_application,
-      ...(opts.securityReviewed ? { security_reviewed: true } : {})
+      ...(opts.securityReviewed ? { security_reviewed: true } : {}),
+      ...(opts.migrationReviewed ? { migration_reviewed: true } : {})
     }
   });
 
@@ -2062,12 +2063,23 @@ async function createSD(options) {
   // depending on the out-of-band stamp-sd-tier-rank.mjs — and when that stamper broke (estimated_loc
   // phantom column), the whole fleet starved on "unclaimable" unstamped work. GAP-FILL only: never
   // overwrite an Adam-sourced / child-inherited finite rank. Non-fatal (mirrors the FR derivation guard).
+  //
+  // QF-20260704-717: --min-tier-rank/--min-tier-rank-reason let a caller EXPLICITLY set a higher
+  // floor with a recorded reason (throws loudly if the reason is missing); absent that, the
+  // no-signal case (the common --from-plan shape) stamps the fleet-claimable baseline instead of
+  // the fail-safe-up ladder top, so a signal-less SD is never stranded unclaimable-by-construction.
   try {
     if (!Number.isFinite(Number(sdData.metadata?.min_tier_rank))) {
-      const { stampPayload } = await import('../lib/fleet/sd-tier-rank.mjs');
-      sdData.metadata = { ...sdData.metadata, ...stampPayload(sdData) };
+      const cliArgs = process.argv.slice(2);
+      const explicitRankIdx = cliArgs.indexOf('--min-tier-rank');
+      const explicitReasonIdx = cliArgs.indexOf('--min-tier-rank-reason');
+      const explicitRank = explicitRankIdx !== -1 ? Number(cliArgs[explicitRankIdx + 1]) : null;
+      const explicitReason = explicitReasonIdx !== -1 ? cliArgs[explicitReasonIdx + 1] : null;
+      const { stampPayloadForCreation } = await import('../lib/fleet/sd-tier-rank.mjs');
+      sdData.metadata = { ...sdData.metadata, ...stampPayloadForCreation(sdData, { explicitRank, explicitReason }) };
     }
   } catch (tierErr) {
+    if (tierErr.message?.includes('explicit override requires a recorded reason')) throw tierErr; // loud, per QF-20260704-717 acceptance criterion 3
     console.warn(`   ⚠️  min_tier_rank stamp skipped (non-blocking): ${tierErr.message}`);
   }
 
@@ -2826,6 +2838,11 @@ Flags:
                         Valid values: EHG, EHG_Engineer (case-insensitive; normalized).
                         When set, PR_MERGE_VERIFICATION at LEAD-FINAL scopes its scan
                         to ONLY these repos. Required for SDs spanning both platform repos.
+  --min-tier-rank <N>   Explicitly set metadata.min_tier_rank (requires --min-tier-rank-reason;
+                        throws without one). Absent this flag, a signal-less SD (the common
+                        --from-plan shape) stamps the fleet-claimable baseline instead of the
+                        fail-safe-up ladder top, so it is never stranded unclaimable-by-construction.
+  --min-tier-rank-reason "<text>"  Required companion to --min-tier-rank; recorded verbatim.
                         Example: --target-repos EHG,EHG_Engineer
                         Pairs with computeReposForSD() at lead-final-approval/gates.js
                         (SD-LEO-INFRA-CROSS-REPO-MERGE-001). Supported in: direct LEO,
@@ -2941,7 +2958,13 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // --child/--from-proposal), so a QF whose DESCRIPTION merely mentions security-
       // adjacent keywords (e.g. "CI DB secrets") isn't unescapably blocked by
       // GR-SECURITY-BASELINE when the actual code change touches no security-sensitive scope.
-      await createFromQF(args[1], { securityReviewed: args.includes('--security-reviewed') });
+      // QF-20260705-395: --migration-reviewed had the identical gap -- a Tier-3 QF whose
+      // description names a real schema migration was unescapably blocked by
+      // GR-MIGRATION-REVIEW, since the flag was silently dropped before reaching createFromQF.
+      await createFromQF(args[1], {
+        securityReviewed: args.includes('--security-reviewed'),
+        migrationReviewed: args.includes('--migration-reviewed'),
+      });
     } else if (args[0] === '--from-proposal') {
       // SD-LEO-INFRA-FROM-PROPOSAL-INGEST-001: materialize PROPOSAL-*.json into DRAFT SDs.
       // path/glob = first non-flag positional after --from-proposal; --dry-run = no writes.
