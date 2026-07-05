@@ -30,7 +30,8 @@
  *
  * SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: `send`/`request` accept `--to solomon` for
  * a DIRECT 1-hop write to Solomon's own session (no coordinator relay hop), gated by
- * ADAM_SOLOMON_TWOWAY_V1=on (default OFF). Omitting --to is byte-identical unchanged behavior —
+ * ADAM_SOLOMON_TWOWAY_V1 (default ON since QF-20260705-488; 'off' is the explicit kill switch).
+ * Omitting --to is byte-identical unchanged behavior —
  * the existing coordinator-relay path is the permanent fallback, never removed.
  *   node scripts/adam-advisory.cjs send --direct "<body>"                          (shorthand for --to solomon)
  *
@@ -680,7 +681,7 @@ async function main() {
     process.exit(2);
   }
   // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: `send/request --to solomon` — direct
-  // 1-hop channel, gated by ADAM_SOLOMON_TWOWAY_V1 (default OFF; omitting --to is unchanged).
+  // 1-hop channel, gated by ADAM_SOLOMON_TWOWAY_V1 (default ON since QF-20260705-488; 'off' kills it).
   // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-4: --to also accepts
   // the relay-class peers eva/ceo (lib/coordinator/peer-target.cjs's PEER_KINDS registry) —
   // these enqueue a tracked FR-1 relay-request instead of a direct write. --direct is
