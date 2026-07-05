@@ -163,9 +163,13 @@ const sb = createClient(
  * from what the ranker (and therefore worker-checkin) actually considers claimable. main() below is
  * byte-identical in behavior; it now calls this function instead of inlining the fetch+filter.
  * @param {object} sb - supabase service-role client
+ * @param {{ quiet?: boolean }} [opts] - QF-20260704-051: quiet=true silences the per-skip
+ *   console.log lines below (still counts them) — for callers like fleet-dashboard.cjs that
+ *   poll this on every render and must not spam stdout with ranker skip-reason logging.
  * @returns {Promise<{ error?: object, sds: object[], byKey: Map, depStatus: object, claimable: object[] }>}
  */
-export async function computeClaimableLeaves(sb) {
+export async function computeClaimableLeaves(sb, opts = {}) {
+  const log = opts.quiet ? () => {} : console.log;
   const { data: sds, error } = await sb.from('strategic_directives_v2')
     // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + title, description to classify bare-shell stubs.
     // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: + current_phase for the in-flight (started) guard.
@@ -206,25 +210,25 @@ export async function computeClaimableLeaves(sb) {
         case 'claimed': break;                              // claimed by a live session — silent (not a skip-log)
         case 'in_flight':
           inFlightSkips++;
-          console.log(`  [skip] in-flight (${d.current_phase}) excluded from fresh ranking: ${d.sd_key}`);
+          log(`  [skip] in-flight (${d.current_phase}) excluded from fresh ranking: ${d.sd_key}`);
           break;
         case 'fixture':
           fixtureSkips++;
-          console.log(`  [skip] fixture excluded from ranking: ${d.sd_key}`);
+          log(`  [skip] fixture excluded from ranking: ${d.sd_key}`);
           break;
         case 'co_author_pending':
           // NOT idle-belt depth: a co-authored SD awaiting convergence would let a parked worker write
           // the PRD before the co-author input lands (SD-LEO-INFRA-CO-AUTHOR-CONVERGE-BEFORE-CLAIMABLE-001).
           awaitingConvergenceSkips++;
-          console.log(`  [skip] awaiting co-author convergence (not idle-belt depth): ${d.sd_key}`);
+          log(`  [skip] awaiting co-author convergence (not idle-belt depth): ${d.sd_key}`);
           break;
         case 'human_action_required':
           humanActionSkips++;
-          console.log(`  [skip] requires human action — not worker-claimable (not idle-belt depth): ${d.sd_key}`);
+          log(`  [skip] requires human action — not worker-claimable (not idle-belt depth): ${d.sd_key}`);
           break;
         default:
           ineligibleSkips++;
-          console.log(`  [skip] dispatch-ineligible (${dbFreeSkip}): ${d.sd_key}`);
+          log(`  [skip] dispatch-ineligible (${dbFreeSkip}): ${d.sd_key}`);
       }
       continue;
     }
@@ -236,7 +240,7 @@ export async function computeClaimableLeaves(sb) {
       // QF-20260703-999: this exclusion previously had NO skip-log (unlike every other exclusion
       // reason above), so a dep-blocked SD vanished from both ranked and skip output with zero trace.
       depBlockedSkips++;
-      console.log(`  [skip] dependency-blocked (${unmet.join(', ')}): ${d.sd_key}`);
+      log(`  [skip] dependency-blocked (${unmet.join(', ')}): ${d.sd_key}`);
       continue;
     }
     // SD-REFILL-00MFWEGZ: an orchestrator child whose PARENT has not passed LEAD is not yet
@@ -245,17 +249,17 @@ export async function computeClaimableLeaves(sb) {
     // matches the actually-claimable set. parentLeadPending early-returns false for parentless
     // SDs (no fetch) and fail-opens on error (never strands a child).
     if (await parentLeadPending(sb, d)) {
-      console.log(`  [skip] parent not past LEAD — child not yet dispatchable: ${d.sd_key}`);
+      log(`  [skip] parent not past LEAD — child not yet dispatchable: ${d.sd_key}`);
       continue;
     }
     claimable.push(d);
   }
-  if (fixtureSkips) console.log(`[BACKLOG-RANK] ${fixtureSkips} fixture SD(s) excluded from ranking`);
-  if (inFlightSkips) console.log(`[BACKLOG-RANK] ${inFlightSkips} in-flight SD(s) excluded from fresh ranking`);
-  if (awaitingConvergenceSkips) console.log(`[BACKLOG-RANK] ${awaitingConvergenceSkips} SD(s) awaiting co-author convergence (excluded from claimable depth)`);
-  if (humanActionSkips) console.log(`[BACKLOG-RANK] ${humanActionSkips} SD(s) requiring human action excluded from claimable depth (not worker-claimable)`);
-  if (ineligibleSkips) console.log(`[BACKLOG-RANK] ${ineligibleSkips} SD(s) dispatch-ineligible (orchestrator-parent / deferred / terminal) excluded from claimable depth`);
-  if (depBlockedSkips) console.log(`[BACKLOG-RANK] ${depBlockedSkips} SD(s) dependency-blocked excluded from claimable depth`);
+  if (fixtureSkips) log(`[BACKLOG-RANK] ${fixtureSkips} fixture SD(s) excluded from ranking`);
+  if (inFlightSkips) log(`[BACKLOG-RANK] ${inFlightSkips} in-flight SD(s) excluded from fresh ranking`);
+  if (awaitingConvergenceSkips) log(`[BACKLOG-RANK] ${awaitingConvergenceSkips} SD(s) awaiting co-author convergence (excluded from claimable depth)`);
+  if (humanActionSkips) log(`[BACKLOG-RANK] ${humanActionSkips} SD(s) requiring human action excluded from claimable depth (not worker-claimable)`);
+  if (ineligibleSkips) log(`[BACKLOG-RANK] ${ineligibleSkips} SD(s) dispatch-ineligible (orchestrator-parent / deferred / terminal) excluded from claimable depth`);
+  if (depBlockedSkips) log(`[BACKLOG-RANK] ${depBlockedSkips} SD(s) dependency-blocked excluded from claimable depth`);
   return { sds, byKey, depStatus, claimable };
 }
 
