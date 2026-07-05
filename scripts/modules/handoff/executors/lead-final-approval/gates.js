@@ -19,6 +19,9 @@ import { classifyFrDelivery, projectGateResult, isFrTraceabilityEnforced } from 
 // Pipeline Flow Verifier (SD-LEO-INFRA-INTEGRATION-AWARE-PRD-001 FR-5)
 import { verifyPipelineFlow, requiresPipelineFlowVerification } from '../../../../../lib/pipeline-flow-verifier.js';
 
+// Observe-only witness rung (SD-LEO-INFRA-INDEPENDENT-GATE-WITNESS-001-D)
+import { withObserveOnlyWitness } from '../../../../../lib/eva/observe-gate-witness.js';
+
 // Orchestrator Completion Validation Gates (SD-ORCHESTRATOR-COMPLETION-VALIDATION-GATES-ORCH-001)
 import { createSmokeTestGate } from './gates/smoke-test-gate.js';
 export { createSmokeTestGate };
@@ -379,7 +382,7 @@ export function createUserStoriesCompleteGate(supabase, prdRepo) {
  * @returns {Object} Gate definition
  */
 export function createRetrospectiveExistsGate(supabase) {
-  return {
+  return withObserveOnlyWitness('RETROSPECTIVE_EXISTS', {
     name: 'RETROSPECTIVE_EXISTS',
     validator: async (ctx) => {
       console.log('\n🔒 GATE 3: Retrospective Verification');
@@ -473,7 +476,7 @@ export function createRetrospectiveExistsGate(supabase) {
       };
     },
     required: true
-  };
+  });
 }
 
 /**
