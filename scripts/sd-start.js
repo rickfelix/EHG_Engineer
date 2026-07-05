@@ -383,7 +383,7 @@ async function getSDDetails(sdId) {
   // Note: legacy_id column was deprecated and removed - using sd_key instead
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type, created_at, target_application, venture_id, scope, governance_metadata, metadata')
+    .select('id, sd_key, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type, created_at, target_application, venture_id, scope, governance_metadata, metadata, completion_date, updated_at, updated_by')
     .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
     .single();
 
@@ -1153,6 +1153,20 @@ async function main() {
   const forceReclaim = process.argv.includes('--force-reclaim');
   let claimResult = await claimGuard(effectiveId, session.session_id, { autoFallback: fallbackEnabled });
   const skippedSDs = [];
+
+  // QF-20260704-825: an explicit-target invocation on a terminal (completed/deferred) SD
+  // must NEVER silently fall through to auto-fallback selection -- that claims an unrelated
+  // SD while the operator believes they hold the one they named. This is not a claim
+  // conflict (no owner to wait on or evict); exit loud regardless of fallbackEnabled.
+  if (!claimResult.success && claimResult.error === 'sd_terminal_status') {
+    console.log(`\n${colors.red}${colors.bold}🚫 TARGET_ALREADY_TERMINAL${colors.reset}`);
+    console.log(`   ${effectiveId} has status=${claimResult.status} — already finished, cannot be (re)claimed.`);
+    console.log(`   Completed: ${sd.completion_date || sd.updated_at || 'unknown'}${sd.updated_by ? ` (updated_by: ${sd.updated_by})` : ''}`);
+    console.log(`\n   ${colors.bold}Action:${colors.reset} This was NOT a claim conflict — no fallback SD will be selected.`);
+    console.log(`   Run ${colors.cyan}npm run sd:next${colors.reset} to pick a different, workable SD.`);
+    console.log('═'.repeat(50));
+    process.exit(1);
+  }
 
   if (!claimResult.success) {
     // SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001 (FR2): Evidence-of-life pre-claim gate.
