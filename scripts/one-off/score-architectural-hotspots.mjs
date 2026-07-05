@@ -164,7 +164,7 @@ async function executePersist(result) {
   for (const r of result.rows) lines.push(`| ${r.rank} | ${r.composite} | ${r.churn} | ${r.complexity} | ${r.loc} | \`${r.path}\` |`);
   lines.push('', '## Framed designs', '');
   const designedPaths = Object.keys(DESIGNS);
-  for (const p of designedPaths) lines.push('- `' + p + '` → ' + DESIGNS[p].sd_key + ' — ' + DESIGNS[p].thesis_line);
+  for (const p of designedPaths) lines.push('- `' + p + '` → ' + DESIGNS[p].sd_slug + ' — ' + DESIGNS[p].thesis_line);
   if (!designedPaths.length) lines.push('_Design drafts created separately (see hotspot_link metadata on draft SDs)._');
   const docPath = path.join(REPO_ROOT, 'docs', 'reference', 'architectural-hotspots.md');
   fs.mkdirSync(path.dirname(docPath), { recursive: true });

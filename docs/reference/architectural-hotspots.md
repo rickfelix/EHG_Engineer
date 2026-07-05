@@ -1,6 +1,6 @@
 # Architectural Hotspots — churn × complexity
 
-> Source: `SD-LEO-INFRA-ARCHITECTURAL-HOTSPOTS-CHURN-001` · rev `abc9edac8c7f` · window 90d · generated 2026-07-05T23:24:25.861Z
+> Source: `SD-LEO-INFRA-ARCHITECTURAL-HOTSPOTS-CHURN-001` · rev `509107e51d31` · window 90d · generated 2026-07-05T23:55:15.258Z
 > DB-first truth: `metadata.hotspot_pack` on the source SD. Re-derive: `node scripts/one-off/score-architectural-hotspots.mjs`.
 
 | # | Composite | Churn | Complexity | LOC | File |
@@ -28,8 +28,8 @@
 
 ## Framed designs
 
-- `lib/eva/stage-execution-worker.js` → undefined — split the monolithic stage-execution loop into a stage-handler registry + a thin worker shell
-- `scripts/leo-create-sd.js` → undefined — extract the nine createFrom* lanes into a source-adapter registry over one shared createSD core
-- `scripts/stale-session-sweep.cjs` → undefined — decompose the 2,900-line sweep main() into an ordered pass-registry with per-pass isolation
-- `scripts/worker-checkin.cjs` → undefined — turn the resolveCheckin claim-ladder into an explicit pipeline of guard/acquire steps
-- `scripts/sd-start.js` → undefined — extract the claim/gate/worktree phases of sd-start into composable modules shared with checkin
+- `lib/eva/stage-execution-worker.js` → SD-ARCH-HOTSPOT-STAGE-WORKER-001 — split the monolithic stage-execution loop into a stage-handler registry + a thin worker shell
+- `scripts/leo-create-sd.js` → SD-ARCH-HOTSPOT-LEO-CREATE-001 — extract the nine createFrom* lanes into a source-adapter registry over one shared createSD core
+- `scripts/stale-session-sweep.cjs` → SD-ARCH-HOTSPOT-SWEEP-001 — decompose the 2,900-line sweep main() into an ordered pass-registry with per-pass isolation
+- `scripts/worker-checkin.cjs` → SD-ARCH-HOTSPOT-CHECKIN-001 — turn the resolveCheckin claim-ladder into an explicit pipeline of guard/acquire steps
+- `scripts/sd-start.js` → SD-ARCH-HOTSPOT-SD-START-001 — extract the claim/gate/worktree phases of sd-start into composable modules shared with checkin
