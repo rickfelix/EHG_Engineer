@@ -50,7 +50,12 @@ export function createUserStoryCoverageGate(supabase) {
         // no-op if STORY_AUTO_VALIDATION already ran). Defensive: a promote failure must NEVER
         // block coverage — fall through and score the current live state (same as prior behavior).
         try {
-          const { autoValidateUserStories } = await import('../../../../auto-validate-user-stories-on-exec-complete.js');
+          // QF-20260705-077: this specifier was one level short (../../../../ resolves to
+          // scripts/modules/, where the file does not exist) — the import threw
+          // ERR_MODULE_NOT_FOUND on every pass and the catch below swallowed it, so the
+          // self-heal NEVER ran in-gate while the manual CLI worked. Five levels reaches
+          // scripts/ (same as story-auto-validation.js's static import in this directory).
+          const { autoValidateUserStories } = await import('../../../../../auto-validate-user-stories-on-exec-complete.js');
           await autoValidateUserStories(sdId, supabase);
         } catch (promoteErr) {
           console.log(`   ⚠️  Pre-coverage auto-validation skipped (non-fatal): ${promoteErr?.message || promoteErr}`);
