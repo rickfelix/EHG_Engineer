@@ -66,6 +66,20 @@ const REQUIRED_EHG_PACKAGES = [
   '@ehg/lint-config',
 ];
 
+// QF-20260704-452: the KEY_NAME= patterns require a non-empty value token (\S+) after
+// the assignment, so a documented .env.example template declaration (e.g.
+// "SUPABASE_SERVICE_ROLE_KEY=", no value) no longer false-flags as a hardcoded secret.
+// The value-shaped patterns (sk-, ghp_, PRIVATE KEY) are already immune to this class
+// and are unchanged. Exported for direct unit testing.
+export const SECRET_PATTERNS = [
+  /SUPABASE_SERVICE_ROLE_KEY\s*=\s*\S+/,
+  /sk-[a-zA-Z0-9]{20,}/,
+  /ghp_[a-zA-Z0-9]{36}/,
+  /ANTHROPIC_API_KEY\s*=\s*\S+/,
+  /OPENAI_API_KEY\s*=\s*\S+/,
+  /BEGIN (RSA|DSA|EC|OPENSSH) PRIVATE KEY/,
+];
+
 function check(name, pass, details) {
   return { name, pass, details: details || (pass ? 'OK' : 'FAIL') };
 }
@@ -142,14 +156,6 @@ function run(projectPath) {
   // === SECURITY CHECKS (SD-LEO-INFRA-VENTURE-DEVWORKFLOW-AWARENESS-001-D) ===
 
   // 7. Secret pattern scanning
-  const SECRET_PATTERNS = [
-    /SUPABASE_SERVICE_ROLE_KEY\s*=/,
-    /sk-[a-zA-Z0-9]{20,}/,
-    /ghp_[a-zA-Z0-9]{36}/,
-    /ANTHROPIC_API_KEY\s*=/,
-    /OPENAI_API_KEY\s*=/,
-    /BEGIN (RSA|DSA|EC|OPENSSH) PRIVATE KEY/,
-  ];
   let secretFiles = 0;
   try {
     const tracked = execFileSync('git', ['ls-files'], { cwd: absPath, encoding: 'utf8', stdio: 'pipe' })
