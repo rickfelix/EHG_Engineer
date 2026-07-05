@@ -15,6 +15,12 @@ function buildSupabase({ ventureRow, appRow } = {}) {
         const chain = { eq: () => chain, maybeSingle: async () => ({ data: appRow || null, error: null }) };
         return { select: () => chain };
       }
+      if (table === 'venture_artifacts') {
+        // SD-LEO-INFRA-LAUNCH-MODE-POLICY-002 (FR-3): the sim-label enforcement
+        // reads prior launch evidence; these -001 scenarios have none (empty).
+        const chain = { eq: () => chain, in: async () => ({ data: [], error: null }) };
+        return { select: () => chain };
+      }
       throw new Error(`unexpected table: ${table}`);
     },
   };
