@@ -55,6 +55,13 @@ describe('resolveHoldProvenance — coalesces every known writer key', () => {
     expect(resolveHoldProvenance(null)).toBeNull();
     expect(resolveHoldProvenance({ not_worker_claimable_reason: '   ' })).toBeNull();
   });
+
+  it('strips control characters from metadata-sourced strings (review W3: log/terminal injection)', () => {
+    const p = resolveHoldProvenance({ not_worker_claimable_reason: 'line one\nFORGED [skip] line\x1b[31m', deferred_by: 'coord\x00-1' });
+    expect(p.reason).not.toMatch(/[\n\x1b\x00]/);
+    expect(p.reason).toContain('line one');
+    expect(p.set_by).toBe('coord -1');
+  });
 });
 
 describe('formatHoldProvenance — one-line render', () => {
@@ -94,5 +101,24 @@ describe('computeClaimableLeaves — returns humanActionHolds with provenance (d
     expect(result.humanActionHolds[0].provenance.set_by).toBe('coordinator-3323e19a');
     expect(result.claimable.map((d) => d.sd_key)).toContain('SD-CLEAN-001');
     expect(result.claimable.map((d) => d.sd_key)).not.toContain('SD-HELD-001');
+  });
+
+  it('humanActionHolds is deterministically sorted by sd_key (review I4: stable render hash)', async () => {
+    const held = (key) => ({
+      sd_key: key, title: 'held', status: 'draft', sd_type: 'feature', priority: 'high',
+      created_at: '2026-07-01T00:00:00Z', current_phase: 'LEAD', claiming_session_id: null, dependencies: null, parent_sd_id: null,
+      metadata: { requires_human_action: true, not_worker_claimable_reason: 'PARKED' },
+    });
+    const sb = {
+      from: () => ({ select: () => ({ not: () => Promise.resolve({ data: [held('SD-Z-001'), held('SD-A-001'), held('SD-M-001')], error: null }), in: () => Promise.resolve({ data: [], error: null }) }) }),
+    };
+    const result = await computeClaimableLeaves(sb, { quiet: true });
+    expect(result.humanActionHolds.map((h) => h.sd_key)).toEqual(['SD-A-001', 'SD-M-001', 'SD-Z-001']);
+  });
+
+  it('error path returns an EMPTY humanActionHolds array, never undefined (review I5)', async () => {
+    const sb = { from: () => ({ select: () => ({ not: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }) }) };
+    const result = await computeClaimableLeaves(sb, { quiet: true });
+    expect(result.humanActionHolds).toEqual([]);
   });
 });

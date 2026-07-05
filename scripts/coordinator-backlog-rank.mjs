@@ -166,7 +166,7 @@ const sb = createClient(
  * @param {{ quiet?: boolean }} [opts] - QF-20260704-051: quiet=true silences the per-skip
  *   console.log lines below (still counts them) — for callers like fleet-dashboard.cjs that
  *   poll this on every render and must not spam stdout with ranker skip-reason logging.
- * @returns {Promise<{ error?: object, sds: object[], byKey: Map, depStatus: object, claimable: object[] }>}
+ * @returns {Promise<{ error?: object, sds: object[], byKey: Map, depStatus: object, claimable: object[], humanActionHolds: Array<{sd_key: string, provenance: object|null}> }>}
  */
 export async function computeClaimableLeaves(sb, opts = {}) {
   const log = opts.quiet ? () => {} : console.log;
@@ -177,7 +177,7 @@ export async function computeClaimableLeaves(sb, opts = {}) {
     // whose parent has not yet passed LEAD (else the field is undefined → the gate silently no-ops).
     .select('sd_key, title, description, status, sd_type, priority, created_at, current_phase, claiming_session_id, dependencies, metadata, parent_sd_id')
     .not('status', 'in', '("completed","cancelled","deferred")');
-  if (error) { console.error('[BACKLOG-RANK] load failed:', error.message); return { error, sds: [], byKey: new Map(), depStatus: {}, claimable: [] }; }
+  if (error) { console.error('[BACKLOG-RANK] load failed:', error.message); return { error, sds: [], byKey: new Map(), depStatus: {}, claimable: [], humanActionHolds: [] }; }
 
   // ── dependency graph: edges dep -> dependents (over non-terminal set + completed deps resolved) ──
   const byKey = new Map((sds || []).map(d => [d.sd_key, d]));
@@ -269,6 +269,10 @@ export async function computeClaimableLeaves(sb, opts = {}) {
   if (humanActionSkips) log(`[BACKLOG-RANK] ${humanActionSkips} SD(s) requiring human action excluded from claimable depth (not worker-claimable)`);
   if (ineligibleSkips) log(`[BACKLOG-RANK] ${ineligibleSkips} SD(s) dispatch-ineligible (orchestrator-parent / deferred / terminal) excluded from claimable depth`);
   if (depBlockedSkips) log(`[BACKLOG-RANK] ${depBlockedSkips} SD(s) dependency-blocked excluded from claimable depth`);
+  // Deterministic order (adversarial-review I4): the select has no .order(), so without
+  // this sort the dashboard's grouped render could reorder between ticks and defeat the
+  // steady-state suppress hash.
+  humanActionHolds.sort((a, b) => a.sd_key.localeCompare(b.sd_key));
   return { sds, byKey, depStatus, claimable, humanActionHolds };
 }
 

@@ -568,10 +568,18 @@ function printAvailable(d) {
   console.log('AVAILABLE FOR CLAIM (' + total + ')');
   console.log('─'.repeat(72));
 
-  if (total === 0) {
+  // QF-20260704-193 (adversarial-review C1): the all-held/zero-claimable state is EXACTLY
+  // the motivating scenario (47 rha-frozen children, zero claimable) — the early return
+  // must not swallow the hold-provenance block, and the empty-state text must not claim
+  // "all claimed or completed" while SDs sit deliberately parked.
+  const holds = d.humanActionHolds || [];
+  if (total === 0 && holds.length === 0) {
     console.log('  (all SDs claimed or completed)');
     console.log('');
     return;
+  }
+  if (total === 0) {
+    console.log('  (no claimable SDs — all remaining are held for human action, see below)');
   }
 
   if (d.unclaimedChildren.length > 0) {
@@ -600,7 +608,8 @@ function printAvailable(d) {
 
   // QF-20260704-193: hold PROVENANCE for rha-held SDs — deliberate-vs-accidental at a
   // glance. Compact: reasons grouped, capped, never a bare count with no explanation.
-  const holds = d.humanActionHolds || [];
+  // NB the count is "held AND idle": a held SD that is also claimed/in-flight is being
+  // worked and is intentionally absent (claimableDbFreeReason short-circuits earlier).
   if (holds.length > 0) {
     console.log('  On hold (requires human action) — ' + holds.length + ':');
     const HOLD_CAP = 6;
