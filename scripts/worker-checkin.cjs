@@ -162,9 +162,46 @@ function isSelfClaimDisabled(metadata) {
   // SD-LEO-INFRA-SELF-CLAIM-STANDDOWN-HONOR-001 FR-1: a coordinator can halt a SPECIFIC worker by
   // writing metadata.coordinator_stand_down===true to that worker's session (without the worker
   // self-setting). STRICT: only the explicit `true` disables — fail-toward-active for any other value.
+  // SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001 FR-4: an UNCLEARED probe quarantine (set by the sweep on a
+  // prompt-blocked window) also disables self-claim. Availability control only — roll_call, resume
+  // and directed WORK_ASSIGNMENTs stay honored. selfClearQuarantine (runCheckin step 2c-2) stamps
+  // cleared_at BEFORE this gate is consulted, so a recovered window re-enters in the same pass.
   return metadata.self_claim === false
     || metadata.availability === 'idle_only'
-    || metadata.coordinator_stand_down === true;
+    || metadata.coordinator_stand_down === true
+    || isQuarantined(metadata);
+}
+
+// SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001 FR-4: pure — uncleared probe quarantine present?
+function isQuarantined(metadata) {
+  const q = metadata && typeof metadata === 'object' ? metadata.quarantine : null;
+  return !!(q && typeof q === 'object' && !q.cleared_at);
+}
+
+/**
+ * SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001 FR-4: self-clear an uncleared quarantine at checkin.
+ * A checkin reaching the DB is BY DEFINITION resumed tool activity — the checkin's own Bash
+ * call fired PostToolUse and moved last_tool_at — so no separate activity re-verification is
+ * needed. The quarantine object is retained (cleared_at stamped) for history, never deleted.
+ * Read-modify-write on FRESH metadata (QF-20260703-314 pattern) so concurrent identity/effort
+ * writers aren't clobbered. Returns the metadata the caller should proceed with. Never throws.
+ */
+async function selfClearQuarantine(sb, sessionId, sessionMetadata) {
+  try {
+    if (!isQuarantined(sessionMetadata)) return sessionMetadata;
+    const { data: freshRow } = await sb.from('claude_sessions')
+      .select('metadata').eq('session_id', sessionId).maybeSingle();
+    const freshMeta = (freshRow && freshRow.metadata) || sessionMetadata || {};
+    if (!isQuarantined(freshMeta)) return freshMeta; // cleared concurrently
+    const cleared = {
+      ...freshMeta,
+      quarantine: { ...freshMeta.quarantine, cleared_at: new Date().toISOString(), cleared_by: 'worker_checkin_self_clear' },
+    };
+    const { error } = await sb.from('claude_sessions').update({ metadata: cleared }).eq('session_id', sessionId);
+    return error ? sessionMetadata : cleared;
+  } catch {
+    return sessionMetadata; // fail-open: worst case self-claim stays gated one more pass
+  }
 }
 
 // SD-LEO-INFRA-SELF-CLAIM-STANDDOWN-HONOR-001 FR-2: a coordinator can halt the WHOLE fleet via a
@@ -1248,6 +1285,12 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
     }
   } catch { /* fail-open: check-in proceeds with whatever metadata was already read */ }
 
+  // 2c-2. SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001 FR-4: self-clear an uncleared probe quarantine.
+  // This checkin executing IS the resumed-tool-activity proof (its Bash call fired PostToolUse).
+  // Must run BEFORE the 5.9 isSelfClaimDisabled gate so a recovered window re-enters self-claim
+  // in this same pass instead of idling one extra cycle.
+  sessionMetadata = await selfClearQuarantine(sb, sessionId, sessionMetadata);
+
   // 2b. FR-2: re-hydrate callsign from the durable SET_IDENTITY row if metadata lost it (survives
   // release/sweep). Runs BEFORE registerRollCall so the re-hydrated callsign flows into the roll-call
   // row + base.callsign in the SAME response.
@@ -1805,7 +1848,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
+module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isQuarantined, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
 
 if (require.main === module) {
   main().catch(err => {

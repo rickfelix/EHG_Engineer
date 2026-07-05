@@ -42,6 +42,11 @@ const { resolveSessionId } = require('../../lib/hooks/session-id.cjs');
 
     const patch = {
       heartbeat_at: new Date(nowMs).toISOString(),
+      // Tick-immune tool-activity clock (SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001):
+      // this hook is the column's ONLY writer — heartbeat_at/process_alive_at are
+      // also PATCHed by session-tick every 30s and keep ticking through a
+      // window-level prompt block, so they cannot prove a tool actually ran.
+      last_tool_at: new Date(nowMs).toISOString(),
       current_tool: null,
       current_tool_args_hash: null,
       current_tool_expected_end_at: null,
@@ -107,6 +112,7 @@ async function writePatch(sessionId, patch) {
 async function clearToolState(sessionId, nowMs) {
   await writePatch(sessionId, {
     heartbeat_at: new Date(nowMs).toISOString(),
+    last_tool_at: new Date(nowMs).toISOString(),
     current_tool: null,
     current_tool_args_hash: null,
     current_tool_expected_end_at: null,
