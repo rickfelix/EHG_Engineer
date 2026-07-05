@@ -2,6 +2,9 @@
  * SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001 (FR-5, TS-4, TS-5) — the accuracy +
  * cost-per-accepted-proposal rollup over solomon_advice_outcome_ledger. Pure-function coverage
  * (no DB, no console output) against the exported computeSolomonLedgerRollup.
+ * QF-20260704-598 extends TS-5: an all-pending ledger used to render "(no data yet)", hiding
+ * pending decay from the dashboard entirely until the FIRST decision was ever recorded. It now
+ * returns decidedCount=0 with pending fields populated instead of null.
  */
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
@@ -11,9 +14,9 @@ const { computeSolomonLedgerRollup } = require('../../scripts/fleet-dashboard.cj
 describe('FR-5: computeSolomonLedgerRollup', () => {
   it('TS-4: excludes pending rows from the accuracy denominator', () => {
     const rows = [
-      { decision: 'pending', outcome: 'unknown' },
-      { decision: 'accepted', outcome: 'shipped_clean', cost_tokens: 100 },
-      { decision: 'rejected', outcome: 'unknown' },
+      { decision: 'pending', outcome: 'unknown', created_at: '2026-07-04T00:00:00Z' },
+      { decision: 'accepted', outcome: 'shipped_clean', cost_tokens: 100, created_at: '2026-07-04T00:00:00Z' },
+      { decision: 'rejected', outcome: 'unknown', created_at: '2026-07-04T00:00:00Z' },
     ];
     const r = computeSolomonLedgerRollup(rows);
     expect(r.decidedCount).toBe(2);       // pending excluded
@@ -22,9 +25,30 @@ describe('FR-5: computeSolomonLedgerRollup', () => {
     expect(r.accuracyPct).toBe(50);       // 1/2
   });
 
-  it('TS-5: returns null (renderer prints "no data yet") when there are zero decided rows', () => {
+  it('TS-5: returns null only when there are literally zero ledger rows', () => {
     expect(computeSolomonLedgerRollup([])).toBeNull();
-    expect(computeSolomonLedgerRollup([{ decision: 'pending', outcome: 'unknown' }])).toBeNull();
+  });
+
+  it('QF-20260704-598: an all-pending ledger returns decidedCount=0 with pending/oldest-age populated (not null)', () => {
+    const nowMs = new Date('2026-07-05T12:00:00Z').getTime();
+    const rows = [
+      { decision: 'pending', outcome: 'unknown', created_at: '2026-07-04T12:00:00Z' }, // 24h old
+      { decision: 'pending', outcome: 'unknown', created_at: '2026-07-03T12:00:00Z' }, // 48h old (oldest)
+    ];
+    const r = computeSolomonLedgerRollup(rows, nowMs);
+    expect(r).not.toBeNull();
+    expect(r.decidedCount).toBe(0);
+    expect(r.pendingCount).toBe(2);
+    expect(r.oldestPendingAgeMs).toBe(48 * 60 * 60 * 1000);
+    expect(r.accuracyPct).toBeNull();
+    expect(r.costPerAccepted).toBeNull();
+  });
+
+  it('QF-20260704-598: oldestPendingAgeMs is null when there are zero pending rows', () => {
+    const rows = [{ decision: 'accepted', outcome: 'shipped_clean', cost_tokens: 10, created_at: '2026-07-04T00:00:00Z' }];
+    const r = computeSolomonLedgerRollup(rows, Date.now());
+    expect(r.pendingCount).toBe(0);
+    expect(r.oldestPendingAgeMs).toBeNull();
   });
 
   it('computes cost-per-accepted-proposal from accepted rows only', () => {
