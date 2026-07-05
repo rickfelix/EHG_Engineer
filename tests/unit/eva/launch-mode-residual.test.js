@@ -98,8 +98,13 @@ describe('TS-2: authorization is resolved from the AUTHORITATIVE decision row (r
 
   it('missing decision row and venture-mismatch are refused; lookup errors fail closed', async () => {
     expect((await setLaunchMode({ supabase: flipFakeSb({ decisionRow: null }), ventureId: V_ID, toMode: LIVE, decision: CHAIRMAN_DECISION })).reason).toBe('decision_not_found');
-    expect((await setLaunchMode({ supabase: flipFakeSb({ decisionRow: { id: 'dec-1', decided_by: 'chairman_ui', venture_id: 'other-venture' } }), ventureId: V_ID, toMode: LIVE, decision: CHAIRMAN_DECISION })).reason).toBe('decision_venture_mismatch');
+    expect((await setLaunchMode({ supabase: flipFakeSb({ decisionRow: { id: 'dec-1', decided_by: 'chairman_ui', venture_id: 'other-venture', status: 'approved' } }), ventureId: V_ID, toMode: LIVE, decision: CHAIRMAN_DECISION })).reason).toBe('decision_venture_mismatch');
     expect((await setLaunchMode({ supabase: flipFakeSb({ decisionError: { message: 'boom' } }), ventureId: V_ID, toMode: LIVE, decision: CHAIRMAN_DECISION })).reason).toMatch(/decision_lookup_failed/);
+  });
+
+  it('decision SEMANTICS bind: rejected decisions and venture-less decisions never authorize a flip', async () => {
+    expect((await setLaunchMode({ supabase: flipFakeSb({ decisionRow: { id: 'dec-1', decided_by: 'chairman_ui', venture_id: V_ID, status: 'rejected' } }), ventureId: V_ID, toMode: LIVE, decision: CHAIRMAN_DECISION })).reason).toMatch(/decision_not_approved/);
+    expect((await setLaunchMode({ supabase: flipFakeSb({ decisionRow: { id: 'dec-1', decided_by: 'chairman_ui', venture_id: null, status: 'approved' } }), ventureId: V_ID, toMode: LIVE, decision: CHAIRMAN_DECISION })).reason).toBe('decision_not_venture_bound');
   });
 
   it('the allowlist predicate itself: chairman variants pass, agents never', () => {
