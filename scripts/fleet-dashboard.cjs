@@ -130,7 +130,7 @@ function formatEtaTime(iso) {
 // ── Data Loading ──
 
 async function loadData() {
-  const [sessRes, allSessRes, childRes, workRes, coordRes, rawSessRes, drainRes] = await Promise.all([
+  const [sessRes, allSessRes, childRes, coordRes, rawSessRes, drainRes] = await Promise.all([
     supabase
       .from('v_active_sessions')
       .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, terminal_id, loop_state')
@@ -147,12 +147,6 @@ async function loadData() {
       .select('sd_key, title, status, current_phase, progress_percentage, completion_date, created_at, dependencies')
       .like('sd_key', 'SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-%')
       .order('sd_key', { ascending: true }),
-    supabase
-      .from('strategic_directives_v2')
-      .select('sd_key, title, status, current_phase, progress_percentage, priority')
-      .in('status', ['draft', 'in_progress', 'ready', 'pending_approval'])
-      .not('sd_key', 'like', 'SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001%')
-      .limit(15),
     supabase
       .from('session_coordination')
       .select('id, target_session, target_sd, message_type, subject, read_at, acknowledged_at, created_at')
@@ -189,11 +183,29 @@ async function loadData() {
     // Pre-migration clones don't have the table — silently empty.
   }
 
+  // QF-20260704-051: the "AVAILABLE FOR CLAIM" headline previously used a naive
+  // status-only filter, so requires_human_action / dependency-blocked / orchestrator-parent
+  // SDs counted as available even though the coordinator's own ranker would never dispatch
+  // them (live specimen: dashboard showed 15, true claimable depth was 0). Reuse the SAME
+  // SSOT predicate the ranker uses (classifyDispatchIneligibility + dependency + parent-LEAD
+  // gating) so the two can never diverge. Fail-soft: an error degrades to an empty list
+  // rather than crashing the dashboard.
+  let claimableLeaves = [];
+  try {
+    const { computeClaimableLeaves } = await import('./coordinator-backlog-rank.mjs');
+    const result = await computeClaimableLeaves(supabase, { quiet: true });
+    claimableLeaves = result.claimable || [];
+  } catch (e) {
+    // degrade-safe: empty claimable list, dashboard still renders
+  }
+
   const sessions = sessRes.data || [];
   const allSessions = allSessRes.data || [];
   const drainAgents = drainRes.data || [];
   const children = childRes.data || [];
-  const workable = workRes.data || [];
+  // QF-20260704-051: orchestrator children are tracked separately (above) — exclude their
+  // prefix here so a claimable child SD is never double-counted in both sections.
+  const workable = claimableLeaves.filter(sd => !sd.sd_key.startsWith('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001'));
   const coordMessages = coordRes.data || [];
   const rawSessions = rawSessRes.data || [];
 
@@ -566,10 +578,17 @@ function printAvailable(d) {
 
   if (d.unclaimedStandalone.length > 0) {
     console.log('  Standalone SDs:');
-    for (const sd of d.unclaimedStandalone) {
+    // QF-20260704-051: the headline count above is the TRUE claimable depth (no longer capped
+    // at the query level) — cap only the printed rows so a large backlog stays readable.
+    const DISPLAY_CAP = 15;
+    const displayed = d.unclaimedStandalone.slice(0, DISPLAY_CAP);
+    for (const sd of displayed) {
       const shortKey = sd.sd_key.replace('SD-LEO-', '').replace('SD-', '').substring(0, 22);
       const prio = sd.priority === 'high' ? 'HIGH' : 'MED';
       console.log('    ' + pad(shortKey, 24) + pad(sd.title.substring(0, 38), 40) + prio);
+    }
+    if (d.unclaimedStandalone.length > displayed.length) {
+      console.log('    … and ' + (d.unclaimedStandalone.length - displayed.length) + ' more');
     }
   }
 
@@ -2057,7 +2076,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth };
+module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth, printAvailable };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.
