@@ -8,7 +8,7 @@ import { promisify } from 'util';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-import { resolveRepoPath } from '../../../lib/repo-paths.js';
+import { resolveRepoPath, resolveRepoPathDbFirst } from '../../../lib/repo-paths.js';
 export const execAsync = promisify(exec);
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
@@ -51,8 +51,17 @@ export async function resolveSDContext(sd_id, supabase, prefetchedSd = null) {
       gitRepoPath = EHG_ROOT;
     } else if (targetApp === 'EHG_Engineer') {
       gitRepoPath = EHG_ENGINEER_ROOT;
+    } else if (targetApp) {
+      // QF-20260704-440: resolve venture repos (e.g. MarketLens) via applications.local_path
+      // (DB-first, registry.json fallback) instead of silently falling through to cwd
+      // (EHG_Engineer), which made C1's git log --grep always search the wrong repo.
+      const resolvedPath = await resolveRepoPathDbFirst(targetApp, supabase);
+      gitRepoPath = resolvedPath || null; // fail-loud: unresolvable venture repo, never default to cwd
+      if (!resolvedPath) {
+        console.log(`   WARN: Could not resolve repo path for target_application="${targetApp}" -- C1 git verification will be skipped rather than run against the wrong repo`);
+      }
     }
-    console.log(`   Git Repo: ${gitRepoPath}`);
+    console.log(`   Git Repo: ${gitRepoPath || 'UNRESOLVED'}`);
   }
 
   return { sdUuid, sdKey, sdCategory, sdType, gitRepoPath };
