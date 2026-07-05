@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-07-05](#2026-07-05)
+  - [Infrastructure](#infrastructure)
 - [2026-07-04](#2026-07-04)
   - [Bugfix](#bugfix)
 - [2026-07-03](#2026-07-03)
@@ -69,6 +71,13 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-07-05
+
+### Infrastructure
+- **Post-Build Artifact Reconciliation Gate gains its adherence-scoring engine and remediation convergence loop** - PR #5585, #5587 (SD-LEO-INFRA-POST-BUILD-ARTIFACT-001-C)
+  - **What shipped**: Child C of the Post-Build Artifact Reconciliation Gate orchestrator (chairman-directed after MarketLens shipped zero UI despite planning artifacts that described forms/displays/signup, with no gate catching it). Applies Child A's `adherence_rubrics` registry (behaviorally-anchored 1-5 dimensions: user-story coverage, persona-surface coverage, data-model fidelity, architecture conformance) to Child B's `post_build_verdicts` rows via new `lib/eva/adherence-scorer.js`, which also owns the reason-quality judgment the parent SD assigns exclusively to this child — a documented-but-thin deviation reason (e.g. "decided to do it differently") scores as drift, not passing evidence, distinguishing it from Child A/B's non-empty-only check. New `lib/eva/convergence-loop.js` orchestrates score -> remediate -> rescore, bounded to 3 cycles with monotone-convergence early termination, a remediation router with a circularity guard on completeness backfills (rejects any backfill sourced from the venture's own build/repo) and a per-cycle cap of 5 items (overflow deferred, never dropped), and an escalation-packet generator offering exactly the chairman's three specified dispositions (descope-as-known-gap / pivot-the-artifact / hold-launch) on exhaustion. Scope explicitly excludes synthetic-persona live-UI journey walks — a chairman scope upgrade mid-flight that neither this child's pure-scoring shape nor sibling Child D's gate-wiring-plus-static-live-run shape fit naturally — filed as fast-follow child SD-LEO-INFRA-POST-BUILD-ARTIFACT-001-E during this SD's own LEAD phase per the chairman's own fallback clause.
+  - **Verification**: 28/28 new unit tests (`tests/unit/eva/adherence-scorer.test.js`=12, `tests/unit/eva/convergence-loop.test.js`=16), 51/51 sibling Child A/B tests unaffected (0 regressions). TESTING sub-agent: CONDITIONAL_PASS (confidence 90) — backend/data-layer only, no UI surface, E2E not applicable. A follow-up PR (#5587) added `@wire-check-exempt` annotations after LEAD-FINAL's WIRE_CHECK_GATE correctly flagged both new modules as awaiting their caller in not-yet-built sibling Child D.
 
 ## 2026-07-04
 
