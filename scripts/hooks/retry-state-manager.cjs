@@ -74,6 +74,16 @@ const EXEMPT_PATTERNS = [
   // phase/percent progressFingerprint (Control 3), so it needs this allowlist backstop the same
   // way the other mutating-but-idempotent scheduled scripts above do.
   /\bscripts[/\\]apply-migration\.js\b/,
+  // QF-20260704-784: `gh pr checks <PR#> --repo ...` is the fleet's standard CI-wait poll --
+  // documented and used fleet-wide while waiting on slow CI. It returns NON-ZERO while checks
+  // are still pending/running (that IS the expected in-progress signal, not a failure), so the
+  // read-only-classifier's noFailureSignal branch (recordAndCount, below) never applies to it --
+  // a non-zero exit is, by that classifier's design, indistinguishable from a genuine failure.
+  // THREE distinct workers tripped LEARN-129 on this exact command class within 90min while
+  // legitimately waiting on slow CI. Exempt unconditionally, like the other idempotent
+  // scheduled/monitoring commands above -- a genuinely stuck/broken PR is caught by other
+  // signals (claim TTL, coordinator liveness), not this repeat-guard.
+  /\bgh\s+pr\s+checks\b/,
 ];
 
 /**
