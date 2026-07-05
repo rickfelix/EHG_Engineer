@@ -132,7 +132,13 @@ export function classifyQuickFixes(quickFixes, triageResults = new Map(), sessio
       !qf.commit_sha &&
       ageDays(qf.created_at) >= STALE_QF_DAYS;
 
-    return { ...qf, _triage: triage, _escalate: escalate, _claimBadge: claimBadge, _isClaimedByOther: isClaimedByOther, _verifyFirst: verifyFirst };
+    // SD-LEO-FIX-QUICK-FIXES-NEEDS-001: durable time-gated defer. Mirrors the
+    // isAutoStartableQF() guard in worker-checkin.cjs so a human operator can't
+    // manually claim off this display what the auto-claim pickers already refuse.
+    const notBeforeMs = qf.not_before ? Date.parse(qf.not_before) : NaN;
+    const deferred = Number.isFinite(notBeforeMs) && notBeforeMs > Date.now();
+
+    return { ...qf, _triage: triage, _escalate: escalate, _claimBadge: claimBadge, _isClaimedByOther: isClaimedByOther, _verifyFirst: verifyFirst, _deferred: deferred };
   });
 
   classified.sort((a, b) => {
@@ -151,7 +157,7 @@ export function classifyQuickFixes(quickFixes, triageResults = new Map(), sessio
   // => claiming_session_id null, no PR) would otherwise be emitted as AUTO_PROCEED_ACTION:
   // qf_start and auto-started without verify-first. in_progress is either actively owned or
   // orphaned; neither is auto-startable.
-  summary.topStartableQF = classified.find(qf => qf.status === 'open' && !qf._escalate && !qf._isClaimedByOther && !qf._verifyFirst) || null;
+  summary.topStartableQF = classified.find(qf => qf.status === 'open' && !qf._escalate && !qf._isClaimedByOther && !qf._verifyFirst && !qf._deferred) || null;
 
   return { summary, classified };
 }
@@ -184,10 +190,15 @@ export function renderQFRow(qf, indent = '') {
     const statusBadge = qf.status === 'in_progress' ? `${colors.cyan}WIP${colors.reset} ` : '';
     // QF-20260525-522: surface why a stale QF was held out of auto-start.
     const verifyBadge = qf._verifyFirst ? `${colors.yellow}⚠ VERIFY-FIRST${colors.reset} ` : '';
-    console.log(`${indent}  ${colors.bold}${tierBadge}${colors.reset} ${badge}${verifyBadge}${statusBadge}${qf.id} - ${truncate(qf.title, 45)}  ${colors.dim}${qf.severity}  ${age}${colors.reset}`);
+    // SD-LEO-FIX-QUICK-FIXES-NEEDS-001: surface a durable time-gated defer.
+    const deferBadge = qf._deferred ? `${colors.yellow}⏳ DEFERRED${colors.reset} ` : '';
+    console.log(`${indent}  ${colors.bold}${tierBadge}${colors.reset} ${badge}${verifyBadge}${deferBadge}${statusBadge}${qf.id} - ${truncate(qf.title, 45)}  ${colors.dim}${qf.severity}  ${age}${colors.reset}`);
     console.log(`${indent}       ${colors.dim}Est: ${loc} | Type: ${qf.type} | Target: ${target}${colors.reset}`);
     if (qf._verifyFirst) {
       console.log(`${indent}       ${colors.dim}⚠ open ${ageDays(qf.created_at)}d & unclaimed — may already be resolved by another SD; verify before starting (not auto-routed)${colors.reset}`);
+    }
+    if (qf._deferred) {
+      console.log(`${indent}       ${colors.dim}⏳ gated until ${qf.not_before} — not claimable/auto-startable until then${colors.reset}`);
     }
   }
 }
