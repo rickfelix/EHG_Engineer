@@ -15,11 +15,16 @@ vi.mock('../../../lib/chairman/record-pending-decision.mjs', () => ({
   escalateChairmanDecision: vi.fn(),
 }));
 
+vi.mock('../../../lib/eva/post-build-convergence-gate.js', () => ({
+  loadVerdictSummary: vi.fn(),
+}));
+
 import {
   buildGuidedTour,
   buildSurfacesInventory,
   resolveAccessInstructions,
   buildReviewDiff,
+  buildVerdictTable,
   sanitizeForChairman,
   extractHumanText,
   generateReviewPacket,
@@ -30,6 +35,7 @@ import {
 } from '../../../lib/eva/chairman-product-review.js';
 import { createOrReusePendingDecision, isFixtureVenture, fetchVentureForFixtureCheck } from '../../../lib/eva/chairman-decision-watcher.js';
 import { escalateChairmanDecision } from '../../../lib/chairman/record-pending-decision.mjs';
+import { loadVerdictSummary } from '../../../lib/eva/post-build-convergence-gate.js';
 
 function createMockLogger() {
   return { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -245,6 +251,22 @@ describe('buildReviewDiff', () => {
     const diff = buildReviewDiff(prev, curr);
     expect(JSON.stringify(diff)).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/i);
   });
+
+  // SD-LEO-INFRA-POST-BUILD-ARTIFACT-001-D: adherence-score deltas surface in the same
+  // taste-language as the rest of the diff (design-agent guidance).
+  it('detects an adherence-score change across re-reviews', () => {
+    const prev = { guidedTour: [], surfacesInventory: [], adherenceScore: 40 };
+    const curr = { guidedTour: [], surfacesInventory: [], adherenceScore: 88 };
+    const diff = buildReviewDiff(prev, curr);
+    expect(diff.hasChanges).toBe(true);
+    expect(diff.changes).toContainEqual({ about: 'Built-vs-planned adherence score', before: '40', after: '88' });
+  });
+
+  it('does not report a spurious adherence-score change when neither packet has a score yet', () => {
+    const prev = { guidedTour: [], surfacesInventory: [] };
+    const curr = { guidedTour: [], surfacesInventory: [] };
+    expect(buildReviewDiff(prev, curr)).toEqual({ hasChanges: false, changes: [] });
+  });
 });
 
 describe('generateReviewPacket', () => {
@@ -286,6 +308,116 @@ describe('generateReviewPacket', () => {
     expect(result.surfacesInventory.length).toBeGreaterThan(0);
     const packetText = JSON.stringify(result);
     expect(packetText).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/i);
+  });
+
+  // SD-LEO-INFRA-POST-BUILD-ARTIFACT-001-D: verdictTable/adherenceScore ride BESIDE the
+  // guidedTour as a distinct secondary section (design-agent CONDITIONAL_PASS guidance) —
+  // never replacing it, never appearing when no verdict has been persisted.
+  it('surfaces no verdictTable/adherenceScore when no verdict has been persisted for this venture', async () => {
+    fetchVentureForFixtureCheck.mockResolvedValue({ id: 'v1', name: 'MarketLens' });
+    isFixtureVenture.mockReturnValue(false);
+    loadVerdictSummary.mockResolvedValue(null);
+    const supabase = {
+      from: vi.fn().mockReturnValue({ select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), in: vi.fn().mockResolvedValue({ data: [] }) }),
+    };
+
+    const result = await generateReviewPacket(supabase, 'v1', logger);
+
+    expect(result).not.toHaveProperty('verdictTable');
+    expect(result).not.toHaveProperty('adherenceScore');
+    expect(result).not.toHaveProperty('belowThreshold');
+    expect(result.guidedTour.length).toBeGreaterThan(0); // primary section unaffected
+  });
+
+  it('surfaces verdictTable + adherenceScore as a secondary section when a verdict is persisted (PASS, not below threshold)', async () => {
+    fetchVentureForFixtureCheck.mockResolvedValue({ id: 'v1', name: 'MarketLens' });
+    isFixtureVenture.mockReturnValue(false);
+    loadVerdictSummary.mockResolvedValue({
+      status: 'PASS', adherence_score: 91, escalated: false,
+      dimension_scores: { ui_evidence: 95, user_story_coverage: 88 }, unscored_dimensions: [], dimension_floor: 60,
+    });
+    const supabase = {
+      from: vi.fn().mockReturnValue({ select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), in: vi.fn().mockResolvedValue({ data: [] }) }),
+    };
+
+    const result = await generateReviewPacket(supabase, 'v1', logger);
+
+    expect(result.adherenceScore).toBe(91);
+    expect(result.belowThreshold).toBeUndefined();
+    expect(result.verdictTable).toEqual([
+      { dimension: 'ui evidence', status: 'pass', score: 95 },
+      { dimension: 'user story coverage', status: 'pass', score: 88 },
+    ]);
+    expect(result.guidedTour.length).toBeGreaterThan(0); // primary section still present, unaffected
+  });
+
+  it('flags belowThreshold:true when the persisted verdict is ESCALATED (the retrodiction negative case)', async () => {
+    fetchVentureForFixtureCheck.mockResolvedValue({ id: 'v1', name: 'MarketLens (pre-recovery)' });
+    isFixtureVenture.mockReturnValue(false);
+    loadVerdictSummary.mockResolvedValue({
+      status: 'ESCALATED', adherence_score: 4, escalated: true,
+      dimension_scores: { user_story_coverage: 0, persona_coverage: null }, unscored_dimensions: ['persona_coverage'], dimension_floor: 60,
+    });
+    const supabase = {
+      from: vi.fn().mockReturnValue({ select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), in: vi.fn().mockResolvedValue({ data: [] }) }),
+    };
+
+    const result = await generateReviewPacket(supabase, 'v1', logger);
+
+    expect(result.adherenceScore).toBe(4);
+    expect(result.belowThreshold).toBe(true);
+    expect(result.verdictTable).toContainEqual({ dimension: 'user story coverage', status: 'fail', score: 0 });
+    expect(result.verdictTable).toContainEqual({ dimension: 'persona coverage', status: 'unscored', score: null });
+  });
+});
+
+describe('buildVerdictTable', () => {
+  it('returns null when no verdict exists', () => {
+    expect(buildVerdictTable(null)).toBeNull();
+  });
+
+  it('maps dimension keys to plain-language names and pass/fail/unscored status', () => {
+    const table = buildVerdictTable({
+      dimension_scores: { ui_evidence: 80, user_story_coverage: 40 },
+      unscored_dimensions: [],
+      dimension_floor: 60,
+    });
+    expect(table).toEqual([
+      { dimension: 'ui evidence', status: 'pass', score: 80 },
+      { dimension: 'user story coverage', status: 'fail', score: 40 },
+    ]);
+  });
+
+  it('marks a dimension unscored regardless of its numeric score value', () => {
+    const table = buildVerdictTable({
+      dimension_scores: { persona_coverage: null },
+      unscored_dimensions: ['persona_coverage'],
+      dimension_floor: 60,
+    });
+    expect(table).toEqual([{ dimension: 'persona coverage', status: 'unscored', score: null }]);
+  });
+
+  it('never fails/passes a dimension when no dimension_floor was persisted (defensive: unknown rubric)', () => {
+    const table = buildVerdictTable({
+      dimension_scores: { ui_evidence: 80 },
+      unscored_dimensions: [],
+      dimension_floor: null,
+    });
+    expect(table).toEqual([{ dimension: 'ui evidence', status: 'pass', score: 80 }]);
+  });
+
+  // Known limitation (flagged by testing-agent, EXEC phase): with no dimension_floor persisted,
+  // a LOW score cannot be distinguished from a passing one and defaults to 'pass' rather than
+  // 'unknown' -- documented here explicitly rather than left as an untested edge case. In
+  // practice dimension_floor is always persisted (runS19ConvergenceGate always reads it off
+  // scoreResult.rubric), so this only bites a hand-corrupted/legacy summary row.
+  it('a LOW score with no dimension_floor also defaults to pass (documented limitation, not a silent gap)', () => {
+    const table = buildVerdictTable({
+      dimension_scores: { user_story_coverage: 2 },
+      unscored_dimensions: [],
+      dimension_floor: null,
+    });
+    expect(table).toEqual([{ dimension: 'user story coverage', status: 'pass', score: 2 }]);
   });
 });
 
