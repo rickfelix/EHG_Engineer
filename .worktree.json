@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-PARENT-SCOPE-COVERAGE-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-PARENT-SCOPE-COVERAGE-001",
-  "createdAt": "2026-07-04T14:57:48.456Z",
+  "sdKey": "SD-LEO-INFRA-POST-BUILD-ARTIFACT-001-C",
+  "expectedBranch": "feat/SD-LEO-INFRA-POST-BUILD-ARTIFACT-001-C",
+  "createdAt": "2026-07-04T22:43:48.798Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
