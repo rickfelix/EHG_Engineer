@@ -1,8 +1,8 @@
-<!-- file_content_hash: a07d23fec716ef5b -->
+<!-- file_content_hash: 1ae975cf096cdb95 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-07-04 10:03:19 PM
+**Generated**: 2026-07-05 1:57:26 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1557,6 +1557,24 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 > Why: A prior incident had Claude misinterpret a 0-minute heartbeat as stale and release an active session's claim, blocking that session's work. The cost of wrongly releasing is high (lost context, blocked SD); the cost of picking a different SD is low.
 
+## G3 — Definition-of-Done Activation Amendment (Machinery-Class ACTIVATED/ARMED)
+
+**G3 (SD-LEO-INFRA-DEFINITION-DONE-ACTIVATION-001, chairman-ratified 2026-07-02): "done" for event-processing machinery now requires ACTIVATED or ARMED evidence, not just merged code + green tests.**
+
+**The problem this closes**: SDs/QFs whose deliverable is event-processing machinery (a worker, watcher, router, gate, cron, or hook) have repeatedly reached "completed" status while the machinery never processed a single real production event — cold-recovery never wired, a quarantined test, dormant verifiers, an eva-scheduler watcher dead 13 days, a frozen capture gauge, a remediation router with writers never injected at the call site. Each was individually root-caused; this amendment closes the shared root: the protocol's own Definition-of-Done never asked "did it run?"
+
+**Machinery-class taxonomy** (`lib/machinery-class/classify.js`): an SD/QF is machinery-class when its `key_changes[].type` or free text (negation-aware) affirmatively signals a worker/consumer/job/cron/watcher/router/gate/hook/service deliverable. Deliberately does NOT require a schema match (unlike the activation-invariant trigger-evaluator, which needs schema+consumer) — a pure cron/watcher fix with no schema change is still machinery-class.
+
+**Two legal completion shapes**:
+- **ACTIVATED** — a `scope_completion_chain` row exists with `evidence_kind='real_event'` and `runtime_observed_at` set. A replayed test fixture (`evidence_kind='replayed_fixture'`) does NOT satisfy this.
+- **ARMED** — real events cannot occur yet (e.g. the feature ships ahead of its producer). Register a named activation trigger via `registerArmedMachinery()` (`lib/machinery-class/armed-registration.js`), which upserts a `periodic_process_registry` row (`process_type='standalone_cron'`, `liveness_source='self_stamped'`, `last_fired_at=null`). The existing periodic-liveness-watcher then surfaces an armed-but-never-fired item on its own OVERDUE gauge instead of it decaying silently.
+
+**Enforcement**: the `INVOCATION_PATH_PROOF` gate at LEAD-FINAL-APPROVAL (`scripts/modules/handoff/executors/lead-final-approval/gates/invocation-path-gate.js`) evaluates machinery-class SDs for UNWIRED/ACTIVATED/ARMED. **Advisory by default** (`ACTIVATION_EVIDENCE_MODE=block` to enforce) — a brand-new requirement must not mass-fail every in-flight SD on day one, mirroring this same gate's own `INVOCATION_PATH_PROOF_MODE` rollout precedent.
+
+**Parent-orchestrator exemption**: an orchestrator parent (`isOrchestratorSync(sd)`) is exempt from this check entirely — machinery lives on children; a parent completes via `PARENT_DELEGATED_COMPLETION` regardless of its own rollup text.
+
+**Validity check**: `node scripts/machinery-class-retro-sweep.mjs` runs the classifier over the last 30 days of completed SDs, detection-only, zero writes — re-finding the named dormant specimens is the smoke test of the classifier itself.
+
 
 
 ## Hot Issue Patterns (Auto-Updated)
@@ -1584,6 +1602,7 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 | Signal Type | Workers | Severity | Title |
 |-------------|---------|----------|-------|
 | feedback | 6 | medium | online — entering autonomous loop |
+| feedback | 3 | medium | wakeup-armed +600s — idle, 0 claimable at my tier (unchanged |
 
 *Auto-updated from `feedback` table where `category='harness_backlog'` AND `metadata.contributing_workers` length ≥ 3.*
 
@@ -1714,7 +1733,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-07-04*
+*Generated from database: 2026-07-05*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*
