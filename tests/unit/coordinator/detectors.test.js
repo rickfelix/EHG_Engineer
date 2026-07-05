@@ -16,6 +16,7 @@ import {
   detectStalledLoop,
   stalledLoopSessionIds,
   detectEvaSchedulerStale,
+  detectCompletionBoundaryExit,
   runDetectors,
 } from '../../../lib/coordinator/detectors.cjs';
 import {
@@ -178,6 +179,46 @@ describe('detectStalledLoop', () => {
   it('STILL flags a non-completion release (e.g. stale_cleanup) with a recent released_at', () => {
     const other = { ...stalled, session_id: 'other-rel', released_reason: 'stale_cleanup', released_at: minsAgo(2) };
     expect(detectStalledLoop({ sessions: [other], unclaimedItems: 5, now: NOW }).matched).toBe(true);
+  });
+});
+
+// QF-20260705-817: the inverse of detectStalledLoop's post-completion-tail exclusion — a worker
+// whose loop EXITED (heartbeat gone STALE) after the grace window elapsed, following a genuine
+// completion release, while unclaimed work waits.
+describe('detectCompletionBoundaryExit', () => {
+  const exited = { session_id: 'w1', sd_key: null, released_reason: 'completed', released_at: minsAgo(20), heartbeat_at: minsAgo(15) };
+  it('matches a session that loop-exited after completion, grace elapsed, heartbeat stale', () => {
+    const r = detectCompletionBoundaryExit({ sessions: [exited], unclaimedItems: 3, now: NOW });
+    expect(r.matched).toBe(true);
+    expect(r.evidence.exited_count).toBe(1);
+    expect(r.evidence.samples[0].session_id).toBe('w1');
+  });
+  it('does not match when there is no unclaimed work', () => {
+    expect(detectCompletionBoundaryExit({ sessions: [exited], unclaimedItems: 0, now: NOW }).matched).toBe(false);
+  });
+  it('does not match a session that still holds a claim', () => {
+    const claimed = { ...exited, session_id: 'has-claim', sd_key: 'SD-X' };
+    expect(detectCompletionBoundaryExit({ sessions: [claimed], unclaimedItems: 5, now: NOW }).matched).toBe(false);
+  });
+  it('does not match a non-completion release reason', () => {
+    const other = { ...exited, session_id: 'other-rel', released_reason: 'stale_cleanup' };
+    expect(detectCompletionBoundaryExit({ sessions: [other], unclaimedItems: 5, now: NOW }).matched).toBe(false);
+  });
+  it('does not match while still inside the post-completion grace window', () => {
+    const inGrace = { ...exited, session_id: 'in-grace', released_at: minsAgo(3), heartbeat_at: minsAgo(15) };
+    expect(detectCompletionBoundaryExit({ sessions: [inGrace], unclaimedItems: 5, now: NOW }).matched).toBe(false);
+  });
+  it('does not match when the heartbeat is still fresh (looks alive, not exited)', () => {
+    const alive = { ...exited, session_id: 'alive', heartbeat_at: minsAgo(2) };
+    expect(detectCompletionBoundaryExit({ sessions: [alive], unclaimedItems: 5, now: NOW }).matched).toBe(false);
+  });
+  it('skips (fail-open) a session with no usable released_at', () => {
+    const noTs = { ...exited, session_id: 'no-ts', released_at: null };
+    expect(detectCompletionBoundaryExit({ sessions: [noTs], unclaimedItems: 5, now: NOW }).matched).toBe(false);
+  });
+  it('skips (fail-open) a session with no usable heartbeat_at', () => {
+    const noHb = { ...exited, session_id: 'no-hb', heartbeat_at: null };
+    expect(detectCompletionBoundaryExit({ sessions: [noHb], unclaimedItems: 5, now: NOW }).matched).toBe(false);
   });
 });
 
