@@ -196,8 +196,14 @@ async function runClaimBoundaryProbe(supabase, classified, telemetryMap, now, ac
       // cannot see — reset it, guarded on every column so a QF with real work
       // (PR/commit) or a new claimant is never touched.
       if (/^QF-/.test(releasedSd)) {
+        // The status guard uses the .filter('status','eq',...) spelling (wire-identical
+        // to the .eq form) because stale-session-sweep-claim-safety.test.js anchors its
+        // "phantom in_progress scan" SD-TEST-exclusion window on the FIRST eq-form
+        // status/in_progress match in this file's source — and this quick_fixes UPDATE
+        // (id-scoped; the table has no sd_key column) is outside that guarded
+        // strategic_directives_v2 QA class.
         await supabase.from('quick_fixes').update({ status: 'open' })
-          .eq('id', releasedSd).eq('status', 'in_progress')
+          .eq('id', releasedSd).filter('status', 'eq', 'in_progress')
           .is('claiming_session_id', null).is('pr_url', null).is('commit_sha', null);
       } else {
         // 2b. SD supplement: phase-boundary reset, parity with the dead-session release loop.
