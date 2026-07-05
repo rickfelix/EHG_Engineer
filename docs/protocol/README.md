@@ -108,6 +108,7 @@ The harness already embodies the 2026 best practice that **the agent that does t
 | Failure mode | Guard |
 |---|---|
 | Worker ends a turn without re-arming → silent attrition | `stop-loop-wakeup-reminder` Stop hook (loop_state-keyed) |
+| Window-level prompt block at a claim/transition boundary (heartbeat stays fresh, zero tool calls) | claim-boundary pre-flight probe in the sweep (shipped — SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001): tick-immune `last_tool_at` clock → auto-release via `release_sd` + self-clearing quarantine + one operator line naming the terminal. Env: `CLAIM_BOUNDARY_PROBE_MINUTES` (8), `CLAIM_BOUNDARY_PROBE_ENABLED` kill-switch |
 | Heartbeat looks fresh but loop is stalled | judge by `loop_state`; `STALLED_LOOP` detector (shipped — SD-LEO-INFRA-LOOP-LIVENESS-DETECTORS-001) |
 | `/loop` 7-day silent expiry | `LOOP_EXPIRY_WARNING` detector (shipped — SD-LEO-INFRA-LOOP-LIVENESS-DETECTORS-001) + re-arm discipline |
 | Duplicate / lost work on collision | `claim_sd` arbitration + in-flight/foreign-claim guards + worktrees |
