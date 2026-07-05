@@ -2652,6 +2652,21 @@ async function main() {
     console.log('INERT_WORKER: ' + (inertErr && inertErr.message ? inertErr.message : 'unknown'));
   }
 
+  // QF-20260705-817 — completion-boundary silent-exit surfacing. DEFAULT-OFF behind
+  // SURFACE_COMPLETION_BOUNDARY_EXIT_V1, READ-ONLY, fail-open. Emits ONE de-duped operator
+  // alert (carrying the same paste-able /loop prompt as INERT_WORKER) when a worker's loop
+  // exited right after completing a phase/SD while unclaimed work waits. Fully inert when flag off.
+  try {
+    const exitSurf = await _coordEventsModule.runCompletionBoundaryExitSurfacing(supabase, {});
+    if (exitSurf && exitSurf.matched) {
+      const a = exitSurf.alert || {};
+      const tail = a.skipped ? ' (alert deduped)' : a.ok ? ' - operator alert emitted' : ' (alert emit failed)';
+      console.log('  COMPLETION_BOUNDARY_EXIT: ' + exitSurf.exited_count + ' worker(s) silent-exited post-completion' + tail);
+    }
+  } catch (exitErr) {
+    console.log('COMPLETION_BOUNDARY_EXIT: ' + (exitErr && exitErr.message ? exitErr.message : 'unknown'));
+  }
+
   // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4d — SIGNAL_RESOLVED notification.
   // For each contributing signal where payload.routed_to_sd_key is non-null AND the SD
   // status is 'completed' AND payload.notification_sent is not yet true, look up
