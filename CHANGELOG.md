@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-07-05](#2026-07-05)
+  - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
 - [2026-07-04](#2026-07-04)
   - [Bugfix](#bugfix)
@@ -73,6 +74,11 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-07-05
+
+### Bugfix
+- **quick_fixes gains a durable time-gated defer, stopping deferred-but-open QFs from being re-claimed repeatedly** - PR #5603 (SD-LEO-FIX-QUICK-FIXES-NEEDS-001)
+  - **What shipped**: `quick_fixes` had no durable defer state, so a QF that is genuinely not ready yet (e.g. QF-20260704-348, which needs a clean 24h fleet_dormancy window before it can be verified) stayed `status='open'` and was re-assigned to the same worker 2x within ~15 minutes by `worker-checkin.cjs`'s self-claim pickers, each cycle burning a verify pass. New nullable `quick_fixes.not_before` timestamptz column; both self-claim picker paths now exclude gated rows via the shared `isAutoStartableQF()` predicate, and the `sd:next` display surface badges/excludes gated rows from `topStartableQF` so a human operator can't manually claim off the queue what the auto-claim pickers already refuse. New `scripts/defer-quick-fix.js` operator CLI sets `not_before` without hand-written SQL. QF-20260704-348 is durably re-opened (`status=open`, `not_before=2026-07-05T21:00:00Z`), replacing the coordinator's prior manual `escalated`-status workaround. Escalated from quick-fix QF-20260704-216.
+  - **Verification**: 21 new unit tests across 3 files; TESTING sub-agent PASS (E2E not applicable — backend-only, no UI). LEAD-TO-PLAN (94), PLAN-TO-EXEC (93), EXEC-TO-PLAN (98), PLAN-TO-LEAD (97), LEAD-FINAL-APPROVAL (96) — all handoffs accepted.
 
 ### Infrastructure
 - **Post-Build Artifact Reconciliation Gate gains a synthetic-persona live-UI journey-walk evidence layer** - PR #5594, #5595 (SD-LEO-INFRA-POST-BUILD-ARTIFACT-001-E)
