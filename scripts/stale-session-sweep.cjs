@@ -910,8 +910,11 @@ async function main() {
   const headlessZombies = classified.filter(s => s.status === 'HEADLESS_ZOMBIE');
   for (const s of headlessZombies) {
     const pidLive = s.pid ? isProcessRunning(Number(s.pid)) : false;
+    // QF-20260508-230: ck_claude_sessions_worktree_state_consistency requires sd_key IS NOT NULL
+    // OR (worktree_path IS NULL AND worktree_branch IS NULL) -- every release site must clear both.
     await supabase.from('claude_sessions').update({
       sd_key: null, status: 'released', released_at: now.toISOString(), released_reason: 'SWEEP_HEADLESS_ZOMBIE',
+      worktree_path: null, worktree_branch: null, has_uncommitted_changes: false, current_branch: null,
     }).eq('session_id', s.session_id);
     actions.push('HEADLESS_ZOMBIE: released ' + s.session_id + ' (sd=' + (s.sd_key || 'none') + ', pid=' + s.pid + ', pid_live=' + pidLive + ')');
     await supabase.from('session_coordination').insert({
