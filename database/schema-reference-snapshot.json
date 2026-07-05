@@ -1,7 +1,7 @@
 {
- "generated_at": "2026-07-04T20:39:03.927Z",
+ "generated_at": "2026-07-05T00:04:52.305Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 768,
+ "table_count": 769,
  "view_count": 177,
  "tables": {
   "_migration_metadata": "{key,value}",
@@ -438,6 +438,7 @@
   "pattern_subagent_mapping": "{id,pattern_id,sub_agent_code,mapping_type,trigger_phrase,trigger_id,confidence,created_at,updated_at}",
   "pcvp_verification_log": "{id,sd_id,sd_key,event_type,event_data,verification_score,created_at,created_by}",
   "pending_ceo_handoffs": "{id,venture_id,handoff_type,from_stage,to_stage,vp_agent_id,handoff_data,status,proposed_at,reviewed_by,reviewed_at,review_notes,created_at,updated_at}",
+  "periodic_process_registry": "{process_key,display_name,owner,process_type,expected_interval_seconds,grace_multiplier,liveness_source,liveness_source_ref,session_bound,currently_expected_active,last_fired_at,created_at,updated_at,last_state}",
   "permission_audit_log": "{id,created_at,session_id,tool_name,rule_code,rule_description,outcome,context_hash,metadata}",
   "persona_behavioral_data": "{id,venture_id,persona_type,behavioral_patterns,sample_size,aggregation_period,metadata,created_at,updated_at,created_by}",
   "persona_config": "{id,target_application,mandatory_personas,allowed_personas,forbidden_personas,optional_triggers,sd_type_overrides,is_active,created_at,updated_at}",
