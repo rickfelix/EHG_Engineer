@@ -100,13 +100,15 @@ export function evaluateActivationEvidence(sd, evidence = {}) {
  */
 export async function checkActivationEvidence(supabase, sd) {
   try {
-    const sdKey = sd?.sd_key || sd?.id;
-    if (!sdKey) return false;
+    // entity_id references strategic_directives_v2's own PRIMARY KEY (sd.id) — the canonical
+    // UUID identity, not sd_key (TEXT) or the secondary uuid_id field.
+    const entityId = sd?.id;
+    if (!entityId) return false;
     const { data, error } = await supabase
       .from('scope_completion_chain')
       .select('id')
       .in('entity_type', ['sd', 'child_sd'])
-      .eq('entity_id', sd?.uuid_id || sd?.id)
+      .eq('entity_id', entityId)
       .eq('evidence_kind', 'real_event')
       .not('runtime_observed_at', 'is', null)
       .limit(1);
@@ -121,6 +123,8 @@ export async function checkActivationEvidence(supabase, sd) {
  * G3 FR-4: does this SD have an ARMED liveness-watch registration in
  * periodic_process_registry? Reuses the existing table's liveness_source_ref JSONB column
  * for SD linkage — no new table, no schema change. Fail-open (false) on any query error.
+ * periodic_process_registry's PRIMARY KEY is process_key (TEXT) — the table has NO `id`
+ * column, so the select below must reference the real key.
  * @param {object} supabase
  * @param {object} sd
  * @returns {Promise<boolean>}
@@ -131,7 +135,7 @@ export async function checkArmedRegistration(supabase, sd) {
     if (!sdKey) return false;
     const { data, error } = await supabase
       .from('periodic_process_registry')
-      .select('id')
+      .select('process_key')
       .contains('liveness_source_ref', { sd_key: sdKey })
       .limit(1);
     if (error) return false;

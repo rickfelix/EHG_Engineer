@@ -55,11 +55,13 @@ describe('evaluateActivationEvidence — pure tri-state classification', () => {
 });
 
 describe('checkActivationEvidence / checkArmedRegistration — DB lookups (fail-open)', () => {
-  function fakeSb({ activationRows = [], armedRows = [], errorOn = null } = {}) {
+  function fakeSb({ activationRows = [], armedRows = [], errorOn = null, selectCalls = [] } = {}) {
     return {
+      selectCalls,
       from(table) {
         return {
-          select() {
+          select(cols) {
+            selectCalls.push({ table, cols });
             const chain = {
               in: () => chain,
               eq: () => chain,
@@ -76,6 +78,26 @@ describe('checkActivationEvidence / checkArmedRegistration — DB lookups (fail-
       },
     };
   }
+
+  // Regression: periodic_process_registry's PRIMARY KEY is process_key (TEXT) — the table
+  // has NO `id` column. A `.select('id')` against it does not error in this mock (which
+  // doesn't validate real column existence), but WOULD error against the live schema,
+  // silently making checkArmedRegistration always fail-open to false. Pin the real column.
+  it("checkArmedRegistration selects 'process_key' (periodic_process_registry has no id column)", async () => {
+    const calls = [];
+    const sb = fakeSb({ selectCalls: calls });
+    await checkArmedRegistration(sb, WORKER_SD);
+    const call = calls.find((c) => c.table === 'periodic_process_registry');
+    expect(call.cols).toBe('process_key');
+  });
+
+  it("checkActivationEvidence selects 'id' (scope_completion_chain DOES have an id PK)", async () => {
+    const calls = [];
+    const sb = fakeSb({ selectCalls: calls });
+    await checkActivationEvidence(sb, WORKER_SD);
+    const call = calls.find((c) => c.table === 'scope_completion_chain');
+    expect(call.cols).toBe('id');
+  });
 
   it('returns true when scope_completion_chain has a matching real-event row', async () => {
     const sb = fakeSb({ activationRows: [{ id: 'row-1' }] });
