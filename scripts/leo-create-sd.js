@@ -756,7 +756,8 @@ async function createFromQF(qfId, opts = {}) {
       qf_severity: qf.severity,
       qf_estimated_loc: qf.estimated_loc,
       qf_target_application: qf.target_application,
-      ...(opts.securityReviewed ? { security_reviewed: true } : {})
+      ...(opts.securityReviewed ? { security_reviewed: true } : {}),
+      ...(opts.migrationReviewed ? { migration_reviewed: true } : {})
     }
   });
 
@@ -2957,7 +2958,13 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // --child/--from-proposal), so a QF whose DESCRIPTION merely mentions security-
       // adjacent keywords (e.g. "CI DB secrets") isn't unescapably blocked by
       // GR-SECURITY-BASELINE when the actual code change touches no security-sensitive scope.
-      await createFromQF(args[1], { securityReviewed: args.includes('--security-reviewed') });
+      // QF-20260705-395: --migration-reviewed had the identical gap -- a Tier-3 QF whose
+      // description names a real schema migration was unescapably blocked by
+      // GR-MIGRATION-REVIEW, since the flag was silently dropped before reaching createFromQF.
+      await createFromQF(args[1], {
+        securityReviewed: args.includes('--security-reviewed'),
+        migrationReviewed: args.includes('--migration-reviewed'),
+      });
     } else if (args[0] === '--from-proposal') {
       // SD-LEO-INFRA-FROM-PROPOSAL-INGEST-001: materialize PROPOSAL-*.json into DRAFT SDs.
       // path/glob = first non-flag positional after --from-proposal; --dry-run = no writes.
