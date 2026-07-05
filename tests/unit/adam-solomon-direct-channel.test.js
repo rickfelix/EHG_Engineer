@@ -17,14 +17,18 @@ const { isAdamSolomonTwoWayV1Enabled } = require('../../lib/coordinator/resolve.
 const { assertValidTarget } = require('../../lib/coordinator/dispatch.cjs');
 
 describe('isAdamSolomonTwoWayV1Enabled — flag gate correctness', () => {
-  it('true only for exactly "on"', () => {
+  // QF-20260705-488 (chairman-directed): default flipped ON — the OFF default forced a
+  // hand-relay of consult answer d7f5401c. Off ONLY on the explicit 'off' kill switch.
+  it('enabled by default; disabled only by exactly "off"', () => {
     const prev = process.env.ADAM_SOLOMON_TWOWAY_V1;
     try {
       process.env.ADAM_SOLOMON_TWOWAY_V1 = 'on';
       expect(isAdamSolomonTwoWayV1Enabled()).toBe(true);
       process.env.ADAM_SOLOMON_TWOWAY_V1 = 'true';
-      expect(isAdamSolomonTwoWayV1Enabled()).toBe(false);
+      expect(isAdamSolomonTwoWayV1Enabled()).toBe(true);
       delete process.env.ADAM_SOLOMON_TWOWAY_V1;
+      expect(isAdamSolomonTwoWayV1Enabled()).toBe(true);
+      process.env.ADAM_SOLOMON_TWOWAY_V1 = 'off';
       expect(isAdamSolomonTwoWayV1Enabled()).toBe(false);
     } finally {
       if (prev === undefined) delete process.env.ADAM_SOLOMON_TWOWAY_V1;

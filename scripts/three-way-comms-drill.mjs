@@ -311,7 +311,10 @@ async function main() {
   const baselineFile = argVal('--baseline-file') || process.env.COMMS_DRILL_BASELINE || path.join(process.cwd(), '.comms-drill-baseline.json');
 
   const now = Date.now();
-  const twoway = /^(on|true|1)$/i.test(String(process.env.ADAM_SOLOMON_TWOWAY_V1 || ''));
+  // QF-20260705-488: read the SHARED gate (default now ON, off only on explicit 'off') instead of
+  // a private regex — the drill previously said RELAY while the real gate routed DIRECT (drift).
+  const { isAdamSolomonTwoWayV1Enabled } = await import('../lib/coordinator/resolve.cjs').then(m => m.default || m);
+  const twoway = isAdamSolomonTwoWayV1Enabled();
   const windowMs = resolveWindowMs(process.env);
   const topic = `comms_drill:${new Date(now).toISOString().replace(/[:.]/g, '-')}:${Math.random().toString(36).slice(2, 8)}`;
 

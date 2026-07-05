@@ -30,8 +30,9 @@
  *
  * SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: `send`/`request` accept `--to adam` for a
  * DIRECT 1-hop write to Adam's own session (no coordinator relay hop), gated by
- * ADAM_SOLOMON_TWOWAY_V1=on (default OFF). Omitting --to is byte-identical unchanged behavior — the
- * existing coordinator-relay path is the permanent fallback, never removed.
+ * ADAM_SOLOMON_TWOWAY_V1 (default ON since QF-20260705-488; 'off' is the explicit kill switch).
+ * Omitting --to is byte-identical unchanged behavior — the existing coordinator-relay path is
+ * the permanent fallback, never removed.
  *   node scripts/solomon-advisory.cjs send --direct "<body>"                   (shorthand for --to adam)
  *
  * SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-4: `--to` also accepts the
@@ -214,7 +215,10 @@ async function checkConsultQuota(supabase, { sdKey = null, perSdMax = SOLOMON_PE
       .gte('created_at', since.toISOString())
       .limit(1000);
     if (error) return { allowed: true };
-    const rows = data || [];
+    // QF-20260705-488 (adversarial-review W2): an answer's originator CC copy also carries
+    // payload.oracle=true — exclude via='cc_originator' rows so a CC'd answer consumes ONE
+    // quota slot, not two (the per-day ceiling would otherwise halve in practice).
+    const rows = (data || []).filter((r) => !(r.payload && r.payload.via === 'cc_originator'));
     if (rows.length >= perDayMax) return { allowed: false, reason: `per-day quota reached (${rows.length}/${perDayMax})` };
     if (sdKey) {
       const perSd = rows.filter((r) => r.payload && (r.payload.sd_key === sdKey || r.payload.sd_id === sdKey)).length;
@@ -320,6 +324,92 @@ async function resolveReplyToCorrelation(supabase, value) {
     return corr;
   }
   return value;
+}
+
+/**
+ * QF-20260705-488: resolve the session that ORIGINATED a consult, from the same value
+ * `--reply-to` accepts (a consult row id OR a bare correlation id). Prefers an explicit
+ * payload.origin_session (set by relay paths that preserve the true originator), else the
+ * consult row's sender_session. Null when unresolvable — the caller treats that as
+ * "no CC" (fail-open). Exported for tests.
+ */
+async function resolveConsultOriginator(supabase, value) {
+  if (!value) return null;
+  try {
+    const { data: byId } = await supabase
+      .from('session_coordination')
+      .select('sender_session, payload')
+      .eq('id', value)
+      .maybeSingle();
+    if (byId) {
+      const p = byId.payload || {};
+      // Adversarial-review I4: CC is scoped to CONSULTS only — the correlation branch below
+      // already filters on kind; without this symmetric check, replying to a non-consult row
+      // by id would CC that row's sender (an undocumented side effect on non-consult flows).
+      if (p.kind !== SOLOMON_CONSULT_KIND) return null;
+      return p.origin_session || byId.sender_session || null;
+    }
+  } catch { /* fall through to correlation match */ }
+  try {
+    const { data } = await supabase
+      .from('session_coordination')
+      .select('sender_session, payload, created_at')
+      .eq('payload->>correlation_id', String(value))
+      .eq('payload->>kind', SOLOMON_CONSULT_KIND)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const row = Array.isArray(data) && data[0] ? data[0] : null;
+    if (row) return (row.payload && row.payload.origin_session) || row.sender_session || null;
+  } catch { /* fail-open: no CC */ }
+  return null;
+}
+
+/**
+ * QF-20260705-488: deliver the originator's CC copy of a consult answer, idempotently.
+ * Resolves the consult's originating session, prefers the LIVE session for that role
+ * (adversarial-review W3: a consult-time session id may be dead — an Adam restart would
+ * otherwise dead-letter the CC into a session nobody polls), skips when the originator IS
+ * the answer target or Solomon itself, and skips when a row for this reply already targets
+ * the originator (idempotent — makes the dedup-branch re-run heal a previously FAILED CC,
+ * adversarial-review W1, instead of stranding it behind the primary-answer dedup forever).
+ * Never throws (fail-open). Exported for tests.
+ * @returns {Promise<{inserted: boolean, originator: string|null, error?: string}>}
+ */
+async function ensureOriginatorCc(supabase, { replyRef, replyTo, target, sessionId, subject, payload, expiresAt }, { getLiveAdamId = getActiveAdamId, insertRow = insertCoordinationRow } = {}) {
+  try {
+    let originator = await resolveConsultOriginator(supabase, replyRef);
+    if (!originator) return { inserted: false, originator: null };
+    // W3: map a dead consult-time session id to the LIVE session of the same role. Adam is
+    // the one lateral peer whose consults this lane answers; other roles keep the raw id
+    // (their outbound drains re-target unread rows on restart).
+    try {
+      const { data: sess } = await supabase.from('claude_sessions').select('metadata').eq('session_id', originator).maybeSingle();
+      if (sess && sess.metadata && sess.metadata.role === 'adam') {
+        originator = (await getLiveAdamId(supabase).catch(() => null)) || originator;
+      }
+    } catch { /* keep the raw originator */ }
+    if (originator === target || originator === sessionId) return { inserted: false, originator };
+    // Idempotence: a row for this reply already targeting the originator (a prior CC, or the
+    // primary answer itself under --to adam) means delivered — never duplicate.
+    try {
+      const { data: existing } = await supabase
+        .from('session_coordination')
+        .select('id')
+        .eq('target_session', originator)
+        .eq('payload->>reply_to', String(replyTo))
+        .limit(1);
+      if (Array.isArray(existing) && existing.length > 0) return { inserted: false, originator };
+    } catch { /* fail-open: attempt the CC */ }
+    const { error: ccErr } = await insertRow(
+      supabase,
+      { sender_session: sessionId, sender_type: 'solomon', target_session: originator, message_type: 'INFO', subject, body: payload.body, payload: { ...payload, via: 'cc_originator' }, expires_at: expiresAt },
+      { select: 'id', single: true }
+    );
+    if (ccErr) return { inserted: false, originator, error: (ccErr && ccErr.message) || String(ccErr) };
+    return { inserted: true, originator };
+  } catch (e) {
+    return { inserted: false, originator: null, error: (e && e.message) || String(e) };
+  }
 }
 
 /**
@@ -498,7 +588,7 @@ async function main() {
     process.exit(2);
   }
   // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: `send/request --to adam` — direct 1-hop
-  // channel, gated by ADAM_SOLOMON_TWOWAY_V1 (default OFF; omitting --to is unchanged).
+  // channel, gated by ADAM_SOLOMON_TWOWAY_V1 (default ON since QF-20260705-488; 'off' kills it).
   // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-4: --to also accepts
   // the relay-class peers eva/ceo (lib/coordinator/peer-target.cjs's PEER_KINDS registry) —
   // these enqueue a tracked FR-1 relay-request instead of a direct write. --direct is
@@ -526,7 +616,7 @@ async function main() {
   }
   const twoWayV1On = isAdamSolomonTwoWayV1Enabled();
   if (peerArg === 'adam' && !twoWayV1On) {
-    console.error('ERROR: --to adam is gated by ADAM_SOLOMON_TWOWAY_V1=on (currently OFF). Omit --to to route via the coordinator.');
+    console.error('ERROR: --to adam is disabled by ADAM_SOLOMON_TWOWAY_V1=off (direct lane is ON by default since QF-20260705-488). Omit --to to route via the coordinator.');
     process.exit(3);
   }
 
@@ -564,14 +654,21 @@ async function main() {
     try { replyTo = await resolveReplyToCorrelation(supabase, replyToArg); }
     catch (e) { console.error(`ERROR: --reply-to ${replyToArg} — ${e.message}`); process.exit(2); }
   }
-  // Durable dedup: never re-answer a consult already answered (when replying to one).
-  if (replyTo && (await alreadyAnswered(supabase, replyTo))) {
-    console.log(`(dedup) consult ${String(replyTo).slice(0, 8)} already answered — not re-sending.`);
-    return;
-  }
   const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via, replyClass: replyClassArg, replyWindowMs });
   const subject = `[SOLOMON_ORACLE] ${payload.body.slice(0, 80)}`;
   const expiresAt = advisoryExpiresAt(Date.now());
+
+  // Durable dedup: never re-answer a consult already answered (when replying to one).
+  // QF-20260705-488 (adversarial-review W1): this return previously made a FAILED originator
+  // CC permanently unrecoverable — the primary answer existed, so a re-run short-circuited
+  // here and the originator never got its copy (the exact hand-relay gap this QF closes).
+  // The dedup branch now heals a missing CC (idempotent) before returning.
+  if (replyTo && (await alreadyAnswered(supabase, replyTo))) {
+    const healed = await ensureOriginatorCc(supabase, { replyRef: replyToArg || replyTo, replyTo, target, sessionId, subject, payload, expiresAt });
+    console.log(`(dedup) consult ${String(replyTo).slice(0, 8)} already answered — not re-sending.${healed.inserted ? ` (healed missing originator CC -> ${healed.originator})` : ''}`);
+    if (healed.error) console.error('WARN: originator CC heal failed (re-run the same --reply-to to retry):', healed.error);
+    return;
+  }
 
   let inserted;
   try {
@@ -603,6 +700,16 @@ async function main() {
     console.error(`WARN: ledger capture failed (${ledgerCaptureFailures} this run) — ${ledgerResult.reason}`);
   }
 
+  // QF-20260705-488 (chairman-caught): a consult ANSWER must also land in the ORIGINATOR's
+  // inbox — answer d7f5401c targeted only the coordinator while the consult came from Adam,
+  // and the chairman had to hand-relay the verdict. Fail-open: a CC failure warns, never
+  // blocks the primary send; a re-run of the same --reply-to heals a missing CC (W1).
+  if (replyTo) {
+    const cc = await ensureOriginatorCc(supabase, { replyRef: replyToArg || replyTo, replyTo, target, sessionId, subject, payload, expiresAt });
+    if (cc.inserted) console.log('  cc_originator:', cc.originator);
+    else if (cc.error) console.error('WARN: originator CC failed (primary send unaffected; re-run the same --reply-to to retry):', cc.error);
+  }
+
   console.log('✓ Solomon oracle advisory sent');
   console.log('  advisory_id:', inserted.id);
   console.log('  target:', target);
@@ -623,7 +730,7 @@ module.exports = {
   isReplyRow, isSolomonInboxRow, isOrphanedSolomonRow, SOLOMON_INBOX_KINDS, EXCLUDED_KINDS, SOLOMON_CONSULT_KIND,
   computeConsultSignature, enforceSweepBudget, SOLOMON_SWEEP_BUDGET, alreadyAnswered, checkConsultQuota,
   drainInbox, resolveReplyToCorrelation, drainSolomonOutbound, captureLedgerRow,
-  checkLedgerCaptureHealth, resolveSolomonAdvisoryTarget,
+  checkLedgerCaptureHealth, resolveSolomonAdvisoryTarget, resolveConsultOriginator, ensureOriginatorCc,
 };
 
 if (require.main === module) {
