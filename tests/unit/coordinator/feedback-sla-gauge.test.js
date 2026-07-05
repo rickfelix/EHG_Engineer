@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { SLA_CATEGORIES, UNCONSUMED_STATUSES, computeBreaches, slaKeyFor, planSlaBreaches, remindSlaBreaches } from '../../../lib/coordinator/feedback-sla-gauge.cjs';
+import { describe, it, expect } from 'vitest';
+import { SLA_CATEGORIES, computeBreaches, slaKeyFor, planSlaBreaches, remindSlaBreaches } from '../../../lib/coordinator/feedback-sla-gauge.cjs';
 
 // QF-20260704-493: feedback-consumption SLA gauge. computeBreaches/slaKeyFor are pure
 // (no DB); planSlaBreaches/remindSlaBreaches are tested here with an injected fake
