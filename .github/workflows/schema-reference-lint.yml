@@ -6,10 +6,13 @@
 # credentials needed in CI. The pre-existing phantom backlog (~30 tables /
 # 782 column refs, data-layer scan 2026-06-10) never blocks a PR.
 #
-# ROLLOUT — ADVISORY FIRST: continue-on-error is true for a 7-day soak.
-# FLIP CRITERION: after 7 days (from merge of this workflow) with zero
-# false-positive reports in the harness backlog, set continue-on-error: false
-# to make the lint blocking. Escapes (always available):
+# BLOCKING (QF-20260704-026): the 7-day advisory soak (merged 2026-06-10, ended
+# 2026-06-17) held clean -- the only false-positive reports during the initial
+# rollout week (docstring-placeholder flag, whole-file diff-scoping block on
+# PR #4595) were both root-caused to the same degraded-diff-base fallback bug
+# and fixed by SD-LEO-INFRA-SCHEMA-LINT-DEGRADED-FAILOPEN-001 (completed
+# 2026-06-16, one day before soak-end). Zero new reports since. Escapes
+# (always available):
 #   scripts/lint/schema-reference-allowlist.json  (files / tables)
 #   inline pragma: a comment containing schema-lint-disable-line
 name: Schema Reference Lint
@@ -41,8 +44,8 @@ jobs:
   schema-reference-lint:
     name: schema-reference-lint
     runs-on: ubuntu-latest
-    # ADVISORY SOAK — see flip criterion in the header comment.
-    continue-on-error: true
+    # BLOCKING (soak completed, see header comment) — QF-20260704-026.
+    continue-on-error: false
     steps:
       - uses: actions/checkout@v4
         with:
