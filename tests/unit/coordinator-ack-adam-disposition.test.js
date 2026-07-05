@@ -96,6 +96,14 @@ describe('FR-4: recordLedgerDecision — tail-inheritance', () => {
     expect(result.recorded).toBe(true); // primary write still succeeds
     expect(result.tailsInherited).toBe(0);
   });
+
+  it('TESTING-OBS-1 fix: a deferred primary propagates its defer_trigger onto inherited tails (never a bare deferred with no trigger)', async () => {
+    const sb = makeStubSupabase({ updatedTailIds: ['tail-1'] });
+    const result = await m.recordLedgerDecision(sb, { correlationId: 'corr-1', disposition: 'deferred', deferTrigger: 'next chairman weekly review' });
+    expect(result.tailsInherited).toBe(1);
+    expect(sb._updates[0].patch.decision).toBe('deferred');
+    expect(sb._updates[0].patch.defer_trigger).toBe('next chairman weekly review');
+  });
 });
 
 describe('FR-6: recordLedgerDecision — deferral-discipline enforcement', () => {

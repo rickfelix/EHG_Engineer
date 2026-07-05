@@ -50,11 +50,15 @@ const VALID_DISPOSITIONS = Object.freeze(['accepted', 'rejected', 'partial', 'de
  * `correlationId` via parent_correlation_id. Never throws — returns the count inherited (0 on any
  * error, including "column does not exist yet" for a not-yet-chairman-applied migration).
  */
-async function inheritTailDecisions(supabase, { correlationId, disposition, decidedBy, decisionAt }) {
+async function inheritTailDecisions(supabase, { correlationId, disposition, decidedBy, decisionAt, deferTrigger }) {
   try {
+    const patch = { decision: disposition, decision_by: decidedBy || null, decision_at: decisionAt };
+    // A deferred primary's tails must carry the SAME defer_trigger, or the DB's
+    // defer_trigger_required CHECK would reject the tail update once the migration is applied.
+    if (disposition === 'deferred') patch.defer_trigger = deferTrigger;
     const { data, error } = await supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — chairman-apply-gated table, not yet in the live snapshot
-      .update({ decision: disposition, decision_by: decidedBy || null, decision_at: decisionAt })
+      .update(patch)
       .eq('parent_correlation_id', correlationId)
       .eq('decision', 'pending')
       .select('id');
@@ -92,7 +96,7 @@ async function recordLedgerDecision(supabase, { correlationId, disposition, deci
   } catch (e) {
     return { recorded: false, reason: (e && e.message) || String(e) };
   }
-  const { inherited: tailsInherited } = await inheritTailDecisions(supabase, { correlationId, disposition, decidedBy, decisionAt });
+  const { inherited: tailsInherited } = await inheritTailDecisions(supabase, { correlationId, disposition, decidedBy, decisionAt, deferTrigger });
   return { recorded: true, tailsInherited };
 }
 
