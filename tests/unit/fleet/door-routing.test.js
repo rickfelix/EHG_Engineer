@@ -154,18 +154,39 @@ const oneWayMeta = { door_class: { door: 'one_way', reasons: ['risk_keyword:migr
 const twoWayMeta = { door_class: { door: 'two_way', reasons: ['allowlist:copy_content_edit'] } };
 
 describe('assertDoorRoutingAllowed (TS-3, TS-5)', () => {
-  it('one_way to a below-top-rank worker throws DISPATCH_ONE_WAY_DOOR naming the reason (fail-closed)', async () => {
+  it('one_way to a non-fable worker throws DISPATCH_ONE_WAY_DOOR naming the reason (fail-closed)', async () => {
     const sb = mockSupabaseForGate({ sdMeta: oneWayMeta, sessMeta: { tier_rank: 1, model: 'sonnet' } });
     const row = { message_type: 'WORK_ASSIGNMENT', target_session: 's1', payload: { assigned_sd: 'SD-X-1' } };
     await expect(assertDoorRoutingAllowed(sb, row, { warn() {} })).rejects.toMatchObject({ code: 'DISPATCH_ONE_WAY_DOOR' });
     await expect(assertDoorRoutingAllowed(sb, row, { warn() {} })).rejects.toThrow(/risk_keyword:migration/);
   });
 
-  it('one_way to a top-rank worker proceeds without a delegate stamp', async () => {
+  it('EXCLUSIVITY IS MODEL-KEYED (finding A): opus at TOP static rank is still REFUSED for one_way', async () => {
+    // rankForModelEffort('opus','high') shares static rank 4 with fable — rank can
+    // never prove fable-ness. The gate must check the declared model.
+    const sb = mockSupabaseForGate({ sdMeta: oneWayMeta, sessMeta: { tier_rank: TOP, model: 'opus' } });
+    const row = { message_type: 'WORK_ASSIGNMENT', target_session: 's1', payload: { assigned_sd: 'SD-X-1' } };
+    await expect(assertDoorRoutingAllowed(sb, row, { warn() {} })).rejects.toMatchObject({ code: 'DISPATCH_ONE_WAY_DOOR' });
+  });
+
+  it('EXCLUSIVITY FAILS CLOSED ON UNKNOWN (finding A): an UNSTAMPED session (defaults UP to top rank) is REFUSED for one_way', async () => {
+    const sb = mockSupabaseForGate({ sdMeta: oneWayMeta, sessMeta: {} }); // no model, resolveWorkerTierRank -> TOP
+    const row = { message_type: 'WORK_ASSIGNMENT', target_session: 's1', payload: { assigned_sd: 'SD-X-1' } };
+    await expect(assertDoorRoutingAllowed(sb, row, { warn() {} })).rejects.toThrow(/UNDECLARED/);
+  });
+
+  it('one_way to a declared-fable worker proceeds without a delegate stamp', async () => {
     const sb = mockSupabaseForGate({ sdMeta: oneWayMeta, sessMeta: { tier_rank: TOP, model: 'fable' } });
     const row = { message_type: 'WORK_ASSIGNMENT', target_session: 's1', payload: { assigned_sd: 'SD-X-1' } };
     await assertDoorRoutingAllowed(sb, row, { warn() {} });
     expect(row.payload.delegate_model).toBeUndefined();
+  });
+
+  it('caller-preset delegate_model outside DELEGATE_TIERS is REPLACED, never honored (finding F)', async () => {
+    const sb = mockSupabaseForGate({ sdMeta: twoWayMeta, sessMeta: { tier_rank: 1, model: 'sonnet' } });
+    const row = { message_type: 'WORK_ASSIGNMENT', target_session: 's1', payload: { assigned_sd: 'SD-X-2', delegate_model: 'haiku' } };
+    await assertDoorRoutingAllowed(sb, row, { warn() {} });
+    expect(row.payload.delegate_model).toBe('sonnet');
   });
 
   it('two_way stamps payload.delegate_model from the worker model, validated against DELEGATE_TIERS', async () => {
@@ -192,6 +213,22 @@ describe('assertDoorRoutingAllowed (TS-3, TS-5)', () => {
     await new Promise(r => setTimeout(r, 10));
     expect(sb.ledgerRows).toHaveLength(1);
     expect(sb.ledgerRows[0]).toMatchObject({ work_key: 'SD-X-1', door: 'one_way', delegate_model: null });
+  });
+
+  it('classifier scores key_changes.impact — destructive impact behind docs-only copy is one_way (finding D)', () => {
+    const r = classifyDoor({
+      description: 'docs-only update to runbook',
+      key_changes: [{ change: 'update runbook', impact: 'also drops the production users table' }],
+      files: ['docs/runbook.md'],
+    });
+    expect(r.door).toBe(DOORS.ONE_WAY);
+  });
+
+  it('copy edits touching sensitive paths never delegate (finding E)', () => {
+    const r = classifyDoor({ description: 'reword the tagline', files: ['src/auth/login.js'] });
+    expect(r.door).toBe(DOORS.ONE_WAY);
+    const r2 = classifyDoor({ description: 'feature-flagged stripe payment capture integration', files: ['src/payments/stripe.js'] });
+    expect(r2.door).toBe(DOORS.ONE_WAY); // payment_surface marker fires
   });
 
   it('FR-4 seam: a REFUSED one_way dispatch writes NO ledger row', async () => {
