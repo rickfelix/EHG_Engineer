@@ -167,6 +167,45 @@ describe('resolveCheckin — surface pending WORK_ASSIGNMENT on resume (seam 1)'
     }
   });
 
+  // QF-20260705-858: a preempt-flagged WA (payload.preempt=true) must surface with an act-now
+  // framing distinct from the routine "finish current work first" note, since a chairman-critical
+  // redirect to a claimed worker must not wait behind the current SD's full completion.
+  it('held claim + PREEMPT-flagged WORK_ASSIGNMENT → surfaces preempt:true with act-now message', async () => {
+    const heldSd = 'SD-CURRENT-010';
+    const assignmentSd = 'SD-PREEMPT-011';
+    const sb = fakeSb({ heldSd, assignmentSd });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [{ id: 'msg-preempt', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd, preempt: true } }];
+    try {
+      const res = await resolveCheckin(sb, 'sess-busy', { getCoordinator: async () => null });
+      expect(res.action).toBe('resume');
+      expect(res.sd).toBe(heldSd); // claim NOT auto-dropped — worker owns clean suspension
+      expect(res.pending_work_assignment).toEqual({ sd: assignmentSd, message_id: 'msg-preempt', preempt: true });
+      expect(res.message).toMatch(/PREEMPT/);
+      expect(res.message).not.toMatch(/finish\/hand off/);
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+
+  it('held claim + non-preempt WORK_ASSIGNMENT → message/behavior BYTE-IDENTICAL to prior (no regression)', async () => {
+    const heldSd = 'SD-CURRENT-012';
+    const assignmentSd = 'SD-REDIRECT-013';
+    const sb = fakeSb({ heldSd, assignmentSd });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [{ id: 'msg-routine', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd } }];
+    try {
+      const res = await resolveCheckin(sb, 'sess-busy', { getCoordinator: async () => null });
+      expect(res.pending_work_assignment).toEqual({ sd: assignmentSd, message_id: 'msg-routine', preempt: false });
+      expect(res.message).toMatch(/finish\/hand off/);
+      expect(res.message).not.toMatch(/PREEMPT/);
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+
   // A genuine directed redirect beneath a (newer) sweep advisory must still be found (finding #3):
   // the directed-field selector skips the advisory and surfaces the real redirect.
   it('held claim + sweep advisory NEWER than a directed redirect → surfaces the directed redirect', async () => {

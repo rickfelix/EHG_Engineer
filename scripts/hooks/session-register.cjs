@@ -131,8 +131,7 @@ async function main() {
     tty: getTTY(),
     codebase: detectCurrentRepo(),
     status: 'active',
-    heartbeat_at: now,
-    started_at: now
+    heartbeat_at: now
   });
 
   const { error } = await supabase
@@ -144,6 +143,8 @@ async function main() {
 
   if (!error) {
     console.log(`session-register: registered ${sessionId.slice(0, 12)}...`);
+  } else {
+    process.stderr.write(`[session-register] upsert.failed session=${sessionId.slice(0, 12)} error=${error.message}\n`);
   }
 
   // SD-LEO-INFRA-SESSION-IDENTITY-RECONCILIATION-001 (FR-1): wire reconcileAtBoot
@@ -196,4 +197,9 @@ async function main() {
   } catch { /* best-effort observability; never block SessionStart */ }
 }
 
-main().catch(() => { /* fail silently */ });
+main().catch((err) => {
+  // Never throw — SessionStart must not abort — but surface the error so it's
+  // no longer invisible (was previously swallowed with no trace, hiding schema
+  // drift like the started_at column removal from every session's boot).
+  process.stderr.write(`[session-register] main.failed error=${err?.message || String(err)}\n`);
+});

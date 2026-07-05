@@ -49,7 +49,7 @@ const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cj
 const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, parentLeadPending } = require('../lib/fleet/claim-eligibility.cjs');
 // SD-LEO-INFRA-COMPLEXITY-TIERED-WORKER-ASSIGNMENT-001 (FR-3): WORK-DOWN-NEVER-UP on the PULL path.
 // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B (FR-3): --model/--effort capture at check-in.
-const { resolveWorkerTierRank, isTieringActive, normalizeModel, normalizeEffort, rankForModelEffort, clamp: clampTierRank } = require('../lib/fleet/tier-ladder.cjs');
+const { resolveWorkerTierRank, isTieringActive, normalizeModel, normalizeEffort, rankForModelEffort } = require('../lib/fleet/tier-ladder.cjs');
 // SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-2): tier-aware "claimable-to-MY-rung" rollup.
 const { claimableForTier } = require('../lib/fleet/tier-claimable.cjs');
 // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-E (FR-6): backlog-gated downward claims. The fetcher is
@@ -274,6 +274,22 @@ function extractDirectedSd(msg) {
   if (typeof p.assigned_sd === 'string' && p.assigned_sd) return p.assigned_sd;
   if (typeof p.sd_key === 'string' && p.sd_key) return p.sd_key;
   return null;
+}
+
+// QF-20260705-914: an INFORMATIONAL sweep completion nudge ("Next work available when X
+// completes") must never reach the step-5 assignment-claim path. Those rows name the
+// worker's CURRENT sd in body/payload.current_sd, and extractSdFromAssignment's broad
+// fallbacks turned them into a directed claim for the very QF the worker just released —
+// a perpetual release->reclaim loop (live: QF-20260704-348, 2 cycles in 90s). The sweep
+// now stamps payload.kind='completion_nudge' + informational:true; the subject-literal
+// match keeps OLD-shape rows still inside ASSIGNMENT_RECENCY_WINDOW_MS inert too (the
+// literal is owned by dispatchWorkAssignmentsIfAllowed in stale-session-sweep.cjs —
+// keep the two in sync).
+function isInformationalNudge(msg) {
+  if (!msg) return false;
+  const p = msg.payload || {};
+  if (p.kind === 'completion_nudge' || p.informational === true) return true;
+  return /^Next work available when /.test(msg.subject || '');
 }
 
 async function resolveTrack(sb, sdKey, fallback) {
@@ -1238,7 +1254,12 @@ function mergeCheckinModelEffort(sessionMetadata, { model: cliModel = null, effo
     const finalModel = next.model || current.model;
     const finalEffort = next.effort || current.effort;
     if (finalModel && finalEffort) {
-      const rank = clampTierRank(rankForModelEffort(finalModel, finalEffort));
+      // QF-20260705-394: rankForModelEffort now returns the STATIC-ladder dense rank
+      // (ladder-bounded by construction), so it is stamped UNCLAMPED. The old
+      // clamp() bound it to the process-cached live top rank — a live-shrunk cache
+      // (K=3 fleet) collapsed a fable/xhigh self-report to 3, below statically-stamped
+      // min_tier_rank=4 SDs, clobbering coordinator rank stamps on every checkin.
+      const rank = rankForModelEffort(finalModel, finalEffort);
       if (next.tier_rank !== rank) next.tier_rank = rank;
     }
   }
@@ -1387,17 +1408,27 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
         const wa = (msgs || []).find(m => m.message_type === 'WORK_ASSIGNMENT' && extractDirectedSd(m));
         if (wa) {
           const waSd = extractDirectedSd(wa);
-          if (waSd && waSd !== mySd) pendingAssignment = { sd: waSd, message_id: wa.id };
+          // QF-20260705-858: a preempt-flagged WA (coordinator dispatch stamps payload.preempt=true
+          // on a chairman-critical redirect) must surface with an act-now framing, distinct from the
+          // routine "finish current work first" note below -- the resume short-circuit otherwise
+          // structurally delays a preempt until the current SD fully completes. Non-preempt WAs are
+          // BYTE-IDENTICAL to prior behavior (no new field, no message change) — only the preempt
+          // branch changes.
+          if (waSd && waSd !== mySd) pendingAssignment = { sd: waSd, message_id: wa.id, preempt: wa.payload?.preempt === true };
         }
       } catch { /* fail-open: no pending-assignment surfacing */ }
       const resumeMsg = isQf
         ? `Already claiming quick-fix ${mySd}; resume it: node scripts/read-quick-fix.js ${mySd}, then run the /quick-fix workflow (do NOT run sd-start.js for a QF).`
         : `Already claiming ${mySd}; resume work (run sd-start to (re)attach the worktree).`;
+      let resumeMessage = resumeMsg;
+      if (pendingAssignment?.preempt) {
+        resumeMessage = `${resumeMsg} ⚠ PREEMPT: coordinator has redirected you to ${pendingAssignment.sd} (chairman-critical). Consider releasing ${mySd} cleanly (worker owns clean suspension — never auto-released) and claiming ${pendingAssignment.sd} now, rather than finishing ${mySd} first.`;
+      } else if (pendingAssignment) {
+        resumeMessage = `${resumeMsg} NOTE: coordinator WORK_ASSIGNMENT pending for ${pendingAssignment.sd} — finish/hand off ${mySd} first, then claim it (never drop an in-progress SD).`;
+      }
       return { ...base, action: 'resume', sd: mySd,
         ...(pendingAssignment ? { pending_work_assignment: pendingAssignment } : {}),
-        message: pendingAssignment
-          ? `${resumeMsg} NOTE: coordinator WORK_ASSIGNMENT pending for ${pendingAssignment.sd} — finish/hand off ${mySd} first, then claim it (never drop an in-progress SD).`
-          : resumeMsg };
+        message: resumeMessage };
     }
   }
 
@@ -1425,7 +1456,8 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
   const assignmentSinceIso = new Date(Date.now() - ASSIGNMENT_RECENCY_WINDOW_MS).toISOString();
   try {
     const msgs = await ws.getMessagesForSession(sb, sessionId, { unackedOnly: true, sinceIso: assignmentSinceIso });
-    assignment = (msgs || []).find(m => m.message_type === 'WORK_ASSIGNMENT');
+    // QF-20260705-914: informational completion nudges are never claimable assignments.
+    assignment = (msgs || []).find(m => m.message_type === 'WORK_ASSIGNMENT' && !isInformationalNudge(m));
     if (!assignment) {
       // QF-20260703-806: the unacked pull can miss a row whose acknowledged_at got stamped by a
       // path OTHER than a genuine claim outcome (the ack-before-claim race). Claim outcome, not
@@ -1433,7 +1465,7 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       // The terminal/ineligible/tryClaim checks below already re-verify the target SD's LIVE
       // state and are idempotent, so resurrecting an already-genuinely-resolved row is harmless.
       const wider = await ws.getMessagesForSession(sb, sessionId, { sinceIso: assignmentSinceIso });
-      assignment = (wider || []).find(m => m.message_type === 'WORK_ASSIGNMENT');
+      assignment = (wider || []).find(m => m.message_type === 'WORK_ASSIGNMENT' && !isInformationalNudge(m));
     }
   } catch { /* fail-open */ }
   if (assignment) {
@@ -1848,7 +1880,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isQuarantined, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
+module.exports = { extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isQuarantined, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
 
 if (require.main === module) {
   main().catch(err => {

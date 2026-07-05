@@ -867,13 +867,22 @@ async function dispatchWorkAssignmentsIfAllowed(supabase, activeSessions, availa
 
     if (existing && existing.length > 0) continue; // Don't spam
 
+    // QF-20260705-914: this completion nudge is INFORMATIONAL, never claim-driving. It used
+    // to stamp target_sd = the worker's CURRENT sd_key, and worker-checkin's assignment-claim
+    // step extracted that very key back out (via body/payload.current_sd fallbacks) — so a
+    // worker that RELEASED its QF (e.g. a not_before defer) re-claimed it on the next checkin,
+    // and the spam-guard above (no unacked WA -> send a fresh nudge) made the release->reclaim
+    // loop perpetual (live: 2 cycles in 90s, 2026-07-05 09:07Z). target_sd stays null and
+    // payload.kind='completion_nudge' marks the contract; worker-checkin skips these rows in
+    // its claim step symmetrically (isInformationalNudge). current_sd remains payload-only
+    // context so assertSdDispatchable still refuses nudging about a terminal SD.
     const row = {
       target_session: s.session_id,
-      target_sd: s.sd_key,
+      target_sd: null,
       message_type: 'WORK_ASSIGNMENT',
       subject: 'Next work available when ' + s.sd_key.split('-').pop() + ' completes',
       body: 'When you complete ' + s.sd_key + ', pick up the next unclaimed child.\n\nREMINDER: Ensure you are in your own isolated worktree before starting new work. Run: node scripts/resolve-sd-workdir.js <SD-ID>',
-      payload: { available_sds: available, current_sd: s.sd_key },
+      payload: { available_sds: available, current_sd: s.sd_key, kind: 'completion_nudge', informational: true },
       sender_type: 'sweep'
     };
     // SD-LEO-FEAT-CLAIM-ASSIGNMENT-PATH-001: refuse to nudge about a terminal/non-existent SD.

@@ -18,6 +18,10 @@ vi.mock('../../../lib/eva/convergence-loop.js', () => ({
 vi.mock('../../../lib/eva/chairman-product-review.js', () => ({
   requestProductReview: vi.fn(),
 }));
+vi.mock('../../../lib/eva/convergence-remediation-writers.js', () => ({
+  createQuickFixWriter: vi.fn(() => 'qf-writer-fn'),
+  createSdWriter: vi.fn(() => 'sd-writer-fn'),
+}));
 
 import {
   isPostBuildConvergenceGateEnabled,
@@ -29,6 +33,7 @@ import {
 import { isConvergenceSubject } from '../../../lib/eva/clean-clone/launch.js';
 import { runConvergenceLoop } from '../../../lib/eva/convergence-loop.js';
 import { requestProductReview } from '../../../lib/eva/chairman-product-review.js';
+import { createQuickFixWriter, createSdWriter } from '../../../lib/eva/convergence-remediation-writers.js';
 
 function createMockLogger() {
   return { log: vi.fn(), warn: vi.fn() };
@@ -161,6 +166,25 @@ describe('runS19ConvergenceGate — acceptance criteria', () => {
     expect(supabase._upserts).toHaveLength(1);
     expect(supabase._upserts[0].advisory_data.post_build_verdict.status).toBe('PASS');
     expect(requestProductReview).not.toHaveBeenCalled();
+  });
+
+  it('QF-20260705-633: passes createQuickFixFn/createSdFn (built via the writer factories) into runConvergenceLoop', async () => {
+    isConvergenceSubject.mockResolvedValue(true);
+    runConvergenceLoop.mockResolvedValue({
+      status: 'PASS', cycles: 1,
+      scoreResult: { mean: 91, dimensionScores: {}, unscoredDimensions: [], rubric: { dimension_floor: 60 } },
+    });
+    const supabase = makeSupabase();
+
+    await runS19ConvergenceGate(supabase, 'v-1', { logger });
+
+    expect(createQuickFixWriter).toHaveBeenCalledWith(supabase);
+    expect(createSdWriter).toHaveBeenCalledWith();
+    expect(runConvergenceLoop).toHaveBeenCalledWith(supabase, expect.objectContaining({
+      ventureId: 'v-1',
+      createQuickFixFn: 'qf-writer-fn',
+      createSdFn: 'sd-writer-fn',
+    }));
   });
 
   it('acceptance negative case: an ESCALATED verdict persists + fires the loud flag via the EXISTING chairman surface (no new channel)', async () => {

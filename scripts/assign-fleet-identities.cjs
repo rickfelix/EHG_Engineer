@@ -20,7 +20,7 @@ const NATO = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', '
 // value to 4 — a THIRD independent hardcoded-4-rung assumption alongside tier-ladder.cjs's
 // LADDER and sd-tier-rank.mjs's rung literals. Both are now derived from the shared
 // lib/fleet/tier-ladder.cjs module so K (ladderTopRank()) is never assumed to be 4.
-const { resolveWorkerTierRank, ladderTopRank, deriveWorkerTierRank } = require('../lib/fleet/tier-ladder.cjs');
+const { resolveWorkerTierRank, ladderTopRank, stampRankForWorker } = require('../lib/fleet/tier-ladder.cjs');
 
 // QF-20260627-108 (FR-1): the chairman effort-encoded callsign scheme. A worker's callsign is
 // derived from its metadata.tier_rank (the source-of-truth), NOT flat first-available NATO order —
@@ -346,15 +346,24 @@ async function main() {
     }
   }
 
-  // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-C (FR-4): this cron is the only reader that sees the
-  // WHOLE live fleet, so it is the authoritative writer of the fleet-relative dense tier_rank. A
-  // lone worker's own check-in self-report (worker-checkin.cjs mergeCheckinModelEffort) only knows
-  // its own capabilityScore against a cached ladder; this refresh corrects every worker to the true
-  // 1..K dense rank across all CURRENTLY live workers, before tierRankOf()/callsignInTierBand() below
-  // read it for banding decisions.
+  // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-C (FR-4): this cron is the authoritative tier_rank
+  // writer. QF-20260705-394 revised WHAT it writes: for workers with known model+effort the stamp
+  // is the STATIC-ladder rank (rankForModelEffort via stampRankForWorker) — identical to
+  // worker-checkin.cjs mergeCheckinModelEffort's self-report formula, so the two writers can never
+  // disagree — because SD min_tier_rank thresholds live in the static space and a live-relative
+  // dense rank compressed (K<4 fleets) or inflated (K>4 fleets) stamps out of that space. The
+  // live-fleet dense rank remains the fallback for unknown model/effort only. NB: a static stamp
+  // can exceed a shrunken live K; tierRankOf()'s bounds check coerces such reads to the live top
+  // for banding, which is the correct band either way.
   const liveFleet = uniqueWorkers.map(w => ({ model: w.metadata?.model, effort: w.metadata?.effort }));
   for (const worker of uniqueWorkers) {
-    const freshRank = deriveWorkerTierRank(worker, liveFleet);
+    // QF-20260705-394: stampRankForWorker writes the PURE static rank for known
+    // model+effort pairs (live dense rank only as unknown-pair fallback) — a K<4 live
+    // fleet must never compress the strongest workers below the static space SD
+    // min_tier_rank thresholds are written in (this cron was the recurring 4->3
+    // clobber writer in the 2026-07-05 dispatch-refusal incident), and a K>4 fleet
+    // must never inflate weak workers above their static rung.
+    const freshRank = stampRankForWorker(worker, liveFleet);
     if (worker.metadata?.tier_rank !== freshRank) {
       const metadata = { ...(worker.metadata || {}), tier_rank: freshRank };
       const { error: rankErr } = await supabase

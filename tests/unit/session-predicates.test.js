@@ -124,6 +124,19 @@ describe('isDispatchableFleetMember — idle/capacity panel role guard (no everC
     expect(isDispatchableFleetMember(undefined, coordId)).toBe(false);
     expect(isDispatchableFleetMember({}, coordId)).toBe(true);   // unknown role → counted (same as legacy)
   });
+
+  // QF-20260705-436: a coordinator-quarantined WEDGE (heartbeat-fresh but conversationally
+  // dead — specimen 7bd4e96b) false-flagged as a live-idle dispatch target, so the charter
+  // audit's DUTY-3 demanded a WORK_ASSIGNMENT into a window nobody reads.
+  it('EXCLUDES a quarantined wedge session (metadata.quarantined_at set) from dispatchable capacity', () => {
+    const wedge = { session_id: '7bd4e96b-0000-4000-8000-000000000000', status: 'active', metadata: { quarantined_at: '2026-07-05T08:00:00Z' }, sd_key: null };
+    expect(isDispatchableFleetMember(wedge, coordId)).toBe(false);
+  });
+
+  it('an un-quarantined session (key cleared/absent/null) counts again — quarantine is reversible', () => {
+    expect(isDispatchableFleetMember({ session_id: 'e4c2b7aa-0000-4000-8000-000000000000', metadata: { quarantined_at: null }, sd_key: null }, coordId)).toBe(true);
+    expect(isDispatchableFleetMember({ session_id: 'e4c2b7aa-0000-4000-8000-000000000000', metadata: {}, sd_key: null }, coordId)).toBe(true);
+  });
 });
 
 describe('production wiring guard (catch idle-filter call-site deletion)', () => {
