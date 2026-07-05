@@ -88,7 +88,18 @@ export function getParentOrchestratorExecToPlanGates(supabase, sd) {
         coverage = computeScopeCoverage(sd, children);
         console.log(`   📊 Scope coverage: ${coverage.coverage_pct}% (${coverage.elements.length} declared element(s))`);
 
-        const baseMetadata = (sd.metadata && typeof sd.metadata === 'object' && !Array.isArray(sd.metadata)) ? sd.metadata : {};
+        // Re-fetch metadata fresh immediately before the write to narrow the read-modify-write
+        // window -- `sd` may have been fetched earlier in this handoff, and a full-object
+        // metadata overwrite using a stale copy would silently clobber any concurrent write
+        // to this parent's metadata JSON column.
+        const { data: freshSd } = await supabase
+          .from('strategic_directives_v2')
+          .select('metadata')
+          .eq('id', sd.id)
+          .maybeSingle();
+        const baseMetadata = (freshSd?.metadata && typeof freshSd.metadata === 'object' && !Array.isArray(freshSd.metadata))
+          ? freshSd.metadata
+          : (sd.metadata && typeof sd.metadata === 'object' && !Array.isArray(sd.metadata) ? sd.metadata : {});
         const { error: metaErr } = await supabase
           .from('strategic_directives_v2')
           .update({ metadata: { ...baseMetadata, scope_coverage: coverage } })
