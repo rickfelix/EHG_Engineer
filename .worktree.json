@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-POST-BUILD-ARTIFACT-001-D",
-  "expectedBranch": "feat/SD-LEO-INFRA-POST-BUILD-ARTIFACT-001-D",
-  "createdAt": "2026-07-05T05:00:29.822Z",
+  "sdKey": "SD-LEO-FIX-SOLOMON-RECOMMENDATION-GUARDRAIL-001",
+  "expectedBranch": "feat/SD-LEO-FIX-SOLOMON-RECOMMENDATION-GUARDRAIL-001",
+  "createdAt": "2026-07-05T07:41:24.764Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }

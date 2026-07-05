@@ -11,16 +11,29 @@
  * invented payload.kind. The --reply leg is gated behind COORDINATOR_TWOWAY_V2=on; the
  * ack-stamp works regardless.
  *
- * `--disposition <accepted|rejected|partial>` records the coordinator's/chairman's decision on the
- * advisory into solomon_advice_outcome_ledger (SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001,
- * FR-3), keyed on the advisory's payload.correlation_id (or the explicit --correlation-id override).
+ * `--disposition <accepted|rejected|partial|deferred>` records the coordinator's/chairman's decision
+ * on the advisory into solomon_advice_outcome_ledger (SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001,
+ * FR-3; 'deferred' + tail-inheritance added by SD-LEO-FIX-SOLOMON-RECOMMENDATION-GUARDRAIL-001),
+ * keyed on the advisory's payload.correlation_id (or the explicit --correlation-id override).
  * Idempotent (ON CONFLICT correlation_id DO UPDATE — re-running never duplicates a row). Fail-open:
  * a ledger write failure is logged but never blocks the advisory ack/retire above.
+ *
+ * `--disposition deferred` REQUIRES `--defer-trigger "<named re-fire event>"` — a deferral without a
+ * named trigger is rejected before any DB write (the DB's own CHECK constraint is a second line of
+ * defense once database/migrations/20260705_solomon_ledger_tail_and_deferral.sql is chairman-applied).
+ *
+ * TAIL-INHERITANCE (SD-LEO-FIX-SOLOMON-RECOMMENDATION-GUARDRAIL-001, FR-4): after a primary row's
+ * decision is stamped, any still-pending rows whose parent_correlation_id references this
+ * correlation_id inherit the identical decision/decision_by/decision_at — closes the class where a
+ * multi-part advisory's sub-recommendations rotted at 'pending' forever once only the first part
+ * was ever stamped. Requires the FR-3 migration to be chairman-applied; degrades to a no-op tail
+ * count (never an error) if the parent_correlation_id column does not exist yet.
  *
  * Usage:
  *   node scripts/coordinator-ack-adam.cjs --advisory <id>
  *   node scripts/coordinator-ack-adam.cjs --advisory <id> --reply "<reply body>"
  *   node scripts/coordinator-ack-adam.cjs --advisory <id> --disposition accepted [--correlation-id <id>]
+ *   node scripts/coordinator-ack-adam.cjs --advisory <id> --disposition deferred --defer-trigger "next chairman weekly review"
  */
 require('dotenv').config();
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
@@ -30,32 +43,57 @@ const { fetchAdvisory, stampActioned } = require('../lib/coordinator/adam-adviso
 const { sendCoordinatorReply } = require('./coordinator-reply.cjs');
 const { resolveAdamReplyTarget, retargetStaleAdamInbound, verifyReplyDelivered } = require('../lib/coordinator/adam-identity.cjs');
 
-const VALID_DISPOSITIONS = Object.freeze(['accepted', 'rejected', 'partial']);
+const VALID_DISPOSITIONS = Object.freeze(['accepted', 'rejected', 'partial', 'deferred']);
+
+/**
+ * Fail-open: stamp the identical decision onto any still-pending tail rows referencing
+ * `correlationId` via parent_correlation_id. Never throws — returns the count inherited (0 on any
+ * error, including "column does not exist yet" for a not-yet-chairman-applied migration).
+ */
+async function inheritTailDecisions(supabase, { correlationId, disposition, decidedBy, decisionAt }) {
+  try {
+    const { data, error } = await supabase
+      .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — chairman-apply-gated table, not yet in the live snapshot
+      .update({ decision: disposition, decision_by: decidedBy || null, decision_at: decisionAt })
+      .eq('parent_correlation_id', correlationId)
+      .eq('decision', 'pending')
+      .select('id');
+    if (error) return { inherited: 0, reason: error.message };
+    return { inherited: (data || []).length };
+  } catch (e) {
+    return { inherited: 0, reason: (e && e.message) || String(e) };
+  }
+}
 
 /**
  * Fail-open: record a coordinator/chairman decision into solomon_advice_outcome_ledger, keyed on
- * correlation_id (idempotent upsert). Never throws — returns { recorded, reason }. Exported for tests.
+ * correlation_id (idempotent upsert), then inherit that same decision onto any pending tail rows
+ * (FR-4). Never throws — returns { recorded, reason, tailsInherited }. Exported for tests.
  */
-async function recordLedgerDecision(supabase, { correlationId, disposition, decidedBy }) {
+async function recordLedgerDecision(supabase, { correlationId, disposition, decidedBy, deferTrigger }) {
   if (!correlationId) return { recorded: false, reason: 'no correlation_id' };
   if (!VALID_DISPOSITIONS.includes(disposition)) return { recorded: false, reason: `invalid disposition: ${disposition}` };
+  if (disposition === 'deferred' && !deferTrigger) {
+    return { recorded: false, reason: 'disposition=deferred requires --defer-trigger (a named re-fire event)' };
+  }
+  const decisionAt = new Date().toISOString();
   try {
+    const row = {
+      correlation_id: correlationId,
+      decision: disposition,
+      decision_by: decidedBy || null,
+      decision_at: decisionAt,
+    };
+    if (disposition === 'deferred') row.defer_trigger = deferTrigger;
     const { error } = await supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
-      .upsert(
-        {
-          correlation_id: correlationId,
-          decision: disposition,
-          decision_by: decidedBy || null,
-          decision_at: new Date().toISOString(),
-        },
-        { onConflict: 'correlation_id' }
-      );
+      .upsert(row, { onConflict: 'correlation_id' });
     if (error) return { recorded: false, reason: error.message };
-    return { recorded: true };
   } catch (e) {
     return { recorded: false, reason: (e && e.message) || String(e) };
   }
+  const { inherited: tailsInherited } = await inheritTailDecisions(supabase, { correlationId, disposition, decidedBy, decisionAt });
+  return { recorded: true, tailsInherited };
 }
 
 function parseArgs(argv) {
@@ -111,11 +149,13 @@ async function main() {
     const correlationId = typeof flags['correlation-id'] === 'string'
       ? flags['correlation-id']
       : (adv.payload && adv.payload.correlation_id);
-    const result = await recordLedgerDecision(supabase, { correlationId, disposition, decidedBy: coordinatorSession });
+    const deferTrigger = typeof flags['defer-trigger'] === 'string' ? flags['defer-trigger'] : null;
+    const result = await recordLedgerDecision(supabase, { correlationId, disposition, decidedBy: coordinatorSession, deferTrigger });
     if (result.recorded) {
       console.log('✓ Ledger decision recorded');
       console.log('  correlation_id:', correlationId);
       console.log('  decision:', disposition);
+      if (result.tailsInherited > 0) console.log('  tails inherited:', result.tailsInherited);
     } else {
       console.warn(`⚠ Ledger decision NOT recorded (advisory still actioned): ${result.reason}`);
     }
@@ -152,7 +192,7 @@ async function main() {
   }
 }
 
-module.exports = { parseArgs, recordLedgerDecision, VALID_DISPOSITIONS };
+module.exports = { parseArgs, recordLedgerDecision, inheritTailDecisions, VALID_DISPOSITIONS };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });
