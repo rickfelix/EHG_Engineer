@@ -395,6 +395,7 @@
     "exec-email:should-send": "node scripts/exec-email-should-send.mjs",
     "capture:chairman-summary": "node scripts/capture-chairman-summary.mjs",
     "capture:forward-venture": "node scripts/capture-forward-venture.mjs",
+    "capture:drain-backlog": "node scripts/drain-capture-backlog.mjs",
     "capabilities:populate-ventures": "node scripts/populate-venture-capabilities.mjs",
     "patterns:auto-block-check": "node scripts/auto-block-check.mjs",
     "patterns:seed-auto-block": "node scripts/seed-auto-block-patterns.mjs",
