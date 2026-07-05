@@ -299,6 +299,58 @@ describe.skipIf(!HAS_DB)('claim-boundary probe (LIVE tables, ephemeral fixtures)
     expect(checkin.isQuarantined(again)).toBe(false);
   }, 30_000);
 
+  it('pre-release re-verification: resumed tool activity since the snapshot aborts the release (race guard)', async () => {
+    // Adversarial-review race (PR #5622): probe decided MISS from a stale snapshot,
+    // but the operator answered the prompt and the worker resumed before release.
+    // Simulate: DB row has FRESH last_tool_at; the probe's telemetryMap carries the
+    // STALE boundary-era value. The MISS must abort — claim untouched.
+    await sb.from('claude_sessions')
+      .update({ last_tool_at: new Date().toISOString() })
+      .eq('session_id', SID_UNKNOWN);
+    const staleTelemetry = new Map([[SID_UNKNOWN, {
+      session_id: SID_UNKNOWN,
+      last_tool_at: lastToolBoundaryIso, // stale snapshot: froze at the boundary
+      claimed_at: claimedAtIso,
+      metadata: {},
+      expected_silence_until: null,
+      current_tool_expected_end_at: null,
+    }]]);
+    const classified = [{ session_id: SID_UNKNOWN, sd_key: QF_UNKNOWN, is_virtual: false, terminal_id: 't', tty: 't', status: 'ACTIVE' }];
+    const actions = [];
+    const outcomes = await runClaimBoundaryProbe(sb, classified, staleTelemetry, new Date(), actions, []);
+    expect(outcomes[0]?.verdict).toBe('MISS'); // predicate said MISS from the snapshot…
+    const { data: sess } = await sb.from('claude_sessions')
+      .select('sd_key, metadata').eq('session_id', SID_UNKNOWN).maybeSingle();
+    expect(sess.sd_key).toBe(QF_UNKNOWN); // …but the live re-read aborted the release
+    expect(sess.metadata?.quarantine).toBeUndefined();
+    expect(actions.some(a => a.includes('release aborted') && a.includes('tool activity resumed'))).toBe(true);
+  }, 30_000);
+
+  it('pre-release re-verification: claim changed since the snapshot aborts the release', async () => {
+    // Session re-claimed a DIFFERENT item in the gap — release_sd is session-keyed and
+    // would release the NEW live claim; the sd_key mismatch must abort.
+    const staleTelemetry = new Map([[SID_UNKNOWN, {
+      session_id: SID_UNKNOWN,
+      last_tool_at: lastToolBoundaryIso,
+      claimed_at: claimedAtIso,
+      metadata: {},
+      expected_silence_until: null,
+      current_tool_expected_end_at: null,
+    }]]);
+    // Present the probe a DIFFERENT detected sd_key than the row's live one.
+    const classified = [{ session_id: SID_UNKNOWN, sd_key: 'QF-TEST-CBP-GONE-STALE', is_virtual: false, terminal_id: 't', tty: 't', status: 'ACTIVE' }];
+    // Restore a stale last_tool_at on the row so only the sd_key guard can abort.
+    await sb.from('claude_sessions')
+      .update({ last_tool_at: lastToolBoundaryIso })
+      .eq('session_id', SID_UNKNOWN);
+    const actions = [];
+    await runClaimBoundaryProbe(sb, classified, staleTelemetry, new Date(), actions, []);
+    const { data: sess } = await sb.from('claude_sessions')
+      .select('sd_key').eq('session_id', SID_UNKNOWN).maybeSingle();
+    expect(sess.sd_key).toBe(QF_UNKNOWN); // live claim untouched
+    expect(actions.some(a => a.includes('release aborted') && a.includes('claim changed'))).toBe(true);
+  }, 30_000);
+
   it('kill-switch: CLAIM_BOUNDARY_PROBE_ENABLED=false disables the pass entirely', async () => {
     const { data: rows } = await sb.from('claude_sessions')
       .select('session_id, sd_key, claimed_at, last_tool_at, terminal_id, tty, metadata')

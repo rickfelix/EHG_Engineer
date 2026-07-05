@@ -152,7 +152,37 @@ async function runClaimBoundaryProbe(supabase, classified, telemetryMap, now, ac
       if (result.verdict !== 'MISS') continue;
 
       const releasedSd = s.sd_key;
-      // 1. Release through the manual fence's own path — QF-aware release_sd RPC.
+      // 1a. Pre-release re-verification (adversarial review, PR #5622): the tick snapshot
+      // is seconds-to-tens-of-seconds old by the time we act, and release_sd is
+      // SESSION-keyed — it releases whatever the session holds NOW, not what the probe
+      // detected. If the operator answered the prompt in the gap (last_tool_at advanced)
+      // or the session re-claimed a DIFFERENT item (sd_key changed), releasing now would
+      // yank a LIVE claim. Re-read the row and abort the MISS on any movement; a failed
+      // re-read also aborts (fail-open: never release on unverifiable state).
+      let liveRow = null;
+      try {
+        const { data, error: liveErr } = await supabase
+          .from('claude_sessions')
+          .select('sd_key, last_tool_at')
+          .eq('session_id', s.session_id)
+          .maybeSingle();
+        if (!liveErr) liveRow = data;
+      } catch { /* liveRow stays null -> abort below */ }
+      if (!liveRow) {
+        warnings.push('CLAIM_BOUNDARY_PROBE: release aborted for ' + s.session_id + ' — pre-release re-read unavailable (fail-open)');
+        continue;
+      }
+      if (liveRow.sd_key !== s.sd_key) {
+        actions.push('CLAIM_BOUNDARY_PROBE: release aborted for ' + s.session_id + ' — claim changed since snapshot (' + s.sd_key + ' -> ' + (liveRow.sd_key || 'none') + '), session is live');
+        continue;
+      }
+      const liveToolMs = liveRow.last_tool_at ? Date.parse(liveRow.last_tool_at) : null;
+      const snapToolMs = t.last_tool_at ? Date.parse(t.last_tool_at) : null;
+      if (Number.isFinite(liveToolMs) && (snapToolMs === null || liveToolMs > snapToolMs)) {
+        actions.push('CLAIM_BOUNDARY_PROBE: release aborted for ' + s.session_id + ' — tool activity resumed since snapshot (window likely un-blocked)');
+        continue;
+      }
+      // 1b. Release through the manual fence's own path — QF-aware release_sd RPC.
       const { bestEffortReleaseSd } = await import('../lib/fleet/best-effort-release.mjs');
       const rel = await bestEffortReleaseSd(supabase, s.session_id, 'CLAIM_BOUNDARY_PROBE',
         (m) => warnings.push('CLAIM_BOUNDARY_PROBE: ' + m));
@@ -175,7 +205,9 @@ async function runClaimBoundaryProbe(supabase, classified, telemetryMap, now, ac
       }
 
       // 3. Quarantine (QF-193 provenance convention). Read-modify-write on FRESH
-      // metadata so concurrent writers (identity stamps, checkin merges) aren't clobbered.
+      // metadata NARROWS the clobber window vs writing the stale snapshot (a write
+      // landing inside the read->write gap can still lose — accepted file-wide JSONB
+      // pattern; a lost quarantine self-heals at the next sweep pass).
       try {
         const { data: freshRow } = await supabase
           .from('claude_sessions').select('metadata').eq('session_id', s.session_id).maybeSingle();
