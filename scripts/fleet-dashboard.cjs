@@ -744,6 +744,57 @@ function printHealth(d) {
   console.log('');
 }
 
+// ── Section: Periodic-Process Liveness (SD-LEO-INFRA-PERIODIC-PROCESS-LIVENESS-001, FR-5) ──
+async function printPeriodicLiveness() {
+  const { data: rows, error } = await supabase
+    .from('periodic_process_registry')
+    .select('process_key, display_name, process_type, currently_expected_active, last_fired_at, last_state, updated_at')
+    .order('process_type', { ascending: true });
+
+  console.log('PERIODIC-PROCESS LIVENESS');
+  console.log('─'.repeat(72));
+
+  if (error) {
+    console.log('  (unable to load periodic_process_registry: ' + error.message + ')');
+    console.log('');
+    return;
+  }
+  if (!rows || rows.length === 0) {
+    console.log('  (registry empty)');
+    console.log('');
+    return;
+  }
+
+  const self = rows.find((r) => r.process_key === '__watcher_self__');
+  const watcherAgeSec = self?.last_fired_at ? Math.round((Date.now() - Date.parse(self.last_fired_at)) / 1000) : null;
+  const watcherLine = watcherAgeSec == null
+    ? '  Watcher last-run: NEVER RUN'
+    : '  Watcher last-run: ' + watcherAgeSec + 's ago' + (watcherAgeSec > 3600 ? '  [STALE WATCHER]' : '');
+  console.log(watcherLine);
+  console.log('');
+
+  // Render the watcher's own persisted last_state directly (scripts/periodic-liveness-watcher.mjs
+  // is the single source of truth for state evaluation and writes last_state on every run,
+  // regardless of outcome -- the dashboard renders that column, it does not re-implement the
+  // 2+-signal logic or re-derive state from a flags lookback. A flags-table lookback was tried
+  // first and rejected: an OVERDUE flag row does not expire when the process recovers, so
+  // rendering "is there a flag" rather than "what is the CURRENT last_state" would keep showing
+  // OVERDUE forever after a single episode (the same latch defect fixed in emitOverdueSignal,
+  // adversarial review on PR #5562).
+  const ageOfHours = (ts) => (ts ? Math.max(0, Math.round((Date.now() - Date.parse(ts)) / 3600000)) + 'h' : '—');
+
+  const others = rows.filter((r) => r.process_key !== '__watcher_self__');
+  for (const r of others) {
+    const state = !r.currently_expected_active
+      ? 'INTENTIONALLY_DOWN'
+      : (r.last_state || 'UNVERIFIED');
+    console.log('  ' + pad(state, 20) + pad(r.process_type, 16) + pad(ageOfHours(r.last_fired_at), 8) + (r.display_name || r.process_key));
+  }
+  console.log('');
+  console.log('  Run scripts/periodic-liveness-watcher.mjs to refresh state.');
+  console.log('');
+}
+
 // ── Section: QA ──
 function printQA(d) {
   const now = Date.now();
@@ -1888,6 +1939,7 @@ async function main() {
     feedback:      async () => await printFeedback(d), // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001
     team:          () => printTeam(d), // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B
     chairmanemail: async () => await printChairmanEmailChannelHealth(), // SD-LEO-INFRA-CHAIRMAN-EMAIL-CHANNEL-001
+    periodic:      async () => await printPeriodicLiveness(), // SD-LEO-INFRA-PERIODIC-PROCESS-LIVENESS-001 (FR-5)
     all:           async () => {
       // Team banner appears at top of /coordinator all when active teams exist (otherwise no-op)
       if (d.executeTeams && d.executeTeams.length > 0) printTeam(d);
@@ -1913,6 +1965,7 @@ async function main() {
       await printFeedback(d); // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001 — feedback work-store
       await printCoaching(d);
       printHealth(d);
+      await printPeriodicLiveness(); // SD-LEO-INFRA-PERIODIC-PROCESS-LIVENESS-001 (FR-5)
       printQA(d);
       await printForecast(d);
       await printPredictions(d);
@@ -1922,7 +1975,7 @@ async function main() {
   const fn = sections[section];
   if (!fn) {
     console.log('Usage: node scripts/fleet-dashboard.cjs [section]');
-    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, qa, forecast, predictions, inbox, adam, solomon, context, feedback, team, all');
+    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, periodic, qa, forecast, predictions, inbox, adam, solomon, context, feedback, team, all');
     process.exit(1);
   }
 
