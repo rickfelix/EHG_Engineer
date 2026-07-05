@@ -1,7 +1,7 @@
 {
- "generated_at": "2026-07-05T13:38:07.701Z",
+ "generated_at": "2026-07-05T16:12:13.674Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 771,
+ "table_count": 772,
  "view_count": 177,
  "tables": {
   "_migration_metadata": "{key,value}",
@@ -273,6 +273,7 @@
   "gate_failure_patterns": "{id,gate,failure_signature,occurrence_count,first_seen_at,last_seen_at,related_pattern_id,remediation_sd_id,remediation_status,evidence,created_at,updated_at}",
   "gate_health_history": "{id,gate,week_start,total_attempts,passes,failures,pass_rate,avg_score,created_at}",
   "gate_requirements_templates": "{id,gate_type,template_name,requirements_template,verification_criteria,is_default,created_at}",
+  "gate_witness_registry": "{id,gate_id,handoff_type,classification,witness_mechanism,enforcement_strength,exemption_reason,existing_mechanism_ref,notes,classified_at,classified_by}",
   "genesis_deployments": "{id,simulation_id,preview_url,deployment_id,project_name,ttl_days,expires_at,health_status,last_health_check,error_message,created_at,updated_at}",
   "genesis_tier_config": "{tier_code,tier_name,description,features,default_ttl_days,requires_approval,created_at,updated_at}",
   "github_operations": "{id,sd_id,prd_id,operation_type,pr_number,pr_url,pr_title,pr_status,release_tag,release_url,release_notes,commit_hash,branch_name,base_branch,review_requested_from,review_status,review_comments,deployment_id,deployment_status,deployment_environment,deployment_url,leo_phase,triggered_by,metadata,error_message,created_at,completed_at,updated_at}",
