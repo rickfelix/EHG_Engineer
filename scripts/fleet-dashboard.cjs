@@ -1779,6 +1779,31 @@ async function printChairmanDirectives() {
   console.log('');
 }
 
+// QF-20260704-493: feedback-consumption SLA gauge — actionable categories with no
+// consumption deadline (adam_adherence_drift, completion_flag, coordinator_review,
+// harness_backlog escalations) can rot unconsumed indefinitely. Recomputes fresh every
+// render (primary-state check); the daily reminder itself lives in the cron-scheduled
+// scripts/coordinator-feedback-sla-gauge.cjs, not here — this is read-only visibility.
+async function printFeedbackSlaGauge() {
+  const { planSlaBreaches } = require('../lib/coordinator/feedback-sla-gauge.cjs');
+
+  console.log('FEEDBACK-CONSUMPTION SLA GAUGE');
+  console.log('─'.repeat(72));
+
+  const breaches = await planSlaBreaches(supabase);
+  if (breaches.length === 0) {
+    console.log('  (all actionable feedback categories consumed within SLA)');
+    console.log('');
+    return;
+  }
+
+  console.log('  ' + breaches.length + ' categor' + (breaches.length === 1 ? 'y' : 'ies') + ' breaching consumption SLA:');
+  for (const b of breaches) {
+    console.log('  • ' + pad(b.category, 22) + b.count + ' unconsumed, oldest ' + b.oldestAgeDays + 'd');
+  }
+  console.log('');
+}
+
 // FR-4 surfacing: rows the stale-session sweep dead-lettered (payload.dead_letter=true)
 // in the last 24h — undelivered traffic no longer vanishes tracelessly; the coordinator
 // can re-send to the successor session. Read-only.
@@ -1937,6 +1962,7 @@ async function main() {
     solomon:       async () => { await printSolomonInbox(); await printSolomonLedgerRollup(); }, // SD-LEO-INFRA-SOLOMON-CONSULT-001F + SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001
     context:       async () => await printWorkingContext(), // SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001 (FR-3)
     feedback:      async () => await printFeedback(d), // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001
+    slagauge:      async () => await printFeedbackSlaGauge(), // QF-20260704-493
     team:          () => printTeam(d), // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B
     chairmanemail: async () => await printChairmanEmailChannelHealth(), // SD-LEO-INFRA-CHAIRMAN-EMAIL-CHANNEL-001
     periodic:      async () => await printPeriodicLiveness(), // SD-LEO-INFRA-PERIODIC-PROCESS-LIVENESS-001 (FR-5)
@@ -1957,6 +1983,7 @@ async function main() {
       await printDeadLetters(); // FR-4 SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001
       await printRelayDropGauge(); // FR-3 SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001
       await printChairmanEmailChannelHealth(); // SD-LEO-INFRA-CHAIRMAN-EMAIL-CHANNEL-001
+      await printFeedbackSlaGauge(); // SD-LEO-FIX-FEEDBACK-CONSUMPTION-SLA-001 (escalated from QF-20260704-493) — feedback-consumption SLA gauge
       await printAdamInbox(); // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B — Adam advisory lane
       await printReviewHeldSds(); // QF-20260704-742 — third intake surface: needs_coordinator_review holds
       await printSolomonInbox(); // SD-LEO-INFRA-SOLOMON-CONSULT-001F — Solomon oracle consult lane (dormant until SOLOMON_CONSULT_V1)
@@ -1975,7 +2002,7 @@ async function main() {
   const fn = sections[section];
   if (!fn) {
     console.log('Usage: node scripts/fleet-dashboard.cjs [section]');
-    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, periodic, qa, forecast, predictions, inbox, adam, solomon, context, feedback, team, all');
+    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, periodic, qa, forecast, predictions, inbox, adam, solomon, context, feedback, slagauge, team, all');
     process.exit(1);
   }
 
