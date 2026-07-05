@@ -157,9 +157,12 @@ describe('TS-3: fail-closed write-path semantics', () => {
 });
 
 describe('TS-4: sim work cannot masquerade as real (shared helper)', () => {
-  it('unlabeled launch evidence fails the sim check; labeled passes', () => {
+  it('unlabeled launch evidence fails the sim check; labeled passes (both row shapes)', () => {
     expect(evaluateSimArtifacts([{ artifact_type: 'launch_metrics', payload: {} }]).pass).toBe(false);
     expect(evaluateSimArtifacts([{ artifact_type: 'launch_metrics', payload: { labeled_simulation: true } }]).pass).toBe(true);
+    // Persisted DB rows carry the payload in venture_artifacts.artifact_data (dual-write).
+    expect(evaluateSimArtifacts([{ artifact_type: 'launch_metrics', artifact_data: {} }]).pass).toBe(false);
+    expect(evaluateSimArtifacts([{ artifact_type: 'launch_metrics', artifact_data: { labeled_simulation: true } }]).pass).toBe(true);
     expect(evaluateSimArtifacts([{ artifact_type: 'unrelated', payload: {} }]).pass).toBe(true); // only launch evidence is subject
     expect(LAUNCH_EVIDENCE_TYPES).toContain('launch_metrics');
   });
