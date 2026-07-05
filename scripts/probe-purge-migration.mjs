@@ -25,44 +25,64 @@ const fingerprintQ = `
 
 const client = await createDatabaseClient('ehg');
 let ok = false;
+let skipped = false;
 try {
-  await client.query('BEGIN');
+  // SD-LEO-INFRA-RETARGET-RESTORE-REHEARSAL-001: this is a one-shot pre-flight probe for a
+  // migration that has already shipped to production (management_reviews_quarantine_20260610
+  // is live). upSql's own 0a guard aborts on a pre-existing quarantine table, so re-running the
+  // full probe against today's already-migrated state would always fail confusingly inside the
+  // migration SQL. When this table is eventually DROPped (chairman-gated, separate migration —
+  // see the breadcrumb in lib/retention/policies.js and scripts/sentinels/audit-security-linter.mjs),
+  // this script becomes fully dead and should be deleted in that same PR.
+  const existing = await client.query(
+    "SELECT to_regclass('public.management_reviews_quarantine_20260610') AS t"
+  );
 
-  const before = await client.query('SELECT count(*)::bigint AS n FROM management_reviews');
-  const fpBefore = await client.query(fingerprintQ);
-  console.log('live count before (in-tx):', before.rows[0].n);
+  if (existing.rows[0].t !== null) {
+    skipped = true;
+    ok = true;
+    console.log('ℹ️  management_reviews_quarantine_20260610 already exists — the 20260610 migration this probes has already shipped. Nothing further to verify; this script is historical.');
+  } else {
+    await client.query('BEGIN');
 
-  // --- UP: run the whole migration as one multi-statement query (matches apply-migration.js model) ---
-  await client.query(upSql);
+    const before = await client.query('SELECT count(*)::bigint AS n FROM management_reviews');
+    const fpBefore = await client.query(fingerprintQ);
+    console.log('live count before (in-tx):', before.rows[0].n);
 
-  const after = await client.query('SELECT count(*)::bigint AS n FROM management_reviews');
-  const quar = await client.query('SELECT count(*)::bigint AS n FROM management_reviews_quarantine_20260610');
-  const conUp = await client.query(constraintQ);
-  console.log('after UP  — live:', after.rows[0].n, '(expect 0) | quarantine:', quar.rows[0].n, '(expect == before) | UNIQUE present:', conUp.rowCount === 1 ? 'YES' : 'NO');
+    // --- UP: run the whole migration as one multi-statement query (matches apply-migration.js model) ---
+    await client.query(upSql);
 
-  // --- DOWN: roll the purge back inside the same tx and prove byte-identical restoration ---
-  await client.query(downSql);
+    const after = await client.query('SELECT count(*)::bigint AS n FROM management_reviews');
+    const quar = await client.query('SELECT count(*)::bigint AS n FROM management_reviews_quarantine_20260610');
+    const conUp = await client.query(constraintQ);
+    console.log('after UP  — live:', after.rows[0].n, '(expect 0) | quarantine:', quar.rows[0].n, '(expect == before) | UNIQUE present:', conUp.rowCount === 1 ? 'YES' : 'NO');
 
-  const restored = await client.query('SELECT count(*)::bigint AS n FROM management_reviews');
-  const fpAfter = await client.query(fingerprintQ);
-  const conDown = await client.query(constraintQ);
-  console.log('after DOWN — live:', restored.rows[0].n, '(expect == before) | UNIQUE present:', conDown.rowCount === 1 ? 'YES' : 'NO', '(expect NO) | fingerprint match:', fpBefore.rows[0].fp === fpAfter.rows[0].fp ? 'YES' : 'NO');
+    // --- DOWN: roll the purge back inside the same tx and prove byte-identical restoration ---
+    await client.query(downSql);
 
-  const pass =
-    after.rows[0].n === '0' &&
-    quar.rows[0].n === before.rows[0].n &&
-    conUp.rowCount === 1 &&
-    restored.rows[0].n === before.rows[0].n &&
-    conDown.rowCount === 0 &&
-    fpBefore.rows[0].fp === fpAfter.rows[0].fp;
+    const restored = await client.query('SELECT count(*)::bigint AS n FROM management_reviews');
+    const fpAfter = await client.query(fingerprintQ);
+    const conDown = await client.query(constraintQ);
+    console.log('after DOWN — live:', restored.rows[0].n, '(expect == before) | UNIQUE present:', conDown.rowCount === 1 ? 'YES' : 'NO', '(expect NO) | fingerprint match:', fpBefore.rows[0].fp === fpAfter.rows[0].fp ? 'YES' : 'NO');
 
-  if (!pass) throw new Error('PROBE ASSERTIONS FAILED');
-  ok = true;
-  console.log('\n✅ PROBE PASS — UP purges + constrains, DOWN restores byte-identical (fingerprint match), all rolled back.');
+    const pass =
+      after.rows[0].n === '0' &&
+      quar.rows[0].n === before.rows[0].n &&
+      conUp.rowCount === 1 &&
+      restored.rows[0].n === before.rows[0].n &&
+      conDown.rowCount === 0 &&
+      fpBefore.rows[0].fp === fpAfter.rows[0].fp;
+
+    if (!pass) throw new Error('PROBE ASSERTIONS FAILED');
+    ok = true;
+    console.log('\n✅ PROBE PASS — UP purges + constrains, DOWN restores byte-identical (fingerprint match), all rolled back.');
+  }
 } catch (e) {
   console.error('\n❌ PROBE FAIL:', e.message);
 } finally {
-  try { await client.query('ROLLBACK'); console.log('rolled back — no committed change'); } catch {}
+  if (!skipped) {
+    try { await client.query('ROLLBACK'); console.log('rolled back — no committed change'); } catch {}
+  }
   await client.end();
   process.exitCode = ok ? 0 : 1;
 }

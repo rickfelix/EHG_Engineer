@@ -10,9 +10,14 @@
  *   from the LIVE table's column shape (jsonb_populate_record), read back via
  *   to_jsonb and assert field-level fidelity.
  *
- * Drill B — quarantine-table copy:
- *   copy a sample from management_reviews_quarantine_20260610 into scratch and
- *   assert row identity via per-row md5(row::text).
+ * Drill B — quarantine-table copy (synthetic fixture, SD-LEO-INFRA-RETARGET-RESTORE-REHEARSAL-001):
+ *   build a synthetic source fixture inside the scratch schema (hard-coded
+ *   23-column shape mirroring the management_reviews table — see
+ *   QUARANTINE_FIXTURE_COLUMNS), copy a deterministic sample into a second
+ *   scratch table, and assert row identity via per-row md5(row::text).
+ *   Retargeted off the real quarantine backup table this drill previously read
+ *   from directly, which is eligible for a future chairman-gated drop — this
+ *   drill no longer depends on it existing.
  *
  * Safety contract (asserted, not promised):
  *   - every statement passes through the audited executor; a whitelist
@@ -41,8 +46,71 @@ import {
 
 // Fixed targets — deliberately constants, never user input (identifier safety).
 const DRILL_A_ARCHIVED_TABLE = 'workflow_trace_log';
-const DRILL_B_QUARANTINE_TABLE = 'management_reviews_quarantine_20260610';
 const SAFE_IDENT = /^[a-z0-9_]+$/;
+
+// Drill B synthetic fixture — hard-coded to mirror the management_reviews table's live
+// 23-column shape (docs/reference/schema/engineer/tables/management_reviews.md, captured
+// 2026-07-02). Deliberately NOT derived from any live/backup table: this is what makes
+// Drill B independent of the real quarantine backup table's eventual chairman-gated drop.
+const QUARANTINE_FIXTURE_COLUMNS = [
+  { col: 'id', type: 'uuid' },
+  { col: 'review_date', type: 'date' },
+  { col: 'review_type', type: 'text' },
+  { col: 'baseline_version_from', type: 'integer' },
+  { col: 'baseline_version_to', type: 'integer' },
+  { col: 'planned_capabilities', type: 'integer' },
+  { col: 'actual_capabilities', type: 'integer' },
+  { col: 'planned_ventures', type: 'integer' },
+  { col: 'actual_ventures', type: 'integer' },
+  { col: 'planned_sds', type: 'integer' },
+  { col: 'actual_sds', type: 'integer' },
+  { col: 'okr_snapshot', type: 'jsonb' },
+  { col: 'risk_snapshot', type: 'jsonb' },
+  { col: 'strategy_health', type: 'jsonb' },
+  { col: 'decisions', type: 'jsonb' },
+  { col: 'actions', type: 'jsonb' },
+  { col: 'pipeline_snapshot', type: 'jsonb' },
+  { col: 'eva_narrative', type: 'text' },
+  { col: 'eva_proposals', type: 'jsonb' },
+  { col: 'chairman_notes', type: 'text' },
+  { col: 'chairman_approved_proposals', type: 'jsonb' },
+  { col: 'overall_score', type: 'integer' },
+  { col: 'created_at', type: 'timestamptz' },
+];
+
+/** Deterministic synthetic rows matching QUARANTINE_FIXTURE_COLUMNS — no live data read. */
+function buildSyntheticQuarantineRows(count) {
+  const reviewTypes = ['weekly', 'monthly', 'ad_hoc'];
+  const rows = [];
+  for (let i = 0; i < count; i++) {
+    rows.push({
+      id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+      review_date: `2026-01-${String((i % 28) + 1).padStart(2, '0')}`,
+      review_type: reviewTypes[i % reviewTypes.length],
+      baseline_version_from: i,
+      baseline_version_to: i + 1,
+      planned_capabilities: i * 2,
+      actual_capabilities: i,
+      planned_ventures: i * 3,
+      actual_ventures: i,
+      planned_sds: i * 5,
+      actual_sds: i,
+      okr_snapshot: { fixture: true, index: i },
+      risk_snapshot: { fixture: true, index: i },
+      strategy_health: { fixture: true, index: i },
+      decisions: [],
+      actions: [],
+      pipeline_snapshot: { fixture: true, index: i },
+      eva_narrative: `synthetic fixture row ${i}`,
+      eva_proposals: [],
+      chairman_notes: null,
+      chairman_approved_proposals: [],
+      overall_score: i % 101,
+      created_at: '2026-01-01T00:00:00+00:00',
+    });
+  }
+  return rows;
+}
 
 function parseArgs(argv) {
   const args = { sample: 500, out: '' };
@@ -134,19 +202,28 @@ async function drillA(execute, scratch, sampleSize) {
   };
 }
 
-async function drillB(execute, scratch, sampleSize) {
-  const t = DRILL_B_QUARANTINE_TABLE;
-  if (!SAFE_IDENT.test(t)) throw new Error(`unsafe identifier: ${t}`);
-  const scratchTable = `${scratch}."restored_quarantine"`;
+export async function drillB(execute, scratch, sampleSize) {
+  const fixtureTable = `${scratch}."quarantine_fixture"`;
+  const restoredTable = `${scratch}."restored_quarantine"`;
 
-  // 1. Scratch copy with the exact live shape (LIKE keeps column order/types,
-  //    which row::text rendering depends on).
-  await execute(`CREATE TABLE ${scratchTable} (LIKE public.${t})`, [], 'create-quarantine-copy');
+  // 1. Synthetic source fixture — hard-coded shape, no live table read.
+  const colDefs = QUARANTINE_FIXTURE_COLUMNS.map((c) => `"${c.col}" ${c.type}`).join(', ');
+  await execute(`CREATE TABLE ${fixtureTable} (${colDefs})`, [], 'create-quarantine-fixture');
 
-  // 2. Copy deterministic sample.
+  const syntheticRows = buildSyntheticQuarantineRows(sampleSize);
   await execute(
-    `INSERT INTO ${scratchTable}
-       SELECT * FROM (SELECT * FROM public.${t} ORDER BY id LIMIT $1) s`,
+    `INSERT INTO ${fixtureTable}
+       SELECT (jsonb_populate_record(NULL::${fixtureTable}, e)).*
+         FROM jsonb_array_elements($1::jsonb) AS e`,
+    [JSON.stringify(syntheticRows)],
+    'insert-quarantine-fixture'
+  );
+
+  // 2. "Restore" copy — same shape, scratch-to-scratch (no public schema involved).
+  await execute(`CREATE TABLE ${restoredTable} (LIKE ${fixtureTable})`, [], 'create-quarantine-copy');
+  await execute(
+    `INSERT INTO ${restoredTable}
+       SELECT * FROM (SELECT * FROM ${fixtureTable} ORDER BY id LIMIT $1) s`,
     [sampleSize],
     'copy-quarantine-sample'
   );
@@ -154,20 +231,20 @@ async function drillB(execute, scratch, sampleSize) {
   // 3. Row-identity: per-row md5(row::text) on the same deterministic sample.
   const { rows: src } = await execute(
     `SELECT md5(s::text) AS h
-       FROM (SELECT * FROM public.${t} ORDER BY id LIMIT $1) s`,
+       FROM (SELECT * FROM ${fixtureTable} ORDER BY id LIMIT $1) s`,
     [sampleSize],
     'md5-source-sample'
   );
   const { rows: dst } = await execute(
-    `SELECT md5(t::text) AS h FROM ${scratchTable} t`,
+    `SELECT md5(t::text) AS h FROM ${restoredTable} t`,
     [],
     'md5-scratch-copy'
   );
 
   const cmp = md5ListsMatch(src.map((r) => r.h), dst.map((r) => r.h));
   return {
-    name: 'quarantine-table copy (md5 row identity)',
-    quarantineTable: t,
+    name: 'quarantine-table copy (md5 row identity, synthetic fixture)',
+    fixtureSchema: 'synthetic:management_reviews-shape',
     sampled: cmp.sourceCount,
     copied: cmp.scratchCount,
     md5Match: cmp.match,
