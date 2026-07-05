@@ -1365,17 +1365,27 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
         const wa = (msgs || []).find(m => m.message_type === 'WORK_ASSIGNMENT' && extractDirectedSd(m));
         if (wa) {
           const waSd = extractDirectedSd(wa);
-          if (waSd && waSd !== mySd) pendingAssignment = { sd: waSd, message_id: wa.id };
+          // QF-20260705-858: a preempt-flagged WA (coordinator dispatch stamps payload.preempt=true
+          // on a chairman-critical redirect) must surface with an act-now framing, distinct from the
+          // routine "finish current work first" note below -- the resume short-circuit otherwise
+          // structurally delays a preempt until the current SD fully completes. Non-preempt WAs are
+          // BYTE-IDENTICAL to prior behavior (no new field, no message change) — only the preempt
+          // branch changes.
+          if (waSd && waSd !== mySd) pendingAssignment = { sd: waSd, message_id: wa.id, preempt: wa.payload?.preempt === true };
         }
       } catch { /* fail-open: no pending-assignment surfacing */ }
       const resumeMsg = isQf
         ? `Already claiming quick-fix ${mySd}; resume it: node scripts/read-quick-fix.js ${mySd}, then run the /quick-fix workflow (do NOT run sd-start.js for a QF).`
         : `Already claiming ${mySd}; resume work (run sd-start to (re)attach the worktree).`;
+      let resumeMessage = resumeMsg;
+      if (pendingAssignment?.preempt) {
+        resumeMessage = `${resumeMsg} ⚠ PREEMPT: coordinator has redirected you to ${pendingAssignment.sd} (chairman-critical). Consider releasing ${mySd} cleanly (worker owns clean suspension — never auto-released) and claiming ${pendingAssignment.sd} now, rather than finishing ${mySd} first.`;
+      } else if (pendingAssignment) {
+        resumeMessage = `${resumeMsg} NOTE: coordinator WORK_ASSIGNMENT pending for ${pendingAssignment.sd} — finish/hand off ${mySd} first, then claim it (never drop an in-progress SD).`;
+      }
       return { ...base, action: 'resume', sd: mySd,
         ...(pendingAssignment ? { pending_work_assignment: pendingAssignment } : {}),
-        message: pendingAssignment
-          ? `${resumeMsg} NOTE: coordinator WORK_ASSIGNMENT pending for ${pendingAssignment.sd} — finish/hand off ${mySd} first, then claim it (never drop an in-progress SD).`
-          : resumeMsg };
+        message: resumeMessage };
     }
   }
 
