@@ -130,10 +130,15 @@ describe('stampDoorClass (TS-2)', () => {
 // ── TS-3 + TS-5: dispatch gate fixtures + inertness ─────────────────────────
 function mockSupabaseForGate({ sdMeta, sessMeta }) {
   const calls = [];
+  const ledgerRows = [];
   return {
     calls,
+    ledgerRows,
     from(table) {
       calls.push(table);
+      if (table === 'door_routing_ledger') {
+        return { insert: async (row) => { ledgerRows.push(row); return { error: null }; } };
+      }
       return {
         select() { return this; }, eq() { return this; },
         maybeSingle: async () => ({
@@ -169,6 +174,32 @@ describe('assertDoorRoutingAllowed (TS-3, TS-5)', () => {
     await assertDoorRoutingAllowed(sb, row, { warn() {} });
     expect(DELEGATE_TIERS).toContain(row.payload.delegate_model);
     expect(row.payload.delegate_model).toBe('opus');
+  });
+
+  it('FR-4 seam: a routed two_way dispatch writes ONE ledger row at stamp time (fire-and-forget)', async () => {
+    const sb = mockSupabaseForGate({ sdMeta: twoWayMeta, sessMeta: { tier_rank: 2, model: 'opus' } });
+    const row = { message_type: 'WORK_ASSIGNMENT', target_session: 's1', payload: { assigned_sd: 'SD-X-2' } };
+    await assertDoorRoutingAllowed(sb, row, { warn() {} });
+    await new Promise(r => setTimeout(r, 10)); // fire-and-forget settles
+    expect(sb.ledgerRows).toHaveLength(1);
+    expect(sb.ledgerRows[0]).toMatchObject({ work_key: 'SD-X-2', door: 'two_way', delegate_model: 'opus', tier_rank: 2 });
+  });
+
+  it('FR-4 seam: a proceeding one_way dispatch also ledgers (no delegate_model)', async () => {
+    const sb = mockSupabaseForGate({ sdMeta: oneWayMeta, sessMeta: { tier_rank: TOP, model: 'fable' } });
+    const row = { message_type: 'WORK_ASSIGNMENT', target_session: 's1', payload: { assigned_sd: 'SD-X-1' } };
+    await assertDoorRoutingAllowed(sb, row, { warn() {} });
+    await new Promise(r => setTimeout(r, 10));
+    expect(sb.ledgerRows).toHaveLength(1);
+    expect(sb.ledgerRows[0]).toMatchObject({ work_key: 'SD-X-1', door: 'one_way', delegate_model: null });
+  });
+
+  it('FR-4 seam: a REFUSED one_way dispatch writes NO ledger row', async () => {
+    const sb = mockSupabaseForGate({ sdMeta: oneWayMeta, sessMeta: { tier_rank: 1, model: 'sonnet' } });
+    const row = { message_type: 'WORK_ASSIGNMENT', target_session: 's1', payload: { assigned_sd: 'SD-X-1' } };
+    await expect(assertDoorRoutingAllowed(sb, row, { warn() {} })).rejects.toMatchObject({ code: 'DISPATCH_ONE_WAY_DOOR' });
+    await new Promise(r => setTimeout(r, 10));
+    expect(sb.ledgerRows).toHaveLength(0);
   });
 
   it('two_way to a non-delegate-declared worker falls back to the default (sonnet)', async () => {
