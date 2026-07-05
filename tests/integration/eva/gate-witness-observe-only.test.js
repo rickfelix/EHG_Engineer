@@ -84,4 +84,33 @@ describe('observe-only enforcement rung (live)', () => {
 
     await expect(wrapped.validator({})).resolves.toEqual({ passed: true });
   });
+
+  // SD-LEO-INFRA-GATE-WITNESS-STRENGTH-001 FR-4/TS-5: prove the registry lookup-and-stamp
+  // change reaches the D-wrapper path for a REAL wired gate_id (registry-corrected to
+  // already_witnessed/cross_actor/convention by this SD) without any change to
+  // observe-gate-witness.js itself.
+  it('stamps enforcement_strength=convention and is_downgrade=true for the real RETROSPECTIVE_EXISTS gate_id', async () => {
+    const judgedSessionId = `observe-only-strength-${Date.now()}`;
+    const gate = {
+      name: 'RETROSPECTIVE_EXISTS',
+      validator: async () => ({ passed: true, score: 100, max_score: 100, issues: [], warnings: [] }),
+      required: true,
+    };
+    const wrapped = withObserveOnlyWitness('RETROSPECTIVE_EXISTS', gate);
+
+    await wrapped.validator({ sd: { claiming_session_id: judgedSessionId } });
+
+    const { data, error } = await supabase
+      .from('gate_witness_events')
+      .select('*')
+      .eq('gate_id', 'RETROSPECTIVE_EXISTS')
+      .eq('judged_session_id', judgedSessionId)
+      .single();
+
+    expect(error).toBeNull();
+    expect(data.enforcement_strength).toBe('convention');
+    expect(data.witness_mechanism).toBe('cross_actor');
+    expect(data.is_downgrade).toBe(true);
+    insertedIds.push(data.id);
+  });
 });
