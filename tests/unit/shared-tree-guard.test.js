@@ -15,6 +15,7 @@ const {
   decideSharedTreeCheckout,
   classifyHeadMovingGitOp,
   extractGitCDir,
+  parseCdSegment,
 } = require('../../scripts/hooks/lib/shared-tree-guard.cjs');
 
 const ME = 'sess-worker-aaaa';
@@ -128,6 +129,42 @@ describe('decideSharedTreeCheckout — flag disable (FR-3)', () => {
   });
 });
 
+describe('decideSharedTreeCheckout — sibling-repo false-positive fix (QF-20260704-121)', () => {
+  const SIBLING = 'C:/Users/rickf/Projects/_EHG/marketlens';
+
+  it('allows a branch op in an INDEPENDENT sibling repo when CLAUDE_PROJECT_DIR is known', () => {
+    const v = decideSharedTreeCheckout(
+      `cd ${SIBLING} && git checkout -b some-branch`,
+      foreign({ env: { CLAUDE_PROJECT_DIR: ROOT } })
+    );
+    expect(v.block).toBe(false);
+  });
+
+  it('still blocks a `cd` to a SUBDIRECTORY of the shared root (stays inside the protected tree)', () => {
+    const v = decideSharedTreeCheckout(
+      'cd scripts && git checkout feat/y',
+      foreign({ env: { CLAUDE_PROJECT_DIR: ROOT } })
+    );
+    expect(v.block).toBe(true);
+  });
+
+  it('still blocks the --work-tree-back-at-root adversarial case even when CLAUDE_PROJECT_DIR is known', () => {
+    const v = decideSharedTreeCheckout(
+      `git --work-tree=${ROOT} --git-dir=${ROOT}/.git checkout x`,
+      foreign({ cwd: WT, env: { CLAUDE_PROJECT_DIR: ROOT } })
+    );
+    expect(v).toMatchObject({ block: true, reason: 'shared_root_hijack' });
+  });
+
+  it('WITHOUT CLAUDE_PROJECT_DIR, preserves the original (pre-fix) behavior: a sibling-repo cd still blocks (no regression to the fail-safe default)', () => {
+    // No env.CLAUDE_PROJECT_DIR set -- sharedRoot is null, so the guard falls back to
+    // judging effectiveDir against ctx.cwd exactly as before this QF. This documents
+    // the tradeoff explicitly rather than silently changing default behavior.
+    const v = decideSharedTreeCheckout(`cd ${SIBLING} && git checkout -b some-branch`, foreign());
+    expect(v.block).toBe(true);
+  });
+});
+
 describe('classifyHeadMovingGitOp / extractGitCDir helpers', () => {
   it('classifies branch vs reset vs file-restore', () => {
     expect(classifyHeadMovingGitOp('git checkout x')).toMatchObject({ kind: 'branch' });
@@ -141,5 +178,17 @@ describe('classifyHeadMovingGitOp / extractGitCDir helpers', () => {
     expect(extractGitCDir('git -C /tmp/x checkout y')).toBe('/tmp/x');
     expect(extractGitCDir('git -C="/tmp/a b" checkout y')).toBe('/tmp/a b');
     expect(extractGitCDir('git checkout y')).toBeNull();
+  });
+});
+
+describe('parseCdSegment', () => {
+  it('extracts the target directory of a cd segment', () => {
+    expect(parseCdSegment('cd /tmp/x')).toBe('/tmp/x');
+    expect(parseCdSegment('cd "C:/Users/rick/some dir"')).toBe('C:/Users/rick/some dir');
+  });
+
+  it('returns null for a non-cd segment', () => {
+    expect(parseCdSegment('git checkout x')).toBeNull();
+    expect(parseCdSegment('ls')).toBeNull();
   });
 });

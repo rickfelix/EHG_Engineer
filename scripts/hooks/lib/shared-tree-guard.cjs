@@ -29,6 +29,25 @@
 // Matches a path that lives inside a .worktrees/<segment>/ subtree (both separators).
 const WORKTREE_PATH_RE = /[/\\]\.worktrees[/\\][^/\\]+/i;
 
+const path = require('path');
+
+/** Normalize a path for prefix comparison: backslashes to forward, strip trailing slash. */
+function normalizePath(p) {
+  return String(p || '').replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
+/**
+ * Parse a leading `cd <dir>` segment (the shell-segment form, e.g. from
+ * `cd <sibling-repo> && git checkout -b x`). Returns the raw target token, or null.
+ * @param {string} segment
+ * @returns {string|null}
+ */
+function parseCdSegment(segment) {
+  const tokens = tokenize(segment);
+  if (tokens.length < 2 || tokens[0] !== 'cd') return null;
+  return tokens[tokens.length - 1] || null;
+}
+
 /**
  * Split a command line into shell-segment-delimited sub-commands so we evaluate
  * each `git ...` invocation independently (e.g. `cd x && git checkout y`).
@@ -203,21 +222,50 @@ function decideSharedTreeCheckout(cmd, ctx) {
     return { block: false, reason: 'session_is_coordinator' };
   }
 
+  // QF-20260704-121: an authoritative, harness-provided reference to the TRUE project
+  // root (independent of which worktree's own copy of this hook happens to be executing
+  // it — __dirname would be wrong for that). When present, a `cd`-resolved effective
+  // directory that is provably outside this root entirely (e.g. an independent sibling
+  // repo like marketlens under the same parent folder) can never touch the tree this
+  // guard protects. Absent it, fall back to the original ctx.cwd-only behavior exactly
+  // (never less safe than before).
+  const sharedRoot = typeof env.CLAUDE_PROJECT_DIR === 'string' && env.CLAUDE_PROJECT_DIR
+    ? normalizePath(env.CLAUDE_PROJECT_DIR) : null;
+
   const segments = splitSegments(cmd);
+  let effectiveCwd = (ctx && ctx.cwd) || '';
   for (const seg of segments) {
+    // Track a leading/chained `cd <dir>` so the NEXT segment's effective directory
+    // reflects it, instead of blindly using the tool call's original tracked cwd — the
+    // root cause of the sibling-repo false-positive (a `cd <sibling> && git checkout`
+    // was judged against the stale starting cwd, never the command's own target).
+    const cdTarget = parseCdSegment(seg);
+    if (cdTarget) {
+      effectiveCwd = path.isAbsolute(cdTarget) ? cdTarget : path.resolve(effectiveCwd, cdTarget);
+      continue;
+    }
+
     const op = classifyHeadMovingGitOp(seg);
     if (!op) continue;
 
     // Resolve the effective working tree THIS op touches. `--work-tree` sets the
     // working tree explicitly (a `--work-tree=<shared-root>` from inside a
     // worktree IS a hijack and must be judged on the target, not the cwd); else
-    // `-C <dir>` changes git's directory; else the process cwd. If the resolved
-    // tree is inside an isolated worktree, the op is safe.
+    // `-C <dir>` changes git's directory; else the running (cd-tracked) cwd. If the
+    // resolved tree is inside an isolated worktree, the op is safe.
     const dirs = op.dirs || {};
-    const effectiveDir = dirs.workTree || dirs.C || (ctx && ctx.cwd) || '';
+    const effectiveDir = dirs.workTree || dirs.C || effectiveCwd || '';
     if (WORKTREE_PATH_RE.test(effectiveDir)) {
       // Isolated worktree — safe, keep scanning other segments.
       continue;
+    }
+
+    if (sharedRoot) {
+      const normDir = normalizePath(effectiveDir);
+      if (normDir !== sharedRoot && !normDir.startsWith(sharedRoot + '/')) {
+        // Genuinely outside the protected root (e.g. an independent sibling repo) — safe.
+        continue;
+      }
     }
 
     // A HEAD-moving op in the shared root while a foreign coordinator is active.
@@ -231,6 +279,8 @@ module.exports = {
   decideSharedTreeCheckout,
   classifyHeadMovingGitOp,
   parseGitSegment,
+  parseCdSegment,
+  normalizePath,
   extractGitCDir,
   tokenize,
   stripLeadingEnvAssignments,
