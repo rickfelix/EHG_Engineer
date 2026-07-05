@@ -60,6 +60,29 @@ const OVERRIDES = {
     enforcement_strength: ENFORCEMENT_STRENGTH.STRUCTURAL,
     notes: 'Calls `gh pr list`/`gh pr merge` guidance via GitHub CLI to verify real merge state -- categorically separate credential from SUPABASE_SERVICE_ROLE_KEY.',
   },
+  // SD-LEO-INFRA-GATE-WITNESS-STRENGTH-001: Child D (observe-only enforcement rung) wired
+  // these 3 gates to observeGateWitness's fixed 'gate-harness' identity, which genuinely
+  // records a witness event on every evaluation -- but this registry was never re-seeded
+  // after Child D shipped, so it still read self_evidence_only/null for all 3. Corrected here
+  // so the registry and the real (weak) witness mechanism agree.
+  RETROSPECTIVE_EXISTS: {
+    classification: CLASSIFICATION.ALREADY_WITNESSED,
+    witness_mechanism: WITNESS_MECHANISM.CROSS_ACTOR,
+    enforcement_strength: ENFORCEMENT_STRENGTH.CONVENTION,
+    notes: "Wired to observeGateWitness's fixed 'gate-harness' identity (SD-LEO-INFRA-INDEPENDENT-GATE-WITNESS-001-D) -- a code-controlled identity, not a cryptographically distinct actor, so convention-strength under the shared SUPABASE_SERVICE_ROLE_KEY architecture, same limitation Child C/D already document.",
+  },
+  GATE5_GIT_COMMIT_ENFORCEMENT: {
+    classification: CLASSIFICATION.ALREADY_WITNESSED,
+    witness_mechanism: WITNESS_MECHANISM.CROSS_ACTOR,
+    enforcement_strength: ENFORCEMENT_STRENGTH.CONVENTION,
+    notes: "Wired to observeGateWitness's fixed 'gate-harness' identity (SD-LEO-INFRA-INDEPENDENT-GATE-WITNESS-001-D) -- convention-strength, same limitation as RETROSPECTIVE_EXISTS above.",
+  },
+  SCOPE_COMPLETION_VERIFICATION: {
+    classification: CLASSIFICATION.ALREADY_WITNESSED,
+    witness_mechanism: WITNESS_MECHANISM.CROSS_ACTOR,
+    enforcement_strength: ENFORCEMENT_STRENGTH.CONVENTION,
+    notes: "Wired to observeGateWitness's fixed 'gate-harness' identity (SD-LEO-INFRA-INDEPENDENT-GATE-WITNESS-001-D) -- convention-strength, same limitation as RETROSPECTIVE_EXISTS above.",
+  },
 };
 
 // Ship-witness ladder rungs -- not part of the 5 handoff executors, added explicitly
