@@ -1425,6 +1425,26 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
           if (tgt && ['completed', 'cancelled', 'deferred'].includes(tgt.status)) terminalStatus = tgt.status;
         }
       } catch { assignedSdFetchFailed = true; }
+      // QF-20260705-429 (residual of QF-20260705-460): directed QF assignments must honor
+      // quick_fixes.not_before (durable time-gated defer). The SD lookup above intentionally
+      // misses for QF- keys and the claim_sd RPC never reads not_before, so without this gate
+      // a directed assignment claims a deferred QF hours early (specimen: QF-20260704-348,
+      // ~2.6h before its gate). Deferral is TRANSIENT: on gate, do NOT ack — the assignment
+      // stays live and succeeds once not_before passes. Read error = FAIL CLOSED via
+      // assignedSdFetchFailed, mirroring the QF-20260703-151 semantics above.
+      let qfDeferredUntil = null;
+      if (!assignedSdFetchFailed && /^QF-/.test(sdKey)) {
+        try {
+          const { data: qfRow, error: qfErr } = await sb.from('quick_fixes')
+            .select('not_before').eq('id', sdKey).maybeSingle();
+          if (qfErr) {
+            assignedSdFetchFailed = true;
+          } else {
+            const nb = qfRow && qfRow.not_before ? Date.parse(qfRow.not_before) : NaN;
+            if (Number.isFinite(nb) && nb > Date.now()) qfDeferredUntil = qfRow.not_before;
+          }
+        } catch { assignedSdFetchFailed = true; }
+      }
       // QF-20260703-091 (RCA-confirmed): mirror the self-claim paths' shared fitness/premise gate
       // (classifyDispatchIneligibility, incl. the repo-match axis) onto this DIRECTED-assignment
       // path too. Previously only sd-start.js caught a repo-mismatched directed assignment, AFTER
@@ -1446,6 +1466,9 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       } else if (ineligibleReason) {
         await ackMessage(sb, assignment.id, { role: sessionRole, kind: assignment.payload?.kind, messageType: assignment.message_type });
         base.assignment_ineligible_purged = { sd: sdKey, reason: ineligibleReason };
+      } else if (qfDeferredUntil) {
+        // No ack: transient — re-attempted next tick; claims automatically once the gate passes.
+        base.assignment_deferred_not_before = { qf: sdKey, not_before: qfDeferredUntil };
       } else {
         const claimed = await tryClaim(sb, sdKey, sessionId);
         if (claimed.ok) {
