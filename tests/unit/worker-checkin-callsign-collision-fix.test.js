@@ -5,6 +5,14 @@
  *     matches the worker's tier band) freed the OLD label instantly, with no grace window,
  *     so another session's next roll_call could claim it right away.
  *
+ * QF-20260705-609: a follow-on gap in the SAME rehydrate path -- a re-band self-heal
+ * (assignFleetIdentityAtCheckin) can write the NEW callsign to claude_sessions.metadata
+ * successfully while its own SET_IDENTITY dispatch insert fails silently. Until the 5-min
+ * cron re-emits, rehydrateCallsign's fleet-wide uniqueness check (QF-665 (a)) does not catch
+ * this, because no OTHER session holds the stale label -- this session itself already
+ * vacated it. Adds a self-consistency check: does this session's OWN already-read
+ * claude_sessions.metadata.fleet_identity.callsign still agree with the stale label.
+ *
  * Deliberately a fresh, minimal file rather than extending
  * tests/unit/worker-checkin-fleet-identity.test.js, which is quarantined for an unrelated,
  * pre-existing reason (stale tier-encoding assumption, SD-LEO-INFRA-BASELINE-QUARANTINE-
@@ -129,5 +137,35 @@ describe('rehydrateCallsign — QF-20260703-665 (a) fleet-wide uniqueness before
     const sb = rehydrateStub({ history: null });
     const out = await rehydrateCallsign(sb, 'sess-1', {});
     expect(out).toBeNull();
+  });
+});
+
+describe('rehydrateCallsign — QF-20260705-609 self-consistency vs already-current claude_sessions metadata', () => {
+  it('refuses to resurrect a stale callsign when THIS session\'s own current metadata already moved on', async () => {
+    const sb = rehydrateStub({
+      history: { payload: { callsign: 'Charlie', color: 'blue' }, created_at: '2026-07-03T00:00:00Z' },
+      holder: null, // no OTHER session holds it either -- QF-665's check alone would let this through
+    });
+    const out = await rehydrateCallsign(sb, 'sess-1', { fleet_identity: { callsign: 'Foxtrot', color: 'red' } });
+    expect(out).toBeNull();
+    expect(sb.rec.update).toBeNull(); // never persisted a reversion to the vacated identity
+  });
+
+  it('still rehydrates normally when currentMeta has no fleet_identity yet (first-time / unknown)', async () => {
+    const sb = rehydrateStub({
+      history: { payload: { callsign: 'Charlie', color: 'blue' }, created_at: '2026-07-03T00:00:00Z' },
+      holder: null,
+    });
+    const out = await rehydrateCallsign(sb, 'sess-1', {});
+    expect(out).toBe('Charlie');
+  });
+
+  it('still rehydrates normally when currentMeta.fleet_identity.callsign already agrees with the stale row', async () => {
+    const sb = rehydrateStub({
+      history: { payload: { callsign: 'Charlie', color: 'blue' }, created_at: '2026-07-03T00:00:00Z' },
+      holder: null,
+    });
+    const out = await rehydrateCallsign(sb, 'sess-1', { fleet_identity: { callsign: 'Charlie', color: 'blue' } });
+    expect(out).toBe('Charlie');
   });
 });
