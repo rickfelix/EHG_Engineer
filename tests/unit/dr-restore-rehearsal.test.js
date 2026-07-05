@@ -270,7 +270,7 @@ describe('drillB — synthetic fixture (retargeted off the real quarantine table
 
   function buildMockExecute({ srcHashes, dstHashes }) {
     const audit = [];
-    const execute = vi.fn(async (sql, params = [], label = '') => {
+    const execute = vi.fn(async (sql, _params = [], label = '') => {
       audit.push(sql);
       if (label === 'md5-source-sample') return { rows: srcHashes.map((h) => ({ h })) };
       if (label === 'md5-scratch-copy') return { rows: dstHashes.map((h) => ({ h })) };
