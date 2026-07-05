@@ -43,7 +43,7 @@ import { isFixtureSd, isBareShell, bareShellLastCompare, isStartedSd, stripDispa
 import { parseSdDependencies } from '../lib/utils/parse-sd-dependencies.cjs';
 // SD-REFILL-00MFWEGZ: reuse the canonical parent-LEAD-pass dispatch gate so the ranking surface
 // mirrors what claim-eligibility actually blocks (no drift between rank-vs-claim).
-import { parentLeadPending, classifyDispatchIneligibility } from '../lib/fleet/claim-eligibility.cjs';
+import { parentLeadPending, classifyDispatchIneligibility, resolveHoldProvenance, formatHoldProvenance } from '../lib/fleet/claim-eligibility.cjs';
 // SD-REFILL-00AH2L4Q: honor the SAME canonical metadata blocker key (metadata.blocked_by_sd_key)
 // that dependency-resolver + worker-checkin enforce, so the dispatch ranker does not keep a
 // metadata-blocked SD on the claimable belt (the convention was inconsistently enforced fleet-wide).
@@ -191,6 +191,9 @@ export async function computeClaimableLeaves(sb, opts = {}) {
 
   // ── claimable leaves ──
   const claimable = [];
+  // QF-20260704-193: held SDs with their coalesced provenance, returned so consumers
+  // (fleet-dashboard) can SURFACE hold reasons instead of rendering nothing.
+  const humanActionHolds = [];
   let fixtureSkips = 0;
   let inFlightSkips = 0;
   let awaitingConvergenceSkips = 0;
@@ -222,10 +225,16 @@ export async function computeClaimableLeaves(sb, opts = {}) {
           awaitingConvergenceSkips++;
           log(`  [skip] awaiting co-author convergence (not idle-belt depth): ${d.sd_key}`);
           break;
-        case 'human_action_required':
+        case 'human_action_required': {
           humanActionSkips++;
-          log(`  [skip] requires human action — not worker-claimable (not idle-belt depth): ${d.sd_key}`);
+          // QF-20260704-193: the hold reasons already EXIST under ad-hoc metadata keys —
+          // print them so a 3 AM operator can tell deliberate parking from an accidental
+          // freeze without hand-querying metadata (live: 47 rha-frozen sprint children).
+          const prov = resolveHoldProvenance(d.metadata);
+          humanActionHolds.push({ sd_key: d.sd_key, provenance: prov });
+          log(`  [skip] requires human action — not worker-claimable (not idle-belt depth): ${d.sd_key} [${formatHoldProvenance(prov)}]`);
           break;
+        }
         default:
           ineligibleSkips++;
           log(`  [skip] dispatch-ineligible (${dbFreeSkip}): ${d.sd_key}`);
@@ -260,7 +269,7 @@ export async function computeClaimableLeaves(sb, opts = {}) {
   if (humanActionSkips) log(`[BACKLOG-RANK] ${humanActionSkips} SD(s) requiring human action excluded from claimable depth (not worker-claimable)`);
   if (ineligibleSkips) log(`[BACKLOG-RANK] ${ineligibleSkips} SD(s) dispatch-ineligible (orchestrator-parent / deferred / terminal) excluded from claimable depth`);
   if (depBlockedSkips) log(`[BACKLOG-RANK] ${depBlockedSkips} SD(s) dependency-blocked excluded from claimable depth`);
-  return { sds, byKey, depStatus, claimable };
+  return { sds, byKey, depStatus, claimable, humanActionHolds };
 }
 
 async function main() {
