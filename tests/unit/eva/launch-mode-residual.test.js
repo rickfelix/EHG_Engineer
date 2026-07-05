@@ -50,7 +50,13 @@ function flipFakeSb({
               : ventureExists ? { data: { id: V_ID, launch_mode: currentMode }, error: null }
                 : { data: null, error: null }
           ) }) }),
-          update: (patch) => ({ eq: () => ({ select: () => { log.flips.push(patch); return Promise.resolve(flipError ? { data: null, error: flipError } : { data: flipMatches ? [{ id: V_ID }] : [], error: null }); } }) }),
+          update: (patch) => {
+            const chain = {
+              eq: () => chain, // chainable: id + from_mode compare-and-swap filters
+              select: () => { log.flips.push(patch); return Promise.resolve(flipError ? { data: null, error: flipError } : { data: flipMatches ? [{ id: V_ID }] : [], error: null }); },
+            };
+            return chain;
+          },
         };
       }
       if (table === 'launch_mode_audit') {
