@@ -54,4 +54,9 @@ describe('isHeadlessZombie', () => {
     const session = { session_id: 's7', terminal_id: null, tty: null, claimed_at: OLD_CLAIM };
     expect(isHeadlessZombie(session, undefined, NOW)).toBe(true);
   });
+
+  it('does NOT flag a legitimate is_virtual (drain) session -- these never set terminal_id/tty/worktree_path by design', () => {
+    const session = { session_id: 's8', is_virtual: true, terminal_id: null, tty: null, claimed_at: OLD_CLAIM };
+    expect(isHeadlessZombie(session, { worktree_path: null }, NOW)).toBe(false);
+  });
 });

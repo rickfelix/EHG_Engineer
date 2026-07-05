@@ -52,8 +52,12 @@ const HEADLESS_ZOMBIE_MIN_MS = 15 * 60 * 1000;
 
 // QF-20260704-081: pure predicate, exported so it can be unit-tested without a live
 // claude_sessions table. See call site (classification loop) for full context/RCA.
+// is_virtual sessions (lib/virtual-session-factory.mjs) are excluded: they legitimately never
+// set terminal_id/tty/worktree_path at all (no window to bind to), so without this guard every
+// virtual/drain session would false-positive as headless after 15 minutes.
 function isHeadlessZombie(session, telemetry, nowMs) {
-  if (!session || (session.terminal_id || session.tty || telemetry?.worktree_path)) return false;
+  if (!session || session.is_virtual) return false;
+  if (session.terminal_id || session.tty || telemetry?.worktree_path) return false;
   const claimAgeMs = session.claimed_at ? nowMs - Date.parse(session.claimed_at) : 0;
   return claimAgeMs > HEADLESS_ZOMBIE_MIN_MS;
 }
