@@ -18,6 +18,11 @@ import {
   buildReport,
   MAX_SAMPLE,
 } from '../../scripts/dr/restore-rehearsal-core.mjs';
+// SD-LEO-INFRA-RETARGET-RESTORE-REHEARSAL-001 — unlike the rest of this file, drillB is
+// imported live from restore-rehearsal.mjs (not core.mjs) to exercise the actual retargeted
+// SQL it generates. Still offline: drillB is only ever invoked below against a mock executor
+// that never reaches a real client, so no DB connection is made during this test run.
+import { drillB } from '../../scripts/dr/restore-rehearsal.mjs';
 
 const SCHEMA = 'dr_rehearsal_20260610_2300';
 
@@ -255,5 +260,55 @@ describe('buildReport', () => {
     const r = buildReport({ ...base, error: 'boom' });
     expect(r.overall).toBe('FAIL');
     expect(r.statementAudit).toMatchObject({ total: 2, reads: 1, scratchWrites: 1, forbidden: 0 });
+  });
+});
+
+// SD-LEO-INFRA-RETARGET-RESTORE-REHEARSAL-001 — Drill B retargeted off the real
+// management_reviews_quarantine_20260610 table onto a synthetic, scratch-only fixture.
+describe('drillB — synthetic fixture (retargeted off the real quarantine table)', () => {
+  const QUOTED_SCHEMA = `"${SCHEMA}"`; // drillB is always called with the pre-quoted schema (see main())
+
+  function buildMockExecute({ srcHashes, dstHashes }) {
+    const audit = [];
+    const execute = vi.fn(async (sql, _params = [], label = '') => {
+      audit.push(sql);
+      if (label === 'md5-source-sample') return { rows: srcHashes.map((h) => ({ h })) };
+      if (label === 'md5-scratch-copy') return { rows: dstHashes.map((h) => ({ h })) };
+      return { rows: [] };
+    });
+    return { execute, audit };
+  }
+
+  it('never references the real quarantine table', async () => {
+    const { execute, audit } = buildMockExecute({ srcHashes: ['a', 'b'], dstHashes: ['a', 'b'] });
+    await drillB(execute, QUOTED_SCHEMA, 5);
+    for (const sql of audit) {
+      expect(sql).not.toMatch(/management_reviews_quarantine_20260610/i);
+    }
+  });
+
+  it('every generated statement classifies as read or scratch-write, never forbidden', async () => {
+    const { execute, audit } = buildMockExecute({ srcHashes: ['a', 'b'], dstHashes: ['a', 'b'] });
+    await drillB(execute, QUOTED_SCHEMA, 5);
+    for (const sql of audit) {
+      const kind = classifyStatement(sql, SCHEMA);
+      expect(kind, `unexpected kind for: ${sql}`).not.toBe('forbidden');
+    }
+  });
+
+  it('PASSes when the two scratch tables agree', async () => {
+    const { execute } = buildMockExecute({ srcHashes: ['a', 'b', 'c'], dstHashes: ['c', 'b', 'a'] });
+    const result = await drillB(execute, QUOTED_SCHEMA, 3);
+    expect(result.status).toBe('PASS');
+    expect(result.md5Match).toBe(true);
+  });
+
+  it('FAILs when the two scratch tables diverge', async () => {
+    const { execute } = buildMockExecute({ srcHashes: ['a', 'b'], dstHashes: ['a', 'x'] });
+    const result = await drillB(execute, QUOTED_SCHEMA, 2);
+    expect(result.status).toBe('FAIL');
+    expect(result.md5Match).toBe(false);
+    expect(result.onlySource).toEqual(['b']);
+    expect(result.onlyScratch).toEqual(['x']);
   });
 });

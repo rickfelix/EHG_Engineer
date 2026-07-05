@@ -46,6 +46,10 @@ const EXEMPTED_TABLES = new Set([
   'schema_migrations',
   'spatial_ref_sys',
   // SD-MAN purge/quarantine campaign copies (2026-06-09/10) — non-`_qparity` suffix.
+  // management_reviews_quarantine_20260610 is still LIVE in production (SD-LEO-INFRA-RETARGET-
+  // RESTORE-REHEARSAL-001 decoupled the DR restore-rehearsal drill from reading it, but did NOT
+  // drop it — that remains a separate, chairman-gated migration). Remove this entry in the same
+  // PR as that eventual drop.
   'management_reviews_quarantine_20260610',
   'venture_artifacts_storm_quarantine_20260610',
   'sd_baseline_items_purge_backup_20260609',
