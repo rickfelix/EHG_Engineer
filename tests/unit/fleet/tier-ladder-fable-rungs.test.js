@@ -46,10 +46,19 @@ describe('static LADDER — fable rungs above opus (QF-20260705-394)', () => {
   });
 
   it('DB compatibility: ranks 1-4 keep their pre-fix meaning (opus/high === 4)', () => {
-    expect(rankForModelEffort('sonnet', 'max')).toBe(1);
+    // QF-20260705-953: sonnet/high+xhigh moved from rank 1 to rank 2 (evidenced fix);
+    // opus/low, opus/medium, opus/high are unchanged.
+    expect(rankForModelEffort('sonnet', 'max')).toBe(2);
     expect(rankForModelEffort('opus', 'low')).toBe(2);
     expect(rankForModelEffort('opus', 'medium')).toBe(3);
     expect(rankForModelEffort('opus', 'high')).toBe(4);
+  });
+
+  it('QF-20260705-953: sonnet/low and sonnet/medium stay at rank 1 (no blanket promotion)', () => {
+    expect(rankForModelEffort('sonnet', 'low')).toBe(1);
+    expect(rankForModelEffort('sonnet', 'medium')).toBe(1);
+    expect(rankForModelEffort('sonnet', 'high')).toBe(2);
+    expect(rankForModelEffort('sonnet', 'xhigh')).toBe(2);
   });
 
   it('no fable pair ever ranks BELOW any opus pair (the clobber precondition is impossible)', () => {
@@ -131,8 +140,9 @@ describe('stampRankForWorker — the identity-assigner cron writer (the recurrin
   });
 
   it('does not inflate weak configs in a TALL live fleet (adversarial-review finding: no live raise)', () => {
-    // 5 distinct scores dense-rank sonnet/xhigh at live 3 — but its static rung is 1;
-    // a live-raised stamp would let static-space min_tier_rank=3 SDs dispatch to sonnet.
+    // 5 distinct scores dense-rank sonnet/xhigh at live 3 — but its static rung is 2
+    // (QF-20260705-953: sonnet/xhigh moved from static rank 1 to 2); a live-raised
+    // stamp would let static-space min_tier_rank=3 SDs dispatch to sonnet.
     const tallFleet = [
       { model: 'haiku', effort: 'low' },
       { model: 'sonnet', effort: 'low' },
@@ -141,7 +151,7 @@ describe('stampRankForWorker — the identity-assigner cron writer (the recurrin
       { model: 'fable', effort: 'xhigh' },
     ];
     const worker = { metadata: { model: 'sonnet', effort: 'xhigh' } };
-    expect(stampRankForWorker(worker, tallFleet)).toBe(1);
+    expect(stampRankForWorker(worker, tallFleet)).toBe(2);
   });
 
   it('agrees with the worker-checkin self-report formula for every known pair (writers never diverge)', () => {
