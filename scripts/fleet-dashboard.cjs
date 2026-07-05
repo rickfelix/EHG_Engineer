@@ -1493,19 +1493,41 @@ async function printSolomonInbox() {
   console.log('');
 }
 
-// ── Section: Solomon advice-outcome rollup (SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001, FR-5) ──
+// ── Section: Solomon advice-outcome rollup (SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001, FR-5;
+//    pending-visibility extended QF-20260704-598 — decay was invisible until a decided row existed) ──
 // Read-only accuracy + cost-per-accepted-proposal rollup over solomon_advice_outcome_ledger. Pending
 // (undecided) rows are excluded from the accuracy denominator so an in-flight advisory never counts
 // as a failure. Dormant-safe: an absent table or empty ledger renders "(no data yet)" rather than
 // crashing or dividing by zero.
 /**
- * Pure: compute the accuracy + cost-per-accepted-proposal rollup from raw ledger rows.
- * Pending (undecided) rows are excluded from the accuracy denominator. Returns null when there is
- * no decided data yet (renderer prints "no data yet" rather than dividing by zero). Exported for tests.
+ * Pure: compute the accuracy + cost-per-accepted-proposal rollup from raw ledger rows, plus
+ * pending-count + oldest-pending-age (QF-20260704-598 — pending decay was archaeology-only before
+ * this, since the old contract returned null whenever there were zero DECIDED rows, hiding an
+ * all-pending ledger from the dashboard entirely). Returns null only when there are literally zero
+ * ledger rows at all; an all-pending ledger now returns decidedCount=0 with pending fields populated
+ * so decay is visible from day one. Exported for tests.
  */
-function computeSolomonLedgerRollup(rows) {
-  const decided = (rows || []).filter((r) => r.decision && r.decision !== 'pending');
-  if (decided.length === 0) return null;
+function computeSolomonLedgerRollup(rows, nowMs = Date.now()) {
+  const all = rows || [];
+  if (all.length === 0) return null;
+
+  const decided = all.filter((r) => r.decision && r.decision !== 'pending');
+  const pending = all.filter((r) => !r.decision || r.decision === 'pending');
+  const oldestPendingAgeMs = pending.length > 0
+    ? Math.max(...pending.map((r) => nowMs - new Date(r.created_at).getTime()))
+    : null;
+
+  if (decided.length === 0) {
+    return {
+      decidedCount: 0,
+      pendingCount: pending.length,
+      oldestPendingAgeMs,
+      acceptedShippedClean: 0,
+      accuracyPct: null,
+      acceptedCount: 0,
+      costPerAccepted: null,
+    };
+  }
 
   const acceptedShippedClean = decided.filter((r) => r.decision === 'accepted' && r.outcome === 'shipped_clean').length;
   const accuracyPct = Math.round((acceptedShippedClean / decided.length) * 100);
@@ -1516,7 +1538,8 @@ function computeSolomonLedgerRollup(rows) {
 
   return {
     decidedCount: decided.length,
-    pendingCount: (rows || []).length - decided.length,
+    pendingCount: pending.length,
+    oldestPendingAgeMs,
     acceptedShippedClean,
     accuracyPct,
     acceptedCount: accepted.length,
@@ -1532,7 +1555,7 @@ async function printSolomonLedgerRollup() {
   try {
     const { data, error } = await supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
-      .select('decision, outcome, cost_tokens')
+      .select('decision, outcome, cost_tokens, created_at')
       .limit(5000);
     if (error) {
       console.log('  (ledger query failed: ' + error.message + ')');
@@ -1553,7 +1576,16 @@ async function printSolomonLedgerRollup() {
     return;
   }
 
-  console.log('  ' + rollup.decidedCount + ' decided proposal(s) (' + rollup.pendingCount + ' pending, excluded)');
+  const oldestPendingStr = rollup.oldestPendingAgeMs !== null
+    ? Math.floor(rollup.oldestPendingAgeMs / (60 * 60 * 1000)) + 'h'
+    : 'n/a';
+  if (rollup.decidedCount === 0) {
+    console.log('  0 decided proposal(s) yet (' + rollup.pendingCount + ' pending, oldest ' + oldestPendingStr + ')');
+    console.log('');
+    return;
+  }
+
+  console.log('  ' + rollup.decidedCount + ' decided proposal(s) (' + rollup.pendingCount + ' pending, oldest ' + oldestPendingStr + ')');
   console.log('  accuracy: ' + rollup.accuracyPct + '% (' + rollup.acceptedShippedClean + '/' + rollup.decidedCount + ' accepted+shipped_clean)');
   console.log('  cost-per-accepted-proposal: ' + (rollup.costPerAccepted !== null ? rollup.costPerAccepted + ' tokens' : 'n/a (0 accepted)'));
   console.log('');
