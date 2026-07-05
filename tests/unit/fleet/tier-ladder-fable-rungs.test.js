@@ -120,19 +120,38 @@ describe('stampRankForWorker — the identity-assigner cron writer (the recurrin
     { model: 'fable', effort: 'xhigh' },
   ];
 
-  it('floors fable/xhigh at the static top even when the live fleet compresses to K=3', () => {
+  it('stamps fable/xhigh at the static top even when the live fleet compresses to K=3', () => {
     const worker = { metadata: { model: 'fable', effort: 'xhigh' } };
-    expect(stampRankForWorker(worker, K3_FLEET)).toBe(4); // live dense rank is 3; static floor wins
+    expect(stampRankForWorker(worker, K3_FLEET)).toBe(4); // live dense rank is 3; static space wins
   });
 
-  it('floors opus/high at its static rung 4 in a compressed fleet (same defect class)', () => {
+  it('stamps opus/high at its static rung 4 in a compressed fleet (same defect class)', () => {
     const worker = { metadata: { model: 'opus', effort: 'high' } };
     expect(stampRankForWorker(worker, [{ model: 'sonnet', effort: 'high' }, { model: 'opus', effort: 'high' }])).toBe(4);
   });
 
-  it('does not floor weak configs UP: sonnet/high stays at its live/static rank 1', () => {
-    const worker = { metadata: { model: 'sonnet', effort: 'high' } };
-    expect(stampRankForWorker(worker, K3_FLEET)).toBe(1);
+  it('does not inflate weak configs in a TALL live fleet (adversarial-review finding: no live raise)', () => {
+    // 5 distinct scores dense-rank sonnet/xhigh at live 3 — but its static rung is 1;
+    // a live-raised stamp would let static-space min_tier_rank=3 SDs dispatch to sonnet.
+    const tallFleet = [
+      { model: 'haiku', effort: 'low' },
+      { model: 'sonnet', effort: 'low' },
+      { model: 'sonnet', effort: 'xhigh' },
+      { model: 'opus', effort: 'high' },
+      { model: 'fable', effort: 'xhigh' },
+    ];
+    const worker = { metadata: { model: 'sonnet', effort: 'xhigh' } };
+    expect(stampRankForWorker(worker, tallFleet)).toBe(1);
+  });
+
+  it('agrees with the worker-checkin self-report formula for every known pair (writers never diverge)', () => {
+    for (const model of ['haiku', 'sonnet', 'opus', 'fable']) {
+      for (const effort of ['low', 'medium', 'high', 'xhigh']) {
+        const cronStamp = stampRankForWorker({ metadata: { model, effort } }, K3_FLEET);
+        const checkinStamp = mergeCheckinModelEffort(null, { model, effort }).metadata.tier_rank;
+        expect(cronStamp).toBe(checkinStamp);
+      }
+    }
   });
 
   it('unknown model/effort keeps the deriveWorkerTierRank fallback (existing stamp honored)', () => {
