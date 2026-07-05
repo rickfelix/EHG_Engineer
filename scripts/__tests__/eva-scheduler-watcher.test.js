@@ -215,7 +215,13 @@ describe('confirmRevival — MF2', () => {
 });
 
 describe('main — integration', () => {
-  const base = (db, extra = {}) => ({ supabase: db, logger: silentLogger, now: fixedNow, env: CREDS, token: 'supervisor-fixedtok', stdio: 'ignore', ...extra });
+  // QF-20260704-390: main() now self-stamps its own liveness (periodic_process_registry) via an
+  // injected stampLastFired dep, BEFORE the scheduler-liveness/CAS-revive logic these TS-N cases
+  // exercise. makeHeartbeatDB's mock doesn't discriminate by table name, so a real stampLastFired
+  // call would inflate these tests' eva_scheduler_heartbeat write-count assertions. Stub it to a
+  // no-op by default -- the self-stamp behavior itself is covered by
+  // tests/unit/eva-scheduler-watcher-self-liveness.test.js.
+  const base = (db, extra = {}) => ({ supabase: db, logger: silentLogger, now: fixedNow, env: CREDS, token: 'supervisor-fixedtok', stdio: 'ignore', stampLastFired: vi.fn().mockResolvedValue({ stamped: true }), ...extra });
 
   it('TS-1: alive scheduler → no action, no spawn', async () => {
     const db = makeHeartbeatDB(freshRow());
