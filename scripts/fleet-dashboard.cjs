@@ -191,10 +191,15 @@ async function loadData() {
   // gating) so the two can never diverge. Fail-soft: an error degrades to an empty list
   // rather than crashing the dashboard.
   let claimableLeaves = [];
+  // QF-20260704-193: held-SD provenance from the SAME ranker pass — the dashboard
+  // previously printed NOTHING for rha-held SDs, so a 3 AM operator could not tell
+  // deliberate parking from an accidental freeze without hand-querying metadata.
+  let humanActionHolds = [];
   try {
     const { computeClaimableLeaves } = await import('./coordinator-backlog-rank.mjs');
     const result = await computeClaimableLeaves(supabase, { quiet: true });
     claimableLeaves = result.claimable || [];
+    humanActionHolds = result.humanActionHolds || [];
   } catch (e) {
     // degrade-safe: empty claimable list, dashboard still renders
   }
@@ -369,6 +374,7 @@ async function loadData() {
     claimedSdIds, activeSessions, staleSessions, idleSessions,
     completedChildren, totalChildren, orchPct,
     unclaimedChildren, unclaimedStandalone, bareShellSDs: bareShells,
+    humanActionHolds,
     drainAgents,
     mc, mcByWorker,
     executeTeams,
@@ -562,10 +568,18 @@ function printAvailable(d) {
   console.log('AVAILABLE FOR CLAIM (' + total + ')');
   console.log('─'.repeat(72));
 
-  if (total === 0) {
+  // QF-20260704-193 (adversarial-review C1): the all-held/zero-claimable state is EXACTLY
+  // the motivating scenario (47 rha-frozen children, zero claimable) — the early return
+  // must not swallow the hold-provenance block, and the empty-state text must not claim
+  // "all claimed or completed" while SDs sit deliberately parked.
+  const holds = d.humanActionHolds || [];
+  if (total === 0 && holds.length === 0) {
     console.log('  (all SDs claimed or completed)');
     console.log('');
     return;
+  }
+  if (total === 0) {
+    console.log('  (no claimable SDs — all remaining are held for human action, see below)');
   }
 
   if (d.unclaimedChildren.length > 0) {
@@ -589,6 +603,27 @@ function printAvailable(d) {
     }
     if (d.unclaimedStandalone.length > displayed.length) {
       console.log('    … and ' + (d.unclaimedStandalone.length - displayed.length) + ' more');
+    }
+  }
+
+  // QF-20260704-193: hold PROVENANCE for rha-held SDs — deliberate-vs-accidental at a
+  // glance. Compact: reasons grouped, capped, never a bare count with no explanation.
+  // NB the count is "held AND idle": a held SD that is also claimed/in-flight is being
+  // worked and is intentionally absent (claimableDbFreeReason short-circuits earlier).
+  if (holds.length > 0) {
+    console.log('  On hold (requires human action) — ' + holds.length + ':');
+    const HOLD_CAP = 6;
+    const byReason = new Map();
+    for (const h of holds) {
+      const key = h.provenance ? (h.provenance.reason + (h.provenance.set_by ? ' — by ' + h.provenance.set_by : '')) : 'no reason recorded (bare flag)';
+      if (!byReason.has(key)) byReason.set(key, []);
+      byReason.get(key).push(h.sd_key);
+    }
+    let printed = 0;
+    for (const [reason, keys] of byReason) {
+      if (printed >= HOLD_CAP) { console.log('    … and ' + (byReason.size - printed) + ' more reason group(s)'); break; }
+      console.log('    [' + keys.length + '] ' + reason.substring(0, 80) + '  (' + keys.slice(0, 3).join(', ') + (keys.length > 3 ? ', …' : '') + ')');
+      printed++;
     }
   }
 
