@@ -1,0 +1,115 @@
+{
+  "executive_summary": "SOLOMON-SHAPED (consult adam-solomon-claim-chokepoint-001, accepted; provenance: feedback 926240dc, 3 stale-code bypass specimens). Server-side claim-eligibility OBSERVATION at the ONE authoritative claim-acquisition point: the claim_sd() RPC's final UPDATE on strategic_directives_v2. Database-agent PLAN-phase review (sub_agent_execution_results 1335d75a) corrected the original premise (lib/claim-guard.mjs:183's reaffirm UPDATE is defense-in-depth, NOT the sole write path -- claim_sd() is) and found a RAISE/INSERT transaction-rollback trap: a trigger cannot both RAISE EXCEPTION and have its own claim_rejects INSERT survive in the same statement, since RAISE aborts the whole transaction including the trigger's own writes. This SD therefore ships ONLY the OBSERVE-ONLY half of the originally-envisioned staged rollout (never raises, only logs would-reject rows) -- flipping to binding-with-RAISE is explicitly OUT OF SCOPE, deferred to a follow-up SD once a 24-48h soak (real wall-clock observation of false-reject rates in production, which cannot happen inside this session) validates the invariants. FR1: gate-version registry reusing the EXISTING chairman_dashboard_config (config_key='default') pattern claim_sd() already reads for TTL, adding a new metadata key `claim_gate_version_floor`, bumped only via atomic jsonb_set (never a JS read-whole-object-then-write, per lib/coordinator/clear-coordinator-review.js's documented precedent for avoiding the lost-update class). FR2: claim_sd() RPC gains a new defaulted parameter `p_client_gate_version` written to a NEW plain column `claim_gate_client_version` on strategic_directives_v2 in the SAME UPDATE that sets the claim (not a JSONB merge); lib/claim-guard.mjs stamps its own CLAIM_GUARD_CODE_VERSION constant when calling the RPC and when reaffirming. A NEW observe-only trigger (BEFORE UPDATE, WHEN NEW.claiming_session_id IS DISTINCT FROM OLD.claiming_session_id AND NEW.claiming_session_id IS NOT NULL -- proven superior to the existing precedent trigger's OLD-IS-NULL-only WHEN clause, since it also re-checks A->B takeovers) checks the version-floor plus 3 of the original 4 invariants -- requires_human_action, needs_coordinator_review, orchestrator-parent (sd_type='orchestrator') -- and logs a would-reject row to a NEW claim_rejects ledger, but NEVER raises and NEVER blocks the write (fail-open end to end, including on any internal trigger error, so a broken trigger can never stall the fleet's claim mechanism). The 4th originally-envisioned invariant, repo-match, is DROPPED ENTIRELY (not deferred) per database-agent's finding: it requires external runtime context (the worker's cwd/local_path, per lib/fleet/sd-executable-here.cjs) that a SQL trigger fundamentally cannot see, and encoding it in SQL would reproduce exactly the false-reject bug QF-20260703-775 already fixed for cross-repo directed assignments -- matching this SD's own counterfactual ('high false-rejects on an invariant -> drop it from the trigger, never encode config in SQL'). FR4: a one-line comment in the migration noting the future convergence -- eligibility moves inside the Pool-C lease RPC when it lands; this trigger stays as defense-in-depth observation. QF-758 (client-side UX pre-check) is unaffected -- this SD adds server-side OBSERVATION only, no blocking behavior change for any caller.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Gate-version registry via chairman_dashboard_config (atomic bump helper)",
+      "description": "Add `claim_gate_version_floor` (integer) to chairman_dashboard_config's config_key='default' metadata JSONB, seeded to 1 (matching claim-guard.mjs's initial CLAIM_GUARD_CODE_VERSION). A new script scripts/bump-claim-gate-version.js sets it via atomic `jsonb_set(metadata, '{claim_gate_version_floor}', to_jsonb($1::int))` -- never a read-whole-object-then-write JS merge, so a concurrent writer to a different metadata key (e.g. claim_ttl_minutes) can never be lost.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "chairman_dashboard_config.metadata->>'claim_gate_version_floor' = '1' after migration.",
+        "scripts/bump-claim-gate-version.js uses jsonb_set (verified by reading the script's SQL text), not a supabase-js read-then-.update(metadata:{...spread}).",
+        "Bumping the floor does not alter any other existing key in the same metadata object (claim_ttl_minutes, sweep_respect_inflight_agent unchanged)."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "claim_sd() RPC carries the client's gate version to a new plain column (DROP+CREATE single signature, not CREATE OR REPLACE with a new param)",
+      "description": "RISK-AGENT CORRECTION (sub_agent_execution_results 5a7bfbd9, integration_risk=8, blocking finding): a naive `CREATE OR REPLACE FUNCTION claim_sd(..., p_client_gate_version integer DEFAULT NULL)` does NOT replace the existing 4-arg function -- Postgres treats a changed argument-type list as a SEPARATE overload, leaving BOTH claim_sd(text,text,text,boolean) and claim_sd(text,text,text,boolean,integer) in the catalog. Every production caller (lib/claim-guard.mjs:614, lib/session-conflict-checker.mjs:302, scripts/qf-start.js:51, scripts/worker-checkin.cjs:213) passes only 3 named args with all trailing params defaulted -- with two matching overloads, PostgREST returns PGRST203 'could not choose the best candidate function' and EVERY claim fails, reproducing the exact fleet-stall this SD exists to prevent. FIX: the migration must `DROP FUNCTION IF EXISTS claim_sd(text,text,text,boolean)` THEN `CREATE FUNCTION claim_sd(text,text,text,boolean,integer)` as a SINGLE five-arg signature in one transaction (verified safe: no view/rule/function depends on claim_sd per pg_depend). The migration must ALSO emit `NOTIFY pgrst, 'reload schema'` so PostgREST picks up the new signature promptly -- a stale PostgREST schema cache calling the old 4-arg RPC with 5 args fails CLOSED (PGRST202, single-call failure) rather than catastrophically (PGRST203, fleet-wide ambiguous-overload failure), but the reload still must happen promptly to avoid an extended failure window once claim-guard.mjs starts sending the 5th arg. ADD COLUMN claim_gate_client_version integer (nullable) to strategic_directives_v2 in the same migration. Function body is otherwise byte-for-byte identical to the live definition except the new param and one additional SET clause (`claim_gate_client_version = p_client_gate_version`) in the existing final UPDATE. lib/claim-guard.mjs gets `const CLAIM_GUARD_CODE_VERSION = 1;` and passes it as the new RPC arg; reaffirmClaimColumns's `.update({claiming_session_id, is_working_on: true})` also adds `claim_gate_client_version: CLAIM_GUARD_CODE_VERSION`. Any caller that still omits the param (lib/session-conflict-checker.mjs, scripts/qf-start.js, scripts/worker-checkin.cjs -- unmodified in this SD since they don't need version-stamping) gets NULL via the param's own DEFAULT NULL, which the trigger (FR-3) treats as 'unknown, do not reject'.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Migration performs DROP FUNCTION IF EXISTS claim_sd(text,text,text,boolean) followed by a single CREATE FUNCTION claim_sd(text,text,text,boolean,integer) in the same transaction -- verified exactly ONE claim_sd overload exists in pg_proc after migration.",
+        "Migration includes NOTIFY pgrst, 'reload schema'.",
+        "claim_sd()'s existing return paths (already_claimed, claimed_by_live_peer, unauthorized_force, sd_not_found, sd_terminal_status, blocking_conflict, success) are BYTE-FOR-BYTE unchanged except the new param + the one additional SET clause -- verified by diffing the function body against the current live definition.",
+        "Calling claim_sd() WITHOUT p_client_gate_version (existing unmodified callers: session-conflict-checker.mjs, qf-start.js, worker-checkin.cjs) succeeds exactly as before; claim_gate_client_version lands NULL on the row.",
+        "lib/claim-guard.mjs's RPC call and reaffirmClaimColumns both pass CLAIM_GUARD_CODE_VERSION=1."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Observe-only claim-eligibility trigger: version-floor + 3 config-free invariants, fail-open, NEVER raises",
+      "description": "New migration creates claim_rejects (ledger: id uuid default gen_random_uuid(), sd_key text, session_id text, would_reject_reasons text[], client_version integer, floor_version integer, created_at timestamptz default now()) and a trigger function `claim_eligibility_observe()` BEFORE UPDATE ON strategic_directives_v2 FOR EACH ROW WHEN (NEW.claiming_session_id IS DISTINCT FROM OLD.claiming_session_id AND NEW.claiming_session_id IS NOT NULL). Body wrapped in a single top-level EXCEPTION WHEN OTHERS THEN RETURN NEW (fail-open -- a broken trigger must never block the fleet's claim mechanism). Computes would_reject_reasons from: (a) version-floor -- NEW.claim_gate_client_version IS NOT NULL AND floor (read fail-open from chairman_dashboard_config, defaulting to NULL/no-check on any read error) IS NOT NULL AND NEW.claim_gate_client_version < floor; (b) NEW.metadata->>'requires_human_action' truthy; (c) NEW.metadata->>'needs_coordinator_review' = 'true'; (d) NEW.sd_type = 'orchestrator'. If would_reject_reasons is non-empty, INSERT one row into claim_rejects. ALWAYS RETURN NEW regardless (observe-only -- this SD ships zero blocking behavior). Repo-match is explicitly NOT one of the checked invariants (dropped per database-agent finding -- would require external worker-cwd context a SQL trigger cannot see).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A claim UPDATE with a stale claim_gate_client_version (below the configured floor) still SUCCEEDS (row is claimed) AND inserts exactly one claim_rejects row with 'version_floor' in would_reject_reasons.",
+        "A claim UPDATE on an SD with metadata.requires_human_action=true still SUCCEEDS AND logs a claim_rejects row with 'requires_human_action'.",
+        "A healthy claim UPDATE (fresh version, no invariants tripped) succeeds with ZERO claim_rejects rows.",
+        "The trigger's WHEN clause does not fire on claim release (->NULL) or same-session reaffirm (no claiming_session_id change) -- verified no claim_rejects noise from routine heartbeat/reaffirm writes.",
+        "Forcing an internal trigger error (e.g. a malformed floor value in config) still allows the claim UPDATE to succeed (fail-open proven, not just asserted)."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Convergence note + explicit out-of-scope documentation",
+      "description": "A one-line SQL comment in the migration noting: eligibility enforcement moves INSIDE the future Pool-C lease RPC when it lands (+ a grant-level REVOKE of direct claim writes at that point); this trigger remains as defense-in-depth observation. The PRD and retrospective explicitly record what is OUT OF SCOPE for this SD: (a) flipping the trigger to binding (RAISE EXCEPTION) mode -- requires its own reviewed change since the ledger-insert-on-reject must then move into claim_sd()'s exception handler (RAISE aborts the trigger's own INSERT, per database-agent's finding) rather than the trigger body; (b) the 24-48h soak/false-reject-rate measurement itself -- inherently requires real wall-clock production observation; (c) the repo-match invariant -- dropped entirely, not deferred.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "Migration file contains the Pool-C convergence comment.",
+        "A completion-flag or retrospective action item explicitly names the binding-mode follow-up SD as required future work, not silently dropped."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Zero behavior change to existing claim_sd() paths", "description": "The only change to claim_sd()'s body is the new defaulted parameter and one additional SET clause in the existing final UPDATE. Every existing return/error path (already_claimed, claimed_by_live_peer, unauthorized_force, sd_not_found, sd_terminal_status, blocking_conflict, drift_recovery, auto_stale_takeover, claimed_by_silenced_peer) is unchanged." },
+    { "id": "TR-2", "title": "Trigger is fail-open end to end", "description": "Both the config-floor read AND the entire trigger body are wrapped in EXCEPTION WHEN OTHERS with a fail-open default (no version check / RETURN NEW) so a config outage or a trigger bug can never block a claim write -- the catastrophic failure mode for a shared multi-worker-fleet claims table is a fleet-wide stall, which this design structurally prevents in observe-only mode." },
+    { "id": "TR-3", "title": "WHEN clause matches the acquisition semantics, not the existing precedent's narrower clause", "description": "WHEN (NEW.claiming_session_id IS DISTINCT FROM OLD.claiming_session_id AND NEW.claiming_session_id IS NOT NULL) -- fires on NULL->session (fresh claim) and A->B (takeover, which should be re-checked), suppresses on release (->NULL) and reaffirm (same->same). The existing precedent trigger (migration 393, tr_enforce_no_claim_on_cancelled_sd) uses the narrower OLD.claiming_session_id IS NULL, which would miss a takeover re-check -- this SD's clause is intentionally broader and does not touch that existing trigger. Postgres fires all matching BEFORE UPDATE triggers in name order; since the new trigger never mutates NEW and never raises, it cannot shadow or be shadowed by the existing one (risk-agent 5a7bfbd9 confirmed no ordering hazard)." },
+    { "id": "TR-4", "title": "claim_rejects retention + isolated config-read sub-block", "description": "risk-agent 5a7bfbd9 (low-severity): add a created_at index on claim_rejects to bound query cost as the ledger grows (no retention policy in this SD -- unbounded growth is acceptable for the short observe-only soak window, but the index avoids a full-scan risk if the floor is bumped repeatedly). Nest the chairman_dashboard_config floor-read in its own inner EXCEPTION sub-block (separate from the outer body-wide EXCEPTION) so a config-read error does not suppress logging of the 3 row-derivable invariants -- only the version-floor check itself degrades to skipped on a config error." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Stale client_gate_version claim -- succeeds + logs claim_rejects with version_floor", "type": "integration", "expected": "Row claimed; exactly one claim_rejects row, reasons include version_floor." },
+    { "id": "TS-2", "scenario": "requires_human_action=true SD claimed -- succeeds + logs claim_rejects", "type": "integration", "expected": "Row claimed (observe-only never blocks); claim_rejects row logged with requires_human_action." },
+    { "id": "TS-3", "scenario": "Healthy claim (fresh version, no invariants tripped)", "type": "integration", "expected": "Row claimed; zero claim_rejects rows." },
+    { "id": "TS-4", "scenario": "Release (->NULL) and same-session reaffirm produce no trigger noise", "type": "integration", "expected": "Zero claim_rejects rows from routine release/reaffirm writes." },
+    { "id": "TS-5", "scenario": "claim_sd() called WITHOUT the new p_client_gate_version param (existing/unmodified callers)", "type": "integration", "expected": "RPC succeeds exactly as before; claim_gate_client_version lands NULL; trigger treats NULL as unknown (no version_floor reject logged)." },
+    { "id": "TS-6", "scenario": "Existing tests/database/ claim-related suite -- zero regression", "type": "regression", "expected": "All pre-existing claim_sd / claim-guard tests still pass unchanged." }
+  ],
+  "acceptance_criteria": [
+    "Every existing claim_sd() caller continues to work unmodified (additive-only RPC signature change).",
+    "The observe-only trigger never blocks a claim write and never raises, under any condition including internal errors.",
+    "A stale-version or config-free-invariant-tripping claim is logged to claim_rejects without being rejected.",
+    "The migration documents the Pool-C convergence note and explicitly scopes out binding-mode + soak measurement + repo-match as future/dropped work.",
+    "Zero regression in the existing claim_sd/claim-guard test suite."
+  ],
+  "risks": [
+    { "risk": "A trigger bug blocks or slows every fleet worker's claim acquisition (worst-case blast radius: whole-fleet stall).", "mitigation": "Observe-only mode never raises; the entire trigger body is wrapped in EXCEPTION WHEN OTHERS with RETURN NEW as the universal fallback. TS validates this by forcing an internal error and confirming the claim still succeeds.", "severity": "critical" },
+    { "risk": "Encoding repo-match (or any config-dependent check) in SQL reproduces the QF-20260703-775 false-reject class.", "mitigation": "Repo-match is dropped entirely from this SD's scope per database-agent's explicit finding; only the 3 confirmed row-derivable invariants are checked.", "severity": "high" },
+    { "risk": "Binding-mode RAISE + ledger-INSERT-in-trigger silently loses the ledger row (RAISE rolls back the trigger's own INSERT).", "mitigation": "This SD ships observe-only ONLY (no RAISE anywhere); the binding-mode follow-up SD must move the ledger insert into claim_sd()'s exception handler, documented explicitly as out-of-scope/deferred here, not silently dropped.", "severity": "medium" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["lib/claim-guard.mjs (claim_sd RPC caller, reaffirmClaimColumns)", "claim_sd() Postgres RPC", "scripts/sd-start.js and every other claim_sd caller (unmodified, additive-only)"],
+    "dependencies": ["chairman_dashboard_config", "strategic_directives_v2 (new column claim_gate_client_version)", "claude_sessions"],
+    "data_contracts": ["NEW table claim_rejects", "NEW column strategic_directives_v2.claim_gate_client_version", "NEW chairman_dashboard_config.metadata.claim_gate_version_floor key"],
+    "runtime_config": ["chairman_dashboard_config.metadata.claim_gate_version_floor (bumped via scripts/bump-claim-gate-version.js only, atomic jsonb_set)"],
+    "observability_rollout": ["claim_rejects table (queryable would-reject ledger)", "no dashboard section in this SD (deferred to the soak-measurement follow-up)"]
+  },
+  "system_architecture": {
+    "summary": "Observe-only claim-eligibility trigger on strategic_directives_v2's claim-acquisition UPDATE, fed a client-stamped gate version via a new claim_sd() RPC parameter, checking 3 row-derivable invariants + a version floor read from the existing chairman_dashboard_config pattern -- fail-open end to end, never blocks, logs would-rejects to a new ledger table.",
+    "components": [
+      { "name": "database/migrations/20260704_claim_gate_version_registry.sql", "change": "NEW -- seeds chairman_dashboard_config.metadata.claim_gate_version_floor=1" },
+      { "name": "database/migrations/20260704_claim_sd_client_gate_version.sql", "change": "NEW -- CREATE OR REPLACE claim_sd() with p_client_gate_version param; ADD COLUMN claim_gate_client_version" },
+      { "name": "database/migrations/20260704_claim_eligibility_observe_trigger.sql", "change": "NEW -- CREATE TABLE claim_rejects; CREATE FUNCTION claim_eligibility_observe(); CREATE TRIGGER" },
+      { "name": "lib/claim-guard.mjs", "change": "UPDATE -- CLAIM_GUARD_CODE_VERSION constant; pass p_client_gate_version to claim_sd RPC call and reaffirmClaimColumns" },
+      { "name": "scripts/bump-claim-gate-version.js", "change": "NEW -- atomic jsonb_set helper for the version floor" },
+      { "name": "tests/database/claim-eligibility-observe-trigger.test.js", "change": "NEW -- TS-1..TS-6" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Database-agent PLAN-phase review (sub_agent_execution_results 1335d75a) already resolved the 5 hardest design questions before any migration was written. EXEC applies those corrections directly.",
+    "steps": [
+      "Migration 1: seed chairman_dashboard_config.metadata.claim_gate_version_floor=1 via jsonb_set.",
+      "Migration 2: CREATE OR REPLACE claim_sd() adding p_client_gate_version param + the one new SET clause; ADD COLUMN claim_gate_client_version.",
+      "Migration 3: CREATE TABLE claim_rejects; CREATE FUNCTION claim_eligibility_observe() (fail-open, never raises); CREATE TRIGGER.",
+      "Update lib/claim-guard.mjs: CLAIM_GUARD_CODE_VERSION constant, pass through RPC call + reaffirmClaimColumns.",
+      "scripts/bump-claim-gate-version.js: atomic jsonb_set CLI helper.",
+      "Write tests/database/claim-eligibility-observe-trigger.test.js covering TS-1..TS-6 against a live/test DB.",
+      "Run the full existing claim_sd/claim-guard test suite for zero regression."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "npx vitest run tests/database/claim-eligibility-observe-trigger.test.js", "expected_outcome": "TS-1..TS-6 all pass." },
+    { "step_number": 2, "instruction": "Run the existing claim_sd/claim-guard regression suite", "expected_outcome": "Zero regression -- all pre-existing tests pass unchanged." }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-SIDE-CLAIM-ELIGIBILITY-001"
+  }
+}
