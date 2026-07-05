@@ -217,9 +217,16 @@ function matchFileToDeliverable(filePath, deliverables) {
 async function syncDeliverables(sdId, options = {}) {
   const { repoPath = EHG_ROOT, silent = false } = options;
 
+  // QF-20260705-859: callers pass either an sd_key or a UUID, but sd_phase_handoffs /
+  // sd_scope_deliverables store the UUID while git branches carry the sd_key. The raw
+  // arg previously went straight into .eq('sd_id', ...) — an sd_key matched zero rows
+  // and the script reported a vacuous "All deliverables already completed".
+  const { resolveSdInput } = await import('./lib/sd-id-resolver.js');
+  const { sdId: sdUuid, sdKey } = await resolveSdInput(sdId, supabase);
+
   if (!silent) {
     console.log('\n📊 Sync Deliverables from Git');
-    console.log(`   SD: ${sdId}`);
+    console.log(`   SD: ${sdKey} (${sdUuid})`);
     console.log(`   Repository: ${repoPath}`);
     console.log('='.repeat(60));
   }
@@ -228,7 +235,7 @@ async function syncDeliverables(sdId, options = {}) {
   const { data: handoff } = await supabase
     .from('sd_phase_handoffs')
     .select('created_at')
-    .eq('sd_id', sdId)
+    .eq('sd_id', sdUuid)
     .eq('handoff_type', 'PLAN-TO-EXEC')
     .eq('status', 'accepted')
     .order('created_at', { ascending: false })
@@ -243,7 +250,7 @@ async function syncDeliverables(sdId, options = {}) {
   const { data: deliverables, error: delError } = await supabase
     .from('sd_scope_deliverables')
     .select('id, deliverable_name, deliverable_type, completion_status')
-    .eq('sd_id', sdId)
+    .eq('sd_id', sdUuid)
     .neq('completion_status', 'completed');
 
   if (delError || !deliverables) {
@@ -258,8 +265,8 @@ async function syncDeliverables(sdId, options = {}) {
 
   if (!silent) console.log(`   📦 Found ${deliverables.length} pending deliverables`);
 
-  // Parse git commits
-  const commits = getGitCommits(sdId, repoPath);
+  // Parse git commits (branches are named feat/<sd_key>, never feat/<uuid>)
+  const commits = getGitCommits(sdKey, repoPath);
 
   if (commits.length === 0) {
     if (!silent) console.log('   ℹ️  No commits found on SD branch');
@@ -279,7 +286,7 @@ async function syncDeliverables(sdId, options = {}) {
       const match = matchFileToDeliverable(file.path, deliverables);
 
       const fileOp = {
-        sd_id: sdId,
+        sd_id: sdUuid,
         operation_type: file.operation,
         file_path: file.path,
         commit_hash: commit.hash,
