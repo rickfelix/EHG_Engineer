@@ -54,7 +54,7 @@ export function createRetrospectiveQualityGate(supabase) {
       const sdUuid = ctx.sd?.id || ctx.sdId;
       const sdCreatedAt = ctx.sd?.created_at || null;
       const { retrospective, leadToPlanAcceptedAt, error: retroError } =
-        await getFilteredRetrospective(sdUuid, sdCreatedAt, supabase);
+        await getFilteredRetrospective(sdUuid, sdCreatedAt, supabase, ctx.sd?.sd_key || null);
 
       if (retroError && retroError.code !== 'PGRST116') {
         console.log(`   ⚠️  Retrospective query error: ${retroError.message}`);

@@ -391,7 +391,7 @@ export function createRetrospectiveExistsGate(supabase) {
       // Handoff-time retros share retro_type='SD_COMPLETION' so the timestamp filter
       // is what distinguishes them from true SD-completion retrospectives.
       const { retrospective, leadToPlanAcceptedAt } =
-        await getFilteredRetrospective(ctx.sd.id, ctx.sd.created_at || null, supabase);
+        await getFilteredRetrospective(ctx.sd.id, ctx.sd.created_at || null, supabase, ctx.sd.sd_key || null);
 
       if (!retrospective) {
         const sdKey = ctx.sd?.sd_key || ctx.sdId || 'unknown';

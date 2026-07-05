@@ -21,6 +21,33 @@
  */
 
 /**
+ * QF-20260704-127: ctx.sd.id has been observed carrying the SD's legacy uuid_id
+ * column instead of its canonical id (same corruption class as QF-20260703-906,
+ * which patched PREREQUISITE_HANDOFF_CHECK inline) — for child SDs specifically,
+ * making every .eq(sdUuid) below come back clean-empty (valid UUID, zero matches)
+ * rather than erroring, so a real retrospective silently reads as missing.
+ * Re-resolve via sd_key (unaffected by the id/uuid_id ambiguity) whenever available.
+ *
+ * @param {string} sdUuid - candidate strategic_directives_v2.id (UUID)
+ * @param {string|null} sdKey - SD's sd_key, used to re-resolve the canonical id
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<string>} the canonical id (or the original sdUuid if unresolvable)
+ */
+async function resolveCanonicalSdId(sdUuid, sdKey, supabase) {
+  if (!sdKey) return sdUuid;
+  const { data: canonical } = await supabase
+    .from('strategic_directives_v2')
+    .select('id')
+    .eq('sd_key', sdKey)
+    .maybeSingle();
+  if (canonical?.id && canonical.id !== sdUuid) {
+    console.log(`   ⚠️  [retro-filters] sdUuid mismatch (${sdUuid} vs canonical ${canonical.id}) — using canonical id`);
+    return canonical.id;
+  }
+  return sdUuid;
+}
+
+/**
  * Resolve the LEAD-TO-PLAN acceptance timestamp for an SD.
  * Falls back to sdCreatedAt if no accepted LEAD-TO-PLAN handoff row exists
  * (Phase-0 / unusual SDs — see SD risk analysis, accepted permissive).
@@ -51,18 +78,20 @@ export async function resolveLeadToPlanAcceptedAt(sdUuid, sdCreatedAt, supabase)
  * Fetch the most recent SD-completion retrospective that satisfies the three
  * invariants (existence, type, freshness). Returns null when no row matches.
  *
- * @param {string} sdUuid - strategic_directives_v2.id (UUID)
+ * @param {string} sdUuid - candidate strategic_directives_v2.id (UUID)
  * @param {string|null} sdCreatedAt - SD.created_at ISO string, freshness fallback
  * @param {Object} supabase - Supabase client
+ * @param {string|null} [sdKey] - SD's sd_key, used to re-resolve the canonical id (QF-20260704-127)
  * @returns {Promise<{retrospective: Object|null, leadToPlanAcceptedAt: string, error: Object|null}>}
  */
-export async function getFilteredRetrospective(sdUuid, sdCreatedAt, supabase) {
-  const leadToPlanAcceptedAt = await resolveLeadToPlanAcceptedAt(sdUuid, sdCreatedAt, supabase);
+export async function getFilteredRetrospective(sdUuid, sdCreatedAt, supabase, sdKey = null) {
+  const canonicalId = await resolveCanonicalSdId(sdUuid, sdKey, supabase);
+  const leadToPlanAcceptedAt = await resolveLeadToPlanAcceptedAt(canonicalId, sdCreatedAt, supabase);
 
   const { data: retrospective, error } = await supabase
     .from('retrospectives')
     .select('*')
-    .eq('sd_id', sdUuid)
+    .eq('sd_id', canonicalId)
     .eq('retro_type', 'SD_COMPLETION')
     // QF-20260530-670: accept retrospective_type IS NULL (canonical generate-retrospective.js)
     // OR ='SD_COMPLETION' (retro-agent's ad-hoc inserts mistag it). Handoff-time retros tag this
