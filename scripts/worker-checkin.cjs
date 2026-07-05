@@ -49,7 +49,7 @@ const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cj
 const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, parentLeadPending } = require('../lib/fleet/claim-eligibility.cjs');
 // SD-LEO-INFRA-COMPLEXITY-TIERED-WORKER-ASSIGNMENT-001 (FR-3): WORK-DOWN-NEVER-UP on the PULL path.
 // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B (FR-3): --model/--effort capture at check-in.
-const { resolveWorkerTierRank, isTieringActive, normalizeModel, normalizeEffort, rankForModelEffort, clamp: clampTierRank } = require('../lib/fleet/tier-ladder.cjs');
+const { resolveWorkerTierRank, isTieringActive, normalizeModel, normalizeEffort, rankForModelEffort } = require('../lib/fleet/tier-ladder.cjs');
 // SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-2): tier-aware "claimable-to-MY-rung" rollup.
 const { claimableForTier } = require('../lib/fleet/tier-claimable.cjs');
 // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-E (FR-6): backlog-gated downward claims. The fetcher is
@@ -1217,7 +1217,12 @@ function mergeCheckinModelEffort(sessionMetadata, { model: cliModel = null, effo
     const finalModel = next.model || current.model;
     const finalEffort = next.effort || current.effort;
     if (finalModel && finalEffort) {
-      const rank = clampTierRank(rankForModelEffort(finalModel, finalEffort));
+      // QF-20260705-394: rankForModelEffort now returns the STATIC-ladder dense rank
+      // (ladder-bounded by construction), so it is stamped UNCLAMPED. The old
+      // clamp() bound it to the process-cached live top rank — a live-shrunk cache
+      // (K=3 fleet) collapsed a fable/xhigh self-report to 3, below statically-stamped
+      // min_tier_rank=4 SDs, clobbering coordinator rank stamps on every checkin.
+      const rank = rankForModelEffort(finalModel, finalEffort);
       if (next.tier_rank !== rank) next.tier_rank = rank;
     }
   }

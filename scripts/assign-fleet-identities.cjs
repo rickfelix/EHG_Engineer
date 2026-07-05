@@ -20,7 +20,7 @@ const NATO = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', '
 // value to 4 — a THIRD independent hardcoded-4-rung assumption alongside tier-ladder.cjs's
 // LADDER and sd-tier-rank.mjs's rung literals. Both are now derived from the shared
 // lib/fleet/tier-ladder.cjs module so K (ladderTopRank()) is never assumed to be 4.
-const { resolveWorkerTierRank, ladderTopRank, deriveWorkerTierRank } = require('../lib/fleet/tier-ladder.cjs');
+const { resolveWorkerTierRank, ladderTopRank, stampRankForWorker } = require('../lib/fleet/tier-ladder.cjs');
 
 // QF-20260627-108 (FR-1): the chairman effort-encoded callsign scheme. A worker's callsign is
 // derived from its metadata.tier_rank (the source-of-truth), NOT flat first-available NATO order —
@@ -354,7 +354,11 @@ async function main() {
   // read it for banding decisions.
   const liveFleet = uniqueWorkers.map(w => ({ model: w.metadata?.model, effort: w.metadata?.effort }));
   for (const worker of uniqueWorkers) {
-    const freshRank = deriveWorkerTierRank(worker, liveFleet);
+    // QF-20260705-394: stampRankForWorker floors the live dense rank at the STATIC
+    // rankForModelEffort — a K<4 live fleet must never compress the strongest workers
+    // below the static space SD min_tier_rank thresholds are written in (this cron was
+    // the recurring 4->3 clobber writer in the 2026-07-05 dispatch-refusal incident).
+    const freshRank = stampRankForWorker(worker, liveFleet);
     if (worker.metadata?.tier_rank !== freshRank) {
       const metadata = { ...(worker.metadata || {}), tier_rank: freshRank };
       const { error: rankErr } = await supabase
