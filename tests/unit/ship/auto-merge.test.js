@@ -83,6 +83,28 @@ describe('buildMergeArgs', () => {
       '--admin',
     ]);
   });
+
+  // QF-20260705-938 (critical, live near-miss ehg PR #734): without -R, gh resolves
+  // the PR NUMBER against the ambient cwd repo — a cross-repo caller from EHG_Engineer
+  // cwd merging an ehg PR silently no-ops (or, on an open-number collision, merges the
+  // WRONG repo's PR with --admin). Cross-repo merge args MUST carry -R.
+  it('carries -R owner/repo when repoOwner/repoName are supplied (cross-repo, QF-20260705-938)', () => {
+    expect(buildMergeArgs(734, { admin: true, repoOwner: 'rickfelix', repoName: 'ehg' })).toEqual([
+      'pr',
+      'merge',
+      '734',
+      '-R',
+      'rickfelix/ehg',
+      '--merge',
+      '--delete-branch',
+      '--admin',
+    ]);
+  });
+
+  it('omits -R when the target repo is unknown (legacy ambient behavior preserved)', () => {
+    expect(buildMergeArgs(5, {})).toEqual(['pr', 'merge', '5', '--merge', '--delete-branch']);
+    expect(buildMergeArgs(5, { repoOwner: 'rickfelix' })).toEqual(['pr', 'merge', '5', '--merge', '--delete-branch']);
+  });
 });
 
 describe('detectDraftState', () => {
@@ -103,6 +125,22 @@ describe('detectDraftState', () => {
   it('returns null on lookup failure', () => {
     const runner = () => ({ code: 1, stdout: '', stderr: 'auth required' });
     expect(detectDraftState(7, runner)).toBe(null);
+  });
+
+  // QF-20260705-938: the draft probe is repo-scoped for cross-repo callers, and the
+  // legacy 2-arg (prNumber, runner) form keeps working via the back-compat shim.
+  it('scopes the pr view with -R when repoOwner/repoName are supplied', () => {
+    const seen = [];
+    const runner = (argv) => { seen.push(argv); return { code: 0, stdout: 'true\n', stderr: '' }; };
+    expect(detectDraftState(734, 'rickfelix', 'ehg', runner)).toBe(true);
+    expect(seen[0]).toEqual(['pr', 'view', '734', '-R', 'rickfelix/ehg', '--json', 'isDraft', '--jq', '.isDraft']);
+  });
+
+  it('legacy 2-arg form (prNumber, runner) still resolves unscoped', () => {
+    const seen = [];
+    const runner = (argv) => { seen.push(argv); return { code: 0, stdout: 'false\n', stderr: '' }; };
+    expect(detectDraftState(7, runner)).toBe(false);
+    expect(seen[0]).toEqual(['pr', 'view', '7', '--json', 'isDraft', '--jq', '.isDraft']);
   });
 });
 
