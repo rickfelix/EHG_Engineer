@@ -828,8 +828,12 @@ async function createAutoPR(qfId, qf, filesChanged, actualLoc, testsPass, uatVer
     // SD-SEC-DATA-VALIDATION-001: Validate qfId
     const validatedQfId = validateQfId(qfId);
 
-    // Check if gh CLI is installed
-    execSync('which gh', { stdio: 'pipe' });
+    // Check if gh CLI is installed. QF-20260705-716: probe with `gh --version`, not
+    // `which gh` — `which` does not exist on win32, so the old probe threw on every
+    // Windows worker and --auto-pr always aborted to "create PR manually" even with
+    // gh installed and on PATH. `gh --version` is cross-platform and also proves the
+    // binary actually executes, which `which` never did.
+    execSync('gh --version', { stdio: 'pipe' });
 
     // Title is still a shell arg, so keep it sanitized.
     const prTitle = sanitizeForShell(`fix(${validatedQfId}): ${qf.title || 'Quick fix'}`);
