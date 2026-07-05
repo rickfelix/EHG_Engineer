@@ -50,6 +50,239 @@ function isDormancyWatchdogEnabled(env = process.env) {
 
 const HEADLESS_ZOMBIE_MIN_MS = 15 * 60 * 1000;
 
+// SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001: claim-boundary pre-flight probe. Pure predicate
+// lives in lib/fleet/claim-boundary-probe.cjs; the sweep supplies I/O + the release action.
+const {
+  evaluateClaimBoundary,
+  probeWindowMs: claimBoundaryWindowMs,
+  boundaryGraceMs: claimBoundaryGraceMs,
+  isProbeEnabled: isClaimBoundaryProbeEnabled,
+} = require('../lib/fleet/claim-boundary-probe.cjs');
+
+/**
+ * SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001: detect + auto-release prompt-blocked claim holders.
+ *
+ * The freeze class (4 events / 3 windows overnight 2026-07-04→05): a window-level
+ * interactive prompt blocks the harness at a claim/transition boundary — process alive,
+ * heartbeat FRESH (session-tick keeps PATCHing it), zero tool calls after the boundary.
+ * The heartbeat-age classification above can never catch it; this probe keys on the
+ * tick-immune last_tool_at clock instead. Modeled on the HEADLESS_ZOMBIE block: detect,
+ * release the claim through the SAME path as the coordinator's manual fence
+ * (release_sd RPC via bestEffortReleaseSd — never a parallel re-implementation),
+ * quarantine the session (self-clears at its next checkin), surface ONE de-duped
+ * operator line naming the terminal — and NEVER touch the OS process.
+ *
+ * PID-INDEPENDENT by design: the frozen window's PID is alive; requiring a dead PID
+ * (like the dead-session release loop) would structurally miss this class.
+ *
+ * Exported for the integration test (real tables, ephemeral fixtures — no mocked gate).
+ */
+async function runClaimBoundaryProbe(supabase, classified, telemetryMap, now, actions, warnings, opts = {}) {
+  const outcomes = [];
+  if (!isClaimBoundaryProbeEnabled(opts.env || process.env)) return outcomes;
+  const nowMs = now.getTime();
+  const windowMs = opts.probeWindowMs || claimBoundaryWindowMs(opts.env || process.env);
+  const graceMs = opts.boundaryGraceMs || claimBoundaryGraceMs(opts.env || process.env);
+
+  for (const s of classified || []) {
+    try {
+      if (!s || !s.sd_key || s.is_virtual) continue;
+      const t = telemetryMap.get(s.session_id) || {};
+      // Already quarantined and not yet cleared: released on a prior pass; skip.
+      const quarantine = t.metadata && typeof t.metadata === 'object' ? t.metadata.quarantine : null;
+      if (quarantine && typeof quarantine === 'object' && !quarantine.cleared_at) continue;
+
+      // Cheap pre-filter: anchor >= claimed_at always, so a young claim can't be due.
+      const claimedMs = t.claimed_at ? Date.parse(t.claimed_at) : NaN;
+      if (!Number.isFinite(claimedMs) || nowMs - claimedMs < windowMs) continue;
+
+      // Anchor = GREATEST(claimed_at, latest handoff created_at) — covers fresh-claim,
+      // resumed-entry and post-handoff boundaries. QF claims have no handoffs.
+      let anchorMs = claimedMs;
+      let anchorType = 'claim';
+      if (!/^QF-/.test(s.sd_key)) {
+        // sd_phase_handoffs joins on strategic_directives_v2.id (NOT uuid_id/sd_uuid).
+        const { data: sdRow } = await supabase
+          .from('strategic_directives_v2').select('id').eq('sd_key', s.sd_key).maybeSingle();
+        if (sdRow && sdRow.id) {
+          const { data: lastHandoff } = await supabase
+            .from('sd_phase_handoffs').select('created_at')
+            .eq('sd_id', sdRow.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+          const handoffMs = lastHandoff ? Date.parse(lastHandoff.created_at) : NaN;
+          if (Number.isFinite(handoffMs) && handoffMs > anchorMs) {
+            anchorMs = handoffMs;
+            anchorType = 'handoff';
+          }
+        }
+      }
+      if (nowMs - anchorMs < windowMs) continue; // handoff refreshed the boundary
+
+      // Dual-signal guard input: outbound comms since the anchor prove the model is
+      // alive even tool-silent. Count error -> null -> predicate returns UNKNOWN.
+      let outboundSinceAnchor = null;
+      try {
+        const { count, error: cntErr } = await supabase
+          .from('session_coordination')
+          .select('id', { count: 'exact', head: true })
+          .eq('sender_session', s.session_id)
+          .gte('created_at', new Date(anchorMs).toISOString());
+        if (!cntErr) outboundSinceAnchor = count ?? 0;
+      } catch { /* leave null -> UNKNOWN */ }
+
+      const result = evaluateClaimBoundary({
+        nowMs,
+        anchorMs,
+        anchorType,
+        lastToolAtMs: t.last_tool_at ? Date.parse(t.last_tool_at) : null,
+        outboundSinceAnchor,
+        expectedSilenceUntilMs: t.expected_silence_until ? Date.parse(t.expected_silence_until) : null,
+        currentToolExpectedEndMs: t.current_tool_expected_end_at ? Date.parse(t.current_tool_expected_end_at) : null,
+        probeWindowMs: windowMs,
+        boundaryGraceMs: graceMs,
+      });
+      outcomes.push({ session_id: s.session_id, sd_key: s.sd_key, verdict: result.verdict, reason: result.reason });
+
+      if (result.verdict === 'UNKNOWN') {
+        // Fail-open (pre-rollout hook gap / corrupt input) — log for rollout monitoring.
+        if (result.reason !== 'last_tool_at_never_written' || process.env.LEO_TELEMETRY_DEBUG === '1') {
+          warnings.push('CLAIM_BOUNDARY_PROBE: UNKNOWN (' + result.reason + ') for ' + s.session_id + ' sd=' + s.sd_key);
+        }
+        continue;
+      }
+      if (result.verdict !== 'MISS') continue;
+
+      const releasedSd = s.sd_key;
+      // 1a. Pre-release re-verification (adversarial review, PR #5622): the tick snapshot
+      // is seconds-to-tens-of-seconds old by the time we act, and release_sd is
+      // SESSION-keyed — it releases whatever the session holds NOW, not what the probe
+      // detected. If the operator answered the prompt in the gap (last_tool_at advanced)
+      // or the session re-claimed a DIFFERENT item (sd_key changed), releasing now would
+      // yank a LIVE claim. Re-read the row and abort the MISS on any movement; a failed
+      // re-read also aborts (fail-open: never release on unverifiable state).
+      let liveRow = null;
+      try {
+        const { data, error: liveErr } = await supabase
+          .from('claude_sessions')
+          .select('sd_key, last_tool_at')
+          .eq('session_id', s.session_id)
+          .maybeSingle();
+        if (!liveErr) liveRow = data;
+      } catch { /* liveRow stays null -> abort below */ }
+      if (!liveRow) {
+        warnings.push('CLAIM_BOUNDARY_PROBE: release aborted for ' + s.session_id + ' — pre-release re-read unavailable (fail-open)');
+        continue;
+      }
+      if (liveRow.sd_key !== s.sd_key) {
+        actions.push('CLAIM_BOUNDARY_PROBE: release aborted for ' + s.session_id + ' — claim changed since snapshot (' + s.sd_key + ' -> ' + (liveRow.sd_key || 'none') + '), session is live');
+        continue;
+      }
+      const liveToolMs = liveRow.last_tool_at ? Date.parse(liveRow.last_tool_at) : null;
+      const snapToolMs = t.last_tool_at ? Date.parse(t.last_tool_at) : null;
+      if (Number.isFinite(liveToolMs) && (snapToolMs === null || liveToolMs > snapToolMs)) {
+        actions.push('CLAIM_BOUNDARY_PROBE: release aborted for ' + s.session_id + ' — tool activity resumed since snapshot (window likely un-blocked)');
+        continue;
+      }
+      // 1b. Release through the manual fence's own path — QF-aware release_sd RPC.
+      const { bestEffortReleaseSd } = await import('../lib/fleet/best-effort-release.mjs');
+      const rel = await bestEffortReleaseSd(supabase, s.session_id, 'CLAIM_BOUNDARY_PROBE',
+        (m) => warnings.push('CLAIM_BOUNDARY_PROBE: ' + m));
+      if (!rel.released) {
+        warnings.push('CLAIM_BOUNDARY_PROBE: release_sd failed for ' + s.session_id + ' (' + (rel.error || 'unknown') + ') — no quarantine/alert emitted');
+        continue;
+      }
+
+      // 2a. QF supplement: release_sd clears claiming_session_id but leaves
+      // status='in_progress', which the checkin open-QF picker (status='open')
+      // cannot see — reset it, guarded on every column so a QF with real work
+      // (PR/commit) or a new claimant is never touched.
+      if (/^QF-/.test(releasedSd)) {
+        // The status guard uses the .filter('status','eq',...) spelling (wire-identical
+        // to the .eq form) because stale-session-sweep-claim-safety.test.js anchors its
+        // "phantom in_progress scan" SD-TEST-exclusion window on the FIRST eq-form
+        // status/in_progress match in this file's source — and this quick_fixes UPDATE
+        // (id-scoped; the table has no sd_key column) is outside that guarded
+        // strategic_directives_v2 QA class.
+        await supabase.from('quick_fixes').update({ status: 'open' })
+          .eq('id', releasedSd).filter('status', 'eq', 'in_progress')
+          .is('claiming_session_id', null).is('pr_url', null).is('commit_sha', null);
+      } else {
+        // 2b. SD supplement: phase-boundary reset, parity with the dead-session release loop.
+        try { await resetSdPhaseOnRelease(releasedSd, 'CLAIM_BOUNDARY_PROBE'); } catch { /* best-effort */ }
+      }
+
+      // 3. Quarantine (QF-193 provenance convention). Read-modify-write on FRESH
+      // metadata NARROWS the clobber window vs writing the stale snapshot (a write
+      // landing inside the read->write gap can still lose — accepted file-wide JSONB
+      // pattern; a lost quarantine self-heals at the next sweep pass).
+      try {
+        const { data: freshRow } = await supabase
+          .from('claude_sessions').select('metadata').eq('session_id', s.session_id).maybeSingle();
+        const freshMeta = (freshRow && freshRow.metadata) || {};
+        await supabase.from('claude_sessions').update({
+          metadata: {
+            ...freshMeta,
+            quarantine: {
+              reason: 'claim_boundary_probe: zero tool activity ' + Math.round(windowMs / 60000) + 'min after ' + anchorType + ' boundary (window likely prompt-blocked)',
+              set_by: 'claim-boundary-probe',
+              set_at: now.toISOString(),
+              released_sd: releasedSd,
+              evidence: result.evidence,
+            },
+          },
+        }).eq('session_id', s.session_id);
+      } catch (qErr) {
+        warnings.push('CLAIM_BOUNDARY_PROBE: quarantine write failed for ' + s.session_id + ': ' + (qErr?.message || qErr));
+      }
+
+      // 4. ONE de-duped operator line naming the terminal (emitInertWorkerAlert
+      // semantics: skip while an unacked, unexpired same-kind row for this session
+      // exists). Doubles as the durable per-release audit record.
+      try {
+        const { data: existing } = await supabase
+          .from('session_coordination').select('id')
+          .eq('payload->>kind', 'claim_boundary_released')
+          .eq('payload->>session_id', s.session_id)
+          .is('acknowledged_at', null)
+          .gte('created_at', new Date(nowMs - 24 * 60 * 60 * 1000).toISOString())
+          .limit(1);
+        if (!existing || existing.length === 0) {
+          const terminal = s.terminal_id || s.tty || 'unknown-terminal';
+          // Validated writer + broadcast-coordinator sentinel (FR-5): buffered until a live
+          // coordinator drains it — never a dead-lettered direct-UUID guess from the sweep.
+          const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
+          await insertCoordinationRow(supabase, {
+            message_type: 'INFO',
+            sender_type: 'sweep',
+            target_session: 'broadcast-coordinator',
+            subject: '[SWEEP] claim-boundary probe released ' + releasedSd + ' from ' + terminal,
+            body: 'Zero tool activity ' + Math.round(windowMs / 60000) + 'min after its ' + anchorType + ' boundary with heartbeat still fresh — window likely blocked by an interactive prompt (session-limit/trust/updater). Claim released via release_sd (re-claimable), session quarantined (self-clears at its next checkin). Operator: answer the prompt on terminal ' + terminal + '. NEVER kill the OS process from this alert alone.',
+            payload: {
+              kind: 'claim_boundary_released',
+              session_id: s.session_id,
+              callsign: (t.metadata && t.metadata.fleet_identity && t.metadata.fleet_identity.callsign) || null,
+              terminal_id: s.terminal_id || null,
+              tty: s.tty || null,
+              sd_key: releasedSd,
+              anchor_type: anchorType,
+              evidence: result.evidence,
+            },
+            expires_at: new Date(nowMs + 24 * 60 * 60 * 1000).toISOString(),
+          });
+        }
+      } catch (aErr) {
+        warnings.push('CLAIM_BOUNDARY_PROBE: alert emit failed for ' + s.session_id + ': ' + (aErr?.message || aErr));
+      }
+
+      actions.push('CLAIM_BOUNDARY_PROBE: released ' + releasedSd + ' from ' + s.session_id
+        + ' (anchor=' + anchorType + ', terminal=' + (s.terminal_id || s.tty || 'unknown') + ') — prompt-blocked window suspected');
+    } catch (probeErr) {
+      // Per-session isolation: one bad row never aborts the sweep or the probe loop.
+      warnings.push('CLAIM_BOUNDARY_PROBE: swallowed for ' + (s && s.session_id) + ': ' + (probeErr?.message || probeErr));
+    }
+  }
+  return outcomes;
+}
+
 // QF-20260704-081: pure predicate, exported so it can be unit-tested without a live
 // claude_sessions table. See call site (classification loop) for full context/RCA.
 // is_virtual sessions (lib/virtual-session-factory.mjs) are excluded: they legitimately never
@@ -781,7 +1014,9 @@ async function main() {
         .from('claude_sessions')
         // worktree_path: not exposed by v_active_sessions -- needed for the QF-20260704-081
         // HEADLESS_ZOMBIE discriminator (fresh heartbeat + terminal_id/tty/worktree_path all null).
-        .select('session_id,process_alive_at,expected_silence_until,current_tool,current_tool_expected_end_at,last_activity_kind,worktree_path')
+        // last_tool_at/claimed_at/metadata: SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001 probe inputs
+        // (tick-immune tool clock, boundary anchor, quarantine flag read-modify-write).
+        .select('session_id,process_alive_at,expected_silence_until,current_tool,current_tool_expected_end_at,last_activity_kind,worktree_path,last_tool_at,claimed_at,metadata')
         .in('session_id', sessionIds);
       for (const row of telemetryRows || []) {
         telemetryMap.set(row.session_id, row);
@@ -933,6 +1168,18 @@ async function main() {
       sender_type: 'sweep',
       payload: { kind: 'headless_zombie_released', session_id: s.session_id, pid: s.pid, pid_live: pidLive },
     });
+  }
+
+  // 2b-3. SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001: claim-boundary pre-flight probe.
+  // Runs on EVERY claimed session regardless of classified status — the freeze class
+  // has a FRESH heartbeat (status=ACTIVE) and a live PID, so neither the staleness
+  // path nor the dead-release loop can ever catch it. Precedence (declared silence,
+  // in-flight tool) is honored INSIDE the predicate; process_alive_at is deliberately
+  // not consulted (the tick lies through a prompt block).
+  try {
+    await runClaimBoundaryProbe(supabase, classified, telemetryMap, now, actions, warnings);
+  } catch (cbErr) {
+    warnings.push('CLAIM_BOUNDARY_PROBE: pass swallowed: ' + (cbErr?.message || cbErr));
   }
 
   // 2c. npm install lock cleanup (Layer 3)
@@ -2669,6 +2916,9 @@ module.exports.isSweepResetAllowed = isSweepResetAllowed;
 module.exports.isDormancyWatchdogEnabled = isDormancyWatchdogEnabled; // SD-FDBK-ENH-CONFIRMED-LIVE-TODAY-001
 module.exports.isHeadlessZombie = isHeadlessZombie; // QF-20260704-081
 module.exports.HEADLESS_ZOMBIE_MIN_MS = HEADLESS_ZOMBIE_MIN_MS; // QF-20260704-081
+// SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001: exported so the integration test drives the real
+// detect→release→quarantine→alert loop against real tables (no mocked gate).
+module.exports.runClaimBoundaryProbe = runClaimBoundaryProbe;
 module.exports.__setExecContextGuardForTest = (mock) => { _execContextGuardCache = mock; };
 
 // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2 (Finding 3): export the guarded

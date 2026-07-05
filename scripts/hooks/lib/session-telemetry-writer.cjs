@@ -69,6 +69,11 @@ function writeTelemetry(sessionId, patch, options) {
     'process_alive_at',
     'expected_silence_until',
     'heartbeat_at',   // convenient — hooks often bump this alongside telemetry
+    'last_tool_at',   // SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001 — tick-immune tool
+                      // clock. In THIS allowlist only, NOT writeTelemetryAwait's:
+                      // the await variant is session-tick's path, and letting the
+                      // tick write last_tool_at would re-create the exact
+                      // contamination that broke heartbeat_at/process_alive_at.
     'metadata',       // needed for last_git_metric_at throttle state
     'current_branch', // SD-LEO-INFRA-SESSION-CURRENT-BRANCH-001 — hooks may
                       // stamp branch when they know it; resolution happens

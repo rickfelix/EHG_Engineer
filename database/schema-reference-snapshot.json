@@ -1,7 +1,7 @@
 {
- "generated_at": "2026-07-05T09:04:06.163Z",
+ "generated_at": "2026-07-05T13:38:07.701Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 769,
+ "table_count": 771,
  "view_count": 177,
  "tables": {
   "_migration_metadata": "{key,value}",
@@ -82,6 +82,7 @@
   "chairman_decision_audit": "{id,decision_id,venture_id,lifecycle_stage,effect_type,applied_at,applied_by}",
   "chairman_decisions": "{id,venture_id,lifecycle_stage,health_score,recommendation,decision,override_reason,risks_acknowledged,quick_fixes_applied,created_at,preference_key,preference_ref_id,preference_snapshot,status,rationale,updated_at,summary,brief_data,dfe_context,mitigation_actions,decided_by,blocking,decision_type,context,attempt_number,deleted_at,decided_by_user_id,approval_type}",
   "chairman_directives": "{id,command_text,venture_id,portfolio_id,status,priority,issued_by,correlation_id,eva_interpretation,eva_response,result,error_message,created_at,updated_at,completed_at,delegated_at}",
+  "chairman_email_channel_health": "{id,last_success_at,consecutive_failures,last_error_class,last_canary_verified_at,alarm_state,alarm_raised_at,alarm_cleared_at,last_alarm_notify_error,updated_at}",
   "chairman_feedback": "{id,target_id,target_type,original_audio_url,transcript_text,chairman_edited,audio_length,audio_quality,performance_drive_phase,portfolio_company,cross_company_impact,priority_level,executive_decision,for_lead,for_plan,for_exec,for_eva,dashboard_category,alert_level,follow_up_required,related_metrics,sentiment,action_required,processing_status,created_by,company_id,role,context,created_at,updated_at,acknowledged_at,processed_at}",
   "chairman_interests": "{id,user_id,interest_type,name,priority,is_active,created_at,updated_at,notes,story_beats,vision_signals,coverage_nav_item_ids,feasibility_score}",
   "chairman_notifications": "{id,chairman_user_id,recipient_email,notification_type,decision_id,status,provider_message_id,error_code,error_message,digest_key,summary_key,subject,email_metadata,created_at,sent_at,updated_at}",
@@ -91,8 +92,9 @@
   "channel_budgets": "{id,venture_id,platform,monthly_budget_cents,daily_limit_cents,daily_stop_loss_multiplier,current_month_spend_cents,current_day_spend_cents,budget_month,status,created_at,updated_at}",
   "ci_snapshots": "{id,competitor_intelligence_id,captured_at,snapshot,diff_from_prior,source,created_at}",
   "circuit_breaker_blocks": "{id,sd_id,handoff_type,from_phase,to_phase,validation_score,required_threshold,score_deficit,block_reason,attempted_by,blocked_at,handoff_metadata,remediation_hints}",
+  "claim_rejects": "{id,sd_key,session_id,would_reject_reasons,client_version,floor_version,created_at}",
   "claude_code_releases": "{id,version,detected_at,release_date,changelog_url,status,metadata,created_at}",
-  "claude_sessions": "{id,session_id,sd_key,track,tty,pid,hostname,codebase,claimed_at,heartbeat_at,status,metadata,created_at,updated_at,is_continuous_mode,continuous_started_at,continuous_sds_completed,machine_id,terminal_id,released_reason,released_at,stale_at,stale_reason,pid_validated_at,terminal_identity,current_branch,worktree_path,is_alive,has_uncommitted_changes,handoff_fail_count,current_phase,worktree_branch,is_virtual,parent_session_id,agent_slot,last_progress_at,current_tool,current_tool_args_hash,current_tool_expected_end_at,last_activity_kind,commits_since_claim,files_modified_since_claim,process_alive_at,expected_silence_until,loop_state,cleanup_pending}",
+  "claude_sessions": "{id,session_id,sd_key,track,tty,pid,hostname,codebase,claimed_at,heartbeat_at,status,metadata,created_at,updated_at,is_continuous_mode,continuous_started_at,continuous_sds_completed,machine_id,terminal_id,released_reason,released_at,stale_at,stale_reason,pid_validated_at,terminal_identity,current_branch,worktree_path,is_alive,has_uncommitted_changes,handoff_fail_count,current_phase,worktree_branch,is_virtual,parent_session_id,agent_slot,last_progress_at,current_tool,current_tool_args_hash,current_tool_expected_end_at,last_activity_kind,commits_since_claim,files_modified_since_claim,process_alive_at,expected_silence_until,loop_state,cleanup_pending,last_tool_at}",
   "cleanup_orchestration_state": "{id,venture_id,venture_name,credential_id,credential_type,provider,phase,attempt_count,error_details,revoked_at,created_at,updated_at}",
   "client_error_events": "{id,created_at,session_id,chairman_user_id,severity,environment,route,message,error_name,error_hash,stack,breadcrumbs,user_agent,app_version,metadata}",
   "codebase_health_config": "{id,dimension,enabled,threshold_warning,threshold_critical,min_occurrences,max_sds_per_cycle,allowlist,metadata,created_at,updated_at}",
