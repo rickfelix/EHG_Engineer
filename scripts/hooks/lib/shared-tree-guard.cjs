@@ -241,7 +241,11 @@ function decideSharedTreeCheckout(cmd, ctx) {
     // was judged against the stale starting cwd, never the command's own target).
     const cdTarget = parseCdSegment(seg);
     if (cdTarget) {
-      effectiveCwd = path.isAbsolute(cdTarget) ? cdTarget : path.resolve(effectiveCwd, cdTarget);
+      // win32 explicitly: every real path this guard evaluates is a Windows path (the fleet
+      // runs on Windows dev machines), but this test suite runs on Linux CI -- the platform-
+      // default `path` module would misclassify a 'C:/...' literal as non-absolute there and
+      // silently prepend the CI runner's own posix cwd, corrupting the comparison.
+      effectiveCwd = path.win32.isAbsolute(cdTarget) ? cdTarget : path.win32.resolve(effectiveCwd, cdTarget);
       continue;
     }
 
