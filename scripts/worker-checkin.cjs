@@ -126,6 +126,24 @@ function sortQfCandidatesBySeverity(qfs) {
     return Date.parse(a?.created_at || 0) - Date.parse(b?.created_at || 0);
   });
 }
+// QF-20260704-244 (leg 3 of the QF-lane fix family; legs 1-2 = QF-20260704-602): a CRITICAL
+// open QF outranks SD self-claim, but tightly fenced against reverse starvation of the SD
+// belt -- only 'critical' jumps (high/medium/low keep the existing SD-first order), only
+// after sitting open long enough to give directed dispatch (leg 1) a chance to route it
+// first, and at most ONE consecutive jump per worker (claude_sessions.metadata.
+// last_claim_was_qf_jump gates the NEXT pull, not this one -- see isCriticalQfJumpEligible /
+// the step-6-minus-1 block in runCheckin).
+const CRITICAL_QF_JUMP_GRACE_MS = 10 * 60 * 1000;
+
+/** Pure: is this QF eligible to jump ahead of SD self-claim (severity=critical, aged past grace)? */
+function isCriticalQfJumpEligible(qf, nowMs) {
+  if (!isAutoStartableQF(qf, nowMs)) return false;
+  if (qf.severity !== 'critical') return false;
+  const created = Date.parse(qf.created_at);
+  if (!Number.isFinite(created)) return false;
+  return (nowMs - created) >= CRITICAL_QF_JUMP_GRACE_MS;
+}
+
 const STALE_QF_DAYS = Number(process.env.SD_NEXT_QF_STALE_DAYS) || 3;  // verify-first freshness boundary (shared with sd-next display)
 // SD-LEO-FEAT-WORKER-CHECKIN-SELF-001 (FR-2): gap before confirmRowGone's confirming read so it lands
 // genuinely later than the first (defends a momentary stale-replica null). Env-overridable; tests set 0.
@@ -1486,6 +1504,49 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
   //      today's behavior (read returns [] -> idle), never an error action.
   try { await ensureActiveBaseline(sb); } catch { /* fail-open: never block the checkin */ }
 
+  // 5.95 QF-20260704-244 (leg 3): a CRITICAL open QF, aged past the directed-dispatch grace
+  // window, outranks SD self-claim. Fenced to prevent reverse SD-belt starvation: only
+  // 'critical' jumps, and at most ONE consecutive jump per worker -- if the LAST pull was a
+  // jump (metadata.last_claim_was_qf_jump), this pull consumes/clears that flag and falls
+  // through to the normal SD-first order instead of jumping again immediately.
+  if (sessionMetadata?.last_claim_was_qf_jump === true) {
+    try {
+      await sb.from('claude_sessions')
+        .update({ metadata: { ...sessionMetadata, last_claim_was_qf_jump: false } })
+        .eq('session_id', sessionId);
+    } catch { /* fail-open: worst case is one extra consecutive jump */ }
+  } else {
+    try {
+      const { data: criticalQfs } = await sb
+        .from('quick_fixes')
+        .select('id, status, pr_url, commit_sha, created_at, routing_tier, title, severity')
+        .eq('status', 'open')
+        .eq('severity', 'critical')
+        .is('pr_url', null)
+        .is('commit_sha', null)
+        .order('created_at', { ascending: true })
+        .limit(QF_CANDIDATE_LIMIT);
+      const nowMs = Date.now();
+      for (const qf of (criticalQfs || [])) {
+        if (!isCriticalQfJumpEligible(qf, nowMs)) continue;
+        const claimed = await tryClaim(sb, qf.id, sessionId);
+        if (claimed.ok) {
+          try {
+            await sb.from('claude_sessions')
+              .update({ metadata: { ...sessionMetadata, last_claim_was_qf_jump: true } })
+              .eq('session_id', sessionId);
+          } catch { /* fail-open: worst case the one-consecutive bound doesn't hold once */ }
+          return {
+            ...base,
+            action: 'self_claimed_qf',
+            qf: qf.id,
+            message: `Self-claimed CRITICAL quick-fix ${qf.id} (priority jump ahead of SD self-claim, QF-20260704-244). Load it: node scripts/read-quick-fix.js ${qf.id} — then run the /quick-fix workflow (implement <=50 LOC on branch qf/${qf.id}, run tests, then node scripts/complete-quick-fix.js ${qf.id}). Do NOT run sd-start.js for a QF. On completion, re-run /checkin.`,
+          };
+        }
+      }
+    } catch { /* fail-open: proceed to normal SD-first order */ }
+  }
+
   // 6. self-claim from ONE merged SD pool: baselined sd:next candidates + claimable
   //    UN-BASELINED drafts, rank-sorted TOGETHER (QF-20260610-986, feedback dc87039d).
   //    The old sequential tiers (6 then 6.25) meant a coordinator dispatch_rank could
@@ -1714,7 +1775,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
+module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
 
 if (require.main === module) {
   main().catch(err => {
