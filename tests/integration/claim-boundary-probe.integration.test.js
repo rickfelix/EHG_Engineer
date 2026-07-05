@@ -32,9 +32,14 @@ const RUN_ID = `cbp-test-${Date.now()}-${process.pid}`;
 const SID_MISS = `${RUN_ID}-miss`;
 const SID_PASS = `${RUN_ID}-pass`;
 const SID_UNKNOWN = `${RUN_ID}-unknown`;
+const SID_SD_MISS = `${RUN_ID}-sdmiss`;
 const QF_MISS = `QF-TEST-CBP-${Date.now()}${process.pid}A`;
 const QF_PASS = `QF-TEST-CBP-${Date.now()}${process.pid}B`;
 const QF_UNKNOWN = `QF-TEST-CBP-${Date.now()}${process.pid}C`;
+// SD-TEST- namespace: the sweep's QA mutation paths are hard-fenced from it
+// (TEST_FIXTURE_SD_KEY_LIKE), and a FRESH updated_at keeps adoptOrphanInProgress
+// (15-min minimum age) away during the seconds this fixture lives.
+const SD_MISS = `SD-TEST-CBP-${Date.now()}${process.pid}`;
 
 const MIN = 60_000;
 
@@ -105,10 +110,33 @@ describe.skipIf(!HAS_DB)('claim-boundary probe (LIVE tables, ephemeral fixtures)
     ]);
     expect(qfErr, `quick_fixes fixture insert: ${qfErr?.message}`).toBeNull();
 
+    // TS-7: an SD-shaped claim so the SD release half (three-column clear +
+    // re-adoptability shape) is asserted live, not inferred from the QF path.
+    const { error: sdErr } = await sb.from('strategic_directives_v2').insert({
+      id: crypto.randomUUID(),
+      sd_key: SD_MISS,
+      title: `[fixture] claim-boundary probe SD release test ${RUN_ID}`,
+      description: 'Ephemeral integration fixture — safe to delete on sight.',
+      rationale: 'TS-7 live SD-release coverage (claim-boundary probe).',
+      status: 'in_progress',
+      current_phase: 'EXEC',
+      sd_type: 'infrastructure',
+      category: 'Infrastructure',
+      priority: 'low',
+      scope: 'ephemeral test fixture',
+      target_application: 'EHG_Engineer',
+      success_criteria: [{ criterion: 'fixture', measure: 'n/a' }],
+      claiming_session_id: SID_SD_MISS,
+      active_session_id: SID_SD_MISS,
+      is_working_on: true,
+    });
+    expect(sdErr, `strategic_directives_v2 fixture insert: ${sdErr?.message}`).toBeNull();
+
     const { error: sessErr } = await sb.from('claude_sessions').insert([
       fixtureSession(SID_MISS, QF_MISS, lastToolBoundaryIso),          // froze at the boundary
       fixtureSession(SID_PASS, QF_PASS, new Date(nowMs - 2 * MIN).toISOString()), // active worker
       fixtureSession(SID_UNKNOWN, QF_UNKNOWN, null),                   // pre-rollout hook
+      fixtureSession(SID_SD_MISS, SD_MISS, lastToolBoundaryIso),       // SD-claim freeze (TS-7)
     ]);
     expect(sessErr, `claude_sessions fixture insert: ${sessErr?.message}`).toBeNull();
   }, 30_000);
@@ -116,22 +144,26 @@ describe.skipIf(!HAS_DB)('claim-boundary probe (LIVE tables, ephemeral fixtures)
   afterAll(async () => {
     if (!sb) return;
     await sb.from('session_coordination').delete().eq('payload->>kind', 'claim_boundary_released')
-      .in('payload->>session_id', [SID_MISS, SID_PASS, SID_UNKNOWN]);
+      .in('payload->>session_id', [SID_MISS, SID_PASS, SID_UNKNOWN, SID_SD_MISS]);
     await sb.from('quick_fixes').delete().in('id', [QF_MISS, QF_PASS, QF_UNKNOWN]);
+    await sb.from('strategic_directives_v2').delete().eq('sd_key', SD_MISS);
     await sb.from('claude_sessions').delete().like('session_id', `${RUN_ID}%`);
     // Zero-survivors: nothing this run seeded may outlive it.
     const { count: sessLeft } = await sb.from('claude_sessions')
       .select('session_id', { count: 'exact', head: true }).like('session_id', `${RUN_ID}%`);
     const { count: qfLeft } = await sb.from('quick_fixes')
       .select('id', { count: 'exact', head: true }).in('id', [QF_MISS, QF_PASS, QF_UNKNOWN]);
+    const { count: sdLeft } = await sb.from('strategic_directives_v2')
+      .select('sd_key', { count: 'exact', head: true }).eq('sd_key', SD_MISS);
     expect(sessLeft ?? 0).toBe(0);
     expect(qfLeft ?? 0).toBe(0);
+    expect(sdLeft ?? 0).toBe(0);
   }, 30_000);
 
   it('TS-1 MISS: releases via release_sd, resets the QF to open, quarantines, emits ONE operator line; TS-2/TS-3 untouched', async () => {
     const { data: rows } = await sb.from('claude_sessions')
       .select('session_id, sd_key, claimed_at, last_tool_at, terminal_id, tty, metadata')
-      .like('session_id', `${RUN_ID}%`);
+      .in('session_id', [SID_MISS, SID_PASS, SID_UNKNOWN]); // TS-7's SD fixture runs in its own test
     expect(rows).toHaveLength(3);
 
     const { classified, telemetryMap } = probeInputs(rows);
@@ -191,6 +223,43 @@ describe.skipIf(!HAS_DB)('claim-boundary probe (LIVE tables, ephemeral fixtures)
     expect(unknownSession.metadata?.quarantine).toBeUndefined();
 
     expect(actions.some(a => a.includes('CLAIM_BOUNDARY_PROBE') && a.includes(QF_MISS))).toBe(true);
+  }, 60_000);
+
+  it('TS-7 SD-claim MISS: release_sd three-column clear + re-adoptability shape + phase reset attempt', async () => {
+    const { data: rows } = await sb.from('claude_sessions')
+      .select('session_id, sd_key, claimed_at, last_tool_at, terminal_id, tty, metadata')
+      .eq('session_id', SID_SD_MISS);
+    expect(rows).toHaveLength(1);
+
+    const { classified, telemetryMap } = probeInputs(rows);
+    const actions = [];
+    const outcomes = await runClaimBoundaryProbe(sb, classified, telemetryMap, new Date(), actions, []);
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]).toMatchObject({ verdict: 'MISS', sd_key: SD_MISS });
+
+    // Three-column dual-column-atomicity invariant on the SD row (AC-6).
+    const { data: sdRow } = await sb.from('strategic_directives_v2')
+      .select('status, claiming_session_id, active_session_id, is_working_on')
+      .eq('sd_key', SD_MISS).maybeSingle();
+    expect(sdRow.claiming_session_id).toBeNull();
+    expect(sdRow.active_session_id).toBeNull();
+    expect(sdRow.is_working_on).toBe(false);
+    // Re-adoptability shape: adoptOrphanInProgress targets in_progress + claiming NULL
+    // (age-gated at 15min, which is why this fixture is safe to leave for seconds).
+    expect(sdRow.status).toBe('in_progress');
+
+    // Session released through the same fence path as the QF case.
+    const { data: sess } = await sb.from('claude_sessions')
+      .select('sd_key, status, released_reason, metadata').eq('session_id', SID_SD_MISS).maybeSingle();
+    expect(sess.sd_key).toBeNull();
+    expect(sess.released_reason).toBe('CLAIM_BOUNDARY_PROBE');
+    expect(sess.metadata?.quarantine?.released_sd).toBe(SD_MISS);
+
+    // Its own operator line, de-duped per session.
+    const { data: alerts } = await sb.from('session_coordination')
+      .select('subject').eq('payload->>kind', 'claim_boundary_released').eq('payload->>session_id', SID_SD_MISS);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].subject).toContain(SD_MISS);
   }, 60_000);
 
   it('second pass: uncleaned quarantine short-circuits — no re-release, no duplicate alert', async () => {
