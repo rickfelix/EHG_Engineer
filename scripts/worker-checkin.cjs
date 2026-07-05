@@ -450,6 +450,18 @@ async function rehydrateCallsign(sb, sessionId, currentMeta) {
       .maybeSingle();
     const cs = data && data.payload && data.payload.callsign;
     if (!cs) return null;
+    // QF-20260705-609: refuse to resurrect `cs` when THIS session's own already-read
+    // claude_sessions.metadata.fleet_identity.callsign already disagrees with it -- a re-band
+    // self-heal (assignFleetIdentityAtCheckin) can write the NEW callsign to claude_sessions
+    // successfully while its own SET_IDENTITY dispatch fails silently (fail-open, "cron
+    // re-emits within 5 min"). Until that re-emit lands, this stale session_coordination row
+    // still names the OLD, already-vacated callsign; rehydrating it here would silently revert
+    // the session to a label it already gave up (chairman-observed live 2026-07-05 morning,
+    // operationally remedied via assign-fleet-identities --force). This is a self-consistency
+    // check (does MY canonical record still agree with `cs`), distinct from QF-20260703-665's
+    // fleet-wide uniqueness check below (does someone ELSE hold `cs`).
+    const myCurrentCallsign = currentMeta && currentMeta.fleet_identity && currentMeta.fleet_identity.callsign;
+    if (myCurrentCallsign && myCurrentCallsign !== cs) return null;
     // QF-20260703-665 (a): refuse to resurrect a callsign a DIFFERENT live session currently
     // holds -- a stale SET_IDENTITY row can name an identity long since reassigned elsewhere
     // (live-repro: Echo ccdd0c1c resurrected while another session already held it). Fail-open
