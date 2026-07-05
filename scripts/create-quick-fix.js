@@ -478,6 +478,24 @@ async function createQuickFix(options = {}) {
       console.log(`   Run /leo ${qfId} to claim and create a worktree when picking up.\n`);
       return printNextSteps(qfId, false, null);
     }
+
+    // QF-20260704-143: role sessions (coordinator/Adam/Solomon) file QFs as dispatch
+    // supply for workers, not work they'll do themselves. Auto-claiming to the creator
+    // (and pre-provisioning a worktree) left every role-filed QF claim-locked and
+    // invisible to worker polls, and burned a worktree-pool slot per queued QF.
+    const { data: creatorSession } = await supabase
+      .from('claude_sessions')
+      .select('metadata')
+      .eq('session_id', creatorSessionId)
+      .maybeSingle();
+    const creatorMeta = creatorSession?.metadata || {};
+    const isRoleSession = creatorMeta.is_coordinator === true || creatorMeta.role === 'adam' || creatorMeta.role === 'solomon';
+    if (isRoleSession) {
+      console.log('🌲 Worktree Isolation skipped — role-session filing, QF queued unclaimed for worker pickup.');
+      console.log(`   Run /leo ${qfId} to claim and create a worktree when picking up.\n`);
+      return printNextSteps(qfId, false, null);
+    }
+
     // Atomically set claiming_session_id; if another session already holds it, bail.
     const { data: claimed } = await supabase
       .from('quick_fixes')
