@@ -49,9 +49,10 @@ describe('FR-2 tier ladder + worker tier resolution', () => {
     // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B: LADDER is now the static SAFE-DEFAULT
     // ladder (K=4 before any live fleet is observed) rather than the sole ranking source
     // -- a live fleet's dense rank comes from deriveLiveLadder/deriveWorkerTierRank
-    // instead (see tests/unit/fleet/tier-ladder-strength-engine.test.js). LADDER[0] itself
-    // is unchanged by the rewrite, so this shape assertion still holds by design.
-    expect(LADDER[0]).toMatchObject({ rank: 1, model: 'sonnet', effort: 'max' });
+    // instead (see tests/unit/fleet/tier-ladder-strength-engine.test.js).
+    // QF-20260705-953: LADDER[0]'s effort moved from 'max' to 'low' — sonnet/high and
+    // sonnet/xhigh dense-rank at 2 now (see tests/unit/fleet/tier-ladder-fable-rungs.test.js).
+    expect(LADDER[0]).toMatchObject({ rank: 1, model: 'sonnet', effort: 'low' });
   });
 
   it('resolveWorkerTierRank returns the declared stamp when present', () => {
