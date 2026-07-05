@@ -441,6 +441,13 @@ function isAutoStartableQF(qf, nowMs) {
   if (qf.pr_url || qf.commit_sha) return false;        // already in PR/commit (verify-first / merge-race guard)
   if (qf.routing_tier != null && Number(qf.routing_tier) >= 3) return false;  // persisted Tier-3 -> full SD, not auto-QF
   if (TIER3_RISK_RE.test(qf.title || '')) return false;                        // risk-keyword drift -> hold for triage/human
+  // SD-LEO-FIX-QUICK-FIXES-NEEDS-001: durable time-gated defer -- a QF genuinely not ready
+  // yet (e.g. needs a clean 24h observation window) stays status='open' but is ineligible
+  // for claim until not_before passes. Prevents the same worker re-claiming it every cycle.
+  if (qf.not_before) {
+    const notBefore = Date.parse(qf.not_before);
+    if (Number.isFinite(notBefore) && notBefore > nowMs) return false;
+  }
   const created = qf.created_at ? Date.parse(qf.created_at) : NaN;
   if (!Number.isFinite(created)) return false;
   const ageDays = (nowMs - created) / (24 * 60 * 60 * 1000);
@@ -461,7 +468,7 @@ async function selfClaimQuickFix(sb, sessionId, base) {
   try {
     const { data: qfs } = await sb
       .from('quick_fixes')
-      .select('id, status, pr_url, commit_sha, created_at, routing_tier, title, severity')
+      .select('id, status, pr_url, commit_sha, created_at, routing_tier, title, severity, not_before')
       .eq('status', 'open')
       .is('pr_url', null)
       .is('commit_sha', null)
@@ -1519,7 +1526,7 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
     try {
       const { data: criticalQfs } = await sb
         .from('quick_fixes')
-        .select('id, status, pr_url, commit_sha, created_at, routing_tier, title, severity')
+        .select('id, status, pr_url, commit_sha, created_at, routing_tier, title, severity, not_before')
         .eq('status', 'open')
         .eq('severity', 'critical')
         .is('pr_url', null)

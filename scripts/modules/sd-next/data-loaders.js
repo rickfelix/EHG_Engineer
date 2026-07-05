@@ -350,7 +350,7 @@ export async function loadOpenQuickFixes(supabase) {
     // to 'completed'. Filtering on status alone surfaces phantom QFs during the merge window.
     const { data, error } = await supabase
       .from('quick_fixes')
-      .select('id, title, type, severity, status, estimated_loc, description, created_at, target_application, claiming_session_id, pr_url, commit_sha')
+      .select('id, title, type, severity, status, estimated_loc, description, created_at, target_application, claiming_session_id, pr_url, commit_sha, not_before')
       .in('status', ['open', 'in_progress'])
       .is('pr_url', null)
       .is('commit_sha', null)
