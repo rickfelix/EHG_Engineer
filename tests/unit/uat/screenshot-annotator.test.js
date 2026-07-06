@@ -11,6 +11,15 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { addBoundingBoxOverlay, createComparisonView } from '../../../lib/uat/screenshot-annotator.js';
 
+// QF-20260704-829: these tests exercise screenshot-annotator.js's `await import('sharp').catch(() =>
+// null)` fallback path, which previously worked only because sharp happened not to be installed in
+// this repo. sharp is now a real dependency (unrelated brand-asset chroma-key work), so the dynamic
+// import would otherwise succeed and these fallback-path assertions would break. Mock sharp's
+// absence explicitly so the test is deterministic regardless of what's actually installed.
+vi.mock('sharp', () => {
+  throw new Error('sharp intentionally mocked as unavailable for fallback-path tests');
+});
+
 // Mock fs module
 vi.mock('fs', async () => {
   const actual = await vi.importActual('fs');
