@@ -437,6 +437,7 @@
     "oiv:validate": "node scripts/oiv-validate.js",
     "sd:preflight": "node scripts/child-sd-preflight.js",
     "sd:burnrate": "node scripts/sd-burnrate.js",
+    "analytics:handoff-rejections": "node scripts/analytics/handoff-rejection-rates.mjs",
     "sd:burnrate:auto": "node scripts/pipeline/burn-rate-worker.js",
     "baseline:version": "node scripts/pipeline/baseline-versioner.js",
     "baseline:insert": "node scripts/pipeline/baseline-insertion-hook.js",
