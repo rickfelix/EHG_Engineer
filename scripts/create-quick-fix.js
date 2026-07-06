@@ -28,6 +28,7 @@ import { preclaimFeedbackRows, resolveFeedbackIds, findFeedbackRefConflicts } fr
 import { releasePreclaim } from '../lib/feedback/release-preclaim.js';
 import { armCliTeardown } from '../lib/cli-graceful-exit.js';
 import { checkFeedbackPremiseLiveness, logForceLivenessOverride } from '../lib/eva/feedback-premise-adapter.js';
+import { loadActiveApplications, validateTargetApplication, detectMisdesignation } from '../lib/fleet/qf-target-application.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -98,7 +99,7 @@ async function createQuickFix(options = {}) {
   // Auto-detect or use provided target application
   targetApplication = options.targetApplication || detectTargetApplication();
   console.log(`🎯 Target Application: ${targetApplication}`);
-  console.log(`   (Run from ${targetApplication === 'EHG' ? 'EHG app' : 'EHG_Engineer'} directory or use --target-application)\n`);
+  console.log('   (Auto-detected from cwd, or pass --target-application <name>)\n');
 
   if (options.interactive || !options.title) {
     console.log('📝 Interactive Mode - Please provide details:\n');
@@ -128,6 +129,24 @@ async function createQuickFix(options = {}) {
     expected = options.expected || '';
     actual = options.actual || '';
     estimatedLoc = options.estimatedLoc || 10;
+  }
+
+  // QF-20260706-648: registry-wide target_application designation.
+  const activeApps = await loadActiveApplications(supabase);
+  if (options.targetApplication) {
+    const { valid, allowedNames } = validateTargetApplication(options.targetApplication, activeApps);
+    if (!valid) {
+      console.log(`❌ Invalid target application: ${options.targetApplication}`);
+      console.log(`   Allowed (active registry): ${allowedNames.join(', ')}`);
+      process.exit(1);
+    }
+  } else {
+    const misdesignated = detectMisdesignation(`${title} ${description}`, targetApplication, activeApps);
+    if (misdesignated) {
+      console.log(`❌ [TARGET_MISDESIGNATION] title/description references "${misdesignated}" but the inferred target is "${targetApplication}" (from cwd).`);
+      console.log(`   Pass --target-application ${misdesignated} if that's the real target, or --target-application ${targetApplication} to confirm the cwd default.`);
+      process.exit(1);
+    }
   }
 
   // Validate type
@@ -661,12 +680,10 @@ for (let i = 0; i < args.length; i++) {
   } else if (arg === '--estimated-loc') {
     options.estimatedLoc = parseInt(args[++i]);
   } else if (arg === '--target-application' || arg === '--target-app') {
-    const val = args[++i];
-    if (!['EHG', 'EHG_Engineer'].includes(val)) {
-      console.error(`❌ Invalid target application: ${val}. Must be 'EHG' or 'EHG_Engineer'`);
-      process.exit(1);
-    }
-    options.targetApplication = val;
+    // QF-20260706-648: any active registry name is accepted here; the async,
+    // DB-backed check against the live applications registry happens inside
+    // createQuickFix() (this parsing loop has no supabase client to query with).
+    options.targetApplication = args[++i];
   } else if (arg === '--feedback-id') {
     options.feedbackId = args[++i];
   } else if (arg === '--force-claim') {
@@ -705,7 +722,7 @@ Options:
   --expected             Expected behavior
   --actual               Actual behavior
   --estimated-loc        Estimated lines of code (default: 10)
-  --target-application   Target repo: 'EHG' or 'EHG_Engineer' (auto-detected from cwd)
+  --target-application   Target repo: any active applications-registry name (auto-detected from cwd)
   --allow-duplicate      Audited override for dedup gate; requires non-empty <reason>
   --force-liveness       Audited override for STALE_PREMISE gate; requires non-empty <reason>
   --help, -h             Show this help
