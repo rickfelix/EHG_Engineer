@@ -104,13 +104,44 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
       const targetAppCFL = validation.details.target_application || sdResolved?.target_application || null;
       const landingSd = { target_application: targetAppCFL, title: sd?.title };
       if (isCustomerFacingLanding(landingSd, scopeToCheck, sd?.title)) {
-        const { dispatchDesignFidelityScorer, observeVentureCompletionDesignPass } = await import('../../../lib/eva/bridge/design-fidelity-observe.js');
+        const { dispatchDesignFidelityScorer, dispatchDesignPromptRubricScorer, observeVentureCompletionDesignPass } = await import('../../../lib/eva/bridge/design-fidelity-observe.js');
         const judgedSessionId = sdResolved?.claiming_session_id || null;
         const scorerCtx = { scopeText: scopeToCheck, titleText: sd?.title, judgedSessionId, stitchData: null, repoAnalysis: null };
         // FR-1/FR-2: give the DORMANT design-fidelity scorer its FIRST live dispatch (observe:false
         // -> live call site only; the recording is owned below, gated on hasDesignPass, so a
         // landing that HAS a design pass is never a false-reject). Stitch is deprecated -> null.
         await dispatchDesignFidelityScorer(landingSd, scorerCtx, { supabase, observe: false });
+
+        // SD-LEO-FEAT-ROUTE-VENTURE-DESIGN-001 (FR-4/FR-5): give dispatchDesignPromptRubricScorer
+        // its first live dispatch, reusing the SAME venture-build harness FR-1/FR-3 wired (never a
+        // parallel gate). No true "post-build page render" source exists anywhere in this codebase
+        // (verified: genesis_deployments is Genesis-simulation-scoped, unrelated to the venture-build
+        // pipeline) -- the closest real, per-venture rendered-HTML evidence is the Stage-17
+        // approved-desktop design artifact (venture_artifacts.artifact_type=stage_17_approved_desktop),
+        // which IS the venture's own finalized/approved design HTML. Fenced on sdResolved.venture_id
+        // (only venture-build leaf SDs carry one -- see lib/eva/lifecycle-sd-bridge.js's grandchild
+        // insert) so a non-venture SD safely no-ops (no renderedHtml resolvable).
+        try {
+          if (sdResolved?.venture_id) {
+            const { data: approved } = await supabase
+              .from('venture_artifacts')
+              .select('artifact_data')
+              .eq('venture_id', sdResolved.venture_id)
+              .eq('artifact_type', 'stage_17_approved_desktop')
+              .eq('is_current', true)
+              .order('created_at')
+              .limit(1)
+              .maybeSingle();
+            const renderedHtml = approved?.artifact_data?.html || null;
+            if (renderedHtml) {
+              const { loadSharedDesignPrompts, buildDesignInstructionBlock } = await import('../../../lib/eva/bridge/design-input-instructions.js');
+              const instructionBlock = buildDesignInstructionBlock(loadSharedDesignPrompts());
+              if (instructionBlock) {
+                await dispatchDesignPromptRubricScorer(landingSd, { ...scorerCtx, renderedHtml, instructionBlock }, { supabase, observe: false });
+              }
+            }
+          }
+        } catch { /* observe-only: an artifact-lookup/dispatch failure must never affect the gate */ }
         // FR-3/FR-4: a customer-facing landing about to auto-exempt via a backend/API
         // classification AND lacking a design pass (no completed design/page-quality child) is an
         // observe-only WOULD-REJECT. hasDesignPass gates it so a designed landing records nothing

@@ -3,7 +3,7 @@
 // (TR-3 / TS-5) -- and that it excludes non-build prompts (e.g. Prompt 1 creation, Prompt 5
 // Feedback page) which are not part of the BUILD_PROMPT_IDS allowlist.
 import { describe, it, expect } from 'vitest';
-import { buildDesignInstructionBlock, BUILD_PROMPT_IDS } from '../../../../lib/eva/bridge/design-input-instructions.js';
+import { buildDesignInstructionBlock, BUILD_PROMPT_IDS, loadSharedDesignPrompts } from '../../../../lib/eva/bridge/design-input-instructions.js';
 
 const PROMPTS = [
   { id: 1, label: 'Prompt 1', summary: 'Landing Page Creation', text: 'Create the landing page...' },
@@ -44,6 +44,23 @@ describe('buildDesignInstructionBlock — mechanical, verbatim wrap (TR-3)', () 
 
   it('round-trips deterministically -- same input produces the same output (no LLM/random)', () => {
     expect(buildDesignInstructionBlock(PROMPTS)).toBe(buildDesignInstructionBlock(PROMPTS));
+  });
+});
+
+// FR-4 (SD-LEO-FEAT-ROUTE-VENTURE-DESIGN-001): loadSharedDesignPrompts is the single vendored
+// JSON-read shared by every caller (lifecycle-sd-bridge.js's venture-build seam AND
+// design-fidelity.js's EXEC-TO-PLAN gate activation) -- proves it resolves the real file and
+// returns the same reference on repeat calls (cached, not re-read per call).
+describe('loadSharedDesignPrompts — single source of truth for shared-design-prompts.json', () => {
+  it('resolves an array containing Prompts 2/3/4 (the BUILD_PROMPT_IDS)', () => {
+    const prompts = loadSharedDesignPrompts();
+    expect(Array.isArray(prompts)).toBe(true);
+    const ids = prompts.map((p) => p.id);
+    for (const id of BUILD_PROMPT_IDS) expect(ids).toContain(id);
+  });
+
+  it('returns the same cached reference on repeat calls', () => {
+    expect(loadSharedDesignPrompts()).toBe(loadSharedDesignPrompts());
   });
 });
 
