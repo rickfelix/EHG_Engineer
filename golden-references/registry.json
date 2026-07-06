@@ -1,4 +1,19 @@
 {
   "$schema_note": "Source of truth for golden references. One row per reference. Mirrored into leo_artifacts (artifact_type=golden_reference) by scripts/golden-references/mirror-registry.mjs — application-level idempotency, zero new DDL. Row shape: {domain, path, guide, door_class_of_application, provenance: {source_files: [], source_commit}, created_at}.",
-  "references": []
+  "references": [
+    {
+      "domain": "gated-rpc-migration",
+      "path": "golden-references/gated-rpc-migration/",
+      "guide": "application-guide.md — gated write path: hardened SECURITY DEFINER RPC + staged chairman-gated migration",
+      "door_class_of_application": "one_way",
+      "provenance": {
+        "source_files": [
+          "database/migrations/20251216_fix_security_definer_views.sql (hardening lineage)",
+          "estate precedents: rescan_stage_20, fn_advance_venture_stage (REVOKE/GRANT)"
+        ],
+        "source_commit": "89868da897cb3abb8695d0f92742245d12b8ba8a"
+      },
+      "created_at": "2026-07-06T05:02:47.675Z"
+    }
+  ]
 }
