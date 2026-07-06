@@ -1,22 +1,25 @@
-# Post-Build Adherence Rubric + Deviation Ledger
+# Post-Build Adherence Rubric + Deviation Ledger + Verdict Engine
 
 **Category**: Reference
 **Status**: Approved
-**Version**: 1.0.0
-**Author**: SD-LEO-INFRA-POST-BUILD-ARTIFACT-001-A
+**Version**: 1.1.0
+**Author**: SD-LEO-INFRA-POST-BUILD-ARTIFACT-001-A, SD-LEO-INFRA-POST-BUILD-ARTIFACT-001-B
 **Last Updated**: 2026-07-04
-**Tags**: eva, artifact-reconciliation, rubric, deviation, schema
+**Tags**: eva, artifact-reconciliation, rubric, deviation, schema, verdict-engine
 
 ## Purpose
 
 Foundational schema for the Post-Build Artifact Reconciliation Gate orchestrator
-(`SD-LEO-INFRA-POST-BUILD-ARTIFACT-001`). Two primitives, consumed by that
-orchestrator's later children (B: verdict-table engine, C: scoring +
-convergence loop, D: gate wiring):
+(`SD-LEO-INFRA-POST-BUILD-ARTIFACT-001`). Three primitives, consumed by that
+orchestrator's later children (C: scoring + convergence loop, D: gate wiring):
 
 1. **`adherence_rubrics`** — a chairman-ratified, immutable rubric registry.
 2. **`lib/eva/deviation-ledger.js`** — an ADR-style, append-only capture point
    for build-time plan-vs-reality deviations.
+3. **`post_build_verdicts` + `lib/eva/post-build-verdict-engine.js`** (Child B) —
+   the artifact walk that enumerates required artifacts, checks completeness,
+   evidence-links claims against the venture's own repo, and writes a durable
+   disposition per claim.
 
 ## `adherence_rubrics` table
 
@@ -114,13 +117,73 @@ fall outside that partial index entirely. `recordDeviation()` always inserts
 `is_current: false`. (Found via adversarial `/ship` review; regression-tested
 in `tests/integration/eva/deviation-ledger-realdb.test.js`.)
 
+## `post_build_verdicts` table + verdict engine (`lib/eva/post-build-verdict-engine.js`)
+
+Delivered by Child B. One row per `(venture_id, artifact_type, claim_ref)` —
+the durable output Child C's scoring + convergence loop will read.
+
+### Schema
+
+| Column | Type | Notes |
+|---|---|---|
+| `artifact_type` | text | e.g. `blueprint_user_story_pack` |
+| `claim_ref` | text | stable identifier for a sub-claim within the artifact, or the artifact_type itself for artifact-level dispositions |
+| `disposition` | text | `BUILT` \| `PARTIAL` \| `MISSING` \| `DEVIATED_WITH_DOCUMENTED_REASON` \| `DEVIATED_UNDOCUMENTED` |
+| `evidence_refs` | jsonb | `[{path, line}]` into the venture's own repo — never raw file content |
+| `deviation_artifact_id` | uuid | FK to `venture_artifacts(id)`, `ON DELETE SET NULL`, set only when disposition is `DEVIATED_WITH_DOCUMENTED_REASON` |
+| `claim_description` | text | human-readable claim text, for per-claim dispositions |
+
+`UNIQUE (venture_id, artifact_type, claim_ref)`. Explicitly an UPSERT target,
+never an append-only log — the S19→S20 gate re-fires the walk on every
+remediation-convergence cycle, and only the current verdict per key matters
+for scoring.
+
+### API
+
+```js
+import { runArtifactWalk } from '../lib/eva/post-build-verdict-engine.js';
+
+const results = await runArtifactWalk(supabase, { ventureId, throughStage: 19 });
+// -> [{ artifactType, claimRef, disposition }, ...] — 100% coverage: every
+// artifact_type required by venture_stages.required_artifacts (stages 0..throughStage)
+// gets at least one verdict row.
+```
+
+Evidence-linking (`findEvidenceForClaim()`) is a conservative keyword/path
+heuristic against the venture's own repo (resolved via `applications.local_path`),
+**not** semantic code understanding — the chairman's honesty rule (FR-4):
+could-not-verify != built. Ambiguous matches fail toward `PARTIAL`/`MISSING`,
+never toward `BUILT`. The repo walk builds an in-memory file index once per
+venture (not once per claim) and skips symlinks/junctions entirely — both a
+cycle guard and a boundary guard, so evidence is never attributed to content
+outside the venture's own repo.
+
+### Design decisions worth knowing before extending this
+
+- **Claim-level rows are cleared and rewritten on every walk**, not merged.
+  A claim's `claimRef` is index-derived (`artifactType:index:textSlice`) to
+  avoid two distinct claims with a shared text prefix colliding on the upsert
+  key; because the index can shift across walks (stories added/removed/
+  reordered), `runArtifactWalk()` deletes an artifact type's prior claim-level
+  rows before writing the current pass's set, so a claim no longer present
+  never survives as an orphaned row.
+- **`deviation_artifact_id` attribution** always points at the deviation
+  record that actually satisfies the substantive-reason check (shared via
+  `findQualifyingDeviation()`, the same predicate `computeDisposition()` uses),
+  never blindly the chronologically-first record.
+- Two full adversarial `/ship` review rounds were run on this module before
+  merge; see `tests/integration/eva/post-build-verdict-engine-realdb.test.js`
+  for the regression tests each finding produced (grain safety, stale
+  is_current filtering, claim-ref collision, deviation misattribution, and a
+  snapshot/restore pattern around the one test that exercises the real
+  MarketLens venture — that table has zero consumers today, but is treated as
+  production-adjacent because Child C will read it as authoritative input).
+
 ## Consumers (future children of the orchestrator)
 
-- **Child B** (verdict-table engine) reads `readDeviations()` to distinguish
-  `DEVIATED-WITH-DOCUMENTED-REASON` from `DEVIATED-UNDOCUMENTED`.
 - **Child C** (scoring + convergence loop) reads the `post_build_adherence_v1`
-  row from `adherence_rubrics` to score, and owns reason-quality judgment for
-  deviation records.
+  row from `adherence_rubrics` to score `post_build_verdicts` rows, and owns
+  reason-quality judgment for deviation records.
 - **Child D** (gate wiring) fires the whole chain at the S19→S20 boundary.
 
 ## See also
