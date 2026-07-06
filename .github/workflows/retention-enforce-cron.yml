@@ -1,0 +1,61 @@
+name: "Retention enforcement (durable cron)"
+
+# QF-20260705-825 (adversarial sweep J1 REFUTED-DORMANT SD-MAN-INFRA-RETENTION-OPS-FINISHER-001)
+#
+# The chairman-GO'd weekly archive-not-delete retention enforcement (retention-enforce.js --apply)
+# was only armed as a session-scoped STANDARD_LOOPS CronCreate (coordinator-startup-check.mjs,
+# '0 3 * * 0') -- a prompt that only fires if a coordinator session happens to be alive at that
+# exact instant. Since SD completion, governance_audit_log grew 484k->557k and workflow_trace_log
+# 513k->601k with no observed apply run: the session-scoped trigger was not reliably firing.
+#
+# This durable GitHub Actions cron is the PRIMARY reliable trigger going forward, mirroring
+# adam-opportunity-scan-cron.yml / sourcing-gauge-gap-miner-cron.yml. The session-scoped
+# STANDARD_LOOPS entry is left in place as a harmless, redundant backup (the underlying operation
+# is idempotent, batch-capped, and fail-soft per table -- an occasional double-fire just processes
+# whatever backlog remains, never double-deletes).
+#
+# Same Sunday 03:00 UTC cadence as the pre-existing session-scoped arming spec. Uses only
+# SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY (already-provisioned secrets) -- no new credentials.
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  retention-apply:
+    name: Weekly retention enforcement (archive-not-delete)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Apply retention (archive-before-delete, per-table fail-soft)
+        run: npm run retention:apply
+
+      - name: Liveness check (advisory — never fails the job)
+        if: always()
+        run: npm run retention:check -- --liveness || echo "::warning::retention liveness reports STALE"
