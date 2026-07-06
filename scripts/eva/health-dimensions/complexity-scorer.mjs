@@ -134,9 +134,11 @@ export async function scan(rootDir, options = {}) {
 }
 
 /**
- * Analyze a single file for complexity metrics
+ * Analyze a single file for complexity metrics.
+ * Exported (SD-LEO-INFRA-ARCHITECTURAL-HOTSPOTS-CHURN-001): the hotspot scorer
+ * reuses this as its complexity half — single source, no re-derivation.
  */
-function analyzeFile(content, filePath) {
+export function analyzeFile(content, filePath) {
   const lines = content.split('\n');
   const lineCount = lines.length;
 
