@@ -590,6 +590,7 @@
     "migration:apply-state": "node scripts/verify-migration-apply-state.mjs",
     "retention:check": "node scripts/retention-enforce.js",
     "retention:apply": "node scripts/retention-enforce.js --apply",
+    "liveness:watch": "node scripts/periodic-liveness-watcher.mjs",
     "dr:rehearse": "node scripts/dr/restore-rehearsal.mjs",
     "dr:dump": "node scripts/dr/governance-dump.mjs",
     "schema:lint": "node scripts/lint/schema-reference-lint.mjs --diff",

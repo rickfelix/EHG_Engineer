@@ -180,6 +180,17 @@ export const STANDARD_LOOPS = [
   // rate-limited/deduped per category per day (metadata.sla_key), so an extra run is a no-op.
   { key: 'feedback-sla', label: 'Feedback-consumption SLA breach reminder (daily)', script: 'coordinator-feedback-sla-gauge.cjs', cron: '45 9 * * *',
     prompt: 'node scripts/coordinator-feedback-sla-gauge.cjs' },
+  // QF-20260705-533 (J1 adversarial sweep REFUTED-DORMANT): the watcher-of-watchers
+  // (periodic-liveness-watcher.mjs, SD-LEO-INFRA-PERIODIC-PROCESS-LIVENESS-001) shipped with NO
+  // scheduled invoker anywhere — the meta-watcher meant to catch dead periodic processes was
+  // itself a dead periodic process. Venue is DELIBERATELY the dev host (not GHA): its 2+-signal
+  // role_session checks read PID/process_alive_at signals that only exist where sessions run;
+  // a CI venue would degrade to single-signal reads (the false-dead class the script's own
+  // header warns about). Its __watcher_self__ self-stamp makes missed ticks self-evident on the
+  // same dashboard it renders — the tick-evidence mitigation the retention loop lacked.
+  // Twice-hourly off-minute cadence (cheap single registry scan; idempotent re-run).
+  { key: 'liveness-watcher', label: 'Periodic-process liveness watcher-of-watchers (twice-hourly, durable)', script: 'periodic-liveness-watcher.mjs', cron: '17,47 * * * *',
+    prompt: 'node scripts/periodic-liveness-watcher.mjs' },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.
