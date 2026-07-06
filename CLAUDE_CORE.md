@@ -1,8 +1,8 @@
-<!-- file_content_hash: 1ae975cf096cdb95 -->
+<!-- file_content_hash: 17fe42551dd53842 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-07-05 1:57:26 PM
+**Generated**: 2026-07-06 9:13:25 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -796,6 +796,10 @@ node scripts/child-sd-preflight.js SD-XXX-001
 
 **Key Principle**: If you can split it without creating incomplete/broken intermediate states, you should split it.
 
+## Observe-Only-First Default for New Enforcement
+
+Any NEW enforcement mechanism (gate, PreToolUse guard, hook block, witness rung, dispatch fence) ships OBSERVE-ONLY by default: it logs/flags violations without blocking, for a calibration window, before promotion to binding. Promotion to binding requires an evidenced review of the observe-window output (false-positive rate examined and either zero or each FP class fixed). Per-SD exception (ship binding immediately) requires documented justification in the SD scope. Rationale (2026-07-04 evidence): ENF-17 shipped binding and false-positive-blocked legitimate sibling-repo work (QF-20260704-121), while the observe-only DUTY-8 charter probe surfaced a real wedged worker with zero collateral — observe-first catches calibration errors harmlessly. Provenance: Solomon simulation-tiers sweep #5 proposal -> Adam proposed -> coordinator co-signed (protocol default, composes with CONST-013 freeze and the ratified observe->binding discipline).
+
 ## Critical Term Definitions
 
 ## 🚫 CRITICAL TERM DEFINITIONS (BINDING)
@@ -1583,11 +1587,11 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 | Pattern ID | Category | Severity | Count | Trend | Top Solution |
 |------------|----------|----------|-------|-------|--------------|
-| PAT-HF-LEADTOPLAN-90e39736 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
-| PAT-HF-PLANTOEXEC-3e540545 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
-| PAT-RETRO-PLANTOLEAD-e8842331 | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
 | PAT-HF-PLANTOLEAD-e8842331 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
-| PAT-RETRO-PLANTOEXEC-SD-EVA-F | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
+| PAT-HF-LEADTOPLAN-90e39736 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
+| PAT-RETRO-PLANTOLEAD-e8842331 | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
+| PAT-RETRO-PLANTOLEAD-2ddf38d5 | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
+| PAT-HF-PLANTOEXEC-3e540545 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
 
 ### Prevention Checklists
 
@@ -1613,18 +1617,7 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. SD-FDBK-ENH-RETROSPECTIVES-AUTO-VALIDATE-001: Symmetric + idempotent missing_protocol_improvements quality-warning lifecycle (PR #4285) [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 6/6/2026 | **Score**: 100
-
-**Key Improvements**:
-- The two quality_issues-writing triggers should arguably be unified so a single function owns quality...
-- A missing_protocol_improvements warning still does not survive a content-change INSERT because auto_...
-
-**Action Items**:
-- [ ] Add a lint/static check that flags any trigger reading or writing a column that ...
-- [ ] Open a follow-up SD to unify retrospectives quality_issues ownership into a sing...
-
-### 2. SD-LEO-FIX-SHOW-WHICH-STAGE-001: Show which stage is being viewed when browsing venture stage history — SD Completion Retrospective [QUALITY]
+### 1. SD-LEO-FIX-SHOW-WHICH-STAGE-001: Show which stage is being viewed when browsing venture stage history — SD Completion Retrospective [QUALITY]
 **Category**: USER_EXPERIENCE | **Date**: 6/6/2026 | **Score**: 100
 
 **Key Improvements**:
@@ -1635,18 +1628,18 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 - [ ] Update the testing-agent so that when it maps a passing test to a user story it ...
 - [ ] Document the add-prd --content integration_operationalization key whitelist (the...
 
-### 3. SD-LEO-INFRA-ATOMIC-FLEET-WORK-001: Atomic fleet work-leasing — the swept-twice bug was a deploy gap, not a code gap [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 6/5/2026 | **Score**: 100
+### 2. SD-LEO-FIX-VENTURE-PROVISIONING-PARITY-001 SD Completion Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 6/6/2026 | **Score**: 100
 
 **Key Improvements**:
-- Migration deploy automation and auditing: committed does not equal applied, and there is currently n...
-- The "completed" definition for migration-bearing SDs should require a deploy gate; otherwise a write...
+- {"area":"EHG app listVentures() applies neither an is_demo nor a deleted_at predicate","prevention":...
+- {"area":"The pre-existing chairman_decisions parity assertion fails on the unmodified baseline","pre...
 
 **Action Items**:
-- [ ] In a fresh session, apply 20260605_atomic_lease_sweep_respect_inflight.sql via s...
-- [ ] Fix the false "check-readiness CI applies it" comment across migration templates...
+- [ ] Open a follow-up QF to add is_demo=false and deleted_at IS NULL predicates to th...
+- [ ] Track and fix the pre-existing chairman_decisions parity assertion that fails on...
 
-### 4. SD-LEO-INFRA-ENABLE-CLAIM-SWEEP-001 Retrospective [QUALITY]
+### 3. SD-LEO-INFRA-ENABLE-CLAIM-SWEEP-001 Retrospective [QUALITY]
 **Category**: DATABASE_SCHEMA | **Date**: 6/6/2026 | **Score**: 100
 
 **Key Improvements**:
@@ -1657,16 +1650,27 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 - [ ] DEPLOY: update the main checkout's .claude/settings.json (or reload settings) so...
 - [ ] POST-DEPLOY VERIFY: confirm the fleet-wide claim-sweep-mid-sub-agent dormancy is...
 
-### 5. SD-LEO-FIX-VENTURE-PROVISIONING-PARITY-001 SD Completion Retrospective [QUALITY]
+### 4. SD-FDBK-ENH-RETROSPECTIVES-AUTO-VALIDATE-001: Symmetric + idempotent missing_protocol_improvements quality-warning lifecycle (PR #4285) [QUALITY]
 **Category**: PROCESS_IMPROVEMENT | **Date**: 6/6/2026 | **Score**: 100
 
 **Key Improvements**:
-- {"area":"EHG app listVentures() applies neither an is_demo nor a deleted_at predicate","prevention":...
-- {"area":"The pre-existing chairman_decisions parity assertion fails on the unmodified baseline","pre...
+- The two quality_issues-writing triggers should arguably be unified so a single function owns quality...
+- A missing_protocol_improvements warning still does not survive a content-change INSERT because auto_...
 
 **Action Items**:
-- [ ] Open a follow-up QF to add is_demo=false and deleted_at IS NULL predicates to th...
-- [ ] Track and fix the pre-existing chairman_decisions parity assertion that fails on...
+- [ ] Add a lint/static check that flags any trigger reading or writing a column that ...
+- [ ] Open a follow-up SD to unify retrospectives quality_issues ownership into a sing...
+
+### 5. SD_COMPLETION Retrospective: issue_patterns completion-side closure-loop (SD-FDBK-ENH-ISSUE-PATTERNS-CLOSURE-001) [QUALITY]
+**Category**: DATABASE_SCHEMA | **Date**: 6/6/2026 | **Score**: 100
+
+**Key Improvements**:
+- CLAIM-SWEEP + WORKTREE-REAP harness bug bit hard during a ~2.5h idle gap (operator stepped away, no ...
+- Observed ~4h clock skew between the node env (reporting 19:08Z) and the system clock (15:06Z), which...
+
+**Action Items**:
+- [ ] Investigate idle-gap claim-sweep coverage + node/system clock skew. The claim-sw...
+- [ ] Consider a detector that alerts if assigned-on-completed or NULL-assigned issue_...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1733,7 +1737,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-07-05*
+*Generated from database: 2026-07-06*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*
