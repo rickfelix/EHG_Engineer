@@ -64,7 +64,8 @@
  *  consistent). Sufficient for the reference; a production verify would use the DB's own
  *  RETURNING row or a per-write token. */
 function deepEq(a, b) {
-  return a === b || JSON.stringify(a) === JSON.stringify(b);
+  if (a === b) return true;
+  try { return JSON.stringify(a) === JSON.stringify(b); } catch { return false; } // e.g. a BigInt payload -> fall back to !== (fail loud)
 }
 
 /** Guard a single composite-key component. FAILS LOUD on every value that cannot be a real
@@ -78,8 +79,11 @@ function assertKeyComponent(v, label) {
   if (t === 'number' && !Number.isFinite(v)) {
     throw new Error(`[upsert-seam] ${label} is ${String(v)} — a non-finite number serializes to "null" and forges a colliding key; refuse to key on it`);
   }
-  if (t !== 'string' && t !== 'number' && t !== 'boolean' && t !== 'bigint') {
-    throw new Error(`[upsert-seam] ${label} is a ${t} — a composite key component must be a scalar (string/number/boolean/bigint); a non-scalar serializes to a structure and silently mis-keys`);
+  if (t !== 'string' && t !== 'number' && t !== 'boolean') {
+    // bigint is a scalar but JSON.stringify throws on it (an opaque failure) — a delegate with a
+    // bigint id must stringify it first; reject here with the guided message rather than let the
+    // key encoder throw a bare TypeError.
+    throw new Error(`[upsert-seam] ${label} is a ${t} — a composite key component must be a JSON-encodable scalar (string/number/boolean); a non-scalar (or a BigInt) serializes to a structure / throws and silently mis-keys`);
   }
 }
 
