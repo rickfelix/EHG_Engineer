@@ -11,15 +11,17 @@
  * @version 1.1.0
  */
 
+import { getGoogleModel, getOpenAIModel } from '../../lib/config/model-config.js';
+
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
 
 // Gemini: Default to Nano Banana Pro (Gemini 3 Pro Image)
-const GEMINI_IMAGE_MODEL = process.env.VISION_VISUALIZATION_MODEL || 'gemini-3-pro-image-preview';
+const GEMINI_IMAGE_MODEL = process.env.VISION_VISUALIZATION_MODEL || getGoogleModel('image-generation');
 
 // OpenAI: DALL-E 3 as fallback
-const OPENAI_IMAGE_MODEL = process.env.VISION_IMAGE_MODEL || 'dall-e-3';
+const OPENAI_IMAGE_MODEL = process.env.VISION_IMAGE_MODEL || getOpenAIModel('image-generation');
 const OPENAI_IMAGE_SIZE = process.env.VISION_IMAGE_SIZE || '1024x1024';
 
 // ============================================================================

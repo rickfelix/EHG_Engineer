@@ -22,6 +22,7 @@
  */
 
 import { getLLMClient } from '../../lib/llm/client-factory.js';
+import { getOpenAIModel } from '../../lib/config/model-config.js';
 import { createClient } from '@supabase/supabase-js';
 
 // =============================================================================
@@ -29,7 +30,7 @@ import { createClient } from '@supabase/supabase-js';
 // =============================================================================
 
 export const CHILD_SD_LLM_CONFIG = {
-  model: 'gpt-4o',           // Production model for quality
+  model: getOpenAIModel('generation'), // Production model for quality (note: unread by the actual call path below, which resolves its own model via getLLMClient({purpose:'child-sd-strategic-fields'}) -- kept accurate for anyone reading this config)
   temperature: 0.5,          // Lower for structured, consistent output
   maxTokens: 4000,           // Sufficient for strategic fields JSON
   enabled: process.env.CHILD_SD_LLM_GENERATION !== 'false'

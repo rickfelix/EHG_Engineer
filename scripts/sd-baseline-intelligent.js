@@ -44,6 +44,7 @@ dotenv.config();
 const supabase = createSupabaseServiceClient();
 
 const openai = getLLMClient({ purpose: 'generation' });
+const generationModelUsed = openai.model || openai.modelId || 'unknown';
 
 // ANSI colors
 const colors = {
@@ -452,7 +453,7 @@ Important: Output ONLY valid JSON, no additional text.`;
         approved_at: new Date().toISOString(),
         notes: `Intelligent baseline with ${this.ordering.length} SDs`,
         generation_rationale: gptResult.baseline_rationale,
-        generated_by: 'gpt-5.2',
+        generated_by: generationModelUsed,
         algorithm_version: ALGORITHM_VERSION,
         generation_metadata: {
           sd_count: this.ordering.length,
@@ -530,7 +531,7 @@ Important: Output ONLY valid JSON, no additional text.`;
         dependency_depth: depth,
         dependencies_count: blockedBy.length,
         blocked_by: blockedBy.length > 0 ? blockedBy : null,
-        generated_by: gptResult.baseline_rationale ? 'gpt-5.2' : 'algorithm',
+        generated_by: gptResult.baseline_rationale ? generationModelUsed : 'algorithm',
         algorithm_version: ALGORITHM_VERSION,
       });
     }

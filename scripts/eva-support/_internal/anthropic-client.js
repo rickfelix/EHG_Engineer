@@ -7,8 +7,9 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { getClaudeModel } from '../../../lib/config/model-config.js';
 
-export const DEFAULT_MODEL = 'claude-opus-4-8';
+export const DEFAULT_MODEL = getClaudeModel('premium-generation');
 
 export function createAnthropicClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;

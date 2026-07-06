@@ -5,6 +5,8 @@
  * Constitution rules, scoring criteria, and thresholds
  */
 
+import { getGeminiLadderModel, getClaudeModel } from '../../../lib/config/model-config.js';
+
 /**
  * Scoring criteria weights (must sum to 100)
  */
@@ -119,13 +121,13 @@ export const VIOLATION_SEVERITY = {
  */
 export const MODEL_CONFIG = {
   evaluator: {
-    model: 'gemini-3-flash-preview',
+    model: getGeminiLadderModel(3),
     family: 'google',
     temperature: 0.3,
     description: 'Evaluator model - different family from proposer'
   },
   proposer: {
-    model: 'claude-sonnet-4-20250514',
+    model: getClaudeModel('generation'),
     family: 'anthropic',
     description: 'Proposer model - creative suggestions'
   }
