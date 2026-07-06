@@ -83,3 +83,28 @@ describe('runVentureStackAgent — negation awareness (reuses the canonical scan
     expect(r.ok).toBe(true);
   });
 });
+
+// SD-LEO-INFRA-ACTIVATE-DORMANT-EXIT-001 (FR-5): observe-only signal for the asymmetry.
+describe('runVentureStackAgent — observeOnly (FR-5, additive, never affects ok/compliant)', () => {
+  it('flags wouldFailClosed when required tech is missing, but ok stays true', () => {
+    const r = runVentureStackAgent({ leaf: { title: 'Widget', description: 'A small UI widget.' } });
+    expect(r.ok).toBe(true);
+    expect(r.observeOnly.wouldFailClosed).toBe(true);
+    expect(r.observeOnly.missing.length).toBeGreaterThan(0);
+    expect(r.observeOnly.missing).toEqual(r.missing);
+  });
+
+  it('does not flag wouldFailClosed when the required stack is fully present', () => {
+    const r = runVentureStackAgent({ leaf: { title: 'Auth API', description: 'Sign-in via Clerk; users in Replit Postgres.' } });
+    expect(r.observeOnly.wouldFailClosed).toBe(false);
+    expect(r.observeOnly.missing).toEqual([]);
+  });
+
+  it('does not flag wouldFailClosed for a leaf already held on forbidden tech (ok:false)', () => {
+    const r = runVentureStackAgent({ leaf: { title: 'Signup', description: 'Implement signup via Replit Auth.' } });
+    expect(r.ok).toBe(false);
+    // observeOnly is specifically about "would ADDITIONALLY fail once symmetric" -- a leaf
+    // already failing on forbidden tech doesn't need a second, redundant observe-only signal.
+    expect(r.observeOnly.wouldFailClosed).toBe(false);
+  });
+});
