@@ -56,6 +56,12 @@ function upsertContractViolations(seam, store = makeStore) {
   try { const s = store(); seam.upsertByKey(s, KEY, rec({ claim_ref: 'c1' }), { clock: clock(1) }); seam.upsertByKey(s, KEY, rec({ claim_ref: 'c2' }), { clock: clock(1) }); if (s.size() !== 2) v.push('partial-key-collapse'); } catch {}
   // null-in-key must fail loud
   { const s = store(); let threw = false; try { seam.upsertByKey(s, KEY, rec({ claim_ref: null }), { clock: clock(1) }); } catch { threw = true; } if (!threw) v.push('null-in-key-not-fail-loud'); }
+  // non-finite key must fail loud (NaN/Infinity serialize to "null" and forge a colliding key)
+  { const s = store(); let threw = false; try { seam.upsertByKey(s, KEY, rec({ claim_ref: NaN }), { clock: clock(1) }); } catch { threw = true; } if (!threw) v.push('non-finite-key-not-fail-loud'); }
+  // WRITE-IDENTITY verify: a silent drop-on-UPDATE (INSERT lands) must FAIL LOUD even when the
+  // stale row's updated_at collides with this clock tick — an updated_at-equality-only verify
+  // FALSE-PASSES here (h4 hiding under h2); a payload-identity verify does not.
+  { const s = store({ dropUpdates: true }); seam.upsertByKey(s, KEY, rec(), { clock: clock(5) }); let threw = false; try { seam.upsertByKey(s, KEY, rec({ disposition: 'MISSING' }), { clock: clock(5) }); } catch { threw = true; } if (!threw) v.push('weak-verify-false-pass-on-drop-update'); }
   return v;
 }
 
@@ -67,6 +73,10 @@ const PARTIAL_KEY = { upsertByKey(s, keyCols, r, o) { const k = JSON.stringify([
 const NO_VERIFY = { upsertByKey(s, keyCols, r, o) { const k = key(r); const row = { ...r, updated_at: o.clock.now() }; s.upsert(k, row); return row; } }; // trusts the write, no read-back
 const STALE_UPDATED_AT = { upsertByKey(s, keyCols, r, o) { const k = key(r); s.upsert(k, { ...r }); const landed = s.getByKey(k); if (!landed) throw new Error('nope'); return landed; } };
 const NULL_KEY_UNSAFE = { upsertByKey(s, keyCols, r, o) { const k = JSON.stringify(keyCols.map((c) => r[c])); const row = { ...r, updated_at: o.clock.now() }; s.upsert(k, row); const landed = s.getByKey(k); if (!landed) throw new Error('nope'); return landed; } };
+// verifies updated_at value-equality ONLY (the pre-hardening shape) -> FALSE-PASSES a silent
+// drop-on-UPDATE whenever the stale row's updated_at collides with this clock tick.
+const WEAK_VERIFY = { upsertByKey(s, keyCols, r, o) { const k = key(r); const row = { ...r, updated_at: o.clock.now() }; s.upsert(k, row); const landed = s.getByKey(k); if (!landed || landed.updated_at !== row.updated_at) throw new Error('nope'); return landed; } };
+const NAN_KEY_UNSAFE = { upsertByKey(s, keyCols, r, o) { const k = JSON.stringify(keyCols.map((c) => r[c])); const row = { ...r, updated_at: o.clock.now() }; s.upsert(k, row); const landed = s.getByKey(k); if (!landed) throw new Error('nope'); return landed; } };
 
 describe('behavioral contract (the real enforcement — runs against the ADAPTED copy too)', () => {
   it('IDEMPOTENCY + CONVERGENCE-TO-LATEST: identical writes -> 1 row; a differing write -> latest value (not DO NOTHING)', () => {
@@ -88,6 +98,30 @@ describe('behavioral contract (the real enforcement — runs against the ADAPTED
     const s = makeStore();
     const r = upsertByKey(s, KEY, rec(), { clock: { now: () => 42 } });
     expect(r).toMatchObject({ venture_id: 'v1', artifact_type: 'bp', claim_ref: 'c1', disposition: 'BUILT', updated_at: 42 });
+  });
+
+  it('DROP-ON-UPDATE + COLLIDING TIMESTAMP FAIL-LOUD: a silent no-op on UPDATE (INSERT lands) still THROWS even when the stale updated_at equals this clock tick', () => {
+    const s = makeStore({ dropUpdates: true });
+    upsertByKey(s, KEY, rec({ disposition: 'BUILT' }), { clock: { now: () => 5 } }); // INSERT lands
+    // the UPDATE silently drops; the stale row bears updated_at=5, SAME tick -> an updated_at-equality
+    // verify would FALSE-PASS. The payload-identity verify must still fail loud (disposition differs).
+    expect(() => upsertByKey(s, KEY, rec({ disposition: 'MISSING' }), { clock: { now: () => 5 } })).toThrow(/did not land|FAIL LOUD|column/i);
+  });
+
+  it('PAYLOAD-DROPPED write FAIL-LOUD: a store that keeps updated_at but drops the payload does not pass verification', () => {
+    const s = makeStore({ timestampOnly: true });
+    expect(() => upsertByKey(s, KEY, rec({ disposition: 'IMPORTANT' }), { clock: { now: () => 9 } })).toThrow(/did not land|column|FAIL LOUD/i);
+  });
+
+  it('NON-FINITE KEY FAIL-LOUD: NaN/Infinity key components throw (they serialize to "null" and forge a colliding key)', () => {
+    const s = makeStore();
+    expect(() => upsertByKey(s, ['a'], { a: NaN, v: 1 }, { clock: { now: () => 1 } })).toThrow(/non-finite|null|scalar|key/i);
+    expect(() => upsertByKey(s, ['a'], { a: Infinity, v: 1 }, { clock: { now: () => 1 } })).toThrow();
+  });
+
+  it('EMPTY KEYCOLS FAIL-LOUD: a zero-column composite key throws (it cannot discriminate rows -> over-merge)', () => {
+    const s = makeStore();
+    expect(() => upsertByKey(s, [], { a: 1, v: 1 }, { clock: { now: () => 1 } })).toThrow(/non-empty|discriminate|keyCols/i);
   });
 
   it('NULL-IN-KEY FAIL-LOUD: a null/undefined key component throws (NULL is distinct from NULL -> duplicates)', () => {
@@ -153,6 +187,12 @@ describe('the upsert CONTRACT has TEETH (positive control + rejects every broken
   it('NEGATIVE: NULL-KEY-UNSAFE (keys on a null component) is REJECTED (no fail-loud)', () => {
     expect(upsertContractViolations(NULL_KEY_UNSAFE)).toContain('null-in-key-not-fail-loud');
   });
+  it('NEGATIVE: WEAK-VERIFY (updated_at-equality only) is REJECTED (false-passes a drop-on-UPDATE under a timestamp collision)', () => {
+    expect(upsertContractViolations(WEAK_VERIFY)).toContain('weak-verify-false-pass-on-drop-update');
+  });
+  it('NEGATIVE: NAN-KEY-UNSAFE (keys on a non-finite component) is REJECTED (no fail-loud)', () => {
+    expect(upsertContractViolations(NAN_KEY_UNSAFE)).toContain('non-finite-key-not-fail-loud');
+  });
 });
 
 describe('textual locks pass on the source', () => {
@@ -187,8 +227,20 @@ describe('doctrine mutations fail named checks (miss direction)', () => {
     expect(judgeSource(m).failed).toContain('deterministic_readback');
   });
   it('dropping the verify read-back fails verify_write_landed_fail_loud', () => {
-    const m = CANON.replace(/const landed = store\.getByKey\(key\);[\s\S]*?\n  \}\n  return landed;/, 'return { ...row };');
+    const m = CANON.replace(/const landed = store\.getByKey\(key\);[\s\S]*?return landed;/, 'return { ...row };');
     expect(judgeSource(m).failed).toContain('verify_write_landed_fail_loud');
+  });
+  it('reverting to an updated_at-equality verify fails verify_write_landed_fail_loud', () => {
+    const m = CANON.replace('assertLanded(landed, row, key);', 'if (!landed || landed.updated_at !== row.updated_at) throw new Error("nope");');
+    expect(judgeSource(m).failed).toContain('verify_write_landed_fail_loud');
+  });
+  it('removing the non-finite key guard fails nonfinite_key_fail_loud', () => {
+    const m = CANON.replace("if (t === 'number' && !Number.isFinite(v)) {", 'if (false) {');
+    expect(judgeSource(m).failed).toContain('nonfinite_key_fail_loud');
+  });
+  it('removing the empty-keyCols guard fails nonempty_keycols_fail_loud', () => {
+    const m = CANON.replace('if (!Array.isArray(keyCols) || keyCols.length === 0) {', 'if (false) {');
+    expect(judgeSource(m).failed).toContain('nonempty_keycols_fail_loud');
   });
   it('dropping the explicit updated_at fails explicit_updated_at', () => {
     const m = CANON.replace('const row = { ...record, updated_at: clock.now() };', 'const row = { ...record };');

@@ -39,14 +39,30 @@ These are never legal adaptations — each has a WHY in the reference:
 - **Inputs not from the mutated row (version-counter carve-out)** — the new value is a pure
   function of external inputs. The ONLY legitimate monotonic counter is a DB-atomic increment
   / optimistic-lock (`... WHERE version = $expected`) / `RETURNING` — never an app-side
-  `read → +1 → write` off the mutated row (it loses increments under interleaving).
+  `read → +1 → write` off the mutated row (it loses increments under interleaving). NOTE: the
+  acceptance harness can only check this at the `bumpVersion` body layer (it forbids a
+  `getByKey` there); it CANNOT see inside your DB adapter's `atomicIncrement`. Independently
+  audit that your `atomicIncrement` is a single atomic statement, not a get-then-set hidden in
+  the adapter — a racy counter buried in the adapter passes every automated check.
+- **keyCols is an ORDERED tuple = the index definition** — the seam keys positionally, so
+  `keyCols` must match your UNIQUE index's column order and be a FIXED per-table constant.
+  Reordering it produces a distinct positional key (the demo store does not model an
+  order-independent set-wise index).
 - **Deterministic read-back** — read BY THE FULL COMPOSITE KEY (or an explicit `ORDER BY`);
   an unordered `limit 1` returns a nondeterministic/stale row (h1).
-- **Verify the write landed + explicit `updated_at`, FAIL LOUD** — confirm the write affected
-  the expected row by reading it back by full key and THROW if it did not (h4's silent no-op);
-  stamp `updated_at` explicitly from the clock (h2); and FAIL LOUD on a null/undefined key
-  component (NULL is distinct from NULL in a composite index, so a null key part silently
-  duplicates). Contrast -F: this seam fails loud; it does not swallow.
+- **Verify the write landed (write-IDENTITY) + explicit `updated_at`, FAIL LOUD** — after the
+  write, read the row back by the FULL key and confirm the INTENDED PAYLOAD is what landed;
+  THROW on any mismatch (h4's silent no-op). Verify by the *payload*, NOT by `updated_at`
+  equality alone: a silent drop-on-UPDATE can leave a stale row whose `updated_at` happens to
+  equal this clock tick (h4 hiding under an h2 timestamp collision — real clocks collide at ms
+  resolution under load), and an equality check FALSE-PASSES on it. Stamp `updated_at`
+  explicitly from the clock (h2). (If your real table has an `updated_at` TRIGGER that owns the
+  column, verify a per-write token / a `RETURNING` id instead of the stamped `updated_at`.)
+  FAIL LOUD on an ILLEGAL key component — null/undefined (NULL is distinct from NULL, so a null
+  part silently duplicates), a NON-FINITE number (NaN/Infinity JSON-serialize to `"null"` and
+  forge a colliding key), a NON-SCALAR (serializes to a structure, not an index value), or a
+  ZERO-COLUMN key (cannot discriminate rows -> over-merges every record into one). Contrast -F:
+  this seam fails loud; it does not swallow.
 
 ### Estate-anchor mapping (positive vs cautionary — the estate is mixed)
 
@@ -74,7 +90,9 @@ npx vitest run tests/unit/golden-references/upsert-seam-acceptance.test.js
   component throws; distinct full keys stay distinct (structural keying); read-back by full
   key is exact and a miss returns null; an atomic version counter advances; `updated_at`
   advances with the clock.
-- **Miss**: a silent-drop store makes the seam THROW; and the portable `upsertContract`
-  ACCEPTS the golden seam (positive control) while REJECTING every broken copy — DO-NOTHING,
-  SELF-READ, PARTIAL-KEY, NO-VERIFY, STALE-UPDATED-AT, NULL-KEY-UNSAFE — so a broken delegate
-  copy is caught.
+- **Miss**: a silent-drop store makes the seam THROW; a drop-on-UPDATE store (INSERT lands, the
+  UPDATE silently no-ops) with a COLLIDING timestamp still THROWS (write-identity, not
+  updated_at-equality); a payload-dropped store THROWS; NaN/Infinity/empty-keyCols THROW; and
+  the portable `upsertContract` ACCEPTS the golden seam (positive control) while REJECTING every
+  broken copy — DO-NOTHING, SELF-READ, PARTIAL-KEY, NO-VERIFY, STALE-UPDATED-AT, NULL-KEY-UNSAFE,
+  WEAK-VERIFY (updated_at-equality only), NAN-KEY-UNSAFE — so a broken delegate copy is caught.

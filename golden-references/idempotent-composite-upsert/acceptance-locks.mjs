@@ -2,9 +2,9 @@
 // predicates over the JS source, node-builtins-only. Textual locks are NECESSARY BUT
 // WEAK (the -C lesson); the behavioral suite (parameterized over GOLDEN_REF_MODULE) that
 // RUNS the seam against a store adapter — two identical writes converge to one row, a
-// silent-drop store makes the seam FAIL LOUD, a partial key collapses distinct rows — is
-// the primary enforcement (the -F lesson: a "no bad keyword" textual check is a weak proxy
-// for the real behavior).
+// silent-drop store makes the seam FAIL LOUD, a partial key collapses distinct rows, a
+// drop-on-UPDATE with a colliding timestamp still fails loud — is the primary enforcement
+// (the -F lesson: a "no bad keyword" textual check is a weak proxy for the real behavior).
 export const DEFAULT_MODULE = 'golden-references/idempotent-composite-upsert/upsert-seam.mjs';
 
 function stripComments(src) {
@@ -61,11 +61,16 @@ export function buildLocks() {
       return /store\.getByKey\(\s*JSON\.stringify\(keyVals\)/.test(r) && !/store\.all\(|\.limit\(|\.find\(/.test(r);
     },
 
-    // D4: verify the write landed by read-back and THROW if not (fail loud on a silent no-op).
+    // D4: verify the write landed by read-back AND by write-IDENTITY (the payload), then THROW
+    // if not — an updated_at-equality-only check false-passes a drop-on-UPDATE with a colliding
+    // timestamp, so the verify MUST compare the intended payload (Object.keys(expected)).
     verify_write_landed_fail_loud: (s) => {
       const u = fnBody(s, 'upsertByKey');
-      if (!u) return false;
-      return /const landed\s*=\s*store\.getByKey\(/.test(u) && /if\s*\(\s*!landed[\s\S]*?throw new Error/.test(u);
+      const a = fnBody(s, 'assertLanded');
+      if (!u || !a) return false;
+      const readsBackAndVerifies = /const landed\s*=\s*store\.getByKey\(/.test(u) && /assertLanded\(\s*landed/.test(u);
+      const payloadIdentity = /Object\.keys\(\s*expected\s*\)/.test(a) && /throw new Error/.test(a);
+      return readsBackAndVerifies && payloadIdentity;
     },
 
     // D4/h2: updated_at is stamped explicitly from the injected clock on every write.
@@ -74,11 +79,32 @@ export function buildLocks() {
       return !!u && /updated_at:\s*clock\.now\(\)/.test(u);
     },
 
-    // D4/h1-null: a null/undefined key component FAILS LOUD (NULL is distinct from NULL).
+    // D4/h1-null: a null/undefined key component FAILS LOUD (NULL is distinct from NULL). The
+    // guard is centralized in assertKeyComponent and actually APPLIED by keyOf.
     null_key_fail_loud: (s) => {
+      const g = fnBody(s, 'assertKeyComponent');
       const k = fnBody(s, 'keyOf');
-      if (!k) return false;
-      return /===\s*null\s*\|\|\s*v\s*===\s*undefined/.test(k) && /throw new Error/.test(k);
+      if (!g || !k) return false;
+      const nullGuard = /v\s*===\s*null\s*\|\|\s*v\s*===\s*undefined/.test(g) && /throw new Error/.test(g);
+      const applied = /assertKeyComponent\(/.test(k);
+      return nullGuard && applied;
+    },
+
+    // D4/h1-nonfinite: a NaN/Infinity key component FAILS LOUD (it serializes to "null" and
+    // forges the exact colliding key the null guard exists to reject).
+    nonfinite_key_fail_loud: (s) => {
+      const g = fnBody(s, 'assertKeyComponent');
+      if (!g) return false;
+      return /Number\.isFinite\(/.test(g) && /throw new Error/.test(g);
+    },
+
+    // D1/degenerate: a zero-column keyCols FAILS LOUD (it cannot discriminate rows -> over-merge).
+    nonempty_keycols_fail_loud: (s) => {
+      const a = fnBody(s, 'assertKeyCols');
+      const k = fnBody(s, 'keyOf');
+      if (!a || !k) return false;
+      const guard = /keyCols\.length\s*===\s*0|!Array\.isArray\(\s*keyCols\s*\)/.test(a) && /throw new Error/.test(a);
+      return guard && /assertKeyCols\(/.test(k);
     },
 
     // store + clock are INJECTED parameters, never module singletons.

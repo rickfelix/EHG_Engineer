@@ -29,8 +29,11 @@ read it as a uniform pattern):
 **VERIFY mechanism** — the estate BASELINE is a *cardinality* check (`select().single()` throws
 on 0/many rows; the client sets an error on a real constraint violation). This reference
 STRENGTHENS that (an improvement, labeled — not an estate description): it reads the row back BY
-THE FULL COMPOSITE KEY and fails loud if the write did not land — which is what catches h4's
-SILENT no-op that the error/cardinality check alone does not.
+THE FULL COMPOSITE KEY and confirms the INTENDED PAYLOAD is what landed (write-IDENTITY),
+failing loud on any mismatch — which is what catches h4's SILENT no-op that the error/cardinality
+check alone does not. Crucially it verifies the *payload*, not `updated_at` equality alone: a
+silent drop-on-UPDATE can leave a stale row whose `updated_at` already equals this clock tick
+(h4 hiding under an h2 timestamp collision), and an equality check would FALSE-PASS on it.
 
 **Contrast with the -F capture seam**: that seam is best-effort and NEVER throws; THIS seam must
 **fail loud** on a vanished write. Idempotency here means repeat identical writes CONVERGE to one
