@@ -72,7 +72,14 @@ const PAGE_SIZE = 1000;
 export async function fetchAllRows(supabase, table, columns, applyFilters) {
   const rows = [];
   for (let offset = 0; ; offset += PAGE_SIZE) {
-    let q = supabase.from(table).select(columns).range(offset, offset + PAGE_SIZE - 1);
+    // Stable unique ordering makes offset pagination provably complete — without it,
+    // PostgREST guarantees no default order and a concurrent write during a multi-page
+    // read could skip/duplicate a row across a page boundary (PR #5666 review INFO).
+    let q = supabase
+      .from(table)
+      .select(columns)
+      .order('id', { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1);
     if (applyFilters) q = applyFilters(q);
     const { data, error } = await q;
     if (error) throw new Error(`${table} paginated query failed: ${error.message}`);
