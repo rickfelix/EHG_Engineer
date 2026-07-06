@@ -137,7 +137,14 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
               const { loadSharedDesignPrompts, buildDesignInstructionBlock } = await import('../../../lib/eva/bridge/design-input-instructions.js');
               const instructionBlock = buildDesignInstructionBlock(loadSharedDesignPrompts());
               if (instructionBlock) {
-                await dispatchDesignPromptRubricScorer(landingSd, { ...scorerCtx, renderedHtml, instructionBlock }, { supabase, observe: false });
+                // Unlike dispatchDesignFidelityScorer above (whose recording is owned below by
+                // observeVentureCompletionDesignPass, keyed on hasDesignPass/childSds -- unrelated
+                // to this rubric score), there is no companion recorder for the prompt-rubric
+                // would-reject. observe defaults to true here so THIS call self-records via the
+                // same reused observeDesignFidelityWouldReject writer -- omitting it would silently
+                // discard every would-reject this scorer computes, making the activation a
+                // cost-only no-op that can never contribute to the observe->bind eval count.
+                await dispatchDesignPromptRubricScorer(landingSd, { ...scorerCtx, renderedHtml, instructionBlock }, { supabase });
               }
             }
           }
