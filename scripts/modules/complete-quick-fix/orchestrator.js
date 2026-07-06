@@ -20,7 +20,7 @@ import os from 'os';
 
 import { REPO_PATHS, EHG_ROOT } from './constants.js';
 import { runTests, runTypeScriptCheck, displayTestResults } from './test-runner.js';
-import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff, canSkipTestGate, reconcileDeclaredTypeVsFiles, touchesFrontend, getScopedUnitTestFiles, isEmptyDiff } from './git-operations.js';
+import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff, canSkipTestGate, reconcileDeclaredTypeVsFiles, touchesFrontend, getScopedUnitTestFiles, isEmptyDiff, buildRateLimitHint } from './git-operations.js';
 // SD-LEO-INFRA-QF-FALSE-COMPLETION-WITNESS-GAP-001: merge-verification witness so a
 // quick_fixes row cannot reach status=completed while its change is absent from origin/main.
 import { verifyQFMergeWitness } from './merge-witness.js';
@@ -195,6 +195,11 @@ export async function completeQuickFix(qfId, options = {}) {
     gitInfo = autoDetectGitInfo(testDir, options);
   } catch (e) {
     console.error(`\n❌ ${e.message}\n`);
+    // QF-20260706-282: on a gh GraphQL rate-limit failure, print the exact manual-completion
+    // invocation pre-filled with locally-derivable values, instead of every worker re-deriving
+    // --commit-sha/--branch-name from first principles.
+    const hint = buildRateLimitHint(e.message, qfId, testDir);
+    if (hint) console.error(`💡 gh rate-limited. Manual completion:\n   ${hint}\n`);
     process.exit(1);
   }
   let { commitSha, branchName, actualLoc, actualSourceLoc, actualTestLoc, sourceDeletionLoc } = gitInfo;

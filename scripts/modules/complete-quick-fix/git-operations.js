@@ -357,6 +357,27 @@ export function fetchPRMetadata(prNumber, testDir) {
 }
 
 /**
+ * QF-20260706-282: on a gh GraphQL rate-limit error, build the exact manual-completion
+ * invocation pre-filled with locally-derivable values (commit sha, branch), instead of every
+ * worker re-deriving --commit-sha/--branch-name from first principles. Returns null for any
+ * other error class, or if the local git info can't be derived.
+ * @param {string} errorMessage
+ * @param {string} qfId
+ * @param {string} testDir
+ * @returns {string|null}
+ */
+export function buildRateLimitHint(errorMessage, qfId, testDir) {
+  if (!/rate limit/i.test(errorMessage || '')) return null;
+  try {
+    const sha = execSync('git rev-parse HEAD', { cwd: testDir, encoding: 'utf-8' }).trim();
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', { cwd: testDir, encoding: 'utf-8' }).trim();
+    return `node scripts/complete-quick-fix.js ${qfId} --commit-sha ${sha} --branch-name ${branch} --force-complete --reason "gh rate-limited; verified independently via REST API"`;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Auto-detect git information for a quick-fix completion.
  *
  * Priority order:

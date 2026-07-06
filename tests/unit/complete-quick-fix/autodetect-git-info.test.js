@@ -21,6 +21,7 @@ const {
   extractPRNumber,
   isInQFWorktree,
   fetchPRMetadata,
+  buildRateLimitHint,
 } = await import('../../../scripts/modules/complete-quick-fix/git-operations.js');
 
 beforeEach(() => {
@@ -205,5 +206,25 @@ describe('fetchPRMetadata', () => {
   it('throws on JSON missing state field', () => {
     execSync.mockReturnValueOnce(JSON.stringify({ headRefName: 'x' }));
     expect(() => fetchPRMetadata(123, 'C:/repo')).toThrow(/malformed JSON/);
+  });
+});
+
+describe('buildRateLimitHint (QF-20260706-282)', () => {
+  it('returns null for a non-rate-limit error message', () => {
+    expect(buildRateLimitHint('gh: authentication required', 'QF-1', 'C:/repo')).toBeNull();
+  });
+  it('returns the pre-filled manual-completion command on a rate-limit message', () => {
+    execSync
+      .mockReturnValueOnce('abc1234\n')
+      .mockReturnValueOnce('qf/QF-1\n');
+    const hint = buildRateLimitHint('GraphQL: API rate limit already exceeded', 'QF-1', 'C:/repo');
+    expect(hint).toBe(
+      'node scripts/complete-quick-fix.js QF-1 --commit-sha abc1234 --branch-name qf/QF-1 ' +
+      '--force-complete --reason "gh rate-limited; verified independently via REST API"'
+    );
+  });
+  it('returns null (best-effort) if local git commands fail', () => {
+    execSync.mockImplementationOnce(() => { throw new Error('not a git repo'); });
+    expect(buildRateLimitHint('API rate limit exceeded', 'QF-1', 'C:/repo')).toBeNull();
   });
 });
