@@ -111,6 +111,14 @@ describe('behavioral contract (the real enforcement — runs against the ADAPTED
     expect(reconcile(['A', 'B'], ['A'], sink.readAll()).undocumented).toEqual(['B']);
   });
 
+  it('WORD-COUNT FLOOR: a causal marker with too few words is THIN and does NOT cover', () => {
+    const sink = makeSink();
+    const skimpy = 'because reasons'; // causal marker present, >=15 chars, but only 2 words
+    recordDeviation(sink, { artifactRef: 'B', why: skimpy, weight: 'minor' });
+    expect(qualifies(skimpy)).toBe(false);
+    expect(reconcile(['A', 'B'], ['A'], sink.readAll()).undocumented).toEqual(['B']);
+  });
+
   it('DELIVERED-ONLY: delivery alone (no deviations) empties the gap set', () => {
     expect(reconcile(['A', 'B'], ['A', 'B'], []).undocumented).toEqual([]);
   });
@@ -227,6 +235,11 @@ describe('doctrine mutations fail named checks (miss direction)', () => {
 
   it('a length-only qualifies() (no causal sense-making) fails qualifying_reason_gate', () => {
     const m = CANON.replace('if (!CAUSAL_MARKERS.test(text)) return false;', '');
+    expect(judgeSource(m).failed).toContain('qualifying_reason_gate');
+  });
+
+  it('dropping the word-count floor fails qualifying_reason_gate', () => {
+    const m = CANON.replace('.length < SENSIBLE_MIN_WORDS)', '.length < 0)');
     expect(judgeSource(m).failed).toContain('qualifying_reason_gate');
   });
 

@@ -66,8 +66,9 @@ export function buildLocks() {
       if (!q) return false;
       const lengthFloor = /length\s*<\s*QUALIFYING_REASON_MIN_LENGTH/.test(q);
       const causalSenseMaking = /CAUSAL_MARKERS\.test/.test(q); // not just length — the anti-token-stuffing gate
+      const wordFloor = /SENSIBLE_MIN_WORDS/.test(q);           // word-count element locked too
       const r = fnBody(s, 'reconcile');
-      return lengthFloor && causalSenseMaking && !!r && /qualifies\s*\(/.test(r);
+      return lengthFloor && causalSenseMaking && wordFloor && !!r && /qualifies\s*\(/.test(r);
     },
 
     // D4: reconcile is a REFERENT-BOUND set difference — coverage requires
