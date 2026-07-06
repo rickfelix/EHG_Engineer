@@ -20,7 +20,7 @@ vi.mock('../../../../lib/supabase-client.js', () => ({
   }),
 }));
 
-const { DEFAULT_STEPS } = await import('../../../../lib/eva/bridge/venture-provisioner.js');
+const { DEFAULT_STEPS, ensureLeoBridgeScaffold } = await import('../../../../lib/eva/bridge/venture-provisioner.js');
 
 function scaffoldStep() {
   const step = DEFAULT_STEPS.find((s) => s.name === 'scaffold_seeded');
@@ -85,5 +85,59 @@ describe('venture-provisioner DEFAULT_STEPS: scaffold_seeded', () => {
   it('execute() no-ops gracefully when no local repo path is resolvable', async () => {
     const ctx = { ventureId: 'v1', venture: { name: 'MarketLens', localPath: null }, ventureRepoPath: null, stepsCompleted: [], log: () => {} };
     await expect(scaffoldStep().execute(ctx)).resolves.not.toThrow();
+  });
+
+  // Regression guard for the adversarial-review finding: scaffold_seeded MUST run after
+  // schema_created (which seeds a default Cloudflare stack_descriptor for a new venture) —
+  // running before it would bake a permanently-wrong Replit-flavored CLAUDE.md/.replit into
+  // a Cloudflare-targeted repo, since the step's fresh read would see no descriptor yet.
+  it('is positioned AFTER schema_created in DEFAULT_STEPS (stack_descriptor ordering)', () => {
+    const names = DEFAULT_STEPS.map((s) => s.name);
+    expect(names.indexOf('scaffold_seeded')).toBeGreaterThan(names.indexOf('schema_created'));
+  });
+});
+
+// Regression guard for the adversarial-review deadlock finding: the fix must be callable
+// standalone, independent of provisionVenture()'s top-level 'completed' status early-return
+// and _verifyAndProvisionVenture()'s 'provisioned' short-circuit -- both of which mean an
+// ALREADY-provisioned venture (the exact population QF-20260706-168 reported) can never
+// reach DEFAULT_STEPS at all. ensureLeoBridgeScaffold is the self-heal path the S19 gate
+// calls directly for exactly that case.
+describe('ensureLeoBridgeScaffold (standalone, callable outside provisionVenture)', () => {
+  let repoPath;
+  const fakeSupabase = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({ maybeSingle: async () => ({ data: { name: 'MarketLens', stack_descriptor: null }, error: null }) }),
+      }),
+    }),
+  };
+
+  beforeEach(() => {
+    repoPath = mkdtempSync(join(tmpdir(), 'ensure-leo-bridge-scaffold-test-'));
+  });
+
+  afterEach(() => {
+    rmSync(repoPath, { recursive: true, force: true });
+  });
+
+  it('writes all 3 files given only (ventureId, repoPath) and an injected supabase client', async () => {
+    const result = await ensureLeoBridgeScaffold('v1', repoPath, { ventureName: 'MarketLens', supabase: fakeSupabase, logger: () => {} });
+    expect(existsSync(join(repoPath, 'CLAUDE.md'))).toBe(true);
+    expect(existsSync(join(repoPath, 'docs', 'build-tasks.md'))).toBe(true);
+    expect(existsSync(join(repoPath, '.replit'))).toBe(true);
+    expect(result.written).toEqual(expect.arrayContaining(['CLAUDE.md', 'docs/build-tasks.md', '.replit']));
+  });
+
+  it('returns written:[] preserved:[] and touches nothing when repoPath does not exist', async () => {
+    const result = await ensureLeoBridgeScaffold('v1', join(repoPath, 'does-not-exist'), { ventureName: 'MarketLens', supabase: fakeSupabase, logger: () => {} });
+    expect(result).toEqual({ written: [], preserved: [] });
+  });
+
+  it('is idempotent on a second call — preserves existing CLAUDE.md/.replit, refreshes build-tasks.md', async () => {
+    await ensureLeoBridgeScaffold('v1', repoPath, { ventureName: 'MarketLens', supabase: fakeSupabase, logger: () => {} });
+    const secondResult = await ensureLeoBridgeScaffold('v1', repoPath, { ventureName: 'MarketLens', supabase: fakeSupabase, logger: () => {} });
+    expect(secondResult.preserved).toEqual(expect.arrayContaining(['CLAUDE.md', '.replit']));
+    expect(secondResult.written).toEqual(['docs/build-tasks.md']);
   });
 });
