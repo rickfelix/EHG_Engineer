@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import mod from '../../../scripts/worker-checkin.cjs';
 
-const { isSelfClaimDisabled, isGlobalStandDownActive, orderByFleetCriticalThenRank } = mod;
+const { isSelfClaimDisabled, isParked, isGlobalStandDownActive, orderByFleetCriticalThenRank } = mod;
 
 // Mock supabase: from('system_settings').select(...).in('key', keys) -> Promise<{data,error}>.
 function mockSettingsSb(result) {
@@ -34,6 +34,24 @@ describe('FR-2 global/fleet stand-down (system_settings)', () => {
   it('global HARD_HALT_STATUS enabled (superset) disables self_claim', async () => {
     const sb = mockSettingsSb({ data: [{ key: 'HARD_HALT_STATUS', value_json: { enabled: true } }], error: null });
     expect(await isGlobalStandDownActive(sb)).toBe(true);
+  });
+});
+
+describe('QF-20260705-347 durable PARK marker', () => {
+  it('metadata.parked_until in the future disables self_claim', () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    expect(isParked({ parked_until: future })).toBe(true);
+    expect(isSelfClaimDisabled({ parked_until: future })).toBe(true);
+  });
+  it('a PAST parked_until re-enables self_claim (park is self-expiring)', () => {
+    const past = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    expect(isParked({ parked_until: past })).toBe(false);
+    expect(isSelfClaimDisabled({ parked_until: past })).toBe(false);
+  });
+  it('absent/garbage parked_until leaves self_claim ENABLED (fail-toward-active)', () => {
+    expect(isParked({})).toBe(false);
+    expect(isParked({ parked_until: 'not-a-date' })).toBe(false);
+    expect(isParked(null)).toBe(false);
   });
 });
 
