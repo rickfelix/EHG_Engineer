@@ -50,7 +50,7 @@ export function buildLocks() {
       const catchGuards = /catch\s*\([^)]*\)\s*\{\s*return guard\(/.test(cb);
       const depsCoerced = /deps\s*=\s*deps\s*\|\|\s*\{\}/.test(cb); // an explicit null must not slip the default
       const guardCatchReturns = /catch\s*\([^)]*\)\s*\{[\s\S]*?return\s*\{\s*ok:\s*false/.test(g);
-      const guardLogNullSafe = /safeLog\(\s*deps\s*&&\s*deps\.logger/.test(g); // catch handler must not deref null deps
+      const guardLogNullSafe = /safeLog\(\s*safeGet\(deps,\s*'logger'\)/.test(g); // catch handler read must survive a null deps AND a throwing getter/Proxy
       const safeLoggerWrapped = /try\s*\{\s*logger\.error\([\s\S]*?\}\s*catch/.test(sl);
       const symptomGuarded = /try\s*\{[\s\S]*?String\(err\)[\s\S]*?\}\s*catch/.test(sy);
       const clockGuarded = /Number\.isFinite/.test(ud);

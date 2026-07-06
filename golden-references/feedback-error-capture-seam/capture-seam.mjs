@@ -80,6 +80,11 @@ function dedupHash(utcDay, symptom, source) {
 function safeLog(logger, line) {
   try { logger.error(line); } catch { /* logger failed or absent; nothing left to do — never re-throw */ }
 }
+/** Read a property that may be a THROWING getter (or on a hostile Proxy) — never throws.
+ *  Used only where the read happens OUTSIDE any other try (the guard catch handlers). */
+function safeGet(obj, key) {
+  try { return obj == null ? undefined : obj[key]; } catch { return undefined; }
+}
 /** Build the schema-shaped entry from a thrown value + deps (pure; never throws). */
 function buildEntry(err, deps) {
   const { category, type = 'error', source, severity = 'medium', clock } = deps;
@@ -137,11 +142,11 @@ export async function captureBoundaryAsync(op, deps = {}) {
  *  than propagate — never re-becoming the swallow footgun. */
 function guard(err, deps, fn) {
   try { return fn(); }
-  catch (captureErr) { safeLog(deps && deps.logger, `[capture-seam] capture failed: ${symptomOf(captureErr)}`); return { ok: false, error: err, deduped: false }; }
+  catch (captureErr) { safeLog(safeGet(deps, 'logger'), `[capture-seam] capture failed: ${symptomOf(captureErr)}`); return { ok: false, error: err, deduped: false }; }
 }
 async function guardAsync(err, deps, fn) {
   try { return await fn(); }
-  catch (captureErr) { safeLog(deps && deps.logger, `[capture-seam] capture failed: ${symptomOf(captureErr)}`); return { ok: false, error: err, deduped: false }; }
+  catch (captureErr) { safeLog(safeGet(deps, 'logger'), `[capture-seam] capture failed: ${symptomOf(captureErr)}`); return { ok: false, error: err, deduped: false }; }
 }
 
 /** The sync failure path — best-effort capture (D1/D2/D3). */

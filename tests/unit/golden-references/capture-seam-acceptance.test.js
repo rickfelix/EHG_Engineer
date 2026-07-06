@@ -69,6 +69,11 @@ function captureContractViolations(cb) {
     try { cb(() => { throw new Error('n'); }, null); } catch { threw = true; }
     if (threw) v.push('throws-on-null-deps');
   }
+  { // hostile-deps: a deps whose property access throws (throwing getter / Proxy) must NOT make the seam throw
+    let threw = false;
+    try { cb(() => { throw new Error('n'); }, new Proxy({}, { get() { throw new Error('trap'); } })); } catch { threw = true; }
+    if (threw) v.push('throws-on-hostile-deps');
+  }
   { // healthy-path-silent: success -> no row, no stderr, ok:true
     const h = makeHarness();
     const r = cb(() => 1, DEPS(h));
@@ -194,6 +199,20 @@ describe('behavioral contract (the real enforcement — runs against the ADAPTED
   it('NEVER-THROWS when deps is explicitly NULL (the null-deps hole: `= {}` only defaults undefined): returns ok:false', () => {
     let r;
     expect(() => { r = captureBoundary(() => { throw new Error('boom'); }, null); }).not.toThrow();
+    expect(r.ok).toBe(false);
+  });
+
+  it('NEVER-THROWS on a deps whose `logger` getter throws (the guard-catch deref hole): returns ok:false', () => {
+    let r;
+    const hostileDeps = { get logger() { throw new Error('logger-getter'); } };
+    expect(() => { r = captureBoundary(() => { throw new Error('boom'); }, hostileDeps); }).not.toThrow();
+    expect(r.ok).toBe(false);
+  });
+
+  it('NEVER-THROWS on a deps Proxy that throws on every get: returns ok:false', () => {
+    let r;
+    const proxyDeps = new Proxy({}, { get() { throw new Error('proxy-trap'); } });
+    expect(() => { r = captureBoundary(() => { throw new Error('boom'); }, proxyDeps); }).not.toThrow();
     expect(r.ok).toBe(false);
   });
 
@@ -394,8 +413,8 @@ describe('doctrine mutations fail named checks (miss direction)', () => {
     const m = CANON.replace('deps = deps || {};', 'deps = deps;'); // first occurrence = captureBoundary
     expect(judgeSource(m).failed).toContain('never_throws_best_effort');
   });
-  it('an unguarded null-deps deref in the guard catch fails never_throws_best_effort', () => {
-    const m = CANON.replace(/safeLog\(deps && deps\.logger/g, 'safeLog(deps.logger');
+  it('an unguarded deps.logger read in the guard catch fails never_throws_best_effort', () => {
+    const m = CANON.replace(/safeLog\(safeGet\(deps, 'logger'\)/g, 'safeLog(deps.logger');
     expect(judgeSource(m).failed).toContain('never_throws_best_effort');
   });
   it('an unguarded logger fails never_throws_best_effort', () => {
