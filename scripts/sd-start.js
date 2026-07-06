@@ -181,6 +181,24 @@ function enforceHumanActionGate(sd, effectiveId) {
   process.exit(1);
 }
 
+// QF-20260706-786: metadata.blocked_on_sd is an ad-hoc single-dependency hold that a
+// worker's own claim-TTL-lapse self-heal can clear (requires_human_action=false) without
+// the referenced SD actually completing (live incident: Bravo self-cleared the fence on
+// LANDING-REBUILD-001 3min after FABLE-VENTURE-DESIGN-001 finished — safe by luck only).
+// This re-derives eligibility from LIVE status every claim, independent of any boolean flag.
+async function enforceBlockedOnSdGate(sd, effectiveId) {
+  const blockedOn = sd?.metadata?.blocked_on_sd;
+  if (typeof blockedOn !== 'string' || !blockedOn || blockedOn === 'none') return;
+  const { data, error } = await supabase.from('strategic_directives_v2').select('status').eq('sd_key', blockedOn).maybeSingle();
+  if (error || !data) return; // fail-open: can't verify -> don't strand the claim on a query fault
+  if (data.status !== 'completed') {
+    console.log(`\n${colors.red}❌ ${effectiveId} is BLOCKED_ON ${blockedOn} — cannot be claimed${colors.reset}`);
+    console.log(`   metadata.blocked_on_sd=${blockedOn} (status=${data.status}) — dependency not yet completed.`);
+    console.log(`\n${colors.bold}Action:${colors.reset} Wait for ${blockedOn} to complete, or pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
+    process.exit(1);
+  }
+}
+
 const MAX_FALLBACK_ATTEMPTS = 3;
 
 /**
@@ -828,6 +846,9 @@ async function main() {
   // 1.2. QF-20260703-295: reject direct claims on HELD SDs (metadata.requires_human_action).
   enforceHumanActionGate(sd, effectiveId);
 
+  // 1.3. QF-20260706-786: independently re-verify metadata.blocked_on_sd against live status.
+  await enforceBlockedOnSdGate(sd, effectiveId);
+
   // 1.4. SD-LEO-INFRA-PR-CADENCE-PRECLAIM-GATE-001: Pre-claim cadence gate.
   // Refuses claim if SD is in a stability window. Re-runs after orchestrator
   // leaf routing so a cadence-blocked leaf is not silently claimed via the parent.
@@ -972,6 +993,8 @@ async function main() {
       // (findUnclaimedChild) does not filter on requires_human_action, so a HELD
       // child routed to via the parent must still be refused here.
       enforceHumanActionGate(sd, effectiveId);
+      // QF-20260706-786: same re-check for a leaf's own metadata.blocked_on_sd.
+      await enforceBlockedOnSdGate(sd, effectiveId);
       } // close else (route-to-leaf)
     }
   }
