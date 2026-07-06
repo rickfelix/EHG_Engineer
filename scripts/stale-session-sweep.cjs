@@ -811,6 +811,58 @@ function checkNpmInstallLock() {
  * Conservative bar (holder gone or heartbeat > VERY_STALE) avoids yanking a live worker's claim.
  * Degrade-safe: query failure warns, never blocks the sweep.
  */
+// QF-20260704-545: harness test runs that die mid-flight leave SD-TEST-* fixtures
+// (draft/in_progress/active, never claimed) polluting the non-terminal queue and
+// coordinator-audit stuck-count indefinitely. Auto-cancel any SD-TEST-* row that's
+// been sitting unclaimed for >24h -- real SDs never use the SD-TEST- prefix
+// (isTestFixtureSdKey), so this can never touch production work.
+const TEST_FIXTURE_STALE_MS = 24 * 60 * 60 * 1000;
+async function cancelStaleTestFixtures(supabase, now, actions, warnings) {
+  try {
+    // active-sd-predicate-parity: use the shared predicate rather than an inline
+    // .in('status', [...]) literal (PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001).
+    const { getActiveSDFilter } = await import('../lib/sd/active-sd-predicate.js');
+    const cutoff = new Date(now.getTime() - TEST_FIXTURE_STALE_MS).toISOString();
+    let query = supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, status')
+      .ilike('sd_key', TEST_FIXTURE_SD_KEY_LIKE);
+    query = getActiveSDFilter(query);
+    const { data: staleFixtures, error } = await query
+      .is('claiming_session_id', null)
+      .lt('updated_at', cutoff);
+
+    if (error) {
+      warnings.push('TEST_FIXTURE_SWEEP: ' + error.message);
+      return;
+    }
+
+    for (const fixture of (staleFixtures || [])) {
+      // Canonical cancellation shape (matches scripts/cancel-sd.js): top-level
+      // cancellation_reason column, not metadata -- never overwrite metadata here.
+      // active_session_id:null co-clears alongside claiming_session_id:null, per the
+      // FR-1 release-site invariant (claim-lifecycle-hardening).
+      const { error: updateErr } = await supabase
+        .from('strategic_directives_v2')
+        .update({
+          status: 'cancelled',
+          current_phase: 'CANCELLED',
+          cancellation_reason: 'QF-20260704-545: auto-cancelled leaked SD-TEST-* fixture, unclaimed >24h',
+          claiming_session_id: null,
+          active_session_id: null,
+          is_working_on: false,
+        })
+        .eq('id', fixture.id)
+        .is('claiming_session_id', null); // race guard: only if still unclaimed
+      if (!updateErr) {
+        actions.push('TEST_FIXTURE: auto-cancelled leaked ' + fixture.sd_key + ' (' + fixture.status + ', unclaimed >24h)');
+      }
+    }
+  } catch (fixtureErr) {
+    warnings.push('TEST_FIXTURE_SWEEP: ' + fixtureErr.message);
+  }
+}
+
 async function clearStaleQfClaims(supabase, now, actions, warnings) {
   const veryStaleSeconds = STALE_THRESHOLD_SECONDS * 3; // 15min = definitely dead
   try {
@@ -935,6 +987,10 @@ async function main() {
   // QF-20260525-211 (early-exit gap): reap orphaned QF claims BEFORE the early-return below,
   // so a stale QF claim is cleared even when zero SD-claiming sessions remain (fleet wound down).
   await clearStaleQfClaims(supabase, now, actions, warnings);
+
+  // QF-20260704-545: same early-exit-gap discipline -- cancel leaked SD-TEST-* fixtures
+  // before the early-return below, so they're reaped even with zero active sessions.
+  await cancelStaleTestFixtures(supabase, now, actions, warnings);
 
   // QF-20260703-076: session-independent dormancy watchdog -- prior backstops run INSIDE
   // a turn and can't observe a worker whose armed wakeup never fired. Detector-only.
@@ -2920,6 +2976,9 @@ module.exports.INTENT_PAYLOAD_KEYS = INTENT_PAYLOAD_KEYS;
 // FR-3 predicate (pure): the reserved SD-TEST- fixture namespace check.
 module.exports.isTestFixtureSdKey = isTestFixtureSdKey;
 module.exports.TEST_FIXTURE_SD_KEY_LIKE = TEST_FIXTURE_SD_KEY_LIKE;
+// QF-20260704-545: auto-cancel leaked SD-TEST-* fixtures (test seam).
+module.exports.cancelStaleTestFixtures = cancelStaleTestFixtures;
+module.exports.TEST_FIXTURE_STALE_MS = TEST_FIXTURE_STALE_MS;
 // SD-REFILL-00NFWJ6M: hard-cap pid-alive OS-truth fallback helpers (test seam).
 module.exports.isProcessRunning = isProcessRunning;
 module.exports.anyClaudeProcessRunning = anyClaudeProcessRunning;
