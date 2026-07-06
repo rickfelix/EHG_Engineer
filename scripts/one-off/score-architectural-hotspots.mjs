@@ -117,12 +117,12 @@ const DESIGNS = {
   'scripts/leo-create-sd.js': {
     sd_slug: 'SD-ARCH-HOTSPOT-LEO-CREATE-001',
     thesis_line: 'extract the nine createFrom* lanes into a source-adapter registry over one shared createSD core',
-    body: 'THESIS: #2 (composite 0.617; 58 commits/90d; 3,500 lines; cmplx 646 — the HIGHEST raw complexity) accretes one createFrom<Source> lane per intake (UAT L330, Learn L392, Feedback L441, RoadmapItem L611, QF L705, Child L803, Plan L1006 — grep-verified), each re-deriving mapping/validation slightly differently; plus createSD L1635 with process.exit(1) inside library code (session finding ec36b279: kills callers mid-loop). TARGET SHAPE: (a) lib/sd-creation/source-adapters/<source>.js each exporting toDraft(input)->CreateSDOptions; (b) ONE shared pipeline: adapter -> enrich-defaults (the buildDefault* family L1471-1634 moves here) -> validate -> insert; (c) createSD returns {ok,error} — never process.exit — with a thin CLI wrapper owning exit codes. SEAMS: the buildDefault* functions are already pure (L1471,1508,1533,1564,1616); mapToDbType L1395 + resolveSdType L1463 shared; inheritStrategicFields L1349 is the Child adapter. ACCEPTANCE (miss): adapters land for >=4 sources; createSD exits nowhere; the CLI file drops below ~800 lines. ACCEPTANCE (pass): every creation path proven by the existing creation tests + one fixture create per adapter; SD rows byte-equivalent for a fixed input. DELEGATE NOTE: new intake sources become two_way (one adapter file). OVERLAP: sd-create skill + leo-create flows call the CLI — interface preserved.',
+    body: 'THESIS: #2 (composite 0.617; 58 commits/90d; 3,500 lines; cmplx 646 — the HIGHEST raw complexity) accretes one createFrom<Source> lane per intake (UAT L330, Learn L392, Feedback L441, RoadmapItem L611, QF L705, createChild L803, Plan L1006 — grep-verified), each re-deriving mapping/validation slightly differently; plus createSD L1635 with process.exit(1) inside library code (session finding ec36b279: kills callers mid-loop). TARGET SHAPE: (a) lib/sd-creation/source-adapters/<source>.js each exporting toDraft(input)->CreateSDOptions; (b) ONE shared pipeline: adapter -> enrich-defaults (the buildDefault* family L1471-1634 moves here) -> validate -> insert; (c) createSD returns {ok,error} — never process.exit — with a thin CLI wrapper owning exit codes. SEAMS: the buildDefault* functions are already pure (L1471,1508,1533,1564,1616); mapToDbType L1395 + resolveSdType L1463 shared; inheritStrategicFields L1349 is the Child adapter. ACCEPTANCE (miss): adapters land for >=4 sources; createSD exits nowhere; the CLI file drops below ~800 lines. ACCEPTANCE (pass): every creation path proven by the existing creation tests + one fixture create per adapter; SD rows byte-equivalent for a fixed input. DELEGATE NOTE: new intake sources become two_way (one adapter file). OVERLAP: sd-create skill + leo-create flows call the CLI — interface preserved.',
   },
   'scripts/stale-session-sweep.cjs': {
     sd_slug: 'SD-ARCH-HOTSPOT-SWEEP-001',
     thesis_line: 'decompose the 2,900-line sweep main() into an ordered pass-registry with per-pass isolation',
-    body: 'THESIS: #3 (composite 0.5706; 61 commits/90d) — main() is a sequential monolith of numbered concern-blocks (QF reaping, dormancy watchdog, identity collisions, source-side telemetry, classification, HEADLESS_ZOMBIE, claim-boundary probe [added by this session — its runClaimBoundaryProbe extraction is the PROOF the pattern works], npm locks, QA scans, dead-letter planning, detectors). Every new guard churns main(). TARGET SHAPE: (a) lib/sweep/passes/<pass>.cjs each exporting {name, run(ctx)} where ctx carries {supabase, now, classified, telemetryMap, actions, warnings}; (b) an ORDERED PASS REGISTRY (array, explicit order — order is load-bearing) with per-pass try/catch isolation (the pattern main() already applies ad hoc); (c) main() shrinks to: gather inputs -> run passes -> report. SEAMS (built-in today, fresh knowledge): runClaimBoundaryProbe is ALREADY the target shape (exported, ctx-taking, isolated) — the template pass; clearStaleQfClaims L581, isHeadlessZombie block L891-927, evaluateSourceSideSignals closure (needs ctx-ification), detector invocation L2369. ACCEPTANCE (miss): >=5 passes extracted with the registry; main() below ~600 lines; a new guard = one pass file + one registry line. ACCEPTANCE (pass): the full sweep unit-suite family green (headless-zombie, qf211, qf162, dormancy-gate, claim-safety static tests updated for new file layout ONLY where they pin source text); one live sweep run output-equivalent. DELEGATE NOTE: individual passes become two_way-editable. OVERLAP: claim-safety static test anchors on source text (session finding 04847713) — the design INCLUDES migrating those anchors to the pass files.',
+    body: 'THESIS: #3 (composite 0.5706; 61 commits/90d) — main() is a sequential monolith of numbered concern-blocks (QF reaping, dormancy watchdog, identity collisions, source-side telemetry, classification, HEADLESS_ZOMBIE, claim-boundary probe [added by this session — its runClaimBoundaryProbe extraction is the PROOF the pattern works], npm locks, QA scans, dead-letter planning, detectors). Every new guard churns main(). TARGET SHAPE: (a) lib/sweep/passes/<pass>.cjs each exporting {name, run(ctx)} where ctx carries {supabase, now, classified, telemetryMap, actions, warnings}; (b) an ORDERED PASS REGISTRY (array, explicit order — order is load-bearing) with per-pass try/catch isolation (the pattern main() already applies ad hoc); (c) main() shrinks to: gather inputs -> run passes -> report. SEAMS (built-in today, fresh knowledge; name-anchored — grep the names, line refs drift): runClaimBoundaryProbe is ALREADY the target shape (exported, ctx-taking, isolated) — the template pass; clearStaleQfClaims L814, isHeadlessZombie L291 plus its classification call sites in main(), evaluateSourceSideSignals closure (needs ctx-ification), the detector-registry invocation block in main() (grep the detectors.cjs call site). ACCEPTANCE (miss): >=5 passes extracted with the registry; main() below ~600 lines; a new guard = one pass file + one registry line. ACCEPTANCE (pass): the full sweep unit-suite family green (headless-zombie, qf211, qf162, dormancy-gate, claim-safety static tests updated for new file layout ONLY where they pin source text); one live sweep run output-equivalent. DELEGATE NOTE: individual passes become two_way-editable. OVERLAP: claim-safety static test anchors on source text (session finding 04847713) — the design INCLUDES migrating those anchors to the pass files.',
   },
   'scripts/worker-checkin.cjs': {
     sd_slug: 'SD-ARCH-HOTSPOT-CHECKIN-001',
@@ -159,7 +159,8 @@ async function executePersist(result) {
   // Docs render
   const lines = ['# Architectural Hotspots — churn × complexity', '',
     `> Source: \`${SOURCE_SD}\` · rev \`${result.rev.slice(0, 12)}\` · window ${WINDOW_DAYS}d · generated ${pack.params.generated_at}`,
-    '> DB-first truth: `metadata.hotspot_pack` on the source SD. Re-derive: `node scripts/one-off/score-architectural-hotspots.mjs`.', '',
+    '> DB-first truth: `metadata.hotspot_pack` on the source SD. Re-running `node scripts/one-off/score-architectural-hotspots.mjs` re-scores at CURRENT HEAD/date (the 90d window is wall-clock-relative) — it does not reproduce this pinned table.',
+    '> Window bias: a 90-day window over-weights files hammered in recent sprints; churn and complexity components are shown separately so the reader can discount.', '',
     '| # | Composite | Churn | Complexity | LOC | File |', '|---|---|---|---|---|---|'];
   for (const r of result.rows) lines.push(`| ${r.rank} | ${r.composite} | ${r.churn} | ${r.complexity} | ${r.loc} | \`${r.path}\` |`);
   lines.push('', '## Framed designs', '');
@@ -184,24 +185,36 @@ async function executePersist(result) {
       .eq('metadata->hotspot_link->>path', row.path)
       .limit(1);
     if (existing && existing.length) { created.push({ path: row.path, key: existing[0].sd_key, existed: true }); continue; }
-    const sdOut = await createSD({
-      sdKey: d.sd_slug,
-      title: 'Hotspot re-architecture: ' + d.thesis_line + ' (' + row.path + ')',
-      description: d.body + '\n\n' + DEVIATION_VALVE,
-      type: 'refactor',
-      priority: 'high',
-      rationale: 'Framed by ' + SOURCE_SD + ' (chairman sprint item 1): rank ' + row.rank + ' hotspot, composite ' + row.composite + ' (churn ' + row.churn + ' × complexity ' + row.complexity + ' over ' + WINDOW_DAYS + 'd). Fable-designed; fleet builds.',
-      scope: 'See description: thesis, seams, both-directions acceptance. Door class: one_way (re-architecture). Intensity: architectural.',
-      metadata: {
-        hotspot_link: { source_sd: SOURCE_SD, path: row.path, rank: row.rank, composite: row.composite },
-        co_author_pending: true,
-        door_class_note: 'one_way',
-      },
-    });
-    created.push({ path: row.path, key: (sdOut && sdOut.sd_key) || d.sd_slug, existed: false });
+    // Per-draft isolation: pack+doc are already persisted above; one failed
+    // createSD must not abort the remaining drafts (re-run self-heals via
+    // the hotspot_link guard, but don't leave the batch half-done needlessly).
+    try {
+      const sdOut = await createSD({
+        sdKey: d.sd_slug,
+        title: 'Hotspot re-architecture: ' + d.thesis_line + ' (' + row.path + ')',
+        description: d.body + '\n\n' + DEVIATION_VALVE,
+        type: 'refactor',
+        priority: 'high',
+        rationale: 'Framed by ' + SOURCE_SD + ' (chairman sprint item 1): rank ' + row.rank + ' hotspot, composite ' + row.composite + ' (churn ' + row.churn + ' × complexity ' + row.complexity + ' over ' + WINDOW_DAYS + 'd). Fable-designed; fleet builds.',
+        scope: 'See description: thesis, seams, both-directions acceptance. Door class: one_way (re-architecture). Intensity: architectural.',
+        metadata: {
+          hotspot_link: { source_sd: SOURCE_SD, path: row.path, rank: row.rank, composite: row.composite },
+          co_author_pending: true,
+          door_class_note: 'one_way',
+        },
+      });
+      created.push({ path: row.path, key: (sdOut && sdOut.sd_key) || d.sd_slug, existed: false });
+    } catch (e) {
+      created.push({ path: row.path, key: d.sd_slug, failed: e.message });
+    }
   }
   console.log('✓ framed drafts:');
-  created.forEach(c => console.log('   ', c.existed ? '(existing)' : 'created ', c.key, '←', c.path));
+  created.forEach(c => console.log('   ', c.failed ? 'FAILED   ' : c.existed ? '(existing)' : 'created ', c.key, '←', c.path, c.failed ? '— ' + c.failed : ''));
+  const failures = created.filter(c => c.failed);
+  if (failures.length) {
+    console.error('✗ ' + failures.length + ' draft(s) failed — re-run --execute after fixing (idempotency skips the rest)');
+    process.exitCode = 1;
+  }
   return { sb, sd, created };
 }
 

@@ -1,7 +1,8 @@
 # Architectural Hotspots — churn × complexity
 
-> Source: `SD-LEO-INFRA-ARCHITECTURAL-HOTSPOTS-CHURN-001` · rev `509107e51d31` · window 90d · generated 2026-07-05T23:55:15.258Z
-> DB-first truth: `metadata.hotspot_pack` on the source SD. Re-derive: `node scripts/one-off/score-architectural-hotspots.mjs`.
+> Source: `SD-LEO-INFRA-ARCHITECTURAL-HOTSPOTS-CHURN-001` · rev `0d99fcf770be` · window 90d · generated 2026-07-06T00:09:26.225Z
+> DB-first truth: `metadata.hotspot_pack` on the source SD. Re-running `node scripts/one-off/score-architectural-hotspots.mjs` re-scores at CURRENT HEAD/date (the 90d window is wall-clock-relative) — it does not reproduce this pinned table.
+> Window bias: a 90-day window over-weights files hammered in recent sprints; churn and complexity components are shown separately so the reader can discount.
 
 | # | Composite | Churn | Complexity | LOC | File |
 |---|---|---|---|---|---|
