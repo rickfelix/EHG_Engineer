@@ -169,13 +169,24 @@ function isSelfClaimDisabled(metadata) {
   return metadata.self_claim === false
     || metadata.availability === 'idle_only'
     || metadata.coordinator_stand_down === true
-    || isQuarantined(metadata);
+    || isQuarantined(metadata)
+    || isParked(metadata);
 }
 
 // SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001 FR-4: pure — uncleared probe quarantine present?
 function isQuarantined(metadata) {
   const q = metadata && typeof metadata === 'object' ? metadata.quarantine : null;
   return !!(q && typeof q === 'object' && !q.cleared_at);
+}
+
+// QF-20260705-347: durable PARK marker — the coordinator stamps metadata.parked_until (ISO)
+// at park time and clears it at resume; a prose park-order WA alone is message-deaf (a parked
+// session isn't reading anything). Availability control only — roll_call, resume and directed
+// WORK_ASSIGNMENTs stay honored, same contract as the other isSelfClaimDisabled sub-checks.
+function isParked(metadata) {
+  const until = metadata && typeof metadata === 'object' && metadata.parked_until
+    ? Date.parse(metadata.parked_until) : NaN;
+  return Number.isFinite(until) && until > Date.now();
 }
 
 /**
@@ -1900,7 +1911,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isQuarantined, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
+module.exports = { extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
 
 if (require.main === module) {
   main().catch(err => {

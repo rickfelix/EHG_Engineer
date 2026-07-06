@@ -137,6 +137,26 @@ describe('isDispatchableFleetMember — idle/capacity panel role guard (no everC
     expect(isDispatchableFleetMember({ session_id: 'e4c2b7aa-0000-4000-8000-000000000000', metadata: { quarantined_at: null }, sd_key: null }, coordId)).toBe(true);
     expect(isDispatchableFleetMember({ session_id: 'e4c2b7aa-0000-4000-8000-000000000000', metadata: {}, sd_key: null }, coordId)).toBe(true);
   });
+
+  // QF-20260705-347: durable PARK marker — a parked-by-plan session (e.g. an overnight-cycle-down
+  // seat) must not false-flag charter-audit DUTY-3 idle-with-work while metadata.parked_until is
+  // still in the future.
+  it('EXCLUDES a session parked_until a future timestamp', () => {
+    const now = Date.parse('2026-07-06T04:00:00Z');
+    const parked = { session_id: 'f1a2b3c4-0000-4000-8000-000000000000', metadata: { parked_until: '2026-07-06T05:00:00Z' }, sd_key: null };
+    expect(isDispatchableFleetMember(parked, coordId, now)).toBe(false);
+  });
+
+  it('counts a session again once parked_until has passed — park is reversible/self-expiring', () => {
+    const now = Date.parse('2026-07-06T06:00:00Z');
+    const expired = { session_id: 'f1a2b3c4-0000-4000-8000-000000000000', metadata: { parked_until: '2026-07-06T05:00:00Z' }, sd_key: null };
+    expect(isDispatchableFleetMember(expired, coordId, now)).toBe(true);
+  });
+
+  it('ignores a garbage/unparseable parked_until (fail toward member)', () => {
+    const garbage = { session_id: 'f1a2b3c4-0000-4000-8000-000000000000', metadata: { parked_until: 'not-a-date' }, sd_key: null };
+    expect(isDispatchableFleetMember(garbage, coordId)).toBe(true);
+  });
 });
 
 describe('production wiring guard (catch idle-filter call-site deletion)', () => {
