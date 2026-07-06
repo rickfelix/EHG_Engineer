@@ -13,7 +13,7 @@ runs all depend on witnesses; when a witness lies, a gate goes green on nothing.
   - `merge_witness_telemetry` (written by `lib/ship/merge-witness-telemetry.mjs`)
     records CONTENT, not a boolean — a `rungs` array of `{id, status, reason}`
     plus an `overall` enum and `evaluated_at`; it is verified by identity-read
-    in `lib/ship/merge-witness-adoption.mjs`. Good: content + verify-by-read.
+    in `lib/ship/witness-adoption.mjs`. Good: content + verify-by-read.
     But it is **deliberately best-effort** — its writer swallows failures and
     returns `{ok:false}` so a telemetry write can never affect a merge lane.
     That swallow is CORRECT for observe-only telemetry and **WRONG for a
