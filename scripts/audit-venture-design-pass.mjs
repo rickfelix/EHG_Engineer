@@ -97,7 +97,7 @@ async function fetchArtifactEvidence(supabase, ventureId) {
     .from('venture_artifacts')
     .select('artifact_type')
     .eq('venture_id', ventureId)
-    .in('artifact_type', ['build_mvp_build', 's17_approved']);
+    .in('artifact_type', ['build_mvp_build']);
   const rows = data || [];
   const { count: stitchCount } = await supabase
     .from('venture_artifacts')

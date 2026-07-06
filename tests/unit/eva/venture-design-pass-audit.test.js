@@ -1,7 +1,8 @@
 // SD-LEO-INFRA-FLEET-WIDE-AUDIT-001 -- fleet-wide venture design-pass classifier.
-// Pure-function tests against classifyVenture(); no DB/filesystem IO.
+// classifyVenture() tests are pure (no IO); the runAudit() filter test below uses a
+// hand-rolled fake supabase client (no live DB), per repo convention for DB-touching logic.
 import { describe, it, expect } from 'vitest';
-import { classifyVenture } from '../../../scripts/audit-venture-design-pass.mjs';
+import { classifyVenture, runAudit } from '../../../scripts/audit-venture-design-pass.mjs';
 
 describe('classifyVenture', () => {
   // TS-1: MarketLens -- realized, no design evidence
@@ -78,5 +79,51 @@ describe('classifyVenture', () => {
   it('design_fidelity_score takes priority over stitch/structural evidence in evidence_basis reporting', () => {
     const v = classifyVenture({ hasBuildArtifact: true, commitCount: 10, repoExists: true, structuralUi: true, stitchCount: 1, designFidelityScore: 0.9 });
     expect(v.evidence_basis).toBe('design_fidelity_score');
+  });
+});
+
+// TS-9: the build_model='leo_bridge' filter must return exactly the audited venture set --
+// a named-set assertion (not just a count) so a future added/removed venture trips this test.
+function fakeSupabase(ventureRows) {
+  return {
+    from(table) {
+      if (table === 'ventures') {
+        return { select: () => ({ eq: (col, val) => Promise.resolve({ data: ventureRows.filter((v) => v[col] === val), error: null }) }) };
+      }
+      if (table === 'applications') {
+        return { select: () => Promise.resolve({ data: [], error: null }) }; // no local_path -> repoExists=false for every venture
+      }
+      if (table === 'venture_artifacts') {
+        return {
+          select: () => ({
+            eq: () => ({
+              in: () => Promise.resolve({ data: [], error: null }),
+              like: () => Promise.resolve({ count: 0, error: null }),
+            }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table in fakeSupabase: ${table}`);
+    },
+  };
+}
+
+describe('runAudit venture filter (TS-9)', () => {
+  it('returns exactly the leo_bridge-tagged ventures, excluding non-matching build_model rows', async () => {
+    const ventureRows = [
+      { id: '1', name: 'MarketLens', status: 'active', build_model: 'leo_bridge' },
+      { id: '2', name: 'CronLinter', status: 'cancelled', build_model: 'leo_bridge' },
+      { id: '3', name: 'DataDistill', status: 'active', build_model: 'leo_bridge' },
+      { id: '4', name: 'CronGenius', status: 'cancelled', build_model: 'leo_bridge' },
+      { id: '5', name: 'Market Modeling SaaS', status: 'active', build_model: 'leo_bridge' },
+      { id: '6', name: 'Canvas AI', status: 'cancelled', build_model: 'leo_bridge' },
+      { id: '7', name: 'Seeded Repo Venture', status: 'active', build_model: 'seeded_repo' },
+      { id: '8', name: 'Untyped Venture', status: 'active', build_model: null },
+    ];
+    const results = await runAudit({ supabase: fakeSupabase(ventureRows), dryRun: true });
+    const names = results.map((r) => r.venture_name).sort();
+    expect(names).toEqual(['Canvas AI', 'CronGenius', 'CronLinter', 'DataDistill', 'Market Modeling SaaS', 'MarketLens']);
+    expect(names).not.toContain('Seeded Repo Venture');
+    expect(names).not.toContain('Untyped Venture');
   });
 });
