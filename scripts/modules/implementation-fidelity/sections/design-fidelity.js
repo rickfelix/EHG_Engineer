@@ -92,6 +92,51 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
 
     const hasUIScope = /component|ui\s|frontend|form|page|view|dashboard/i.test(scopeToCheck);
 
+    // FR-3 (SD-LEO-INFRA-ACTIVATE-DESIGN-FIDELITY-001): a CUSTOMER-FACING LANDING must NOT
+    // silently auto-exempt to 25/25 just because it is backend/API-classified (the seam that let
+    // the thin MarketLens landing ship ungated). OBSERVE-ONLY-FIRST: record a would-reject BEFORE
+    // any backend exemption fires; never change validation.score/pass while
+    // DESIGN_FIDELITY_GATE_MODE !== 'bind'. SWALLOW-ALL (mirrors observeGateWitness) so a witness
+    // write failure can never affect this gate's real result. Fenced by isCustomerFacingLanding
+    // so a genuine backend leaf is untouched (near-zero fleet cost).
+    try {
+      const { isCustomerFacingLanding } = await import('../../../lib/eva/bridge/customer-facing-design-detector.js');
+      const targetAppCFL = validation.details.target_application || sdResolved?.target_application || null;
+      const landingSd = { target_application: targetAppCFL, title: sd?.title };
+      if (isCustomerFacingLanding(landingSd, scopeToCheck, sd?.title)) {
+        const { dispatchDesignFidelityScorer, observeVentureCompletionDesignPass } = await import('../../../lib/eva/bridge/design-fidelity-observe.js');
+        const judgedSessionId = sdResolved?.claiming_session_id || null;
+        const scorerCtx = { scopeText: scopeToCheck, titleText: sd?.title, judgedSessionId, stitchData: null, repoAnalysis: null };
+        // FR-1/FR-2: give the DORMANT design-fidelity scorer its FIRST live dispatch (observe:false
+        // -> live call site only; the recording is owned below, gated on hasDesignPass, so a
+        // landing that HAS a design pass is never a false-reject). Stitch is deprecated -> null.
+        await dispatchDesignFidelityScorer(landingSd, scorerCtx, { supabase, observe: false });
+        // FR-3/FR-4: a customer-facing landing about to auto-exempt via a backend/API
+        // classification AND lacking a design pass (no completed design/page-quality child) is an
+        // observe-only WOULD-REJECT. hasDesignPass gates it so a designed landing records nothing
+        // (zero false-rejects — required for the observe->bind criterion). SWALLOW-ALL; never blocks.
+        let childSds = [];
+        try {
+          if (sdResolved?.id) {
+            const { data: kids } = await supabase
+              .from('strategic_directives_v2')
+              .select('sd_type,title,status')
+              .eq('parent_sd_id', sdResolved.id);
+            childSds = kids || [];
+          }
+        } catch { /* observe-only: a child lookup failure must never affect the gate */ }
+        await observeVentureCompletionDesignPass(landingSd, {
+          designArtifacts: [], // Stitch/Lovable design-token source deprecated (SD out-of-scope note)
+          childSds,
+          scopeText: scopeToCheck,
+          titleText: sd?.title,
+          judgedSessionId,
+        }, { supabase });
+        // OBSERVE-ONLY: intentionally do NOT return/block here — the existing exemption logic
+        // still runs and still awards its 25/25. Binding is a separate, hand-verified step.
+      }
+    } catch { /* observe-only: a detector/witness failure must never affect the gate */ }
+
     // SD types that never require UI component validation
     const noUITypes = ['database', 'infrastructure', 'documentation'];
     if (noUITypes.includes(sd?.sd_type) && !hasUIScope) {
