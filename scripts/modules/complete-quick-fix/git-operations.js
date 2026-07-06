@@ -569,17 +569,34 @@ export function analyzeGitDiff(testDir, qfDescription = '') {
     // commitAndPushChanges no-ops (nothing committed → no branch commits → --auto-pr
     // can't open a PR). Fall back to the working tree (tracked changes vs HEAD +
     // untracked) so scope/test-coverage checks and the auto-PR body see real files.
+    //
+    // QF-20260706-632: live near-miss — run from the SHARED main repo root (not an
+    // isolated QF worktree) with no QF commit yet, this fallback previously attributed
+    // ANOTHER session's entire dirty baseline (~264 files) to this QF and attempted to
+    // git-add + commit all of it onto main; only the OS command-line length limit on the
+    // auto-generated commit message stopped it. Fence the fallback to isolated QF
+    // worktrees only (isInQFWorktree already exists for this exact guard class), plus a
+    // sanity cap — a single QF should never legitimately touch this many uncommitted files.
+    const WORKING_TREE_FALLBACK_FILE_CAP = 30;
     let diffRange = 'origin/main...HEAD';
     if (files.length === 0) {
-      const tracked = execSync('git diff HEAD --name-only', { encoding: 'utf-8', cwd: testDir })
-        .trim().split('\n').filter(f => f);
-      const untracked = execSync('git ls-files --others --exclude-standard', { encoding: 'utf-8', cwd: testDir })
-        .trim().split('\n').filter(f => f);
-      const working = [...new Set([...tracked, ...untracked])];
-      if (working.length > 0) {
-        files = working;
-        diffRange = 'HEAD';
-        console.log('   ℹ️  No committed diff vs origin/main; using working-tree changes (uncommitted QF).');
+      if (!isInQFWorktree(testDir)) {
+        console.log(`   ⚠️  Refusing working-tree fallback: ${testDir} is not an isolated QF worktree.`);
+        console.log('   ⚠️  Commit the QF changes first, or run completion from the QF worktree (.worktrees/qf/<QF-ID>).');
+      } else {
+        const tracked = execSync('git diff HEAD --name-only', { encoding: 'utf-8', cwd: testDir })
+          .trim().split('\n').filter(f => f);
+        const untracked = execSync('git ls-files --others --exclude-standard', { encoding: 'utf-8', cwd: testDir })
+          .trim().split('\n').filter(f => f);
+        const working = [...new Set([...tracked, ...untracked])];
+        if (working.length > WORKING_TREE_FALLBACK_FILE_CAP) {
+          console.log(`   ⚠️  Refusing working-tree fallback: ${working.length} dirty file(s) exceeds the ${WORKING_TREE_FALLBACK_FILE_CAP}-file sanity cap.`);
+          console.log('   ⚠️  Commit the QF changes explicitly, or pass an explicit file list.');
+        } else if (working.length > 0) {
+          files = working;
+          diffRange = 'HEAD';
+          console.log('   ℹ️  No committed diff vs origin/main; using working-tree changes (uncommitted QF).');
+        }
       }
     }
     filesChanged = files;
