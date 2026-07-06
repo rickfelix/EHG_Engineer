@@ -131,12 +131,7 @@ async function createQuickFix(options = {}) {
     estimatedLoc = options.estimatedLoc || 10;
   }
 
-  // QF-20260706-648: registry-wide target_application designation. When an explicit
-  // --target-application was given, validate it against the active registry (mirrors
-  // the fn_quick_fixes_validate_target_application DB trigger — fail fast here with
-  // the allowed list instead of surfacing a raw constraint error). When relying on
-  // cwd auto-detect, refuse a QF whose title/description names a different active
-  // venture instead of silently filing against the wrong repo.
+  // QF-20260706-648: registry-wide target_application designation.
   const activeApps = await loadActiveApplications(supabase);
   if (options.targetApplication) {
     const { valid, allowedNames } = validateTargetApplication(options.targetApplication, activeApps);
