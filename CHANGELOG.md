@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-07-06](#2026-07-06)
+  - [Bugfix](#bugfix)
 - [2026-07-05](#2026-07-05)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -73,6 +75,13 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-07-06
+
+### Bugfix
+- **`ADAM_GOVERNANCE_HEARTBEAT_V1` repo variable set — governance scan and Adam durable-source tick were both wired but permanently inert** - QF-20260705-083
+  - **What shipped**: Adversarial sweep J1 (SD-LEO-INFRA-ADVERSARIAL-VERIFICATION-SWEEP-001) REFUTED-DORMANT two prior SDs down to one root cause: `SD-LEO-INFRA-ENABLE-ADAM-GOVERNANCE-001`'s deliverable was flipping this repo variable on, and `SD-LEO-INFRA-ADAM-DURABLE-SOURCE-TRIGGER-001`'s cron tick + missing-run watchdog were gated on the same flag — but `gh variable list` never actually contained it, so every governance scan run exited `SUPPRESSED_FLAG_OFF` since both SDs completed. Set via `gh variable set ADAM_GOVERNANCE_HEARTBEAT_V1 --body on`.
+  - **Verification**: Ran `node scripts/adam-opportunity-scan.cjs --scan --scope harness` locally with the flag on — confirmed `ADAM_OK scope=harness` output (real evaluation path) instead of `SUPPRESSED_FLAG_OFF`, ledger JSON shows `"flag":"on"`.
 
 ## 2026-07-05
 
