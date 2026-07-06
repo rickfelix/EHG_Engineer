@@ -343,7 +343,7 @@ async function main() {
     console.log('Usage: node semantic-target-application-validator.js <SD-ID> [options]');
     console.log('');
     console.log('Options:');
-    console.log('  --model <model>       Override model (default: gpt-5.2)');
+    console.log('  --model <model>       Override model (default: resolved via lib/config/model-config.js)');
     console.log('  --threshold <N>       Confidence threshold 0-100 (default: 80)');
     console.log('');
     console.log('Environment:');

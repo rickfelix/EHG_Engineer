@@ -12,6 +12,7 @@
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { getValidationClient } from '../../../lib/llm/client-factory.js';
+import { getClaudeModel } from '../../../lib/config/model-config.js';
 
 dotenv.config();
 
@@ -109,7 +110,7 @@ Score the built output against the reference on a 0-100 scale for ${domain.label
 
   try {
     const response = await client.messages.create({
-      model: client._model || 'claude-haiku-4-5-20251001',
+      model: client._model || getClaudeModel('fast'),
       max_tokens: 1024,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],

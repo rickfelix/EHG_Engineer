@@ -66,7 +66,7 @@ export class AIQualityJudge {
     console.log('\n📜 Constitution Validation...');
     const constitutionResult = await this.constitutionValidator.validate(improvement, {
       evaluator_model: this.evaluatorModel,
-      proposer_model: options.proposer_model || 'claude-sonnet-4-20250514'
+      proposer_model: options.proposer_model || MODEL_CONFIG.proposer.model
     });
 
     if (!constitutionResult.passed) {
