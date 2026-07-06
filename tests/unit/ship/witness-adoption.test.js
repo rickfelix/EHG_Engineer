@@ -85,6 +85,45 @@ describe('classifyMerges / detectUnwitnessedMerges (identity matching)', () => {
   });
 });
 
+describe('detectUnwitnessedMerges grace window (QF-20260704-403)', () => {
+  const now = Date.parse('2026-07-04T12:00:00Z');
+
+  it('a merge inside the grace window (< 5 min old) is NOT counted as unwitnessed', () => {
+    const merges = [{ repo: 'rickfelix/ehg', prNumber: 1, mergedAt: '2026-07-04T11:57:00Z' }]; // 3 min ago
+    const result = detectUnwitnessedMerges(merges, [], { now });
+    expect(result.count).toBe(0);
+    expect(result.unwitnessed).toEqual([]);
+  });
+
+  it('a merge older than the grace window IS counted as unwitnessed', () => {
+    const merges = [{ repo: 'rickfelix/ehg', prNumber: 1, mergedAt: '2026-07-04T11:50:00Z' }]; // 10 min ago
+    const result = detectUnwitnessedMerges(merges, [], { now });
+    expect(result.count).toBe(1);
+  });
+
+  it('total stays the full classified count regardless of the grace window', () => {
+    const merges = [
+      { repo: 'rickfelix/ehg', prNumber: 1, mergedAt: '2026-07-04T11:57:00Z' }, // grace-window, excluded from count
+      { repo: 'rickfelix/ehg', prNumber: 2, mergedAt: '2026-07-04T11:50:00Z' }, // older, counted
+    ];
+    const result = detectUnwitnessedMerges(merges, [], { now });
+    expect(result.total).toBe(2);
+    expect(result.count).toBe(1);
+  });
+
+  it('a custom graceMs is respected', () => {
+    const merges = [{ repo: 'rickfelix/ehg', prNumber: 1, mergedAt: '2026-07-04T11:59:00Z' }]; // 1 min ago
+    expect(detectUnwitnessedMerges(merges, [], { now, graceMs: 0 }).count).toBe(1);
+    expect(detectUnwitnessedMerges(merges, [], { now, graceMs: 2 * 60 * 1000 }).count).toBe(0);
+  });
+
+  it('defaults to Date.now() when now is not injected (still excludes fresh merges)', () => {
+    const merges = [{ repo: 'rickfelix/ehg', prNumber: 1, mergedAt: new Date().toISOString() }];
+    const result = detectUnwitnessedMerges(merges, []);
+    expect(result.count).toBe(0);
+  });
+});
+
 describe('isInvalidated (QF-20260703-979)', () => {
   it('true for a row carrying a synthetic INVALIDATED rung', () => {
     const row = { repo: 'rickfelix/marketlens', pr_number: 2, rungs: [{ id: 'P5', status: 'pass' }, { id: 'INVALIDATED', status: 'fail', reason: 'false specimen' }] };
