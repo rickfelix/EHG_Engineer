@@ -43,6 +43,21 @@
         "source_commit": "5aa8eac5002ccf111dc2c359a87c91ab5391b42a"
       },
       "created_at": "2026-07-06T08:00:24.434Z"
+    },
+    {
+      "domain": "deviation-record-writer",
+      "path": "golden-references/deviation-record-writer/",
+      "guide": "application-guide.md — deviation-record writer: write-at-divergence, structured-not-narrative, closed weight taxonomy + reason-quality legality, reconcile referent-set-difference (four doctrines vs silent scope-shrink)",
+      "door_class_of_application": "two_way",
+      "provenance": {
+        "source_files": [
+          "lib/eva/deviation-ledger.js (recordDeviation/readDeviations, DEVIATION_WEIGHTS incl declared-descope; docstring = the thesis)",
+          "lib/eva/post-build-verdict-engine.js (computeDisposition/findQualifyingDeviation — reason-quality legality) + post_build_verdicts (silent-shrink reconcile query)",
+          "lib/eva/adherence-scorer.js + journey-evidence-merge.js (disposition/deviation_artifact_id read side); token-stuffing failure mode (REFERENT-AUDIT); weight!=disposition caveat"
+        ],
+        "source_commit": "1041b7bf475b76dee7aac56cf6104b1421be6910"
+      },
+      "created_at": "2026-07-06T09:44:28.219Z"
     }
   ]
 }
