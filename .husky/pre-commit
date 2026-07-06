@@ -175,6 +175,31 @@ fi
 echo "✅ CLAUDE*.md protection check passed"
 
 # ============================================================================
+# STAGE 0.55: CLAUDE*.md Conflict-Marker Guard (BLOCKING)
+# ============================================================================
+# QF-20260705-104: mechanical guard against unresolved merge/stash conflict
+# markers surviving into a commit. A stash-pop corruption left conflict
+# markers in 16 generated CLAUDE*.md files for ~75min, caught only by an
+# incidental hash-probe (Solomon feedback cycle 11). Scans the working tree
+# (not just staged diffs) so corruption is caught regardless of stage state.
+# ============================================================================
+CONFLICTED_CLAUDE_FILES=$(grep -l '^<<<<<<< ' CLAUDE*.md 2>/dev/null || true)
+
+if [ ! -z "$CONFLICTED_CLAUDE_FILES" ]; then
+  echo ""
+  echo "❌ BLOCKED: Unresolved conflict markers found in CLAUDE*.md files!"
+  echo ""
+  echo "$CONFLICTED_CLAUDE_FILES" | sed 's/^/   - /'
+  echo ""
+  echo "   Resolve the conflict, then regenerate: node scripts/generate-claude-md-from-db.js"
+  echo "   Emergency bypass (logged): git commit --no-verify"
+  echo ""
+  exit 1
+fi
+
+echo "✅ CLAUDE*.md conflict-marker guard passed"
+
+# ============================================================================
 # STAGE 0.6: Script Reference Protection (BLOCKING)
 # ============================================================================
 # SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-002: Prevent deletion of referenced scripts
