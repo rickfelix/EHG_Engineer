@@ -34,11 +34,17 @@ describe('classifyVenture', () => {
     // is_cancelled is applied by the caller (runAudit) from ventures.status, not by classifyVenture itself.
   });
 
-  // TS-5: Canvas AI-class -- repo entirely absent, no build artifact
-  it('no build artifact + repo absent (commitCount null) => latent_at_risk, not guessed', () => {
+  // TS-5: Canvas AI-class -- repo entirely absent, no build artifact. This is a DIFFERENT
+  // evidentiary state from Market Modeling SaaS (TS-2: repo confirmed present with zero
+  // commits) -- an absent directory cannot confirm whether the venture was never built or was
+  // built and later removed, so it must NOT be silently defaulted to either realized_defect
+  // OR latent_at_risk (PLAN_VERIFICATION row a549d94f caught an earlier version of this test
+  // asserting the wrong, implementation-conformed expectation instead of the PRD's own spec).
+  it('no build artifact + repo directory absent => insufficient_evidence, not guessed as latent_at_risk', () => {
     const v = classifyVenture({ hasBuildArtifact: false, commitCount: null, repoExists: false, structuralUi: false, stitchCount: 0, designFidelityScore: null });
-    expect(v.build_state).toBe('latent');
-    expect(v.disposition).toBe('latent_at_risk');
+    expect(v.build_state).toBe('insufficient_evidence');
+    expect(v.disposition).toBe('insufficient_evidence');
+    expect(v.disposition).not.toBe('latent_at_risk');
   });
 
   it('build artifact recorded but real committed code exists with no artifact => flagged as insufficient_evidence, not guessed', () => {
@@ -82,16 +88,22 @@ describe('classifyVenture', () => {
   });
 });
 
-// TS-9: the build_model='leo_bridge' filter must return exactly the audited venture set --
-// a named-set assertion (not just a count) so a future added/removed venture trips this test.
-function fakeSupabase(ventureRows) {
+// TS-9/TS-10: fake supabase client covering ventures, applications (incl. the orphaned-rows
+// query), venture_artifacts, and strategic_directives_v2 (remediation_status lookup).
+function fakeSupabase({ ventureRows = [], orphanedApps = [] } = {}) {
   return {
     from(table) {
       if (table === 'ventures') {
         return { select: () => ({ eq: (col, val) => Promise.resolve({ data: ventureRows.filter((v) => v[col] === val), error: null }) }) };
       }
       if (table === 'applications') {
-        return { select: () => Promise.resolve({ data: [], error: null }) }; // no local_path -> repoExists=false for every venture
+        return {
+          select: () => ({
+            // bare await supabase.from('applications').select(...) -- no local_path anywhere
+            then: (resolve) => resolve({ data: [], error: null }),
+            is: (col, val) => Promise.resolve({ data: val === null ? orphanedApps : [], error: null }),
+          }),
+        };
       }
       if (table === 'venture_artifacts') {
         return {
@@ -102,6 +114,9 @@ function fakeSupabase(ventureRows) {
             }),
           }),
         };
+      }
+      if (table === 'strategic_directives_v2') {
+        return { select: () => ({ eq: () => ({ not: () => Promise.resolve({ data: [], error: null }) }) }) };
       }
       throw new Error(`unexpected table in fakeSupabase: ${table}`);
     },
@@ -120,10 +135,24 @@ describe('runAudit venture filter (TS-9)', () => {
       { id: '7', name: 'Seeded Repo Venture', status: 'active', build_model: 'seeded_repo' },
       { id: '8', name: 'Untyped Venture', status: 'active', build_model: null },
     ];
-    const results = await runAudit({ supabase: fakeSupabase(ventureRows), dryRun: true });
+    const { results } = await runAudit({ supabase: fakeSupabase({ ventureRows }), dryRun: true });
     const names = results.map((r) => r.venture_name).sort();
     expect(names).toEqual(['Canvas AI', 'CronGenius', 'CronLinter', 'DataDistill', 'Market Modeling SaaS', 'MarketLens']);
     expect(names).not.toContain('Seeded Repo Venture');
     expect(names).not.toContain('Untyped Venture');
+  });
+});
+
+// TS-10: orphaned applications rows (no linked venture) must surface separately, never merged
+// into or silently dropped from the ventures ledger.
+describe('runAudit orphaned applications (TS-10)', () => {
+  it('surfaces venture_id=NULL applications rows in a separate result set', async () => {
+    const orphanedApps = [
+      { name: 'Cron Canary', local_path: 'C:/Users/rickf/Projects/_EHG/cron-canary' },
+      { name: 'PrivacyPatrol AI', local_path: 'C:/Users/rickf/Projects/_EHG/privacypatrol-ai' },
+    ];
+    const { results, orphanedApplications } = await runAudit({ supabase: fakeSupabase({ ventureRows: [], orphanedApps }), dryRun: true });
+    expect(results).toEqual([]); // no ventures in this fixture -- proves the two result sets are independent
+    expect(orphanedApplications.map((a) => a.name).sort()).toEqual(['Cron Canary', 'PrivacyPatrol AI']);
   });
 });
