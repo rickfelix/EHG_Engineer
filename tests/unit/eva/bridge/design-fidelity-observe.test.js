@@ -34,6 +34,17 @@ describe('isCustomerFacingLanding — detects venture landings, fences backend l
       'DataDistill D1 distillation engine',
     )).toBe(false);
   });
+  it('FALSE: a backend worker mentioning hero-image / landing zone (FR-1 — page-noun required, not bare hero/landing)', () => {
+    expect(isCustomerFacingLanding(
+      { target_application: 'datadistill' },
+      'the hero-image worker that warms the landing thumbnail cache in the landing zone',
+      'DataDistill hero-image worker',
+    )).toBe(false);
+  });
+  it('TRUE: front page / product page (FR-4 recall)', () => {
+    expect(isCustomerFacingLanding({ target_application: 'venturex' }, 'rebuild the product page', 'x')).toBe(true);
+    expect(isCustomerFacingLanding({ target_application: 'venturex' }, 'the front page redesign', 'x')).toBe(true);
+  });
   it('FALSE: EHG_Engineer harness target is never a customer-facing landing', () => {
     expect(isCustomerFacingLanding({ target_application: 'EHG_Engineer' }, 'a landing page', 'landing')).toBe(false);
   });

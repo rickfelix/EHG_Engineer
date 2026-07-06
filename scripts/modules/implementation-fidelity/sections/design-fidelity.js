@@ -116,22 +116,25 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
         // observe-only WOULD-REJECT. hasDesignPass gates it so a designed landing records nothing
         // (zero false-rejects — required for the observe->bind criterion). SWALLOW-ALL; never blocks.
         let childSds = [];
-        try {
-          if (sdResolved?.id) {
-            const { data: kids } = await supabase
+        let childLookupOk = false; // only record a would-reject when we could actually determine
+        try {                      // the design-pass state — a transient child-lookup failure must
+          if (sdResolved?.id) {    // not manufacture a spurious observe metric (re-verify FR-3).
+            const { data: kids, error: kidsErr } = await supabase
               .from('strategic_directives_v2')
               .select('sd_type,title,status')
               .eq('parent_sd_id', sdResolved.id);
-            childSds = kids || [];
+            if (!kidsErr) { childSds = kids || []; childLookupOk = true; }
           }
         } catch { /* observe-only: a child lookup failure must never affect the gate */ }
-        await observeVentureCompletionDesignPass(landingSd, {
-          designArtifacts: [], // Stitch/Lovable design-token source deprecated (SD out-of-scope note)
-          childSds,
-          scopeText: scopeToCheck,
-          titleText: sd?.title,
-          judgedSessionId,
-        }, { supabase });
+        if (childLookupOk) {
+          await observeVentureCompletionDesignPass(landingSd, {
+            designArtifacts: [], // Stitch/Lovable design-token source deprecated (SD out-of-scope note)
+            childSds,
+            scopeText: scopeToCheck,
+            titleText: sd?.title,
+            judgedSessionId,
+          }, { supabase });
+        }
         // OBSERVE-ONLY: intentionally do NOT return/block here — the existing exemption logic
         // still runs and still awards its 25/25. Binding is a separate, hand-verified step.
       }
