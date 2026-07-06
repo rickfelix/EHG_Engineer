@@ -50,10 +50,16 @@ function symptomOf(err) {
   try { if (err && typeof err.message === 'string' && err.message) return err.message; } catch { /* throwing getter */ }
   if (err === null || err === undefined) return String(err);
   if (typeof err !== 'object') { try { return String(err); } catch { return 'unserializable-throw'; } }
-  try { const j = JSON.stringify(err); if (j && j !== '{}') return j; } catch { /* circular / throwing toJSON */ }
+  try { const j = JSON.stringify(err); if (j && j !== '{}') return j; } catch { /* circular / throwing toJSON / BigInt */ }
   try {
     const name = (err.constructor && err.constructor.name) || 'Object';
-    return `${name}{${Object.keys(err).slice(0, 12).sort().join(',')}}`;
+    // Include VALUES, not just key NAMES — else distinct non-JSON throws with the same
+    // key-shape ({code:1n} vs {code:2n}) collapse to one dedup row (a swallow of the 2nd).
+    const parts = Object.keys(err).slice(0, 12).sort().map((k) => {
+      let v; try { v = String(err[k]); } catch { v = '?'; }
+      return `${k}=${v.slice(0, 64)}`;
+    });
+    return `${name}{${parts.join(',')}}`;
   } catch { return 'unserializable-throw'; } // null-proto object
 }
 /** Epoch ms from the INJECTED clock — never throws; a hostile clock falls back to 0. */
@@ -97,6 +103,7 @@ function buildEntry(err, deps) {
  * @returns {{ ok: true, value: any } | { ok: false, error: any, deduped: boolean }}
  */
 export function captureBoundary(op, deps = {}) {
+  deps = deps || {};                     // an explicit `null` must not slip past the `= {}` default
   let value;
   try {
     value = op();                        // D4: throw-vs-return discrimination, NOT truthiness
@@ -115,6 +122,7 @@ export function captureBoundary(op, deps = {}) {
  * @returns {Promise<{ ok: true, value: any } | { ok: false, error: any, deduped: boolean }>}
  */
 export async function captureBoundaryAsync(op, deps = {}) {
+  deps = deps || {};                     // an explicit `null` must not slip past the `= {}` default
   let value;
   try {
     value = await op();
@@ -129,11 +137,11 @@ export async function captureBoundaryAsync(op, deps = {}) {
  *  than propagate — never re-becoming the swallow footgun. */
 function guard(err, deps, fn) {
   try { return fn(); }
-  catch (captureErr) { safeLog(deps.logger, `[capture-seam] capture failed: ${symptomOf(captureErr)}`); return { ok: false, error: err, deduped: false }; }
+  catch (captureErr) { safeLog(deps && deps.logger, `[capture-seam] capture failed: ${symptomOf(captureErr)}`); return { ok: false, error: err, deduped: false }; }
 }
 async function guardAsync(err, deps, fn) {
   try { return await fn(); }
-  catch (captureErr) { safeLog(deps.logger, `[capture-seam] capture failed: ${symptomOf(captureErr)}`); return { ok: false, error: err, deduped: false }; }
+  catch (captureErr) { safeLog(deps && deps.logger, `[capture-seam] capture failed: ${symptomOf(captureErr)}`); return { ok: false, error: err, deduped: false }; }
 }
 
 /** The sync failure path — best-effort capture (D1/D2/D3). */

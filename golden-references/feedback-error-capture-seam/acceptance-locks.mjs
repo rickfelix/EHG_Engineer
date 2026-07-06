@@ -48,13 +48,15 @@ export function buildLocks() {
       const rec = fnBody(s, 'record');
       if (!cb || !g || !sl || !sy || !ud || !rec) return false;
       const catchGuards = /catch\s*\([^)]*\)\s*\{\s*return guard\(/.test(cb);
+      const depsCoerced = /deps\s*=\s*deps\s*\|\|\s*\{\}/.test(cb); // an explicit null must not slip the default
       const guardCatchReturns = /catch\s*\([^)]*\)\s*\{[\s\S]*?return\s*\{\s*ok:\s*false/.test(g);
+      const guardLogNullSafe = /safeLog\(\s*deps\s*&&\s*deps\.logger/.test(g); // catch handler must not deref null deps
       const safeLoggerWrapped = /try\s*\{\s*logger\.error\([\s\S]*?\}\s*catch/.test(sl);
       const symptomGuarded = /try\s*\{[\s\S]*?String\(err\)[\s\S]*?\}\s*catch/.test(sy);
       const clockGuarded = /Number\.isFinite/.test(ud);
       const sinkWrapped = /try\s*\{\s*sink\.append\([\s\S]*?\}\s*catch/.test(rec);
       const noBareThrow = !/\bthrow\b/.test(cb) && !/\bthrow\b/.test(rec);
-      return catchGuards && guardCatchReturns && safeLoggerWrapped && symptomGuarded && clockGuarded && sinkWrapped && noBareThrow;
+      return catchGuards && depsCoerced && guardCatchReturns && guardLogNullSafe && safeLoggerWrapped && symptomGuarded && clockGuarded && sinkWrapped && noBareThrow;
     },
 
     // D2 (never-silent): the FIRST-capture path emits BOTH a durable row (sink.append)

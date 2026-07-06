@@ -64,6 +64,11 @@ function captureContractViolations(cb) {
     try { cb(() => { throw Object.create(null); }, DEPS(h)); } catch { threw = true; }
     if (threw) v.push('throws-on-hostile-input');
   }
+  { // null-deps: a hostile NULL deps bag + a throwing op must NOT make the seam throw (the re-verify blocker)
+    let threw = false;
+    try { cb(() => { throw new Error('n'); }, null); } catch { threw = true; }
+    if (threw) v.push('throws-on-null-deps');
+  }
   { // healthy-path-silent: success -> no row, no stderr, ok:true
     const h = makeHarness();
     const r = cb(() => 1, DEPS(h));
@@ -103,6 +108,12 @@ const DEDUP_BREAK = (op, d) => {
 const SINK_THROWS_PROPAGATES = (op, d) => {
   try { return { ok: true, value: op() }; } catch (e) {
     d.sink.append({ category: d.category, dedup_hash: 'h', symptom: 'x' }); d.logger.error('x'); // UNGUARDED
+    return { ok: false, error: e };
+  }
+};
+const NULL_DEPS_UNSAFE = (op, d) => { // no `d = d || {}` coercion -> derefs a null deps bag
+  try { return { ok: true, value: op() }; } catch (e) {
+    d.sink.append({ symptom: String(e && e.message) }); d.logger.error('x');
     return { ok: false, error: e };
   }
 };
@@ -180,6 +191,12 @@ describe('behavioral contract (the real enforcement — runs against the ADAPTED
     expect(r.ok).toBe(false);
   });
 
+  it('NEVER-THROWS when deps is explicitly NULL (the null-deps hole: `= {}` only defaults undefined): returns ok:false', () => {
+    let r;
+    expect(() => { r = captureBoundary(() => { throw new Error('boom'); }, null); }).not.toThrow();
+    expect(r.ok).toBe(false);
+  });
+
   it('NON-ERROR throw: a thrown string is captured safely with a stable hash (never throws)', () => {
     const h = makeHarness();
     let r;
@@ -197,6 +214,13 @@ describe('behavioral contract (the real enforcement — runs against the ADAPTED
     captureBoundary(() => { throw { code: 'E1', detail: 'disk full' }; }, DEPS(h));
     captureBoundary(() => { throw { code: 'E2', detail: 'network down' }; }, DEPS(h));
     expect(h.rows).toHaveLength(2); // bare String() would collapse both to "[object Object]"
+  });
+
+  it('NO OVER-DEDUP (non-serializable): two DISTINCT BigInt-bearing throws (JSON.stringify throws) are two rows', () => {
+    const h = makeHarness();
+    captureBoundary(() => { throw { code: 1n, detail: 'disk' }; }, DEPS(h)); // BigInt -> JSON path throws -> value fallback
+    captureBoundary(() => { throw { code: 2n, detail: 'net' }; }, DEPS(h));
+    expect(h.rows).toHaveLength(2); // the ctor+keys fallback must include VALUES, not just key names
   });
 
   it('BEST-EFFORT: a throwing sink.append does NOT propagate; a fallback stderr is still emitted', () => {
@@ -293,6 +317,20 @@ describe('async variant (captureBoundaryAsync — the estate sink is async)', ()
     r.value.catch(() => {});                 // swallow the rejection so it is not an unhandled rejection here
     expect(h.rows).toHaveLength(0);          // documented in the module header + guide
   });
+
+  it('NEVER-REJECTS when deps is explicitly NULL: an async rejection returns ok:false', async () => {
+    let r;
+    await expect((async () => { r = await captureBoundaryAsync(async () => { throw new Error('boom'); }, null); })()).resolves.not.toThrow();
+    expect(r.ok).toBe(false);
+  });
+
+  it('async teeth: a SWALLOW-async copy is OBSERVABLY broken (no row despite a rejection)', async () => {
+    const swallowAsync = async (op) => { try { return { ok: true, value: await op() }; } catch (e) { return { ok: false, error: e }; } };
+    const h = makeHarness();
+    const r = await swallowAsync(async () => { throw new Error('x'); });
+    expect(r.ok).toBe(false);
+    expect(h.rows).toHaveLength(0);          // a delegate can observe the async swallow — the async path IS checkable
+  });
 });
 
 describe('the capture CONTRACT has TEETH (proves enforcement reaches a delegate copy)', () => {
@@ -313,6 +351,9 @@ describe('the capture CONTRACT has TEETH (proves enforcement reaches a delegate 
   });
   it('NEGATIVE-COPY: a SINK-THROWS-PROPAGATES copy (unguarded sink) is REJECTED', () => {
     expect(captureContractViolations(SINK_THROWS_PROPAGATES)).toContain('sink-throws-propagates');
+  });
+  it('NEGATIVE-COPY: a NULL-DEPS-UNSAFE copy (derefs a null deps bag) is REJECTED', () => {
+    expect(captureContractViolations(NULL_DEPS_UNSAFE)).toContain('throws-on-null-deps');
   });
   it('NEGATIVE-COPY: a NOT-HARDENED copy (throws on a hostile input) is REJECTED', () => {
     const notHardened = (op, d) => {
@@ -347,6 +388,14 @@ describe('doctrine mutations fail named checks (miss direction)', () => {
   });
   it('re-throwing from the boundary catch fails never_throws_best_effort', () => {
     const m = CANON.replace('return guard(err, deps, () => record(err, deps));', 'throw err;');
+    expect(judgeSource(m).failed).toContain('never_throws_best_effort');
+  });
+  it('removing the deps null-coercion fails never_throws_best_effort', () => {
+    const m = CANON.replace('deps = deps || {};', 'deps = deps;'); // first occurrence = captureBoundary
+    expect(judgeSource(m).failed).toContain('never_throws_best_effort');
+  });
+  it('an unguarded null-deps deref in the guard catch fails never_throws_best_effort', () => {
+    const m = CANON.replace(/safeLog\(deps && deps\.logger/g, 'safeLog(deps.logger');
     expect(judgeSource(m).failed).toContain('never_throws_best_effort');
   });
   it('an unguarded logger fails never_throws_best_effort', () => {

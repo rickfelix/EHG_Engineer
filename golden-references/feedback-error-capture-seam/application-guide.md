@@ -31,6 +31,20 @@ this folder.
    call site so recurrences dedup.
 5. Keep `symptom` derived safely from the thrown value (a non-`Error` throw must not
    break the coercion).
+6. Keep `source` a stable STRING per call site (an object `source` collapses under
+   `String()` to `[object Object]` and over-dedups distinct call sites).
+
+### Async ops (REQUIRED when `op` OR `sink.append` returns a Promise)
+
+`captureBoundary` is SYNCHRONOUS. If `op` is `async` (or returns a Promise), a rejection
+is NOT a synchronous throw — the sync seam returns `{ ok:true, value:<rejected promise> }`
+and captures NOTHING (the rejection later surfaces as an unhandledRejection outside the
+seam). This is the swallow class the reference exists to defeat, so it is a footgun on the
+teaching surface. **Use `captureBoundaryAsync` whenever `op` or your sink is async** — and
+the estate's real sink (`emit-feedback.js` `emitFeedback`) IS `async`, so an application
+adapter almost always needs the async variant. `captureBoundaryAsync` awaits `op()` (a
+rejection IS a captured failure) and awaits the sink (so an async write failure is caught).
+Both share every doctrine below and neither ever throws/rejects.
 
 ## Invariants
 
