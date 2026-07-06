@@ -73,6 +73,21 @@
         "source_commit": "de44b5d368694634072e7849db2b78b302806a00"
       },
       "created_at": "2026-07-06T11:19:52.727Z"
+    },
+    {
+      "domain": "idempotent-composite-upsert",
+      "path": "golden-references/idempotent-composite-upsert/",
+      "guide": "application-guide.md — idempotent composite-key upsert/write seam: full-key upsert (converge-to-latest), inputs-not-from-mutated-row (version-counter carve-out), deterministic read-back, verify-landed + explicit updated_at FAIL LOUD (four doctrines vs the composite-upsert bug class)",
+      "door_class_of_application": "two_way",
+      "provenance": {
+        "source_files": [
+          "lib/eva/post-build-verdict-engine.js upsertVerdict (POSITIVE: full-key onConflict venture_id,artifact_type,claim_ref + explicit updated_at + select().single() verify)",
+          "lib/coordinator/convergence-ledger.js upsertStage (CAUTION: no verify + no explicit updated_at) + lib/adam/task-ledger.js (CAUTION: no explicit updated_at) + lib/eva/archplan-upsert.js (CAUTION: version=existing.version+1 racy read-modify-write)",
+          "the composite-key upsert bug class: unordered-limit1 stale read; updated_at-no-trigger; input-from-mutated-row; supabase-js silent CHECK/enum no-op"
+        ],
+        "source_commit": "88d858239ff90560a28118eaa754c9e4b9114863"
+      },
+      "created_at": "2026-07-06T13:42:27.056Z"
     }
   ]
 }
