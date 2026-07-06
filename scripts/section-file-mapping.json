@@ -33,6 +33,7 @@
       "git_commit_guidelines",
       "pr_size_guidelines",
       "database_first_enforcement_expanded",
+      "enforcement_rollout_default",
       "supabase_operations",
       "database_column_reference",
       "pattern_search_guide",
