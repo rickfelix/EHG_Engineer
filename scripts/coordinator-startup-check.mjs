@@ -191,6 +191,15 @@ export const STANDARD_LOOPS = [
   // Twice-hourly off-minute cadence (cheap single registry scan; idempotent re-run).
   { key: 'liveness-watcher', label: 'Periodic-process liveness watcher-of-watchers (twice-hourly, durable)', script: 'periodic-liveness-watcher.mjs', cron: '17,47 * * * *',
     prompt: 'node scripts/periodic-liveness-watcher.mjs' },
+  // QF-20260705-797 (J1 adversarial sweep REFUTED-DORMANT, scoped to FR-1 of
+  // SD-LEO-FIX-SOLOMON-RECOMMENDATION-GUARDRAIL-001): solomon-ledger-pending-resurface.cjs
+  // shipped with an npm script only — no scheduled invoker anywhere — so aged
+  // solomon_advice_outcome_ledger rows never resurfaced into Adam's inbox. Cheap (single SELECT
+  // + per-row dedup check), fail-open (no active Adam session -> no-op), and self-rate-limits
+  // to once per stale ledger row per day via its own payload.dedup_key, so a frequent tick is
+  // safe. Also composed into scripts/coordinator-quiet-tick.mjs's COMPOSED_CORES.
+  { key: 'solomon-ledger-resurface', label: 'Solomon ledger-pending resurface (aged advice-outcome rows -> Adam inbox)', script: 'solomon-ledger-pending-resurface.cjs', cron: '13,43 * * * *',
+    prompt: 'node scripts/solomon-ledger-pending-resurface.cjs' },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.
