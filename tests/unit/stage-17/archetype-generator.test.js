@@ -145,5 +145,17 @@ describe('archetype-generator', () => {
       const results = await generateArchetypesForAllScreens('v-1', supabase);
       expect(results).toHaveLength(0);
     });
+
+    test('gives distinct screenIds to two screens that resolve to the same classifySurface page_type (regression: same-slug screens must not overwrite each other)', async () => {
+      const supabase = createMockSupabaseWithScreens([
+        { name: 'Settings' },
+        { name: 'Settings' },
+      ]);
+      const results = await generateArchetypesForAllScreens('v-1', supabase);
+      expect(results).toHaveLength(2);
+      expect(results[0].screenId).not.toBe(results[1].screenId);
+      // 2 screens * 4 variants each — none overwritten
+      expect(mockWriteArtifact).toHaveBeenCalledTimes(8);
+    });
   });
 });
