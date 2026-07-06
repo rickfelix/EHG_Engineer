@@ -11,7 +11,7 @@ import crypto from 'crypto';
 import { createRequire } from 'node:module';
 
 import { CLAUDEMDGeneratorV3, KNOWN_GENERATED_FILES, verifyFileContentHash } from '../../scripts/modules/claude-md-generator/index.js';
-import { parseOnlyFlag } from '../../scripts/generate-claude-md-from-db.js';
+import { parseOnlyFlag, detectConflictedState } from '../../scripts/generate-claude-md-from-db.js';
 
 const require = createRequire(import.meta.url);
 const { evaluatePublicationInvariants } = require('../../scripts/protocol-publication-audit.cjs');
@@ -143,5 +143,53 @@ describe('FR-4: --only scoped regeneration', () => {
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_COORDINATOR_DIGEST.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_SOLOMON.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_SOLOMON_DIGEST.md');
+  });
+});
+
+describe('QF-20260705-104: detectConflictedState (generator entry guard, seam 2)', () => {
+  it('clean CLAUDE*.md files, no git repo => null (no false positive)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'conflict-guard-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '# Clean file\nno markers here\n');
+      expect(detectConflictedState(dir)).toBeNull();
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('a CLAUDE*.md file with a conflict marker is reported', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'conflict-guard-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'CLAUDE_CORE.md'), '# Body\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch\n');
+      const result = detectConflictedState(dir);
+      expect(result).not.toBeNull();
+      expect(result.markered).toEqual(['CLAUDE_CORE.md']);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('multiple markered files are all reported', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'conflict-guard-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '<<<<<<< HEAD\nx\n');
+      fs.writeFileSync(path.join(dir, 'CLAUDE_LEAD.md'), '<<<<<<< HEAD\ny\n');
+      fs.writeFileSync(path.join(dir, 'CLAUDE_PLAN.md'), '# clean\n');
+      const result = detectConflictedState(dir);
+      expect(result.markered.sort()).toEqual(['CLAUDE.md', 'CLAUDE_LEAD.md']);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('non-CLAUDE*.md files are ignored even with markers', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'conflict-guard-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'README.md'), '<<<<<<< HEAD\nx\n');
+      expect(detectConflictedState(dir)).toBeNull();
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('fails open on a git status error (no git repo) rather than throwing', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'conflict-guard-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '# clean, no markers\n');
+      expect(() => detectConflictedState(dir)).not.toThrow();
+      expect(detectConflictedState(dir)).toBeNull();
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });
