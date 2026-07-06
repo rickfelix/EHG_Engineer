@@ -14,12 +14,22 @@
 //     predicates deciding the same question at different call sites is the
 //     schism class.)
 //  5. TOTAL, EXCEPTION-SAFE VERDICT: any exception during evaluation resolves
-//     to BLOCK with a reason. Throw is never pass; a swallowed error is never
-//     silence.
+//     to BLOCK. But a code-bug BLOCK must be DISTINGUISHABLE from a policy
+//     BLOCK — the catch path sets `internal_error: true` so a consumer can
+//     alert on it instead of mistaking a TypeError for a legitimate gate
+//     decision. Throw is never pass; a swallowed error is never SILENT
+//     (the flag is the alarm).
 //
-// Verdict shape {allowed: boolean, reason: string, evidence: array} is a
-// normalization of the estate's best incumbent (the eva decision-filter
-// triad); reason is present on EVERY negative path.
+// Verdict shape: {allowed: boolean, reason: string, evidence: array,
+// internal_error?: true}. This is a DELIBERATELY BINARY gate verdict. The
+// estate's decision engines are NON-binary on purpose:
+//   - lib/eva/decision-filter-engine.js: {auto_proceed, triggers, recommendation}
+//     where recommendation is an action enum (AUTO_PROCEED / PRESENT_TO_CHAIRMAN
+//     / AUTO_PROCEED_WITH_MITIGATIONS)
+//   - lib/governance/decision-filter-engine.js: {decision: GO|ESCALATE|BLOCK, reasoning}
+// If your gate needs an ESCALATE / present-to-chairman state, DO NOT collapse
+// to this boolean — adopt the tri-state. Use this binary shape only when the
+// decision is genuinely allow-or-block. `reason` is present on EVERY path.
 
 const REQUIRED_INPUTS = Object.freeze(['venture_id', 'stage_number', 'artifact_count', 'blocking_issues']);
 
@@ -56,11 +66,15 @@ export function evaluateGate(inputs) {
     }
     return { allowed: true, reason: `stage ${inputs.stage_number}: all checks passed`, evidence };
   } catch (err) {
-    // Doctrine 5: totality — an exception is a BLOCK with a reason, never a
-    // pass and never a throw-through. (Estate defect classes: a gauge family
-    // reading throw as advisory-pass; a forward-gate swallowing throws open.)
+    // Doctrine 5: totality — an exception is a BLOCK, never a pass and never a
+    // throw-through. `internal_error: true` makes a code-bug BLOCK top-level
+    // distinguishable from a policy BLOCK so a consumer ALERTS rather than
+    // treating a TypeError as a legitimate gate decision. (Estate defect
+    // classes this corrects: a gauge family reading throw as advisory-pass; a
+    // forward-gate swallowing throws open — both make bugs look like passes.)
     return {
       allowed: false,
+      internal_error: true,
       reason: `evaluation error: ${err && err.message ? err.message : String(err)}`,
       evidence: [{ check: 'evaluation_totality', error: String(err && err.message || err) }],
     };
