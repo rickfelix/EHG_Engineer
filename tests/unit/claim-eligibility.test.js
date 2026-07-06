@@ -89,6 +89,24 @@ describe('draftDepsSatisfied', () => {
     const sb = makeSb({}, { errorOnIn: true });
     await expect(draftDepsSatisfied(sb, { dependencies: [{ sd_key: 'SD-A' }] }, { throwOnError: true })).rejects.toBeTruthy();
   });
+
+  // QF-20260706-786: metadata.blocked_on_sd re-derived from LIVE status, independent of
+  // requires_human_action / blocked_on_sd_resolved (live incident: Bravo self-cleared the
+  // rha fence on LANDING-REBUILD-001 without the referenced SD having actually completed).
+  it('false when metadata.blocked_on_sd references a not-yet-completed SD, even with requires_human_action already cleared', async () => {
+    const sb = makeSb({ 'SD-LEO-INFRA-FABLE-VENTURE-DESIGN-001': { status: 'in_progress' } });
+    const sd = { dependencies: [], metadata: { requires_human_action: false, blocked_on_sd: 'SD-LEO-INFRA-FABLE-VENTURE-DESIGN-001' } };
+    expect(await draftDepsSatisfied(sb, sd)).toBe(false);
+  });
+  it('true once the metadata.blocked_on_sd referenced SD is actually completed', async () => {
+    const sb = makeSb({ 'SD-LEO-INFRA-FABLE-VENTURE-DESIGN-001': { status: 'completed' } });
+    const sd = { dependencies: [], metadata: { blocked_on_sd: 'SD-LEO-INFRA-FABLE-VENTURE-DESIGN-001' } };
+    expect(await draftDepsSatisfied(sb, sd)).toBe(true);
+  });
+  it('treats metadata.blocked_on_sd="none" as non-blocking', async () => {
+    const sd = { dependencies: [], metadata: { blocked_on_sd: 'none' } };
+    expect(await draftDepsSatisfied(makeSb({}), sd)).toBe(true);
+  });
 });
 
 describe('evaluateDispatchEligibility (discriminated verdict; throws on query error)', () => {
