@@ -25,10 +25,17 @@ runs all depend on witnesses; when a witness lies, a gate goes green on nothing.
 - **Two witness intents** the reference distills: *observe-only telemetry*
   (best-effort, may swallow) vs *gate-bearing evidence* (must be atomic with the
   action and independently verifiable). This reference teaches the second.
+- **The independence that matters**: `witness-adoption.mjs` verifies telemetry by
+  cross-checking against `gh pr list` of ACTUALLY-merged PRs — an independent
+  ground truth, not the witness's own copy. A witness that only re-checks the
+  action's self-report proves consistency, never truth, and greens on a lying
+  action. This reference re-derives the truth from the PRIMARY governed state
+  (the thing the action changed), separate from both the witness and the return.
 
-The witness shape here (`{action, observed_result, evidence_hash, verified}`) is a
+The witness shape here (`{action, claimed_result, evidence_hash, verified}`) is a
 DISTILLATION of those estate shapes, not a new invention — field names are
-illustrative; the doctrines are the point.
+illustrative; the doctrines are the point. `claimed_result` is deliberately named
+a CLAIM, not a truth: verify re-derives the truth elsewhere and compares.
 
 **Task shape a delegate will face**: build the witness for a new governed action
 (different action, different observed content), preserving every invariant.

@@ -1,14 +1,15 @@
 // Structural acceptance LOCKS for the witness-evidence-emitter reference —
 // pure predicates over the JS source, node-builtins-only. Textual locks are
 // NECESSARY BUT WEAK (the -C lesson); the behavioral suite (parameterized over
-// GOLDEN_REF_MODULE) CALLS emit/verify against a real store and is the primary
-// enforcement — especially for the self-test-masking checks.
+// GOLDEN_REF_MODULE) CALLS emit/verify against a real governed store and is the
+// primary enforcement — ESPECIALLY the lying-action and crash-rollback checks
+// that no grep can prove.
 export const DEFAULT_MODULE = 'golden-references/witness-evidence-emitter/witness-emitter.mjs';
 
 function stripComments(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 }
-/** Body of a named exported function, comments stripped. */
+/** Code body of a named exported function, comments stripped. */
 function fnBody(src, name) {
   const start = src.search(new RegExp('export function ' + name + '\\b'));
   if (start === -1) return null;
@@ -22,64 +23,67 @@ function fnBody(src, name) {
 export function buildLocks() {
   return {
     reference_only_header: (s) => /REFERENCE ONLY/.test(s),
-    // D1: the emit writes happen inside ONE transaction callback — not two
-    // separate awaited writes. Require a single opts.transaction(...) call and
-    // NO `await ...write`/two-store-write pattern outside it.
-    atomic_single_boundary: (s) => {
+    // D1: the action runs INSIDE the transaction callback (its real effect and
+    // the witness commit together), and there are NO writes outside it. Requires
+    // exactly one transaction() and the action() call to appear inside its body.
+    action_inside_transaction: (s) => {
       const b = fnBody(s, 'emitWitness');
       if (!b) return false;
-      const txnCalls = (b.match(/\.transaction\s*\(/g) || []).length;
-      // exactly one transaction boundary; no awaited writes (the forbidden race)
-      return txnCalls === 1 && !/await\s+\w+\.(write|set|insert)/.test(b);
+      const txn = b.match(/opts\.transaction\(\([^)]*\)\s*=>\s*\{([\s\S]*?)\}\)/);
+      if (!txn) return false;
+      const inside = txn[1];
+      // action invoked inside the boundary; no store writes outside the callback.
+      const actionInside = /action\s*\(/.test(inside);
+      const outside = b.replace(txn[0], '');
+      const writesOutside = /store\.(set|put|save|insert|upsert|write)\s*\(/.test(outside);
+      const oneBoundary = (b.match(/opts\.transaction\(/g) || []).length === 1;
+      return actionInside && oneBoundary && !writesOutside;
     },
-    // D2: observed_result is assigned from the action RETURN (a call), never
-    // from a parameter/opts field.
+    // D2: the claim comes from calling the action, not a pre-supplied value.
     never_predeclare: (s) => {
       const b = fnBody(s, 'emitWitness');
       if (!b) return false;
-      return /observed_result\s*=\s*action\s*\(/.test(b)
-        && !/observed_result\s*=\s*opts\./.test(b);
+      return /=\s*action\s*\(/.test(b) && !/claimed_result\s*=\s*opts\./.test(b);
     },
-    // D3 + D5: verifyWitness re-derives from the STORE and must NOT read
-    // witness.observed_result (the tautology).
-    verify_by_read: (s) => {
-      const b = fnBody(s, 'verifyWitness');
-      if (!b) return false;
-      return /opts\.store\.(get|has)/.test(b) && !/witness\.observed_result/.test(b);
-    },
+    // D3 + D5: verify re-derives from an INJECTED deriveTruth over the store and
+    // must NOT read the witness's claim or the action's return (the tautology).
     independent_rederivation: (s) => {
       const b = fnBody(s, 'verifyWitness');
       if (!b) return false;
-      // verify compares a RE-HASH of store content to the witness hash, and
-      // never trusts the witness's own observed_result.
-      return /hashContent\s*\(\s*rederived/.test(b) && /evidence_hash/.test(b)
+      return /opts\.deriveTruth\s*\(/.test(b)
+        && !/witness\.claimed_result/.test(b)
         && !/witness\.observed_result/.test(b);
     },
-    // D4: content AND hash — evidence_hash computed via crypto AND the WITNESS
-    // OBJECT itself carries both observed_result and evidence_hash (not a
-    // boolean-only witness). Scoped to the emit body so a stray createHash in a
-    // dead helper cannot satisfy it.
-    tamper_evident: (s) => {
+    // verify re-hashes the RE-DERIVED truth (not the witness's own value) and
+    // compares to the witness hash.
+    verify_by_read: (s) => {
+      const b = fnBody(s, 'verifyWitness');
+      if (!b) return false;
+      return /hashContent\s*\(\s*actual\s*\)/.test(b) && /evidence_hash/.test(b);
+    },
+    // D4: content AND canonical crypto hash — witness carries claimed_result AND
+    // evidence_hash; the hash is CANONICAL (sorted keys) so a store re-read
+    // re-hashes stably; not a boolean-only witness.
+    tamper_evident_canonical: (s) => {
       const b = fnBody(s, 'emitWitness');
       if (!b) return false;
-      const hashComputed = /createHash\(['"]sha256/.test(s) && /evidence_hash\s*=\s*hashContent/.test(b);
-      const witnessLit = b.match(/const witness\s*=\s*\{([^}]*)\}/);
-      const carries = witnessLit && /observed_result/.test(witnessLit[1]) && /evidence_hash/.test(witnessLit[1]);
-      return hashComputed && !!carries;
+      const witnessLit = b.match(/witness\s*=\s*\{([\s\S]*?)\};/);
+      const carries = witnessLit && /claimed_result/.test(witnessLit[1]) && /evidence_hash/.test(witnessLit[1]);
+      const canonicalHash = /createHash\(['"]sha256/.test(s) && /Object\.keys\([^)]*\)\.sort\(\)/.test(s);
+      return !!carries && canonicalHash;
     },
     // verified starts null (emitter never self-asserts).
     verified_null_at_emit: (s) => {
       const b = fnBody(s, 'emitWitness');
       return !!b && /verified:\s*null/.test(b) && !/verified:\s*true/.test(b);
     },
-    // Store/sink is an INJECTED parameter, never a module singleton.
-    injected_store: (s) => /emitWitness\(action,\s*opts\)/.test(s)
+    // Store + deriveTruth are INJECTED parameters, never module singletons.
+    injected_dependencies: (s) => /emitWitness\(action,\s*opts\)/.test(s)
       && /verifyWitness\(witness,\s*opts\)/.test(s)
-      && !/^(const|let)\s+store\s*=/m.test(s),
-    // Node-builtins-only import surface (isolation echo; the -A scan is the law).
+      && !/^\s*(const|let|var)\s+store\s*=/m.test(s),
     builtins_only_import: (s) => {
       const imports = [...s.matchAll(/^import\s+.*?from\s+['"]([^'"]+)['"]/gm)].map((m) => m[1]);
-      return imports.every((i) => i.startsWith('node:'));
+      return imports.length > 0 && imports.every((i) => i.startsWith('node:'));
     },
   };
 }
