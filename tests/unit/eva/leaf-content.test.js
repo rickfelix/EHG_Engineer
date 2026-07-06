@@ -12,12 +12,14 @@ import {
   computeLeafContent,
   templateLeafContent,
   isPrebuildPanelEnrichmentEnabled,
+  buildDesignInputBlock,
 } from '../../../lib/eva/bridge/leaf-content.js';
 
 const LAYER = { key: 'api', label: 'API Layer', description: 'REST endpoints, request handling, validation' };
 const CHILD = { title: 'Distillation Engine Worker' };
 const TEMPLATE_DESC = 'REST endpoints, request handling, validation for "Distillation Engine Worker".';
 const TEMPLATE_SCOPE = 'API Layer implementation for parent task.';
+const TEMPLATE_SCOPE_UI = 'UI Layer implementation for parent task.';
 
 const okDriver = { async runAgent({ agent }) { return { ok: true, section: `${agent.code} content` }; } };
 
@@ -84,6 +86,61 @@ describe('HOLD observability (SD-LEO-INFRA-WIRE-PRE-BUILD-002 FR-6 / TS-6b)', ()
       layer: LAYER, childPayload: CHILD, leafKey: 'LEAF-2',
       ventureContext: { panelDriver: heldDriver, panelArtifactTypes: ['blueprint_data_model'], panelCriteriaOpts: { dataSensitive: true }, onHold },
     })).rejects.toThrow(/PREBUILD_PANEL_HELD/);
+  });
+});
+
+// SD-LEO-FEAT-ROUTE-VENTURE-DESIGN-001 (FR-1/FR-2, TS-1/TS-2/TS-4)
+const UI_LAYER = { key: 'ui', label: 'UI Layer', description: 'Components, pages, user interactions' };
+
+describe('FR-1/FR-2: design-input routing (ui layer only)', () => {
+  it('TS-2: no locked source at all -> byte-identical to the generic template (zero regression)', async () => {
+    const r = await computeLeafContent({ layer: UI_LAYER, childPayload: CHILD, leafKey: 'K', ventureContext: {} });
+    expect(r).toEqual(templateLeafContent(UI_LAYER, CHILD));
+  });
+
+  it('TS-1: a locked design-token source produces a payload, not the bare template', async () => {
+    const tokens = { colors: ['#111'], typeScale: { heading: 'Inter' } };
+    const r = await computeLeafContent({
+      layer: UI_LAYER, childPayload: CHILD, leafKey: 'K',
+      ventureContext: { designTokens: tokens },
+    });
+    expect(r.description).not.toBe(templateLeafContent(UI_LAYER, CHILD).description);
+    expect(r.description).toContain('DESIGN TOKENS');
+    expect(r.description).toContain('#111');
+    expect(r.scope).toBe(TEMPLATE_SCOPE_UI); // scope untouched, per TR-2
+  });
+
+  it('TS-4: design_reference on childPayload reaches the build context (was a dead field)', async () => {
+    const childWithRef = { ...CHILD, design_reference: { wireframe: 'hero+features+cta' } };
+    const r = await computeLeafContent({ layer: UI_LAYER, childPayload: childWithRef, leafKey: 'K', ventureContext: {} });
+    expect(r.description).toContain('DESIGN REFERENCE');
+    expect(r.description).toContain('hero+features+cta');
+  });
+
+  it('a non-ui layer is never affected by design-input fields, even if present on ventureContext', async () => {
+    const r = await computeLeafContent({
+      layer: LAYER, childPayload: { ...CHILD, design_reference: { x: 1 } }, leafKey: 'K',
+      ventureContext: { designTokens: { colors: ['#fff'] } },
+    });
+    expect(r).toEqual({ description: TEMPLATE_DESC, scope: TEMPLATE_SCOPE });
+  });
+
+  it('buildDesignInputBlock returns null when nothing is available (pure helper)', () => {
+    expect(buildDesignInputBlock({})).toBeNull();
+    expect(buildDesignInputBlock()).toBeNull();
+  });
+
+  it('buildDesignInputBlock composes all four inputs when present', () => {
+    const block = buildDesignInputBlock({
+      tokens: { colors: ['#000'] },
+      motionGrammar: { entry_transition: 'fade' },
+      designReference: { wireframe: 'x' },
+      instructionBlock: 'CHECKLIST TEXT',
+    });
+    expect(block).toContain('DESIGN TOKENS');
+    expect(block).toContain('MOTION GRAMMAR');
+    expect(block).toContain('DESIGN REFERENCE');
+    expect(block).toContain('CHECKLIST TEXT');
   });
 });
 
