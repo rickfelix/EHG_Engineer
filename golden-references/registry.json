@@ -14,6 +14,20 @@
         "source_commit": "89868da897cb3abb8695d0f92742245d12b8ba8a"
       },
       "created_at": "2026-07-06T05:02:47.675Z"
+    },
+    {
+      "domain": "stage-gate-check",
+      "path": "golden-references/stage-gate-check/",
+      "guide": "application-guide.md — stage-gate check: pure fail-closed exception-safe predicate with separated evidence emission (five doctrines)",
+      "door_class_of_application": "two_way",
+      "provenance": {
+        "source_files": [
+          "lib/eva/stage-execution-worker.js (rank-1 hotspot, composite 0.9985)",
+          "estate defect classes: gate-predicate-schism (isBlocking vs stage_creates_decision), work-boundary throw=advisory, forward-gate swallowed-throw fail-open"
+        ],
+        "source_commit": "541d7608b5184a287df269a55131229efb43195b"
+      },
+      "created_at": "2026-07-06T06:46:05.653Z"
     }
   ]
 }
