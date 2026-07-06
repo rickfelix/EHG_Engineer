@@ -1,0 +1,4 @@
+{
+  "$schema_note": "Source of truth for golden references. One row per reference. Mirrored into leo_artifacts (artifact_type=golden_reference) by scripts/golden-references/mirror-registry.mjs — application-level idempotency, zero new DDL. Row shape: {domain, path, guide, door_class_of_application, provenance: {source_files: [], source_commit}, created_at}.",
+  "references": []
+}
