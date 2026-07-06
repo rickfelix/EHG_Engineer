@@ -636,6 +636,7 @@
     "openai": "^5.23.2",
     "p-retry": "^7.0.0",
     "playwright": "^1.58.2",
+    "sharp": "^0.35.3",
     "stripe": "^18.5.0",
     "tiktoken": "^1.0.22",
     "tree-kill": "^1.2.2",
