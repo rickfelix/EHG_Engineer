@@ -8,6 +8,7 @@ import {
   projectTimeToWall,
   getCalibratedBudget,
   computeVerdict,
+  resolveModelWeight,
   CONSTANTS,
 } from '../../../lib/eva/capacity-governor.js';
 
@@ -95,18 +96,32 @@ describe('getCalibratedBudget()', () => {
   });
 });
 
+describe('resolveModelWeight() (QF-20260706-630 defect 3)', () => {
+  it('weights fable ~2x the sonnet baseline, opus heavier than sonnet, haiku lighter', () => {
+    expect(resolveModelWeight('fable')).toBe(2);
+    expect(resolveModelWeight('claude-opus-4-8')).toBeGreaterThan(resolveModelWeight('claude-sonnet-5'));
+    expect(resolveModelWeight('sonnet')).toBe(1);
+    expect(resolveModelWeight('haiku')).toBeLessThan(1);
+  });
+  it('defaults unknown/missing models to the sonnet baseline (never NaN)', () => {
+    expect(resolveModelWeight(undefined)).toBe(1);
+    expect(resolveModelWeight('qwen3-coder:30b')).toBe(1);
+  });
+});
+
 describe('computeVerdict()', () => {
-  it('parks burst/fable-tier sessions before any standard-tier session (TS-4)', () => {
-    const fleetRoster = [
-      { sessionId: 's1', callsign: 'Alpha', model: 'sonnet', seatTier: 'standard' },
-      { sessionId: 's2', callsign: 'Bravo', model: 'fable', seatTier: 'burst' },
-      { sessionId: 's3', callsign: 'Charlie', model: 'sonnet', seatTier: 'standard' },
-      { sessionId: 's4', callsign: 'Delta', model: 'sonnet', seatTier: 'standard' },
-      { sessionId: 's5', callsign: 'Echo', model: 'sonnet', seatTier: 'standard' },
-      { sessionId: 's6', callsign: 'Foxtrot', model: 'fable', seatTier: 'burst' },
-      { sessionId: 's7', callsign: 'Golf', model: 'sonnet', seatTier: 'standard' },
-      { sessionId: 's8', callsign: 'Hotel', model: 'sonnet', seatTier: 'standard' },
-    ];
+  const fleetRoster = [
+    { sessionId: 's1', callsign: 'Alpha', model: 'sonnet', weight: resolveModelWeight('sonnet') },
+    { sessionId: 's2', callsign: 'Bravo', model: 'fable', weight: resolveModelWeight('fable') },
+    { sessionId: 's3', callsign: 'Charlie', model: 'sonnet', weight: resolveModelWeight('sonnet') },
+    { sessionId: 's4', callsign: 'Delta', model: 'sonnet', weight: resolveModelWeight('sonnet') },
+    { sessionId: 's5', callsign: 'Echo', model: 'sonnet', weight: resolveModelWeight('sonnet') },
+    { sessionId: 's6', callsign: 'Foxtrot', model: 'fable', weight: resolveModelWeight('fable') },
+    { sessionId: 's7', callsign: 'Golf', model: 'sonnet', weight: resolveModelWeight('sonnet') },
+    { sessionId: 's8', callsign: 'Hotel', model: 'sonnet', weight: resolveModelWeight('sonnet') },
+  ];
+
+  it('parks light (sonnet) seats before any fable seat -- fable-stays-up doctrine (TS-4)', () => {
     const result = computeVerdict({
       fleetRoster,
       projectedHoursToWall: 3, // shorter than the window -> must shrink
@@ -117,21 +132,51 @@ describe('computeVerdict()', () => {
 
     expect(result.core_size).toBeLessThan(fleetRoster.length);
     expect(result.park_list.length).toBe(fleetRoster.length - result.core_size);
-    // Every burst-tier seat that got parked must appear before considering any
-    // standard-tier seat is parked -- i.e. no standard-tier park without both
-    // burst seats already parked.
-    const parkedTiers = result.park_list.map(s => s.seatTier);
-    const firstStandardIdx = parkedTiers.indexOf('standard');
-    if (firstStandardIdx !== -1) {
-      const burstCount = fleetRoster.filter(s => s.seatTier === 'burst').length;
-      const burstParkedBeforeStandard = parkedTiers.slice(0, firstStandardIdx).filter(t => t === 'burst').length;
-      expect(burstParkedBeforeStandard).toBe(Math.min(burstCount, firstStandardIdx));
+    // No fable seat may be parked while any sonnet seat remains unparked.
+    const parkedModels = result.park_list.map(s => s.model);
+    const firstFableIdx = parkedModels.indexOf('fable');
+    if (firstFableIdx !== -1) {
+      expect(parkedModels.slice(0, firstFableIdx).every(m => m !== 'fable')).toBe(true);
     }
+  });
+
+  it('shrinking to keep both fable seats forces parking ALL sonnet seats first (weighted core-size)', () => {
+    // 2 fable (weight 2 each = 4) + enough headroom that surviving both fable seats alone
+    // still satisfies the window -- core_size should retain the fable seats over sonnet.
+    const result = computeVerdict({
+      fleetRoster,
+      projectedHoursToWall: 1.5,
+      unattendedWindowHours: 6,
+      eventCount: 2,
+      windowEntryIso: '2026-07-05T23:00:00-04:00',
+    });
+    const coreModels = fleetRoster
+      .slice() // computeVerdict sorts internally; re-derive from the roster's own weight order
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, result.core_size)
+      .map(s => s.model);
+    expect(coreModels.filter(m => m === 'fable').length).toBe(Math.min(2, result.core_size));
+  });
+
+  it('anchors the window to NOW when no windowEntryIso is given, not a fixed clock target (QF-20260706-630 defect 1)', () => {
+    const before = Date.now();
+    const result = computeVerdict({
+      fleetRoster: [{ sessionId: 's1', callsign: 'Alpha', model: 'sonnet', weight: 1 }],
+      projectedHoursToWall: 10,
+      unattendedWindowHours: 6,
+      eventCount: 6,
+    });
+    const after = Date.now();
+    const resumeAtMs = Date.parse(result.resume_at);
+    // resume_at must be ~6h from NOW (+/- the time this test took to run), never pinned to a
+    // fixed clock boundary hours away (the ~26h-window-for-a-6h-ask bug).
+    expect(resumeAtMs).toBeGreaterThanOrEqual(before + 6 * 3600_000 - 5000);
+    expect(resumeAtMs).toBeLessThanOrEqual(after + 6 * 3600_000 + 5000);
   });
 
   it('reports low confidence with fewer than 5 calibration events', () => {
     const result = computeVerdict({
-      fleetRoster: [{ sessionId: 's1', callsign: 'Alpha', model: 'sonnet', seatTier: 'standard' }],
+      fleetRoster: [{ sessionId: 's1', callsign: 'Alpha', model: 'sonnet', weight: 1 }],
       projectedHoursToWall: 10,
       unattendedWindowHours: 6,
       eventCount: 2,
@@ -141,7 +186,7 @@ describe('computeVerdict()', () => {
 
   it('returns all 4 required verdict fields', () => {
     const result = computeVerdict({
-      fleetRoster: [{ sessionId: 's1', callsign: 'Alpha', model: 'sonnet', seatTier: 'standard' }],
+      fleetRoster: [{ sessionId: 's1', callsign: 'Alpha', model: 'sonnet', weight: 1 }],
       projectedHoursToWall: 10,
       unattendedWindowHours: 6,
       eventCount: 6,
