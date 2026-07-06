@@ -121,6 +121,20 @@ async function main() {
     else { written++; }
   }
   console.log(`[backfill-canonical-lfa] APPLIED: written=${written} skipped=${skipped} failed=${failed}`);
+
+  // QF-20260705-478: leave a durable run-evidence row so "did it run, and with what result" is
+  // answerable next time without re-deriving it from git blame — best-effort, never fails the run.
+  try {
+    const { error: evErr } = await sb.from('audit_log').insert({
+      event_type: 'backfill_run',
+      entity_type: 'script_run',
+      entity_id: 'backfill-canonical-lfa-from-executions',
+      metadata: { script: 'backfill-canonical-lfa-from-executions.mjs', corroborated: targets.length, cross_repo: crossRepo, written, skipped, failed },
+      severity: failed > 0 ? 'warning' : 'info',
+      created_by: 'backfill-canonical-lfa-from-executions.mjs',
+    });
+    if (evErr) console.warn('[backfill-canonical-lfa] run-evidence write skipped (non-fatal):', evErr.message);
+  } catch (e) { console.warn('[backfill-canonical-lfa] run-evidence write skipped (non-fatal):', e.message); }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
