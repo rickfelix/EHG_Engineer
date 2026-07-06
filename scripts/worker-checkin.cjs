@@ -1519,13 +1519,21 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       // ~2.6h before its gate). Deferral is TRANSIENT: on gate, do NOT ack — the assignment
       // stays live and succeeds once not_before passes. Read error = FAIL CLOSED via
       // assignedSdFetchFailed, mirroring the QF-20260703-151 semantics above.
+      // QF-20260705-115: same query also carries `status`, so a directed assignment whose QF
+      // already reached a terminal status is purged HERE instead of relying on claim_sd's RPC
+      // rejection to land in TERMINAL_CLAIM_ERRORS (it doesn't always -- live specimen:
+      // QF-20260705-436 resurfaced 5+ checkins post-completion). Reuses `terminalStatus` so it
+      // takes the SAME ack+stale_assignment_purged branch as the SD terminal case below.
+      // Terminal set mirrors the existing quick_fixes staleness check at line ~1386.
       let qfDeferredUntil = null;
       if (!assignedSdFetchFailed && /^QF-/.test(sdKey)) {
         try {
           const { data: qfRow, error: qfErr } = await sb.from('quick_fixes')
-            .select('not_before').eq('id', sdKey).maybeSingle();
+            .select('status, not_before').eq('id', sdKey).maybeSingle();
           if (qfErr) {
             assignedSdFetchFailed = true;
+          } else if (qfRow && ['completed', 'cancelled', 'escalated'].includes(qfRow.status)) {
+            terminalStatus = qfRow.status;
           } else {
             const nb = qfRow && qfRow.not_before ? Date.parse(qfRow.not_before) : NaN;
             if (Number.isFinite(nb) && nb > Date.now()) qfDeferredUntil = qfRow.not_before;

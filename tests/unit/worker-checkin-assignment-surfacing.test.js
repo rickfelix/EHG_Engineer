@@ -59,7 +59,7 @@ describe('extractDirectedSd — structured directed fields only (finding #2)', (
 
 // resolveCheckin seam 1 — fake sb: session holds mySd; an unread WORK_ASSIGNMENT targets a
 // different SD. The assignment must surface on the resume result without dropping the claim.
-function fakeSb({ heldSd, assignmentSd, windDown, sdRow }) {
+function fakeSb({ heldSd, assignmentSd, windDown, sdRow, qfRow }) {
   return {
     rpc: () => Promise.resolve({ data: { success: true }, error: null }),
     from(table) {
@@ -71,6 +71,8 @@ function fakeSb({ heldSd, assignmentSd, windDown, sdRow }) {
           // QF-20260703-780: sdRow === null must mean "genuinely no row" (a QF-keyed or
           // phantom/typo'd-SD-keyed lookup), distinct from sdRow left unspecified (undefined).
           if (table === 'strategic_directives_v2') return Promise.resolve({ data: sdRow === undefined ? { status: 'in_progress' } : sdRow, error: null });
+          // QF-20260705-115: quick_fixes.status/not_before for the directed-QF terminal check.
+          if (table === 'quick_fixes') return Promise.resolve({ data: qfRow === undefined ? null : qfRow, error: null });
           return Promise.resolve({ data: null, error: null });
         },
         insert() { return Promise.resolve({ error: null }); },
@@ -486,6 +488,97 @@ describe('resolveCheckin — QF-20260703-780: terminal-class claim rejection ack
       expect(res.action).not.toBe('claimed_assignment');
       expect(res.assignment_claim_error).toBe('claimed_by_live_peer');
       expect(res.assignment_claim_terminal_purged).toBeUndefined();
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+});
+
+// QF-20260705-115: the SD-only lookup above (strategic_directives_v2) always misses for a
+// QF- key by design (QF-20260704-602), so a directed assignment whose QF already reached a
+// terminal status previously fell through to tryClaim() every checkin instead of being purged
+// directly -- live specimen: QF-20260705-436 resurfaced 5+ checkins post-completion. Fixed by
+// reading quick_fixes.status alongside the existing not_before query and reusing the SAME
+// stale_assignment_purged branch as the SD terminal case (no RPC round-trip needed).
+describe('resolveCheckin — QF-20260705-115: directed QF assignment purges on quick_fixes.status terminal', () => {
+  it('a QF-keyed assignment whose quick_fixes.status is completed is purged via stale_assignment_purged (no RPC call)', async () => {
+    const assignmentSd = 'QF-20260705-436';
+    const sb = fakeSb({ heldSd: null, sdRow: null, qfRow: { status: 'completed', not_before: null } });
+    let rpcCalled = false;
+    sb.rpc = () => { rpcCalled = true; return Promise.resolve({ data: { success: true }, error: null }); };
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [{ id: 'msg-qf-completed', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd } }];
+    try {
+      const res = await resolveCheckin(sb, 'sess-idle', { getCoordinator: async () => null });
+      expect(res.action).not.toBe('claimed_assignment');
+      expect(res.stale_assignment_purged).toEqual({ sd: assignmentSd, status: 'completed' });
+      expect(res.assignment_claim_terminal_purged).toBeUndefined();
+      expect(rpcCalled).toBe(false);
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+
+  it.each(['cancelled', 'escalated'])('a QF-keyed assignment whose quick_fixes.status is %s is also purged', async (status) => {
+    const assignmentSd = 'QF-20260705-999';
+    const sb = fakeSb({ heldSd: null, sdRow: null, qfRow: { status, not_before: null } });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [{ id: 'msg-qf-terminal-2', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd } }];
+    try {
+      const res = await resolveCheckin(sb, 'sess-idle', { getCoordinator: async () => null });
+      expect(res.stale_assignment_purged).toEqual({ sd: assignmentSd, status });
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+
+  it('a QF-keyed assignment with a NON-terminal status (open/in_progress) still claims normally', async () => {
+    const assignmentSd = 'QF-20260705-222';
+    const sb = fakeSb({ heldSd: null, sdRow: null, qfRow: { status: 'open', not_before: null } });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [{ id: 'msg-qf-open', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd } }];
+    try {
+      const res = await resolveCheckin(sb, 'sess-idle', { getCoordinator: async () => null });
+      expect(res.action).toBe('claimed_assignment');
+      expect(res.sd).toBe(assignmentSd);
+      expect(res.stale_assignment_purged).toBeUndefined();
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+
+  it('a QF-keyed assignment with a future not_before still defers (unaffected by the status check)', async () => {
+    const assignmentSd = 'QF-20260705-333';
+    const future = new Date(Date.now() + 3600000).toISOString();
+    const sb = fakeSb({ heldSd: null, sdRow: null, qfRow: { status: 'open', not_before: future } });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [{ id: 'msg-qf-deferred', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd } }];
+    try {
+      const res = await resolveCheckin(sb, 'sess-idle', { getCoordinator: async () => null });
+      expect(res.action).not.toBe('claimed_assignment');
+      expect(res.assignment_deferred_not_before).toEqual({ qf: assignmentSd, not_before: future });
+      expect(res.stale_assignment_purged).toBeUndefined();
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+
+  it('a QF-keyed assignment with no quick_fixes row (null) falls through unchanged (byte-identical to before)', async () => {
+    const assignmentSd = 'QF-20260703-197';
+    const sb = fakeSb({ heldSd: null, sdRow: null, qfRow: null });
+    sb.rpc = () => Promise.resolve({ data: { success: false, error: 'sd_terminal_status' }, error: null });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [{ id: 'msg-qf-no-row', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: assignmentSd } }];
+    try {
+      const res = await resolveCheckin(sb, 'sess-idle', { getCoordinator: async () => null });
+      expect(res.action).not.toBe('claimed_assignment');
+      expect(res.assignment_claim_terminal_purged).toEqual({ sd: assignmentSd, error: 'sd_terminal_status' });
+      expect(res.stale_assignment_purged).toBeUndefined();
     } finally {
       ws.getMessagesForSession = orig;
     }
