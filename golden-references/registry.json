@@ -28,6 +28,21 @@
         "source_commit": "541d7608b5184a287df269a55131229efb43195b"
       },
       "created_at": "2026-07-06T06:46:05.653Z"
+    },
+    {
+      "domain": "witness-evidence-emitter",
+      "path": "golden-references/witness-evidence-emitter/",
+      "guide": "application-guide.md — witness-evidence emitter: atomic, never-pre-declare, verify-by-read, tamper-evident, independent re-derivation (five doctrines vs test-masking)",
+      "door_class_of_application": "two_way",
+      "provenance": {
+        "source_files": [
+          "lib/ship/merge-witness-telemetry.mjs + merge_witness_telemetry (content witness; best-effort-swallow flagged WRONG for gate witnesses)",
+          "sub_agent_execution_results (metadata.repo_path verify-by-read)",
+          "reference_test_masking defect class"
+        ],
+        "source_commit": "5aa8eac5002ccf111dc2c359a87c91ab5391b42a"
+      },
+      "created_at": "2026-07-06T08:00:24.434Z"
     }
   ]
 }
