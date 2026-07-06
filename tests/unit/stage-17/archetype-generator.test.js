@@ -52,6 +52,7 @@ function createMockSupabaseWithScreens(screens) {
 describe('archetype-generator', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockWriteArtifact.mockReset().mockResolvedValue('archetype-id');
     mockEnsureTokenManifestLocked.mockResolvedValue({
       colors: ['#2563EB', '#06B6D4'],
       typeScale: { heading: 'Montserrat', body: 'Lato' },
@@ -62,14 +63,39 @@ describe('archetype-generator', () => {
   });
 
   describe('generateArchetypeVariants()', () => {
-    test('generates exactly 4 archetype variants written as stage_17_archetype', async () => {
+    test('generates exactly 4 archetype variants written as ARTIFACT_TYPES.BLUEPRINT_S17_ARCHETYPES', async () => {
       const ids = await generateArchetypeVariants('v-1', 'Landing Page', 'landing', {});
       expect(ids).toHaveLength(4);
       expect(mockComplete).toHaveBeenCalledTimes(4);
       for (const call of mockWriteArtifact.mock.calls) {
-        expect(call[1].artifactType).toBe('stage_17_archetype');
-        expect(call[1].metadata.screenId).toBe('landing');
+        expect(call[1].artifactType).toBe('s17_archetypes');
+        expect(call[1].metadata.screenId).toContain('landing');
       }
+    });
+
+    test('gives each variant a DISTINCT metadata.screenId (regression: writeArtifact dedups is_current rows by screenId — a shared screenId across all 4 calls collapses them into 1 overwritten row)', async () => {
+      await generateArchetypeVariants('v-1', 'Landing Page', 'landing', {});
+      const screenIds = mockWriteArtifact.mock.calls.map(call => call[1].metadata.screenId);
+      expect(new Set(screenIds).size).toBe(4);
+    });
+
+    test('4 variants survive against a dedup-aware writeArtifact fake simulating the real is_current collision behavior', async () => {
+      // Simulates writeArtifact's real dedup: an insert with a screenId matching an
+      // existing is_current row for the same (venture,stage,type) UPDATES that row
+      // in place and returns the SAME id, instead of inserting a new one.
+      const rows = new Map(); // key: `${lifecycleStage}|${artifactType}|${screenId}` -> id
+      let nextId = 1;
+      mockWriteArtifact.mockImplementation(async (_supabase, opts) => {
+        const key = `${opts.lifecycleStage}|${opts.artifactType}|${opts.metadata?.screenId ?? '__no_screen__'}`;
+        if (rows.has(key)) return rows.get(key);
+        const id = `artifact-${nextId++}`;
+        rows.set(key, id);
+        return id;
+      });
+
+      const ids = await generateArchetypeVariants('v-1', 'Landing Page', 'landing', {});
+      expect(new Set(ids).size).toBe(4);
+      expect(rows.size).toBe(4);
     });
 
     test('locks tokens before generating (FR-1 call site)', async () => {
