@@ -1,7 +1,7 @@
 {
- "generated_at": "2026-07-05T23:26:45.116Z",
+ "generated_at": "2026-07-06T00:19:49.380Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 773,
+ "table_count": 774,
  "view_count": 177,
  "tables": {
   "_migration_metadata": "{key,value}",
@@ -70,6 +70,7 @@
   "campaign_content": "{id,campaign_id,content_id,platform,scheduled_at,dispatched_at,dispatch_status,idempotency_key,external_post_id,metadata,created_at}",
   "campaign_enrollments": "{id,venture_id,lead_email,campaign_id,current_step,opened_previous,next_step_at,status,metadata,created_at,updated_at}",
   "capability_reuse_log": "{id,capability_id,capability_key,reusing_sd_id,reusing_sd_uuid,reuse_context,reuse_type,created_at}",
+  "capacity_limit_events": "{id,account,event_type,fleet_size,window_started_at,limit_hit_at,session_hours_burned,notes,created_at}",
   "capital_transactions": "{id,venture_id,stage_work_id,amount,transaction_type,correlation_id,description,created_at,stripe_charge_id,stripe_event_id}",
   "capital_transactions_preimg_qparity20260610": "{id,stage_work_id}",
   "cascade_invalidation_flags": "{id,invalidation_log_id,document_type,document_id,status,flagged_at,resolved_at,resolved_by,resolution_notes}",
