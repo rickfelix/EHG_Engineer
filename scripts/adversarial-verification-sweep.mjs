@@ -62,6 +62,25 @@ const LEDGER_CATEGORY = 'verification_ledger';
 // flags it loudly rather than under-reporting the auditable total.
 const PAGE_LIMIT = 5000;
 
+/**
+ * Fetch EVERY row of a query by paginating in PAGE_SIZE chunks — complete by construction,
+ * so consumers need no truncation heuristics. Used for the reads whose COMPLETENESS is
+ * load-bearing (witnessed-merge set; ledger set-difference), where a silently short read
+ * flips verdicts rather than just under-counting.
+ */
+const PAGE_SIZE = 1000;
+export async function fetchAllRows(supabase, table, columns, applyFilters) {
+  const rows = [];
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    let q = supabase.from(table).select(columns).range(offset, offset + PAGE_SIZE - 1);
+    if (applyFilters) q = applyFilters(q);
+    const { data, error } = await q;
+    if (error) throw new Error(`${table} paginated query failed: ${error.message}`);
+    rows.push(...(data || []));
+    if (!data || data.length < PAGE_SIZE) return rows;
+  }
+}
+
 // Machinery-class filter: title/description must smell like an automated moving part (something
 // that RUNS and has an observable side effect), because those are exactly the items whose "done"
 // status a green build cannot substantiate. Docs/CHANGELOG-only completions are excluded — they
@@ -223,10 +242,11 @@ async function assemble(outPath) {
   const merges = PLATFORM_REPOS.flatMap((r) =>
     defaultFetchMergedPlatformPRs(r.owner, r.name, WITNESS_CUTOVER_ISO, ghRunner),
   );
-  const { data: telemetryRows, error: telErr } = await supabase
-    .from('merge_witness_telemetry')
-    .select('repo, pr_number');
-  if (telErr) throw new Error('merge_witness_telemetry query failed: ' + telErr.message);
+  // Adversarial review of this very tool (PR #5666): this read was the one UNGUARDED query —
+  // a truncated witnessed-set silently reclassifies witnessed merges as unwitnessed (false
+  // REFUTE injections), the exact silent-truncation class this file guards against. Paginate
+  // to completeness instead of trusting any single-page cap.
+  const telemetryRows = await fetchAllRows(supabase, 'merge_witness_telemetry', 'repo, pr_number');
   const unwitnessed = detectUnwitnessedMerges(merges, telemetryRows).unwitnessed;
   const unwitnessedItems = unwitnessed.map((m) => ({
     work_key: `${m.repo}#${m.prNumber}`,
@@ -429,8 +449,11 @@ async function writeLedger(dispositionsPath) {
 
     if (existing && existing.length > 0) {
       const id = existing[0].id;
+      // Re-runs refresh the VERDICT fields but never clobber human triage state
+      // (PR #5666 review): status/severity are set only on first insert.
+      const { status: _s, severity: _sev, ...verdictOnly } = row;
       // eslint-disable-next-line no-await-in-loop
-      const { error: updErr } = await supabase.from('feedback').update(row).eq('id', id);
+      const { error: updErr } = await supabase.from('feedback').update(verdictOnly).eq('id', id);
       if (updErr) throw new Error(`ledger update failed for ${workKey}: ${updErr.message}`);
     } else {
       // eslint-disable-next-line no-await-in-loop
@@ -457,12 +480,12 @@ async function writeLedger(dispositionsPath) {
     }
   }
 
-  // Set-difference invariant: every backlog key must now have a ledger row.
-  const { data: ledgerRows, error: allErr } = await supabase
-    .from('feedback')
-    .select('metadata')
-    .eq('category', LEDGER_CATEGORY);
-  if (allErr) throw new Error('ledger set-difference read failed: ' + allErr.message);
+  // Set-difference invariant: every backlog key must now have a ledger row. Paginated
+  // (PR #5666 review): a single-page read would FALSE-FAIL this invariant once the ledger
+  // outgrows PostgREST's page cap across sweeps — fails closed, but loudly wrong.
+  const ledgerRows = await fetchAllRows(supabase, 'feedback', 'metadata', (q) =>
+    q.eq('category', LEDGER_CATEGORY),
+  );
   const ledgerKeys = new Set((ledgerRows || []).map((r) => r.metadata?.work_key).filter(Boolean));
   const missing = [...backlogKeys].filter((k) => !ledgerKeys.has(k));
 
