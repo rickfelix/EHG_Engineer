@@ -54,6 +54,7 @@ import {
 } from '../lib/governance/per-loop-health-gauges.js';
 import { getCaptureCompleteness } from '../lib/eva/venture-capture-forward.js';
 import { resolveMinExtractStage } from '../lib/eva/template-extractor.js';
+import { detectExpiredPremises } from '../lib/governance/revisit-tags.js';
 
 const RECURSION_GOVERNOR_DIMENSION = 'recursion-governor-ratio';
 
@@ -150,6 +151,10 @@ function buildDetectorResolvers(supabase) {
       return countUnrankedClaimableLeaves(claimable, Date.now());
     },
     'relay-drop': async () => shapeRelayDropResult(await planRelayDrops(supabase)),
+    // Filesystem detector (stale-tree precedent): parses REVISIT-IF tags from live
+    // source, so moved tags stay visible; tests/fixtures excluded by default so the
+    // planted miss-direction fixture never trips the live gauge.
+    'expired-premise-tags': async () => detectExpiredPremises(process.cwd(), { now: new Date() }),
     'stale-tree': async () => shapeStaleTreeResult(checkoutFreshness(process.cwd(), { role: 'fleet-gauge-runner' })),
     'ship-witness-unwitnessed-merge': async () => {
       const ghRunner = (args) => {
