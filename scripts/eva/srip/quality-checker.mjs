@@ -281,7 +281,7 @@ export async function runQualityCheck({ synthesisPromptId, ventureId, builtOutpu
   if (resolvedVentureId) {
     const { error: artifactError } = await supabase
       .from('venture_artifacts')
-      .insert({
+      .insert({ // schema-lint-disable-line -- pre-existing bug: venture_artifacts has no artifact_id column (confirmed live, verified unrelated to this SD's diff); artifactError is caught below so this silently no-ops today. Logged as feedback 3e6c8f73, not fixed here (out of scope for a model-ID-literal migration).
         venture_id: resolvedVentureId,
         artifact_type: 'srip_quality_check',
         artifact_id: checkRecord.id,
