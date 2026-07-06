@@ -11,6 +11,7 @@ import {
 } from '../../../../lib/eva/bridge/customer-facing-design-detector.js';
 import {
   observeDesignFidelityWouldReject, dispatchDesignFidelityScorer, observeVentureCompletionDesignPass,
+  dispatchDesignPromptRubricScorer,
   DESIGN_FIDELITY_GATE_ID,
 } from '../../../../lib/eva/bridge/design-fidelity-observe.js';
 
@@ -185,6 +186,67 @@ describe('dispatchDesignFidelityScorer — the dormant scorer gets a LIVE call s
   it('a throwing scorer is treated as null (would-reject), never propagates', async () => {
     const rec = vi.fn().mockResolvedValue({});
     const r = await dispatchDesignFidelityScorer(landing, landingCtx, { scoreDesignFidelity: () => { throw new Error('boom'); }, recordWitnessEvent: rec, supabase: {} });
+    expect(r.wouldReject).toBe(true);
+    expect(r.score).toBeNull();
+  });
+});
+
+// ---- (SD-LEO-FEAT-ROUTE-VENTURE-DESIGN-001 FR-4/FR-5) dispatchDesignPromptRubricScorer ----
+// Mirrors dispatchDesignFidelityScorer's tests exactly, proving it reuses the SAME writer
+// (observeDesignFidelityWouldReject / recordWitnessEvent) -- no second gate mechanism (TR-4).
+describe('dispatchDesignPromptRubricScorer — reuses the SAME observe-only writer, no parallel gate', () => {
+  const landing = { target_application: 'marketlens', title: 'MarketLens Landing Rebuild' };
+  const landingCtx = {
+    scopeText: 'the MarketLens landing page', titleText: 'MarketLens Landing Rebuild', judgedSessionId: 'sess-A',
+    renderedHtml: '<html><body>hero</body></html>', instructionBlock: 'DESIGN VERIFICATION CHECKLIST...',
+  };
+
+  it('FENCED: a non-customer-facing SD does not dispatch the rubric', async () => {
+    const rubric = vi.fn();
+    const r = await dispatchDesignPromptRubricScorer({ target_application: 'ehg_engineer' }, { scopeText: 'backend', renderedHtml: 'x', instructionBlock: 'y' }, { dispatchRubric: rubric });
+    expect(r.dispatched).toBe(false);
+    expect(rubric).not.toHaveBeenCalled();
+  });
+
+  it('NOT YET BUILT: no renderedHtml/instructionBlock -> does not dispatch (nothing to score against)', async () => {
+    const rubric = vi.fn();
+    const r = await dispatchDesignPromptRubricScorer(landing, { ...landingCtx, renderedHtml: null }, { dispatchRubric: rubric });
+    expect(r.dispatched).toBe(false);
+    expect(rubric).not.toHaveBeenCalled();
+  });
+
+  it('LIVE DISPATCH: the rubric dispatch function IS invoked for a customer-facing landing (spy)', async () => {
+    const rubric = vi.fn().mockResolvedValue({ score: 30, findings: ['thin hero'] });
+    const rec = vi.fn().mockResolvedValue({ id: 'w' });
+    const r = await dispatchDesignPromptRubricScorer(landing, landingCtx, { dispatchRubric: rubric, recordWitnessEvent: rec, supabase: {} });
+    expect(rubric).toHaveBeenCalledTimes(1);
+    expect(rubric).toHaveBeenCalledWith({ renderedHtml: landingCtx.renderedHtml, instructionBlock: landingCtx.instructionBlock });
+    expect(r.dispatched).toBe(true);
+    expect(r.wouldReject).toBe(true); // 30 < default threshold 50
+    // TR-4: the SAME witness recorder is invoked -- no second write path.
+    expect(rec).toHaveBeenCalledTimes(1);
+  });
+
+  it('null result -> would-reject; a high score -> NOT a would-reject', async () => {
+    const rec = vi.fn().mockResolvedValue({});
+    const low = await dispatchDesignPromptRubricScorer(landing, landingCtx, { dispatchRubric: async () => null, recordWitnessEvent: rec, supabase: {} });
+    expect(low.wouldReject).toBe(true);
+    const high = await dispatchDesignPromptRubricScorer(landing, landingCtx, { dispatchRubric: async () => ({ score: 85 }), recordWitnessEvent: rec, supabase: {} });
+    expect(high.wouldReject).toBe(false);
+  });
+
+  it('observe:false -> live dispatch WITHOUT recording (caller owns recording)', async () => {
+    const rubric = vi.fn().mockResolvedValue({ score: 10 });
+    const rec = vi.fn();
+    const r = await dispatchDesignPromptRubricScorer(landing, landingCtx, { dispatchRubric: rubric, recordWitnessEvent: rec, supabase: {}, observe: false });
+    expect(rubric).toHaveBeenCalledTimes(1);
+    expect(r.wouldReject).toBe(true);
+    expect(rec).not.toHaveBeenCalled();
+  });
+
+  it('a throwing dispatch is treated as null (would-reject), never propagates', async () => {
+    const rec = vi.fn().mockResolvedValue({});
+    const r = await dispatchDesignPromptRubricScorer(landing, landingCtx, { dispatchRubric: async () => { throw new Error('LLM timeout'); }, recordWitnessEvent: rec, supabase: {} });
     expect(r.wouldReject).toBe(true);
     expect(r.score).toBeNull();
   });
