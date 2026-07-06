@@ -7,13 +7,14 @@ import { resolveActiveVentureByName } from '../../lib/venture-name-resolver.js';
  * first query filters to live statuses, the fallback query does not.
  */
 function createMockSupabase({ liveMatch = null, anyMatch = null, throwOnLive = false, throwOnAny = false } = {}) {
+  const calls = { select: [], in: [], order: [] };
   const from = vi.fn(() => {
     let hasStatusFilter = false;
     const builder = {
-      select() { return builder; },
+      select(...args) { calls.select.push(args); return builder; },
       ilike() { return builder; },
-      in() { hasStatusFilter = true; return builder; },
-      order() { return builder; },
+      in(...args) { hasStatusFilter = true; calls.in.push(args); return builder; },
+      order(...args) { calls.order.push(args); return builder; },
       limit() {
         if (hasStatusFilter) {
           if (throwOnLive) return Promise.resolve({ data: null, error: { message: 'live query failed' } });
@@ -25,7 +26,7 @@ function createMockSupabase({ liveMatch = null, anyMatch = null, throwOnLive = f
     };
     return builder;
   });
-  return { from };
+  return { from, _calls: calls };
 }
 
 describe('resolveActiveVentureByName', () => {
@@ -44,6 +45,15 @@ describe('resolveActiveVentureByName', () => {
     const supabase = createMockSupabase({ liveMatch: active, anyMatch: cancelled });
     const result = await resolveActiveVentureByName(supabase, 'MarketLens');
     expect(result).toEqual(active);
+  });
+
+  test('queries the correct columns and status list, ordered by created_at desc (regression: catches a wrong column/status/sort-order edit that call-count-only assertions would miss)', async () => {
+    const active = { id: 'ecbba50e', name: 'MarketLens', status: 'active' };
+    const supabase = createMockSupabase({ liveMatch: active });
+    await resolveActiveVentureByName(supabase, 'MarketLens');
+    expect(supabase._calls.select[0]).toEqual(['id, name, status']);
+    expect(supabase._calls.in[0]).toEqual(['status', ['active', 'paused']]);
+    expect(supabase._calls.order[0]).toEqual(['created_at', { ascending: false }]);
   });
 
   test('falls back to a cancelled venture when no live match exists (re-run-under-old-name preserved)', async () => {

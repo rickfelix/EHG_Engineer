@@ -88,7 +88,13 @@ async function main() {
 
   // Resolve venture name to ID (status-aware: prefers an active/paused match over
   // a cancelled duplicate sharing the same name)
-  const resolvedVenture = await resolveActiveVentureByName(supabase, venture);
+  let resolvedVenture;
+  try {
+    resolvedVenture = await resolveActiveVentureByName(supabase, venture);
+  } catch (err) {
+    console.error('Error querying ventures:', err.message);
+    process.exit(1);
+  }
 
   if (!resolvedVenture) {
     console.error(`\n  Error: Venture "${venture}" not found\n`);
