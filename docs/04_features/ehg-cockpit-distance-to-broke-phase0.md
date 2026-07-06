@@ -145,9 +145,19 @@ gauge and its capability probe are 1:1.
    Stage-16 projection, not a live balance. Is projection-derived runway acceptable for V1,
    or is a live cash-balance feed required (out of scope here; would need an accounting
    integration that does not exist today)?
-4. **Q4 — Gross vs net burn.** Reuse the live gross-burn runway (revenue not netted, clearly
+4. **Q4 — Gross vs net burn.** ~~Reuse the live gross-burn runway (revenue not netted, clearly
    labeled), or have the build SD derive `average_monthly_revenue` from
-   `revenue_projections[]` for true net-burn distance-to-broke?
+   `revenue_projections[]` for true net-burn distance-to-broke?~~ **RESOLVED by
+   SD-LEO-INFRA-OPERATOR-RUNWAY-TRUTHFULNESS-001**: the operator cockpit's runway gauge
+   (`computeRunway()` in EHG_Engineer's `lib/operator/cash-burn-substrate.js`, mirrored by
+   `distanceToBroke()` in this repo's `src/components/chairman-v3/survivability/survivability-logic.ts`)
+   nets revenue against burn, but **only when revenue is confirmed live** —
+   `revenue.status === 'live' && !revenue.test_mode`. Test-mode/unconfirmed revenue is
+   excluded from the net-burn calc entirely (treated as 0), and a net burn `<= 0` that rests
+   on an AI-burn lower-bound or a stale "other burn" input renders an explicit
+   `inputs_incomplete` state rather than a false cash-positive headline. See that SD's
+   retrospective (`retrospectives` table, id `2aa7c579-e2b3-4e35-89ea-cf779e7fd107`) for the
+   production incident this resolved.
 5. **Q5 — Scope.** Per-venture runway, portfolio-aggregate runway, or both (portfolio
    headline + per-venture drill-down)?
 
