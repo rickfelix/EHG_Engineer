@@ -383,6 +383,9 @@ export class BaseExecutor {
       let gateResults;
       let currentRetryCount = options._retryCount || 0;
       const maxGateRetries = GATE_MAX_RETRIES;
+      // QF-20260705-788: captured at the retryCount===2 crossing, but only actually EMITTED after
+      // the loop exits and the FINAL gateResults.passed is known — see below.
+      let _pendingGateAutoSignalArgs = null;
 
       for (let attempt = 0; attempt <= maxGateRetries; attempt++) {
         gateResults = await this.validationOrchestrator.validateGates(gates, validationContext);
@@ -415,33 +418,50 @@ export class BaseExecutor {
             currentRetryCount++;
             console.log(`\n   🔄 Gate retry ${currentRetryCount}/${maxGateRetries}: ${skipCheck.reason}`);
             // SD-LEO-INFRA-SIGNAL-THRESHOLD-AUTO-EMIT-001 (FR-1): auto-emit a /signal at the gate-2x
-            // crossing — enforcement-layer escalation mirroring the shipped RCA-2x wiring. Fire-and-forget
-            // (detached + unref), env-gated (LEO_AUTO_SIGNAL=off), wrapped fail-open: it can NEVER block,
-            // slow, or throw into the handoff. Removes worker discretion at the gate-recurrence threshold.
+            // crossing — enforcement-layer escalation mirroring the shipped RCA-2x wiring. Env-gated
+            // (LEO_AUTO_SIGNAL=off), wrapped fail-open: it can NEVER block, slow, or throw into the
+            // handoff. QF-20260705-788: only CAPTURED here (not spawned) — a 2x-fail crossing still
+            // has one gate re-evaluation left in this same loop (GATE_MAX_RETRIES=2), and that final
+            // attempt routinely passes (the known WIRE_CHECK_GATE transient-fail gotcha). Emitting
+            // immediately fired HIGH-severity noise for a self-healing condition; the actual spawn now
+            // happens AFTER the loop, gated on the FINAL gateResults.passed still being false.
             try {
               const _req = createRequire(import.meta.url);
               const { shouldEmitGateAutoSignal, buildGateAutoSignalArgs } =
                 _req(path.join(ENGINEER_ROOT, 'lib', 'hooks', 'auto-signal-threshold.cjs'));
               const _sessionId = process.env.CLAUDE_SESSION_ID;
               if (shouldEmitGateAutoSignal({ retryCount: currentRetryCount, sessionId: _sessionId, env: process.env })) {
-                const { spawn } = _req('child_process');
-                const _args = buildGateAutoSignalArgs({
-                  gateName: gateResults.failedGate,
-                  sdKey: sd?.sd_key || sd?.id,
-                  retryCount: currentRetryCount,
-                });
-                const _child = spawn(
-                  process.execPath,
-                  [path.join(ENGINEER_ROOT, 'scripts', 'worker-signal.cjs'), ..._args],
-                  { detached: true, stdio: 'ignore', env: { ...process.env, CLAUDE_SESSION_ID: _sessionId } }
-                );
-                _child.unref();
+                _pendingGateAutoSignalArgs = {
+                  args: buildGateAutoSignalArgs({
+                    gateName: gateResults.failedGate,
+                    sdKey: sd?.sd_key || sd?.id,
+                    retryCount: currentRetryCount,
+                  }),
+                  sessionId: _sessionId,
+                };
               }
             } catch { /* fail-open: auto-signal must never block the handoff */ }
             continue;
           }
         }
         break; // Not retry-eligible or max retries reached
+      }
+
+      // QF-20260705-788: emit the captured gate-2x auto-signal ONLY if the handoff's gates are
+      // STILL failing after the retry loop exhausted (genuine exhaustion) — a subsequent PASS
+      // within this same loop (the self-healing WIRE_CHECK_GATE case) suppresses it entirely.
+      // Fire-and-forget (detached + unref), same safety contract as before.
+      if (_pendingGateAutoSignalArgs && !gateResults.passed) {
+        try {
+          const _req = createRequire(import.meta.url);
+          const { spawn } = _req('child_process');
+          const _child = spawn(
+            process.execPath,
+            [path.join(ENGINEER_ROOT, 'scripts', 'worker-signal.cjs'), ..._pendingGateAutoSignalArgs.args],
+            { detached: true, stdio: 'ignore', env: { ...process.env, CLAUDE_SESSION_ID: _pendingGateAutoSignalArgs.sessionId } }
+          );
+          _child.unref();
+        } catch { /* fail-open: auto-signal must never block the handoff */ }
       }
 
       try { endSpan(step3Span, { result: gateResults.passed ? 'pass' : 'fail' }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
