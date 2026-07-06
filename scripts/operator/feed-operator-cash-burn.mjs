@@ -30,6 +30,8 @@ import { priceFor } from '../../lib/cost/llm-pricing.js';
 import { periodMonthOf, upsertSubstrateInputs, AI_BURN_LOWER_BOUND_LABEL } from '../../lib/operator/cash-burn-substrate.js';
 import { readStripeCashSlice } from '../../lib/operator/cash-sources/stripe-balance.js';
 import { readBankCashSlice } from '../../lib/operator/cash-sources/bank-read-service.js';
+import { loadTellerCertPair } from '../../lib/operator/cash-sources/token-vault.js';
+import { createTellerClient } from '../../lib/operator/cash-sources/teller-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -113,7 +115,15 @@ async function main() {
       if (!DRY_RUN) await upsertSubstrateInputs(periodMonth, { cash_usd: cashUsd }, supabase, nowIso);
       result.cash = { written: !DRY_RUN, value_usd: cashUsd, sources: ['chairman_attested'] };
     } else {
-    const bankSlice = await readBankCashSlice();
+    // FR-1: the Teller client factory must stay SYNCHRONOUS (bank-read-service.js calls it
+    // without awaiting) -- pre-load the mTLS cert pair here (async) and close over it, rather
+    // than making the factory itself async. Absent an enrolled cert pair, the factory stays
+    // undefined and readBankCashSlice() falls through to its existing inert-by-default path.
+    const { certPem, keyPem } = await loadTellerCertPair();
+    const tellerClientFactory = certPem && keyPem
+      ? (token) => createTellerClient({ token, certPem, keyPem })
+      : undefined;
+    const bankSlice = await readBankCashSlice({ tellerClientFactory });
     if (!bankSlice) {
       // Inert: no primary cash source yet. Peek Stripe for logging only; do NOT write cash.
       const stripePeek = await readStripeCashSlice();

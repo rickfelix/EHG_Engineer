@@ -1,0 +1,111 @@
+{
+  "_comment": "Canonical shared fixture (TR-1) proving computeRunway() (EHG_Engineer) and distanceToBroke() (ehg) reach an identical verdict for the same row. Consumed by both repos' test suites plus scripts/operator/verify-runway-parity.mjs. nowIso is the fixed instant every case is evaluated against.",
+  "nowIso": "2026-06-19T22:00:00Z",
+  "cases": [
+    {
+      "name": "TS-2: complete live inputs render a real runway figure",
+      "row": {
+        "cash_usd": 5000, "cash_last_synced_at": "2026-06-19T21:00:00Z",
+        "ai_burn_usd": 800, "ai_burn_last_synced_at": "2026-06-19T21:00:00Z", "ai_burn_is_lower_bound": false,
+        "other_burn_usd": 200, "other_burn_last_synced_at": "2026-06-19T21:00:00Z",
+        "revenue_usd": 0, "revenue_last_synced_at": "2026-06-19T21:00:00Z", "revenue_livemode": true
+      },
+      "expected": { "headline": "5 months of runway", "months": 5.0 }
+    },
+    {
+      "name": "TS-2b: lower-bound burn WITH net>0 still renders a real runway (guard does not over-fire)",
+      "row": {
+        "cash_usd": 1200, "cash_last_synced_at": "2026-06-19T21:00:00Z",
+        "ai_burn_usd": 100, "ai_burn_last_synced_at": "2026-06-19T21:00:00Z", "ai_burn_is_lower_bound": true,
+        "other_burn_usd": null, "other_burn_last_synced_at": null,
+        "revenue_usd": null, "revenue_last_synced_at": null, "revenue_livemode": null
+      },
+      "expected": { "headline": "12 months of runway", "months": 12.0 }
+    },
+    {
+      "name": "TS-1a: FR-4 truth-guard refuses cash-positive when net<=0 is built on a lower-bound burn",
+      "row": {
+        "cash_usd": 1000, "cash_last_synced_at": "2026-06-19T21:00:00Z",
+        "ai_burn_usd": 100, "ai_burn_last_synced_at": "2026-06-19T21:00:00Z", "ai_burn_is_lower_bound": true,
+        "other_burn_usd": null, "other_burn_last_synced_at": null,
+        "revenue_usd": 200, "revenue_last_synced_at": "2026-06-19T21:00:00Z", "revenue_livemode": true
+      },
+      "expected": { "headline": "inputs incomplete — runway unknown", "months": null }
+    },
+    {
+      "name": "TS-1b: FR-4 truth-guard also refuses on a genuinely stale other_burn",
+      "row": {
+        "cash_usd": 1000, "cash_last_synced_at": "2026-06-19T21:00:00Z",
+        "ai_burn_usd": 100, "ai_burn_last_synced_at": "2026-06-19T21:00:00Z", "ai_burn_is_lower_bound": false,
+        "other_burn_usd": 400, "other_burn_last_synced_at": "2026-06-18T00:00:00Z",
+        "revenue_usd": 200, "revenue_last_synced_at": "2026-06-19T21:00:00Z", "revenue_livemode": true
+      },
+      "expected": { "headline": "inputs incomplete — runway unknown", "months": null }
+    },
+    {
+      "name": "genuine cash-positive: non-lower-bound burn, fresh inputs, net<=0 -- guard does not over-fire",
+      "row": {
+        "cash_usd": 1000, "cash_last_synced_at": "2026-06-19T21:00:00Z",
+        "ai_burn_usd": 100, "ai_burn_last_synced_at": "2026-06-19T21:00:00Z", "ai_burn_is_lower_bound": false,
+        "other_burn_usd": null, "other_burn_last_synced_at": null,
+        "revenue_usd": 200, "revenue_last_synced_at": "2026-06-19T21:00:00Z", "revenue_livemode": true
+      },
+      "expected": { "headline": "net cash-positive (no burn-down)", "months": null }
+    },
+    {
+      "name": "TS-4: Stripe test-mode revenue contributes $0 to net-burn",
+      "row": {
+        "cash_usd": 1000, "cash_last_synced_at": "2026-06-19T21:00:00Z",
+        "ai_burn_usd": 100, "ai_burn_last_synced_at": "2026-06-19T21:00:00Z", "ai_burn_is_lower_bound": false,
+        "other_burn_usd": null, "other_burn_last_synced_at": null,
+        "revenue_usd": 50, "revenue_last_synced_at": "2026-06-19T21:00:00Z", "revenue_livemode": false
+      },
+      "expected": { "headline": "10 months of runway", "months": 10.0 }
+    },
+    {
+      "name": "TS-4 (live counterpart): live revenue nets against burn normally",
+      "row": {
+        "cash_usd": 1000, "cash_last_synced_at": "2026-06-19T21:00:00Z",
+        "ai_burn_usd": 100, "ai_burn_last_synced_at": "2026-06-19T21:00:00Z", "ai_burn_is_lower_bound": false,
+        "other_burn_usd": null, "other_burn_last_synced_at": null,
+        "revenue_usd": 50, "revenue_last_synced_at": "2026-06-19T21:00:00Z", "revenue_livemode": true
+      },
+      "expected": { "headline": "20 months of runway", "months": 20.0 }
+    },
+    {
+      "name": "TS-3: manual cash attestation stays live at 20 days (past the old 36h)",
+      "row": {
+        "cash_usd": 5000, "cash_last_synced_at": "2026-05-30T22:00:00Z",
+        "ai_burn_usd": 100, "ai_burn_last_synced_at": "2026-06-19T21:00:00Z", "ai_burn_is_lower_bound": false,
+        "other_burn_usd": null, "other_burn_last_synced_at": null,
+        "revenue_usd": null, "revenue_last_synced_at": null, "revenue_livemode": null
+      },
+      "expected": { "headline": "50 months of runway", "months": 50.0 }
+    },
+    {
+      "name": "TS-3b: an attestation beyond the monthly window still fails closed",
+      "row": {
+        "cash_usd": 5000, "cash_last_synced_at": "2026-05-01T00:00:00Z",
+        "ai_burn_usd": 100, "ai_burn_last_synced_at": "2026-06-19T21:00:00Z", "ai_burn_is_lower_bound": false,
+        "other_burn_usd": null, "other_burn_last_synced_at": null,
+        "revenue_usd": null, "revenue_last_synced_at": null, "revenue_livemode": null
+      },
+      "expected": { "headline": "awaiting cash source", "months": null }
+    },
+    {
+      "name": "awaiting_burn: cash live but ai_burn unattested",
+      "row": {
+        "cash_usd": 5000, "cash_last_synced_at": "2026-06-19T21:00:00Z",
+        "ai_burn_usd": null, "ai_burn_last_synced_at": null, "ai_burn_is_lower_bound": null,
+        "other_burn_usd": null, "other_burn_last_synced_at": null,
+        "revenue_usd": null, "revenue_last_synced_at": null, "revenue_livemode": null
+      },
+      "expected": { "headline": "awaiting burn data", "months": null }
+    },
+    {
+      "name": "null row: awaiting cash source",
+      "row": null,
+      "expected": { "headline": "awaiting cash source", "months": null }
+    }
+  ]
+}
