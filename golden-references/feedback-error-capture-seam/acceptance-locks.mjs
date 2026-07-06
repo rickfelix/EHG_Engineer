@@ -1,21 +1,21 @@
 // Structural acceptance LOCKS for the feedback/error-capture-seam reference —
 // pure predicates over the JS source, node-builtins-only. Textual locks are
-// NECESSARY BUT WEAK (the -C lesson); the behavioral suite (parameterized over
-// GOLDEN_REF_MODULE) CALLS captureBoundary with a planted failure — and with a
-// THROWING sink/logger — and is the primary enforcement (best-effort robustness
-// and the swallow/never-silent doctrines are things no grep can prove).
+// NECESSARY BUT WEAK (the -C lesson) and a "no throw keyword" check is a proxy for
+// throw-SAFETY (the -F adversarial lesson) — so the behavioral suite (parameterized
+// over GOLDEN_REF_MODULE) that CALLS captureBoundary with a hostile thrown value, a
+// throwing sink/logger/clock, and an async op is the PRIMARY enforcement.
 export const DEFAULT_MODULE = 'golden-references/feedback-error-capture-seam/capture-seam.mjs';
 
 function stripComments(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 }
-/** Code body of a named function (exported or not), comments stripped. */
+/** Code body of a named function (exported or not, sync or async), comments stripped. */
 function fnBody(src, name) {
-  const start = src.search(new RegExp('(export )?function ' + name + '\\b'));
+  const start = src.search(new RegExp('(export )?(async )?function ' + name + '\\b'));
   if (start === -1) return null;
   const rest = src.slice(start + 1);
   const jsdoc = rest.search(/\n\/\*\*/);
-  const nextFn = rest.search(/\n(export )?function /);
+  const nextFn = rest.search(/\n(export )?(async )?function /);
   const cut = [jsdoc, nextFn].filter((i) => i !== -1).sort((a, b) => a - b)[0];
   return stripComments('e' + (cut === undefined ? rest : rest.slice(0, cut)));
 }
@@ -24,75 +24,81 @@ export function buildLocks() {
   return {
     reference_only_header: (s) => /REFERENCE ONLY/.test(s),
 
-    // D1: captureBoundary wraps op() in try/catch and routes failure to capture(),
-    // whose failure path appends a structured entry to the injected sink.
+    // D1: captureBoundary wraps op() in try/catch and routes failure through the
+    // last-ditch guard to record(), which appends a schema-shaped entry to the sink.
     capture_at_boundary: (s) => {
       const cb = fnBody(s, 'captureBoundary');
-      const cap = fnBody(s, 'capture');
-      if (!cb || !cap) return false;
-      const wrapsOp = /try\s*\{[\s\S]*?op\(\)[\s\S]*?\}\s*catch/.test(cb) && /return capture\(/.test(cb);
-      const appendsEntry = /sink\.append\(\s*\{[\s\S]*?symptom[\s\S]*?dedup_hash/.test(cap);
+      const rec = fnBody(s, 'record');
+      if (!cb || !rec) return false;
+      const wrapsOp = /try\s*\{[\s\S]*?op\(\)[\s\S]*?\}\s*catch/.test(cb) && /return guard\(/.test(cb);
+      const appendsEntry = /sink\.append\(\s*entry\s*\)/.test(rec) && /buildEntry\(/.test(rec);
       return wrapsOp && appendsEntry;
     },
 
-    // D2 (never-throws): the boundary catch RETURNS (never re-throws); the sink write
-    // is wrapped in try/catch; the logger goes through safeLog (which swallows a
-    // logger failure). No bare throw on the failure path — the seam must not become
-    // the swallow footgun it fights.
+    // D2 (never-throws — for ANY input): the boundary routes failure through guard()
+    // (a last-ditch try that returns a best-effort result rather than propagate); the
+    // pure prologue is throw-safe (symptomOf guards String(err); utcDayOf handles an
+    // invalid/NaN time); the sink write and the logger are each wrapped; no bare throw.
     never_throws_best_effort: (s) => {
       const cb = fnBody(s, 'captureBoundary');
-      const cap = fnBody(s, 'capture');
+      const g = fnBody(s, 'guard');
       const sl = fnBody(s, 'safeLog');
-      if (!cb || !cap || !sl) return false;
-      const catchReturns = /catch\s*\([^)]*\)\s*\{\s*return capture\(/.test(cb);
-      const sinkWrapped = /try\s*\{\s*sink\.append\([\s\S]*?\}\s*catch/.test(cap);
+      const sy = fnBody(s, 'symptomOf');
+      const ud = fnBody(s, 'utcDayOf');
+      const rec = fnBody(s, 'record');
+      if (!cb || !g || !sl || !sy || !ud || !rec) return false;
+      const catchGuards = /catch\s*\([^)]*\)\s*\{\s*return guard\(/.test(cb);
+      const guardCatchReturns = /catch\s*\([^)]*\)\s*\{[\s\S]*?return\s*\{\s*ok:\s*false/.test(g);
       const safeLoggerWrapped = /try\s*\{\s*logger\.error\([\s\S]*?\}\s*catch/.test(sl);
-      const noBareThrow = !/\bthrow\b/.test(cap);
-      return catchReturns && sinkWrapped && safeLoggerWrapped && noBareThrow;
+      const symptomGuarded = /try\s*\{[\s\S]*?String\(err\)[\s\S]*?\}\s*catch/.test(sy);
+      const clockGuarded = /Number\.isFinite/.test(ud);
+      const sinkWrapped = /try\s*\{\s*sink\.append\([\s\S]*?\}\s*catch/.test(rec);
+      const noBareThrow = !/\bthrow\b/.test(cb) && !/\bthrow\b/.test(rec);
+      return catchGuards && guardCatchReturns && safeLoggerWrapped && symptomGuarded && clockGuarded && sinkWrapped && noBareThrow;
     },
 
-    // D2 (never-silent): the FIRST-capture branch emits BOTH a durable row (sink.append)
-    // AND a stderr line (safeLog logger). Both present in the else branch.
+    // D2 (never-silent): the FIRST-capture path emits BOTH a durable row (sink.append)
+    // AND a stderr line (safeLog logger).
     never_silent_stderr_and_row: (s) => {
-      const cap = fnBody(s, 'capture');
-      if (!cap) return false;
-      return /sink\.append\(/.test(cap) && /safeLog\(\s*logger/.test(cap);
+      const rec = fnBody(s, 'record');
+      if (!rec) return false;
+      return /sink\.append\(/.test(rec) && /safeLog\(\s*logger/.test(rec);
     },
 
-    // D3: dedup_hash is composed of STABLE fields ONLY (utcDay + symptom + source);
-    // emitted_at (volatile) is NOT part of the hash but IS stored on the row.
+    // D3: dedup_hash is STABLE fields ONLY (utcDay + symptom + source); emitted_at
+    // (volatile) is stored on the entry but NOT part of the hash.
     dedup_stable_fields_only: (s) => {
       const dh = fnBody(s, 'dedupHash');
-      const cap = fnBody(s, 'capture');
-      if (!dh || !cap) return false;
-      const stableHash = /\$\{utcDay\}::\$\{symptom\}::\$\{source\}/.test(dh) && !/emitted_at/.test(dh);
-      const volatileStored = /emitted_at:\s*clock\.now\(\)/.test(cap);
+      const be = fnBody(s, 'buildEntry');
+      if (!dh || !be) return false;
+      const stableHash = /\$\{utcDay\}::\$\{symptom\}::\$\{String\(source\)\}/.test(dh) && !/emitted_at/.test(dh);
+      const volatileStored = /emitted_at:\s*safeNow\(clock\)/.test(be);
       return stableHash && volatileStored;
     },
 
-    // D3: dedup lookup is co-scoped by (category, dedup_hash) — same hash under a
-    // different category is a new row.
+    // D3: dedup lookup is co-scoped by (category, dedup_hash).
     category_scoped_dedup: (s) => {
-      const cap = fnBody(s, 'capture');
-      if (!cap) return false;
-      return /sink\.findByHash\(\s*\{\s*category,\s*dedup_hash\s*\}\s*\)/.test(cap);
+      const rec = fnBody(s, 'record');
+      if (!rec) return false;
+      return /findByHash\(\s*\{\s*category,\s*dedup_hash/.test(rec);
     },
 
-    // D4: the SUCCESS path writes nothing — captureBoundary's non-throwing return has
-    // no sink/logger/safeLog call (discrimination is throw-vs-return, not truthiness).
+    // D4: the SUCCESS path writes nothing (all writes live in record()); discrimination
+    // is throw-vs-return, not truthiness.
     healthy_path_silent: (s) => {
       const cb = fnBody(s, 'captureBoundary');
       if (!cb) return false;
       const returnsValue = /return\s*\{\s*ok:\s*true,\s*value\s*\}/.test(cb);
-      const noWriteOnSuccess = !/sink\.|logger\.|safeLog\(/.test(cb); // all writes live in capture()
+      const noWriteOnSuccess = !/sink\.|logger\.|safeLog\(/.test(cb);
       return returnsValue && noWriteOnSuccess;
     },
 
     // sink/logger/clock are INJECTED (destructured from deps), never module singletons.
     injected_deps: (s) => {
-      const cap = fnBody(s, 'capture');
-      if (!cap) return false;
-      const destructured = /const\s*\{\s*sink,\s*logger,\s*clock/.test(cap);
+      const rec = fnBody(s, 'record');
+      const be = fnBody(s, 'buildEntry');
+      if (!rec || !be) return false;
+      const destructured = /const\s*\{[^}]*\bsink\b[^}]*\}\s*=\s*deps/.test(rec) && /const\s*\{[^}]*\bclock\b[^}]*\}\s*=\s*deps/.test(be);
       const noSingleton = !/^(const|let|var)\s+(sink|logger|clock)\s*=/m.test(s);
       return destructured && noSingleton;
     },
