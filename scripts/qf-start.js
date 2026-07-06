@@ -18,6 +18,7 @@
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { spawnSync } from 'node:child_process';
 import dotenv from 'dotenv';
+import { repoUnfitReason } from '../lib/fleet/qf-repo-fitness.js';
 
 dotenv.config();
 
@@ -48,6 +49,13 @@ async function main() {
   }
 
   const supabase = createSupabaseServiceClient();
+
+  const unfitReason = await repoUnfitReason(supabase, qfId);
+  if (unfitReason) {
+    console.error(`✗ Quick-fix ${qfId} NOT claimed: ${unfitReason}`);
+    await safeExit(3);
+  }
+
   const { data, error } = await supabase.rpc('claim_sd', {
     p_sd_id: qfId,
     p_session_id: sessionId,
