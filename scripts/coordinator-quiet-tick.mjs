@@ -75,6 +75,13 @@ export const COMPOSED_CORES = [
   { key: 'relay-drain', script: 'coordinator-relay-drain.cjs', args: ['scripts/coordinator-relay-drain.cjs'], quiescentSkip: false },
   // FR-3: cheap read + fail-open write; valuable exactly when quiet for the same reason.
   { key: 'relay-drop-gauge', script: 'coordinator-relay-drop-gauge.cjs', args: ['scripts/coordinator-relay-drop-gauge.cjs'], quiescentSkip: false },
+  // QF-20260705-797: solomon-ledger-pending-resurface.cjs shipped with no scheduled invoker
+  // anywhere (npm script only) -- 0 session_coordination rows ever emitted. Cheap (single SELECT
+  // + per-row dedup check), fail-open (no active Adam -> no-op), and self-rate-limits to once per
+  // stale ledger row per day via its own payload.dedup_key, so running it every tick is safe. NOT
+  // quiescentSkip: an aged pending recommendation is exactly as stale-and-worth-surfacing during a
+  // quiet fleet window as during an active one.
+  { key: 'solomon-ledger-resurface', script: 'solomon-ledger-pending-resurface.cjs', args: ['scripts/solomon-ledger-pending-resurface.cjs'], quiescentSkip: false },
 ];
 
 /** Build the fail-soft core list for the current mode (quiescent skips the expensive cores). */
