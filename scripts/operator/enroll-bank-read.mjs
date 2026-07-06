@@ -104,8 +104,12 @@ async function main() {
   try {
     const supabase = createSupabaseServiceClient();
     await supabase.from('audit_log').insert({
-      action: 'BANK_READ_ENROLLMENT',
-      details: { actor: os.userInfo().username, at: new Date().toISOString(), reenroll: REENROLL },
+      event_type: 'BANK_READ_ENROLLMENT',
+      entity_type: 'operator_cash_source',
+      entity_id: 'bank_read',
+      severity: 'info',
+      created_by: os.userInfo().username,
+      metadata: { at: new Date().toISOString(), reenroll: REENROLL },
     });
   } catch (err) {
     console.warn(`[enroll-bank-read] WARN audit_log write failed (enrollment still succeeded, non-blocking): ${err.message}`);
