@@ -1,6 +1,6 @@
 # Bitter-Lesson Ledger — harness heuristics + workaround expiry
 
-> Source: `SD-LEO-INFRA-BITTER-LESSON-AUDIT-001` · rev `3d0c4a2e1a75` · generated 2026-07-06T01:26:35.026Z
+> Source: `SD-LEO-INFRA-BITTER-LESSON-AUDIT-001` · rev `73cf01b6c011` · generated 2026-07-06T02:24:01.742Z
 > DB-first truth: `metadata.bitter_lesson_ledger` on the source SD. Regenerate: `node scripts/one-off/bitter-lesson-audit.mjs --execute`.
 > Sweep coverage is DISCLOSED, not closed: truly-silent workarounds are grep-invisible by definition — the families below say exactly what was searched.
 
@@ -24,7 +24,7 @@
 
 Model NAMES and their rank ordering are point-in-time lineup knowledge hand-baked into code; every new model family (Gemini 3.5, Claude 5.x tiers) forces source edits. The ordering CONCEPT is structural; the mapping is config-class data.
 
-*Replacement spec:* Move the model→rank map and DELEGATE_TIERS into lib/config/model-config.js as data (same seam that already owns per-provider model IDs); dispatch reads capability tiers, never names. REVISIT-IF tags stamped at both sites.
+*Replacement spec:* Move the model→rank map (MODEL_STRENGTH in lib/fleet/tier-ladder.cjs — the primary hand-baked site, adversarial-review catch) and DELEGATE_TIERS into lib/config/model-config.js as data (same seam that already owns per-provider model IDs); dispatch reads capability tiers, never names. REVISIT-IF tags stamped at all three sites.
 
 **one-way-door exclusivity (declared !== fable, name-keyed fail-closed)** (`KEEP`)
 
@@ -77,7 +77,7 @@ REVISIT-IF(<condition>) owner=<role> provenance=<SD/QF/ref> [note=<premise>]
   condition: expires=YYYY-MM-DD (machine-evaluable) | free text (inventoried)
 ```
 
-Tag inventory: 5 tags (1 healthy, 4 non-evaluable, 0 expired, 0 orphaned). Gauge: `expired-premise-tags` in lib/governance/gauge-registry.js (weekly via gauge-runner).
+Tag inventory: 6 tags (1 healthy, 5 non-evaluable, 0 expired, 0 orphaned). Gauge: `expired-premise-tags` in lib/governance/gauge-registry.js (weekly via gauge-runner).
 
 ## Workaround sweep families (disclosed coverage)
 
@@ -87,7 +87,7 @@ Tag inventory: 5 tags (1 healthy, 4 non-evaluable, 0 expired, 0 orphaned). Gauge
 | workaround/interim markers | `(workaround|WORKAROUND|interim path|stopgap|band-aid)` | 265 | 117 |
 | retry/fallback shims | `(fallback to|retry shim|best-effort|fail-open)` | 983 | 418 |
 | version/model pins with reasons | `(pinned to|pin |downgraded from|Downgraded from)` | 235 | 100 |
-| REVISIT-IF tags (this SD grammar) | `REVISIT-IF\(` | 13 | 5 |
+| REVISIT-IF tags (this SD grammar) | `REVISIT-IF\(` | 14 | 6 |
 
 ## Model-ID bucket table
 

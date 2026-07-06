@@ -31,11 +31,11 @@ const ASSERT_COMMENTS = process.argv.includes('--assert-comment-only');
 const COMPONENTS = [
   {
     name: 'dispatch tier-ladder (static model→rank map + DELEGATE_TIERS list)',
-    paths: ['lib/coordinator/dispatch.cjs', 'lib/fleet/door-constants.cjs'],
+    paths: ['lib/fleet/tier-ladder.cjs', 'lib/coordinator/dispatch.cjs', 'lib/fleet/door-constants.cjs'],
     classification: 'PARAMETERIZE',
     reasoning: 'Model NAMES and their rank ordering are point-in-time lineup knowledge hand-baked into code; every new model family (Gemini 3.5, Claude 5.x tiers) forces source edits. The ordering CONCEPT is structural; the mapping is config-class data.',
     capability_trigger: 'Any lineup change — nearest known: Gemini 3.5 GA (mid-July) and post-Tuesday delegate-tier expansion.',
-    replacement_spec: 'Move the model→rank map and DELEGATE_TIERS into lib/config/model-config.js as data (same seam that already owns per-provider model IDs); dispatch reads capability tiers, never names. REVISIT-IF tags stamped at both sites.',
+    replacement_spec: 'Move the model→rank map (MODEL_STRENGTH in lib/fleet/tier-ladder.cjs — the primary hand-baked site, adversarial-review catch) and DELEGATE_TIERS into lib/config/model-config.js as data (same seam that already owns per-provider model IDs); dispatch reads capability tiers, never names. REVISIT-IF tags stamped at all three sites.',
   },
   {
     name: 'one-way-door exclusivity (declared !== fable, name-keyed fail-closed)',
@@ -226,7 +226,7 @@ function renderDoc(ledger) {
 }
 
 function assertCommentOnly() {
-  const TAGGED = ['lib/fleet/door-constants.cjs', 'lib/coordinator/dispatch.cjs', 'lib/config/model-config.js'];
+  const TAGGED = ['lib/fleet/door-constants.cjs', 'lib/coordinator/dispatch.cjs', 'lib/config/model-config.js', 'lib/fleet/tier-ladder.cjs'];
   // Two-dot against origin/main: covers the WORKING TREE too, so the assertion
   // is meaningful pre-commit (three-dot ...HEAD sees only committed changes and
   // passes vacuously on uncommitted tags).
