@@ -25,6 +25,8 @@ function buildSupabaseMock({
   buildArtifactPresent = true,
   resourceRow = { repo_url: 'https://github.com/foo/bar', deployment_url: 'https://app.example.replit.app' },
   configError = null,
+  stackDescriptor = null,
+  insertedEvents,
 } = {}) {
   const buildEqChain = (finalResult) => {
     const chain = {
@@ -56,12 +58,22 @@ function buildSupabaseMock({
       }
       // SD-LEO-INFRA-FAIL-CLOSED-VENTURE-001-A PA-2: verifier now queries
       // ventures (not venture_resources — those columns never existed live).
+      // SD-LEO-INFRA-ACTIVATE-DORMANT-EXIT-001 (FR-2): also backs the observe-only
+      // verifiers (verifyStackDescriptorValid etc.), which select stack_descriptor.
       if (table === 'ventures') {
         return {
           select: vi.fn(() => buildEqChain({
-            data: resourceRow,
+            data: resourceRow === null ? null : { ...resourceRow, stack_descriptor: stackDescriptor },
             error: null,
           })),
+        };
+      }
+      if (table === 'system_events') {
+        return {
+          insert: vi.fn((row) => {
+            if (insertedEvents) insertedEvents.push(row);
+            return Promise.resolve({ data: null, error: null });
+          }),
         };
       }
       return { select: vi.fn() };
@@ -205,6 +217,72 @@ describe('exit-gate-enforcer', () => {
       expect(result.allowed).toBe(false);
       expect(result.blocked_by[0]).toMatch(/venture_stages read failed/);
       expect(result.blocked_by[0]).toMatch(/simulated PG error/);
+    });
+  });
+
+  // SD-LEO-INFRA-ACTIVATE-DORMANT-EXIT-001 (FR-2): observe-only gates never block.
+  describe('gates.exit_observe (FR-2, observe-only)', () => {
+    it('a failing observe-only gate does NOT affect allowed, but is reported in would_block_by', async () => {
+      const { checkExitGates } = await importEnforcerWithFlag('on');
+      const supabase = buildSupabaseMock({
+        stageConfig: { exit: ['Application deployed', 'GitHub repo URL stored in venture_resources'], exit_observe: ['stack descriptor valid'] },
+        stackDescriptor: null, // verifyStackDescriptorValid fails closed on missing descriptor
+      });
+      const result = await checkExitGates({ supabase, ventureId: VENTURE_ID, fromStage: 19 });
+      expect(result.allowed).toBe(true); // binding gates (build+repo URLs) both pass
+      expect(result.would_block_by).toHaveLength(1);
+      expect(result.would_block_by[0]).toMatch(/stack descriptor valid/);
+    });
+
+    it('writes one system_events row per observe-only gate evaluated', async () => {
+      const insertedEvents = [];
+      const { checkExitGates } = await importEnforcerWithFlag('on');
+      const supabase = buildSupabaseMock({
+        stageConfig: { exit: ['Application deployed', 'GitHub repo URL stored in venture_resources'], exit_observe: ['stack descriptor valid', 'deployment target provisioned'] },
+        stackDescriptor: null,
+        insertedEvents,
+      });
+      await checkExitGates({ supabase, ventureId: VENTURE_ID, fromStage: 19 });
+      expect(insertedEvents).toHaveLength(2);
+      expect(insertedEvents.every((e) => e.event_type === 'EXIT_GATE_OBSERVE_ONLY')).toBe(true);
+      expect(insertedEvents.every((e) => e.payload.would_satisfy === false)).toBe(true);
+    });
+
+    it('a SATISFIED observe-only gate produces an empty would_block_by but still logs the evaluation', async () => {
+      const insertedEvents = [];
+      const { checkExitGates } = await importEnforcerWithFlag('on');
+      const supabase = buildSupabaseMock({
+        stageConfig: { exit: ['Application deployed', 'GitHub repo URL stored in venture_resources'], exit_observe: ['stack descriptor valid'] },
+        stackDescriptor: { db_provider: 'd1', deployment_target: 'cloudflare-pages', storage: 'r2' },
+        insertedEvents,
+      });
+      const result = await checkExitGates({ supabase, ventureId: VENTURE_ID, fromStage: 19 });
+      expect(result.would_block_by).toEqual([]);
+      expect(insertedEvents).toHaveLength(1);
+      expect(insertedEvents[0].payload.would_satisfy).toBe(true);
+    });
+
+    it('runs exit_observe evaluation even when gates.exit is empty (allowed=true regardless)', async () => {
+      const insertedEvents = [];
+      const { checkExitGates } = await importEnforcerWithFlag('on');
+      const supabase = buildSupabaseMock({
+        stageConfig: { exit: [], exit_observe: ['stack descriptor valid'] },
+        stackDescriptor: null,
+        insertedEvents,
+      });
+      const result = await checkExitGates({ supabase, ventureId: VENTURE_ID, fromStage: 19 });
+      expect(result.allowed).toBe(true);
+      expect(result.would_block_by).toHaveLength(1);
+      expect(insertedEvents).toHaveLength(1);
+    });
+
+    it('backward-compat: absent exit_observe key produces would_block_by:[] and no system_events writes', async () => {
+      const insertedEvents = [];
+      const { checkExitGates } = await importEnforcerWithFlag('on');
+      const supabase = buildSupabaseMock({ insertedEvents });
+      const result = await checkExitGates({ supabase, ventureId: VENTURE_ID, fromStage: 19 });
+      expect(result.would_block_by).toEqual([]);
+      expect(insertedEvents).toHaveLength(0);
     });
   });
 

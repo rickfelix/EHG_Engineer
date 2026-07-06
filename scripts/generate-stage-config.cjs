@@ -115,6 +115,19 @@ function getArchPhases(row) {
 }
 
 function getRequiredArtifacts(row) {
+  // QF-20260703-439 fixed stage 21's requiredArtifacts shape from a flat AND list to
+  // { anyOf: [...] } directly in the GENERATED file, but venture_stages.required_artifacts
+  // is a `text[]` column -- it cannot hold a nested object, so the fix could never be
+  // persisted to the SSOT this way. A later --write silently reverted it (adversarial
+  // review on SD-LEO-INFRA-ACTIVATE-DORMANT-EXIT-001, PR #5701), reintroducing the exact
+  // false-escalation bug QF-20260703-439 fixed for chairman-ratified organic-only ventures
+  // (e.g. MarketLens, decision 08547ee8, which never produces the paid-ads-only
+  // distribution_ad_copy artifact). Mirrors the existing metadata-override convention
+  // already used by getArchPhases() above: metadata IS a flexible jsonb column, so a
+  // structured override belongs there, not in the flat text[] column.
+  if (row.metadata && Array.isArray(row.metadata.required_artifacts_override)) {
+    return row.metadata.required_artifacts_override;
+  }
   return Array.isArray(row.required_artifacts) ? row.required_artifacts : [];
 }
 
@@ -136,6 +149,16 @@ function jsLiteral(value) {
   if (Array.isArray(value)) {
     if (value.length === 0) return '[]';
     return `[${value.map((v) => jsLiteral(v)).join(', ')}]`;
+  }
+  // SD-LEO-INFRA-ACTIVATE-DORMANT-EXIT-001 (adversarial-review fix): plain-object support,
+  // needed for requiredArtifacts anyOf groups (e.g. { anyOf: ['a', 'b'] }, QF-20260703-439).
+  // Before this branch, an object silently serialized via String(value) -> the literal text
+  // "[object Object]" (invalid JS) -- the root cause of why that QF's fix was hand-edited into
+  // the generated file directly instead of going through --write, and why a later --write
+  // silently reverted it.
+  if (typeof value === 'object') {
+    const entries = Object.entries(value).map(([k, v]) => `${k}: ${jsLiteral(v)}`);
+    return `{ ${entries.join(', ')} }`;
   }
   return String(value);
 }
