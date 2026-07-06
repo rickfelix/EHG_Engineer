@@ -58,6 +58,21 @@
         "source_commit": "1041b7bf475b76dee7aac56cf6104b1421be6910"
       },
       "created_at": "2026-07-06T09:44:28.219Z"
+    },
+    {
+      "domain": "feedback-error-capture-seam",
+      "path": "golden-references/feedback-error-capture-seam/",
+      "guide": "application-guide.md — feedback/error capture seam: capture-at-boundary never swallow, best-effort but never silent (seam-design hardening), dedup on stable fields per-UTC-day category-scoped, healthy path silent (four doctrines vs swallowed errors)",
+      "door_class_of_application": "two_way",
+      "provenance": {
+        "source_files": [
+          "lib/governance/emit-feedback.js (@canonical-writer-for:feedback; emitFeedback sha256(today::description::dedup_key) per-UTC-day, stable-fields-only, category-scoped; _buildRowObject schema-shaping; MUST-NOT-throw sub-paths)",
+          "scripts/log-harness-bug.js (CLI wrapper, STDOUT-on-success) + scripts/capture-completion-flags.js (completion funnel)",
+          "feedback table + sub_agent_execution_results error rows; swallowed-error / session-register failure class; never-throw + stderr labeled as seam-design hardening"
+        ],
+        "source_commit": "de44b5d368694634072e7849db2b78b302806a00"
+      },
+      "created_at": "2026-07-06T11:19:52.727Z"
     }
   ]
 }
