@@ -9,6 +9,7 @@ import {
   computeRunway,
   LIVENESS_WINDOWS_MS,
   AI_BURN_LOWER_BOUND_LABEL,
+  cashAttestationMissingResult,
 } from '../../../lib/operator/cash-burn-substrate.js';
 
 const HOUR = 60 * 60 * 1000;
@@ -59,7 +60,9 @@ describe('computeRunway — honest degrade', () => {
     expect(v.months_of_runway).toBeNull();
     expect(v.headline).toBe('awaiting cash source');
     expect(v.partials.net_burn.status).toBe('live');
-    expect(v.partials.net_burn.value_usd).toBe(500); // 600 + 0 - 100
+    // FR-3: this fixture's revenue is explicitly test-mode (revenue_livemode: false), so it now
+    // correctly contributes $0 (was 600 + 0 - 100 = 500 under the pre-fix test-mode-counts bug).
+    expect(v.partials.net_burn.value_usd).toBe(600); // 600 + 0 - 0(test-mode revenue excluded)
   });
 
   it('cash + ai_burn fresh: months-of-runway renders (cash / net-burn)', () => {
@@ -115,7 +118,12 @@ describe('computeRunway — honest degrade', () => {
     expect(v.partials.revenue.livemode).toBe(false);
   });
 
-  it('net cash-positive (revenue >= burn) withholds runway rather than reporting infinite', () => {
+  // SD-LEO-INFRA-OPERATOR-RUNWAY-TRUTHFULNESS-001 FR-4 (TS-1a): a net<=0 verdict built on a
+  // LOWER-BOUND ai_burn (the structurally-always-true fleet case, since main-session Opus
+  // tokens are not captured) cannot honestly claim cash-positive -- refuse the optimistic
+  // claim. This is the ACTUAL July trigger this SD exists to fix; it replaces the pre-fix
+  // test that asserted the old (incorrect) 'net cash-positive' headline for this exact input.
+  it('TS-1a: FR-4 truth-guard refuses cash-positive when net<=0 is built on a lower-bound burn', () => {
     const row = {
       cash_usd: 5000, cash_last_synced_at: fresh(1),
       ai_burn_usd: 100, ai_burn_last_synced_at: fresh(1), ai_burn_is_lower_bound: true,
@@ -125,7 +133,107 @@ describe('computeRunway — honest degrade', () => {
     const v = computeRunway(row, { nowMs: NOW });
     expect(v.partials.net_burn.value_usd).toBe(-400); // 100 + 0 - 500
     expect(v.months_of_runway).toBeNull();
+    expect(v.state).toBe('inputs_incomplete');
+    expect(v.headline).toBe('inputs incomplete — runway unknown');
+  });
+
+  it('TS-1b: FR-4 truth-guard also refuses on a genuinely stale other_burn (not just the lower-bound flag)', () => {
+    const row = {
+      cash_usd: 5000, cash_last_synced_at: fresh(1),
+      ai_burn_usd: 100, ai_burn_last_synced_at: fresh(1), ai_burn_is_lower_bound: false, // NOT a lower bound
+      other_burn_usd: 400, other_burn_last_synced_at: fresh(48), // stale (>36h window) -- a real cost masked
+      revenue_usd: 500, revenue_last_synced_at: fresh(1), revenue_livemode: true,
+    };
+    const v = computeRunway(row, { nowMs: NOW });
+    expect(v.partials.other_burn.status).toBe('stale');
+    expect(v.partials.net_burn.value_usd).toBe(-400); // 100 + 0(stale other_burn suppressed) - 500
+    expect(v.state).toBe('inputs_incomplete');
+    expect(v.headline).toBe('inputs incomplete — runway unknown');
+  });
+
+  it('genuine cash-positive: a non-lower-bound burn with fresh inputs still reaches cash_positive (guard does not over-fire)', () => {
+    const row = {
+      cash_usd: 5000, cash_last_synced_at: fresh(1),
+      ai_burn_usd: 100, ai_burn_last_synced_at: fresh(1), ai_burn_is_lower_bound: false,
+      other_burn_usd: 0, other_burn_last_synced_at: fresh(1),
+      revenue_usd: 500, revenue_last_synced_at: fresh(1), revenue_livemode: true,
+    };
+    const v = computeRunway(row, { nowMs: NOW });
+    expect(v.partials.net_burn.value_usd).toBe(-400);
+    expect(v.months_of_runway).toBeNull();
+    expect(v.state).toBe('cash_positive');
     expect(v.headline).toBe('net cash-positive (no burn-down)');
+  });
+
+  // TS-2b: the normal production case (ai_burn is structurally always a lower bound) with net>0
+  // must still render a real runway number -- the guard is scoped to the netBurn<=0 branch only.
+  it('TS-2b: lower-bound burn WITH net>0 still renders a real runway (guard does not over-fire outside net<=0)', () => {
+    const row = {
+      cash_usd: 5000, cash_last_synced_at: fresh(2),
+      ai_burn_usd: 800, ai_burn_last_synced_at: fresh(1), ai_burn_is_lower_bound: true,
+      other_burn_usd: 200, other_burn_last_synced_at: fresh(1),
+      revenue_usd: 0, revenue_last_synced_at: fresh(1), revenue_livemode: false,
+    };
+    const v = computeRunway(row, { nowMs: NOW });
+    expect(v.partials.net_burn.value_usd).toBe(1000);
+    expect(v.state).toBe('runway_measured');
+    expect(v.months_of_runway).toBe(5.0);
+  });
+
+  // TS-4: live-only revenue -- FR-3.
+  it('TS-4: Stripe test-mode revenue contributes $0 to net-burn; live/undefined revenue is unaffected', () => {
+    const testMode = computeRunway({
+      cash_usd: 5000, cash_last_synced_at: fresh(1),
+      ai_burn_usd: 100, ai_burn_last_synced_at: fresh(1), ai_burn_is_lower_bound: false,
+      other_burn_usd: 0, other_burn_last_synced_at: fresh(1),
+      revenue_usd: 50, revenue_last_synced_at: fresh(1), revenue_livemode: false,
+    }, { nowMs: NOW });
+    expect(testMode.partials.net_burn.value_usd).toBe(100); // 50 test-mode contributes $0
+
+    const liveMode = computeRunway({
+      cash_usd: 5000, cash_last_synced_at: fresh(1),
+      ai_burn_usd: 100, ai_burn_last_synced_at: fresh(1), ai_burn_is_lower_bound: false,
+      other_burn_usd: 0, other_burn_last_synced_at: fresh(1),
+      revenue_usd: 50, revenue_last_synced_at: fresh(1), revenue_livemode: true,
+    }, { nowMs: NOW });
+    expect(liveMode.partials.net_burn.value_usd).toBe(50); // 100 - 50 live revenue
+
+    const undefinedMode = computeRunway({
+      cash_usd: 5000, cash_last_synced_at: fresh(1),
+      ai_burn_usd: 100, ai_burn_last_synced_at: fresh(1), ai_burn_is_lower_bound: false,
+      other_burn_usd: 0, other_burn_last_synced_at: fresh(1),
+      revenue_usd: 50, revenue_last_synced_at: fresh(1),
+    }, { nowMs: NOW });
+    expect(undefinedMode.partials.net_burn.value_usd).toBe(50); // conservative default: undefined=live
+  });
+
+  // TS-3 / TS-3b: FR-2 monthly attestation freshness.
+  it('TS-3: a manual cash attestation stays live for the new monthly window (e.g. 20 days, past the old 36h)', () => {
+    const daysAgo = (d) => new Date(NOW - d * 24 * HOUR).toISOString();
+    const row = {
+      cash_usd: 10000, cash_last_synced_at: daysAgo(20),
+      ai_burn_usd: 100, ai_burn_last_synced_at: fresh(1), ai_burn_is_lower_bound: false,
+      other_burn_usd: 0, other_burn_last_synced_at: fresh(1),
+      revenue_usd: 0, revenue_last_synced_at: fresh(1),
+    };
+    const v = computeRunway(row, { nowMs: NOW });
+    expect(v.partials.cash.status).toBe('live');
+  });
+
+  it('TS-3b: an attestation beyond the monthly window still fails closed (stale)', () => {
+    const daysAgo = (d) => new Date(NOW - d * 24 * HOUR).toISOString();
+    const row = {
+      cash_usd: 10000, cash_last_synced_at: daysAgo(40),
+      ai_burn_usd: 100, ai_burn_last_synced_at: fresh(1), ai_burn_is_lower_bound: false,
+      other_burn_usd: 0, other_burn_last_synced_at: fresh(1),
+      revenue_usd: 0, revenue_last_synced_at: fresh(1),
+    };
+    const v = computeRunway(row, { nowMs: NOW });
+    expect(v.partials.cash.status).toBe('stale');
+  });
+
+  it('FR-2: the cash liveness window is a real bound (31 days), not effectively infinite', () => {
+    expect(LIVENESS_WINDOWS_MS.cash).toBe(31 * 24 * HOUR);
   });
 
   it('NULL-not-zero: a 0-valued cash input is distinct from an absent one and never fabricated', () => {
@@ -159,5 +267,41 @@ describe('computeRunway — honest degrade', () => {
   it('exposes per-input liveness windows (ai_burn/revenue hourly-tight, cash generous)', () => {
     expect(LIVENESS_WINDOWS_MS.ai_burn).toBeLessThan(LIVENESS_WINDOWS_MS.cash);
     expect(LIVENESS_WINDOWS_MS.revenue).toBe(LIVENESS_WINDOWS_MS.ai_burn);
+  });
+});
+
+describe('cashAttestationMissingResult — the operator-cash-attestation-missing gauge (FR-4)', () => {
+  it('TS-5a: trips (count:1) via the explicit inputs_incomplete state, cash itself still live', () => {
+    const row = {
+      cash_usd: 5000, cash_last_synced_at: fresh(1),
+      ai_burn_usd: 100, ai_burn_last_synced_at: fresh(1), ai_burn_is_lower_bound: true,
+      other_burn_usd: 0, other_burn_last_synced_at: fresh(1),
+      revenue_usd: 500, revenue_last_synced_at: fresh(1), revenue_livemode: true,
+    };
+    const verdict = computeRunway(row, { nowMs: NOW });
+    expect(verdict.partials.cash.status).toBe('live'); // cash itself is fine
+    expect(verdict.state).toBe('inputs_incomplete');
+    const result = cashAttestationMissingResult(verdict);
+    expect(result.count).toBe(1);
+  });
+
+  it('TS-5b: does NOT trip (count:0) on a real, complete, healthy runway (negative case)', () => {
+    const row = {
+      cash_usd: 5000, cash_last_synced_at: fresh(2),
+      ai_burn_usd: 800, ai_burn_last_synced_at: fresh(1), ai_burn_is_lower_bound: false,
+      other_burn_usd: 200, other_burn_last_synced_at: fresh(1),
+      revenue_usd: 0, revenue_last_synced_at: fresh(1), revenue_livemode: false,
+    };
+    const verdict = computeRunway(row, { nowMs: NOW });
+    expect(verdict.state).toBe('runway_measured');
+    const result = cashAttestationMissingResult(verdict);
+    expect(result.count).toBe(0);
+  });
+
+  it('still trips on the pre-existing cash-not-live condition (regression)', () => {
+    const verdict = computeRunway(null, { nowMs: NOW });
+    const result = cashAttestationMissingResult(verdict);
+    expect(result.count).toBe(1);
+    expect(result.cash_status).toBe('unattested');
   });
 });

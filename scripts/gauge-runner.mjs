@@ -55,7 +55,7 @@ import {
 import { getCaptureCompleteness } from '../lib/eva/venture-capture-forward.js';
 import { resolveMinExtractStage } from '../lib/eva/template-extractor.js';
 import { detectExpiredPremises } from '../lib/governance/revisit-tags.js';
-import { readSubstrateRow, computeRunway, periodMonthOf } from '../lib/operator/cash-burn-substrate.js';
+import { readSubstrateRow, computeRunway, periodMonthOf, cashAttestationMissingResult } from '../lib/operator/cash-burn-substrate.js';
 
 const RECURSION_GOVERNOR_DIMENSION = 'recursion-governor-ratio';
 
@@ -209,8 +209,8 @@ function buildDetectorResolvers(supabase) {
     'operator-cash-attestation-missing': async () => {
       const periodMonth = periodMonthOf(Date.now());
       const row = await readSubstrateRow(periodMonth, supabase);
-      const { partials } = computeRunway(row);
-      return { count: partials.cash.status === 'live' ? 0 : 1, period_month: periodMonth, cash_status: partials.cash.status };
+      const verdict = computeRunway(row);
+      return { ...cashAttestationMissingResult(verdict), period_month: periodMonth };
     },
     'recursion-governor-ratio': async () => {
       const items = await fetchThroughputItems(supabase);
