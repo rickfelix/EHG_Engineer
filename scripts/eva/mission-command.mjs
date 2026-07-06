@@ -21,6 +21,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { resolveActiveVentureByName } from '../../lib/venture-name-resolver.js';
 
 dotenv.config();
 
@@ -61,13 +62,8 @@ function getSupabase() {
 
 async function resolveVentureId(supabase, ventureName) {
   if (!ventureName) return null;
-  const { data } = await supabase
-    .from('ventures')
-    .select('id, name')
-    .ilike('name', `%${ventureName}%`)
-    .limit(1)
-    .single();
-  return data?.id || null;
+  const venture = await resolveActiveVentureByName(supabase, ventureName, { partial: true });
+  return venture?.id || null;
 }
 
 // ============================================================================
