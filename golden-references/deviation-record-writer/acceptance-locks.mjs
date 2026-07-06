@@ -56,15 +56,18 @@ export function buildLocks() {
       return JSON.stringify(vals) === JSON.stringify(expected) && /WEIGHTS\.includes\(/.test(s);
     },
 
-    // D3: legality of COVERAGE requires a qualifying (non-thin) reason — distilling
-    // findQualifyingDeviation (length threshold), NOT mere non-emptiness and NOT
-    // weight membership; reconcile must actually USE qualifies() for coverage.
+    // D3: legality of COVERAGE requires a SENSIBLE reason — distilling the estate's
+    // classifyDeviationReason sense-making pass (length floor AND a causal marker),
+    // NOT mere length and NOT weight membership; reconcile must USE qualifies() for
+    // coverage. A length-only gate greens token-stuffing, so the causal check is
+    // load-bearing.
     qualifying_reason_gate: (s) => {
       const q = fnBody(s, 'qualifies');
       if (!q) return false;
-      const substantive = /trim\(\)\.length\s*>=/.test(q);
+      const lengthFloor = /length\s*<\s*QUALIFYING_REASON_MIN_LENGTH/.test(q);
+      const causalSenseMaking = /CAUSAL_MARKERS\.test/.test(q); // not just length — the anti-token-stuffing gate
       const r = fnBody(s, 'reconcile');
-      return substantive && !!r && /qualifies\s*\(/.test(r);
+      return lengthFloor && causalSenseMaking && !!r && /qualifies\s*\(/.test(r);
     },
 
     // D4: reconcile is a REFERENT-BOUND set difference — coverage requires

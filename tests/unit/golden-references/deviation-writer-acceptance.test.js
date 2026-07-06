@@ -27,7 +27,7 @@ beforeAll(async () => {
   qualifies = mod.qualifies;
 });
 
-const QUALIFYING = 'blocked upstream on X, deferred to next sprint'; // >= 15 chars
+const QUALIFYING = 'deferred because the upstream API is unavailable until Q3'; // SENSIBLE: causal marker + >=6 words + >=15 chars
 
 // A PORTABLE reconcile-contract checker: the exact teeth a delegate runs against
 // their own copy. Returns the list of contract VIOLATIONS (empty === compliant).
@@ -44,9 +44,12 @@ function reconcileContractViolations(reconcileFn) {
   // WRONG-REFERENT must NOT cover (the -D killer: referent binding, not existence)
   const wrong = [{ artifactRef: 'C', why: QUALIFYING, weight: 'declared-descope' }];
   if (!eq(reconcileFn(['A', 'B'], ['A'], wrong).undocumented, ['B'])) v.push('wrong-referent-covered');
-  // thin reason must NOT cover
+  // thin (too-short) reason must NOT cover
   const thin = [{ artifactRef: 'B', why: 'nope', weight: 'minor' }];
   if (!eq(reconcileFn(['A', 'B'], ['A'], thin).undocumented, ['B'])) v.push('thin-reason-covered');
+  // TOKEN-STUFFING: a length-passing but causal-less reason must NOT cover
+  const stuffed = [{ artifactRef: 'B', why: 'many performance and scalability issues remain', weight: 'minor' }];
+  if (!eq(reconcileFn(['A', 'B'], ['A'], stuffed).undocumented, ['B'])) v.push('token-stuffing-covered');
   // delivered items are SUBTRACTED even with no deviations
   if (reconcileFn(['A', 'B'], ['A', 'B'], []).undocumented.length !== 0) v.push('delivered-not-subtracted');
   return v;
@@ -89,6 +92,23 @@ describe('behavioral contract (the real enforcement — runs against the ADAPTED
     expect(sink.readAll()).toHaveLength(1);
     expect(qualifies('too short')).toBe(false);
     expect(reconcile(['A', 'B'], ['A'], sink.readAll()).undocumented).toEqual(['B']); // but does not cover
+  });
+
+  it('TOKEN-STUFFING: a long but causal-less reason records but does NOT cover (sense-making, not length)', () => {
+    const sink = makeSink();
+    const stuffed = 'many performance and scalability issues remain'; // >=15 chars, 6 words, NO causal marker
+    recordDeviation(sink, { artifactRef: 'B', why: stuffed, weight: 'minor' }); // records (non-empty)
+    expect(sink.readAll()).toHaveLength(1);
+    expect(qualifies(stuffed)).toBe(false);                                     // but not sensible
+    expect(reconcile(['A', 'B'], ['A'], sink.readAll()).undocumented).toEqual(['B']);
+  });
+
+  it('GENERIC-ONLY: a bare restatement above the length floor does NOT cover', () => {
+    const sink = makeSink();
+    const generic = 'decided to build it differently'; // matches GENERIC_ONLY, >=15 chars
+    recordDeviation(sink, { artifactRef: 'B', why: generic, weight: 'minor' });
+    expect(qualifies(generic)).toBe(false);
+    expect(reconcile(['A', 'B'], ['A'], sink.readAll()).undocumented).toEqual(['B']);
   });
 
   it('DELIVERED-ONLY: delivery alone (no deviations) empties the gap set', () => {
@@ -159,6 +179,20 @@ describe('the reconcile CONTRACT has TEETH (proves enforcement reaches a delegat
     };
     expect(reconcileContractViolations(brokenReasonBlind)).toContain('thin-reason-covered');
   });
+
+  it('NEGATIVE-COPY: a LENGTH-ONLY qualifies (no sense-making) is REJECTED — token-stuffing slips', () => {
+    // This is exactly the naive/original implementation (length floor only). The
+    // contract catches it: a long causal-less reason greens a silent shrink.
+    const lengthOnly = (expected, delivered, deviations) => {
+      const dset = new Set(delivered);
+      const qLen = (why) => typeof why === 'string' && why.trim().length >= 15;
+      const undocumented = expected.filter(
+        (e) => !dset.has(e) && !(deviations || []).some((d) => d && d.artifactRef === e && qLen(d.why))
+      );
+      return { undocumented, covered: [] };
+    };
+    expect(reconcileContractViolations(lengthOnly)).toContain('token-stuffing-covered');
+  });
 });
 
 describe('textual locks pass on the source', () => {
@@ -191,8 +225,8 @@ describe('doctrine mutations fail named checks (miss direction)', () => {
     expect(judgeSource(m).failed).toContain('closed_weight_allowlist');
   });
 
-  it('a presence-only qualifies() fails qualifying_reason_gate', () => {
-    const m = CANON.replace('why.trim().length >= QUALIFYING_REASON_MIN', 'why.trim().length > 0');
+  it('a length-only qualifies() (no causal sense-making) fails qualifying_reason_gate', () => {
+    const m = CANON.replace('if (!CAUSAL_MARKERS.test(text)) return false;', '');
     expect(judgeSource(m).failed).toContain('qualifying_reason_gate');
   });
 

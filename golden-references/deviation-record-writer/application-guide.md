@@ -26,8 +26,9 @@ need estate context beyond this folder.
    `declared-descope` for a deliberate, documented drop.
 4. Map `makeSink()` onto your durable ledger (append + read-back-by-referent);
    in the estate that is `deviation-ledger.js` over `venture_artifacts`.
-5. Tune `qualifies` (the reason-quality threshold) to your rubric — the estate uses
-   a length floor as a proxy for `findQualifyingDeviation`.
+5. Tune `qualifies` (the SENSIBLE gate) to your rubric — it distills the estate's
+   `classifyDeviationReason` (length floor + causal marker + word count + not
+   generic), not merely `findQualifyingDeviation`'s length floor.
 
 ## Invariants
 
@@ -41,11 +42,15 @@ These are never legal adaptations — each has a WHY in the reference:
   is REJECTED (thrown), never silently stored. This is the token-stuffing defense.
 - **Closed weight taxonomy + reason-quality legality** — `weight` must be in
   `{minor, moderate, critical, declared-descope}`; `why` is required non-empty at
-  write time; but COVERAGE additionally requires a QUALIFYING (substantive) `why`.
-  A valid `weight` with a thin reason does NOT cover — it maps to the estate's
-  `DEVIATED_UNDOCUMENTED`. Do NOT rename `weight` to "disposition": that collides
-  with `post_build_verdicts.disposition` (values `BUILT/PARTIAL/MISSING/DEVIATED_*`)
-  and teaches a taxonomy the estate contradicts.
+  write time (the ledger tier); but COVERAGE additionally requires a SENSIBLE `why`
+  — one that clears a length floor AND carries a causal marker AND is not a bare
+  restatement (the estate's `classifyDeviationReason` sense-making pass). Length is
+  necessary, not sufficient: a long causal-less reason is THIN and does NOT cover,
+  so token-stuffing cannot buy coverage. (A *short* reason fails the length floor; a
+  *THIN* reason clears length but not sense-making — the estate scores both as
+  gaps.) Do NOT rename `weight` to "disposition": that collides with
+  `post_build_verdicts.disposition` (values `BUILT/PARTIAL/MISSING/DEVIATED_*`) and
+  teaches a taxonomy the estate contradicts.
 - **Reconcile defeats silent shrink** — an expected item is undocumented unless it
   was delivered OR a deviation is bound to THAT item AND carries a qualifying
   reason. Coverage is REFERENT-BOUND: a record for a different item, or a thin
@@ -59,8 +64,8 @@ These are never legal adaptations — each has a WHY in the reference:
 | `recordDeviation({artifactRef,...})`  | `lib/eva/deviation-ledger.js` `recordDeviation` → `artifact_data`           |
 | `artifactRef` binding                 | `readDeviations` reads back by `artifact_ref`                              |
 | `weight` `{...declared-descope}`      | `DEVIATION_WEIGHTS` (chairman-ratified; `declared-descope` = documented skip)|
-| `qualifies(why)`                      | `post-build-verdict-engine.js` `findQualifyingDeviation` (reason quality)   |
-| `reconcile` → `undocumented`          | `post_build_verdicts`: `MISSING` OR (`PARTIAL` AND `deviation_artifact_id IS NULL`) = 0 |
+| `qualifies(why)` (SENSIBLE gate)      | `adherence-scorer.js` `classifyDeviationReason` (length + causal + words + not-generic); `findQualifyingDeviation` is the coarser length-only disposition split |
+| `reconcile` → `undocumented`          | approximates `MISSING ∪ DEVIATED_UNDOCUMENTED`; the `post_build_verdicts` `MISSING OR (PARTIAL AND deviation_artifact_id IS NULL)=0` count is one venture's remediation pass condition, not a canonical gate |
 | `reconcile` covered                   | verdict `DEVIATED_WITH_DOCUMENTED_REASON`                                   |
 | **caveat**: `weight` ≠ `disposition`  | `post_build_verdicts.disposition` is a DIFFERENT column (`BUILT/PARTIAL/…`) |
 

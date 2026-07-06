@@ -21,18 +21,26 @@ note written AT the divergence that makes the drop reconcilable later.
   artifact is allowable — what the rubric penalizes is UNDOCUMENTED drift, not
   documented, sensible deviation.* `why` is REQUIRED non-empty for EVERY weight,
   including `declared-descope`.
-- **The legality boundary is REASON QUALITY, not a category**
-  (`lib/eva/post-build-verdict-engine.js`): `computeDisposition` splits
-  `DEVIATED_WITH_DOCUMENTED_REASON` from `DEVIATED_UNDOCUMENTED` via
-  `findQualifyingDeviation` — a reason qualifies by substance (length threshold),
-  not by which weight it carries. `lib/eva/adherence-scorer.js` and
-  `journey-evidence-merge.js` read the `disposition` + `deviation_artifact_id`
+- **Reason quality is TWO-TIER, and length is necessary-not-sufficient**: the
+  ledger (`lib/eva/deviation-ledger.js`) enforces only a NON-EMPTY `why`;
+  `lib/eva/post-build-verdict-engine.js` `findQualifyingDeviation` applies a coarse
+  length floor (`>=15`) to split `DEVIATED_WITH_DOCUMENTED_REASON` from
+  `DEVIATED_UNDOCUMENTED` at the disposition level; but the ACTUAL anti-token-
+  stuffing judgment is `lib/eva/adherence-scorer.js` `classifyDeviationReason`
+  (SENSIBLE vs THIN: length floor AND a causal marker AND a word-count floor AND
+  not a bare generic restatement). The source is explicit that length is
+  *"necessary, not sufficient"* — a THIN reason (long but causal-less) is scored
+  as a GAP. This reference's `qualifies()` distills the SENSIBLE gate, so coverage
+  genuinely resists token-stuffing, not merely short text. `adherence-scorer.js` +
+  `journey-evidence-merge.js` also read the `disposition` + `deviation_artifact_id`
   linkage on the verdict side.
-- **The real silent-shrink reconcile query** (over `post_build_verdicts`): the
-  count of `disposition='MISSING'` OR (`disposition='PARTIAL'` AND
-  `deviation_artifact_id IS NULL`) must be ZERO — an undocumented gap is a MISSING
-  or PARTIAL claim with no qualifying deviation linked to it. This reference
-  distills that query into a pure `reconcile()` set difference.
+- **A concrete silent-shrink pass condition** (one venture's remediation triage,
+  NOT a canonical system gate): over `post_build_verdicts`, the count of
+  `disposition='MISSING'` OR (`disposition='PARTIAL'` AND `deviation_artifact_id
+  IS NULL`) must be ZERO. This reference distills the *shape* of that check into a
+  pure `reconcile()` set difference; the reference's `undocumented` set is roughly
+  `MISSING ∪ DEVIATED_UNDOCUMENTED` (it also surfaces THIN-reason gaps), so the
+  correspondence is approximate, not verbatim.
 
 **Vocabulary caveat** (do not miscopy): the categorical field here is `weight`
 `{minor, moderate, critical, declared-descope}` — the estate's real, closed,

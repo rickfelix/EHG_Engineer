@@ -13,12 +13,18 @@
 // Estate anchor (the real shape this distills):
 //   lib/eva/deviation-ledger.js recordDeviation({ artifactRef, what, instead,
 //   why, weight }) + readDeviations (records BOUND by artifact_ref; `why` is
-//   REQUIRED non-empty for EVERY weight, including declared-descope).
-//   lib/eva/post-build-verdict-engine.js splits DEVIATED_WITH_DOCUMENTED_REASON
-//   from DEVIATED_UNDOCUMENTED by REASON QUALITY (findQualifyingDeviation:
-//   why.trim().length >= 15), NOT by a categorical value. The real silent-shrink
-//   query (post_build_verdicts): count(disposition='MISSING' OR (disposition=
-//   'PARTIAL' AND deviation_artifact_id IS NULL)) must be 0.
+//   REQUIRED non-empty for EVERY weight, including declared-descope — the ledger
+//   only enforces non-empty). lib/eva/adherence-scorer.js classifyDeviationReason
+//   is the estate's EXCLUSIVE sense-making pass (SENSIBLE vs THIN: length floor +
+//   causal marker + word count + not-generic) — a THIN reason is scored as a GAP.
+//   lib/eva/post-build-verdict-engine.js findQualifyingDeviation (length >= 15)
+//   is the coarser disposition-level split (DEVIATED_WITH_DOCUMENTED_REASON vs
+//   DEVIATED_UNDOCUMENTED); reconcile() below distills the STRONGER sense-making
+//   gate, because a length-passing but causal-less reason is exactly the
+//   token-stuffing the honesty control must police. (A venture-remediation pass
+//   condition over post_build_verdicts — count(MISSING OR (PARTIAL AND
+//   deviation_artifact_id IS NULL)) = 0 — is one concrete instance, not a
+//   canonical system-wide gate.)
 //
 // VOCABULARY CAVEAT (do not miscopy): the categorical field here is `weight`
 //   {minor, moderate, critical, declared-descope} — the estate's real, closed,
@@ -35,9 +41,11 @@
 //     why + a weight in the closed allowlist; a malformed / free-text-only record
 //     is REJECTED (thrown), not silently stored (the token-stuffing failure mode).
 //  3. CLOSED WEIGHT ALLOWLIST + REASON-QUALITY LEGALITY: weight must be in the
-//     allowlist (throws otherwise); why is required non-empty at write time; but
-//     COVERAGE additionally requires a QUALIFYING (non-thin) why — a valid weight
-//     with a thin reason does NOT cover (maps to DEVIATED_UNDOCUMENTED).
+//     allowlist (throws otherwise); why is required non-empty at write time (the
+//     ledger tier); but COVERAGE additionally requires a SENSIBLE why — clears a
+//     length floor AND has a causal marker AND is not a bare restatement (the
+//     estate's classifyDeviationReason sense-making pass, the REAL anti-token-
+//     stuffing gate). A long but causal-less reason is THIN and does NOT cover.
 //  4. RECONCILE DEFEATS SILENT SHRINK: reconcile(expected, delivered, deviations)
 //     returns { undocumented } = expected − delivered − { e : ∃ d with
 //     d.artifactRef === e AND qualifies(d.why) }. Coverage is REFERENT-BOUND —
@@ -46,19 +54,34 @@
 
 /** Estate-exact closed weight taxonomy (lib/eva/deviation-ledger.js DEVIATION_WEIGHTS). */
 const WEIGHTS = Object.freeze(['minor', 'moderate', 'critical', 'declared-descope']);
-/** Distills findQualifyingDeviation: a reason qualifies only if substantive. */
-const QUALIFYING_REASON_MIN = 15;
+// Reason-quality gate — distills the estate's REAL two-tier honesty model:
+//   Tier 1 (the ledger): recordDeviation only enforces a NON-EMPTY why.
+//   Tier 2 (the sense-making pass, adherence-scorer.js classifyDeviationReason):
+//   a reason only COVERS a gap if it is SENSIBLE — clears the length floor AND is
+//   not a bare generic restatement AND contains a causal marker AND has enough
+//   words. Gating coverage on length ALONE greens token-stuffed reasons (length
+//   is necessary, not sufficient) — see the length-only negative-copy test.
+const QUALIFYING_REASON_MIN_LENGTH = 15;
+const SENSIBLE_MIN_WORDS = 6;
+const CAUSAL_MARKERS = /\b(because|since|due to|per|requires?|so that|in order to|as a result|caused by|driven by)\b/i;
+const GENERIC_ONLY = /^(decided to (do it|build it|make it) differently|changed (it|this|approach)|different approach|updated (per|based on) feedback)\.?$/i;
 
 /**
- * A qualifying reason is a non-empty, SUBSTANTIVE why — not a thin placeholder.
- * Distills lib/eva/post-build-verdict-engine.js findQualifyingDeviation
- * (why.trim().length >= 15). Coverage in reconcile() gates on THIS, not on mere
- * presence and not on weight membership.
+ * Whether a deviation's `why` is SENSIBLE (may cover a gap) vs THIN (may not).
+ * Distills lib/eva/adherence-scorer.js classifyDeviationReason — the estate's
+ * exclusive sense-making pass, NOT merely the length floor. Ambiguous cases fail
+ * toward THIN (never toward SENSIBLE). This is the anti-token-stuffing gate: a
+ * long, causal-less restatement does NOT qualify.
  * @param {string} why
- * @returns {boolean}
+ * @returns {boolean} true iff SENSIBLE
  */
 export function qualifies(why) {
-  return typeof why === 'string' && why.trim().length >= QUALIFYING_REASON_MIN;
+  const text = String(why ?? '').trim();
+  if (text.length < QUALIFYING_REASON_MIN_LENGTH) return false;             // Tier-1 length floor
+  if (GENERIC_ONLY.test(text)) return false;                               // bare restatement — THIN
+  if (!CAUSAL_MARKERS.test(text)) return false;                            // no causal content — THIN (token-stuffing)
+  if (text.split(/\s+/).filter(Boolean).length < SENSIBLE_MIN_WORDS) return false;
+  return true;                                                              // SENSIBLE
 }
 
 /**
