@@ -47,10 +47,17 @@ const GATE_NAME = 'WIRE_CHECK_ADVISORY';
 
 /**
  * Remediation message appended to every unreachable-file advisory warning.
+ *
+ * QF-20260705-574: this pattern recurred 3+ times in one session with the IDENTICAL fix each
+ * time (Child C, Child E, Solomon guardrail SD) — workers rediscovered it from scratch because
+ * this EARLIER (advisory) message only named ONE of the two sanctioned remedies the LEAD-FINAL
+ * blocking gate already teaches. Both are now enumerated inline with one-line examples.
  */
 const REMEDIATION =
-  'Wire each file into package.json scripts (e.g. "audit:x": "node scripts/x.js") ' +
-  'or import it from a statically-reachable caller — in the SAME PR. Otherwise the ' +
+  'If intentional, pick the matching remedy in the SAME PR — either: ' +
+  '(a) wire it into package.json scripts (e.g. "audit:x": "node scripts/x.js") or import it from a ' +
+  'statically-reachable caller; OR (b) if it is a one-off probe/validation script with no permanent ' +
+  'entry point, add a `// @wire-check-exempt: <reason>` comment in its first 2KB. Otherwise the ' +
   'blocking WIRE_CHECK_GATE will fail this SD at LEAD-FINAL and force a 2nd PR.';
 
 /**

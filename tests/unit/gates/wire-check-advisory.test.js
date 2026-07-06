@@ -83,4 +83,13 @@ describe('wire-check-advisory gate (SD-FDBK-ENH-WIRE-CHECK-GATE-002)', () => {
     const source = fs.readFileSync(ADVISORY_FILE, 'utf8');
     expect(source).toMatch(/required:\s*false/);
   });
+
+  // QF-20260705-574: this earlier (advisory) message previously named only ONE of the two
+  // sanctioned remedies the blocking LEAD-FINAL gate already teaches — workers rediscovered the
+  // @wire-check-exempt option from scratch each time. Both remedies must now be inline.
+  it('teaches BOTH sanctioned remedies inline (package.json wiring AND @wire-check-exempt)', () => {
+    const source = fs.readFileSync(ADVISORY_FILE, 'utf8');
+    expect(source).toMatch(/package\.json scripts/);
+    expect(source).toMatch(/@wire-check-exempt/);
+  });
 });
