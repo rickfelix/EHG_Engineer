@@ -8,6 +8,7 @@
 import { parseArgs } from 'node:util';
 import { CAPABILITY_TYPES, isValidCapabilityType } from '../../lib/capabilities/capability-taxonomy.js';
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
+import { resolveActiveVentureByName } from '../../lib/venture-name-resolver.js';
 
 const supabase = createSupabaseServiceClient();
 
@@ -85,18 +86,17 @@ async function main() {
     process.exit(1);
   }
 
-  // Resolve venture name to ID
-  const { data: ventures, error: ventureError } = await supabase
-    .from('ventures')
-    .select('id, name')
-    .ilike('name', venture);
-
-  if (ventureError) {
-    console.error('Error querying ventures:', ventureError.message);
+  // Resolve venture name to ID (status-aware: prefers an active/paused match over
+  // a cancelled duplicate sharing the same name)
+  let resolvedVenture;
+  try {
+    resolvedVenture = await resolveActiveVentureByName(supabase, venture);
+  } catch (err) {
+    console.error('Error querying ventures:', err.message);
     process.exit(1);
   }
 
-  if (!ventures || ventures.length === 0) {
+  if (!resolvedVenture) {
     console.error(`\n  Error: Venture "${venture}" not found\n`);
     const { data: all } = await supabase.from('ventures').select('name');
     if (all) {
@@ -106,8 +106,8 @@ async function main() {
     process.exit(1);
   }
 
-  const ventureId = ventures[0].id;
-  const ventureName = ventures[0].name;
+  const ventureId = resolvedVenture.id;
+  const ventureName = resolvedVenture.name;
 
   // Insert capability
   const { data: inserted, error: insertError } = await supabase

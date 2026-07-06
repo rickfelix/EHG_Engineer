@@ -16,6 +16,7 @@
  */
 import { createSupabaseServiceClient } from '../lib/supabase-connection.js';
 import { convertSprintToSDs } from '../lib/eva/lifecycle-sd-bridge.js';
+import { resolveActiveVentureByName } from '../lib/venture-name-resolver.js';
 
 const arg = process.argv[2];
 const APPLY = process.argv.includes('--apply');
@@ -26,9 +27,15 @@ if (!arg) { console.error('Usage: node scripts/reroute-venture-to-bridge.mjs "<v
 const sb = await createSupabaseServiceClient('engineer');
 const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(arg);
 
-const { data: venture } = isUuid
-  ? await sb.from('ventures').select('id,name,repo_url,build_model').eq('id', arg).maybeSingle()
-  : await sb.from('ventures').select('id,name,repo_url,build_model').ilike('name', arg).limit(1).maybeSingle();
+let venture;
+if (isUuid) {
+  ({ data: venture } = await sb.from('ventures').select('id,name,repo_url,build_model').eq('id', arg).maybeSingle());
+} else {
+  const resolved = await resolveActiveVentureByName(sb, arg);
+  if (resolved) {
+    ({ data: venture } = await sb.from('ventures').select('id,name,repo_url,build_model').eq('id', resolved.id).maybeSingle());
+  }
+}
 if (!venture) { console.error(`Venture not found: ${arg}`); process.exit(1); }
 
 console.log(`\n=== Re-route venture onto LEO-SD bridge ${APPLY ? '(APPLY)' : '(DRY-RUN)'} ===`);
