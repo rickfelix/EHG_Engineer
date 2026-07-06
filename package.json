@@ -45,6 +45,7 @@
     "audit:orphan-prs": "node scripts/audit-orphan-prs.mjs",
     "audit:shared-tables": "node scripts/audit-shared-tables-residue.cjs",
     "audit:ghost-completed": "node scripts/audit-ghost-completed-sds.mjs",
+    "audit:venture-design-pass": "node scripts/audit-venture-design-pass.mjs",
     "pattern:port-isol-persist": "node scripts/insert-pat-port-isol-001.mjs",
     "hook:rca-outcome": "node scripts/hooks/post-tool-rca-outcome.cjs",
     "audit:codeguardian-mock": "node scripts/audit/codeguardian-mock-disposition.mjs",
