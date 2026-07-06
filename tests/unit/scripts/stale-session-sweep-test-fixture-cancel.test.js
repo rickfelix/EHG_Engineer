@@ -14,39 +14,41 @@ const SOURCE_PATH = resolve(__dirname, '../../../scripts/stale-session-sweep.cjs
 const require = createRequire(import.meta.url);
 const sweep = require(SOURCE_PATH);
 
+// Chainable + thenable query-builder mock: select/ilike/in/or/is/lt (used by both the
+// SELECT path and getActiveSDFilter's real .in()/.or()/.is() calls) all return the SAME
+// chain object, which also resolves like a promise -- so it doesn't matter how many
+// chain calls the real production code makes before awaiting.
+function makeSelectChain(result) {
+  const chain = {};
+  chain.select = vi.fn().mockReturnValue(chain);
+  chain.ilike = vi.fn().mockReturnValue(chain);
+  chain.in = vi.fn().mockReturnValue(chain);
+  chain.or = vi.fn().mockReturnValue(chain);
+  chain.is = vi.fn().mockReturnValue(chain);
+  chain.lt = vi.fn().mockReturnValue(chain);
+  chain.then = (resolve, reject) => Promise.resolve(result).then(resolve, reject);
+  return chain;
+}
+
+function makeUpdateChain(result) {
+  const chain = {};
+  chain.eq = vi.fn().mockReturnValue(chain);
+  chain.is = vi.fn().mockReturnValue(chain);
+  chain.then = (resolve, reject) => Promise.resolve(result).then(resolve, reject);
+  return chain;
+}
+
 function makeSupabase({ selectResult, updateResults = [] }) {
   let updateCallIndex = 0;
   return {
     from: vi.fn().mockImplementation((table) => {
       if (table !== 'strategic_directives_v2') throw new Error(`unexpected table: ${table}`);
       return {
-        select: vi.fn().mockReturnThis(),
-        ilike: vi.fn().mockReturnThis(),
-        in: vi.fn().mockReturnThis(),
-        is: vi.fn().mockImplementation(function () {
-          // First .is() call is part of the SELECT chain (claiming_session_id null filter);
-          // subsequent calls belong to per-row UPDATE chains.
-          if (this._isUpdateChain) {
-            const result = updateResults[updateCallIndex] ?? { error: null };
-            updateCallIndex++;
-            return Promise.resolve(result);
-          }
-          return this;
-        }),
-        lt: vi.fn().mockImplementation(function () {
-          return Promise.resolve(selectResult);
-        }),
-        update: vi.fn().mockImplementation(function (payload) {
-          this._lastUpdatePayload = payload;
-          const chain = {
-            eq: vi.fn().mockReturnThis(),
-            is: vi.fn().mockImplementation(() => {
-              const result = updateResults[updateCallIndex] ?? { error: null };
-              updateCallIndex++;
-              return Promise.resolve(result);
-            }),
-          };
-          return chain;
+        select: vi.fn().mockReturnValue(makeSelectChain(selectResult)),
+        update: vi.fn().mockImplementation(() => {
+          const result = updateResults[updateCallIndex] ?? { error: null };
+          updateCallIndex++;
+          return makeUpdateChain(result);
         }),
       };
     }),
@@ -74,21 +76,21 @@ describe('cancelStaleTestFixtures()', () => {
   });
 
   it('never queries by anything but the SD-TEST-% prefix', async () => {
+    let ilikeCol, ilikePattern;
     const fromSpy = vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      ilike: vi.fn().mockImplementation((col, pattern) => {
-        expect(col).toBe('sd_key');
-        expect(pattern).toBe(sweep.TEST_FIXTURE_SD_KEY_LIKE);
-        return {
-          in: vi.fn().mockReturnThis(),
-          is: vi.fn().mockReturnThis(),
-          lt: vi.fn().mockResolvedValue({ data: [], error: null }),
-        };
+      select: vi.fn().mockReturnValue({
+        ilike: vi.fn().mockImplementation((col, pattern) => {
+          ilikeCol = col;
+          ilikePattern = pattern;
+          return makeSelectChain({ data: [], error: null });
+        }),
       }),
     });
     const supabase = { from: fromSpy };
     await sweep.cancelStaleTestFixtures(supabase, now, [], []);
     expect(fromSpy).toHaveBeenCalledWith('strategic_directives_v2');
+    expect(ilikeCol).toBe('sd_key');
+    expect(ilikePattern).toBe(sweep.TEST_FIXTURE_SD_KEY_LIKE);
   });
 
   it('does nothing (no throw, no actions) when zero stale fixtures are found', async () => {

@@ -819,12 +819,16 @@ function checkNpmInstallLock() {
 const TEST_FIXTURE_STALE_MS = 24 * 60 * 60 * 1000;
 async function cancelStaleTestFixtures(supabase, now, actions, warnings) {
   try {
+    // active-sd-predicate-parity: use the shared predicate rather than an inline
+    // .in('status', [...]) literal (PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001).
+    const { getActiveSDFilter } = await import('../lib/sd/active-sd-predicate.js');
     const cutoff = new Date(now.getTime() - TEST_FIXTURE_STALE_MS).toISOString();
-    const { data: staleFixtures, error } = await supabase
+    let query = supabase
       .from('strategic_directives_v2')
       .select('id, sd_key, status')
-      .ilike('sd_key', TEST_FIXTURE_SD_KEY_LIKE)
-      .in('status', ['draft', 'in_progress', 'active'])
+      .ilike('sd_key', TEST_FIXTURE_SD_KEY_LIKE);
+    query = getActiveSDFilter(query);
+    const { data: staleFixtures, error } = await query
       .is('claiming_session_id', null)
       .lt('updated_at', cutoff);
 
@@ -836,6 +840,8 @@ async function cancelStaleTestFixtures(supabase, now, actions, warnings) {
     for (const fixture of (staleFixtures || [])) {
       // Canonical cancellation shape (matches scripts/cancel-sd.js): top-level
       // cancellation_reason column, not metadata -- never overwrite metadata here.
+      // active_session_id:null co-clears alongside claiming_session_id:null, per the
+      // FR-1 release-site invariant (claim-lifecycle-hardening).
       const { error: updateErr } = await supabase
         .from('strategic_directives_v2')
         .update({
@@ -843,6 +849,7 @@ async function cancelStaleTestFixtures(supabase, now, actions, warnings) {
           current_phase: 'CANCELLED',
           cancellation_reason: 'QF-20260704-545: auto-cancelled leaked SD-TEST-* fixture, unclaimed >24h',
           claiming_session_id: null,
+          active_session_id: null,
           is_working_on: false,
         })
         .eq('id', fixture.id)
