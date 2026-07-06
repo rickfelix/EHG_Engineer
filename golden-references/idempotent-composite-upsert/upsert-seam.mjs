@@ -62,7 +62,10 @@
 /** Deep-ish equality for a read-back payload field. Scalars compare by ===; nested values by
  *  a stable JSON encoding (both operands come from the same shaped record, so key order is
  *  consistent). Sufficient for the reference; a production verify would use the DB's own
- *  RETURNING row or a per-write token. */
+ *  RETURNING row or a per-write token. CAVEAT for a real table: this is order-sensitive and
+ *  exact, so a column the DB TRANSFORMS on read-back — jsonb re-sorted by key, undefined->null,
+ *  a numeric returned as a string, a timestamptz normalized — would false-throw on a LEGITIMATE
+ *  write. For such columns verify a per-write token / RETURNING id, not a payload deep-equal. */
 function deepEq(a, b) {
   if (a === b) return true;
   try { return JSON.stringify(a) === JSON.stringify(b); } catch { return false; } // e.g. a BigInt payload -> fall back to !== (fail loud)
