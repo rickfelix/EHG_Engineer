@@ -12,10 +12,13 @@ auto-applied).
   shipped multiple fixes for this exact class.
 - Recurring surprise: `SECURITY DEFINER` functions **bypass RLS** on every table they
   touch — a policy on the table does not protect a definer function's writes.
-- Recurring inconsistency: estate `search_path` pinning has **14 distinct forms**; the
-  most common (`SET search_path = public`) is *weaker* than the hardened remediation
-  lineage (`''` / `pg_catalog, public`) introduced by
-  `database/migrations/20251216_fix_security_definer_views.sql`.
+- Recurring inconsistency: estate `search_path` pinning has **14 distinct forms**,
+  and none of the common ones position `pg_temp` explicitly last — the actual
+  hardening that matters for definer functions (unless positioned, `pg_temp` is
+  implicitly searched FIRST for relations; CVE-2018-1058 class). Several estate
+  definer precedents also never revoke PUBLIC EXECUTE and one authorizes on
+  `current_user` (dead code inside a definer). This reference is the corrective,
+  not a citation of existing estate practice.
 - Process: DDL is chairman-gated (`requires_chairman_apply` pre-flagged at sourcing);
   migrations stage with a DOWN stanza and apply at a cutover, never on merge.
 

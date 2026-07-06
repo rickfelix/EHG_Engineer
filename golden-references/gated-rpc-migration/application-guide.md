@@ -29,11 +29,18 @@ entity; you do not need estate context beyond this folder.
 
 These are never legal adaptations — each has a WHY in the reference:
 
-- **Hardened search_path pin** (`SET search_path = pg_catalog, public` or `''`) —
-  never bare `public`; the modal estate form is the weaker survivor and leaves
-  builtins shadowable.
-- **In-function authorization** — `SECURITY DEFINER` bypasses RLS on every table it
-  touches; a table policy does not protect this write path. The AUTHZ block stays.
+- **Hardened search_path pin** (`SET search_path = public, pg_temp`) — `pg_temp`
+  explicitly LAST, always. Unless positioned, `pg_temp` is implicitly searched
+  FIRST for relations, so a malicious temporary table can shadow the governed
+  table inside the definer (CVE-2018-1058 class). Do not use `''` with this
+  reference's unqualified table references — it breaks name resolution at
+  runtime while passing textual checks.
+- **In-function authorization on the CALLER identity** — `SECURITY DEFINER`
+  bypasses RLS on every table it touches; a table policy does not protect this
+  write path. The AUTHZ block stays, and it must read the caller from
+  `request.jwt.claims->>'role'` (with a `session_user` fallback) — NEVER
+  `current_user`, which inside a definer is the function OWNER and makes any
+  check dead code.
 - **Closed execution surface** — `REVOKE ... FROM PUBLIC` and `FROM anon`, then
   `GRANT` to named roles only.
 - **RAISE-based validation with a stable error contract** — supabase-js silently

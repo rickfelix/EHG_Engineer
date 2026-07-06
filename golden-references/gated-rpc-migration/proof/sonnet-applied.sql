@@ -1,9 +1,8 @@
--- STAGED, CHAIRMAN-GATED MIGRATION — requires_chairman_apply pre-flagged at
--- sourcing; stages with its DOWN stanza below, and applies at a cutover —
--- never on merge.
--- Adapted from golden reference: golden-references/gated-rpc-migration/migration.sql
--- Source SD: SD-LEO-INFRA-GOLDEN-REFERENCES-CANONICAL-001-B (delegate adaptation — escalation_requests)
--- Hardening lineage: database/migrations/20251216_fix_security_definer_views.sql
+-- Application of golden reference: gated-rpc-migration (escalation_requests / submit_escalation_request).
+-- Chairman-gated migration: requires_chairman_apply pre-flagged at sourcing, stages with the
+-- DOWN stanza below, and applies at a cutover — never on merge.
+-- Hardening basis: PostgreSQL CVE-2018-1058 guidance for SECURITY DEFINER — search_path pinned
+-- with pg_temp explicitly LAST; caller identity read from request.jwt.claims, never current_user.
 
 -- ============================================================================
 -- UP
@@ -46,23 +45,31 @@ CREATE OR REPLACE FUNCTION submit_escalation_request(
 RETURNS escalation_requests
 LANGUAGE plpgsql
 SECURITY DEFINER
--- Hardened pin (remediation lineage): pg_catalog first, never bare `public`.
--- The modal estate form `SET search_path = public` is the WEAKER survivor —
--- it leaves the function open to malicious same-name objects in public
--- schemas shadowing pg_catalog builtins.
-SET search_path = pg_catalog, public
+-- Hardened pin (CVE-2018-1058 class): pg_temp explicitly LAST. Unless
+-- positioned, pg_temp is implicitly searched FIRST for relations — a
+-- malicious temporary table could shadow the governed table inside this
+-- definer. pg_catalog needs no listing (always first for builtins); the
+-- hazard is temp-schema and cross-schema relation shadowing, not builtins.
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_row escalation_requests;
+  v_caller_role TEXT;
 BEGIN
-  -- AUTHZ (in-function, because SECURITY DEFINER bypasses RLS): only the
-  -- service role or an authenticated caller may submit. Applications adapt
-  -- this predicate to their role model; deleting it is never a legal
-  -- adaptation.
-  IF current_setting('request.jwt.claims', true) IS NULL
-     AND current_user NOT IN ('service_role', 'postgres') THEN
+  -- AUTHZ (in-function, because SECURITY DEFINER bypasses RLS): read the
+  -- CALLER's identity, never current_user — inside a definer, current_user
+  -- is the function OWNER, so any current_user check is dead code. Under
+  -- PostgREST the caller role lives in request.jwt.claims->>'role'; for
+  -- direct DB sessions fall back to session_user. Fail CLOSED on anything
+  -- not explicitly allowed.
+  v_caller_role := coalesce(
+    current_setting('request.jwt.claims', true)::jsonb ->> 'role',
+    session_user::text
+  );
+  IF v_caller_role NOT IN ('authenticated', 'service_role', 'postgres') THEN
     RAISE insufficient_privilege
-      USING MESSAGE = 'submit_escalation_request: caller not authorized';
+      USING MESSAGE = 'submit_escalation_request: caller role '
+        || coalesce(v_caller_role, '<none>') || ' not authorized';
   END IF;
 
   -- Argument validation FIRST, with a stable RAISE error contract — the
@@ -86,8 +93,13 @@ BEGIN
 
   -- Write, then RETURN the row (verify-by-read-back: the caller receives the
   -- persisted row, so "succeeded but nothing landed" is impossible).
+  -- requested_by records the CALLER (jwt sub, else session_user) — never
+  -- current_user, which is the definer/owner inside this function.
   INSERT INTO escalation_requests (venture_id, summary, detail, severity, requested_by)
-  VALUES (p_venture_id, p_summary, p_detail, p_severity, current_user)
+  VALUES (p_venture_id, p_summary, p_detail, p_severity, coalesce(
+    current_setting('request.jwt.claims', true)::jsonb ->> 'sub',
+    session_user::text
+  ))
   RETURNING * INTO v_row;
 
   RETURN v_row;
@@ -95,8 +107,8 @@ END;
 $$;
 
 -- Execution surface: closed by default, opened to named roles only.
--- PUBLIC/anon never call a definer function (estate precedents:
--- rescan_stage_20, fn_advance_venture_stage).
+-- PUBLIC/anon never call a definer function. NOTE: functions are created
+-- PUBLIC-executable by default, so the REVOKE below is load-bearing.
 REVOKE EXECUTE ON FUNCTION submit_escalation_request(UUID, TEXT, TEXT, TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION submit_escalation_request(UUID, TEXT, TEXT, TEXT) FROM anon;
 GRANT EXECUTE ON FUNCTION submit_escalation_request(UUID, TEXT, TEXT, TEXT) TO authenticated;
