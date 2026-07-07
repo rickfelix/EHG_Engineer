@@ -21,13 +21,17 @@ function createMockSupabase(overrides = {}) {
 }
 
 describe('checkBudget', () => {
-  it('should allow when no budget configured', async () => {
+  // QF-20260706-549: checkBudget previously FAILED OPEN (allowed:true) when no
+  // channel_budgets row existed, making the spend brake a no-op and leaving spend
+  // untracked. Regression: a missing budget row must BLOCK, not grant unlimited spend.
+  it('should BLOCK (fail closed) when no budget configured', async () => {
     const supabase = createMockSupabase();
     supabase.single.mockResolvedValue({ data: null, error: { code: 'PGRST116' } });
 
     const result = await checkBudget(supabase, 'v-1', 'x');
 
-    expect(result.allowed).toBe(true);
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toContain('No budget configured');
     expect(result.budget).toBeNull();
   });
 
