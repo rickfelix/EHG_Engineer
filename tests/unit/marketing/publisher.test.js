@@ -29,7 +29,13 @@ function createMockSupabase() {
     upsert: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     limit: vi.fn().mockResolvedValue({ data: [] }),
-    single: vi.fn().mockResolvedValue({ data: null, error: null })
+    // Default: a funded budget row, so "should publish" tests exercise the real
+    // configured-budget path (QF-20260706-549: checkBudget now fails CLOSED when
+    // no row exists, so a null default would block every publish here).
+    single: vi.fn().mockResolvedValue({
+      data: { status: 'active', current_month_spend_cents: 0, monthly_budget_cents: 10000, daily_limit_cents: null },
+      error: null
+    })
   };
   mock.from.mockReturnValue(mock);
   return mock;
@@ -99,6 +105,24 @@ describe('Publisher', () => {
 
     // Verify marketing_attribution insert was called
     expect(mockSupabase.from).toHaveBeenCalledWith('marketing_attribution');
+  });
+
+  it('should BLOCK publish (fail closed) when no budget row exists', async () => {
+    // QF-20260706-549: publisher/index.js has its own local checkBudget() (separate
+    // from lib/marketing/budget-governor.js) that also failed open on a missing row.
+    const noBudgetSupabase = createMockSupabase();
+    noBudgetSupabase.single = vi.fn().mockResolvedValue({ data: null, error: null });
+    noBudgetSupabase.from.mockReturnValue(noBudgetSupabase);
+
+    const result = await publish({
+      supabase: noBudgetSupabase,
+      content: { id: 'c-1', body: 'Test' },
+      platform: 'x',
+      ventureId: 'v-1'
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('No budget configured');
   });
 
   it('should deduplicate existing dispatches', async () => {
