@@ -109,6 +109,16 @@ function makeRecordingSupabase() {
   return {
     inserts,
     from: vi.fn((table) => {
+      // SD-LEO-FEAT-CLOSE-DISTINCTIVENESS-GAP-001: the ui-leaf branch now reads the award
+      // library — resolve it (empty) so the sampler fail-softs instantly instead of hitting
+      // the generic sdTable mock's never-settling order() thenable.
+      if (table === 'design_reference_library') {
+        return {
+          select: vi.fn(() => ({
+            order: vi.fn().mockResolvedValue({ data: [], error: null }),
+          })),
+        };
+      }
       if (table === 'eva_vision_documents') {
         const vc = {
           select: vi.fn(() => vc),
