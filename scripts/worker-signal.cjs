@@ -28,6 +28,7 @@ const { evaluateSolomonTriage } = require('../lib/coordinator/solomon-triage.cjs
 const { PAYLOAD_KINDS } = require('../lib/fleet/worker-status.cjs');
 // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class SSOT.
 const { computeReplyExpectedBy } = require('../lib/coordinator/reply-class.cjs');
+const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 
 // SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-4): 'unfit' — a worker reporting an assignment it cannot
 // execute HERE/NOW (repo mismatch / closed premise / missing input precondition). Replaces the
@@ -604,6 +605,7 @@ async function solomonConsultMain(flags, positional) {
 }
 
 async function main() {
+  warnIfCheckoutStale('worker-signal.cjs');
   const { flags, positional } = parseArgs(process.argv);
 
   // FR-1: route the `intent` subcommand before the legacy signal path.

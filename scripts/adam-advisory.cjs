@@ -48,6 +48,7 @@ const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled 
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 const { insertCoordinationRow, isSentinelTarget } = require('../lib/coordinator/dispatch.cjs');
 const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version.cjs');
+const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
 const { enqueueRelayRequest } = require('../lib/coordinator/relay-queue.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
@@ -632,6 +633,7 @@ async function printStatus(supabase, sessionId, argv) {
 }
 
 async function main() {
+  warnIfCheckoutStale('adam-advisory.cjs');
   const argv = process.argv.slice(2);
   const mode = argv[0];
   if (mode !== 'send' && mode !== 'request' && mode !== 'replies' && mode !== 'inbox' && mode !== 'status') {
