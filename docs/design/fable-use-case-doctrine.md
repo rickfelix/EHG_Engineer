@@ -44,7 +44,7 @@
 
 Ranked; the first two are the unknown-unknown class (nobody had named them):
 
-1. **Venture selection + demand-thesis adjudication (S2/S5).** The horizon scan proved demand is the binding constraint — and the highest-leverage demand decision is *which venture to build at all*. Every downstream token is wasted on a venture nobody wants; a Fable-grade adversarial read of the demand thesis (who exactly pays, why now, what channel reaches them, kill-criteria) at the TOP of the funnel dominates any amount of Fable polish at the bottom. **Includes the input side nobody audits: is the idea-generation pipeline producing ideas worth selecting from?** Garbage-in dominates everything.
+1. **Venture selection + demand-thesis adjudication (S2/S5).** The horizon scan proved demand is the binding constraint — and the highest-impact demand decision is *which venture to build at all*. Every downstream token is wasted on a venture nobody wants; a Fable-grade adversarial read of the demand thesis (who exactly pays, why now, what channel reaches them, kill-criteria) at the TOP of the funnel dominates any amount of Fable polish at the bottom. **Includes the input side nobody audits: is the idea-generation pipeline producing ideas worth selecting from?** Garbage-in dominates everything.
 2. **Per-venture distribution/GTM design.** Channel thesis, positioning, launch narrative — creative-strategic work where cheap tiers produce generic-SaaS mush (the exact drift class the grounding duty exists to catch). The distribution stage (horizon II.1) needs a Fable design pass the way pages needed the design pipeline.
 3. **Adversarial pre-mortems on major waves.** One Fable session before each wave ships ("how does the sellable wave fail? what does deploy Child A break?") — hours of cost against weeks of misdirected build. Institutionalize as a rung, not an ad-hoc ask.
 4. **Grounding-completeness + autonomy-oversight audits of Adam** (already chartered as Solomon duties; under-exercised). The decision layer's honesty compounds into everything.
@@ -70,7 +70,7 @@ Ranked; the first two are the unknown-unknown class (nobody had named them):
 
 ## 5. The remaining window (expires ~tomorrow PM) — ranked spend
 
-1. **Venture-selection / demand-thesis doctrine** (§3.1–3.2): the S2/S5 adversarial demand rubric + the distribution-stage design shape. Attacks THE constraint; nothing else in the window has comparable leverage; nobody else can currently write it.
+1. **Venture-selection / demand-thesis doctrine** (§3.1–3.2): the S2/S5 adversarial demand rubric + the distribution-stage design shape. Attacks THE constraint; nothing else in the window has comparable impact; nobody else can currently write it.
 2. **Adversarial pre-mortem of the next two waves** — the sellable wave + deploy Child A/APA Child A (the builds about to fire). Catch the interaction failures before workers encode them.
 3. **Decomposition review of the APA + deploy SD trees as Adam authors them** (R1: they constrain the whole next fortnight of fleet work).
 4. **Nothing else.** No more detailing, no doc polish, nothing Sonnet-able. If the window outlasts 1–3, bank it — an unspent Fable hour is cheaper than a mis-tiered one.
