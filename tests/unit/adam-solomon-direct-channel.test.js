@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { resolveAdamAdvisoryTarget, buildAdvisoryPayload: buildAdamPayload, classifyDirectTarget } = require('../../scripts/adam-advisory.cjs');
+const { resolveAdamAdvisoryTarget, buildAdvisoryPayload: buildAdamPayload, classifyDirectTarget, extractEmbeddedPeerDirective } = require('../../scripts/adam-advisory.cjs');
 const { resolveSolomonAdvisoryTarget, buildAdvisoryPayload: buildSolomonPayload } = require('../../scripts/solomon-advisory.cjs');
 const { isAdamSolomonTwoWayV1Enabled } = require('../../lib/coordinator/resolve.cjs');
 const { assertValidTarget } = require('../../lib/coordinator/dispatch.cjs');
@@ -173,5 +173,37 @@ describe('classifyDirectTarget — sentinels and reserved words are NEVER a dire
     const r = classifyDirectTarget(null, false);
     expect(r.isBlockedPeerWord).toBe(false);
     expect(r.isDirectTarget).toBe(false);
+  });
+});
+
+// QF-20260707-114: live-confirmed on 3 Adam->Solomon consult messages — the whole "--to solomon"
+// (or a raw session_id) landed as literal trailing TEXT inside the quoted body, not a real argv
+// flag, so it silently fell through to the coordinator default with no error.
+describe('extractEmbeddedPeerDirective — recovers a --to/--direct directive embedded in the body', () => {
+  it('a real --to/--direct flag (rawPeerArg already set) passes through untouched', () => {
+    expect(extractEmbeddedPeerDirective('solomon', 'hello world')).toEqual({ peerArg: 'solomon', body: 'hello world' });
+  });
+  it('no embedded directive and no real flag -> unchanged (byte-identical to prior behavior)', () => {
+    expect(extractEmbeddedPeerDirective(null, 'hello world')).toEqual({ peerArg: null, body: 'hello world' });
+  });
+  it('recovers a trailing "--to solomon" embedded in the body, stripping it', () => {
+    expect(extractEmbeddedPeerDirective(null, 'design the thing --to solomon'))
+      .toEqual({ peerArg: 'solomon', body: 'design the thing' });
+  });
+  it('recovers a trailing "--to <session-uuid>" embedded in the body, stripping it', () => {
+    expect(extractEmbeddedPeerDirective(null, 'reply here --to ca84d15c-7f3b-4ad3-afab-0d30ba643201'))
+      .toEqual({ peerArg: 'ca84d15c-7f3b-4ad3-afab-0d30ba643201', body: 'reply here' });
+  });
+  it('recovers a trailing "--direct" embedded in the body, stripping it', () => {
+    expect(extractEmbeddedPeerDirective(null, 'urgent question --direct'))
+      .toEqual({ peerArg: 'solomon', body: 'urgent question' });
+  });
+  it('lowercases the recovered peer the same way the real --to flag path does', () => {
+    expect(extractEmbeddedPeerDirective(null, 'ping --to SOLOMON'))
+      .toEqual({ peerArg: 'solomon', body: 'ping' });
+  });
+  it('does NOT match "--to" mid-sentence (only a trailing directive at the very end)', () => {
+    expect(extractEmbeddedPeerDirective(null, 'the flag --to solomon changed everything'))
+      .toEqual({ peerArg: null, body: 'the flag --to solomon changed everything' });
   });
 });
