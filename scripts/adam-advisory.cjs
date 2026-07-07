@@ -135,6 +135,28 @@ function classifyDirectTarget(peerArg, isRelayClassPeer) {
   return { isDirectTarget, isBlockedPeerWord };
 }
 
+/**
+ * QF-20260707-114: a caller sometimes embeds `--to <peer>` / `--direct` INSIDE the quoted body
+ * instead of passing it as a separate CLI arg — live-confirmed on Adam->Solomon consult
+ * messages, where the whole message ended in the literal trailing text "--to solomon" (or a raw
+ * session_id). Because that text is never a standalone argv element, the normal --to/--direct
+ * parsing finds nothing, peerArg silently stays null, and the advisory falls through to the
+ * coordinator default with zero indication --to was ignored. This pure helper detects the same
+ * trailing directive in the already-assembled body and honors it exactly like a real flag,
+ * stripping it out. Only fires when no real --to/--direct flag was already found (rawPeerArg is
+ * null) — byte-identical to prior behavior otherwise. Exported for testing.
+ * @param {string|null} rawPeerArg - peerArg computed from real --to/--direct flags (null if none)
+ * @param {string} rawBody - the flag-stripped body before this defensive re-scan
+ * @returns {{peerArg: string|null, body: string}}
+ */
+function extractEmbeddedPeerDirective(rawPeerArg, rawBody) {
+  if (rawPeerArg) return { peerArg: rawPeerArg, body: rawBody };
+  const toMatch = rawBody.match(/\s+--to\s+(\S+)$/i);
+  if (toMatch) return { peerArg: toMatch[1].toLowerCase(), body: rawBody.slice(0, -toMatch[0].length).trim() };
+  if (/\s+--direct$/i.test(rawBody)) return { peerArg: 'solomon', body: rawBody.replace(/\s+--direct$/i, '').trim() };
+  return { peerArg: null, body: rawBody };
+}
+
 function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass, replyWindowMs, now, addressee }) {
   // request mode (expectsReply) is always live-handshake (synchronous, bounded-timeout await);
   // send mode defaults to fire-and-forget unless the sender opts into reply-needed via --reply-class
@@ -692,9 +714,16 @@ async function main() {
   // adversarial-review finding, deep-tier PR review: the two layers previously disagreed.
   const toArg = toIdx >= 0 ? (argv[toIdx + 1] || '').toLowerCase() || null : null;
   const directIdx = argv.indexOf('--direct');
-  const peerArg = toArg || (directIdx >= 0 ? 'solomon' : null);
+  const rawPeerArg = toArg || (directIdx >= 0 ? 'solomon' : null);
   const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1, toIdx, toIdx + 1, directIdx].filter(i => i >= 0));
-  const body = argv.slice(1).filter((a, i) => !flagValueIdxs.has(i + 1)).join(' ').trim();
+  const rawBody = argv.slice(1).filter((a, i) => !flagValueIdxs.has(i + 1)).join(' ').trim();
+  // QF-20260707-114: a caller (confirmed live: Adam) sometimes embeds `--to <peer>` / `--direct`
+  // INSIDE the quoted body instead of passing it as a separate CLI arg (the whole message ends
+  // in the literal trailing text "--to solomon"). argv.indexOf('--to') then finds nothing (it's
+  // not a standalone argv element), peerArg silently stays null, and the advisory falls through
+  // to the coordinator default with no indication --to was ignored. Detect + honor the same
+  // trailing directive here, stripped from the body, so it resolves exactly like a real flag.
+  const { peerArg, body } = extractEmbeddedPeerDirective(rawPeerArg, rawBody);
   if (!body) { console.error('ERROR: advisory body required.'); process.exit(2); }
 
   const isRelayClassPeer = !!(peerArg && PEER_KINDS[peerArg] && PEER_KINDS[peerArg].class === 'relay');
@@ -867,7 +896,7 @@ async function drainAdamOutbound(supabase, { newSessionId, oldSessionIds } = {})
   }
 }
 
-module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS, resolveAdamAdvisoryTarget, classifyDirectTarget, windowSweep, parseSweepWindowMs, DEFAULT_SWEEP_WINDOW_MS };
+module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS, resolveAdamAdvisoryTarget, classifyDirectTarget, extractEmbeddedPeerDirective, windowSweep, parseSweepWindowMs, DEFAULT_SWEEP_WINDOW_MS };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });
