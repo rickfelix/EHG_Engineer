@@ -46,6 +46,7 @@ const { redact, BODY_HARD_CAP, awaitCoordinatorReply } = require('./worker-signa
 const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled } = require('../lib/coordinator/resolve.cjs');
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version.cjs');
+const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 const { getActiveAdamId } = require('../lib/coordinator/adam-identity.cjs');
@@ -529,6 +530,7 @@ async function printStatus(supabase, sessionId, argv) {
 }
 
 async function main() {
+  warnIfCheckoutStale('solomon-advisory.cjs');
   const argv = process.argv.slice(2);
   const mode = argv[0];
   if (mode !== 'send' && mode !== 'request' && mode !== 'inbox' && mode !== 'status') {
