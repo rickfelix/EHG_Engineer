@@ -22,7 +22,8 @@ describe('SD-LEO-FIX-MIGRATE-RUNTIME-MODEL-001: model-config migration (FR-2, FR
     { file: 'scripts/modules/ai-quality-judge/config.js', fn: 'getClaudeModel', purpose: 'generation' },
     { file: 'scripts/modules/child-sd-llm-service.mjs', fn: 'getOpenAIModel', purpose: 'generation' },
     { file: 'lib/competitive-intelligence/differentiation-board.js', fn: 'getClaudeModel', purpose: 'premium-generation' },
-    { file: 'lib/eva/stage-17/refinement.js', fn: 'getClaudeModel', purpose: 'premium-generation' },
+    // SD-LEO-FEAT-AUTHOR-VENTURE-DESIGN-001 (FR-4): S17 generation re-pointed premium-generation -> design-generation (Fable).
+    { file: 'lib/eva/stage-17/refinement.js', fn: 'getClaudeModel', purpose: 'design-generation' },
     { file: 'scripts/eva-support/_internal/anthropic-client.js', fn: 'getClaudeModel', purpose: 'premium-generation' },
     { file: 'lib/marketing/ai/image-generator.js', fn: 'getGoogleModel', purpose: 'image-generation' },
     { file: 'scripts/lib/visualization-provider.js', fn: 'getGoogleModel', purpose: 'image-generation' },
@@ -34,7 +35,7 @@ describe('SD-LEO-FIX-MIGRATE-RUNTIME-MODEL-001: model-config migration (FR-2, FR
 
   it.each(purposeSites)('$file resolves via $fn(\'$purpose\')', ({ file, fn, purpose }) => {
     const src = read(file);
-    expect(src).toContain(`import`);
+    expect(src).toContain('import');
     expect(src).toMatch(new RegExp(`${fn}\\s*\\(\\s*['"]${purpose}['"]\\s*\\)`));
   });
 
