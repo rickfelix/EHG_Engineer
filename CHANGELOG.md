@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-07-06](#2026-07-06)
+  - [Features](#features)
   - [Bugfix](#bugfix)
 - [2026-07-05](#2026-07-05)
   - [Bugfix](#bugfix)
@@ -77,6 +78,13 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-07-06
+
+### Features
+- **Venture design-authoring layer live on Fable — craft + conversion + motion as build-time generation inputs** - SD-LEO-FEAT-AUTHOR-VENTURE-DESIGN-001
+  - **What shipped**: The content half of the design seam (sibling to the shipped wiring SD-LEO-FEAT-ROUTE-VENTURE-DESIGN-001, PR #5712). NEW `lib/eva/bridge/design-generation-inputs.json`: 34 imperative craft do-rules inverted from the Stage-17 audit rubrics (Prompts 2/3/4), each carrying an `anchor` quoted verbatim from its prompt's audit text — an anchor-provenance unit test makes audit-vs-generation drift a red test; the 9 UX Peak conversion-psychology do-rules with a HARD never-fabricate guardrail baked into the rendered instruction text (real venture data or omit the element); a ONE-easing/ONE-entrance motion grammar with reduced-motion-safe, transform/opacity-only parallax; and the chairman-approved MarketLens landing (marketlens@c962178) distilled as a few-shot style exemplar. `buildDesignInstructionBlock` now renders build-to-the-rules first, verify-checklist after (CRAFT → CONVERSION+GUARDRAIL → MOTION → checklist → EXEMPLAR) through the same single call site. The S17 generation executor resolves to `claude-fable-5` via a new `design-generation` model purpose (env `CLAUDE_MODEL_DESIGN_GENERATION`; S17 env slots keep precedence; the design-fidelity audit slot is untouched — scorer ≠ builder). PR #5714.
+  - **Deliberately untouched**: `shared-design-prompts.json` is byte-identical — EXEC grounding discovered it is cross-repo vendored byte-equivalent (twinned checksum gate with ehg, and `design-prompts-writer.js` renders every entry into venture docs), so the authored content lives in the sibling inputs file with the anchor test providing the same no-drift guarantee at zero cross-repo blast radius.
+  - **First sample (WATCH-AND-REVIEW)**: a DataDistill landing generated from that venture's real corpus only (`docs/design/samples/first-generated-sample-datadistill.html`) — independent design-agent score vs design_quality_v1: cycle-1 4.00 with 4 real findings (incl. the same declared-but-not-loaded font class the MarketLens flagship caught) → fixed → cycle-2 PASS 4.50, zero blockers, fabrication sweep CLEAN, 6/9 conversion principles, motion PASS. The chairman's taste verdict on the sample gates broad generator trust — the merge does not.
+  - **Verification**: 20 new tests (anchor provenance, section order, guardrail presence, motion constraints, exemplar integrity, Fable resolution + env precedence + audit-slot independence, SSOT byte-identity); 416 targeted + 6234 eva-regression tests green; deep-tier adversarial review passed with both warnings closed by ground truth (live `FABLE-OK` API smoke through the real adapter; `fable` added to `LONG_TIMEOUT_MODEL_PATTERN` after the smoke log proved it fell to the 30s default).
 
 ### Bugfix
 - **22 hardcoded LLM model literals migrated to `lib/config/model-config.js` purpose lookups** - SD-LEO-FIX-MIGRATE-RUNTIME-MODEL-001
