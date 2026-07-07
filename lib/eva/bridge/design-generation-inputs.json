@@ -1,0 +1,82 @@
+{
+  "_provenance": "SD-LEO-FEAT-AUTHOR-VENTURE-DESIGN-001 — authored build-time design generation inputs (craft do-rules inverted from the Stage-17 audit rubrics in shared-design-prompts.json, which stays byte-identical as the audit SSOT; every craft do_rule carries an anchor quoted verbatim from its prompt's audit text, enforced by the anchor-provenance unit test so the two forms cannot drift silently). Conversion do-rules distilled from UX Peak; motion grammar per chairman direction; exemplar distilled from the chairman-approved MarketLens landing.",
+  "craft_do_rules": {
+    "2": [
+      { "rule": "Write the hero headline + subhead so a first-time visitor can say what this is, who it is for, and the outcome — in under 5 seconds. If the value proposition needs the rest of the page, the hero has failed.", "anchor": "in under 5 seconds" },
+      { "rule": "Make the hero headline the single loudest element above the fold; the subhead supports without competing; any eyebrow hugs the headline.", "anchor": "single loudest element above the fold" },
+      { "rule": "Label every CTA action-led and specific (\"Start free\", \"Get the API key\") — never a generic \"Submit\" or \"Learn more\" — and repeat the primary CTA label identically every time it appears.", "anchor": "action-led and specific" },
+      { "rule": "Write section headings that alone tell the page's story; never place a wall of text between the visitor and the CTA.", "anchor": "wall of text" },
+      { "rule": "Set body copy at roughly 45-80 characters per line; allow no orphans, no widows, and no awkward mid-word breaks at viewport edges.", "anchor": "characters per line" },
+      { "rule": "Vary the gaps inside a text block deliberately: an eyebrow hugs its heading, the heading breathes into the body — the gaps should never all be equal.", "anchor": "eyebrow hugs its heading" },
+      { "rule": "Meet WCAG AA on every text element (4.5:1 body, 3:1 large type), and prefer a solid color token over opacity tricks wherever a solid token reads more clearly.", "anchor": "solid color token" },
+      { "rule": "Style uppercase eyebrows consistently across every section: tracking at or above 0.14em, weight 600+, size 10-12px.", "anchor": "0.14em" },
+      { "rule": "Use true micro-typography: smart quotes, real em/en dashes, non-breaking spaces before units, one consistent ellipsis style — and never leave punctuation trapped in an accent style.", "anchor": "non-breaking spaces before units" },
+      { "rule": "Write trust copy with metrics that are specific and consistently formatted — and ONLY real ones taken from venture data; omit the element when no real number exists.", "anchor": "specific and consistently formatted" },
+      { "rule": "Give every button label whitespace-nowrap so it cannot wrap on narrow viewports.", "anchor": "whitespace-nowrap" },
+      { "rule": "Verify type at 360px, 768px, 1024px, and 1440px: no heading may break unnaturally, overflow, or lose hierarchy at any width.", "anchor": "360px" }
+    ],
+    "3": [
+      { "rule": "Keep the value-prop headline AND the primary CTA visible without scrolling at both 1440px and 390px — a below-the-fold primary CTA on mobile is a build failure.", "anchor": "visible without scrolling" },
+      { "rule": "Let the hero silhouette set the page: later sections echo the hero's column ratio instead of inventing their own.", "anchor": "column ratio" },
+      { "rule": "Compose a scroll narrative — hero, proof, problem/solution, how-it-works, closing CTA — whose section silhouettes relate, with one clear conversion path rather than competing ones.", "anchor": "one clear conversion path" },
+      { "rule": "Place the primary CTA at the hero and again near the end; never bury it and never dilute it with equal-weight CTAs.", "anchor": "equal-weight CTAs" },
+      { "rule": "Design social proof as a deliberate, evenly-weighted band of logos or metrics — never an afterthought row.", "anchor": "evenly-weighted band" },
+      { "rule": "Earn every centering: center only short, symmetrical, hero-like moments. Never center multi-line body copy — that is defaulted, not designed.", "anchor": "Centered alignment must be earned" },
+      { "rule": "Line up an intro block's edges with the content below it, and keep the left edges of stacked elements (eyebrow, heading, body, CTA) on one vertical line.", "anchor": "edges line up" },
+      { "rule": "Give every asymmetric layout an intentional text-to-image width relationship — half, two-thirds, or golden ratio — never an arbitrary split.", "anchor": "golden ratio" },
+      { "rule": "Hold a coherent vertical-rhythm tier (tight / standard / hero) across neighboring sections; never leave one section a full tier off from both neighbors.", "anchor": "full tier off from both neighbors" },
+      { "rule": "Give every text child inside a flex column an explicit width or items-stretch so it can never collapse to min-content on narrow viewports.", "anchor": "min-content" },
+      { "rule": "When two consecutive sections share a background token, mark the boundary with a divider, contrast band, or asymmetric padding.", "anchor": "divider, contrast band, or asymmetric padding" },
+      { "rule": "Hold each section's silhouette at 360px, 768px, 1024px, and 1440px — do not let the composition collapse into a generic single column too early.", "anchor": "generic single column too early" }
+    ],
+    "4": [
+      { "rule": "Treat the hero as the LCP element: nothing above it may block render; serve hero media in a modern format (AVIF/WebP), correctly sized, with fetchpriority set high.", "anchor": "fetchpriority" },
+      { "rule": "Make the primary CTA interactive immediately — no hydration delay may block the first click.", "anchor": "hydration delay" },
+      { "rule": "Give every image explicit width/height or an aspect-ratio so it reserves space; lazy-load below the fold. Layout shift from unreserved media is the number-one build defect.", "anchor": "aspect-ratio" },
+      { "rule": "Load web fonts with font-display swap, preload and subset the primary display face — no invisible-text flash, no late reflow.", "anchor": "font-display" },
+      { "rule": "Build to the vitals budget: LCP < 2.5s, CLS < 0.1, INP < 200ms — identify the LCP element and keep everything above it render-clean.", "anchor": "LCP < 2.5s" },
+      { "rule": "Animate transform/opacity only — never width, height, top, or left; nothing that forces reflow.", "anchor": "transform/opacity only" },
+      { "rule": "Build for real content, not demo copy: a much longer headline, a single unbroken word or URL, a list with 0, 1, or 50 items, and a failed image must all degrade gracefully with space reserved and zero shift.", "anchor": "unbroken word" },
+      { "rule": "Design every interactive state: hover, focus-visible, active, disabled, and a pending state for anything async — a visitor must never click into silence.", "anchor": "focus-visible" },
+      { "rule": "Give forms inline validation, an accessible per-field error state (never just a red border), a success state, and a primary CTA disabled until valid.", "anchor": "per-field error state" },
+      { "rule": "Ship both themes: verify contrast, tonal depth, and image overlays in light AND dark; take every color from theme tokens, never hardcoded hex.", "anchor": "never hardcoded hex" }
+    ]
+  },
+  "conversion": {
+    "label": "Conversion psychology (UX Peak distill)",
+    "do_rules": [
+      { "principle": "Smart Default", "rule": "Pre-select the most common choice (plan, tier, option) so the low-effort path IS the recommended path — the visitor confirms rather than configures." },
+      { "principle": "Goal Gradient", "rule": "Never show the user starting at zero: count progress already made (\"step 1 of 3 done\", a pre-filled bar) — visible momentum toward a goal increases completion." },
+      { "principle": "Reciprocity", "rule": "Give real value BEFORE asking for commitment — a preview, a free insight, a usable artifact — so signing up feels like reciprocation, not a toll booth." },
+      { "principle": "Endowment", "rule": "Let the visitor build or customize part of the product before signup (their data, their name, their configuration) — people do not abandon what already feels like theirs." },
+      { "principle": "Loss Aversion", "rule": "Frame the decision as preventing a concrete loss (the missed insight, the wasted spend, the drifting metric) — avoiding a loss motivates roughly twice as strongly as an equivalent gain." },
+      { "principle": "Contrast", "rule": "Anchor the price or effort against a larger relevant number (the cost of the problem, the price of the alternative) so the ask reads small by comparison." },
+      { "principle": "Reduce Cognitive Load", "rule": "Anticipate the visitor's objections (Is it secure? Can I cancel? How long is setup?) and answer them proactively right next to the CTA — an unanswered question is an exit." },
+      { "principle": "Social Proof / Halo", "rule": "Place a credibility signal (a real customer, award, rating, or security mark) adjacent to the title or CTA so trust transfers at the exact decision moment." },
+      { "principle": "Overcome the Imagination Gap", "rule": "Show the product in real use in the hero — actual UI, actual output — never make the visitor imagine what it does." }
+    ],
+    "guardrail": "HARD GUARDRAIL — INTEGRITY OVER PERSUASION: NEVER fabricate metrics, testimonials, user counts, ratings, or any social-proof number. Use real venture data, or OMIT the element entirely. A conversion principle applied with a fake number destroys the exact trust it exists to build. When real data is missing, that is a MISS to flag — not a blank to invent."
+  },
+  "motion": {
+    "label": "Motion grammar",
+    "do_rules": [
+      { "rule": "Give each screen the micro-animation vocabulary designed for its brand feel: an entry transition, hover states, a loading animation, and a CTA effect." },
+      { "rule": "Pick ONE easing curve and ONE entrance pattern and reuse them across the entire page — motion coherence beats motion variety." },
+      { "rule": "Add subtle scroll-parallax to hero or instrument elements as depth, not spectacle: small offsets, slow deltas, transform/opacity only." },
+      { "rule": "Animate transform and opacity ONLY — never layout properties (width/height/top/left) that force reflow." },
+      { "rule": "Honor prefers-reduced-motion: disable or reduce ALL motion — parallax included — when the user asks for less." },
+      { "rule": "Make motion deliberate, never decorative: every animation must earn its place by directing attention or confirming an action." }
+    ]
+  },
+  "exemplar": {
+    "label": "Style exemplar — the chairman-approved MarketLens landing",
+    "provenance": "marketlens@c962178",
+    "note": "Emulate the CHARACTER of this worked example, not its content. It applied exactly these craft + conversion + motion rules to real corpus content and passed the design-quality rubric with the chairman's approval.",
+    "character": [
+      "One corpus-verbatim hero headline as the single loudest element, a supporting tagline that does not compete, and ONE action-led CTA label repeated verbatim on every page where it appears.",
+      "Deliberate section silhouettes — hero, a four-block feature grid, a trusted-by proof band — each earning its width and rhythm rather than defaulting to centered columns.",
+      "Proof built ONLY from real venture artifacts: every landing section traces to a corpus source, and any element with no real backing data is OMITTED and flagged rather than invented.",
+      "A restrained tokenized palette (one primary, one sparing accent), self-hosted brand fonts actually loaded via @font-face, WCAG-AA hover and focus states everywhere, and a compact vector logo instead of heavy raster assets."
+    ]
+  }
+}
