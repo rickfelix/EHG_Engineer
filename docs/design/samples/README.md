@@ -30,3 +30,30 @@ not magnitudes → product depiction shows parity checks only).
 
 This sample is a **chairman taste-review checkpoint**, not auto-trusted output — per the
 SD's WATCH-AND-REVIEW constraint, broad trust in the generator requires the chairman's verdict.
+
+
+---
+
+# Second-Generation Sample — the Distinctiveness Pass
+
+`second-generation-sample-datadistill-distinctive.html` is the **FR-5 evidence for
+SD-LEO-FEAT-CLOSE-DISTINCTIVENESS-GAP-001** — the same DataDistill corpus re-generated
+after the chairman's verdict on the first sample ("real page, but not as good as the
+hand versions"), through the enriched block: anti-default distinctiveness rules +
+award-library influence (seed 1862036410: Slack color attitude, Pacaso asymmetry,
+Anthropic Research density, Loom micro-interaction, Pitch narrative, Airtable type
+clarity — per-dimension minority influences) + a REAL Gemini-generated layered hero
+(tint/WCAG scrim/fade/grain/parallax; data-URI embedding is sample-only).
+
+**Design stance:** Archivo expanded display + IBM Plex Mono readouts (no Inter);
+laboratory-ink palette where raw data = muted marks and the distilled signal = the page's
+one teal emphasis (the palette IS the funnel metaphor); the ONE deliberate risk = the
+parity-instrument card breaking the grid off-axis. Corpus content verbatim; MISS ledger
+unchanged (social proof still honestly omitted).
+
+| Cycle | Mean | Verdict | Evidence row |
+|-------|------|---------|--------------|
+| v1 baseline (parent SD) | 4.50 | PASS | `fdbd52bc` |
+| v2 distinctiveness | **4.83** | **PASS — all 6 distinctiveness checks pass, zero blockers, fabrication CLEAN** (4 advisories fixed post-score: visible illustrative caption, transform-only hover, mark contrast, light-mode margins) | `c8bd4b13` |
+
+Chairman follow-up taste verdict pending — it alone advances the WATCH-AND-REVIEW trust line.
