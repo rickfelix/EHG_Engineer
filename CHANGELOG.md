@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-07-07](#2026-07-07)
+  - [Features](#features)
 - [2026-07-06](#2026-07-06)
   - [Features](#features)
   - [Bugfix](#bugfix)
@@ -76,6 +78,14 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-07-07
+
+### Features
+- **Distinctiveness layer for auto-generated venture design — award-library grounding, anti-default rules, layered AI hero defaults** - SD-LEO-FEAT-CLOSE-DISTINCTIVENESS-GAP-001
+  - **What shipped**: The chairman's verdict on the first auto-generated venture design ("lands as a real page, but definitely not as good as the ones Adam did by hand" — Inter-default typography, conventional palette, no aesthetic risk) diagnosed a gap neither the craft rubrics nor the conversion rules teach: anti-default distinctiveness. Three levers, all wiring existing capabilities: (1) NEW `lib/eva/bridge/design-reference-sampler.js` feeds the 137-site Awwwards `design_reference_library` (previously consumed only by Stage-15 wireframes) into design authoring as a **seeded per-venture, per-dimension, cross-archetype-minority influence** — reproducible per venture, divergent across ventures, never a wholesale template, sanitized through the existing `sanitizeDesignReference` seam, stable-ordered, and bounded by a 4s timeout race so a hung read can never stall venture tree creation; (2) a **distinctiveness category** in the generation inputs (never default to Inter/Space Grotesk, characterful subject-justified display pairing, subject-derived palette, exactly ONE deliberate aesthetic risk, the named AI-default clusters to avoid) with an explicit precedence paragraph — WCAG/hierarchy floors and the no-fabrication guardrail outrank distinctiveness; (3) NEW `lib/eva/bridge/hero-image-spec.js` + hero do-rules + the chairman's always-want signature **DEFAULT-ON** (restrained parallax, micro-animations, generated layered hero with tint/WCAG-scrim/fade/grain and a gradient fallback). PR #5718.
+  - **Proof**: the DataDistill sample re-generated through the enriched block with a real Gemini-generated hero — independent design-agent score **4.83 PASS vs the 4.50 baseline, all 6 distinctiveness checks pass, zero blockers, fabrication sweep clean** (`docs/design/samples/second-generation-sample-datadistill-distinctive.html`). The chairman's round-two taste verdict gates broad generator trust.
+  - **Verification**: 17 new tests; the CI-caught 60s test timeout was root-caused (a never-settling mock thenable defeating try/catch) and fixed systemically with the timeout race; deep-tier adversarial review passed with all three warnings fixed pre-merge (row-order reproducibility, dead archetype threading on the live path, prompt-injection sanitization); 419 bridge + 6251 eva-regression + 24,849-test CI unit tier green; `shared-design-prompts.json` byte-identical.
 
 ## 2026-07-06
 
