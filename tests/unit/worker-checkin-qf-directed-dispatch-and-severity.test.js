@@ -77,6 +77,33 @@ describe('resolveCheckin — a qf_id-only directed assignment now reaches the cl
   });
 });
 
+// QF-20260707-650: same bug class as leg 1, a different field-name variant. A directed_dispatch
+// payload carrying the QF key as payload.qf (not qf_id) was silently skipped by extraction --
+// confirmed live on QF-20260705-893's redispatch (session_coordination row 2a3cef4b).
+describe('extractSdFromAssignment — recognizes payload.qf (QF-20260707-650)', () => {
+  it('returns qf when assigned_sd/sd_key/qf_id are all absent', () => {
+    expect(extractSdFromAssignment({ payload: { qf: 'QF-20260705-893' } })).toBe('QF-20260705-893');
+  });
+
+  it('qf_id still takes precedence over qf when both present', () => {
+    expect(extractSdFromAssignment({ payload: { qf_id: 'QF-1', qf: 'QF-2' } })).toBe('QF-1');
+  });
+
+  it('assigned_sd/sd_key still take precedence over qf when present', () => {
+    expect(extractSdFromAssignment({ payload: { assigned_sd: 'QF-1', qf: 'QF-2' } })).toBe('QF-1');
+    expect(extractSdFromAssignment({ payload: { sd_key: 'QF-1', qf: 'QF-2' } })).toBe('QF-1');
+  });
+
+  it('falls through to available_sds when qf is absent (unchanged prior behavior)', () => {
+    expect(extractSdFromAssignment({ payload: { available_sds: ['SD-X-001'] } })).toBe('SD-X-001');
+  });
+
+  it('returns null for a non-string/empty qf (defensive)', () => {
+    expect(extractSdFromAssignment({ payload: { qf: '' } })).toBeNull();
+    expect(extractSdFromAssignment({ payload: { qf: 123 } })).toBeNull();
+  });
+});
+
 describe('sortQfCandidatesBySeverity (leg 2)', () => {
   it('orders critical before high before medium before low', () => {
     const qfs = [

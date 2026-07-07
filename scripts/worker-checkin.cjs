@@ -258,6 +258,11 @@ function extractSdFromAssignment(msg) {
   // sd_key instead). claim_sd itself is already QF-aware (p_sd_id LIKE 'QF-%'); the
   // gap was purely in this extraction step.
   if (typeof p.qf_id === 'string' && p.qf_id) return p.qf_id;
+  // QF-20260707-650: same bug class, different field-name variant. A directed_dispatch payload
+  // sometimes carries the QF key as payload.qf instead of qf_id (confirmed live on
+  // QF-20260705-893's redispatch, session_coordination row 2a3cef4b) -- silently skipped this
+  // extraction, no ack, no claim attempt, until manually diagnosed.
+  if (typeof p.qf === 'string' && p.qf) return p.qf;
   if (Array.isArray(p.available_sds) && p.available_sds.length) return p.available_sds[0];
   // current_sd is what the worker is ALREADY on — only use it as a last resort
   // when nothing else names a target (an assignment can reference the same SD).
