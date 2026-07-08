@@ -49,7 +49,8 @@ describe('classifyDispatchIneligibility — hold-axis composition (QF-20260705-5
       .toBe('human_action_required');
   });
   it('the SD-ARCH-HOTSPOT-STAGE-WORKER-001 specimen (both fields set) is refused on not_before first', () => {
-    const specimen = { sd_key: 'SD-ARCH-HOTSPOT-STAGE-WORKER-001', metadata: { not_before: '2026-07-08T04:00:00Z', door_class_note: 'one_way' } };
+    const future = new Date(Date.now() + 86400000).toISOString();
+    const specimen = { sd_key: 'SD-ARCH-HOTSPOT-STAGE-WORKER-001', metadata: { not_before: future, door_class_note: 'one_way' } };
     expect(classifyDispatchIneligibility(specimen)).toBe('not_before_hold');
   });
 });
