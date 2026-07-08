@@ -606,6 +606,63 @@ function isTestFixtureSdKey(sdKey) {
   return typeof sdKey === 'string' && /^SD-TEST-/.test(sdKey);
 }
 
+// SD-FDBK-INFRA-QUALITY-GATE-COUPLED-001 (FR-1): pure decision function for
+// bare-shell SD enrichment. Prefers sd.metadata.plan_content (the
+// authoritative --from-plan source) over the filename-substring search,
+// which previously ran unconditionally and produced wrong-topic matches.
+// Extracted as a pure function (fs/path injectable) so it is unit-testable
+// without a live Supabase client.
+//
+// @returns {null | { description: string, sourceLabel: string, tooShort?: boolean }}
+//   null            -- no plan_content and no filename match found
+//   tooShort: true  -- a filename match was found but its content was too short to use
+function computeBareShellEnrichment(sd, { searchDirs, fsModule, pathModule }) {
+  const planContent = sd.metadata && typeof sd.metadata.plan_content === 'string'
+    ? sd.metadata.plan_content.trim()
+    : '';
+  if (planContent.length > 50) {
+    const summary = planContent.substring(0, 500);
+    return {
+      description: sd.title + '\n\n' + summary + '\n\n[Auto-enriched by sweep from plan_content]',
+      sourceLabel: 'metadata.plan_content',
+    };
+  }
+
+  // Fallback (unchanged behavior): filename-substring search.
+  const keywords = sd.title.toLowerCase().split(/[\s\-_]+/).filter(w => w.length > 3);
+  let bestMatch = null;
+  let bestScore = 0;
+
+  for (const dir of searchDirs) {
+    if (!fsModule.existsSync(dir)) continue;
+    const files = fsModule.readdirSync(dir).filter(f => f.endsWith('.md'));
+    for (const file of files) {
+      const nameLower = file.toLowerCase();
+      const score = keywords.filter(kw => nameLower.includes(kw)).length;
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = pathModule.join(dir, file);
+      }
+    }
+  }
+
+  if (!bestMatch || bestScore < 2) return null;
+
+  const content = fsModule.readFileSync(bestMatch, 'utf8').substring(0, 2000);
+  const lines = content.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+  const summary = lines.slice(0, 10).join('\n').substring(0, 500);
+  const sourceLabel = pathModule.basename(bestMatch);
+
+  if (summary.length <= 50) {
+    return { description: null, sourceLabel, tooShort: true };
+  }
+
+  return {
+    description: sd.title + '\n\n' + summary + '\n\n[Auto-enriched by sweep from ' + sourceLabel + ']',
+    sourceLabel,
+  };
+}
+
 // --- Layer 1: Terminal Identity Collision Detection ---
 // Reads .claude/session-identity/ marker files to detect when multiple
 // live Claude Code processes share the same session_id (identity collision).
@@ -1536,9 +1593,15 @@ async function main() {
   }
 
   // 3e. QA — detect and auto-enrich bare-shell SDs (FIX #6)
+  // SD-FDBK-INFRA-QUALITY-GATE-COUPLED-001 (FR-1): metadata is now selected so
+  // metadata.plan_content -- the authoritative --from-plan source already
+  // attached to the SD row -- can be preferred over the filename-substring
+  // search below, which previously ran unconditionally and produced
+  // wrong-topic matches (e.g. substring 'venture'+'design' matching an
+  // unrelated 'venture-detail-page-reDESIGN' file).
   const { data: pendingSDs } = await supabase
     .from('strategic_directives_v2')
-    .select('sd_key, title, description, scope')
+    .select('sd_key, title, description, scope, metadata')
     .in('status', ['draft', 'ready'])
     .not('sd_key', 'like', '%ORCH-STAGE-VENTURE-WORKFLOW-001-%')
     // FR-3: never enrich ephemeral SD-TEST-* fixtures.
@@ -1552,50 +1615,27 @@ async function main() {
     const searchDirs = ['docs/audits', 'docs/plans', 'brainstorm'].map(d => path.join(repoRoot, d));
 
     for (const sd of bareShellSDs) {
-      // Try to find matching content in docs/audits, docs/plans, brainstorm
-      const keywords = sd.title.toLowerCase().split(/[\s\-_]+/).filter(w => w.length > 3);
-      let bestMatch = null;
-      let bestScore = 0;
+      const decision = computeBareShellEnrichment(sd, { searchDirs, fsModule: fs, pathModule: path });
 
-      for (const dir of searchDirs) {
-        if (!fs.existsSync(dir)) continue;
-        const files = fs.readdirSync(dir).filter(f => f.endsWith('.md'));
-        for (const file of files) {
-          const nameLower = file.toLowerCase();
-          const score = keywords.filter(kw => nameLower.includes(kw)).length;
-          if (score > bestScore) {
-            bestScore = score;
-            bestMatch = path.join(dir, file);
-          }
-        }
+      if (!decision) {
+        warnings.push('BARE_SHELL: ' + sd.sd_key + ' has no real description — no matching docs found');
+        continue;
+      }
+      if (decision.tooShort) {
+        warnings.push('BARE_SHELL: ' + sd.sd_key + ' — found ' + decision.sourceLabel + ' but content too short');
+        continue;
       }
 
-      if (bestMatch && bestScore >= 2) {
-        // Read up to 2000 chars from the matching file for description enrichment
-        const content = fs.readFileSync(bestMatch, 'utf8').substring(0, 2000);
-        // Extract first paragraph or summary section
-        const lines = content.split('\n').filter(l => l.trim() && !l.startsWith('#'));
-        const summary = lines.slice(0, 10).join('\n').substring(0, 500);
+      const { error } = await supabase
+        .from('strategic_directives_v2')
+        .update({ description: decision.description })
+        .eq('sd_key', sd.sd_key)
+        .select();
 
-        if (summary.length > 50) {
-          const { error } = await supabase
-            .from('strategic_directives_v2')
-            .update({
-              description: sd.title + '\n\n' + summary + '\n\n[Auto-enriched by sweep from ' + path.basename(bestMatch) + ']'
-            })
-            .eq('sd_key', sd.sd_key)
-            .select();
-
-          if (!error) {
-            actions.push('ENRICH: ' + sd.sd_key + ' — description populated from ' + path.basename(bestMatch));
-          } else {
-            warnings.push('BARE_SHELL: ' + sd.sd_key + ' — enrichment failed: ' + error.message);
-          }
-        } else {
-          warnings.push('BARE_SHELL: ' + sd.sd_key + ' — found ' + path.basename(bestMatch) + ' but content too short');
-        }
+      if (!error) {
+        actions.push('ENRICH: ' + sd.sd_key + ' — description populated from ' + decision.sourceLabel);
       } else {
-        warnings.push('BARE_SHELL: ' + sd.sd_key + ' has no real description — no matching docs found');
+        warnings.push('BARE_SHELL: ' + sd.sd_key + ' — enrichment failed: ' + error.message);
       }
     }
   }
@@ -2976,6 +3016,8 @@ module.exports.INTENT_PAYLOAD_KEYS = INTENT_PAYLOAD_KEYS;
 // FR-3 predicate (pure): the reserved SD-TEST- fixture namespace check.
 module.exports.isTestFixtureSdKey = isTestFixtureSdKey;
 module.exports.TEST_FIXTURE_SD_KEY_LIKE = TEST_FIXTURE_SD_KEY_LIKE;
+// SD-FDBK-INFRA-QUALITY-GATE-COUPLED-001 (FR-1): bare-shell enrichment decision (pure).
+module.exports.computeBareShellEnrichment = computeBareShellEnrichment;
 // QF-20260704-545: auto-cancel leaked SD-TEST-* fixtures (test seam).
 module.exports.cancelStaleTestFixtures = cancelStaleTestFixtures;
 module.exports.TEST_FIXTURE_STALE_MS = TEST_FIXTURE_STALE_MS;
