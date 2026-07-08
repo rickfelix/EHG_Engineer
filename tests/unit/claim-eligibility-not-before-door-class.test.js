@@ -49,7 +49,11 @@ describe('classifyDispatchIneligibility — hold-axis composition (QF-20260705-5
       .toBe('human_action_required');
   });
   it('the SD-ARCH-HOTSPOT-STAGE-WORKER-001 specimen (both fields set) is refused on not_before first', () => {
-    const specimen = { sd_key: 'SD-ARCH-HOTSPOT-STAGE-WORKER-001', metadata: { not_before: '2026-07-08T04:00:00Z', door_class_note: 'one_way' } };
+    // QF-20260708-267: was a hardcoded past-dated literal ('2026-07-08T04:00:00Z') that
+    // calendar-drifted stale (same class as QF-20260707-793) -- use a relative future date
+    // like the rest of this file (lines 14, 45) so the fixture never expires.
+    const future = new Date(Date.now() + 86400000).toISOString();
+    const specimen = { sd_key: 'SD-ARCH-HOTSPOT-STAGE-WORKER-001', metadata: { not_before: future, door_class_note: 'one_way' } };
     expect(classifyDispatchIneligibility(specimen)).toBe('not_before_hold');
   });
 });
