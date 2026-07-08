@@ -6,6 +6,9 @@
  * Used by both GATE_SD_QUALITY (handoff gate) and validateSDFields (creation-time).
  */
 
+import enrichmentMarkers from '../../lib/sd-enrichment-markers.cjs';
+const { PLAN_CONTENT_MARKER } = enrichmentMarkers;
+
 /**
  * Per-sd_type threshold configuration.
  * Defines how many of the 8 JSONB fields must be populated per SD type.
@@ -196,6 +199,48 @@ export function checkStructuralQuality(sd) {
   return { issues, warnings, score: Math.max(score, 0) };
 }
 
+// SD-FDBK-INFRA-QUALITY-GATE-COUPLED-001 (FR-2): matches the literal marker
+// written by the stale-session-sweep.cjs filename-search enrichment path
+// (the plan_content path writes a distinct '[Auto-enriched by sweep from
+// plan_content]' marker that never matches this pattern, by design).
+const ENRICHMENT_MARKER_PATTERN = /\[Auto-enriched by sweep from ([^\]]+)\]/;
+
+/**
+ * Deterministic (no-LLM) check: when a description carries the
+ * '[Auto-enriched by sweep from X]' marker written by the FILENAME-SEARCH
+ * enrichment path, assert basename(X) === basename(metadata.plan_file_path)
+ * -- catching the exact relevance defect where the sweep matched an
+ * unrelated file by keyword substring. Non-blocking (warning only): this SD
+ * intentionally does not retroactively block already-shipped SDs carrying a
+ * mismatched marker.
+ * @returns {{ issues: Array, warnings: Array, score: number }}
+ */
+export function checkEnrichmentProvenance(sd) {
+  const warnings = [];
+  const description = typeof sd.description === 'string' ? sd.description : '';
+  const match = description.match(ENRICHMENT_MARKER_PATTERN);
+  const planFilePath = sd.metadata && typeof sd.metadata.plan_file_path === 'string'
+    ? sd.metadata.plan_file_path
+    : null;
+
+  // The 'plan_content' literal marker (written when the sweep sourced the
+  // enrichment from metadata.plan_content, not a filename match) is never a
+  // basename to compare -- distinct from the filename-search marker by design.
+  if (match && planFilePath && match[1].trim() !== PLAN_CONTENT_MARKER) {
+    const markerBasename = match[1].trim().split(/[\\/]/).pop();
+    const planBasename = planFilePath.split(/[\\/]/).pop();
+    if (markerBasename !== planBasename) {
+      warnings.push({
+        field: 'description',
+        type: 'enrichment_provenance_mismatch',
+        message: `description carries '[Auto-enriched by sweep from ${markerBasename}]' but metadata.plan_file_path points to '${planBasename}' -- the sweep's filename-substring match may be wrong-topic`,
+      });
+    }
+  }
+
+  return { issues: [], warnings, score: 0 };
+}
+
 /**
  * Compute the full quality score for an SD.
  * @param {Object} sd - Strategic Directive record (or SD-like data object)
@@ -208,9 +253,10 @@ export function computeQualityScore(sd) {
   const completeness = checkFieldCompleteness(sd, threshold);
   const content = checkContentQuality(sd, threshold);
   const structure = checkStructuralQuality(sd);
+  const provenance = checkEnrichmentProvenance(sd);
 
-  const allIssues = [...completeness.issues, ...content.issues, ...structure.issues];
-  const allWarnings = [...completeness.warnings, ...content.warnings, ...structure.warnings];
+  const allIssues = [...completeness.issues, ...content.issues, ...structure.issues, ...provenance.issues];
+  const allWarnings = [...completeness.warnings, ...content.warnings, ...structure.warnings, ...provenance.warnings];
   const totalScore = completeness.score + content.score + structure.score;
 
   const pass = totalScore >= threshold.passingScore && allIssues.length === 0;
