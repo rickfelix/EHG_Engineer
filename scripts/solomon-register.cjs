@@ -135,8 +135,14 @@ async function registerSolomon(supabase, sessionId, opts = {}) {
   }
   // Retire stale priors — but RE-VALIDATE freshness right before clearing each, so a prior that
   // became fresh since the decision (a racing restart) is NEVER cleared (the deliberate divergence
-  // holds even under a race). Residual: two simultaneous STALE restarts can both register briefly
-  // — surfaced by the MULTIPLE_SOLOMONS detector + refused on the next register (eventual convergence).
+  // holds even under a race). Residual: two simultaneous STALE restarts can both register briefly.
+  // NOTE (adversarial review, SD-FDBK-INFRA-FIX-ADAM-SOLOMON-001): unlike adam-register.cjs's
+  // parallel loop (QF-20260703-883), this loop has NO JS-merge fallback when clear_solomon_flag
+  // errors/is absent — a failed clear silently leaves that prior tagged role=solomon forever, with
+  // no detector backstop (no MULTIPLE_SOLOMONS detector exists in lib/coordinator/detectors.cjs,
+  // unlike MULTIPLE_ADAMS). Tracked as a follow-up (see this SD's retrospective action items) to
+  // bring this loop to parity with adam-register.cjs rather than silently claiming a backstop that
+  // does not exist.
   const retired = [];
   if (decision.retire.length) {
     const nowMs2 = Date.now();
