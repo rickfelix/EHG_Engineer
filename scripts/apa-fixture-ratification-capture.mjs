@@ -38,6 +38,19 @@ function parseArgs(argv) {
   return out;
 }
 
+// recordDisposition() never overwrites an existing row (dedup returns the
+// PRIOR row unchanged), so on dedup the actually-stored verdict can differ
+// from what this call intended (e.g. a fixture previously flagged, now
+// re-run as confirmed). Always report the row's actual stored
+// answer_payload, never the caller's intended verdict, so the console output
+// can never silently misreport a contradicted decision.
+function storedVerdict(row) {
+  const payload = row.payload.answer_payload || {};
+  if (payload.confirmed) return 'confirmed';
+  if (payload.flagged) return 'flagged';
+  return 'unknown';
+}
+
 export async function captureRatifications(supabase, { fixtureSet, confirmed, flagged, authority }) {
   const results = [];
   for (const fixtureId of confirmed) {
@@ -48,7 +61,8 @@ export async function captureRatifications(supabase, { fixtureSet, confirmed, fl
       authority,
       answerPayload: { confirmed: true, flagged: false },
     });
-    results.push({ fixtureId, verdict: 'confirmed', created, questionKey: row.payload.question_key });
+    const verdict = storedVerdict(row);
+    results.push({ fixtureId, verdict, created, contradicted: !created && verdict !== 'confirmed', questionKey: row.payload.question_key });
   }
   for (const fixtureId of flagged) {
     const { row, created } = await recordDisposition(supabase, {
@@ -58,7 +72,8 @@ export async function captureRatifications(supabase, { fixtureSet, confirmed, fl
       authority,
       answerPayload: { confirmed: false, flagged: true },
     });
-    results.push({ fixtureId, verdict: 'flagged', created, questionKey: row.payload.question_key });
+    const verdict = storedVerdict(row);
+    results.push({ fixtureId, verdict, created, contradicted: !created && verdict !== 'flagged', questionKey: row.payload.question_key });
   }
   return results;
 }
@@ -70,7 +85,10 @@ async function main() {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
   const results = await captureRatifications(supabase, args);
   for (const r of results) {
-    console.log(`${r.fixtureId}: ${r.verdict} -> ${r.created ? 'NEW' : 'DEDUPED (already recorded)'} disposition row (question_key=${r.questionKey})`);
+    const note = r.contradicted
+      ? `⚠ CONTRADICTS a prior disposition -- stored verdict is "${r.verdict}", not overwritten (re-run with an explicit override if this is intentional)`
+      : `${r.created ? 'NEW' : 'DEDUPED (already recorded)'} disposition row`;
+    console.log(`${r.fixtureId}: ${r.verdict} -> ${note} (question_key=${r.questionKey})`);
   }
   console.log(`\n${results.length} ratification(s) captured for fixture-set "${args.fixtureSet}".`);
 }

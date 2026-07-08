@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { bindConsultAnswer } from '../../scripts/consult-answer-bind.mjs';
 
-function makeFakeSupabase({ initialSdMetadata = {} } = {}) {
+function makeFakeSupabase({ initialSdMetadata = {}, knownSdKeys = ['SD-TEST-001'] } = {}) {
   const events = [];
   let sdMetadata = { ...initialSdMetadata };
   let nextId = 1;
@@ -49,10 +49,15 @@ function makeFakeSupabase({ initialSdMetadata = {} } = {}) {
             }),
           }),
           update: (patch) => ({
-            eq: () => {
-              sdMetadata = patch.metadata;
-              return Promise.resolve({ error: null });
-            },
+            eq: (col, val) => ({
+              select: () => {
+                if (!knownSdKeys.includes(val)) {
+                  return Promise.resolve({ data: [], error: null }); // zero-row-match simulation
+                }
+                sdMetadata = patch.metadata;
+                return Promise.resolve({ data: [{ sd_key: val }], error: null });
+              },
+            }),
           }),
         };
       }
@@ -94,5 +99,29 @@ describe('bindConsultAnswer (FR-4)', () => {
   it('throws when required args are missing', async () => {
     const sb = makeFakeSupabase();
     await expect(bindConsultAnswer(sb, { sdKey: 'SD-TEST-001' })).rejects.toThrow(/blockedStateKey/);
+  });
+
+  it('throws instead of silently succeeding when the metadata update matches 0 rows (stale/mismatched sd_key)', async () => {
+    const sb = makeFakeSupabase({ knownSdKeys: [] }); // no SD matches -- simulates a stale sd_key
+    await expect(bindConsultAnswer(sb, {
+      sdKey: 'SD-DOES-NOT-EXIST-001', blockedStateKey: 'blocked_on_x',
+      questionText: 'Ship it?', answer: 'Yes', authority: 'session-A',
+    })).rejects.toThrow(/matched 0 rows/);
+  });
+
+  it('scopes question_key by (sdKey, blockedStateKey) so two DIFFERENT SDs asking an identically-worded question do NOT collide', async () => {
+    const sb = makeFakeSupabase({ knownSdKeys: ['SD-A-001', 'SD-B-001'] });
+    const forA = await bindConsultAnswer(sb, {
+      sdKey: 'SD-A-001', blockedStateKey: 'blocked_on_x',
+      questionText: 'Should we proceed?', answer: 'Yes for A', authority: 'solomon',
+    });
+    const forB = await bindConsultAnswer(sb, {
+      sdKey: 'SD-B-001', blockedStateKey: 'blocked_on_x',
+      questionText: 'Should we proceed?', answer: 'Yes for B', authority: 'solomon',
+    });
+    expect(sb._events).toHaveLength(2); // two DISTINCT disposition rows, not deduped
+    expect(forA.disposition.id).not.toBe(forB.disposition.id);
+    expect(forA.disposition.payload.answer_payload.answer).toBe('Yes for A');
+    expect(forB.disposition.payload.answer_payload.answer).toBe('Yes for B');
   });
 });

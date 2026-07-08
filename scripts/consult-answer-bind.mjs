@@ -8,9 +8,12 @@
 // transitioned in the same call -- so "answered" and "unblocked" can no longer
 // silently diverge.
 //
-// question_key is derived purely from the question TEXT content (never from
-// correlation_id), so a re-asked question in a brand-new session dedups
-// against the same disposition row instead of creating a phantom duplicate.
+// question_key is derived from the question TEXT content scoped to
+// (sdKey, blockedStateKey) -- never from correlation_id -- so a re-asked
+// question in a brand-new session dedups against the same disposition row
+// instead of creating a phantom duplicate. Scoping by sdKey/blockedStateKey
+// (not just raw question text) prevents two unrelated SDs that happen to ask
+// an identically-worded question from colliding onto the same disposition row.
 
 import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
@@ -37,7 +40,7 @@ export async function bindConsultAnswer(supabase, { sdKey, blockedStateKey, ques
 
   const { row } = await recordDisposition(supabase, {
     decisionType: 'consult_answer',
-    subject: { question_text: questionText },
+    subject: { sd_key: sdKey, blocked_state_key: blockedStateKey, question_text: questionText },
     decisionKey: `${sdKey}:${blockedStateKey}`,
     authority,
     answerPayload: { answer },
@@ -59,12 +62,19 @@ export async function bindConsultAnswer(supabase, { sdKey, blockedStateKey, ques
     [`${blockedStateKey}_unblocked_at`]: new Date().toISOString(),
   };
 
-  const { error: updateError } = await supabase
+  // .select() + affected-row check: a bare .update() can silently no-op on
+  // zero matched rows (stale/mismatched sd_key, RLS) and still report no
+  // error -- the known supabase-js false-success pattern in this codebase.
+  const { data: updatedRows, error: updateError } = await supabase
     .from('strategic_directives_v2')
     .update({ metadata: nextMetadata })
-    .eq('sd_key', sdKey);
+    .eq('sd_key', sdKey)
+    .select('sd_key');
   if (updateError) {
     throw new Error(`bindConsultAnswer: could not update SD "${sdKey}" metadata: ${updateError.message}`);
+  }
+  if (!updatedRows || updatedRows.length === 0) {
+    throw new Error(`bindConsultAnswer: update matched 0 rows for SD "${sdKey}" -- metadata was NOT cleared, blocked-state remains set`);
   }
 
   return { disposition: row, sdUpdated: true };

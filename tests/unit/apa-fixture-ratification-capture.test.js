@@ -74,4 +74,23 @@ describe('captureRatifications (FR-3)', () => {
     await captureRatifications(sb, { fixtureSet: 'set-2', confirmed: ['G1'], flagged: [], authority: 'a' });
     expect(sb._rows).toHaveLength(2);
   });
+
+  it('reports the ACTUAL stored verdict (not the caller-intended one) when a re-run contradicts a prior disposition', async () => {
+    const sb = makeFakeSupabase();
+    await captureRatifications(sb, { fixtureSet: 'set-1', confirmed: [], flagged: ['G3'], authority: 'chairman' });
+    // Chairman changes his mind: G3 is now re-run as confirmed. recordDisposition never
+    // overwrites, so the stored row is still the ORIGINAL flagged decision.
+    const second = await captureRatifications(sb, { fixtureSet: 'set-1', confirmed: ['G3'], flagged: [], authority: 'chairman' });
+    expect(sb._rows).toHaveLength(1); // no duplicate row
+    expect(second[0].verdict).toBe('flagged'); // reports the TRUE stored verdict, not "confirmed"
+    expect(second[0].contradicted).toBe(true);
+  });
+
+  it('does not flag contradicted when the re-run verdict matches the stored one', async () => {
+    const sb = makeFakeSupabase();
+    await captureRatifications(sb, { fixtureSet: 'set-1', confirmed: ['G1'], flagged: [], authority: 'chairman' });
+    const second = await captureRatifications(sb, { fixtureSet: 'set-1', confirmed: ['G1'], flagged: [], authority: 'chairman' });
+    expect(second[0].verdict).toBe('confirmed');
+    expect(second[0].contradicted).toBe(false);
+  });
 });
