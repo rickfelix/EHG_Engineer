@@ -1,8 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
 const DIR = path.resolve('docs/design/apa-calibration-fixtures');
+
+// review-packet.html embeds ~3MB of base64 image data and is deliberately not committed
+// (avoids repo bloat + a verified secret-scanner false positive on embedded binary data) --
+// regenerate it from the 16 committed source pairs before asserting against it.
+beforeAll(() => {
+  execFileSync('node', ['scripts/apa-fixture-artifact-build.mjs'], { stdio: 'inherit' });
+});
 const FIXTURE_IDS = [
   'G1-airtable', 'G2-runway', 'G3-wealthsimple', 'G4-stripe',
   'D1-trust', 'D2-typography', 'D3-brand-assets', 'D4-visual-hierarchy', 'D5-accessibility-states', 'D6-content-copy-fidelity',
