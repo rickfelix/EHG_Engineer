@@ -1446,6 +1446,30 @@ describe('EvaMasterScheduler', () => {
       expect(() => scheduler.registerRound('valid', {})).toThrow();
     });
 
+    test('registered rounds and jobs survive past 24h (QF-20260707-432 regression)', () => {
+      // Registries used to be TTLMaps with a 24h TTL and no refresh-on-read, so every
+      // constructor-registered round/job silently vanished 24h after daemon start while
+      // the poll loop stayed healthy. registerRound/registerJob only ever fire once at
+      // startup, so entries must live for the full process lifetime.
+      vi.useFakeTimers();
+      try {
+        scheduler.registerRound('long_lived_round', {
+          description: 'Should not expire',
+          handler: async () => ({ ok: true }),
+          cadence: 'hourly',
+        });
+        scheduler.registerJob({ name: 'long_lived_job', handler: async () => {}, cadenceDays: 1 });
+
+        vi.advanceTimersByTime(25 * 60 * 60 * 1000); // 25h — past the old 24h TTL
+
+        const roundTypes = scheduler.listRounds().map(r => r.type);
+        expect(roundTypes).toContain('long_lived_round');
+        expect(scheduler.getRegisteredJobs().map(j => j.name)).toContain('long_lived_job');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     test('runRound should execute the handler and return result', async () => {
       scheduler.registerRound('quick_test', {
         description: 'Quick',
