@@ -59,7 +59,7 @@ FR-1 mirror-kill already covers is explicitly out of scope — see that SD's TR-
 | `status === 'deferred'` / `'completed'` / `'cancelled'` | claim-eligibility.cjs | B | fail-open (excluded) | Lifecycle state, not authorization. |
 | tier axes (`min_tier_rank`, `worker_tier_rank`, lower-tier-backlog) | claim-eligibility.cjs | B | fail-open when `ctx` absent | Capability/fit, not approval; explicitly no-op when `ctx` is undefined (directed-assign's FR-1 call always passes `ctx=undefined`). |
 | `metadata.fleet_critical === true` | worker-checkin.cjs | B (promotion) | n/a | Lifts an SD *into* the visible pool; still routes back through the classifier afterward (a fleet_critical + review-pending SD is correctly excluded — "the hold wins"). |
-| `metadata.self_claim === false`, `metadata.availability === 'idle_only'`, `metadata.coordinator_stand_down === true` | worker-checkin.cjs (`isSelfClaimDisabled`) | **out of scope** | fail-toward-active | **Worker-session** availability, not SD-dispatch-authorization — a different axis entirely (governs whether a *worker* self-claims, not whether an *SD* is authorized). Documented here for completeness; not part of this audit's Kind-A/B scope. |
+| `metadata.self_claim === false`, `metadata.availability === 'idle_only'`, `metadata.coordinator_stand_down === true` | worker-checkin.cjs (self-claim gate predicate) | **out of scope** | fail-toward-active | **Worker-session** availability — a different axis entirely from SD-dispatch approval (governs whether a *worker* self-claims, not whether an *SD* is authorized). Documented here for completeness; not part of this audit's Kind-A/B scope. |
 
 ## Findings
 
