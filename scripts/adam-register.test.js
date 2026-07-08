@@ -1,19 +1,13 @@
 // Tests for SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-A
-// scripts/adam-register.cjs — idempotent verify-first Adam role tagger.
+// scripts/adam-register.cjs — Adam role tagger.
+//
+// registerAdam's behavioral suite (guard, RPC success/fail, retire, drain, FR-2 readback) lives
+// in tests/unit/coordination/adam-singleton.test.js; this file covers computeAdamTag (the pure
+// merge helper, still used by the fallback write path) plus a focused registerAdam smoke suite.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 const { computeAdamTag, registerAdam, ADAM_ROLE } = require('./adam-register.cjs');
-
-// These tests exercise the legacy (flag-OFF) registerAdam path, but the real .env sets
-// ROLE_HANDOFF_ADAM_V1=on for the FR-3 single-Adam guard — force it off here so the suite
-// isn't at the mercy of ambient env (mirrors tests/unit/coordination/adam-singleton.test.js).
-const PRIOR_ROLE_HANDOFF_ADAM_V1 = process.env.ROLE_HANDOFF_ADAM_V1;
-beforeEach(() => { delete process.env.ROLE_HANDOFF_ADAM_V1; });
-afterEach(() => {
-  if (PRIOR_ROLE_HANDOFF_ADAM_V1 === undefined) delete process.env.ROLE_HANDOFF_ADAM_V1;
-  else process.env.ROLE_HANDOFF_ADAM_V1 = PRIOR_ROLE_HANDOFF_ADAM_V1;
-});
 
 describe('computeAdamTag (pure)', () => {
   it('tags an untagged metadata and preserves existing keys', () => {
@@ -41,15 +35,43 @@ describe('computeAdamTag (pure)', () => {
   });
 });
 
-function stub({ row, updateErr = null, selectErr = null }) {
-  const calls = { updated: null };
+// Stateful stub: rpc('set_adam_flag') and the update()/insert() fallback both mutate the tracked
+// row, so registerAdam's mandatory FR-2 readback sees the real effect of whichever path fired —
+// same convention as adam-singleton.test.js's regStub.
+function stub({ row = null, updateErr = null, selectErr = null, rpcError = null, priorAdams = [] } = {}) {
+  const calls = { updated: null, inserted: null, rpc: [] };
+  let currentRow = row;
   const chain = {
     select: () => chain,
     eq: () => chain,
-    maybeSingle: () => Promise.resolve({ data: row, error: selectErr }),
-    update: (payload) => { calls.updated = payload; return { eq: () => Promise.resolve({ error: updateErr }) }; },
+    filter: () => Promise.resolve({ data: priorAdams, error: null }), // fetchAllAdams
+    maybeSingle: () => Promise.resolve({ data: currentRow, error: selectErr }),
+    update: (payload) => {
+      calls.updated = payload;
+      return {
+        eq: () => {
+          currentRow = { session_id: (currentRow && currentRow.session_id) || null, metadata: payload.metadata };
+          return Promise.resolve({ error: updateErr });
+        },
+      };
+    },
+    insert: (payload) => {
+      calls.inserted = payload;
+      currentRow = { session_id: payload.session_id, metadata: payload.metadata };
+      return Promise.resolve({ error: null });
+    },
   };
-  return { sb: { from: () => chain }, calls };
+  const sb = {
+    from: () => chain,
+    rpc: (fn, args) => {
+      calls.rpc.push({ fn, args });
+      if (fn === 'set_adam_flag' && !rpcError) {
+        currentRow = { session_id: args.p_session_id, metadata: { ...((currentRow && currentRow.metadata) || {}), role: ADAM_ROLE, non_fleet: true, adam_since: 'test' } };
+      }
+      return Promise.resolve({ error: rpcError });
+    },
+  };
+  return { sb, calls };
 }
 
 describe('registerAdam', () => {
@@ -60,28 +82,34 @@ describe('registerAdam', () => {
     expect(r.action).toBe('error');
   });
 
-  it('errors when the session row is absent', async () => {
-    const { sb } = stub({ row: null });
+  // SD-FDBK-INFRA-FIX-ADAM-SOLOMON-001 FR-1: the bug this SD fixes. A session with no existing
+  // claude_sessions row used to be a hard "not found" error; set_adam_flag now creates it
+  // (INSERT ... ON CONFLICT), so this is the ordinary first-boot case, not a fault.
+  it('creates the session row when absent, instead of erroring "not found"', async () => {
+    const { sb, calls } = stub({ row: null });
     const r = await registerAdam(sb, 'sess-x');
-    expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/not found/);
-  });
-
-  it('tags an untagged session (writes merged metadata)', async () => {
-    const { sb, calls } = stub({ row: { session_id: 'sess-1', metadata: { callsign: 'Adam' } } });
-    const r = await registerAdam(sb, 'sess-1');
     expect(r.ok).toBe(true);
     expect(r.action).toBe('tagged');
+    expect(calls.rpc.map((c) => c.fn)).toContain('set_adam_flag');
+  });
+
+  it('RPC-absent fallback tags an untagged session and preserves existing metadata keys', async () => {
+    const { sb, calls } = stub({
+      row: { session_id: 'sess-1', metadata: { callsign: 'Adam' } },
+      rpcError: { code: 'PGRST202', message: 'Could not find the function set_adam_flag' },
+    });
+    const r = await registerAdam(sb, 'sess-1');
+    expect(r.ok).toBe(true);
+    expect(r.action).toBe('tagged_fallback');
     expect(calls.updated.metadata.role).toBe(ADAM_ROLE);
     expect(calls.updated.metadata.non_fleet).toBe(true);
     expect(calls.updated.metadata.callsign).toBe('Adam'); // preserved
   });
 
-  it('verifies (no write) when already tagged', async () => {
-    const { sb, calls } = stub({ row: { session_id: 'sess-2', metadata: { role: 'adam', non_fleet: true } } });
+  it('re-registering an already-tagged session still succeeds (idempotent re-tag via RPC)', async () => {
+    const { sb } = stub({ row: { session_id: 'sess-2', metadata: { role: ADAM_ROLE, non_fleet: true } } });
     const r = await registerAdam(sb, 'sess-2');
     expect(r.ok).toBe(true);
-    expect(r.action).toBe('verified');
-    expect(calls.updated).toBeNull(); // idempotent: no update issued
+    expect(r.action).toBe('tagged');
   });
 });

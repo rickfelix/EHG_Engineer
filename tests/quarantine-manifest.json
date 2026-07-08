@@ -1362,6 +1362,15 @@
       "linked_ref": "sd:SD-LEO-INFRA-CI-UNIT-TIER-INSTALL-CASCADE-001",
       "quarantined_at": "2026-06-28T22:30:00.000Z",
       "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+    },
+    {
+      "file": "tests/unit/worker-checkin-critical-qf-priority-jump.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'idle' to be 'self_claimed_qf' // Object.is equality",
+      "linked_ref": "feedback:3ac708a6-b821-41d6-b39b-3d9558404c7b",
+      "quarantined_at": "2026-07-08T01:00:00.000Z",
+      "quarantined_by": "ccdd0c1c-19b0-481c-834c-082f2cd96776",
+      "triage_note": "Hardcoded fixture date (NOW=2026-07-05) rots as real wall-clock time advances past it: resolveCheckin()/isAutoStartableQF() use real Date.now() internally (no injectable clock), so once STALE_QF_DAYS has elapsed since the fixture date, isAutoStartableQF's staleness ceiling rejects the fixture QFs — breaking acceptance #1/#3 (idle instead of self_claimed_qf). Deterministic, not flaky; will not self-heal. This was the REQUIRED 'Run Unit Tier (quarantine-aware)' branch-protection check, blocking every PR fleet-wide until quarantined. Un-quarantine once resolveCheckin/isAutoStartableQF accept an injectable nowMs (or the fixture re-anchors to a mocked clock)."
     }
   ]
 }

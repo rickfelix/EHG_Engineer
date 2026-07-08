@@ -28,7 +28,7 @@ node scripts/adam-register.cjs
 
 (Equivalent: `npm run adam:register`. Self-loads `.env`; uses `CLAUDE_SESSION_ID` from the SessionStart hook.)
 
-This tags the current session in `claude_sessions.metadata` with `role=adam` and `non_fleet=true` (a JSONB merge — preserves existing keys, no migration). It is **verify-first**: if the session is already tagged it reports `verified` and writes nothing. The output is one JSON object — `action` is `tagged`, `verified`, or `error` — and now also carries the **contract-read verdict**: `contract_read`, `contract_read_partial`, `contract_exists`.
+This tags the current session in `claude_sessions.metadata` with `role=adam` and `non_fleet=true` via the atomic `set_adam_flag` RPC (idempotent upsert — creates the row if this session has never registered before, merges onto the live row otherwise), with a mandatory readback confirming the tag actually landed before reporting success. The output is one JSON object — `action` is `tagged`, `tagged_after_retire`, `refused`, or `error` — and now also carries the **contract-read verdict**: `contract_read`, `contract_read_partial`, `contract_exists`.
 
 **If `contract_read` is `false` (or `contract_read_partial` is `true`): STOP and do Step 1 before any Adam work.** Registration itself is deliberately never blocked by the read check — an untagged Adam re-enters fleet accounting (worker counts, ETA math, revival pings, claim-sweep targeting), which is the worse failure — so the enforcement is the verified verdict plus your obligation to act on it, not the exit code.
 
@@ -83,7 +83,7 @@ Going forward, the **active coordinator** runs an hourly responsibilities remind
 
 ## Single-Adam handoff / restart (SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-C)
 
-Adam is a **singleton role-session** — the Adam analogue of the coordinator singleton. The shared rules live in the **[role-session-handoff doc](./role-session-handoff.md)** (sibling A's four-rules doc). For Adam specifically (all new write-path behavior is behind the `ROLE_HANDOFF_ADAM_V1` flag, default-OFF; flag-OFF is byte-identical to the legacy register):
+Adam is a **singleton role-session** — the Adam analogue of the coordinator singleton. The shared rules live in the **[role-session-handoff doc](./role-session-handoff.md)** (sibling A's four-rules doc). For Adam specifically (the guard + atomic write-path below is unconditional — the earlier `ROLE_HANDOFF_ADAM_V1` flag and its legacy register fallback were retired in SD-FDBK-INFRA-FIX-ADAM-SOLOMON-001):
 
 - **Single-Adam guard** (`scripts/adam-register.cjs`): on (re)register it prefers **refuse-new-on-fresh-prior** over clearing the prior — a legitimately-restarting Adam is never killed mid-canary; only a STALE prior Adam is retired. Identity is written via the atomic `set_adam_flag`/`clear_adam_flag` RPCs (chairman-gated migration), never a JS read-modify-write.
 - **Comms survive a restart**: a retired prior Adam's unread inbound is re-targeted to the new session (`drainAdamOutbound`, idempotent).

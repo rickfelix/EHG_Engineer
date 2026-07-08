@@ -33,7 +33,7 @@ The read is recorded in session state by the protocol-file-tracker hook (same me
 node scripts/solomon-register.cjs
 ```
 
-This tags the current session in `claude_sessions.metadata` with `role=solomon` and `non_fleet=true` (a JSONB merge — preserves existing keys, no migration). It is **verify-first**: an already-tagged session reports `verified` and writes nothing. Identity is written via the atomic `set_solomon_flag`/`clear_solomon_flag` RPCs (chairman-gated migration), never a JS read-modify-write. A retired prior Solomon's unread inbound is re-targeted to the new session (`drainSolomonOutbound`, idempotent — Phase E-A).
+This tags the current session in `claude_sessions.metadata` with `role=solomon` and `non_fleet=true`. Identity is written via the atomic `set_solomon_flag`/`clear_solomon_flag` RPCs (idempotent upsert — creates the row if this session has never registered before, merges onto the live row otherwise, so a re-run is a no-op in effect even though it re-issues the write), never a JS read-modify-write. A mandatory readback confirms the tag actually landed before reporting success. A retired prior Solomon's unread inbound is re-targeted to the new session (`drainSolomonOutbound`, idempotent — Phase E-A).
 
 > Why the tag matters: Solomon **heartbeats like any live session**, so the explicit `role=solomon`/`non_fleet=true` tag is what excludes it from worker counts, ETA math, revival requests, and claim-sweep targeting.
 
