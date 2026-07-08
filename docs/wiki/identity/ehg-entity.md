@@ -1,8 +1,17 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: ehg_wiki_sections (DB). -->
 <!-- Regenerate: node scripts/generate-ehg-wiki-docs.js -->
-<!-- ehg_wiki_sections id=1 | version 3 | ratified: true -->
+<!-- ehg_wiki_sections id=1 -->
 
 # EHG Legal Entity
+
+## Metadata
+
+- **Category**: Reference
+- **Status**: Approved
+- **Version**: 3.0.0
+- **Author**: EHG Wiki (generated)
+- **Last Updated**: 2026-07-08
+- **Tags**: ["ehg-wiki", "identity"]
 
 EHG is the legal entity **ExecHoldings Global, LLC** (resolves the EHG acronym).
 

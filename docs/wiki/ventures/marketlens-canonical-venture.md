@@ -1,8 +1,17 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: ehg_wiki_sections (DB). -->
 <!-- Regenerate: node scripts/generate-ehg-wiki-docs.js -->
-<!-- ehg_wiki_sections id=2 | version 1 | ratified: true -->
+<!-- ehg_wiki_sections id=2 -->
 
 # MarketLens: two venture rows, which is canonical
+
+## Metadata
+
+- **Category**: Reference
+- **Status**: Approved
+- **Version**: 1.0.0
+- **Author**: EHG Wiki (generated)
+- **Last Updated**: 2026-07-08
+- **Tags**: ["ehg-wiki", "ventures"]
 
 There are TWO MarketLens venture rows in `ventures`. Only one is canonical — do not resolve MarketLens by an unordered name lookup.
 

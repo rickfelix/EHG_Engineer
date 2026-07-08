@@ -1,8 +1,17 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: ehg_wiki_sections (DB). -->
 <!-- Regenerate: node scripts/generate-ehg-wiki-docs.js -->
-<!-- ehg_wiki_sections id=3 | version 1 | ratified: true -->
+<!-- ehg_wiki_sections id=3 -->
 
 # LEO Protocol phase workflow
+
+## Metadata
+
+- **Category**: Reference
+- **Status**: Approved
+- **Version**: 1.0.0
+- **Author**: EHG Wiki (generated)
+- **Last Updated**: 2026-07-08
+- **Tags**: ["ehg-wiki", "factory"]
 
 The LEO Protocol is the factory's core build workflow: **LEAD** (Strategy) -> **PLAN** (Architecture) -> **EXEC** (Implementation).
 

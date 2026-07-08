@@ -60,12 +60,22 @@ async function main() {
     fs.mkdirSync(dir, { recursive: true });
     const filePath = path.join(dir, `${section.slug}.md`);
 
+    const lastUpdated = new Date(section.updated_at).toISOString().slice(0, 10);
     const body = [
       '<!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: ehg_wiki_sections (DB). -->',
       '<!-- Regenerate: node scripts/generate-ehg-wiki-docs.js -->',
-      `<!-- ${section.citation_id} | version ${section.version} | ratified: ${section.chairman_ratified} -->`,
+      `<!-- ${section.citation_id} -->`,
       '',
       `# ${section.title}`,
+      '',
+      '## Metadata',
+      '',
+      '- **Category**: Reference',
+      `- **Status**: ${section.chairman_ratified ? 'Approved' : 'Draft'}`,
+      `- **Version**: ${section.version}.0.0`,
+      '- **Author**: EHG Wiki (generated)',
+      `- **Last Updated**: ${lastUpdated}`,
+      `- **Tags**: ["ehg-wiki", "${section.domain}"]`,
       '',
       section.content,
       '',
