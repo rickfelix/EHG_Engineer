@@ -85,7 +85,9 @@ function parseArgs(argv) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
   const result = await bindConsultAnswer(supabase, args);
   console.log(`Consult answer bound: question_key=${result.disposition.payload.question_key}, SD "${args.sdKey}".${args.blockedStateKey} unblocked.`);
 }

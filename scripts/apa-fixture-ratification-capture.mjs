@@ -65,7 +65,9 @@ export async function captureRatifications(supabase, { fixtureSet, confirmed, fl
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
   const results = await captureRatifications(supabase, args);
   for (const r of results) {
     console.log(`${r.fixtureId}: ${r.verdict} -> ${r.created ? 'NEW' : 'DEDUPED (already recorded)'} disposition row (question_key=${r.questionKey})`);
