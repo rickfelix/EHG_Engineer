@@ -1,7 +1,7 @@
 {
- "generated_at": "2026-07-06T16:28:51.247Z",
+ "generated_at": "2026-07-08T23:04:36.894Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 775,
+ "table_count": 776,
  "view_count": 177,
  "tables": {
   "_migration_metadata": "{key,value}",
@@ -170,6 +170,7 @@
   "ehg_page_routes": "{id,route_path,page_name,feature_area_id,purpose,user_workflow,component_file_path,layout_type,access_level,related_routes,metadata,created_at,updated_at}",
   "ehg_services": "{id,service_key,display_name,description,api_version,artifact_schema,status,config,created_at,updated_at,version,sla_tier,config_schema}",
   "ehg_user_workflows": "{id,workflow_name,workflow_code,description,user_persona,entry_points,workflow_steps,exit_points,related_features,ui_components_involved,metadata,created_at,updated_at}",
+  "ehg_wiki_sections": "{id,domain,slug,title,content,version,citation_id,chairman_ratified,created_at,updated_at}",
   "enhancement_proposal_audit": "{id,proposal_id,actor_id,from_status,to_status,request_id,created_at}",
   "enhancement_proposals": "{id,created_at,updated_at,created_by,title,description,proposed_change,source_type,source_id,status,metadata,vetted_at,approved_at,applied_at,applied_improvement_id}",
   "eva_actions": "{action_id,session_id,venture_id,company_id,stage_id,event_type,action_name,payload,status,priority_level,execution_context,rollback_data,assigned_agent_id,result,error_message,retry_count,max_retries,created_at,scheduled_for,executed_at,completed_at,failed_at,rolled_back_at,created_by,chairman_approved,is_reversible}",
