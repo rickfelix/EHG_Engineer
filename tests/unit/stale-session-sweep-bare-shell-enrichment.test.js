@@ -83,4 +83,18 @@ describe('computeBareShellEnrichment (FR-1)', () => {
     expect(decision.tooShort).toBe(true);
     expect(decision.description).toBeNull();
   });
+
+  it('returns readError:true (does not throw) when the matched file cannot be read', () => {
+    const fsModule = {
+      existsSync: () => true,
+      readdirSync: () => ['demand-thesis-gate-plan.md'],
+      readFileSync: () => { throw new Error('ENOENT: no such file or directory'); },
+    };
+    const sd = { sd_key: 'SD-U-001', title: 'Demand Thesis Gate Implementation', metadata: {} };
+    expect(() => {
+      const decision = computeBareShellEnrichment(sd, { searchDirs: ['docs/plans'], fsModule, pathModule: fakePath });
+      expect(decision.readError).toBe(true);
+      expect(decision.description).toBeNull();
+    }).not.toThrow();
+  });
 });

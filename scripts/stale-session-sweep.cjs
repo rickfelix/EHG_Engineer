@@ -25,6 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const { randomUUID } = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
+const { PLAN_CONTENT_MARKER } = require('../lib/sd-enrichment-markers.cjs');
 const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'); // QF-20260525-542
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate (same one the
 // worker self_claim path uses) so CLAIM_FIX never re-affirms an orchestrator PARENT / dep-blocked SD.
@@ -613,9 +614,10 @@ function isTestFixtureSdKey(sdKey) {
 // Extracted as a pure function (fs/path injectable) so it is unit-testable
 // without a live Supabase client.
 //
-// @returns {null | { description: string, sourceLabel: string, tooShort?: boolean }}
-//   null            -- no plan_content and no filename match found
-//   tooShort: true  -- a filename match was found but its content was too short to use
+// @returns {null | { description: string, sourceLabel: string, tooShort?: boolean, readError?: boolean }}
+//   null              -- no plan_content and no filename match found
+//   tooShort: true    -- a filename match was found but its content was too short to use
+//   readError: true   -- a filename match was found but reading it failed (deleted/renamed/permissions)
 function computeBareShellEnrichment(sd, { searchDirs, fsModule, pathModule }) {
   const planContent = sd.metadata && typeof sd.metadata.plan_content === 'string'
     ? sd.metadata.plan_content.trim()
@@ -623,8 +625,8 @@ function computeBareShellEnrichment(sd, { searchDirs, fsModule, pathModule }) {
   if (planContent.length > 50) {
     const summary = planContent.substring(0, 500);
     return {
-      description: sd.title + '\n\n' + summary + '\n\n[Auto-enriched by sweep from plan_content]',
-      sourceLabel: 'metadata.plan_content',
+      description: sd.title + '\n\n' + summary + '\n\n[Auto-enriched by sweep from ' + PLAN_CONTENT_MARKER + ']',
+      sourceLabel: 'metadata.' + PLAN_CONTENT_MARKER,
     };
   }
 
@@ -648,10 +650,19 @@ function computeBareShellEnrichment(sd, { searchDirs, fsModule, pathModule }) {
 
   if (!bestMatch || bestScore < 2) return null;
 
-  const content = fsModule.readFileSync(bestMatch, 'utf8').substring(0, 2000);
+  const sourceLabel = pathModule.basename(bestMatch);
+  let content;
+  try {
+    content = fsModule.readFileSync(bestMatch, 'utf8').substring(0, 2000);
+  } catch {
+    // Matched file deleted/renamed/unreadable between readdirSync and
+    // readFileSync, or a permissions/encoding issue -- degrade to a
+    // per-SD "no match" result instead of throwing and aborting the whole
+    // sweep loop for every remaining bare-shell SD in this tick.
+    return { description: null, sourceLabel, readError: true };
+  }
   const lines = content.split('\n').filter(l => l.trim() && !l.startsWith('#'));
   const summary = lines.slice(0, 10).join('\n').substring(0, 500);
-  const sourceLabel = pathModule.basename(bestMatch);
 
   if (summary.length <= 50) {
     return { description: null, sourceLabel, tooShort: true };
@@ -1623,6 +1634,10 @@ async function main() {
       }
       if (decision.tooShort) {
         warnings.push('BARE_SHELL: ' + sd.sd_key + ' — found ' + decision.sourceLabel + ' but content too short');
+        continue;
+      }
+      if (decision.readError) {
+        warnings.push('BARE_SHELL: ' + sd.sd_key + ' — matched ' + decision.sourceLabel + ' but reading it failed (deleted/renamed/unreadable) — skipped this SD, sweep continues');
         continue;
       }
 

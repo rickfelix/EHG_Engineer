@@ -6,6 +6,9 @@
  * Used by both GATE_SD_QUALITY (handoff gate) and validateSDFields (creation-time).
  */
 
+import enrichmentMarkers from '../../lib/sd-enrichment-markers.cjs';
+const { PLAN_CONTENT_MARKER } = enrichmentMarkers;
+
 /**
  * Per-sd_type threshold configuration.
  * Defines how many of the 8 JSONB fields must be populated per SD type.
@@ -223,7 +226,7 @@ export function checkEnrichmentProvenance(sd) {
   // The 'plan_content' literal marker (written when the sweep sourced the
   // enrichment from metadata.plan_content, not a filename match) is never a
   // basename to compare -- distinct from the filename-search marker by design.
-  if (match && planFilePath && match[1].trim() !== 'plan_content') {
+  if (match && planFilePath && match[1].trim() !== PLAN_CONTENT_MARKER) {
     const markerBasename = match[1].trim().split(/[\\/]/).pop();
     const planBasename = planFilePath.split(/[\\/]/).pop();
     if (markerBasename !== planBasename) {
