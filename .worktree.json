@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-FDBK-INFRA-FIX-ADAM-SOLOMON-001",
-  "expectedBranch": "feat/SD-FDBK-INFRA-FIX-ADAM-SOLOMON-001",
-  "createdAt": "2026-07-07T21:20:47.051Z",
+  "sdKey": "SD-FDBK-ENH-APA-CALIBRATION-FIXTURE-001",
+  "expectedBranch": "feat/SD-FDBK-ENH-APA-CALIBRATION-FIXTURE-001",
+  "createdAt": "2026-07-08T10:50:25.391Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }

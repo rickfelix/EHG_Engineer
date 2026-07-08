@@ -1,0 +1,40 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="MarketLens provides precise, AI-generated buyer personas and Willingness-to-Pay (WTP) bands instantly. Eliminate market guesswork and optimize pricing strategies."><meta property="og:title" content="MarketLens: AI Buyer Personas &amp; WTP for Consultants &amp; Agencies"><meta property="og:description" content="MarketLens provides precise, AI-generated buyer personas and Willingness-to-Pay (WTP) bands instantly. Eliminate market guesswork and optimize pricing strategies."><meta property="og:type" content="website"><link rel="stylesheet" href="/styles.css"><title>Sign up — MarketLens</title></head>
+<body>
+
+<header class="brand-header"><img src="/logo.svg" alt="MarketLens logo" height="32"><strong>MarketLens</strong></header>
+<main>
+  <h1>Create your account</h1>
+  <form id="signup-form">
+    <input type="email" id="email" placeholder="Email" required="">
+    <input type="password" id="password" placeholder="Password (min 8 characters)" required="" minlength="8">
+    <button type="submit" class="cta-button">Get Started Free</button>
+  </form>
+  <p id="signup-message" role="status"></p>
+</main>
+<script>
+  document.getElementById('signup-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const messageEl = document.getElementById('signup-message');
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (res.status === 201) {
+      messageEl.textContent = 'Account created — welcome to MarketLens!';
+    } else if (res.status === 409) {
+      messageEl.textContent = 'That email is already registered.';
+    } else {
+      const body = await res.json().catch(() => ({}));
+      messageEl.textContent = body?.error?.message || 'Signup failed — please check your input.';
+    }
+  });
+</script>
+<footer class="site-footer">
+<p>© MarketLens — market intelligence for consultants and agencies.</p>
+<nav aria-label="Footer"><a href="/pricing">Pricing</a><a href="/about">About</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/contact">Contact</a></nav>
+</footer>
+
+</body></html>

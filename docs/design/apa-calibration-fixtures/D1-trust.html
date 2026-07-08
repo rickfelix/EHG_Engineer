@@ -1,0 +1,71 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="MarketLens provides precise, AI-generated buyer personas and Willingness-to-Pay (WTP) bands instantly. Eliminate market guesswork and optimize pricing strategies."><meta property="og:title" content="MarketLens: AI Buyer Personas &amp; WTP for Consultants &amp; Agencies"><meta property="og:description" content="MarketLens provides precise, AI-generated buyer personas and Willingness-to-Pay (WTP) bands instantly. Eliminate market guesswork and optimize pricing strategies."><meta property="og:type" content="website"><link rel="stylesheet" href="/styles.css"><title>Unlock Market Truths: Precise AI Buyer Personas &amp; WTP Instantly.</title></head>
+<body>
+
+<header class="brand-header"><img src="/logo.svg" alt="MarketLens logo" height="32"><strong>MarketLens</strong></header>
+<main class="landing">
+  <section class="hero">
+    <h1 class="hero-title">Unlock Market Truths: Precise AI Buyer Personas &amp; WTP Instantly.</h1>
+    <p class="hero-subtitle">For Strategic Consultants like you, MarketLens eliminates guesswork, delivering data-backed insights to optimize pricing and validate your expertise.</p>
+    <p class="hero-tagline">Uncover Market Truths. Price with Precision.</p>
+    <button id="cta" class="cta-button">Get Started Free</button>
+    <p class="hero-audience">Built for The Strategic Consultants.</p>
+  </section>
+
+  <section class="features" aria-labelledby="features-heading">
+    <h2 id="features-heading" class="section-heading">Stop Guessing. Know Your Buyers &amp; Their Willingness to Pay.</h2>
+    <ul class="feature-grid">
+    <li class="feature">
+      <h3 class="feature-title">Precise AI buyer personas</h3>
+      <p class="feature-body">Describe your product and market — get evidence-styled buyer personas built for B2B strategy work, not generic templates.</p>
+    </li>
+    <li class="feature">
+      <h3 class="feature-title">Willingness-to-pay bands</h3>
+      <p class="feature-body">Get data-backed WTP pricing bands so you set and justify premium fees with confidence, not guesswork.</p>
+    </li>
+    <li class="feature">
+      <h3 class="feature-title">Eliminate market guesswork</h3>
+      <p class="feature-body">Replace weeks of interviews and spreadsheet modeling with instant, data-driven market intelligence.</p>
+    </li>
+    <li class="feature">
+      <h3 class="feature-title">Built for consultants &amp; agencies</h3>
+      <p class="feature-body">Purpose-built for consultants, fractional CMOs, and small agencies who advise clients on positioning and pricing.</p>
+    </li>
+    </ul>
+  </section>
+
+  <!-- D1 FIXTURE (trust): fabricated trust row, no venture_artifact backs this claim -->
+  <section class="proof" aria-labelledby="trust-badges-heading">
+    <h2 id="trust-badges-heading" class="section-heading">Trusted by 500+ agencies</h2>
+    <ul class="proof-list">
+      <li>Acme Consulting Group</li>
+      <li>Northstar Advisory</li>
+      <li>Blue Ridge Partners</li>
+      <li>Vantage Point Consultants</li>
+    </ul>
+  </section>
+
+  <section class="proof" aria-labelledby="proof-heading">
+    <h2 id="proof-heading" class="section-heading">Where free tools stop, MarketLens starts</h2>
+    <ul class="proof-list"><li>Data-driven Willingness-to-Pay analysis — not just persona templates.</li><li>An AI moat that sharpens as validated results accumulate.</li><li>Evidence-styled output you can put in front of a client.</li></ul>
+    <a class="cta-button cta-secondary" href="/signup">Get Started Free</a>
+  </section>
+</main>
+<script>
+  document.getElementById('cta').addEventListener('click', async () => {
+    try {
+      await fetch('/api/landing/cta-click', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: 'landing-hero' }),
+      });
+    } finally {
+      window.location.href = '/signup';
+    }
+  });
+</script>
+<footer class="site-footer">
+<p>© MarketLens — market intelligence for consultants and agencies.</p>
+<nav aria-label="Footer"><a href="/pricing">Pricing</a><a href="/about">About</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/contact">Contact</a></nav>
+</footer>
+
+</body></html>
