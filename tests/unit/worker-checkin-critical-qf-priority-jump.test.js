@@ -11,7 +11,10 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { resolveCheckin, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS } = require('../../scripts/worker-checkin.cjs');
 
-const NOW = Date.parse('2026-07-05T00:00:00Z');
+// QF-20260707-793: relative to real Date.now(), not a fixed calendar date -- resolveCheckin's
+// isCriticalQfJumpEligible/isAutoStartableQF check ageDays against a real STALE_QF_DAYS=3
+// ceiling using the wall clock, so a hardcoded NOW drifts past that ceiling as real time passes.
+const NOW = Date.now();
 const OLD_ENOUGH = new Date(NOW - CRITICAL_QF_JUMP_GRACE_MS - 60_000).toISOString(); // just past grace
 const TOO_FRESH = new Date(NOW - 60_000).toISOString(); // 1 minute ago
 
