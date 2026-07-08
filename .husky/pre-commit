@@ -271,7 +271,15 @@ echo "🔐 Running secret detection scan..."
 
 # Get all staged file contents (excluding pre-commit hook itself to avoid false positives)
 # The hook contains regex patterns that would otherwise trigger detection
-STAGED_CONTENT=$(git diff --cached --diff-filter=ACM -U0 -- ':!.husky/pre-commit' ':!.githooks/*' 2>/dev/null || true)
+STAGED_CONTENT=$(git diff --cached --diff-filter=ACM -U0 -- ':!.husky/pre-commit' ':!.githooks/*' ':!docs/design/apa-calibration-fixtures/*' 2>/dev/null || true)
+
+# QF-20260708-650: frozen design fixtures under docs/design/apa-calibration-fixtures/**
+# inline-embed base64 PNG screenshots that false-positive-match the AKIA pattern.
+# Narrowly scoped allowlist: strip ONLY base64 image-data-URI lines from that path's
+# diff -- any other content in those files (e.g. a real secret) is still scanned.
+FIXTURE_CONTENT=$(git diff --cached --diff-filter=ACM -U0 -- 'docs/design/apa-calibration-fixtures/*' 2>/dev/null | grep -viE '^\+.*data:image/(png|jpe?g|gif);base64,' || true)
+STAGED_CONTENT="${STAGED_CONTENT}
+${FIXTURE_CONTENT}"
 
 # Define secret patterns (regex)
 # These patterns match common API key and credential formats
