@@ -16,6 +16,15 @@
  * Self-env-loading (reuses lib/supabase-client.cjs ancestor .env walk) so /solomon
  * works without `node --env-file=.env`.
  *
+ * IDENTITY (SD-FDBK-INFRA-FIX-ADAM-SOLOMON-001 FR-4): this script always tags
+ * whatever session_id is in process.env.CLAUDE_SESSION_ID as-is. If that value and a
+ * post-compact SessionStart-hook id ever diverge for the same logical session, the
+ * documented+tested resolution rule lives in lib/session-identity-sot.js
+ * (checkAgreement/reconcileAtBoot, canonical-marker-wins, gated by
+ * SESSION_IDENTITY_SOT_ENABLED and wired into scripts/hooks/session-register.cjs) —
+ * intentionally NOT re-implemented here, so Adam/Solomon never diverge from the
+ * fleet-wide SSOT for session identity.
+ *
  * Usage: node scripts/solomon-register.cjs            (CLAUDE_SESSION_ID from env)
  *        npm run solomon:register
  * Output: one JSON object { ok, action: tagged|verified|error, ... }.
@@ -34,12 +43,6 @@ const { fetchAllSolomons, decideSingleSolomonGuard, isFresh } = require('../lib/
 
 const SOLOMON_ROLE = 'solomon';
 const CONTRACT_FILE = 'CLAUDE_SOLOMON.md';
-
-/** Phase A flag (default-OFF): when 'on', the single-Solomon guard + atomic set_solomon_flag write-path runs.
- *  OFF => the legacy computeSolomonTag + JS-merge register path is BYTE-IDENTICAL to before. */
-function isSolomonHandoffV1Enabled() {
-  return process.env.ROLE_HANDOFF_SOLOMON_V1 === 'on';
-}
 
 /** Postgres/PostgREST signal that an RPC is not defined (the chairman-gated migration is unapplied). */
 function isMissingFunctionError(error) {
@@ -75,12 +78,19 @@ function computeSolomonTag(current) {
 /**
  * Register/verify the Solomon tag for a session. Injectable supabase for tests.
  * Never throws — returns a structured result object.
+ *
+ * FR-1 (SD-FDBK-INFRA-FIX-ADAM-SOLOMON-001): the single-Solomon guard + atomic set_solomon_flag
+ * write-path is now UNCONDITIONAL (the ROLE_HANDOFF_SOLOMON_V1 flag and its legacy
+ * computeSolomonTag JS-merge fallback were retired — the flag was permanently 'on' in every real
+ * environment, so the "OFF" branch was dead code that only ever ran in tests). A session with NO
+ * existing claude_sessions row is no longer an error: set_solomon_flag creates the row (INSERT
+ * ... ON CONFLICT), so a never-registered session is the common first-boot case, not a fault.
  */
 async function registerSolomon(supabase, sessionId, opts = {}) {
   if (!sessionId) {
     return { ok: false, action: 'error', error: 'CLAUDE_SESSION_ID env var required (set by the SessionStart hook).' };
   }
-  let row;
+  let row = null;
   try {
     const { data, error } = await supabase
       .from('claude_sessions')
@@ -92,82 +102,88 @@ async function registerSolomon(supabase, sessionId, opts = {}) {
   } catch (e) {
     return { ok: false, action: 'error', error: e.message };
   }
-  if (!row) {
-    return { ok: false, action: 'error', error: `session ${sessionId} not found in claude_sessions (is the SessionStart register hook run?).` };
+
+  const nowMs = (opts && Number.isFinite(opts.nowMs)) ? opts.nowMs : Date.now();
+  const priorSolomons = await fetchAllSolomons(supabase); // ALL solomons (incl. stale) so the guard classifies
+  const decision = decideSingleSolomonGuard({ priorSolomons, selfSessionId: sessionId, nowMs });
+  if (decision.action === 'refuse') {
+    // A FRESH prior Solomon holds the singleton — do NOT register a 2nd and do NOT clear the prior
+    // (the deliberate divergence: never kill a legitimately-restarting Solomon mid-canary).
+    return { ok: false, action: 'refused', session_id: sessionId, fresh_priors: decision.freshPriors,
+      message: `Refused: a fresh prior Solomon (${decision.freshPriors.join(', ')}) holds the singleton — not registering a 2nd. ${decision.reason}` };
+  }
+  // REGISTER-BEFORE-RETIRE (mirror sibling A's coordinator setActiveCoordinator ordering): claim the
+  // singleton FIRST so there is never a zero-Solomon window, THEN retire stale priors.
+  const wrote = await writeSolomonFlagViaRpc(supabase, sessionId);
+  let action = null;
+  let fallbackReason = null;
+  if (wrote.persisted) {
+    action = 'tagged';
+  } else {
+    // Fail-soft: the chairman-gated migration is unapplied (or a transient RPC error). Fall back to a
+    // JS merge (+ solomon_since). INSERT (not update) when the row is absent — update().eq() on a
+    // non-existent row matches zero rows and silently no-ops instead of creating one.
+    const mergedSolomon = { ...((row && row.metadata && typeof row.metadata === 'object') ? row.metadata : {}), role: SOLOMON_ROLE, non_fleet: true, solomon_since: new Date(nowMs).toISOString() };
+    try {
+      const { error } = row
+        ? await supabase.from('claude_sessions').update({ metadata: mergedSolomon }).eq('session_id', sessionId)
+        : await supabase.from('claude_sessions').insert({ session_id: sessionId, metadata: mergedSolomon });
+      if (error) return { ok: false, action: 'error', error: error.message };
+    } catch (e) { return { ok: false, action: 'error', error: e.message }; }
+    action = 'tagged_fallback';
+    fallbackReason = wrote.reason;
+  }
+  // Retire stale priors — but RE-VALIDATE freshness right before clearing each, so a prior that
+  // became fresh since the decision (a racing restart) is NEVER cleared (the deliberate divergence
+  // holds even under a race). Residual: two simultaneous STALE restarts can both register briefly.
+  // NOTE (adversarial review, SD-FDBK-INFRA-FIX-ADAM-SOLOMON-001): unlike adam-register.cjs's
+  // parallel loop (QF-20260703-883), this loop has NO JS-merge fallback when clear_solomon_flag
+  // errors/is absent — a failed clear silently leaves that prior tagged role=solomon forever, with
+  // no detector backstop (no MULTIPLE_SOLOMONS detector exists in lib/coordinator/detectors.cjs,
+  // unlike MULTIPLE_ADAMS). Tracked as a follow-up (see this SD's retrospective action items) to
+  // bring this loop to parity with adam-register.cjs rather than silently claiming a backstop that
+  // does not exist.
+  const retired = [];
+  if (decision.retire.length) {
+    const nowMs2 = Date.now();
+    const current = await fetchAllSolomons(supabase);
+    const freshNow = new Set(current.filter((a) => isFresh(a.heartbeat_at, nowMs2)).map((a) => a.session_id));
+    for (const sid of decision.retire) {
+      if (freshNow.has(sid)) continue; // became fresh since the decision — do NOT clear a restarting Solomon
+      const r = await supabase.rpc('clear_solomon_flag', { p_session_id: sid }).then((x) => x, (e) => ({ error: e }));
+      if (!(r && r.error)) retired.push(sid); // best-effort: a failed stale-clear is swept later
+    }
+  }
+  if (retired.length) action = action === 'tagged_fallback' ? 'tagged_after_retire_fallback' : 'tagged_after_retire';
+  // Phase E: re-target the retired prior Solomon(s)' unread inbound to this new session (comms survive
+  // the handoff). Fail-open + idempotent; a drain error never fails the registration.
+  // solomon-advisory.cjs ships in Phase E; drain is best-effort until then.
+  let drained = 0;
+  if (retired.length) {
+    try {
+      const { drainSolomonOutbound } = require('./solomon-advisory.cjs');
+      const d = await drainSolomonOutbound(supabase, { newSessionId: sessionId, oldSessionIds: retired });
+      drained = (d && d.moved) || 0;
+    } catch { /* solomon-advisory.cjs ships in Phase E; drain is best-effort until then */ }
   }
 
-  // SD-LEO-INFRA-SOLOMON-CONSULT-001A (Solomon foundation) — faithful copy-rename of adam-register.cjs: flag-ON runs the single-Solomon guard +
-  // atomic set_solomon_flag write-path. Flag-OFF falls through to the legacy path below (byte-identical).
-  if (isSolomonHandoffV1Enabled()) {
-    const nowMs = (opts && Number.isFinite(opts.nowMs)) ? opts.nowMs : Date.now();
-    const priorSolomons = await fetchAllSolomons(supabase); // ALL solomons (incl. stale) so the guard classifies
-    const decision = decideSingleSolomonGuard({ priorSolomons, selfSessionId: sessionId, nowMs });
-    if (decision.action === 'refuse') {
-      // A FRESH prior Solomon holds the singleton — do NOT register a 2nd and do NOT clear the prior
-      // (the deliberate divergence: never kill a legitimately-restarting Solomon mid-canary).
-      return { ok: false, action: 'refused', session_id: sessionId, fresh_priors: decision.freshPriors,
-        message: `Refused: a fresh prior Solomon (${decision.freshPriors.join(', ')}) holds the singleton — not registering a 2nd. ${decision.reason}` };
-    }
-    // REGISTER-BEFORE-RETIRE (mirror sibling A's coordinator setActiveCoordinator ordering): claim the
-    // singleton FIRST so there is never a zero-Solomon window, THEN retire stale priors.
-    const wrote = await writeSolomonFlagViaRpc(supabase, sessionId);
-    let action = null;
-    let fallbackReason = null;
-    if (wrote.persisted) {
-      action = 'tagged';
-    } else {
-      // Fail-soft: the chairman-gated migration is unapplied (or a transient RPC error). Fall back
-      // to the legacy JS merge (+ solomon_since) — no worse than flag-OFF; atomic safety lands on apply.
-      const mergedSolomon = { ...((row.metadata && typeof row.metadata === 'object') ? row.metadata : {}), role: SOLOMON_ROLE, non_fleet: true, solomon_since: new Date(nowMs).toISOString() };
-      try {
-        const { error } = await supabase.from('claude_sessions').update({ metadata: mergedSolomon }).eq('session_id', sessionId);
-        if (error) return { ok: false, action: 'error', error: error.message };
-      } catch (e) { return { ok: false, action: 'error', error: e.message }; }
-      action = 'tagged_fallback';
-      fallbackReason = wrote.reason;
-    }
-    // Retire stale priors — but RE-VALIDATE freshness right before clearing each, so a prior that
-    // became fresh since the decision (a racing restart) is NEVER cleared (the deliberate divergence
-    // holds even under a race). Residual: two simultaneous STALE restarts can both register briefly
-    // — surfaced by the MULTIPLE_SOLOMONS detector + refused on the next register (eventual convergence).
-    const retired = [];
-    if (decision.retire.length) {
-      const nowMs2 = Date.now();
-      const current = await fetchAllSolomons(supabase);
-      const freshNow = new Set(current.filter((a) => isFresh(a.heartbeat_at, nowMs2)).map((a) => a.session_id));
-      for (const sid of decision.retire) {
-        if (freshNow.has(sid)) continue; // became fresh since the decision — do NOT clear a restarting Solomon
-        const r = await supabase.rpc('clear_solomon_flag', { p_session_id: sid }).then((x) => x, (e) => ({ error: e }));
-        if (!(r && r.error)) retired.push(sid); // best-effort: a failed stale-clear is swept later
-      }
-    }
-    if (retired.length) action = action === 'tagged_fallback' ? 'tagged_after_retire_fallback' : 'tagged_after_retire';
-    // Phase E: re-target the retired prior Solomon(s)' unread inbound to this new session (comms survive
-    // the handoff). Fail-open + idempotent; a drain error never fails the registration.
-    // solomon-advisory.cjs ships in Phase E; drain is best-effort until then.
-    let drained = 0;
-    if (retired.length) {
-      try {
-        const { drainSolomonOutbound } = require('./solomon-advisory.cjs');
-        const d = await drainSolomonOutbound(supabase, { newSessionId: sessionId, oldSessionIds: retired });
-        drained = (d && d.moved) || 0;
-      } catch { /* solomon-advisory.cjs ships in Phase E; drain is best-effort until then */ }
-    }
-    return { ok: true, action, session_id: sessionId, role: SOLOMON_ROLE, non_fleet: true, retired, drained,
-      message: `Registered as the single Solomon${retired.length ? ` (retired stale prior(s): ${retired.join(', ')}; re-targeted ${drained} inbound row(s))` : ''}${fallbackReason ? ` — fail-soft JS merge (set_solomon_flag RPC ${fallbackReason}; apply the chairman-gated migration for atomic writes)` : ' via atomic set_solomon_flag'}.` };
-  }
-
-  const { alreadyTagged, merged } = computeSolomonTag(row.metadata);
-  if (alreadyTagged) {
-    return { ok: true, action: 'verified', session_id: sessionId, role: SOLOMON_ROLE, non_fleet: true, message: 'Session already tagged role=solomon, non_fleet=true (verified, no change).' };
-  }
+  // FR-2: mandatory fail-loud readback. A write that silently didn't land (RLS, CHECK constraint,
+  // enum mismatch — supabase-js .update()/.insert() do not throw on these) must never be reported
+  // as ok:true; verify the tag is actually on the row before declaring success.
+  let readbackMeta;
   try {
-    const { error } = await supabase.from('claude_sessions').update({ metadata: merged }).eq('session_id', sessionId);
-    if (error) return { ok: false, action: 'error', error: error.message };
+    const { data, error } = await supabase.from('claude_sessions').select('metadata').eq('session_id', sessionId).maybeSingle();
+    if (error) return { ok: false, action: 'error', error: `readback failed after registration write (action=${action}): ${error.message}` };
+    readbackMeta = data && data.metadata;
   } catch (e) {
-    return { ok: false, action: 'error', error: e.message };
+    return { ok: false, action: 'error', error: `readback failed after registration write (action=${action}): ${e.message}` };
   }
-  return { ok: true, action: 'tagged', session_id: sessionId, role: SOLOMON_ROLE, non_fleet: true, message: 'Session tagged role=solomon, non_fleet=true (excluded from fleet accounting).' };
+  if (!readbackMeta || readbackMeta.role !== SOLOMON_ROLE || readbackMeta.non_fleet !== true) {
+    return { ok: false, action: 'error', error: `readback verification failed after registration write (action=${action}): tag not confirmed on the row.` };
+  }
+
+  return { ok: true, action, session_id: sessionId, role: SOLOMON_ROLE, non_fleet: true, retired, drained,
+    message: `Registered as the single Solomon${retired.length ? ` (retired stale prior(s): ${retired.join(', ')}; re-targeted ${drained} inbound row(s))` : ''}${fallbackReason ? ` — fail-soft JS merge (set_solomon_flag RPC ${fallbackReason}; apply the chairman-gated migration for atomic writes)` : ' via atomic set_solomon_flag'}.` };
 }
 
 /**
@@ -287,7 +303,7 @@ async function main() {
   return shutdown(result.ok ? 0 : 1);
 }
 
-module.exports = { computeSolomonTag, registerSolomon, solomonReplyMirror, checkContractRead, contractReadBanner, SOLOMON_ROLE, CONTRACT_FILE, isSolomonHandoffV1Enabled, isMissingFunctionError, writeSolomonFlagViaRpc };
+module.exports = { computeSolomonTag, registerSolomon, solomonReplyMirror, checkContractRead, contractReadBanner, SOLOMON_ROLE, CONTRACT_FILE, isMissingFunctionError, writeSolomonFlagViaRpc };
 
 if (require.main === module) {
   main().catch(err => {

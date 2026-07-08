@@ -872,8 +872,8 @@ async function main() {
  * restarted Adam receives replies/directives the prior session never consumed. Mirrors the
  * coordinator broadcast-drain (lib/coordinator/resolve.cjs:233-238). IDEMPOTENT: gates on
  * read_at IS NULL and re-targets old->new, so a re-run matches nothing (no loop, no duplicate).
- * FAIL-OPEN: returns { moved:0, error? } on any error, never throws. The caller (adam-register)
- * only invokes this under the ROLE_HANDOFF_ADAM_V1 flag.
+ * FAIL-OPEN: returns { moved:0, error? } on any error, never throws. Invoked unconditionally by
+ * adam-register's registerAdam() whenever a stale prior Adam was retired.
  * @param {object} supabase
  * @param {{ newSessionId: string, oldSessionIds: string[] }} p
  * @returns {Promise<{ moved: number, error?: string }>}
