@@ -998,7 +998,9 @@ async function adoptOrphanInProgress(sb, sessionId, base) {
       // resume message (advisory — sd-start reads the live phase authoritatively on attach).
       // target_application added for the SD-LEO-INFRA-WORKER-CLAIM-TIME-001 claim-time repo-match
       // axis so a repo-mismatched orphan is not adopted into the wrong checkout.
-      .select('sd_key, sd_type, status, current_phase, metadata, updated_at, target_application')
+      // parent_sd_id added (SD-FDBK-INFRA-ORPHAN-ADOPT-RESUME-001): feeds the parentLeadPending
+      // guard below so a CHILD orphan whose orchestrator parent is still pre-LEAD is not adopted.
+      .select('sd_key, sd_type, status, current_phase, metadata, updated_at, target_application, parent_sd_id')
       .eq('status', 'in_progress')
       .is('claiming_session_id', null)
       .neq('sd_type', 'orchestrator')         // parents are in_progress/no-claim BY DESIGN while children run
@@ -1011,6 +1013,13 @@ async function adoptOrphanInProgress(sb, sessionId, base) {
       // metadata.requires_human_action all skip. SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-2): {cwd}
       // adds the claim-time fitness axes so a repo-mismatched orphan is not adopted here.
       if (classifyDispatchIneligibility(sd, { cwd: process.cwd() }) !== null) continue;
+      // SD-FDBK-INFRA-ORPHAN-ADOPT-RESUME-001: parent-lifecycle guard. classifyDispatchIneligibility
+      // excludes orchestrator-parents/test-fixtures/human-action/live-held but NOT a CHILD whose
+      // orchestrator parent is still pre-LEAD — adopting one only burns PLAN cycles before the hard
+      // 'child cannot enter EXEC until parent completes LEAD' block, then re-orphans (witnessed:
+      // ...ASSESSMENT-001-A re-adopted twice under a draft/LEAD parent). Reuse the same shared
+      // predicate the self-claim + draft tiers apply (evaluateDispatchEligibility). Fails open.
+      if (await parentLeadPending(sb, sd)) continue;
       // Live-foreign-holder probe (the half-write case: SD-side claim cleared but a LIVE session
       // still points at it via claude_sessions.sd_key). SD-LEO-INFRA-RECLAIM-STEAL-LIVE-CLAIMANT-
       // WIP-GUARD-001 (FR-3): the raw is_alive flag alone under-protects (it FREEZES stale between

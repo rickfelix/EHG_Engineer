@@ -35,6 +35,9 @@ function makeStub(cfg) {
       eq(k, v) { state.filters[k] = v; return chain; },
       in(k, v) { state.filters[k] = v; return chain; },
       neq(k, v) { state.filters['neq_' + k] = v; return chain; },
+      // parentLeadPending (SD-FDBK-INFRA-ORPHAN-ADOPT-RESUME-001) looks the parent up via
+      // .or('id.eq.<ref>,sd_key.eq.<ref>'); capture the ref so resolveSingle can return the parent row.
+      or(expr) { const m = /(?:id|sd_key)\.eq\.([^,]+)/.exec(String(expr || '')); if (m) state.filters.or_ref = m[1]; return chain; },
       lt(k, v) { state.filters['lt_' + k] = v; return chain; },
       gte() { return chain; },
       is() { return chain; },
@@ -51,7 +54,10 @@ function makeStub(cfg) {
       // isSdInFlight (a): SELECT current_phase ... WHERE sd_key=? .maybeSingle()
       if (table === 'strategic_directives_v2') {
         if (cfg.inFlightThrow) return Promise.reject(new Error('isSdInFlight query failed'));
-        return Promise.resolve({ data: (cfg.sdRows && cfg.sdRows[state.filters.sd_key]) || null, error: null });
+        // or_ref => parentLeadPending's parent lookup (keyed by parent id/sd_key); else the
+        // isSdInFlight / resume-path lookup keyed by sd_key. Both read from cfg.sdRows.
+        const key = state.filters.or_ref || state.filters.sd_key;
+        return Promise.resolve({ data: (cfg.sdRows && cfg.sdRows[key]) || null, error: null });
       }
       // SD-LEO-INFRA-WORKER-CHECKIN-TEST-REGRESSION-001: the resume path (and confirmRowGone) reads
       // quick_fixes.status by id .maybeSingle() to verify a claimed QF is still resumable. Seed it via
@@ -693,6 +699,48 @@ describe('ORPHAN-ADOPTION: adopt zero-claim in_progress SDs (resume_orphan)', ()
     });
     const r = await runCheckin(sb, 'sess-1', noCoord);
     expect(r.action).toBe('idle'); // both classifier-skipped despite being claimable
+  });
+
+  // SD-FDBK-INFRA-ORPHAN-ADOPT-RESUME-001: parent-lifecycle guard on orphan adoption. A CHILD
+  // orphan whose orchestrator parent has not yet passed LEAD cannot enter EXEC, so adopting it
+  // only burns PLAN cycles and re-orphans. parentLeadPending (the same predicate the self-claim +
+  // draft tiers use) now gates the orphan-adopt path too. (The real fix also adds parent_sd_id to
+  // the orphan query .select(...) so the guard sees the link; the stub returns full rows, so these
+  // tests exercise the guard logic — the select projection is covered by PRD FR-2 + code review.)
+  it('excludes a CHILD orphan whose orchestrator parent is still pre-LEAD (draft/LEAD)', async () => {
+    const sb = makeStub({
+      ...sess,
+      orphans: [orphan('SD-CHILD-PRELEAD-001', { parent_sd_id: 'SD-PARENT-PRELEAD-001' })],
+      sdRows: { 'SD-PARENT-PRELEAD-001': { status: 'draft', current_phase: 'LEAD' } },
+      candidates: [],
+      claimResults: { 'SD-CHILD-PRELEAD-001': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('idle'); // parentLeadPending skips it despite being otherwise claimable
+  });
+
+  it('adopts a CHILD orphan whose parent has COMPLETED (parentLeadPending → false)', async () => {
+    const sb = makeStub({
+      ...sess,
+      orphans: [orphan('SD-CHILD-DONE-001', { parent_sd_id: 'SD-PARENT-DONE-001' })],
+      sdRows: { 'SD-PARENT-DONE-001': { status: 'completed', current_phase: 'COMPLETED' } },
+      candidates: [],
+      claimResults: { 'SD-CHILD-DONE-001': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('resume_orphan');
+    expect(r.sd).toBe('SD-CHILD-DONE-001');
+  });
+
+  it('still adopts a NON-child orphan (no parent_sd_id — the guard no-ops, no regression)', async () => {
+    const sb = makeStub({
+      ...sess,
+      orphans: [orphan('SD-STANDALONE-ORPHAN-001')], // no parent_sd_id
+      candidates: [],
+      claimResults: { 'SD-STANDALONE-ORPHAN-001': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('resume_orphan');
   });
 
   // SD-LEO-INFRA-RECLAIM-STEAL-LIVE-CLAIMANT-WIP-GUARD-001 (FR-3): a lapsed/half-write claim's
