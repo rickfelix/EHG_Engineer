@@ -70,6 +70,8 @@ Any LLM judging design/output quality must run **BRAND-STRIPPED + MULTIMODAL (sc
 
 ## 3. SD carve (already Adam-adopted; restated for sourcing)
 - **SD-3 family (this doc):** spec-gate SD + APA-runtime SD sourced as a COUPLED PAIR; the criteria library IS the coupling artifact. L3/L4 spec-production+triangulation source behind them (consumes the same library + grades).
+  - Pair-half A (criteria library + spec-gate, `SD-LEO-INFRA-VALUE-AUTHENTICITY-SPEC-001`): **shipped** — `value_authenticity_criteria_library` frozen at contract_version=1, 5 seeded rows.
+  - Pair-half B (L1 runtime anti-stub ladder, `SD-LEO-INFRA-VALUE-AUTHENTICITY-APA-001`): **shipped** — T0/T1/T2 probes + fail-closed aggregator (`lib/apa/value-authenticity-t0.mjs`, `-t1.mjs`, `-t2.mjs`, `-ladder.mjs`) and the I4 seeded regression canary (`lib/apa/fixtures/value-authenticity-i4-marketlens-stub.mjs`). T1's live-sandbox wiring to APA Child A and T3/T4 (soft corroborators) remain future work.
 - Depends on: **SD-1** decision-binding (shipped) for waiver/ratification/deferral records. Sibling to: **SD-2** dispatch-authorization (control axis; no code edge).
 - Fold-in note: L1's T2 perturbation vocabulary and L2's trigger-predicate boundaries are **validate-at-build** items (medium confidence — need empirical validation against a real generator when one ships).
 
