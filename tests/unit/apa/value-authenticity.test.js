@@ -78,6 +78,11 @@ describe('value-authenticity-criteria.mjs — round-trip SSOT', () => {
     const supabase = makeMockSupabase(SEEDED_CRITERIA, { injectedError: { message: 'connection reset' } });
     await expect(getCriterion(supabase, 'VA-T0-source-exists')).rejects.toThrow(/connection reset/);
   });
+
+  it('getCriteriaByTForm throws (never silently returns an empty array) when the DB itself errors', async () => {
+    const supabase = makeMockSupabase(SEEDED_CRITERIA, { injectedError: { message: 'connection reset' } });
+    await expect(getCriteriaByTForm(supabase, 'T0')).rejects.toThrow(/connection reset/);
+  });
 });
 
 describe('value-authenticity-t0.mjs — TS-1 (MarketLens replay, T0 half)', () => {
@@ -182,6 +187,34 @@ describe('value-authenticity-t2.mjs — TS-1 (MarketLens replay, T2 half: the co
       valueEngineFn: realPersonaEngine, baseInput: { budget: 0 }, perturbationSteps: [(i) => i],
       expectedDirection: 'sideways', extractComparable: () => 0,
     })).toThrow(/expectedDirection must be/);
+  });
+
+  it('flags a fully non-responsive engine (ignores its input entirely) even though it has zero direction reversals', () => {
+    const constantEngine = () => ({ wtpBandIndex: 2 });
+    const result = checkMetamorphicMonotonicity({
+      valueEngineFn: constantEngine,
+      baseInput: { description: 'seed' },
+      perturbationSteps: [
+        (input) => ({ description: `${input.description} a` }),
+        (input) => ({ description: `${input.description} ab` }),
+        (input) => ({ description: `${input.description} abc` }),
+      ],
+      expectedDirection: 'increasing',
+      extractComparable: (output) => output.wtpBandIndex,
+    });
+    expect(result.finding).toBe(true);
+    expect(result.violations).toBe(0);
+    expect(result.reason).toMatch(/IDENTICAL/);
+  });
+
+  it('throws rather than silently passing when extractComparable returns a non-numeric value', () => {
+    expect(() => checkMetamorphicMonotonicity({
+      valueEngineFn: realPersonaEngine,
+      baseInput: { description: 'x', budget: 0 },
+      perturbationSteps: [(input) => ({ ...input, budget: input.budget + 2500 })],
+      expectedDirection: 'increasing',
+      extractComparable: (output) => output.typoedFieldName,
+    })).toThrow(/non-numeric\/non-finite/);
   });
 });
 
