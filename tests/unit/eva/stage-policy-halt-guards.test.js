@@ -135,6 +135,25 @@ function makeEngineFakeSupabase(seedRows = {}) {
   };
 }
 
+describe('CRITICAL fix (adversarial review PR #5753): loadStageTemplate JS-wrapper hoists policy-halt sentinels', () => {
+  it('surfaces the real Distribution step\'s _blocked at the TOP level so classifyStepResult routes it away from fallback_persist', async () => {
+    const { sb } = makeEngineFakeSupabase({}); // no thesis → real step blocks
+    const template = await _internal.loadStageTemplate(sb, 21);
+    expect(Array.isArray(template.analysisSteps)).toBe(true);
+
+    const stepResult = await template.analysisSteps[0].execute({
+      ventureContext: { id: '00000000-0000-0000-0000-000000000002', name: 'WrapperTest' },
+    });
+
+    // Without the hoist, the sentinel is buried as {artifactType:null, payload:{_blocked:true}}
+    // and classifyStepResult returns 'fallback_persist' — persisting the sentinel as
+    // requiredArtifacts[0] (distribution_channel_config) and defeating the binding gate.
+    expect(stepResult._blocked).toBe(true);
+    expect(stepResult.payload).toBeUndefined();
+    expect(classifyStepResult(stepResult)).toBe('blocked');
+  });
+});
+
 describe('TS-10: executeStage never persists a blocked step output (stage 21, real template)', () => {
   it('runs the real Distribution analysisStep, gets _blocked (no thesis), and performs no artifact persist', async () => {
     const { sb, calls } = makeEngineFakeSupabase({}); // no thesis, no decisions

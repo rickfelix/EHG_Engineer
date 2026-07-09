@@ -288,6 +288,26 @@ describe('deriveChannelsFromThesis — persona×channel JOIN (FR-2 / TS-4)', () 
     expect(d.invalid[0].invalid_reason).toMatch(/builder/);
   });
 
+  it('invalidates a second channel normalizing to the same legacy name (no duplicate experiments / inflated counts)', () => {
+    const thesis = {
+      claims: {
+        WHO: { personas: ['consultant', 'indie builder'] },
+        CHANNEL: {
+          channels: [
+            { channel: 'twitter', persona: 'consultant' },
+            { channel: 'build_in_public', persona: 'indie builder' }, // also → twitter_x
+          ],
+        },
+      },
+    };
+    const d = deriveChannelsFromThesis(validateThesisChannelClaim(thesis));
+    expect(d.channels).toHaveLength(1);
+    expect(d.channels[0].channel).toBe('twitter_x');
+    expect(d.invalid).toHaveLength(1);
+    expect(d.invalid[0].invalid_reason).toMatch(/duplicate_channel/);
+    expect(d.invalid[0].invalid_reason).toMatch(/twitter/);
+  });
+
   it('raises COHERENCE_JOIN_GAP for a channel naming no persona at all', () => {
     const thesis = {
       claims: {
@@ -645,6 +665,32 @@ describe('TS-5/TS-6/FR-7: the ONLY skip path is an APPROVED chairman decision', 
     expect(marker[0].row.artifact_data.skipped_by_decision).toBe(true);
     // No NEW pending decision is created on the skip path.
     expect(insertsOf(calls, 'chairman_decisions')).toHaveLength(0);
+  });
+
+  it('is idempotent on re-run: existing chairman deviation records for this decision are reused, not duplicated', async () => {
+    const priorDeviation = (id) => ({
+      id,
+      venture_id: 'ven-1',
+      artifact_type: 'build_deviation_record',
+      is_current: false,
+      created_at: '2026-07-08T00:00:00Z',
+      artifact_data: {
+        artifact_ref: 'distribution_channel_config',
+        why: `Chairman-approved distribution skip (chairman_decisions ${approvedSkip.id}): prior run`,
+        decided_by: 'chairman',
+        weight: 'declared-descope',
+      },
+    });
+    const { sb, calls } = makeFakeSupabase({
+      chairman_decisions: [approvedSkip],
+      venture_artifacts: [priorDeviation('dev-prior-1')],
+    });
+    const result = await analyzeStage22Distribution({ ventureId: 'ven-1', ventureName: 'V', supabase: sb, logger: silent });
+    expect(result.skipped_by_decision).toBe(true);
+    expect(result.block_reason).toBe('skipped_by_chairman_decision'); // labeled, not anonymous
+    // No NEW deviation inserts — prior records reused.
+    expect(insertsOf(calls, 'venture_artifacts', 'build_deviation_record')).toHaveLength(0);
+    expect(result.deviation_ids).toContain('dev-prior-1');
   });
 
   it('does NOT honor a PENDING (unapproved) skip decision — the block path fires instead', async () => {
