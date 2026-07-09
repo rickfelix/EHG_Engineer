@@ -101,6 +101,29 @@ describe('createResilientPage() — TS-3 (deterministic selector-drift recovery,
     expect(fixturePage.fillCalls).toEqual(['[data-testid="signup-submit"]', '[data-testid="signup-submit-v2"]']);
   });
 
+  it('recovers a drifted data-testid selector via click() using the same deterministic strategy', async () => {
+    const clickCalls = [];
+    const fixturePage = {
+      click: vi.fn(async (selector) => {
+        clickCalls.push(selector);
+        if (selector === '[data-testid="signup-submit"]') {
+          throw new Error('element not found: drifted');
+        }
+      }),
+      locator: vi.fn((sel) => ({
+        count: vi.fn(async () => (sel === '[data-testid*="signup"]' ? 1 : 0)),
+        all: vi.fn(async () => (sel === '[data-testid*="signup"]'
+          ? [{ getAttribute: vi.fn(async (attr) => (attr === 'data-testid' ? 'signup-submit-v2' : null)) }]
+          : [])),
+      })),
+    };
+    const resilientPage = createResilientPage(fixturePage);
+
+    await resilientPage.click('[data-testid="signup-submit"]');
+
+    expect(clickCalls).toEqual(['[data-testid="signup-submit"]', '[data-testid="signup-submit-v2"]']);
+  });
+
   it('re-throws the original error when no recovery strategy matches (a genuinely broken flow must still fail)', async () => {
     const fixturePage = {
       fill: vi.fn(async () => { throw new Error('#totally-gone: no signal to recover from'); }),
