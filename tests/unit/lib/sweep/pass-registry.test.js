@@ -93,7 +93,7 @@ describe('sweep pass-registry — mutation/delegation audit (documentation test)
 
   it('every pass in EARLY_PASSES/MAIN_PASSES has an audit entry', () => {
     for (const pass of [...EARLY_PASSES, ...MAIN_PASSES]) {
-      expect(AUDIT[pass.name], `no audit entry for pass "${pass.name}" — update this test`).toBeDefined();
+      expect(AUDIT[pass.name], `no audit entry for pass "${pass.name}" — extend this test`).toBeDefined();
     }
   });
 
