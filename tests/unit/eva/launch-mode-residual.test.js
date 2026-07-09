@@ -65,6 +65,17 @@ function flipFakeSb({
           update: (patch) => ({ eq: (col, val) => { log.confirms.push({ patch, id: val }); return Promise.resolve({ error: null }); } }),
         };
       }
+      if (table === 'venture_deployments') {
+        // SD-LEO-INFRA-VENTURE-DEPLOY-PIPELINE-001-D FR-5: the deploy precondition
+        // reads the latest routed row. These residual tests predate the table; no
+        // routed row + default observe mode preserves every prior expectation
+        // (violation logged, flip semantics unchanged).
+        const chain = {
+          select: () => chain, eq: () => chain, order: () => chain, limit: () => chain,
+          maybeSingle: () => Promise.resolve({ data: null, error: null }),
+        };
+        return chain;
+      }
       throw new Error('unexpected table ' + table);
     },
   };

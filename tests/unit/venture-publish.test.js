@@ -143,11 +143,16 @@ describe('FR-3: fail-closed post-publish verifiers', () => {
     expect(resolveVerifier('compute deployed')).not.toBe(resolveVerifier('application deployed'));
   });
 
-  it('pages-url-live: PASS when recorded, fail-closed when absent / on error', async () => {
+  it('pages-url-live: PASS when recorded AND serving, fail-closed when absent / on error', async () => {
     const v = resolveVerifier('pages url live');
-    expect((await v({ supabase: fakeSupabase({ venture: { stack_descriptor: PUBLISHED } }), ventureId: VENTURE })).satisfied).toBe(true);
-    expect((await v({ supabase: fakeSupabase({ venture: { stack_descriptor: READY_DESCRIPTOR } }), ventureId: VENTURE })).satisfied).toBe(false);
-    expect((await v({ supabase: fakeSupabase({ ventureError: { message: 'boom' } }), ventureId: VENTURE })).satisfied).toBe(false);
+    // SD-LEO-INFRA-VENTURE-DEPLOY-PIPELINE-001-D FR-3 (design R3): the row alone is no
+    // longer sufficient — the URL must also live-probe. fetchImpl injected here so this
+    // stays a unit test; the recorded-but-dead case is covered in
+    // venture-deploy-gate-wiring.test.js.
+    const alive = async () => ({ status: 200 });
+    expect((await v({ supabase: fakeSupabase({ venture: { stack_descriptor: PUBLISHED } }), ventureId: VENTURE, fetchImpl: alive })).satisfied).toBe(true);
+    expect((await v({ supabase: fakeSupabase({ venture: { stack_descriptor: READY_DESCRIPTOR } }), ventureId: VENTURE, fetchImpl: alive })).satisfied).toBe(false);
+    expect((await v({ supabase: fakeSupabase({ ventureError: { message: 'boom' } }), ventureId: VENTURE, fetchImpl: alive })).satisfied).toBe(false);
   });
 
   it('compute-deployed: PASS only when status published, fail-closed otherwise', async () => {
