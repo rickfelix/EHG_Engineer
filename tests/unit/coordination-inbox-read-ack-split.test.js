@@ -85,6 +85,17 @@ describe('classifyInboxMessage', () => {
     expect(classifyInboxMessage(coaching, { amAdam: false })).toEqual({ skip: false, markRead: true, markAck: false });
   });
 
+  // QF-20260709-800: a solomon_consult row (INFO, kind not in DIRECTIVE_KINDS by design) previously
+  // fell through to the default drain (markRead:true) on Solomon's OWN first poll, before
+  // scripts/solomon-advisory.cjs's specialized drainInbox() (read_at IS NULL) ever saw it — a silent
+  // drop. amSolomon must mirror amAdam's surface-not-drain carve-out.
+  it('QF-800: a solomon_consult INFO row stays UNREAD for Solomon (mirrors amAdam)', () => {
+    const consult = { message_type: 'INFO', payload: { kind: 'solomon_consult' }, sender_type: 'worker' };
+    expect(classifyInboxMessage(consult, { amSolomon: true })).toEqual({ skip: false, markRead: false, markAck: false });
+    // non-Solomon session keeps the pre-existing default drain (unaffected by this fix)
+    expect(classifyInboxMessage(consult, { amSolomon: false })).toEqual({ skip: false, markRead: true, markAck: false });
+  });
+
   // QF-20260610-545: residual after QF-623 — the carve-out kept a sender_type ALLOWLIST
   // (orchestrator|coordinator), so sender_type=chairman directives fell through to the default
   // drain and 5 chairman messages were auto-acked unseen (harness-bug 43c2dee2). The fix replaces

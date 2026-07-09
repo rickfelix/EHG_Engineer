@@ -95,11 +95,20 @@ describe('FR-E1: NET-NEW guards', () => {
   });
 
   it('alreadyAnswered is true when an advisory already echoes the consult correlation (durable dedup)', async () => {
-    const answered = { from: () => ({ select: () => ({ eq: () => ({ limit: async () => ({ data: [{ id: 'x' }], error: null }) }) }) }) };
-    const fresh = { from: () => ({ select: () => ({ eq: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) };
+    // QF-20260709-800: alreadyAnswered now chains a second .eq() (payload->>kind = adam_advisory)
+    // to exclude ping_on_silence reminder rows from the dedup check — the mock chain reflects that.
+    const answered = { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ limit: async () => ({ data: [{ id: 'x' }], error: null }) }) }) }) }) };
+    const fresh = { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) }) };
     expect(await m.alreadyAnswered(answered, 'c1')).toBe(true);
     expect(await m.alreadyAnswered(fresh, 'c1')).toBe(false);
     expect(await m.alreadyAnswered(fresh, null)).toBe(false); // no correlation → not answered
+  });
+
+  it('alreadyAnswered is false when only a ping_on_silence reminder echoes the correlation (QF-20260709-800)', async () => {
+    // A ping row also carries payload.reply_to (threads back to the original consult), but is
+    // NOT a genuine answer — the kind filter must exclude it, so dedup never false-positives.
+    const pingOnly = { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) }) };
+    expect(await m.alreadyAnswered(pingOnly, 'c1')).toBe(false);
   });
 
   it('checkConsultQuota blocks at the per-day and per-SD ceilings, fails OPEN on error', async () => {
