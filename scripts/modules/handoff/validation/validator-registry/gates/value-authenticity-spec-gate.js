@@ -160,7 +160,7 @@ function evaluateFunctionalRequirement(fr, ctx) {
         fr_id: fr.id || '(no id)',
         criterion,
         issue: 'MOCK_SATISFIABLE',
-        message: `FR ${fr.id || '(no id)'}: acceptance criterion "${String(criterion).slice(0, 120)}" is free-text and mock-satisfiable — select+parameterize a criterion_id from value_authenticity_criteria_library instead.`
+        message: `FR ${fr.id || '(no id)'}: acceptance criterion "${String(criterion).slice(0, 120)}" is free-text and mock-satisfiable — reference a parameterized criterion_id from value_authenticity_criteria_library instead.`
       });
       continue;
     }
