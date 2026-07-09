@@ -66,6 +66,19 @@ describe('executeJourneyStep()', () => {
   it('throws for an unknown step id', async () => {
     await expect(executeJourneyStep({}, 'nonexistent', {}, PERSONA, {})).rejects.toThrow(/unknown step/);
   });
+
+  it('throws unknown-step for an Object.prototype-colliding step name rather than invoking the inherited member (adversarial review finding)', async () => {
+    await expect(executeJourneyStep({}, 'constructor', {}, PERSONA, {})).rejects.toThrow(/unknown step/);
+    await expect(executeJourneyStep({}, 'toString', {}, PERSONA, {})).rejects.toThrow(/unknown step/);
+  });
+
+  it('records a failureReason string for a non-Error throw instead of crashing the whole run (adversarial review finding)', async () => {
+    const stepExecutors = { stepA: vi.fn(async () => { throw 'a plain string, not an Error'; }) };
+    const outcome = await executeJourneyStep({}, 'stepA', stepExecutors, PERSONA, {});
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.failureReason).toBe('a plain string, not an Error');
+  });
 });
 
 describe('createResilientPage() — TS-3 (deterministic selector-drift recovery, zero model cost)', () => {
@@ -101,27 +114,29 @@ describe('createResilientPage() — TS-3 (deterministic selector-drift recovery,
     expect(fixturePage.fillCalls).toEqual(['[data-testid="signup-submit"]', '[data-testid="signup-submit-v2"]']);
   });
 
-  it('recovers a drifted data-testid selector via click() using the same deterministic strategy', async () => {
-    const clickCalls = [];
-    const fixturePage = {
-      click: vi.fn(async (selector) => {
-        clickCalls.push(selector);
-        if (selector === '[data-testid="signup-submit"]') {
-          throw new Error('element not found: drifted');
-        }
-      }),
-      locator: vi.fn((sel) => ({
-        count: vi.fn(async () => (sel === '[data-testid*="signup"]' ? 1 : 0)),
-        all: vi.fn(async () => (sel === '[data-testid*="signup"]'
-          ? [{ getAttribute: vi.fn(async (attr) => (attr === 'data-testid' ? 'signup-submit-v2' : null)) }]
-          : [])),
-      })),
-    };
+  it('does NOT wrap click() with drift-recovery — a real click side effect must never be blindly retried (adversarial review finding: double-submission risk)', async () => {
+    const click = vi.fn(async () => { throw new Error('click failed after side effect already fired'); });
+    const fixturePage = { click, locator: vi.fn(() => ({ count: vi.fn(async () => 1), all: vi.fn(async () => []) })) };
     const resilientPage = createResilientPage(fixturePage);
 
-    await resilientPage.click('[data-testid="signup-submit"]');
+    await expect(resilientPage.click('[data-testid="submit"]')).rejects.toThrow(/already fired/);
+    expect(click).toHaveBeenCalledTimes(1); // never retried
+  });
 
-    expect(clickCalls).toEqual(['[data-testid="signup-submit"]', '[data-testid="signup-submit-v2"]']);
+  it('passes through every other page method (bound to the real page) via Proxy — a plain object-spread would silently drop prototype methods on a real Playwright Page (adversarial review finding)', async () => {
+    class FakePlaywrightPage {
+      constructor() { this.calls = []; }
+      async fill() { return 'fill-passthrough'; }
+      // goto/locator/evaluate/etc. live on the PROTOTYPE, not as own properties —
+      // exactly what a real Playwright Page class instance looks like.
+      async goto(url) { this.calls.push(url); return 'goto-ok'; }
+    }
+    const realishPage = new FakePlaywrightPage();
+    const resilientPage = createResilientPage(realishPage);
+
+    expect(typeof resilientPage.goto).toBe('function');
+    await expect(resilientPage.goto('http://fixture')).resolves.toBe('goto-ok');
+    expect(realishPage.calls).toEqual(['http://fixture']);
   });
 
   it('re-throws the original error when no recovery strategy matches (a genuinely broken flow must still fail)', async () => {
