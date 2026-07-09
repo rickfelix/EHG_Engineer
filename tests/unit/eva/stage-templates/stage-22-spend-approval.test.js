@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   persistCanonicalPair,
-  persistSkipMarker,
+  persistBlockMarker,
 } from '../../../../lib/eva/stage-templates/analysis-steps/stage-22-distribution-setup.js';
 import { FALLBACK_DECISION_CREATING_STAGES } from '../../../../lib/eva/chairman-decision-watcher.js';
 
@@ -77,20 +77,25 @@ describe('FR-4: persistCanonicalPair writes titled, allow-listed distribution ar
   });
 });
 
-describe('FR-4: persistSkipMarker writes a titled distribution_skip_marker', () => {
-  it('inserts artifact_type=distribution_skip_marker WITH a title (NOT NULL) at lifecycle_stage 21', async () => {
-    // SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A: Distribution is now lifecycle_stage 21
+// SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-B: the silent skip marker is gone —
+// the binding gate writes a titled distribution_block_marker instead (same FR-4
+// NOT-NULL-title + lifecycle_stage-21 contract).
+describe('FR-4: persistBlockMarker writes a titled distribution_block_marker', () => {
+  it('inserts artifact_type=distribution_block_marker WITH a title (NOT NULL) at lifecycle_stage 21', async () => {
     const { sb, calls } = stub();
-    const r = await persistSkipMarker(sb, 'ven-3', [{ artifact_type: 'engine_pricing_model', source_stage: 7 }], silent);
+    const r = await persistBlockMarker(sb, 'ven-3', { block_reason: 'demand_thesis_missing', decision_id: 'dec-1' }, silent);
     expect(r.persisted).toBe(true);
     expect(calls.inserts).toHaveLength(1);
-    expect(calls.inserts[0].artifact_type).toBe('distribution_skip_marker');
-    expect(calls.inserts[0].title).toBe('Distribution skipped');
+    expect(calls.inserts[0].artifact_type).toBe('distribution_block_marker');
+    expect(calls.inserts[0].title).toBe('Distribution blocked');
     expect(calls.inserts[0].lifecycle_stage).toBe(21);
+    expect(calls.inserts[0].artifact_data.block_reason).toBe('demand_thesis_missing');
+    // Prior current marker retired first (partial unique index on is_current=true).
+    expect(calls.updates.some(u => u.is_current === false)).toBe(true);
   });
 
   it('fails open (no throw) without supabase/ventureId', async () => {
-    const r = await persistSkipMarker(null, null, []);
+    const r = await persistBlockMarker(null, null, {});
     expect(r.persisted).toBe(false);
   });
 });
