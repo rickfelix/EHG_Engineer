@@ -22,6 +22,24 @@ function hash(seed) {
   return createHash('sha256').update(seed).digest('hex');
 }
 
+// QF-20260709-797: a run killed before afterAll orphans the fixture ventures into the
+// PRODUCTION venture list (witnessed 2026-07-08: two TS-fixture rows surfaced to the chairman
+// as phantom active ventures). Startup sweep: before creating fresh fixtures, delete any
+// stale TS-fixture-% rows older than STALE_FIXTURE_MS (and their feedback), so a prior
+// crashed run is self-healed by the next run instead of leaking forever. The 1h age guard
+// ensures a concurrently-running suite's live fixtures are never swept.
+const STALE_FIXTURE_MS = 60 * 60 * 1000;
+
+async function sweepStaleFixtures(client) {
+  const cutoff = new Date(Date.now() - STALE_FIXTURE_MS).toISOString();
+  const { data: stale } = await client.from('ventures')
+    .select('id').ilike('name', 'TS-fixture-%').lt('created_at', cutoff);
+  const ids = (stale || []).map((v) => v.id);
+  if (!ids.length) return;
+  await client.from('feedback').delete().in('venture_id', ids);
+  await client.from('ventures').delete().in('id', ids);
+}
+
 beforeAll(async () => {
   if (!HAS_REAL_DB) return;
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -29,17 +47,26 @@ beforeAll(async () => {
   const anonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   anon = createClient(url, anonKey);
 
+  await sweepStaleFixtures(svc);
+
   const { data: v1, error: e1 } = await svc.from('ventures')
     .insert({ name: `TS-fixture-${randomUUID()}`, problem_statement: 'fixture for venture-error-aggregation.db.test.js' })
     .select('id').single();
   if (e1) throw e1;
   ventureId = v1.id;
 
-  const { data: v2, error: e2 } = await svc.from('ventures')
-    .insert({ name: `TS-fixture-other-${randomUUID()}`, problem_statement: 'fixture for venture-error-aggregation.db.test.js (revocation-isolation control)' })
-    .select('id').single();
-  if (e2) throw e2;
-  otherVentureId = v2.id;
+  // Guarded second insert (QF-20260709-797): if it fails, remove the first fixture before
+  // rethrowing so a half-created pair never persists into the venture list.
+  try {
+    const { data: v2, error: e2 } = await svc.from('ventures')
+      .insert({ name: `TS-fixture-other-${randomUUID()}`, problem_statement: 'fixture for venture-error-aggregation.db.test.js (revocation-isolation control)' })
+      .select('id').single();
+    if (e2) throw e2;
+    otherVentureId = v2.id;
+  } catch (err) {
+    await svc.from('ventures').delete().eq('id', ventureId).then(() => {}, () => {});
+    throw err;
+  }
 });
 
 afterEach(async () => {
