@@ -26,7 +26,7 @@ import { getRepoRoot, isInsideWorktree } from '../lib/repo-paths.js';
 import os from 'os';
 import path from 'node:path';
 import dotenv from 'dotenv';
-import { getOrCreateSession, updateHeartbeat } from '../lib/session-manager.mjs';
+import { getOrCreateSession } from '../lib/session-manager.mjs'; // (updateHeartbeat import was long-dead — dropped with the FR-5/FR-6 extraction lint pass)
 import { resolveOwnSession } from '../lib/resolve-own-session.js';
 import { assertValidClaim, ClaimIdentityError } from '../lib/claim-validity-gate.js';
 // SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-001: FR-3 inbox poll + FR-2 sd_key drift detector
@@ -60,7 +60,6 @@ import { decideOwnConflictReattach } from '../lib/exec-context-guard.mjs';
 // base is behind origin/main, so a worker never silently builds on a stale base (a merge-as-is would
 // revert sibling work that landed after the base commit). Fail-open; reuses checkout-freshness.
 import { runStaleBaseGuard } from '../lib/worktree/stale-base-guard.mjs';
-import { getNextReadyChild } from './modules/handoff/child-sd-selector.js';
 import { checkSDAge, handleTimelineViolation, formatBlockMessage } from './modules/governance/timeline-violation-handler.js';
 import {
   evaluateInstallDecision,
@@ -89,6 +88,20 @@ dotenv.config();
 
 const supabase = createSupabaseServiceClient();
 
+// SD-ARCH-HOTSPOT-SD-START-001: the claim gate/queue phases live in shared
+// lib/claim/*.cjs modules consumed by BOTH this CLI and worker-checkin.cjs
+// (one eligibility truth — kills the claim-drift bug family). CJS so checkin
+// can require() them; loaded here via the established createRequire interop
+// (same pattern as the npm-install-lock load below). This CLI keeps ALL
+// console/colors/process.exit/argv handling — the modules return pure verdicts.
+import { createRequire } from 'node:module';
+const cjsRequire = createRequire(import.meta.url);
+const { evaluateClaimDependencyGate } = cjsRequire('../lib/claim/gates/dependency-gate.cjs');
+const { verifyHandoffIntegrity: verifyHandoffIntegrityGate } = cjsRequire('../lib/claim/gates/handoff-integrity.cjs');
+const { evaluateCadenceGate } = cjsRequire('../lib/claim/gates/cadence-gate.cjs');
+const queueResolver = cjsRequire('../lib/claim/queue-resolver.cjs');
+const { classifyAllDispatchIneligibility } = cjsRequire('../lib/fleet/claim-eligibility.cjs');
+
 // SD-FDBK-INFRA-DEPENDENCY-BLOCKS-ADVISORY-001: pre-claim DEPENDENCY gate.
 // Dependency BLOCKS were advisory-only (computed by the sweep/dashboard but never
 // enforced), so workers repeatedly claimed dependency-blocked child SDs. This
@@ -97,40 +110,23 @@ const supabase = createSupabaseServiceClient();
 // warns and proceeds; any resolution error fails OPEN so a transient DB issue can
 // never block every claim. Pure decision logic lives in lib/sd-start/dependency-gate.mjs.
 async function enforceDependencyGate(sd, effectiveId) {
-  let resolved;
-  try {
-    // dependencies is not fetched by getSDDetails — read it for the effective SD.
-    const { data: row, error: depErr } = await supabase
-      .from('strategic_directives_v2')
-      .select('dependencies')
-      .eq('id', sd.id)
-      .maybeSingle();
-    if (depErr) throw depErr;
-
-    const deps = Array.isArray(row?.dependencies) ? row.dependencies : [];
-    const refs = deps
-      .map(d => (d && typeof d === 'object' ? d.sd_id : d))
-      .filter(v => typeof v === 'string' && v.length > 0);
-    if (refs.length === 0) return; // no declared dependencies — nothing to enforce
-
-    // Resolve each ref (sd_key OR uuid) to its current status in one query.
-    const { data: depRows, error: resErr } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, sd_key, status')
-      .or(`sd_key.in.(${refs.join(',')}),id.in.(${refs.join(',')})`);
-    if (resErr) throw resErr;
-
-    const byRef = new Map();
-    for (const r of depRows || []) {
-      if (r.sd_key) byRef.set(r.sd_key, r.status);
-      if (r.id) byRef.set(r.id, r.status);
-    }
-    resolved = refs.map(ref => ({ sd_id: ref, status: byRef.has(ref) ? byRef.get(ref) : null }));
-  } catch (err) {
+  // SD-ARCH-HOTSPOT-SD-START-001 FR-2: resolution moved to the SHARED gate
+  // (lib/claim/gates/dependency-gate.cjs — the same one worker-checkin consumes,
+  // one resolution truth). This CLI applies its native FAIL-OPEN polarity over
+  // the raw axes: proceed-with-warning on resolution errors and unresolved refs;
+  // refuse only CONFIRMED-incomplete deps (--force downgrades to warn-proceed).
+  const gate = await evaluateClaimDependencyGate(supabase, sd);
+  if (gate.queryError) {
     // Fail-open: a transient DB/resolution error must never block every claim.
-    console.warn(`${colors.dim}(dependency gate skipped — resolution error, fail-open: ${err.message})${colors.reset}`);
+    console.warn(`${colors.dim}(dependency gate skipped — resolution error, fail-open: ${gate.queryError})${colors.reset}`);
     return;
   }
+  // The blocked_on_sd fold (retired enforceBlockedOnSdGate) is enforced by the
+  // dedicated wrapper at its original pre-/post-route call sites; exclude it here
+  // so `dependencies`-array semantics (incl. --force) stay byte-identical.
+  const blockedOn = sd?.metadata?.blocked_on_sd;
+  const resolved = gate.resolved.filter(d => d.sd_id !== blockedOn);
+  if (resolved.length === 0) return; // no declared dependencies — nothing to enforce
 
   const force = process.argv.includes('--force');
   const result = evaluateDependencyGate(resolved, { force });
@@ -174,7 +170,13 @@ async function enforceDependencyGate(sd, effectiveId) {
 // so an == 'human_action_required' equality check would silently miss a HELD SD that is ALSO an
 // orchestrator parent or test-fixture key (adversarial review finding, ship-gate self-review).
 function enforceHumanActionGate(sd, effectiveId) {
-  if (!sd?.metadata?.requires_human_action) return;
+  // SD-ARCH-HOTSPOT-SD-START-001 FR-6 (prospective-testing D6): route through the
+  // shared ALL-MATCH classifier and key on the SPECIFIC axis — .includes(), never
+  // length>0, so a HELD SD that is also an orchestrator/fixture still surfaces the
+  // hold (the reason the old first-match classifier was avoided) while a
+  // multi-axis orchestrator SD without the hold does NOT trip this gate.
+  const axes = classifyAllDispatchIneligibility(sd || {});
+  if (!axes.includes('human_action_required')) return;
   console.log(`\n${colors.red}❌ ${effectiveId} requires HUMAN ACTION — cannot be claimed${colors.reset}`);
   console.log('   metadata.requires_human_action=true — held for chairman/coordinator review.');
   console.log(`\n${colors.bold}Action:${colors.reset} Pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
@@ -187,13 +189,19 @@ function enforceHumanActionGate(sd, effectiveId) {
 // LANDING-REBUILD-001 3min after FABLE-VENTURE-DESIGN-001 finished — safe by luck only).
 // This re-derives eligibility from LIVE status every claim, independent of any boolean flag.
 async function enforceBlockedOnSdGate(sd, effectiveId) {
+  // SD-ARCH-HOTSPOT-SD-START-001 FR-2: resolution now rides the SHARED dependency
+  // gate's blocked_on_sd fold (one resolution truth with worker-checkin). Parity
+  // preserved exactly: fail-open on query faults / unresolvable refs, HARD refuse
+  // (no --force override) when the referenced SD is live and not completed.
   const blockedOn = sd?.metadata?.blocked_on_sd;
   if (typeof blockedOn !== 'string' || !blockedOn || blockedOn === 'none') return;
-  const { data, error } = await supabase.from('strategic_directives_v2').select('status').eq('sd_key', blockedOn).maybeSingle();
-  if (error || !data) return; // fail-open: can't verify -> don't strand the claim on a query fault
-  if (data.status !== 'completed') {
+  // dependencies:[] → only the blocked_on_sd fold resolves (single-ref lookup).
+  const gate = await evaluateClaimDependencyGate(supabase, { ...sd, dependencies: [] });
+  if (gate.queryError) return; // fail-open: can't verify -> don't strand the claim on a query fault
+  const hit = gate.blocking.find(d => d.sd_id === blockedOn);
+  if (hit) {
     console.log(`\n${colors.red}❌ ${effectiveId} is BLOCKED_ON ${blockedOn} — cannot be claimed${colors.reset}`);
-    console.log(`   metadata.blocked_on_sd=${blockedOn} (status=${data.status}) — dependency not yet completed.`);
+    console.log(`   metadata.blocked_on_sd=${blockedOn} (status=${hit.status}) — dependency not yet completed.`);
     console.log(`\n${colors.bold}Action:${colors.reset} Wait for ${blockedOn} to complete, or pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
     process.exit(1);
   }
@@ -260,36 +268,10 @@ async function getSessionAutoProceed(sessionId) {
  *
  * SD-LEO-INFRA-PRE-CLAIM-CHECK-001: Used by auto-fallback when claim conflicts occur.
  */
-async function getNextWorkableSD(excludeKeys = []) {
-  // Get all active sessions to identify claimed SDs
-  const { data: activeSessions } = await supabase
-    .from('claude_sessions')
-    .select('sd_key')
-    .not('sd_key', 'is', null)
-    .in('status', ['active', 'idle']);
-
-  const claimedSdKeys = new Set((activeSessions || []).map(s => s.sd_key));
-
-  // Query for workable SDs: not completed, not cancelled, not blocked
-  const { data: candidates } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key, title, current_phase, status, priority, progress_percentage')
-    .in('status', ['draft', 'active', 'planning', 'ready', 'in_progress'])
-    .not('sd_key', 'is', null)
-    .order('priority', { ascending: true })
-    .order('created_at', { ascending: true })
-    .limit(20);
-
-  if (!candidates || candidates.length === 0) return null;
-
-  // Filter: exclude specified keys, exclude claimed SDs, exclude blocked
-  for (const sd of candidates) {
-    if (excludeKeys.includes(sd.sd_key)) continue;
-    if (claimedSdKeys.has(sd.sd_key)) continue;
-    return { sdKey: sd.sd_key, title: sd.title, phase: sd.current_phase };
-  }
-
-  return null;
+// SD-ARCH-HOTSPOT-SD-START-001 FR-5: relocated to lib/claim/queue-resolver.cjs
+// (shared with worker-checkin). Thin delegate — behavior parity pinned there.
+function getNextWorkableSD(excludeKeys = []) {
+  return queueResolver.getNextWorkableSD(supabase, excludeKeys);
 }
 
 /**
@@ -310,77 +292,13 @@ function getPhaseContextFile(phase) {
  *
  * @returns {{ valid: boolean, lastHandoff: Object|null, message: string, recoveryOptions: string[] }}
  */
-async function verifyHandoffIntegrity(sdUuid) {
-  // QF-20260609-564: sd_phase_handoffs is keyed by sd_id (the SD UUID). The prior query
-  // filtered the wrong (non-existent) text-key column, so every call hit the error path and
-  // silently returned valid:true, disabling resume-integrity verification entirely (the
-  // accepted/rejected/missing-handoff checks below never ran). Correct pattern matches
-  // sd-start.js:~1465 and sd-recover.js:53.
-  const { data: handoffs, error } = await supabase
-    .from('sd_phase_handoffs')
-    .select('id, from_phase, to_phase, status, created_at, rejection_reason, resolved_at')
-    .eq('sd_id', sdUuid)
-    .order('created_at', { ascending: false })
-    .limit(1);
-
-  if (error) {
-    // QF-20260609-564: surface the error instead of silently swallowing it. Stay fail-open
-    // (the consumer hard-exits on valid:false without --force, so a transient DB hiccup must
-    // not block resume), but log loudly so a real/persistent query error can never hide again
-    // the way the dead-column bug did.
-    console.warn(`⚠️  verifyHandoffIntegrity: handoff query failed (${error.code || 'error'}: ${error.message}) — proceeding without integrity check`);
-    return { valid: true, lastHandoff: null, message: `Could not query handoffs: ${error.message} (proceeding)`, recoveryOptions: [] };
-  }
-
-  if (!handoffs || handoffs.length === 0) {
-    return {
-      valid: false,
-      lastHandoff: null,
-      status: 'missing',
-      message: 'No prior handoff found',
-      recoveryOptions: [
-        'Run the appropriate handoff for this phase',
-        'Use --force flag to proceed without handoff verification'
-      ]
-    };
-  }
-
-  const last = handoffs[0];
-
-  if (last.status === 'accepted' || last.status === 'completed') {
-    return {
-      valid: true,
-      lastHandoff: last,
-      status: last.status,
-      message: `Last handoff: ${last.status} (${last.from_phase} → ${last.to_phase})`,
-      recoveryOptions: []
-    };
-  }
-
-  // Handoff was rejected or failed — but check if it was already resolved
-  if (last.resolved_at) {
-    return {
-      valid: true,
-      lastHandoff: last,
-      status: 'resolved',
-      message: `Last handoff ${last.status} but resolved at ${new Date(last.resolved_at).toLocaleString()} (${last.from_phase} → ${last.to_phase})`,
-      recoveryOptions: []
-    };
-  }
-
-  const reason = last.rejection_reason || 'No reason provided';
-  return {
-    valid: false,
-    lastHandoff: last,
-    status: last.status,
-    message: `Last handoff ${last.status}: ${last.from_phase} → ${last.to_phase}`,
-    reason,
-    recoveryOptions: [
-      `View handoff details: node -e "..." (handoff ID: ${last.id})`,
-      `Re-run the ${last.from_phase} → ${last.to_phase} handoff after addressing issues`,
-      'Use --force flag to override and continue (not recommended)'
-    ]
-  };
+// SD-ARCH-HOTSPOT-SD-START-001 FR-3: relocated to lib/claim/gates/handoff-integrity.cjs
+// (QF-20260609-564 sd_id keying + fail-open semantics preserved there verbatim).
+// The CLI keeps the loud warning surface via onWarn.
+function verifyHandoffIntegrity(sdUuid) {
+  return verifyHandoffIntegrityGate(supabase, sdUuid, {
+    onWarn: (msg) => console.warn(`⚠️  ${msg}`),
+  });
 }
 
 // Colors for terminal output
@@ -455,168 +373,21 @@ async function hasParentNeedsOwnLeadToPlan(sd) {
   return !data || data.length === 0;
 }
 
-async function getOrchestratorChildren(sdKeyOrId) {
-  const { data, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, title, status, current_phase, priority, claiming_session_id, progress_percentage, sd_type')
-    .or(`parent_sd_id.eq.${sdKeyOrId}`);
-
-  if (error || !data || data.length === 0) {
-    // If sdKeyOrId was a sd_key, resolve its UUID id and retry
-    const { data: parent } = await supabase
-      .from('strategic_directives_v2')
-      .select('id')
-      .eq('sd_key', sdKeyOrId)
-      .single();
-
-    if (parent && parent.id !== sdKeyOrId) {
-      const { data: children, error: childErr } = await supabase
-        .from('strategic_directives_v2')
-        .select('id, sd_key, title, status, current_phase, priority, claiming_session_id, progress_percentage, sd_type')
-        .eq('parent_sd_id', parent.id);
-
-      if (!childErr && children) return children;
-    }
-    return data || [];
-  }
-  return data;
+// SD-ARCH-HOTSPOT-SD-START-001 FR-5: relocated to lib/claim/queue-resolver.cjs
+// (shared with worker-checkin, incl. the sd_key→UUID resolve-and-retry fallback
+// and the live-claim source-of-truth read). Thin delegates.
+function getOrchestratorChildren(sdKeyOrId) {
+  return queueResolver.getOrchestratorChildren(supabase, sdKeyOrId);
 }
 
-/**
- * Get the set of session IDs that currently hold an active claim in claude_sessions.
- * A session is "active" if status is 'active' or 'idle' (not released/stale).
- * This is the source of truth — the claiming_session_id on the SD can be stale.
- */
-async function getActiveClaimSessionIds() {
-  const { data } = await supabase
-    .from('claude_sessions')
-    .select('session_id')
-    .not('sd_key', 'is', null)
-    .in('status', ['active', 'idle']);
-  return new Set((data || []).map(r => r.session_id));
-}
-
-/**
- * Recursively find a leaf-level (non-orchestrator) work item from an orchestrator hierarchy.
- * Traverses orchestrator → sub-orchestrator → ... → leaf SD.
- *
- * When a child is itself an orchestrator (sd_type === 'orchestrator' or has children),
- * recurse into it instead of claiming it directly. This ensures that `sd:start` on a
- * top-level orchestrator drills down to the actual grandchild that needs work.
- *
- * @param {string} parentSdKey - The orchestrator SD key to search from
- * @param {number} depth - Current recursion depth (safety limit)
- * @param {string[]} routingPath - Accumulated routing path for display
- * @returns {Promise<{child: object|null, allComplete: boolean, reason: string, routingPath: string[]}>}
- */
-async function findLeafWorkItem(parentSdKey, depth = 0, routingPath = []) {
-  const MAX_DEPTH = 5; // Safety limit for deeply nested orchestrators
-
-  if (depth >= MAX_DEPTH) {
-    return {
-      child: null,
-      allComplete: false,
-      reason: `Max orchestrator nesting depth (${MAX_DEPTH}) exceeded`,
-      routingPath
-    };
-  }
-
-  const { child, allComplete, reason } = await findUnclaimedChild(parentSdKey);
-
-  if (!child) {
-    return { child: null, allComplete, reason, routingPath };
-  }
-
-  const childKey = child.sd_key || child.id;
-  const updatedPath = [...routingPath, childKey];
-
-  // Check if this child is itself an orchestrator (has its own children)
-  const grandchildren = await getOrchestratorChildren(childKey);
-
-  if (grandchildren.length > 0) {
-    // Sub-orchestrator detected — check if all its children are done
-    const allGrandchildrenComplete = grandchildren.every(gc => gc.status === 'completed');
-
-    if (allGrandchildrenComplete) {
-      // Sub-orchestrator needs its own completion handoff — return it as the work item
-      return {
-        child,
-        allComplete: false,
-        reason: `Sub-orchestrator ${childKey}: all ${grandchildren.length} children completed — needs completion handoff`,
-        routingPath: updatedPath
-      };
-    }
-
-    // Recurse into the sub-orchestrator to find a leaf grandchild
-    console.log(`   ${colors.cyan}↳ ${childKey} is a sub-orchestrator (${grandchildren.length} children) — drilling deeper...${colors.reset}`);
-    return findLeafWorkItem(childKey, depth + 1, updatedPath);
-  }
-
-  // Leaf-level SD found
-  return { child, allComplete: false, reason, routingPath: updatedPath };
-}
-
-/**
- * Find the first unclaimed child SD that's ready to work on.
- * Uses child-sd-selector for urgency-based sorting, then filters out claimed children.
- *
- * FIX: validates claiming_session_id against active claude_sessions rows.
- * A child with a stale/released claiming_session_id is treated as unclaimed.
- */
-async function findUnclaimedChild(parentSdKey) {
-  // FIX: parent_sd_id stores UUID `id`, not sd_key.
-  // Resolve sd_key → UUID id so getNextReadyChild and getOrchestratorChildren
-  // can query parent_sd_id correctly.
-  let parentId = parentSdKey;
-  const { data: parentRow } = await supabase
-    .from('strategic_directives_v2')
-    .select('id')
-    .eq('sd_key', parentSdKey)
-    .single();
-  if (parentRow) {
-    parentId = parentRow.id;
-  }
-
-  // Use the existing getNextReadyChild which handles urgency sorting and blocker filtering
-  const result = await getNextReadyChild(supabase, parentId);
-
-  if (!result.sd) {
-    return { child: null, allComplete: result.allComplete, reason: result.reason };
-  }
-
-  // Get sessions that genuinely hold an active claim in claude_sessions
-  const activeSessionIds = await getActiveClaimSessionIds();
-
-  // A child is truly claimed only if its claiming_session_id maps to an active session
-  const isTrulyClaimed = (child) =>
-    child.claiming_session_id && activeSessionIds.has(child.claiming_session_id);
-
-  // Check if the selected child is already claimed by another active session
-  if (isTrulyClaimed(result.sd)) {
-    // The top-priority child is claimed — check all children for an unclaimed one
-    const children = await getOrchestratorChildren(parentSdKey);
-    const readyChildren = children.filter(c =>
-      !isTrulyClaimed(c) &&
-      c.status !== 'completed' &&
-      c.status !== 'blocked'
-    );
-
-    if (readyChildren.length > 0) {
-      return { child: readyChildren[0], allComplete: false, reason: 'First unclaimed child' };
-    }
-
-    // All children are either truly claimed or not ready
-    const allClaimed = children.filter(c => isTrulyClaimed(c) && c.status !== 'completed');
-    if (allClaimed.length > 0) {
-      return {
-        child: null,
-        allComplete: false,
-        reason: `No ready children: ${allClaimed.length} active`
-      };
-    }
-  }
-
-  return { child: result.sd, allComplete: false, reason: result.reason };
+// SD-ARCH-HOTSPOT-SD-START-001 FR-5: the leaf/child resolution lives in
+// lib/claim/queue-resolver.cjs (resolveLeafWorkItem composes findUnclaimedChild
+// internally — shared with worker-checkin; stale-claim validation + urgency
+// sorting intact). Thin delegate: the CLI supplies supabase + drilling trace.
+function findLeafWorkItem(parentSdKey) {
+  return queueResolver.resolveLeafWorkItem(supabase, parentSdKey, {
+    onTrace: (msg) => console.log(`   ${colors.cyan}↳ ${msg}${colors.reset}`),
+  });
 }
 
 async function getNextHandoff(sd) {
@@ -647,14 +418,10 @@ async function getNextHandoff(sd) {
  * plus either --pattern-id or --followup-sd-key, audit-logged fail-closed.
  */
 async function enforceCadenceGate(sd, effectiveId) {
-  const { computeGateState, formatRefusalMessage } = await import('../lib/cadence/pre-claim-gate.mjs');
-  const gateState = computeGateState({
-    governance_metadata: sd.governance_metadata,
-    metadata: sd.metadata,
-  });
-
-  if (!gateState.active) return;
-
+  // SD-ARCH-HOTSPOT-SD-START-001 FR-4: gate logic + audit contract live in the
+  // shared lib/claim/gates/cadence-gate.cjs adapter (cadence SSOT untouched at
+  // lib/cadence/pre-claim-gate.mjs). This CLI keeps argv parsing + rendering +
+  // process.exit, applied over the adapter's pure verdict.
   const argv = process.argv;
   const overrideIdx = argv.findIndex(a => a === '--override-cadence-gate');
   const overrideReason = (overrideIdx !== -1 && argv[overrideIdx + 1]) ? argv[overrideIdx + 1] : null;
@@ -663,73 +430,44 @@ async function enforceCadenceGate(sd, effectiveId) {
   const patternId = (patternIdIdx !== -1 && argv[patternIdIdx + 1]) ? argv[patternIdIdx + 1] : null;
   const followupSdKey = (followupIdx !== -1 && argv[followupIdx + 1]) ? argv[followupIdx + 1] : null;
 
-  if (!overrideReason || overrideReason.length < 20) {
-    console.log(`\n${colors.red}${colors.bold}🚫 ${formatRefusalMessage({ sdKey: effectiveId, gateState })}${colors.reset}`);
-    if (overrideReason && overrideReason.length < 20) {
-      console.log(`${colors.red}   (override reason must be ≥20 chars; got ${overrideReason.length})${colors.reset}`);
-    }
-    try {
-      await supabase.from('audit_log').insert({
-        event_type: 'CADENCE_GATE_REFUSED',
-        entity_type: 'strategic_directive',
-        entity_id: sd.id,
-        metadata: {
-          sd_key: effectiveId,
-          gate_until: gateState.gate_until,
-          days_remaining: gateState.days_remaining,
-          source: gateState.source,
-          override_attempted: overrideReason !== null,
-          override_reason: overrideReason,
-          operator_session_id: process.env.CLAUDE_SESSION_ID || null,
-        },
-        severity: 'info',
-      });
-    } catch (auditErr) {
-      console.warn(`${colors.dim}(audit-log refusal record failed non-blocking: ${auditErr.message})${colors.reset}`);
-    }
-    process.exit(1);
-  }
-
-  const { validateBypassShape } = await import('./modules/handoff/bypass-rubric.js');
-  const shapeResult = await validateBypassShape({
+  const verdict = await evaluateCadenceGate(supabase, sd, {
+    sdKey: effectiveId,
+    overrideReason,
     patternId,
     followupSdKey,
-    supabase,
-    bypassReason: overrideReason,
-    sdId: sd.id,
-    handoffType: 'sd_start_cadence_override',
+    sessionId: process.env.CLAUDE_SESSION_ID || null,
   });
-  if (!shapeResult.allowed) {
-    console.log(`\n${colors.red}${colors.bold}🚫 Cadence override refused${colors.reset}`);
-    console.log(`   ${shapeResult.message}`);
+
+  if (verdict.allowed && verdict.outcome === 'inactive') return;
+
+  if (verdict.outcome === 'refused') {
+    console.log(`\n${colors.red}${colors.bold}🚫 ${verdict.refusalMessage}${colors.reset}`);
+    if (verdict.shortOverride) {
+      console.log(`${colors.red}   (override reason must be ≥20 chars; got ${verdict.overrideReasonLength})${colors.reset}`);
+    }
+    if (!verdict.auditRecorded) {
+      console.warn(`${colors.dim}(audit-log refusal record failed non-blocking: ${verdict.auditError})${colors.reset}`);
+    }
     process.exit(1);
   }
 
-  const { error: auditErr } = await supabase.from('audit_log').insert({
-    event_type: 'CADENCE_GATE_OVERRIDE',
-    entity_type: 'strategic_directive',
-    entity_id: sd.id,
-    metadata: {
-      sd_key: effectiveId,
-      gate_until: gateState.gate_until,
-      days_remaining: gateState.days_remaining,
-      source: gateState.source,
-      override_reason: overrideReason,
-      pattern_id: patternId,
-      followup_sd_key: followupSdKey,
-      operator_session_id: process.env.CLAUDE_SESSION_ID || null,
-    },
-    severity: 'warning',
-  });
-  if (auditErr) {
+  if (verdict.outcome === 'override_rejected') {
+    console.log(`\n${colors.red}${colors.bold}🚫 Cadence override refused${colors.reset}`);
+    console.log(`   ${verdict.message}`);
+    process.exit(1);
+  }
+
+  if (verdict.outcome === 'audit_unavailable_fail_closed') {
     console.log(`\n${colors.red}${colors.bold}🚫 audit-log unavailable; cadence override cannot be safely recorded${colors.reset}`);
-    console.log(`   audit_log error: ${auditErr.message}`);
+    console.log(`   audit_log error: ${verdict.auditError}`);
     console.log(`   ${colors.dim}fail-closed: claim refused${colors.reset}`);
     process.exit(1);
   }
+
+  // override_accepted
   console.log(`${colors.yellow}⚠ Cadence gate override accepted${colors.reset}`);
-  console.log(`   Reason:           "${overrideReason}"`);
-  console.log(`   Pattern/Followup: ${patternId || followupSdKey}`);
+  console.log(`   Reason:           "${verdict.overrideReason}"`);
+  console.log(`   Pattern/Followup: ${verdict.patternRef}`);
   console.log(`   Audit row:        event_type=CADENCE_GATE_OVERRIDE on entity_id=${sd.id}`);
 }
 

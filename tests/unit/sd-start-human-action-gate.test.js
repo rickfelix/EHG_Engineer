@@ -22,18 +22,26 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(resolve(__dirname, '../..', 'scripts/sd-start.js'), 'utf8');
 
 describe('QF-20260703-295: sd-start.js HELD-SD (requires_human_action) claim gate', () => {
-  it('defines enforceHumanActionGate, gated directly on metadata.requires_human_action, that exits(1)', () => {
+  it('defines enforceHumanActionGate, keyed on the SPECIFIC human_action_required axis, that exits(1)', () => {
+    // SD-ARCH-HOTSPOT-SD-START-001 FR-6/D6: the gate now routes through the shared
+    // ALL-MATCH classifier (classifyAllDispatchIneligibility) and keys on
+    // .includes('human_action_required') — the same never-miss-a-HELD-orchestrator
+    // guarantee the old direct metadata check provided, now via one axis table.
     const start = src.indexOf('function enforceHumanActionGate');
     expect(start).toBeGreaterThan(0);
-    const body = src.slice(start, start + 500);
-    expect(body).toMatch(/sd\?\.metadata\?\.requires_human_action/);
+    const body = src.slice(start, start + 1800);
+    expect(body).toMatch(/classifyAllDispatchIneligibility\(sd \|\| \{\}\)/);
+    expect(body).toMatch(/axes\.includes\('human_action_required'\)/);
     expect(body).toMatch(/process\.exit\(1\)/);
   });
 
-  it('does NOT gate via classifyDispatchIneligibility\'s return value (axis-precedence-masking regression)', () => {
+  it('does NOT gate via the FIRST-MATCH classifier return value or a length>0 blanket (axis-precedence-masking regression, D6)', () => {
     const start = src.indexOf('function enforceHumanActionGate');
-    const body = src.slice(start, start + 500);
-    expect(body).not.toMatch(/classifyDispatchIneligibility/);
+    const body = src.slice(start, start + 1800);
+    // The first-match form short-circuits on orchestrator_parent/test_fixture_key
+    // before human_action_required; a blanket length>0 would over-block routing.
+    expect(body).not.toMatch(/classifyDispatchIneligibility\(/);
+    expect(body).not.toMatch(/axes\.length\s*>\s*0/);
   });
 
   it('calls the gate right after the 1.1 deferred-claim check (direct/parent claim path)', () => {
@@ -46,12 +54,17 @@ describe('QF-20260703-295: sd-start.js HELD-SD (requires_human_action) claim gat
     expect(src.slice(idx, idx + 600)).toMatch(/enforceHumanActionGate\(sd, effectiveId\)/);
   });
 
-  it('regression pin: a HELD sd that is ALSO an orchestrator parent must still be refused', () => {
-    // Guards the exact gap the review-gate found: classifyDispatchIneligibility({sd_type:
-    // 'orchestrator', metadata: {requires_human_action: true}}) returns 'orchestrator_parent'
-    // (checked first), NOT 'human_action_required' — so a gate keyed off that return value
-    // would silently let this combination through. The direct metadata check does not.
+  it('regression pin: a HELD sd that is ALSO an orchestrator parent must still be refused', async () => {
+    // Guards the exact gap the review-gate found: the FIRST-MATCH classifier returns
+    // 'orchestrator_parent' (checked first), NOT 'human_action_required' — so a gate
+    // keyed off that return value would silently let this combination through. The
+    // ALL-MATCH classifier the gate now uses surfaces the hold regardless.
+    const { createRequire } = await import('node:module');
+    const cjsRequire = createRequire(import.meta.url);
+    const { classifyDispatchIneligibility, classifyAllDispatchIneligibility } =
+      cjsRequire('../../lib/fleet/claim-eligibility.cjs');
     const heldOrchestrator = { sd_type: 'orchestrator', metadata: { requires_human_action: true } };
-    expect(Boolean(heldOrchestrator?.metadata?.requires_human_action)).toBe(true);
+    expect(classifyDispatchIneligibility(heldOrchestrator)).toBe('orchestrator_parent'); // the masking
+    expect(classifyAllDispatchIneligibility(heldOrchestrator)).toContain('human_action_required'); // the fix
   });
 });
