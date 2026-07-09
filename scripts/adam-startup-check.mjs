@@ -19,7 +19,7 @@
 // Fail-open: always exits 0; a hiccup never blocks /adam startup.
 
 import 'dotenv/config';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 // SD-LEO-INFRA-FLEET-FRESHNESS-GUARD-001: advisory, fail-open checkout-freshness badge.
@@ -46,6 +46,18 @@ export const RESPONSIBILITIES = [
 //   - offer-help:      an agent-judgment tick (no script) — propose-only, silence-by-default.
 export const ADAM_LOOPS = [
   {
+    // SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: the quiet-tick cutover (docs/protocol/
+    // fleet-hibernation-quiet-tick.md). ONE self-pacing LLM tick composes the folded loops
+    // (inbox-monitor, belt-countdown, offer-help — marked folded:true, kept in this registry
+    // for the loop-parity guard). Cron minutes offset from the coordinator quiet-tick
+    // (0,15,30,45) so the two parties never co-fire; the tick parks 180–900s via ScheduleWakeup.
+    key: 'quiet-tick',
+    label: 'Adam quiet-tick (folds inbox-monitor + belt-countdown + offer-help)',
+    script: 'adam-quiet-tick.mjs',
+    cron: '7,22,37,52 * * * *',
+    prompt: 'Run `node scripts/adam-quiet-tick.mjs`. It prints ONE QUIET_TICK summary line and self-paces. If the output contains NO QUIET_TICK_PING / QUIET_TICK_STALL_ALERT / QUIET_TICK_OUTBOUND_PROBE / QUIET_TICK_ERROR lines, this turn is a NO-OP: arm ScheduleWakeup(nextWakeSeconds from the output) and emit nothing else. Otherwise act on the flagged lines, then arm the wakeup.',
+  },
+  {
     key: 'governance-scan',
     label: 'Daily governance opportunity-scan (gated on ADAM_GOVERNANCE_HEARTBEAT_V1)',
     script: 'adam-opportunity-scan.cjs',
@@ -56,6 +68,7 @@ export const ADAM_LOOPS = [
     // SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001: drain ALL coordinator-directed kinds (replies +
     // coordinator directives), not reply-only — closes the reply-only blindspot.
     key: 'inbox-monitor',
+    folded: true, // SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: composed by adam-quiet-tick — never armed standalone
     label: 'Adam inbox — drain ALL coordinator-directed kinds (full-lane reader)',
     script: 'adam-advisory.cjs',
     // QF-20260701-062: chairman-directed 15min -> 5min durable baseline (tighter comms
@@ -68,6 +81,7 @@ export const ADAM_LOOPS = [
   },
   {
     key: 'offer-help',
+    folded: true, // SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: composed by adam-quiet-tick — never armed standalone
     label: 'Offer coordinator help (agent judgment, propose-only, silence-by-default)',
     script: null, // agent-prompt tick — no script to run
     cron: '0 */2 * * *',
@@ -89,6 +103,7 @@ export const ADAM_LOOPS = [
     // crons and DIED with every Adam session (2026-06-11 handoff drill). Arming it here makes it
     // survive session restarts — closing the contract↔tooling gap the duty-marker parity test enforces.
     key: 'belt-countdown',
+    folded: true, // SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: composed by adam-quiet-tick — never armed standalone
     label: 'Belt-countdown one-liner (ET 12h, rolling ETA to belt-dry) while the fleet is active',
     script: null, // agent-prompt tick — depth/burn come from DB rows via fleet-dashboard, never hand-converted ET↔UTC
     cron: '*/15 * * * *',
@@ -122,6 +137,11 @@ export const ADAM_LOOPS = [
     // every recurring tick (scripts/adam-quiet-tick.mjs's reconcileBoard()), not only at /adam cold
     // start — closing the same "durable but session-fragile" gap the belt-countdown duty closed.
     key: 'board-reconcile',
+    // SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: folded — this loop ran the SAME adam-quiet-tick.mjs
+    // at 12×/hour, duplicating the consolidated quiet-tick loop above (which composes
+    // reconcileBoard() on every tick at 4×/hour + self-paced wakeups). Keeping both would
+    // defeat the burn reduction the cutover exists for.
+    folded: true,
     label: 'Board<->reality reconcile every tick (adam_task_ledger via rehydrateBoard)',
     script: 'adam-quiet-tick.mjs',
     cron: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *',
@@ -219,12 +239,27 @@ export function renderLoops(armed) {
     lines.push('  (no --armed set supplied — run CronList and re-invoke with --armed "<loop-key>,…" (e.g. "governance-scan,inbox-monitor") for an armed|MISSING verdict; emitting full spec below)');
   }
   const toArm = [];
+  const toTearDown = [];
   for (const loop of ADAM_LOOPS) {
+    // SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: folded loops stay registered (quiet-tick cores +
+    // the loop-parity guard reference them) but are NEVER armed standalone — the quiet-tick
+    // composes them. A live cron still matching a folded loop must be torn down.
+    if (loop.folded) {
+      const live = loopStatus(loop, armed) === 'armed';
+      lines.push(`  [⏸ folded ] ${loop.key.padEnd(16)} ${loop.label} — composed by adam-quiet-tick; do NOT arm standalone${live ? ' (LIVE cron found — tear down below)' : ''}`);
+      if (live) toTearDown.push(loop);
+      continue;
+    }
     const status = loopStatus(loop, armed);
     const badge = status === 'armed' ? '✅ armed' : status === 'MISSING' ? '❌ MISSING' : '… unverified';
     lines.push(`  [${badge}] ${loop.key.padEnd(16)} ${loop.label}`);
     lines.push(`              cron: ${loop.cron}`);
     if (status !== 'armed') toArm.push(loop);
+  }
+  if (toTearDown.length) {
+    lines.push('');
+    lines.push(`  → TEAR DOWN ${toTearDown.length} standalone cron(s) now folded into the quiet-tick (CronDelete the CronList entry whose prompt matches):`);
+    for (const loop of toTearDown) lines.push(`     CronDelete <prompt: ${JSON.stringify(loop.prompt)}>`);
   }
   lines.push('');
   if (toArm.length === 0 && armed.provided) {
@@ -432,9 +467,22 @@ export async function renderBoardRehydrate({ supabase = null, env = process.env 
   }
 }
 
+// SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: the Adam role tag source for role-aware compaction
+// thresholds (.claude/compaction-thresholds.cjs detectRoleFromFile). Peer of the coordinator's
+// .claude/active-coordinator.json. Fail-open: a write error never blocks startup.
+export function writeAdamMarker(env = process.env, repoRoot = REPO_ROOT) {
+  try {
+    if (!env.CLAUDE_SESSION_ID) return false;
+    writeFileSync(resolve(repoRoot, '.claude', 'active-adam.json'),
+      JSON.stringify({ session_id: env.CLAUDE_SESSION_ID, updated_at: new Date().toISOString() }, null, 2));
+    return true;
+  } catch { return false; }
+}
+
 async function main() {
   try {
     console.log('[ADAM-STARTUP] ' + (process.env.CLAUDE_SESSION_ID ? 'session=' + process.env.CLAUDE_SESSION_ID : 'session=unknown'));
+    if (writeAdamMarker()) console.log('[ADAM-STARTUP] role marker written: .claude/active-adam.json');
     console.log(buildReport(process.argv.slice(2), process.env));
     // FR-2: the read-only Sourcing SSOT state probe (DB-backed, fail-open).
     console.log('');

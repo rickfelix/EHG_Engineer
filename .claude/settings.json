@@ -7,7 +7,8 @@
     "COORD_ADAM_ACTION_ACK_V1": "on",
     "ADAM_GOVERNANCE_HEARTBEAT_V1": "on",
     "COORD_QUESTION_AUTO_PROCEED_V1": "on",
-    "LEO_LOOP_WAKEUP_REMINDER": "on"
+    "LEO_LOOP_WAKEUP_REMINDER": "on",
+    "COORD_COMPACTION_THRESHOLD_V2": "on"
   },
   "statusLine": {
     "type": "command",

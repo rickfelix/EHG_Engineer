@@ -2540,12 +2540,38 @@ async function main() {
       if (!_coordMutationAllowed) {
         warnings.push('CLAIM_FIX: re-assert SKIPPED for ' + s.sd_key + ' — not the canonical coordinator (rogue double-act guard)');
       } else if (sd.claiming_session_id !== s.session_id) {
-        await supabase
-          .from('strategic_directives_v2')
-          .update({ claiming_session_id: s.session_id, is_working_on: true })
-          .eq('sd_key', s.sd_key)
-          .select();
-        actions.push('CLAIM_FIX: set claiming_session_id on ' + s.sd_key + ' → ' + s.session_id.substring(0, 20));
+        // QF-20260709-968: sd.claiming_session_id is the AUTHORITATIVE claim (coordinator-directed,
+        // fail-closed gate enforced); s.sd_key is a worker SELF-REPORT re-stamped every checkin. When
+        // they disagree AND the current claim-holder is still alive, the claim wins — clear the
+        // stale self-report binding instead of silently reverting a directed reassignment. Only
+        // backfill claiming_session_id from a binding when the SD claim is genuinely unheld (NULL
+        // or the holder is dead).
+        const holder = sd.claiming_session_id ? classified.find(c => c.session_id === sd.claiming_session_id) : null;
+        if (holder && CLAIM_HOLDING_STATUSES.has(holder.status)) {
+          // QF-20260508-230 invariant: every claude_sessions release UPDATE must null
+          // worktree_branch (mirrors the fixture/non-uuid/terminal bilateral-release branches above).
+          await supabase
+            .from('claude_sessions')
+            .update({
+              sd_key: null,
+              status: s.status === 'ACTIVE' ? 'idle' : 'released',
+              released_at: now.toISOString(),
+              released_reason: 'SWEEP_STALE_BINDING_CLAIM_FIX',
+              worktree_path: null,
+              worktree_branch: null,
+              current_branch: null,
+            })
+            .eq('session_id', s.session_id)
+            .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
+          actions.push('CLAIM_FIX: cleared stale sd_key binding on session ' + s.session_id.substring(0, 20) + ' (SD ' + s.sd_key + ' authoritatively claimed by live session ' + sd.claiming_session_id.substring(0, 20) + ')');
+        } else {
+          await supabase
+            .from('strategic_directives_v2')
+            .update({ claiming_session_id: s.session_id, is_working_on: true })
+            .eq('sd_key', s.sd_key)
+            .select();
+          actions.push('CLAIM_FIX: set claiming_session_id on ' + s.sd_key + ' → ' + s.session_id.substring(0, 20));
+        }
       } else if (!sd.is_working_on) {
         // Fix incomplete claim: claiming_session_id matches but is_working_on is false
         await supabase

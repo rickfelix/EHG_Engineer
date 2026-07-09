@@ -53,22 +53,40 @@ function defaultReadCoordFile() {
   } catch (_) { return null; }
 }
 
+// SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: the Adam role tag source (peer of active-coordinator.json),
+// written by scripts/adam-startup-check.mjs writeAdamMarker() at Adam startup. Same file-only,
+// fail-safe read discipline — no DB/network in the render hot path.
+function defaultReadAdamFile() {
+  try {
+    const fp = path.resolve(__dirname, 'active-adam.json');
+    return fs.existsSync(fp) ? JSON.parse(fs.readFileSync(fp, 'utf8')) : null;
+  } catch (_) { return null; }
+}
+
 // File-only role detection — NO database, NO network in the render hot path.
-// Returns 'coordinator' | 'worker' | 'solo'. Fail-safe to 'worker' (the conservative,
-// current-behavior profile) on ANY error. `reader` is injectable for tests.
-function detectRoleFromFile(sessionId, reader) {
+// Returns 'coordinator' | 'adam' | 'worker' | 'solo'. Fail-safe to 'worker' (the conservative,
+// current-behavior profile) on ANY error. `reader`/`adamReader` are injectable for tests.
+// Adam is checked AFTER coordinator (a session somehow tagged both counts as coordinator) and
+// only ever widens detection — a missing/mismatched adam marker preserves prior behavior exactly.
+function detectRoleFromFile(sessionId, reader, adamReader) {
   const read = typeof reader === 'function' ? reader : defaultReadCoordFile;
+  const readAdam = typeof adamReader === 'function' ? adamReader : defaultReadAdamFile;
   let coord = null;
   try { coord = read(); } catch (_) { return 'worker'; }
+  if (sessionId && coord && coord.session_id === sessionId) return 'coordinator';
+  let adam = null;
+  try { adam = readAdam(); } catch (_) { adam = null; }
+  if (sessionId && adam && adam.session_id === sessionId) return 'adam';
   if (!coord || !coord.session_id) return 'solo';
-  if (sessionId && coord.session_id === sessionId) return 'coordinator';
   return 'worker';
 }
 
 // Select advisory thresholds by role + flag. Flag OFF => GLOBAL for every role.
+// SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: 'adam' joins 'coordinator' on the earlier profile —
+// both are long-lived role sessions whose burn the earlier CRITICAL/EMERGENCY nudges manage.
 function selectThresholds(role, flagEnabled) {
   if (!flagEnabled) return GLOBAL_THRESHOLDS;
-  if (role === 'coordinator') return COORDINATOR_THRESHOLDS;
+  if (role === 'coordinator' || role === 'adam') return COORDINATOR_THRESHOLDS;
   return GLOBAL_THRESHOLDS;
 }
 
