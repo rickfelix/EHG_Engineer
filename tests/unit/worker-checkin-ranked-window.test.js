@@ -225,8 +225,9 @@ describe('ranked-SD reachability via the fifth source (SD-LEO-INFRA-GUARANTEE-CL
 describe('FR-1/FR-2 source-pinned wiring (the union exists and routes through the SSOT)', () => {
   it('runCheckin fetches the ranked-direct source and unions it as kind:baselined via the seen-set', async () => {
     const { readFileSync } = await import('fs');
-    const src = readFileSync(new URL('../../scripts/worker-checkin.cjs', import.meta.url), 'utf8');
-    const body = src.slice(src.indexOf('async function runCheckin'), src.indexOf('async function main'));
+    // SD-ARCH-HOTSPOT-CHECKIN-001: merged-pool rung moved verbatim to lib/checkin/steps/merged-pool-self-claim.cjs — pin follows the code.
+    const src = readFileSync(new URL('../../lib/checkin/steps/merged-pool-self-claim.cjs', import.meta.url), 'utf8');
+    const body = src;
     expect(body).toMatch(/fetchRankedCandidates\(sb\)/);                 // the fifth source is called
     expect(body).toMatch(/for \(const r of rankedRows\)/);               // unioned into the merged pool
     expect(body).toMatch(/seen\.has\(r\.sd_key\)/);                      // SAME seen-set dedup

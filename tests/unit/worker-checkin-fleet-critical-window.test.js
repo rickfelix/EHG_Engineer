@@ -246,8 +246,9 @@ describe('fleet_critical reachability via the new third source (SD-LEO-INFRA-SEL
 describe('FR-2/FR-5 source-pinned wiring (the union exists and routes through the SSOT)', () => {
   it('runCheckin fetches the fleet_critical source and unions it as kind:baselined via the seen-set', async () => {
     const { readFileSync } = await import('fs');
-    const src = readFileSync(new URL('../../scripts/worker-checkin.cjs', import.meta.url), 'utf8');
-    const body = src.slice(src.indexOf('async function runCheckin'), src.indexOf('async function main'));
+    // SD-ARCH-HOTSPOT-CHECKIN-001: merged-pool rung moved verbatim to lib/checkin/steps/merged-pool-self-claim.cjs — pin follows the code.
+    const src = readFileSync(new URL('../../lib/checkin/steps/merged-pool-self-claim.cjs', import.meta.url), 'utf8');
+    const body = src;
     expect(body).toMatch(/fetchFleetCriticalCandidates\(sb\)/);          // the third source is called
     expect(body).toMatch(/for \(const f of fcRows\)/);                   // unioned into the merged pool
     expect(body).toMatch(/seen\.has\(f\.sd_key\)/);                      // SAME seen-set dedup
