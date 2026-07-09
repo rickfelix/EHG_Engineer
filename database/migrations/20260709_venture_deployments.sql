@@ -28,16 +28,14 @@ ALTER TABLE venture_deployments ENABLE ROW LEVEL SECURITY;
 
 -- Service-role-only writes (mirrors venture_preview_instances posture): no anon/authenticated
 -- policy is created, so RLS denies all non-service access by default.
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'venture_deployments' AND policyname = 'service_role_all'
-  ) THEN
-    CREATE POLICY service_role_all ON venture_deployments
-      FOR ALL TO service_role USING (true) WITH CHECK (true);
-  END IF;
-END $$;
+-- Plain CREATE POLICY (no DO-block/IF-NOT-EXISTS wrapper): the tier classifier
+-- allow-lists this head (Rule D) but treats DO blocks and COMMENT ON as TIER-2
+-- triggers — TIER-1 auto-apply eligibility is a PRD acceptance criterion. A re-run
+-- of this migration fails here loudly instead of silently re-applying, which is
+-- the acceptable trade for staying provably additive.
+CREATE POLICY service_role_all ON venture_deployments
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
 
-COMMENT ON TABLE venture_deployments IS
-  'Deploy-event record (deploy-pipeline Child D). Written by lib/venture-deploy/promote.js; read by exit-gate verifiers and the launch_mode deploy precondition.';
+-- Table purpose (kept as SQL comments — COMMENT ON is a classifier TIER-2 trigger):
+-- Deploy-event record (deploy-pipeline Child D). Written by lib/venture-deploy/promote.js;
+-- read by exit-gate verifiers and the launch_mode deploy precondition.

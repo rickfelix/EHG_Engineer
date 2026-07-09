@@ -225,17 +225,70 @@ describe('runHealthGate', () => {
     expect(gate.ok).toBe(false);
     expect(gate.failures.join(' ')).toMatch(/503/);
   });
+
+  it('a redirect-wall revision does NOT pass (final 3xx is a failure, not liveness)', async () => {
+    // With redirect:follow a compliant fetch only surfaces 3xx when redirects
+    // cannot resolve (loop/cap) — the gate must treat that as dead, never route it.
+    const fetchImpl = vi.fn(async () => ({ status: 301 }));
+    const gate = await runHealthGate('https://x.example', { fetchImpl, timeoutMs: 100, retries: 0 });
+    expect(gate.ok).toBe(false);
+  });
+
+  it('clears its timeout even when the probe rejects (no timer leak)', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn(async () => { throw new Error('ECONNREFUSED'); });
+      const gate = await runHealthGate('https://x.example', { fetchImpl, timeoutMs: 60000, retries: 0 });
+      expect(gate.ok).toBe(false);
+      expect(vi.getTimerCount()).toBe(0); // all timers cleared in finally
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('rollback()', () => {
-  it('records a rolled_back row referencing the last routed deploy', async () => {
+  it('is a noop (no phantom record) when nothing was ever routed', async () => {
+    const supabase = mockSupabase();
+    const result = await rollback('v1', supabase);
+    expect(result.status).toBe('noop');
+    expect(supabase.state.deployments).toHaveLength(0);
+  });
+
+  it('plan mode records intent without executing and leaves the routed row live', async () => {
     const supabase = mockSupabase();
     supabase.state.deployments.push({ id: 'dep-0', venture_id: 'v1', sha: 'oldsha', status: 'routed', created_at: new Date().toISOString() });
     const result = await rollback('v1', supabase);
     expect(result.status).toBe('rolled_back');
-    const rec = supabase.state.deployments.find((d) => d.status === 'rolled_back');
+    expect(result.executed).toBe(false);
+    const rec = supabase.state.deployments.find((d) => d.metadata?.rolled_back_from === 'dep-0');
     expect(rec.sha).toBe('oldsha');
-    expect(rec.metadata.rolled_back_from).toBe('dep-0');
+    expect(rec.metadata.intent).toBe('plan');
+    expect(supabase.state.deployments[0].status).toBe('routed'); // traffic never moved
+  });
+
+  it('execute mode uses the FAMILY adapter (cloudflare → deployWorkers) and retires the routed row', async () => {
+    const supabase = mockSupabase({ descriptor: { ...DESCRIPTOR, deployment_target: 'cloudflare-workers' } });
+    supabase.state.deployments.push({ id: 'dep-0', venture_id: 'v1', sha: 'oldsha', status: 'routed', created_at: new Date().toISOString() });
+    const adapters = { deployWorkers: vi.fn(async () => ({})), deployCloudRun: vi.fn() };
+    const result = await rollback('v1', supabase, { adapters, execute: true });
+    expect(result.executed).toBe(true);
+    expect(adapters.deployWorkers).toHaveBeenCalledTimes(1);
+    expect(adapters.deployCloudRun).not.toHaveBeenCalled();
+    expect(supabase.state.deployments[0].status).toBe('rolled_back'); // retired from routed
+  });
+
+  it('execute mode adapter throw records an HONEST failed rollback (executed:false)', async () => {
+    const supabase = mockSupabase();
+    supabase.state.deployments.push({ id: 'dep-0', venture_id: 'v1', sha: 'oldsha', status: 'routed', created_at: new Date().toISOString() });
+    const adapters = { deployCloudRun: vi.fn(async () => { throw new Error('gcloud rollback exploded'); }) };
+    const result = await rollback('v1', supabase, { adapters, execute: true });
+    expect(result.status).toBe('failed');
+    expect(result.executed).toBe(false);
+    expect(supabase.state.deployments[0].status).toBe('routed'); // NOT retired — traffic never moved
+    const rec = supabase.state.deployments.find((d) => d.metadata?.rolled_back_from === 'dep-0');
+    expect(rec.metadata.executed).toBe(false);
+    expect(rec.error).toMatch(/exploded/);
   });
 });
 
