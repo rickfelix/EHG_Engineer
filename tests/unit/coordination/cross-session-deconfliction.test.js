@@ -213,8 +213,26 @@ describe('TS-FR2: sweep INTENT collision reader', () => {
     expect(src).toContain('SWEEP_CONFLICT_RESOLUTION');
     // WORKTREE_CONFLICT branch warning still present and unchanged in form.
     expect(src).toMatch(/WORKTREE_CONFLICT: branch /);
-    // The new INTENT collision path is clearly separate + flag-gated.
-    expect(src).toMatch(/INTENT_COLLISION/);
-    expect(src).toMatch(/if \(DECONFLICTION_ENABLED\) \{/);
+  });
+
+  // SD-ARCH-HOTSPOT-SWEEP-001: the INTENT-collision block (main() step "4a-2") was
+  // extracted out of scripts/stale-session-sweep.cjs into a real registry pass —
+  // lib/sweep/passes/intent-collision-detection.cjs (SWEEP_PASS_REGISTRY on) and
+  // lib/sweep/legacy-fallback.cjs's runIntentCollisionLegacy (SWEEP_PASS_REGISTRY=off) —
+  // so `if (DECONFLICTION_ENABLED) {` no longer appears in stale-session-sweep.cjs itself.
+  // Migrated (not loosened): both replacement files still assert the flag-gate exists,
+  // just as an early-return guard (`if (!DECONFLICTION_ENABLED) return;`) rather than a
+  // wrapping if-block — same protective effect, same underlying CROSS_SESSION_DECONFLICTION
+  // env var, new location.
+  it('the new INTENT collision path stays flag-gated in BOTH its registry and legacy-fallback locations', () => {
+    const passSrc = require('node:fs').readFileSync(
+      path.resolve(ROOT, 'lib/sweep/passes/intent-collision-detection.cjs'), 'utf8');
+    const legacySrc = require('node:fs').readFileSync(
+      path.resolve(ROOT, 'lib/sweep/legacy-fallback.cjs'), 'utf8');
+    for (const src of [passSrc, legacySrc]) {
+      expect(src).toMatch(/INTENT_COLLISION/);
+      expect(src).toMatch(/DECONFLICTION_ENABLED = process\.env\.CROSS_SESSION_DECONFLICTION === 'true'/);
+      expect(src).toMatch(/if \(!DECONFLICTION_ENABLED\) return;/);
+    }
   });
 });
