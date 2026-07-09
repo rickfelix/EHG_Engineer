@@ -1,16 +1,25 @@
 /**
- * Unit tests for Stage 22 Analysis Step — Distribution Setup
- * SD: SD-LEO-FEAT-STAGE-DISTRIBUTION-SETUP-001
+ * Unit tests for Stage 22 Analysis Step — Distribution Setup (thesis-derived rebuild)
+ * SD: SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-B
  *
- * Covers:
- *   FR-1 split + idempotency + dual-emit (flag OFF emits 3, flag ON emits 2)
- *   FR-3 entry-precondition refusal + SKIP marker artifact
- *   FR-4 channel-coverage validation (4 negative cases + happy path)
+ * Covers (PRD FR-1..FR-8 / TS-1..TS-9):
+ *   FR-1 thesis-derived channels, open taxonomy, no fixed-six validator
+ *   FR-2 persona×channel JOIN → COHERENCE_JOIN_GAP (fail-partial)
+ *   FR-3 ranked budget-boxed portfolio, ≥2 message variants, UTM/first-touch,
+ *        back-compat channels[]/counts + value-domain normalization
+ *   FR-4 fail-partial per-experiment validation
+ *   FR-5 binding gate: recorded blocking chairman decision + block marker,
+ *        canonical pair withheld, dedup, zero _skip:true
+ *   FR-7 approved chairman skip → BUILD_DEVIATION_RECORD valve
+ *   TR-4 no fabricated fallback portfolio on LLM failure
  *
  * @module tests/unit/eva/stage-templates/analysis-steps/stage-22-distribution-setup.test
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 
 // Mock the LLM client BEFORE importing the module under test.
 vi.mock('../../../../../lib/llm/index.js', () => ({
@@ -18,472 +27,717 @@ vi.mock('../../../../../lib/llm/index.js', () => ({
     complete: vi.fn(),
   })),
 }));
+// Growth co-output + gap diagnostics are separately-owned modules with their own
+// suites — isolate them here so their DB/LLM traffic doesn't pollute call capture.
+vi.mock('../../../../../lib/eva/stage-templates/analysis-steps/prelaunch-growth-playbook.js', () => ({
+  runPrelaunchGrowthCoOutput: vi.fn(async () => ({ status: 'mocked' })),
+}));
+vi.mock('../../../../../lib/eva/contracts/describe-artifact-gap.js', () => ({
+  describeArtifactGap: vi.fn(async () => null),
+}));
 
 import {
   analyzeStage22Distribution,
-  validateEntryPreconditions,
-  validateChannelCoverage,
+  validateThesisChannelClaim,
+  deriveChannelsFromThesis,
+  validateExperiment,
+  rankExperiments,
+  assembleExperiments,
   splitArtifacts,
+  normalizeChannelName,
   normalizeUpstreamParams,
-  CHANNELS,
+  paidBudgetAdvisory,
+  THESIS_ARTIFACT_TYPE,
+  BLOCK_DECISION_TYPE,
+  SKIP_DECISION_TYPE,
   REQUIRED_UPSTREAM,
-  FEATURE_FLAG_KEY,
 } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-22-distribution-setup.js';
 import { getLLMClient } from '../../../../../lib/llm/index.js';
-import { CROSS_STAGE_DEPS } from '../../../../../lib/eva/contracts/stage-contracts.js';
 
-// Helper — full happy-path LLM response (all 6 channels, 3 active).
-function makeLLMResponse(overrides = {}) {
-  const channels = (overrides.channels || CHANNELS.map(ch => {
-    const isActive = ['app_store', 'google_ads', 'email'].includes(ch);
-    return {
-      channel: ch,
-      enabled: isActive,
-      status: isActive ? 'active' : 'skipped',
-      skip_reason: isActive ? null : `No ${ch} audience for B2B persona`,
-      ad_copy: isActive ? { headline: 'h', body: 'b', cta: 'c' } : null,
-      targeting: isActive ? { audience: 'a', demographics: 'd', keywords: ['k'] } : null,
+const silent = { info() {}, warn() {}, error() {}, log() {} };
+
+// ---------------------------------------------------------------------------
+// Fake supabase harness (extended for the rebuild — HIGH-6 finding):
+// - generic eq/in filter application against seeded per-table rows
+// - chainable insert().select('id')[.single()] (recordPendingDecision, recordDeviation)
+// - order()/limit()/maybeSingle()/single() and thenable awaiting
+// ---------------------------------------------------------------------------
+function makeFakeSupabase(seedRows = {}) {
+  const calls = { inserts: [], updates: [] };
+  let insertSeq = 0;
+
+  function from(table) {
+    const q = { table, op: 'select', filters: [], limitN: null, wantSingle: false, wantMaybe: false, payload: null };
+
+    function applyFilters(rows) {
+      return rows.filter((row) => q.filters.every(([kind, col, val]) => {
+        if (kind === 'eq') return row[col] === val;
+        if (kind === 'in') return Array.isArray(val) && val.includes(row[col]);
+        return true;
+      }));
+    }
+
+    function exec() {
+      if (q.op === 'insert') {
+        const id = `fake-${table}-${++insertSeq}`;
+        const data = q.wantSingle ? { ...q.payload, id } : [{ ...q.payload, id }];
+        return Promise.resolve({ data, error: null });
+      }
+      if (q.op === 'update') {
+        return Promise.resolve({ data: null, error: null });
+      }
+      let rows = applyFilters(seedRows[table] || []);
+      if (q.limitN != null) rows = rows.slice(0, q.limitN);
+      if (q.wantSingle || q.wantMaybe) return Promise.resolve({ data: rows[0] ?? null, error: null });
+      return Promise.resolve({ data: rows, error: null });
+    }
+
+    const builder = {
+      select() { return builder; },
+      insert(payload) {
+        q.op = 'insert';
+        q.payload = payload;
+        calls.inserts.push({ table, row: payload });
+        return builder;
+      },
+      update(patch) {
+        q.op = 'update';
+        q.payload = patch;
+        calls.updates.push({ table, patch });
+        return builder;
+      },
+      eq(col, val) { q.filters.push(['eq', col, val]); return builder; },
+      in(col, val) { q.filters.push(['in', col, val]); return builder; },
+      contains(col, val) { q.filters.push(['contains', col, val]); return builder; },
+      gte() { return builder; },
+      order() { return builder; },
+      limit(n) { q.limitN = n; return builder; },
+      maybeSingle() { q.wantMaybe = true; return exec(); },
+      single() { q.wantSingle = true; return exec(); },
+      then(res, rej) { return exec().then(res, rej); },
     };
-  }));
-  return JSON.stringify({
-    channels,
-    email_sequences: [{ sequence_name: 'welcome', emails_count: 3, cadence: 'D0,D3,D7', preview: 'p' }],
-    budget_allocation: { total_monthly: '$5k', by_channel: { google_ads: '50%', email: '50%' } },
+    return builder;
+  }
+
+  return { sb: { from }, calls };
+}
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+const WEB_SAAS_THESIS = {
+  claims: {
+    WHO: { personas: ['consultant', 'indie builder'] },
+    CHANNEL: {
+      channels: [
+        { channel: 'community', channel_type: 'community', persona: 'consultant', cost_hypothesis: '10h to 100 strangers' },
+        { channel: 'twitter', channel_type: 'social', persona: 'indie builder' },
+        { channel: 'integration', channel_type: 'integration', persona: 'consultant' },
+      ],
+    },
+  },
+};
+
+function thesisRow(artifactData = WEB_SAAS_THESIS) {
+  return {
+    id: 'thesis-row-1',
+    venture_id: 'ven-1',
+    artifact_type: THESIS_ARTIFACT_TYPE,
+    is_current: true,
+    artifact_data: artifactData,
+    created_at: '2026-07-01T00:00:00Z',
+  };
+}
+
+function makeExperiment(channel, persona, overrides = {}) {
+  return {
+    channel,
+    hypothesis: `${persona} discovers via ${channel} because that is where they already look for tools`,
+    persona_mapping: persona,
+    cost_to_signal_bound: '$0 + 8 hours to reach 100 relevant strangers',
+    success_criteria: '25 landing visits, 5 waitlist signups in 14 days',
+    kill_criteria: '<1% CTR after 200 impressions',
+    execution_tier: 'T1',
+    message_variants: [
+      { variant_id: 'A', headline: 'hA', body: 'bA', cta: 'cA' },
+      { variant_id: 'B', headline: 'hB', body: 'bB', cta: 'cB' },
+    ],
+    utm: { utm_source: channel, utm_medium: 'organic', utm_campaign: 'launch' },
     ...overrides,
+  };
+}
+
+function llmResponse(experiments, extra = {}) {
+  return JSON.stringify({
+    experiments,
+    email_sequences: [{ sequence_name: 'welcome', emails_count: 3, cadence: 'D0,D3,D7', preview: 'p' }],
+    budget_allocation: { total_monthly: '$50', by_channel: { community: '60%', twitter_x: '30%', integration: '10%' } },
+    ...extra,
   });
 }
 
 function setupMockLLM(response) {
-  const mockComplete = vi.fn().mockResolvedValue(response);
+  const mockComplete = typeof response === 'function'
+    ? vi.fn().mockImplementation(response)
+    : vi.fn().mockResolvedValue(response);
   getLLMClient.mockReturnValue({ complete: mockComplete });
   return mockComplete;
 }
 
-// Factory — fake supabase client that records calls.
-function makeFakeSupabase({ flagEnabled = false, captureWrites = [] } = {}) {
-  const inserted = [];
-  const updated = [];
-  captureWrites.length = 0; // share array if caller wants to inspect
-  const sb = {
-    from(table) {
-      const ctx = { table };
-      const builder = {
-        select(_fields) {
-          ctx.op = 'select';
-          return builder;
-        },
-        eq(col, val) {
-          ctx.filters = ctx.filters || {};
-          ctx.filters[col] = val;
-          return builder;
-        },
-        maybeSingle() {
-          if (table === 'leo_feature_flags' && ctx.filters?.flag_key === FEATURE_FLAG_KEY) {
-            return Promise.resolve({ data: { is_enabled: flagEnabled }, error: null });
-          }
-          return Promise.resolve({ data: null, error: null });
-        },
-        update(payload) {
-          ctx.op = 'update';
-          ctx.payload = payload;
-          return {
-            eq(col, val) {
-              ctx.filters = ctx.filters || {};
-              ctx.filters[col] = val;
-              return this;
-            },
-          };
-        },
-        insert(payload) {
-          inserted.push({ table, payload });
-          captureWrites.push({ op: 'insert', table, payload });
-          return Promise.resolve({ data: payload, error: null });
-        },
-      };
-      // Mock update path so it returns a thenable when chained .eq().eq().eq().eq()
-      const origUpdate = builder.update.bind(builder);
-      builder.update = (payload) => {
-        const rec = { op: 'update', table, payload, filters: {} };
-        updated.push(rec);
-        captureWrites.push(rec);
-        const eqChain = {
-          eq(col, val) { rec.filters[col] = val; return eqChain; },
-          then(resolve) { resolve({ data: null, error: null }); return Promise.resolve({ data: null, error: null }); },
-        };
-        return eqChain;
-      };
-      return builder;
-    },
-  };
-  return { sb, inserted, updated };
-}
+const insertsOf = (calls, table, type = null) => calls.inserts
+  .filter((i) => i.table === table)
+  .filter((i) => (type ? i.row.artifact_type === type : true));
 
-// SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A (FR-003, option-ii): Distribution is now stage 21
-// and Visual Assets is stage 22. Distribution's REQUIRED_UPSTREAM is only 3 entries
-// (pricing/7, persona/10, GTM/12) — the former visual_social_graphics and
-// visual_device_screenshots (source_stage:21) were removed because Distribution now runs
-// BEFORE Visual (they were a forward-dependency contradiction).
-const VALID_UPSTREAM = {
-  stage7Data: { pricing: { tier: 'pro' } },
-  stage10Data: { persona: { name: 'Pragmatic Priya' } },
-  stage12Data: { gtm: { strategy: 'PLG' } },
-  stage18Data: { copy: 'tagline' },
-};
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
-describe('stage-22-distribution-setup — pure helpers (FR-1/3/4)', () => {
-  describe('validateEntryPreconditions (FR-3)', () => {
-    it('passes when all 3 upstream artifacts present (pricing/7, persona/10, GTM/12)', () => {
-      const result = validateEntryPreconditions(VALID_UPSTREAM);
-      expect(result.ok).toBe(true);
-      expect(result.missing).toEqual([]);
-    });
-
-    it.each(REQUIRED_UPSTREAM)('fails when $artifact_type missing', (req) => {
-      const params = { ...VALID_UPSTREAM, [req.param_key]: null };
-      const result = validateEntryPreconditions(params);
-      expect(result.ok).toBe(false);
-      expect(result.missing).toContainEqual({ artifact_type: req.artifact_type, source_stage: req.source_stage });
-    });
-
-    it('treats empty-object data as missing', () => {
-      const result = validateEntryPreconditions({ ...VALID_UPSTREAM, stage7Data: {} });
-      expect(result.ok).toBe(false);
-      expect(result.missing[0].artifact_type).toBe('engine_pricing_model');
-    });
+// ---------------------------------------------------------------------------
+// Pure helpers
+// ---------------------------------------------------------------------------
+describe('normalizeChannelName — value-domain normalization (FR-3, CRITICAL-2)', () => {
+  it('maps legacy-platform synonyms onto the selectOrganicChannel allowlist', () => {
+    expect(normalizeChannelName('twitter')).toBe('twitter_x');
+    expect(normalizeChannelName('X')).toBe('twitter_x');
+    expect(normalizeChannelName('Build In Public')).toBe('twitter_x');
+    expect(normalizeChannelName('content_seo')).toBe('blog_seo');
+    expect(normalizeChannelName('newsletter')).toBe('email');
+    expect(normalizeChannelName('instagram')).toBe('facebook_instagram');
   });
 
-  describe('validateChannelCoverage (FR-4)', () => {
-    function makeChannel(overrides = {}) {
-      return {
-        channel: 'email',
-        enabled: true,
-        ad_copy: { headline: 'h', body: 'b', cta: 'c' },
-        targeting: { audience: 'a' },
-        ...overrides,
-      };
+  it('passes open-taxonomy names through unchanged (never a fixed list)', () => {
+    for (const open of ['community', 'integration', 'marketplace', 'partnership', 'referral']) {
+      expect(normalizeChannelName(open)).toBe(open);
     }
-    function makeAll6(overrides = {}) {
-      return CHANNELS.map(ch => {
-        const isActive = ['app_store', 'google_ads', 'email'].includes(ch);
-        return makeChannel({
-          channel: ch,
-          enabled: isActive,
-          skip_reason: isActive ? null : 'no audience',
-          ad_copy: isActive ? { headline: 'h', body: 'b', cta: 'c' } : null,
-          targeting: isActive ? { audience: 'a' } : null,
-          ...overrides,
-        });
-      });
-    }
-
-    it('passes when all 6 channels present and well-formed', () => {
-      expect(() => validateChannelCoverage(makeAll6())).not.toThrow();
-    });
-
-    it('throws when channels is not an array', () => {
-      expect(() => validateChannelCoverage(null)).toThrow(/not an array/);
-      expect(() => validateChannelCoverage('garbage')).toThrow(/not an array/);
-    });
-
-    it('throws when a channel is missing', () => {
-      const channels = makeAll6().filter(c => c.channel !== 'twitter_x');
-      expect(() => validateChannelCoverage(channels)).toThrow(/missing channel "twitter_x"/);
-    });
-
-    it('throws when an unrecognized channel is present', () => {
-      const channels = makeAll6().concat([makeChannel({ channel: 'tiktok' })]);
-      expect(() => validateChannelCoverage(channels)).toThrow(/unrecognized channel "tiktok"/);
-    });
-
-    it('throws when an enabled channel is missing ad_copy', () => {
-      const channels = makeAll6();
-      channels[0].ad_copy = null;
-      expect(() => validateChannelCoverage(channels)).toThrow(/missing ad_copy object/);
-    });
-
-    it('throws when a disabled channel is missing skip_reason', () => {
-      const channels = makeAll6();
-      const ix = channels.findIndex(c => !c.enabled);
-      channels[ix].skip_reason = '';
-      channels[ix].reason = '';
-      expect(() => validateChannelCoverage(channels)).toThrow(/missing skip_reason/);
-    });
-  });
-
-  describe('splitArtifacts (FR-1)', () => {
-    it('splits into channelConfig (no ad_copy) and adCopy (only enabled channels)', () => {
-      const llmResult = JSON.parse(makeLLMResponse());
-      const { channelConfig, adCopy } = splitArtifacts(llmResult);
-
-      expect(channelConfig.channels).toHaveLength(6);
-      expect(channelConfig.channels.every(c => c.ad_copy === undefined)).toBe(true);
-      expect(channelConfig.budget_allocation).toBeDefined();
-
-      expect(adCopy.channels_with_copy.length).toBe(3);
-      expect(adCopy.channels_with_copy.every(c => c.ad_copy)).toBe(true);
-      expect(adCopy.email_sequences).toHaveLength(1);
-    });
   });
 });
 
-describe('analyzeStage22Distribution — integration (FR-1/3/4)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+describe('validateThesisChannelClaim — consumption contract (FR-8)', () => {
+  it('accepts the design-shaped thesis and extracts channels + personas', () => {
+    const r = validateThesisChannelClaim(WEB_SAAS_THESIS);
+    expect(r.ok).toBe(true);
+    expect(r.channels).toHaveLength(3);
+    expect(r.personas).toEqual(['consultant', 'indie builder']);
+    expect(r.problems).toEqual([]);
   });
 
-  it('FR-3 — emits SKIP marker when engine_pricing_model (stage7) absent', async () => {
-    // SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A: Distribution no longer requires Visual
-    // artifacts (they were a forward-dep contradiction). Verify that a genuinely
-    // required precondition (stage7/pricing) causes a SKIP.
-    const { sb, inserted } = makeFakeSupabase({ flagEnabled: false });
-    const params = {
-      ...VALID_UPSTREAM,
-      stage7Data: null, // genuinely required upstream absent
-      ventureName: 'TestVenture',
-      ventureId: 'venture-uuid-1',
-      supabase: sb,
-      logger: { info: () => {}, warn: () => {} },
+  it('tolerates benign extra fields (additive-producer friendly)', () => {
+    const thesis = {
+      version: 3,
+      extra_top: true,
+      claims: {
+        ...WEB_SAAS_THESIS.claims,
+        WTP: { price_point: '$29/mo' },
+        CHANNEL: { ...WEB_SAAS_THESIS.claims.CHANNEL, evidence_grade: 'B' },
+      },
     };
-    const out = await analyzeStage22Distribution(params);
-
-    expect(out._skip).toBe(true);
-    expect(out.precondition_missing.find(m => m.artifact_type === 'engine_pricing_model')).toBeDefined();
-    expect(out.channels).toEqual([]);
-    // SKIP marker persisted
-    const skipInsert = inserted.find(i => i.payload.artifact_type === 'distribution_skip_marker');
-    expect(skipInsert).toBeDefined();
-    expect(skipInsert.payload.artifact_data.precondition_missing).toContain('engine_pricing_model');
-    // Canonical pair NOT emitted
-    expect(inserted.find(i => i.payload.artifact_type === 'distribution_channel_config')).toBeUndefined();
-    expect(inserted.find(i => i.payload.artifact_type === 'distribution_ad_copy')).toBeUndefined();
+    expect(validateThesisChannelClaim(thesis).ok).toBe(true);
   });
 
-  it('FR-1 — emits BOTH canonical pair AND legacy launch_deployment_runbook when flag OFF (dual-emit)', async () => {
-    setupMockLLM(makeLLMResponse());
-    const { sb, inserted } = makeFakeSupabase({ flagEnabled: false });
-    const params = {
-      ...VALID_UPSTREAM,
-      ventureName: 'TestVenture',
-      ventureId: 'venture-uuid-2',
-      supabase: sb,
-      logger: { info: () => {}, warn: () => {} },
+  it('accepts array-form claims keyed by claim_type', () => {
+    const thesis = {
+      claims: [
+        { claim_type: 'WHO', personas: [{ name: 'consultant' }] },
+        { claim_type: 'CHANNEL', channels: [{ channel: 'community', persona: 'consultant' }] },
+      ],
     };
-    const out = await analyzeStage22Distribution(params);
-
-    expect(out._skip).toBeUndefined();
-    expect(out._flag_enabled).toBe(false);
-    expect(out._dual_emitted).toBe(true);
-    expect(inserted.find(i => i.payload.artifact_type === 'distribution_channel_config')).toBeDefined();
-    expect(inserted.find(i => i.payload.artifact_type === 'distribution_ad_copy')).toBeDefined();
-    expect(inserted.find(i => i.payload.artifact_type === 'launch_deployment_runbook')).toBeDefined();
+    const r = validateThesisChannelClaim(thesis);
+    expect(r.ok).toBe(true);
+    expect(r.personas).toEqual(['consultant']);
   });
 
-  it('FR-1 — emits ONLY canonical pair (no legacy) when flag ON (single-emit)', async () => {
-    setupMockLLM(makeLLMResponse());
-    const { sb, inserted } = makeFakeSupabase({ flagEnabled: true });
-    const params = {
-      ...VALID_UPSTREAM,
-      ventureName: 'TestVenture',
-      ventureId: 'venture-uuid-3',
-      supabase: sb,
-      logger: { info: () => {}, warn: () => {} },
+  it('reports a missing CHANNEL claim', () => {
+    const r = validateThesisChannelClaim({ claims: { WHO: { personas: ['consultant'] } } });
+    expect(r.ok).toBe(false);
+    expect(r.problems.join(' ')).toMatch(/CHANNEL claim is missing/);
+  });
+
+  it('reports empty channels[] and missing thesis', () => {
+    expect(validateThesisChannelClaim({ claims: { WHO: { personas: ['p'] }, CHANNEL: { channels: [] } } }).ok).toBe(false);
+    expect(validateThesisChannelClaim(null).ok).toBe(false);
+    expect(validateThesisChannelClaim(undefined).problems.length).toBeGreaterThan(0);
+  });
+});
+
+describe('deriveChannelsFromThesis — persona×channel JOIN (FR-2 / TS-4)', () => {
+  it('joins each channel to a WHO persona and normalizes names', () => {
+    const parsed = validateThesisChannelClaim(WEB_SAAS_THESIS);
+    const d = deriveChannelsFromThesis(parsed);
+    expect(d.channels.map((c) => c.channel)).toEqual(['community', 'twitter_x', 'integration']);
+    expect(d.channels[0].persona).toBe('consultant');
+    expect(d.channels[1].source_channel).toBe('twitter');
+    expect(d.invalid).toEqual([]);
+  });
+
+  it('raises COHERENCE_JOIN_GAP for a channel whose persona is not in the WHO claim — that entry only', () => {
+    const thesis = {
+      claims: {
+        WHO: { personas: ['consultant'] },
+        CHANNEL: {
+          channels: [
+            { channel: 'community', persona: 'consultant' },
+            { channel: 'app_store', persona: 'builder' }, // not in WHO
+          ],
+        },
+      },
     };
-    const out = await analyzeStage22Distribution(params);
-
-    expect(out._flag_enabled).toBe(true);
-    expect(out._dual_emitted).toBe(false);
-    expect(inserted.find(i => i.payload.artifact_type === 'distribution_channel_config')).toBeDefined();
-    expect(inserted.find(i => i.payload.artifact_type === 'distribution_ad_copy')).toBeDefined();
-    expect(inserted.find(i => i.payload.artifact_type === 'launch_deployment_runbook')).toBeUndefined();
+    const d = deriveChannelsFromThesis(validateThesisChannelClaim(thesis));
+    expect(d.channels).toHaveLength(1);
+    expect(d.invalid).toHaveLength(1);
+    expect(d.invalid[0].invalid_reason).toMatch(/COHERENCE_JOIN_GAP/);
+    expect(d.invalid[0].invalid_reason).toMatch(/builder/);
   });
 
-  it('FR-1 — idempotent: marks prior is_current=true rows as is_current=false before insert', async () => {
-    setupMockLLM(makeLLMResponse());
-    const { sb, updated } = makeFakeSupabase({ flagEnabled: false });
-    const params = {
-      ...VALID_UPSTREAM,
-      ventureName: 'TestVenture',
-      ventureId: 'venture-uuid-4',
-      supabase: sb,
-      logger: { info: () => {}, warn: () => {} },
+  it('invalidates a second channel normalizing to the same legacy name (no duplicate experiments / inflated counts)', () => {
+    const thesis = {
+      claims: {
+        WHO: { personas: ['consultant', 'indie builder'] },
+        CHANNEL: {
+          channels: [
+            { channel: 'twitter', persona: 'consultant' },
+            { channel: 'build_in_public', persona: 'indie builder' }, // also → twitter_x
+          ],
+        },
+      },
     };
-    await analyzeStage22Distribution(params);
-    // 3 update calls (one per artifact_type written) when dual-emit ON
-    const channelConfigUpdates = updated.filter(u => u.filters.artifact_type === 'distribution_channel_config');
-    const adCopyUpdates = updated.filter(u => u.filters.artifact_type === 'distribution_ad_copy');
-    const legacyUpdates = updated.filter(u => u.filters.artifact_type === 'launch_deployment_runbook');
-    expect(channelConfigUpdates.length).toBe(1);
-    expect(adCopyUpdates.length).toBe(1);
-    expect(legacyUpdates.length).toBe(1);
-    // The update payload sets is_current=false
-    expect(channelConfigUpdates[0].payload.is_current).toBe(false);
+    const d = deriveChannelsFromThesis(validateThesisChannelClaim(thesis));
+    expect(d.channels).toHaveLength(1);
+    expect(d.channels[0].channel).toBe('twitter_x');
+    expect(d.invalid).toHaveLength(1);
+    expect(d.invalid[0].invalid_reason).toMatch(/duplicate_channel/);
+    expect(d.invalid[0].invalid_reason).toMatch(/twitter/);
   });
 
-  it('FR-4 — emits SKIP marker when LLM returns malformed coverage (missing channel)', async () => {
-    setupMockLLM(makeLLMResponse({
-      channels: CHANNELS.filter(c => c !== 'twitter_x').map(ch => ({
-        channel: ch, enabled: true, ad_copy: { headline: 'h', body: 'b', cta: 'c' }, targeting: { audience: 'a' },
-      })),
+  it('raises COHERENCE_JOIN_GAP for a channel naming no persona at all', () => {
+    const thesis = {
+      claims: {
+        WHO: { personas: ['consultant'] },
+        CHANNEL: { channels: [{ channel: 'community' }] },
+      },
+    };
+    const d = deriveChannelsFromThesis(validateThesisChannelClaim(thesis));
+    expect(d.channels).toHaveLength(0);
+    expect(d.invalid[0].invalid_reason).toMatch(/COHERENCE_JOIN_GAP: channel names no persona/);
+  });
+});
+
+describe('validateExperiment — fail-partial unit (FR-4)', () => {
+  it('passes a fully-formed experiment', () => {
+    expect(validateExperiment(makeExperiment('community', 'consultant')).valid).toBe(true);
+  });
+
+  it('fails on missing kill_criteria (with the reason named)', () => {
+    const r = validateExperiment(makeExperiment('community', 'consultant', { kill_criteria: '' }));
+    expect(r.valid).toBe(false);
+    expect(r.reasons.join(' ')).toMatch(/kill_criteria/);
+  });
+
+  it('fails with fewer than 2 well-formed message variants — never pads (FR-3)', () => {
+    const r = validateExperiment(makeExperiment('community', 'consultant', {
+      message_variants: [{ variant_id: 'A', headline: 'h', body: 'b', cta: 'c' }],
     }));
-    const { sb, inserted } = makeFakeSupabase({ flagEnabled: false });
-    const params = {
-      ...VALID_UPSTREAM,
-      ventureName: 'TestVenture',
-      ventureId: 'venture-uuid-5',
-      supabase: sb,
-      logger: { info: () => {}, warn: () => {} },
-    };
-    const out = await analyzeStage22Distribution(params);
-
-    expect(out._skip).toBe(true);
-    expect(out._validation_error).toMatch(/missing channel "twitter_x"/);
-    const skipInsert = inserted.find(i => i.payload.artifact_type === 'distribution_skip_marker');
-    expect(skipInsert).toBeDefined();
-    expect(skipInsert.payload.artifact_data.precondition_missing).toContain('channel_coverage_violation');
-    // Canonical pair NOT emitted (validation failed)
-    expect(inserted.find(i => i.payload.artifact_type === 'distribution_channel_config')).toBeUndefined();
+    expect(r.valid).toBe(false);
+    expect(r.reasons.join(' ')).toMatch(/>=2 well-formed message variants/);
   });
 
-  it('returns gracefully when supabase absent (no persistence happens)', async () => {
-    setupMockLLM(makeLLMResponse());
-    const params = {
-      ...VALID_UPSTREAM,
-      ventureName: 'TestVenture',
-      ventureId: 'venture-uuid-6',
-      supabase: null,
-      logger: { info: () => {}, warn: () => {} },
-    };
-    const out = await analyzeStage22Distribution(params);
-    expect(out._canonical_pair).toBeDefined();
-    expect(out._flag_enabled).toBe(false); // defaults OFF when no supabase
+  it('fails on invalid execution_tier and missing utm fields', () => {
+    const r = validateExperiment(makeExperiment('community', 'consultant', {
+      execution_tier: 'T9',
+      utm: { utm_source: 'community' },
+    }));
+    expect(r.valid).toBe(false);
+    expect(r.reasons.join(' ')).toMatch(/execution_tier/);
+    expect(r.reasons.join(' ')).toMatch(/utm/);
   });
 });
 
-// SD-LEO-FIX-FIX-POST-BUILD-001 — the worker upstream-loading fix.
-// The generic worker (fetchUpstreamArtifacts) keys upstream data as stage{N}Data
-// merged-by-stage with a __byType sub-map keyed by artifact_type. Before this fix
-// (a) CROSS_STAGE_DEPS[22] omitted source stages 7/10/12 so stage7Data/stage10Data/
-// stage12Data never arrived, and (b) the per-artifact-type S21 keys were never derived.
-describe('SD-LEO-FIX-FIX-POST-BUILD-001 — worker upstream-loading fix', () => {
-  // Shape the loader actually produces: stage{N}Data with a __byType sub-map.
-  function makeWorkerShapeUpstream({ includeS21 = true } = {}) {
-    const upstream = {
-      stage7Data:  { tier: 'pro', __byType: { engine_pricing_model: { tier: 'pro' } } },
-      stage10Data: { name: 'Pragmatic Priya', __byType: { identity_persona_brand: { name: 'Pragmatic Priya' } } },
-      stage12Data: { strategy: 'PLG', __byType: { identity_gtm_sales_strategy: { strategy: 'PLG' } } },
-      stage18Data: { copy: 'tagline', __byType: { content_marketing_copy: { copy: 'tagline' } } },
-    };
-    if (includeS21) {
-      upstream.stage21Data = {
-        // merged top-level (one type wins) + lossless __byType for both visual types
-        url: 'social',
-        __byType: {
-          visual_social_graphics:    { social_url: 'https://cdn/social.png' },
-          visual_device_screenshots: { screenshot_url: 'https://cdn/shot.png' },
-        },
-      };
+describe('rankExperiments (FR-3)', () => {
+  it('orders by generator rank, re-stamps 1-based ranks, and stamps first-touch attribution', () => {
+    const ranked = rankExperiments([
+      makeExperiment('a', 'p', { rank: 7 }),
+      makeExperiment('b', 'p', { rank: 2 }),
+      makeExperiment('c', 'p', {}), // unranked → last, stable
+    ]);
+    expect(ranked.map((e) => e.channel)).toEqual(['b', 'a', 'c']);
+    expect(ranked.map((e) => e.rank)).toEqual([1, 2, 3]);
+    expect(ranked.every((e) => e.attribution === 'first_touch')).toBe(true);
+  });
+});
+
+describe('assembleExperiments (FR-4)', () => {
+  const derived = [
+    { channel: 'community', source_channel: 'community', channel_type: 'community', persona: 'consultant', cost_hypothesis: null },
+    { channel: 'twitter_x', source_channel: 'twitter', channel_type: 'social', persona: 'indie builder', cost_hypothesis: null },
+  ];
+
+  it('invalidates a thesis channel the generator omitted (not_generated)', () => {
+    const r = assembleExperiments(derived, { experiments: [makeExperiment('community', 'consultant')] });
+    expect(r.valid).toHaveLength(1);
+    expect(r.invalid).toHaveLength(1);
+    expect(r.invalid[0].invalid_reason).toMatch(/not_generated/);
+  });
+
+  it('invalidates generator channels outside the thesis (not_in_thesis) — never silently drops them', () => {
+    const r = assembleExperiments(derived, {
+      experiments: [
+        makeExperiment('community', 'consultant'),
+        makeExperiment('twitter', 'indie builder'), // normalizes onto derived twitter_x
+        makeExperiment('linkedin', 'consultant'),   // off-thesis
+      ],
+    });
+    expect(r.valid).toHaveLength(2);
+    expect(r.invalid.map((i) => i.invalid_reason).join(' ')).toMatch(/not_in_thesis/);
+  });
+
+  it('defaults persona_mapping from the derived persona when the generator omits it', () => {
+    const exp = makeExperiment('community', 'consultant');
+    delete exp.persona_mapping;
+    const r = assembleExperiments(derived.slice(0, 1), { experiments: [exp] });
+    expect(r.valid).toHaveLength(1);
+    expect(r.valid[0].persona_mapping).toBe('consultant');
+  });
+});
+
+describe('splitArtifacts — back-compat consumer contract (FR-3 / TS-9 shape half)', () => {
+  const portfolio = {
+    experiments: rankExperiments([
+      makeExperiment('twitter_x', 'indie builder'),
+      makeExperiment('community', 'consultant'),
+    ]),
+    invalid_experiments: [{ channel: 'app_store', entry: {}, invalid_reason: 'COHERENCE_JOIN_GAP: x' }],
+    email_sequences: [{ sequence_name: 'welcome' }],
+    budget_allocation: { total_monthly: '$50', by_channel: { community: '100%' } },
+    thesis_version: 'thesis-row-1',
+  };
+
+  it('keeps channels[].{channel,status,enabled,skip_reason} with status pinned active for valid experiments', () => {
+    const { channelConfig } = splitArtifacts(portfolio);
+    const active = channelConfig.channels.filter((c) => c.status === 'active');
+    expect(active).toHaveLength(2);
+    expect(active.every((c) => c.enabled === true && c.skip_reason === null)).toBe(true);
+    const skipped = channelConfig.channels.find((c) => c.status === 'skipped');
+    expect(skipped.channel).toBe('app_store');
+    expect(skipped.skip_reason).toMatch(/COHERENCE_JOIN_GAP/);
+  });
+
+  it('active_channels equals the valid-experiment count (stage-23 read)', () => {
+    const { channelConfig } = splitArtifacts(portfolio);
+    expect(channelConfig.active_channels).toBe(2);
+    expect(channelConfig.total_channels).toBe(3);
+  });
+
+  it('message variants live ONLY in the ad-copy artifact; config carries variant_count', () => {
+    const { channelConfig, adCopy } = splitArtifacts(portfolio);
+    expect(channelConfig.experiments.every((e) => !('message_variants' in e))).toBe(true);
+    expect(channelConfig.experiments.every((e) => e.variant_count === 2)).toBe(true);
+    expect(adCopy.channels_with_copy).toHaveLength(2);
+    expect(adCopy.channels_with_copy.every((c) => c.message_variants.length >= 2)).toBe(true);
+  });
+
+  it('config carries first-touch attribution + thesis_version + paid-budget advisory', () => {
+    const { channelConfig } = splitArtifacts(portfolio);
+    expect(channelConfig.attribution).toBe('first_touch');
+    expect(channelConfig.thesis_version).toBe('thesis-row-1');
+    expect(channelConfig.paid_budget_advisory.flagged).toBe(false);
+  });
+});
+
+describe('paidBudgetAdvisory (unchanged behavior)', () => {
+  it('flags paid spend above 20%', () => {
+    expect(paidBudgetAdvisory({ by_channel: { google_ads: '40%', community: '60%' } }).flagged).toBe(true);
+    expect(paidBudgetAdvisory({ by_channel: { community: '90%', google_ads: '10%' } }).flagged).toBe(false);
+  });
+});
+
+describe('normalizeUpstreamParams + REQUIRED_UPSTREAM (optional context, key convention pinned)', () => {
+  it('REQUIRED_UPSTREAM keeps whole-stage stage{N}Data keys (invariant test contract)', () => {
+    for (const req of REQUIRED_UPSTREAM) {
+      expect(req.param_key).toBe(`stage${req.source_stage}Data`);
     }
-    return upstream;
-  }
-
-  // SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A: Distribution is now stage_number 21
-  // (not 22). CROSS_STAGE_DEPS[21] covers its deps; CROSS_STAGE_DEPS[22] is Visual Assets.
-  describe('FR-1 — CROSS_STAGE_DEPS[21] alignment (Distribution is now stage 21)', () => {
-    it('includes the producer-required source stages 7, 10 and 12', () => {
-      for (const stage of [7, 10, 12]) {
-        expect(CROSS_STAGE_DEPS[21]).toContain(stage);
-      }
-    });
-
-    it('retains the build-phase context stages 17-20 (additive change only, stage 21 is self)', () => {
-      // Distribution is stage 21, so CROSS_STAGE_DEPS[21] includes 17-20 as context;
-      // 21 itself is not a dependency of itself.
-      for (const stage of [17, 18, 19, 20]) {
-        expect(CROSS_STAGE_DEPS[21]).toContain(stage);
-      }
-    });
-
-    it('every REQUIRED_UPSTREAM source_stage is present in CROSS_STAGE_DEPS[21]', () => {
-      const deps = new Set(CROSS_STAGE_DEPS[21]);
-      for (const req of REQUIRED_UPSTREAM) {
-        expect(deps.has(req.source_stage)).toBe(true);
-      }
-    });
   });
 
-  describe('FR-2 — normalizeUpstreamParams (per-artifact-type S21 key derivation)', () => {
-    it('does NOT derive stage21SocialData / stage21ScreenshotData (visual removed from REQUIRED_UPSTREAM)', () => {
-      // SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A: visual_social_graphics and
-      // visual_device_screenshots were removed from REQUIRED_UPSTREAM (forward-dep fix).
-      // normalizeUpstreamParams iterates REQUIRED_UPSTREAM generically; since those
-      // artifact_types are gone, neither key is produced even when stage21Data.__byType
-      // contains the visual entries.
-      const out = normalizeUpstreamParams(makeWorkerShapeUpstream());
-      expect(out.stage21SocialData).toBeUndefined();
-      expect(out.stage21ScreenshotData).toBeUndefined();
-    });
+  it('is pure and tolerates missing __byType', () => {
+    const params = { stage7Data: { pricing: true }, ventureId: 'v' };
+    const out = normalizeUpstreamParams(params);
+    expect(out.stage7Data).toEqual({ pricing: true });
+    expect(out).not.toBe(params);
+  });
+});
 
-    it('leaves already-populated stage{N}Data keys untouched (stage7/10/12)', () => {
-      const input = makeWorkerShapeUpstream();
-      const out = normalizeUpstreamParams(input);
-      expect(out.stage7Data).toBe(input.stage7Data);
-      expect(out.stage10Data).toBe(input.stage10Data);
-      expect(out.stage12Data).toBe(input.stage12Data);
-    });
+// ---------------------------------------------------------------------------
+// analyzeStage22Distribution — end-to-end paths (fake supabase + mocked LLM)
+// ---------------------------------------------------------------------------
+describe('TS-1: web-SaaS thesis without app_store → full portfolio, no skip, no block', () => {
+  it('persists the canonical pair with 3 ranked experiments and zero _skip/_blocked', async () => {
+    const { sb, calls } = makeFakeSupabase({ venture_artifacts: [thesisRow()] });
+    setupMockLLM(llmResponse([
+      makeExperiment('community', 'consultant', { rank: 1 }),
+      makeExperiment('twitter', 'indie builder', { rank: 2 }),
+      makeExperiment('integration', 'consultant', { rank: 3 }),
+    ]));
 
-    it('is pure — does not mutate the input params', () => {
-      const input = makeWorkerShapeUpstream();
-      normalizeUpstreamParams(input);
-      expect(input.stage21SocialData).toBeUndefined();
-      expect(input.stage21ScreenshotData).toBeUndefined();
-    });
+    const result = await analyzeStage22Distribution({ ventureId: 'ven-1', ventureName: 'MarketLens', supabase: sb, logger: silent });
 
-    it('tolerates absent stage21Data / missing __byType without throwing', () => {
-      expect(() => normalizeUpstreamParams({})).not.toThrow();
-      expect(() => normalizeUpstreamParams({ stage21Data: {} })).not.toThrow();
-      expect(() => normalizeUpstreamParams(null)).not.toThrow();
-    });
+    expect('_skip' in result).toBe(false);
+    expect('_blocked' in result).toBe(false);
+    expect(result.active_channels).toBe(3);
+    expect(result.experiments.map((e) => e.channel)).toEqual(['community', 'twitter_x', 'integration']);
+
+    const configInsert = insertsOf(calls, 'venture_artifacts', 'distribution_channel_config');
+    const copyInsert = insertsOf(calls, 'venture_artifacts', 'distribution_ad_copy');
+    expect(configInsert).toHaveLength(1);
+    expect(copyInsert).toHaveLength(1);
+    expect(configInsert[0].row.lifecycle_stage).toBe(21);
+    expect(configInsert[0].row.title.length).toBeGreaterThan(0);
+    // No app_store anywhere — the fixed six is gone; open taxonomy is first-class.
+    expect(configInsert[0].row.artifact_data.channels.some((c) => c.channel === 'app_store')).toBe(false);
+    expect(configInsert[0].row.artifact_data.channels.some((c) => c.channel === 'integration')).toBe(true);
+    expect(configInsert[0].row.artifact_data.channels.some((c) => c.channel === 'community')).toBe(true);
+    // No block/skip markers, no chairman decisions on the happy path.
+    expect(insertsOf(calls, 'venture_artifacts', 'distribution_block_marker')).toHaveLength(0);
+    expect(insertsOf(calls, 'chairman_decisions')).toHaveLength(0);
   });
 
-  describe('FR-3 — producer runs / skips correctly on worker-loader shape', () => {
-    it('RUNS (preconditions ok) when all three required upstream artifacts (7/10/12) arrive in worker shape', () => {
-      const normalized = normalizeUpstreamParams(makeWorkerShapeUpstream());
-      const result = validateEntryPreconditions(normalized);
-      expect(result.ok).toBe(true);
-      expect(result.missing).toEqual([]);
-    });
+  it('dual-emits the legacy runbook while the gate flag is OFF, single-emits when ON', async () => {
+    const flagOff = makeFakeSupabase({ venture_artifacts: [thesisRow()] });
+    setupMockLLM(llmResponse([makeExperiment('community', 'consultant')]));
+    await analyzeStage22Distribution({ ventureId: 'ven-1', ventureName: 'V', supabase: flagOff.sb, logger: silent });
+    expect(insertsOf(flagOff.calls, 'venture_artifacts', 'launch_deployment_runbook')).toHaveLength(1);
 
-    it('does NOT skip end-to-end for a fully-built venture (worker shape)', async () => {
-      setupMockLLM(makeLLMResponse());
-      const { sb, inserted } = makeFakeSupabase({ flagEnabled: false });
-      const out = await analyzeStage22Distribution({
-        ...makeWorkerShapeUpstream(),
-        ventureName: 'DataDistill',
-        ventureId: 'venture-datadistill',
-        supabase: sb,
-        logger: { info: () => {}, warn: () => {} },
-      });
-      expect(out._skip).toBeUndefined();
-      expect(inserted.find(i => i.payload.artifact_type === 'distribution_channel_config')).toBeDefined();
+    const flagOn = makeFakeSupabase({
+      venture_artifacts: [thesisRow()],
+      leo_feature_flags: [{ flag_key: 'LEO_S22_GATES_ENABLED', is_enabled: true }],
     });
+    setupMockLLM(llmResponse([makeExperiment('community', 'consultant')]));
+    await analyzeStage22Distribution({ ventureId: 'ven-1', ventureName: 'V', supabase: flagOn.sb, logger: silent });
+    expect(insertsOf(flagOn.calls, 'venture_artifacts', 'launch_deployment_runbook')).toHaveLength(0);
+  });
+});
 
-    it('passes preconditions when S21 visual data absent — Distribution no longer requires Visual upstream', () => {
-      // SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A: visual_social_graphics and
-      // visual_device_screenshots removed from REQUIRED_UPSTREAM (forward-dep fix).
-      // Distribution runs BEFORE Visual Assets, so requiring Visual was a contradiction.
-      // With S7/S10/S12 present and no stage21 visual data, preconditions are OK.
-      const normalized = normalizeUpstreamParams(makeWorkerShapeUpstream({ includeS21: false }));
-      const result = validateEntryPreconditions(normalized);
-      expect(result.ok).toBe(true);
-      expect(result.missing).toEqual([]);
-      // Visual artifact_types are not in the missing list (not required at all)
-      const missingTypes = result.missing.map(m => m.artifact_type);
-      expect(missingTypes).not.toContain('visual_social_graphics');
-      expect(missingTypes).not.toContain('visual_device_screenshots');
-      // S7/S10/S12 not falsely reported missing either
-      expect(missingTypes).not.toContain('engine_pricing_model');
-      expect(missingTypes).not.toContain('identity_persona_brand');
-      expect(missingTypes).not.toContain('identity_gtm_sales_strategy');
+describe('TS-2: fail-partial — one malformed channel invalidates only that experiment', () => {
+  it('persists the valid experiments and records the malformed one under invalid_experiments', async () => {
+    const { sb, calls } = makeFakeSupabase({ venture_artifacts: [thesisRow()] });
+    setupMockLLM(llmResponse([
+      makeExperiment('community', 'consultant'),
+      makeExperiment('twitter', 'indie builder', { kill_criteria: '' }), // malformed
+      makeExperiment('integration', 'consultant'),
+    ]));
+
+    const result = await analyzeStage22Distribution({ ventureId: 'ven-1', ventureName: 'V', supabase: sb, logger: silent });
+
+    expect('_skip' in result).toBe(false);
+    expect('_blocked' in result).toBe(false);
+    expect(result.active_channels).toBe(2);
+    expect(result.invalid_experiments).toHaveLength(1);
+    expect(result.invalid_experiments[0].channel).toBe('twitter_x');
+    expect(result.invalid_experiments[0].invalid_reason).toMatch(/kill_criteria/);
+    expect(insertsOf(calls, 'venture_artifacts', 'distribution_channel_config')).toHaveLength(1);
+  });
+});
+
+describe('TS-3/FR-5: binding gate — missing thesis blocks with a recorded chairman decision', () => {
+  it('records a blocking pending distribution_block decision + block marker; withholds the pair; no _skip', async () => {
+    const { sb, calls } = makeFakeSupabase({}); // no thesis rows
+    setupMockLLM(llmResponse([]));
+
+    const result = await analyzeStage22Distribution({ ventureId: 'ven-1', ventureName: 'V', supabase: sb, logger: silent });
+
+    expect(result._blocked).toBe(true);
+    expect('_skip' in result).toBe(false);
+    expect(result.block_reason).toBe('demand_thesis_missing');
+    expect(result.decision_id).toBeTruthy();
+
+    const decisions = insertsOf(calls, 'chairman_decisions');
+    expect(decisions).toHaveLength(1);
+    expect(decisions[0].row.decision_type).toBe(BLOCK_DECISION_TYPE);
+    expect(decisions[0].row.lifecycle_stage).toBe(21);
+    expect(decisions[0].row.blocking).toBe(true);
+    expect(decisions[0].row.status).toBe('pending');
+    expect(typeof decisions[0].row.summary).toBe('string');
+
+    const marker = insertsOf(calls, 'venture_artifacts', 'distribution_block_marker');
+    expect(marker).toHaveLength(1);
+    expect(marker[0].row.title).toBe('Distribution blocked');
+    expect(marker[0].row.lifecycle_stage).toBe(21);
+    expect(marker[0].row.artifact_data.decision_id).toBe(result.decision_id);
+
+    // The canonical pair is WITHHELD — that is what blocks advancement.
+    expect(insertsOf(calls, 'venture_artifacts', 'distribution_channel_config')).toHaveLength(0);
+    expect(insertsOf(calls, 'venture_artifacts', 'distribution_ad_copy')).toHaveLength(0);
+    // The LLM is never consulted without a thesis.
+    expect(getLLMClient).not.toHaveBeenCalled();
+  });
+
+  it('blocks with demand_thesis_invalid when the thesis has no CHANNEL claim', async () => {
+    const { sb, calls } = makeFakeSupabase({
+      venture_artifacts: [thesisRow({ claims: { WHO: { personas: ['consultant'] } } })],
     });
+    const result = await analyzeStage22Distribution({ ventureId: 'ven-1', ventureName: 'V', supabase: sb, logger: silent });
+    expect(result._blocked).toBe(true);
+    expect(result.block_reason).toBe('demand_thesis_invalid');
+    expect(result.block_detail).toMatch(/CHANNEL claim is missing/);
+    expect(insertsOf(calls, 'chairman_decisions')).toHaveLength(1);
+  });
+
+  it('blocks with no_joinable_channels when every channel fails the persona JOIN (all COHERENCE_JOIN_GAP)', async () => {
+    const { sb } = makeFakeSupabase({
+      venture_artifacts: [thesisRow({
+        claims: {
+          WHO: { personas: ['consultant'] },
+          CHANNEL: { channels: [{ channel: 'community', persona: 'nobody' }] },
+        },
+      })],
+    });
+    const result = await analyzeStage22Distribution({ ventureId: 'ven-1', ventureName: 'V', supabase: sb, logger: silent });
+    expect(result._blocked).toBe(true);
+    expect(result.block_reason).toBe('no_joinable_channels');
+    expect(result.block_detail).toMatch(/COHERENCE_JOIN_GAP/);
+  });
+
+  it('blocks with all_experiments_invalid when generation yields zero valid experiments', async () => {
+    const { sb } = makeFakeSupabase({ venture_artifacts: [thesisRow()] });
+    setupMockLLM(llmResponse([
+      makeExperiment('community', 'consultant', { message_variants: [] }),
+      makeExperiment('twitter', 'indie builder', { hypothesis: '' }),
+      makeExperiment('integration', 'consultant', { execution_tier: 'nope' }),
+    ]));
+    const result = await analyzeStage22Distribution({ ventureId: 'ven-1', ventureName: 'V', supabase: sb, logger: silent });
+    expect(result._blocked).toBe(true);
+    expect(result.block_reason).toBe('all_experiments_invalid');
+  });
+
+  it('returns a graceful non-persisting block without supabase (no throw)', async () => {
+    const result = await analyzeStage22Distribution({ ventureName: 'V', logger: silent });
+    expect(result._blocked).toBe(true);
+    expect(result.block_reason).toBe('no_supabase_or_ventureId');
+    expect(result.decision_id).toBeNull();
+  });
+});
+
+describe('TS-6/FR-5b: block-decision dedup', () => {
+  it('reuses an existing PENDING distribution_block decision instead of inserting a duplicate', async () => {
+    const { sb, calls } = makeFakeSupabase({
+      chairman_decisions: [{
+        id: 'existing-block-1',
+        venture_id: 'ven-1',
+        lifecycle_stage: 21,
+        decision_type: BLOCK_DECISION_TYPE,
+        decision: 'pending',
+        status: 'pending',
+      }],
+    });
+    const result = await analyzeStage22Distribution({ ventureId: 'ven-1', ventureName: 'V', supabase: sb, logger: silent });
+    expect(result._blocked).toBe(true);
+    expect(result.decision_id).toBe('existing-block-1');
+    expect(insertsOf(calls, 'chairman_decisions')).toHaveLength(0);
+  });
+});
+
+describe('TS-5/TS-6/FR-7: the ONLY skip path is an APPROVED chairman decision', () => {
+  const approvedSkip = {
+    id: 'skip-dec-1',
+    venture_id: 'ven-1',
+    lifecycle_stage: 21,
+    decision_type: SKIP_DECISION_TYPE,
+    decision: 'approve',
+    status: 'approved',
+    summary: 'MarketLens: skip distribution for the probe window',
+  };
+
+  it('honors an approved skip via BUILD_DEVIATION_RECORD rows for BOTH canonical types', async () => {
+    const { sb, calls } = makeFakeSupabase({ chairman_decisions: [approvedSkip] });
+    const result = await analyzeStage22Distribution({ ventureId: 'ven-1', ventureName: 'V', supabase: sb, logger: silent });
+
+    expect(result._blocked).toBe(true);
+    expect(result.skipped_by_decision).toBe(true);
+    expect(result.decision_id).toBe('skip-dec-1');
+    expect('_skip' in result).toBe(false);
+
+    const deviations = insertsOf(calls, 'venture_artifacts', 'build_deviation_record');
+    expect(deviations).toHaveLength(2);
+    const refs = deviations.map((d) => d.row.artifact_data.artifact_ref).sort();
+    expect(refs).toEqual(['distribution_ad_copy', 'distribution_channel_config']);
+    expect(deviations.every((d) => d.row.artifact_data.weight === 'declared-descope')).toBe(true);
+    expect(deviations.every((d) => d.row.artifact_data.why.includes('skip-dec-1'))).toBe(true);
+
+    const marker = insertsOf(calls, 'venture_artifacts', 'distribution_block_marker');
+    expect(marker).toHaveLength(1);
+    expect(marker[0].row.artifact_data.skipped_by_decision).toBe(true);
+    // No NEW pending decision is created on the skip path.
+    expect(insertsOf(calls, 'chairman_decisions')).toHaveLength(0);
+  });
+
+  it('is idempotent on re-run: existing chairman deviation records for this decision are reused, not duplicated', async () => {
+    const priorDeviation = (id) => ({
+      id,
+      venture_id: 'ven-1',
+      artifact_type: 'build_deviation_record',
+      is_current: false,
+      created_at: '2026-07-08T00:00:00Z',
+      artifact_data: {
+        artifact_ref: 'distribution_channel_config',
+        why: `Chairman-approved distribution skip (chairman_decisions ${approvedSkip.id}): prior run`,
+        decided_by: 'chairman',
+        weight: 'declared-descope',
+      },
+    });
+    const { sb, calls } = makeFakeSupabase({
+      chairman_decisions: [approvedSkip],
+      venture_artifacts: [priorDeviation('dev-prior-1')],
+    });
+    const result = await analyzeStage22Distribution({ ventureId: 'ven-1', ventureName: 'V', supabase: sb, logger: silent });
+    expect(result.skipped_by_decision).toBe(true);
+    expect(result.block_reason).toBe('skipped_by_chairman_decision'); // labeled, not anonymous
+    // No NEW deviation inserts — prior records reused.
+    expect(insertsOf(calls, 'venture_artifacts', 'build_deviation_record')).toHaveLength(0);
+    expect(result.deviation_ids).toContain('dev-prior-1');
+  });
+
+  it('does NOT honor a PENDING (unapproved) skip decision — the block path fires instead', async () => {
+    const { sb, calls } = makeFakeSupabase({
+      chairman_decisions: [{ ...approvedSkip, id: 'skip-dec-2', decision: 'pending', status: 'pending' }],
+    });
+    const result = await analyzeStage22Distribution({ ventureId: 'ven-1', ventureName: 'V', supabase: sb, logger: silent });
+    expect(result.skipped_by_decision).toBeUndefined();
+    expect(result._blocked).toBe(true);
+    expect(result.block_reason).toBe('demand_thesis_missing');
+    expect(insertsOf(calls, 'venture_artifacts', 'build_deviation_record')).toHaveLength(0);
+  });
+});
+
+describe('TS-7/TR-4: LLM failure → recorded block, never a fabricated fallback portfolio', () => {
+  it('retries once, then blocks with generation_failed and persists NO portfolio', async () => {
+    const { sb, calls } = makeFakeSupabase({ venture_artifacts: [thesisRow()] });
+    const mockComplete = vi.fn().mockRejectedValue(new Error('provider down'));
+    getLLMClient.mockReturnValue({ complete: mockComplete });
+
+    const result = await analyzeStage22Distribution({ ventureId: 'ven-1', ventureName: 'V', supabase: sb, logger: silent });
+
+    expect(mockComplete).toHaveBeenCalledTimes(2); // one retry
+    expect(result._blocked).toBe(true);
+    expect(result.block_reason).toBe('generation_failed');
+    expect(insertsOf(calls, 'venture_artifacts', 'distribution_channel_config')).toHaveLength(0);
+    expect(insertsOf(calls, 'venture_artifacts', 'launch_deployment_runbook')).toHaveLength(0);
+  });
+});
+
+describe('module invariants (FR-1/FR-5 acceptance)', () => {
+  const raw = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), '../../../../../lib/eva/stage-templates/analysis-steps/stage-22-distribution-setup.js'),
+    'utf8',
+  );
+  // Strip block + line comments so doc references to the removed pattern don't false-positive.
+  const src = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  it('emits zero _skip:true anywhere in the module CODE (the silent-skip path is gone)', () => {
+    expect(src).not.toMatch(/_skip\s*:\s*true/);
+    expect(src).not.toMatch(/persistSkipMarker/);
+  });
+
+  it('contains no fixed channel-universe validator or fallback (fixed six removed)', () => {
+    expect(src).not.toMatch(/validateChannelCoverage/);
+    expect(src).not.toMatch(/all 6 must appear/);
+    expect(src).not.toMatch(/buildFallback/);
+    expect(src).not.toMatch(/'app_store',\s*'google_ads'/);
   });
 });
