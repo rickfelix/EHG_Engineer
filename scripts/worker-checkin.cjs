@@ -49,13 +49,13 @@ const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cj
 const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, parentLeadPending } = require('../lib/fleet/claim-eligibility.cjs');
 // SD-LEO-INFRA-COMPLEXITY-TIERED-WORKER-ASSIGNMENT-001 (FR-3): WORK-DOWN-NEVER-UP on the PULL path.
 // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B (FR-3): --model/--effort capture at check-in.
-const { resolveWorkerTierRank, isTieringActive, normalizeModel, normalizeEffort, rankForModelEffort } = require('../lib/fleet/tier-ladder.cjs');
+const { resolveWorkerTierRank, isTieringActive, normalizeModel, normalizeEffort, rankForModelEffort, ladderTopRank } = require('../lib/fleet/tier-ladder.cjs');
 // SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-2): tier-aware "claimable-to-MY-rung" rollup.
 const { claimableForTier } = require('../lib/fleet/tier-claimable.cjs');
 // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-E (FR-6): backlog-gated downward claims. The fetcher is
 // SHARED with lib/coordinator/dispatch.cjs's assertWorkerTierAllowed so the pull path (here) and
 // the directed-dispatch path compute an IDENTICAL backlog verdict — never two re-derivations.
-const { fetchLowerTierBacklogData } = require('../lib/fleet/tier-backlog.cjs');
+const { fetchLowerTierBacklogData, fetchFableWindowActive } = require('../lib/fleet/tier-backlog.cjs');
 // SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: reuse the coordinator cron's pool + picker + ghost guard so
 // check-in-time self-assign and the 5-min cron allocate identities identically (see assignFleetIdentityAtCheckin).
 const { NATO, COLORS, nextAvailable, isTestSessionId, tierRankOf, pickCallsignForTier, callsignInTierBand } = require('./assign-fleet-identities.cjs');
@@ -1790,6 +1790,11 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
     if (tierCtx.tiering_active === true) {
       const backlogData = await fetchLowerTierBacklogData(sb);
       if (backlogData) tierCtx.lower_tier_backlog_data = backlogData;
+      // QF-20260709-881: only a top-rung (fable) worker's downward claims are gated on this, so
+      // only fetch when relevant — avoids a config round-trip for every sub-top-rung checkin.
+      if (Number(tierCtx.worker_tier_rank) >= ladderTopRank()) {
+        tierCtx.fable_window_active = await fetchFableWindowActive(sb);
+      }
     }
     // QF-20260630-761: snapshot whether tiering is active so the idle message (below, outside this
     // scope) only attributes a 0-claimable belt to TIER when tiering is actually on. With tiering off
