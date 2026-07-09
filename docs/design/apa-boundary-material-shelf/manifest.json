@@ -1,0 +1,5 @@
+{
+  "$schema_note": "APA Boundary-Material Shelf — durable, versioned source of floor-edge (sub-award) calibration fixtures. Each entry is a live-site capture (format='capture_png', consumed by SD-LEO-INFRA-APA-FIXTURE-HARNESS-001) BANDED relative to the ~4.0 pass/fail floor: 'above' (~4.1, just-above), 'on_line' (~4.0), 'below' (~3.8, just-below). The assembler is FORBIDDEN from drawing an all-same-side selection (see lib/apa/boundary-material-shelf.mjs assertBandDiversity). Each entry MUST carry craft_justification + a11y_notes (anti-reputation-confabulation discipline). entries[] is intentionally EMPTY at v1: PART A of SD-LEO-INFRA-APA-BOUNDARY-MATERIAL-001 ships the durable versioned container + schema + selection guard; populating it (live-site capture + design-banding + the pixel-level brand-strip scan) is the fenced curation follow-up.",
+  "shelf_version": 1,
+  "entries": []
+}
