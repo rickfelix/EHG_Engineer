@@ -97,3 +97,19 @@ ON CONFLICT (criterion_id) DO NOTHING;
 
 COMMENT ON TABLE value_authenticity_criteria_library IS
   'SD-LEO-INFRA-VALUE-AUTHENTICITY-SPEC-001: canonical anti-mock criteria library (T0-T4 forms). Spec-time gate (this SD) writes selections here; APA runtime (pair-half B, SD-LEO-INFRA-VALUE-AUTHENTICITY-APA-001) reads+runs by criterion_id. Contract version 1 — see migration header comment before changing the ID format.';
+
+-- Adversarial-review finding (PR #5761): this table shipped with no RLS, unlike
+-- every sibling internal-reference-table migration from the same week
+-- (20260706_create_capacity_limit_events.sql, 20260706_venture_design_pass_ledger.sql).
+-- Matches the established pattern: service_role has full access (writes come from the
+-- gate/database-agent, never end-user code), authenticated reads are allowed (the
+-- library is reference data, not sensitive).
+ALTER TABLE value_authenticity_criteria_library ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "service_role_all" ON value_authenticity_criteria_library;
+CREATE POLICY "service_role_all" ON value_authenticity_criteria_library
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "authenticated_select" ON value_authenticity_criteria_library;
+CREATE POLICY "authenticated_select" ON value_authenticity_criteria_library
+  FOR SELECT TO authenticated USING (true);

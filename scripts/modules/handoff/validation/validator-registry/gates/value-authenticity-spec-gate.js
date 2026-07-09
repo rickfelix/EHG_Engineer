@@ -64,23 +64,31 @@ function classifyTriggerPredicate(leafText) {
  * than a selection+parameterization from the canonical criteria library by ID? Pure
  * function — no I/O, no DB lookup (library existence is NOT verified here; that is
  * the caller's job when it has access to the live library rows).
- * @param {string} criterionText
+ *
+ * Coerces via String() rather than relying on the input already being a string:
+ * PRD acceptance_criteria is author-supplied JSONB and a non-string entry (a number,
+ * object, or array slipped in by a malformed PRD) must never throw here — this
+ * function runs inside a fleet-wide handoff gate where an uncaught exception gets
+ * converted to a hard FAIL by ValidationOrchestrator, regardless of the observe-only
+ * binding flag (the exact fail-open guarantee FR-5 promises).
+ * @param {*} criterionText
  * @returns {boolean} true if the criterion is mock-satisfiable (missing a library ID)
  */
 function isMockSatisfiable(criterionText) {
-  const text = (criterionText || '').trim();
+  const text = criterionText == null ? '' : String(criterionText).trim();
   if (!text) return true;
   return !LIBRARY_CRITERION_ID_PATTERN.test(text);
 }
 
 /**
  * Extract the library criterion_id referenced by an acceptance-criterion string, if
- * any. Pure function.
- * @param {string} criterionText
+ * any. Pure function. Coerces via String() for the same reason as isMockSatisfiable.
+ * @param {*} criterionText
  * @returns {string|null}
  */
 function extractCriterionId(criterionText) {
-  const match = LIBRARY_CRITERION_ID_PATTERN.exec(criterionText || '');
+  const text = criterionText == null ? '' : String(criterionText);
+  const match = LIBRARY_CRITERION_ID_PATTERN.exec(text);
   return match ? match[0].toUpperCase() : null;
 }
 
@@ -208,12 +216,20 @@ function evaluateValueAuthenticitySpecGate(prd, options = {}) {
   const allFindings = frs.flatMap(fr => evaluateFunctionalRequirement(fr, options));
   const messages = allFindings.map(f => f.message);
 
-  // Observe-only (default): never fails the gate, findings surface as warnings only,
-  // so the calibration window has real data without blocking any handoff (FR-5).
+  // Observe-only (default): score is ALWAYS 100, never just "passed: true" with a
+  // lower score. Adversarial-review finding (PR #5761): ValidationOrchestrator
+  // computes a WEIGHTED-AVERAGE composite score across all gates
+  // (weightedScoreSum / totalWeight) that feeds the SD-type pass threshold — a
+  // rule row with weight:0 is treated as weight:1.0 by `gate.weight || 1.0`
+  // (falsy-zero fallback), so a lower score here would NOT be blocking by itself
+  // (`passed` gates that) but WOULD drag down other gates' composite average,
+  // indirectly failing an otherwise-healthy handoff. True observe-only neutrality
+  // requires score:100 always, with findings surfaced ONLY via warnings — the
+  // calibration window still gets real data without touching any handoff's score.
   if (!bindingEnabled) {
     return {
       passed: true,
-      score: allFindings.length === 0 ? 100 : 70,
+      score: 100,
       max_score: 100,
       issues: [],
       warnings: messages,
@@ -259,7 +275,22 @@ function registerValueAuthenticityGate(registry) {
     }
 
     const bindingEnabled = process.env.VALUE_AUTHENTICITY_GATE_BINDING === 'true';
-    return evaluateValueAuthenticitySpecGate(prd, { bindingEnabled, libraryCriterionIds });
+    try {
+      return evaluateValueAuthenticitySpecGate(prd, { bindingEnabled, libraryCriterionIds });
+    } catch (evalErr) {
+      // Defense-in-depth: this gate must NEVER be the thing that hard-fails a handoff.
+      // ValidationOrchestrator converts an uncaught validator exception into a hard
+      // FAIL regardless of the binding flag — a single malformed PRD field (e.g. a
+      // non-string acceptance_criteria entry future code adds without updating this
+      // gate) would otherwise silently violate FR-5's fail-open guarantee for every
+      // SD in the fleet. Fail open here too, with the error surfaced as a warning.
+      return {
+        passed: true,
+        score: 100,
+        max_score: 100,
+        warnings: [`valueAuthenticitySpecGate evaluation error (failed open): ${evalErr && evalErr.message ? evalErr.message : String(evalErr)}`]
+      };
+    }
   }, 'Value-authenticity spec-time gate (FR-2/FR-3/FR-4; observe-only unless VALUE_AUTHENTICITY_GATE_BINDING=true)');
 }
 

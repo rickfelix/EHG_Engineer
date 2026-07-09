@@ -52,6 +52,16 @@ describe('isMockSatisfiable + extractCriterionId (FR-2)', () => {
     expect(isMockSatisfiable('')).toBe(true);
     expect(isMockSatisfiable(null)).toBe(true);
   });
+
+  it('crash-safety: a non-string criterion entry (malformed PRD JSONB) never throws — adversarial-review finding', () => {
+    expect(() => isMockSatisfiable(42)).not.toThrow();
+    expect(() => isMockSatisfiable({ not: 'a string' })).not.toThrow();
+    expect(() => isMockSatisfiable(['array', 'entry'])).not.toThrow();
+    expect(() => isMockSatisfiable(true)).not.toThrow();
+    expect(isMockSatisfiable(42)).toBe(true); // coerced to "42", no library ID → mock-satisfiable
+    expect(() => extractCriterionId(42)).not.toThrow();
+    expect(() => extractCriterionId({ not: 'a string' })).not.toThrow();
+  });
 });
 
 describe('checkDeferredStubTrap (FR-3, two teeth)', () => {
@@ -188,6 +198,16 @@ describe('evaluateFunctionalRequirement — integration of the checks above', ()
     expect(findings.some(f => f.issue === 'UNKNOWN_CRITERION_ID')).toBe(true);
   });
 
+  it('crash-safety: a malformed PRD with non-string acceptance_criteria entries never throws — adversarial-review finding', () => {
+    const fr = {
+      id: 'FR-9',
+      title: 'Generate market analysis',
+      description: 'System shall produce a market analysis score',
+      acceptance_criteria: [42, { malformed: true }, null, 'VA-T1-source-reached: x']
+    };
+    expect(() => evaluateFunctionalRequirement(fr, { libraryCriterionIds: new Set(['VA-T1-SOURCE-REACHED']) })).not.toThrow();
+  });
+
   it('FR-4 no-silent-pass: derived-result leaf with zero criteria and no waiver is flagged, not silently passed', () => {
     const fr = {
       id: 'FR-5',
@@ -229,6 +249,16 @@ describe('evaluateValueAuthenticitySpecGate — TS-4 observe-only vs binding mod
     expect(result.passed).toBe(true);
     expect(result.warnings.length).toBeGreaterThan(0);
     expect(result.issues).toEqual([]);
+  });
+
+  it('adversarial-review finding: observe-only score is ALWAYS 100 regardless of findings — a real ValidationOrchestrator quirk (gate.weight || 1.0) means a lower score here would drag down OTHER gates composite average even though passed=true never blocks by itself', () => {
+    const result = evaluateValueAuthenticitySpecGate(nonConformingPrd, { bindingEnabled: false });
+    expect(result.score).toBe(100);
+    expect(result.max_score).toBe(100);
+    // Sanity: a conforming PRD also scores 100, so the invariant is score-independent
+    // of findings, not just "happens to be 100 when findings exist".
+    const cleanResult = evaluateValueAuthenticitySpecGate({ functional_requirements: [] }, { bindingEnabled: false });
+    expect(cleanResult.score).toBe(100);
   });
 
   it('binding mode: the SAME non-conforming PRD FAILS the gate', () => {
