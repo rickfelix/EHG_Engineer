@@ -732,6 +732,7 @@
   "venture_market_analysis": "{id,venture_id,tam_estimate,sam_estimate,som_estimate,market_trends,methodology,confidence_score,metadata,created_at,updated_at}",
   "venture_milestones": "{id,venture_id,stage_number,milestone_name,start_date,end_date,status,dependencies,metadata,created_at,updated_at}",
   "venture_nursery": "{id,brief_id,name,description,maturity_level,trigger_conditions,current_score,score_history,last_evaluated_at,next_evaluation_at,evaluation_interval_days,promoted_to_venture_id,promoted_at,source_type,source_ref,created_at,updated_at}",
+  "venture_deployments": "{id,venture_id,sha,revision,url,actor,status,error,metadata,created_at}",
   "venture_persona_mapping": "{id,venture_id,persona_id,relevance_score,notes,created_by,created_at,updated_at}",
   "venture_phase_budgets": "{id,venture_id,phase_name,budget_allocated,budget_remaining,phase_started_at,phase_completed_at,created_at,updated_at}",
   "venture_postmortems": "{id,venture_id,venture_name,venture_start_date,failure_date,why_1,why_1_evidence,why_2,why_2_evidence,why_3,why_3_evidence,why_4,why_4_evidence,why_5,why_5_evidence,root_cause_summary,contributing_factors,linked_sd_ids,linked_pattern_ids,status,assigned_to,reviewed_by,review_date,created_by,updated_by,created_at,updated_at}",
