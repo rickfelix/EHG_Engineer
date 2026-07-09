@@ -179,7 +179,9 @@ describe('runQaFixtureScan scope contract (adversarial-review fix, PR #5755)', (
   });
 
   it('claim-boundary-probe registry dispatch sits AFTER the HEADLESS_ZOMBIE release block (ordering parity with legacy mode)', () => {
-    const zombieIdx = source.indexOf("s.status === 'HEADLESS_ZOMBIE'");
+    // Anchor on SWEEP_HEADLESS_ZOMBIE (the released_reason INSIDE the release loop), not the
+    // filter line at the block's start — pins "after the whole block", not "after block start".
+    const zombieIdx = source.indexOf("'SWEEP_HEADLESS_ZOMBIE'");
     const probeDispatchIdx = source.indexOf('runPasses([passRegistryModule.MAIN_PASSES[1]]');
     expect(zombieIdx).toBeGreaterThan(-1);
     expect(probeDispatchIdx).toBeGreaterThan(-1);
