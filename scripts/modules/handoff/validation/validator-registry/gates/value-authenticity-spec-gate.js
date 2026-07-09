@@ -133,6 +133,23 @@ function evaluateFunctionalRequirement(fr, ctx) {
   const leafText = `${fr?.title || ''} ${fr?.description || ''}`;
   if (!classifyTriggerPredicate(leafText)) return findings; // out of scope (CRUD/nav)
 
+  // FR-3 deferred-stub trap: an FR MAY declare `fr.deferral = { namedBlockingSdKey,
+  // claimDemoted }` to mark itself as a phased/stubbed capability. When declared, BOTH
+  // teeth must be present (checkDeferredStubTrap) — an untracked deferral (the exact
+  // MarketLens TR-2 defect: "deferred the real engine to an untracked follow-up") is
+  // flagged independent of whether the FR also has a library-selected criterion.
+  if (fr && Object.prototype.hasOwnProperty.call(fr, 'deferral')) {
+    const stubTrap = checkDeferredStubTrap(fr.deferral || {});
+    if (!stubTrap.passed) {
+      findings.push({
+        fr_id: fr.id || '(no id)',
+        criterion: null,
+        issue: 'DEFERRED_STUB_TRAP_VIOLATION',
+        message: `FR ${fr.id || '(no id)'}: declares a deferral missing required teeth (${stubTrap.missingTeeth.join(', ')}) — an untracked/undemoted deferred stub is not compliant.`
+      });
+    }
+  }
+
   const criteria = Array.isArray(fr?.acceptance_criteria) ? fr.acceptance_criteria : [];
   const libraryCriterionIds = ctx?.libraryCriterionIds || new Set();
   let anyLibraryCriterion = false;

@@ -116,6 +116,45 @@ describe('evaluateFunctionalRequirement — integration of the checks above', ()
     expect(findings[0].issue).toBe('MOCK_SATISFIABLE');
   });
 
+  it('TS-1: MarketLens replay fails on BOTH grounds when the FR also declares an untracked deferral (SSOT §4.1)', () => {
+    const fr = {
+      id: 'TR-2',
+      title: 'Generate persona recommendations',
+      description: 'System shall generate a persona and WTP pricing analysis from user input',
+      acceptance_criteria: ['Output differs per input'],
+      // The real engine was deferred to an UNTRACKED follow-up — no named blocking SD,
+      // no claim-demotion. This is the exact MarketLens TR-2 defect.
+      deferral: {}
+    };
+    const findings = evaluateFunctionalRequirement(fr, { libraryCriterionIds: new Set() });
+    const issues = findings.map(f => f.issue);
+    expect(issues).toContain('MOCK_SATISFIABLE');
+    expect(issues).toContain('DEFERRED_STUB_TRAP_VIOLATION');
+  });
+
+  it('FR-3 wired: a tracked deferral (both teeth present) does not raise DEFERRED_STUB_TRAP_VIOLATION', () => {
+    const fr = {
+      id: 'FR-7',
+      title: 'Generate persona recommendations',
+      description: 'System shall generate a persona and WTP pricing analysis from user input',
+      acceptance_criteria: ['VA-T1-source-reached: instrumented_call_site=x, product_level_claim=y'],
+      deferral: { namedBlockingSdKey: 'SD-REAL-ENGINE-001', claimDemoted: true }
+    };
+    const findings = evaluateFunctionalRequirement(fr, { libraryCriterionIds: new Set(['VA-T1-SOURCE-REACHED']) });
+    expect(findings.some(f => f.issue === 'DEFERRED_STUB_TRAP_VIOLATION')).toBe(false);
+  });
+
+  it('FR-3 wired: an FR with no `deferral` field at all is never flagged for the stub trap', () => {
+    const fr = {
+      id: 'FR-8',
+      title: 'Generate market analysis',
+      description: 'System shall produce a market analysis score',
+      acceptance_criteria: ['VA-T1-source-reached: instrumented_call_site=x, product_level_claim=y']
+    };
+    const findings = evaluateFunctionalRequirement(fr, { libraryCriterionIds: new Set(['VA-T1-SOURCE-REACHED']) });
+    expect(findings.some(f => f.issue === 'DEFERRED_STUB_TRAP_VIOLATION')).toBe(false);
+  });
+
   it('TS-5: a CRUD/nav FR is never gated, even with a vague criterion', () => {
     const fr = {
       id: 'FR-2',
