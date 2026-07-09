@@ -234,6 +234,18 @@ describe('runHealthGate', () => {
     expect(gate.ok).toBe(false);
   });
 
+  it('a cross-origin redirect to a healthy 200 does NOT pass (off-host final URL)', async () => {
+    // A broken revision that redirects everything to some healthy page (login wall,
+    // parked domain) must not take traffic — the final host must be the revision's.
+    const fetchImpl = vi.fn(async () => ({ status: 200, url: 'https://parked.other.example/' }));
+    const gate = await runHealthGate('https://x.example', { fetchImpl, timeoutMs: 100, retries: 0 });
+    expect(gate.ok).toBe(false);
+    expect(gate.failures.join(' ')).toMatch(/off-host/);
+    // Same-host final URL (e.g. followed http→https on the same host) still passes.
+    const sameHost = vi.fn(async (url) => ({ status: 200, url }));
+    expect((await runHealthGate('https://x.example', { fetchImpl: sameHost, timeoutMs: 100, retries: 0 })).ok).toBe(true);
+  });
+
   it('clears its timeout even when the probe rejects (no timer leak)', async () => {
     vi.useFakeTimers();
     try {
