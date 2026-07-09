@@ -284,6 +284,46 @@ async function runClaimBoundaryProbe(supabase, classified, telemetryMap, now, ac
   return outcomes;
 }
 
+// SD-LEO-INFRA-WORKER-SOURCE-SIDE-001 / SD-ARCH-HOTSPOT-SWEEP-001 (PRD FR-2): source-side
+// telemetry precedence check, promoted to module level from a main()-local closure so it
+// compiles standalone and is unit-testable without a live sweep run. All signals honor a
+// 30-minute hard cap (SILENCE_HARD_CAP_MS) — a worker cannot declare silence beyond that
+// window, preventing a misconfigured hook from masking a dead worker.
+//
+// CRITICAL (risk-agent finding, PRD FR-2): this is a CLASSIFICATION INPUT feeding the
+// ALIVE_SOURCE_SIDE branch of the session status ladder in main()'s classification loop —
+// it is called DURING classification (sessions.map()), never as an ordered registry pass
+// running AFTER classification. If it ran post-classification, a source-side-alive worker
+// would already be classified dormant/dead by the time this ran, defeating its purpose and
+// causing false claim releases. See tests/unit/ for the ALIVE_SOURCE_SIDE regression test
+// (TS-3) asserting this ordering constraint.
+const TICK_ALIVE_WINDOW_MS = 90 * 1000;
+function evaluateSourceSideSignals(telemetryMap, sessionId, nowMs) {
+  const t = telemetryMap.get(sessionId);
+  if (!t) return null;
+  if (t.expected_silence_until) {
+    const endMs = Date.parse(t.expected_silence_until);
+    const deltaMs = endMs - nowMs;
+    if (deltaMs > 0 && deltaMs <= SILENCE_HARD_CAP_MS) {
+      return { alive: true, reason: 'silent until ' + t.expected_silence_until };
+    }
+  }
+  if (t.process_alive_at) {
+    const tickMs = Date.parse(t.process_alive_at);
+    const ageMs = nowMs - tickMs;
+    if (ageMs >= 0 && ageMs <= TICK_ALIVE_WINDOW_MS) {
+      return { alive: true, reason: 'tick alive ' + Math.round(ageMs / 1000) + 's ago' };
+    }
+  }
+  if (t.current_tool_expected_end_at) {
+    const endMs = Date.parse(t.current_tool_expected_end_at);
+    if (endMs - nowMs > 0) {
+      return { alive: true, reason: 'tool ' + (t.current_tool || 'running') + ' expected until ' + t.current_tool_expected_end_at };
+    }
+  }
+  return null;
+}
+
 // QF-20260704-081: pure predicate, exported so it can be unit-tested without a live
 // claude_sessions table. See call site (classification loop) for full context/RCA.
 // is_virtual sessions (lib/virtual-session-factory.mjs) are excluded: they legitimately never
@@ -311,11 +351,37 @@ const _adamActionAck = require('../lib/coordinator/adam-action-ack.cjs');
 // mutual self-ID handshake (coordinator discovery that doesn't depend solely on the flag).
 const _selfIdHandshake = require('../lib/coordinator/self-id-handshake.cjs');
 
+// SD-ARCH-HOTSPOT-SWEEP-001: ordered pass-registry (lib/sweep/pass-registry.cjs).
+// SWEEP_PASS_REGISTRY=off keeps the pre-refactor monolithic code path callable as a
+// rollback lever for at least one release cycle (one_way door-class re-architecture —
+// see PRD TR-3). Passes call back into this module's own exports lazily (never at
+// require-time) to sidestep the circular-require ordering hazard documented in each
+// pass file's header comment.
+//
+// CIRCULAR-REQUIRE NOTE (bidirectional): this require is ITSELF the other half of the
+// same hazard. If a consumer requires lib/sweep/pass-registry.cjs BEFORE
+// scripts/stale-session-sweep.cjs is ever loaded (e.g. a test importing the registry
+// directly), pass-registry.cjs's passes trigger loading this file, which reaches this
+// exact line while pass-registry.cjs is still mid-execution (its own module.exports not
+// yet assigned) — a destructured `const { EARLY_PASSES, ... } = require(...)` would
+// capture `undefined` permanently. Reference the whole module object instead and access
+// .EARLY_PASSES/.MAIN_PASSES/.runPasses lazily at each call site inside main() (called
+// well after the full require graph has settled) — verified by
+// tests/unit/lib/sweep/pass-registry.test.js, which imports pass-registry.cjs directly
+// and reproduces exactly this ordering.
+const passRegistryModule = require('../lib/sweep/pass-registry.cjs');
+const legacyFallback = require('../lib/sweep/legacy-fallback.cjs');
+const SWEEP_PASS_REGISTRY_ENABLED = process.env.SWEEP_PASS_REGISTRY !== 'off';
+
 // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2 — INTENT collision detection.
 // Reuse the INTENT payload key contract owned by the WRITER (worker-signal.cjs) so the
 // sweep reader and the broadcast writer cannot drift (pinned end-to-end by TS-WC-1).
 const { INTENT_PAYLOAD_KEYS } = require('./worker-signal.cjs');
-const DECONFLICTION_ENABLED = process.env.CROSS_SESSION_DECONFLICTION === 'true';
+// SD-ARCH-HOTSPOT-SWEEP-001: DECONFLICTION_ENABLED used to gate the inline intent-collision
+// block here; that gate now lives with the code it guards, in
+// lib/sweep/passes/intent-collision-detection.cjs (registry path) and
+// lib/sweep/legacy-fallback.cjs (SWEEP_PASS_REGISTRY=off path) — each derives its own copy
+// from the same CROSS_SESSION_DECONFLICTION env var. No longer referenced in this file.
 // INTENT rows are read within a claim-TTL-aligned window — deliberately NOT the
 // signal-router 60-min WINDOW_MIN (a tree-cancel intent stays relevant for the life
 // of the claim). Default 24h matches the INTENT expires_at the writer stamps.
@@ -1027,312 +1093,20 @@ async function dispatchWorkAssignmentsIfAllowed(supabase, activeSessions, availa
   return { dispatched, skipped: 0, blocked: false };
 }
 
-async function main() {
-  const now = new Date();
-  const actions = [];
-  const warnings = [];
-  const conflictEvicted = [];
-  // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2: collected INTENT collisions,
-  // surfaced as a real return value from main() (not console-only).
-  const collisionsDetected = [];
-
-  // 1. Get all sessions with SD claims
-  const { data: sessions, error: sessErr } = await supabase
-    .from('v_active_sessions')
-    // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2: include current_branch so the
-    // branchSessions map (and the new INTENT collision reader) see real branch data. The
-    // column already exists on v_active_sessions; it was simply not selected before, which
-    // also left the pre-existing WORKTREE_CONFLICT branch check (L~1046) effectively inert.
-    .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, is_virtual, parent_session_id, terminal_id, current_branch')
-    .not('sd_key', 'is', null)
-    .order('heartbeat_age_seconds', { ascending: true });
-
-  if (sessErr) {
-    console.log('ERROR: Failed to query sessions — ' + sessErr.message);
-    process.exit(1);
-  }
-
-  // QF-20260525-211 (early-exit gap): reap orphaned QF claims BEFORE the early-return below,
-  // so a stale QF claim is cleared even when zero SD-claiming sessions remain (fleet wound down).
-  await clearStaleQfClaims(supabase, now, actions, warnings);
-
-  // QF-20260704-545: same early-exit-gap discipline -- cancel leaked SD-TEST-* fixtures
-  // before the early-return below, so they're reaped even with zero active sessions.
-  await cancelStaleTestFixtures(supabase, now, actions, warnings);
-
-  // QF-20260703-076: session-independent dormancy watchdog -- prior backstops run INSIDE
-  // a turn and can't observe a worker whose armed wakeup never fired. Detector-only.
-  //
-  // SD-FDBK-ENH-CONFIRMED-LIVE-TODAY-001: DORMANT BY DEFAULT, mirroring MASKED_STALL_DETECT_ON
-  // (scripts/coordinator-capacity-forecast.mjs, SD-FDBK-INFRA-STALL-AFTER-COMPLETION-001). RCA +
-  // RISK evidence (signal 12ce5796, sub_agent_execution_results 209327fa-92aa-481c-9fa7-9edb655b20dd)
-  // confirmed process_alive_at is the SOLE liveness input to detectDormantWorkers(), and on Windows
-  // process_alive_at freezes for hours when session-tick.cjs's steady-state PATCH (status=eq.active)
-  // returns 0 rows and self-exits (QF-20260509-187) -- a live, actively-working session then
-  // false-flags as dormant (confirmed live on session 4af85f4b, 2026-07-04). No consumer takes a
-  // destructive action from this signal alone, but it was generating false-positive P1
-  // fleet_dormancy feedback noise. Gated OFF until the session-tick root-cause fix (deferred to a
-  // follow-up SD -- needs new spawn-and-observe Windows test infra) restores process_alive_at
-  // trustworthiness. Flip LEO_DORMANCY_WATCHDOG_ENABLED=on to re-enable.
-  if (isDormancyWatchdogEnabled()) {
-    try {
-      const { data: allTracked } = await supabase
-        .from('claude_sessions')
-        .select('session_id, loop_state, expected_silence_until, process_alive_at')
-        .eq('status', 'active');
-      const dormant = detectDormantWorkers(allTracked || [], now.getTime());
-      const DORMANCY_ALERT_THRESHOLD = 2;
-      if (dormant.length >= DORMANCY_ALERT_THRESHOLD) {
-        const { emitFeedback } = await import('../lib/governance/emit-feedback.js');
-        const hourBucket = now.toISOString().slice(0, 13);
-        await emitFeedback({
-          supabase,
-          title: `Fleet dormancy: ${dormant.length} worker(s) armed a wakeup that never fired`,
-          description: `Dormant session_ids: ${dormant.map((d) => d.session_id).join(', ')}. Each has an elapsed expected_silence_until and a stale/absent process_alive_at -- the native ScheduleWakeup did not re-invoke the loop. See QF-20260703-076 RCA.`,
-          category: 'fleet_dormancy',
-          severity: 'high',
-          dedup_key: `dormancy:${hourBucket}`,
-        });
-      }
-    } catch (watchdogErr) {
-      if (process.env.LEO_TELEMETRY_DEBUG === '1') {
-        console.error('[sweep] dormancy watchdog swallowed: ' + watchdogErr.message);
-      }
-    }
-  }
-
-  if (!sessions || sessions.length === 0) {
-    if (actions.length > 0) {
-      console.log('[' + now.toLocaleTimeString() + '] SWEEP: ' + actions.join('; '));
-    } else {
-      console.log('[' + now.toLocaleTimeString() + '] SWEEP: No sessions with claims. All clear.');
-    }
-    return;
-  }
-
-  // 2a. Identity collision detection (Layer 1) — run BEFORE classification
-  // so aliveMarkers are available for PID-based liveness cross-referencing.
-  const { collisions, aliveMarkers } = detectIdentityCollisions();
-
-  // Build a set of alive CC PIDs from marker files (pid-*.json + fallback-*.json).
-  // DB terminal_id formats: "win-cc-{port}-{ccPid}" (CLI) or "win-{PID}" (Desktop).
-  // Match by extracting the last segment from terminal_id and checking the alive set.
-  const aliveCcPids = new Set(aliveMarkers.map(m => String(m.pid)));
-
-  // ── SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: source-side telemetry lookup ────────
-  // Fetch process_alive_at / expected_silence_until / current_tool_expected_end_at
-  // for all session_ids in this sweep. These signals take precedence over
-  // heartbeat-based stale detection (see classification below).
-  //
-  // All signals honor a 30-minute hard cap — a worker cannot declare silence
-  // beyond that window, preventing a misconfigured hook from masking a dead
-  // worker. FR-4 (SD-LEO-INFRA-CLAIM-LIFECYCLE-HARDENING-002): this READER cap and the
-  // park-worker WRITER cap now derive from one shared constant (lib/fleet/silence-cap.cjs),
-  // so the writer can no longer arm a window the reader silently ignores.
-  const TICK_ALIVE_WINDOW_MS = 90 * 1000;
-  const telemetryMap = new Map();
-  try {
-    const sessionIds = sessions.map(s => s.session_id).filter(Boolean);
-    if (sessionIds.length > 0) {
-      const { data: telemetryRows } = await supabase
-        .from('claude_sessions')
-        // worktree_path: not exposed by v_active_sessions -- needed for the QF-20260704-081
-        // HEADLESS_ZOMBIE discriminator (fresh heartbeat + terminal_id/tty/worktree_path all null).
-        // last_tool_at/claimed_at/metadata: SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001 probe inputs
-        // (tick-immune tool clock, boundary anchor, quarantine flag read-modify-write).
-        .select('session_id,process_alive_at,expected_silence_until,current_tool,current_tool_expected_end_at,last_activity_kind,worktree_path,last_tool_at,claimed_at,metadata')
-        .in('session_id', sessionIds);
-      for (const row of telemetryRows || []) {
-        telemetryMap.set(row.session_id, row);
-      }
-    }
-  } catch (teleErr) {
-    // Graceful degradation — if the 8 new columns aren't present yet (pre-
-    // migration clone), fall through to heartbeat-only logic.
-    if (process.env.LEO_TELEMETRY_DEBUG === '1') {
-      console.error('[sweep] telemetry fetch swallowed: ' + teleErr.message);
-    }
-  }
-
-  function evaluateSourceSideSignals(sessionId, nowMs) {
-    const t = telemetryMap.get(sessionId);
-    if (!t) return null;
-    if (t.expected_silence_until) {
-      const endMs = Date.parse(t.expected_silence_until);
-      const deltaMs = endMs - nowMs;
-      if (deltaMs > 0 && deltaMs <= SILENCE_HARD_CAP_MS) {
-        return { alive: true, reason: 'silent until ' + t.expected_silence_until };
-      }
-    }
-    if (t.process_alive_at) {
-      const tickMs = Date.parse(t.process_alive_at);
-      const ageMs = nowMs - tickMs;
-      if (ageMs >= 0 && ageMs <= TICK_ALIVE_WINDOW_MS) {
-        return { alive: true, reason: 'tick alive ' + Math.round(ageMs / 1000) + 's ago' };
-      }
-    }
-    if (t.current_tool_expected_end_at) {
-      const endMs = Date.parse(t.current_tool_expected_end_at);
-      if (endMs - nowMs > 0) {
-        return { alive: true, reason: 'tool ' + (t.current_tool || 'running') + ' expected until ' + t.current_tool_expected_end_at };
-      }
-    }
-    return null;
-  }
-
-  // 2. Classify each session
-  // Primary signal: heartbeat age. Secondary signal: PID marker liveness.
-  // A session with a stale heartbeat but a living PID is likely loading context
-  // or between tool calls (heartbeat fires on PostToolUse only).
-  const VERY_STALE_SECONDS = STALE_THRESHOLD_SECONDS * 3; // 15min = definitely dead
-  // SD-LEO-INFRA-PARALLEL-AGENT-QUEUE-001: Virtual drain sessions use shorter thresholds
-  const VIRTUAL_STALE_THRESHOLD = 180; // 3 minutes for virtual drain agents
-  const VIRTUAL_VERY_STALE = VIRTUAL_STALE_THRESHOLD * 2; // 6 minutes = definitely dead
-  // SD-REFILL-00NFWJ6M: computed ONCE — gates the hard-cap pid-alive OS-truth fallback below.
-  const claudeProcRunningHost = anyClaudeProcessRunning();
-  const classified = sessions.map(s => {
-    const threshold = s.is_virtual ? VIRTUAL_STALE_THRESHOLD : STALE_THRESHOLD_SECONDS;
-    const veryStaleThreshold = s.is_virtual ? VIRTUAL_VERY_STALE : VERY_STALE_SECONDS;
-    const isStale = s.heartbeat_age_seconds > threshold;
-    const isVeryStale = s.heartbeat_age_seconds > veryStaleThreshold;
-
-    // Cross-reference with PID marker files: if the CC process is alive on this
-    // machine, the session is running even without recent heartbeats.
-    // terminal_id formats:
-    //   1. "win-cc-{port}-{ccPid}" (CLI, e.g. win-cc-13596-22408 → PID 22408)
-    //   2. "win-{ccPid}"           (Desktop, e.g. win-13596 → PID 13596)
-    //   3. UUID                    (resolve PID via .claude/session-identity/pid-*.json cc_pid)
-    // SD-LEO-INFRA-SESSION-IDENTITY-RECONCILIATION-001 (FR-3): explicit dispatch.
-    // Required because FR-4 deletes dead pid-*.json markers more aggressively;
-    // sweep needs deterministic PID resolution from a stable secondary source rather
-    // than naive last-segment-of-hyphen-split (which silently mis-classified UUID-format
-    // terminal_ids as having last-segment hex chars instead of a real PID).
-    let hasPidAlive = false;
-    if (s.terminal_id) {
-      const ccPid = resolveCcPidFromTerminalId(s.terminal_id, s.session_id);
-      if (ccPid != null) {
-        hasPidAlive = aliveCcPids.has(String(ccPid));
-        // SD-REFILL-00NFWJ6M: marker-vs-OS divergence — FR-4 deletes a live worker's pid-*.json
-        // marker aggressively, so a MISSING marker is NOT proof of death. A live worker deep in a
-        // >20min sub-agent run (no mid-Task heartbeat) was hard-cap-released because the marker set
-        // missed its still-running PID. Fall back to OS process truth when the marker set misses,
-        // GATED on a claude.exe existing on this host (guards PID-recycling false-holds: no claude.exe
-        // → a "live" PID is a recycled non-CC process). isProcessRunning uses process.kill(pid,0).
-        if (!hasPidAlive && claudeProcRunningHost && isProcessRunning(Number(ccPid))) {
-          hasPidAlive = true;
-        }
-      }
-    }
-
-    // Desktop sessions use heuristic liveness (claude.exe running + recent marker).
-    // Cap the protection: if heartbeat is >30 min stale, treat as dead even with
-    // a "live" marker — the specific session has likely exited while claude.exe
-    // continues running for other sessions.
-    const DESKTOP_DEAD_CAP_SECONDS = 1800; // 30 minutes
-    const isDesktopSession = s.terminal_id && /^win-\d+$/.test(s.terminal_id);
-    const exceedsDesktopCap = isDesktopSession && s.heartbeat_age_seconds > DESKTOP_DEAD_CAP_SECONDS;
-
-    // SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: source-side signals FIRST.
-    const sourceSide = evaluateSourceSideSignals(s.session_id, now.getTime());
-
-    let status;
-    if (sourceSide && sourceSide.alive) {
-      status = 'ALIVE_SOURCE_SIDE';
-    } else if (!isStale) {
-      status = 'ACTIVE';
-    } else if (hasPidAlive && !exceedsDesktopCap) {
-      // PID is alive but heartbeat is stale — session is loading context,
-      // compacting, or between tool calls. NOT stale.
-      status = 'ALIVE_NO_HEARTBEAT';
-    } else if (isVeryStale || exceedsDesktopCap) {
-      status = 'DEAD'; // No heartbeat for 15min+ (CLI) or 30min+ (Desktop) AND no living PID
-    } else {
-      status = 'STALE_UNKNOWN'; // Between 5-15min, no PID match = might be on another host
-    }
-
-    // QF-20260704-081: a session with a fresh heartbeat (never ages into DEAD via the
-    // staleness path above) but terminal_id, tty, AND worktree_path ALL null for 15min+ is a
-    // binding signature no real windowed session has -- its parked loop keeps
-    // heartbeating/rescheduling while the window itself is gone (confirmed specimen: PID 23348
-    // survived windowless 14.7h holding a claim). Detected here, released below -- never auto-kill
-    // the OS process; surfaced for a coordinator kill decision.
-    if (status === 'ACTIVE' && isHeadlessZombie(s, telemetryMap.get(s.session_id), now.getTime())) {
-      status = 'HEADLESS_ZOMBIE';
-    }
-
-    return {
-      ...s,
-      isStale: isStale && !hasPidAlive && !(sourceSide && sourceSide.alive),
-      status,
-      sourceSideReason: sourceSide?.reason || null,
-      hasPidAlive, // QF-20260426-SWEEP-HARDCAP-PIDALIVE: preserve for hard-cap guard
-    };
-  });
-  if (collisions.length > 0) {
-    await splitCollidingSessions(supabase, collisions, actions, warnings);
-  }
-
-  // 2b-2. QF-20260704-081: release HEADLESS_ZOMBIE claims. Verify PID, release the claim, mark
-  // released -- NEVER auto-kill the OS process; surface via session_coordination so a coordinator
-  // makes the kill decision (the process may be doing unrelated harmless work post-window-death).
-  const headlessZombies = classified.filter(s => s.status === 'HEADLESS_ZOMBIE');
-  for (const s of headlessZombies) {
-    const pidLive = s.pid ? isProcessRunning(Number(s.pid)) : false;
-    // QF-20260508-230: ck_claude_sessions_worktree_state_consistency requires sd_key IS NOT NULL
-    // OR (worktree_path IS NULL AND worktree_branch IS NULL) -- every release site must clear both.
-    await supabase.from('claude_sessions').update({
-      sd_key: null, status: 'released', released_at: now.toISOString(), released_reason: 'SWEEP_HEADLESS_ZOMBIE',
-      worktree_path: null, worktree_branch: null, has_uncommitted_changes: false, current_branch: null,
-    }).eq('session_id', s.session_id);
-    actions.push('HEADLESS_ZOMBIE: released ' + s.session_id + ' (sd=' + (s.sd_key || 'none') + ', pid=' + s.pid + ', pid_live=' + pidLive + ')');
-    await supabase.from('session_coordination').insert({
-      message_type: 'INFO',
-      subject: 'HEADLESS_ZOMBIE released: ' + s.session_id,
-      body: 'Fresh heartbeat but terminal_id/tty/worktree_path all null for 15min+ -- claim released. pid=' + s.pid + ' live=' + pidLive + '. Verify and kill the OS process if still live and truly orphaned.',
-      sender_type: 'sweep',
-      payload: { kind: 'headless_zombie_released', session_id: s.session_id, pid: s.pid, pid_live: pidLive },
-    });
-  }
-
-  // 2b-3. SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001: claim-boundary pre-flight probe.
-  // Runs on EVERY claimed session regardless of classified status — the freeze class
-  // has a FRESH heartbeat (status=ACTIVE) and a live PID, so neither the staleness
-  // path nor the dead-release loop can ever catch it. Precedence (declared silence,
-  // in-flight tool) is honored INSIDE the predicate; process_alive_at is deliberately
-  // not consulted (the tick lies through a prompt block).
-  try {
-    await runClaimBoundaryProbe(supabase, classified, telemetryMap, now, actions, warnings);
-  } catch (cbErr) {
-    warnings.push('CLAIM_BOUNDARY_PROBE: pass swallowed: ' + (cbErr?.message || cbErr));
-  }
-
-  // 2c. npm install lock cleanup (Layer 3)
-  const npmLock = checkNpmInstallLock();
-  if (npmLock.stale_removed) {
-    actions.push('NPM_LOCK: removed stale install lock (PID ' + npmLock.stale_pid + ' — expired)');
-  }
-  if (npmLock.dead_removed) {
-    actions.push('NPM_LOCK: removed dead install lock (PID ' + npmLock.dead_pid + ' — process gone)');
-  }
-  if (npmLock.locked) {
-    warnings.push('NPM_LOCK: active install lock held by PID ' + npmLock.holder_pid + ' (' + npmLock.age_seconds + 's)');
-  }
-
-  // 3. Detect conflicts (multiple sessions claiming same SD)
-  // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001 (adversarial review): exclude FIXTURE sessions from conflict
-  // keeper selection. The conflict loop picks the freshest-heartbeat session as keeper and EVICTS the
-  // rest; without this, a fixture sharing an sd_key with a real worker (the fd018627 condition) could
-  // win keeper and bounce the real worker BEFORE the CLAIM_FIX fixture guard (further below) releases
-  // the fixture. Fixtures never participate in keeper selection; they are bilaterally released later.
-  const { isFixtureSession } = await import('../lib/fleet/session-predicates.mjs');
-  const bySD = {};
-  classified.forEach(s => {
-    if (isFixtureSession(s.session_id)) return; // fixture: never a conflict keeper/evictor
-    if (!bySD[s.sd_key]) bySD[s.sd_key] = [];
-    bySD[s.sd_key].push(s);
-  });
-
-  const conflicts = Object.entries(bySD).filter(([, arr]) => arr.length > 1);
+// SD-ARCH-HOTSPOT-SWEEP-001 (PRD FR-2, main()-line-count acceptance criterion): the QA
+// claim-safety block (formerly inline steps 3b/3c/3d + FIX #2) extracted verbatim into
+// its own top-level function to shrink main(). Deliberately kept in THIS file (not moved
+// into lib/sweep/passes/) rather than delegated like the other 6 passes — the claim-safety
+// pinning tests (tests/unit/scripts/stale-session-sweep-claim-safety.test.js,
+// sweep-residuals.test.js, stale-sweep-qf211-claim-guards.test.js,
+// stale-sweep-qf162-release-announce.test.js) all readFileSync this exact file's full
+// source text and regex-match specific query/guard patterns (e.g.
+// `.not('sd_key','like',TEST_FIXTURE_SD_KEY_LIKE)`, `isSweepResetAllowed`'s fail-soft
+// body) — as long as the code text lives anywhere in this file, those pins hold with zero
+// migration. Called from main() via the shared sweepPassCtx (supabase/now/classified/
+// actions), same ctx bag MAIN_PASSES already reuses.
+async function runQaFixtureScan(ctx) {
+  const { supabase, now, classified, actions } = ctx;
 
   // 3b. QA — detect sessions working on completed SDs
   const claimedSdKeys = [...new Set(classified.map(s => s.sd_key).filter(Boolean))];
@@ -1561,6 +1335,521 @@ async function main() {
       actions.push('QA: cleared stale claiming_session_id on ' + sd.status + ' ' + sd.sd_key);
     }
   }
+}
+
+// SD-ARCH-HOTSPOT-SWEEP-001 (main()-line-count acceptance criterion): the tail-of-tick
+// coordinator housekeeping block (SIGNAL_RESOLVED notification, pending-question
+// auto-proceed timer, Adam-action ACK escalation, CARDINAL action-time adherence probes,
+// 3-part mutual self-ID handshake) extracted verbatim. All five are independently
+// flag-gated / fail-open / best-effort and depend only on `supabase` — no shared local
+// state with the rest of main(), so this is a pure hoist, zero behavior change. Kept in
+// this file (not lib/sweep/passes/) for the same source-text-pinning reason documented on
+// runQaFixtureScan() above (this block isn't pinned today, but the convention is uniform).
+async function runCoordinatorHousekeeping(ctx) {
+  const { supabase } = ctx;
+
+  // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4d — SIGNAL_RESOLVED notification.
+  // For each contributing signal where payload.routed_to_sd_key is non-null AND the SD
+  // status is 'completed' AND payload.notification_sent is not yet true, look up
+  // sender_callsign's current_session_id (heartbeat <10min) and send SIGNAL_RESOLVED.
+  // Drops silently when callsign no longer maps to a live session. Sets
+  // payload.notification_sent=true to prevent re-send.
+  try {
+    const { data: candidates } = await supabase
+      .from('session_coordination')
+      .select('id, payload, body')
+      .not('payload->>routed_to_sd_key', 'is', null)
+      .neq('payload->>notification_sent', 'true')
+      .limit(50);
+
+    let notified = 0;
+    let dropped = 0;
+    for (const sig of candidates || []) {
+      const sdKey = sig.payload?.routed_to_sd_key;
+      const callsign = sig.payload?.sender_callsign;
+      if (!sdKey || !callsign) continue;
+
+      // Verify SD is completed.
+      const { data: sdRow } = await supabase
+        .from('strategic_directives_v2')
+        .select('sd_key, status')
+        .eq('sd_key', sdKey)
+        .maybeSingle();
+      if (!sdRow || sdRow.status !== 'completed') continue;
+
+      // Resolve callsign → current live session_id.
+      const liveCutoff = new Date(Date.now() - 10 * 60_000).toISOString();
+      const { data: live } = await supabase
+        .from('claude_sessions')
+        .select('session_id, metadata')
+        .gte('heartbeat_at', liveCutoff)
+        .filter('metadata->>fleet_identity', 'not.is', null);
+      const owner = (live || []).find(s => s.metadata?.fleet_identity?.callsign === callsign);
+
+      if (!owner) {
+        // Mark notification_sent=true with a "dropped" flag so we don't retry forever.
+        const merged = { ...(sig.payload || {}), notification_sent: true, signal_resolved_dropped: true };
+        await supabase.from('session_coordination').update({ payload: merged }).eq('id', sig.id);
+        dropped++;
+        continue;
+      }
+
+      // Send SIGNAL_RESOLVED to owner.
+      await supabase.from('session_coordination').insert({
+        sender_session: null,
+        sender_type: 'coordinator',
+        target_session: owner.session_id,
+        message_type: 'INFO',
+        subject: `[SIGNAL_RESOLVED] ${sig.payload?.signal_type || 'signal'} → ${sdKey}`,
+        body: `Your earlier signal (\"${(sig.body || '').slice(0, 200)}\") contributed to SD ${sdKey}, which is now completed.`,
+        payload: {
+          signal_resolved: true,
+          signal_type: sig.payload?.signal_type,
+          original_body: (sig.body || '').slice(0, 500),
+          resulting_sd_key: sdKey,
+          original_signal_id: sig.id
+        },
+        expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString()
+      });
+
+      // Mark sent.
+      const merged = { ...(sig.payload || {}), notification_sent: true };
+      await supabase.from('session_coordination').update({ payload: merged }).eq('id', sig.id);
+      notified++;
+    }
+    if (notified > 0 || dropped > 0) {
+      console.log('SIGNAL_RESOLVED: notified=' + notified + ' dropped=' + dropped);
+    }
+  } catch (resolvedErr) {
+    console.log('SIGNAL_RESOLVED: ' + (resolvedErr && resolvedErr.message ? resolvedErr.message : 'unknown'));
+  }
+
+  // SD-LEO-INFRA-COORDINATOR-PENDING-QUESTION-001 — pending-question timer /
+  // default-proceed. For an OPEN operator_question (category='operator_question',
+  // status='new') that is NON-CRITICAL and unanswered past the timeout, auto-
+  // proceed on the coordinator's recommended option and mark it resolved with an
+  // auto_proceeded marker + audit note (FR-001, idempotent). Every still-open
+  // question is re-surfaced each tick (FR-002 — the existing email path renders
+  // status='new' rows; this just reports the live count). CRITICAL-category
+  // questions NEVER auto-proceed (FR-003). DEFAULT-OFF behind
+  // COORD_QUESTION_AUTO_PROCEED_V1; READ-ONLY + fail-open when the flag is off
+  // (aged non-critical questions resurface instead of auto-proceeding).
+  try {
+    const pq = await _pendingQuestionTimer.planAndApplyPendingQuestions(supabase, {});
+    const stillOpen = pq.resurfaced + pq.hardWaited; // open questions kept visible this tick
+    if (pq.autoProceeded > 0 || stillOpen > 0) {
+      console.log(
+        '  PENDING_QUESTION: auto-proceeded=' + pq.autoProceeded +
+        ' resurfaced=' + pq.resurfaced + ' hard-wait=' + pq.hardWaited +
+        ' skipped=' + pq.skipped + (pq.enabled ? '' : ' (auto-proceed flag OFF)')
+      );
+    }
+  } catch (pqErr) {
+    console.log('PENDING_QUESTION: ' + (pqErr && pqErr.message ? pqErr.message : 'unknown'));
+  }
+
+  // SD-LEO-INFRA-ADAM-COORDINATOR-ACTION-001 — Adam->coordinator action-required
+  // two-stage ACK + wake/SLA escalation. The sweep-set read_at marks an action
+  // handoff DELIVERED (transport), NOT actioned; an action-required handoff stays
+  // pending-action until the coordinator agent records a genuine second-stage ACK
+  // (payload.actioned_at). When such a handoff is DELIVERED but un-actioned past
+  // the SLA, emit a wake/action-required alert targeting the coordinator so the
+  // parked coordinator is woken into an active cycle (FR-002), and stamp
+  // payload.escalated_at on the original row so escalation is idempotent (no spam).
+  // Informational (unflagged) rows are never tracked (FR-003). DEFAULT-OFF behind
+  // COORD_ADAM_ACTION_ACK_V1; READ-ONLY + fail-open when the flag is off (aged
+  // un-actioned handoffs stay 'pending' instead of escalating). SLA configurable
+  // via COORD_ADAM_ACTION_SLA_MIN.
+  try {
+    const aa = await _adamActionAck.planAndApplyAdamActionAcks(supabase, {});
+    if (aa.escalated > 0 || aa.pending > 0 || aa.done > 0) {
+      console.log(
+        '  ADAM_ACTION_ACK: escalated=' + aa.escalated +
+        ' pending=' + aa.pending + ' done=' + aa.done +
+        (aa.enabled ? '' : ' (escalation flag OFF)')
+      );
+    }
+  } catch (aaErr) {
+    console.log('ADAM_ACTION_ACK: ' + (aaErr && aaErr.message ? aaErr.message : 'unknown'));
+  }
+
+  // SD-LEO-INFRA-GOVERNANCE-ROLE-ADHERENCE-DBVALIDATION-001 (FR-2): run the CARDINAL Adam adherence
+  // probes at ACTION-TIME (per sweep tick) — not only the 6h retrospective audit — and record a
+  // DB-validated verdict to adam_adherence_ledger ONLY on a verdict transition (dedupe-on-change).
+  // Flag-gated (ADAM_ACTION_TIME_ADHERENCE_V1=on; default-OFF), FAIL-OPEN, WARN-only: it can NEVER
+  // block the sweep. Both modules are ESM, so dynamic-import them from this CJS sweep.
+  try {
+    const [{ recordActionTimeAdherence, isActionTimeAdherenceEnabled }, { recordAdherence }] = await Promise.all([
+      import('../lib/adam/action-time-adherence.mjs'),
+      import('./adam-self-adherence-review.mjs'),
+    ]);
+    if (isActionTimeAdherenceEnabled()) {
+      // The sweep tick's action-time check resolves the ADVISORY-BOUNDARY (D2) fact (the latest
+      // advisory body) — that is the pre-send boundary self-check. The belt-starvation (D1) and
+      // propose-only facts (claimableBelt/idleWorkers/adamAuthoredBuildsInWindow) are NOT cheaply
+      // available here, so those probes honestly degrade to 'unknown' in this path (never a silent
+      // pass). D1 belt-starvation is fully evaluated where belt/idle live: the 6h retrospective audit
+      // (adam-self-adherence-review) and the coordinator charter-audit's SOURCE-TO-CAPACITY detector.
+      let sourceableBacklogCount = null;
+      try {
+        const { sourceableBacklog } = await import('./lib/sourceable-backlog.mjs');
+        const { data: bl } = await supabase.from('feedback')
+          .select('id, status, title, metadata')
+          .eq('category', 'harness_backlog').in('status', ['open', 'new', 'backlog']);
+        sourceableBacklogCount = Array.isArray(bl) ? sourceableBacklog(bl).length : null;
+      } catch { /* unresolved → probe returns unknown (fail-loud) */ }
+      let advisoryBody = null;
+      try {
+        const { data: adv } = await supabase.from('chairman_decisions')
+          .select('decision').order('created_at', { ascending: false }).limit(1);
+        if (adv && adv[0]) advisoryBody = String(adv[0].decision || '');
+      } catch { /* unresolved → D2 unknown */ }
+      const facts = { sourceableBacklogCount, advisoryBody };
+      const res = await recordActionTimeAdherence({ supabase, facts, recordAdherence });
+      if (res && res.recorded > 0) console.log('  ADAM_ACTION_TIME_ADHERENCE: recorded ' + res.recorded + ' verdict transition(s)');
+    }
+  } catch (atErr) {
+    console.log('ADAM_ACTION_TIME_ADHERENCE: ' + (atErr && atErr.message ? atErr.message : 'unknown') + ' (fail-open)');
+  }
+
+  // SD-LEO-INFRA-ADD-PART-MUTUAL-001 — 3-part mutual self-ID handshake housekeeping.
+  // The reactive RESPONDER self-heal (a coordinator replying + re-registering its
+  // is_coordinator flag) runs in COORDINATOR context (coordinator-comms-check.mjs); the
+  // sweep is not a session, so it runs the handshake tick as a non-coordinator (selfRole
+  // 'sweep', selfIsCoordinator=false) — driving only the INITIATOR-confirm / idempotency
+  // housekeeping and giving WIRE_CHECK a reachable entry point. DEFAULT-OFF behind
+  // COORD_SELF_ID_V1; fully inert (zero writes) when the flag is off; fail-open.
+  try {
+    const sid = await _selfIdHandshake.planAndApplySelfIdHandshake(supabase, {
+      selfSessionId: 'sweep',
+      selfRole: 'sweep',
+      selfIsCoordinator: false,
+    });
+    if (sid.replied > 0 || sid.confirmed > 0 || sid.registered > 0) {
+      console.log(
+        '  SELF_ID_HANDSHAKE: replied=' + sid.replied +
+        ' confirmed=' + sid.confirmed + ' registered=' + sid.registered +
+        (sid.enabled ? '' : ' (flag OFF)'),
+      );
+    }
+  } catch (sidErr) {
+    console.log('SELF_ID_HANDSHAKE: ' + (sidErr && sidErr.message ? sidErr.message : 'unknown'));
+  }
+}
+
+async function main() {
+  const now = new Date();
+  const actions = [];
+  const warnings = [];
+  const conflictEvicted = [];
+  // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2: collected INTENT collisions,
+  // surfaced as a real return value from main() (not console-only).
+  const collisionsDetected = [];
+
+  // 1. Get all sessions with SD claims
+  const { data: sessions, error: sessErr } = await supabase
+    .from('v_active_sessions')
+    // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2: include current_branch so the
+    // branchSessions map (and the new INTENT collision reader) see real branch data. The
+    // column already exists on v_active_sessions; it was simply not selected before, which
+    // also left the pre-existing WORKTREE_CONFLICT branch check (L~1046) effectively inert.
+    .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, is_virtual, parent_session_id, terminal_id, current_branch')
+    .not('sd_key', 'is', null)
+    .order('heartbeat_age_seconds', { ascending: true });
+
+  if (sessErr) {
+    console.log('ERROR: Failed to query sessions — ' + sessErr.message);
+    process.exit(1);
+  }
+
+  // QF-20260525-211 (early-exit gap): reap orphaned QF claims BEFORE the early-return below,
+  // so a stale QF claim is cleared even when zero SD-claiming sessions remain (fleet wound down).
+  // SD-ARCH-HOTSPOT-SWEEP-001: EARLY_PASSES registry call (ordering is load-bearing —
+  // must complete before dispatchWorkAssignmentsIfAllowed observes claim availability
+  // later in this same tick). SWEEP_PASS_REGISTRY=off fallback calls the function directly.
+  if (SWEEP_PASS_REGISTRY_ENABLED) {
+    await passRegistryModule.runPasses(passRegistryModule.EARLY_PASSES, { supabase, now, actions, warnings });
+  } else {
+    await clearStaleQfClaims(supabase, now, actions, warnings);
+  }
+
+  // QF-20260704-545: same early-exit-gap discipline -- cancel leaked SD-TEST-* fixtures
+  // before the early-return below, so they're reaped even with zero active sessions.
+  await cancelStaleTestFixtures(supabase, now, actions, warnings);
+
+  // QF-20260703-076: session-independent dormancy watchdog -- prior backstops run INSIDE
+  // a turn and can't observe a worker whose armed wakeup never fired. Detector-only.
+  //
+  // SD-FDBK-ENH-CONFIRMED-LIVE-TODAY-001: DORMANT BY DEFAULT, mirroring MASKED_STALL_DETECT_ON
+  // (scripts/coordinator-capacity-forecast.mjs, SD-FDBK-INFRA-STALL-AFTER-COMPLETION-001). RCA +
+  // RISK evidence (signal 12ce5796, sub_agent_execution_results 209327fa-92aa-481c-9fa7-9edb655b20dd)
+  // confirmed process_alive_at is the SOLE liveness input to detectDormantWorkers(), and on Windows
+  // process_alive_at freezes for hours when session-tick.cjs's steady-state PATCH (status=eq.active)
+  // returns 0 rows and self-exits (QF-20260509-187) -- a live, actively-working session then
+  // false-flags as dormant (confirmed live on session 4af85f4b, 2026-07-04). No consumer takes a
+  // destructive action from this signal alone, but it was generating false-positive P1
+  // fleet_dormancy feedback noise. Gated OFF until the session-tick root-cause fix (deferred to a
+  // follow-up SD -- needs new spawn-and-observe Windows test infra) restores process_alive_at
+  // trustworthiness. Flip LEO_DORMANCY_WATCHDOG_ENABLED=on to re-enable.
+  if (isDormancyWatchdogEnabled()) {
+    try {
+      const { data: allTracked } = await supabase
+        .from('claude_sessions')
+        .select('session_id, loop_state, expected_silence_until, process_alive_at')
+        .eq('status', 'active');
+      const dormant = detectDormantWorkers(allTracked || [], now.getTime());
+      const DORMANCY_ALERT_THRESHOLD = 2;
+      if (dormant.length >= DORMANCY_ALERT_THRESHOLD) {
+        const { emitFeedback } = await import('../lib/governance/emit-feedback.js');
+        const hourBucket = now.toISOString().slice(0, 13);
+        await emitFeedback({
+          supabase,
+          title: `Fleet dormancy: ${dormant.length} worker(s) armed a wakeup that never fired`,
+          description: `Dormant session_ids: ${dormant.map((d) => d.session_id).join(', ')}. Each has an elapsed expected_silence_until and a stale/absent process_alive_at -- the native ScheduleWakeup did not re-invoke the loop. See QF-20260703-076 RCA.`,
+          category: 'fleet_dormancy',
+          severity: 'high',
+          dedup_key: `dormancy:${hourBucket}`,
+        });
+      }
+    } catch (watchdogErr) {
+      if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+        console.error('[sweep] dormancy watchdog swallowed: ' + watchdogErr.message);
+      }
+    }
+  }
+
+  if (!sessions || sessions.length === 0) {
+    if (actions.length > 0) {
+      console.log('[' + now.toLocaleTimeString() + '] SWEEP: ' + actions.join('; '));
+    } else {
+      console.log('[' + now.toLocaleTimeString() + '] SWEEP: No sessions with claims. All clear.');
+    }
+    return;
+  }
+
+  // 2a. Identity collision detection (Layer 1) — run BEFORE classification
+  // so aliveMarkers are available for PID-based liveness cross-referencing.
+  const { collisions, aliveMarkers } = detectIdentityCollisions();
+
+  // Build a set of alive CC PIDs from marker files (pid-*.json + fallback-*.json).
+  // DB terminal_id formats: "win-cc-{port}-{ccPid}" (CLI) or "win-{PID}" (Desktop).
+  // Match by extracting the last segment from terminal_id and checking the alive set.
+  const aliveCcPids = new Set(aliveMarkers.map(m => String(m.pid)));
+
+  // ── SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: source-side telemetry lookup ────────
+  // Fetch process_alive_at / expected_silence_until / current_tool_expected_end_at
+  // for all session_ids in this sweep. These signals take precedence over
+  // heartbeat-based stale detection (see classification below).
+  //
+  // All signals honor a 30-minute hard cap — a worker cannot declare silence
+  // beyond that window, preventing a misconfigured hook from masking a dead
+  // worker. FR-4 (SD-LEO-INFRA-CLAIM-LIFECYCLE-HARDENING-002): this READER cap and the
+  // park-worker WRITER cap now derive from one shared constant (lib/fleet/silence-cap.cjs),
+  // so the writer can no longer arm a window the reader silently ignores.
+  // SD-ARCH-HOTSPOT-SWEEP-001 (PRD FR-2): TICK_ALIVE_WINDOW_MS is now module-level (see top
+  // of file) so the promoted evaluateSourceSideSignals() helper compiles standalone.
+  const telemetryMap = new Map();
+  try {
+    const sessionIds = sessions.map(s => s.session_id).filter(Boolean);
+    if (sessionIds.length > 0) {
+      const { data: telemetryRows } = await supabase
+        .from('claude_sessions')
+        // worktree_path: not exposed by v_active_sessions -- needed for the QF-20260704-081
+        // HEADLESS_ZOMBIE discriminator (fresh heartbeat + terminal_id/tty/worktree_path all null).
+        // last_tool_at/claimed_at/metadata: SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001 probe inputs
+        // (tick-immune tool clock, boundary anchor, quarantine flag read-modify-write).
+        .select('session_id,process_alive_at,expected_silence_until,current_tool,current_tool_expected_end_at,last_activity_kind,worktree_path,last_tool_at,claimed_at,metadata')
+        .in('session_id', sessionIds);
+      for (const row of telemetryRows || []) {
+        telemetryMap.set(row.session_id, row);
+      }
+    }
+  } catch (teleErr) {
+    // Graceful degradation — if the 8 new columns aren't present yet (pre-
+    // migration clone), fall through to heartbeat-only logic.
+    if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+      console.error('[sweep] telemetry fetch swallowed: ' + teleErr.message);
+    }
+  }
+
+  // SD-ARCH-HOTSPOT-SWEEP-001 (PRD FR-2): now module-level evaluateSourceSideSignals
+  // (see top of file) — call site updated to pass telemetryMap explicitly.
+
+  // 2. Classify each session
+  // Primary signal: heartbeat age. Secondary signal: PID marker liveness.
+  // A session with a stale heartbeat but a living PID is likely loading context
+  // or between tool calls (heartbeat fires on PostToolUse only).
+  const VERY_STALE_SECONDS = STALE_THRESHOLD_SECONDS * 3; // 15min = definitely dead
+  // SD-LEO-INFRA-PARALLEL-AGENT-QUEUE-001: Virtual drain sessions use shorter thresholds
+  const VIRTUAL_STALE_THRESHOLD = 180; // 3 minutes for virtual drain agents
+  const VIRTUAL_VERY_STALE = VIRTUAL_STALE_THRESHOLD * 2; // 6 minutes = definitely dead
+  // SD-REFILL-00NFWJ6M: computed ONCE — gates the hard-cap pid-alive OS-truth fallback below.
+  const claudeProcRunningHost = anyClaudeProcessRunning();
+  const classified = sessions.map(s => {
+    const threshold = s.is_virtual ? VIRTUAL_STALE_THRESHOLD : STALE_THRESHOLD_SECONDS;
+    const veryStaleThreshold = s.is_virtual ? VIRTUAL_VERY_STALE : VERY_STALE_SECONDS;
+    const isStale = s.heartbeat_age_seconds > threshold;
+    const isVeryStale = s.heartbeat_age_seconds > veryStaleThreshold;
+
+    // Cross-reference with PID marker files: if the CC process is alive on this
+    // machine, the session is running even without recent heartbeats.
+    // terminal_id formats:
+    //   1. "win-cc-{port}-{ccPid}" (CLI, e.g. win-cc-13596-22408 → PID 22408)
+    //   2. "win-{ccPid}"           (Desktop, e.g. win-13596 → PID 13596)
+    //   3. UUID                    (resolve PID via .claude/session-identity/pid-*.json cc_pid)
+    // SD-LEO-INFRA-SESSION-IDENTITY-RECONCILIATION-001 (FR-3): explicit dispatch.
+    // Required because FR-4 deletes dead pid-*.json markers more aggressively;
+    // sweep needs deterministic PID resolution from a stable secondary source rather
+    // than naive last-segment-of-hyphen-split (which silently mis-classified UUID-format
+    // terminal_ids as having last-segment hex chars instead of a real PID).
+    let hasPidAlive = false;
+    if (s.terminal_id) {
+      const ccPid = resolveCcPidFromTerminalId(s.terminal_id, s.session_id);
+      if (ccPid != null) {
+        hasPidAlive = aliveCcPids.has(String(ccPid));
+        // SD-REFILL-00NFWJ6M: marker-vs-OS divergence — FR-4 deletes a live worker's pid-*.json
+        // marker aggressively, so a MISSING marker is NOT proof of death. A live worker deep in a
+        // >20min sub-agent run (no mid-Task heartbeat) was hard-cap-released because the marker set
+        // missed its still-running PID. Fall back to OS process truth when the marker set misses,
+        // GATED on a claude.exe existing on this host (guards PID-recycling false-holds: no claude.exe
+        // → a "live" PID is a recycled non-CC process). isProcessRunning uses process.kill(pid,0).
+        if (!hasPidAlive && claudeProcRunningHost && isProcessRunning(Number(ccPid))) {
+          hasPidAlive = true;
+        }
+      }
+    }
+
+    // Desktop sessions use heuristic liveness (claude.exe running + recent marker).
+    // Cap the protection: if heartbeat is >30 min stale, treat as dead even with
+    // a "live" marker — the specific session has likely exited while claude.exe
+    // continues running for other sessions.
+    const DESKTOP_DEAD_CAP_SECONDS = 1800; // 30 minutes
+    const isDesktopSession = s.terminal_id && /^win-\d+$/.test(s.terminal_id);
+    const exceedsDesktopCap = isDesktopSession && s.heartbeat_age_seconds > DESKTOP_DEAD_CAP_SECONDS;
+
+    // SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: source-side signals FIRST.
+    const sourceSide = evaluateSourceSideSignals(telemetryMap, s.session_id, now.getTime());
+
+    let status;
+    if (sourceSide && sourceSide.alive) {
+      status = 'ALIVE_SOURCE_SIDE';
+    } else if (!isStale) {
+      status = 'ACTIVE';
+    } else if (hasPidAlive && !exceedsDesktopCap) {
+      // PID is alive but heartbeat is stale — session is loading context,
+      // compacting, or between tool calls. NOT stale.
+      status = 'ALIVE_NO_HEARTBEAT';
+    } else if (isVeryStale || exceedsDesktopCap) {
+      status = 'DEAD'; // No heartbeat for 15min+ (CLI) or 30min+ (Desktop) AND no living PID
+    } else {
+      status = 'STALE_UNKNOWN'; // Between 5-15min, no PID match = might be on another host
+    }
+
+    // QF-20260704-081: a session with a fresh heartbeat (never ages into DEAD via the
+    // staleness path above) but terminal_id, tty, AND worktree_path ALL null for 15min+ is a
+    // binding signature no real windowed session has -- its parked loop keeps
+    // heartbeating/rescheduling while the window itself is gone (confirmed specimen: PID 23348
+    // survived windowless 14.7h holding a claim). Detected here, released below -- never auto-kill
+    // the OS process; surfaced for a coordinator kill decision.
+    if (status === 'ACTIVE' && isHeadlessZombie(s, telemetryMap.get(s.session_id), now.getTime())) {
+      status = 'HEADLESS_ZOMBIE';
+    }
+
+    return {
+      ...s,
+      isStale: isStale && !hasPidAlive && !(sourceSide && sourceSide.alive),
+      status,
+      sourceSideReason: sourceSide?.reason || null,
+      hasPidAlive, // QF-20260426-SWEEP-HARDCAP-PIDALIVE: preserve for hard-cap guard
+    };
+  });
+  // SD-ARCH-HOTSPOT-SWEEP-001: shared ctx bag for MAIN_PASSES (lib/sweep/pass-registry.cjs).
+  // Built once here (right after classification) and reused at each later registry
+  // call site in main() — same actions/warnings/collisionsDetected arrays, mutated
+  // in place, so every pass's pushes are visible in the final sweep report.
+  const sweepPassCtx = {
+    supabase, now, classified, telemetryMap, actions, warnings, collisions, collisionsDetected,
+  };
+  if (SWEEP_PASS_REGISTRY_ENABLED) {
+    // identity-collision-split + claim-boundary-probe grouped here (both originally
+    // ran before dispatchWorkAssignmentsIfAllowed at line ~2434 — verified neither
+    // depends on HEADLESS_ZOMBIE release below, and claim-boundary-probe's live
+    // pre-release re-read makes any interleaving with headless-zombie idempotent-safe).
+    await passRegistryModule.runPasses([passRegistryModule.MAIN_PASSES[0], passRegistryModule.MAIN_PASSES[1]], sweepPassCtx);
+  } else if (collisions.length > 0) {
+    await splitCollidingSessions(supabase, collisions, actions, warnings);
+  }
+
+  // 2b-2. QF-20260704-081: release HEADLESS_ZOMBIE claims. Verify PID, release the claim, mark
+  // released -- NEVER auto-kill the OS process; surface via session_coordination so a coordinator
+  // makes the kill decision (the process may be doing unrelated harmless work post-window-death).
+  const headlessZombies = classified.filter(s => s.status === 'HEADLESS_ZOMBIE');
+  for (const s of headlessZombies) {
+    const pidLive = s.pid ? isProcessRunning(Number(s.pid)) : false;
+    // QF-20260508-230: ck_claude_sessions_worktree_state_consistency requires sd_key IS NOT NULL
+    // OR (worktree_path IS NULL AND worktree_branch IS NULL) -- every release site must clear both.
+    await supabase.from('claude_sessions').update({
+      sd_key: null, status: 'released', released_at: now.toISOString(), released_reason: 'SWEEP_HEADLESS_ZOMBIE',
+      worktree_path: null, worktree_branch: null, has_uncommitted_changes: false, current_branch: null,
+    }).eq('session_id', s.session_id);
+    actions.push('HEADLESS_ZOMBIE: released ' + s.session_id + ' (sd=' + (s.sd_key || 'none') + ', pid=' + s.pid + ', pid_live=' + pidLive + ')');
+    await supabase.from('session_coordination').insert({
+      message_type: 'INFO',
+      subject: 'HEADLESS_ZOMBIE released: ' + s.session_id,
+      body: 'Fresh heartbeat but terminal_id/tty/worktree_path all null for 15min+ -- claim released. pid=' + s.pid + ' live=' + pidLive + '. Verify and kill the OS process if still live and truly orphaned.',
+      sender_type: 'sweep',
+      payload: { kind: 'headless_zombie_released', session_id: s.session_id, pid: s.pid, pid_live: pidLive },
+    });
+  }
+
+  // 2b-3. SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001: claim-boundary pre-flight probe.
+  // Runs on EVERY claimed session regardless of classified status — the freeze class
+  // has a FRESH heartbeat (status=ACTIVE) and a live PID, so neither the staleness
+  // path nor the dead-release loop can ever catch it. Precedence (declared silence,
+  // in-flight tool) is honored INSIDE the predicate; process_alive_at is deliberately
+  // not consulted (the tick lies through a prompt block).
+  // SD-ARCH-HOTSPOT-SWEEP-001: now dispatched via the MAIN_PASSES registry call above
+  // (grouped with identity-collision-split); SWEEP_PASS_REGISTRY=off fallback here.
+  if (!SWEEP_PASS_REGISTRY_ENABLED) {
+    try {
+      await runClaimBoundaryProbe(supabase, classified, telemetryMap, now, actions, warnings);
+    } catch (cbErr) {
+      warnings.push('CLAIM_BOUNDARY_PROBE: pass swallowed: ' + (cbErr?.message || cbErr));
+    }
+  }
+
+  // 2c. npm install lock cleanup (Layer 3)
+  const npmLock = checkNpmInstallLock();
+  if (npmLock.stale_removed) {
+    actions.push('NPM_LOCK: removed stale install lock (PID ' + npmLock.stale_pid + ' — expired)');
+  }
+  if (npmLock.dead_removed) {
+    actions.push('NPM_LOCK: removed dead install lock (PID ' + npmLock.dead_pid + ' — process gone)');
+  }
+  if (npmLock.locked) {
+    warnings.push('NPM_LOCK: active install lock held by PID ' + npmLock.holder_pid + ' (' + npmLock.age_seconds + 's)');
+  }
+
+  // 3. Detect conflicts (multiple sessions claiming same SD)
+  // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001 (adversarial review): exclude FIXTURE sessions from conflict
+  // keeper selection. The conflict loop picks the freshest-heartbeat session as keeper and EVICTS the
+  // rest; without this, a fixture sharing an sd_key with a real worker (the fd018627 condition) could
+  // win keeper and bounce the real worker BEFORE the CLAIM_FIX fixture guard (further below) releases
+  // the fixture. Fixtures never participate in keeper selection; they are bilaterally released later.
+  const { isFixtureSession } = await import('../lib/fleet/session-predicates.mjs');
+  const bySD = {};
+  classified.forEach(s => {
+    if (isFixtureSession(s.session_id)) return; // fixture: never a conflict keeper/evictor
+    if (!bySD[s.sd_key]) bySD[s.sd_key] = [];
+    bySD[s.sd_key].push(s);
+  });
+
+  const conflicts = Object.entries(bySD).filter(([, arr]) => arr.length > 1);
+
+  // 3b-3d + FIX #2. QA claim-safety: completed/cancelled-SD release, orphaned claims,
+  // stuck pending_approval, terminal-claim clear. SD-ARCH-HOTSPOT-SWEEP-001: extracted
+  // to runQaFixtureScan() (top-level function above main(), this file) to shrink main().
+  await runQaFixtureScan(sweepPassCtx);
 
   // QF-20260525-211: the QF stale-claim clear formerly inlined here now runs via
   // clearStaleQfClaims() before the early-return above, so it executes on every sweep
@@ -1888,36 +2177,13 @@ async function main() {
 
   // 4a-2. SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2 — INTENT collision detection.
   // ADDITIVE to the dup-claim (step 3) and WORKTREE_CONFLICT (4a) logic above — those are
-  // unchanged. This reads broadcast INTENT rows (payload.intent_action) and flags when a
-  // destructive intent (e.g. cancel-tree) targets an SD/branch/files a DIFFERENT live
-  // session is actively holding. Runs AFTER classification so it can use classified[].
-  // Surfaces collisions as a real return value (sweepResult.collisions) AND prominent
-  // stdout — never a silently-swallowed console-only warning. Gated by DECONFLICTION_ENABLED.
-  if (DECONFLICTION_ENABLED) {
-    try {
-      const { rows: intentRows, error: intentErr } = await loadRecentIntents(supabase, INTENT_WINDOW_MIN);
-      if (intentErr) {
-        console.log('INTENT_COLLISION: load error=' + (intentErr.message || 'unknown'));
-      } else {
-        const found = detectCrossSessionCollisions(classified, intentRows);
-        collisionsDetected.push(...found);
-        if (found.length > 0) {
-          console.log('');
-          console.log('!!! CROSS-SESSION INTENT COLLISION(S): ' + found.length + ' !!!');
-          for (const c of found) {
-            const line = 'INTENT_COLLISION: ' + c.intent_action +
-              ' from ' + (c.sender_session || '?') +
-              ' targets ' + (c.target_sd_key || c.target_tree || '?') +
-              ' — collides with live session ' + c.collided_with_session +
-              ' (' + c.reasons.join(', ') + ')';
-            console.log('  ' + line);
-            warnings.push(line);
-          }
-        }
-      }
-    } catch (collErr) {
-      console.log('INTENT_COLLISION: ' + (collErr && collErr.message ? collErr.message : 'unknown'));
-    }
+  // unchanged. Gated by DECONFLICTION_ENABLED inside the pass itself.
+  // SD-ARCH-HOTSPOT-SWEEP-001: dispatched via the MAIN_PASSES registry;
+  // SWEEP_PASS_REGISTRY=off fallback preserves the original inline block.
+  if (SWEEP_PASS_REGISTRY_ENABLED) {
+    await passRegistryModule.runPasses([passRegistryModule.MAIN_PASSES[2]], sweepPassCtx);
+  } else {
+    await legacyFallback.runIntentCollisionLegacy(sweepPassCtx);
   }
 
   // 4b. Struggling worker detection (SD-MAN-INFRA-WORKER-WORKTREE-SELF-001)
@@ -2300,36 +2566,17 @@ async function main() {
   try { await supabase.rpc('cleanup_expired_coordination'); } catch { /* ignore */ }
 
   // FIX #3 — REWORKED by FR-4 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): coordination
-  // messages targeting dead/gone sessions are DEAD-LETTERED, never hard-DELETEd. The old
-  // delete made undelivered traffic vanish tracelessly (the 'CLEANUP: deleted N unread...'
-  // path). Now (mirroring the :WORK_ASSIGNMENT read_at-drain precedent below): stamp
-  // payload.dead_letter=true + dead_letter_at/reason/original_target, stamp read_at (drops
-  // the row out of every unread selector), and backfill expires_at=now+7d when NULL so the
-  // cleanup_expired_coordination RPC reaps the audit trail after a week. Surfaced by the
-  // coordinator inbox 'DEAD-LETTERED (24h)' section (scripts/fleet-dashboard.cjs).
-  // Eligibility is unchanged from QF-20260426-SWEEP-MSG-NUKE: (a) UUID-shaped target,
-  // (b) target DEAD or gone, (c) past expires_at if set. Selection is the pure
-  // planDeadLetters() (exported for tests).
-  const allSessionIds = new Set(classified.map(s => s.session_id));
-  const deadIds = new Set(classified.filter(s => s.status === 'DEAD').map(s => s.session_id));
+  // messages targeting dead/gone sessions are DEAD-LETTERED, never hard-DELETEd. Selection
+  // is the pure planDeadLetters() (exported for tests).
+  // SD-ARCH-HOTSPOT-SWEEP-001: dispatched via the MAIN_PASSES registry;
+  // SWEEP_PASS_REGISTRY=off fallback preserves the original inline block. `nowMs` stays
+  // declared here (not inside the pass) — subsequent inline code below (WORK_ASSIGNMENT
+  // terminal-drain, STUCK auto-signal drain) still reads this exact variable.
   const nowMs = Date.now();
-
-  const { data: unreadMsgs } = await supabase
-    .from('session_coordination')
-    .select('id, target_session, message_type, payload, expires_at')
-    .is('acknowledged_at', null)
-    .is('read_at', null);
-
-  const deadLetterPlan = planDeadLetters(unreadMsgs, { allSessionIds, deadIds }, nowMs);
-  if (deadLetterPlan.length > 0) {
-    // Per-row UPDATE (payload merge differs per row); chunked pacing of 50 retained.
-    for (let i = 0; i < deadLetterPlan.length; i += 50) {
-      const batch = deadLetterPlan.slice(i, i + 50);
-      for (const dl of batch) {
-        await supabase.from('session_coordination').update(dl.update).eq('id', dl.id);
-      }
-    }
-    actions.push('CLEANUP: dead-lettered ' + deadLetterPlan.length + ' unread coordination messages targeting dead/gone sessions (payload.dead_letter=true, audit retained)');
+  if (SWEEP_PASS_REGISTRY_ENABLED) {
+    await passRegistryModule.runPasses([passRegistryModule.MAIN_PASSES[3]], sweepPassCtx);
+  } else {
+    await legacyFallback.runDeadLetterLegacy({ ...sweepPassCtx, nowMs });
   }
 
   // FR-1 (SD-LEO-FIX-STALE-SESSION-SWEEP-001): drain WORK_ASSIGNMENT rows whose target SD/QF has
@@ -2710,261 +2957,23 @@ async function main() {
     console.log('COORDINATOR FLAG CLEANUP: ' + (coordErr && coordErr.message ? coordErr.message : 'unknown'));
   }
 
-  // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3b — aggregate worker signals into
-  // harness-backlog feedback rows. Idempotent (signal_fingerprint dedup).
-  // Best-effort — failure does not abort sweep.
-  try {
-    const router = _signalRouterModule;
-    const result = await router.aggregateSignals(supabase);
-    if (result.error) {
-      console.log('SIGNAL ROUTER: error=' + result.error.message);
-    } else if (result.promoted > 0 || result.skipped > 0) {
-      console.log('SIGNAL ROUTER: promoted=' + result.promoted + ' skipped=' + result.skipped);
-      for (const row of (result.promotedRows || [])) {
-        console.log('  HARNESS_BACKLOG_CREATED: feedback_id=' + row.feedback_id + ' type=' + row.signal_type + ' callsigns=' + row.callsigns.join(',') + ' count=' + row.signal_count);
-      }
-    }
-  } catch (routerErr) {
-    console.log('SIGNAL ROUTER: ' + (routerErr && routerErr.message ? routerErr.message : 'unknown'));
+  // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3b — signal-router aggregation +
+  // SD-LEO-INFRA-COORDINATION-OBSERVABILITY-ANOMALY-001 anomaly detectors +
+  // SD-LEO-INFRA-SURFACE-INERT-WORKER-001 inert-worker surfacing +
+  // QF-20260705-817 completion-boundary silent-exit surfacing.
+  // SD-ARCH-HOTSPOT-SWEEP-001: dispatched via the MAIN_PASSES registry;
+  // SWEEP_PASS_REGISTRY=off fallback preserves the original 4 inline blocks.
+  if (SWEEP_PASS_REGISTRY_ENABLED) {
+    await passRegistryModule.runPasses([passRegistryModule.MAIN_PASSES[4]], sweepPassCtx);
+  } else {
+    await legacyFallback.runCoordinationDetectorsLegacy(sweepPassCtx);
   }
 
-  // SD-LEO-INFRA-COORDINATION-OBSERVABILITY-ANOMALY-001 (epic #4) — coordination
-  // anomaly detectors. DEFAULT-OFF behind COORD_DETECTORS_V2. READ-ONLY over claim
-  // state + fail-open: a failure here never aborts the sweep. Logs a structured
-  // coordination_events row per match (consumed later by epic #3). Fully inert
-  // (zero reads/writes) when the flag is off.
-  try {
-    const coordEvents = _coordEventsModule;
-    if (coordEvents.coordDetectorsEnabled()) {
-      const coordInputs = await coordEvents.gatherDetectorInputs(supabase, {});
-      const coordMatches = await coordEvents.runAndLogDetectors(supabase, coordInputs);
-      for (const m of coordMatches) {
-        console.log('  COORD_DETECTOR: ' + m.event_type + ' [' + m.severity + '] ' + m.reason + (m.logged ? '' : ' (event-log-failed)'));
-      }
-      if (coordMatches.length > 0) console.log('COORD_DETECTORS: ' + coordMatches.length + ' anomaly event(s) flagged');
-    }
-  } catch (coordDetErr) {
-    console.log('COORD_DETECTORS: ' + (coordDetErr && coordDetErr.message ? coordDetErr.message : 'unknown'));
-  }
-
-  // SD-LEO-INFRA-SURFACE-INERT-WORKER-001 — surface INERT worker-revival to the
-  // operator. DEFAULT-OFF behind SURFACE_INERT_WORKER_V1, READ-ONLY over
-  // worker_spawn_requests, fail-open. Emits ONE de-duped operator alert (carrying
-  // a paste-able fleet-worker /loop prompt) when pending spawn requests age past
-  // threshold with no spawn-executor consuming them. Fully inert when flag off.
-  try {
-    const inert = await _coordEventsModule.runInertWorkerSurfacing(supabase, {});
-    if (inert && inert.matched) {
-      const a = inert.alert || {};
-      const tail = a.skipped ? ' (alert deduped)' : a.ok ? ' - operator alert emitted' : ' (alert emit failed)';
-      console.log('  INERT_WORKER: ' + inert.aged_count + ' aged unconsumed spawn request(s)' + tail);
-    }
-  } catch (inertErr) {
-    console.log('INERT_WORKER: ' + (inertErr && inertErr.message ? inertErr.message : 'unknown'));
-  }
-
-  // QF-20260705-817 — completion-boundary silent-exit surfacing. DEFAULT-OFF behind
-  // SURFACE_COMPLETION_BOUNDARY_EXIT_V1, READ-ONLY, fail-open. Emits ONE de-duped operator
-  // alert (carrying the same paste-able /loop prompt as INERT_WORKER) when a worker's loop
-  // exited right after completing a phase/SD while unclaimed work waits. Fully inert when flag off.
-  try {
-    const exitSurf = await _coordEventsModule.runCompletionBoundaryExitSurfacing(supabase, {});
-    if (exitSurf && exitSurf.matched) {
-      const a = exitSurf.alert || {};
-      const tail = a.skipped ? ' (alert deduped)' : a.ok ? ' - operator alert emitted' : ' (alert emit failed)';
-      console.log('  COMPLETION_BOUNDARY_EXIT: ' + exitSurf.exited_count + ' worker(s) silent-exited post-completion' + tail);
-    }
-  } catch (exitErr) {
-    console.log('COMPLETION_BOUNDARY_EXIT: ' + (exitErr && exitErr.message ? exitErr.message : 'unknown'));
-  }
-
-  // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4d — SIGNAL_RESOLVED notification.
-  // For each contributing signal where payload.routed_to_sd_key is non-null AND the SD
-  // status is 'completed' AND payload.notification_sent is not yet true, look up
-  // sender_callsign's current_session_id (heartbeat <10min) and send SIGNAL_RESOLVED.
-  // Drops silently when callsign no longer maps to a live session. Sets
-  // payload.notification_sent=true to prevent re-send.
-  try {
-    const { data: candidates } = await supabase
-      .from('session_coordination')
-      .select('id, payload, body')
-      .not('payload->>routed_to_sd_key', 'is', null)
-      .neq('payload->>notification_sent', 'true')
-      .limit(50);
-
-    let notified = 0;
-    let dropped = 0;
-    for (const sig of candidates || []) {
-      const sdKey = sig.payload?.routed_to_sd_key;
-      const callsign = sig.payload?.sender_callsign;
-      if (!sdKey || !callsign) continue;
-
-      // Verify SD is completed.
-      const { data: sdRow } = await supabase
-        .from('strategic_directives_v2')
-        .select('sd_key, status')
-        .eq('sd_key', sdKey)
-        .maybeSingle();
-      if (!sdRow || sdRow.status !== 'completed') continue;
-
-      // Resolve callsign → current live session_id.
-      const liveCutoff = new Date(Date.now() - 10 * 60_000).toISOString();
-      const { data: live } = await supabase
-        .from('claude_sessions')
-        .select('session_id, metadata')
-        .gte('heartbeat_at', liveCutoff)
-        .filter('metadata->>fleet_identity', 'not.is', null);
-      const owner = (live || []).find(s => s.metadata?.fleet_identity?.callsign === callsign);
-
-      if (!owner) {
-        // Mark notification_sent=true with a "dropped" flag so we don't retry forever.
-        const merged = { ...(sig.payload || {}), notification_sent: true, signal_resolved_dropped: true };
-        await supabase.from('session_coordination').update({ payload: merged }).eq('id', sig.id);
-        dropped++;
-        continue;
-      }
-
-      // Send SIGNAL_RESOLVED to owner.
-      await supabase.from('session_coordination').insert({
-        sender_session: null,
-        sender_type: 'coordinator',
-        target_session: owner.session_id,
-        message_type: 'INFO',
-        subject: `[SIGNAL_RESOLVED] ${sig.payload?.signal_type || 'signal'} → ${sdKey}`,
-        body: `Your earlier signal (\"${(sig.body || '').slice(0, 200)}\") contributed to SD ${sdKey}, which is now completed.`,
-        payload: {
-          signal_resolved: true,
-          signal_type: sig.payload?.signal_type,
-          original_body: (sig.body || '').slice(0, 500),
-          resulting_sd_key: sdKey,
-          original_signal_id: sig.id
-        },
-        expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString()
-      });
-
-      // Mark sent.
-      const merged = { ...(sig.payload || {}), notification_sent: true };
-      await supabase.from('session_coordination').update({ payload: merged }).eq('id', sig.id);
-      notified++;
-    }
-    if (notified > 0 || dropped > 0) {
-      console.log('SIGNAL_RESOLVED: notified=' + notified + ' dropped=' + dropped);
-    }
-  } catch (resolvedErr) {
-    console.log('SIGNAL_RESOLVED: ' + (resolvedErr && resolvedErr.message ? resolvedErr.message : 'unknown'));
-  }
-
-  // SD-LEO-INFRA-COORDINATOR-PENDING-QUESTION-001 — pending-question timer /
-  // default-proceed. For an OPEN operator_question (category='operator_question',
-  // status='new') that is NON-CRITICAL and unanswered past the timeout, auto-
-  // proceed on the coordinator's recommended option and mark it resolved with an
-  // auto_proceeded marker + audit note (FR-001, idempotent). Every still-open
-  // question is re-surfaced each tick (FR-002 — the existing email path renders
-  // status='new' rows; this just reports the live count). CRITICAL-category
-  // questions NEVER auto-proceed (FR-003). DEFAULT-OFF behind
-  // COORD_QUESTION_AUTO_PROCEED_V1; READ-ONLY + fail-open when the flag is off
-  // (aged non-critical questions resurface instead of auto-proceeding).
-  try {
-    const pq = await _pendingQuestionTimer.planAndApplyPendingQuestions(supabase, {});
-    const stillOpen = pq.resurfaced + pq.hardWaited; // open questions kept visible this tick
-    if (pq.autoProceeded > 0 || stillOpen > 0) {
-      console.log(
-        '  PENDING_QUESTION: auto-proceeded=' + pq.autoProceeded +
-        ' resurfaced=' + pq.resurfaced + ' hard-wait=' + pq.hardWaited +
-        ' skipped=' + pq.skipped + (pq.enabled ? '' : ' (auto-proceed flag OFF)')
-      );
-    }
-  } catch (pqErr) {
-    console.log('PENDING_QUESTION: ' + (pqErr && pqErr.message ? pqErr.message : 'unknown'));
-  }
-
-  // SD-LEO-INFRA-ADAM-COORDINATOR-ACTION-001 — Adam->coordinator action-required
-  // two-stage ACK + wake/SLA escalation. The sweep-set read_at marks an action
-  // handoff DELIVERED (transport), NOT actioned; an action-required handoff stays
-  // pending-action until the coordinator agent records a genuine second-stage ACK
-  // (payload.actioned_at). When such a handoff is DELIVERED but un-actioned past
-  // the SLA, emit a wake/action-required alert targeting the coordinator so the
-  // parked coordinator is woken into an active cycle (FR-002), and stamp
-  // payload.escalated_at on the original row so escalation is idempotent (no spam).
-  // Informational (unflagged) rows are never tracked (FR-003). DEFAULT-OFF behind
-  // COORD_ADAM_ACTION_ACK_V1; READ-ONLY + fail-open when the flag is off (aged
-  // un-actioned handoffs stay 'pending' instead of escalating). SLA configurable
-  // via COORD_ADAM_ACTION_SLA_MIN.
-  try {
-    const aa = await _adamActionAck.planAndApplyAdamActionAcks(supabase, {});
-    if (aa.escalated > 0 || aa.pending > 0 || aa.done > 0) {
-      console.log(
-        '  ADAM_ACTION_ACK: escalated=' + aa.escalated +
-        ' pending=' + aa.pending + ' done=' + aa.done +
-        (aa.enabled ? '' : ' (escalation flag OFF)')
-      );
-    }
-  } catch (aaErr) {
-    console.log('ADAM_ACTION_ACK: ' + (aaErr && aaErr.message ? aaErr.message : 'unknown'));
-  }
-
-  // SD-LEO-INFRA-GOVERNANCE-ROLE-ADHERENCE-DBVALIDATION-001 (FR-2): run the CARDINAL Adam adherence
-  // probes at ACTION-TIME (per sweep tick) — not only the 6h retrospective audit — and record a
-  // DB-validated verdict to adam_adherence_ledger ONLY on a verdict transition (dedupe-on-change).
-  // Flag-gated (ADAM_ACTION_TIME_ADHERENCE_V1=on; default-OFF), FAIL-OPEN, WARN-only: it can NEVER
-  // block the sweep. Both modules are ESM, so dynamic-import them from this CJS sweep.
-  try {
-    const [{ recordActionTimeAdherence, isActionTimeAdherenceEnabled }, { recordAdherence }] = await Promise.all([
-      import('../lib/adam/action-time-adherence.mjs'),
-      import('./adam-self-adherence-review.mjs'),
-    ]);
-    if (isActionTimeAdherenceEnabled()) {
-      // The sweep tick's action-time check resolves the ADVISORY-BOUNDARY (D2) fact (the latest
-      // advisory body) — that is the pre-send boundary self-check. The belt-starvation (D1) and
-      // propose-only facts (claimableBelt/idleWorkers/adamAuthoredBuildsInWindow) are NOT cheaply
-      // available here, so those probes honestly degrade to 'unknown' in this path (never a silent
-      // pass). D1 belt-starvation is fully evaluated where belt/idle live: the 6h retrospective audit
-      // (adam-self-adherence-review) and the coordinator charter-audit's SOURCE-TO-CAPACITY detector.
-      let sourceableBacklogCount = null;
-      try {
-        const { sourceableBacklog } = await import('./lib/sourceable-backlog.mjs');
-        const { data: bl } = await supabase.from('feedback')
-          .select('id, status, title, metadata')
-          .eq('category', 'harness_backlog').in('status', ['open', 'new', 'backlog']);
-        sourceableBacklogCount = Array.isArray(bl) ? sourceableBacklog(bl).length : null;
-      } catch { /* unresolved → probe returns unknown (fail-loud) */ }
-      let advisoryBody = null;
-      try {
-        const { data: adv } = await supabase.from('chairman_decisions')
-          .select('decision').order('created_at', { ascending: false }).limit(1);
-        if (adv && adv[0]) advisoryBody = String(adv[0].decision || '');
-      } catch { /* unresolved → D2 unknown */ }
-      const facts = { sourceableBacklogCount, advisoryBody };
-      const res = await recordActionTimeAdherence({ supabase, facts, recordAdherence });
-      if (res && res.recorded > 0) console.log('  ADAM_ACTION_TIME_ADHERENCE: recorded ' + res.recorded + ' verdict transition(s)');
-    }
-  } catch (atErr) {
-    console.log('ADAM_ACTION_TIME_ADHERENCE: ' + (atErr && atErr.message ? atErr.message : 'unknown') + ' (fail-open)');
-  }
-
-  // SD-LEO-INFRA-ADD-PART-MUTUAL-001 — 3-part mutual self-ID handshake housekeeping.
-  // The reactive RESPONDER self-heal (a coordinator replying + re-registering its
-  // is_coordinator flag) runs in COORDINATOR context (coordinator-comms-check.mjs); the
-  // sweep is not a session, so it runs the handshake tick as a non-coordinator (selfRole
-  // 'sweep', selfIsCoordinator=false) — driving only the INITIATOR-confirm / idempotency
-  // housekeeping and giving WIRE_CHECK a reachable entry point. DEFAULT-OFF behind
-  // COORD_SELF_ID_V1; fully inert (zero writes) when the flag is off; fail-open.
-  try {
-    const sid = await _selfIdHandshake.planAndApplySelfIdHandshake(supabase, {
-      selfSessionId: 'sweep',
-      selfRole: 'sweep',
-      selfIsCoordinator: false,
-    });
-    if (sid.replied > 0 || sid.confirmed > 0 || sid.registered > 0) {
-      console.log(
-        '  SELF_ID_HANDSHAKE: replied=' + sid.replied +
-        ' confirmed=' + sid.confirmed + ' registered=' + sid.registered +
-        (sid.enabled ? '' : ' (flag OFF)'),
-      );
-    }
-  } catch (sidErr) {
-    console.log('SELF_ID_HANDSHAKE: ' + (sidErr && sidErr.message ? sidErr.message : 'unknown'));
-  }
+  // SD-ARCH-HOTSPOT-SWEEP-001: SIGNAL_RESOLVED notification, pending-question
+  // auto-proceed, Adam-action ACK escalation, CARDINAL adherence probes, and the 3-part
+  // self-ID handshake tick — extracted to runCoordinatorHousekeeping() (top-level
+  // function above main(), this file) to shrink main().
+  await runCoordinatorHousekeeping({ supabase });
 
   console.log('=== SWEEP COMPLETE ===');
 
@@ -3047,10 +3056,19 @@ module.exports.isSweepResetAllowed = isSweepResetAllowed;
 module.exports.isDormancyWatchdogEnabled = isDormancyWatchdogEnabled; // SD-FDBK-ENH-CONFIRMED-LIVE-TODAY-001
 module.exports.isHeadlessZombie = isHeadlessZombie; // QF-20260704-081
 module.exports.HEADLESS_ZOMBIE_MIN_MS = HEADLESS_ZOMBIE_MIN_MS; // QF-20260704-081
+// SD-ARCH-HOTSPOT-SWEEP-001 (PRD FR-2 / TS-3): promoted classification-time helper —
+// exported so the ALIVE_SOURCE_SIDE regression test can assert it without a live sweep run.
+module.exports.evaluateSourceSideSignals = evaluateSourceSideSignals;
+module.exports.TICK_ALIVE_WINDOW_MS = TICK_ALIVE_WINDOW_MS;
 // SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001: exported so the integration test drives the real
 // detect→release→quarantine→alert loop against real tables (no mocked gate).
 module.exports.runClaimBoundaryProbe = runClaimBoundaryProbe;
 module.exports.__setExecContextGuardForTest = (mock) => { _execContextGuardCache = mock; };
+// SD-ARCH-HOTSPOT-SWEEP-001: exported so lib/sweep/passes/clear-stale-qf-claims.cjs and
+// lib/sweep/passes/identity-collision-split.cjs can delegate to the single underlying
+// implementation (no duplicate logic — see each wrapper's header comment).
+module.exports.clearStaleQfClaims = clearStaleQfClaims;
+module.exports.splitCollidingSessions = splitCollidingSessions;
 
 // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2 (Finding 3): export the guarded
 // WORK_ASSIGNMENT dispatch so the single-writer gate is unit-testable (assert NO sender_type:'sweep'
