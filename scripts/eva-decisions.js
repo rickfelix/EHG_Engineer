@@ -13,6 +13,8 @@
  *   --status <pending|approved|rejected|cancelled>   Filter by status
  *   --stage <0|10|22|25>                             Filter by stage
  *   --rationale "reason"                             Required for approve/reject
+ *   --override-kill                                  Required to approve a decision whose brief_data.decision='kill'
+ *   --override-reason "reason"                       Required (min 10 chars) with --override-kill
  *   --limit <n>                                      Max results (default 50)
  *   --json                                           Output as JSON
  *
@@ -21,6 +23,7 @@
  *   node scripts/eva-decisions.js list --status approved
  *   node scripts/eva-decisions.js view abc-123
  *   node scripts/eva-decisions.js approve abc-123 --rationale "Strong market fit"
+ *   node scripts/eva-decisions.js approve abc-123 --rationale "..." --override-kill --override-reason "chairman accepts the risk"
  *   node scripts/eva-decisions.js reject abc-123 --rationale "Insufficient traction"
  *
  * Part of SD-EVA-FEAT-CHAIRMAN-API-001
@@ -29,6 +32,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { shouldBlockKillApproval } from '../lib/eva/kill-override-guard.js';
 
 // ── Argument Parsing ──────────────────────────────────────────
 
@@ -230,6 +234,8 @@ async function viewDecision(supabase, decisionId) {
 
 async function approveDecision(supabase, decisionId) {
   const rationale = getArg('rationale');
+  const overrideKill = hasFlag('override-kill');
+  const overrideReason = getArg('override-reason');
 
   if (!decisionId) {
     console.error('Usage: eva decisions approve <decision-id> --rationale "reason"');
@@ -239,11 +245,15 @@ async function approveDecision(supabase, decisionId) {
     console.error('Error: --rationale is required for approval');
     process.exit(1);
   }
+  if (overrideKill && (!overrideReason || overrideReason.trim().length < 10)) {
+    console.error('Error: --override-reason (min 10 chars) is required when using --override-kill');
+    process.exit(1);
+  }
 
   // Check current status
   const { data: existing, error: fetchErr } = await supabase
     .from('chairman_decisions')
-    .select('id, status, venture_id, lifecycle_stage')
+    .select('id, status, venture_id, lifecycle_stage, brief_data')
     .eq('id', decisionId)
     .single();
 
@@ -257,14 +267,28 @@ async function approveDecision(supabase, decisionId) {
     process.exit(1);
   }
 
+  // SD-LEO-INFRA-VENTURE-SELECTION-DEMAND-001: a computed 'kill' verdict must never be
+  // approved silently — require an explicit, recorded override.
+  if (shouldBlockKillApproval({ briefData: existing.brief_data, overrideKill })) {
+    console.error(`\n  ❌ REFUSED: Decision ${decisionId} carries a computed 'kill' verdict (brief_data.decision='kill').`);
+    console.error('  Approving a kill verdict requires an explicit, recorded override:');
+    console.error(`    eva decisions approve ${decisionId} --rationale "..." --override-kill --override-reason "why you are overriding the kill verdict"\n`);
+    process.exit(1);
+  }
+
+  const updatePayload = {
+    status: 'approved',
+    decision: 'proceed',
+    rationale,
+    updated_at: new Date().toISOString(),
+  };
+  if (overrideKill) {
+    updatePayload.override_reason = overrideReason;
+  }
+
   const { error } = await supabase
     .from('chairman_decisions')
-    .update({
-      status: 'approved',
-      decision: 'proceed',
-      rationale,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq('id', decisionId);
 
   if (error) {
@@ -274,6 +298,9 @@ async function approveDecision(supabase, decisionId) {
 
   console.log(`\n  ✅ Decision APPROVED: ${decisionId}`);
   console.log(`  Rationale: ${rationale}`);
+  if (overrideKill) {
+    console.log(`  ⚠️  Kill-verdict override: ${overrideReason}`);
+  }
   console.log(`  Venture: ${existing.venture_id}`);
   console.log(`  Stage: ${existing.lifecycle_stage}\n`);
 }
