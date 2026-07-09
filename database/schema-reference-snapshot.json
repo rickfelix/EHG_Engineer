@@ -1,7 +1,7 @@
 {
- "generated_at": "2026-07-08T23:04:36.894Z",
+ "generated_at": "2026-07-09T22:00:11.764Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 776,
+ "table_count": 778,
  "view_count": 177,
  "tables": {
   "_migration_metadata": "{key,value}",
@@ -696,6 +696,7 @@
   "validation_audit_log": "{id,correlation_id,sd_id,sd_type,validator_name,failure_reason,artifact_id,failure_category,metadata,created_at,execution_context}",
   "validation_evidence": "{id,validation_id,evidence_type,file_path,file_name,file_size,mime_type,component_name,test_case,viewport_size,elements_found,elements_missing,accessibility_issues,performance_metrics,captured_at,created_at}",
   "validation_gate_registry": "{id,gate_key,sd_type,validation_profile,applicability,reason,created_at,updated_at}",
+  "value_authenticity_criteria_library": "{id,criterion_id,contract_version,t_form,title,description,parameter_schema,parameter_schema_notes,evidence_grade,hard_catcher,mock_distinguishing_proof,created_at,updated_at}",
   "venture_archetypes": "{id,name,description,visual_theme,is_default,icon,color,created_at,updated_at,archetype_key,detection_keywords,detection_patterns,total_ventures,graduated_count,killed_count,avg_completion_stages,common_kill_stages,common_kill_reasons,recommended_strategies,known_pitfalls,benchmark_metrics,is_active}",
   "venture_artifact_summaries": "{id,venture_id,artifact_id,artifact_type,lifecycle_stage,summary_text,tags,llm_model,token_count,source_updated_at,created_at,updated_at}",
   "venture_artifact_summaries_qparity20260610": "{id,venture_id,artifact_id,artifact_type,lifecycle_stage,summary_text,tags,llm_model,token_count,source_updated_at,created_at,updated_at}",
@@ -734,6 +735,7 @@
   "venture_persona_mapping": "{id,venture_id,persona_id,relevance_score,notes,created_by,created_at,updated_at}",
   "venture_phase_budgets": "{id,venture_id,phase_name,budget_allocated,budget_remaining,phase_started_at,phase_completed_at,created_at,updated_at}",
   "venture_postmortems": "{id,venture_id,venture_name,venture_start_date,failure_date,why_1,why_1_evidence,why_2,why_2_evidence,why_3,why_3_evidence,why_4,why_4_evidence,why_5,why_5_evidence,root_cause_summary,contributing_factors,linked_sd_ids,linked_pattern_ids,status,assigned_to,reviewed_by,review_date,created_by,updated_by,created_at,updated_at}",
+  "venture_preview_instances": "{id,venture_id,sha,fixture_id,status,url,expires_at,created_by,metadata,created_at,updated_at}",
   "venture_provisioning_state": "{venture_id,venture_name,status,state,current_step,steps_completed,error_details,retry_count,github_repo_url,registry_entry_id,conformance_score,conformance_threshold,conformance_passed,conformance_checks_total,conformance_checks_passing,conformance_failed_checks,conformance_checked_at,provisioned_at,completed_at,created_at,updated_at}",
   "venture_quality_findings": "{id,venture_id,stage_number,finding_category,severity,finding_hash,evidence_pointer,sd_key,created_at,resolved_at,status,sd_filed_at,resolved_at_v2,cancelled_at}",
   "venture_raid_summary": "{venture_id,risk_count,action_count,issue_count,decision_count,total_count,last_updated}",
