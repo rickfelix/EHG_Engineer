@@ -56,9 +56,17 @@ describe('sd-start.js cadence gate wiring', () => {
     expect(afterReassign).toMatch(/await enforceCadenceGate\s*\(\s*sd\s*,\s*effectiveId\s*\)/);
   });
 
-  it('helper imports the canonical pre-claim-gate module', () => {
-    // Drift guard: helper must read computeGateState from
-    // lib/cadence/pre-claim-gate.mjs, not a local re-implementation.
-    expect(SOURCE).toMatch(/import\(['"]\.\.\/lib\/cadence\/pre-claim-gate\.mjs['"]\)/);
+  it('helper consumes the canonical pre-claim-gate module (via the shared cadence adapter)', () => {
+    // Drift guard: computeGateState must come from lib/cadence/pre-claim-gate.mjs,
+    // not a local re-implementation. SD-ARCH-HOTSPOT-SD-START-001 FR-4 moved the
+    // consumption one hop: sd-start → lib/claim/gates/cadence-gate.cjs (shared
+    // adapter, also usable by worker-checkin) → the cadence SSOT. Pin BOTH hops
+    // so neither link can silently fork the gate-state logic.
+    expect(SOURCE).toMatch(/lib\/claim\/gates\/cadence-gate\.cjs/);
+    const adapterSrc = fs.readFileSync(
+      path.resolve(__dirname, '..', '..', 'lib', 'claim', 'gates', 'cadence-gate.cjs'),
+      'utf8',
+    );
+    expect(adapterSrc).toMatch(/import\(['"]\.\.\/\.\.\/cadence\/pre-claim-gate\.mjs['"]\)/);
   });
 });
