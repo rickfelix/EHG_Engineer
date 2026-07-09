@@ -4,10 +4,15 @@
 // Three layers must refuse claiming a finished/closed item:
 //   1. claim_sd RPC (migration)  — universal data-layer backstop (SD + QF)
 //   2. lib/claim-guard.mjs       — pre-acquire refusal + accurate terminal banner
-//   3. scripts/worker-checkin.cjs — purge a stale WORK_ASSIGNMENT whose target went terminal
+//   3. the worker check-in directed-assignment step — purge a stale WORK_ASSIGNMENT whose target went terminal
 // formatClaimFailure is exported + pure, so it gets a real functional assertion; the other two
 // layers are pinned by static source assertion (CI-runnable, no DB), matching the
 // block-claims-cancelled.test.js convention.
+//
+// SD-ARCH-HOTSPOT-CHECKIN-001: the worker-checkin resolveCheckin monolith was decomposed into an
+// ordered step pipeline (lib/checkin/steps/*). The stale-terminal-WORK_ASSIGNMENT purge rung moved
+// verbatim from scripts/worker-checkin.cjs into lib/checkin/steps/directed-assignment.cjs (wired as
+// step #7 in lib/checkin/steps/index.cjs). The pin below follows the code to its new home.
 
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
@@ -17,7 +22,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../../..');
 const guardSrc = fs.readFileSync(path.join(repoRoot, 'lib/claim-guard.mjs'), 'utf-8');
-const checkinSrc = fs.readFileSync(path.join(repoRoot, 'scripts/worker-checkin.cjs'), 'utf-8');
+const directedAssignmentSrc = fs.readFileSync(path.join(repoRoot, 'lib/checkin/steps/directed-assignment.cjs'), 'utf-8');
 const migrationPath = path.join(repoRoot, 'database/migrations/20260609_claim_sd_terminal_status_guard.sql');
 const migSrc = fs.existsSync(migrationPath) ? fs.readFileSync(migrationPath, 'utf-8') : '';
 
@@ -55,12 +60,12 @@ describe('claim-guard.mjs pre-acquire refuses completed/deferred (FAIL-OPEN, pre
   });
 });
 
-describe('worker-checkin.cjs purges a stale terminal WORK_ASSIGNMENT', () => {
+describe('directed-assignment step purges a stale terminal WORK_ASSIGNMENT', () => {
   it('checks the assigned SD status and ACKs (purges) when terminal, falling through', () => {
-    expect(checkinSrc).toMatch(/terminalStatus/);
-    expect(checkinSrc).toMatch(/\[['"]completed['"],\s*['"]cancelled['"],\s*['"]deferred['"]\]\.includes\(tgt\.status\)/);
+    expect(directedAssignmentSrc).toMatch(/terminalStatus/);
+    expect(directedAssignmentSrc).toMatch(/\[['"]completed['"],\s*['"]cancelled['"],\s*['"]deferred['"]\]\.includes\(tgt\.status\)/);
     // It ACKs the stale assignment (purge) rather than re-claiming.
-    const idx = checkinSrc.indexOf('stale_assignment_purged');
+    const idx = directedAssignmentSrc.indexOf('stale_assignment_purged');
     expect(idx).toBeGreaterThan(0);
   });
 });
