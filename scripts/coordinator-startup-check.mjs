@@ -49,18 +49,25 @@ export const RESPONSIBILITIES = [
 export const STANDARD_LOOPS = [
   { key: 'sweep',       label: 'Stale-session sweep',  script: 'stale-session-sweep.cjs',   cron: '*/5 * * * *',
     prompt: 'node scripts/stale-session-sweep.cjs' },
+  // SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: the quiet-tick cutover (docs/protocol/
+  // fleet-hibernation-quiet-tick.md). ONE self-pacing LLM tick composes the folded loops below
+  // (inbox, audit, charter-audit, capacity-forecast, backlog-rank — marked folded:true, kept in
+  // this registry for the loop-parity guard). Cron minutes offset from Adam's quiet-tick so the
+  // two parties never co-fire. The tick itself parks 180–900s via ScheduleWakeup between fires.
+  { key: 'quiet-tick', label: 'Coordinator quiet-tick (folds inbox+audit+charter-audit+capacity-forecast+backlog-rank)', script: 'coordinator-quiet-tick.mjs', cron: '0,15,30,45 * * * *',
+    prompt: 'Run `node scripts/coordinator-quiet-tick.mjs`. It prints ONE QUIET_TICK summary line and self-paces. If the output contains NO QUIET_TICK_PING / QUIET_TICK_STALL_ALERT / QUIET_TICK_OUTBOUND_PROBE / QUIET_TICK_ERROR lines, this turn is a NO-OP: arm ScheduleWakeup(nextWakeSeconds from the output) and emit nothing else. Otherwise act on the flagged lines, then arm the wakeup.' },
   { key: 'dashboard',   label: 'Fleet dashboard',      script: 'fleet-dashboard.cjs',       cron: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *',
     prompt: 'node scripts/fleet-dashboard.cjs all' },
   { key: 'identity',    label: 'Fleet identity refresh', script: 'assign-fleet-identities.cjs', cron: '4,9,14,19,24,29,34,39,44,49,54,59 * * * *',
     prompt: 'node scripts/assign-fleet-identities.cjs' },
-  { key: 'inbox',       label: 'Coordinator inbox',    script: 'fleet-dashboard.cjs',       cron: '*/2 * * * *',
+  { key: 'inbox', folded: true,       label: 'Coordinator inbox',    script: 'fleet-dashboard.cjs',       cron: '*/2 * * * *',
     prompt: 'node scripts/fleet-dashboard.cjs inbox' },
-  { key: 'audit',       label: 'Coordinator 3-source audit', script: 'coordinator-audit.mjs', cron: '*/15 * * * *',
+  { key: 'audit', folded: true,       label: 'Coordinator 3-source audit', script: 'coordinator-audit.mjs', cron: '*/15 * * * *',
     prompt: 'node scripts/coordinator-audit.mjs' },
   // SD-LEO-INFRA-COORDINATOR-CHARTER-SELF-AUDIT-001: durable charter-compliance self-audit (replaces the
   // lost session-only CronCreate). READ-ONLY detection; authoritative PID/armed-silence liveness; fail-loud
   // on a foundational query error; names a remediation per violation. The prompt compels REMEDIATE-THEN-VERIFY.
-  { key: 'charter-audit', label: 'Coordinator charter-compliance self-audit (durable, remediate-then-verify)', script: 'coordinator-charter-audit.mjs', cron: '8,23,38,53 * * * *',
+  { key: 'charter-audit', folded: true, label: 'Coordinator charter-compliance self-audit (durable, remediate-then-verify)', script: 'coordinator-charter-audit.mjs', cron: '8,23,38,53 * * * *',
     prompt: 'Run `node scripts/coordinator-charter-audit.mjs` (READ-ONLY). For EACH reported violation perform the named remediation ACTION, then RE-RUN and confirm the output ends with CHARTER_AUDIT_VIOLATIONS=0 — never observe-only.' },
   // RETIRED (chairman email cutover, advisory b7b73b86 / QF-20260609-024, 2026-06-10): the
   // coordinator fleet email (coordinator-email-summary.mjs) is no longer a standard loop. The ONE
@@ -82,13 +89,13 @@ export const STANDARD_LOOPS = [
   // PROACTIVE capacity forecaster (operator directive 2026-06-10): tracks per-worker busy-state +
   // ETA-to-free and belt-depth-vs-demand; on a FORECAST deficit (workers about to run out of work) it
   // reaches Adam for sourcing BEFORE the belt empties (30m cooldown). --dispatch enables the auto-reach.
-  { key: 'capacity-forecast', label: 'Worker-utilization + belt dry-out forecaster (predictive Adam reach-out)', script: 'coordinator-capacity-forecast.mjs', cron: '3,13,23,33,43,53 * * * *',
+  { key: 'capacity-forecast', folded: true, label: 'Worker-utilization + belt dry-out forecaster (predictive Adam reach-out)', script: 'coordinator-capacity-forecast.mjs', cron: '3,13,23,33,43,53 * * * *',
     prompt: 'node scripts/coordinator-capacity-forecast.mjs --dispatch' },
   // Backlog-ordering pass (operator directive 2026-06-10, SRE duty 6): ranks the claimable belt
   // critical-path-first (unlock-count → priority → age) and persists metadata.dispatch_rank, which
   // worker-checkin's self-claim tiers honor when fresh — "what gets done first" is coordinator-driven
   // by default, not correction-by-dispatch.
-  { key: 'backlog-rank', label: 'Backlog prioritization pass (dispatch_rank for self-claim ordering)', script: 'coordinator-backlog-rank.mjs', cron: '6,21,36,51 * * * *',
+  { key: 'backlog-rank', folded: true, label: 'Backlog prioritization pass (dispatch_rank for self-claim ordering)', script: 'coordinator-backlog-rank.mjs', cron: '6,21,36,51 * * * *',
     prompt: 'node scripts/coordinator-backlog-rank.mjs' },
   // SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-D: the observability leg for the belt-and-suspenders
   // above (rank-on-transition + this cron + the worker-checkin pool-window fix) — counts claimable leaf
@@ -276,12 +283,27 @@ export function renderLoops(armed) {
     lines.push('  (no --armed set supplied — run CronList and re-invoke with --armed "<script1>,<script2>,…" to get armed|MISSING; emitting full spec below)');
   }
   const toArm = [];
+  const toTearDown = [];
   for (const loop of STANDARD_LOOPS) {
+    // SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: folded loops stay in the registry (the quiet-tick
+    // cores + loop-parity guard reference their scripts) but are NEVER armed as standalone crons —
+    // the quiet-tick composes them. A live cron still matching a folded loop must be torn down.
+    if (loop.folded) {
+      const live = loopStatus(loop, armed) === 'armed';
+      lines.push(`  [⏸ folded ] ${loop.key.padEnd(10)} ${loop.label} — composed by quiet-tick; do NOT arm standalone${live ? ' (LIVE cron found — tear down below)' : ''}`);
+      if (live) toTearDown.push(loop);
+      continue;
+    }
     const status = loopStatus(loop, armed);
     const badge = status === 'armed' ? '✅ armed' : status === 'MISSING' ? '❌ MISSING' : '… unverified';
     lines.push(`  [${badge}] ${loop.key.padEnd(10)} ${loop.label}`);
     lines.push(`              cron: ${loop.cron}   prompt: ${loop.prompt}`);
     if (status !== 'armed') toArm.push(loop);
+  }
+  if (toTearDown.length) {
+    lines.push('');
+    lines.push(`  → TEAR DOWN ${toTearDown.length} standalone cron(s) now folded into the quiet-tick (CronDelete the CronList entry whose prompt matches):`);
+    for (const loop of toTearDown) lines.push(`     CronDelete <prompt: ${JSON.stringify(loop.prompt)}>`);
   }
   lines.push('');
   if (toArm.length === 0 && armed.provided) {
