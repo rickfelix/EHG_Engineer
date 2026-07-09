@@ -1,3 +1,12 @@
+---
+Category: Protocol
+Status: Approved
+Version: 1.1.0
+Author: SD-LEO-INFRA-VENTURE-SELECTION-DEMAND-001
+Last Updated: 2026-07-09
+Tags: ["chairman", "governance", "kill-gate"]
+---
+
 # Only-the-Chairman-Can — dependency map (one page)
 
 **SD:** SD-LEO-INFRA-SOLO-OPERATOR-CONTINUITY-001 · **Exit criterion:** roadmap X4
@@ -21,6 +30,7 @@ never auto-resolve. Companion to the Anthropic-cap contingency (`anthropic-cap-c
 | 7 | **Authorize spend / legal / external commitments** (LLC, Stripe live mode, contracts) | Legal/financial liability attaches to the human | Hold-and-surface |
 | 8 | **Override the no-auto-override doctrine itself** | By definition only the chairman can relax their own guardrail | Never auto-relaxed |
 | 9 | **Confirm the product looks/feels right before public launch** (S23→S24 product-review gate, `decision_type='product_review'`, separate from the S23 kill-gate in row 1) | A hands-on taste/quality check an agent cannot self-certify — public launch is the outward-facing moment | Hold-and-surface (one escalation email, no reminders); enforced independently at both the daemon-walk and RPC advance paths so neither can bypass it (SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001) |
+| 10 | **KILL a venture at the S5 financial kill gate** (pre-build, `stage_config.gate_type='kill'`, distinct from the S24 hard-kill in row 1) | Pre-build capital-allocation decision; hardcoded manual autonomy at every L0-L4 level | Hold-and-surface (`chairman_decisions` row, `eva-decisions.js approve`); the computed verdict is now surfaced in the review brief and a computed `kill` verdict requires an explicit `--override-kill --override-reason` to approve — never a silent approve-through (SD-LEO-INFRA-VENTURE-SELECTION-DEMAND-001) |
 
 ---
 
