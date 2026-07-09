@@ -1,9 +1,9 @@
 ---
 category: deployment
 status: draft
-version: 1.0.0
+version: 1.1.0
 author: rickfelix
-last_updated: 2026-06-04
+last_updated: 2026-07-09
 tags: [deployment, auto-generated]
 ---
 # Multi-Session Coordination Operational Runbook
@@ -1402,10 +1402,40 @@ The INTENT writer/reader key contract is a single frozen object (`INTENT_PAYLOAD
 Flip `CROSS_SESSION_DECONFLICTION` to `false` (instant inert) or `git revert` PR #4222 —
 there is no migration to undo.
 
+## Sweep Pass-Registry Architecture (SD-ARCH-HOTSPOT-SWEEP-001)
+
+`scripts/stale-session-sweep.cjs` — the every-tick fleet supervisor — was re-architected
+from a sequential `main()` monolith (~1,955 lines) into an **ordered pass registry**
+(PR #5755, one-way door):
+
+- **Pass modules**: `lib/sweep/passes/*.cjs`, each exporting `{name, run(ctx)}` and
+  DELEGATING back into the script's own exports (single implementation — no duplicated
+  fleet-coordination logic). Ctx contract documented in `lib/sweep/ctx.cjs`.
+- **Registry**: `lib/sweep/pass-registry.cjs` — `EARLY_PASSES` (run before the
+  empty-sessions early return; `clear-stale-qf-claims` must complete before dispatch
+  observes claim availability in the same tick) and `MAIN_PASSES` (post-classification,
+  original `main()` source order). Ordering is **load-bearing** and documented inline.
+- **Isolation**: per-pass try/catch converts a throw into a `PASS_FAILED(...)` warning —
+  EXCEPT passes marked `critical: true` (`identity-collision-split`), which rethrow and
+  abort the tick, preserving the pre-refactor safety semantics (downstream claim mutation
+  must never run against unsplit identity-collided sessions).
+- **Adding a guard** = one new pass file + one registry array entry (no `main()` edit).
+
+### Operator kill-switch
+
+| Env var | Default | Effect |
+|---------|---------|--------|
+| `SWEEP_PASS_REGISTRY` | unset (ON) | Set to `off` to run the pre-refactor inline code path (`lib/sweep/legacy-fallback.cjs`). Both paths call the same underlying implementations, so behavior parity holds; use only as an emergency rollback lever. |
+
+Known accepted risks (follow-ups filed): `main()` invokes registry passes by positional
+index (order pinned by unit test only); intent-collision logic is duplicated between the
+registry pass and the legacy fallback (drift risk if one copy is patched alone).
+
 ## Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 5.2.0 | 2026-07-09 | Sweep re-architecture (SD-ARCH-HOTSPOT-SWEEP-001, PR #5755): `main()` decomposed into ordered pass-registry (`lib/sweep/`) with per-pass isolation + `critical` rethrow, `SWEEP_PASS_REGISTRY=off` kill-switch, `evaluateSourceSideSignals` promoted to module-level pure helper. Includes QF-20260709-968 (CLAIM_FIX treats SD-row claim as authoritative over session-row binding). Cross-seat build: Golf-2 → Bravo handover with adversarial review gate (2 CRITICALs fixed pre-merge). |
 | 5.1.0 | 2026-06-04 | Added Cross-Session De-confliction Protocol behind default-OFF flag `CROSS_SESSION_DECONFLICTION` (SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001): FR-1 typed INTENT broadcast, FR-2 sweep collision detection, FR-3 targeted de-confliction reply + `acknowledged_at` stamp, FR-4 lone-signal ack+route. Enum-safe (reuses INFO/COACHING), migration-free. PR #4222. |
 | 5.0.0 | 2026-02-18 | **Breaking**: Dropped sd_claims table (SD-LEO-INFRA-CONSOLIDATE-CLAIMS-INTO-001). All claim state now in claude_sessions exclusively. Fixed isSameConversation() for UUID vs port-based terminal_id. v_active_sessions rebuilt without sd_claims JOIN. Manual release is now single-table. |
 | 4.1.0 | 2026-02-13 | Added session creation heartbeat guard (prevents hijacking active sessions), Added sd_claims lifecycle-aware unique constraint (superseded by v5.0.0) |
