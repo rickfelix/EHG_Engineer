@@ -1335,6 +1335,11 @@ async function runQaFixtureScan(ctx) {
       actions.push('QA: cleared stale claiming_session_id on ' + sd.status + ' ' + sd.sd_key);
     }
   }
+
+  // Adversarial-review fix (PR #5755): main() still consumes these five locals after the
+  // hoist (dead-release cross-signal gate, CLAIM_RELEASED announce, QA summary) — return
+  // them so the call site can rebind what used to be main()-scoped declarations.
+  return { sdStatusMap, workingOnCompleted, orphanedClaims, stuckApproval, terminalWithClaims };
 }
 
 // SD-ARCH-HOTSPOT-SWEEP-001 (main()-line-count acceptance criterion): the tail-of-tick
@@ -1771,11 +1776,11 @@ async function main() {
     supabase, now, classified, telemetryMap, actions, warnings, collisions, collisionsDetected,
   };
   if (SWEEP_PASS_REGISTRY_ENABLED) {
-    // identity-collision-split + claim-boundary-probe grouped here (both originally
-    // ran before dispatchWorkAssignmentsIfAllowed at line ~2434 — verified neither
-    // depends on HEADLESS_ZOMBIE release below, and claim-boundary-probe's live
-    // pre-release re-read makes any interleaving with headless-zombie idempotent-safe).
-    await passRegistryModule.runPasses([passRegistryModule.MAIN_PASSES[0], passRegistryModule.MAIN_PASSES[1]], sweepPassCtx);
+    // identity-collision-split only — claim-boundary-probe moved to its original 2b-3
+    // position below (adversarial-review fix, PR #5755: running the probe BEFORE the
+    // HEADLESS_ZOMBIE release block diverged from legacy ordering and could double-release
+    // a zombie with two coordination alerts; both modes now share the original order).
+    await passRegistryModule.runPasses([passRegistryModule.MAIN_PASSES[0]], sweepPassCtx);
   } else if (collisions.length > 0) {
     await splitCollidingSessions(supabase, collisions, actions, warnings);
   }
@@ -1808,9 +1813,12 @@ async function main() {
   // path nor the dead-release loop can ever catch it. Precedence (declared silence,
   // in-flight tool) is honored INSIDE the predicate; process_alive_at is deliberately
   // not consulted (the tick lies through a prompt block).
-  // SD-ARCH-HOTSPOT-SWEEP-001: now dispatched via the MAIN_PASSES registry call above
-  // (grouped with identity-collision-split); SWEEP_PASS_REGISTRY=off fallback here.
-  if (!SWEEP_PASS_REGISTRY_ENABLED) {
+  // SD-ARCH-HOTSPOT-SWEEP-001: dispatched via the MAIN_PASSES registry at this original
+  // 2b-3 position in BOTH modes (adversarial-review fix, PR #5755 — see the
+  // identity-collision-split call site above for the ordering-parity rationale).
+  if (SWEEP_PASS_REGISTRY_ENABLED) {
+    await passRegistryModule.runPasses([passRegistryModule.MAIN_PASSES[1]], sweepPassCtx);
+  } else {
     try {
       await runClaimBoundaryProbe(supabase, classified, telemetryMap, now, actions, warnings);
     } catch (cbErr) {
@@ -1849,7 +1857,11 @@ async function main() {
   // 3b-3d + FIX #2. QA claim-safety: completed/cancelled-SD release, orphaned claims,
   // stuck pending_approval, terminal-claim clear. SD-ARCH-HOTSPOT-SWEEP-001: extracted
   // to runQaFixtureScan() (top-level function above main(), this file) to shrink main().
-  await runQaFixtureScan(sweepPassCtx);
+  // Adversarial-review fix (PR #5755): rebind the five formerly-main()-scoped locals the
+  // hoist relocated — the dead-release cross-signal gate (sdStatusMap), the CLAIM_RELEASED
+  // announce loop, and the QA summary below all still read them from main() scope.
+  const { sdStatusMap, workingOnCompleted, orphanedClaims, stuckApproval, terminalWithClaims } =
+    await runQaFixtureScan(sweepPassCtx);
 
   // QF-20260525-211: the QF stale-claim clear formerly inlined here now runs via
   // clearStaleQfClaims() before the early-return above, so it executes on every sweep

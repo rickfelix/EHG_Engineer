@@ -76,6 +76,24 @@ describe('sweep pass-registry (SD-ARCH-HOTSPOT-SWEEP-001)', () => {
     expect(runB).toHaveBeenCalledTimes(1);
     expect(runB).toHaveBeenCalledWith(ctx);
   });
+
+  it('runPasses RETHROWS for critical passes — abort-on-throw parity with the pre-refactor main() (adversarial-review fix, PR #5755)', async () => {
+    const order = [];
+    const passes = [
+      { name: 'ok-1', run: async () => { order.push('ok-1'); } },
+      { name: 'crit-boom', critical: true, run: async () => { order.push('crit-boom'); throw new Error('split failed'); } },
+      { name: 'never-runs', run: async () => { order.push('never-runs'); } },
+    ];
+    const warnings = [];
+    await expect(runPasses(passes, { warnings })).rejects.toThrow('split failed');
+    expect(order).toEqual(['ok-1', 'crit-boom']); // abort: the pass after the critical throw never ran
+    expect(warnings).toHaveLength(0); // rethrow, not isolate — no PASS_FAILED warning
+  });
+
+  it('identity-collision-split is registered critical (unsplit sessions must abort the tick, not fail open)', () => {
+    const pass = MAIN_PASSES.find(p => p.name === 'identity-collision-split');
+    expect(pass.critical).toBe(true);
+  });
 });
 
 // Living audit (FR-3 spirit): which Supabase tables does each extracted pass touch,
@@ -134,5 +152,37 @@ describe('sweep registry ordering (SD-ARCH-HOTSPOT-SWEEP-001 / PRD TS-4)', () =>
     expect(earlyPassesIdx).toBeGreaterThan(-1);
     expect(dispatchIdx).toBeGreaterThan(-1);
     expect(earlyPassesIdx).toBeLessThan(dispatchIdx);
+  });
+});
+
+// Adversarial-review regression pins (PR #5755). The CRITICAL found there: the
+// runQaFixtureScan() hoist moved five variable declarations out of main() while three
+// main() sites still consumed them — a guaranteed ReferenceError on every tick that no
+// unit test could catch (nothing executes main()). These pins hold the repaired contract:
+// the hoisted function must RETURN the five locals, and main() must REBIND them at the
+// call site. Source-text technique, same as the claim-safety pinning files.
+describe('runQaFixtureScan scope contract (adversarial-review fix, PR #5755)', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const sourcePath = path.resolve(__dirname, '../../../../scripts/stale-session-sweep.cjs');
+  const source = fs.readFileSync(sourcePath, 'utf8');
+  const FIVE = ['sdStatusMap', 'workingOnCompleted', 'orphanedClaims', 'stuckApproval', 'terminalWithClaims'];
+
+  it('runQaFixtureScan returns the five formerly-main()-scoped locals', () => {
+    const re = new RegExp(`return\\s*\\{\\s*${FIVE.join('\\s*,\\s*')}\\s*\\}`);
+    expect(source).toMatch(re);
+  });
+
+  it('main() rebinds all five at the runQaFixtureScan call site', () => {
+    const re = new RegExp(`const\\s*\\{[^}]*${FIVE.join('[^}]*')}[^}]*\\}\\s*=\\s*\\n?\\s*await runQaFixtureScan\\(`);
+    expect(source).toMatch(re);
+  });
+
+  it('claim-boundary-probe registry dispatch sits AFTER the HEADLESS_ZOMBIE release block (ordering parity with legacy mode)', () => {
+    const zombieIdx = source.indexOf("s.status === 'HEADLESS_ZOMBIE'");
+    const probeDispatchIdx = source.indexOf('runPasses([passRegistryModule.MAIN_PASSES[1]]');
+    expect(zombieIdx).toBeGreaterThan(-1);
+    expect(probeDispatchIdx).toBeGreaterThan(-1);
+    expect(probeDispatchIdx).toBeGreaterThan(zombieIdx);
   });
 });
