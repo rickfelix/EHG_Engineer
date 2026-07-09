@@ -137,6 +137,11 @@ export const ADAM_LOOPS = [
     // every recurring tick (scripts/adam-quiet-tick.mjs's reconcileBoard()), not only at /adam cold
     // start — closing the same "durable but session-fragile" gap the belt-countdown duty closed.
     key: 'board-reconcile',
+    // SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: folded — this loop ran the SAME adam-quiet-tick.mjs
+    // at 12×/hour, duplicating the consolidated quiet-tick loop above (which composes
+    // reconcileBoard() on every tick at 4×/hour + self-paced wakeups). Keeping both would
+    // defeat the burn reduction the cutover exists for.
+    folded: true,
     label: 'Board<->reality reconcile every tick (adam_task_ledger via rehydrateBoard)',
     script: 'adam-quiet-tick.mjs',
     cron: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *',

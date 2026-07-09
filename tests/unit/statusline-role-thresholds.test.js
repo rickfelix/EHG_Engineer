@@ -104,3 +104,62 @@ describe('compaction-thresholds: TS-6 no database in the render path', () => {
     expect(called).toBe(1); // only the injected file reader is invoked
   });
 });
+
+// ── SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: adam role + burn-feed helpers ──
+describe('compaction-thresholds: TS-7 adam role detection + earlier thresholds', () => {
+  const coordNull = () => null;
+  const adamMatch = () => ({ session_id: 'adam-1' });
+  const adamNull = () => null;
+
+  it('matching active-adam.json session_id => adam (no coordinator file)', () => {
+    expect(ct.detectRoleFromFile('adam-1', coordNull, adamMatch)).toBe('adam');
+  });
+  it('coordinator match WINS over an adam match (double-tagged session)', () => {
+    const coordMatch = () => ({ session_id: 'both-1' });
+    const adamAlso = () => ({ session_id: 'both-1' });
+    expect(ct.detectRoleFromFile('both-1', coordMatch, adamAlso)).toBe('coordinator');
+  });
+  it('non-matching adam marker preserves prior behavior exactly (worker/solo)', () => {
+    const coordOther = () => ({ session_id: 'someone-else' });
+    const adamOther = () => ({ session_id: 'not-me' });
+    expect(ct.detectRoleFromFile('me', coordOther, adamOther)).toBe('worker');
+    expect(ct.detectRoleFromFile('me', coordNull, adamOther)).toBe('solo');
+  });
+  it('adam reader throwing falls back safely (never crashes, prior semantics)', () => {
+    const boom = () => { throw new Error('fs boom'); };
+    expect(ct.detectRoleFromFile('me', coordNull, boom)).toBe('solo');
+  });
+  it('flag ON: adam gets the earlier (coordinator-grade) thresholds; flag OFF: global', () => {
+    expect(ct.selectThresholds('adam', true)).toEqual(ct.COORDINATOR_THRESHOLDS);
+    expect(ct.selectThresholds('adam', false)).toEqual(ct.GLOBAL_THRESHOLDS);
+  });
+});
+
+describe('context-usage-feed: TS-8 burn-feed entry shape + throttle (SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001)', () => {
+  const feed = require('../../.claude/context-usage-feed.cjs');
+  const sample = { sessionId: 's1', modelId: 'claude-x', contextUsed: 1000, contextSize: 2000, usagePercent: 50, inputTokens: 400, outputTokens: 100, cacheCreationTokens: 300, cacheReadTokens: 200, status: 'HEALTHY', cwd: 'C:/x', now: new Date('2026-07-09T00:00:00Z') };
+
+  it('buildUsageEntry matches the sync-context-usage transformEntry field shape', () => {
+    const e = feed.buildUsageEntry(sample);
+    expect(Object.keys(e).sort()).toEqual([
+      'cache_creation_tokens', 'cache_read_tokens', 'compaction_detected', 'context_size', 'context_used',
+      'input_tokens', 'model_id', 'output_tokens', 'session_id', 'status', 'timestamp', 'usage_percent', 'working_directory',
+    ].sort());
+    expect(e.session_id).toBe('s1');
+    expect(e.usage_percent).toBe(50);
+    expect(e.timestamp).toBe('2026-07-09T00:00:00.000Z');
+  });
+  it('throttles an unchanged percent+status repaint (no append)', () => {
+    const e = feed.buildUsageEntry(sample);
+    expect(feed.shouldAppendUsage({ last_percent: 50, last_status: 'HEALTHY' }, e)).toBe(false);
+  });
+  it('appends on first sample, percent change, or status change', () => {
+    const e = feed.buildUsageEntry(sample);
+    expect(feed.shouldAppendUsage(null, e)).toBe(true);
+    expect(feed.shouldAppendUsage({ last_percent: 49, last_status: 'HEALTHY' }, e)).toBe(true);
+    expect(feed.shouldAppendUsage({ last_percent: 50, last_status: 'CRITICAL' }, e)).toBe(true);
+  });
+  it('rejects a malformed next entry (no percent) — never appends garbage', () => {
+    expect(feed.shouldAppendUsage(null, { status: 'HEALTHY' })).toBe(false);
+  });
+});

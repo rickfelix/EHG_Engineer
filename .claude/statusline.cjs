@@ -112,9 +112,11 @@ try {
 } catch (_) { /* intentionally silent: keep inline global thresholds, never crash the status line */ }
 
 // Status level (shifted: old-red→yellow, old-yellow→hidden)
+// SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: EMERGENCY must be UNMISTAKABLE — the chairman's only
+// job is pressing /compact when told, never tracking meters. A subtle ' !' was missable.
 let status = 'HEALTHY';
 let icon = '';
-if (percentUsed >= thresholds.emergency) { status = 'EMERGENCY'; icon = ' !'; }
+if (percentUsed >= thresholds.emergency) { status = 'EMERGENCY'; icon = ' ‼ EMERGENCY — /compact NOW'; }
 else if (percentUsed >= thresholds.critical) { status = 'CRITICAL'; icon = ' *'; }
 
 // Progress bar
@@ -259,6 +261,28 @@ const progressSection = status === 'HEALTHY'
 
 // Build output
 const output = `${activitySignal}${projectInfo}${autoProceedInfo}${progressSection} (${modelShort})`;
+
+// SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001 (FR-4): feed the burn-observability pipeline.
+// context_usage_log (table + sync + RPC) already existed but was starved — this statusline never
+// appended the context-usage.jsonl it ingests. Append a contract-shaped line, throttled to
+// percent/status changes (shouldAppendUsage reads the PRE-overwrite state file). Fail-soft:
+// nothing here may ever break the statusline render.
+try {
+  const feed = require('./context-usage-feed.cjs');
+  let prevState = null;
+  try { prevState = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch (_) { prevState = null; }
+  const entry = feed.buildUsageEntry({
+    sessionId, modelId: model, contextUsed, contextSize, usagePercent: percentUsed,
+    inputTokens: totalInputTokens, outputTokens: totalOutputTokens,
+    cacheCreationTokens: cacheCreation, cacheReadTokens: cacheRead,
+    status, cwd: process.cwd(),
+  });
+  if (feed.shouldAppendUsage(prevState, entry)) {
+    const logDir = path.join(__dirname, 'logs');
+    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+    fs.appendFileSync(path.join(logDir, 'context-usage.jsonl'), JSON.stringify(entry) + '\n', 'utf8');
+  }
+} catch (_) { /* intentionally silent: the burn feed is best-effort */ }
 
 // Update state file
 try {
