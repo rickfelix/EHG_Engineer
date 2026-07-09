@@ -23,7 +23,8 @@ import {
   registerGate3Validators,
   registerGate4Validators,
   registerGateQValidators,
-  registerAdditionalValidators
+  registerAdditionalValidators,
+  registerValueAuthenticityGate
 } from './gates/index.js';
 
 /**
@@ -41,6 +42,7 @@ export function createValidatorRegistry() {
   registerGate4Validators(registry);
   registerGateQValidators(registry);
   registerAdditionalValidators(registry);
+  registerValueAuthenticityGate(registry);
 
   console.log(`ValidatorRegistry: Registered ${registry.validators.size} validators`);
 
@@ -61,7 +63,8 @@ export {
   registerGate3Validators,
   registerGate4Validators,
   registerGateQValidators,
-  registerAdditionalValidators
+  registerAdditionalValidators,
+  registerValueAuthenticityGate
 } from './gates/index.js';
 
 // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Gate context preloader

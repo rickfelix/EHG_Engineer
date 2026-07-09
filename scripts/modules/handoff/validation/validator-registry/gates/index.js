@@ -10,3 +10,5 @@ export { registerGate3Validators } from './gate-3-traceability.js';
 export { registerGate4Validators } from './gate-4-strategic-value.js';
 export { registerGateQValidators } from './gate-q-quality.js';
 export { registerAdditionalValidators } from './additional-validators.js';
+// SD-LEO-INFRA-VALUE-AUTHENTICITY-SPEC-001: observe-only spec-time anti-mock gate.
+export { registerValueAuthenticityGate } from './value-authenticity-spec-gate.js';
