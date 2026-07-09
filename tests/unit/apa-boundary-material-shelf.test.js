@@ -6,6 +6,7 @@ import {
   validateShelfEntry,
   validateShelf,
   assertBandDiversity,
+  loadShelf,
 } from '../../lib/apa/boundary-material-shelf.mjs';
 
 // SD-LEO-INFRA-APA-BOUNDARY-MATERIAL-001 (PART A): schema + assembler band-diversity guard.
@@ -31,6 +32,11 @@ describe('boundary-material shelf: entry schema', () => {
     expect(() => validateShelfEntry(entry({ craft_justification: '' }))).toThrow(/craft_justification/);
     expect(() => validateShelfEntry(entry({ a11y_notes: '  ' }))).toThrow(/a11y_notes/);
   });
+  it('rejects a non-object entry and a missing/non-string id', () => {
+    expect(() => validateShelfEntry(null)).toThrow(/not an object/);
+    expect(() => validateShelfEntry(entry({ id: undefined }))).toThrow(/id/);
+    expect(() => validateShelfEntry(entry({ id: 42 }))).toThrow(/id/);
+  });
 });
 
 describe('boundary-material shelf: manifest shape', () => {
@@ -48,6 +54,12 @@ describe('boundary-material shelf: manifest shape', () => {
     expect(shelf.shelf_version).toBe(1);
     expect(shelf.entries).toEqual([]);
   });
+  it('loadShelf() reads + validates the committed manifest via its own async path', async () => {
+    const shelf = await loadShelf();
+    expect(shelf.shelf_version).toBe(1);
+    expect(shelf.entries).toEqual([]);
+    await expect(loadShelf(path.resolve('docs/design/apa-boundary-material-shelf/nope.json'))).rejects.toThrow();
+  });
 });
 
 describe('boundary-material shelf: assembler FORBIDDEN all-same-side guard', () => {
@@ -62,6 +74,9 @@ describe('boundary-material shelf: assembler FORBIDDEN all-same-side guard', () 
   });
   it('rejects an empty selection', () => {
     expect(() => assertBandDiversity([])).toThrow(/non-empty/);
+  });
+  it('rejects a selection containing an invalid band', () => {
+    expect(() => assertBandDiversity([entry({ band: 'above' }), entry({ band: 'nope' })])).toThrow(/invalid band/);
   });
   it('accepts an above+below selection (straddles the floor)', () => {
     const r = assertBandDiversity([entry({ band: 'above' }), entry({ band: 'below' })]);
