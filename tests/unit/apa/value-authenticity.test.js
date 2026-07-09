@@ -25,13 +25,17 @@ const SEEDED_CRITERIA = [
   { criterion_id: 'VA-T4-plausibility-as-persona', t_form: 'T4', hard_catcher: false, evidence_grade: null },
 ];
 
-function makeMockSupabase(rows) {
+function makeMockSupabase(rows, { injectedError = null } = {}) {
   return {
     from: vi.fn(() => ({
       select: vi.fn(() => ({
         eq: vi.fn((col, val) => ({
-          maybeSingle: vi.fn(async () => ({ data: rows.find((r) => r[col] === val) ?? null, error: null })),
-          then: (resolve) => resolve({ data: rows.filter((r) => r[col] === val), error: null }),
+          maybeSingle: vi.fn(async () => (injectedError
+            ? { data: null, error: injectedError }
+            : { data: rows.find((r) => r[col] === val) ?? null, error: null })),
+          then: (resolve) => resolve(injectedError
+            ? { data: null, error: injectedError }
+            : { data: rows.filter((r) => r[col] === val), error: null }),
         })),
       })),
     })),
@@ -68,6 +72,11 @@ describe('value-authenticity-criteria.mjs — round-trip SSOT', () => {
     const supabase = makeMockSupabase(SEEDED_CRITERIA);
     const result = await verifyRoundTrip(supabase, 'VA-T9-fabricated');
     expect(result.found).toBe(false);
+  });
+
+  it('getCriterion throws (never silently returns null) when the DB itself errors', async () => {
+    const supabase = makeMockSupabase(SEEDED_CRITERIA, { injectedError: { message: 'connection reset' } });
+    await expect(getCriterion(supabase, 'VA-T0-source-exists')).rejects.toThrow(/connection reset/);
   });
 });
 
@@ -209,5 +218,36 @@ describe('value-authenticity-ladder.mjs — fail-closed aggregation keyed on har
     await expect(aggregateVerdict(supabase, [
       { criterionId: 'VA-T9-fabricated', finding: true, reason: 'x' },
     ])).rejects.toThrow(/round-trip SSOT violated/);
+  });
+
+  it('a mix of hard AND soft findings: hard dominates the verdict while soft is still recorded', async () => {
+    const supabase = makeMockSupabase(SEEDED_CRITERIA);
+    const result = await aggregateVerdict(supabase, [
+      { criterionId: 'VA-T0-source-exists', finding: true, reason: 'no external dependency' },
+      { criterionId: 'VA-T3-paraphrase-invariance', finding: true, reason: 'paraphrase drift' },
+    ]);
+    expect(result.verdict).toBe('FAIL');
+    expect(result.hardFindings).toHaveLength(1);
+    expect(result.softFindings).toHaveLength(1);
+  });
+
+  it('weakest-link evidence grade: the LOWER grade across findings wins (design sec 2 weakest-link propagation)', async () => {
+    const gradedCriteria = SEEDED_CRITERIA.map((c) => ({ ...c }));
+    gradedCriteria.find((c) => c.criterion_id === 'VA-T0-source-exists').evidence_grade = 'E2';
+    gradedCriteria.find((c) => c.criterion_id === 'VA-T1-source-reached').evidence_grade = 'E0';
+    const supabase = makeMockSupabase(gradedCriteria);
+
+    const result = await aggregateVerdict(supabase, [
+      { criterionId: 'VA-T0-source-exists', finding: true, reason: 'x' },
+      { criterionId: 'VA-T1-source-reached', finding: true, reason: 'y' },
+    ]);
+
+    expect(result.weakestLinkGrade).toBe('E0');
+  });
+
+  it('an empty findings array produces PASS with no hard/soft findings (loop never enters, distinct from a single non-finding)', async () => {
+    const supabase = makeMockSupabase(SEEDED_CRITERIA);
+    const result = await aggregateVerdict(supabase, []);
+    expect(result).toEqual({ verdict: 'PASS', hardFindings: [], softFindings: [], weakestLinkGrade: null });
   });
 });
