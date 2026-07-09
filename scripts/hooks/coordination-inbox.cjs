@@ -110,7 +110,7 @@ try {
 //     read_at IS NULL SELECT) until actioned.
 // Pure + synchronous; no DB calls (amCoordinator/amAdam/twoWayOn/isIdle resolved once by caller).
 function classifyInboxMessage(msg, opts = {}) {
-  const { twoWayOn = false, amAdam = false, isIdle = false } = opts;
+  const { twoWayOn = false, amAdam = false, amSolomon = false, isIdle = false } = opts;
   const p = (msg && msg.payload) || {};
   const isInfo = msg && msg.message_type === 'INFO';
   // Coordinator-exclusive INFO rows — SKIP for EVERY session (the coordinator surfaces them via
@@ -139,6 +139,16 @@ function classifyInboxMessage(msg, opts = {}) {
   // notifications re-surface until acked — acceptable for an advisory session whose duty is
   // never missing a directive. Non-Adam (worker/coordinator) drain behavior is untouched.
   if (amAdam) {
+    return { skip: false, markRead: false, markAck: false };
+  }
+  // QF-20260709-800: mirror the amAdam carve-out for Solomon. Without this, a
+  // solomon_consult row (INFO, kind not in DIRECTIVE_KINDS by design) falls
+  // through to the default drain below and gets read_at stamped on the FIRST
+  // tool-call poll — before scripts/solomon-advisory.cjs's specialized
+  // drainInbox() (which queries read_at IS NULL) ever sees it. That drain has
+  // its own closure path (it answers, then stamps read_at itself), so it must
+  // own the stamping, not this generic hook.
+  if (amSolomon) {
     return { skip: false, markRead: false, markAck: false };
   }
   // Actionable directed rows — surface but do NOT mark read/ack on poll; re-surface until the
@@ -527,6 +537,7 @@ async function main() {
   // so the inbox classifier can avoid draining coordinator directives in an Adam session.
   let isIdle = false;
   let amAdam = false;
+  let amSolomon = false;
   try {
     const { data: sessionData } = await supabase
       .from('claude_sessions')
@@ -535,7 +546,8 @@ async function main() {
       .single();
     isIdle = !sessionData?.sd_id; // NOTE: pre-existing bug — column is sd_key, so this is ~always true (flagged, out of scope)
     amAdam = sessionData?.metadata?.role === 'adam';
-  } catch { /* assume not idle / not adam if query fails */ }
+    amSolomon = sessionData?.metadata?.role === 'solomon'; // QF-20260709-800
+  } catch { /* assume not idle / not adam / not solomon if query fails */ }
 
   // Read unread coordination messages for this session
   const { data: messages, error: tableErr } = await supabase
@@ -571,7 +583,7 @@ async function main() {
       // SD-LEO-FIX-FIX-COORDINATION-INBOX-001: single pure decision replaces the three inline
       // skip guards (which were wrongly gated on amCoordinator, letting Adam/workers drain
       // coordinator-exclusive rows) and the read_at/ack stamping below.
-      const verdict = classifyInboxMessage(msg, { isIdle, twoWayOn, amAdam });
+      const verdict = classifyInboxMessage(msg, { isIdle, twoWayOn, amAdam, amSolomon });
       if (verdict.skip) {
         continue;
       }
