@@ -105,7 +105,7 @@ describe('sweep pass-registry — mutation/delegation audit (documentation test)
     // This assertion documents that the registry itself (EARLY_PASSES/MAIN_PASSES) still
     // excludes it — a future SD promoting runQaFixtureScan to a real {name, run(ctx)} pass
     // should update this AUDIT table when it does.
-    for (const [name, entry] of Object.entries(AUDIT)) {
+    for (const entry of Object.values(AUDIT)) {
       expect(entry.tables.some(t => t.startsWith('strategic_directives_v2') && !t.includes('read'))).toBe(false);
     }
   });
