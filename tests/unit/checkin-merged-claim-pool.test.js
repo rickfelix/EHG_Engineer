@@ -51,12 +51,13 @@ describe('merged claim pool ordering (QF-20260610-986)', () => {
 describe('merged pool construction invariants (source-pinned)', () => {
   it('runCheckin builds ONE merged pool and rank-sorts it across kinds', async () => {
     const { readFileSync } = await import('fs');
-    const src = readFileSync(new URL('../../scripts/worker-checkin.cjs', import.meta.url), 'utf8');
+    // SD-ARCH-HOTSPOT-CHECKIN-001: merged-pool rung moved verbatim to lib/checkin/steps/merged-pool-self-claim.cjs — pin follows the code.
+    const src = readFileSync(new URL('../../lib/checkin/steps/merged-pool-self-claim.cjs', import.meta.url), 'utf8');
     // The merged tier exists and the old sequential 6.25 call inside runCheckin is gone.
     expect(src).toMatch(/ONE merged SD pool/);
     expect(src).toMatch(/sortByDispatchRank\(sb, merged, \(x\) => x\.key\)/);
     // selfClaimDraftSd survives as an exported wrapper but runCheckin no longer calls it.
-    const runCheckinBody = src.slice(src.indexOf('async function runCheckin'), src.indexOf('async function main'));
+    const runCheckinBody = src;
     expect(runCheckinBody).not.toMatch(/selfClaimDraftSd\(/);
     // Dedup: baselined entry wins when both pools surface one SD (seen-set built baselined-first).
     expect(runCheckinBody).toMatch(/seen\.has\(c\.sd_id\)/);

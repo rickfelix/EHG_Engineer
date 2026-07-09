@@ -176,8 +176,9 @@ describe('newest-window reachability via the new fourth source (SD-LEO-INFRA-SEL
 
   it('FR-3: the newest source is unioned as kind:draft and deduped by the SAME seen-set (no double-count)', async () => {
     const { readFileSync } = await import('fs');
-    const src = readFileSync(new URL('../../scripts/worker-checkin.cjs', import.meta.url), 'utf8');
-    const body = src.slice(src.indexOf('async function runCheckin'), src.indexOf('async function main'));
+    // SD-ARCH-HOTSPOT-CHECKIN-001: merged-pool rung moved verbatim to lib/checkin/steps/merged-pool-self-claim.cjs — pin follows the code.
+    const src = readFileSync(new URL('../../lib/checkin/steps/merged-pool-self-claim.cjs', import.meta.url), 'utf8');
+    const body = src;
     expect(body).toMatch(/fetchNewestDraftCandidates\(sb\)/);   // the fourth source is called
     expect(body).toMatch(/for \(const d of newestRows\)/);      // unioned into the merged pool
     expect(body).toMatch(/seen\.has\(d\.sd_key\)/);             // SAME seen-set dedup (by sd_key)
