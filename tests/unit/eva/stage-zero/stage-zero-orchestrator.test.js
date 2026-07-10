@@ -58,6 +58,7 @@ import { executeStageZero } from '../../../../lib/eva/stage-zero/stage-zero-orch
 import { routePath } from '../../../../lib/eva/stage-zero/path-router.js';
 import { conductChairmanReview, persistVentureBrief } from '../../../../lib/eva/stage-zero/chairman-review.js';
 import { runSynthesis } from '../../../../lib/eva/stage-zero/synthesis/index.js';
+import { generateForecast } from '../../../../lib/eva/stage-zero/modeling.js';
 
 const silentLogger = {
   log: vi.fn(),
@@ -163,6 +164,31 @@ describe('StageZeroOrchestrator', () => {
       mockPathOutput,
       expect.objectContaining({ supabase: mockSupabase }),
     );
+  });
+
+  // H7 (Delta-ledger 41a2e6da, SD-LEO-INFRA-SYNTHESIS-SCORING-HARDENING-001): a
+  // forecast-generation throw previously left metadata.venture_score entirely absent
+  // (silently missing) and the run proceeded anyway. It must now proceed with an
+  // explicit, marked, below-neutral score instead.
+  it('stamps a marked venture_score:0 (not silently absent) when forecast generation throws', async () => {
+    routePath.mockResolvedValue(mockPathOutput);
+    runSynthesis.mockResolvedValue(mockBrief);
+    generateForecast.mockRejectedValueOnce(new Error('LLM outage'));
+    conductChairmanReview.mockResolvedValue({
+      decision: 'ready',
+      brief: mockBrief,
+      validation: { valid: true, errors: [] },
+    });
+    persistVentureBrief.mockResolvedValue({ id: 'v-1' });
+
+    await executeStageZero(
+      { path: 'discovery_mode' },
+      { supabase: mockSupabase, logger: silentLogger },
+    );
+
+    const passedSynthesisResult = conductChairmanReview.mock.calls[0][0];
+    expect(passedSynthesisResult.metadata.venture_score).toBe(0);
+    expect(passedSynthesisResult.metadata.forecast_failed).toBe(true);
   });
 
   it('should skip synthesis when options.skipSynthesis=true', async () => {
