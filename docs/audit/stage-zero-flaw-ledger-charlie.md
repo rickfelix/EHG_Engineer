@@ -92,4 +92,4 @@
 
 ---
 
-*Complete. Adjudication input per the 14:24Z directive: findings fold into the EXISTING SD set at adjudication (no new mints). Highest-leverage folds by blast radius: CH-1 (live park-path break — fold into the nursery-drift fix feedback ecab6c51 already routed), CH-2+CH-3+CH-4 (posture reach/consumption — fold into the posture SD's successor scope), CH-5 (kill-criteria O2 seam — fold into the S20-26 harness build this seat reserves for next), CH-8 (stub-path canary — fold into the authenticity calibration set), R7-C1 (unchanged deepest flaw — already Delta's headline).*
+*Complete. Adjudication input per the 14:24Z directive: findings fold into the EXISTING SD set at adjudication (no new mints). Highest-impact folds by blast radius: CH-1 (live park-path break — fold into the nursery-drift fix feedback ecab6c51 already routed), CH-2+CH-3+CH-4 (posture reach/consumption — fold into the posture SD's successor scope), CH-5 (kill-criteria O2 seam — fold into the S20-26 harness build this seat reserves for next), CH-8 (stub-path canary — fold into the authenticity calibration set), R7-C1 (unchanged deepest flaw — already Delta's headline).*
