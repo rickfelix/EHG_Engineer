@@ -401,8 +401,11 @@ class GitBranchVerifier {
     const statusResult = await this.gitCommand('git status --porcelain');
     if (statusResult.stdout.length > 0) {
       console.log('⚠️  Uncommitted changes detected - stashing before branch creation');
-      await this.gitCommand('git stash push -m "GATE-6: Auto-stash before branch creation"');
-      this.results.changesStashed = true;
+      // QF-20260709-082: stash is a REPO-WIDE stack shared across every worktree
+      // on this .git -- only mark changesStashed when the push actually stashed
+      // something, else a later pop grabs ANOTHER worktree's WIP.
+      const createStashResult = await this.gitCommand('git stash push -m "GATE-6: Auto-stash before branch creation"');
+      this.results.changesStashed = !createStashResult.stdout.includes('No local changes to save');
     }
 
     // Create and checkout new branch
@@ -465,8 +468,10 @@ class GitBranchVerifier {
         return false;
       }
 
-      this.results.changesStashed = true;
-      console.log('✅ Changes stashed');
+      // QF-20260709-082: only mark changesStashed when the push actually stashed
+      // something (repo-wide shared stash stack across worktrees; see above).
+      this.results.changesStashed = !stashResult.stdout.includes('No local changes to save');
+      console.log(this.results.changesStashed ? '✅ Changes stashed' : 'ℹ️  Nothing to stash');
     }
 
     // Check if branch exists locally, if not fetch from remote or create
