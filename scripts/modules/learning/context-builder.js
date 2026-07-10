@@ -15,6 +15,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import { syncVisionScoresToPatterns } from '../../eva/vision-to-patterns.js';
+import { isUntrustedOrigin, sanitizeUserText } from '../../../lib/factory/content-sanitizer.js';
 import {
   filterPatternsForLearning,
   fetchAssignedSdStatuses,
@@ -604,10 +605,10 @@ async function findSimilarPatterns(patterns) {
  * SD-QUALITY-INT-001: Query resolved feedback for learning patterns
  * Extracts learnings from resolved issues with high occurrence counts
  */
-async function getResolvedFeedbackLearnings(limit = TOP_N) {
+export async function getResolvedFeedbackLearnings(limit = TOP_N) {
   const { data, error } = await supabase
     .from('feedback')
-    .select('id, title, description, type, category, priority, occurrence_count, resolution_notes, resolution_sd_id, created_at, updated_at')
+    .select('id, title, description, type, category, priority, occurrence_count, resolution_notes, resolution_sd_id, created_at, updated_at, source_type, source_application')
     .in('status', ['resolved', 'shipped'])
     .not('resolution_notes', 'is', null)
     .order('occurrence_count', { ascending: false })
@@ -633,14 +634,22 @@ async function getResolvedFeedbackLearnings(limit = TOP_N) {
     const resolutionBonus = feedback.resolution_sd_id ? 15 : 0;
     const confidence = Math.min(100, baseConfidence + occurrenceBonus + resolutionBonus);
 
+    // FR-6 (SD-FDBK-FIX-LIVE-PROMPT-INJECTION-001): untrusted-origin (public-submitted)
+    // feedback text flows through this learning item into a new SD's description
+    // (see sd-builders.js buildSDDescription()) -- quarantine-wrap it here so it is
+    // read as reported user data, not as literal instructions, downstream.
+    const untrustedOrigin = isUntrustedOrigin(feedback);
+    const safeTitle = untrustedOrigin ? sanitizeUserText(feedback.title).content : feedback.title;
+    const safeResolutionNotes = untrustedOrigin ? sanitizeUserText(feedback.resolution_notes).content : feedback.resolution_notes;
+
     learnings.push({
       id: `FB-${feedback.id.substring(0, 8)}`,
       source_type: 'feedback',
       source_id: feedback.id,
       type: feedback.type,
       category: feedback.category,
-      title: feedback.title,
-      content: `${feedback.title}: ${feedback.resolution_notes}`,
+      title: safeTitle,
+      content: `${safeTitle}: ${safeResolutionNotes}`,
       occurrence_count: feedback.occurrence_count || 1,
       resolution_sd_id: feedback.resolution_sd_id,
       priority: feedback.priority,

@@ -4,7 +4,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { sanitize, sanitizeUserText, MAX_MESSAGE_LENGTH, MAX_USER_TEXT_LENGTH } from '../lib/factory/content-sanitizer.js';
+import { sanitize, sanitizeUserText, isUntrustedOrigin, MAX_MESSAGE_LENGTH, MAX_USER_TEXT_LENGTH } from '../lib/factory/content-sanitizer.js';
 
 describe('content-sanitizer', () => {
   describe('sanitize() — backward compatibility with error-sanitizer', () => {
@@ -83,7 +83,7 @@ describe('content-sanitizer', () => {
     it('detects SQL injection patterns', () => {
       const result = sanitizeUserText("'; DROP TABLE feedback; --");
       // The SQL pattern looks for SELECT/INSERT/UPDATE/DELETE + FROM/INTO/TABLE
-      const result2 = sanitizeUserText("SELECT * FROM feedback WHERE 1=1 UNION ALL SELECT password FROM users");
+      const result2 = sanitizeUserText('SELECT * FROM feedback WHERE 1=1 UNION ALL SELECT password FROM users');
       assert.equal(result2.injectionDetected, true);
     });
 
@@ -109,6 +109,38 @@ describe('content-sanitizer', () => {
       const text = 'Short feedback';
       const result = sanitizeUserText(text);
       assert.equal(result.originalLength, text.length);
+    });
+  });
+
+  describe('isUntrustedOrigin() — SD-FDBK-FIX-LIVE-PROMPT-INJECTION-001 (FR-1)', () => {
+    it("classifies a public/venture-origin row (source_type='user_feedback') as untrusted", () => {
+      assert.equal(isUntrustedOrigin({ source_type: 'user_feedback', source_application: 'marketlens' }), true);
+    });
+
+    it("classifies an internal row (source_type='manual_feedback') as trusted", () => {
+      assert.equal(isUntrustedOrigin({ source_type: 'manual_feedback', source_application: 'EHG_Engineer' }), false);
+    });
+
+    it('fails closed on a null/undefined feedback row', () => {
+      assert.equal(isUntrustedOrigin(null), true);
+      assert.equal(isUntrustedOrigin(undefined), true);
+    });
+
+    it('fails closed on missing/malformed source_type', () => {
+      assert.equal(isUntrustedOrigin({}), true);
+      assert.equal(isUntrustedOrigin({ source_type: null }), true);
+      assert.equal(isUntrustedOrigin({ source_type: 123 }), true);
+    });
+
+    it('treats every other CHECK-constrained source_type value as trusted', () => {
+      const trustedTypes = [
+        'manual_feedback', 'auto_capture', 'uat_failure', 'error_capture',
+        'uncaught_exception', 'unhandled_rejection', 'manual_capture',
+        'todoist_intake', 'youtube_intake', 'claude_code_intake', 'telegram',
+      ];
+      for (const source_type of trustedTypes) {
+        assert.equal(isUntrustedOrigin({ source_type }), false, `expected ${source_type} to be trusted`);
+      }
     });
   });
 });
