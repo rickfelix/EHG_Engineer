@@ -78,6 +78,31 @@ describe('rankCandidates - default weights (FR-1)', () => {
 });
 
 describe('rankCandidates - tie-break order', () => {
+  // SD-LEO-INFRA-STAGE0-REVENUE-TIEBREAKER-INTERIM-001 (FR-1): revenue carries
+  // no composite weight — two candidates differing ONLY in revenue produce
+  // IDENTICAL composites under DEFAULT weights (chairman Phase-1: revenue =
+  // tiebreaker-only). Exit criterion: SD-LEO-INFRA-STAGE0-GOVERNED-POSTURE-001.
+  test('candidates differing ONLY in monthly_revenue_potential tie on composite under DEFAULT weights (FR-1)', () => {
+    const cands = [
+      v2Candidate({ name: 'PoorClaim', monthly_revenue_potential: '$1K/month' }),
+      v2Candidate({ name: 'RichClaim', monthly_revenue_potential: '$500K/month' }),
+    ];
+    const ranked = rankCandidates(cands, { strategicContext: strategicCtx });
+    expect(ranked[0].composite_score).toBe(ranked[1].composite_score);
+    // ...and revenue then breaks the tie (FR-2): higher parsed_revenue_high first.
+    expect(ranked[0].name).toBe('RichClaim');
+    // Attribution is honest: revenue no longer feeds the composite.
+    expect(ranked[0].score_attribution).not.toContain('monthly_revenue_potential');
+  });
+
+  test('DEFAULT_RANK_WEIGHTS carries no revenue key; redistribution pinned (FR-1)', () => {
+    expect(DEFAULT_RANK_WEIGHTS.monthly_revenue_potential).toBeUndefined();
+    expect(DEFAULT_RANK_WEIGHTS.automation_feasibility).toBe(0.45);
+    expect(DEFAULT_RANK_WEIGHTS.target_market_specificity).toBe(0.30);
+    expect(DEFAULT_RANK_WEIGHTS.strategic_fit).toBe(0.15);
+    expect(DEFAULT_RANK_WEIGHTS.competition_level).toBe(0.10);
+  });
+
   test('genuine composite ties broken by name ASC (A before B with identical inputs)', () => {
     const cands = [
       v2Candidate({ name: 'B', automation_feasibility: 5, monthly_revenue_potential: '$5K' }),
