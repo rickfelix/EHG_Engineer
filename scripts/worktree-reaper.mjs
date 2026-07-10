@@ -60,6 +60,9 @@ import { listActiveWorktrees, countActiveWorktrees, MAX_WORKTREE_COUNT } from '.
 import { safeRecursiveRm, safeRecursiveCp, removeWorktreeViaGit } from '../lib/worktree-manager.js';
 // SD-LEO-INFRA-ORPHAN-WORKTREE-SWEEP-001 (FR-1/FR-4): reclaim unregistered .worktrees/ dirs.
 import { runOrphanSweep } from '../lib/worktree-reaper/orphan-sweep.js';
+// QF-20260710-432: last-line live-claim guard — a live-claimed worktree is never
+// reaped regardless of commit count (Alpha-2 incident: zero-commit mid-PLAN reap).
+import { liveClaimBlocksRemoval } from '../lib/worktree-reaper/live-claim-guard.js';
 // SD-LEO-INFRA-WORKTREE-CONTENTION-CLEANUP-001: single-source reapability helpers.
 // These three used to be defined locally below; the canonical home is now
 // lib/worktree-reapability.js so every removal path shares one implementation.
@@ -1310,6 +1313,28 @@ export async function main(argv = process.argv) {
       const recKey = keyFromWorktree({ path: wtPath, branch: rec.branch });
       if (fresh.get(normalizePath(wtPath)) || freshKeys.has(recKey)) {
         console.log(`  ↷ ${path.basename(wtPath)} acquired active claim mid-run — skipping`);
+        aborted++;
+        continue;
+      }
+
+      // QF-20260710-432 last-line guard: ask the authoritative claim question directly
+      // (claiming_session_id + isSessionAlive) — fail-CLOSED on any lookup error. The
+      // Alpha-2 incident reaped a live-claimed ZERO-COMMIT worktree mid-PLAN; commit
+      // presence/age is never sufficient evidence of abandonment.
+      const claimGuard = await liveClaimBlocksRemoval(supabase, wtPath, {
+        logger: (m) => process.stderr.write(`  ${m}
+`),
+      });
+      if (claimGuard.blocked) {
+        console.log(`  ⛔ ${path.basename(wtPath)} live-claim guard: ${claimGuard.reason} — skipping`);
+        emitJsonLine({
+          schema_version: SCHEMA_VERSION,
+          timestamp: new Date().toISOString(),
+          event: 'removal_blocked_live_claim',
+          worktree_path: wtPath,
+          reason: claimGuard.reason,
+          detail: claimGuard.detail || null,
+        });
         aborted++;
         continue;
       }
