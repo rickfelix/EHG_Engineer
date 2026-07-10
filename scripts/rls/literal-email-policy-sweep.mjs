@@ -12,6 +12,7 @@
  * (needs .env DB credentials): node scripts/rls/literal-email-policy-sweep.mjs
  */
 import { createDatabaseClient } from '../lib/supabase-connection.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 // Matches a literal email embedded anywhere in a policy expression. Deliberately broad:
 // quoted or not, any TLD length >= 2. Policy expressions comparing to auth.jwt()->>'email'
@@ -79,6 +80,6 @@ async function main() {
 }
 
 // Import-safe: only run when invoked directly (lets tests import the pure parts).
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('literal-email-policy-sweep.mjs')) {
+if (isMainModule(import.meta.url)) {
   main();
 }
