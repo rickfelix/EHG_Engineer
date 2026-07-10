@@ -18,6 +18,7 @@ describe('checkin step registry (lib/checkin/steps/index.cjs)', () => {
       'resume',
       'build-forbidden-guard',
       'directed-assignment',
+      'seat-busy-fence',
       'recover-stranded-final',
       'adopt-orphan',
       'drain-reservations',
