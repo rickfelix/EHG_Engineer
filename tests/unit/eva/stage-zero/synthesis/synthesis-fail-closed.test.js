@@ -170,4 +170,23 @@ describe('runSynthesis — fail-closed policy (SD-LEO-INFRA-STAGE0-ENGINE-FAIL-C
     expect(result.metadata.synthesis.components_total).toBe(15);
     expect(result.maturity).toBe('ready');
   });
+
+  test('regression (adversarial review finding): mentalModelAnalysis legitimately resolving to null (no curated model matched -- NOT an error) must never block maturity=ready', async () => {
+    // analyzeMentalModels() resolves null both on a genuine failure AND on the ordinary,
+    // non-error outcome "no curated model matched this venture" (lib/eva/mental-models/index.js).
+    // A mocked rejection collapses to the same null value once index.js's own .catch() runs, so
+    // mockResolvedValueOnce(null) is the only way to simulate the legitimate-empty-selection path
+    // directly, bypassing that ambiguity the same way the real function's internal try/catch does.
+    runMentalModelAnalysis.mockResolvedValueOnce(null);
+
+    const result = await runSynthesis(validPathOutput, { logger: silentLogger });
+
+    // All 14 OTHER components genuinely succeeded -- only the ambiguous, advisory-only
+    // mentalModelAnalysis is null. This must NOT gate maturity: a healthy venture whose
+    // archetype/path simply has no matching curated mental model must still reach 'ready'.
+    expect(result.maturity).toBe('ready');
+    // The gauge still reflects the null (informational -- it did not produce a result).
+    expect(result.metadata.synthesis.components_run).toBe(14);
+    expect(result.metadata.synthesis.components_total).toBe(15);
+  });
 });
