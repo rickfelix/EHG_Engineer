@@ -191,6 +191,73 @@ describe('executeDiscoveryMode', () => {
   });
 });
 
+// SD-LEO-INFRA-STAGE0-TRAVERSABILITY-REACH-001 (PRD FR-1/FR-4, TS-1): CH-6 found
+// required_capabilities prompted in only 1 of 5 discovery strategies (trend_scanner).
+// Enumerate all 5 explicitly rather than asserting one representative case.
+describe('required_capabilities reach across all 5 discovery strategies (CH-6)', () => {
+  test.each([
+    'trend_scanner',
+    'democratization_finder',
+    'capability_overhang',
+    'simple_venture',
+  ])('%s prompts for required_capabilities', async (strategy) => {
+    await executeDiscoveryMode(
+      { strategy },
+      { supabase: mockSupabase, logger: silentLogger, llmClient: mockLlmClient }
+    );
+    const promptArg = mockLlmClient.complete.mock.calls[0][1];
+    expect(promptArg).toContain('required_capabilities');
+  });
+
+  test('nursery_reeval carries forward required_capabilities from the original parked record when present', async () => {
+    const nurseryItems = [
+      {
+        id: 'nursery-1', name: 'Parked Idea', problem_statement: 'old problem',
+        parked_reason: 'capability gap', original_score: 5, parked_at: '2026-01-01T00:00:00Z',
+        metadata: { required_capabilities: [{ name: 'venture web deploy', kind: 'form_factor' }] },
+      },
+    ];
+    const supabase = createMockSupabase(defaultStrategy, nurseryItems);
+    const llm = createMockLlm([]);
+    llm.complete = vi.fn().mockResolvedValue(JSON.stringify([
+      { nursery_id: 'nursery-1', name: 'Revived Idea', problem_statement: 'p', solution: 's', target_market: 'm', revival_reason: 'market shifted', new_score: 8 },
+    ]));
+
+    const result = await executeDiscoveryMode(
+      { strategy: 'nursery_reeval' },
+      { supabase, logger: silentLogger, llmClient: llm }
+    );
+
+    expect(result.raw_material.top_candidate.required_capabilities).toEqual([{ name: 'venture web deploy', kind: 'form_factor' }]);
+    // undeclared===0: recognized as a DECLARED, matched requirement — not silently dropped.
+    expect(result.metadata.traversability.undeclared).toBe(0);
+  });
+
+  test('nursery_reeval omits (not fabricates) required_capabilities when the original parked record has none', async () => {
+    const nurseryItems = [
+      {
+        id: 'nursery-2', name: 'Parked Idea 2', problem_statement: 'old problem',
+        parked_reason: 'low score', original_score: 3, parked_at: '2026-01-01T00:00:00Z',
+        metadata: {},
+      },
+    ];
+    const supabase = createMockSupabase(defaultStrategy, nurseryItems);
+    const llm = createMockLlm([]);
+    llm.complete = vi.fn().mockResolvedValue(JSON.stringify([
+      { nursery_id: 'nursery-2', name: 'Revived Idea 2', problem_statement: 'p', solution: 's', target_market: 'm', revival_reason: 'market shifted', new_score: 7 },
+    ]));
+
+    const result = await executeDiscoveryMode(
+      { strategy: 'nursery_reeval' },
+      { supabase, logger: silentLogger, llmClient: llm }
+    );
+
+    expect(result.raw_material.top_candidate.required_capabilities).toBeUndefined();
+    // undeclared===1: honest no_requirements_declared auto-pass, not a fabricated field.
+    expect(result.metadata.traversability.undeclared).toBe(1);
+  });
+});
+
 describe('rankCandidates', () => {
   test('sorts by score descending with competition bonus', () => {
     const candidates = [

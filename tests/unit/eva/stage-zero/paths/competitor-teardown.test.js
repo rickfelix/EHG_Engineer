@@ -25,6 +25,20 @@ import { executeCompetitorTeardown } from '../../../../../lib/eva/stage-zero/pat
 
 const silentLogger = { log: vi.fn(), warn: vi.fn() };
 
+// SD-LEO-INFRA-STAGE0-TRAVERSABILITY-REACH-001: executeCompetitorTeardown now loads the
+// live capability envelope fail-closed before returning; supabase must at least answer
+// the v_unified_capabilities query even in tests unrelated to the gate itself.
+function makeGateSupabase() {
+  return {
+    from: vi.fn((table) => {
+      if (table === 'v_unified_capabilities') {
+        return { select: vi.fn().mockReturnThis(), in: vi.fn().mockResolvedValue({ data: [], error: null }) };
+      }
+      return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: null, error: null }) };
+    }),
+  };
+}
+
 let mockLlmClient;
 
 function _createMockLlm(analysisResponse, deconstructionResponse, _gapResponse) {
@@ -100,7 +114,7 @@ describe('executeCompetitorTeardown', () => {
   test('analyzes single URL and returns PathOutput', async () => {
     const result = await executeCompetitorTeardown(
       { urls: ['http://competitor.com'] },
-      { logger: silentLogger, llmClient: mockLlmClient }
+      { logger: silentLogger, llmClient: mockLlmClient, supabase: makeGateSupabase() }
     );
 
     expect(result).not.toBeNull();
@@ -114,7 +128,7 @@ describe('executeCompetitorTeardown', () => {
   test('analyzes multiple URLs', async () => {
     const result = await executeCompetitorTeardown(
       { urls: ['http://a.com', 'http://b.com'] },
-      { logger: silentLogger, llmClient: mockLlmClient }
+      { logger: silentLogger, llmClient: mockLlmClient, supabase: makeGateSupabase() }
     );
 
     expect(result.competitor_urls).toEqual(['http://a.com', 'http://b.com']);
@@ -126,7 +140,7 @@ describe('executeCompetitorTeardown', () => {
   test('single competitor does not run gap analysis', async () => {
     const result = await executeCompetitorTeardown(
       { urls: ['http://single.com'] },
-      { logger: silentLogger, llmClient: mockLlmClient }
+      { logger: silentLogger, llmClient: mockLlmClient, supabase: makeGateSupabase() }
     );
 
     expect(result.raw_material.gap_analysis).toBeNull();
@@ -135,7 +149,7 @@ describe('executeCompetitorTeardown', () => {
   test('uses injected llmClient', async () => {
     await executeCompetitorTeardown(
       { urls: ['http://test.com'] },
-      { logger: silentLogger, llmClient: mockLlmClient }
+      { logger: silentLogger, llmClient: mockLlmClient, supabase: makeGateSupabase() }
     );
 
     expect(mockLlmClient.complete).toHaveBeenCalled();
@@ -144,7 +158,7 @@ describe('executeCompetitorTeardown', () => {
   test('returns valid PathOutput with suggested fields from deconstruction', async () => {
     const result = await executeCompetitorTeardown(
       { urls: ['http://test.com'] },
-      { logger: silentLogger, llmClient: mockLlmClient }
+      { logger: silentLogger, llmClient: mockLlmClient, supabase: makeGateSupabase() }
     );
 
     // The suggested fields come from the deconstruction response
@@ -186,7 +200,7 @@ describe('executeCompetitorTeardown — differentiation board wiring (SD-LEO-INF
       {
         logger: silentLogger,
         llmClient: mockLlmClient,
-        supabase: {}, // present, but persist disabled
+        supabase: makeGateSupabase(), // present, but persist disabled
         persistTeardownAnalyses: persistSpy,
         runDifferentiationBoard: boardSpy,
       }
@@ -207,7 +221,7 @@ describe('executeCompetitorTeardown — differentiation board wiring (SD-LEO-INF
       {
         logger: silentLogger,
         llmClient: mockLlmClient,
-        supabase: {},
+        supabase: makeGateSupabase(),
         persistToCanonical: true,
         persistTeardownAnalyses: persistSpy,
         runDifferentiationBoard: boardSpy,
@@ -242,7 +256,7 @@ describe('executeCompetitorTeardown — differentiation board wiring (SD-LEO-INF
       {
         logger: warnLogger,
         llmClient: mockLlmClient,
-        supabase: {},
+        supabase: makeGateSupabase(),
         persistToCanonical: true,
         persistTeardownAnalyses: persistSpy,
         runDifferentiationBoard: boardSpy,
@@ -270,7 +284,7 @@ describe('executeCompetitorTeardown — differentiation board wiring (SD-LEO-INF
       {
         logger: silentLogger,
         llmClient: mockLlmClient,
-        supabase: {},
+        supabase: makeGateSupabase(),
         persistToCanonical: true,
         persistTeardownAnalyses: persistSpy,
         runDifferentiationBoard: boardSpy,

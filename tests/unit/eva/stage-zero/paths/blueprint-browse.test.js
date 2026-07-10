@@ -33,6 +33,9 @@ const sampleBlueprints = [
   { id: 'bp-3', title: 'SaaS Pro', category: 'saas', summary: 'Advanced SaaS', problem_statement: 'Advanced problem', solution_concept: 'Pro solution', target_market: 'Enterprise', is_active: true },
 ];
 
+// SD-LEO-INFRA-STAGE0-TRAVERSABILITY-REACH-001: executeBlueprintBrowse now loads the
+// live capability envelope fail-closed before returning; the mock serves an (honestly
+// empty, per TR-1) delivered envelope so undeclared blueprint candidates auto-pass.
 function createMockSupabase(blueprints = sampleBlueprints) {
   // Supabase query builder: every method returns 'this', await resolves { data, error }
   const result = { data: blueprints, error: null };
@@ -42,7 +45,14 @@ function createMockSupabase(blueprints = sampleBlueprints) {
     order: vi.fn().mockReturnThis(),
     then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
   };
-  return { from: vi.fn(() => chain), _chain: chain };
+  const envelopeChain = {
+    select: vi.fn().mockReturnThis(),
+    in: vi.fn().mockResolvedValue({ data: [], error: null }),
+  };
+  return {
+    from: vi.fn((table) => (table === 'v_unified_capabilities' ? envelopeChain : chain)),
+    _chain: chain,
+  };
 }
 
 beforeEach(() => {
