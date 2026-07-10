@@ -1890,6 +1890,33 @@ async function printFeedbackSlaGauge() {
   console.log('');
 }
 
+// SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 (FR-9): open-actionable count +
+// oldest-actionable-age for category='harness_backlog' — the write-only-sink class
+// (2,320+ rows, zero closures at audit time) is visible here if it ever re-forms.
+// NO-DATA on query failure, per the established gauge convention.
+async function printDrainGauge() {
+  const { planDrainGauge } = require('../lib/coordinator/drain-gauge.cjs');
+
+  console.log('HARNESS-BACKLOG DRAIN GAUGE');
+  console.log('─'.repeat(72));
+
+  const result = await planDrainGauge(supabase);
+  if (result.noData) {
+    console.log('  (NO-DATA: ' + result.reason + ')');
+    console.log('');
+    return;
+  }
+
+  if (result.openCount === 0) {
+    console.log('  (0 open-actionable harness_backlog rows)');
+    console.log('');
+    return;
+  }
+
+  console.log('  ' + result.openCount + ' open-actionable, oldest ' + result.oldestAgeDays + 'd');
+  console.log('');
+}
+
 // FR-4 surfacing: rows the stale-session sweep dead-lettered (payload.dead_letter=true)
 // in the last 24h — undelivered traffic no longer vanishes tracelessly; the coordinator
 // can re-send to the successor session. Read-only.
@@ -2049,6 +2076,7 @@ async function main() {
     context:       async () => await printWorkingContext(), // SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001 (FR-3)
     feedback:      async () => await printFeedback(d), // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001
     slagauge:      async () => await printFeedbackSlaGauge(), // QF-20260704-493
+    draingauge:    async () => await printDrainGauge(), // SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 (FR-9)
     team:          () => printTeam(d), // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B
     chairmanemail: async () => await printChairmanEmailChannelHealth(), // SD-LEO-INFRA-CHAIRMAN-EMAIL-CHANNEL-001
     periodic:      async () => await printPeriodicLiveness(), // SD-LEO-INFRA-PERIODIC-PROCESS-LIVENESS-001 (FR-5)
@@ -2070,6 +2098,7 @@ async function main() {
       await printRelayDropGauge(); // FR-3 SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001
       await printChairmanEmailChannelHealth(); // SD-LEO-INFRA-CHAIRMAN-EMAIL-CHANNEL-001
       await printFeedbackSlaGauge(); // SD-LEO-FIX-FEEDBACK-CONSUMPTION-SLA-001 (escalated from QF-20260704-493) — feedback-consumption SLA gauge
+      await printDrainGauge(); // SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 (FR-9) — harness-backlog drain gauge
       await printAdamInbox(); // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B — Adam advisory lane
       await printReviewHeldSds(); // QF-20260704-742 — third intake surface: needs_coordinator_review holds
       await printSolomonInbox(); // SD-LEO-INFRA-SOLOMON-CONSULT-001F — Solomon oracle consult lane (dormant until SOLOMON_CONSULT_V1)
@@ -2088,7 +2117,7 @@ async function main() {
   const fn = sections[section];
   if (!fn) {
     console.log('Usage: node scripts/fleet-dashboard.cjs [section]');
-    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, periodic, qa, forecast, predictions, inbox, adam, solomon, context, feedback, slagauge, team, all');
+    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, periodic, qa, forecast, predictions, inbox, adam, solomon, context, feedback, slagauge, draingauge, team, all');
     process.exit(1);
   }
 

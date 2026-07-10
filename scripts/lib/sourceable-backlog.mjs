@@ -14,12 +14,18 @@
  * (a closure artifact), as opposed to a genuine sourceable harness-backlog item?
  * Primary signal: metadata.flag_class (set by capture-completion-flags.js). Title fallback
  * covers rows fetched without metadata.
+ *
+ * SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 (FR-10): the alternation used to be
+ * "completion flag" (no plural), so \b never broke between "flag" and the "s" in
+ * capture-completion-flags.js's actual witness title "Completion flags witness — SD-XXX"
+ * (both are word characters -- no boundary exists there) -- the witness rows silently
+ * fell through this filter uncaught. "flags?" makes the plural match too.
  * @param {{title?:string, metadata?:object}} r feedback row
  * @returns {boolean}
  */
 export const isAutoCaptureFeedback = (r) => {
   if (r && r.metadata && r.metadata.flag_class) return true;
-  return /^\s*(completion flag|fleet retro|coordinator review)\b/i.test(String((r && r.title) || ''));
+  return /^\s*(completion flags?|fleet retro|coordinator review)\b/i.test(String((r && r.title) || ''));
 };
 
 /**

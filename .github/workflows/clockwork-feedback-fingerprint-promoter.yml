@@ -1,0 +1,48 @@
+name: "Clockwork: Feedback Fingerprint Promoter"
+
+# SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 / FR-5
+# Groups harness_backlog feedback rows by content fingerprint; promotes any
+# fingerprint with 3+ occurrences within a rolling 14-day window to a QF-candidate.
+
+on:
+  schedule:
+    # Every 6 hours — frequent enough to catch a burst quickly, sparse enough not to
+    # spam QF creation.
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Preview mode (no writes)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run fingerprint promoter
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            node scripts/feedback-fingerprint-promoter.mjs
+          else
+            node scripts/feedback-fingerprint-promoter.mjs --apply
+          fi

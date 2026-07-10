@@ -1,0 +1,106 @@
+{
+  "title": "Harness-backlog drain policy: terminal categories, fingerprint promotion, archive-not-delete age-out",
+  "executive_summary": "The feedback table (category='harness_backlog') is a write-only sink: 2,320 rows, zero closures ever. 1,784 are completion-flag witness residue (auto-generated audit rows from the post-completion-tail witness mechanism) burying 516 genuinely-actionable reports. This PRD makes closure a write-time design property: (1) new terminal categories that never enter actionable queries, migrating the witness writer off category='harness_backlog' entirely; (2) generalizing the existing signal-router.cjs fingerprint mechanism into a scheduled promoter that auto-creates a QF-candidate at 3+ occurrences within 14 days; (3) an archive-not-delete age-out job for informational rows only; (4) writer-API enforcement so uncategorized writes fail toward attention, not toward the sink; (5) routing retro-action-item promotion directly to QF/SD creation instead of through this table; (6) a drain gauge on the coordinator board.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Introduce write-time terminal categories",
+      "description": "feedback.category is free-text (no CHECK constraint). Introduce 3 new category values as a documented convention (not a DB constraint, matching the existing free-text design): completion_flag_witness, telemetry_aggregate, informational_note. These are never included in any actionable-work query (fleet-dashboard.cjs's harness_backlog reader, sd-from-feedback.js, the coordinator board).",
+      "priority": "P0"
+    },
+    {
+      "id": "FR-2",
+      "title": "Migrate the completion-flag witness writer off category='harness_backlog'",
+      "description": "scripts/capture-completion-flags.js's WITNESS_TUPLE (zero-findings path) currently writes {category:'harness_backlog', status:'backlog'}. Change to {category:'completion_flag_witness'}. This single change removes 1,784 of 2,320 rows from the harness_backlog category.",
+      "priority": "P0"
+    },
+    {
+      "id": "FR-3",
+      "title": "Backfill migration for existing witness rows",
+      "description": "A small additive migration (or a one-off backfill script, given category has no CHECK constraint -- a plain UPDATE) re-categorizes the existing ~1,784 rows matched by dedup_key LIKE 'completion-flag-witness::%' from category='harness_backlog' to category='completion_flag_witness'. Archive-not-delete: this is a re-categorization, not a deletion -- no data is lost.",
+      "priority": "P0"
+    },
+    {
+      "id": "FR-4",
+      "title": "Generalize signal-router.cjs's fingerprint mechanism into a shared module",
+      "description": "lib/coordinator/signal-router.cjs already implements normalize() (NFKC, lowercase, strip control/zero-width chars, collapse whitespace), fingerprint(type, body) = sha256(type::normalize(body)), groupByFingerprint(), and shouldPromote() (occurrence-threshold promotion). Extract the reusable parts (normalize, fingerprint, groupByFingerprint) into a shared module (e.g. lib/shared/content-fingerprint.js) that both signal-router.cjs (unchanged behavior) and the new feedback-table promoter (FR-5) import, rather than reimplementing fingerprinting a third time in this codebase (after signal-router.cjs and issue_patterns.dedup_fingerprint's SQL trigger).",
+      "priority": "P0"
+    },
+    {
+      "id": "FR-5",
+      "title": "Scheduled promoter: 3-occurrence fingerprint promotion to QF-candidate",
+      "description": "A new script (following the existing .github/workflows/clockwork-*.yml GitHub Actions cron pattern -- no DB-backed job-queue table exists in this codebase, confirmed) queries feedback WHERE category='harness_backlog' AND archived_at IS NULL, groups by fingerprint (FR-4's shared module, fingerprinting on title+description), and for any fingerprint with 3+ occurrences within a rolling 14-day window, creates exactly one QF-candidate (via the existing QF-creation path) citing the fingerprint, occurrence count, and the source feedback row ids. Idempotent: a fingerprint that has already been promoted (tracked via a marker on the source rows, e.g. metadata.promoted_to_qf) is not promoted again even if a 4th occurrence lands.",
+      "priority": "P0"
+    },
+    {
+      "id": "FR-6",
+      "title": "Age-out job: archive-not-delete for informational rows",
+      "description": "feedback.status has a CHECK constraint (new/triaged/in_progress/resolved/wont_fix/duplicate/invalid/backlog/shipped) with no 'archived' value. Add a nullable archived_at timestamptz column via an additive migration (avoids touching the existing CHECK or overloading the already-ambiguous 'backlog' status value). A new scheduled script (clockwork-*.yml pattern) sets archived_at = now() on rows WHERE category='informational_note' AND archived_at IS NULL AND updated_at < now() - interval '30 days'. Rows in any other category are structurally excluded from this job's query -- actionable rows never age out, they promote (FR-5) or get manually dispositioned.",
+      "priority": "P0"
+    },
+    {
+      "id": "FR-7",
+      "title": "Writer-API enforcement: category required, fail toward attention",
+      "description": "lib/governance/emit-feedback.js's emitFeedback()/emitFeedbackBatch() -- the canonical writer scripts/log-harness-bug.js, lib/coordinator/signal-router.cjs, lib/eva/lifecycle-sd-bridge.js, lib/adam/outbound-silence-watchdog.js, and scripts/pattern-alert-sd-creator.js all funnel through -- must require an explicit category parameter. If a caller omits it, default to 'harness_backlog' (actionable) rather than silently defaulting to any of the 3 new terminal categories -- fail toward attention, never toward the sink.",
+      "priority": "P0"
+    },
+    {
+      "id": "FR-8",
+      "title": "Route retro-action-item promotion directly to QF/SD creation",
+      "description": "Find the retro-action-item promotion path (the mechanism that currently inserts promoted retrospective action items into the feedback table as an intermediate step, per the SD rationale's 'retro action items are promoted into the same table and die there'). Route it directly to the existing /learn apply-phase SD/QF-creation path instead of inserting into feedback first.",
+      "priority": "P1"
+    },
+    {
+      "id": "FR-9",
+      "title": "Drain gauge on the coordinator board",
+      "description": "A new lib/coordinator/drain-gauge.cjs module, following the established gauge pattern (lib/coordinator/feedback-sla-gauge.cjs / relay-drop-gauge.cjs / strand-age-gauge.cjs: exports plan<Name>()), computing open-actionable count (category='harness_backlog' AND archived_at IS NULL AND status NOT IN resolved-equivalent statuses) and oldest-actionable-age. Wired into scripts/fleet-dashboard.cjs's print/dispatch table (mirroring the existing printFeedbackSlaGauge() registration). NO-DATA on query failure, per the established gauge convention (never silently show a stale/zero count as if it were live).",
+      "priority": "P1"
+    },
+    {
+      "id": "FR-10",
+      "title": "Fix the sourceable-backlog.mjs word-boundary regex bug",
+      "description": "scripts/lib/sourceable-backlog.mjs's title regex /^\\s*(completion flag|fleet retro|coordinator review)\\b/i fails to match 'Completion flags witness' because \\b does not break between 'flag' and 's' (both word characters) -- confirmed by direct regex testing. Fix so historical witness rows (before FR-2/FR-3 land, and any stragglers) are correctly filtered wherever this function is still consulted during the transition.",
+      "priority": "P2"
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "description": "The archived_at column addition is additive-only (nullable, no default backfill required beyond FR-6's own age-out logic) -- no ALTER on feedback's existing CHECK constraints, no data loss." },
+    { "id": "TR-2", "description": "signal-router.cjs's existing behavior (its own promotion threshold: >=3 distinct callsigns in 60min OR single critical) is preserved byte-for-byte after the FR-4 extraction -- this is a refactor (move shared logic to a new module), not a behavior change to the signal-router's own use case." },
+    { "id": "TR-3", "description": "Archive-not-delete is a hard invariant across FR-3 and FR-6: no DELETE statement is ever issued against the feedback table by any code this SD introduces." }
+  ],
+  "out_of_scope": [
+    "Retroactively re-triaging the 516 currently-actionable harness_backlog rows -- that is downstream operator work the drain gauge now makes visible, not this SD's job",
+    "Building a general-purpose DB-backed cron/job-queue system -- reuses the existing clockwork-*.yml GitHub Actions pattern",
+    "Changing feedback.status's CHECK constraint to add an 'archived' value -- archived_at is additive instead, a lower-risk migration"
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "description": "A zero-findings capture-completion-flags.js run writes category='completion_flag_witness', not 'harness_backlog'; the row never appears in fleet-dashboard.cjs's harness_backlog actionable query." },
+    { "id": "TS-2", "description": "The backfill migration re-categorizes all existing dedup_key LIKE 'completion-flag-witness::%' rows; row count before/after matches (no rows lost, only category changed)." },
+    { "id": "TS-3", "description": "3 feedback rows sharing a fingerprint within 14 days trigger exactly one QF-candidate citing the fingerprint + all 3 source ids; a 4th occurrence of the same already-promoted fingerprint does not create a duplicate." },
+    { "id": "TS-4", "description": "signal-router.cjs's existing unit tests still pass unchanged after the FR-4 extraction (behavior-preserving refactor)." },
+    { "id": "TS-5", "description": "The age-out job sets archived_at on a 31-day-old informational_note row but leaves a 31-day-old harness_backlog row's archived_at NULL." },
+    { "id": "TS-6", "description": "emitFeedback() called without a category parameter defaults to 'harness_backlog', not to any of the 3 new terminal categories." },
+    { "id": "TS-7", "description": "The regex fix: sourceableBacklog() (or its title-matching helper) correctly matches 'Completion flags witness — SD-XXX' as non-sourceable." },
+    { "id": "TS-8", "description": "The drain gauge returns NO-DATA (not a stale zero) when its underlying query fails, and returns a correct open-actionable count + oldest age against seeded data otherwise." }
+  ],
+  "implementation_approach": {
+    "phases": [
+      { "phase": 1, "description": "FR-1/FR-2/FR-3: terminal category convention, witness-writer migration, backfill." },
+      { "phase": 2, "description": "FR-4: extract shared fingerprint module from signal-router.cjs (behavior-preserving refactor)." },
+      { "phase": 3, "description": "FR-5/FR-6: promoter + age-out scheduled scripts (clockwork-*.yml pattern) + archived_at migration." },
+      { "phase": 4, "description": "FR-7: writer-API category enforcement." },
+      { "phase": 5, "description": "FR-8/FR-9/FR-10: retro-action routing, drain gauge, regex bug fix." }
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": ["scripts/fleet-dashboard.cjs (drain gauge)", "scripts/sd-from-feedback.js", "lib/quality/assist-engine.js", "the QF-creation path (promoter output)"],
+    "dependencies": ["feedback table", "lib/governance/emit-feedback.js", "lib/coordinator/signal-router.cjs (fingerprint logic source)", ".github/workflows/clockwork-*.yml cron pattern"],
+    "data_contracts": ["feedback.archived_at nullable timestamptz", "feedback.category new terminal values: completion_flag_witness, telemetry_aggregate, informational_note", "promoted-fingerprint marker: metadata.promoted_to_qf on source rows"],
+    "runtime_config": [],
+    "observability_rollout": "The promoter and age-out jobs are new scheduled GitHub Actions workflows (clockwork-*.yml pattern), running on their own cron schedule independent of any live session; the drain gauge is queried on-demand by fleet-dashboard.cjs, no new always-on process."
+  },
+  "risks": [
+    { "risk": "The FR-4 fingerprint-module extraction could subtly change signal-router.cjs's own promotion behavior", "mitigation": "TR-2 requires byte-for-byte behavior preservation, verified by re-running signal-router.cjs's existing test suite unchanged (TS-4)." },
+    { "risk": "The backfill migration (FR-3) touches ~1,784 rows -- a bulk UPDATE risk if the dedup_key match is too broad or too narrow", "mitigation": "Dry-run count query before the actual UPDATE; verify row count matches the known 1,784 figure before committing." }
+  ]
+}
