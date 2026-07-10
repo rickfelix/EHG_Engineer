@@ -20,6 +20,7 @@ describe('checkin step registry (lib/checkin/steps/index.cjs)', () => {
       'directed-assignment',
       'recover-stranded-final',
       'adopt-orphan',
+      'drain-reservations',
       'self-claim-gates',
       'critical-qf-jump',
       'merged-pool-self-claim',
