@@ -1,0 +1,47 @@
+name: "Clockwork: Retro Action Item Promoter"
+
+# SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 / FR-8
+# Promotes high-priority retrospective action items directly to QF-candidates,
+# never through an intermediate feedback-table insert.
+
+on:
+  schedule:
+    # Daily at 04:00 UTC.
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Preview mode (no writes)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run retro action item promoter
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            node scripts/promote-retro-action-items.mjs
+          else
+            node scripts/promote-retro-action-items.mjs --apply
+          fi

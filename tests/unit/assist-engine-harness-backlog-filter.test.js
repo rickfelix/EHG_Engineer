@@ -56,4 +56,22 @@ describe('QF-20260509-149: splitEnhancementsExcludingHarnessBacklog', () => {
     expect(enhancements.map(e => e.id)).toEqual(['e1', 'e2']);
     expect(skippedHarnessBacklog).toBe(0);
   });
+
+  // SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 (FR-1, TS-1): a plain
+  // category!=='harness_backlog' exclusion would let fresh write-time-terminal
+  // category rows (completion_flag_witness/telemetry_aggregate/informational_note)
+  // leak into the enhancements stream and re-form the sink-noise problem FR-2 exists
+  // to fix (VALIDATION finding at PLAN_VERIFICATION).
+  it('also excludes the write-time-terminal categories, not just harness_backlog', () => {
+    const enriched = [
+      row({ id: 'w1', category: 'completion_flag_witness' }),
+      row({ id: 't1', category: 'telemetry_aggregate' }),
+      row({ id: 'n1', category: 'informational_note' }),
+      row({ id: 'h1', category: 'harness_backlog' }),
+      row({ id: 'keep', category: 'enhancement' }),
+    ];
+    const { enhancements, skippedHarnessBacklog } = splitEnhancementsExcludingHarnessBacklog(enriched);
+    expect(enhancements.map(e => e.id)).toEqual(['keep']);
+    expect(skippedHarnessBacklog).toBe(4);
+  });
 });

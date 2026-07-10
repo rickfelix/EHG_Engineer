@@ -23,10 +23,14 @@ const { printFeedback } = require('../../../scripts/fleet-dashboard.cjs');
 function mockSupabase({ untriaged = [], backlog = [], failOn = null } = {}) {
   const recorded = [];
   function builder() {
-    const state = { category_eq: null, statusFiltered: false, limited: false };
+    const state = { category_eq: null, category_not_in: null, statusFiltered: false, limited: false };
     const chain = {
       select() { return chain; },
-      not(col) { if (col === 'status') state.statusFiltered = true; return chain; },
+      not(col, op, val) {
+        if (col === 'status') state.statusFiltered = true;
+        if (col === 'category' && op === 'in') state.category_not_in = val;
+        return chain;
+      },
       eq(col, val) { if (col === 'category') state.category_eq = val; return chain; },
       neq(col) { if (col === 'status') state.statusFiltered = true; return chain; },
       order() { return chain; },
@@ -113,6 +117,15 @@ describe('printFeedback — anti-flood guards', () => {
       expect(q.statusFiltered).toBe(true);
       expect(q.limited).toBe(true);
     }
+  });
+});
+
+describe('printFeedback — terminal-category exclusion (SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 FR-1)', () => {
+  test('the untriaged query excludes harness_backlog AND the write-time-terminal categories', async () => {
+    const sb = mockSupabase({ untriaged: [], backlog: [] });
+    await printFeedback({}, { supabase: sb });
+    const untriagedQuery = sb._recorded.find((q) => q.category_eq !== 'harness_backlog');
+    expect(untriagedQuery.category_not_in).toBe('(harness_backlog,completion_flag_witness,telemetry_aggregate,informational_note)');
   });
 });
 

@@ -1,0 +1,47 @@
+name: "Clockwork: Feedback Age-Out"
+
+# SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 / FR-6
+# Archive-not-delete age-out: sets feedback.archived_at on informational_note rows
+# untouched 30+ days. Never deletes, never touches actionable (harness_backlog) rows.
+
+on:
+  schedule:
+    # Daily at 03:00 UTC — low-traffic window, independent of other clockwork cadences.
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Preview mode (no writes)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  age-out:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run age-out
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            node scripts/feedback-age-out.mjs
+          else
+            node scripts/feedback-age-out.mjs --apply
+          fi

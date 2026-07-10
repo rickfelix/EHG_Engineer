@@ -18,6 +18,14 @@ describe('isAutoCaptureFeedback', () => {
     expect(isAutoCaptureFeedback({ title: 'Coordinator review of SD-BAZ' })).toBe(true);
   });
 
+  it('flags "Completion flags witness" titles (SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 FR-10, TS-7)', () => {
+    // Regression: the old /^\s*(completion flag|...)\b/i alternation had no plural,
+    // so \b never broke between "flag" and "s" in the witness writer's actual title
+    // (both word characters -- no boundary there) and these rows silently fell through.
+    expect(isAutoCaptureFeedback({ title: 'Completion flags witness — SD-LEO-INFRA-STAGE0-ENVELOPE-REGISTRATION-001' })).toBe(true);
+    expect(isAutoCaptureFeedback({ title: 'completion flags witness — sd-foo-001' })).toBe(true);
+  });
+
   it('does NOT flag a genuine harness-backlog item', () => {
     expect(isAutoCaptureFeedback({ title: 'COORDINATION-CHANNEL BUG: messages auto-marked read', metadata: {} })).toBe(false);
     expect(isAutoCaptureFeedback({ title: 'sd-start leaves a locked orphan worktree', metadata: null })).toBe(false);

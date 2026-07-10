@@ -43,9 +43,16 @@ const HARNESS_FLAG_TYPES = Object.freeze(new Set(['harness', 'quirk', 'friction'
  * (mapFeedbackLifecycle('backlog') === 'ON_THE_SHELF') so it is durable evidence the
  * reflection ran, without nagging the operator on every assist fall-through. Requires
  * TR-1 (emit-feedback.js status param).
+ *
+ * SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 (FR-2): category is
+ * 'completion_flag_witness', a write-time-terminal category — NOT 'harness_backlog'.
+ * These zero-findings witness rows (identified structurally by metadata.no_flags=true)
+ * were previously indistinguishable from genuinely-actionable harness_backlog reports.
+ * The terminal category keeps status:'backlog' as a secondary signal but no longer
+ * relies on it as the only thing distinguishing a witness from a real finding.
  * @private
  */
-const WITNESS_TUPLE = Object.freeze({ type: 'enhancement', category: 'harness_backlog', status: 'backlog' });
+const WITNESS_TUPLE = Object.freeze({ type: 'enhancement', category: 'completion_flag_witness', status: 'backlog' });
 
 /**
  * NON-harness category for findings that need a human decision. There is NO CHECK
