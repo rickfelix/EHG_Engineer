@@ -1,0 +1,305 @@
+{
+  "s11_logo_pre_s7_skip": {
+    "io": [
+      {
+        "kind": "db",
+        "table": "venture_stage_work",
+        "op": "select",
+        "filters": [
+          [
+            "eq",
+            "venture_id",
+            "00000000-0000-4000-8000-000000000001"
+          ],
+          [
+            "gte",
+            "lifecycle_stage",
+            "7"
+          ],
+          [
+            "limit",
+            "1"
+          ]
+        ],
+        "args": "lifecycle_stage"
+      }
+    ],
+    "loggerLines": {
+      "log": 1,
+      "warn": 0,
+      "error": 0
+    }
+  },
+  "s11_logo_idempotent_skip": {
+    "io": [
+      {
+        "kind": "db",
+        "table": "venture_stage_work",
+        "op": "select",
+        "filters": [
+          [
+            "eq",
+            "venture_id",
+            "00000000-0000-4000-8000-000000000001"
+          ],
+          [
+            "gte",
+            "lifecycle_stage",
+            "7"
+          ],
+          [
+            "limit",
+            "1"
+          ]
+        ],
+        "args": "lifecycle_stage"
+      },
+      {
+        "kind": "db",
+        "table": "venture_artifacts",
+        "op": "select",
+        "filters": [
+          [
+            "eq",
+            "venture_id",
+            "00000000-0000-4000-8000-000000000001"
+          ],
+          [
+            "eq",
+            "artifact_type",
+            "identity_logo_image"
+          ],
+          [
+            "limit",
+            "1"
+          ]
+        ],
+        "args": "id"
+      }
+    ],
+    "loggerLines": {
+      "log": 1,
+      "warn": 0,
+      "error": 0
+    }
+  },
+  "s11_logo_no_spec_skip": {
+    "io": [
+      {
+        "kind": "db",
+        "table": "venture_stage_work",
+        "op": "select",
+        "filters": [
+          [
+            "eq",
+            "venture_id",
+            "00000000-0000-4000-8000-000000000001"
+          ],
+          [
+            "gte",
+            "lifecycle_stage",
+            "7"
+          ],
+          [
+            "limit",
+            "1"
+          ]
+        ],
+        "args": "lifecycle_stage"
+      },
+      {
+        "kind": "db",
+        "table": "venture_artifacts",
+        "op": "select",
+        "filters": [
+          [
+            "eq",
+            "venture_id",
+            "00000000-0000-4000-8000-000000000001"
+          ],
+          [
+            "eq",
+            "artifact_type",
+            "identity_logo_image"
+          ],
+          [
+            "limit",
+            "1"
+          ]
+        ],
+        "args": "id"
+      },
+      {
+        "kind": "db",
+        "table": "venture_artifacts",
+        "op": "select",
+        "filters": [
+          [
+            "eq",
+            "venture_id",
+            "00000000-0000-4000-8000-000000000001"
+          ],
+          [
+            "eq",
+            "artifact_type",
+            "identity_brand_name"
+          ],
+          [
+            "order",
+            "updated_at",
+            "{\"ascending\":false}"
+          ],
+          [
+            "limit",
+            "1"
+          ],
+          [
+            "maybeSingle"
+          ]
+        ],
+        "args": "artifact_data"
+      }
+    ],
+    "loggerLines": {
+      "log": 1,
+      "warn": 0,
+      "error": 0
+    }
+  },
+  "s17_docgen_default_path": {
+    "io": [
+      {
+        "kind": "db",
+        "table": "ventures",
+        "op": "select",
+        "filters": [
+          [
+            "eq",
+            "id",
+            "00000000-0000-4000-8000-000000000001"
+          ],
+          [
+            "single"
+          ]
+        ],
+        "args": "name"
+      },
+      {
+        "kind": "db",
+        "table": "venture_artifacts",
+        "op": "select",
+        "filters": [
+          [
+            "eq",
+            "venture_id",
+            "00000000-0000-4000-8000-000000000001"
+          ],
+          [
+            "eq",
+            "is_current",
+            "true"
+          ]
+        ],
+        "args": "artifact_type, artifact_data, content, lifecycle_stage"
+      },
+      {
+        "kind": "throw",
+        "message": "supabase.from(...).select(...).like is not a function"
+      }
+    ],
+    "loggerLines": {
+      "log": 1,
+      "warn": 0,
+      "error": 0
+    }
+  },
+  "s17_seed_draft_vision_default_path": {
+    "io": [
+      {
+        "kind": "db",
+        "table": "venture_stage_work",
+        "op": "select",
+        "filters": [
+          [
+            "eq",
+            "venture_id",
+            "00000000-0000-4000-8000-000000000001"
+          ],
+          [
+            "eq",
+            "lifecycle_stage",
+            "19"
+          ],
+          [
+            "maybeSingle"
+          ]
+        ],
+        "args": "advisory_data"
+      },
+      {
+        "kind": "db",
+        "table": "ventures",
+        "op": "select",
+        "filters": [
+          [
+            "eq",
+            "id",
+            "00000000-0000-4000-8000-000000000001"
+          ],
+          [
+            "maybeSingle"
+          ]
+        ],
+        "args": "name, build_model"
+      },
+      {
+        "kind": "db",
+        "table": "eva_vision_documents",
+        "op": "select",
+        "filters": [
+          [
+            "eq",
+            "venture_id",
+            "00000000-0000-4000-8000-000000000001"
+          ],
+          [
+            "eq",
+            "level",
+            "L2"
+          ],
+          [
+            "limit",
+            "1"
+          ],
+          [
+            "maybeSingle"
+          ]
+        ],
+        "args": "id, vision_key, status"
+      },
+      {
+        "kind": "db",
+        "table": "venture_artifacts",
+        "op": "select",
+        "filters": [
+          [
+            "eq",
+            "venture_id",
+            "00000000-0000-4000-8000-000000000001"
+          ],
+          [
+            "eq",
+            "is_current",
+            "true"
+          ]
+        ],
+        "args": "artifact_type, artifact_data, content, lifecycle_stage"
+      }
+    ],
+    "loggerLines": {
+      "log": 0,
+      "warn": 1,
+      "error": 0
+    }
+  }
+}
