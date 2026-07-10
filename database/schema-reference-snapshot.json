@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-07-10T04:32:39.640Z",
+ "generated_at": "2026-07-10T12:36:05.555Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
  "table_count": 784,
  "view_count": 180,
@@ -596,7 +596,7 @@
   "service_tasks": "{id,venture_id,service_id,task_type,status,priority,artifacts,confidence_score,input_params,claimed_at,completed_at,error_message,metadata,created_at,updated_at}",
   "service_telemetry": "{id,task_id,venture_id,service_id,pr_url,pr_status,outcomes,venture_agent_version,reported_at,outcome,agent_version,processing_time_ms,feedback,service_key,event_type,confidence_score,routing_decision,metadata,created_at}",
   "service_versions": "{id,service_id,version,artifact_schema,changelog,deprecated_at,created_at}",
-  "session_coordination": "{id,target_session,target_sd,message_type,subject,body,payload,sender_session,sender_type,created_at,expires_at,read_at,acknowledged_at,correlation_id}",
+  "session_coordination": "{id,target_session,target_sd,message_type,subject,body,payload,sender_session,sender_type,created_at,expires_at,read_at,acknowledged_at,correlation_id,delivered_at}",
   "session_lifecycle_events": "{id,event_type,session_id,machine_id,terminal_id,pid,reason,latency_ms,metadata,created_at}",
   "ship_review_findings": "{id,pr_number,review_tier,risk_score,finding_count,finding_categories,verdict,sd_key,branch,multi_agent,reviewed_at,created_at,synthesized_at}",
   "shipping_decisions": "{id,sd_id,handoff_type,decision_type,decision,confidence,confidence_score,reasoning,context_snapshot,executed_at,execution_result,execution_duration_ms,escalated_to_human,human_decision,human_decision_at,human_notes,model,tokens_used,cost_usd,created_at,updated_at}",

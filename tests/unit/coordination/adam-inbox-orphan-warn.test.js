@@ -15,6 +15,10 @@ function stub(rows) {
     eq(col, val) { captured.eq[col] = val; return selectChain; },
     or() { captured.usedOr = true; return selectChain; },
     is(col) { captured.isNull.push(col); return selectChain; },
+    // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001: window scope (gte) + advisory
+    // older-rows head-count (terminal .lt) added to drainInbox.
+    gte() { return selectChain; },
+    lt() { return Promise.resolve({ count: 0, error: null }); },
     order() { return selectChain; },
     limit() { return Promise.resolve({ data: rows, error: null }); },
   };
