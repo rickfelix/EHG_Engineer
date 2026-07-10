@@ -102,7 +102,8 @@ describe('computePaidGaugeState (SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002 FR-4)
           }
           return {
             not: vi.fn(() => ({ limit: vi.fn(() => Promise.resolve({ data: readinessRows, error: null })) })),
-            eq: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ data: resolvedRows, error: null })) })),
+            // resolved-rows query: .eq(venture_id).eq(attribution_status).eq(livemode)
+            eq: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ data: resolvedRows, error: null })) })) })),
           };
         }),
       })),
@@ -116,10 +117,18 @@ describe('computePaidGaugeState (SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002 FR-4)
     expect(result.reason).toMatch(/never run/);
   });
 
-  it('TS-5: reports live with correct paid_amount_cents once resolver coverage exists', async () => {
+  it('TS-5: reports live with a DEDUPED paid_amount_cents once resolver coverage exists — never double-counts a payment\'s multiple webhook-event rows (adversarial-review finding)', async () => {
     const supabase = buildSupabaseStub({
       readinessRows: [{ id: 'row-1' }],
-      resolvedRows: [{ amount_cents: 1000, currency: 'usd' }, { amount_cents: 500, currency: 'usd' }],
+      resolvedRows: [
+        // ONE real payment (pi_1) captured as 3 separate ops_payment_events rows,
+        // per Stripe's own multi-event webhook behavior + the Phase-1 IDEMP-02 note.
+        { id: 'e1', amount_cents: 1000, currency: 'usd', event_type: 'checkout.session.completed', payment_intent_id: 'pi_1', stripe_charge_id: null },
+        { id: 'e2', amount_cents: 1000, currency: 'usd', event_type: 'payment_intent.succeeded', payment_intent_id: 'pi_1', stripe_charge_id: null },
+        { id: 'e3', amount_cents: 1000, currency: 'usd', event_type: 'charge.succeeded', payment_intent_id: 'pi_1', stripe_charge_id: 'ch_1' },
+        // A SECOND, genuinely distinct payment (pi_2).
+        { id: 'e4', amount_cents: 500, currency: 'usd', event_type: 'checkout.session.completed', payment_intent_id: 'pi_2', stripe_charge_id: null },
+      ],
       unattributedCount: 2,
     });
     const result = await computePaidGaugeState({ supabase, ventureId: 'v-1' });

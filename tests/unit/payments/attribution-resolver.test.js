@@ -7,6 +7,7 @@ import {
   resolveViaLineage,
   resolveRow,
   resolveUnattributedEvents,
+  computeAttributedRevenue,
   VALID_METHODS,
 } from '../../../lib/payments/attribution-resolver.js';
 
@@ -77,6 +78,74 @@ describe('attribution-resolver (SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002)', () 
   it('VALID_METHODS has no "inferred" value — zero heuristic attributions possible', () => {
     expect(VALID_METHODS).toEqual(['direct_metadata', 'lineage_payment_intent', 'lineage_charge']);
     expect(VALID_METHODS).not.toContain('inferred');
+  });
+
+  describe('computeAttributedRevenue (adversarial-review finding: Phase-1 IDEMP-02 dedup)', () => {
+    it('dedups a single real payment captured as 3 separate webhook-event rows sharing payment_intent_id, counting it ONCE', () => {
+      const rows = [
+        { id: 'e1', amount_cents: 1000, currency: 'usd', event_type: 'checkout.session.completed', payment_intent_id: 'pi_1', stripe_charge_id: null },
+        { id: 'e2', amount_cents: 1000, currency: 'usd', event_type: 'payment_intent.succeeded', payment_intent_id: 'pi_1', stripe_charge_id: null },
+        { id: 'e3', amount_cents: 1000, currency: 'usd', event_type: 'charge.succeeded', payment_intent_id: 'pi_1', stripe_charge_id: 'ch_1' },
+      ];
+      expect(computeAttributedRevenue(rows)).toEqual({ totalCents: 1000, currency: 'usd' });
+    });
+
+    it('prefers checkout.session over payment_intent/charge as the primary amount within a group', () => {
+      const rows = [
+        { id: 'e1', amount_cents: 999, currency: 'usd', event_type: 'charge.succeeded', payment_intent_id: 'pi_1', stripe_charge_id: 'ch_1' },
+        { id: 'e2', amount_cents: 1000, currency: 'usd', event_type: 'checkout.session.completed', payment_intent_id: 'pi_1', stripe_charge_id: null },
+      ];
+      expect(computeAttributedRevenue(rows).totalCents).toBe(1000);
+    });
+
+    it('sums genuinely distinct payments (different payment_intent_id) rather than collapsing them', () => {
+      const rows = [
+        { id: 'e1', amount_cents: 1000, currency: 'usd', event_type: 'checkout.session.completed', payment_intent_id: 'pi_1', stripe_charge_id: null },
+        { id: 'e2', amount_cents: 500, currency: 'usd', event_type: 'checkout.session.completed', payment_intent_id: 'pi_2', stripe_charge_id: null },
+      ];
+      expect(computeAttributedRevenue(rows).totalCents).toBe(1500);
+    });
+
+    it('ALWAYS adds refund rows (a genuine adjustment, never a duplicate of the original charge)', () => {
+      const rows = [
+        { id: 'e1', amount_cents: 1000, currency: 'usd', event_type: 'checkout.session.completed', payment_intent_id: 'pi_1', stripe_charge_id: null },
+        { id: 'e2', amount_cents: -400, currency: 'usd', event_type: 'charge.refunded', payment_intent_id: 'pi_1', stripe_charge_id: 'ch_1' },
+      ];
+      expect(computeAttributedRevenue(rows).totalCents).toBe(600);
+    });
+
+    it('falls back to stripe_charge_id grouping when payment_intent_id is absent', () => {
+      const rows = [
+        { id: 'e1', amount_cents: 300, currency: 'usd', event_type: 'charge.succeeded', payment_intent_id: null, stripe_charge_id: 'ch_only' },
+        { id: 'e2', amount_cents: 300, currency: 'usd', event_type: 'charge.refunded', payment_intent_id: null, stripe_charge_id: 'ch_only' },
+      ];
+      // Note: charge.refunded's amount_cents would itself already be negative
+      // in a real captured row (ingester convention); this fixture uses a
+      // positive value purely to prove refund rows are ALWAYS additive here.
+      expect(computeAttributedRevenue(rows).totalCents).toBe(600);
+    });
+
+    it('rows with neither payment_intent_id nor stripe_charge_id are treated as independent singletons (never merged)', () => {
+      const rows = [
+        { id: 'e1', amount_cents: 100, currency: 'usd', event_type: 'checkout.session.completed', payment_intent_id: null, stripe_charge_id: null },
+        { id: 'e2', amount_cents: 200, currency: 'usd', event_type: 'checkout.session.completed', payment_intent_id: null, stripe_charge_id: null },
+      ];
+      expect(computeAttributedRevenue(rows).totalCents).toBe(300);
+    });
+
+    it('returns currency: null (never mislabeled) when resolved rows span more than one currency', () => {
+      const rows = [
+        { id: 'e1', amount_cents: 1000, currency: 'usd', event_type: 'checkout.session.completed', payment_intent_id: 'pi_1', stripe_charge_id: null },
+        { id: 'e2', amount_cents: 800, currency: 'eur', event_type: 'checkout.session.completed', payment_intent_id: 'pi_2', stripe_charge_id: null },
+      ];
+      const result = computeAttributedRevenue(rows);
+      expect(result.currency).toBeNull();
+      expect(result.totalCents).toBe(1800);
+    });
+
+    it('returns totalCents: 0, currency: null for an empty row set', () => {
+      expect(computeAttributedRevenue([])).toEqual({ totalCents: 0, currency: null });
+    });
   });
 
   describe('resolveUnattributedEvents', () => {
