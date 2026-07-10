@@ -13,7 +13,7 @@ function makeDecision(overrides = {}) {
     created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), // 5h ago (overdue for gate_decision 4h SLA)
     blocking: false,
     venture_id: 'v-1',
-    metadata: {},
+    brief_data: {},
     ...overrides,
   };
 }
@@ -95,7 +95,7 @@ describe('chairman-sla-enforcer', () => {
 
     it('skips already-escalated decisions', async () => {
       const escalatedDecision = makeDecision({
-        metadata: { escalation: { escalated_at: '2026-01-01' } },
+        brief_data: { escalation: { escalated_at: '2026-01-01' } },
       });
       const supabase = mockSupabase({ selectData: [escalatedDecision] });
 
