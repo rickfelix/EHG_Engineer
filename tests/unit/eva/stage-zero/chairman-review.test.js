@@ -213,6 +213,30 @@ describe('ChairmanReview', () => {
       expect(insertArg.seeded_from_venture_id).toBeNull();
     });
 
+    // SD-LEO-INFRA-STAGE0-TRAVERSABILITY-REACH-001 (adversarial-review CRITICAL fix):
+    // required_capabilities was declared on the candidate/brief but never persisted, so a
+    // future seeded_from_venture reseed (venture-reseeding.js reads this exact metadata
+    // path) always saw undefined. Persist it so the carry-forward is no longer vacuous.
+    it('persists required_capabilities onto metadata.stage_zero when the brief declares it', async () => {
+      const mockSupabase = createMockSupabase();
+      await persistVentureBrief(
+        { decision: 'ready', brief: { ...validBrief, required_capabilities: [{ name: 'venture web deploy', kind: 'form_factor' }] }, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+      const insertArg = mockSupabase._mockChain.insert.mock.calls[0][0];
+      expect(insertArg.metadata.stage_zero.required_capabilities).toEqual([{ name: 'venture web deploy', kind: 'form_factor' }]);
+    });
+
+    it('persists required_capabilities = null (not fabricated) when the brief does not declare it', async () => {
+      const mockSupabase = createMockSupabase();
+      await persistVentureBrief(
+        { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+      const insertArg = mockSupabase._mockChain.insert.mock.calls[0][0];
+      expect(insertArg.metadata.stage_zero.required_capabilities).toBeNull();
+    });
+
     it('should throw on DB error when inserting venture', async () => {
       const mockSupabase = createMockSupabase({
         single: vi.fn().mockResolvedValue({
