@@ -51,12 +51,13 @@ describe('FR-3 — the reusable scanner catches off-stack CODE (not just deps)',
     expect(violations.some((v) => v.why.includes('Supabase'))).toBe(true);
   });
 
-  it('PASSES a Clerk + Replit-Postgres compliant venture (no false block)', () => {
+  it('PASSES a Clerk + Replit-Postgres + /v1/metrics compliant venture (no false block)', () => {
     const io = {
-      files: ['src/routes/__root.tsx', 'src/lib/db.ts'],
+      files: ['src/routes/__root.tsx', 'src/lib/db.ts', 'src/routes/api.v1.metrics.ts'],
       read: (rel) => ({
         'src/routes/__root.tsx': 'import { ClerkProvider } from "@clerk/tanstack-react-start";',
         'src/lib/db.ts': 'const url = process.env.DATABASE_URL; import pg from "pg";',
+        'src/routes/api.v1.metrics.ts': 'app.get("/v1/metrics", async (req, res) => { /* aggregates-only KPI response */ });',
       }[rel]),
     };
     const { violations, missing } = scanForStackViolations('/x', io);
@@ -64,10 +65,29 @@ describe('FR-3 — the reusable scanner catches off-stack CODE (not just deps)',
     expect(missing.length).toBe(0);
   });
 
-  it('reports MISSING required stack when Clerk/Postgres absent (advisory completeness)', () => {
+  it('reports MISSING required stack when Clerk/Postgres/v1-metrics all absent (advisory completeness)', () => {
     const io = { files: ['src/index.ts'], read: () => 'export const x = 1;' };
     const { missing } = scanForStackViolations('/x', io);
     expect(missing.length).toBe(REQUIRED.length);
+  });
+
+  // SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A (FR-1)
+  it('FLAGS a venture missing GET /v1/metrics even when Clerk + Postgres are both present', () => {
+    const io = {
+      files: ['src/routes/__root.tsx', 'src/lib/db.ts'],
+      read: (rel) => ({
+        'src/routes/__root.tsx': 'import { ClerkProvider } from "@clerk/tanstack-react-start";',
+        'src/lib/db.ts': 'const url = process.env.DATABASE_URL; import pg from "pg";',
+      }[rel]),
+    };
+    const { missing } = scanForStackViolations('/x', io);
+    expect(missing.some((m) => /v1\/metrics/.test(m))).toBe(true);
+  });
+
+  it('PASSES v1/metrics detection for a route registered as a template literal', () => {
+    const io = { files: ['src/server.ts'], read: () => 'router.get(`/v1/metrics`, handler);' };
+    const { missing } = scanForStackViolations('/x', io);
+    expect(missing.some((m) => /v1\/metrics/.test(m))).toBe(false);
   });
 
   it('the scanner encodes the standard (supabase + openid forbidden imports present)', () => {

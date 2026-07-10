@@ -1,0 +1,89 @@
+// SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A (FR-2)
+import { describe, it, expect } from 'vitest';
+import { computeGaugeState, isGaugeWriterAlive, DEFAULT_CADENCE_HOURS } from '../../../lib/telemetry/funnel-gauge.mjs';
+
+const NOW = new Date('2026-07-10T12:00:00.000Z');
+
+describe('computeGaugeState (SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A FR-2)', () => {
+  it('no_writer_yet when no venture_telemetry row exists', () => {
+    const result = computeGaugeState({ telemetryRow: null, now: NOW });
+    expect(result.state).toBe('no_writer_yet');
+    expect(result.reason).toMatch(/no venture_telemetry row/);
+  });
+
+  it('no_writer_yet when a row exists but kpis has never carried any validated field (e.g. always skipped/errored)', () => {
+    const result = computeGaugeState({
+      telemetryRow: { kpis: {}, pulled_at: NOW.toISOString(), ingest_status: 'skipped' },
+      now: NOW,
+    });
+    expect(result.state).toBe('no_writer_yet');
+    expect(result.reason).toMatch(/no validated KPI payload/);
+  });
+
+  it('no_writer_yet when kpis is null', () => {
+    const result = computeGaugeState({ telemetryRow: { kpis: null, pulled_at: NOW.toISOString(), ingest_status: 'error' }, now: NOW });
+    expect(result.state).toBe('no_writer_yet');
+  });
+
+  it('live when the latest pull is ok and within the cadence window', () => {
+    const pulledAt = new Date(NOW.getTime() - 5 * 3600 * 1000); // 5h ago
+    const result = computeGaugeState({
+      telemetryRow: { kpis: { signups: 10 }, pulled_at: pulledAt.toISOString(), ingest_status: 'ok' },
+      now: NOW,
+      cadenceHours: DEFAULT_CADENCE_HOURS,
+    });
+    expect(result.state).toBe('live');
+    expect(result.reason).toMatch(/within the 30h cadence window/);
+  });
+
+  it('stale when the last successful pull exceeds the cadence window, even though ingest_status is ok', () => {
+    const pulledAt = new Date(NOW.getTime() - 40 * 3600 * 1000); // 40h ago, exceeds default 30h
+    const result = computeGaugeState({
+      telemetryRow: { kpis: { signups: 10 }, pulled_at: pulledAt.toISOString(), ingest_status: 'ok' },
+      now: NOW,
+    });
+    expect(result.state).toBe('stale');
+    expect(result.reason).toMatch(/exceeding the 30h cadence window/);
+  });
+
+  it('stale when historical kpis exist but the LATEST attempt is not ok (writer regressed)', () => {
+    const pulledAt = new Date(NOW.getTime() - 1 * 3600 * 1000); // recent, but errored
+    const result = computeGaugeState({
+      telemetryRow: { kpis: { signups: 10 }, pulled_at: pulledAt.toISOString(), ingest_status: 'error' },
+      now: NOW,
+    });
+    expect(result.state).toBe('stale');
+    expect(result.reason).toMatch(/latest pull attempt was 'error'/);
+  });
+
+  it('honors a per-venture cadenceHours override tighter than the default', () => {
+    const pulledAt = new Date(NOW.getTime() - 2 * 3600 * 1000); // 2h ago
+    const result = computeGaugeState({
+      telemetryRow: { kpis: { signups: 10 }, pulled_at: pulledAt.toISOString(), ingest_status: 'ok' },
+      now: NOW,
+      cadenceHours: 1, // 2h ago exceeds a 1h declared cadence
+    });
+    expect(result.state).toBe('stale');
+  });
+
+  it('never fabricates a number — the return shape never carries a metric value, only a state + reason', () => {
+    const result = computeGaugeState({ telemetryRow: null, now: NOW });
+    expect(Object.keys(result).sort()).toEqual(['reason', 'state']);
+  });
+});
+
+describe('isGaugeWriterAlive (SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A FR-2/FR-5)', () => {
+  it('true only for state live', () => {
+    const pulledAt = new Date(NOW.getTime() - 1 * 3600 * 1000);
+    expect(isGaugeWriterAlive({ telemetryRow: { kpis: { signups: 1 }, pulled_at: pulledAt.toISOString(), ingest_status: 'ok' }, now: NOW })).toBe(true);
+  });
+
+  it('false for no_writer_yet', () => {
+    expect(isGaugeWriterAlive({ telemetryRow: null, now: NOW })).toBe(false);
+  });
+
+  it('false for stale', () => {
+    const pulledAt = new Date(NOW.getTime() - 40 * 3600 * 1000);
+    expect(isGaugeWriterAlive({ telemetryRow: { kpis: { signups: 1 }, pulled_at: pulledAt.toISOString(), ingest_status: 'ok' }, now: NOW })).toBe(false);
+  });
+});
