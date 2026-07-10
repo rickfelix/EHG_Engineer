@@ -94,19 +94,21 @@ function createMockLLMClient(responses = {}) {
 }
 
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+// QF-20260710-850: unit tests must never hit the network — inject the fetch seam.
+const mockFetchUrl = vi.fn().mockResolvedValue('MOCK FETCHED SITE CONTENT for grounding');
 
 // ── Core Functionality Tests ──────────────────────────────────
 
 describe('Competitor Teardown - executeCompetitorTeardown', () => {
   test('requires at least one URL', async () => {
     await expect(
-      executeCompetitorTeardown({ urls: [] }, { logger: silentLogger })
+      executeCompetitorTeardown({ urls: [] }, { logger: silentLogger, fetchUrl: mockFetchUrl })
     ).rejects.toThrow('At least one competitor URL is required');
   });
 
   test('requires urls parameter', async () => {
     await expect(
-      executeCompetitorTeardown({}, { logger: silentLogger })
+      executeCompetitorTeardown({}, { logger: silentLogger, fetchUrl: mockFetchUrl })
     ).rejects.toThrow('At least one competitor URL is required');
   });
 
@@ -115,7 +117,7 @@ describe('Competitor Teardown - executeCompetitorTeardown', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://testcorp.com'] },
-      { logger: silentLogger, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
     );
 
     // Verify PathOutput structure
@@ -143,7 +145,7 @@ describe('Competitor Teardown - executeCompetitorTeardown', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://comp-a.com', 'https://comp-b.com'] },
-      { logger: silentLogger, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
     );
 
     // LLM should be called: 2 analyses + 1 deconstruction + 1 gap analysis = 4
@@ -164,7 +166,7 @@ describe('Competitor Teardown - executeCompetitorTeardown', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://single.com'] },
-      { logger: silentLogger, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
     );
 
     // LLM should be called: 1 analysis + 1 deconstruction = 2
@@ -195,7 +197,7 @@ describe('Competitor Teardown - analyzeCompetitor', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://testcorp.com'] },
-      { logger: silentLogger, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
     );
 
     const analysis = result.raw_material.competitor_analyses[0];
@@ -212,7 +214,7 @@ describe('Competitor Teardown - analyzeCompetitor', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://bad-response.com'] },
-      { logger: silentLogger, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
     );
 
     // Should still produce a result, even with error in analysis
@@ -268,7 +270,7 @@ describe('Competitor Teardown - First Principles', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://comp.com'] },
-      { logger: silentLogger, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
     );
 
     expect(result.suggested_name).toBe('AutoPilot');
@@ -295,7 +297,7 @@ describe('Competitor Teardown - First Principles', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://test.com'] },
-      { logger: silentLogger, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
     );
 
     // Should still return a result, with empty suggested fields
@@ -321,7 +323,7 @@ describe('Competitor Teardown - Gap Analysis', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://comp1.com', 'https://comp2.com'] },
-      { logger: silentLogger, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
     );
 
     const gap = result.raw_material.gap_analysis;
@@ -355,7 +357,7 @@ describe('Competitor Teardown - Gap Analysis', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://comp1.com', 'https://comp2.com'] },
-      { logger: silentLogger, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
     );
 
     expect(result.raw_material.gap_analysis.error).toBe('Gap analysis failed');

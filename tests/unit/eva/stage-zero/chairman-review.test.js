@@ -37,6 +37,7 @@ vi.mock('../../../../lib/eva/chairman-decision-watcher.js', () => ({
 
 import { conductChairmanReview, persistVentureBrief } from '../../../../lib/eva/stage-zero/chairman-review.js';
 import { parkVenture } from '../../../../lib/eva/stage-zero/venture-nursery.js';
+import { createOrReusePendingDecision } from '../../../../lib/eva/chairman-decision-watcher.js';
 
 const silentLogger = {
   log: vi.fn(),
@@ -63,8 +64,42 @@ function createMockSupabase(overrides = {}) {
     }),
     ...overrides,
   };
+  // SD-LEO-INFRA-STAGE0-POSTURE-SUCCESSOR-001 (CH-9): persistVentureBrief now runs an
+  // up-front same-name lookup + a WIP count on 'ventures' and reads eva_config — the
+  // mock serves those chains (no existing venture, live count 0, setting unset) while
+  // keeping the shared _mockChain for insert assertions.
+  const venturesTable = {
+    ...mockChain,
+    // Hybrid select: the insert chain continues .single() (served by mockChain, honoring
+    // overrides) while the up-front name lookup continues .eq().in().order().limit()
+    // .maybeSingle() (served by the custom chain); the WIP count uses {head:true}.
+    select: vi.fn((cols, opts) => {
+      if (opts?.head) {
+        return { in: vi.fn().mockResolvedValue({ count: 0, error: null }) };
+      }
+      return {
+        ...mockChain,
+        eq: vi.fn(() => ({
+          in: vi.fn(() => ({
+            order: vi.fn(() => ({
+              limit: vi.fn(() => ({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              })),
+            })),
+          })),
+        })),
+      };
+    }),
+  };
+  const evaConfigTable = {
+    select: vi.fn(() => ({
+      eq: vi.fn(() => ({
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      })),
+    })),
+  };
   return {
-    from: vi.fn(() => ({ ...mockChain })),
+    from: vi.fn((table) => (table === 'ventures' ? venturesTable : table === 'eva_config' ? evaConfigTable : { ...mockChain })),
     _mockChain: mockChain,
   };
 }
@@ -73,6 +108,7 @@ function createMockSupabase(overrides = {}) {
 // INSERT chain (.insert().select().single()) from the idempotency LOOKUP chain
 // (.select().eq().in().order().limit().maybeSingle()) so the 23505 guard can be exercised.
 function makeGuardSupabase({ insertError = null, existingVenture = null, onSelect = () => {} } = {}) {
+  let lookupCalls = 0;
   const venturesTable = {
     insert: vi.fn(() => ({
       select: vi.fn(() => ({
@@ -82,14 +118,23 @@ function makeGuardSupabase({ insertError = null, existingVenture = null, onSelec
         }),
       })),
     })),
-    select: vi.fn(() => {
+    select: vi.fn((cols, opts) => {
+      // WIP count query (CH-9) — not a lookup; live count 0.
+      if (opts?.head) {
+        return { in: vi.fn().mockResolvedValue({ count: 0, error: null }) };
+      }
       onSelect();
+      // First lookup = the CH-9 up-front same-name check (returns null so the insert
+      // path runs); later lookups = the 23505 recovery (returns existingVenture) —
+      // models the race where the venture appears between the check and the insert.
+      lookupCalls += 1;
+      const result = lookupCalls === 1 ? null : existingVenture;
       return {
         eq: vi.fn(() => ({
           in: vi.fn(() => ({
             order: vi.fn(() => ({
               limit: vi.fn(() => ({
-                maybeSingle: vi.fn().mockResolvedValue({ data: existingVenture, error: null }),
+                maybeSingle: vi.fn().mockResolvedValue({ data: result, error: null }),
               })),
             })),
           })),
@@ -106,6 +151,7 @@ function makeGuardSupabase({ insertError = null, existingVenture = null, onSelec
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
           },
     ),
   };
@@ -190,6 +236,145 @@ describe('ChairmanReview', () => {
       expect(mockSupabase.from).toHaveBeenCalledWith('ventures');
     });
 
+    // ── SD-LEO-INFRA-STAGE0-CHAIRMAN-DECISION-AUTHORITY-001 acceptance canaries ──
+
+    // Canary 1: READY NEVER SELF-APPROVES.
+    it('ready path inserts a PAUSED venture awaiting the chairman — never active', async () => {
+      const mockSupabase = createMockSupabase();
+      await persistVentureBrief(
+        { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+      const insertArg = mockSupabase._mockChain.insert.mock.calls[0][0];
+      expect(insertArg.status).toBe('paused');
+      expect(insertArg.metadata.stage_zero.awaiting_chairman_decision).toBe(true);
+      expect(insertArg.metadata.stage_zero.pause_provenance.minted_by).toBe('stage0-chairman-gate');
+      expect(insertArg.current_lifecycle_stage).toBe(1);
+    });
+
+    it('ready path mints the REAL pending gate at stage 0 and returns its id', async () => {
+      const mockSupabase = createMockSupabase();
+      const result = await persistVentureBrief(
+        { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+      expect(createOrReusePendingDecision).toHaveBeenCalledTimes(1);
+      const mintArg = createOrReusePendingDecision.mock.calls[0][0];
+      expect(mintArg.stageNumber).toBe(0);
+      expect(mintArg.decisionType).toBe('stage_gate');
+      expect(mintArg.forceDecisionCreation).toBe(true);
+      expect(mintArg.briefData.provenance.minted_by).toBe('stage0-machine');
+      expect(result.stage_zero_decision_id).toBe('decision-1');
+    });
+
+    it('never writes chairman_decisions directly — no machine-forged approval row exists', async () => {
+      const mockSupabase = createMockSupabase();
+      await persistVentureBrief(
+        { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+      // The ONLY decision writer on this path is the mocked real gate helper; chairman-review
+      // itself must not touch the table (the forged status='approved' insert is deleted).
+      expect(mockSupabase.from).not.toHaveBeenCalledWith('chairman_decisions');
+    });
+
+    it('the machine-forged approval insert is gone from the source (grep pin)', async () => {
+      const fs = await import('node:fs');
+      const url = await import('node:url');
+      const path = await import('node:path');
+      const here = path.dirname(url.fileURLToPath(import.meta.url));
+      const src = fs.readFileSync(
+        path.resolve(here, '../../../../lib/eva/stage-zero/chairman-review.js'),
+        'utf8',
+      );
+      expect(src).not.toContain('Venture meets readiness criteria');
+      expect(src).not.toContain("status: 'active'");
+    });
+
+    // Fail-closed mint (flaw H5 class closed): a ready venture without a pending decision must
+    // never exist — mint failure compensates the venture to cancelled and rethrows.
+    it('mint failure throws fail-closed and compensates the venture to cancelled', async () => {
+      createOrReusePendingDecision.mockRejectedValueOnce(new Error('mint exploded'));
+      // maybeSingle serves the live-pending check inside the compensating path — no pending
+      // decision exists, so the cancel proceeds.
+      const mockSupabase = createMockSupabase({
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      });
+      await expect(
+        persistVentureBrief(
+          { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+          { supabase: mockSupabase, logger: silentLogger },
+        ),
+      ).rejects.toThrow(/fail-closed.*mint exploded/);
+      const updateArg = mockSupabase._mockChain.update.mock.calls.find(
+        (c) => c[0]?.status === 'cancelled',
+      );
+      expect(updateArg).toBeDefined();
+      expect(updateArg[0].metadata.stage_zero.cancellation_reason).toBe('stage0_decision_mint_failed');
+    });
+
+    // Adversarial-review round 1: never cancel a venture that already carries a live PENDING
+    // gate decision (concurrent duplicate-name 23505 re-mint race) — cancelling would strand
+    // a chairman-visible decision whose later approval becomes a silent no-op.
+    it('mint failure with a live pending decision SKIPS the compensating cancel', async () => {
+      createOrReusePendingDecision.mockRejectedValueOnce(new Error('mint exploded'));
+      const mockSupabase = createMockSupabase({
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'd-live' }, error: null }),
+      });
+      await expect(
+        persistVentureBrief(
+          { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+          { supabase: mockSupabase, logger: silentLogger },
+        ),
+      ).rejects.toThrow(/fail-closed/);
+      const cancelCall = mockSupabase._mockChain.update.mock.calls.find(
+        (c) => c[0]?.status === 'cancelled',
+      );
+      expect(cancelCall).toBeUndefined();
+    });
+
+    // Adversarial-review round 2: supabase-js returns { data: null, error } on PostgREST faults
+    // instead of throwing — a discarded error would read as "no pending decision" and cancel
+    // anyway. A soft check failure must also fail toward PAUSE.
+    it('mint failure with a FAILED live-pending check also SKIPS the compensating cancel', async () => {
+      createOrReusePendingDecision.mockRejectedValueOnce(new Error('mint exploded'));
+      const mockSupabase = createMockSupabase({
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: 'transient 5xx' } }),
+      });
+      await expect(
+        persistVentureBrief(
+          { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+          { supabase: mockSupabase, logger: silentLogger },
+        ),
+      ).rejects.toThrow(/fail-closed/);
+      const cancelCall = mockSupabase._mockChain.update.mock.calls.find(
+        (c) => c[0]?.status === 'cancelled',
+      );
+      expect(cancelCall).toBeUndefined();
+    });
+
+    // Idempotent re-run wedge closure: original run died between venture insert and mint —
+    // the 23505 path re-mints (reuse-safe) for a paused-awaiting existing venture.
+    it('23505 re-run with a paused-awaiting venture re-mints the pending gate', async () => {
+      const existingVenture = {
+        id: 'v-existing',
+        name: 'TestVenture',
+        status: 'paused',
+        metadata: { stage_zero: { awaiting_chairman_decision: true } },
+      };
+      const mockSupabase = makeGuardSupabase({
+        insertError: { code: '23505', message: 'duplicate key value violates unique constraint "idx_ventures_unique_active_name"' },
+        existingVenture,
+      });
+      const result = await persistVentureBrief(
+        { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger, company_id: 'co-1' },
+      );
+      expect(createOrReusePendingDecision).toHaveBeenCalledTimes(1);
+      expect(result.stage_zero_decision_id).toBe('decision-1');
+      expect(result.id).toBe('v-existing');
+    });
+
     // SD-LEO-INFRA-CLEAN-CLONE-LAUNCH-001-A (FR-3): a reseeded brief stamps provenance
     // and stays at a fresh S0; a normal brief stamps null.
     it('stamps seeded_from_venture_id + fresh S0 for a reseeded brief', async () => {
@@ -235,6 +420,45 @@ describe('ChairmanReview', () => {
       );
       const insertArg = mockSupabase._mockChain.insert.mock.calls[0][0];
       expect(insertArg.metadata.stage_zero.required_capabilities).toBeNull();
+    });
+
+    // CH-7 (QF-20260710-467): posture_version + weights_used must survive to the venture
+    // record instead of dying at creation — the R9 reproducibility chain's longest-retention
+    // stop.
+    it('persists posture_version/posture_phase_key/weights_used when the brief carries a posture stamp', async () => {
+      const mockSupabase = createMockSupabase();
+      const briefWithPosture = {
+        ...validBrief,
+        metadata: {
+          posture_version: 'discovery@v3',
+          posture_phase_key: 'discovery',
+          posture_criteria: { weights: { moat: 0.4, market: 0.6 } },
+        },
+      };
+      await persistVentureBrief(
+        { decision: 'ready', brief: briefWithPosture, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+      const insertArg = mockSupabase._mockChain.insert.mock.calls[0][0];
+      expect(insertArg.metadata.stage_zero.posture).toEqual({
+        posture_version: 'discovery@v3',
+        posture_phase_key: 'discovery',
+        weights_used: { moat: 0.4, market: 0.6 },
+      });
+    });
+
+    it('null-coalesces posture fields for a brief with no posture stamp (non-discovery paths)', async () => {
+      const mockSupabase = createMockSupabase();
+      await persistVentureBrief(
+        { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+      const insertArg = mockSupabase._mockChain.insert.mock.calls[0][0];
+      expect(insertArg.metadata.stage_zero.posture).toEqual({
+        posture_version: null,
+        posture_phase_key: null,
+        weights_used: null,
+      });
     });
 
     it('should throw on DB error when inserting venture', async () => {
@@ -318,7 +542,7 @@ describe('ChairmanReview', () => {
       ).rejects.toThrow('Failed to create venture');
     });
 
-    it('throws on a non-unique-violation DB error without attempting the idempotent lookup', async () => {
+    it('throws on a non-unique-violation DB error without attempting the 23505 recovery lookup', async () => {
       const onSelect = vi.fn();
       const mockSupabase = makeGuardSupabase({
         insertError: { code: '23503', message: 'foreign key violation' },
@@ -331,8 +555,73 @@ describe('ChairmanReview', () => {
           { supabase: mockSupabase, logger: silentLogger, company_id: 'co-1' },
         ),
       ).rejects.toThrow('Failed to create venture');
-      // A non-23505 error must skip the idempotent lookup entirely.
-      expect(onSelect).not.toHaveBeenCalled();
+      // SD-LEO-INFRA-STAGE0-POSTURE-SUCCESSOR-001 (CH-9): the up-front same-name check
+      // runs exactly once; a non-23505 error must NOT trigger an additional recovery lookup.
+      expect(onSelect).toHaveBeenCalledTimes(1);
+    });
+
+    // SD-LEO-INFRA-STAGE0-POSTURE-SUCCESSOR-001 (CH-9): the WIP one-setting queue-claim gate.
+    it('refuses a second live venture at the WIP limit (default 1)', async () => {
+      const stub = {
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: { id: 'co-1' }, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
+      const venturesAtLimit = {
+        ...stub,
+        select: vi.fn((cols, opts) => {
+          if (opts?.head) return { in: vi.fn().mockResolvedValue({ count: 1, error: null }) };
+          return {
+            eq: vi.fn(() => ({
+              in: vi.fn(() => ({
+                order: vi.fn(() => ({
+                  limit: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) })),
+                })),
+              })),
+            })),
+          };
+        }),
+      };
+      const evaConfigUnset = { select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) })) })) };
+      const supabase = { from: vi.fn((t) => (t === 'ventures' ? venturesAtLimit : t === 'eva_config' ? evaConfigUnset : { ...stub })) };
+
+      await expect(
+        persistVentureBrief(
+          { decision: 'ready', brief: { ...validBrief, name: 'SecondVenture' }, validation: { valid: true, errors: [] } },
+          { supabase, logger: silentLogger, company_id: 'co-1' },
+        ),
+      ).rejects.toMatchObject({ name: 'WipLimitExceededError', limit: 1, current_count: 1 });
+    });
+
+    it('same-name idempotent re-run returns the existing venture BEFORE the WIP gate', async () => {
+      const existing = { id: 'v-existing', name: 'TestVenture', status: 'active' };
+      const ventures = {
+        insert: vi.fn(),
+        select: vi.fn((cols, opts) => {
+          if (opts?.head) return { in: vi.fn().mockResolvedValue({ count: 99, error: null }) };
+          return {
+            eq: vi.fn(() => ({
+              in: vi.fn(() => ({
+                order: vi.fn(() => ({
+                  limit: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: existing, error: null }) })),
+                })),
+              })),
+            })),
+          };
+        }),
+      };
+      const evaConfigUnset = { select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) })) })) };
+      const supabase = { from: vi.fn((t) => (t === 'ventures' ? ventures : evaConfigUnset)) };
+
+      const result = await persistVentureBrief(
+        { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+        { supabase, logger: silentLogger, company_id: 'co-1' },
+      );
+      expect(result).toEqual(existing);
+      expect(ventures.insert).not.toHaveBeenCalled();
     });
   });
 });

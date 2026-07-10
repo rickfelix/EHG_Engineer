@@ -24,6 +24,8 @@ vi.mock('../../../../../scripts/modules/sd-key-generator.js', () => ({
 import { executeCompetitorTeardown } from '../../../../../lib/eva/stage-zero/paths/competitor-teardown.js';
 
 const silentLogger = { log: vi.fn(), warn: vi.fn() };
+// QF-20260710-850: unit tests must never hit the network — inject the fetch seam.
+const mockFetchUrl = vi.fn().mockResolvedValue('MOCK FETCHED SITE CONTENT for grounding');
 
 // SD-LEO-INFRA-STAGE0-TRAVERSABILITY-REACH-001: executeCompetitorTeardown now loads the
 // live capability envelope fail-closed before returning; supabase must at least answer
@@ -102,19 +104,19 @@ beforeEach(() => {
 
 describe('executeCompetitorTeardown', () => {
   test('throws when no URLs provided', async () => {
-    await expect(executeCompetitorTeardown({ urls: [] }, { logger: silentLogger }))
+    await expect(executeCompetitorTeardown({ urls: [] }, { logger: silentLogger, fetchUrl: mockFetchUrl }))
       .rejects.toThrow('At least one competitor URL is required');
   });
 
   test('throws when urls is undefined', async () => {
-    await expect(executeCompetitorTeardown({}, { logger: silentLogger }))
+    await expect(executeCompetitorTeardown({}, { logger: silentLogger, fetchUrl: mockFetchUrl }))
       .rejects.toThrow('At least one competitor URL is required');
   });
 
   test('analyzes single URL and returns PathOutput', async () => {
     const result = await executeCompetitorTeardown(
       { urls: ['http://competitor.com'] },
-      { logger: silentLogger, llmClient: mockLlmClient, supabase: makeGateSupabase() }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient: mockLlmClient, supabase: makeGateSupabase() }
     );
 
     expect(result).not.toBeNull();
@@ -128,7 +130,7 @@ describe('executeCompetitorTeardown', () => {
   test('analyzes multiple URLs', async () => {
     const result = await executeCompetitorTeardown(
       { urls: ['http://a.com', 'http://b.com'] },
-      { logger: silentLogger, llmClient: mockLlmClient, supabase: makeGateSupabase() }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient: mockLlmClient, supabase: makeGateSupabase() }
     );
 
     expect(result.competitor_urls).toEqual(['http://a.com', 'http://b.com']);
@@ -140,7 +142,7 @@ describe('executeCompetitorTeardown', () => {
   test('single competitor does not run gap analysis', async () => {
     const result = await executeCompetitorTeardown(
       { urls: ['http://single.com'] },
-      { logger: silentLogger, llmClient: mockLlmClient, supabase: makeGateSupabase() }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient: mockLlmClient, supabase: makeGateSupabase() }
     );
 
     expect(result.raw_material.gap_analysis).toBeNull();
@@ -149,7 +151,7 @@ describe('executeCompetitorTeardown', () => {
   test('uses injected llmClient', async () => {
     await executeCompetitorTeardown(
       { urls: ['http://test.com'] },
-      { logger: silentLogger, llmClient: mockLlmClient, supabase: makeGateSupabase() }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient: mockLlmClient, supabase: makeGateSupabase() }
     );
 
     expect(mockLlmClient.complete).toHaveBeenCalled();
@@ -158,7 +160,7 @@ describe('executeCompetitorTeardown', () => {
   test('returns valid PathOutput with suggested fields from deconstruction', async () => {
     const result = await executeCompetitorTeardown(
       { urls: ['http://test.com'] },
-      { logger: silentLogger, llmClient: mockLlmClient, supabase: makeGateSupabase() }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient: mockLlmClient, supabase: makeGateSupabase() }
     );
 
     // The suggested fields come from the deconstruction response
@@ -166,6 +168,54 @@ describe('executeCompetitorTeardown', () => {
     expect(result.suggested_problem).toBeDefined();
     expect(result.suggested_solution).toBeDefined();
     expect(result.target_market).toBeDefined();
+  });
+});
+
+describe('executeCompetitorTeardown — fetch grounding (QF-20260710-850, Solomon C11)', () => {
+  test('calls the injected fetchUrl for each URL and grounds the analysis prompt in the fetched content', async () => {
+    await executeCompetitorTeardown(
+      { urls: ['http://a.com', 'http://b.com'] },
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient: mockLlmClient, supabase: makeGateSupabase() }
+    );
+
+    expect(mockFetchUrl).toHaveBeenCalledTimes(2);
+    expect(mockFetchUrl).toHaveBeenCalledWith('http://a.com');
+    // The first analysis prompt must embed the fetched content as primary source
+    const firstPrompt = mockLlmClient.complete.mock.calls[0][1];
+    expect(firstPrompt).toContain('Fetched Site Content');
+    expect(firstPrompt).toContain('MOCK FETCHED SITE CONTENT for grounding');
+    expect(firstPrompt).not.toContain('Based only on what you know');
+  });
+
+  test('stamps fetched analyses with grounding provenance and a metadata rollup', async () => {
+    const result = await executeCompetitorTeardown(
+      { urls: ['http://a.com'] },
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient: mockLlmClient, supabase: makeGateSupabase() }
+    );
+
+    const analysis = result.raw_material.competitor_analyses[0];
+    expect(analysis.grounding).toBe('fetched');
+    expect(analysis.fetched_chars).toBeGreaterThan(0);
+    expect(analysis.evidence_grade).toBeUndefined();
+    expect(result.metadata.grounding).toEqual({ fetched: 1, unfetched: 0 });
+  });
+
+  test('fetch failure falls back to a labeled UNFETCHED model-knowledge profile graded E0', async () => {
+    const failingFetch = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+    const result = await executeCompetitorTeardown(
+      { urls: ['http://unreachable.example'] },
+      { logger: silentLogger, fetchUrl: failingFetch, llmClient: mockLlmClient, supabase: makeGateSupabase() }
+    );
+
+    const analysis = result.raw_material.competitor_analyses[0];
+    expect(analysis.grounding).toBe('unfetched');
+    expect(analysis.grounding_label).toBe('model-knowledge profile, UNFETCHED');
+    expect(analysis.evidence_grade).toBe('E0');
+    expect(result.metadata.grounding).toEqual({ fetched: 0, unfetched: 1 });
+    // The fallback prompt must declare itself, not masquerade as grounded analysis
+    const prompt = mockLlmClient.complete.mock.calls[0][1];
+    expect(prompt).toContain('No site content could be fetched');
+    expect(prompt).not.toContain('Fetched Site Content');
   });
 });
 
@@ -198,7 +248,7 @@ describe('executeCompetitorTeardown — differentiation board wiring (SD-LEO-INF
     const result = await executeCompetitorTeardown(
       { urls: ['http://competitor.com'] },
       {
-        logger: silentLogger,
+        logger: silentLogger, fetchUrl: mockFetchUrl,
         llmClient: mockLlmClient,
         supabase: makeGateSupabase(), // present, but persist disabled
         persistTeardownAnalyses: persistSpy,
@@ -219,7 +269,7 @@ describe('executeCompetitorTeardown — differentiation board wiring (SD-LEO-INF
     const result = await executeCompetitorTeardown(
       { urls: ['http://a.com', 'http://b.com'] },
       {
-        logger: silentLogger,
+        logger: silentLogger, fetchUrl: mockFetchUrl,
         llmClient: mockLlmClient,
         supabase: makeGateSupabase(),
         persistToCanonical: true,
@@ -254,7 +304,7 @@ describe('executeCompetitorTeardown — differentiation board wiring (SD-LEO-INF
     const result = await executeCompetitorTeardown(
       { urls: ['http://competitor.com'] },
       {
-        logger: warnLogger,
+        logger: warnLogger, fetchUrl: mockFetchUrl,
         llmClient: mockLlmClient,
         supabase: makeGateSupabase(),
         persistToCanonical: true,
@@ -282,7 +332,7 @@ describe('executeCompetitorTeardown — differentiation board wiring (SD-LEO-INF
     const result = await executeCompetitorTeardown(
       { urls: ['http://competitor.com'] },
       {
-        logger: silentLogger,
+        logger: silentLogger, fetchUrl: mockFetchUrl,
         llmClient: mockLlmClient,
         supabase: makeGateSupabase(),
         persistToCanonical: true,

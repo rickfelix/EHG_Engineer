@@ -103,7 +103,23 @@ describe('routePath', () => {
 
   test('passes params and deps through to handler', async () => {
     const params = { urls: ['http://test.com'], extra: 'data' };
-    const deps = { logger: silentLogger, supabase: {} };
+    // SD-LEO-INFRA-STAGE0-POSTURE-SUCCESSOR-001 (CH-3): the router now resolves the
+    // active posture for the anti-goal screen when deps.supabase is present — the
+    // fixture serves an active posture (no anti_goals => screen inert).
+    const supabase = {
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({
+          data: [{
+            id: 'p1', phase_key: 'test_posture', version: 1,
+            criteria: { weights: { automation_feasibility: 1.0 } },
+            status: 'active', ratified_by: 'chairman', ratified_at: '2026-07-10T00:00:00Z',
+          }],
+          error: null,
+        }),
+      })),
+    };
+    const deps = { logger: silentLogger, supabase };
     executeCompetitorTeardown.mockResolvedValueOnce(validPathOutput);
     await routePath('competitor_teardown', params, deps);
     expect(executeCompetitorTeardown).toHaveBeenCalledWith(params, deps);

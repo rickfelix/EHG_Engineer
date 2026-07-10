@@ -153,7 +153,7 @@ describe('validateVentureBrief', () => {
       who_pays: 'SMB owners',
       pays_for_what: 'an automated solution',
       reached_how: 'SEO + communities',
-      price_point: 'subscription $29/mo',
+      price_point: { amount_low: 29, amount_high: 29, currency: 'USD', model: 'recurring', raw_text: 'subscription $29/mo' },
       demand_test_plan: [
         { step: 1, instruction: 'landing page probe', success_signal: '>=10 signups' },
         { step: 2, instruction: 'pre-order ask', success_signal: '>=3 pre-commitments' },

@@ -188,6 +188,9 @@ describe('executeDiscoveryMode', () => {
     // Governed-posture stamp (spec R2): the run records the posture-version it applied.
     expect(result.metadata.posture_version).toBe('test_posture@v1');
     expect(result.raw_material.posture_version).toBe('test_posture@v1');
+    // CH-7 (QF-20260710-467): the applied weights must also reach metadata (not just
+    // raw_material, which is discarded before the chairman-review write site).
+    expect(result.metadata.posture_criteria).toEqual(result.raw_material.posture_criteria);
   });
 });
 
