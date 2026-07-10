@@ -13,6 +13,7 @@ import {
   EXPLICIT_DECISIONS,
   buildExplicitDecisions,
   validateExplicitDecisions,
+  PRICE_MODELS,
 } from '../../../../lib/eva/stage-zero/thesis-contract.js';
 import { validateVentureBrief } from '../../../../lib/eva/stage-zero/interfaces.js';
 import { scanTextForStackCompliance, ruleApplies } from '../../../../lib/eva/standards/venture-stack-compliance.js';
@@ -22,7 +23,7 @@ const FULL_THESIS = {
   who_pays: 'B2B SaaS founders with 5-50 employees',
   pays_for_what: 'automated churn-risk digests from their existing billing data',
   reached_how: 'founder communities; SEO on churn keywords',
-  price_point: 'subscription $49/mo',
+  price_point: { amount_low: 49, amount_high: 49, currency: 'USD', model: 'recurring', raw_text: 'subscription $49/mo' },
   demand_test_plan: [
     { step: 1, instruction: 'Landing page with request-access CTA', success_signal: '>=10 qualified signups' },
     { step: 2, instruction: 'Pre-order ask at $49/mo', success_signal: '>=3 pre-commitments' },
@@ -124,9 +125,15 @@ describe('FR-1: buildThesisFromSynthesis derivation with provenance', () => {
     expect(t.provenance.who_pays.assumption).toBe('payer_assumed_equal_to_target_market');
     expect(t.provenance.pays_for_what.source_field).toBe('suggested_solution');
     expect(t.provenance.price_point.source_field).toContain('revenue_model');
-    expect(t.price_point).toContain('E0 ungraded'); // LLM estimate honestly labeled
+    expect(t.price_point.raw_text).toContain('E0 ungraded'); // LLM estimate honestly labeled
+    expect(t.price_point.amount_low).toBe(5000);
+    expect(t.price_point.amount_high).toBe(5000);
+    expect(t.price_point.currency).toBe('USD');
+    expect(t.price_point.model).toBe('recurring'); // 'subscription' revenue_model
+    expect(t.price_point.grade).toBe('E0');
     expect(t.incomplete_fields).toEqual([]);
     expect(t.demand_test_plan.length).toBeGreaterThanOrEqual(2);
+    expect(validateVentureThesis(t).valid).toBe(true);
   });
 
   it('prefers synthesis virality channels for reached_how when present', () => {
@@ -140,7 +147,90 @@ describe('FR-1: buildThesisFromSynthesis derivation with provenance', () => {
     expect(t.incomplete_fields).toContain('who_pays');
     expect(t.incomplete_fields).toContain('price_point');
     expect(t.incomplete_fields).toContain('demand_test_plan');
+    expect(t.price_point).toBeUndefined(); // absent, not a half-built structure
     expect(validateVentureThesis(t).valid).toBe(false); // incomplete thesis does not masquerade as valid
+  });
+});
+
+describe('FR-1b: price_point is a structured field (SD-LEO-INFRA-STAGE0-THESIS-PRICING-KEY-001)', () => {
+  it('validateVentureThesis rejects a string price_point (the old prose shape)', () => {
+    const r = validateVentureThesis({ ...FULL_THESIS, price_point: 'subscription $49/mo' });
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(' ')).toContain('thesis.price_point is required (structured object');
+  });
+
+  it('validateVentureThesis rejects a structured price_point missing required sub-fields', () => {
+    const r = validateVentureThesis({ ...FULL_THESIS, price_point: { amount_low: 10 } });
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(' ')).toContain('thesis.price_point.currency is required');
+    expect(r.errors.join(' ')).toContain('thesis.price_point.model must be one of');
+    expect(r.errors.join(' ')).toContain('thesis.price_point.raw_text is required');
+  });
+
+  it('validateVentureThesis rejects a non-numeric amount and an unlisted model', () => {
+    const r1 = validateVentureThesis({ ...FULL_THESIS, price_point: { ...FULL_THESIS.price_point, amount_low: '49' } });
+    expect(r1.errors.join(' ')).toContain('thesis.price_point.amount_low must be a number or null');
+    const r2 = validateVentureThesis({ ...FULL_THESIS, price_point: { ...FULL_THESIS.price_point, model: 'freemium' } });
+    expect(r2.errors.join(' ')).toContain(`thesis.price_point.model must be one of ${PRICE_MODELS.join('|')}`);
+  });
+
+  it('accepts null amounts (price genuinely unknown yet, refined by the demand test)', () => {
+    const r = validateVentureThesis({
+      ...FULL_THESIS,
+      price_point: { amount_low: null, amount_high: null, currency: 'USD', model: 'unknown', raw_text: 'price TBD via WTP probe' },
+    });
+    expect(r.valid).toBe(true);
+  });
+
+  it('buildThesisFromSynthesis infers model=recurring/one_time/unknown from revenue_model text', () => {
+    const pathOutput = { target_market: 'x', suggested_solution: 'y' };
+    const recurring = buildThesisFromSynthesis(pathOutput, {}, { revenue_model: 'monthly subscription', monthly_revenue_potential: '$10/month' });
+    expect(recurring.price_point.model).toBe('recurring');
+
+    const oneTime = buildThesisFromSynthesis(pathOutput, {}, { revenue_model: 'one-time license fee', monthly_revenue_potential: null });
+    expect(oneTime.price_point.model).toBe('one_time');
+    expect(oneTime.price_point.amount_low).toBeNull();
+    expect(oneTime.price_point.amount_high).toBeNull();
+    expect(oneTime.price_point.currency).toBe('USD');
+
+    const unknownModel = buildThesisFromSynthesis(pathOutput, {}, { revenue_model: 'ads', monthly_revenue_potential: null });
+    expect(unknownModel.price_point.model).toBe('unknown');
+  });
+
+  it('a parsed monthly_revenue_potential with NO revenue_model text still produces a valid structured price_point (model=unknown)', () => {
+    const pathOutput = { target_market: 'x', suggested_solution: 'y' };
+    const t = buildThesisFromSynthesis(pathOutput, {}, { monthly_revenue_potential: '$2K-$5K/month', automation_approach: 'cold outreach' });
+    expect(t.price_point.amount_low).toBe(2000);
+    expect(t.price_point.amount_high).toBe(5000);
+    expect(t.price_point.model).toBe('unknown');
+    expect(t.price_point.grade).toBe('E0');
+    expect(validateVentureThesis(t).valid).toBe(true);
+  });
+
+  it("deriveDefaultKillCriteria's kill-first-revenue description reads price_point.raw_text, not the object itself", () => {
+    const kills = deriveDefaultKillCriteria(FULL_THESIS);
+    const killFirstRevenue = kills.find((k) => k.id === 'kill-first-revenue');
+    expect(killFirstRevenue.description).toContain('subscription $49/mo');
+    expect(killFirstRevenue.description).not.toContain('[object Object]');
+
+    const noPriceKills = deriveDefaultKillCriteria({});
+    expect(noPriceKills.find((k) => k.id === 'kill-first-revenue').description).toContain('price point pending');
+  });
+
+  it('ALL-PATHS: the single production writer (buildThesisFromSynthesis) always emits a schema-valid structured price_point when any revenue signal exists', () => {
+    const pathOutput = { target_market: 'x', suggested_solution: 'y' };
+    const cases = [
+      { revenue_model: 'subscription', monthly_revenue_potential: '$5K/month' },
+      { revenue_model: 'one-time purchase', monthly_revenue_potential: null },
+      { monthly_revenue_potential: '$500/month' },
+    ];
+    for (const candidate of cases) {
+      const t = buildThesisFromSynthesis(pathOutput, {}, candidate);
+      expect(typeof t.price_point).toBe('object');
+      expect(PRICE_MODELS).toContain(t.price_point.model);
+      expect(typeof t.price_point.raw_text).toBe('string');
+      expect(t.price_point.raw_text.length).toBeGreaterThan(0);
+    }
   });
 });
 
