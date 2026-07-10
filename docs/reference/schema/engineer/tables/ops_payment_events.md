@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
+**Generated**: 2026-07-10T04:10:27.238Z
 **Rows**: 1
 **RLS**: Enabled (1 policy)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (13 total)
+## Columns (17 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -31,6 +31,10 @@
 | venture_id | `uuid` | YES | - | - |
 | raw_payload | `jsonb` | **NO** | - | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
+| attribution_status | `text` | YES | - | - |
+| attribution_method | `text` | YES | - | - |
+| attribution_reason | `text` | YES | - | - |
+| resolved_at | `timestamp with time zone` | YES | - | - |
 
 ## Constraints
 
@@ -42,6 +46,10 @@
 
 ### Unique Constraints
 - `ops_payment_events_stripe_event_id_key`: UNIQUE (stripe_event_id)
+
+### Check Constraints
+- `ops_payment_events_attribution_method_check`: CHECK ((attribution_method = ANY (ARRAY['direct_metadata'::text, 'lineage_payment_intent'::text, 'lineage_charge'::text])))
+- `ops_payment_events_attribution_status_check`: CHECK ((attribution_status = ANY (ARRAY['resolved'::text, 'unattributed'::text])))
 
 ## Indexes
 
@@ -56,6 +64,10 @@
 - `idx_ops_payment_events_pi`
   ```sql
   CREATE INDEX idx_ops_payment_events_pi ON public.ops_payment_events USING btree (payment_intent_id) WHERE (payment_intent_id IS NOT NULL)
+  ```
+- `idx_ops_payment_events_unresolved`
+  ```sql
+  CREATE INDEX idx_ops_payment_events_unresolved ON public.ops_payment_events USING btree (created_at) WHERE ((venture_id IS NULL) AND (attribution_status IS NULL))
   ```
 - `idx_ops_payment_events_venture`
   ```sql
