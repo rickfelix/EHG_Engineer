@@ -68,6 +68,9 @@ function createMockSupabase(tableData = {}) {
         select: vi.fn().mockReturnThis(),
         insert: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        // SD-LEO-INFRA-STAGE0-NURSERY-PARK-PATH-001: the live venture_nursery read filters
+        // promoted_to_venture_id via .is() (phantom .eq('status') removed).
+        is: vi.fn().mockReturnThis(),
         in: vi.fn().mockReturnThis(),
         order: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue({ data, error: null }),

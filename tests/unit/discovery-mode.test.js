@@ -82,8 +82,10 @@ const STRATEGY_CONFIGS = {
 };
 
 const DEFAULT_NURSERY_ITEMS = [
-  { id: 'n-1', name: 'OldVenture A', problem_statement: 'Problem A', solution: 'Solution A', target_market: 'Market A', parked_reason: 'Market not ready', original_score: 60, parked_at: '2025-06-01', metadata: {} },
-  { id: 'n-2', name: 'OldVenture B', problem_statement: 'Problem B', solution: 'Solution B', target_market: 'Market B', parked_reason: 'Tech limitations', original_score: 45, parked_at: '2025-03-01', metadata: {} },
+  // SD-LEO-INFRA-STAGE0-NURSERY-PARK-PATH-001: LIVE venture_nursery shape — the rich
+  // brief rides source_ref (no problem_statement/parked_reason/metadata columns exist).
+  { id: 'n-1', name: 'OldVenture A', description: 'Problem A → Solution A', maturity_level: 'seed', current_score: 60, trigger_conditions: [], next_evaluation_at: '2025-06-01', created_at: '2025-05-01', source_ref: { park: { parked_reason: 'Market not ready' }, brief: { problem_statement: 'Problem A', solution: 'Solution A', target_market: 'Market A' } } },
+  { id: 'n-2', name: 'OldVenture B', description: 'Problem B → Solution B', maturity_level: 'seed', current_score: 45, trigger_conditions: [], next_evaluation_at: '2025-03-01', created_at: '2025-02-01', source_ref: { park: { parked_reason: 'Tech limitations' }, brief: { problem_statement: 'Problem B', solution: 'Solution B', target_market: 'Market B' } } },
 ];
 
 function createMockSupabase({ strategies = STRATEGY_CONFIGS, nurseryItems = DEFAULT_NURSERY_ITEMS, dbError = null, nurseryError = null, strategyError = null } = {}) {
@@ -131,9 +133,11 @@ function createMockSupabase({ strategies = STRATEGY_CONFIGS, nurseryItems = DEFA
         };
       }
       if (table === 'venture_nursery') {
+        // SD-LEO-INFRA-STAGE0-NURSERY-PARK-PATH-001: the live SELECT filters
+        // promoted_to_venture_id via .is() (the phantom .eq('status') is gone).
         return {
           select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
+            is: vi.fn().mockReturnValue({
               order: vi.fn().mockReturnValue({
                 limit: vi.fn().mockResolvedValue({
                   data: nurseryError ? null : nurseryItems,

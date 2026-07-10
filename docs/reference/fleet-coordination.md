@@ -259,6 +259,49 @@ intended, no action needed" note, so an autonomous worker doesn't mistake a fenc
 for a stuck belt and file a false RCA/`/signal stuck`. Purely additive — no new
 `action` enum value.
 
+## Seat-Busy Fence (Directed Non-SD Work)
+
+SD-LEO-INFRA-NON-SD-WORK-CLAIM-FENCE-001: fences the *seat*, not an SD. The
+Coordinator Reservation Fence above only fires when `target_sd` is set —
+directed non-SD work (a console assessment, an audit sweep, an open-loop
+gather) is dispatched with no `target_sd` at all, so it was structurally
+invisible to every per-SD eligibility check. Live incident 683617ed
+(Alpha-3, 2026-07-10): mid a directed console assessment, checkin
+auto-self-claimed a belt SD out from under the seat.
+
+**Payload convention** — `payload.kind='seat_busy_reservation'` on a
+`session_coordination` row with `message_type='INFO'`, `target_session` set
+to the busy worker's session id, `target_sd=NULL`, and the native
+`expires_at` column for the window. Registered in `PAYLOAD_KINDS`
+(`lib/fleet/worker-status.cjs`) — same rationale as `coordinator_reservation`:
+a standing fence, not an action-required directive, so deliberately **not**
+in `DIRECTIVE_KINDS`.
+
+**Read + enforce path** — `lib/checkin/steps/seat-busy-fence.cjs`, a single
+consolidated checkin pipeline step positioned strictly after
+`directed-assignment.cjs` (so a `WORK_ASSIGNMENT` this tick is claimed before
+the fence could ever apply) and strictly before `recover-stranded-final.cjs`
+(so recovery/adoption/QF-jump/self-claim-gates/self-claim-qf all
+short-circuit in one place). Mirrors `self-claim-gates.cjs`'s own
+idle-short-circuit idiom rather than threading a new ctx field through each
+tier's own eligibility check. Only honors rows whose `sender_session` matches
+the live active coordinator — fails closed (no fence) when coordinator
+identity is unresolved this tick. Fails open on any read error.
+
+**Enforcement** — `isSeatBusyOnDirectedWork(ctx)` in
+`lib/fleet/claim-eligibility.cjs`: a pure, TTL-aware predicate (kept
+standalone, not folded into `INELIGIBILITY_AXES`, since it is seat-scoped
+rather than row/SD-scoped). Self-compares `expires_at` against `Date.now()`
+the same way `coordinatorReservation` does; an expired reservation fails open
+to claimable and emits a `console.warn` naming the reservation so the expiry
+is loud, not silent.
+
+**Not yet wired** — this SD builds the mechanism a coordinator *can* use; it
+does not itself wire any coordinator-side dispatch tooling to write a
+`seat_busy_reservation` row automatically when directing non-SD work. A
+future SD should call this out explicitly as a follow-up if repeat incidents
+of this shape recur.
+
 ## Probabilistic Liveness (Monte Carlo)
 
 SD-LEO-INFRA-FLEET-LIVENESS-MONTE-001 layers a probabilistic model on top of the binary thresholds above so the dashboard and sweep can reason about worker liveness with uncertainty.
