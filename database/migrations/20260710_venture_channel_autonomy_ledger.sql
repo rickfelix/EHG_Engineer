@@ -192,8 +192,12 @@ SELECT
   vdc.ratelimit_verified_at,
   vdc.first_post_observed_at,
   vdc.liveness_evidence_ref
+-- LEFT JOIN (round-2 adversarial review): an INNER JOIN here would silently drop any
+-- venture_distribution_channels row whose channel_id doesn't resolve to a
+-- distribution_channels row — exactly the rows an operator most needs visibility into,
+-- given the taxonomy-mismatch limitation documented above (e.g. bluesky).
 FROM venture_distribution_channels vdc
-JOIN distribution_channels dc ON dc.id = vdc.channel_id;
+LEFT JOIN distribution_channels dc ON dc.id = vdc.channel_id;
 
 CREATE OR REPLACE VIEW v_injection_quarantine_queue
 WITH (security_invoker = true) AS

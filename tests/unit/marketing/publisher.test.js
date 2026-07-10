@@ -3,7 +3,7 @@
  * SD-EVA-FEAT-MARKETING-FOUNDATION-001
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock the adapters - use function() not arrow for constructor compatibility
 vi.mock('../../../lib/marketing/publisher/adapters/x.js', () => {
@@ -21,6 +21,13 @@ vi.mock('../../../lib/marketing/publisher/adapters/bluesky.js', () => {
   return { BlueskyAdapter: MockBlueskyAdapter };
 });
 
+// A resolvable secret_ref backing the "happy path" tests below — publish() now
+// short-circuits to dry-run (never constructing the adapter) whenever no per-venture
+// credential resolves, so the happy-path tests need one on record (round-2 adversarial
+// review fix; see the dedicated "no credentials -> dry-run" tests further down for the
+// null-resolution path).
+const TEST_SECRET_REF = 'venture_channel_secrets:v-1:x';
+
 /**
  * Table-aware mock — required since SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-C FR-3/
  * FR-6 added three new pre-adapter-construction queries (venture_channel_autonomy,
@@ -30,8 +37,8 @@ vi.mock('../../../lib/marketing/publisher/adapters/bluesky.js', () => {
  *
  * Defaults represent the "everything wired and healthy" happy path: autonomous channel
  * (bypasses the propose-and-approve ledger check), under the rate limit, kill-switch
- * clear, funded budget, no venture-specific credential on record (adapters fall back to
- * their own dry-run path, which the adapter mocks below short-circuit anyway).
+ * clear, funded budget, and a resolvable venture-specific credential on record (so the
+ * real adapter mocks below actually get constructed and called).
  */
 function createMockSupabase(overrides = {}) {
   const tableConfig = {
@@ -45,7 +52,7 @@ function createMockSupabase(overrides = {}) {
       ],
       error: null
     },
-    venture_channel_secrets: { maybeSingle: { data: null, error: null } },
+    venture_channel_secrets: { maybeSingle: { data: { secret_ref: TEST_SECRET_REF }, error: null } },
     channel_budgets: {
       single: {
         data: { status: 'active', current_month_spend_cents: 0, monthly_budget_cents: 10000, daily_limit_cents: null },
@@ -78,13 +85,19 @@ function createMockSupabase(overrides = {}) {
 describe('Publisher', () => {
   let publish, getSupportedPlatforms;
   let mockSupabase;
+  const ORIGINAL_KEYRING_ENV = process.env.VENTURE_CHANNEL_SECRET_STORE;
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    process.env.VENTURE_CHANNEL_SECRET_STORE = JSON.stringify({ [TEST_SECRET_REF]: { apiKey: 'test-key' } });
     mockSupabase = createMockSupabase();
     const mod = await import('../../../lib/marketing/publisher/index.js');
     publish = mod.publish;
     getSupportedPlatforms = mod.getSupportedPlatforms;
+  });
+
+  afterEach(() => {
+    process.env.VENTURE_CHANNEL_SECRET_STORE = ORIGINAL_KEYRING_ENV;
   });
 
   it('should return supported platforms', () => {
@@ -179,11 +192,17 @@ describe('Publisher', () => {
 
 describe('Publisher — SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-C FR-3/FR-6 hard gates', () => {
   let publish;
+  const ORIGINAL_KEYRING_ENV = process.env.VENTURE_CHANNEL_SECRET_STORE;
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    process.env.VENTURE_CHANNEL_SECRET_STORE = JSON.stringify({ [TEST_SECRET_REF]: { apiKey: 'test-key' } });
     const mod = await import('../../../lib/marketing/publisher/index.js');
     publish = mod.publish;
+  });
+
+  afterEach(() => {
+    process.env.VENTURE_CHANNEL_SECRET_STORE = ORIGINAL_KEYRING_ENV;
   });
 
   it('hard-blocks a publish attempt with no approval record (propose_and_approve default, no accepted ledger entry)', async () => {
@@ -291,6 +310,42 @@ describe('Publisher — SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-C FR-3/FR-6
     expect(result.success).toBe(false);
     expect(result.blockedBy).toBe('spend-guardrail');
     expect(result.error).toContain('not recorded');
+  });
+
+  it('surfaces the ledger correlationId on a downstream rate-limit block, so an operator can reconcile an orphaned autonomous-tier ledger row', async () => {
+    const supabase = createMockSupabase({
+      venture_channel_publish_ledger: { maybeSingle: { data: null, error: null }, count: 50 }
+    });
+
+    const result = await publish({ supabase, content: { id: 'c-1', body: 'Test' }, platform: 'x', ventureId: 'v-1' });
+
+    expect(result.blockedBy).toBe('rate-limit');
+    expect(result.ledgerCorrelationId).toBeTruthy();
+  });
+
+  it('ADVERSARIAL-REVIEW FIX (round 2): no per-venture credential resolved -> dry-run, the adapter is NEVER constructed, never falls through to a shared identity', async () => {
+    const supabase = createMockSupabase({
+      venture_channel_secrets: { maybeSingle: { data: null, error: null } } // no secret_ref on record
+    });
+
+    const result = await publish({ supabase, content: { id: 'c-1', body: 'Test' }, platform: 'x', ventureId: 'v-1' });
+
+    expect(result.success).toBe(true);
+    expect(result.dryRun).toBe(true);
+    expect(result.postId).toContain('dry-run-no-credentials');
+    expect(result.reason).toContain('No venture-specific credentials');
+  });
+
+  it('ADVERSARIAL-REVIEW FIX (round 2): an unresolvable secret_ref (row exists but keyring lookup misses) ALSO forces dry-run, never a fallback identity', async () => {
+    // secret_ref is on record, but the env keyring (set in this describe's beforeEach)
+    // has no entry for a DIFFERENT ref — simulates an unresolvable reference.
+    const supabase = createMockSupabase({
+      venture_channel_secrets: { maybeSingle: { data: { secret_ref: 'venture_channel_secrets:v-OTHER:x' }, error: null } }
+    });
+
+    const result = await publish({ supabase, content: { id: 'c-1', body: 'Test' }, platform: 'x', ventureId: 'v-1' });
+
+    expect(result.dryRun).toBe(true);
   });
 });
 
