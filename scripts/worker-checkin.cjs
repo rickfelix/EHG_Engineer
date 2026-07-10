@@ -1131,6 +1131,48 @@ async function selfHealStaleClaim(sb, sessionId, sdKey) {
   } catch { /* fail-open */ }
 }
 
+/**
+ * SD-LEO-INFRA-CHECKIN-OWN-CLAIM-DETECT-001: the authoritative query — does strategic_directives_v2
+ * (the same columns sd:next and the coordinator read) say THIS session holds a live, unworked claim?
+ * claude_sessions.sd_key is only ever a cache of this; this is the source of truth. Fail-open (null on
+ * any error) so a query hiccup never turns a checkin into action=error.
+ * @returns {Promise<string|null>} the sd_key of the owned claim, or null
+ */
+async function findOwnSdClaim(sb, sessionId) {
+  try {
+    const { data, error } = await sb.from('strategic_directives_v2')
+      .select('sd_key')
+      .eq('claiming_session_id', sessionId)
+      .eq('is_working_on', true)
+      .limit(1)
+      .maybeSingle();
+    if (error) return null;
+    return data ? data.sd_key : null;
+  } catch { return null; }
+}
+
+/**
+ * SD-LEO-INFRA-CHECKIN-OWN-CLAIM-DETECT-001: converge the claude_sessions.sd_key CACHE onto the
+ * authoritative SD-side claim just found by findOwnSdClaim. Only ever writes sd_key — never touches
+ * worktree_path/worktree_branch (ck_claude_sessions_worktree_state_consistency only rejects
+ * sd_key=NULL with a non-null worktree column; sd_key=NOT-NULL with a null worktree column, the
+ * state this write produces on a never-attached session, is always valid). CAS-guarded to a NULL
+ * cache so this can never clobber a concurrent legitimate claim on the session row. Uses .select()
+ * so the caller can detect a silent 0-row no-op (the CAS lost a race) instead of assuming success.
+ * @returns {Promise<boolean>} true if the cache write is confirmed (readback returned a row)
+ */
+async function healOwnClaimPointer(sb, sessionId, sdKey) {
+  try {
+    const { data, error } = await sb.from('claude_sessions')
+      .update({ sd_key: sdKey })
+      .eq('session_id', sessionId)
+      .is('sd_key', null) // CAS: only while the cache is still empty
+      .select('session_id');
+    if (error) return false;
+    return Array.isArray(data) && data.length > 0;
+  } catch { return false; }
+}
+
 // SD-LEO-FEAT-WORKER-CHECKIN-SELF-001 (FR-1/FR-2): confirm a claimed row was HARD-DELETED before we
 // release the claim on it. Returns true ONLY when TWO consecutive reads both find the row absent — a
 // single eventual-consistency null must NEVER release a LIVE claim (observed live: a transient read
@@ -1407,9 +1449,9 @@ async function main() {
 // Steps destructure what they need from ctx.helpers instead of require()ing this file (which
 // would be circular). Every name below is either defined above in this file or imported at the
 // top (imports are referenced directly — never re-derived).
-const CHECKIN_HELPERS = { ws, tryClaim, ackMessage, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, classifyDispatchIneligibility, registerRollCall, rehydrateCallsign, selfClearQuarantine, mergeCheckinModelEffort, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isBuildForbiddenSession, ensureActiveBaseline, isCriticalQfJumpEligible, tryClaimDraftCandidate, baselinedCandidateEligible, isSdInFlight, selfClaimQuickFix, selfHealStaleClaim, confirmRowGone, surfaceCoordinatorMessages, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, sortByDispatchRank, resolveWorkerTierRank, isTieringActive, fetchLowerTierBacklogData, ladderTopRank, fetchFableWindowActive, claimableForTier, getCommsActivitySignals, computeAdaptiveCadence, antiWinddownDirective, ASSIGNMENT_RECENCY_WINDOW_MS, TERMINAL_CLAIM_ERRORS, QF_CANDIDATE_LIMIT, SELF_CLAIM_CANDIDATE_LIMIT, DEFAULT_IDLE_WAKEUP_SECONDS };
+const CHECKIN_HELPERS = { ws, tryClaim, ackMessage, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, classifyDispatchIneligibility, registerRollCall, rehydrateCallsign, selfClearQuarantine, mergeCheckinModelEffort, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isBuildForbiddenSession, ensureActiveBaseline, isCriticalQfJumpEligible, tryClaimDraftCandidate, baselinedCandidateEligible, isSdInFlight, selfClaimQuickFix, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, surfaceCoordinatorMessages, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, sortByDispatchRank, resolveWorkerTierRank, isTieringActive, fetchLowerTierBacklogData, ladderTopRank, fetchFableWindowActive, claimableForTier, getCommsActivitySignals, computeAdaptiveCadence, antiWinddownDirective, ASSIGNMENT_RECENCY_WINDOW_MS, TERMINAL_CLAIM_ERRORS, QF_CANDIDATE_LIMIT, SELF_CLAIM_CANDIDATE_LIMIT, DEFAULT_IDLE_WAKEUP_SECONDS };
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
+module.exports = { extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
 
 if (require.main === module) {
   main().catch(err => {
