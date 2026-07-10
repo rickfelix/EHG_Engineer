@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  scanForStackViolations, STATELESS_PROCESS_CHECKS,
+  scanForStackViolations, STATELESS_PROCESS_CHECKS, REQUIRED,
 } from '../../lib/eva/bridge/templates/venture-stack-scan.js';
 
 const COMPLIANT_BASE = `
@@ -71,7 +71,10 @@ describe('additive return shape (existing consumers untouched)', () => {
       'src/auth/oidc.server.ts': 'export const oidc = 1;',
     }));
     expect(r.violations.length).toBeGreaterThanOrEqual(2); // supabase import + forbidden path
-    expect(r.missing.length).toBe(2); // clerk + replit_postgres absent
+    // SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A added a 3rd REQUIRED entry (v1_metrics)
+    // after this test was first written — assert against REQUIRED.length rather than a
+    // hardcoded count so future REQUIRED additions don't silently break this fixture.
+    expect(r.missing.length).toBe(REQUIRED.length); // clerk + replit_postgres + v1_metrics all absent
     expect(Array.isArray(r.warnings)).toBe(true); // additive key present
   });
 
