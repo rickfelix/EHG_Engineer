@@ -1,9 +1,9 @@
 ---
 category: documentation
 status: approved
-version: 1.0.0
+version: 1.1.0
 author: Rick Felix
-last_updated: 2026-04-29
+last_updated: 2026-07-10
 tags: [documentation]
 ---
 
@@ -55,3 +55,35 @@ These have been parsed into structured `feedback` rows with `metadata.line_forma
 ## Do not append to this file.
 
 Use the CLI. If you cannot run the CLI for any reason (offline, broken supabase env), append to a temporary scratch and migrate when you're back online — do **not** restore this file as a primary capture mechanism.
+
+## Drain policy (SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001, 2026-07-10)
+
+The `feedback` table (category='harness_backlog') was a chairman-ratified write-only sink: rows accumulated, nothing ever closed them. This SD made closure a write-time design property.
+
+### Write-time terminal categories
+
+Three category values are write-time-terminal — a row landing in one of them is never actionable and is structurally excluded from every "untriaged"/"enhancements" reader (see `lib/governance/feedback-terminal-categories.cjs` for the canonical list):
+
+| Category | Meaning | Writer |
+|---|---|---|
+| `completion_flag_witness` | Zero-findings witness proving a completion-flag reflection ran | `scripts/capture-completion-flags.js` |
+| `telemetry_aggregate` | Dashboard/counter-only rows, never row-per-event | (reserved for future writers) |
+| `informational_note` | Ages out automatically after 30 days untouched | (reserved for future writers) |
+
+Any reader that excludes `category='harness_backlog'` to build an "actionable" view **must** also exclude these three, or fresh terminal-category rows leak straight back into that view. Import `TERMINAL_CATEGORIES` from the canonical module rather than hand-rolling the exclusion list.
+
+### Fingerprint promotion
+
+`scripts/feedback-fingerprint-promoter.mjs` (scheduled via `.github/workflows/clockwork-feedback-fingerprint-promoter.yml`, every 6h) groups open `harness_backlog` rows by content fingerprint (`lib/shared/content-fingerprint.cjs` — the same primitive `lib/coordinator/signal-router.cjs` uses for worker-signal aggregation). A fingerprint with 3+ occurrences within a rolling 14-day window is promoted to exactly one QF-candidate via `scripts/create-quick-fix.js`, citing the fingerprint, occurrence count, and source row ids. Idempotent via `metadata.promoted_to_qf` on the source rows.
+
+### Retro action item promotion
+
+`scripts/promote-retro-action-items.mjs` (`.github/workflows/clockwork-retro-action-item-promoter.yml`, daily) promotes high-priority `retrospectives.action_items` directly to a QF — never through an intermediate `feedback` insert. Idempotent via `metadata.action_items_promoted` on the retrospective row.
+
+### Age-out (archive-not-delete)
+
+`scripts/feedback-age-out.mjs` (`.github/workflows/clockwork-feedback-age-out.yml`, daily) sets `feedback.archived_at` on `informational_note` rows untouched 30+ days. Rows are never deleted — `archived_at` is additive-only. Rows in any other category are structurally excluded from this job's query.
+
+### Drain gauge
+
+`node scripts/fleet-dashboard.cjs draingauge` (also included in the `all` render) shows open-actionable count (`category='harness_backlog' AND archived_at IS NULL AND status` not resolved-equivalent) and oldest-actionable-age, via an exact `count()` query — not a row fetch, which PostgREST implicitly caps at 1000 rows.
