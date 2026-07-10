@@ -28,6 +28,22 @@ const silentLogger = { log: vi.fn(), warn: vi.fn() };
 let mockLlmClient;
 let mockSupabase;
 
+// SD-LEO-INFRA-STAGE0-GOVERNED-POSTURE-001: executeDiscoveryMode resolves the governed
+// posture fail-closed before ranking; the mock serves an active posture row whose weights
+// are the pre-posture set these assertions were computed under.
+const TEST_WEIGHTS = Object.freeze({
+  automation_feasibility: 0.30,
+  monthly_revenue_potential: 0.25,
+  target_market_specificity: 0.20,
+  strategic_fit: 0.15,
+  competition_level: 0.10,
+});
+const TEST_POSTURE_ROW = {
+  id: 'posture-1', phase_key: 'test_posture', version: 1, display_name: 'Test posture',
+  criteria: { weights: TEST_WEIGHTS }, status: 'active',
+  ratified_by: 'chairman', ratified_at: '2026-07-10T00:00:00Z', expiry_condition: null,
+};
+
 function createMockSupabase(strategyData = null, nurseryItems = []) {
   const chain = {
     select: vi.fn().mockReturnThis(),
@@ -36,7 +52,11 @@ function createMockSupabase(strategyData = null, nurseryItems = []) {
     order: vi.fn().mockReturnThis(),
     limit: vi.fn().mockResolvedValue({ data: nurseryItems, error: null }),
   };
-  return { from: vi.fn(() => chain), _chain: chain };
+  const postureChain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockResolvedValue({ data: [TEST_POSTURE_ROW], error: null }),
+  };
+  return { from: vi.fn((table) => (table === 'selection_postures' ? postureChain : chain)), _chain: chain };
 }
 
 // SD-LEO-ENH-TREND-SCANNER-SCORING-001 (Checkpoint 2): mock now matches the
@@ -147,6 +167,9 @@ describe('executeDiscoveryMode', () => {
     expect(result.metadata.strategy_key).toBe('trend_scanner');
     expect(result.metadata.strategy_name).toBe('Trend Scanner');
     expect(result.metadata.constraints_applied).toContain('industry');
+    // Governed-posture stamp (spec R2): the run records the posture-version it applied.
+    expect(result.metadata.posture_version).toBe('test_posture@v1');
+    expect(result.raw_material.posture_version).toBe('test_posture@v1');
   });
 });
 
@@ -157,7 +180,7 @@ describe('rankCandidates', () => {
       { name: 'High', automation_feasibility: 8, competition_level: 'low' },
       { name: 'Mid', automation_feasibility: 7, competition_level: 'medium' },
     ];
-    const ranked = rankCandidates(candidates);
+    const ranked = rankCandidates(candidates, { weights: TEST_WEIGHTS });
     expect(ranked[0].name).toBe('High'); // 8*10 + 10 = 90
     expect(ranked[1].name).toBe('Mid');  // 7*10 + 5 = 75
     expect(ranked[2].name).toBe('Low');  // 5*10 + 0 = 50
