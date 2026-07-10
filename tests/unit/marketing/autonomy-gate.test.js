@@ -148,11 +148,25 @@ describe('checkPublishAuthorization — dedup + FR-7 chairman_decisions routing'
 
   beforeEach(() => vi.clearAllMocks());
 
-  it('allows immediately when the channel is autonomous, without touching the ledger', async () => {
-    const supabase = makeAuthSupabase({ autonomyState: 'autonomous' });
+  it('ADVERSARIAL-REVIEW FIX: an autonomous channel still writes a ledger row per publish attempt (so rate-limiting and outcome-based demotion are not silently dead for the unsupervised tier)', async () => {
+    const supabase = makeAuthSupabase({ autonomyState: 'autonomous', insertData: { id: 'ledger-auto-1' } });
     const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1' });
+
     expect(result.allowed).toBe(true);
+    expect(result.correlationId).toBeTruthy();
+    expect(supabase.ledgerChain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ venture_id: 'v-1', channel_type: 'x', decision: 'accepted', decision_by: 'system:autonomous' })
+    );
+    // Autonomous approval is system-graduated, not a human review — no chairman_decisions noise.
     expect(recordPendingDecision).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when an autonomous channel cannot record its own publish attempt', async () => {
+    const supabase = makeAuthSupabase({ autonomyState: 'autonomous', insertError: { message: 'db unavailable' } });
+    const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1' });
+
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toContain('fail-closed');
   });
 
   it('allows when an accepted ledger entry exists for this exact content', async () => {

@@ -141,9 +141,19 @@ COMMENT ON COLUMN venture_distribution_channels.liveness_state IS
 -- STEP 6: Ops-visibility read-model views (FR-7) — the durable inspectability contract
 -- in place of a new frontend page. Pending approvals / quarantine disposition route
 -- through the existing chairman_decisions surface, not new UI.
+--
+-- SECURITY (adversarial review, PR #5791): every view here is created WITH
+-- (security_invoker = true) — PostgreSQL 15+/Supabase's fix for the "Security Definer
+-- View" pitfall. Without it, a view runs with the CREATING role's privileges (which
+-- typically bypasses its own RLS as the table owner), silently exposing every venture's
+-- rows to any querying role regardless of the authenticated-scoped RLS policies defined
+-- in STEP 8 below — including v_injection_quarantine_queue, which would otherwise leak
+-- flagged prompt-injection content across ventures/companies. security_invoker makes
+-- each view honor the QUERYING role's own RLS instead.
 -- ============================================================================
 
-CREATE OR REPLACE VIEW v_channel_autonomy_state AS
+CREATE OR REPLACE VIEW v_channel_autonomy_state
+WITH (security_invoker = true) AS
 SELECT
   vca.venture_id,
   vca.channel_type,
@@ -171,7 +181,8 @@ GROUP BY vca.venture_id, vca.channel_type, vca.autonomy_state, vca.clean_streak,
 -- same gap). This view reports venture_distribution_channels' own liveness columns
 -- directly — dc.name is included as a human-readable label only, NOT as a reliable
 -- join key back to the publish()-path `platform` identifier.
-CREATE OR REPLACE VIEW v_publisher_adapter_liveness AS
+CREATE OR REPLACE VIEW v_publisher_adapter_liveness
+WITH (security_invoker = true) AS
 SELECT
   vdc.venture_id,
   dc.name AS channel_label,
@@ -184,7 +195,8 @@ SELECT
 FROM venture_distribution_channels vdc
 JOIN distribution_channels dc ON dc.id = vdc.channel_id;
 
-CREATE OR REPLACE VIEW v_injection_quarantine_queue AS
+CREATE OR REPLACE VIEW v_injection_quarantine_queue
+WITH (security_invoker = true) AS
 SELECT
   id,
   venture_id,
