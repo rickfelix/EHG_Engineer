@@ -88,12 +88,17 @@ describe('FR-3: DIRECTIVE_KINDS allowlist', () => {
     }
   });
 
-  it('directive kinds get read-only drain for non-Adam sessions (markRead, never markAck)', () => {
+  it('directive kinds stamp delivered_at (transport receipt) for non-Adam sessions — read_at stays NULL, never markAck', () => {
+    // SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001 FR-3: was {markRead:true} — stamping read_at on
+    // the FIRST poll hid the row from consumers gating on read_at IS NULL (e.g.
+    // coordinator-quiet-tick.mjs's hasUnactionedDirective(), Adam's inbox monitor) before it was ever
+    // genuinely actioned — the root cause of the 2026-07-09 incident. Now markDelivered stamps the new
+    // delivered_at column instead; read_at re-surfaces every throttled poll until genuine action.
     const v = classifyInboxMessage(
       { message_type: 'INFO', payload: { kind: 'coordinator_request' }, sender_type: 'coordinator' },
       { amAdam: false }
     );
-    expect(v).toEqual({ skip: false, markRead: true, markAck: false });
+    expect(v).toEqual({ skip: false, markRead: false, markDelivered: true, markAck: false });
   });
 
   it('roll_call keeps the legacy read+ack drain; plain coordinator INFO is now read-only (ack withheld for /checkin)', () => {

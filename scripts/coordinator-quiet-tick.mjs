@@ -30,6 +30,8 @@ const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
 const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs');
 const { decideCadence, detectSalientDelta, runCoresFailSoft } = require('../lib/coordinator/quiet-tick.cjs');
+const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
+const { DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
 
 const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -136,6 +138,32 @@ function saveLastState(s) {
   try { writeFileSync(LAST_STATE_FILE, JSON.stringify(s)); } catch { /* fail-soft: never block the tick */ }
 }
 
+/**
+ * SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001 FR-1: is there a DIRECTIVE_KINDS
+ * row targeting the coordinator that has not yet been genuinely surfaced/actioned
+ * (read_at IS NULL)? Reuses the SAME allowlist and targeting pattern as the
+ * existing 'inbox' core (fleet-dashboard.cjs) and scripts/hooks/coordination-inbox.cjs
+ * — never a second hand-rolled copy of DIRECTIVE_KINDS (QF-20260610-545 lesson).
+ * Fail-soft: a query error returns false (never blocks the tick, never forces a
+ * false hard-wake on an unrelated DB hiccup).
+ */
+export async function hasUnactionedDirective(sb, coordinatorId) {
+  if (!coordinatorId) return false;
+  try {
+    const { data, error } = await sb
+      .from('session_coordination')
+      .select('id')
+      .eq('target_session', coordinatorId)
+      .in('payload->>kind', DIRECTIVE_KINDS)
+      .is('read_at', null)
+      .limit(1);
+    if (error) return false;
+    return Boolean(data && data.length > 0);
+  } catch {
+    return false;
+  }
+}
+
 async function main() {
   const asJson = process.argv.includes('--json');
   const sb = makeClient();
@@ -161,12 +189,28 @@ async function main() {
   const delta = detectSalientDelta(loadLastState(), salient);
   saveLastState(salient);
 
-  // FR-5/FR-6: self-paced next wake (capped at 15min when quiescent, never 300s).
-  const delaySeconds = decideCadence({ quiescent, partyOffsetS: COORD_PARTY_OFFSET_S });
+  // SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001 FR-1: a DIRECTIVE_KINDS row
+  // targeting the coordinator that has not been genuinely surfaced/actioned yet
+  // must hard-wake the loop regardless of quiescent state (see the incident this
+  // SD fixes: a chairman directive sat unactioned for 25+ minutes because
+  // decideCadence had no awareness of it and self-scheduled a 900s park).
+  let unactionedDirective = false;
+  try {
+    const coordinatorId = await getActiveCoordinatorId(sb);
+    unactionedDirective = await hasUnactionedDirective(sb, coordinatorId);
+  } catch { /* fail-soft: never block the tick on identity/query errors */ }
+
+  // FR-5/FR-6: self-paced next wake (capped at 15min when quiescent, never 300s;
+  // overridden to a short hard-wake band when a directive is pending, per FR-1 above).
+  const delaySeconds = decideCadence({
+    quiescent,
+    partyOffsetS: COORD_PARTY_OFFSET_S,
+    hasUnactionedDirective: unactionedDirective,
+  });
 
   const result = {
     mode: quiescent ? 'QUIESCENT' : 'ACTIVE',
-    modeReason,
+    modeReason: unactionedDirective ? `${modeReason} [DIRECTIVE_HARD_WAKE]` : modeReason,
     cores: tick.summary,
     failedCount: tick.failedCount,
     skippedCount: tick.skippedCount,

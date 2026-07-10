@@ -12,6 +12,8 @@ const {
   MAX_QUIESCENT_PARK_S,
   ACTIVE_MAX_S,
   PROMPT_CACHE_TTL_S,
+  DIRECTIVE_WAKE_MIN_S,
+  DIRECTIVE_WAKE_MAX_S,
 } = require('../../../lib/coordinator/quiet-tick.cjs');
 
 describe('decideCadence (FR-5/FR-6)', () => {
@@ -53,6 +55,50 @@ describe('decideCadence (FR-5/FR-6)', () => {
     const coord = decideCadence({ quiescent: false, partyOffsetS: 0 });
     const adam = decideCadence({ quiescent: false, partyOffsetS: 60 });
     expect(coord).not.toBe(adam);
+  });
+});
+
+describe('decideCadence hasUnactionedDirective hard-wake override (SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001 FR-1)', () => {
+  it('overrides a quiescent long park with a short hard-wake delay', () => {
+    const d = decideCadence({ quiescent: true, hasUnactionedDirective: true });
+    expect(d).toBeLessThan(ACTIVE_MAX_S);
+    expect(d).toBeLessThanOrEqual(DIRECTIVE_WAKE_MAX_S);
+    expect(d).toBeGreaterThanOrEqual(DIRECTIVE_WAKE_MIN_S);
+  });
+
+  it('overrides the normal active band too — a directive is always faster than plain active', () => {
+    const d = decideCadence({ quiescent: false, hasUnactionedDirective: true });
+    expect(d).toBeLessThan(180); // strictly below ACTIVE_MIN_S
+  });
+
+  it('reproduces the 2026-07-09 incident shape: quiescent + directive pending never approaches the 900s park', () => {
+    const d = decideCadence({ quiescent: true, hasUnactionedDirective: true, desiredQuiescentParkS: MAX_QUIESCENT_PARK_S });
+    expect(d).toBeLessThan(60);
+  });
+
+  it('hasUnactionedDirective=false is byte-identical to the pre-FR-1 behavior (regression-safe default)', () => {
+    for (const quiescent of [true, false]) {
+      for (const offset of [0, 100, 420]) {
+        const withFalse = decideCadence({ quiescent, partyOffsetS: offset, hasUnactionedDirective: false });
+        const withOmitted = decideCadence({ quiescent, partyOffsetS: offset });
+        expect(withFalse).toBe(withOmitted);
+      }
+    }
+  });
+
+  it('phasing spreads directive hard-wake delays across the short band without breaching it', () => {
+    for (const offset of [0, 10, 30, 100, 999]) {
+      const d = decideCadence({ quiescent: true, hasUnactionedDirective: true, partyOffsetS: offset });
+      expect(d).toBeGreaterThanOrEqual(DIRECTIVE_WAKE_MIN_S);
+      expect(d).toBeLessThanOrEqual(DIRECTIVE_WAKE_MAX_S);
+    }
+  });
+
+  it('never returns exactly 300s under the directive override either', () => {
+    for (let offset = 0; offset <= 100; offset += 3) {
+      const d = decideCadence({ quiescent: true, hasUnactionedDirective: true, partyOffsetS: offset });
+      expect(d).not.toBe(300);
+    }
   });
 });
 
