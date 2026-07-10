@@ -123,16 +123,25 @@ export async function createFixture(supabase, runId, { entryStage = 20, journal 
   if (error) throw new Error(`fixture venture insert failed: ${error.message}`);
   j.append({ kind: 'lifecycle', event: 'fixture venture created', touched_tables: ['ventures'], detail: { venture_id: venture.id, name: venture.name, entry_stage: entryStage } });
 
-  // Pre-S20 history: completed stage-work rows 1..entryStage-1 (same upsert key the
-  // production write-through uses: venture_id,lifecycle_stage).
+  // Pre-S20 history: completed stage-work rows 1..entryStage-1 (same upsert key + live
+  // columns the production write-through uses: stage_status/work_type/advisory_data —
+  // lib/eva/stage-work-sync.js; work_type comes from venture_stages, NOT NULL).
+  const { data: stageTypes } = await supabase
+    .from('venture_stages')
+    .select('stage_number, work_type')
+    .gte('stage_number', 1)
+    .lt('stage_number', entryStage);
+  const workTypeByStage = new Map((stageTypes || []).map((r) => [r.stage_number, r.work_type]));
   for (let stage = 1; stage < entryStage; stage++) {
     const { error: swErr } = await supabase
       .from('venture_stage_work')
       .upsert({
         venture_id: venture.id,
         lifecycle_stage: stage,
-        status: 'completed',
-        stage_data: { harness_seeded: true, run_id: runId },
+        stage_status: 'completed',
+        work_type: workTypeByStage.get(stage) || 'analysis',
+        completed_at: new Date().toISOString(),
+        advisory_data: { harness_seeded: true, run_id: runId },
       }, { onConflict: 'venture_id,lifecycle_stage' });
     if (swErr) throw new Error(`stage_work seed failed at stage ${stage}: ${swErr.message}`);
   }
