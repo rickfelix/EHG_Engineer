@@ -96,6 +96,16 @@ function createMockSupabase(overrides = {}) {
       chain.insert = vi.fn().mockResolvedValue({ error: null });
     }
 
+    // SD-LEO-INFRA-STAGE0-TRAVERSABILITY-GATE-001: gate loads the live envelope.
+    if (table === 'v_unified_capabilities') {
+      chain.in = vi.fn().mockResolvedValue({
+        data: [
+          { name: 'venture web deploy', capability_type: 'service', maturity_level: 'production', scope: 'platform' },
+        ],
+        error: null,
+      });
+    }
+
     // SD-LEO-INFRA-STAGE0-GOVERNED-POSTURE-001: discovery ranking resolves the
     // governed posture fail-closed; serve an active posture row.
     if (table === 'selection_postures') {

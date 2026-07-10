@@ -117,6 +117,12 @@ function createMockSupabase({ strategies = STRATEGY_CONFIGS, nurseryItems = DEFA
           }),
         };
       }
+      if (table === 'v_unified_capabilities') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          in: vi.fn().mockResolvedValue({ data: TEST_ENVELOPE_ROWS, error: null }),
+        };
+      }
       if (table === 'selection_postures') {
         return {
           select: vi.fn().mockReturnValue({
@@ -154,6 +160,13 @@ const TEST_WEIGHTS = Object.freeze({
   strategic_fit: 0.15,
   competition_level: 0.10,
 });
+
+// SD-LEO-INFRA-STAGE0-TRAVERSABILITY-GATE-001: executeDiscoveryMode loads the live
+// capability envelope fail-closed; the mock serves delivered (production) rows.
+const TEST_ENVELOPE_ROWS = [
+  { name: 'venture web deploy', capability_type: 'service', maturity_level: 'production', scope: 'platform' },
+  { name: 'email delivery', capability_type: 'service', maturity_level: 'production', scope: 'platform' },
+];
 const TEST_POSTURE_ROW = {
   id: 'posture-1', phase_key: 'test_posture', version: 1, display_name: 'Test posture',
   criteria: { weights: TEST_WEIGHTS }, status: 'active',

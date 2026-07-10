@@ -35,6 +35,13 @@ const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
 // SD-LEO-INFRA-STAGE0-GOVERNED-POSTURE-001: executeDiscoveryMode resolves the governed
 // posture fail-closed before ranking; the mock serves an active posture row.
+
+// SD-LEO-INFRA-STAGE0-TRAVERSABILITY-GATE-001: executeDiscoveryMode loads the live
+// capability envelope fail-closed; the mock serves delivered (production) rows.
+const TEST_ENVELOPE_ROWS = [
+  { name: 'venture web deploy', capability_type: 'service', maturity_level: 'production', scope: 'platform' },
+  { name: 'email delivery', capability_type: 'service', maturity_level: 'production', scope: 'platform' },
+];
 const TEST_POSTURE_ROW = {
   id: 'posture-1', phase_key: 'test_posture', version: 1,
   criteria: {
@@ -53,6 +60,12 @@ function createSupabase(strategy = { strategy_key: 'trend_scanner', name: 'Trend
   // Each .from() call returns a fresh chainable; supports .select().eq().eq().single() and ranking-data .gte().order().limit()
   return {
     from: vi.fn((table) => {
+      if (table === 'v_unified_capabilities') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          in: vi.fn().mockResolvedValue({ data: TEST_ENVELOPE_ROWS, error: null }),
+        };
+      }
       if (table === 'selection_postures') {
         return {
           select: vi.fn().mockReturnThis(),
