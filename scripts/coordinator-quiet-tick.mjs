@@ -229,15 +229,24 @@ async function main() {
   // the loop regardless of quiescent state (see the incident this SD fixes: a
   // chairman directive sat unactioned for 25+ minutes because decideCadence had no
   // awareness of it and self-scheduled a 900s park).
-  let unactionedDirective = false;
-  try {
-    const coordinatorId = await getActiveCoordinatorId(sb);
-    const [sessionDirective, chairmanDirective] = await Promise.all([
-      hasUnactionedDirective(sb, coordinatorId),
-      hasOutstandingChairmanDirective(sb),
-    ]);
-    unactionedDirective = sessionDirective || chairmanDirective;
-  } catch { /* fail-soft: never block the tick on identity/query errors */ }
+  // Round-2 adversarial-review finding: getActiveCoordinatorId() has unguarded
+  // network awaits (lib/coordinator/resolve.cjs) — running it BEFORE the chairman-
+  // directive check inside one shared try/catch let an identity-resolution error
+  // suppress the chairman-directive check too, even though that check needs no
+  // coordinatorId at all. Run the two checks independently so a resolve.cjs hiccup
+  // never masks the flagship (broadcast, coordinator-identity-agnostic) case.
+  const [sessionDirective, chairmanDirective] = await Promise.all([
+    (async () => {
+      try {
+        const coordinatorId = await getActiveCoordinatorId(sb);
+        return await hasUnactionedDirective(sb, coordinatorId);
+      } catch {
+        return false; // fail-soft: never block the tick on identity/query errors
+      }
+    })(),
+    hasOutstandingChairmanDirective(sb), // already internally fail-soft
+  ]);
+  const unactionedDirective = sessionDirective || chairmanDirective;
 
   // FR-5/FR-6: self-paced next wake (capped at 15min when quiescent, never 300s;
   // overridden to a short hard-wake band when a directive is pending, per FR-1 above).
