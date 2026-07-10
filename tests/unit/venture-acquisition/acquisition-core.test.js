@@ -291,3 +291,82 @@ describe('consumed-exactly-once + fail-loud (FR-4/FR-6, TS-5/TS-7)', () => {
     expect(() => computeQuestionKey('nonsense_type', { a: 1 })).toThrow(/invalid decisionType/);
   });
 });
+
+// ── Adversarial-review regression pins (findings a6c7549a) ──────────────────
+
+describe('adversarial-review fixes', () => {
+  it('DOUBLE-BUY GUARD: a pre-existing AWAITING disposition (in-flight or crashed-after-register) refuses — never proceeds to register', async () => {
+    const key = computeQuestionKey('domain_acquisition', { venture_id: 'v1', domain: 'lumina.com' });
+    const tables = {
+      chairman_decisions: [approvedPacket()],
+      venture_artifacts: [],
+      system_events: [{ id: 'se-1', event_type: 'DECISION_DISPOSITION', idempotency_key: key, payload: { question_key: key, status: 'awaiting_disposition', decision_type: 'domain_acquisition' } }],
+    };
+    const sb = fakeSupabase(tables);
+    const reg = fakeRegistrar();
+    const r = await executeAcquisition(sb, 'dec-1', { registrar: reg, execute: true, env: {} });
+    expect(r.status).toBe('refused');
+    expect(r.reason).toBe('in_flight_or_unknown_outcome');
+    expect(r.unblock).toMatch(/Verify with the registrar/);
+    expect(reg.registerDomain).not.toHaveBeenCalled();
+  });
+
+  it('CEILING PROVENANCE: the APPROVED ceiling binds — raising the env ceiling after approval cannot loosen the bound', async () => {
+    const packet = approvedPacket();
+    packet.brief_data.ceiling_usd = 20; // what the chairman saw and approved
+    const tables = { chairman_decisions: [packet], system_events: [], venture_artifacts: [] };
+    const sb = fakeSupabase(tables);
+    const reg = fakeRegistrar({ checkDomain: vi.fn(async () => ({ available: true, price: 30 })) });
+    const r = await executeAcquisition(sb, 'dec-1', { registrar: reg, execute: true, env: { DOMAIN_PURCHASE_CEILING_USD: '100' } });
+    expect(r.status).toBe('refused'); // 30 > min(100, 20)
+    expect(reg.registerDomain).not.toHaveBeenCalled();
+    expect(tables.chairman_decisions[0].brief_data.acquisition_refusal.ceiling_usd).toBe(20);
+  });
+
+  it('CEILING PROVENANCE inverse: lowering the env ceiling below the approved one also binds (min of both)', async () => {
+    const packet = approvedPacket();
+    packet.brief_data.ceiling_usd = 100;
+    const sb = fakeSupabase({ chairman_decisions: [packet], system_events: [], venture_artifacts: [] });
+    const reg = fakeRegistrar({ checkDomain: vi.fn(async () => ({ available: true, price: 30 })) });
+    const r = await executeAcquisition(sb, 'dec-1', { registrar: reg, execute: true, env: { DOMAIN_PURCHASE_CEILING_USD: '25' } });
+    expect(r.status).toBe('refused'); // 30 > min(25, 100)
+  });
+
+  it('LOWERCASE NORMALIZE: Lumina.com and lumina.com are the SAME idempotency subject', async () => {
+    const packet = approvedPacket();
+    packet.brief_data.recommended = 'Lumina.com';
+    const tables = { chairman_decisions: [packet], system_events: [], venture_artifacts: [] };
+    const sb = fakeSupabase(tables);
+    const r = await executeAcquisition(sb, 'dec-1', { registrar: fakeRegistrar(), execute: true, env: {} });
+    expect(r.status).toBe('registered');
+    expect(r.domain).toBe('lumina.com');
+    const dispo = tables.system_events.find((e) => e.event_type === 'DECISION_DISPOSITION');
+    expect(dispo.idempotency_key).toBe(computeQuestionKey('domain_acquisition', { venture_id: 'v1', domain: 'lumina.com' }));
+  });
+
+  it('FORENSICS BEFORE CONSUME: the registrar response lands on the decision record (survives a consume crash), and success reports resultPersisted', async () => {
+    const tables = { chairman_decisions: [approvedPacket()], system_events: [], venture_artifacts: [] };
+    const sb = fakeSupabase(tables);
+    const r = await executeAcquisition(sb, 'dec-1', { registrar: fakeRegistrar(), execute: true, env: {} });
+    expect(r.status).toBe('registered');
+    expect(r.resultPersisted).toBe(true);
+    expect(tables.chairman_decisions[0].brief_data.acquisition_result.registrar_response).toMatchObject({ order_id: 'ord-1' });
+  });
+
+  it('COMPOSE 23505: the partial unique pending index surfaces as pending_conflict (or the raced packet), never an opaque throw', async () => {
+    const tables = tablesWithShortlist();
+    const sb = fakeSupabase(tables);
+    // Simulate the real-DB partial unique index: first insert 23505s.
+    const origFrom = sb.from.bind(sb);
+    sb.from = (table) => {
+      const chain = origFrom(table);
+      if (table === 'chairman_decisions') {
+        chain.insert = () => ({ select: () => ({ single: () => Promise.resolve({ data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint "idx_chairman_decisions_unique_pending"' } }) }) });
+      }
+      return chain;
+    };
+    const r = await composeAcquisitionPacket(sb, 'v1', { registrar: fakeRegistrar(), env: {} });
+    expect(r.status).toBe('pending_conflict');
+    expect(r.unblock).toMatch(/pending slot/);
+  });
+});
