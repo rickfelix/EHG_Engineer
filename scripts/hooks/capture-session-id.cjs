@@ -18,6 +18,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { rankForModelEffort } = require('../../lib/fleet/tier-ladder.cjs');
 const { execSync } = require('child_process');
 
 // SD-FDBK-ENH-SESSIONSTART-HOOK-CAPTURE-001 (FR-7): self-load .env so process.env.SUPABASE_*
@@ -282,12 +283,36 @@ function findClaudeCodePid(entryPath = 'unknown') {
 // only to the local marker file, never the DB) as a secondary auto-source alongside the
 // worker-checkin.cjs --model self-report. get-then-merge (base spread first) means an
 // already-DB-stamped metadata.model is never clobbered by an absent/null model here.
+
+// QF-20260710-406: SessionStart's stdin `model` field carries Claude Code's own model
+// identifier (undocumented exact format, e.g. a versioned display name), not the short
+// {haiku,sonnet,opus,fable} ladder alias. Substring-match on family name so any cased/
+// versioned variant resolves; unrecognized strings pass through untouched and fall to
+// tier-ladder's own normalizeModel, which maps conservative-UP (never under-restricts).
+const MODEL_ALIAS_ORDER = ['fable', 'opus', 'sonnet', 'haiku'];
+function coarseModelAlias(raw) {
+  const s = typeof raw === 'string' ? raw.toLowerCase() : '';
+  return MODEL_ALIAS_ORDER.find((alias) => s.includes(alias)) || raw;
+}
+
 function buildSessionMetadata(existingMetadata, ccPid, source, model) {
   const base = (existingMetadata && typeof existingMetadata === 'object' && !Array.isArray(existingMetadata))
     ? existingMetadata
     : {};
   const merged = { ...base, cc_pid: ccPid, source: source || 'unknown' };
-  if (model) merged.model = model;
+  if (model) {
+    merged.model = model;
+    // QF-20260710-406: a genuine model CHANGE observed at a real SessionStart event
+    // (startup/resume/clear/compact — the only moments this field is populated) must
+    // re-derive tier_rank, so a mid-session /model switch self-heals on the next
+    // natural session-lifecycle boundary instead of staying stranded on a stale rank
+    // until a worker manually re-checks in with --model. No-op on the common case
+    // (model unchanged from the prior stamp).
+    if (base.model !== model) {
+      try { merged.tier_rank = rankForModelEffort(coarseModelAlias(model), base.effort); }
+      catch { /* fail-open: keep whatever tier_rank was already stamped */ }
+    }
+  }
   return merged;
 }
 

@@ -60,4 +60,33 @@ describe('QF-20260627-531: buildSessionMetadata merge-preserves stamped fields',
     const merged = buildSessionMetadata(existing, '9', 'sessionstart', 'fable');
     expect(merged.model).toBe('fable');
   });
+
+  // QF-20260710-406: a SessionStart-observed model CHANGE must re-derive tier_rank so a
+  // mid-session /model switch self-heals at the next natural session-lifecycle boundary.
+  describe('QF-20260710-406: tier_rank re-derives on a genuine model change', () => {
+    it('demotes a stale fable/4 stamp when SessionStart reports a downgrade to sonnet', () => {
+      const existing = { model: 'fable', effort: 'high', tier_rank: 4 };
+      const merged = buildSessionMetadata(existing, '9', 'compact', 'sonnet');
+      expect(merged.model).toBe('sonnet');
+      expect(merged.tier_rank).toBe(2); // rankForModelEffort('sonnet', 'high')
+    });
+
+    it('does NOT touch tier_rank when the reported model is unchanged from the prior stamp', () => {
+      const existing = { model: 'fable', effort: 'high', tier_rank: 4 };
+      const merged = buildSessionMetadata(existing, '9', 'compact', 'fable');
+      expect(merged.tier_rank).toBe(4);
+    });
+
+    it('resolves a raw/versioned model identifier via family-substring match, not the fail-safe fallback', () => {
+      const existing = { model: 'fable', effort: 'high', tier_rank: 4 };
+      const merged = buildSessionMetadata(existing, '9', 'resume', 'claude-sonnet-5-20260601');
+      expect(merged.tier_rank).toBe(2); // resolved to 'sonnet', not conservative-up to fable's rank
+    });
+
+    it('derives tier_rank using the already-stamped effort, not a default', () => {
+      const existing = { model: 'fable', effort: 'low', tier_rank: 4 };
+      const merged = buildSessionMetadata(existing, '9', 'clear', 'sonnet');
+      expect(merged.tier_rank).toBe(1); // rankForModelEffort('sonnet', 'low')
+    });
+  });
 });
