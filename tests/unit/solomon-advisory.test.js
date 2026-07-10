@@ -143,27 +143,118 @@ describe('FR-E1: drainSolomonOutbound (re-target on handoff — register depende
   });
 });
 
-describe('FR-E1: drainInbox consumes consults via two-stage ACK (read_at only)', () => {
-  it('surfaces consults/directives, warns on orphans, stamps read_at but NOT acknowledged_at', async () => {
-    const seen = { update: null };
+// QF-20260710-593 — migrated (not loosened): the old assertions locked in the read_at-only
+// filter/stamp, the exact bug this QF fixes (a row stamped read_at by one drain silently vanished
+// from every later drain even when never genuinely actioned). Mirrors
+// tests/unit/adam-inbox-surface-not-stamp.test.js's recording-mock pattern.
+function makeRecordingMock(selectRows = []) {
+  const updates = [];
+  const selects = [];
+  function chain() {
+    const state = { op: 'select', filters: [], updatePayload: null };
+    const c = {
+      select: () => c,
+      update: (payload) => { state.op = 'update'; state.updatePayload = payload; return c; },
+      eq: (col, v) => { state.filters.push(['eq', col, v]); return c; },
+      in: (col, v) => { state.filters.push(['in', col, v]); return c; },
+      is: (col, v) => { state.filters.push(['is', col, v]); return c; },
+      order: () => c,
+      limit: () => c,
+      then: (res, rej) => finish().then(res, rej),
+    };
+    async function finish() {
+      if (state.op === 'update') { updates.push(state); return { data: [], error: null }; }
+      selects.push(state);
+      return { data: selectRows, error: null };
+    }
+    return c;
+  }
+  return { supabase: { from: chain }, updates, selects };
+}
+
+describe('QF-20260710-593: drainInbox filters acknowledged_at IS NULL (recoverable until actioned)', () => {
+  it('queries ack-IS-NULL (not read_at) — a row a prior drain read-stamped still resurfaces', async () => {
     const unread = [
-      { id: 'a', payload: { kind: 'solomon_consult', body: 'q1' }, created_at: new Date().toISOString() },
+      { id: 'a', payload: { kind: 'solomon_consult', body: 'q1' }, created_at: new Date().toISOString(), read_at: new Date().toISOString() },
       { id: 'b', payload: { kind: 'coordinator_alert', body: 'orphan' }, created_at: new Date().toISOString() }, // orphan
     ];
-    const sb = {
-      from: () => ({
-        select: () => ({ eq: () => ({ is: () => ({ order: () => ({ limit: async () => ({ data: unread, error: null }) }) }) }) }),
-        update(p) { seen.update = p; return { in: () => ({ is: async () => ({ data: null, error: null }) }) }; },
-      }),
-    };
+    const { supabase, selects, updates } = makeRecordingMock(unread);
     const logs = []; const warns = [];
     const log = vi.spyOn(console, 'log').mockImplementation((...a) => logs.push(a.join(' ')));
     const warn = vi.spyOn(console, 'warn').mockImplementation((...a) => warns.push(a.join(' ')));
-    await m.drainInbox(sb, 'solomon-sess', { quiet: false });
+    await m.drainInbox(supabase, 'solomon-sess', { quiet: false });
     log.mockRestore(); warn.mockRestore();
-    expect(seen.update).toHaveProperty('read_at');
-    expect(seen.update).not.toHaveProperty('acknowledged_at'); // two-stage ACK
-    expect(warns.join(' ')).toMatch(/orphan/i);                // orphan surfaced, not consumed
+    expect(selects[0].filters).toContainEqual(['is', 'acknowledged_at', null]);
+    expect(selects[0].filters.some((f) => f[0] === 'is' && f[1] === 'read_at')).toBe(false);
+    expect(warns.join(' ')).toMatch(/orphan/i); // orphan surfaced, not consumed
     expect(logs.join(' ')).toMatch(/consult/);
+    // interactive (default): surfaced rows stamp read_at, never acknowledged_at
+    const stamp = updates.find((u) => u.updatePayload && 'read_at' in u.updatePayload);
+    expect(stamp).toBeTruthy();
+    expect(updates.some((u) => u.updatePayload && 'acknowledged_at' in u.updatePayload)).toBe(false);
+  });
+
+  it('background=true stamps delivered_at instead of read_at', async () => {
+    const row = { id: 'a', payload: { kind: 'solomon_consult', body: 'q1' }, created_at: new Date().toISOString() };
+    const { supabase, updates } = makeRecordingMock([row]);
+    await m.drainInbox(supabase, 'solomon-sess', { quiet: true, background: true });
+    expect(updates.find((u) => u.updatePayload && 'delivered_at' in u.updatePayload)).toBeTruthy();
+    expect(updates.some((u) => u.updatePayload && 'read_at' in u.updatePayload)).toBe(false);
+  });
+});
+
+describe('QF-20260710-593: stampSurfaced', () => {
+  it('background=true stamps delivered_at only-where-NULL, never read_at', async () => {
+    const { supabase, updates } = makeRecordingMock();
+    await m.stampSurfaced(supabase, ['a', 'b'], { background: true });
+    expect(updates).toHaveLength(1);
+    expect(Object.keys(updates[0].updatePayload)).toEqual(['delivered_at']);
+    expect(updates[0].filters).toContainEqual(['is', 'delivered_at', null]);
+  });
+
+  it('interactive (default) stamps read_at only-where-NULL, never delivered_at/acknowledged_at', async () => {
+    const { supabase, updates } = makeRecordingMock();
+    await m.stampSurfaced(supabase, ['a']);
+    expect(updates).toHaveLength(1);
+    expect(Object.keys(updates[0].updatePayload)).toEqual(['read_at']);
+    expect(updates[0].filters).toContainEqual(['is', 'read_at', null]);
+  });
+
+  it('empty id list is a no-op', async () => {
+    const { supabase, updates } = makeRecordingMock();
+    await m.stampSurfaced(supabase, [], { background: true });
+    expect(updates).toHaveLength(0);
+  });
+});
+
+describe('QF-20260710-593: ackRows — the action-time stamp', () => {
+  function ackMock() {
+    const updates = [];
+    const supabase = { from: () => {
+      const state = { payload: null, guards: [] };
+      const c = {
+        update: (payload) => { state.payload = payload; return c; },
+        eq: (col, v) => { state.guards.push(['eq', col, v]); return c; },
+        is: (col, v) => { state.guards.push(['is', col, v]); return c; },
+        select: async () => { updates.push(state); return { data: [{ id: 'id-1', read_at: '2026-07-10T00:00:00Z' }], error: null }; },
+      };
+      return c;
+    } };
+    return { supabase, updates };
+  }
+
+  it('stamps acknowledged_at only-where-NULL (idempotent)', async () => {
+    const { supabase, updates } = ackMock();
+    await m.ackRows(supabase, ['id-1']);
+    expect(updates).toHaveLength(1);
+    expect(Object.keys(updates[0].payload)).toEqual(['acknowledged_at']);
+    expect(updates[0].guards).toContainEqual(['is', 'acknowledged_at', null]);
+  });
+
+  it('ownership guard: with expectedTarget the update is scoped to target_session', async () => {
+    const { supabase, updates } = ackMock();
+    await m.ackRows(supabase, ['id-1'], { expectedTarget: 'solomon-sess' });
+    expect(updates).toHaveLength(1);
+    expect(updates[0].guards).toContainEqual(['eq', 'target_session', 'solomon-sess']);
   });
 });

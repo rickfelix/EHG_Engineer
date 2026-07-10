@@ -255,12 +255,16 @@ async function renderChairmanDirectives(supabase, { quiet = false } = {}) {
   }
 }
 
-async function drainInbox(supabase, sessionId, { quiet = false } = {}) {
+async function drainInbox(supabase, sessionId, { quiet = false, background = false } = {}) {
+  // QF-20260710-593 (mirrors adam-advisory drainInbox / SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001):
+  // recoverable filter is acknowledged_at IS NULL, never read_at IS NULL — a row this drain surfaces but
+  // the reasoning turn doesn't genuinely act on must stay recoverable on the NEXT drain instead of
+  // silently vanishing the moment it's first read-stamped.
   const { data: allRows, error } = await supabase
     .from('session_coordination')
     .select('id, sender_session, sender_type, message_type, subject, body, payload, created_at')
     .eq('target_session', sessionId)
-    .is('read_at', null)
+    .is('acknowledged_at', null)
     .order('created_at', { ascending: true })
     .limit(100);
   if (error) { console.error('ERROR: solomon inbox query failed:', error.message); process.exit(1); }
@@ -293,12 +297,56 @@ async function drainInbox(supabase, sessionId, { quiet = false } = {}) {
     console.log(`  • [${lane}/${kind}] (${ageMin}m) ${text}`);
     ids.push(r.id);
   }
-  // Two-stage ACK: stamp read_at = DELIVERED only; withhold acknowledged_at (recoverable until actioned).
-  await supabase
-    .from('session_coordination')
-    .update({ read_at: new Date().toISOString() })
-    .in('id', ids)
-    .is('read_at', null);
+  // QF-20260710-593: stamp routing by context — background/cron passes (no reasoning turn sees
+  // stdout) stamp delivered_at only; interactive render stamps read_at. acknowledged_at is NEVER
+  // set here (action-time only, see ackRows below).
+  await stampSurfaced(supabase, ids, { background });
+}
+
+/**
+ * QF-20260710-593 (mirrors adam-advisory.stampSurfaced) — the single stamp-routing seam for
+ * drainInbox. background=true: stamp delivered_at (only where NULL). background=false
+ * (interactive): stamp read_at (only where NULL). Idempotent either way; acknowledged_at is
+ * NEVER written here (see ackRows).
+ */
+async function stampSurfaced(supabase, ids, { background = false } = {}) {
+  if (!ids || ids.length === 0) return;
+  const now = new Date().toISOString();
+  if (background) {
+    await supabase.from('session_coordination').update({ delivered_at: now }).in('id', ids).is('delivered_at', null);
+  } else {
+    await supabase.from('session_coordination').update({ read_at: now }).in('id', ids).is('read_at', null);
+  }
+}
+
+/**
+ * QF-20260710-593 (mirrors adam-advisory.ackRows) — the single sanctioned action-time stamp for
+ * the Solomon lane. Stamps acknowledged_at (only where NULL) and backfills read_at where NULL (an
+ * actioned row was necessarily seen). Ownership-scoped when expectedTarget is given. Idempotent.
+ */
+async function ackRows(supabase, ids, { expectedTarget = null } = {}) {
+  const now = new Date().toISOString();
+  let acked = 0;
+  for (const id of ids) {
+    let q = supabase
+      .from('session_coordination')
+      .update({ acknowledged_at: now })
+      .eq('id', id)
+      .is('acknowledged_at', null);
+    if (expectedTarget) q = q.eq('target_session', expectedTarget);
+    const { data, error } = await q.select('id, read_at');
+    if (error) { console.error(`ERROR: ack failed for ${id}: ${error.message}`); continue; }
+    if (data && data.length > 0) {
+      acked += 1;
+      if (data[0].read_at == null) {
+        await supabase.from('session_coordination').update({ read_at: now }).eq('id', id).is('read_at', null);
+      }
+      console.log(`  ✓ acked ${id}`);
+    } else {
+      console.log(`  • ${id} already acked, not found, or not targeted at this Solomon session — no-op`);
+    }
+  }
+  console.log(`${acked}/${ids.length} row(s) newly acknowledged.`);
 }
 
 async function snapshotSender(supabase, sessionId) {
@@ -533,8 +581,8 @@ async function main() {
   warnIfCheckoutStale('solomon-advisory.cjs');
   const argv = process.argv.slice(2);
   const mode = argv[0];
-  if (mode !== 'send' && mode !== 'request' && mode !== 'inbox' && mode !== 'status') {
-    console.error('Usage: node scripts/solomon-advisory.cjs send "<body>" [--reply-to <id>] [--to adam]  |  request "<q>" [--timeout <ms>] [--to adam]  |  inbox [--quiet]  |  status [--working "<body>" [--eta <ms>]]');
+  if (mode !== 'send' && mode !== 'request' && mode !== 'inbox' && mode !== 'status' && mode !== 'ack') {
+    console.error('Usage: node scripts/solomon-advisory.cjs send "<body>" [--reply-to <id>] [--to adam]  |  request "<q>" [--timeout <ms>] [--to adam]  |  inbox [--quiet] [--background]  |  ack <row-id...>  |  status [--working "<body>" [--eta <ms>]]');
     process.exit(2);
   }
   const sessionId = process.env.CLAUDE_SESSION_ID;
@@ -543,6 +591,20 @@ async function main() {
   let supabase;
   try { supabase = createSupabaseServiceClient(); }
   catch (e) { console.error('ERROR: supabase client unavailable:', e.message); process.exit(1); }
+
+  // QF-20260710-593: --background marks a cron/monitor context whose stdout no reasoning turn
+  // sees — such passes stamp delivered_at only (mirrors adam-advisory).
+  const isBackground = argv.includes('--background');
+
+  // QF-20260710-593 — `ack <id...>`: the action-time acknowledged_at stamp. Ids are positional
+  // args (flags filtered out).
+  if (mode === 'ack') {
+    const ids = argv.slice(1).filter((a) => !a.startsWith('--'));
+    if (ids.length === 0) { console.error('Usage: node scripts/solomon-advisory.cjs ack <row-id...>'); process.exit(2); }
+    const solomonTarget = (await getActiveSolomonId(supabase)) || sessionId;
+    await ackRows(supabase, ids, { expectedTarget: solomonTarget });
+    return;
+  }
 
   if (mode === 'inbox') {
     // Resolve the CANONICAL Solomon session (env var may not propagate to a cron subprocess).
@@ -557,7 +619,7 @@ async function main() {
     // FR-1: surface broadcast chairman directives FIRST-CLASS (above consults) with Solomon's per-directive
     // ack status, BEFORE the normal target_session-scoped drain — the Solomon-last-hop compliance fix.
     await renderChairmanDirectives(supabase, { quiet: argv.includes('--quiet') });
-    await drainInbox(supabase, solomonId, { quiet: argv.includes('--quiet') });
+    await drainInbox(supabase, solomonId, { quiet: argv.includes('--quiet'), background: isBackground });
     // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: PING-ON-SILENCE — check MY OWN sent
     // reply-needed advisories for ones left unanswered past their window. Never suppressed by
     // --quiet (a real overdue reply is a genuine delivery, not routine tick noise).
@@ -733,6 +795,7 @@ module.exports = {
   computeConsultSignature, enforceSweepBudget, SOLOMON_SWEEP_BUDGET, alreadyAnswered, checkConsultQuota,
   drainInbox, resolveReplyToCorrelation, drainSolomonOutbound, captureLedgerRow,
   checkLedgerCaptureHealth, resolveSolomonAdvisoryTarget, resolveConsultOriginator, ensureOriginatorCc,
+  stampSurfaced, ackRows,
 };
 
 if (require.main === module) {
