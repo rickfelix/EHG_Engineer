@@ -99,6 +99,8 @@ SELECT jsonb_build_object(
 );
 $$;
 
+-- Least-privilege: strip the Postgres default PUBLIC EXECUTE before granting (security-agent review).
+REVOKE EXECUTE ON FUNCTION public.get_pending_chairman_items(text, integer, integer) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_pending_chairman_items(text, integer, integer) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_pending_chairman_items(text, integer, integer) TO service_role;
 
