@@ -90,6 +90,26 @@ describe('FR-3 — the reusable scanner catches off-stack CODE (not just deps)',
     expect(missing.some((m) => /v1\/metrics/.test(m))).toBe(false);
   });
 
+  // Adversarial review (PR #5774): the content-only regex missed Next.js file-based routing,
+  // where the URL comes from the folder structure and the literal string never appears in source.
+  it('PASSES v1/metrics detection for a Next.js App Router file-based route (no string literal in content)', () => {
+    const io = { files: ['src/app/api/v1/metrics/route.ts'], read: () => 'export async function GET() { return Response.json(kpis); }' };
+    const { missing } = scanForStackViolations('/x', io);
+    expect(missing.some((m) => /v1\/metrics/.test(m))).toBe(false);
+  });
+
+  it('PASSES v1/metrics detection for a Next.js Pages Router API file (no string literal in content)', () => {
+    const io = { files: ['src/pages/api/v1/metrics.ts'], read: () => 'export default function handler(req, res) { res.json(kpis); }' };
+    const { missing } = scanForStackViolations('/x', io);
+    expect(missing.some((m) => /v1\/metrics/.test(m))).toBe(false);
+  });
+
+  it('does not false-positive v1/metrics on an unrelated file path containing similar segments', () => {
+    const io = { files: ['src/pages/v1/metrics-summary.ts'], read: () => 'export default function() {}' };
+    const { missing } = scanForStackViolations('/x', io);
+    expect(missing.some((m) => /v1\/metrics/.test(m))).toBe(true);
+  });
+
   it('the scanner encodes the standard (supabase + openid forbidden imports present)', () => {
     const ids = FORBIDDEN_IMPORTS.map((f) => f.id);
     expect(ids).toContain('supabase');
