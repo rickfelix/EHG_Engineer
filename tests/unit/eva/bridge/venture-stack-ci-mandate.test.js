@@ -51,13 +51,16 @@ describe('FR-3 — the reusable scanner catches off-stack CODE (not just deps)',
     expect(violations.some((v) => v.why.includes('Supabase'))).toBe(true);
   });
 
-  it('PASSES a Clerk + Replit-Postgres + /v1/metrics compliant venture (no false block)', () => {
+  it('PASSES a Clerk + Replit-Postgres + /v1/metrics + SEO-basics compliant venture (no false block)', () => {
     const io = {
-      files: ['src/routes/__root.tsx', 'src/lib/db.ts', 'src/routes/api.v1.metrics.ts'],
+      files: ['src/routes/__root.tsx', 'src/lib/db.ts', 'src/routes/api.v1.metrics.ts', 'src/app/sitemap.ts', 'src/app/robots.ts', 'src/app/layout.tsx'],
       read: (rel) => ({
         'src/routes/__root.tsx': 'import { ClerkProvider } from "@clerk/tanstack-react-start";',
         'src/lib/db.ts': 'const url = process.env.DATABASE_URL; import pg from "pg";',
         'src/routes/api.v1.metrics.ts': 'app.get("/v1/metrics", async (req, res) => { /* aggregates-only KPI response */ });',
+        'src/app/sitemap.ts': 'export default function sitemap() { return [{ url: "https://example.com" }]; }',
+        'src/app/robots.ts': 'export default function robots() { return { rules: { userAgent: "*" } }; }',
+        'src/app/layout.tsx': 'export const metadata = { openGraph: { title: "Acme" } }; // <script type="application/ld+json">{}</script>',
       }[rel]),
     };
     const { violations, missing } = scanForStackViolations('/x', io);
@@ -114,5 +117,39 @@ describe('FR-3 — the reusable scanner catches off-stack CODE (not just deps)',
     const ids = FORBIDDEN_IMPORTS.map((f) => f.id);
     expect(ids).toContain('supabase');
     expect(ids).toContain('openid_client');
+  });
+
+  // SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-C (FR-5)
+  it('FLAGS a venture missing SEO basics (sitemap/robots/OG-meta/structured-data) by name, same as a missing v1/metrics endpoint', () => {
+    const io = { files: ['src/index.ts'], read: () => 'export const x = 1;' };
+    const { missing } = scanForStackViolations('/x', io);
+    expect(missing.some((m) => /sitemap\.xml/.test(m))).toBe(true);
+    expect(missing.some((m) => /robots\.txt/.test(m))).toBe(true);
+    expect(missing.some((m) => /OpenGraph/.test(m))).toBe(true);
+    expect(missing.some((m) => /structured data/.test(m))).toBe(true);
+  });
+
+  it('PASSES sitemap detection for a Next.js App Router dynamic generator (no string literal in content)', () => {
+    const io = { files: ['src/app/sitemap.ts'], read: () => 'export default function sitemap() { return []; }' };
+    const { missing } = scanForStackViolations('/x', io);
+    expect(missing.some((m) => /sitemap\.xml/.test(m))).toBe(false);
+  });
+
+  it('PASSES robots.txt detection for a route referencing "/robots.txt" by content', () => {
+    const io = { files: ['src/server.ts'], read: () => 'app.get("/robots.txt", handler);' };
+    const { missing } = scanForStackViolations('/x', io);
+    expect(missing.some((m) => /robots\.txt/.test(m))).toBe(false);
+  });
+
+  it('PASSES OG-meta detection for a Next.js Metadata API openGraph field', () => {
+    const io = { files: ['src/app/layout.tsx'], read: () => 'export const metadata = { openGraph: { title: "Acme" } };' };
+    const { missing } = scanForStackViolations('/x', io);
+    expect(missing.some((m) => /OpenGraph/.test(m))).toBe(false);
+  });
+
+  it('PASSES structured-data detection for a JSON-LD script tag', () => {
+    const io = { files: ['src/app/page.tsx'], read: () => '<script type="application/ld+json">{"@context":"https://schema.org"}</script>' };
+    const { missing } = scanForStackViolations('/x', io);
+    expect(missing.some((m) => /structured data/.test(m))).toBe(false);
   });
 });

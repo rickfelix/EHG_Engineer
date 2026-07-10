@@ -67,6 +67,7 @@ The **product remains the hosted SaaS control plane** (Cloudflare-default); the 
 ## Companion standard
 
 - **Venture metrics** (`docs/03_protocols_and_standards/venture-metrics-standard.md`, SD-LEO-INFRA-PORTFOLIO-PRODUCT-KPI-001): every venture (Cloudflare-default or Replit opt-in) exposes an authenticated, **aggregates-only** `GET /v1/metrics` that the platform PULLs one-way for portfolio analysis — the platform never opens a venture database. This is how cross-venture portfolio data is gathered despite per-venture isolation.
+- **SEO basics** (SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-C, FR-5): every venture ships a `sitemap.xml`, a `robots.txt`, OpenGraph/meta tags on public pages, and structured data (JSON-LD). This closes the "generator-without-consumer" gap where distribution configs assumed discoverable pages that didn't exist — MarketLens, the pilot venture, shipped with none of the four. Enforced the same way as `/v1/metrics`: four new `REQUIRED` entries (`sitemap`, `robots_txt`, `og_meta`, `structured_data`) in the per-venture stack-enforcing CI scanner (`lib/eva/bridge/templates/venture-stack-scan.js`).
 
 ## Scope boundary (explicit)
 

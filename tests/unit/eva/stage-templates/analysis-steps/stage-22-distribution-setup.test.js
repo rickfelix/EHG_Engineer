@@ -498,6 +498,41 @@ describe('TS-1: web-SaaS thesis without app_store → full portfolio, no skip, n
     expect(insertsOf(calls, 'chairman_decisions')).toHaveLength(0);
   });
 
+  // SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-C FR-2: real production trigger for
+  // provisionOrganicChannel(), wired right after the canonical pair is persisted.
+  it('provisions the organic distribution channel as a non-blocking side effect once distribution_channel_config exists', async () => {
+    const { sb, calls } = makeFakeSupabase({
+      venture_artifacts: [
+        thesisRow(),
+        // Simulates the artifact this same call's persistCanonicalPair writes — the fake
+        // supabase's seedRows are static (inserts don't feed back into subsequent
+        // selects), so it's seeded directly to exercise provisionOrganicChannel's real
+        // read path.
+        { venture_id: 'ven-1', artifact_type: 'distribution_channel_config', is_current: true, artifact_data: { channels: [{ channel: 'twitter_x', status: 'active' }] } },
+      ],
+      distribution_channels: [{ id: 'chan-twitter-x', platform: 'twitter' }],
+    });
+    setupMockLLM(llmResponse([makeExperiment('twitter', 'indie builder', { rank: 1 })]));
+
+    await analyzeStage22Distribution({ ventureId: 'ven-1', ventureName: 'MarketLens', supabase: sb, logger: silent });
+
+    const vdcInserts = insertsOf(calls, 'venture_distribution_channels');
+    expect(vdcInserts).toHaveLength(1);
+    expect(vdcInserts[0].row).toMatchObject({ venture_id: 'ven-1', channel_id: 'chan-twitter-x', is_organic: true, budget_usd: 0 });
+  });
+
+  it('does not fail the stage when organic-channel provisioning finds no config to read yet', async () => {
+    // No pre-seeded distribution_channel_config artifact — provisionOrganicChannel
+    // returns {ok:false, reason:'no_distribution_channel_config'} and the stage proceeds
+    // unaffected (non-blocking side effect, per implementation_approach).
+    const { sb } = makeFakeSupabase({ venture_artifacts: [thesisRow()] });
+    setupMockLLM(llmResponse([makeExperiment('community', 'consultant', { rank: 1 })]));
+
+    const result = await analyzeStage22Distribution({ ventureId: 'ven-1', ventureName: 'MarketLens', supabase: sb, logger: silent });
+
+    expect('_blocked' in result).toBe(false);
+  });
+
   it('dual-emits the legacy runbook while the gate flag is OFF, single-emits when ON', async () => {
     const flagOff = makeFakeSupabase({ venture_artifacts: [thesisRow()] });
     setupMockLLM(llmResponse([makeExperiment('community', 'consultant')]));
