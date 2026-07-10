@@ -98,8 +98,8 @@ try {
 } catch { /* fail-open: ack-withholding disabled, hook still runs */ }
 
 // SD-LEO-FIX-FIX-COORDINATION-INBOX-001: pure, per-message inbox decision.
-// Returns { skip, markRead, markAck }. The bug this fixes: this PostToolUse hook (fires on
-// every tool call in every session) stamped read_at on poll for actionable rows AND only
+// Returns { skip, markRead, markDelivered, markAck }. The bug this fixes: this PostToolUse hook
+// (fires on every tool call in every session) stamped read_at on poll for actionable rows AND only
 // skipped coordinator-exclusive rows when amCoordinator===true — so a non-coordinator session
 // (Adam, or a misrouted worker) DRAINED read_at before the agent processed the body, and the
 // Adam inbox monitor (which gates on read_at IS NULL) then reported UNREAD:0, hiding coordinator
@@ -108,6 +108,10 @@ try {
 //     by an Adam read); acknowledged_at = "received". A poll must NOT pre-stamp read_at for
 //     anything still needing action — leave it NULL so the row re-surfaces (the existing
 //     read_at IS NULL SELECT) until actioned.
+//   - delivered_at = "a consumer's process saw this row exist" (transport receipt), stamped by
+//     markDelivered instead of read_at where a poll needs to stop treating a row as brand-new
+//     without falsely implying it was processed (SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001
+//     FR-2/FR-3 — see the DIRECTIVE_KINDS branch below).
 // Pure + synchronous; no DB calls (amCoordinator/amAdam/twoWayOn/isIdle resolved once by caller).
 function classifyInboxMessage(msg, opts = {}) {
   const { twoWayOn = false, amAdam = false, amSolomon = false, isIdle = false } = opts;
@@ -173,12 +177,19 @@ function classifyInboxMessage(msg, opts = {}) {
     return { skip: false, markRead: false, markAck: false };
   }
   // FR-3 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): DIRECTIVE kinds never receive
-  // acknowledged_at from a poll, for ANY role/sender — read-only drain (read_at = DELIVERED,
-  // so they don't re-render forever; ACK is withheld so delivered vs actioned stays
-  // distinguishable; genuine actioning stamps acknowledged_at / payload.actioned_at later).
+  // acknowledged_at from a poll, for ANY role/sender. SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001
+  // FR-3 correction: this branch used to stamp read_at here as a stand-in "delivered" marker
+  // (there was no separate delivered_at column yet) — but read_at IS NULL is exactly the signal
+  // scripts/coordinator-quiet-tick.mjs's hasUnactionedDirective() (and Adam's inbox monitor) key
+  // off of to detect a pending directive, so stamping it on the FIRST poll hid the row from those
+  // consumers before it was ever genuinely actioned — the root cause of the 2026-07-09 incident
+  // (a directive stack sat unactioned for 25+ minutes while looking "read"). Now that delivered_at
+  // exists, stamp THAT instead: read_at stays NULL (re-surfaces every throttled poll — the intended
+  // urgency signal) until genuine action-required processing (worker-checkin ackMessage on a real
+  // claim, an Adam action-required drill, ack-chairman-directive.cjs, etc.) stamps it later.
   // Kind-allowlist shape per QF-20260610-545 — never a sender_type allow/denylist.
   if (p.kind && DIRECTIVE_KINDS.includes(p.kind)) {
-    return { skip: false, markRead: true, markAck: false };
+    return { skip: false, markRead: false, markDelivered: true, markAck: false };
   }
   // SD-LEO-INFRA-WORKER-INBOX-PUSH-DELIVERY-001 (FR-3): COACHING + any remaining coordinator->worker
   // INFO push (plain announcements, coordinator_reply when two-way is OFF) are now DELIVERED by the
@@ -648,8 +659,12 @@ async function main() {
       // and coordinator-directives-to-Adam keep read_at NULL (re-surface until genuinely actioned);
       // pure notifications still drain (read_at + acknowledged_at) on display. Skip the UPDATE
       // entirely when neither flag is set so read_at/acknowledged_at stay NULL.
+      // SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001 FR-2/FR-3: markDelivered stamps the new
+      // delivered_at transport-receipt column instead of read_at for DIRECTIVE_KINDS rows — see
+      // classifyInboxMessage's DIRECTIVE_KINDS branch for why read_at must stay NULL here.
       const upd = {};
       if (verdict.markRead) upd.read_at = new Date().toISOString();
+      if (verdict.markDelivered) upd.delivered_at = new Date().toISOString();
       if (verdict.markAck) upd.acknowledged_at = new Date().toISOString();
       if (Object.keys(upd).length > 0) {
         await supabase

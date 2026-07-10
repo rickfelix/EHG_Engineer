@@ -1,0 +1,197 @@
+{
+  "executive_summary": "Live incident 2026-07-09 ~00:31-00:58Z: a chairman burn-now directive stack (5 messages, including an expiring-quota window worth ~a week of Fable tokens) sat unactioned for 25+ minutes because the coordinator's self-paced wake cadence (decideCadence in lib/coordinator/quiet-tick.cjs, called from scripts/coordinator-quiet-tick.mjs) only considers fleet-wide quiescence (assessFleetActivity) and has no knowledge of pending DIRECTIVE_KINDS rows -- so it can self-schedule up to a 900s quiescent park immediately after a directive lands. Compounding this, read_at on session_coordination is stamped by inbox rendering/polling (scripts/hooks/coordination-inbox.cjs), not by genuine action -- so senders (Adam, chairman) see 'read' and reasonably infer 'processed' (the gauge-vs-action divergence class). This SD closes both gaps: (1) directive-aware wake override that forces a short cadence when an unactioned DIRECTIVE_KINDS row targets the coordinator, regardless of quiescent state; (2) a new delivered_at column that captures transport receipt separately from read_at, and restricts read_at to genuine action-required surfacing only. Co-designed with the coordinator (its own incident root-cause analysis).",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Directive-aware hard-wake override in decideCadence",
+      "description": "lib/coordinator/quiet-tick.cjs decideCadence({quiescent, partyOffsetS, desiredQuiescentParkS}) currently derives the next ScheduleWakeup delay ONLY from the fleet-wide quiescent flag (up to MAX_QUIESCENT_PARK_S=900s when quiescent). Add a new optional input, e.g. hasUnactionedDirective:boolean, that when true forces a short delay (a new constant, e.g. DIRECTIVE_WAKE_S in the 15-60s range -- final value decided during EXEC, must stay well inside the prompt-cache-warm window like ACTIVE_MIN_S/ACTIVE_MAX_S do) regardless of the quiescent flag. scripts/coordinator-quiet-tick.mjs's main() must compute this input by querying session_coordination for rows WHERE target_session/target_sd matches the coordinator's identity, payload->>kind is in the existing DIRECTIVE_KINDS allowlist (imported from lib/fleet/worker-status.cjs -- do not duplicate the list), and read_at IS NULL, then pass the result into the existing decideCadence call at line ~165. The 'inbox' core already runs every tick regardless of quiescent mode (quiescentSkip:false, safety:true) -- this FR wires that existing detection into the wake-cadence decision it currently never influences.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "decideCadence({quiescent: true, hasUnactionedDirective: true}) returns a delay well under MAX_QUIESCENT_PARK_S (in the new short-wake band), not the up-to-900s quiescent park",
+        "decideCadence({quiescent: true, hasUnactionedDirective: false}) is unchanged from current behavior (regression-safe)",
+        "decideCadence never returns exactly 300s regardless of the new input (existing PROMPT_CACHE_TTL_S invariant preserved)",
+        "coordinator-quiet-tick.mjs queries pending DIRECTIVE_KINDS rows targeting the coordinator and passes the result into decideCadence; unit-testable via dependency injection matching the existing pure-function pattern in lib/coordinator/quiet-tick.cjs"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "delivered_at column: transport receipt distinct from read_at",
+      "description": "session_coordination currently has no column distinguishing 'a consumer's process saw this row exist' (transport receipt) from 'the row was genuinely surfaced for action' (read_at, per existing DIRECTIVE_KINDS deliver-not-consume semantics already documented in scripts/hooks/coordination-inbox.cjs comments). Add delivered_at timestamptz (nullable, no default) via an additive migration -- no backfill of historical rows (documented as a known gap, not retroactively fabricated). Any inbox reader that currently touches a row on first sight (poll/list/render) should stamp delivered_at instead of read_at where it does not already correctly reserve read_at for genuine surfacing.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Migration adds session_coordination.delivered_at timestamptz NULL, additive only, verified live via database-agent (column exists, no NOT NULL constraint, no backfill)",
+        "A row that is merely listed/polled (not drilled into an action-required path) gets delivered_at stamped (or left as before if already correctly un-stamped) but NEVER gets read_at stamped as a side effect of that list/poll"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Restrict read_at to genuine action-required surfacing only",
+      "description": "Audit scripts/hooks/coordination-inbox.cjs (which already contains extensive comments about the intended read_at semantics, e.g. lines ~102-190) for any code path where a peek-render or list-render of a DIRECTIVE_KINDS row stamps read_at. Where found, change that path to leave read_at NULL (stamping delivered_at per FR-2 instead) so only a genuine action-required drill path (or worker-checkin ackMessage on a real claim, or an Adam read that follows the documented closure path) stamps read_at. Apply the same audit to any other inbox reader that touches DIRECTIVE_KINDS rows.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A regression test reproduces the SD's named failure shape: a directive-kind row is peek-rendered (list view) and asserts read_at stays NULL afterward",
+        "A regression test confirms a genuine action-required drill (the existing closure path) still correctly stamps read_at as before (no regression to the working case)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Regression test reproducing the 2026-07-09 incident shape",
+      "description": "Acceptance test simulating: a directive-class row (payload.kind in DIRECTIVE_KINDS) lands while the coordinator's fleet state is QUIESCENT (mid a tick-storm of other advisory traffic) -> assert coordinator-quiet-tick.mjs / decideCadence recommends the new short hard-wake delay, not the quiescent park. A second scenario asserts a non-directive advisory kind arriving during QUIESCENT still gets the normal batch-cadence park (no noise amplification -- silence-by-default preserved per the SD's explicit non-goal).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Test: directive-kind row present + quiescent=true -> nextWakeSeconds is in the new short-wake band",
+        "Test: only non-directive advisory kinds present + quiescent=true -> nextWakeSeconds is unchanged (up to the existing 900s cap), proving no noise amplification"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Additive-only migration, no backfill",
+      "description": "delivered_at is a new nullable column with no default and no backfill of historical rows (explicitly documented in the migration comment as an intentional gap per the SD scope: 'backfill nothing, historical stamps left as-is, documented'). No existing column, constraint, or index on session_coordination is modified or dropped."
+    },
+    {
+      "id": "TR-2",
+      "title": "Reuse DIRECTIVE_KINDS, never duplicate it",
+      "description": "The directive-class kind enumeration already exists as DIRECTIVE_KINDS in lib/fleet/worker-status.cjs (chairman_directive, coordinator_request, work_assignment, adam_action_required, coordinator_reminder, coordinator_to_adam, coordinator_directive), imported and source-pinned by tests/unit/coord-adam-comms-resilient.test.js. This SD's directive-pending query MUST import that same list, never hand-roll a second copy (the exact anti-pattern QF-20260610-545 and the coord-adam-comms-resilient work already fixed once)."
+    },
+    {
+      "id": "TR-3",
+      "title": "Pure-function testability preserved",
+      "description": "decideCadence must remain a pure function (no IO) per its existing module contract (lib/coordinator/quiet-tick.cjs docstring: 'All three are PURE (no IO) so the entrypoints can be thin and the invariants are pinned by tests/unit'). The new hasUnactionedDirective input must be computed by the CALLER (coordinator-quiet-tick.mjs, which already does IO for quiescence/salient-state) and passed in, not queried inside decideCadence itself."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "decideCadence with hasUnactionedDirective=true overrides a quiescent long park",
+      "type": "unit",
+      "expected": "Returned delay is in the new short-wake band, strictly less than MAX_QUIESCENT_PARK_S"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "decideCadence with hasUnactionedDirective=false or omitted preserves existing behavior",
+      "type": "unit",
+      "expected": "Identical output to the pre-change function for all existing test cases (regression-safe, backward compatible default)"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "coordinator-quiet-tick.mjs detects a pending directive-kind row and wires it into decideCadence",
+      "type": "integration",
+      "expected": "Given a fixture session_coordination row with payload.kind in DIRECTIVE_KINDS, target matching the coordinator, and read_at IS NULL, nextWakeSeconds in the tick's JSON output is in the short-wake band"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Non-directive advisory kind during quiescent mode does not trigger the override",
+      "type": "integration",
+      "expected": "nextWakeSeconds unaffected (up to the existing 900s cap) -- proves silence-by-default is preserved, no noise amplification"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "Peek/list render of a directive-kind row leaves read_at NULL, stamps delivered_at",
+      "type": "unit",
+      "expected": "read_at stays NULL after a list-only render path in scripts/hooks/coordination-inbox.cjs; delivered_at is stamped"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "Genuine action-required drill still stamps read_at (no regression)",
+      "type": "unit",
+      "expected": "The existing closure path (worker-checkin ackMessage on genuine claim / Adam action-required drill) continues to stamp read_at exactly as before this change"
+    }
+  ],
+  "acceptance_criteria": [
+    "A directive lands mid-tick-storm -> the coordinator's next self-paced wake is within the new short-wake band (documented target: seconds, not the up-to-15-minute quiescent park)",
+    "A peek/list render of a directive-kind row never stamps read_at; only genuine action-required surfacing does",
+    "Non-directive advisory kinds keep existing batch cadence -- no noise amplification, silence-by-default preserved",
+    "No backfill of historical read_at/delivered_at semantics; documented as an intentional gap",
+    "Zero regressions in existing lib/coordinator/quiet-tick.cjs and scripts/hooks/coordination-inbox.cjs test suites"
+  ],
+  "risks": [
+    {
+      "risk": "Over-broad directive-pending detection causes the coordinator to hard-wake on rows it cannot yet act on (e.g. rows targeting a different, unrelated session), reintroducing noise amplification the SD explicitly wants to avoid",
+      "mitigation": "Query must filter target_session/target_sd to the coordinator's own identity, matching the exact scoping the existing 'inbox' core (fleet-dashboard.cjs inbox) and DIRECTIVE_KINDS consumers already use -- reuse, do not redesign, the targeting logic",
+      "severity": "medium"
+    },
+    {
+      "risk": "Tightening read_at semantics in coordination-inbox.cjs breaks an existing consumer that currently (incorrectly but load-bearingly) relies on read_at being stamped on render",
+      "mitigation": "FR-3 acceptance criteria explicitly require a passing regression test for the existing genuine-action-required closure path before this SD can complete; any consumer found relying on the render-side-effect is a separate documented finding, not silently patched around",
+      "severity": "medium"
+    },
+    {
+      "risk": "New delivered_at column adds a write on every inbox touch, increasing session_coordination write volume (currently 11,202 rows and growing)",
+      "mitigation": "Column is nullable with no default; stamping is opt-in per code path touched by this SD, not a blanket trigger-based write on every row access",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "scripts/coordinator-quiet-tick.mjs (the coordinator's own self-paced wake loop)",
+      "scripts/hooks/coordination-inbox.cjs (shared inbox render/drain path used by coordinator + Adam lane readers)",
+      "Any future consumer of lib/coordinator/quiet-tick.cjs decideCadence()"
+    ],
+    "dependencies": [
+      "lib/fleet/worker-status.cjs DIRECTIVE_KINDS (reused, not modified)",
+      "lib/coordinator/fleet-quiescence.cjs assessFleetActivity (unchanged; quiescent flag remains an input, not replaced)"
+    ],
+    "data_contracts": [
+      "session_coordination gains delivered_at timestamptz (nullable, additive)"
+    ],
+    "runtime_config": [
+      "none"
+    ],
+    "observability_rollout": [
+      "coordinator-quiet-tick.mjs's existing QUIET_TICK= summary line gains visibility into the directive-pending decision (nextWakeSeconds already surfaced; the triggering reason should be visible in modeReason or an equivalent field for post-incident review)"
+    ]
+  },
+  "system_architecture": {
+    "summary": "Two coupled, additive changes to the existing coordinator tick + shared inbox-read path: a new decideCadence input for directive-aware wake override, and a new delivered_at column with tightened read_at stamping discipline.",
+    "components": [
+      {
+        "name": "database/migrations/<timestamp>_session_coordination_delivered_at.sql",
+        "change": "NEW: additive delivered_at timestamptz column, no backfill"
+      },
+      {
+        "name": "lib/coordinator/quiet-tick.cjs",
+        "change": "MODIFY: decideCadence gains an optional hasUnactionedDirective input forcing a short-wake override; remains a pure function"
+      },
+      {
+        "name": "scripts/coordinator-quiet-tick.mjs",
+        "change": "MODIFY: query pending DIRECTIVE_KINDS rows targeting the coordinator (read_at IS NULL), pass the boolean into decideCadence"
+      },
+      {
+        "name": "scripts/hooks/coordination-inbox.cjs",
+        "change": "MODIFY: audit and correct any list/peek render path that stamps read_at; stamp delivered_at on transport receipt instead"
+      }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Migration first (additive, zero-risk), then the pure decideCadence change (unit-tested in isolation), then wire the caller, then the inbox read_at/delivered_at audit, then the incident-shape regression test last to prove the whole chain.",
+    "steps": [
+      "1. Apply database/migrations/<timestamp>_session_coordination_delivered_at.sql via database-agent, verify live (column exists, nullable, no backfill)",
+      "2. Add hasUnactionedDirective input + short-wake band constant to lib/coordinator/quiet-tick.cjs decideCadence, with unit tests for both the override and the unchanged-default cases",
+      "3. Wire scripts/coordinator-quiet-tick.mjs to query pending DIRECTIVE_KINDS rows (reusing the import from lib/fleet/worker-status.cjs) and pass the result to decideCadence",
+      "4. Audit scripts/hooks/coordination-inbox.cjs's read_at-stamping code paths per the existing in-file comments; correct any list/peek path that stamps read_at, stamp delivered_at instead",
+      "5. Add the end-to-end regression test reproducing the incident shape (TS-3/TS-4) plus the read_at/delivered_at unit tests (TS-5/TS-6)"
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "Run the new decideCadence unit tests: npx vitest run <test file covering lib/coordinator/quiet-tick.cjs>",
+      "expected_outcome": "hasUnactionedDirective=true returns a short-wake delay; hasUnactionedDirective=false/omitted matches pre-change behavior exactly"
+    },
+    {
+      "step_number": 2,
+      "instruction": "Run node scripts/coordinator-quiet-tick.mjs --json --dry-run against a fixture/test DB state with one pending DIRECTIVE_KINDS row targeting the coordinator",
+      "expected_outcome": "Output JSON's nextWakeSeconds is in the new short-wake band, not the quiescent park value"
+    },
+    {
+      "step_number": 3,
+      "instruction": "Run the coordination-inbox.cjs regression test simulating a peek/list render of a directive-kind row, then query the row's read_at and delivered_at",
+      "expected_outcome": "read_at is NULL, delivered_at is stamped; a separate test proves the genuine action-required drill path still stamps read_at as before"
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001"
+  }
+}

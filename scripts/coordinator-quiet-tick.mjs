@@ -30,6 +30,15 @@ const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
 const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs');
 const { decideCadence, detectSalientDelta, runCoresFailSoft } = require('../lib/coordinator/quiet-tick.cjs');
+const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
+const { DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
+// SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001 FR-1 (adversarial-review finding): a
+// chairman_directive rides on target_session='broadcast' (never a real session id — see
+// scripts/issue-chairman-directive.cjs), so it can NEVER match the target_session=coordinatorId
+// filter a plain session_coordination query uses. Its own compliance tracking is a SEPARATE
+// mechanism (chairman_directive_ack rows, keyed by directive_id + role, not read_at at all) —
+// reuse the existing, purpose-built gauge rather than re-deriving broadcast-lane detection.
+const { loadRoleDirectiveStatus } = require('../lib/coordinator/chairman-directive-gauge.cjs');
 
 const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -136,6 +145,59 @@ function saveLastState(s) {
   try { writeFileSync(LAST_STATE_FILE, JSON.stringify(s)); } catch { /* fail-soft: never block the tick */ }
 }
 
+/**
+ * SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001 FR-1: is there a session-targeted
+ * DIRECTIVE_KINDS row targeting the coordinator that has not yet been genuinely
+ * surfaced/actioned (read_at IS NULL)? Reuses the SAME allowlist and targeting
+ * pattern as the existing 'inbox' core (fleet-dashboard.cjs printInbox) and
+ * scripts/hooks/coordination-inbox.cjs — never a second hand-rolled copy of
+ * DIRECTIVE_KINDS (QF-20260610-545 lesson).
+ *
+ * Does NOT cover chairman_directive — see hasOutstandingChairmanDirective below,
+ * a deliberately SEPARATE check (adversarial-review finding on PR #5794): a
+ * chairman_directive is issued with target_session='broadcast' (a literal sentinel,
+ * never a real session id — scripts/issue-chairman-directive.cjs), so it can never
+ * match this function's target_session=coordinatorId filter, and its compliance is
+ * tracked by a wholly different mechanism (chairman_directive_ack rows, not read_at).
+ *
+ * Fail-soft: a query error returns false (never blocks the tick, never forces a
+ * false hard-wake on an unrelated DB hiccup).
+ */
+export async function hasUnactionedDirective(sb, coordinatorId) {
+  if (!coordinatorId) return false;
+  try {
+    const { data, error } = await sb
+      .from('session_coordination')
+      .select('id')
+      .eq('target_session', coordinatorId)
+      .in('payload->>kind', DIRECTIVE_KINDS)
+      .is('read_at', null)
+      .limit(1);
+    if (error) return false;
+    return Boolean(data && data.length > 0);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001 FR-1 (adversarial-review finding):
+ * is there an OUTSTANDING chairman_directive applying to the 'coordinator' role — the
+ * flagship, incident-motivating case (a chairman burn-now directive sat unactioned for
+ * 25+ minutes)? Reuses the existing, purpose-built compliance gauge
+ * (lib/coordinator/chairman-directive-gauge.cjs loadRoleDirectiveStatus) rather than
+ * re-deriving the SUPERSEDES-per-directive-id / ack-by-role logic it already implements.
+ * Fail-soft: loadRoleDirectiveStatus itself never throws (returns [] on error).
+ */
+export async function hasOutstandingChairmanDirective(sb) {
+  try {
+    const rows = await loadRoleDirectiveStatus(sb, 'coordinator');
+    return rows.some((r) => r.status === 'outstanding');
+  } catch {
+    return false;
+  }
+}
+
 async function main() {
   const asJson = process.argv.includes('--json');
   const sb = makeClient();
@@ -161,12 +223,42 @@ async function main() {
   const delta = detectSalientDelta(loadLastState(), salient);
   saveLastState(salient);
 
-  // FR-5/FR-6: self-paced next wake (capped at 15min when quiescent, never 300s).
-  const delaySeconds = decideCadence({ quiescent, partyOffsetS: COORD_PARTY_OFFSET_S });
+  // SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001 FR-1: a DIRECTIVE_KINDS row
+  // targeting the coordinator, OR an outstanding chairman_directive (broadcast lane,
+  // separate ack mechanism — adversarial-review finding on PR #5794), must hard-wake
+  // the loop regardless of quiescent state (see the incident this SD fixes: a
+  // chairman directive sat unactioned for 25+ minutes because decideCadence had no
+  // awareness of it and self-scheduled a 900s park).
+  // Round-2 adversarial-review finding: getActiveCoordinatorId() has unguarded
+  // network awaits (lib/coordinator/resolve.cjs) — running it BEFORE the chairman-
+  // directive check inside one shared try/catch let an identity-resolution error
+  // suppress the chairman-directive check too, even though that check needs no
+  // coordinatorId at all. Run the two checks independently so a resolve.cjs hiccup
+  // never masks the flagship (broadcast, coordinator-identity-agnostic) case.
+  const [sessionDirective, chairmanDirective] = await Promise.all([
+    (async () => {
+      try {
+        const coordinatorId = await getActiveCoordinatorId(sb);
+        return await hasUnactionedDirective(sb, coordinatorId);
+      } catch {
+        return false; // fail-soft: never block the tick on identity/query errors
+      }
+    })(),
+    hasOutstandingChairmanDirective(sb), // already internally fail-soft
+  ]);
+  const unactionedDirective = sessionDirective || chairmanDirective;
+
+  // FR-5/FR-6: self-paced next wake (capped at 15min when quiescent, never 300s;
+  // overridden to a short hard-wake band when a directive is pending, per FR-1 above).
+  const delaySeconds = decideCadence({
+    quiescent,
+    partyOffsetS: COORD_PARTY_OFFSET_S,
+    hasUnactionedDirective: unactionedDirective,
+  });
 
   const result = {
     mode: quiescent ? 'QUIESCENT' : 'ACTIVE',
-    modeReason,
+    modeReason: unactionedDirective ? `${modeReason} [DIRECTIVE_HARD_WAKE]` : modeReason,
     cores: tick.summary,
     failedCount: tick.failedCount,
     skippedCount: tick.skippedCount,
