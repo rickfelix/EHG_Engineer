@@ -26,6 +26,7 @@ dotenv.config();
 
 import { createClient } from '@supabase/supabase-js';
 import { executeStageZero } from '../lib/eva/stage-zero/stage-zero-orchestrator.js';
+import { processStageZeroDecisions } from '../lib/eva/stage-zero/decision-activation.js';
 import { randomUUID } from 'crypto';
 
 // ── Configuration ──────────────────────────────────────────────────
@@ -443,6 +444,15 @@ let running = true;
 async function pollOnce(supabase) {
   // Release stale claims first
   await releaseStaleClaims(supabase);
+
+  // SD-LEO-INFRA-STAGE0-CHAIRMAN-DECISION-AUTHORITY-001: resume seam for the paused 'ready' flow —
+  // apply chairman verdicts (activate / park+cancel) before claiming new synthesis work. Fail-soft:
+  // an activation-pass fault must never block request processing; it retries next tick.
+  try {
+    await processStageZeroDecisions({ supabase, logger: log });
+  } catch (err) {
+    log.warn(`Stage-0 decision activation pass failed (retry next tick): ${err.message}`);
+  }
 
   // Fetch next pending
   const request = await fetchNextPending(supabase);

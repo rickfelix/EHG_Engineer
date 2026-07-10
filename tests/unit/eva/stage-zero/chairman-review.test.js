@@ -37,6 +37,7 @@ vi.mock('../../../../lib/eva/chairman-decision-watcher.js', () => ({
 
 import { conductChairmanReview, persistVentureBrief } from '../../../../lib/eva/stage-zero/chairman-review.js';
 import { parkVenture } from '../../../../lib/eva/stage-zero/venture-nursery.js';
+import { createOrReusePendingDecision } from '../../../../lib/eva/chairman-decision-watcher.js';
 
 const silentLogger = {
   log: vi.fn(),
@@ -188,6 +189,101 @@ describe('ChairmanReview', () => {
 
       expect(result.id).toBe('v-1');
       expect(mockSupabase.from).toHaveBeenCalledWith('ventures');
+    });
+
+    // ── SD-LEO-INFRA-STAGE0-CHAIRMAN-DECISION-AUTHORITY-001 acceptance canaries ──
+
+    // Canary 1: READY NEVER SELF-APPROVES.
+    it('ready path inserts a PAUSED venture awaiting the chairman — never active', async () => {
+      const mockSupabase = createMockSupabase();
+      await persistVentureBrief(
+        { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+      const insertArg = mockSupabase._mockChain.insert.mock.calls[0][0];
+      expect(insertArg.status).toBe('paused');
+      expect(insertArg.metadata.stage_zero.awaiting_chairman_decision).toBe(true);
+      expect(insertArg.metadata.stage_zero.pause_provenance.minted_by).toBe('stage0-chairman-gate');
+      expect(insertArg.current_lifecycle_stage).toBe(1);
+    });
+
+    it('ready path mints the REAL pending gate at stage 0 and returns its id', async () => {
+      const mockSupabase = createMockSupabase();
+      const result = await persistVentureBrief(
+        { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+      expect(createOrReusePendingDecision).toHaveBeenCalledTimes(1);
+      const mintArg = createOrReusePendingDecision.mock.calls[0][0];
+      expect(mintArg.stageNumber).toBe(0);
+      expect(mintArg.decisionType).toBe('stage_gate');
+      expect(mintArg.forceDecisionCreation).toBe(true);
+      expect(mintArg.briefData.provenance.minted_by).toBe('stage0-machine');
+      expect(result.stage_zero_decision_id).toBe('decision-1');
+    });
+
+    it('never writes chairman_decisions directly — no machine-forged approval row exists', async () => {
+      const mockSupabase = createMockSupabase();
+      await persistVentureBrief(
+        { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+      // The ONLY decision writer on this path is the mocked real gate helper; chairman-review
+      // itself must not touch the table (the forged status='approved' insert is deleted).
+      expect(mockSupabase.from).not.toHaveBeenCalledWith('chairman_decisions');
+    });
+
+    it('the machine-forged approval insert is gone from the source (grep pin)', async () => {
+      const fs = await import('node:fs');
+      const url = await import('node:url');
+      const path = await import('node:path');
+      const here = path.dirname(url.fileURLToPath(import.meta.url));
+      const src = fs.readFileSync(
+        path.resolve(here, '../../../../lib/eva/stage-zero/chairman-review.js'),
+        'utf8',
+      );
+      expect(src).not.toContain('Venture meets readiness criteria');
+      expect(src).not.toContain("status: 'active'");
+    });
+
+    // Fail-closed mint (flaw H5 class closed): a ready venture without a pending decision must
+    // never exist — mint failure compensates the venture to cancelled and rethrows.
+    it('mint failure throws fail-closed and compensates the venture to cancelled', async () => {
+      createOrReusePendingDecision.mockRejectedValueOnce(new Error('mint exploded'));
+      const mockSupabase = createMockSupabase();
+      await expect(
+        persistVentureBrief(
+          { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+          { supabase: mockSupabase, logger: silentLogger },
+        ),
+      ).rejects.toThrow(/fail-closed.*mint exploded/);
+      const updateArg = mockSupabase._mockChain.update.mock.calls.find(
+        (c) => c[0]?.status === 'cancelled',
+      );
+      expect(updateArg).toBeDefined();
+      expect(updateArg[0].metadata.stage_zero.cancellation_reason).toBe('stage0_decision_mint_failed');
+    });
+
+    // Idempotent re-run wedge closure: original run died between venture insert and mint —
+    // the 23505 path re-mints (reuse-safe) for a paused-awaiting existing venture.
+    it('23505 re-run with a paused-awaiting venture re-mints the pending gate', async () => {
+      const existingVenture = {
+        id: 'v-existing',
+        name: 'TestVenture',
+        status: 'paused',
+        metadata: { stage_zero: { awaiting_chairman_decision: true } },
+      };
+      const mockSupabase = makeGuardSupabase({
+        insertError: { code: '23505', message: 'duplicate key value violates unique constraint "idx_ventures_unique_active_name"' },
+        existingVenture,
+      });
+      const result = await persistVentureBrief(
+        { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger, company_id: 'co-1' },
+      );
+      expect(createOrReusePendingDecision).toHaveBeenCalledTimes(1);
+      expect(result.stage_zero_decision_id).toBe('decision-1');
+      expect(result.id).toBe('v-existing');
     });
 
     // SD-LEO-INFRA-CLEAN-CLONE-LAUNCH-001-A (FR-3): a reseeded brief stamps provenance
