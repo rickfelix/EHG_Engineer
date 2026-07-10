@@ -63,8 +63,42 @@ function createMockSupabase(overrides = {}) {
     }),
     ...overrides,
   };
+  // SD-LEO-INFRA-STAGE0-POSTURE-SUCCESSOR-001 (CH-9): persistVentureBrief now runs an
+  // up-front same-name lookup + a WIP count on 'ventures' and reads eva_config — the
+  // mock serves those chains (no existing venture, live count 0, setting unset) while
+  // keeping the shared _mockChain for insert assertions.
+  const venturesTable = {
+    ...mockChain,
+    // Hybrid select: the insert chain continues .single() (served by mockChain, honoring
+    // overrides) while the up-front name lookup continues .eq().in().order().limit()
+    // .maybeSingle() (served by the custom chain); the WIP count uses {head:true}.
+    select: vi.fn((cols, opts) => {
+      if (opts?.head) {
+        return { in: vi.fn().mockResolvedValue({ count: 0, error: null }) };
+      }
+      return {
+        ...mockChain,
+        eq: vi.fn(() => ({
+          in: vi.fn(() => ({
+            order: vi.fn(() => ({
+              limit: vi.fn(() => ({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              })),
+            })),
+          })),
+        })),
+      };
+    }),
+  };
+  const evaConfigTable = {
+    select: vi.fn(() => ({
+      eq: vi.fn(() => ({
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      })),
+    })),
+  };
   return {
-    from: vi.fn(() => ({ ...mockChain })),
+    from: vi.fn((table) => (table === 'ventures' ? venturesTable : table === 'eva_config' ? evaConfigTable : { ...mockChain })),
     _mockChain: mockChain,
   };
 }
@@ -73,6 +107,7 @@ function createMockSupabase(overrides = {}) {
 // INSERT chain (.insert().select().single()) from the idempotency LOOKUP chain
 // (.select().eq().in().order().limit().maybeSingle()) so the 23505 guard can be exercised.
 function makeGuardSupabase({ insertError = null, existingVenture = null, onSelect = () => {} } = {}) {
+  let lookupCalls = 0;
   const venturesTable = {
     insert: vi.fn(() => ({
       select: vi.fn(() => ({
@@ -82,14 +117,23 @@ function makeGuardSupabase({ insertError = null, existingVenture = null, onSelec
         }),
       })),
     })),
-    select: vi.fn(() => {
+    select: vi.fn((cols, opts) => {
+      // WIP count query (CH-9) — not a lookup; live count 0.
+      if (opts?.head) {
+        return { in: vi.fn().mockResolvedValue({ count: 0, error: null }) };
+      }
       onSelect();
+      // First lookup = the CH-9 up-front same-name check (returns null so the insert
+      // path runs); later lookups = the 23505 recovery (returns existingVenture) —
+      // models the race where the venture appears between the check and the insert.
+      lookupCalls += 1;
+      const result = lookupCalls === 1 ? null : existingVenture;
       return {
         eq: vi.fn(() => ({
           in: vi.fn(() => ({
             order: vi.fn(() => ({
               limit: vi.fn(() => ({
-                maybeSingle: vi.fn().mockResolvedValue({ data: existingVenture, error: null }),
+                maybeSingle: vi.fn().mockResolvedValue({ data: result, error: null }),
               })),
             })),
           })),
@@ -106,6 +150,7 @@ function makeGuardSupabase({ insertError = null, existingVenture = null, onSelec
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
           },
     ),
   };
@@ -333,7 +378,7 @@ describe('ChairmanReview', () => {
       ).rejects.toThrow('Failed to create venture');
     });
 
-    it('throws on a non-unique-violation DB error without attempting the idempotent lookup', async () => {
+    it('throws on a non-unique-violation DB error without attempting the 23505 recovery lookup', async () => {
       const onSelect = vi.fn();
       const mockSupabase = makeGuardSupabase({
         insertError: { code: '23503', message: 'foreign key violation' },
@@ -346,8 +391,73 @@ describe('ChairmanReview', () => {
           { supabase: mockSupabase, logger: silentLogger, company_id: 'co-1' },
         ),
       ).rejects.toThrow('Failed to create venture');
-      // A non-23505 error must skip the idempotent lookup entirely.
-      expect(onSelect).not.toHaveBeenCalled();
+      // SD-LEO-INFRA-STAGE0-POSTURE-SUCCESSOR-001 (CH-9): the up-front same-name check
+      // runs exactly once; a non-23505 error must NOT trigger an additional recovery lookup.
+      expect(onSelect).toHaveBeenCalledTimes(1);
+    });
+
+    // SD-LEO-INFRA-STAGE0-POSTURE-SUCCESSOR-001 (CH-9): the WIP one-setting queue-claim gate.
+    it('refuses a second live venture at the WIP limit (default 1)', async () => {
+      const stub = {
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: { id: 'co-1' }, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
+      const venturesAtLimit = {
+        ...stub,
+        select: vi.fn((cols, opts) => {
+          if (opts?.head) return { in: vi.fn().mockResolvedValue({ count: 1, error: null }) };
+          return {
+            eq: vi.fn(() => ({
+              in: vi.fn(() => ({
+                order: vi.fn(() => ({
+                  limit: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) })),
+                })),
+              })),
+            })),
+          };
+        }),
+      };
+      const evaConfigUnset = { select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) })) })) };
+      const supabase = { from: vi.fn((t) => (t === 'ventures' ? venturesAtLimit : t === 'eva_config' ? evaConfigUnset : { ...stub })) };
+
+      await expect(
+        persistVentureBrief(
+          { decision: 'ready', brief: { ...validBrief, name: 'SecondVenture' }, validation: { valid: true, errors: [] } },
+          { supabase, logger: silentLogger, company_id: 'co-1' },
+        ),
+      ).rejects.toMatchObject({ name: 'WipLimitExceededError', limit: 1, current_count: 1 });
+    });
+
+    it('same-name idempotent re-run returns the existing venture BEFORE the WIP gate', async () => {
+      const existing = { id: 'v-existing', name: 'TestVenture', status: 'active' };
+      const ventures = {
+        insert: vi.fn(),
+        select: vi.fn((cols, opts) => {
+          if (opts?.head) return { in: vi.fn().mockResolvedValue({ count: 99, error: null }) };
+          return {
+            eq: vi.fn(() => ({
+              in: vi.fn(() => ({
+                order: vi.fn(() => ({
+                  limit: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: existing, error: null }) })),
+                })),
+              })),
+            })),
+          };
+        }),
+      };
+      const evaConfigUnset = { select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) })) })) };
+      const supabase = { from: vi.fn((t) => (t === 'ventures' ? ventures : evaConfigUnset)) };
+
+      const result = await persistVentureBrief(
+        { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+        { supabase, logger: silentLogger, company_id: 'co-1' },
+      );
+      expect(result).toEqual(existing);
+      expect(ventures.insert).not.toHaveBeenCalled();
     });
   });
 });

@@ -53,13 +53,13 @@ function createMockSupabase(responses = {}) {
 }
 
 describe('resolveProfile', () => {
-  test('returns legacy fallback when no supabase client', async () => {
-    const result = await resolveProfile({ logger: silentLogger });
-
-    expect(result.name).toBe('legacy_defaults');
-    expect(result.source).toBe('fallback');
-    expect(result.fallback_reason).toBe('no_supabase_client');
-    expect(result.weights).toEqual(LEGACY_WEIGHTS);
+  // SD-LEO-INFRA-STAGE0-POSTURE-SUCCESSOR-001 (CH-2): the legacy fallback is retired —
+  // profile resolution FAILS CLOSED with typed reasons (second fail-open scorer removed).
+  test('throws ProfileResolutionError when no supabase client (fail-closed, no legacy fallback)', async () => {
+    await expect(resolveProfile({ logger: silentLogger })).rejects.toMatchObject({
+      name: 'ProfileResolutionError',
+      reason: 'no_supabase_client',
+    });
   });
 
   test('resolves explicit profile by ID', async () => {
@@ -107,45 +107,36 @@ describe('resolveProfile', () => {
     expect(result.source).toBe('active');
   });
 
-  test('falls back to legacy when profile not found', async () => {
+  test('throws profile_not_found for a missing explicit profile (fail-closed)', async () => {
     const supabase = createMockSupabase({
       single: { data: null, error: { message: 'not found' } },
     });
 
-    const result = await resolveProfile(
-      { supabase, logger: silentLogger },
-      'nonexistent-uuid'
-    );
-
-    expect(result.name).toBe('legacy_defaults');
-    expect(result.source).toBe('fallback');
-    expect(result.fallback_reason).toBe('profile_not_found');
+    await expect(resolveProfile({ supabase, logger: silentLogger }, 'nonexistent-uuid')).rejects.toMatchObject({
+      name: 'ProfileResolutionError',
+      reason: 'profile_not_found',
+    });
   });
 
-  test('falls back to legacy when no active profile exists', async () => {
+  test('throws no_active_profile when no active profile exists (fail-closed)', async () => {
     const supabase = createMockSupabase({
       single: { data: null, error: { message: 'not found' } },
     });
 
-    const result = await resolveProfile({ supabase, logger: silentLogger });
-
-    expect(result.name).toBe('legacy_defaults');
-    expect(result.source).toBe('fallback');
-    expect(result.fallback_reason).toBe('no_active_profile');
+    await expect(resolveProfile({ supabase, logger: silentLogger })).rejects.toMatchObject({
+      name: 'ProfileResolutionError',
+      reason: 'no_active_profile',
+    });
   });
 
-  test('falls back to legacy on database error', async () => {
+  test('database errors propagate — no legacy fallback path exists', async () => {
     const supabase = {
       from: vi.fn().mockImplementation(() => {
         throw new Error('connection refused');
       }),
     };
 
-    const result = await resolveProfile({ supabase, logger: silentLogger });
-
-    expect(result.name).toBe('legacy_defaults');
-    expect(result.source).toBe('fallback');
-    expect(result.fallback_reason).toBe('error');
+    await expect(resolveProfile({ supabase, logger: silentLogger })).rejects.toThrow('connection refused');
   });
 });
 

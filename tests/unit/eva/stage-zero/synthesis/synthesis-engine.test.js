@@ -177,14 +177,13 @@ describe('runSynthesis', () => {
     expect(result.metadata.synthesis.weighted_score).toBeNull();
   });
 
-  test('handles profile resolution failure', async () => {
+  test('profile resolution failure FAILS the synthesis run (CH-2 fail-closed, no catch-to-null)', async () => {
+    // SD-LEO-INFRA-STAGE0-POSTURE-SUCCESSOR-001: the catch-to-null swallow was the
+    // third fail-open layer — scoring without governed weights is the defect class.
     resolveProfile.mockRejectedValueOnce(new Error('profile DB error'));
     const logger = { log: vi.fn(), warn: vi.fn() };
 
-    const result = await runSynthesis(validPathOutput, { logger });
-
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Profile resolution failed'));
-    expect(result.metadata.synthesis.profile).toBeNull();
+    await expect(runSynthesis(validPathOutput, { logger })).rejects.toThrow('profile DB error');
   });
 
   test('returns enriched brief with all results', async () => {
