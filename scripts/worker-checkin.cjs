@@ -47,6 +47,12 @@ const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cj
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate, also used by
 // scripts/stale-session-sweep.cjs CLAIM_FIX (closes the self_claim-vs-sweep writer-consumer-asymmetry).
 const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, parentLeadPending } = require('../lib/fleet/claim-eligibility.cjs');
+// SD-ARCH-HOTSPOT-SD-START-001 FR-2: the CONVERGED dependency gate shared with scripts/sd-start.js
+// (one resolution truth — deps array shapes + blocked_on_sd fold + sd_key-OR-id lookup). This
+// consumer applies its native FAIL-CLOSED polarity via depsSatisfiedFromVerdict: skip on
+// blocking, unresolved, AND query error — the exact draftDepsSatisfied semantics it replaces
+// (with uuid-shaped refs now RESOLVING instead of dangling, a resolution-accuracy fix only).
+const { evaluateClaimDependencyGate, depsSatisfiedFromVerdict } = require('../lib/claim/gates/dependency-gate.cjs');
 // SD-LEO-INFRA-COMPLEXITY-TIERED-WORKER-ASSIGNMENT-001 (FR-3): WORK-DOWN-NEVER-UP on the PULL path.
 // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B (FR-3): --model/--effort capture at check-in.
 const { resolveWorkerTierRank, isTieringActive, normalizeModel, normalizeEffort, rankForModelEffort, ladderTopRank } = require('../lib/fleet/tier-ladder.cjs');
@@ -828,7 +834,8 @@ async function tryClaimDraftCandidate(sb, sessionId, base, d, tierCtx = {}) {
   // SD-LEO-INFRA-COMPLEXITY-TIERED-WORKER-ASSIGNMENT-001 (FR-3): tierCtx adds worker_tier_rank +
   // tiering_active so a below-rung worker skips above-rung drafts (WORK-DOWN-NEVER-UP).
   if (classifyDispatchIneligibility(d, { cwd: process.cwd(), ...tierCtx }) !== null) return null;
-  if (!(await draftDepsSatisfied(sb, d))) return null; // skip dependency-blocked
+  // SD-ARCH-HOTSPOT-SD-START-001 FR-2: converged shared gate (fail-closed polarity preserved).
+  if (!depsSatisfiedFromVerdict(await evaluateClaimDependencyGate(sb, d))) return null; // skip dependency-blocked
   // SD-REFILL-00SO4HZY: skip an orchestrator child whose parent has not yet passed LEAD (a worker would
   // otherwise drive PLAN then hit the hard EXEC-transition block). Fail-open inside parentLeadPending.
   if (await parentLeadPending(sb, d)) return null;

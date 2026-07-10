@@ -18,22 +18,29 @@ import { dirname, resolve } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(resolve(__dirname, '..', '..', 'scripts/sd-start.js'), 'utf8');
+// SD-ARCH-HOTSPOT-SD-START-001 FR-2: the LIVE-status resolution moved into the
+// shared dependency gate (blocked_on_sd fold) — pin the invariant across both files.
+const gateSrc = readFileSync(resolve(__dirname, '..', '..', 'lib/claim/gates/dependency-gate.cjs'), 'utf8');
 
 describe('QF-20260706-786: sd-start.js metadata.blocked_on_sd claim gate', () => {
-  it('defines enforceBlockedOnSdGate, gated on a LIVE strategic_directives_v2 status lookup, that exits(1) when unresolved', () => {
+  it('defines enforceBlockedOnSdGate over the SHARED gate, refusing (exit 1) on a live non-completed dependency', () => {
     const start = src.indexOf('async function enforceBlockedOnSdGate');
     expect(start).toBeGreaterThan(0);
-    const body = src.slice(start, start + 900);
+    const body = src.slice(start, start + 1800);
     expect(body).toMatch(/sd\?\.metadata\?\.blocked_on_sd/);
-    expect(body).toMatch(/strategic_directives_v2/);
-    expect(body).toMatch(/status.*!==.*'completed'/);
+    expect(body).toMatch(/evaluateClaimDependencyGate/);          // shared resolution, no fork
+    expect(body).toMatch(/gate\.blocking\.find/);                 // gated on LIVE status axes
     expect(body).toMatch(/process\.exit\(1\)/);
+    // The LIVE strategic_directives_v2 status lookup + blocked_on_sd fold live in the shared gate.
+    expect(gateSrc).toMatch(/strategic_directives_v2/);
+    expect(gateSrc).toMatch(/blocked_on_sd/);
+    expect(gateSrc).toMatch(/status !== 'completed'|status && d\.status !== 'completed'|d\.status !== 'completed'/);
   });
 
   it('fails open on a query error (never strands a claim on a transient fault)', () => {
     const start = src.indexOf('async function enforceBlockedOnSdGate');
-    const body = src.slice(start, start + 900);
-    expect(body).toMatch(/if \(error \|\| !data\) return;/);
+    const body = src.slice(start, start + 1800);
+    expect(body).toMatch(/if \(gate\.queryError\) return;/);
   });
 
   it('is called right after enforceHumanActionGate on the initial claim path', () => {
