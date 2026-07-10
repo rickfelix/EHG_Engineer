@@ -9,8 +9,12 @@ function mockSupabase(data = [], error = null) {
   return {
     from: vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
-        order: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({ data, error }),
+        // SD-LEO-INFRA-STAGE0-ENVELOPE-REGISTRATION-001 (FR-4): .or() excludes
+        // LEO-Protocol-internal-tooling source_key rows before ordering.
+        or: vi.fn().mockReturnValue({
+          order: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({ data, error }),
+          }),
         }),
       }),
     }),
@@ -150,5 +154,26 @@ describe('getCapabilityContextBlock', () => {
     expect(trend).not.toBe(demo);
     expect(demo).not.toBe(overhang);
     expect(overhang).not.toBe(nursery);
+  });
+
+  // SD-LEO-INFRA-STAGE0-ENVELOPE-REGISTRATION-001 (FR-4/TS-7)
+  it('excludes the LEO-Protocol-internal-tooling seeder source from its query', async () => {
+    const orSpy = vi.fn().mockReturnValue({
+      order: vi.fn().mockReturnValue({
+        limit: vi.fn().mockResolvedValue({ data: SAMPLE_CAPABILITIES, error: null }),
+      }),
+    });
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({ or: orSpy }),
+      }),
+    };
+
+    await getCapabilityContextBlock(supabase, 'trend_scanner');
+
+    expect(orSpy).toHaveBeenCalledWith(
+      expect.stringContaining('SD-LEO-ENH-EVA-INTAKE-DISPOSITION-001')
+    );
+    expect(orSpy).toHaveBeenCalledWith(expect.stringContaining('source_key.is.null'));
   });
 });
