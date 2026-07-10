@@ -1,3 +1,9 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- Approval provenance: chairman approved in-session 2026-07-10 ~13:5x ET (verbatim "approved"),
+-- relayed by Adam (session def9008c) via advisory corr 61b0fd23-bf63-4d03-824e-13c5f8ada540,
+-- relayed to Alpha-4 by coordinator directive 361c53e1. Chain verified against the live
+-- session_coordination row before stamping.
+--
 -- QF-20260710-291: Stage-0 park round-trip persisted parked candidates as status='approved'
 -- (decision='pause') — semantically corrupt authority state, parked-path sibling of the
 -- Delta-C1 forged-approval class removed from the ready path by
