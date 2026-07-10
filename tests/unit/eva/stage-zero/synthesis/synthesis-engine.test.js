@@ -56,6 +56,17 @@ vi.mock('../../../../../lib/eva/stage-zero/synthesis/agentic-fit.js', () => ({
   analyzeAgenticFit: vi.fn().mockResolvedValue({ component: 'agentic_fit', agentic_fit_score: 72, fit_composite: 70, queue_jump_score: 80, dimension_scores: { agent_leverage: 80, compounding: 70, kill_speed: 65, attention_economy: 60 }, machine_improvement: 40, machine_improvement_bonus: 0.2, disadvantage_flags: [], disadvantage_down_weight: 1, hardest_disadvantage_flags: [], chairman_review_required: false, af_band: 'AF-High', af_interpretation: 'ok', confidence: 0.7, summary: 'ok' }),
   buildAgenticFitAdvisory: vi.fn().mockReturnValue(null),
 }));
+// SD-LEO-INFRA-STAGE0-ENGINE-FAIL-CLOSED-001: these two were previously unmocked, so this suite
+// silently ran their REAL implementations (which reject with no DB/LLM client in a test env).
+// That was invisible under the old hardcoded components_run:15 stamp; the fail-closed fix now
+// correctly counts every real failure, so proper isolation is required for the "all succeed"
+// fixtures below to actually represent an all-succeeding run.
+vi.mock('../../../../../lib/eva/stage-zero/synthesis/attention-capital.js', () => ({
+  analyzeAttentionCapital: vi.fn().mockResolvedValue({ component: 'attention_capital', ac_score: 55, ac_band: 'AC-Moderate', ac_interpretation: 'ok', component_scores: { organic_search_momentum: 50, engagement_depth: 50, earned_media_ratio: 50, advocacy_signal: 50, return_engagement: 50 }, confidence: 0.6, confidence_caveat: '', summary: 'ok' }),
+}));
+vi.mock('../../../../../lib/eva/stage-zero/synthesis/mental-model-analysis.js', () => ({
+  runMentalModelAnalysis: vi.fn().mockResolvedValue({ component: 'mental_model_analysis', models: [], summary: 'ok' }),
+}));
 vi.mock('../../../../../lib/eva/stage-zero/profile-service.js', () => ({
   resolveProfile: vi.fn().mockResolvedValue(null),
   calculateWeightedScore: vi.fn().mockReturnValue({ total_score: 75, breakdown: {} }),
