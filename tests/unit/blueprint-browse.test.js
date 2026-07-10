@@ -68,9 +68,15 @@ function createMockSupabase(blueprints = DEFAULT_BLUEPRINTS, dbError = null) {
     return chain;
   };
 
+  // SD-LEO-INFRA-STAGE0-TRAVERSABILITY-REACH-001: executeBlueprintBrowse now loads the
+  // live capability envelope fail-closed before returning; the mock serves an (honestly
+  // empty, per TR-1) delivered envelope so undeclared blueprint candidates auto-pass.
   return {
-    from: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue(buildChain(blueprints, dbError)),
+    from: vi.fn((table) => {
+      if (table === 'v_unified_capabilities') {
+        return { select: vi.fn().mockReturnThis(), in: vi.fn().mockResolvedValue({ data: [], error: null }) };
+      }
+      return { select: vi.fn().mockReturnValue(buildChain(blueprints, dbError)) };
     }),
   };
 }

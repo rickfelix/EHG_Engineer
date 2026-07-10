@@ -55,6 +55,7 @@ function createMockSupabase(strategyData = null, nurseryItems = []) {
   const chain = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    is: vi.fn().mockReturnThis(),
     single: vi.fn().mockResolvedValue({ data: strategyData, error: strategyData ? null : { message: 'not found' } }),
     order: vi.fn().mockReturnThis(),
     limit: vi.fn().mockResolvedValue({ data: nurseryItems, error: null }),
@@ -215,9 +216,12 @@ describe('required_capabilities reach across all 5 discovery strategies (CH-6)',
   test('nursery_reeval carries forward required_capabilities from the original parked record when present', async () => {
     const nurseryItems = [
       {
-        id: 'nursery-1', name: 'Parked Idea', problem_statement: 'old problem',
-        parked_reason: 'capability gap', original_score: 5, parked_at: '2026-01-01T00:00:00Z',
-        metadata: { required_capabilities: [{ name: 'venture web deploy', kind: 'form_factor' }] },
+        id: 'nursery-1', name: 'Parked Idea', description: 'old problem',
+        current_score: 5, created_at: '2026-01-01T00:00:00Z',
+        source_ref: {
+          park: { parked_reason: 'capability gap' },
+          candidate: { required_capabilities: [{ name: 'venture web deploy', kind: 'form_factor' }] },
+        },
       },
     ];
     const supabase = createMockSupabase(defaultStrategy, nurseryItems);
@@ -239,9 +243,9 @@ describe('required_capabilities reach across all 5 discovery strategies (CH-6)',
   test('nursery_reeval omits (not fabricates) required_capabilities when the original parked record has none', async () => {
     const nurseryItems = [
       {
-        id: 'nursery-2', name: 'Parked Idea 2', problem_statement: 'old problem',
-        parked_reason: 'low score', original_score: 3, parked_at: '2026-01-01T00:00:00Z',
-        metadata: {},
+        id: 'nursery-2', name: 'Parked Idea 2', description: 'old problem',
+        current_score: 3, created_at: '2026-01-01T00:00:00Z',
+        source_ref: { park: { parked_reason: 'low score' }, candidate: {} },
       },
     ];
     const supabase = createMockSupabase(defaultStrategy, nurseryItems);

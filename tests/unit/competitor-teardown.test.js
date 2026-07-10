@@ -97,6 +97,20 @@ const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 // QF-20260710-850: unit tests must never hit the network — inject the fetch seam.
 const mockFetchUrl = vi.fn().mockResolvedValue('MOCK FETCHED SITE CONTENT for grounding');
 
+// SD-LEO-INFRA-STAGE0-TRAVERSABILITY-REACH-001: executeCompetitorTeardown now loads the
+// live capability envelope fail-closed before returning; supabase must at least answer
+// the v_unified_capabilities query even in tests unrelated to the gate itself.
+function makeGateSupabase() {
+  return {
+    from: vi.fn((table) => {
+      if (table === 'v_unified_capabilities') {
+        return { select: vi.fn().mockReturnThis(), in: vi.fn().mockResolvedValue({ data: [], error: null }) };
+      }
+      return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: null, error: null }) };
+    }),
+  };
+}
+
 // ── Core Functionality Tests ──────────────────────────────────
 
 describe('Competitor Teardown - executeCompetitorTeardown', () => {
@@ -117,7 +131,7 @@ describe('Competitor Teardown - executeCompetitorTeardown', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://testcorp.com'] },
-      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient, supabase: makeGateSupabase() }
     );
 
     // Verify PathOutput structure
@@ -145,7 +159,7 @@ describe('Competitor Teardown - executeCompetitorTeardown', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://comp-a.com', 'https://comp-b.com'] },
-      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient, supabase: makeGateSupabase() }
     );
 
     // LLM should be called: 2 analyses + 1 deconstruction + 1 gap analysis = 4
@@ -166,7 +180,7 @@ describe('Competitor Teardown - executeCompetitorTeardown', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://single.com'] },
-      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient, supabase: makeGateSupabase() }
     );
 
     // LLM should be called: 1 analysis + 1 deconstruction = 2
@@ -180,7 +194,7 @@ describe('Competitor Teardown - executeCompetitorTeardown', () => {
 
     await executeCompetitorTeardown(
       { urls: ['https://testcorp.com'] },
-      { logger, llmClient }
+      { logger, llmClient, supabase: makeGateSupabase() }
     );
 
     expect(logger.log).toHaveBeenCalledWith(expect.stringContaining('1 competitor'));
@@ -197,7 +211,7 @@ describe('Competitor Teardown - analyzeCompetitor', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://testcorp.com'] },
-      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient, supabase: makeGateSupabase() }
     );
 
     const analysis = result.raw_material.competitor_analyses[0];
@@ -214,7 +228,7 @@ describe('Competitor Teardown - analyzeCompetitor', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://bad-response.com'] },
-      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient, supabase: makeGateSupabase() }
     );
 
     // Should still produce a result, even with error in analysis
@@ -242,7 +256,7 @@ describe('Competitor Teardown - analyzeCompetitor', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://error.com'] },
-      { logger, llmClient }
+      { logger, llmClient, supabase: makeGateSupabase() }
     );
 
     const analysis = result.raw_material.competitor_analyses[0];
@@ -270,7 +284,7 @@ describe('Competitor Teardown - First Principles', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://comp.com'] },
-      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient, supabase: makeGateSupabase() }
     );
 
     expect(result.suggested_name).toBe('AutoPilot');
@@ -297,7 +311,7 @@ describe('Competitor Teardown - First Principles', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://test.com'] },
-      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient, supabase: makeGateSupabase() }
     );
 
     // Should still return a result, with empty suggested fields
@@ -323,7 +337,7 @@ describe('Competitor Teardown - Gap Analysis', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://comp1.com', 'https://comp2.com'] },
-      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient, supabase: makeGateSupabase() }
     );
 
     const gap = result.raw_material.gap_analysis;
@@ -357,7 +371,7 @@ describe('Competitor Teardown - Gap Analysis', () => {
 
     const result = await executeCompetitorTeardown(
       { urls: ['https://comp1.com', 'https://comp2.com'] },
-      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient }
+      { logger: silentLogger, fetchUrl: mockFetchUrl, llmClient, supabase: makeGateSupabase() }
     );
 
     expect(result.raw_material.gap_analysis.error).toBe('Gap analysis failed');
