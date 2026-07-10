@@ -46,18 +46,23 @@ describe('isAdamInboxRow predicate', () => {
 });
 
 // AND-only fetch + JS-filter stub (mirrors adam-advisory-full-lane.test.js).
+// SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001: drainInbox now window-scopes (gte), runs an
+// advisory older-rows head-count (terminal .lt), and records the UPDATE payload so the stamp
+// matrix (read_at interactive / delivered_at background / acknowledged_at never) is pinned.
 function stub(rows) {
-  const captured = { eq: {}, isNull: [], updatedIds: null, usedOr: false };
+  const captured = { eq: {}, isNull: [], updatedIds: null, usedOr: false, updatePayloads: [] };
   const selectChain = {
     select() { return selectChain; },
     eq(col, val) { captured.eq[col] = val; return selectChain; },
     or() { captured.usedOr = true; return selectChain; },
     is(col) { captured.isNull.push(col); return selectChain; },
+    gte() { return selectChain; },
+    lt() { return Promise.resolve({ count: 0, error: null }); },
     order() { return selectChain; },
     limit() { return Promise.resolve({ data: rows, error: null }); },
   };
   const updateChain = {
-    update() { return updateChain; },
+    update(payload) { captured.updatePayloads.push(payload); return updateChain; },
     in(_col, ids) { captured.updatedIds = ids; return updateChain; },
     is() { return Promise.resolve({ error: null }); },
     eq() { return Promise.resolve({ error: null }); }, // QF-20260702-414: orphan_seen_at per-row stamp
@@ -88,11 +93,19 @@ describe('drainInbox (all-classes drain)', () => {
     const { supabase, captured } = stub(rows);
     await drainInbox(supabase, 'adam-session');
     expect(captured.eq.target_session).toBe('adam-session');
-    expect(captured.isNull).toContain('read_at');
+    // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-4): the recoverable filter is
+    // acknowledged_at IS NULL — read_at is a stamp, never a server filter, so a
+    // read-stamped-but-unactioned row can never be hidden.
+    expect(captured.isNull).toContain('acknowledged_at');
+    expect(captured.isNull).not.toContain('read_at');
     expect(captured.usedOr).toBe(false); // AND-only — no PostgREST .or() trap
     expect(captured.updatedIds).toEqual(['reply', 'directive', 'heads_up', 'handoff', 'advisory', 'adam_fb', 'assist', 'reconcile']);
     // none of the excluded/untyped ids consumed
     for (const bad of ['canary', 'comms', 'ack', 'untyped']) expect(captured.updatedIds).not.toContain(bad);
+    // Stamp matrix: interactive surfacing stamps read_at; acknowledged_at is NEVER written by a drain.
+    const surfaceStamp = captured.updatePayloads.find(p => 'read_at' in p);
+    expect(surfaceStamp).toBeTruthy();
+    expect(captured.updatePayloads.some(p => 'acknowledged_at' in p)).toBe(false);
     logSpy.mockRestore();
   });
 

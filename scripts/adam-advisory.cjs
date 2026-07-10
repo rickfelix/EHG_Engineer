@@ -51,7 +51,7 @@ const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
 const { enqueueRelayRequest } = require('../lib/coordinator/relay-queue.cjs');
-const { PAYLOAD_KINDS, DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
+const { PAYLOAD_KINDS, DIRECTIVE_KINDS, ADAM_EXCLUDED_KINDS } = require('../lib/fleet/worker-status.cjs');
 // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class SSOT.
 const { REPLY_CLASSES, isValidReplyClass, computeReplyExpectedBy, checkAndPingOverdueReplies } = require('../lib/coordinator/reply-class.cjs');
 // SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001: reuse the canonical Adam-session resolver for the unattended
@@ -295,33 +295,96 @@ function isReplyRow(r) {
   return p.kind === 'coordinator_reply' || (p.reply_to != null && p.reply_to !== '');
 }
 
-async function drainReplies(supabase, sessionId) {
+async function drainReplies(supabase, sessionId, { background = false, windowMs = DEFAULT_DRAIN_WINDOW_MS } = {}) {
+  // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-4): the recoverable filter is
+  // acknowledged_at IS NULL (never read_at IS NULL) — a reply a background/legacy pass
+  // stamped read_at on stays surfaced until genuinely actioned. Window-scoped as a
+  // backlog guard (default 7d); older unacked rows are counted loudly, never silent.
+  const cutoffIso = new Date(Date.now() - windowMs).toISOString();
   const { data: allRows, error } = await supabase
     .from('session_coordination')
-    .select('id, sender_session, subject, body, payload, created_at')
+    .select('id, sender_session, subject, body, payload, created_at, read_at')
     .eq('target_session', sessionId)
-    .is('read_at', null)
+    .is('acknowledged_at', null)
+    .gte('created_at', cutoffIso)
     .order('created_at', { ascending: true })
     .limit(100);
   if (error) { console.error('ERROR: replies query failed:', error.message); process.exit(1); }
   const rows = (allRows || []).filter(isReplyRow);
-  if (rows.length === 0) { console.log('(no unread directed replies)'); return; }
+  if (rows.length === 0) { console.log('(no unacked directed replies)'); return; }
 
-  console.log(`${rows.length} directed repl${rows.length === 1 ? 'y' : 'ies'}:`);
+  console.log(`${rows.length} unacked directed repl${rows.length === 1 ? 'y' : 'ies'} (ack via adam-advisory.cjs ack <id> once actioned):`);
   const ids = [];
   for (const r of rows) {
     const replyTo = (r.payload && r.payload.reply_to) || '?';
     const text = (r.payload && r.payload.body) || r.body || '(empty)';
     const ageMin = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
-    console.log(`  • [${String(replyTo).slice(0, 8)}] (${ageMin}m) ${text}`);
+    console.log(`  • [${String(replyTo).slice(0, 8)}] id=${r.id} (${ageMin}m) ${text}`);
     ids.push(r.id);
   }
-  // Consume: stamp read_at only on rows still NULL (idempotent; mirrors the await consume).
-  await supabase
-    .from('session_coordination')
-    .update({ read_at: new Date().toISOString() })
-    .in('id', ids)
-    .is('read_at', null);
+  // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-1): stamp routing by context.
+  // Background/cron context: delivered_at only — read_at is reserved for a surface whose
+  // content lands in an operator-visible turn. Interactive: read_at (this render IS the
+  // operator-visible surface). Neither path ever stamps acknowledged_at (action-time only).
+  await stampSurfaced(supabase, ids, { background });
+}
+
+// SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001: interactive drain backlog-guard window.
+const DEFAULT_DRAIN_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-1) — the single stamp-routing seam for
+ * both drain lanes. background=true: stamp delivered_at (only where NULL; column added by
+ * database/migrations/20260710_session_coordination_delivered_at.sql) and leave read_at
+ * untouched. background=false (interactive): stamp read_at (only where NULL). Idempotent
+ * either way; acknowledged_at is NEVER written here (see the `ack` subcommand).
+ */
+async function stampSurfaced(supabase, ids, { background = false } = {}) {
+  if (!ids || ids.length === 0) return;
+  const now = new Date().toISOString();
+  if (background) {
+    await supabase
+      .from('session_coordination')
+      .update({ delivered_at: now })
+      .in('id', ids)
+      .is('delivered_at', null);
+  } else {
+    await supabase
+      .from('session_coordination')
+      .update({ read_at: now })
+      .in('id', ids)
+      .is('read_at', null);
+  }
+}
+
+/**
+ * SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-4) — `ack <id...>`: the single
+ * sanctioned action-time stamp for the Adam lane (chairman directives keep
+ * scripts/ack-chairman-directive.cjs). Stamps acknowledged_at (only where NULL) and
+ * backfills read_at where NULL (an actioned row was necessarily seen). Idempotent.
+ */
+async function ackRows(supabase, ids) {
+  const now = new Date().toISOString();
+  let acked = 0;
+  for (const id of ids) {
+    const { data, error } = await supabase
+      .from('session_coordination')
+      .update({ acknowledged_at: now })
+      .eq('id', id)
+      .is('acknowledged_at', null)
+      .select('id, read_at');
+    if (error) { console.error(`ERROR: ack failed for ${id}: ${error.message}`); continue; }
+    if (data && data.length > 0) {
+      acked += 1;
+      if (data[0].read_at == null) {
+        await supabase.from('session_coordination').update({ read_at: now }).eq('id', id).is('read_at', null);
+      }
+      console.log(`  ✓ acked ${id}`);
+    } else {
+      console.log(`  • ${id} already acked (or not found) — no-op`);
+    }
+  }
+  console.log(`${acked}/${ids.length} row(s) newly acknowledged.`);
 }
 
 /**
@@ -399,7 +462,10 @@ function isAdamInboxRow(r) {
  * consume (each has a dedicated responder that owns the row; the Adam inbox marking it read first
  * would break that handler). Mirrors the "DELIBERATELY EXCLUDED" list in the ADAM_INBOX_KINDS doc.
  */
-const EXCLUDED_KINDS = Object.freeze(['canary_request', 'comms_check', 'ack', 'coordinator_ack']);
+// SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001: canonical home moved to
+// lib/fleet/worker-status.cjs (ADAM_EXCLUDED_KINDS) so read-adam-directives.cjs and
+// adam-quiet-tick.mjs share the list without a require cycle. Export name preserved.
+const EXCLUDED_KINDS = ADAM_EXCLUDED_KINDS;
 
 /**
  * SD-FDBK-INFRA-ADAM-INBOX-ADAM-001 — is this an ORPHANED Adam-directed row? A row targeting the
@@ -456,15 +522,36 @@ async function renderChairmanDirectives(supabase, role, { quiet = false } = {}) 
  * DELIVERED-but-unacked directive stays recoverable via scripts/read-adam-directives.cjs (the
  * acknowledged_at IS NULL tier) until Adam genuinely acts.
  */
-async function drainInbox(supabase, sessionId, { quiet = false } = {}) {
+async function drainInbox(supabase, sessionId, { quiet = false, background = false, windowMs = DEFAULT_DRAIN_WINDOW_MS } = {}) {
+  // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-4): recoverable filter is
+  // acknowledged_at IS NULL — a row any background/legacy pass read-stamped still surfaces
+  // until actioned (the read-stamped-not-processed class, chairman-caught 2026-07-10, is
+  // structurally unreachable). Window-scoped (default 7d) as a backlog guard; older
+  // unacked rows are COUNTED below, never silently invisible.
+  const cutoffIso = new Date(Date.now() - windowMs).toISOString();
   const { data: allRows, error } = await supabase
     .from('session_coordination')
-    .select('id, sender_session, sender_type, message_type, subject, body, payload, created_at')
+    .select('id, sender_session, sender_type, message_type, subject, body, payload, created_at, read_at')
     .eq('target_session', sessionId)
-    .is('read_at', null)
+    .is('acknowledged_at', null)
+    .gte('created_at', cutoffIso)
     .order('created_at', { ascending: true })
     .limit(100);
   if (error) { console.error('ERROR: inbox query failed:', error.message); process.exit(1); }
+
+  // Backlog-guard visibility: unacked rows OLDER than the window are reported by count so
+  // they cannot rot invisibly; recover them via `--window <Nd>` or the stampless `--sweep`.
+  try {
+    const { count: olderCount } = await supabase
+      .from('session_coordination')
+      .select('id', { count: 'exact', head: true })
+      .eq('target_session', sessionId)
+      .is('acknowledged_at', null)
+      .lt('created_at', cutoffIso);
+    if (olderCount > 0) {
+      console.warn(`⚠ ${olderCount} unacked directed row(s) OLDER than the ${Math.round(windowMs / 86_400_000)}d drain window — widen with --window <Nd> or inspect via --sweep.`);
+    }
+  } catch { /* count is advisory — never blocks the drain */ }
 
   // SD-LEO-FIX-ADAM-INBOX-ALL-CLASSES-001: widen the drain to ALL directed Adam classes
   // (isAdamInboxRow ⊇ DIRECTIVE_KINDS) — responder-owned + untyped rows stay untouched.
@@ -501,9 +588,9 @@ async function drainInbox(supabase, sessionId, { quiet = false } = {}) {
   // chairman-attached work. With --quiet (the recurring tick), stay SILENT on a fully-empty lane
   // (mirrors the belt-countdown/offer-help silence-by-default). Manual `inbox` keeps the
   // confirmation line. Orphaned-row WARNINGs above are NEVER suppressed (real unread deliveries).
-  if (rows.length === 0) { if (!quiet) console.log('(no unread directed inbox rows — replies or directed classes)'); return; }
+  if (rows.length === 0) { if (!quiet) console.log('(no unacked directed inbox rows — replies or directed classes)'); return; }
 
-  console.log(`${rows.length} inbox row${rows.length === 1 ? '' : 's'} (full lane — replies + all directed classes):`);
+  console.log(`${rows.length} unacked inbox row${rows.length === 1 ? '' : 's'} (full lane — replies + all directed classes; ack via adam-advisory.cjs ack <id> once actioned):`);
   const ids = [];
   for (const r of rows) {
     const lane = isReplyRow(r) ? 'reply' : (isDirectiveRow(r) ? 'directive' : 'adam-directed');
@@ -514,17 +601,13 @@ async function drainInbox(supabase, sessionId, { quiet = false } = {}) {
     // instead of silently misreading the row — surfaced, not consumed-differently (still drained).
     const skew = detectVersionSkew(r.payload);
     if (skew) console.warn(`  ⚠ PROTOCOL VERSION SKEW: sender v${skew.senderVersion}, receiver v${skew.receiverVersion} (id=${r.id})`);
-    console.log(`  • [${lane}/${kind}] (${ageMin}m) ${text}`);
+    console.log(`  • [${lane}/${kind}] id=${r.id} (${ageMin}m) ${text}`);
     ids.push(r.id);
   }
-  // Consume: stamp read_at = DELIVERED on surfaced rows still NULL (idempotent). Deliberately do NOT
-  // set acknowledged_at / payload.actioned_at — directives stay in the read-but-unacked tier
-  // (read-adam-directives.cjs) until genuinely actioned (two-stage ACK).
-  await supabase
-    .from('session_coordination')
-    .update({ read_at: new Date().toISOString() })
-    .in('id', ids)
-    .is('read_at', null);
+  // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-1): stamp routing by context —
+  // background/cron passes stamp delivered_at only; interactive render stamps read_at.
+  // acknowledged_at / payload.actioned_at are NEVER set here (action-time only, `ack`).
+  await stampSurfaced(supabase, ids, { background });
 }
 
 const DEFAULT_SWEEP_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -636,8 +719,8 @@ async function main() {
   warnIfCheckoutStale('adam-advisory.cjs');
   const argv = process.argv.slice(2);
   const mode = argv[0];
-  if (mode !== 'send' && mode !== 'request' && mode !== 'replies' && mode !== 'inbox' && mode !== 'status') {
-    console.error('Usage: node scripts/adam-advisory.cjs send "<body>" [--reply-to <correlation_or_row_id>] [--to solomon|<session_id>]  |  request "<question>" [--timeout <ms>] [--to solomon|<session_id>]  |  replies  |  inbox [--sweep [--window 24h]]  |  status [--working "<body>" [--eta <ms>]]');
+  if (mode !== 'send' && mode !== 'request' && mode !== 'replies' && mode !== 'inbox' && mode !== 'status' && mode !== 'ack') {
+    console.error('Usage: node scripts/adam-advisory.cjs send "<body>" [--reply-to <correlation_or_row_id>] [--to solomon|<session_id>]  |  request "<question>" [--timeout <ms>] [--to solomon|<session_id>]  |  replies [--background]  |  inbox [--background] [--window <Nh|Nd>] [--sweep [--window 24h]]  |  ack <row-id...>  |  status [--working "<body>" [--eta <ms>]]');
     process.exit(2);
   }
 
@@ -648,9 +731,22 @@ async function main() {
   try { supabase = createSupabaseServiceClient(); }
   catch (e) { console.error('ERROR: supabase client unavailable:', e.message); process.exit(1); }
 
+  // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001: --background marks a cron/monitor
+  // context whose stdout no reasoning turn sees — such passes stamp delivered_at only.
+  const isBackground = argv.includes('--background');
+
+  // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-4): `ack <id...>` — the action-time
+  // acknowledged_at stamp. Ids are positional args (flags filtered out).
+  if (mode === 'ack') {
+    const ids = argv.slice(1).filter((a) => !a.startsWith('--'));
+    if (ids.length === 0) { console.error('Usage: node scripts/adam-advisory.cjs ack <row-id...>'); process.exit(2); }
+    await ackRows(supabase, ids);
+    return;
+  }
+
   // FR-4 — durable reply reader (reply lane only; kept for back-compat).
   if (mode === 'replies') {
-    await drainReplies(supabase, sessionId);
+    await drainReplies(supabase, sessionId, { background: isBackground });
     return;
   }
 
@@ -663,7 +759,12 @@ async function main() {
     // FR-1: surface broadcast chairman directives FIRST-CLASS (above normal advisories) with Adam's
     // per-directive ack status, BEFORE the normal target_session-scoped drain.
     await renderChairmanDirectives(supabase, 'adam', { quiet: argv.includes('--quiet') });
-    await drainInbox(supabase, adamId, { quiet: argv.includes('--quiet') });
+    // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001: --window (when given without --sweep)
+    // widens/narrows the interactive drain's backlog-guard window; default 7d.
+    const drainWindowMs = argv.includes('--window') && !argv.includes('--sweep')
+      ? parseSweepWindowMs(argv)
+      : DEFAULT_DRAIN_WINDOW_MS;
+    await drainInbox(supabase, adamId, { quiet: argv.includes('--quiet'), background: isBackground, windowMs: drainWindowMs });
     // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: PING-ON-SILENCE — check MY OWN sent
     // reply-needed advisories for ones left unanswered past their window. Never suppressed by
     // --quiet (a real overdue reply is a genuine delivery, not routine tick noise).
@@ -898,7 +999,7 @@ async function drainAdamOutbound(supabase, { newSessionId, oldSessionIds } = {})
   }
 }
 
-module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS, resolveAdamAdvisoryTarget, classifyDirectTarget, extractEmbeddedPeerDirective, windowSweep, parseSweepWindowMs, DEFAULT_SWEEP_WINDOW_MS };
+module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS, resolveAdamAdvisoryTarget, classifyDirectTarget, extractEmbeddedPeerDirective, windowSweep, parseSweepWindowMs, DEFAULT_SWEEP_WINDOW_MS, stampSurfaced, ackRows, DEFAULT_DRAIN_WINDOW_MS };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });
