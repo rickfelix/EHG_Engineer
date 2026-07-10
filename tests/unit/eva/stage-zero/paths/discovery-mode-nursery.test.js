@@ -39,10 +39,12 @@ function nurserySupabase(items) {
           }),
         };
       }
-      // venture_nursery
+      // venture_nursery — SD-LEO-INFRA-STAGE0-NURSERY-PARK-PATH-001: the live-schema
+      // SELECT filters promoted_to_venture_id via .is(), replacing the phantom .eq('status').
       return {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
         order: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue({ data: items, error: null }),
       };
