@@ -7,7 +7,9 @@
  * fixture conventions so every exclusion guard refuses to route it:
  *   - ventures.is_demo = true            (the canonical isFixtureVenture discriminant —
  *                                         lib/eva/chairman-decision-watcher.js:36)
- *   - ventures.is_synthetic = true       (synthetic-venture-factory convention)
+ *   - metadata.synthetic = true          (live ventures table has NO is_synthetic column —
+ *                                         smoke-run finding 2026-07-10: pipeline-runner files
+ *                                         still write/filter that phantom column; ledger item)
  *   - name 'TEST-HARNESS-S20-<run-id>'   (TEST- fixture family key)
  *   - metadata.is_fixture / metadata.synthetic = true (spec §H1/§H5-6 markers)
  *
@@ -62,7 +64,12 @@ export function buildFixtureVentureRow(runId, { entryStage = 20 } = {}) {
     current_lifecycle_stage: entryStage,
     status: 'active',
     is_demo: true,        // canonical isFixtureVenture discriminant
-    is_synthetic: true,   // synthetic-venture-factory convention
+    // NOTE (smoke-run finding 2026-07-10): the LIVE ventures table has NO
+    // is_synthetic column (only is_demo + is_scaffolding) — the insert failed
+    // with a PostgREST schema error. metadata.synthetic below carries the
+    // synthetic marker instead. Separately ledgered: pipeline-runner files
+    // (synthetic-venture-factory.js:190, pipeline-executor.js:101,
+    // circuit-breaker.js:82) still write/filter the phantom column.
     metadata: {
       is_fixture: true,
       synthetic: true,
