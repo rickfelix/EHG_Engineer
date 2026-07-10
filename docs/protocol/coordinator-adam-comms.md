@@ -101,17 +101,30 @@ node scripts/coordinator-ack-adam.cjs --advisory <id> --reply "sourcing now" # r
 node scripts/adam-advisory.cjs inbox                                         # drains the full lane (replies + directives)
 ```
 
-## Receipt contract — ALL directive kinds (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001)
+## Receipt contract — ALL directive kinds (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001, revised by SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001)
 
 The two-stage ACK above is not advisory-specific. For **every** directive kind
 (`coordinator_request`, `work_assignment`, `adam_action_required`, `coordinator_reminder`,
 `coordinator_to_adam` — the canonical list is `DIRECTIVE_KINDS` in
-`lib/fleet/worker-status.cjs`, **import it, never duplicate it**), in **both** directions:
+`lib/fleet/worker-status.cjs`, **import it, never duplicate it**), in **both** directions,
+receipt is now a **three-stage** contract:
 
 | Marker | Meaning | Who stamps it |
 |--------|---------|---------------|
-| `read_at` | **DELIVERED** — a render/poll surfaced the row to the target | any poll/render (inbox hook, dashboard) |
+| `delivered_at` | **TRANSPORT RECEIPT** — a render/poll merely saw the row exist | any poll/render (inbox hook, dashboard) |
+| `read_at` | **SURFACED FOR ACTION** — the row was genuinely surfaced for action-required processing | worker check-in `ackMessage` on a real claim, Adam's action-required drill, `ack-chairman-directive.cjs`, etc. — never a plain poll/render |
 | `acknowledged_at` / `payload.actioned_at` | **ACTIONED** — the agent genuinely processed it | ONLY the agent that actioned the row |
+
+Prior to SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001, a plain poll/render stamped
+`read_at` directly (skipping the middle stage) — that let a directive row read as "delivered"
+to any consumer gating on `read_at IS NULL`, even though nothing had genuinely surfaced it for
+action yet. This is exactly the gap that caused a chairman burn-now directive stack to sit
+unactioned for 25+ minutes on 2026-07-09: `scripts/coordinator-quiet-tick.mjs`'s hard-wake
+check (see [fleet-hibernation-quiet-tick.md](fleet-hibernation-quiet-tick.md#directive-hard-wake-override-sd-leo-infra-coordinator-wake-on-directive-001))
+gates on `read_at IS NULL`, so a row already poll-stamped to `read_at` looked "handled" and
+never triggered the hard-wake. `scripts/hooks/coordination-inbox.cjs`'s `classifyInboxMessage`
+now stamps `delivered_at` on first poll instead, leaving `read_at` NULL (and the hard-wake
+live) until real action occurs.
 
 No poll/drain path may ever stamp `acknowledged_at` on a directive kind (FR-3 —
 the inbox hook's kind-allowlist enforces this; the sender-type allowlist that auto-acked
