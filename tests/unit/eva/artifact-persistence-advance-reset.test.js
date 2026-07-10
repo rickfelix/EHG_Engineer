@@ -46,6 +46,17 @@ const lexiguardVentureRow = {
 function createMockSupabase({ stageWorkRow, ventureRow, rpcResult = { success: true } }) {
   const updates = { venture_stage_work: [], ventures: [] };
   const fromHandlers = {
+    // SD-LEO-INFRA-EXIT-GATE-FAIL-CLOSED-POLARITY-001 (HP-2): the enforcer now
+    // fails CLOSED on a MISSING venture_stages row, so healthy-config fixtures
+    // must model row-present-with-empty-gates (the intended allow path) instead
+    // of riding the old row-absent silent allow through the chainable fallback.
+    venture_stages: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: vi.fn().mockResolvedValue({ data: { metadata: {} }, error: null }),
+        }),
+      }),
+    }),
     venture_stage_work: () => ({
       select: () => ({
         eq: () => ({
