@@ -363,16 +363,20 @@ async function stampSurfaced(supabase, ids, { background = false } = {}) {
  * scripts/ack-chairman-directive.cjs). Stamps acknowledged_at (only where NULL) and
  * backfills read_at where NULL (an actioned row was necessarily seen). Idempotent.
  */
-async function ackRows(supabase, ids) {
+async function ackRows(supabase, ids, { expectedTarget = null } = {}) {
   const now = new Date().toISOString();
   let acked = 0;
   for (const id of ids) {
-    const { data, error } = await supabase
+    // Ownership guard (adversarial review of PR #5802): only rows targeting THIS Adam
+    // session may be acked — a mistyped foreign UUID must not drop another session's row
+    // out of ITS acknowledged_at-IS-NULL recovery tier.
+    let q = supabase
       .from('session_coordination')
       .update({ acknowledged_at: now })
       .eq('id', id)
-      .is('acknowledged_at', null)
-      .select('id, read_at');
+      .is('acknowledged_at', null);
+    if (expectedTarget) q = q.eq('target_session', expectedTarget);
+    const { data, error } = await q.select('id, read_at');
     if (error) { console.error(`ERROR: ack failed for ${id}: ${error.message}`); continue; }
     if (data && data.length > 0) {
       acked += 1;
@@ -381,7 +385,7 @@ async function ackRows(supabase, ids) {
       }
       console.log(`  ✓ acked ${id}`);
     } else {
-      console.log(`  • ${id} already acked (or not found) — no-op`);
+      console.log(`  • ${id} already acked, not found, or not targeted at this Adam session — no-op`);
     }
   }
   console.log(`${acked}/${ids.length} row(s) newly acknowledged.`);
@@ -538,6 +542,13 @@ async function drainInbox(supabase, sessionId, { quiet = false, background = fal
     .order('created_at', { ascending: true })
     .limit(100);
   if (error) { console.error('ERROR: inbox query failed:', error.message); process.exit(1); }
+
+  // Within-window overflow visibility (adversarial review of PR #5802): oldest-first +
+  // limit(100) + never-auto-ack means >100 unacked rows would re-surface the same oldest
+  // 100 every pass — say so loudly instead of silently starving newer rows.
+  if ((allRows || []).length === 100) {
+    console.warn('⚠ inbox fetch cap hit (100, oldest-first) — newer unacked rows exist beyond this page; ack surfaced rows or use --sweep to see the full window.');
+  }
 
   // Backlog-guard visibility: unacked rows OLDER than the window are reported by count so
   // they cannot rot invisibly; recover them via `--window <Nd>` or the stampless `--sweep`.
@@ -740,7 +751,9 @@ async function main() {
   if (mode === 'ack') {
     const ids = argv.slice(1).filter((a) => !a.startsWith('--'));
     if (ids.length === 0) { console.error('Usage: node scripts/adam-advisory.cjs ack <row-id...>'); process.exit(2); }
-    await ackRows(supabase, ids);
+    // Ownership guard: acks are scoped to rows targeting the canonical Adam session.
+    const adamTarget = (await resolveAdamSessionId(supabase)) || sessionId;
+    await ackRows(supabase, ids, { expectedTarget: adamTarget });
     return;
   }
 

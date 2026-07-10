@@ -123,22 +123,39 @@ describe('FR-4: interactive drainInbox filters acknowledged_at IS NULL (recovera
 });
 
 describe('FR-4: ack subcommand is the action-time stamp', () => {
-  it('stamps acknowledged_at only-where-NULL (idempotent)', async () => {
+  function ackMock() {
     const updates = [];
-    const supabase = { from: () => ({
-      update: (payload) => ({
-        eq: (c, v) => ({ is: (c2, v2) => ({ select: async () => {
-          updates.push({ payload, guards: [[c, v], [c2, v2]] });
-          return { data: [{ id: v, read_at: '2026-07-10T00:00:00Z' }], error: null };
-        } }) }),
-        // read_at backfill path (guarded .is with no select)
-        in: () => ({ is: async () => ({ data: [], error: null }) }),
-      }),
-    }) };
+    const supabase = { from: () => {
+      const state = { payload: null, guards: [] };
+      const c = {
+        update: (payload) => { state.payload = payload; return c; },
+        eq: (col, v) => { state.guards.push([col, v]); return c; },
+        is: (col, v) => { state.guards.push([col, v]); return c; },
+        in: () => c,
+        select: async () => {
+          updates.push(state);
+          return { data: [{ id: 'id-1', read_at: '2026-07-10T00:00:00Z' }], error: null };
+        },
+        then: (res) => Promise.resolve({ data: [], error: null }).then(res),
+      };
+      return c;
+    } };
+    return { supabase, updates };
+  }
+
+  it('stamps acknowledged_at only-where-NULL (idempotent)', async () => {
+    const { supabase, updates } = ackMock();
     await ackRows(supabase, ['id-1']);
     expect(updates).toHaveLength(1);
     expect(Object.keys(updates[0].payload)).toEqual(['acknowledged_at']);
     expect(updates[0].guards).toContainEqual(['acknowledged_at', null]);
+  });
+
+  it('ownership guard: with expectedTarget the update is scoped to target_session', async () => {
+    const { supabase, updates } = ackMock();
+    await ackRows(supabase, ['id-1'], { expectedTarget: ADAM });
+    expect(updates).toHaveLength(1);
+    expect(updates[0].guards).toContainEqual(['target_session', ADAM]);
   });
 });
 
@@ -165,9 +182,11 @@ describe('FR-1/FR-3: quiet tick', () => {
     expect(core.args).toContain('--quiet');
   });
 
-  it('surfaceInboxItems emits items once and stamps only payload.tick_surfaced_at', async () => {
+  it('surfaceInboxItems: ITEMs dedup via tick_surfaced_at; DIRECTIVEs re-print every tick until acked', async () => {
     const fresh = row({ payload: { kind: 'adam_advisory' } });
     const directive = row({ payload: { kind: DIRECTIVE_KINDS[0] } });
+    // an already-tick-surfaced DIRECTIVE must STILL surface (hard interrupt — dedup never applies)
+    const surfacedDirective = row({ payload: { kind: DIRECTIVE_KINDS[0], tick_surfaced_at: '2026-07-10T00:00:00Z', reply_needed: true } });
     const alreadySurfaced = row({ payload: { kind: 'adam_advisory', tick_surfaced_at: '2026-07-10T00:00:00Z' } });
     const excluded = row({ payload: { kind: 'canary_request' } });
     const updates = [];
@@ -182,23 +201,33 @@ describe('FR-1/FR-3: quiet tick', () => {
         then: (res) => {
           if (state.op === 'update') { updates.push(state); return Promise.resolve({ data: [], error: null }).then(res); }
           if (state.table === 'claude_sessions') return Promise.resolve({ data: [{ session_id: ADAM }], error: null }).then(res);
-          return Promise.resolve({ data: [fresh, directive, alreadySurfaced, excluded], error: null }).then(res);
+          return Promise.resolve({ data: [fresh, directive, surfacedDirective, alreadySurfaced, excluded], error: null }).then(res);
         },
       };
       return c;
     } };
     const out = await surfaceInboxItems(sb);
-    expect(out.items.map(i => i.id).sort()).toEqual([directive.id, fresh.id].sort());
-    expect(out.directives).toBe(1);
+    expect(out.items.map(i => i.id).sort()).toEqual([directive.id, fresh.id, surfacedDirective.id].sort());
+    expect(out.directives).toBe(2);
     expect(out.items.find(i => i.id === directive.id).isDirective).toBe(true);
-    // dedup marker stamped on exactly the two surfaced rows; only payload written
-    expect(updates).toHaveLength(2);
+    // dedup marker stamped ONLY on the fresh ITEM-class row (directives never marked —
+    // they must re-print every tick until acknowledged); only payload written
+    expect(updates).toHaveLength(1);
     for (const u of updates) {
       expect(Object.keys(u.payload)).toEqual(['payload']);
       expect(u.payload.payload.tick_surfaced_at).toBeTruthy();
+      expect(u.payload.payload.kind).toBe('adam_advisory');
       expect(JSON.stringify(u.payload)).not.toContain('read_at');
       expect(JSON.stringify(u.payload)).not.toContain('acknowledged_at');
     }
+  });
+
+  it('the cron prompt allowlist includes both INBOX tokens (no-op gate cannot swallow a directive)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../../scripts/adam-startup-check.mjs', import.meta.url), 'utf8');
+    const quietTickPrompt = src.slice(src.indexOf("key: 'quiet-tick'"), src.indexOf("key: 'governance-scan'"));
+    expect(quietTickPrompt).toContain('QUIET_TICK_INBOX_DIRECTIVE');
+    expect(quietTickPrompt).toContain('QUIET_TICK_INBOX_ITEM');
   });
 
   it('surfaceInboxItems is fail-soft on query error', async () => {

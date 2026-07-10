@@ -144,27 +144,37 @@ export async function surfaceInboxItems(sb) {
       .limit(50);
     if (error) return { items: [], directives: 0, error: error.message };
 
+    const isDirectiveRow = (r) =>
+      (r.payload && (DIRECTIVE_KINDS.includes(r.payload.kind) || r.payload.reply_needed || r.payload.reply_to)) || false;
+
+    // Print-once dedup applies to the ITEM class only. DIRECTIVE-class rows are HARD
+    // interrupts: they re-print EVERY tick until acknowledged_at converges them —
+    // deduping a directive would let a single missed turn hide it forever (the exact
+    // failure class this SD closes; adversarial review of PR #5802).
     const eligible = (rows || []).filter((r) => {
       const k = r.payload && r.payload.kind;
       if (k != null && ADAM_EXCLUDED_KINDS.includes(k)) return false;
-      return !(r.payload && r.payload.tick_surfaced_at); // print-once dedup
+      if (isDirectiveRow(r)) return true;
+      return !(r.payload && r.payload.tick_surfaced_at);
     });
-    if (eligible.length === 0) return { items: [], directives: 0 };
+    const capHit = (rows || []).length === 50;
+    if (eligible.length === 0) return { items: [], directives: 0, capHit };
 
     const items = eligible.map((r) => {
       const k = (r.payload && r.payload.kind) || '(untyped)';
-      const isDirective = (r.payload && (DIRECTIVE_KINDS.includes(r.payload.kind) || r.payload.reply_needed || r.payload.reply_to)) || false;
+      const isDirective = isDirectiveRow(r);
       const ageMin = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
       const subject = String(r.subject || (r.payload && r.payload.body) || r.body || '(empty)').replace(/\s+/g, ' ').slice(0, 140);
       return { id: r.id, kind: k, isDirective, ageMin, subject };
     });
 
-    // Stamp the dedup marker (visibility only — the row stays unread/unacked-recoverable).
+    // Stamp the dedup marker on ITEM-class rows only (visibility marker — the row stays
+    // unread/unacked-recoverable; directives are deliberately never marked).
     const seenAt = new Date().toISOString();
-    for (const r of eligible) {
+    for (const r of eligible.filter((x) => !isDirectiveRow(x) && !(x.payload && x.payload.tick_surfaced_at))) {
       await sb.from('session_coordination').update({ payload: { ...(r.payload || {}), tick_surfaced_at: seenAt } }).eq('id', r.id);
     }
-    return { items, directives: items.filter((i) => i.isDirective).length };
+    return { items, directives: items.filter((i) => i.isDirective).length, capHit };
   } catch (e) {
     return { items: [], directives: 0, error: e && e.message };
   }
@@ -275,6 +285,7 @@ async function main() {
       `fail=${tick.failedCount} ` +
       `reconcile=parents:${boardReconcile.parents},errors:${boardReconcile.errors.length} ` +
       `stalls=${stall.alerted.length} ` +
+      `inbox=${inboxSurface.items.length}(dir:${inboxSurface.directives}) ` +
       `probes=${outboundSilence.probed.length} esc=${outboundSilence.escalated.length} ` +
       `ping=${delta.changed ? delta.fields.join(',') : 'suppressed'} ` +
       `nextWakeSeconds=${delaySeconds} :: ${modeReason}`
@@ -290,6 +301,9 @@ async function main() {
     for (const i of inboxSurface.items) {
       const token = i.isDirective ? 'QUIET_TICK_INBOX_DIRECTIVE' : 'QUIET_TICK_INBOX_ITEM';
       console.log(`${token}=adam id=${i.id} kind=${i.kind} age=${i.ageMin}m subject="${i.subject}"`);
+    }
+    if (inboxSurface.capHit) {
+      console.log('QUIET_TICK_INBOX_CAP=adam fetched=50 oldest-first — within-window overflow; ack surfaced rows to reach newer ones');
     }
     for (const p of outboundSilence.probed) {
       console.log(`QUIET_TICK_OUTBOUND_PROBE=adam target=${p.target} row=${p.rowId}`);
