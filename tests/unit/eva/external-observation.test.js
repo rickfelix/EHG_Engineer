@@ -3,11 +3,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { verifyExternalObservation, collectExternalObservations } from '../../../lib/eva/external-observation.js';
 
 describe('verifyExternalObservation (pure, SD-LEO-INFRA-LAUNCH-MODE-POLICY-001 FR-2)', () => {
-  it('verified:true only when all 3 checks pass', () => {
-    const result = verifyExternalObservation({ endpointStatus: 200, billingProductId: 'prod_123', telemetryRowCount: 5 });
+  it('verified:true only when all 4 checks pass', () => {
+    const result = verifyExternalObservation({ endpointStatus: 200, billingProductId: 'prod_123', telemetryRowCount: 5, gaugeWriterAlive: true });
     expect(result.verified).toBe(true);
-    expect(result.checks).toHaveLength(3);
+    expect(result.checks).toHaveLength(4);
     expect(result.checks.every((c) => c.verified)).toBe(true);
+  });
+
+  it('fails (SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A FR-5) when gaugeWriterAlive is false even though the other 3 checks pass', () => {
+    const result = verifyExternalObservation({ endpointStatus: 200, billingProductId: 'prod_123', telemetryRowCount: 5, gaugeWriterAlive: false });
+    expect(result.verified).toBe(false);
+    const gaugeCheck = result.checks.find((c) => c.name === 'gauge_writer_alive');
+    expect(gaugeCheck.verified).toBe(false);
+    expect(gaugeCheck.reason).toMatch(/not currently live/);
   });
 
   it('fails closed (verified:false, reason NO_DATA_SOURCE) when inputs are missing — never silently passes', () => {
@@ -48,30 +56,41 @@ describe('collectExternalObservations (I/O boundary, SD-LEO-INFRA-LAUNCH-MODE-PO
   const originalFetch = global.fetch;
   afterEach(() => { global.fetch = originalFetch; });
 
-  function buildSupabase({ row, error = null } = {}) {
-    const chain = { eq: () => chain, maybeSingle: async () => ({ data: row, error }) };
-    return { from: () => ({ select: () => chain }) };
+  /** Routes by table name so applications + venture_telemetry can return distinct rows. */
+  function buildSupabase({ applicationRow, telemetryRow, applicationError = null, telemetryError = null } = {}) {
+    return {
+      from: (table) => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => (table === 'applications'
+              ? { data: applicationRow, error: applicationError }
+              : { data: telemetryRow, error: telemetryError }),
+          }),
+        }),
+      }),
+    };
   }
 
-  it('returns endpointStatus from a successful fetch and billingProductId from application.metadata', async () => {
+  it('returns endpointStatus from a successful fetch and billingProductId from application.metadata (no application.id — telemetry lookup skipped)', async () => {
     global.fetch = vi.fn().mockResolvedValue({ status: 200 });
-    const supabase = buildSupabase({ row: { deployment_url: 'https://example.com', metadata: { billing_product_id: 'prod_123' } } });
+    const supabase = buildSupabase({ applicationRow: { deployment_url: 'https://example.com', metadata: { billing_product_id: 'prod_123' } } });
     const result = await collectExternalObservations({ supabase, ventureId: 'venture-1' });
     expect(result.endpointStatus).toBe(200);
     expect(result.billingProductId).toBe('prod_123');
     expect(result.telemetryRowCount).toBeNull();
+    expect(result.gaugeWriterAlive).toBeNull();
   });
 
   it('returns endpointStatus=null on a fetch error rather than throwing', async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('network unreachable'));
-    const supabase = buildSupabase({ row: { deployment_url: 'https://example.com', metadata: {} } });
+    const supabase = buildSupabase({ applicationRow: { deployment_url: 'https://example.com', metadata: {} } });
     const result = await collectExternalObservations({ supabase, ventureId: 'venture-1' });
     expect(result.endpointStatus).toBeNull();
   });
 
   it('returns endpointStatus=null and billingProductId=null when no application row exists', async () => {
     global.fetch = vi.fn();
-    const supabase = buildSupabase({ row: null });
+    const supabase = buildSupabase({ applicationRow: null });
     const result = await collectExternalObservations({ supabase, ventureId: 'venture-1' });
     expect(result.endpointStatus).toBeNull();
     expect(result.billingProductId).toBeNull();
@@ -84,6 +103,41 @@ describe('collectExternalObservations (I/O boundary, SD-LEO-INFRA-LAUNCH-MODE-PO
       endpointStatus: null,
       billingProductId: null,
       telemetryRowCount: null,
+      gaugeWriterAlive: null,
     });
+  });
+
+  it('SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A FR-5: gaugeWriterAlive:true and telemetryRowCount:1 for a venture with a fresh ok pull', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+    const now = new Date('2026-07-10T12:00:00Z');
+    const supabase = buildSupabase({
+      applicationRow: { id: 'app-1', deployment_url: 'https://example.com', metadata: {}, metrics_cadence_hours: null },
+      telemetryRow: { kpis: { signups: 3 }, pulled_at: new Date(now.getTime() - 2 * 3600 * 1000).toISOString(), ingest_status: 'ok' },
+    });
+    const result = await collectExternalObservations({ supabase, ventureId: 'venture-1' });
+    expect(result.telemetryRowCount).toBe(1);
+    expect(result.gaugeWriterAlive).toBe(true);
+  });
+
+  it('SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A FR-5: gaugeWriterAlive:false for a venture whose writer has never landed real data', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+    const supabase = buildSupabase({
+      applicationRow: { id: 'app-2', deployment_url: 'https://example.com', metadata: {}, metrics_cadence_hours: null },
+      telemetryRow: null,
+    });
+    const result = await collectExternalObservations({ supabase, ventureId: 'venture-2' });
+    expect(result.telemetryRowCount).toBe(0);
+    expect(result.gaugeWriterAlive).toBe(false);
+  });
+
+  it('SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A FR-5: honors a per-venture metrics_cadence_hours override', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+    const supabase = buildSupabase({
+      applicationRow: { id: 'app-3', deployment_url: 'https://example.com', metadata: {}, metrics_cadence_hours: 1 },
+      telemetryRow: { kpis: { signups: 3 }, pulled_at: new Date(Date.now() - 5 * 3600 * 1000).toISOString(), ingest_status: 'ok' },
+    });
+    const result = await collectExternalObservations({ supabase, ventureId: 'venture-3' });
+    // 5h stale against a 1h declared cadence -> not alive, even though the module default (30h) would have passed it.
+    expect(result.gaugeWriterAlive).toBe(false);
   });
 });
