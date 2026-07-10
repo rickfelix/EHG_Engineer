@@ -140,6 +140,8 @@ describe('createPathOutput', () => {
 });
 
 describe('validateVentureBrief', () => {
+  // SD-LEO-INFRA-STAGE0-THESIS-CONTRACT-001: a COMPLETE brief now carries the thesis /
+  // kill-criteria / explicit-decisions contract — a bare score-shaped brief is rejected.
   const validBrief = {
     name: 'Test Venture',
     problem_statement: 'A problem',
@@ -147,12 +149,37 @@ describe('validateVentureBrief', () => {
     target_market: 'SMBs',
     origin_type: 'discovery',
     raw_chairman_intent: 'Make money with AI',
+    thesis: {
+      who_pays: 'SMB owners',
+      pays_for_what: 'an automated solution',
+      reached_how: 'SEO + communities',
+      price_point: 'subscription $29/mo',
+      demand_test_plan: [
+        { step: 1, instruction: 'landing page probe', success_signal: '>=10 signups' },
+        { step: 2, instruction: 'pre-order ask', success_signal: '>=3 pre-commitments' },
+      ],
+    },
+    kill_criteria: [
+      { id: 'k1', metric: 'signups', comparator: 'lt', threshold: 10, stage_by: 12, description: 'dies if <10 signups by S12', source: 'derived_default' },
+    ],
+    explicit_decisions: {
+      form_factor: { value: 'web', default: 'web', decided_by: 'default', rationale: 'declared factory default', criterion_for_native: 'OS capability load-bearing' },
+    },
   };
 
   test('returns valid for complete brief', () => {
     const result = validateVentureBrief(validBrief);
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
+  });
+
+  test('rejects a thesis-less score-shaped brief (SD-LEO-INFRA-STAGE0-THESIS-CONTRACT-001)', () => {
+    const { thesis, kill_criteria, explicit_decisions, ...bare } = validBrief;
+    const result = validateVentureBrief({ ...bare, composite_score: 91 });
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/thesis contract/);
+    expect(result.errors.join(' ')).toMatch(/kill contract/);
+    expect(result.errors.join(' ')).toMatch(/decision contract/);
   });
 
   test('returns invalid for null', () => {
