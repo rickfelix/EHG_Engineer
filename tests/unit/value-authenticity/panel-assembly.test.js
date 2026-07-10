@@ -180,6 +180,17 @@ describe('value-authenticity panel assembly + bounded iterative review (L3)', ()
       expect(result.mode).toBe('round_cap_escalation');
       expect(recordDisposition).toHaveBeenCalledTimes(1);
       expect(recordDisposition.mock.calls[0][1].decisionKey).toMatch(/round-cap/);
+
+      // FR-6 AC-3 (VALIDATION finding): the chairman escalation at the round
+      // cap must carry the full round history, not just the final round's
+      // disagreement -- assert the digest covers all 3 rounds and stays
+      // awaiting_disposition (a context digest, not yet an answer).
+      const dispositionCall = recordDisposition.mock.calls[0][1];
+      expect(dispositionCall.status).toBe('awaiting_disposition');
+      const digest = dispositionCall.answerPayload.context.roundHistoryDigest;
+      expect(digest).toHaveLength(3);
+      expect(digest.map((d) => d.round)).toEqual([1, 2, 3]);
+      expect(digest.every((d) => typeof d.classificationType !== 'undefined')).toBe(true);
     });
 
     it('stops iterating immediately on round 2 convergence and does not run round 3', async () => {
