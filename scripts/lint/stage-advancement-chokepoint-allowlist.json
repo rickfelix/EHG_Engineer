@@ -22,7 +22,7 @@
     "database/migrations/20260704_stage_advancement_advance_venture_to_stage_artifact_gate.sql",
     "database/migrations/20260704_stage_advancement_fn_advance_venture_stage_retire_legacy_table.sql",
     "database/migrations/20260704_stage_advancement_ventures_guard_trigger.sql",
-
+    "scripts/harness/s20-run.mjs",
     "scripts/lint/stage-advancement-chokepoint-lint.mjs",
     "scripts/canary/run-canary-probe.mjs",
     "database/migrations/20251206_factory_architecture.sql",
