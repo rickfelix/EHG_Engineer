@@ -9,7 +9,8 @@ import path from 'node:path';
 // We can't easily import the function (script is a CLI entry, not a module).
 // Instead spawn node and exercise the mapping via a tiny shim that requires
 // the file's mapToDbType into a probe.
-const SCRIPT_PATH = path.resolve(__dirname, '../leo-create-sd.js').replace(/\\/g, '/');
+// SD-ARCH-HOTSPOT-LEO-CREATE-001: code moved verbatim to lib/sd-creation/pipeline.js — pin follows the code
+const SCRIPT_PATH = path.resolve(__dirname, '../../lib/sd-creation/pipeline.js').replace(/\\/g, '/');
 
 function probeMapper(userType) {
   const { spawnSync } = require('node:child_process');
