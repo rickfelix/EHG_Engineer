@@ -10,7 +10,10 @@
  *   - block when venture_resources.deployment_url is null
  *   - flag OFF skips enforcement (legacy behavior)
  *   - empty gates.exit array → allow
- *   - missing verifier for prose gate string → skip with WARN, allow
+ *   - unresolvable verifier on BINDING gates.exit → BLOCK + EXIT_GATE_ANOMALY
+ *     (SD-LEO-INFRA-EXIT-GATE-FAIL-CLOSED-POLARITY-001 HP-1 — inverted from the
+ *     original skip-with-WARN-allow pin; observe lane keeps log-and-allow)
+ *   - missing venture_stages row → BLOCK + EXIT_GATE_ANOMALY (HP-2)
  *   - lifecycle_stage_config read failure → block with structured reason
  */
 
@@ -197,15 +200,102 @@ describe('exit-gate-enforcer', () => {
       expect(result.allowed).toBe(true);
     });
 
-    it('skips unknown gate strings (no verifier registered) with a WARN, still allows', async () => {
+    // SD-LEO-INFRA-EXIT-GATE-FAIL-CLOSED-POLARITY-001 (HP-1/FR-1) — INTENTIONAL
+    // POLARITY INVERSION of the original "skips unknown gate strings ... still
+    // allows" pin (VALIDATION 209181ef carry-forward a): a declared-but-
+    // unresolvable verifier on a BINDING gates.exit entry now fails CLOSED.
+    // Log-and-allow remains correct ONLY for gates.exit_observe (pinned below).
+    it('BLOCKS unknown gate strings on BINDING gates.exit (fail-closed) and writes an EXIT_GATE_ANOMALY', async () => {
       const { checkExitGates } = await importEnforcerWithFlag('on');
+      const insertedEvents = [];
       const supabase = buildSupabaseMock({
         stageConfig: { exit: ['Frobnicate the widget cache'] },
+        insertedEvents,
+      });
+      const result = await checkExitGates({ supabase, ventureId: VENTURE_ID, fromStage: 19 });
+      expect(result.allowed).toBe(false);
+      expect(result.gates_checked).toEqual(['Frobnicate the widget cache']);
+      expect(result.blocked_by[0]).toMatch(/Frobnicate the widget cache: no verifier registered for a BINDING gate \(fail-closed\)/);
+      const anomaly = insertedEvents.find((e) => e.event_type === 'EXIT_GATE_ANOMALY');
+      expect(anomaly).toBeTruthy();
+      expect(anomaly.payload.anomaly_kind).toBe('unresolvable_binding_verifier');
+      expect(anomaly.payload.gate_string).toBe('Frobnicate the widget cache');
+    });
+
+    // FR-1 regression fixture per SD success criterion: the S19 spend-guardrail
+    // gate shape — a real resolvable gate stays subject to its verifier while an
+    // unresolvable sibling blocks.
+    it('mixed binding gates: resolvable gate evaluated, unresolvable sibling blocks (S19 fixture shape)', async () => {
+      const { checkExitGates } = await importEnforcerWithFlag('on');
+      const supabase = buildSupabaseMock({
+        stageConfig: { exit: ['Application deployed', 'Totally unknown gate prose'] },
+        buildArtifactPresent: true,
+      });
+      const result = await checkExitGates({ supabase, ventureId: VENTURE_ID, fromStage: 19 });
+      expect(result.allowed).toBe(false);
+      expect(result.blocked_by).toHaveLength(1); // only the unresolvable one
+      expect(result.blocked_by[0]).toMatch(/Totally unknown gate prose/);
+    });
+
+    // SD-LEO-INFRA-EXIT-GATE-FAIL-CLOSED-POLARITY-001 (HP-2/FR-2): row-absent
+    // (data:null, error:null from maybeSingle) is DISTINCT from row-present-
+    // empty-gates and must block loudly.
+    it('BLOCKS when the venture_stages row is missing entirely, with an EXIT_GATE_ANOMALY', async () => {
+      const { checkExitGates } = await importEnforcerWithFlag('on');
+      const insertedEvents = [];
+      const supabase = buildSupabaseMock({ insertedEvents });
+      supabase.from = vi.fn((table) => {
+        if (table === 'venture_stages') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              })),
+            })),
+          };
+        }
+        if (table === 'system_events') {
+          return { insert: vi.fn((row) => { insertedEvents.push(row); return Promise.resolve({ data: null, error: null }); }) };
+        }
+        return { select: vi.fn() };
+      });
+      const result = await checkExitGates({ supabase, ventureId: VENTURE_ID, fromStage: 19 });
+      expect(result.allowed).toBe(false);
+      expect(result.blocked_by[0]).toMatch(/venture_stages row missing for stage 19 \(fail-closed\)/);
+      const anomaly = insertedEvents.find((e) => e.event_type === 'EXIT_GATE_ANOMALY');
+      expect(anomaly).toBeTruthy();
+      expect(anomaly.payload.anomaly_kind).toBe('stage_config_row_missing');
+    });
+
+    // FR-3: a failing anomaly insert must never change the blocking verdict.
+    it('anomaly insert failure is fail-soft: verdict stays allowed=false, no throw', async () => {
+      const { checkExitGates } = await importEnforcerWithFlag('on');
+      const supabase = buildSupabaseMock({ stageConfig: { exit: ['Frobnicate the widget cache'] } });
+      const origFrom = supabase.from;
+      supabase.from = vi.fn((table) => {
+        if (table === 'system_events') {
+          return { insert: vi.fn(() => Promise.reject(new Error('insert exploded'))) };
+        }
+        return origFrom(table);
+      });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const result = await checkExitGates({ supabase, ventureId: VENTURE_ID, fromStage: 19 });
+      expect(result.allowed).toBe(false);
+      expect(result.blocked_by[0]).toMatch(/no verifier registered for a BINDING gate/);
+      warnSpy.mockRestore();
+    });
+
+    // FR-1 AC: unknown strings under gates.exit_observe keep log-and-allow.
+    it('unknown gate strings under gates.exit_observe still log-and-allow (observe lane untouched)', async () => {
+      const { checkExitGates } = await importEnforcerWithFlag('on');
+      const supabase = buildSupabaseMock({
+        stageConfig: { exit: [], exit_observe: ['Some unknown observe prose'] },
       });
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const result = await checkExitGates({ supabase, ventureId: VENTURE_ID, fromStage: 19 });
       expect(result.allowed).toBe(true);
-      expect(result.gates_checked).toEqual(['Frobnicate the widget cache']);
+      expect(result.would_block_by).toEqual([]);
+      expect(result.blocked_by).toEqual([]);
       expect(warnSpy).toHaveBeenCalled();
       warnSpy.mockRestore();
     });
