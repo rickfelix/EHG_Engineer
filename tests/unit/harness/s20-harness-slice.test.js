@@ -24,8 +24,8 @@ describe('§H1: fixture venture row contract', () => {
     expect(row.is_demo).toBe(true);
   });
 
-  it('carries every exclusion marker: is_synthetic, TEST- family name, metadata.is_fixture/synthetic', () => {
-    expect(row.is_synthetic).toBe(true);
+  it('carries every exclusion marker: TEST- family name, metadata.is_fixture/synthetic (NO is_synthetic — live ventures table has no such column, smoke finding 2026-07-10)', () => {
+    expect(row.is_synthetic).toBeUndefined(); // phantom column — insert fails live if present
     expect(row.name.startsWith(FIXTURE_NAME_PREFIX)).toBe(true);
     expect(row.name.startsWith('TEST-')).toBe(true);
     expect(row.metadata.is_fixture).toBe(true);
