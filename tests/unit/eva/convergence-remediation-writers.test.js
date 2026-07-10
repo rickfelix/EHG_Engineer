@@ -83,4 +83,16 @@ describe('createSdWriter', () => {
     expect(callArg.type).toBe('bugfix');
     expect(callArg.metadata).toMatchObject({ source: 'convergence_gate_remediation', dimension: 'persona-surface-coverage' });
   });
+
+  it('SD-LEO-INFRA-DISPATCH-AUTH-AUTO-AUTHORIZE-001-B FR-3: stamps metadata.sourced_by so the SD is attributable to this mint path', async () => {
+    resolveVenturePrefix.mockResolvedValue(null);
+    generateSDKey.mockResolvedValue('SD-LEO-FIX-EXAMPLE-002');
+    createSD.mockResolvedValue({ sd_key: 'SD-LEO-FIX-EXAMPLE-002' });
+
+    const writer = createSdWriter();
+    await writer({ title: 'Another gap', dimension: 'data-model-fidelity' });
+
+    const callArg = createSD.mock.calls[0][0];
+    expect(callArg.metadata.sourced_by).toBe('convergence-remediation');
+  });
 });
