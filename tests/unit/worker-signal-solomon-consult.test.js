@@ -74,9 +74,17 @@ describe('Phase D — buildSolomonConsultPayload shape', () => {
     expect(p.intent_action).toBeUndefined();
   });
 
-  it('caps the body at BODY_HARD_CAP after redaction', () => {
+  // QF-20260710-560: an over-cap consult body used to be silently sliced to BODY_HARD_CAP,
+  // which is exactly how Solomon's FW-3 advisory tail was clipped without any signal — now
+  // it hard-errors instead so the caller must split the message.
+  it('rejects a body over BODY_HARD_CAP after redaction instead of silently slicing it', () => {
     const big = 'a'.repeat(ws.BODY_HARD_CAP + 500);
-    const p = ws.buildSolomonConsultPayload({ correlationId: 'c1', body: big });
+    expect(() => ws.buildSolomonConsultPayload({ correlationId: 'c1', body: big })).toThrow(/exceeds 4096-char hard cap/);
+  });
+
+  it('accepts a body exactly at BODY_HARD_CAP', () => {
+    const atCap = 'a'.repeat(ws.BODY_HARD_CAP);
+    const p = ws.buildSolomonConsultPayload({ correlationId: 'c1', body: atCap });
     expect(p.body.length).toBe(ws.BODY_HARD_CAP);
   });
 });
@@ -87,13 +95,18 @@ describe('Phase D — BYTE-IDENTICAL flag-off inertness (subprocess)', () => {
     // the command would proceed to createClient and behave differently. Exiting 0 with the
     // dormant message and no supabase env proves the branch is inert before any DB access.
     const env = { ...process.env };
-    // Strip the flag + any DB creds via string-keyed deletes. NOTE: the names are
-    // STRING LITERALS (not code identifiers) so the db-test-guards static heuristic
-    // (DB_IMPORT_SIGNAL) does not misclassify this pure unit test as DB-touching —
-    // the flag-off branch provably never reaches a supabase client.
-    for (const k of ['SOLOMON_CONSULT_V1', 'SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']) {
+    // Strip DB creds via string-keyed deletes. NOTE: the names are STRING LITERALS (not
+    // code identifiers) so the db-test-guards static heuristic (DB_IMPORT_SIGNAL) does not
+    // misclassify this pure unit test as DB-touching — the flag-off branch provably never
+    // reaches a supabase client.
+    for (const k of ['SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']) {
       delete env[k];
     }
+    // Explicitly OFF (not deleted): the subprocess's own dotenv.config() re-reads .env from
+    // disk, which now defaults SOLOMON_CONSULT_V1=on (SD-LEO-INFRA-SOLOMON-CONSULT-001D went
+    // live) and would re-fill a merely-deleted key. dotenv.config() never overwrites an
+    // ALREADY-SET process.env var, so setting 'off' here survives the subprocess's own load.
+    env.SOLOMON_CONSULT_V1 = 'off';
     env.CLAUDE_SESSION_ID = 'test-session-flagoff';
 
     let stdout = '';

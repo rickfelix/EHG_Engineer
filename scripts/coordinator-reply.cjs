@@ -19,7 +19,7 @@ require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const { isTwoWayV2Enabled } = require('../lib/coordinator/resolve.cjs');
 const { isFullUuid } = require('../lib/coordinator/dispatch.cjs');
-const { redact, BODY_HARD_CAP } = require('./worker-signal.cjs');
+const { capBody } = require('./worker-signal.cjs');
 const { resolveAdamReplyTarget, retargetStaleAdamInbound, verifyReplyDelivered } = require('../lib/coordinator/adam-identity.cjs');
 
 // Default reply lifetime — comfortably exceeds the worker await window (30s) plus margin.
@@ -40,7 +40,7 @@ function buildReplyPayload({ correlationId, body, coordinatorSession }) {
     // always fire-and-forget (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
     reply_class: 'fire-and-forget'
   };
-  if (body) payload.body = redact(String(body)).slice(0, BODY_HARD_CAP);
+  if (body) payload.body = capBody(body); // QF-20260710-560: reject over-cap, never silently clip
   // INVARIANT: no signal_type (would be scooped by signal-router) / no intent_action.
   return payload;
 }
