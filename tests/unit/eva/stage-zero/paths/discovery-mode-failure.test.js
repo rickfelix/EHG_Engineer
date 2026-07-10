@@ -33,17 +33,41 @@ import { TREND_SCANNER_PROMPT_VERSION } from '../../../../../lib/eva/stage-zero/
 
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
+// SD-LEO-INFRA-STAGE0-GOVERNED-POSTURE-001: executeDiscoveryMode resolves the governed
+// posture fail-closed before ranking; the mock serves an active posture row.
+const TEST_POSTURE_ROW = {
+  id: 'posture-1', phase_key: 'test_posture', version: 1,
+  criteria: {
+    weights: {
+      automation_feasibility: 0.30,
+      monthly_revenue_potential: 0.25,
+      target_market_specificity: 0.20,
+      strategic_fit: 0.15,
+      competition_level: 0.10,
+    },
+  },
+  status: 'active', ratified_by: 'chairman', ratified_at: '2026-07-10T00:00:00Z',
+};
+
 function createSupabase(strategy = { strategy_key: 'trend_scanner', name: 'Trend Scanner', description: 'Find trends', is_active: true }) {
   // Each .from() call returns a fresh chainable; supports .select().eq().eq().single() and ranking-data .gte().order().limit()
   return {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      gte: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
-      single: vi.fn().mockResolvedValue({ data: strategy, error: null }),
-    })),
+    from: vi.fn((table) => {
+      if (table === 'selection_postures') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockResolvedValue({ data: [TEST_POSTURE_ROW], error: null }),
+        };
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+        single: vi.fn().mockResolvedValue({ data: strategy, error: null }),
+      };
+    }),
   };
 }
 

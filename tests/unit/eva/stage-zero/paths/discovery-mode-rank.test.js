@@ -6,7 +6,7 @@
  */
 
 import { describe, test, expect } from 'vitest';
-import { rankCandidates, DEFAULT_RANK_WEIGHTS } from '../../../../../lib/eva/stage-zero/paths/discovery-mode.js';
+import { rankCandidates } from '../../../../../lib/eva/stage-zero/paths/discovery-mode.js';
 import { TREND_SCANNER_PROMPT_VERSION } from '../../../../../lib/eva/stage-zero/paths/discovery-mode-versions.js';
 
 const v2 = TREND_SCANNER_PROMPT_VERSION;
@@ -29,10 +29,20 @@ function v2Candidate(overrides = {}) {
 
 const strategicCtx = { themes: ['fintech automation', 'B2B SaaS', 'subscription revenue'] };
 
-describe('rankCandidates - default weights (FR-1)', () => {
-  test('DEFAULT_RANK_WEIGHTS sums to 1.0', () => {
-    const sum = Object.values(DEFAULT_RANK_WEIGHTS).reduce((a, b) => a + b, 0);
-    expect(Math.abs(sum - 1)).toBeLessThan(1e-9);
+// SD-LEO-INFRA-STAGE0-GOVERNED-POSTURE-001: weights are governed posture data now —
+// DEFAULT_RANK_WEIGHTS was deleted. This fixture carries the pre-posture weight set
+// these suites' assertion values were computed under (math unchanged).
+const FIXTURE_WEIGHTS = Object.freeze({
+  automation_feasibility: 0.30,
+  monthly_revenue_potential: 0.25,
+  target_market_specificity: 0.20,
+  strategic_fit: 0.15,
+  competition_level: 0.10,
+});
+
+describe('rankCandidates - explicit posture weights (FR-1 / governed-posture FR-3)', () => {
+  test('throws without weights — hardcoded defaults removed (governed posture required)', () => {
+    expect(() => rankCandidates([v2Candidate()])).toThrow(/posture weights/);
   });
 
   test('top candidate cites >=3 LLM-emitted fields in score_attribution (TS-1, AC-1)', () => {
@@ -43,7 +53,7 @@ describe('rankCandidates - default weights (FR-1)', () => {
       v2Candidate({ name: 'Delta', automation_feasibility: 6, monthly_revenue_potential: '$3K/month', competition_level: 'medium' }),
       v2Candidate({ name: 'Epsilon', automation_feasibility: 8, monthly_revenue_potential: '$15K/month', competition_level: 'low' }),
     ];
-    const ranked = rankCandidates(candidates, { strategicContext: strategicCtx });
+    const ranked = rankCandidates(candidates, { weights: FIXTURE_WEIGHTS, strategicContext: strategicCtx });
     expect(ranked[0].score_attribution.length).toBeGreaterThanOrEqual(3);
     // Must include >=3 of the 5 documented inputs (FR-1 names them automation_feasibility,
     // monthly_revenue_potential, target_market_specificity, strategic_fit, competition_level).
@@ -53,7 +63,7 @@ describe('rankCandidates - default weights (FR-1)', () => {
   });
 
   test('emits composite_score in 0-100 range with score alias for backward compat', () => {
-    const ranked = rankCandidates([v2Candidate()], { strategicContext: strategicCtx });
+    const ranked = rankCandidates([v2Candidate()], { weights: FIXTURE_WEIGHTS, strategicContext: strategicCtx });
     expect(ranked[0].composite_score).toBeGreaterThanOrEqual(0);
     expect(ranked[0].composite_score).toBeLessThanOrEqual(100);
     expect(ranked[0].score).toBe(ranked[0].composite_score);
@@ -65,13 +75,13 @@ describe('rankCandidates - default weights (FR-1)', () => {
         v2Candidate({ name: 'Weak', automation_feasibility: 4, competition_level: 'high', monthly_revenue_potential: '$1K' }),
         v2Candidate({ name: 'Strong', automation_feasibility: 9, competition_level: 'low', monthly_revenue_potential: '$20K' }),
       ],
-      { strategicContext: strategicCtx }
+      { weights: FIXTURE_WEIGHTS, strategicContext: strategicCtx }
     );
     expect(ranked[0].name).toBe('Strong');
   });
 
   test('handles missing fields without throwing — defaults to neutral contributions', () => {
-    const ranked = rankCandidates([v2Candidate({ monthly_revenue_potential: undefined, target_market: '', competition_level: undefined })], { strategicContext: strategicCtx });
+    const ranked = rankCandidates([v2Candidate({ monthly_revenue_potential: undefined, target_market: '', competition_level: undefined })], { weights: FIXTURE_WEIGHTS, strategicContext: strategicCtx });
     expect(ranked[0]).toBeDefined();
     expect(ranked[0].score_attribution.length).toBeGreaterThan(0);
   });
@@ -83,7 +93,7 @@ describe('rankCandidates - tie-break order', () => {
       v2Candidate({ name: 'B', automation_feasibility: 5, monthly_revenue_potential: '$5K' }),
       v2Candidate({ name: 'A', automation_feasibility: 5, monthly_revenue_potential: '$5K' }),
     ];
-    const ranked = rankCandidates(cands);
+    const ranked = rankCandidates(cands, { weights: FIXTURE_WEIGHTS });
     expect(ranked[0].name).toBe('A');
     expect(ranked[1].name).toBe('B');
   });
@@ -139,7 +149,7 @@ describe('rankCandidates - legacy v1 branch (TR-4, AC-5, TS-5)', () => {
       competition_level: 'low',
       // no prompt_version → legacy branch
     };
-    const ranked = rankCandidates([legacyCandidate]);
+    const ranked = rankCandidates([legacyCandidate], { weights: FIXTURE_WEIGHTS });
     expect(ranked[0].score_attribution).toContain('legacy_v1_formula');
     // v1 formula: feasibility*10 + competition_bonus(low=10) = 90
     expect(ranked[0].score).toBe(90);
@@ -151,7 +161,7 @@ describe('rankCandidates - legacy v1 branch (TR-4, AC-5, TS-5)', () => {
       { name: 'Legacy', automation_feasibility: 9, competition_level: 'low' }, // v1 → 100
       v2Candidate({ name: 'Modern', automation_feasibility: 9, monthly_revenue_potential: '$50K', competition_level: 'low' }),
     ];
-    const ranked = rankCandidates(mixed, { strategicContext: strategicCtx });
+    const ranked = rankCandidates(mixed, { weights: FIXTURE_WEIGHTS, strategicContext: strategicCtx });
     const legacy = ranked.find(r => r.name === 'Legacy');
     const modern = ranked.find(r => r.name === 'Modern');
     expect(legacy.score_attribution).toContain('legacy_v1_formula');

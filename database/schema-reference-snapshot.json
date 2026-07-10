@@ -1,7 +1,7 @@
 {
- "generated_at": "2026-07-10T12:36:05.555Z",
+ "generated_at": "2026-07-10T13:15:01.495Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 784,
+ "table_count": 785,
  "view_count": 180,
  "tables": {
   "_migration_metadata": "{key,value}",
@@ -588,6 +588,7 @@
   "security_audit_events_2027_03": "{id,event_type,severity,taxonomy_class,venture_id,venture_name_input,venture_name_normalized,colliding_with_venture_id,source_agent,source_module_path,correlation_id,session_id,sd_id,occurred_at,detected_at,event_payload,integrity_hash,pat_pattern_id,created_at}",
   "security_audit_events_2027_04": "{id,event_type,severity,taxonomy_class,venture_id,venture_name_input,venture_name_normalized,colliding_with_venture_id,source_agent,source_module_path,correlation_id,session_id,sd_id,occurred_at,detected_at,event_payload,integrity_hash,pat_pattern_id,created_at}",
   "security_audit_events_2027_05": "{id,event_type,severity,taxonomy_class,venture_id,venture_name_input,venture_name_normalized,colliding_with_venture_id,source_agent,source_module_path,correlation_id,session_id,sd_id,occurred_at,detected_at,event_payload,integrity_hash,pat_pattern_id,created_at}",
+  "selection_postures": "{id,phase_key,version,display_name,criteria,status,ratified_by,ratified_at,ratification_ref,transition_condition,expiry_condition,activated_at,expired_at,created_at}",
   "self_audit_findings": "{id,created_at,routine_key,mode,title,summary,severity,confidence,repo_ref,commit_sha,evidence_pack,fingerprint,status,dismissed_reason,metadata}",
   "sensemaking_analyses": "{id,correlation_id,input_type,input_source,input_metadata,prompt_template_id,prompt_version,personas_applied,persona_selection_rationale,overall_confidence,confidence_justification,analysis_result,status,error_details,governance_flags,kb_entries_used,model,latency_ms,token_count,created_at,completed_at,disposition,disposition_at,disposition_by,telegram_notification_message_id}",
   "sensemaking_knowledge_base": "{id,category,title,content_summary,content_full,relevance_tags,token_estimate,version,is_active,created_at,updated_at}",

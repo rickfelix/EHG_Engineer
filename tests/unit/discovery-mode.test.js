@@ -117,6 +117,13 @@ function createMockSupabase({ strategies = STRATEGY_CONFIGS, nurseryItems = DEFA
           }),
         };
       }
+      if (table === 'selection_postures') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ data: [TEST_POSTURE_ROW], error: null }),
+          }),
+        };
+      }
       if (table === 'venture_nursery') {
         return {
           select: vi.fn().mockReturnValue({
@@ -137,6 +144,21 @@ function createMockSupabase({ strategies = STRATEGY_CONFIGS, nurseryItems = DEFA
 }
 
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+
+// SD-LEO-INFRA-STAGE0-GOVERNED-POSTURE-001: ranking weights are governed posture data.
+// The mock posture carries the pre-posture weight set these assertions were computed under.
+const TEST_WEIGHTS = Object.freeze({
+  automation_feasibility: 0.30,
+  monthly_revenue_potential: 0.25,
+  target_market_specificity: 0.20,
+  strategic_fit: 0.15,
+  competition_level: 0.10,
+});
+const TEST_POSTURE_ROW = {
+  id: 'posture-1', phase_key: 'test_posture', version: 1, display_name: 'Test posture',
+  criteria: { weights: TEST_WEIGHTS }, status: 'active',
+  ratified_by: 'chairman', ratified_at: '2026-07-10T00:00:00Z', expiry_condition: null,
+};
 
 // ── Core Functionality Tests ──────────────────────────────
 
@@ -413,7 +435,7 @@ describe('Discovery Mode - rankCandidates', () => {
       { name: 'Low', automation_feasibility: 3 },
       { name: 'High', automation_feasibility: 9 },
       { name: 'Mid', automation_feasibility: 6 },
-    ]);
+    ], { weights: TEST_WEIGHTS });
 
     expect(ranked[0].name).toBe('High');
     expect(ranked[0].score).toBe(90);
@@ -425,7 +447,7 @@ describe('Discovery Mode - rankCandidates', () => {
     const ranked = rankCandidates([
       { name: 'Low Comp', automation_feasibility: 7, competition_level: 'low' },
       { name: 'High Comp', automation_feasibility: 8, competition_level: 'high' },
-    ]);
+    ], { weights: TEST_WEIGHTS });
 
     // Low Comp: 7*10 + 10 = 80, High Comp: 8*10 + 0 = 80 → tied, original order preserved
     expect(ranked[0].score).toBe(80);
@@ -435,19 +457,19 @@ describe('Discovery Mode - rankCandidates', () => {
   test('adds medium competition bonus', () => {
     const ranked = rankCandidates([
       { name: 'A', automation_feasibility: 5, competition_level: 'medium' },
-    ]);
+    ], { weights: TEST_WEIGHTS });
     expect(ranked[0].score).toBe(55); // 5*10 + 5
   });
 
   test('handles missing automation_feasibility', () => {
     const ranked = rankCandidates([
       { name: 'No Score' },
-    ]);
+    ], { weights: TEST_WEIGHTS });
     expect(ranked[0].score).toBe(50); // default 5 * 10
   });
 
   test('handles empty array', () => {
-    expect(rankCandidates([])).toHaveLength(0);
+    expect(rankCandidates([], { weights: TEST_WEIGHTS })).toHaveLength(0);
   });
 });
 

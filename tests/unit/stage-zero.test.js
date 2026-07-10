@@ -96,6 +96,27 @@ function createMockSupabase(overrides = {}) {
       chain.insert = vi.fn().mockResolvedValue({ error: null });
     }
 
+    // SD-LEO-INFRA-STAGE0-GOVERNED-POSTURE-001: discovery ranking resolves the
+    // governed posture fail-closed; serve an active posture row.
+    if (table === 'selection_postures') {
+      chain.eq = vi.fn().mockResolvedValue({
+        data: [{
+          id: 'posture-1', phase_key: 'test_posture', version: 1,
+          criteria: {
+            weights: {
+              automation_feasibility: 0.30,
+              monthly_revenue_potential: 0.25,
+              target_market_specificity: 0.20,
+              strategic_fit: 0.15,
+              competition_level: 0.10,
+            },
+          },
+          status: 'active', ratified_by: 'chairman', ratified_at: '2026-07-10T00:00:00Z',
+        }],
+        error: null,
+      });
+    }
+
     return chain;
   };
 
