@@ -146,6 +146,49 @@ describe('attribution-resolver (SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002)', () 
     it('returns totalCents: 0, currency: null for an empty row set', () => {
       expect(computeAttributedRevenue([])).toEqual({ totalCents: 0, currency: null });
     });
+
+    it('adversarial-review round 2 finding: an abandoned/expired checkout session never counts as revenue — mapEventToRow still stamps amount_cents = amount_total (the INTENDED amount, never collected) and the row still carries venture_id metadata, but no money ever moved', () => {
+      const rows = [
+        { id: 'e1', amount_cents: 5000, currency: 'usd', event_type: 'checkout.session.expired', payment_intent_id: null, stripe_charge_id: null },
+      ];
+      expect(computeAttributedRevenue(rows)).toEqual({ totalCents: 0, currency: null });
+    });
+
+    it('adversarial-review round 2 finding: async_payment_failed checkout sessions never count as revenue', () => {
+      const rows = [
+        { id: 'e1', amount_cents: 5000, currency: 'usd', event_type: 'checkout.session.async_payment_failed', payment_intent_id: 'pi_1', stripe_charge_id: null },
+      ];
+      expect(computeAttributedRevenue(rows)).toEqual({ totalCents: 0, currency: null });
+    });
+
+    it('a failed/expired sibling never displaces the genuine terminal-success row within the same payment identity group', () => {
+      const rows = [
+        { id: 'e1', amount_cents: 5000, currency: 'usd', event_type: 'checkout.session.expired', payment_intent_id: 'pi_1', stripe_charge_id: null },
+        { id: 'e2', amount_cents: 1000, currency: 'usd', event_type: 'checkout.session.completed', payment_intent_id: 'pi_1', stripe_charge_id: null },
+      ];
+      expect(computeAttributedRevenue(rows).totalCents).toBe(1000);
+    });
+
+    it('adversarial-review round 2 finding: order-independent within a same-prefix, different-lifecycle group — payment_intent.created (amount_received typically 0/null) never wins over payment_intent.succeeded regardless of array order', () => {
+      const succeededFirst = [
+        { id: 'e1', amount_cents: 1000, currency: 'usd', event_type: 'payment_intent.succeeded', payment_intent_id: 'pi_1', stripe_charge_id: null },
+        { id: 'e2', amount_cents: 0, currency: 'usd', event_type: 'payment_intent.created', payment_intent_id: 'pi_1', stripe_charge_id: null },
+      ];
+      const createdFirst = [
+        { id: 'e2', amount_cents: 0, currency: 'usd', event_type: 'payment_intent.created', payment_intent_id: 'pi_1', stripe_charge_id: null },
+        { id: 'e1', amount_cents: 1000, currency: 'usd', event_type: 'payment_intent.succeeded', payment_intent_id: 'pi_1', stripe_charge_id: null },
+      ];
+      expect(computeAttributedRevenue(succeededFirst).totalCents).toBe(1000);
+      expect(computeAttributedRevenue(createdFirst).totalCents).toBe(1000);
+    });
+
+    it('a payment identity group with ONLY non-terminal/failed events (no genuine success row) contributes zero — never falls back to picking a non-primary row', () => {
+      const rows = [
+        { id: 'e1', amount_cents: 700, currency: 'usd', event_type: 'payment_intent.payment_failed', payment_intent_id: 'pi_1', stripe_charge_id: null },
+        { id: 'e2', amount_cents: 700, currency: 'usd', event_type: 'payment_intent.processing', payment_intent_id: 'pi_1', stripe_charge_id: null },
+      ];
+      expect(computeAttributedRevenue(rows)).toEqual({ totalCents: 0, currency: null });
+    });
   });
 
   describe('resolveUnattributedEvents', () => {
