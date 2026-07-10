@@ -250,7 +250,11 @@ describe('ChairmanReview', () => {
     // never exist — mint failure compensates the venture to cancelled and rethrows.
     it('mint failure throws fail-closed and compensates the venture to cancelled', async () => {
       createOrReusePendingDecision.mockRejectedValueOnce(new Error('mint exploded'));
-      const mockSupabase = createMockSupabase();
+      // maybeSingle serves the live-pending check inside the compensating path — no pending
+      // decision exists, so the cancel proceeds.
+      const mockSupabase = createMockSupabase({
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      });
       await expect(
         persistVentureBrief(
           { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
@@ -262,6 +266,26 @@ describe('ChairmanReview', () => {
       );
       expect(updateArg).toBeDefined();
       expect(updateArg[0].metadata.stage_zero.cancellation_reason).toBe('stage0_decision_mint_failed');
+    });
+
+    // Adversarial-review round 1: never cancel a venture that already carries a live PENDING
+    // gate decision (concurrent duplicate-name 23505 re-mint race) — cancelling would strand
+    // a chairman-visible decision whose later approval becomes a silent no-op.
+    it('mint failure with a live pending decision SKIPS the compensating cancel', async () => {
+      createOrReusePendingDecision.mockRejectedValueOnce(new Error('mint exploded'));
+      const mockSupabase = createMockSupabase({
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'd-live' }, error: null }),
+      });
+      await expect(
+        persistVentureBrief(
+          { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+          { supabase: mockSupabase, logger: silentLogger },
+        ),
+      ).rejects.toThrow(/fail-closed/);
+      const cancelCall = mockSupabase._mockChain.update.mock.calls.find(
+        (c) => c[0]?.status === 'cancelled',
+      );
+      expect(cancelCall).toBeUndefined();
     });
 
     // Idempotent re-run wedge closure: original run died between venture insert and mint —

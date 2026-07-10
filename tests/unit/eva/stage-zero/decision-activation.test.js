@@ -3,7 +3,8 @@
  * SD-LEO-INFRA-STAGE0-CHAIRMAN-DECISION-AUTHORITY-001
  *
  * Acceptance canary 2 ("Real approval activates") + rejection-parks + the
- * no-machine-approver filters (advisory rows never activate).
+ * no-machine-approver filters (advisory rows never activate) + adversarial-review
+ * round-1 regressions (venture-anchored scan, park dedupe, fresh re-read).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -18,13 +19,21 @@ import { parkVenture } from '../../../../lib/eva/stage-zero/venture-nursery.js';
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
 /**
- * Fake supabase for the consumer's three query shapes:
- *  - chairman_decisions: select().eq().eq().in() -> { data: decisions } (filters recorded)
- *  - ventures select:    select().in().eq()      -> { data: ventures }
- *  - ventures update:    update(payload).eq().eq() -> { error } (payloads recorded)
+ * Fake supabase for the consumer's query shapes:
+ *  - ventures scan (list):   select('*').eq(status).eq(jsonpath).limit()      -> pausedVentures
+ *  - ventures fresh read:    select('*').eq(id).eq(status).maybeSingle()      -> freshVenture
+ *  - chairman_decisions:     select().in().eq().eq().in().order().limit()     -> decisions (filters recorded)
+ *  - venture_nursery dedupe: select('id').eq(name).is().limit().maybeSingle() -> existingPark
+ *  - ventures update:        update(payload).eq().eq()                        -> { error } (payloads recorded)
  */
-function makeSupabase({ decisions = [], ventures = [], updateError = null } = {}) {
-  const recorded = { decisionFilters: [], ventureUpdates: [] };
+function makeSupabase({
+  pausedVentures = [],
+  decisions = [],
+  freshVenture = undefined, // undefined => default to first paused venture; null => gone
+  existingPark = null,
+  updateError = null,
+} = {}) {
+  const recorded = { decisionFilters: [], ventureUpdates: [], nurseryLookups: 0 };
 
   function decisionsChain() {
     const filters = [];
@@ -32,10 +41,9 @@ function makeSupabase({ decisions = [], ventures = [], updateError = null } = {}
     const chain = {
       select: () => chain,
       eq: (col, val) => { filters.push(['eq', col, val]); return chain; },
-      in: (col, vals) => {
-        filters.push(['in', col, vals]);
-        return Promise.resolve({ data: decisions, error: null });
-      },
+      in: (col, vals) => { filters.push(['in', col, vals]); return chain; },
+      order: () => chain,
+      limit: () => Promise.resolve({ data: decisions, error: null }),
     };
     return chain;
   }
@@ -43,9 +51,13 @@ function makeSupabase({ decisions = [], ventures = [], updateError = null } = {}
   function venturesChain() {
     const chain = {
       select: () => chain,
-      in: () => chain,
-      eq: () => Promise.resolve({ data: ventures, error: null }),
-      // consumer shape: update(payload).eq('id', ..).eq('status', 'paused') then awaited
+      eq: () => chain,
+      limit: () => Promise.resolve({ data: pausedVentures, error: null }),
+      maybeSingle: () =>
+        Promise.resolve({
+          data: freshVenture === undefined ? (pausedVentures[0] || null) : freshVenture,
+          error: null,
+        }),
       update: (payload) => {
         recorded.ventureUpdates.push(payload);
         return { eq: () => ({ eq: () => Promise.resolve({ error: updateError }) }) };
@@ -54,8 +66,24 @@ function makeSupabase({ decisions = [], ventures = [], updateError = null } = {}
     return chain;
   }
 
+  function nurseryChain() {
+    recorded.nurseryLookups += 1;
+    const chain = {
+      select: () => chain,
+      eq: () => chain,
+      is: () => chain,
+      limit: () => chain,
+      maybeSingle: () => Promise.resolve({ data: existingPark, error: null }),
+    };
+    return chain;
+  }
+
   return {
-    from: vi.fn((table) => (table === 'chairman_decisions' ? decisionsChain() : venturesChain())),
+    from: vi.fn((table) => {
+      if (table === 'chairman_decisions') return decisionsChain();
+      if (table === 'venture_nursery') return nurseryChain();
+      return venturesChain();
+    }),
     _recorded: recorded,
   };
 }
@@ -75,20 +103,31 @@ const pausedAwaitingVenture = {
 describe('processStageZeroDecisions', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('queries ONLY stage-0 stage_gate decisions — advisory rows are excluded at the filter', async () => {
-    const supabase = makeSupabase({ decisions: [], ventures: [] });
+  it('queries ONLY stage-0 stage_gate decisions for the awaiting ventures — advisory rows excluded at the filter', async () => {
+    const supabase = makeSupabase({
+      pausedVentures: [pausedAwaitingVenture],
+      decisions: [],
+    });
     await processStageZeroDecisions({ supabase, logger: silentLogger });
     const filters = supabase._recorded.decisionFilters[0];
+    expect(filters).toContainEqual(['in', 'venture_id', ['v-1']]); // venture-anchored, not history-anchored
     expect(filters).toContainEqual(['eq', 'lifecycle_stage', 0]);
     expect(filters).toContainEqual(['eq', 'decision_type', 'stage_gate']);
     expect(filters).toContainEqual(['in', 'status', ['approved', 'rejected']]);
   });
 
+  it('does not scan decisions at all when no venture is paused-awaiting (bounded pass)', async () => {
+    const supabase = makeSupabase({ pausedVentures: [], decisions: [] });
+    const summary = await processStageZeroDecisions({ supabase, logger: silentLogger });
+    expect(summary).toEqual({ processed: 0, activated: 0, parked: 0, errors: 0 });
+    expect(supabase._recorded.decisionFilters).toHaveLength(0);
+  });
+
   // Acceptance canary 2: real approval activates.
   it('activates a paused-awaiting venture on an approved decision, with decision-id provenance', async () => {
     const supabase = makeSupabase({
+      pausedVentures: [pausedAwaitingVenture],
       decisions: [{ id: 'd-1', venture_id: 'v-1', status: 'approved', rationale: 'looks good' }],
-      ventures: [pausedAwaitingVenture],
     });
     const summary = await processStageZeroDecisions({ supabase, logger: silentLogger });
     expect(summary.activated).toBe(1);
@@ -102,8 +141,8 @@ describe('processStageZeroDecisions', () => {
 
   it('rejection parks the brief (nursery) THEN cancels the venture', async () => {
     const supabase = makeSupabase({
+      pausedVentures: [pausedAwaitingVenture],
       decisions: [{ id: 'd-2', venture_id: 'v-1', status: 'rejected', rationale: 'not now' }],
-      ventures: [pausedAwaitingVenture],
     });
     const summary = await processStageZeroDecisions({ supabase, logger: silentLogger });
     expect(summary.parked).toBe(1);
@@ -117,11 +156,25 @@ describe('processStageZeroDecisions', () => {
     expect(update.metadata.stage_zero.cancellation.decision_id).toBe('d-2');
   });
 
+  // Adversarial-review round 1: a prior tick's successful park whose cancel failed must be
+  // REUSED — never a duplicate nursery insert.
+  it('re-processed rejection reuses the existing un-promoted nursery row (park dedupe)', async () => {
+    const supabase = makeSupabase({
+      pausedVentures: [pausedAwaitingVenture],
+      decisions: [{ id: 'd-2', venture_id: 'v-1', status: 'rejected', rationale: 'not now' }],
+      existingPark: { id: 'nursery-existing' },
+    });
+    const summary = await processStageZeroDecisions({ supabase, logger: silentLogger });
+    expect(parkVenture).not.toHaveBeenCalled();
+    expect(summary.parked).toBe(1); // still cancels the venture
+    expect(supabase._recorded.ventureUpdates[0].status).toBe('cancelled');
+  });
+
   it('park failure leaves the venture PAUSED (retryable) — never cancels without a nursery row', async () => {
     parkVenture.mockRejectedValueOnce(new Error('nursery schema drift'));
     const supabase = makeSupabase({
+      pausedVentures: [pausedAwaitingVenture],
       decisions: [{ id: 'd-3', venture_id: 'v-1', status: 'rejected', rationale: null }],
-      ventures: [pausedAwaitingVenture],
     });
     const summary = await processStageZeroDecisions({ supabase, logger: silentLogger });
     expect(summary.parked).toBe(0);
@@ -129,24 +182,30 @@ describe('processStageZeroDecisions', () => {
     expect(supabase._recorded.ventureUpdates).toHaveLength(0); // no cancel write
   });
 
-  it('is idempotent: a venture no longer paused-awaiting is a no-op', async () => {
-    const activatedVenture = {
-      ...pausedAwaitingVenture,
-      metadata: { stage_zero: { awaiting_chairman_decision: false } },
-    };
+  // Adversarial-review round 1: the fresh re-read makes a concurrent transition a no-op.
+  it('is idempotent: a venture that transitioned between scan and apply is a no-op', async () => {
     const supabase = makeSupabase({
+      pausedVentures: [pausedAwaitingVenture],
       decisions: [{ id: 'd-1', venture_id: 'v-1', status: 'approved', rationale: null }],
-      ventures: [activatedVenture],
+      freshVenture: null, // gone by the time we re-read — another instance applied it
     });
     const summary = await processStageZeroDecisions({ supabase, logger: silentLogger });
     expect(summary.processed).toBe(0);
     expect(supabase._recorded.ventureUpdates).toHaveLength(0);
   });
 
-  it('returns early with zero work when no resolved decisions exist', async () => {
-    const supabase = makeSupabase({ decisions: [], ventures: [] });
+  it('is idempotent: awaiting flag already cleared on the fresh read is a no-op', async () => {
+    const supabase = makeSupabase({
+      pausedVentures: [pausedAwaitingVenture],
+      decisions: [{ id: 'd-1', venture_id: 'v-1', status: 'approved', rationale: null }],
+      freshVenture: {
+        ...pausedAwaitingVenture,
+        metadata: { stage_zero: { awaiting_chairman_decision: false } },
+      },
+    });
     const summary = await processStageZeroDecisions({ supabase, logger: silentLogger });
-    expect(summary).toEqual({ processed: 0, activated: 0, parked: 0, errors: 0 });
+    expect(summary.processed).toBe(0);
+    expect(supabase._recorded.ventureUpdates).toHaveLength(0);
   });
 });
 
