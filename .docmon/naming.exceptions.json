@@ -62,6 +62,12 @@
       "pattern": "^CD\\d+-.*\\.md$",
       "reason": "Chairman-decision governance records (the CD<NN> decision-ID prefix is the canonical naming convention)",
       "example": "CD30-cloudflare-default-supersedes-CD15.md"
+    },
+    {
+      "path_prefix": "docs/reference/schema/",
+      "pattern": "^[a-z][a-z0-9_]*\\.md$",
+      "reason": "Auto-generated schema-reference docs (scripts/generate-schema-docs-from-db.js) are named after the literal database table they document — renaming would diverge from the DB identifier they mirror and get re-clobbered on the next regeneration",
+      "example": "ops_payment_events.md, income_capture_monthly.md"
     }
   ],
   "valid_pattern": {
