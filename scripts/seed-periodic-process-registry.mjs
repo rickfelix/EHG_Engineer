@@ -31,8 +31,22 @@ const supabase = createClient(
 
 const ROLE_SESSION_INTERVAL_SECONDS = 1800; // 30-min tick, matches the fleet's own ScheduleWakeup idle-tick convention
 
+// QF-20260710-257: known rounds map to their DECLARED cadence — prefix inference put
+// gap_analysis / vision_rescore / corrective_generation (registered 'weekly' in
+// lib/eva/eva-master-scheduler.js _registerDefaultRounds) on the 86400 default, and
+// okr-mid-month-review (registerJob cadenceDays: 15) on 86400, producing standing false
+// OVERDUE flags that the liveness watcher's seeder re-invocation re-asserted every run.
+// New scheduler rounds/jobs MUST be added here; prefix inference is fallback only.
+const DECLARED_ROUND_INTERVALS = {
+  vision_rescore: 604800,
+  gap_analysis: 604800,
+  corrective_generation: 604800,
+  'okr-mid-month-review': 1296000, // cadenceDays: 15 (NOT monthly — ground truth over advisory)
+};
+
 function intervalForRoundKey(key) {
-  if (key.startsWith('daily_') || key.startsWith('okr-mid-month')) return 86400;
+  if (DECLARED_ROUND_INTERVALS[key]) return DECLARED_ROUND_INTERVALS[key];
+  if (key.startsWith('daily_')) return 86400;
   if (key.startsWith('weekly_') || key.startsWith('friday_')) return 604800;
   if (key.startsWith('okr-monthly') || key.startsWith('monthly_')) return 2592000;
   return 86400; // conservative default for unrecognized prefixes
