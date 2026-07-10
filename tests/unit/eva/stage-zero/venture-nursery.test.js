@@ -153,6 +153,14 @@ describe('parkVenture (FR-1: live-schema insert)', () => {
     ).resolves.toBeTruthy();
     expect(captured.inserts[0].payload.maturity_level).toBe('seed'); // CHECK-safe mapping
   });
+
+  test('surfaces a genuine insert error as "Failed to park venture: <msg>" (error branch preserved from the predecessor suite)', async () => {
+    const supabase = { from: () => ({
+      insert: () => ({ select: () => ({ single: async () => ({ data: null, error: { message: 'boom' } }) }) }),
+    }) };
+    await expect(parkVenture(sampleBrief, { reason: 'x' }, { supabase, logger: silentLogger }))
+      .rejects.toThrow('Failed to park venture: boom');
+  });
 });
 
 describe('total mappers (FR-1: CHECK violation structurally impossible)', () => {
@@ -215,6 +223,14 @@ describe('reactivateVenture (FR-2: live columns; no status column)', () => {
     const { supabase } = captureSb({ singleData: { id: 'id-1', name: 'Test', promoted_to_venture_id: 'v-9', source_ref: {} } });
     await expect(reactivateVenture('id-1', { reason: 'test' }, { supabase, logger: silentLogger }))
       .rejects.toThrow('Venture already promoted');
+  });
+
+  test('throws "Nursery entry not found" on a fetch error (error branch preserved from the predecessor suite)', async () => {
+    const supabase = { from: () => ({
+      select: () => ({ eq: () => ({ single: async () => ({ data: null, error: { message: 'no row' } }) }) }),
+    }) };
+    await expect(reactivateVenture('missing-id', { reason: 'test' }, { supabase, logger: silentLogger }))
+      .rejects.toThrow('Nursery entry not found: missing-id');
   });
 
   test('marks source_ref.reactivation + last_evaluated_at and rebuilds pathOutput from source_ref.brief', async () => {
