@@ -1,5 +1,5 @@
 // SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A (FR-2)
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { computeGaugeState, isGaugeWriterAlive, computePaidGaugeState, DEFAULT_CADENCE_HOURS } from '../../../lib/telemetry/funnel-gauge.mjs';
 
 const NOW = new Date('2026-07-10T12:00:00.000Z');
@@ -88,13 +88,47 @@ describe('isGaugeWriterAlive (SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A FR-
   });
 });
 
-// Coordinator ruling on FR-3 descope (SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A):
-// the "paid" stage is never fabricated -- it's an explicit, visible gated state until
-// venture-payment attribution exists.
-describe('computePaidGaugeState (coordinator-ruled FR-3 descope)', () => {
-  it('always reports gated_on_attribution — never a fabricated paid value', () => {
-    const result = computePaidGaugeState();
+// Coordinator ruling on FR-3 descope (SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A),
+// given a real implementation by SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002 FR-4.
+// Never fabricates a paid value -- gated_on_attribution unless resolver coverage exists.
+describe('computePaidGaugeState (SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002 FR-4)', () => {
+  function buildSupabaseStub({ readinessRows, resolvedRows, unattributedCount }) {
+    return {
+      from: vi.fn(() => ({
+        select: vi.fn((cols, opts) => {
+          if (opts?.head) {
+            // unattributed count query
+            return { eq: vi.fn(() => Promise.resolve({ count: unattributedCount, error: null })) };
+          }
+          return {
+            not: vi.fn(() => ({ limit: vi.fn(() => Promise.resolve({ data: readinessRows, error: null })) })),
+            eq: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ data: resolvedRows, error: null })) })),
+          };
+        }),
+      })),
+    };
+  }
+
+  it('TS-5: reports gated_on_attribution — unchanged pre-resolver behavior — when the resolver has never run anywhere', async () => {
+    const supabase = buildSupabaseStub({ readinessRows: [], resolvedRows: [], unattributedCount: 0 });
+    const result = await computePaidGaugeState({ supabase, ventureId: 'v-1' });
     expect(result.state).toBe('gated_on_attribution');
-    expect(result.reason).toMatch(/attribution/);
+    expect(result.reason).toMatch(/never run/);
+  });
+
+  it('TS-5: reports live with correct paid_amount_cents once resolver coverage exists', async () => {
+    const supabase = buildSupabaseStub({
+      readinessRows: [{ id: 'row-1' }],
+      resolvedRows: [{ amount_cents: 1000, currency: 'usd' }, { amount_cents: 500, currency: 'usd' }],
+      unattributedCount: 2,
+    });
+    const result = await computePaidGaugeState({ supabase, ventureId: 'v-1' });
+    expect(result).toEqual({ state: 'live', paid_amount_cents: 1500, currency: 'usd', unattributed_count_fleet_wide: 2 });
+  });
+
+  it('never hides the UNATTRIBUTED line — unattributed_count_fleet_wide is present even when zero', async () => {
+    const supabase = buildSupabaseStub({ readinessRows: [{ id: 'row-1' }], resolvedRows: [], unattributedCount: 0 });
+    const result = await computePaidGaugeState({ supabase, ventureId: 'v-1' });
+    expect(result.unattributed_count_fleet_wide).toBe(0);
   });
 });
