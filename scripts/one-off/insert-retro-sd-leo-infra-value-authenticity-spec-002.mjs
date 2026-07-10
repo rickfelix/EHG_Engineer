@@ -117,7 +117,7 @@ const retro = {
 
 async function main() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
     console.error('SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY required');
     process.exit(1);
