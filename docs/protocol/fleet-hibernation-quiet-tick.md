@@ -45,6 +45,46 @@ When workers/signals are present the tick runs ACTIVE (180–270s), so latency i
 whenever anything is actually moving. Phasing (`partyOffsetS`: coordinator 0, Adam 420)
 keeps the two parties from co-firing and tapping each other awake.
 
+## Directive hard-wake override (SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001)
+
+The 900s quiescent park above assumed no pending work needed the coordinator's attention.
+That assumption broke on 2026-07-09: a chairman burn-now directive stack sat unactioned for
+25+ minutes because `decideCadence` had no awareness of pending directive-class inbox rows
+and could self-schedule a full 900s park immediately after a directive landed.
+
+`decideCadence` now takes an optional `hasUnactionedDirective` flag that, when true,
+overrides **both** the quiescent park and the normal active band with a short
+`DIRECTIVE_WAKE_MIN_S`–`DIRECTIVE_WAKE_MAX_S` (15–45s) hard-wake delay — checked *before* the
+quiescent branch. Omitting the flag is byte-identical to prior behavior.
+
+`scripts/coordinator-quiet-tick.mjs` computes the flag from **two independent, `Promise.all`
+branches** (each with its own error boundary, so one failing never suppresses the other):
+
+| Check | Covers | Mechanism |
+|-------|--------|-----------|
+| `hasUnactionedDirective(sb, coordinatorId)` | Session-targeted `DIRECTIVE_KINDS` rows (`target_session = <real session id>`) | `read_at IS NULL` |
+| `hasOutstandingChairmanDirective(sb)` | `chairman_directive` rows — issued with `target_session='broadcast'` (a literal sentinel, never a real session id, per `scripts/issue-chairman-directive.cjs`) | reuses `lib/coordinator/chairman-directive-gauge.cjs` `loadRoleDirectiveStatus('coordinator')`, since broadcast directives track compliance via a separate `chairman_directive_ack` mechanism, not `read_at` |
+
+The two-check split exists because a plain `target_session=coordinatorId` query structurally
+cannot see broadcast-lane `chairman_directive` rows — the exact flagship incident scenario —
+so a single check would have missed it.
+
+### `read_at` vs `delivered_at`
+
+`session_coordination.delivered_at` (additive migration, no backfill) now separates two
+meanings that used to be conflated under `read_at`:
+
+- **`delivered_at`** — a consumer's process merely *saw* this row (poll/list/render).
+- **`read_at`** — the row was genuinely surfaced for action-required processing (worker
+  check-in `ackMessage` on a real claim, Adam's action-required drill,
+  `ack-chairman-directive.cjs`, etc.).
+
+`scripts/hooks/coordination-inbox.cjs`'s `classifyInboxMessage` previously stamped `read_at`
+on a `DIRECTIVE_KINDS` row on its *first poll* — a stand-in "delivered" marker that hid the
+row from any consumer gating on `read_at IS NULL` (including `hasUnactionedDirective` above)
+before it was ever genuinely actioned. It now stamps `delivered_at` instead, leaving
+`read_at` NULL until real action occurs.
+
 ## Smoke test (safe — no side effects)
 
 ```bash
