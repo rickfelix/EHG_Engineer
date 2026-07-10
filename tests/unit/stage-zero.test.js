@@ -199,6 +199,27 @@ describe('Stage 0 Interfaces', () => {
   });
 
   describe('validateVentureBrief', () => {
+    // SD-LEO-INFRA-STAGE0-THESIS-CONTRACT-001: a valid brief carries the thesis /
+    // kill-criteria / explicit-decisions contract (a thesis-less score is rejected).
+    const CONTRACT = {
+      thesis: {
+        who_pays: 'SMB owners',
+        pays_for_what: 'a solution',
+        reached_how: 'communities',
+        price_point: 'subscription $29/mo',
+        demand_test_plan: [
+          { step: 1, instruction: 'landing page probe', success_signal: '>=10 signups' },
+          { step: 2, instruction: 'pre-order ask', success_signal: '>=3 pre-commitments' },
+        ],
+      },
+      kill_criteria: [
+        { id: 'k1', metric: 'signups', comparator: 'lt', threshold: 10, stage_by: 12, description: 'dies if <10 signups by S12', source: 'derived_default' },
+      ],
+      explicit_decisions: {
+        form_factor: { value: 'web', default: 'web', decided_by: 'default', rationale: 'declared factory default', criterion_for_native: 'OS capability load-bearing' },
+      },
+    };
+
     test('accepts valid brief', () => {
       const brief = {
         name: 'Test Venture',
@@ -208,6 +229,7 @@ describe('Stage 0 Interfaces', () => {
         origin_type: 'discovery',
         raw_chairman_intent: 'Build something great',
         maturity: 'ready',
+        ...CONTRACT,
       };
       const result = validateVentureBrief(brief);
       expect(result.valid).toBe(true);
@@ -216,6 +238,21 @@ describe('Stage 0 Interfaces', () => {
     test('rejects missing required fields', () => {
       const result = validateVentureBrief({ name: 'Test' });
       expect(result.valid).toBe(false);
+    });
+
+    test('rejects a thesis-less brief (SD-LEO-INFRA-STAGE0-THESIS-CONTRACT-001)', () => {
+      const brief = {
+        name: 'Test',
+        problem_statement: 'Test',
+        solution: 'Test',
+        target_market: 'Test',
+        origin_type: 'manual',
+        raw_chairman_intent: 'Test',
+        maturity: 'ready',
+      };
+      const result = validateVentureBrief(brief);
+      expect(result.valid).toBe(false);
+      expect(result.errors.join(' ')).toMatch(/thesis contract/);
     });
 
     test('rejects invalid maturity', () => {
@@ -227,6 +264,7 @@ describe('Stage 0 Interfaces', () => {
         origin_type: 'manual',
         raw_chairman_intent: 'Test',
         maturity: 'invalid',
+        ...CONTRACT,
       };
       const result = validateVentureBrief(brief);
       expect(result.valid).toBe(false);
@@ -241,6 +279,7 @@ describe('Stage 0 Interfaces', () => {
         origin_type: 'manual',
         raw_chairman_intent: 'Test',
         maturity: 'blocked',
+        ...CONTRACT,
       };
       expect(validateVentureBrief(brief).valid).toBe(true);
     });
@@ -254,6 +293,7 @@ describe('Stage 0 Interfaces', () => {
         origin_type: 'manual',
         raw_chairman_intent: 'Test',
         maturity: 'nursery',
+        ...CONTRACT,
       };
       expect(validateVentureBrief(brief).valid).toBe(true);
     });
