@@ -1,8 +1,14 @@
 /**
  * SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-C FR-3 — graduated-autonomy ladder.
  */
-import { describe, it, expect, vi } from 'vitest';
-import { evaluateGraduation, recordPublishOutcome } from '../../../lib/marketing/autonomy-gate.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('../../../lib/chairman/record-pending-decision.mjs', () => ({
+  recordPendingDecision: vi.fn().mockResolvedValue({ recorded: true, id: 'decision-1' }),
+}));
+
+import { recordPendingDecision } from '../../../lib/chairman/record-pending-decision.mjs';
+import { evaluateGraduation, recordPublishOutcome, checkPublishAuthorization } from '../../../lib/marketing/autonomy-gate.js';
 
 function makeSupabase({ recentRows = [], selectError = null, updateError = null, upsertError = null }) {
   const ledgerChain = {
@@ -114,5 +120,74 @@ describe('recordPublishOutcome', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('No ledger entry found');
+  });
+});
+
+describe('checkPublishAuthorization — dedup + FR-7 chairman_decisions routing', () => {
+  function makeAuthSupabase({ autonomyState = null, autonomyError = null, acceptedRow = null, acceptedError = null, existingPending = null, existingPendingError = null, insertData = { id: 'ledger-new' }, insertError = null }) {
+    let ledgerMaybeSingleCallCount = 0;
+    const autonomyChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn(() => Promise.resolve({ data: autonomyState ? { autonomy_state: autonomyState } : null, error: autonomyError })),
+    };
+    const ledgerChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      insert: vi.fn().mockReturnThis(),
+      single: vi.fn(() => Promise.resolve({ data: insertError ? null : insertData, error: insertError })),
+      maybeSingle: vi.fn(() => {
+        ledgerMaybeSingleCallCount += 1;
+        // 1st maybeSingle call = "accepted?" check; 2nd = "already pending?" dedup check.
+        if (ledgerMaybeSingleCallCount === 1) return Promise.resolve({ data: acceptedRow, error: acceptedError });
+        return Promise.resolve({ data: existingPending, error: existingPendingError });
+      }),
+    };
+    return { from: vi.fn((table) => (table === 'venture_channel_autonomy' ? autonomyChain : ledgerChain)), ledgerChain };
+  }
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('allows immediately when the channel is autonomous, without touching the ledger', async () => {
+    const supabase = makeAuthSupabase({ autonomyState: 'autonomous' });
+    const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1' });
+    expect(result.allowed).toBe(true);
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+  });
+
+  it('allows when an accepted ledger entry exists for this exact content', async () => {
+    const supabase = makeAuthSupabase({ autonomyState: 'propose_and_approve', acceptedRow: { id: 'ledger-1' } });
+    const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1' });
+    expect(result.allowed).toBe(true);
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+  });
+
+  it('on first proposal, inserts a pending ledger row AND notifies chairman_decisions (FR-7)', async () => {
+    const supabase = makeAuthSupabase({ autonomyState: 'propose_and_approve', acceptedRow: null, existingPending: null });
+    const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1', correlationId: 'corr-1' });
+
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toContain('AUTONOMY_APPROVAL_REQUIRED');
+    expect(supabase.ledgerChain.insert).toHaveBeenCalledWith(expect.objectContaining({ correlation_id: 'corr-1', decision: 'pending' }));
+    expect(recordPendingDecision).toHaveBeenCalledWith(
+      supabase,
+      expect.objectContaining({ decisionType: 'outbound_publish_approval', ventureId: 'v-1' })
+    );
+  });
+
+  it('on a RETRY of the same unapproved attempt, does not insert a duplicate row or re-notify (dedup)', async () => {
+    const supabase = makeAuthSupabase({ autonomyState: 'propose_and_approve', acceptedRow: null, existingPending: { id: 'ledger-already-pending' } });
+    const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1', correlationId: 'corr-1' });
+
+    expect(result.allowed).toBe(false);
+    expect(supabase.ledgerChain.insert).not.toHaveBeenCalled();
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the autonomy-state lookup errors', async () => {
+    const supabase = makeAuthSupabase({ autonomyError: { message: 'connection reset' } });
+    const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1' });
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toContain('fail-closed');
   });
 });

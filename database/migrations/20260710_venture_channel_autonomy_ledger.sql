@@ -159,10 +159,23 @@ LEFT JOIN venture_channel_publish_ledger vcpl
   ON vcpl.venture_id = vca.venture_id AND vcpl.channel_type = vca.channel_type
 GROUP BY vca.venture_id, vca.channel_type, vca.autonomy_state, vca.clean_streak, vca.graduated_at, vca.graduated_by;
 
+-- KNOWN LIMITATION: distribution_channels.channel_type is a coarse category enum
+-- ('social'|'email'|'web'|'other', 20260105_marketing_content_distribution.sql) and
+-- .platform ('linkedin'|'twitter'|...) does not include every publisher/index.js
+-- adapter key ('x', 'bluesky' — bluesky has no distribution_channels row at all today).
+-- The publish()-path tables (venture_channel_autonomy/_secrets, keyed on the adapter
+-- `platform` string) and venture_distribution_channels (keyed on distribution_channels.id,
+-- a DIFFERENT taxonomy for the distribution-PLAN side) are not joinable on a shared
+-- channel identifier without a taxonomy reconciliation that is out of this SD's scope
+-- (see lib/marketing/channel-secrets.js's resolveChannelCredentials docstring for the
+-- same gap). This view reports venture_distribution_channels' own liveness columns
+-- directly — dc.name is included as a human-readable label only, NOT as a reliable
+-- join key back to the publish()-path `platform` identifier.
 CREATE OR REPLACE VIEW v_publisher_adapter_liveness AS
 SELECT
   vdc.venture_id,
-  dc.channel_type,
+  dc.name AS channel_label,
+  dc.platform,
   vdc.liveness_state,
   vdc.auth_verified_at,
   vdc.ratelimit_verified_at,
