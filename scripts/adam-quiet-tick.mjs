@@ -55,7 +55,10 @@ const DRY_RUN = process.argv.includes('--dry-run');
  * delta-gated rather than dropped.
  */
 export const COMPOSED_CORES = [
-  { key: 'inbox-monitor', script: 'adam-advisory.cjs', args: ['scripts/adam-advisory.cjs', 'inbox', '--quiet'], quiescentSkip: false, safety: true },
+  // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-1): --background — this cron core's
+  // stdout is truncated to one line (scriptCore below), so it must NEVER consume (read_at);
+  // it stamps delivered_at only. Operator-visible surfacing is FR-3's surfaceInboxItems.
+  { key: 'inbox-monitor', script: 'adam-advisory.cjs', args: ['scripts/adam-advisory.cjs', 'inbox', '--quiet', '--background'], quiescentSkip: false, safety: true },
 ];
 export const DELTA_GATED_LOOPS = ['belt-countdown', 'offer-help'];
 
@@ -111,6 +114,69 @@ export async function readCriticalPathParents(sb) {
     return (data || []).map((row) => ({ ...row, inFlightNextStep: row.status === 'in_progress' }));
   } catch {
     return [];
+  }
+}
+
+// SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-3) — surface the Adam session's
+// unacked directed rows as FIRST-CLASS lines in the TICK'S OWN stdout (the act-on-flagged-
+// lines contract, same as QUIET_TICK_STALL_ALERT). Required because scriptCore truncates
+// the child drain's stdout to its last line — content printed by the child is structurally
+// invisible to the operator turn, so the tick itself must surface. Print-once dedup via
+// payload.tick_surfaced_at (QF-20260702-414 orphan_seen_at pattern — a visibility marker,
+// NEVER read_at/acknowledged_at). Fail-soft: any error returns items:[] without aborting.
+const TICK_SURFACE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+export async function surfaceInboxItems(sb) {
+  try {
+    const { resolveAdamSessionId } = require('./read-adam-directives.cjs');
+    const { DIRECTIVE_KINDS, ADAM_EXCLUDED_KINDS } = require('../lib/fleet/worker-status.cjs');
+    const adamId = await resolveAdamSessionId(sb);
+    if (!adamId) return { items: [], directives: 0 };
+
+    const cutoffIso = new Date(Date.now() - TICK_SURFACE_WINDOW_MS).toISOString();
+    const { data: rows, error } = await sb
+      .from('session_coordination')
+      .select('id, subject, body, payload, sender_type, created_at')
+      .eq('target_session', adamId)
+      .is('acknowledged_at', null)
+      .gte('created_at', cutoffIso)
+      .order('created_at', { ascending: true })
+      .limit(50);
+    if (error) return { items: [], directives: 0, error: error.message };
+
+    const isDirectiveRow = (r) =>
+      (r.payload && (DIRECTIVE_KINDS.includes(r.payload.kind) || r.payload.reply_needed || r.payload.reply_to)) || false;
+
+    // Print-once dedup applies to the ITEM class only. DIRECTIVE-class rows are HARD
+    // interrupts: they re-print EVERY tick until acknowledged_at converges them —
+    // deduping a directive would let a single missed turn hide it forever (the exact
+    // failure class this SD closes; adversarial review of PR #5802).
+    const eligible = (rows || []).filter((r) => {
+      const k = r.payload && r.payload.kind;
+      if (k != null && ADAM_EXCLUDED_KINDS.includes(k)) return false;
+      if (isDirectiveRow(r)) return true;
+      return !(r.payload && r.payload.tick_surfaced_at);
+    });
+    const capHit = (rows || []).length === 50;
+    if (eligible.length === 0) return { items: [], directives: 0, capHit };
+
+    const items = eligible.map((r) => {
+      const k = (r.payload && r.payload.kind) || '(untyped)';
+      const isDirective = isDirectiveRow(r);
+      const ageMin = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
+      const subject = String(r.subject || (r.payload && r.payload.body) || r.body || '(empty)').replace(/\s+/g, ' ').slice(0, 140);
+      return { id: r.id, kind: k, isDirective, ageMin, subject };
+    });
+
+    // Stamp the dedup marker on ITEM-class rows only (visibility marker — the row stays
+    // unread/unacked-recoverable; directives are deliberately never marked).
+    const seenAt = new Date().toISOString();
+    for (const r of eligible.filter((x) => !isDirectiveRow(x) && !(x.payload && x.payload.tick_surfaced_at))) {
+      await sb.from('session_coordination').update({ payload: { ...(r.payload || {}), tick_surfaced_at: seenAt } }).eq('id', r.id);
+    }
+    return { items, directives: items.filter((i) => i.isDirective).length, capHit };
+  } catch (e) {
+    return { items: [], directives: 0, error: e && e.message };
   }
 }
 
@@ -183,6 +249,10 @@ async function main() {
     outboundSilence = { probed: [], escalated: [], laneHealth: { unactionedCount: 0, maxAgeMs: 0 }, error: e && e.message };
   }
 
+  // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-3): surface unacked directed rows
+  // as first-class tick output (the child drain above ran --background and consumed nothing).
+  const inboxSurface = await surfaceInboxItems(sb);
+
   // FR-4: belt-countdown + offer-help collapse to a salient-delta check — Adam only
   // reaches the coordinator on a real belt/venture delta, never a "still idle" status.
   const salient = await readSalientState(sb);
@@ -199,6 +269,8 @@ async function main() {
     failedCount: tick.failedCount,
     boardReconcile,
     stallAlerted: stall.alerted,
+    inboxSurfaced: inboxSurface.items.length,
+    inboxDirectives: inboxSurface.directives,
     outboundSilence,
     crossPartyPing: delta.changed,
     pingFields: delta.fields,
@@ -213,6 +285,7 @@ async function main() {
       `fail=${tick.failedCount} ` +
       `reconcile=parents:${boardReconcile.parents},errors:${boardReconcile.errors.length} ` +
       `stalls=${stall.alerted.length} ` +
+      `inbox=${inboxSurface.items.length}(dir:${inboxSurface.directives}) ` +
       `probes=${outboundSilence.probed.length} esc=${outboundSilence.escalated.length} ` +
       `ping=${delta.changed ? delta.fields.join(',') : 'suppressed'} ` +
       `nextWakeSeconds=${delaySeconds} :: ${modeReason}`
@@ -222,6 +295,15 @@ async function main() {
     }
     for (const a of stall.alerted) {
       console.log(`QUIET_TICK_STALL_ALERT=adam node=${a.id} title="${a.title}" escalated=${a.escalated}`);
+    }
+    // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-3): first-class inbox surfacing —
+    // directive/reply-needed rows carry the distinct hard-interrupt token.
+    for (const i of inboxSurface.items) {
+      const token = i.isDirective ? 'QUIET_TICK_INBOX_DIRECTIVE' : 'QUIET_TICK_INBOX_ITEM';
+      console.log(`${token}=adam id=${i.id} kind=${i.kind} age=${i.ageMin}m subject="${i.subject}"`);
+    }
+    if (inboxSurface.capHit) {
+      console.log('QUIET_TICK_INBOX_CAP=adam fetched=50 oldest-first — within-window overflow; ack surfaced rows to reach newer ones');
     }
     for (const p of outboundSilence.probed) {
       console.log(`QUIET_TICK_OUTBOUND_PROBE=adam target=${p.target} row=${p.rowId}`);

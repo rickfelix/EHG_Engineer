@@ -856,7 +856,10 @@ async function tryClaimDraftCandidate(sb, sessionId, base, d, tierCtx = {}) {
   // enforce mode would block. Observe NEVER blocks; enforce refuses (dormant until the
   // backfill-verified cutover flips the enforce flag).
   const authVerdict = await dispatchAuth.evaluateDispatchAuthorization(d, sb, { mode: await getDispatchAuthMode() });
-  if (authVerdict.would_deny) console.log(dispatchAuth.formatWouldDenyLine(d.sd_key, authVerdict, 'checkin_self_claim'));
+  if (authVerdict.would_deny) {
+    console.log(dispatchAuth.formatWouldDenyLine(d.sd_key, authVerdict, 'checkin_self_claim'));
+    await dispatchAuth.recordWouldDenyEvidence(sb, d.sd_key, authVerdict, 'checkin_self_claim', d);
+  }
   if (!authVerdict.authorized) return null; // enforce mode: born-un-authorized SD skipped
   const claimed = await tryClaim(sb, d.sd_key, sessionId);
   if (claimed.ok) {

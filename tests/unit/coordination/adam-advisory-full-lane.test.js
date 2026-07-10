@@ -27,17 +27,19 @@ describe('isReplyRow (FR-4 reply-lane predicate)', () => {
 // Stub the supabase query/update chain. The SELECT uses AND-only filters (NO .or()), and the
 // chain captures the eq/is filters so we can PROVE lane scoping is applied, plus the consumed ids.
 function stub(rows) {
-  const captured = { eq: {}, isNull: [], updatedIds: null, usedOr: false };
+  const captured = { eq: {}, isNull: [], updatedIds: null, usedOr: false, updatePayloads: [] };
   const selectChain = {
     select() { return selectChain; },
     eq(col, val) { captured.eq[col] = val; return selectChain; },
     or() { captured.usedOr = true; return selectChain; },
     is(col) { captured.isNull.push(col); return selectChain; },
+    // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001: window scoping added to the lane query.
+    gte() { return selectChain; },
     order() { return selectChain; },
     limit() { return Promise.resolve({ data: rows, error: null }); },
   };
   const updateChain = {
-    update() { return updateChain; },
+    update(payload) { captured.updatePayloads.push(payload); return updateChain; },
     in(_col, ids) { captured.updatedIds = ids; return updateChain; },
     is() { return Promise.resolve({ error: null }); },
   };
@@ -56,7 +58,7 @@ function stub(rows) {
 }
 
 describe('drainReplies (FR-4 full-lane, AND-only query + JS filter)', () => {
-  it('scopes to target_session + read_at IS NULL, surfaces only reply rows, consumes them once', async () => {
+  it('scopes to target_session + acknowledged_at IS NULL, surfaces only reply rows, stamps read_at interactively', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const rows = [
       { id: 'r1', payload: { kind: 'coordinator_reply', reply_to: 'corr-1', body: 'classic reply' }, created_at: new Date().toISOString() },
@@ -66,18 +68,24 @@ describe('drainReplies (FR-4 full-lane, AND-only query + JS filter)', () => {
     const { supabase, captured } = stub(rows);
     await drainReplies(supabase, 'adam-session');
     expect(captured.eq.target_session).toBe('adam-session'); // lane scoped by the AND-only query
-    expect(captured.isNull).toContain('read_at');
+    // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-4): recoverable filter is
+    // acknowledged_at IS NULL — read_at is only a stamp, never a hiding filter.
+    expect(captured.isNull).toContain('acknowledged_at');
+    expect(captured.isNull).not.toContain('read_at');
     expect(captured.usedOr).toBe(false);                      // no brittle PostgREST .or()
-    expect(captured.updatedIds).toEqual(['r1', 'r2']);        // only the two reply rows consumed; r3 left alone
+    expect(captured.updatedIds).toEqual(['r1', 'r2']);        // only the two reply rows stamped; r3 left alone
+    // Interactive surfacing stamps read_at; acknowledged_at is NEVER written by the drain.
+    expect(captured.updatePayloads.some(p => 'read_at' in p)).toBe(true);
+    expect(captured.updatePayloads.some(p => 'acknowledged_at' in p)).toBe(false);
     logSpy.mockRestore();
   });
 
-  it('reports cleanly when there are no unread directed replies', async () => {
+  it('reports cleanly when there are no unacked directed replies', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const { supabase, captured } = stub([{ id: 'x', payload: { kind: 'work_assignment' }, created_at: new Date().toISOString() }]);
     await drainReplies(supabase, 'adam-session');
-    expect(captured.updatedIds).toBeNull(); // nothing reply-shaped -> nothing consumed
-    expect(logSpy).toHaveBeenCalledWith('(no unread directed replies)');
+    expect(captured.updatedIds).toBeNull(); // nothing reply-shaped -> nothing stamped
+    expect(logSpy).toHaveBeenCalledWith('(no unacked directed replies)');
     logSpy.mockRestore();
   });
 });

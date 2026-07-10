@@ -1,0 +1,45 @@
+# EHG Operator App — Deep UI/UX Gap Report (Solo Chairman)
+
+**Date:** 2026-06-23. **By:** Adam (7-lens deep-dive `wf_bc4c163d-0de`, design-agent reviewers).
+**Frame:** the chairman is the SOLE user (single-operator tool; public signup disabled). Goes a layer *below* W0's surface inventory into interaction-flow, data-contract, and feedback defects. 52 gaps; evidence cited per finding.
+
+## Headline
+**Two apps wearing one logo, and the seams are exactly where the chairman makes his money.** The newest tier (V3 cockpit, decision queue/sheet, provenance badge) is genuinely high-bar — it honest-degrades and refuses to fabricate. Underneath sits a vestigial enterprise-SaaS layer (orphan routes, multi-user layer, demo/test pages in prod, a mock-data toggle wired to live hooks). Three themes:
+1. **The loop fractures at every drill-down** — briefing→decision→act breaks at each hop (read-only/404 detail, dead CRITICAL CTA, full chrome-swap on venture click).
+2. **Silent-wrong-data masquerading as honest-empty** — core panels query columns that don't exist, hard-error, and fall back to a *reassuring* "No ventures at risk"; the attention queue ranks off all-NULL fields.
+3. **The highest-stakes buttons are the most broken** — Go-Live / kill-gate override / run-stage POST to nonexistent endpoints; approve/reject silently rolls back with no toast.
+
+## HIGH gaps
+- **H1** ✅ FIXED (SD-EHG-PRODUCT-UIUX-REMEDIATION-001-B, PR #738, 2026-07-10). ~~Briefing decision click → read-only page on the wrong data source; **1 of 5 live pending decisions 404s** ("Decision Not Found"). Only the queue-table path can act.~~ Briefing click now opens the unified, actionable `DecisionGateDetailSheet`; live-verified the source view is a 7-branch/6-table union (this doc's original "5" undercounted it), and gated action buttons by `decision_type` so the RPC-uncovered branches (`flag_review` etc. — 75-of-78 live pending rows) show a review-only state instead of an erroring button. *(M)*
+- **H2** ✅ FIXED (SD-EHG-PRODUCT-UIUX-REMEDIATION-001-B, PR #738, 2026-07-10). ~~The #1 CRITICAL "Review Now" CTA links to a nonexistent route + full-reloads to the start.~~ Now a router `Link` to `/chairman/decisions?decision=:id`, opening the same actionable sheet as H1. *(S)*
+- **H3** ✅ FIXED (SD-EHG-PRODUCT-UIUX-REMEDIATION-001-B, PR #738, 2026-07-10). ~~Every venture drill-down hard-swaps the whole cockpit chrome (sidebar + attention rail vanish); no "back to decisions."~~ `/chairman/ventures/:id` is now `ChairmanShell`-nested (was a redirect-out); `VentureUnifiedDetail` gained an `embedded` mode suppressing its own sidebar. Standalone `/ventures/:id` unchanged. *(M-L)*
+- **H4** ✅ FIXED (SD-EHG-PRODUCT-UIUX-REMEDIATION-001-B, PR #738, 2026-07-10). ~~Command palette / global search / Cmd+K lost in the V3 rebuild (regression — exists only in legacy layout).~~ `useCommandK`/`FeatureSearch` now mounted in `ChairmanShell` with a visible topbar trigger. *(M)*
+- **H5** RetentionRisk/HealthHeatmap/Metrics/Operations query columns/FKs that **don't exist** (live-verified), hard-error, render reassuring "empty." Needs query repoint + stop swallowing errors + a CI schema-contract test. *(M)*
+- **H6** Launch / Stage-23 kill-gate override / run-stage POST to dead `/api/*`; **Stage-23 override fails 100% silently** (no else, no catch). Add error branches today; real endpoints next. *(S → M-L)*
+- **H7** Approve/reject/park give **no success and no error feedback** (optimistic vanish + silent rollback). *(S)*
+- **H8** Attention queue ranks off all-NULL fields; the real strand signal (`orchestrator_state`: 4 failed / 3 blocked) is buried in one icon. Rank off `orchestrator_state` + status + dwell. *(M)*
+- **H9** A Stage-26 venture that never deployed looks identical to one launched and earning — the one distinction the 26 stages exist to produce. *(M)*
+- **H10** The two existential metrics — distance-to-quit and distance-to-broke — have **zero instrumentation** (`netProfit={null}` hardcoded). The cockpit is *named* for survivability but can't answer either question. *(M)*
+
+## MEDIUM (selected)
+M1 no hero metric (~12 co-equal numbers; pending count shown 3× from 2 disagreeing sources) · M2 "Portfolio Value" $-card shows a team count · M3 the recommendation is buried last under a raw JSON dump; Pivot/Sunset/Exit all log as "reject" · M4 RetentionRisk fabricates "50→Medium" beside an honest gray heatmap; mislabeled (computes build-health) · M5 two competing toast systems; consequential writes give no confirmation · M6 provenance badge in 2/115 cockpit files, 0/8 panels · M7 OKR↔venture mapping is a fabricated cartesian product · M8 IA organized by engineering subsystem not operator verbs; 3 sidebars; 2 ventures lists; raw/phantom breadcrumbs · M9 high-value surfaces (Launch, Friday review, Research Lab, Exit Readiness) orphaned from nav · M10 blocked/failed ventures spin "Processing" forever.
+
+## REMOVE-CANDIDATES — "why is this even here?"
+| # | Surface | Why no purpose for the sole user | Action |
+|---|---------|----------------------------------|--------|
+| **R1** | **Mock-mode toggle wired to live hooks** (`?mock=true` / localStorage / **Ctrl+Shift+M**) | Can silently flip his cockpit to fabricated data behind a dismissible banner — opposite of decision-grade trust | **HARD-GATE** behind a build-time DEV flag so prod can't enter it |
+| **R2** | **Multi-user / team / board-members / collaboration** (`/team`, `/board/members`, `/notifications-collaboration`) | One permanent user; invites/roles/permissions are dead weight burying real controls | **REMOVE** + the nav entry |
+| **R3** | **25+ URL-only orphan routes** (`/rd-department`, `/executive-dashboard`, `/gap-analysis`, `/data-lifecycle`, …) | In no nav, linked nowhere; rot undetected | **REMOVE** dead ones; MERGE any keepers into real nav |
+| **R4** | **FirstRunWizard + mock-venture seeding** | Wipeable-localStorage gate that can **seed FAKE ventures** into his view — a data-trust attack | **REMOVE** from render path; keep tour as manual help only |
+| **R5** | **Demo/test/celebration pages in prod** (`/research-agents-demo`, `/phase2-testing`, `/platform-completion` trophy) | Dev/QA artifacts + self-congratulation, not decision tools | **REMOVE** from prod routes |
+| **R6** | **Security sextet + EVA-orchestration triplication + 2 dead imports** | 6 overlapping security views, 3 orchestration views, dead lazy imports | **MERGE** to one each; REMOVE dead imports |
+| **R7** | **Deprecated marketing landing archive** (`src/_deprecated/landing/*`) | Hero/testimonials/CTA meaningless for a logged-in solo operator; 6-mo window elapsed | **REMOVE** (git history is the archive) |
+| **R8** | **Dead nav-taxonomy links** (`/company-settings`, `/ai-agents`, `/mvp-engine`, … resolve to 404) | His search/catalog surfaces 404-links | **REMOVE** the dead hrefs |
+
+## Already solid (balanced)
+SurvivabilityCockpit honest-degrade is the gold standard · BuildMetricsCard provenance badge is the right primitive (reuse it) · the decision-queue machinery is well-built (defect is feedback, not engine) · make-truthful removed all `Math.random` mocks · stage gate machinery is mature · venture page itself is consolidated (the issue is the chrome *into* it).
+
+## Bottom line + recommended sequence
+Not "a few tweaks," not "burn it down" — a strong newest-tier cockpit bolted onto an unfinished migration, with systemic gaps clustered in (1) the decision loop not connecting end-to-end, (2) an inconsistent data-trust contract, (3) flagship actions that are theater. **Almost none requires net-new design — it's reuse + rewire + a decisive cleanup.**
+
+**Sequence:** (1) hard-gate mock mode + add error branches to the dead-endpoint actions *(immediate trust stops)* → (2) unify the decision surface + fix the CRITICAL CTA + add gate toasts *(the loop)* → (3) repoint the broken-schema panels + CI contract test + rank attention off `orchestrator_state` *(data trust)* → (4) nest the venture page in ChairmanShell + restore Cmd+K *(continuity)* → (5) the Section-3 cuts.

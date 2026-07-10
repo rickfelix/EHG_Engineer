@@ -12,10 +12,13 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { drainInbox } = require('../../scripts/adam-advisory.cjs');
 
-// Minimal chainable supabase mock: from().select().eq().is().order().limit() -> {data, error}
+// Minimal chainable supabase mock: from().select().eq().is().gte().order().limit() -> {data, error}
+// SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001: gte (window scope) + terminal lt (older-rows
+// head-count) added; the empty-lane wording changed 'no unread' -> 'no unacked'.
 function makeSupabase(rows) {
   const q = {
-    select: () => q, eq: () => q, is: () => q, order: () => q,
+    select: () => q, eq: () => q, is: () => q, gte: () => q, order: () => q,
+    lt: () => Promise.resolve({ count: 0, error: null }),
     limit: () => Promise.resolve({ data: rows, error: null }),
   };
   return { from: () => q };
@@ -31,19 +34,19 @@ describe('Adam inbox --quiet no-op suppression (SD-REFILL-00YJS6VB)', () => {
 
   it('quiet: empty lane prints NOTHING (silent no-op tick)', async () => {
     await drainInbox(makeSupabase([]), 'adam-sid', { quiet: true });
-    const noUnread = logSpy.mock.calls.flat().some((a) => String(a).includes('no unread'));
-    expect(noUnread).toBe(false);
+    const emptyLine = logSpy.mock.calls.flat().some((a) => String(a).includes('no unacked'));
+    expect(emptyLine).toBe(false);
   });
 
   it('non-quiet (manual): empty lane prints the confirmation line', async () => {
     await drainInbox(makeSupabase([]), 'adam-sid', { quiet: false });
-    const noUnread = logSpy.mock.calls.flat().some((a) => String(a).includes('no unread'));
-    expect(noUnread).toBe(true);
+    const emptyLine = logSpy.mock.calls.flat().some((a) => String(a).includes('no unacked'));
+    expect(emptyLine).toBe(true);
   });
 
   it('default (no opts) behaves like non-quiet — backward compatible', async () => {
     await drainInbox(makeSupabase([]), 'adam-sid');
-    const noUnread = logSpy.mock.calls.flat().some((a) => String(a).includes('no unread'));
-    expect(noUnread).toBe(true);
+    const emptyLine = logSpy.mock.calls.flat().some((a) => String(a).includes('no unacked'));
+    expect(emptyLine).toBe(true);
   });
 });

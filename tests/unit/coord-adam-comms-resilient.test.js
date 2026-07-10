@@ -401,26 +401,29 @@ describe('full-lane: isDirectiveRow / isReplyRow lane classification', () => {
 });
 
 describe('full-lane: drainInbox surfaces BOTH lanes + two-stage ACK', () => {
-  // AND-only server query (.eq target_session + .is read_at null), then a consume update; the mock
-  // returns the seeded rows on the 1st .from() and captures the read_at update on the 2nd.
+  // AND-only server query (.eq target_session + .is acknowledged_at null), then a surface-stamp
+  // update. SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001: drainInbox added a window scope (gte)
+  // and an advisory older-rows head-count (terminal .lt), so the mock routes by verb instead of
+  // by call order.
   function mockInboxSb(rows, captured) {
-    let callIdx = 0;
     return {
       from() {
-        callIdx += 1;
-        if (callIdx === 1) {
-          const q = {
-            select() { return q; }, eq() { return q; }, is() { return q; }, order() { return q; },
-            limit() { return Promise.resolve({ data: rows, error: null }); },
-          };
-          return q;
-        }
-        const u = {
-          update(patch) { captured.update = patch; return u; },
-          in(_k, ids) { captured.ids = ids; return u; },
-          is() { return Promise.resolve({}); },
+        const q = {
+          select() { return q; },
+          update(patch) { captured.update = patch; return q; },
+          eq() { return q; },
+          in(_k, ids) { captured.ids = ids; return q; },
+          is() { return q; },
+          gte() { return q; },
+          lt() { return Promise.resolve({ count: 0, error: null }); },
+          order() { return q; },
+          limit() { return Promise.resolve({ data: rows, error: null }); },
+          then(res, rej) {
+            // awaited chain terminal: the surface-stamp update resolves here
+            return Promise.resolve({ data: [], error: null }).then(res, rej);
+          },
         };
-        return u;
+        return q;
       },
     };
   }

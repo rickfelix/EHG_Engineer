@@ -17,6 +17,10 @@ function stub(rows) {
     select() { return selectChain; },
     eq() { return selectChain; },
     is() { return selectChain; },
+    // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001: drainInbox now window-scopes (gte)
+    // and runs an advisory older-rows head-count (terminal .lt).
+    gte() { return selectChain; },
+    lt() { return Promise.resolve({ count: 0, error: null }); },
     order() { return selectChain; },
     limit() { return Promise.resolve({ data: rows, error: null }); },
   };

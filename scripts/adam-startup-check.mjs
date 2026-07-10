@@ -55,7 +55,11 @@ export const ADAM_LOOPS = [
     label: 'Adam quiet-tick (folds inbox-monitor + belt-countdown + offer-help)',
     script: 'adam-quiet-tick.mjs',
     cron: '7,22,37,52 * * * *',
-    prompt: 'Run `node scripts/adam-quiet-tick.mjs`. It prints ONE QUIET_TICK summary line and self-paces. If the output contains NO QUIET_TICK_PING / QUIET_TICK_STALL_ALERT / QUIET_TICK_OUTBOUND_PROBE / QUIET_TICK_ERROR lines, this turn is a NO-OP: arm ScheduleWakeup(nextWakeSeconds from the output) and emit nothing else. Otherwise act on the flagged lines, then arm the wakeup.',
+    // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001: QUIET_TICK_INBOX_DIRECTIVE /
+    // QUIET_TICK_INBOX_ITEM are actionable tokens — omitting them from this allowlist
+    // would make an isolated directive arrival read as a NO-OP tick (the read-stamped-
+    // not-processed class rebuilt at the tick layer; caught by adversarial review of PR #5802).
+    prompt: 'Run `node scripts/adam-quiet-tick.mjs`. It prints ONE QUIET_TICK summary line and self-paces. If the output contains NO QUIET_TICK_PING / QUIET_TICK_STALL_ALERT / QUIET_TICK_OUTBOUND_PROBE / QUIET_TICK_INBOX_DIRECTIVE / QUIET_TICK_INBOX_ITEM / QUIET_TICK_ERROR lines, this turn is a NO-OP: arm ScheduleWakeup(nextWakeSeconds from the output) and emit nothing else. Otherwise act on the flagged lines (QUIET_TICK_INBOX_DIRECTIVE lines are HARD interrupts — process the directed row, then `node scripts/adam-advisory.cjs ack <id>`; QUIET_TICK_INBOX_ITEM lines are directed inbox rows to action or deliberately leave pending), then arm the wakeup.',
   },
   {
     key: 'governance-scan',

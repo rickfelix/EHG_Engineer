@@ -18,11 +18,21 @@
 require('dotenv').config();
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 
-// SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001: include 'chairman'. The full-lane inbox drain stamps
-// read_at=DELIVERED on directive-kind rows of ANY sender; this acked-NULL safety net must cover
-// chairman too, or a chairman directive is DELIVERED-then-dropped (harness-bug 43c2dee2: 5 chairman
-// messages auto-acked unseen — the exact blindspot this SD lineage closes). Sender-agnostic by intent.
+// SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001: include 'chairman'. (Kept exported for back-compat.)
+// SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-2): the query NO LONGER filters by this
+// list — the recoverable tier is UNIVERSAL across sender lanes (Solomon adam_advisory,
+// coordinator_reply, untyped rows included; the 2026-07-10 incident rows 9370edf1/06843d14/
+// 7bd9f12b were exactly the lanes the old sender allowlist hid). Only the handler-owned /
+// terminal ADAM_EXCLUDED_KINDS are excluded (never acked by design — they would pollute an
+// unacked tier forever).
 const DIRECTIVE_SENDERS = ['coordinator', 'orchestrator', 'chairman'];
+const { ADAM_EXCLUDED_KINDS } = require('../lib/fleet/worker-status.cjs');
+
+/** FR-2 — tier membership: any directed row except handler-owned/terminal kinds. PURE. */
+function isRecoverableTierRow(r) {
+  const k = r && r.payload && r.payload.kind;
+  return !(k != null && ADAM_EXCLUDED_KINDS.includes(k));
+}
 
 // Resolve the Adam session id: prefer CLAUDE_SESSION_ID when it is the Adam session, else fall
 // back to the most-recent active session tagged metadata.role='adam'. Returns null if none.
@@ -50,36 +60,41 @@ async function main() {
   const adamId = await resolveAdamSessionId(supabase);
   if (!adamId) { console.log('ADAM DIRECTIVE PEEK: no active Adam session found — nothing to surface.'); return; }
 
-  const { data: rows, error } = await supabase
+  // FR-2 (SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001): UNIVERSAL tier — no sender_type
+  // filter. Fetch wide (excluded kinds are filtered in JS since payload.kind is jsonb),
+  // render the oldest 20, and report the TRUE total so accumulation is always visible.
+  const { data: allRows, error } = await supabase
     .from('session_coordination')
-    .select('id, message_type, subject, body, payload, sender_type, sender_session, created_at, read_at, acknowledged_at')
+    .select('id, message_type, subject, body, payload, sender_type, sender_session, created_at, read_at, delivered_at, acknowledged_at')
     .eq('target_session', adamId)
-    .in('sender_type', DIRECTIVE_SENDERS)
     .is('acknowledged_at', null)
     .order('created_at', { ascending: true })
-    .limit(20);
+    .limit(200);
   if (error) { console.error('ERROR: directive query failed:', error.message); process.exit(1); }
+  const tier = (allRows || []).filter(isRecoverableTierRow);
+  const rows = tier.slice(0, 20);
 
-  console.log('ADAM DIRECTIVE PEEK — read-but-unacknowledged (read-only — stamps nothing)');
+  console.log('ADAM RECOVERY PEEK — unacknowledged directed rows, ALL sender lanes (read-only — stamps nothing)');
   console.log('─'.repeat(60));
-  if (!rows || !rows.length) { console.log('  (no unacknowledged coordinator/orchestrator directives to Adam)'); return; }
+  if (!rows.length) { console.log('  (no unacknowledged directed rows to Adam)'); return; }
 
-  console.log(`  ${rows.length} unacknowledged directive(s):`);
+  console.log(`  ${tier.length} unacknowledged row(s) total${tier.length > rows.length ? ` — showing oldest ${rows.length}` : ''}${(allRows || []).length === 200 ? ' (fetch cap hit — true total may be higher)' : ''}:`);
   for (const r of rows) {
-    const stage = r.read_at ? 'READ-unacked' : 'unread';
+    const kind = (r.payload && r.payload.kind) || '(untyped)';
+    const stage = r.read_at ? 'READ-unacked' : (r.delivered_at ? 'DELIVERED-unacked' : 'unread');
     const ageMin = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
     const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
     const body = (r.body || (r.payload && r.payload.body) || r.subject || '').replace(/\n/g, ' ');
     console.log(`  • ${r.id}`);
-    console.log(`      ${r.sender_type} | ${r.message_type} | ${stage} | ${ageStr} ago`);
+    console.log(`      ${r.sender_type || '?'} | ${kind} | ${r.message_type} | ${stage} | ${ageStr} ago`);
     console.log(`      ${body}`);
   }
   console.log('');
-  console.log('  These rows stay visible until acknowledged_at is stamped (genuine Adam action).');
+  console.log('  These rows stay visible until acknowledged_at is stamped (adam-advisory.cjs ack <id> at genuine action time).');
 }
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });
 }
 
-module.exports = { resolveAdamSessionId, DIRECTIVE_SENDERS };
+module.exports = { resolveAdamSessionId, DIRECTIVE_SENDERS, isRecoverableTierRow };
