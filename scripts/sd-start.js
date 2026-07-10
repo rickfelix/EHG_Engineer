@@ -101,6 +101,8 @@ const { verifyHandoffIntegrity: verifyHandoffIntegrityGate } = cjsRequire('../li
 const { evaluateCadenceGate } = cjsRequire('../lib/claim/gates/cadence-gate.cjs');
 const queueResolver = cjsRequire('../lib/claim/queue-resolver.cjs');
 const { classifyAllDispatchIneligibility } = cjsRequire('../lib/fleet/claim-eligibility.cjs');
+// SD-ARCH-HOTSPOT-SD-START-001 FR-7: dispatch-authorization polarity gate (flag-gated, observe-first).
+const dispatchAuthGate = cjsRequire('../lib/claim/gates/dispatch-authorization.cjs');
 
 // SD-FDBK-INFRA-DEPENDENCY-BLOCKS-ADVISORY-001: pre-claim DEPENDENCY gate.
 // Dependency BLOCKS were advisory-only (computed by the sweep/dashboard but never
@@ -906,6 +908,24 @@ async function main() {
     }
   }
 
+  // 2.9. SD-ARCH-HOTSPOT-SD-START-001 FR-7 (D8 placement): dispatch-authorization
+  // check AFTER every eligibility gate, immediately BEFORE the claim write — the
+  // observe-mode WOULD-DENY set equals exactly what enforce mode would block.
+  // Flag ladder absent => mode 'off' => zero lookups, byte-identical behavior.
+  {
+    const authMode = await dispatchAuthGate.resolveDispatchAuthMode();
+    const authVerdict = await dispatchAuthGate.evaluateDispatchAuthorization(sd, supabase, { mode: authMode });
+    if (authVerdict.would_deny) {
+      console.log(`${colors.yellow}${dispatchAuthGate.formatWouldDenyLine(effectiveId, authVerdict, 'sd_start_direct_claim')}${colors.reset}`);
+    }
+    if (!authVerdict.authorized) {
+      console.log(`\n${colors.red}${colors.bold}🚫 ${effectiveId} is not dispatch-authorized (born-un-authorized polarity, enforce mode)${colors.reset}`);
+      console.log(`   reason: ${authVerdict.reason}`);
+      console.log(`   ${colors.dim}Grant path: a chairman/coordinator dispatch_auth disposition (see scripts/backfill-dispatch-auth-grants.mjs for the cutover tool).${colors.reset}`);
+      process.exit(1);
+    }
+  }
+
   // 3. SD-LEO-INFRA-CLAIM-GUARD-001: Use centralized claimGuard
   // SD-LEO-INFRA-PRE-CLAIM-CHECK-001: Auto-fallback on claim conflict
   const autoProceed = await getSessionAutoProceed(session.session_id);
@@ -1117,6 +1137,26 @@ async function main() {
         }
 
         console.log(`${colors.dim}   Attempt ${fallbackAttempt}/${MAX_FALLBACK_ATTEMPTS}: Trying ${nextSD.sdKey} — ${nextSD.title}${colors.reset}`);
+
+        // SD-ARCH-HOTSPOT-SD-START-001 FR-7 (self-review gap fix): the fallback lane
+        // claims a DIFFERENT SD than the one gated at 2.9 — without this check the
+        // enforce mode would be bypassed (and observe would under-count) on exactly
+        // this lane. Skip-polarity here (iterate to the next candidate), matching
+        // checkin's self-claim semantics rather than sd-start's loud direct refusal.
+        {
+          const fbAuthMode = await dispatchAuthGate.resolveDispatchAuthMode();
+          const fbVerdict = await dispatchAuthGate.evaluateDispatchAuthorization({ sd_key: nextSD.sdKey }, supabase, { mode: fbAuthMode });
+          if (fbVerdict.would_deny) {
+            console.log(`${colors.yellow}${dispatchAuthGate.formatWouldDenyLine(nextSD.sdKey, fbVerdict, 'sd_start_fallback_claim')}${colors.reset}`);
+          }
+          if (!fbVerdict.authorized) {
+            skippedSDs.push({ sdKey: nextSD.sdKey, reason: `dispatch_auth: ${fbVerdict.reason}` });
+            excludeKeys.push(nextSD.sdKey);
+            console.log(`${colors.yellow}   ⚠️  ${nextSD.sdKey} not dispatch-authorized (enforce mode) — skipping${colors.reset}`);
+            continue;
+          }
+        }
+
         claimResult = await claimGuard(nextSD.sdKey, session.session_id, { autoFallback: true });
 
         if (claimResult.success) {
