@@ -113,13 +113,35 @@ describe('rankCandidates - tie-break order', () => {
     };
     // Without strategicContext, fit=50 (neutral) for both; composites will tie.
     // Tie-break should then look at parsed_revenue_high.
+    // SD-LEO-INFRA-STAGE0-EVIDENCE-GRADING-001: the revenue tie-break only fires on
+    // GROUNDED (E1+) revenue — these fixtures declare sourced evidence to exercise it.
+    const E1_REV = { monthly_revenue_potential: { grade: 'E1', sources: ['fixture://market-report'] } };
     const cands = [
-      v2Candidate({ name: 'LowRev', monthly_revenue_potential: '$1K', automation_feasibility: 8 }),
-      v2Candidate({ name: 'HighRev', monthly_revenue_potential: '$50K', automation_feasibility: 4 }),
+      v2Candidate({ name: 'LowRev', monthly_revenue_potential: '$1K', automation_feasibility: 8, evidence: E1_REV }),
+      v2Candidate({ name: 'HighRev', monthly_revenue_potential: '$50K', automation_feasibility: 4, evidence: E1_REV }),
     ];
     const ranked = rankCandidates(cands, { weights: w });
     expect(ranked[0].composite_score).toBe(ranked[1].composite_score); // confirm tie
     expect(ranked[0].name).toBe('HighRev');
+  });
+
+  test('E0 (ungrounded) revenue is EXCLUDED from tie-breaking — feasibility decides instead (spec R4)', () => {
+    const w = {
+      automation_feasibility: 0.0,
+      monthly_revenue_potential: 0.0,
+      target_market_specificity: 0.0,
+      strategic_fit: 1.0,
+      competition_level: 0.0,
+    };
+    // No declared evidence → revenue grade E0 → a hallucinated $50K cannot decide the tie.
+    const cands = [
+      v2Candidate({ name: 'LowRevHighFeas', monthly_revenue_potential: '$1K', automation_feasibility: 8 }),
+      v2Candidate({ name: 'HighRevLowFeas', monthly_revenue_potential: '$50K', automation_feasibility: 4 }),
+    ];
+    const ranked = rankCandidates(cands, { weights: w });
+    expect(ranked[0].composite_score).toBe(ranked[1].composite_score); // tie
+    expect(ranked[0].name).toBe('LowRevHighFeas'); // feasibility tie-break, NOT E0 revenue
+    expect(ranked[0].evidence_grades.monthly_revenue_potential).toBe('E0');
   });
 
   test('automation_feasibility DESC fires when composite + revenue both tie', () => {

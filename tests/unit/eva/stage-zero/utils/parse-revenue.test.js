@@ -8,16 +8,19 @@
 import { describe, test, expect } from 'vitest';
 import { parseRevenuePotential } from '../../../../../lib/eva/stage-zero/utils/parse-revenue.js';
 
+// SD-LEO-INFRA-STAGE0-EVIDENCE-GRADING-001: parsed LLM market numerics are stamped
+// E0 at origin (spec R4) — every expected shape carries grade:'E0'.
+
 describe('parseRevenuePotential — documented input forms (AC-6)', () => {
   const cases = [
-    { input: '$5K/month',          expected: { low: 5000,    high: 5000,    currency: 'USD' } },
-    { input: '$5,000-$50,000/mo',  expected: { low: 5000,    high: 50000,   currency: 'USD' } },
-    { input: '$1K+/month',         expected: { low: 1000,    high: 1000,    currency: 'USD' } },
-    { input: '$500-$2000 monthly', expected: { low: 500,     high: 2000,    currency: 'USD' } },
-    { input: '~$10K MRR',          expected: { low: 10000,   high: 10000,   currency: 'USD' } },
-    { input: '$2K+',               expected: { low: 2000,    high: 2000,    currency: 'USD' } },
-    { input: '$60K/year',          expected: { low: 5000,    high: 5000,    currency: 'USD' } },
-    { input: '$10M/year',          expected: { low: 833333,  high: 833333,  currency: 'USD' } },
+    { input: '$5K/month',          expected: { low: 5000,    high: 5000,    currency: 'USD', grade: 'E0' } },
+    { input: '$5,000-$50,000/mo',  expected: { low: 5000,    high: 50000,   currency: 'USD', grade: 'E0' } },
+    { input: '$1K+/month',         expected: { low: 1000,    high: 1000,    currency: 'USD', grade: 'E0' } },
+    { input: '$500-$2000 monthly', expected: { low: 500,     high: 2000,    currency: 'USD', grade: 'E0' } },
+    { input: '~$10K MRR',          expected: { low: 10000,   high: 10000,   currency: 'USD', grade: 'E0' } },
+    { input: '$2K+',               expected: { low: 2000,    high: 2000,    currency: 'USD', grade: 'E0' } },
+    { input: '$60K/year',          expected: { low: 5000,    high: 5000,    currency: 'USD', grade: 'E0' } },
+    { input: '$10M/year',          expected: { low: 833333,  high: 833333,  currency: 'USD', grade: 'E0' } },
   ];
 
   test.each(cases)('parses "$input" → low/high', ({ input, expected }) => {
@@ -49,46 +52,46 @@ describe('parseRevenuePotential — null fallback (no throws)', () => {
   test('does not throw on weird unicode', () => {
     expect(() => parseRevenuePotential('💰 $5K')).not.toThrow();
     // The regex still extracts $5K → 5000
-    expect(parseRevenuePotential('💰 $5K')).toEqual({ low: 5000, high: 5000, currency: 'USD' });
+    expect(parseRevenuePotential('💰 $5K')).toEqual({ low: 5000, high: 5000, currency: 'USD', grade: 'E0' });
   });
 });
 
 describe('parseRevenuePotential — yearly normalization', () => {
   test('yearly is divided by 12', () => {
-    expect(parseRevenuePotential('$120K/year')).toEqual({ low: 10000, high: 10000, currency: 'USD' });
+    expect(parseRevenuePotential('$120K/year')).toEqual({ low: 10000, high: 10000, currency: 'USD', grade: 'E0' });
   });
 
   test('annual is divided by 12', () => {
-    expect(parseRevenuePotential('$60K annually')).toEqual({ low: 5000, high: 5000, currency: 'USD' });
+    expect(parseRevenuePotential('$60K annually')).toEqual({ low: 5000, high: 5000, currency: 'USD', grade: 'E0' });
   });
 
   test('p.a. is treated as yearly', () => {
-    expect(parseRevenuePotential('$24K p.a.')).toEqual({ low: 2000, high: 2000, currency: 'USD' });
+    expect(parseRevenuePotential('$24K p.a.')).toEqual({ low: 2000, high: 2000, currency: 'USD', grade: 'E0' });
   });
 
   test('default is monthly when ambiguous', () => {
-    expect(parseRevenuePotential('$10K')).toEqual({ low: 10000, high: 10000, currency: 'USD' });
+    expect(parseRevenuePotential('$10K')).toEqual({ low: 10000, high: 10000, currency: 'USD', grade: 'E0' });
   });
 });
 
 describe('parseRevenuePotential — range detection', () => {
   test('hyphen-separated range', () => {
-    expect(parseRevenuePotential('$1K-$5K')).toEqual({ low: 1000, high: 5000, currency: 'USD' });
+    expect(parseRevenuePotential('$1K-$5K')).toEqual({ low: 1000, high: 5000, currency: 'USD', grade: 'E0' });
   });
 
   test('"to" separated range', () => {
-    expect(parseRevenuePotential('$1,000 to $5,000')).toEqual({ low: 1000, high: 5000, currency: 'USD' });
+    expect(parseRevenuePotential('$1,000 to $5,000')).toEqual({ low: 1000, high: 5000, currency: 'USD', grade: 'E0' });
   });
 
   test('comma-numeric ranges parsed correctly', () => {
-    expect(parseRevenuePotential('$5,000-$50,000/mo')).toEqual({ low: 5000, high: 50000, currency: 'USD' });
+    expect(parseRevenuePotential('$5,000-$50,000/mo')).toEqual({ low: 5000, high: 50000, currency: 'USD', grade: 'E0' });
   });
 
   test('decimal shorthand: $5.5K', () => {
-    expect(parseRevenuePotential('$5.5K/month')).toEqual({ low: 5500, high: 5500, currency: 'USD' });
+    expect(parseRevenuePotential('$5.5K/month')).toEqual({ low: 5500, high: 5500, currency: 'USD', grade: 'E0' });
   });
 
   test('billion shorthand: $2B/year', () => {
-    expect(parseRevenuePotential('$2B/year')).toEqual({ low: 166666667, high: 166666667, currency: 'USD' });
+    expect(parseRevenuePotential('$2B/year')).toEqual({ low: 166666667, high: 166666667, currency: 'USD', grade: 'E0' });
   });
 });

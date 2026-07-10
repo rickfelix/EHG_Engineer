@@ -102,12 +102,15 @@ describe('resolveActivePosture — fail-closed (FR-2)', () => {
 describe('posture consumption (FR-3)', () => {
   const v2 = '2025-12-trend-scanner-v2';
   const candidates = [
-    // Revenue monster: high revenue, middling automation, vague market.
-    { name: 'RevenueMonster', prompt_version: v2, automation_feasibility: 5, monthly_revenue_potential: '$500K/month', target_market: 'everyone', competition_level: 'medium' },
-    // Simple bot: highly automatable, specific market, no revenue estimate at all
-    // (revenue01=0 — under Phase-2's 0.40 revenue weight this must lose; under
-    // Phase-1's 0.0 revenue weight it must win on simplicity).
-    { name: 'SimpleBot', prompt_version: v2, automation_feasibility: 10, target_market: 'B2B SaaS startups with 50-200 employees in fintech', competition_level: 'low' },
+    // Revenue monster: huge GROUNDED revenue (declared E1 with a source, since
+    // SD-LEO-INFRA-STAGE0-EVIDENCE-GRADING-001 flattens ungrounded E0 revenue),
+    // middling automation, vague market, low competition.
+    { name: 'RevenueMonster', prompt_version: v2, automation_feasibility: 5, monthly_revenue_potential: '$500K/month', target_market: 'everyone', competition_level: 'low', evidence: { monthly_revenue_potential: { grade: 'E1', sources: ['fixture://market-sizing-report'] } } },
+    // Simple bot: highly automatable, specific market, tiny GROUNDED revenue
+    // (process-proving scale — under Phase-2's 0.40 revenue weight this must lose
+    // to the grounded revenue monster; under Phase-1's 0.0 revenue weight it must
+    // win on simplicity).
+    { name: 'SimpleBot', prompt_version: v2, automation_feasibility: 10, monthly_revenue_potential: '$100/month', target_market: 'B2B SaaS startups with 50-200 employees in fintech', competition_level: 'low', evidence: { monthly_revenue_potential: { grade: 'E1', sources: ['fixture://pilot-invoice'] } } },
   ];
 
   test('rankCandidates without weights throws (no hardcoded posture constants)', () => {
