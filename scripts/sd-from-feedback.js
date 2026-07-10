@@ -20,8 +20,10 @@
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import readline from 'readline';
+import { pathToFileURL } from 'url';
 // SD-LEO-SDKEY-001: Centralized SD key generation
 import { generateSDKey } from './modules/sd-key-generator.js';
+import { isUntrustedOrigin, sanitizeUserText } from '../lib/factory/content-sanitizer.js';
 
 dotenv.config();
 
@@ -192,11 +194,14 @@ async function generateSdKey(feedback) {
 /**
  * Generate default smoke test steps from feedback
  */
-function generateDefaultSmokeTestSteps(feedback) {
+export function generateDefaultSmokeTestSteps(feedback) {
+  // FR-5 (SD-FDBK-FIX-LIVE-PROMPT-INJECTION-001): untrusted-origin title is quarantine-wrapped
+  // before landing in an EXEC agent's smoke_test_steps instruction text.
+  const stepTitle = isUntrustedOrigin(feedback) ? sanitizeUserText(feedback.title).content : feedback.title;
   const steps = [
     {
       step_number: 1,
-      instruction: `Navigate to the affected area: ${feedback.title}`,
+      instruction: `Navigate to the affected area: ${stepTitle}`,
       expected_outcome: 'Page loads without errors'
     },
     {
@@ -238,11 +243,20 @@ async function createSdFromFeedback(feedback, parentId = null) {
   // SD-LEO-FIX-CREATION-COLUMN-MAPPING-001: id=human-readable key per schema
   const sdKey = await generateSdKey(feedback);
 
+  // FR-5 (SD-FDBK-FIX-LIVE-PROMPT-INJECTION-001): untrusted-origin feedback text becomes a new
+  // SD's description -- read verbatim by a full-authority EXEC agent as its work instructions.
+  // Title is intentionally left unwrapped (short, low-risk, and wrapping would corrupt sd_key
+  // generation/display, which already ran via generateSdKey() above using the raw title).
+  const untrustedOrigin = isUntrustedOrigin(feedback);
+  const safeDescription = untrustedOrigin
+    ? sanitizeUserText(feedback.description || feedback.title).content
+    : (feedback.description || feedback.title);
+
   const sdData = {
     id: sdKey,  // Human-readable key (per schema: id=VARCHAR for main identifier)
     sd_key: sdKey,  // Same for backward compatibility
     title: feedback.title,
-    description: feedback.description || feedback.title,
+    description: safeDescription,
     rationale: `Created from feedback item. Source: ${feedback.source_type || 'manual'}. Original ID: ${feedback.id}`,
     sd_type: sdType,
     status: 'draft',
@@ -436,7 +450,13 @@ async function main() {
   }
 }
 
-main().catch(error => {
-  console.error('\n❌ Unexpected error:', error.message);
-  process.exit(1);
-});
+// Self-invoke guard (Windows-safe): without this, importing the module for any
+// purpose (e.g. a unit test) unconditionally ran main() as a side effect, which
+// then process.exit(1)'d outside a real CLI context. Discovered as a testability
+// blocker while adding untrusted-origin regression tests for this exact file.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch(error => {
+    console.error('\n❌ Unexpected error:', error.message);
+    process.exit(1);
+  });
+}

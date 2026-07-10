@@ -23,6 +23,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { getLLMClient } from '../../../lib/llm/client-factory.js';
 import { isMainModule } from '../../../lib/utils/is-main-module.js';
+import { isUntrustedOrigin, sanitizeUserText } from '../../../lib/factory/content-sanitizer.js';
 import 'dotenv/config';
 
 const VALID_CATEGORIES = ['bug', 'enhancement', 'question', 'noise'];
@@ -68,11 +69,18 @@ Do not include any other text.`;
 async function classifyWithLLM(item) {
   try {
     const client = getLLMClient({ purpose: 'classification' });
+    // Untrusted-origin (public-submitted) title/description is quarantine-wrapped
+    // before it reaches the LLM prompt, so it is read as DATA, never as INSTRUCTIONS.
+    const untrusted = isUntrustedOrigin(item);
+    const title = untrusted ? sanitizeUserText(item.title || 'No title').content : (item.title || 'No title');
+    const description = untrusted
+      ? sanitizeUserText((item.description || '').substring(0, 300)).content
+      : (item.description || '').substring(0, 300);
     const userPrompt = [
-      `Title: ${item.title || 'No title'}`,
+      `Title: ${title}`,
       `Category: ${item.category || 'unknown'}`,
       `Severity: ${item.severity || 'unknown'}`,
-      `Description: ${(item.description || '').substring(0, 300)}`,
+      `Description: ${description}`,
     ].join('\n');
 
     const result = await client.complete(SYSTEM_PROMPT, userPrompt, {
@@ -129,7 +137,7 @@ async function run() {
 
   const { data: items, error } = await supabase
     .from('feedback')
-    .select('id, title, description, category, severity, status, created_at')
+    .select('id, title, description, category, severity, status, created_at, source_type')
     .eq('status', 'new')
     .is('ai_triage_classification', null)
     .order('created_at', { ascending: true })

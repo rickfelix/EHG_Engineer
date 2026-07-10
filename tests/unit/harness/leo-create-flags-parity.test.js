@@ -36,7 +36,10 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
 
     it('createFromFeedback metadata propagates migration_reviewed=true when flag is set', () => {
       const idx = src.indexOf('async function createFromFeedback');
-      const body = src.slice(idx, idx + 5000);
+      // Window widened 5000->6500 (SD-FDBK-FIX-LIVE-PROMPT-INJECTION-001 added
+      // untrusted-origin sanitization lines earlier in the function body, pushing
+      // this spread further from the function start).
+      const body = src.slice(idx, idx + 6500);
       // Spread only when truthy
       expect(body).toMatch(/migrationReviewed\s*\?\s*\{\s*migration_reviewed:\s*true\s*\}/);
       expect(body).toMatch(/securityReviewed\s*\?\s*\{\s*security_reviewed:\s*true\s*\}/);
