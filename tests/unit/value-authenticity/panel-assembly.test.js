@@ -130,15 +130,24 @@ describe('value-authenticity panel assembly + bounded iterative review (L3)', ()
   });
 
   describe('runIterativeReview', () => {
+    it('throws without a reviewId (adversarial-review finding: prevents cross-review question_key collisions on generic question text)', async () => {
+      await expect(runIterativeReview({ question: 'q', stakesLevel: 'low', supabase: {} }))
+        .rejects.toThrow(/reviewId is required/);
+    });
+
     it('TS-7: cost-tiering -- a CRUD/nav question skips assemblePanel entirely and takes a single grounded pass', async () => {
       const assemblePanelFn = vi.fn();
       const runResearchFn = vi.fn().mockResolvedValue({ success: true, synthesis: {} });
       const result = await runIterativeReview({
-        question: 'user can view their order history in a list', stakesLevel: 'low', assemblePanelFn, runResearchFn, supabase: {},
+        question: 'user can view their order history in a list', reviewId: 'FR-cost-tiering', context: { extra: 'ctx' }, stakesLevel: 'low', assemblePanelFn, runResearchFn, supabase: {},
       });
       expect(result.mode).toBe('single_grounded_pass');
       expect(assemblePanelFn).not.toHaveBeenCalled();
       expect(runResearchFn).toHaveBeenCalled();
+      // adversarial-review finding: context must be stringified, never passed raw
+      const passedContext = runResearchFn.mock.calls[0][0].context;
+      expect(typeof passedContext).toBe('string');
+      expect(passedContext).not.toBe('[object Object]');
     });
 
     it('converges and stops immediately on round 1 without escalation when all responses agree and stakes is low', async () => {
@@ -148,7 +157,7 @@ describe('value-authenticity panel assembly + bounded iterative review (L3)', ()
       ];
       const assemblePanelFn = vi.fn().mockResolvedValue(agreeingResponses);
       const result = await runIterativeReview({
-        question: 'system generates a personalized pricing recommendation score', stakesLevel: 'low', maxRounds: 3, assemblePanelFn, supabase: {}, detectFamiliesFn: () => ['anthropic', 'openai'],
+        question: 'system generates a personalized pricing recommendation score', reviewId: 'FR-converge-round1', stakesLevel: 'low', maxRounds: 3, assemblePanelFn, supabase: {}, detectFamiliesFn: () => ['anthropic', 'openai'],
       });
       expect(result.terminated).toBe(true);
       expect(result.mode).toBe('converged');
@@ -167,6 +176,7 @@ describe('value-authenticity panel assembly + bounded iterative review (L3)', ()
 
       const result = await runIterativeReview({
         question: 'system generates a personalized pricing recommendation score',
+        reviewId: 'FR-bounded-iteration',
         stakesLevel: 'high',
         maxRounds: 3,
         assemblePanelFn,
@@ -211,6 +221,7 @@ describe('value-authenticity panel assembly + bounded iterative review (L3)', ()
 
       const result = await runIterativeReview({
         question: 'system generates a personalized pricing recommendation score',
+        reviewId: 'FR-converges-round2',
         stakesLevel: 'low',
         maxRounds: 3,
         assemblePanelFn,
@@ -234,6 +245,7 @@ describe('value-authenticity panel assembly + bounded iterative review (L3)', ()
 
       const result = await runIterativeReview({
         question: 'system generates a personalized pricing recommendation score',
+        reviewId: 'FR-mid-loop-judgment',
         stakesLevel: 'medium',
         maxRounds: 3,
         assemblePanelFn,
@@ -256,6 +268,7 @@ describe('value-authenticity panel assembly + bounded iterative review (L3)', ()
       recordDisposition.mockResolvedValue({ row: { id: 'disp-degraded', payload: { status: 'awaiting_disposition' } }, created: true });
       const result = await runIterativeReview({
         question: 'system generates a personalized pricing recommendation score',
+        reviewId: 'FR-degraded-mode',
         stakesLevel: 'low',
         maxRounds: 3,
         assemblePanelFn,
@@ -316,6 +329,7 @@ describe('value-authenticity panel assembly + bounded iterative review (L3)', ()
       const routeDivergenceFn = vi.fn().mockResolvedValue({ action: 'deep_research', result: {} });
       const result = await runIterativeReview({
         question: 'system generates a personalized pricing recommendation score based on WTP',
+        reviewId: 'TR-2',
         context: trTwoContext,
         stakesLevel: 'high',
         maxRounds: 3,

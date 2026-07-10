@@ -62,19 +62,50 @@ describe('value-authenticity divergence classifier-router (L4)', () => {
       expect(runResearchFn).toHaveBeenCalledWith(expect.objectContaining({ question: 'What was the US population in 2020?' }));
     });
 
+    it('adversarial-review finding: panelContext is stringified before reaching runResearchFn, never passed as a raw object (research-engine.js template-literal-concatenates context, silently rendering "[object Object]" for a raw object)', async () => {
+      const runResearchFn = vi.fn().mockResolvedValue({ success: true, synthesis: {} });
+      await routeDivergence(
+        { type: 'factual' },
+        { question: 'q', panelContext: { fr_id: 'TR-2', prd_text: 'some prd text' }, runResearchFn },
+      );
+      const passedContext = runResearchFn.mock.calls[0][0].context;
+      expect(typeof passedContext).toBe('string');
+      expect(passedContext).toContain('TR-2');
+      expect(passedContext).not.toBe('[object Object]');
+    });
+
+    it('an empty panelContext is passed as undefined, not a noisy "{}" string', async () => {
+      const runResearchFn = vi.fn().mockResolvedValue({ success: true, synthesis: {} });
+      await routeDivergence({ type: 'factual' }, { question: 'q', runResearchFn });
+      expect(runResearchFn.mock.calls[0][0].context).toBeUndefined();
+    });
+
     it('TS-2: judgment classification creates a decision-binding disposition row (chairman escalation)', async () => {
       const recordDispositionFn = vi.fn().mockResolvedValue({ row: { id: 'disp-1', payload: { status: 'awaiting_disposition' } }, created: true });
       const result = await routeDivergence(
         { type: 'judgment' },
-        { question: 'What pricing model?', supabase: {}, recordDispositionFn },
+        { question: 'What pricing model?', reviewId: 'FR-1', supabase: {}, recordDispositionFn },
       );
       expect(result.action).toBe('chairman_escalation');
-      expect(recordDispositionFn).toHaveBeenCalledWith({}, expect.objectContaining({ decisionType: 'ratification' }));
+      expect(recordDispositionFn).toHaveBeenCalledWith({}, expect.objectContaining({ decisionType: 'ratification', subject: { question: 'What pricing model?', reviewId: 'FR-1' } }));
       expect(result.disposition.payload.status).toBe('awaiting_disposition');
     });
 
+    it('adversarial-review finding: two different reviews with identical question text get DISTINCT disposition subjects (reviewId prevents collision)', async () => {
+      const recordDispositionFn = vi.fn().mockResolvedValue({ row: { id: 'disp-x' }, created: true });
+      const genericQuestion = 'system generates a personalized pricing recommendation score';
+      await routeDivergence({ type: 'judgment' }, { question: genericQuestion, reviewId: 'SD-A:FR-1', supabase: {}, recordDispositionFn });
+      await routeDivergence({ type: 'judgment' }, { question: genericQuestion, reviewId: 'SD-B:FR-3', supabase: {}, recordDispositionFn });
+      const subjects = recordDispositionFn.mock.calls.map((c) => JSON.stringify(c[1].subject));
+      expect(subjects[0]).not.toBe(subjects[1]);
+    });
+
     it('judgment route throws without a supabase client', async () => {
-      await expect(routeDivergence({ type: 'judgment' }, { question: 'q' })).rejects.toThrow(/supabase client is required/);
+      await expect(routeDivergence({ type: 'judgment' }, { question: 'q', reviewId: 'FR-1' })).rejects.toThrow(/supabase client is required/);
+    });
+
+    it('judgment route throws without a reviewId (prevents cross-review question_key collisions)', async () => {
+      await expect(routeDivergence({ type: 'judgment' }, { question: 'q', supabase: {} })).rejects.toThrow(/reviewId is required/);
     });
 
     it('TS-2: underspecified classification returns a re-spec instruction with no external call made', async () => {
