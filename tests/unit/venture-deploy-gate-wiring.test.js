@@ -132,6 +132,25 @@ describe('FR-3: verifyPagesUrlLive live-probe (TS-4)', () => {
     const supabase = mockSupabase({ stackDescriptor: LEGACY_PUBLISHED });
     const fetchImpl = vi.fn(async () => ({ status: 200 }));
     expect((await verifyPagesUrlLive({ supabase, ventureId: 'v1', fetchImpl })).satisfied).toBe(true);
+    // The probe must actually run on the legacy path — a skipped probe would
+    // also return satisfied:true and make this test's name a lie.
+    expect(fetchImpl).toHaveBeenCalled();
+  });
+
+  it('legacy publish URL that is DEAD is fail-closed (the transition path gets no probe exemption)', async () => {
+    const supabase = mockSupabase({ stackDescriptor: LEGACY_PUBLISHED });
+    const fetchImpl = vi.fn(async () => ({ status: 503 }));
+    const r = await verifyPagesUrlLive({ supabase, ventureId: 'v1', fetchImpl });
+    expect(r.satisfied).toBe(false);
+    expect(r.reason).toMatch(/not serving/);
+  });
+
+  it('a cross-origin redirect to a healthy 200 is fail-closed (off-host, shared safeHost semantics)', async () => {
+    const supabase = mockSupabase({ routedRows: [{ id: 'dep-1', url: 'https://live.example' }] });
+    const fetchImpl = vi.fn(async () => ({ status: 200, url: 'https://parked.other.example/' }));
+    const r = await verifyPagesUrlLive({ supabase, ventureId: 'v1', fetchImpl });
+    expect(r.satisfied).toBe(false);
+    expect(r.reason).toMatch(/off-host/);
   });
 
   it('no URL anywhere is fail-closed without probing', async () => {
