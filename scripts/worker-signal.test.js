@@ -2,7 +2,7 @@
 // scripts/worker-signal.cjs — type validation, redaction (M1), body slice (M2), CLI parsing
 
 import { describe, it, expect } from 'vitest';
-import { redact, parseArgs, REDACTION_PATTERNS, SIGNAL_TYPES, SEVERITIES, BODY_HARD_CAP, buildRequestPayload, buildSolomonConsultPayload, buildIntentPayload } from './worker-signal.cjs';
+import { redact, capBody, parseArgs, REDACTION_PATTERNS, SIGNAL_TYPES, SEVERITIES, BODY_HARD_CAP, buildRequestPayload, buildSolomonConsultPayload, buildIntentPayload } from './worker-signal.cjs';
 
 describe('WS-1: redact strips AWS access keys', () => {
   it('replaces AKIA pattern with REDACTED:AWS_KEY', () => {
@@ -103,6 +103,32 @@ describe('WS-12: redact + slice round-trip respects 4096 cap', () => {
     expect(sliced.length).toBeLessThanOrEqual(BODY_HARD_CAP);
     expect(sliced).toContain('[REDACTED:AWS_KEY]');
     expect(sliced).not.toContain('AKIAIOSFODNN7');
+  });
+});
+
+// QF-20260710-560: over-cap sends must hard-error, never silently clip (loss-proof-channel
+// violation — Solomon's FW-3 advisory tail was silently dropped this way).
+describe('QF-20260710-560: capBody rejects over-cap bodies instead of silently truncating', () => {
+  it('throws BODY_TOO_LONG for a redacted body over 4096 chars', () => {
+    const big = 'x'.repeat(4097);
+    expect(() => capBody(big)).toThrow(/exceeds 4096-char hard cap/);
+    try {
+      capBody(big);
+    } catch (e) {
+      expect(e.code).toBe('BODY_TOO_LONG');
+    }
+  });
+  it('does not throw for a body exactly at the cap', () => {
+    expect(() => capBody('x'.repeat(4096))).not.toThrow();
+  });
+  it('buildRequestPayload propagates the reject instead of truncating', () => {
+    expect(() => buildRequestPayload({ correlationId: 'c1', body: 'x'.repeat(4097) })).toThrow(/exceeds 4096-char hard cap/);
+  });
+  it('buildSolomonConsultPayload propagates the reject instead of truncating', () => {
+    expect(() => buildSolomonConsultPayload({ correlationId: 'c2', body: 'x'.repeat(4097) })).toThrow(/exceeds 4096-char hard cap/);
+  });
+  it('buildIntentPayload propagates the reject instead of truncating', () => {
+    expect(() => buildIntentPayload({ action: 'cancel-tree', targetSdKey: 'SD-X-001', body: 'x'.repeat(4097) })).toThrow(/exceeds 4096-char hard cap/);
   });
 });
 

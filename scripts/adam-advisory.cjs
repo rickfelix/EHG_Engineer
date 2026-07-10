@@ -16,7 +16,7 @@
  * scoops it) and NO payload.intent_action (so the deconfliction sweep ignores it).
  *
  * Builds on (does NOT duplicate) SD-LEO-INFRA-WORKER-CHECKIN-HANDSHAKE-001:
- * reuses scripts/worker-signal.cjs (redact, BODY_HARD_CAP, awaitCoordinatorReply),
+ * reuses scripts/worker-signal.cjs (redact, capBody, awaitCoordinatorReply),
  * lib/coordinator/resolve.cjs (getActiveCoordinatorId, isTwoWayV2Enabled),
  * lib/coordinator/dispatch.cjs (insertCoordinationRow), and the existing
  * scripts/coordinator-reply.cjs for the reply leg. No migration.
@@ -43,7 +43,7 @@
 
 const crypto = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
-const { redact, BODY_HARD_CAP, awaitCoordinatorReply } = require('./worker-signal.cjs');
+const { redact, capBody, awaitCoordinatorReply } = require('./worker-signal.cjs');
 const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled } = require('../lib/coordinator/resolve.cjs');
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 const { insertCoordinationRow, isSentinelTarget } = require('../lib/coordinator/dispatch.cjs');
@@ -187,9 +187,11 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
   if (Array.isArray(appliesToScopes) && appliesToScopes.length) payload.applies_to_scopes = appliesToScopes;
   if (body) {
     // Prefix the body with [<scope_key>] so a delivered-but-ignored advisory stays
-    // scannable by scope. Prefix BEFORE redact/slice so the tag survives the hard cap.
+    // scannable by scope. Prefix BEFORE the hard-cap check so the tag counts against it.
+    // QF-20260710-560: reject over-cap instead of silently clipping (this is the exact
+    // site that clipped Solomon's FW-3 advisory tail).
     const tagged = scopeKey ? `[${scopeKey}] ${String(body)}` : String(body);
-    payload.body = redact(tagged).slice(0, BODY_HARD_CAP);
+    payload.body = capBody(tagged);
   }
   if (correlationId) payload.correlation_id = correlationId; // replyable (always)
   if (expectsReply) payload.expects_reply = true;            // awaiting a sync reply (request mode only)

@@ -13,7 +13,8 @@
 //
 // Security (per security-agent CONDITIONAL_PASS, evidence id c8611924-1f5d-46f3-841c-4b8b270ab08b):
 //   M1: redact 6 secret patterns BEFORE write
-//   M2: slice body to 4096 chars AFTER redaction
+//   M2: hard-cap body at 4096 chars AFTER redaction — over-cap sends are REJECTED (exit 2),
+//       never silently clipped (QF-20260710-560; a silent clip is a loss-proof-channel violation)
 
 require('dotenv').config();
 const crypto = require('crypto');
@@ -38,6 +39,21 @@ const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.c
 const SIGNAL_TYPES = ['stuck', 'need-sweep', 'prd-ambiguous', 'gate-bug', 'spec-conflict', 'harness-bug', 'feedback', 'unfit', 'other'];
 const SEVERITIES = ['low', 'medium', 'high', 'critical'];
 const BODY_HARD_CAP = 4096;
+
+// QF-20260710-560: M2 used to silently .slice(0, BODY_HARD_CAP), dropping content with no
+// signal (Solomon's FW-3 advisory tail was clipped this way — a loss-proof-channel violation).
+// Hard-error instead: caller must split the message, never lose the tail silently.
+function capBody(rawBody) {
+  const redacted = redact(String(rawBody));
+  if (redacted.length > BODY_HARD_CAP) {
+    const err = new Error(
+      `body exceeds ${BODY_HARD_CAP}-char hard cap (${redacted.length} chars after redaction) — split into ordered parts, do not send oversized`
+    );
+    err.code = 'BODY_TOO_LONG';
+    throw err;
+  }
+  return redacted;
+}
 
 // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-1 — typed INTENT broadcast.
 // Default-OFF feature flag. When OFF, the `intent` subcommand refuses to write so
@@ -85,7 +101,7 @@ function buildIntentPayload({ action, targetSdKey, targetTree, targetFiles, send
     // chase — always fire-and-forget (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
     reply_class: 'fire-and-forget'
   };
-  if (body) payload.body = redact(String(body)).slice(0, BODY_HARD_CAP);
+  if (body) payload.body = capBody(body);
   // INVARIANT: payload.signal_type must be ABSENT on INTENT rows.
   return payload;
 }
@@ -300,7 +316,7 @@ function buildRequestPayload({ correlationId, body, senderCallsign, repo }) {
     sender_callsign: senderCallsign || null,
     repo: repo || null
   };
-  if (body) payload.body = redact(String(body)).slice(0, BODY_HARD_CAP);
+  if (body) payload.body = capBody(body);
   // INVARIANT: no signal_type / no intent_action on request rows.
   return payload;
 }
@@ -476,7 +492,7 @@ function buildSolomonConsultPayload({ correlationId, body, senderCallsign, repo,
     triage_reason: triageReason || null,
     oracle_consult: true
   };
-  if (body) payload.body = redact(String(body)).slice(0, BODY_HARD_CAP);
+  if (body) payload.body = capBody(body);
   if (replyClass === 'reply-needed') payload.reply_expected_by = computeReplyExpectedBy(now, replyWindowMs);
   // INVARIANT: no signal_type / no intent_action on consult rows (off the friction router + intent sweep).
   return payload;
@@ -655,8 +671,8 @@ async function main() {
     process.exit(2);
   }
 
-  // M1: redact, then M2: hard-cap at 4096
-  const body = redact(rawBody).slice(0, BODY_HARD_CAP);
+  // M1: redact, then M2: hard-cap at 4096 (reject, never silently clip — QF-20260710-560)
+  const body = capBody(rawBody);
   const subtype = flags.reason ? redact(String(flags.reason)).slice(0, 200) : null;
 
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -750,7 +766,7 @@ async function main() {
 
 // Export internals for unit testing.
 module.exports = {
-  redact, parseArgs, REDACTION_PATTERNS, SIGNAL_TYPES, SEVERITIES, BODY_HARD_CAP,
+  redact, capBody, parseArgs, REDACTION_PATTERNS, SIGNAL_TYPES, SEVERITIES, BODY_HARD_CAP,
   // SD-REFILL-00KGB0SK — dedup link on a follow-up signal
   normalizeLinksSd,
   // FR-1 (SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001)
@@ -763,6 +779,10 @@ module.exports = {
 
 if (require.main === module) {
   main().catch(err => {
+    if (err && err.code === 'BODY_TOO_LONG') {
+      console.error('ERROR:', err.message);
+      process.exit(2);
+    }
     console.error('UNHANDLED:', err.message || err);
     process.exit(1);
   });
