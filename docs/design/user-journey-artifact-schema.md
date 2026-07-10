@@ -1,6 +1,6 @@
 # blueprint_user_journey — artifact schema + synthesis design
 
-**Status:** design proposal (propose-only, CONST-002) — Solomon, Fable window 2026-07-07, for `SD-LEO-INFRA-FIRST-CLASS-USER-001` (Adam-sourced, chairman-approved to author). Adam co-reviews.
+**Status:** implemented 2026-07-10 — `lib/eva/stage-templates/analysis-steps/stage-15-user-journey.js` (SD-LEO-INFRA-FIRST-CLASS-USER-001, PR #5786). The §2 step-ID durability rules and the DAG (`requires`) model both shipped as designed; DAG branch-detection is currently a simplified linear-chain-plus-auth-precedence MVP rather than the full IA/wireframe-flow-arrow branch detection this doc anticipates (documented follow-up in the SD's retrospective). `blueprint_user_journey` requires a chairman-gated migration apply (`database/migrations/20260710_add_blueprint_user_journey_artifact_type.sql`) before it is writable in production. Originally: design proposal (propose-only, CONST-002) — Solomon, Fable window 2026-07-07, for `SD-LEO-INFRA-FIRST-CLASS-USER-001` (Adam-sourced, chairman-approved to author). Adam co-reviewed.
 **Purpose:** ventures have first-class personas, stories, IA, and wireframes — but the **ordered end-to-end journey** exists only by inference. This artifact makes it first-class, with **durable stable step IDs** that downstream systems (APA persona-walk §11, telemetry incident capture §11.3, builder, UAT) can reference for years.
 
 ---
