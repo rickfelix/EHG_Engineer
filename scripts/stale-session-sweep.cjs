@@ -373,6 +373,24 @@ const passRegistryModule = require('../lib/sweep/pass-registry.cjs');
 const legacyFallback = require('../lib/sweep/legacy-fallback.cjs');
 const SWEEP_PASS_REGISTRY_ENABLED = process.env.SWEEP_PASS_REGISTRY !== 'off';
 
+// SD-LEO-INFRA-SWEEP-LEGACY-KILL-SWITCH-RETIRE-001: the un-owned-kill-switch class —
+// lib/sweep/legacy-fallback.cjs previously carried only a prose "if ever removed
+// post-rollout" note with no owner, no condition, no enumerated action. This record
+// makes retirement checkable rather than permanent-by-default. It is metadata only —
+// nothing reads it at runtime; a human (or a future automation) consults it to decide
+// when SWEEP_PASS_REGISTRY=off can be deleted.
+const SWEEP_PASS_REGISTRY_RETIREMENT = {
+  owner: 'coordinator (fleet-infra on-call)',
+  condition: 'SWEEP_PASS_REGISTRY has not been set to "off" in production for 30 consecutive ' +
+    'days AND tests/ci/sweep-legacy-twin-parity.test.js has stayed green for that entire ' +
+    'window (i.e. the three legacy twins never needed to diverge to stay correct) — ' +
+    'whichever is later.',
+  retirement_action: 'Remove the SWEEP_PASS_REGISTRY_ENABLED branch at all 7 gated call ' +
+    'sites in this file (collapse each to always call the registry-path function), delete ' +
+    'lib/sweep/legacy-fallback.cjs, delete tests/ci/sweep-legacy-twin-parity.test.js, delete ' +
+    'this SWEEP_PASS_REGISTRY_RETIREMENT record.',
+};
+
 // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2 — INTENT collision detection.
 // Reuse the INTENT payload key contract owned by the WRITER (worker-signal.cjs) so the
 // sweep reader and the broadcast writer cannot drift (pinned end-to-end by TS-WC-1).
@@ -1572,6 +1590,10 @@ async function main() {
   // SD-ARCH-HOTSPOT-SWEEP-001: EARLY_PASSES registry call (ordering is load-bearing —
   // must complete before dispatchWorkAssignmentsIfAllowed observes claim availability
   // later in this same tick). SWEEP_PASS_REGISTRY=off fallback calls the function directly.
+  // SD-LEO-INFRA-SWEEP-LEGACY-KILL-SWITCH-RETIRE-001: exempt from
+  // tests/ci/sweep-legacy-twin-parity.test.js — both branches call the SAME
+  // clearStaleQfClaims function directly (shared-function delegation, not a
+  // re-implementation), so they cannot diverge.
   if (SWEEP_PASS_REGISTRY_ENABLED) {
     await passRegistryModule.runPasses(passRegistryModule.EARLY_PASSES, { supabase, now, actions, warnings });
   } else {
@@ -1775,6 +1797,10 @@ async function main() {
   const sweepPassCtx = {
     supabase, now, classified, telemetryMap, actions, warnings, collisions, collisionsDetected,
   };
+  // SD-LEO-INFRA-SWEEP-LEGACY-KILL-SWITCH-RETIRE-001: exempt from
+  // tests/ci/sweep-legacy-twin-parity.test.js — both branches call the SAME
+  // splitCollidingSessions function directly (shared-function delegation), so they
+  // cannot diverge.
   if (SWEEP_PASS_REGISTRY_ENABLED) {
     // identity-collision-split only — claim-boundary-probe moved to its original 2b-3
     // position below (adversarial-review fix, PR #5755: running the probe BEFORE the
@@ -1816,6 +1842,10 @@ async function main() {
   // SD-ARCH-HOTSPOT-SWEEP-001: dispatched via the MAIN_PASSES registry at this original
   // 2b-3 position in BOTH modes (adversarial-review fix, PR #5755 — see the
   // identity-collision-split call site above for the ordering-parity rationale).
+  // SD-LEO-INFRA-SWEEP-LEGACY-KILL-SWITCH-RETIRE-001: exempt from
+  // tests/ci/sweep-legacy-twin-parity.test.js — both branches call the SAME
+  // runClaimBoundaryProbe function directly (shared-function delegation), so they
+  // cannot diverge.
   if (SWEEP_PASS_REGISTRY_ENABLED) {
     await passRegistryModule.runPasses([passRegistryModule.MAIN_PASSES[1]], sweepPassCtx);
   } else {
@@ -3112,3 +3142,7 @@ module.exports.splitCollidingSessions = splitCollidingSessions;
 // WORK_ASSIGNMENT dispatch so the single-writer gate is unit-testable (assert NO sender_type:'sweep'
 // insert happens when !allowed; insert happens when allowed).
 module.exports.dispatchWorkAssignmentsIfAllowed = dispatchWorkAssignmentsIfAllowed;
+
+// SD-LEO-INFRA-SWEEP-LEGACY-KILL-SWITCH-RETIRE-001: exported so its shape (owner/condition/
+// retirement_action all present and non-empty) is unit-testable.
+module.exports.SWEEP_PASS_REGISTRY_RETIREMENT = SWEEP_PASS_REGISTRY_RETIREMENT;
