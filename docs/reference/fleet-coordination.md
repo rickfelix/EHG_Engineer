@@ -1,10 +1,10 @@
 ---
 category: Reference
 status: Draft
-version: 1.1.0
+version: 1.2.0
 author: Claude Code
-last_updated: 2026-04-16
-tags: [fleet, coordinator, workers, sessions, coordination, monte-carlo, liveness]
+last_updated: 2026-07-10
+tags: [fleet, coordinator, workers, sessions, coordination, monte-carlo, liveness, reservation-fence]
 ---
 
 # Fleet Coordination System
@@ -215,6 +215,49 @@ Claims are tracked via `claude_sessions.sd_id`. A partial unique index enforces 
 | Release claim | `UPDATE claude_sessions SET sd_id = NULL, released_at = NOW()` |
 | Check claims | `SELECT * FROM claude_sessions WHERE sd_id IS NOT NULL AND status != 'terminated'` |
 | Fix stuck | `UPDATE claude_sessions SET sd_id=NULL, status='idle', released_at=NOW() WHERE session_id='...'` |
+
+## Coordinator Reservation Fence
+
+SD-LEO-INFRA-DISPATCH-AUTH-AUTO-AUTHORIZE-001-C: a coordinator can fence a specific
+SD to a specific session or worker tier for a time window, so the belt self-claim
+loop cannot grab it out from under an intended claimant. Fixes a live incident where
+a Fable-reserved worker seat belt-claimed a Sonnet-lane SD before a directed
+assignment could land.
+
+**Payload convention** — `payload.kind='coordinator_reservation'` on a
+`session_coordination` row with `message_type='INFO'`, `target_sd` set to the
+fenced SD key, `target_session=NULL` (broadcast — every candidate session must be
+able to read it, and it must never be auto-consumed by the first reader), and the
+native `expires_at` column for the window (default 1h). `payload` carries
+`reserved_for_session` and/or `reserved_for_tier` (the exemption). Registered in
+`PAYLOAD_KINDS` (`lib/fleet/worker-status.cjs`) — deliberately **not** in
+`DIRECTIVE_KINDS`, since a fence is a standing state row, not an action-required
+directive.
+
+**Read path** — `lib/checkin/steps/drain-reservations.cjs`, a checkin pipeline step
+positioned strictly after `adopt-orphan.cjs` and before `self-claim-gates.cjs` (so
+directed `WORK_ASSIGNMENT` dispatch, stranded/orphan recovery, and own-claim resume
+are structurally unaffected — they all run earlier). Read-only: never stamps
+`read_at`/`acknowledged_at` on the row it reads. Only honors rows whose
+`sender_session` matches the live active coordinator (`ctx.coordinatorId`) —
+defense-in-depth against a buggy (not malicious) worker self-fencing a claim
+monopoly. Fails open on any read error (never blocks the rest of self-claim).
+
+**Enforcement** — `coordinatorReservation(row, ctx)`, an axis in
+`lib/fleet/claim-eligibility.cjs`'s `INELIGIBILITY_AXES`, positioned before the
+tier axes (a reservation is more specific than the general worker-tier ladder).
+Self-compares `expires_at > now()` rather than trusting the row's continued
+existence — `cleanup_expired_coordination()` GC lags to the next
+stale-session-sweep tick, so an expired-but-not-yet-GC'd row must not still fence.
+Ctx-gated: absent `ctx.reservations` is byte-identical to pre-SD behavior for every
+other classifier caller (sweep, sd-start, directed-assign).
+
+**Worker breadcrumb** — when a tick actually skips a candidate due to an active
+fence, `worker-checkin.cjs`'s JSON output gains a `reservation_fences_skipped[]`
+array and the top-level `message` gets an explicit "deliberate, working as
+intended, no action needed" note, so an autonomous worker doesn't mistake a fence
+for a stuck belt and file a false RCA/`/signal stuck`. Purely additive — no new
+`action` enum value.
 
 ## Probabilistic Liveness (Monte Carlo)
 
