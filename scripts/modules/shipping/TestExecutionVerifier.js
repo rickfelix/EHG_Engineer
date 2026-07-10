@@ -140,24 +140,33 @@ export class TestExecutionVerifier {
 
   /**
    * Execute vitest and parse results.
+   *
+   * Uses --outputFile so the JSON report is written to a clean file rather
+   * than extracted from stdout — a test's own console.log emitting a brace
+   * before the real reporter block previously broke the indexOf/lastIndexOf
+   * substring parse, yielding a false "Test execution failed" (QF-20260710-717).
    */
   runTests() {
+    const outputFile = join(this.cwd, '.vitest-preflight-report.json');
+    let exitCode = 0;
     try {
-      const output = execSync('npx vitest run --reporter=json 2>&1', {
+      execSync(`npx vitest run --reporter=json --outputFile=${JSON.stringify(outputFile)}`, {
         cwd: this.cwd,
         encoding: 'utf8',
         timeout: TEST_TIMEOUT_MS,
         stdio: 'pipe'
       });
-
-      return this.parseTestOutput(output, 0);
     } catch (error) {
-      // execSync throws on non-zero exit code
-      const output = error.stdout || error.stderr || '';
-      const exitCode = error.status || 1;
-
-      return this.parseTestOutput(output, exitCode);
+      // execSync throws on non-zero exit code; the report file is still written.
+      exitCode = error.status || 1;
     }
+
+    let output = '';
+    try {
+      output = readFileSync(outputFile, 'utf8');
+    } catch { /* file missing — parseTestOutput falls back to exit code */ }
+
+    return this.parseTestOutput(output, exitCode);
   }
 
   /**
