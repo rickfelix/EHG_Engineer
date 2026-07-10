@@ -71,10 +71,14 @@ Exceptions: UPPERCASE standards (README.md, CLAUDE.md, etc.)
 }
 
 /**
- * Check if filename matches any exception pattern
+ * Check if filename matches any exception pattern. An exception may carry an
+ * optional path_prefix to scope it to a directory (e.g. auto-generated
+ * schema-reference docs named after literal DB table identifiers) — without
+ * it, the pattern applies repo-wide by basename alone, as before.
  */
-function isException(filename, exceptions) {
+function isException(filename, relativePath, exceptions) {
   for (const exc of exceptions) {
+    if (exc.path_prefix && !relativePath.startsWith(exc.path_prefix)) continue;
     try {
       const pattern = new RegExp(exc.pattern);
       if (pattern.test(filename)) {
@@ -133,7 +137,7 @@ function validateNaming(filePath, config, repoRoot) {
   const fileName = path.basename(filePath);
 
   // Check if file is an exception
-  const exceptionCheck = isException(fileName, config.exceptions);
+  const exceptionCheck = isException(fileName, relativePath, config.exceptions);
   if (exceptionCheck.matched) {
     return createResult(relativePath, 'valid', {
       exception_applied: true,
