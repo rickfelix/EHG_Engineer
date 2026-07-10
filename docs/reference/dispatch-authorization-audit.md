@@ -4,7 +4,7 @@
 **Status**: Approved
 **Version**: 1.0.0
 **Author**: Claude (EXEC, SD-LEO-INFRA-HANDOFF-DISPATCH-AUTHORIZATION-001)
-**Last Updated**: 2026-07-08
+**Last Updated**: 2026-07-10
 **Tags**: dispatch-authorization, claim-eligibility, kind-a, kind-b, fail-open, fail-closed
 
 ## Purpose
@@ -87,11 +87,26 @@ authorization) and is explicitly excluded above rather than silently folded in.
   `scripts/backfill-dispatch-auth-grants.mjs` (dry-run default, PRE-FLIP
   VERIFICATION must read 0 un-granted claimables before the enforce flip). The
   module header there is the authoritative cutover contract.
+  **UPDATE (SD-LEO-INFRA-DISPATCH-AUTH-AUTO-AUTHORIZE-001-B):** the observe-mode
+  would_deny signal was log-only (console.log via `formatWouldDenyLine`) until this
+  child SD, which added a durable, mint-path-segmented evidence write alongside it
+  (reuses `system_events`, `event_type='DISPATCH_AUTH_WOULD_DENY'`) at all 3 call
+  sites, plus `scripts/dispatch-auth-would-deny-report.mjs` for a per-mint-path
+  profile. It also extended `metadata.sourced_by` stamping to the two SD-creation
+  writers (`lib/eva/convergence-remediation-writers.js`,
+  `lib/eva/lifecycle-sd-bridge.js`) that previously omitted it, alongside the
+  already-stamping `refill-auto-promote.js` / `proposal-lanes.js`. This evidence is
+  the empirical input a future, still-unscoped SD would need to derive an
+  auto-authorize allowlist — deriving/shipping that allowlist, and flipping enforce,
+  both remain out of scope here exactly as this section already describes.
 
 ## Related
 
 - SD: `SD-LEO-INFRA-HANDOFF-DISPATCH-AUTHORIZATION-001`
+- SD: `SD-LEO-INFRA-DISPATCH-AUTH-AUTO-AUTHORIZE-001-B` (durable would_deny evidence
+  + `sourced_by` stamping coverage)
 - Primitive: `lib/decision-binding/disposition.js` (SD-1,
   `SD-LEO-INFRA-DECISION-BINDING-PRIMITIVE-001`)
 - Tests: `tests/unit/needs-coordinator-review-hold.test.js`,
-  `tests/unit/dispatch-auth-opt-in.test.js`
+  `tests/unit/dispatch-auth-opt-in.test.js`,
+  `tests/unit/claim/gates/dispatch-authorization.test.js`
