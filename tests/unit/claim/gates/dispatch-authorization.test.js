@@ -16,6 +16,8 @@ const {
   resolveDispatchAuthMode,
   evaluateDispatchAuthorization,
   formatWouldDenyLine,
+  recordWouldDenyEvidence,
+  WOULD_DENY_EVENT_TYPE,
   DISPATCH_AUTH_AUTHORITY_ALLOWLIST,
 } = require('../../../../lib/claim/gates/dispatch-authorization.cjs');
 
@@ -92,6 +94,39 @@ describe('evaluateDispatchAuthorization — TS-7/TS-8/TS-9', () => {
   });
 });
 
+describe('recordWouldDenyEvidence — SD-LEO-INFRA-DISPATCH-AUTH-AUTO-AUTHORIZE-001-B FR-1/FR-2', () => {
+  it('writes a system_events row with sd_id, event_type, and a payload segmented by lane + mint_path', async () => {
+    const inserted = [];
+    const supabase = { from: (table) => ({ insert: async (row) => { inserted.push({ table, row }); return { error: null }; } }) };
+    const sd = { sd_key: 'SD-X-001', metadata: { sourced_by: 'auto-refill' } };
+    await recordWouldDenyEvidence(supabase, 'SD-X-001', { reason: 'dispatch_auth_pending' }, 'checkin_self_claim', sd);
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0].table).toBe('system_events');
+    expect(inserted[0].row).toMatchObject({
+      event_type: WOULD_DENY_EVENT_TYPE,
+      sd_id: 'SD-X-001',
+      payload: { reason: 'dispatch_auth_pending', lane: 'checkin_self_claim', mint_path: 'auto-refill' },
+    });
+  });
+
+  it('falls back to mint_path="unknown" when the sd/metadata is unavailable (the sd-start fallback-claim lane)', async () => {
+    const inserted = [];
+    const supabase = { from: () => ({ insert: async (row) => { inserted.push(row); return { error: null }; } }) };
+    await recordWouldDenyEvidence(supabase, 'SD-Y-001', { reason: 'dispatch_auth_pending' }, 'sd_start_fallback_claim', null);
+    expect(inserted[0].payload.mint_path).toBe('unknown');
+  });
+
+  it('is fail-soft: a Supabase insert failure never throws (TR-2 — evidence recording must not affect the claim path)', async () => {
+    const supabase = { from: () => ({ insert: async () => { throw new Error('connection reset'); } }) };
+    await expect(recordWouldDenyEvidence(supabase, 'SD-Z-001', { reason: 'x' }, 'checkin_self_claim', null)).resolves.toBeUndefined();
+  });
+
+  it('is fail-soft on a returned (non-thrown) Supabase error too', async () => {
+    const supabase = { from: () => ({ insert: async () => ({ error: { message: 'boom' } }) }) };
+    await expect(recordWouldDenyEvidence(supabase, 'SD-Z-002', { reason: 'x' }, 'checkin_self_claim', null)).resolves.toBeUndefined();
+  });
+});
+
 describe('WIRING PINS (D8 placement + lane exemptions)', () => {
   const checkin = readFileSync(resolve(repoRoot, 'scripts/worker-checkin.cjs'), 'utf8');
   const sdStart = readFileSync(resolve(repoRoot, 'scripts/sd-start.js'), 'utf8');
@@ -143,6 +178,17 @@ describe('WIRING PINS (D8 placement + lane exemptions)', () => {
     // And exactly two in sd-start (direct claim + fallback lane).
     const sdStartHooks = (sdStart.match(/evaluateDispatchAuthorization\(/g) || []).length;
     expect(sdStartHooks).toBe(2);
+  });
+
+  it('SD-LEO-INFRA-DISPATCH-AUTH-AUTO-AUTHORIZE-001-B: recordWouldDenyEvidence is wired at all 3 would_deny call sites', () => {
+    expect(checkin).toMatch(/recordWouldDenyEvidence\(sb, d\.sd_key, authVerdict, 'checkin_self_claim', d\)/);
+    expect(sdStart).toMatch(/recordWouldDenyEvidence\(supabase, effectiveId, authVerdict, 'sd_start_direct_claim', sd\)/);
+    expect(sdStart).toMatch(/recordWouldDenyEvidence\(supabase, nextSD\.sdKey, fbVerdict, 'sd_start_fallback_claim', null\)/);
+    // Every recordWouldDenyEvidence call must be gated behind the same `would_deny` check as its
+    // sibling formatWouldDenyLine call (never fires on an authorized/off-mode verdict).
+    const recordCount = (checkin.match(/recordWouldDenyEvidence\(/g) || []).length
+      + (sdStart.match(/recordWouldDenyEvidence\(/g) || []).length;
+    expect(recordCount).toBe(3);
   });
 });
 

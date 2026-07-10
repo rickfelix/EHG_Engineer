@@ -917,6 +917,7 @@ async function main() {
     const authVerdict = await dispatchAuthGate.evaluateDispatchAuthorization(sd, supabase, { mode: authMode });
     if (authVerdict.would_deny) {
       console.log(`${colors.yellow}${dispatchAuthGate.formatWouldDenyLine(effectiveId, authVerdict, 'sd_start_direct_claim')}${colors.reset}`);
+      await dispatchAuthGate.recordWouldDenyEvidence(supabase, effectiveId, authVerdict, 'sd_start_direct_claim', sd);
     }
     if (!authVerdict.authorized) {
       console.log(`\n${colors.red}${colors.bold}🚫 ${effectiveId} is not dispatch-authorized (born-un-authorized polarity, enforce mode)${colors.reset}`);
@@ -1148,6 +1149,7 @@ async function main() {
           const fbVerdict = await dispatchAuthGate.evaluateDispatchAuthorization({ sd_key: nextSD.sdKey }, supabase, { mode: fbAuthMode });
           if (fbVerdict.would_deny) {
             console.log(`${colors.yellow}${dispatchAuthGate.formatWouldDenyLine(nextSD.sdKey, fbVerdict, 'sd_start_fallback_claim')}${colors.reset}`);
+            await dispatchAuthGate.recordWouldDenyEvidence(supabase, nextSD.sdKey, fbVerdict, 'sd_start_fallback_claim', null);
           }
           if (!fbVerdict.authorized) {
             skippedSDs.push({ sdKey: nextSD.sdKey, reason: `dispatch_auth: ${fbVerdict.reason}` });
