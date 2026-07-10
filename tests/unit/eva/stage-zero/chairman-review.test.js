@@ -213,6 +213,45 @@ describe('ChairmanReview', () => {
       expect(insertArg.seeded_from_venture_id).toBeNull();
     });
 
+    // CH-7 (QF-20260710-467): posture_version + weights_used must survive to the venture
+    // record instead of dying at creation — the R9 reproducibility chain's longest-retention
+    // stop.
+    it('persists posture_version/posture_phase_key/weights_used when the brief carries a posture stamp', async () => {
+      const mockSupabase = createMockSupabase();
+      const briefWithPosture = {
+        ...validBrief,
+        metadata: {
+          posture_version: 'discovery@v3',
+          posture_phase_key: 'discovery',
+          posture_criteria: { weights: { moat: 0.4, market: 0.6 } },
+        },
+      };
+      await persistVentureBrief(
+        { decision: 'ready', brief: briefWithPosture, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+      const insertArg = mockSupabase._mockChain.insert.mock.calls[0][0];
+      expect(insertArg.metadata.stage_zero.posture).toEqual({
+        posture_version: 'discovery@v3',
+        posture_phase_key: 'discovery',
+        weights_used: { moat: 0.4, market: 0.6 },
+      });
+    });
+
+    it('null-coalesces posture fields for a brief with no posture stamp (non-discovery paths)', async () => {
+      const mockSupabase = createMockSupabase();
+      await persistVentureBrief(
+        { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+      const insertArg = mockSupabase._mockChain.insert.mock.calls[0][0];
+      expect(insertArg.metadata.stage_zero.posture).toEqual({
+        posture_version: null,
+        posture_phase_key: null,
+        weights_used: null,
+      });
+    });
+
     it('should throw on DB error when inserting venture', async () => {
       const mockSupabase = createMockSupabase({
         single: vi.fn().mockResolvedValue({
