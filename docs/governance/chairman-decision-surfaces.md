@@ -2,6 +2,7 @@
 
 > SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-001 · 2026-06-11
 > Updated by SD-EHG-CONSOLE-QUEUE-POLLUTION-001 · 2026-07-10 (chairman-actionable predicate)
+> Updated by SD-LEO-INFRA-CHAIRMAN-DECISION-SURFACING-001 · 2026-07-10 (escalation reach + SLA dispatch)
 >
 > The 10 places a "the chairman needs to decide something" can live, and which
 > are covered by the unified queue (`chairman_unified_decisions` /
@@ -42,6 +43,32 @@
 | 9 | `session_coordination` | Table; coordinator↔worker message lane (questions, advisories, directives) | Coordinator/worker fleet | `payload->>kind` various; no uniform "awaiting chairman" kind | **Uncovered** — lane is agent-to-agent; genuinely-human questions are escalated via `coordinator-escalate-question.mjs`, which now lands in surfaces 1+4 (both covered) |
 | 10 | Todoist (external) | Chairman's personal task system (MCP) | Chairman/assistants externally | external API, not in our DB | **Uncovered** — external system of record; out of scope by design (the queue must not write to or mirror an external personal tool) |
 
+## Escalation reach and SLA dispatch (SD-LEO-INFRA-CHAIRMAN-DECISION-SURFACING-001, 2026-07-10)
+
+Two gaps closed, both on surface #1 (`chairman_decisions`):
+
+- **No raiser bypass**: `shouldAutoEscalate` (`lib/chairman/record-pending-decision.mjs`) previously fired the
+  standout on-creation email only when the caller passed `raisedBy==='adam'` — every producer that inserts
+  `chairman_decisions` directly (stage-gate machinery, coordinator escalations, event-bus handlers, etc.,
+  ~16 producer classes) structurally bypassed it, so a blocking pending decision from any of them had no
+  reliable path to the chairman. Widened: **any `blocking===true` row now escalates regardless of raiser**;
+  the `adam` + `session_question` path is preserved unchanged. Producer-by-producer coverage is pinned in
+  `tests/unit/chairman/all-paths-producers.test.js` (the Stage-0 ready-venture pause is the regression fixture).
+- **Dormant SLA backstop, now dispatched**: `lib/eva/chairman-sla-enforcer.js` (`enforceDecisionSLAs`) and its
+  predecessor `lib/eva/chairman-decision-timeout.js` had zero production call sites — the assumed 24h fallback
+  had never run once (registered-verifier-never-dispatched class). `scripts/cron/chairman-decision-sla-sweep.mjs`
+  + `.github/workflows/chairman-decision-sla-cron.yml` is now the named dispatcher, running the enforcer
+  **notify-only** (`blockOnViolation:false` — never mutates `blocking`) plus a dedicated blocking-row
+  grace-period sweep (the enforcer itself exempts blocking rows). Only the enforcer is armed;
+  `chairman-decision-timeout.js` is its documented predecessor and stays unscheduled to avoid double-escalation.
+- **Quiet-window race fixed**: `escalateChairmanDecision` previously stamped `brief_data.escalation_email_sent_at`
+  at spawn, before `adam-decision-email.mjs` checked the 23:00–05:00 ET quiet window — an item could be marked
+  sent but never delivered. The quiet-window check now runs before any stamp/spawn; suppressed rows stay
+  eligible for the next sweep pass.
+- **Sweep-side telemetry guard**: `lib/chairman/chairman-actionable.mjs` mirrors the console's chairman-actionable
+  allowlist (row #4's predicate above) for the JS-side sweep, with a documented superset — blocking rows escalate
+  by email even when a type (e.g. `stage_gate`) isn't in the console's own allowlist.
+
 ## Consumers (de-orphaning)
 
 - `scripts/chairman-decisions.mjs list|decide` — CLI (+ `/decisions` skill in
@@ -49,6 +76,9 @@
 - `scripts/adam-exec-summary.mjs` — daily chairman email ("Decisions awaiting
   you", top 10 with age + one-line recommendation; GitHub-Actions cron
   `adam-exec-email-cron.yml`). This is the ≥1-live-consumer validation condition.
+- `scripts/cron/chairman-decision-sla-sweep.mjs` — hourly (outside the quiet window) SLA notify +
+  blocking-row escalation sweep, dispatched by `.github/workflows/chairman-decision-sla-cron.yml`.
+  Liveness self-registers in `periodic_process_registry` (named activation trigger = the workflow file).
 
 ## Ordering semantics (`chairman_pending_decisions`)
 
