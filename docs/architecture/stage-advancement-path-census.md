@@ -59,6 +59,16 @@ service-role write is caught. **FR-7** (staged, chairman-gated) adds a `BEFORE U
 `ventures.current_lifecycle_stage` that enforces the gate regardless of RLS/service-role status --
 the only mechanism that genuinely closes this surface, not merely documents it.
 
+## Post-census addition (2026-07-10)
+
+**Path #16 — S20-26 harness forced-stage-set** (`scripts/harness/s20-run.mjs`): a DELIBERATE, self-reporting
+bypass used only by the simulated-run harness under `--advance-policy=forced-stage-set` and only for
+`is_demo` fixture ventures. The real gate block is journaled BEFORE any forced set (drivability evidence
+preserved), and the write is declared through the harness config-diff seam as the `forced_stage_set`
+divergence — unsanctioned use self-reports as `TEST_MODE_DIVERGENCE` in the run journal. Exists because
+S20/S23 declare unresolvable binding verifiers (no registered verifier; fail-closed since PR #5801), which
+no run output can satisfy. Disposition: deliberately exempt (test-instrument, fixture-scoped, journaled).
+
 ## Disposition summary
 
 - 100% disposition: 15 of 15 identified write sites (0 undispositioned).

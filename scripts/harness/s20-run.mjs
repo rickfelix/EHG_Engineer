@@ -83,6 +83,28 @@ export const POST_LAUNCH_DRIVERS = Object.freeze([
 
 export const ALL_O_REQUIREMENTS = Object.freeze(['O1', 'O2', 'O3', 'O4', 'O5', 'O6', 'O7', 'O8', 'O9', 'O10']);
 
+/**
+ * Per-band advance policy (smoke-run decode 2026-07-10):
+ * - 'real-gates' (DEFAULT): the band advances only through the live gate path;
+ *   a block is a drivability edge and the venture stays put (stage-mismatch
+ *   cascades downstream are themselves honest evidence).
+ * - 'forced-stage-set': REQUIRED for any run that must traverse S20/S23 today —
+ *   their declared gates are UNRESOLVABLE (prose with no registered verifier;
+ *   fail-closed since PR #5801), so nothing a run produces can satisfy them.
+ *   After journaling the real block, the runner performs an explicit stage set,
+ *   declared through the §H2 config-diff seam as the 'forced_stage_set'
+ *   divergence — sanctioned ONLY when the coordinator enumerates it pre-run.
+ */
+export const ADVANCE_POLICIES = Object.freeze(['real-gates', 'forced-stage-set']);
+export const FORCED_STAGE_SET_DIVERGENCE = 'forced_stage_set';
+
+/** The enumerated divergence set for a given advance policy. */
+export function allowedDivergencesFor(advancePolicy = 'real-gates') {
+  return advancePolicy === 'forced-stage-set'
+    ? Object.freeze([...ALLOWED_DIVERGENCES, FORCED_STAGE_SET_DIVERGENCE])
+    : ALLOWED_DIVERGENCES;
+}
+
 /** Injectable stepping clock (§H4): starts at a fixed ISO, advances on demand. */
 export function makeSteppingClock(startIso, stepHours = 24) {
   let t = Date.parse(startIso);
@@ -114,7 +136,7 @@ function makeClient() {
  * advanceStage (real exit gates). Returns { advanced } — a block is journaled
  * as an observation of the live gate, never thrown past the band.
  */
-export async function runBand({ supabase, journal, ventureId, stage, clock, logger = console, seams = {} }) {
+export async function runBand({ supabase, journal, ventureId, stage, clock, logger = console, seams = {}, advancePolicy = 'real-gates' }) {
   const oReqs = STAGE_O_MAP[stage] || [];
   const executeStage = seams.executeStage || (await import('../../lib/eva/stage-execution-engine.js')).executeStage;
   const advanceStage = seams.advanceStage || (await import('../../lib/eva/artifact-persistence-service.js')).advanceStage;
@@ -156,6 +178,33 @@ export async function runBand({ supabase, journal, ventureId, stage, clock, logg
       touched_tables: ['system_events'],
       detail: { blocked: true, at_clock: clock.now() },
     });
+
+    // 'forced-stage-set' policy: traverse past the block as an ENUMERATED
+    // divergence (the real block above stays journaled as the drivability
+    // evidence). Unsanctioned use self-reports: assertDivergenceAllowed lands
+    // it as TEST_MODE_DIVERGENCE when the policy's set doesn't include it.
+    if (advancePolicy === 'forced-stage-set') {
+      journal.assertDivergenceAllowed(FORCED_STAGE_SET_DIVERGENCE, [...allowedDivergencesFor(advancePolicy)], { stage, to: stage + 1 });
+      const doForce = seams.forceStageSet || (async () => {
+        const { error } = await supabase.from('ventures').update({ current_lifecycle_stage: stage + 1 }).eq('id', ventureId);
+        if (error) throw new Error(`forced stage set failed: ${error.message}`);
+      });
+      try {
+        await doForce({ supabase, ventureId, toStage: stage + 1 });
+        journal.append({
+          kind: 'observation',
+          event: `S${stage} -> S${stage + 1} FORCED stage set (sanctioned divergence — real gates remain blocked; see prior block observation)`,
+          o_requirements: oReqs,
+          touched_tables: ['ventures'],
+          detail: { forced: true },
+        });
+        journal.append({ kind: 'checkpoint', event: `band S${stage} complete (forced-stage-set policy)`, detail: { band_complete: stage } });
+        return { advanced: true, executed: true, forced: true };
+      } catch (fe) {
+        journal.append({ kind: 'finding', finding_type: 'CANNOT_DRIVE', event: `S${stage} forced stage set failed: ${String(fe.message).slice(0, 200)}`, o_requirements: oReqs, detail: { stage } });
+      }
+    }
+
     journal.append({ kind: 'checkpoint', event: `band S${stage} checkpoint (advance blocked — drivability edge)`, detail: { band_complete: stage } });
     return { advanced: false, executed: true };
   }
@@ -193,7 +242,7 @@ export async function runPostLaunchDrivers({ supabase, journal, ventureId, clock
 }
 
 /** §H6 containment sweep (run-level; teardown is the separate explicit step). */
-export async function containmentSweep({ supabase, journal, runId, ventureId }) {
+export async function containmentSweep({ supabase, journal, runId, ventureId, advancePolicy = 'real-gates' }) {
   // Fence 6: ghost-venture scheduler residue must be zero DURING the run too.
   for (const table of ['eva_scheduler_queue', 'eva_scheduler_metrics']) {
     const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq('venture_id', ventureId);
@@ -206,11 +255,12 @@ export async function containmentSweep({ supabase, journal, runId, ventureId }) 
     }
   }
   // Enumerated divergences the run exercises are journaled up-front for the diff auditor.
-  for (const d of ALLOWED_DIVERGENCES) journal.assertDivergenceAllowed(d, [...ALLOWED_DIVERGENCES], { declared_upfront: true });
+  const allowed = [...allowedDivergencesFor(advancePolicy)];
+  for (const d of allowed) journal.assertDivergenceAllowed(d, allowed, { declared_upfront: true });
   journal.append({ kind: 'fence_assertion', event: 'containment sweep complete', detail: { run_id: runId } });
 }
 
-export async function runArc({ runId, entryStage = 20, toStage = 26, clockStart, clockStepHours = 24, createFixtureFirst = false, sweepOnly = false, supabase: sb, seams = {}, baseDir } = {}) {
+export async function runArc({ runId, entryStage = 20, toStage = 26, clockStart, clockStepHours = 24, createFixtureFirst = false, sweepOnly = false, advancePolicy = 'real-gates', supabase: sb, seams = {}, baseDir } = {}) {
   const supabase = sb || makeClient();
   const clock = makeSteppingClock(clockStart || new Date().toISOString(), clockStepHours);
   const journal = new RunJournal(runId, { clock: clock.now, ...(baseDir ? { baseDir } : {}) });
@@ -228,13 +278,13 @@ export async function runArc({ runId, entryStage = 20, toStage = 26, clockStart,
     const done = completedBands(journal);
     for (let stage = entryStage; stage <= toStage; stage++) {
       if (done.has(stage)) { journal.append({ kind: 'lifecycle', event: `band S${stage} already complete — resumed past it (§H7)` }); continue; }
-      await runBand({ supabase, journal, ventureId, stage, clock, seams });
+      await runBand({ supabase, journal, ventureId, stage, clock, seams, advancePolicy });
       clock.step(); // injected-clock advancement between bands (never wall-clock waits)
     }
     await runPostLaunchDrivers({ supabase, journal, ventureId, clock, seams });
   }
 
-  await containmentSweep({ supabase, journal, runId, ventureId });
+  await containmentSweep({ supabase, journal, runId, ventureId, advancePolicy });
 
   // §H3 coverage close-out: every O-requirement observed or first-class-found.
   const coverage = journal.checkCoverage([...ALL_O_REQUIREMENTS]);
@@ -259,6 +309,7 @@ async function main() {
       clockStepHours: Number(flag('clock-step-hours', 24)),
       createFixtureFirst: args.includes('--create-fixture'),
       sweepOnly: args.includes('--sweep-only'),
+      advancePolicy: flag('advance-policy', 'real-gates'),
     });
     console.log(`HARNESS_RUN_PASS run=${res.runId} venture=${res.ventureId} covered=${res.coverage.covered.length}/${ALL_O_REQUIREMENTS.length} journal=${res.journalPath}`);
     process.exit(0);
