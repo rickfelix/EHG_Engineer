@@ -26,6 +26,11 @@ vi.mock('../../../lib/eva/artifact-persistence-service.js', () => ({
 import { renderLogo } from '../../../lib/eva/bridge/imagen-logo-renderer.js';
 import { writeArtifact } from '../../../lib/eva/artifact-persistence-service.js';
 import { StageExecutionWorker } from '../../../lib/eva/stage-execution-worker.js';
+// SD-ARCH-HOTSPOT-STAGE-WORKER-001: the S11 hooks relocated verbatim to
+// lib/eva/stage-handlers/s11.js. Tests invoke the relocated functions through the
+// worker's real _stageHandlerCtx so the ctx plumbing is exercised too. All
+// assertions unchanged (migrated, not loosened).
+import { namePromotion, logoGeneration } from '../../../lib/eva/stage-handlers/s11.js';
 
 function createMockLogger() {
   return { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -117,7 +122,7 @@ describe('FR-1: _postStageHook_S11_NamePromotion (provenance-guarded name promot
     });
     const worker = makeWorker(supabase, logger);
 
-    await worker._postStageHook_S11_NamePromotion(VID);
+    await namePromotion(worker._stageHandlerCtx(VID), VID);
 
     const updates = supabase._updateCalls.ventures || [];
     expect(updates).toHaveLength(1);
@@ -148,7 +153,7 @@ describe('FR-1: _postStageHook_S11_NamePromotion (provenance-guarded name promot
     });
     const worker = makeWorker(supabase, logger);
 
-    await worker._postStageHook_S11_NamePromotion(VID);
+    await namePromotion(worker._stageHandlerCtx(VID), VID);
 
     // No update must occur — the chairman edit is sticky forever.
     expect(supabase._updateCalls.ventures || []).toHaveLength(0);
@@ -172,7 +177,7 @@ describe('FR-1: _postStageHook_S11_NamePromotion (provenance-guarded name promot
     });
     const worker = makeWorker(supabase, logger);
 
-    await worker._postStageHook_S11_NamePromotion(VID);
+    await namePromotion(worker._stageHandlerCtx(VID), VID);
 
     expect(supabase._updateCalls.ventures || []).toHaveLength(0);
   });
@@ -196,7 +201,7 @@ describe('FR-1: _postStageHook_S11_NamePromotion (provenance-guarded name promot
     });
     const worker = makeWorker(supabase, logger);
 
-    await worker._postStageHook_S11_NamePromotion(VID);
+    await namePromotion(worker._stageHandlerCtx(VID), VID);
 
     const updates = supabase._updateCalls.ventures || [];
     expect(updates).toHaveLength(1);
@@ -212,7 +217,7 @@ describe('FR-1: _postStageHook_S11_NamePromotion (provenance-guarded name promot
     });
     const worker = makeWorker(supabase, logger);
 
-    await worker._postStageHook_S11_NamePromotion(VID);
+    await namePromotion(worker._stageHandlerCtx(VID), VID);
 
     expect(supabase._updateCalls.ventures || []).toHaveLength(0);
     // ventures table should not even be queried for an update
@@ -229,7 +234,7 @@ describe('FR-1: _postStageHook_S11_NamePromotion (provenance-guarded name promot
     });
     const worker = makeWorker(supabase, logger);
 
-    await expect(worker._postStageHook_S11_NamePromotion(VID)).resolves.toBeUndefined();
+    await expect(namePromotion(worker._stageHandlerCtx(VID), VID)).resolves.toBeUndefined();
     expect(supabase._updateCalls.ventures || []).toHaveLength(0);
     expect(logger.warn).toHaveBeenCalled();
   });
@@ -240,7 +245,7 @@ describe('FR-1: _postStageHook_S11_NamePromotion (provenance-guarded name promot
       storage: {},
     };
     const worker = makeWorker(supabase, logger);
-    await expect(worker._postStageHook_S11_NamePromotion(VID)).resolves.toBeUndefined();
+    await expect(namePromotion(worker._stageHandlerCtx(VID), VID)).resolves.toBeUndefined();
     expect(logger.warn).toHaveBeenCalledWith(
       '[S11-NamePromotion] hook errored (non-fatal):',
       'boom'
@@ -273,7 +278,7 @@ describe('FR-3: _postStageHook_S11_LogoGeneration (logoSpec source)', () => {
     });
     const worker = makeWorker(supabase, logger);
 
-    await worker._postStageHook_S11_LogoGeneration(VID);
+    await logoGeneration(worker._stageHandlerCtx(VID), VID);
 
     expect(renderLogo).toHaveBeenCalledTimes(1);
     expect(renderLogo).toHaveBeenCalledWith(logoSpec, expect.objectContaining({ ventureName: 'Stratum' }));
@@ -298,7 +303,7 @@ describe('FR-3: _postStageHook_S11_LogoGeneration (logoSpec source)', () => {
     });
     const worker = makeWorker(supabase, logger);
 
-    await worker._postStageHook_S11_LogoGeneration(VID);
+    await logoGeneration(worker._stageHandlerCtx(VID), VID);
 
     // no second venture_stage_work read, no render — the canonical artifact is the only logoSpec source
     expect(renderLogo).not.toHaveBeenCalled();
@@ -317,7 +322,7 @@ describe('FR-3: _postStageHook_S11_LogoGeneration (logoSpec source)', () => {
     });
     const worker = makeWorker(supabase, logger);
 
-    await worker._postStageHook_S11_LogoGeneration(VID);
+    await logoGeneration(worker._stageHandlerCtx(VID), VID);
 
     expect(renderLogo).not.toHaveBeenCalled();
     expect(writeArtifact).not.toHaveBeenCalled();
@@ -334,7 +339,7 @@ describe('FR-3: _postStageHook_S11_LogoGeneration (logoSpec source)', () => {
     });
     const worker = makeWorker(supabase, logger);
 
-    await worker._postStageHook_S11_LogoGeneration(VID);
+    await logoGeneration(worker._stageHandlerCtx(VID), VID);
 
     expect(renderLogo).not.toHaveBeenCalled();
     expect(writeArtifact).not.toHaveBeenCalled();
@@ -348,7 +353,7 @@ describe('FR-3: _postStageHook_S11_LogoGeneration (logoSpec source)', () => {
     });
     const worker = makeWorker(supabase, logger);
 
-    await worker._postStageHook_S11_LogoGeneration(VID);
+    await logoGeneration(worker._stageHandlerCtx(VID), VID);
 
     expect(renderLogo).not.toHaveBeenCalled();
   });

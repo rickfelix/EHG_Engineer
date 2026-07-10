@@ -121,13 +121,15 @@ describe('enrichFromVisionArch — return shape', () => {
 // refactor of the async caller doesn't quietly drop the orphan check.
 describe('QF-20260509-171: direct-args caller fail-fast on unresolved key', () => {
   it('leo-create-sd.js direct-args path refuses INSERT when missing.vision is true', () => {
-    const src = readFileSync(resolve(repoRoot, 'scripts', 'leo-create-sd.js'), 'utf8');
+    // SD-ARCH-HOTSPOT-LEO-CREATE-001: code moved verbatim to scripts/modules/leo-create-sd/direct-lane.js — pin follows the code
+    const src = readFileSync(resolve(repoRoot, 'scripts', 'modules', 'leo-create-sd', 'direct-lane.js'), 'utf8');
     expect(src).toMatch(/enrichResult\.missing\.vision/);
     expect(src).toMatch(/--vision-key.*not found in eva_vision_documents/);
   });
 
   it('leo-create-sd.js direct-args path refuses INSERT when missing.arch is true', () => {
-    const src = readFileSync(resolve(repoRoot, 'scripts', 'leo-create-sd.js'), 'utf8');
+    // SD-ARCH-HOTSPOT-LEO-CREATE-001: code moved verbatim to scripts/modules/leo-create-sd/direct-lane.js — pin follows the code
+    const src = readFileSync(resolve(repoRoot, 'scripts', 'modules', 'leo-create-sd', 'direct-lane.js'), 'utf8');
     expect(src).toMatch(/enrichResult\.missing\.arch/);
     expect(src).toMatch(/--arch-key.*not found in eva_architecture_plans/);
   });

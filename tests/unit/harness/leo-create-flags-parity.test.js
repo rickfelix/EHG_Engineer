@@ -8,12 +8,20 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const scriptPath = path.resolve(__dirname, '../../../scripts/leo-create-sd.js');
+// SD-ARCH-HOTSPOT-LEO-CREATE-001: code moved verbatim to lib/sd-creation/source-adapters/{feedback,qf}.js
+// and scripts/modules/leo-create-sd/direct-lane.js — pin follows the code (the CLI keeps the argv wiring;
+// the lane bodies live in the adapters, so the pinned source is the concatenation of all four files).
+const pinnedSources = [
+  path.resolve(__dirname, '../../../scripts/leo-create-sd.js'),
+  path.resolve(__dirname, '../../../lib/sd-creation/source-adapters/feedback.js'),
+  path.resolve(__dirname, '../../../lib/sd-creation/source-adapters/qf.js'),
+  path.resolve(__dirname, '../../../scripts/modules/leo-create-sd/direct-lane.js'),
+];
 
 describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creation paths', () => {
   let src;
   beforeAll(() => {
-    src = fs.readFileSync(scriptPath, 'utf-8');
+    src = pinnedSources.map(p => fs.readFileSync(p, 'utf-8')).join('\n');
   });
 
   describe('--from-feedback path', () => {
@@ -106,7 +114,9 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
     });
 
     it('withRetry is imported from the shared retry utility', () => {
-      expect(src).toMatch(/import \{ withRetry \} from ['"]\.\.\/lib\/eva\/stage-zero\/data-pollers\/retry\.js['"]/);
+      // SD-ARCH-HOTSPOT-LEO-CREATE-001: code moved verbatim to lib/sd-creation/source-adapters/qf.js —
+      // pin follows the code (the import specifier rebases from '../lib/eva/...' to '../../eva/...').
+      expect(src).toMatch(/import \{ withRetry \} from ['"]\.\.\/\.\.\/eva\/stage-zero\/data-pollers\/retry\.js['"]/);
     });
 
     it('exhausted retries throw an Error naming the already-created SD key and a manual recovery UPDATE', () => {

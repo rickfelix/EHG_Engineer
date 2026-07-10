@@ -15,12 +15,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '../../..');
 const worker = readFileSync(resolve(repoRoot, 'lib/eva/stage-execution-worker.js'), 'utf8');
 const dfe = readFileSync(resolve(repoRoot, 'lib/eva/decision-filter-engine.js'), 'utf8');
+// SD-ARCH-HOTSPOT-STAGE-WORKER-001: the S11 GvosProfile hook (home of the chairman_warning
+// audit insert) relocated verbatim to lib/eva/stage-handlers/s11.js — pin follows the code.
+const s11 = readFileSync(resolve(repoRoot, 'lib/eva/stage-handlers/s11.js'), 'utf8');
+const s15 = readFileSync(resolve(repoRoot, 'lib/eva/stage-handlers/s15.js'), 'utf8');
+const s17 = readFileSync(resolve(repoRoot, 'lib/eva/stage-handlers/s17.js'), 'utf8');
+// Negative (phantom-pattern-must-not-exist) pins scan the worker PLUS all relocated
+// handler code, so relocation cannot smuggle a phantom reference out of the pin's view.
+const combined = worker + s11 + s15 + s17;
 
 describe('phantom-column cleanup — in-scope sites fixed', () => {
   it('venture_stage_work upsert no longer references the phantom stage_number column', () => {
     // narrow to the venture_stage_work upsert (venture_stages.stage_number is a DIFFERENT, live column)
-    expect(worker).not.toMatch(/\bstage_number:\s*stageNumber/); // phantom upsert key (\b excludes p_stage_number RPC param)
-    expect(worker).not.toMatch(/onConflict:\s*'venture_id,stage_number'/); // phantom conflict target
+    expect(combined).not.toMatch(/\bstage_number:\s*stageNumber/); // phantom upsert key (\b excludes p_stage_number RPC param)
+    expect(combined).not.toMatch(/onConflict:\s*'venture_id,stage_number'/); // phantom conflict target
     // the real unique constraint is used for the upsert conflict target
     expect(worker).toMatch(/onConflict:\s*'venture_id,lifecycle_stage'/);
   });
@@ -32,13 +40,15 @@ describe('phantom-column cleanup — in-scope sites fixed', () => {
   });
 
   it('the dead legacy stage_data fallback is gone', () => {
-    expect(worker).not.toMatch(/\.select\('stage_data'\)/);
-    expect(worker).not.toMatch(/s11Work\?\.stage_data/);
+    expect(combined).not.toMatch(/\.select\('stage_data'\)/);
+    expect(combined).not.toMatch(/s11Work\?\.stage_data/);
   });
 
   it('audit_log insert conforms to the live schema (NOT NULL entity_type/entity_id, metadata-folded)', () => {
     // the chairman_warning audit insert must carry the required entity columns
-    const insertBlock = worker.slice(worker.indexOf("event_type: 'chairman_warning'"), worker.indexOf("event_type: 'chairman_warning'") + 600);
+    // (lives in the relocated S11 GvosProfile handler; assert it did NOT fork back into the worker)
+    expect(worker).not.toMatch(/event_type:\s*'chairman_warning'/);
+    const insertBlock = s11.slice(s11.indexOf("event_type: 'chairman_warning'"), s11.indexOf("event_type: 'chairman_warning'") + 600);
     expect(insertBlock).toMatch(/entity_type:\s*'venture'/);
     expect(insertBlock).toMatch(/entity_id:\s*ventureId/);
     // the former phantom values are folded into metadata (no standalone details: key)
@@ -50,7 +60,7 @@ describe('phantom-column cleanup — in-scope sites fixed', () => {
   });
 
   it('the chairman_decisions resolve update dropped the phantom resolved_at', () => {
-    expect(worker).not.toMatch(/resolved_at:\s*new Date/);
+    expect(combined).not.toMatch(/resolved_at:\s*new Date/);
   });
 });
 

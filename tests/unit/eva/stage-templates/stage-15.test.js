@@ -105,16 +105,20 @@ describe('stage-15.js - Design Studio template', () => {
       const iaIndex = fnSource.indexOf('generateInformationArchitecture');
       const wireframeIndex = fnSource.indexOf('analyzeStage15WireframeGenerator');
       const convergenceIndex = fnSource.indexOf('analyzeStage19VisualConvergence');
+      const journeyIndex = fnSource.indexOf('generateUserJourneys');
 
       expect(storyIndex).toBeGreaterThan(-1);
       expect(iaIndex).toBeGreaterThan(-1);
       expect(wireframeIndex).toBeGreaterThan(-1);
       expect(convergenceIndex).toBeGreaterThan(-1);
+      expect(journeyIndex).toBeGreaterThan(-1);
 
       // Assert ordering: UserStories < IA < Wireframes < Convergence
       expect(storyIndex).toBeLessThan(iaIndex);
       expect(iaIndex).toBeLessThan(wireframeIndex);
       expect(wireframeIndex).toBeLessThan(convergenceIndex);
+      // SD-LEO-INFRA-FIRST-CLASS-USER-001: journeys run after wireframes exist (needs screens as input)
+      expect(wireframeIndex).toBeLessThan(journeyIndex);
     });
 
     it('analysisStep is an async function', () => {

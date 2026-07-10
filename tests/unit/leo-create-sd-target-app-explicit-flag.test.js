@@ -31,7 +31,8 @@ const repoRoot = resolve(__dirname, '..', '..');
 
 describe('QF-20260509-986: target_application_explicit writer/consumer parity', () => {
   it('leo-create-sd.js writes metadata.target_application_explicit based on explicitTargetApp || VENTURE env', () => {
-    const src = readFileSync(resolve(repoRoot, 'scripts', 'leo-create-sd.js'), 'utf8');
+    // SD-ARCH-HOTSPOT-LEO-CREATE-001: code moved verbatim to lib/sd-creation/pipeline.js — pin follows the code
+    const src = readFileSync(resolve(repoRoot, 'lib', 'sd-creation', 'pipeline.js'), 'utf8');
     expect(src).toContain('target_application_explicit');
     // The flag must be truthy when explicitTargetApp OR VENTURE env supplied the value;
     // detectFromKeyChanges (path inference) MUST NOT count as explicit.
