@@ -46,7 +46,7 @@ const { isBuildForbiddenSession } = require('../lib/claim/build-forbidden-sessio
 const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cjs');
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate, also used by
 // scripts/stale-session-sweep.cjs CLAIM_FIX (closes the self_claim-vs-sweep writer-consumer-asymmetry).
-const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, parentLeadPending } = require('../lib/fleet/claim-eligibility.cjs');
+const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, coordinatorReservation, parentLeadPending } = require('../lib/fleet/claim-eligibility.cjs');
 // SD-ARCH-HOTSPOT-SD-START-001 FR-2: the CONVERGED dependency gate shared with scripts/sd-start.js
 // (one resolution truth — deps array shapes + blocked_on_sd fold + sd_key-OR-id lookup). This
 // consumer applies its native FAIL-CLOSED polarity via depsSatisfiedFromVerdict: skip on
@@ -1315,6 +1315,18 @@ async function runCheckin(sb, sessionId, opts = {}) {
       if (assigned && assigned.callsign) result.callsign = assigned.callsign;
     }
   } catch { /* fail-open: naming must NEVER turn a check-in into action=error */ }
+  // SD-LEO-INFRA-DISPATCH-AUTH-AUTO-AUTHORIZE-001-C (FR-4): when this tick actually skipped one
+  // or more belt candidates due to an active coordinator reservation, make that explicit in the
+  // top-level message regardless of which step ultimately resolved the tick (self_claimed,
+  // self_claimed_qf, idle, ...) -- an autonomous LLM worker reading only `message` must not
+  // mistake a deliberate fence for a stuck/broken belt and file a false RCA / `/signal stuck`.
+  // Purely additive: no new action value, absent/empty reservation_fences_skipped is a no-op.
+  try {
+    if (result && Array.isArray(result.reservation_fences_skipped) && result.reservation_fences_skipped.length && typeof result.message === 'string') {
+      const skippedKeys = result.reservation_fences_skipped.map((f) => f.sd).join(', ');
+      result.message = `${result.message} [Reservation fence: ${skippedKeys} skipped this tick by an active coordinator reservation — deliberate, working as intended, no action needed.]`;
+    }
+  } catch { /* fail-open: message augmentation must NEVER turn a check-in into action=error */ }
   return result;
 }
 
@@ -1449,7 +1461,7 @@ async function main() {
 // Steps destructure what they need from ctx.helpers instead of require()ing this file (which
 // would be circular). Every name below is either defined above in this file or imported at the
 // top (imports are referenced directly — never re-derived).
-const CHECKIN_HELPERS = { ws, tryClaim, ackMessage, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, classifyDispatchIneligibility, registerRollCall, rehydrateCallsign, selfClearQuarantine, mergeCheckinModelEffort, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isBuildForbiddenSession, ensureActiveBaseline, isCriticalQfJumpEligible, tryClaimDraftCandidate, baselinedCandidateEligible, isSdInFlight, selfClaimQuickFix, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, surfaceCoordinatorMessages, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, sortByDispatchRank, resolveWorkerTierRank, isTieringActive, fetchLowerTierBacklogData, ladderTopRank, fetchFableWindowActive, claimableForTier, getCommsActivitySignals, computeAdaptiveCadence, antiWinddownDirective, ASSIGNMENT_RECENCY_WINDOW_MS, TERMINAL_CLAIM_ERRORS, QF_CANDIDATE_LIMIT, SELF_CLAIM_CANDIDATE_LIMIT, DEFAULT_IDLE_WAKEUP_SECONDS };
+const CHECKIN_HELPERS = { ws, tryClaim, ackMessage, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, classifyDispatchIneligibility, coordinatorReservation, registerRollCall, rehydrateCallsign, selfClearQuarantine, mergeCheckinModelEffort, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isBuildForbiddenSession, ensureActiveBaseline, isCriticalQfJumpEligible, tryClaimDraftCandidate, baselinedCandidateEligible, isSdInFlight, selfClaimQuickFix, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, surfaceCoordinatorMessages, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, sortByDispatchRank, resolveWorkerTierRank, isTieringActive, fetchLowerTierBacklogData, ladderTopRank, fetchFableWindowActive, claimableForTier, getCommsActivitySignals, computeAdaptiveCadence, antiWinddownDirective, ASSIGNMENT_RECENCY_WINDOW_MS, TERMINAL_CLAIM_ERRORS, QF_CANDIDATE_LIMIT, SELF_CLAIM_CANDIDATE_LIMIT, DEFAULT_IDLE_WAKEUP_SECONDS };
 
 module.exports = { extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
 
