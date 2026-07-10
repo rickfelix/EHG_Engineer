@@ -1,0 +1,55 @@
+name: "Chairman decision SLA sweep (cron)"
+
+# SD-LEO-INFRA-CHAIRMAN-DECISION-SURFACING-001 — chairman-decision-timeout.js and
+# chairman-sla-enforcer.js had ZERO production call sites (registered-verifier-never-
+# dispatched class): the 24h SLA backstop everyone assumed had never run once, and
+# blocking pending decisions from non-adam producers had no machine path to the
+# chairman. This workflow is the named dispatcher: it runs the sweep, which invokes
+# enforceDecisionSLAs in NOTIFY-ONLY mode plus a blocking-row escalation pass through
+# the rate-capped decision-email seam. Static wiring pinned by
+# tests/unit/cron/chairman-decision-sla-wiring.test.js — renaming this file, the sweep
+# script, or the enforcer import fails CI.
+
+on:
+  schedule:
+    # Hourly at :15, EXCLUDING 03:00-09:59 UTC — the chairman quiet window is
+    # 23:00-05:00 America/New_York (03:00-09:00 UTC in EDT, 04:00-10:00 UTC in EST);
+    # skipping 03-09 UTC keeps every firing outside the window year-round. The
+    # escalation seam ALSO guards the quiet window in-process (FR-3), so this
+    # schedule is belt-and-suspenders, not the only protection.
+    - cron: '15 0-2,10-23 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  sweep:
+    name: SLA notify + blocking-row escalation sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      ESCALATION_GO_LIVE_CUTOFF: ${{ vars.ESCALATION_GO_LIVE_CUTOFF }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run sweep (--once)
+        run: node scripts/cron/chairman-decision-sla-sweep.mjs --once
