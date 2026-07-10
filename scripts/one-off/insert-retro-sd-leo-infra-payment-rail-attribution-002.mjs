@@ -148,7 +148,7 @@ const retro = {
 
 async function main() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
     console.error('SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY required');
     process.exit(1);
@@ -164,7 +164,7 @@ async function main() {
     .limit(1);
 
   if (existing && existing.length > 0) {
-    console.log(`SD_COMPLETION retrospective already exists (id: ${existing[0].id}, created_at: ${existing[0].created_at}) — skipping insert.`);
+    console.log(`SD_COMPLETION retrospective already exists (id: ${existing[0].id}, created_at: ${existing[0].created_at}) — no new row needed.`);
     return;
   }
 
