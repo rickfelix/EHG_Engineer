@@ -188,8 +188,14 @@ describe('TS-4: sim work cannot masquerade as real (shared helper)', () => {
 describe('TS-5: live mode demands external observations (fail-closed)', () => {
   it('null/absent observations fail closed; verified observations pass', () => {
     expect(evaluateModeEvidence({ mode: LIVE, observations: null }).pass).toBe(false);
-    expect(evaluateModeEvidence({ mode: LIVE, observations: { endpointStatus: 200, billingProductId: 'prod_1', telemetryRowCount: 3 } }).pass).toBe(true);
-    expect(evaluateModeEvidence({ mode: LIVE, observations: { endpointStatus: 200, billingProductId: 'prod_1', telemetryRowCount: 0 } }).pass).toBe(false);
+    expect(evaluateModeEvidence({ mode: LIVE, observations: { endpointStatus: 200, billingProductId: 'prod_1', telemetryRowCount: 3, gaugeWriterAlive: true } }).pass).toBe(true);
+    expect(evaluateModeEvidence({ mode: LIVE, observations: { endpointStatus: 200, billingProductId: 'prod_1', telemetryRowCount: 0, gaugeWriterAlive: true } }).pass).toBe(false);
+  });
+
+  // SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A (FR-5): new gauge_writer_alive check —
+  // endpoint + billing + telemetry all passing is no longer sufficient on its own.
+  it('fails when gaugeWriterAlive is false even though the other 3 checks pass', () => {
+    expect(evaluateModeEvidence({ mode: LIVE, observations: { endpointStatus: 200, billingProductId: 'prod_1', telemetryRowCount: 3, gaugeWriterAlive: false } }).pass).toBe(false);
   });
 });
 
