@@ -99,8 +99,11 @@ describe('analyzeNarrativeRisk', () => {
     const result = await analyzeNarrativeRisk(mockPathOutput, { llmClient: client, logger: silentLogger });
 
     expect(result.component).toBe('narrative_risk');
-    expect(result.nr_score).toBe(0);
+    // M6 (Delta-ledger 41a2e6da): a failed analysis must read as elevated risk (worst),
+    // not the safest possible band — nr_score is a higher-is-worse metric.
+    expect(result.nr_score).toBe(100);
     expect(result.nr_band).toBe('NR-Unknown');
+    expect(result._failed).toBe(true);
     expect(result.component_scores.decision_sensitivity).toBe(0);
     expect(result.component_scores.demand_distortion).toBe(0);
     expect(result.component_scores.hype_persistence).toBe(0);
@@ -118,8 +121,9 @@ describe('analyzeNarrativeRisk', () => {
     const result = await analyzeNarrativeRisk(mockPathOutput, { llmClient: client, logger: silentLogger });
 
     expect(result.component).toBe('narrative_risk');
-    expect(result.nr_score).toBe(0);
+    expect(result.nr_score).toBe(100);
     expect(result.nr_band).toBe('NR-Unknown');
+    expect(result._failed).toBe(true);
     expect(result.summary).toContain('Could not parse');
   });
 

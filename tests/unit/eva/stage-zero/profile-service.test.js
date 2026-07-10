@@ -149,7 +149,9 @@ describe('calculateWeightedScore', () => {
       moat_architecture: { moat_score: 90 },
       chairman_constraints: { verdict: 'pass' }, // 100
       time_horizon: { position: 'build_now' }, // 100
-      archetypes: { primary_confidence: 0.85 }, // 85
+      // C6 (Delta-ledger 41a2e6da): primary_confidence is a 0-100 SCALE value (archetypes.js
+      // emits e.g. 85 directly), not a 0-1 fraction — matches the real production shape.
+      archetypes: { primary_confidence: 85 }, // 85
       build_cost: { complexity: 'simple' }, // 90
       virality: { virality_score: 72 },
     };
@@ -240,17 +242,80 @@ describe('calculateWeightedScore', () => {
     );
     expect(now.total_score).toBe(100);
 
-    const soon = calculateWeightedScore(
-      { time_horizon: { position: 'build_soon' } },
+    // C6 (Delta-ledger 41a2e6da): 'build_soon' is a dead value — VALID_POSITIONS
+    // (time-horizon.js) can never emit it. 'window_closing' is the real third position
+    // that previously had no case and silently fell through to the generic 50 default.
+    const closing = calculateWeightedScore(
+      { time_horizon: { position: 'window_closing' } },
       { time_horizon: 1.0 }
     );
-    expect(soon.total_score).toBe(75);
+    expect(closing.total_score).toBe(60);
 
     const later = calculateWeightedScore(
       { time_horizon: { position: 'park_and_build_later' } },
       { time_horizon: 1.0 }
     );
     expect(later.total_score).toBe(25);
+  });
+});
+
+// SD-LEO-INFRA-SYNTHESIS-SCORING-HARDENING-001 — UNIFYING ACCEPTANCE (Solomon's clause,
+// Delta-ledger 41a2e6da): "NO scoring module may score >= neutral on its own FAILURE
+// path, and OUTAGE != EMPTY." Parameterized across every weighted component in the
+// zone, not just the components C5/C6 originally cited — the extractComponentScore
+// `_failed` check is a single chokepoint, so this proves the invariant holds
+// structurally for the whole zone, regardless of each component's own per-case switch
+// logic or its fallback object's specific (possibly score-inflating) placeholder fields.
+describe('calculateWeightedScore — zone-wide failure-path honesty (C6 UNIFYING ACCEPTANCE)', () => {
+  const NEUTRAL = 50;
+
+  test.each(VALID_COMPONENTS)('%s: a _failed:true result scores below neutral and is marked failed in the breakdown', (component) => {
+    const result = calculateWeightedScore(
+      { [component]: { _failed: true } },
+      { [component]: 1.0 },
+    );
+
+    expect(result.total_score).toBeLessThan(NEUTRAL);
+    expect(result.breakdown).toHaveLength(1);
+    expect(result.breakdown[0].failed).toBe(true);
+  });
+
+  test.each(VALID_COMPONENTS)('%s: a _failed:true result is NOT inflated by score-friendly placeholder fields', (component) => {
+    // Regression fixture for the exact C6 mechanism: a fallback object whose OTHER
+    // fields happen to look like a genuine high-scoring result (e.g. time_horizon's
+    // real default position:'build_now', a high verdict/complexity/confidence) must
+    // still score below neutral once _failed:true is set — the chokepoint must win
+    // regardless of what the rest of the object claims.
+    const scoreFriendlyButFailed = {
+      _failed: true,
+      relevance_score: 100,
+      composite_score: 100,
+      reframings: ['a'],
+      moat_score: 100,
+      verdict: 'pass',
+      position: 'build_now',
+      primary_confidence: 100,
+      complexity: 'simple',
+      virality_score: 100,
+      trajectory_score: 100,
+      agentic_fit_score: 100,
+    };
+    const result = calculateWeightedScore(
+      { [component]: scoreFriendlyButFailed },
+      { [component]: 1.0 },
+    );
+
+    expect(result.total_score).toBeLessThan(NEUTRAL);
+    expect(result.breakdown[0].failed).toBe(true);
+  });
+
+  test('a genuinely successful (non-failed) result is unaffected by the _failed chokepoint', () => {
+    const result = calculateWeightedScore(
+      { chairman_constraints: { verdict: 'pass' } },
+      { chairman_constraints: 1.0 },
+    );
+    expect(result.total_score).toBe(100);
+    expect(result.breakdown[0].failed).toBe(false);
   });
 });
 

@@ -44,6 +44,7 @@ describe('defaultEvaluator', () => {
 
     expect(result).toEqual({
       venture_score: 75,
+      venture_score_missing: false,
       chairman_confidence: 60,
       synthesis_quality: 80,
       variant_key: 'control',
@@ -58,10 +59,23 @@ describe('defaultEvaluator', () => {
     expect(result.synthesis_quality).toBe(0);
   });
 
+  // H7 (Delta-ledger 41a2e6da): venture_score_missing distinguishes "never computed"
+  // from "genuinely scored zero" — both previously collapsed to the same 0 via `|| 0`.
+  test('marks venture_score_missing when the field is absent, not when it is genuinely 0', () => {
+    const missing = defaultEvaluator({ metadata: {} }, controlVariant, mockDeps);
+    expect(missing.venture_score).toBe(0);
+    expect(missing.venture_score_missing).toBe(true);
+
+    const genuineZero = defaultEvaluator({ metadata: { venture_score: 0 } }, controlVariant, mockDeps);
+    expect(genuineZero.venture_score).toBe(0);
+    expect(genuineZero.venture_score_missing).toBe(false);
+  });
+
   test('handles null synthesisResult gracefully', () => {
     const result = defaultEvaluator(null, controlVariant, mockDeps);
 
     expect(result.venture_score).toBe(0);
+    expect(result.venture_score_missing).toBe(true);
     expect(result.variant_key).toBe('control');
   });
 });
@@ -79,6 +93,7 @@ describe('promptAwareEvaluator', () => {
     expect(getPrompt).not.toHaveBeenCalled();
     expect(result).toEqual({
       venture_score: 75,
+      venture_score_missing: false,
       chairman_confidence: 60,
       synthesis_quality: 80,
       variant_key: 'variant_b',

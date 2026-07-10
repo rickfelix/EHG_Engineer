@@ -117,6 +117,9 @@ describe('Modeling - generateForecast', () => {
     expect(result.confidence).toBe(0);
     expect(result.revenue_projections.year_1.realistic).toBe(0);
     expect(result.summary).toContain('Rate limited');
+    // H7 (Delta-ledger 41a2e6da): confidence:0 alone doesn't distinguish "genuinely
+    // scored zero" from "the forecast failed" — _failed makes that explicit.
+    expect(result._failed).toBe(true);
   });
 
   test('handles non-JSON response', async () => {
@@ -134,6 +137,7 @@ describe('Modeling - generateForecast', () => {
 
     expect(result.confidence).toBe(0);
     expect(result.summary).toContain('Could not parse');
+    expect(result._failed).toBe(true);
   });
 
   test('handles brief without synthesis metadata', async () => {
