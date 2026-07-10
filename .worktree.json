@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-ARCH-HOTSPOT-CHECKIN-001",
-  "expectedBranch": "feat/SD-ARCH-HOTSPOT-CHECKIN-001",
-  "createdAt": "2026-07-09T22:12:52.800Z",
+  "sdKey": "SD-ARCH-HOTSPOT-LEO-CREATE-001",
+  "expectedBranch": "feat/SD-ARCH-HOTSPOT-LEO-CREATE-001",
+  "createdAt": "2026-07-10T00:45:22.288Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }

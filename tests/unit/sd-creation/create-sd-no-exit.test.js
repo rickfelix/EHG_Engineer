@@ -21,7 +21,7 @@ vi.mock('../../../lib/supabase-client.js', () => {
       }
       return { data: null, error: null, count: 0 };
     };
-    const target = () => {};
+    const target = function proxyBase() { return undefined; }; // callable Proxy base, never invoked directly
     const proxy = new Proxy(target, {
       get(_t, prop) {
         if (prop === 'then') {
