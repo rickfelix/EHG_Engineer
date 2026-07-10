@@ -63,11 +63,23 @@ function fakeSb({ heldSd, assignmentSd, windDown, sdRow, qfRow }) {
   return {
     rpc: () => Promise.resolve({ data: { success: true }, error: null }),
     from(table) {
+      const eqFilters = {};
       const api = {
-        _t: table, select() { return this; }, eq() { return this; }, gte() { return this; },
+        _t: table, select() { return this; },
+        eq(col, val) { eqFilters[col] = val; return this; },
+        gte() { return this; },
         order() { return this; }, limit() { return this; },
         maybeSingle() {
           if (table === 'claude_sessions') return Promise.resolve({ data: { metadata: { role: 'worker', ...(windDown ? { wind_down: windDown } : {}) }, sd_key: heldSd }, error: null });
+          // SD-LEO-INFRA-CHECKIN-OWN-CLAIM-DETECT-001: findOwnSdClaim queries THIS table by
+          // (claiming_session_id, is_working_on) — a different query shape than the sd_key-keyed
+          // lookup (staleTerminal check, assignment-fitness check) below. This fixture never seeds
+          // a live SD-side own-claim, so that query shape must always miss (data: null) — otherwise
+          // it would spuriously match the sdRow fixture set up for the sd_key-keyed lookups and
+          // falsely resume into an SD the test never intended this session to own.
+          if (table === 'strategic_directives_v2' && 'claiming_session_id' in eqFilters) {
+            return Promise.resolve({ data: null, error: null });
+          }
           // QF-20260703-780: sdRow === null must mean "genuinely no row" (a QF-keyed or
           // phantom/typo'd-SD-keyed lookup), distinct from sdRow left unspecified (undefined).
           if (table === 'strategic_directives_v2') return Promise.resolve({ data: sdRow === undefined ? { status: 'in_progress' } : sdRow, error: null });
