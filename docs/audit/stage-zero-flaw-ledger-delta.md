@@ -2,7 +2,7 @@
 
 **Commission:** chairman burn-now, Leg B (467cd050), Fable seat Delta — territory: anti-stub / value-authenticity failure classes.
 **Spec:** `docs/design/stage-zero-greenfield-spec.md` (Solomon R1–R10; present on disk at audit time and preserved at commit `99f431b8a3b`).
-**Method:** two parallel evidence sweeps (synthesis zone; top-level/orchestrator zone) with verbatim file:line receipts; findings adjudicated and deduped by Delta; refuted candidates and NOT-FOUNDs listed per adversarial-verify discipline. **Checkpoint 1 of 2** — data-pollers/ + paths/ residual sweep lands in checkpoint 2.
+**Method:** three evidence sweeps (synthesis zone; top-level/orchestrator zone; data-pollers/paths/R5 zone) with verbatim file:line receipts; findings adjudicated and deduped by Delta; refuted candidates and NOT-FOUNDs listed per adversarial-verify discipline. **COMPLETE (checkpoints 1+2).** Checkpoint-2 findings appended below; final roll-up at end.
 **Consumer ground truth:** live entry chain is `scripts/stage-zero-queue-processor.js` → `stage-zero-orchestrator.js` → `synthesis/index.js runSynthesis` → `modeling.js` forecast → `chairman-review.js`; gates read `metadata.venture_score` via `lib/agents/modules/venture-state-machine/stage-gates.js:626-651`.
 
 ---
@@ -130,10 +130,69 @@ Posture/phase/weight-config concept; E0-E3 or any evidence-grade/source-of-numbe
 | No posture concept (R2) | **CONFIRMED** (C3) |
 | Scores not theses; no pre-registered kills (R3) | **CONFIRMED** (C7) |
 | Ungrounded LLM scoring (R4) | **CONFIRMED** (C2, H10) |
-| Silent web assumption (R5) | Deferred to checkpoint 2 (venture-stack-policy is outside this zone sweep) |
+| Silent web assumption (R5) | **CONFIRMED** (CP2: form_factor/PWA = 0 hits in lib/; web enforced only as a downstream prohibition at venture-stack-policy.js:56-57 + prompt bias at discovery-mode.js:438 and modeling.js:86 — no selection-time decision exists; app-store pollers ingest native-app signal into a web-only factory with no reconciling decision) |
 | No capability-envelope input (R6) | **CONFIRMED-with-nuance** (context block exists, gate does not) |
 | 17 synthesis modules unaudited vs R8 | **CONFIRMED and worse** (C4, C5, C6) |
 | Continuous background generation | **REFUTED** (on-demand queue) |
 
 ---
-*Checkpoint 1 committed by Delta (session 06fda730). Checkpoint 2: data-pollers/ + paths/ residual sweep (change-detector, significance-scorer, normalizer, countermeasure-engine, apple-rss/producthunt pollers, blueprint-browse, competitor-teardown, venture-reseeding, discovery-mode-versions) + R5 form-factor check.*
+
+# CHECKPOINT 2 — data-pollers/ + paths/ + R5 (appended)
+
+## CRITICAL (checkpoint 2)
+
+### C9 — Change detection queries a column that does not exist (`polled_at`)
+`data-pollers/change-detector.js:43,57` + `data-pollers/pipeline-orchestrator.js:72-76` select/order on `polled_at`; the real column is `scraped_at` (migration `20260222_..._app_rankings_table.sql:34`; `polled_at` appears in no migration). Every real run errors; change-detector logs-and-continues, pipeline-orchestrator **discards the error via destructuring** — the run reports 0 movements as if the market were quiet. (`discovery-mode.js:191` uses `scraped_at` correctly — the bug is local.)
+
+### C10 — Movement detection is structurally impossible: the upsert destroys the history it compares against
+Pollers upsert on `(source, app_url)` (`apple-rss-poller.js:48`; unique constraint at migration L46) — one row per app. change-detector then reads "previous" and the pipeline reads "current" from the SAME just-overwritten rows: delta is always 0 even with C9 fixed. A stub returning `[]` is behaviorally identical to this "monitor" (R8/R10.2).
+
+### C11 — Competitor "teardown" never fetches the competitor URL
+`paths/competitor-teardown.js:9` promises "Fetch and analyze each competitor URL"; `deps.fetchUrl` (JSDoc `:40`) is never destructured or called; `:211` prompts "Based on what you know about this URL/company" — the analysis is LLM prior recall keyed on the URL STRING, live via `path-router.js:74`. R8 provenance-declared-not-reached; outputs (business_model, pricing, weaknesses) are E0 presented as competitor analysis (R4).
+
+## HIGH (checkpoint 2)
+
+### H11 — The entire monitoring chain is shipped-dead code (triple-masked)
+Repo-wide grep: `runPipeline` (pipeline-orchestrator) — zero importers, zero tests; `generateCountermeasures` — zero importers, zero tests; `detectChanges`/`scoreMovements` imported only by those dead modules; `runRankingPipeline` consumed only by its unit test + an archived one-time script; pollers have NO live scheduled trigger — production only READS `app_rankings` (`discovery-mode.js:189`, `competitor-teardown.js:177-186`), a table nothing refreshes. C9+C10+H11 compound: the capability (a) is never invoked, (b) queries a phantom column, (c) cannot observe movement by schema design — any one masks the other two; zero test files exist for all four modules. (Live exceptions recorded: `retry.js` genuinely reused elsewhere; `runAllPollers` dead-ends into the unused ranking pipeline.)
+
+### H12 — Significance score = magic constants with no evidence grade
+`data-pollers/significance-scorer.js:8-12,30,33-35,41` — the 60/20/10/10 split, PH weight 0.8, maxMagnitude 50, up/down 10/5 are unexplained priors; output carries `significance_score` only — no E0-E3, no source field (R4).
+
+### H13 — Countermeasure "recommendations" are string interpolation of the input row
+`data-pollers/countermeasure-engine.js:13-34,39-50` — four if-branches + fill-in-the-blank sentences emitted as `enrichment_metadata.type:'competitor_countermeasures'` with urgency/action labels; nothing reaches beyond the movement row itself (R8 mock-indistinguishable; dead per H11 — decorative both ways).
+
+## MEDIUM (checkpoint 2)
+
+- **M12** Poller outage ≡ quiet market; the pipeline stamps `status:'success'` with ≥2 of 3 sources up (`apple-rss-poller.js:56-62`, `pipeline-orchestrator.js:108`, `ranking-pipeline.js:71`); no consumer can distinguish dead-poller from no-movement.
+- **M13** Teardown grounding dies silently: the ONE real-data path ("Market Position Data", `competitor-teardown.js:160-199`) is wrapped in a bare swallow (`:197-199`); failed per-URL analyses flow onward as `{company_name: url, error}` → "unknown model" (`:249,:265`) with no R4 weakest-link downgrade.
+- **M14** LLM-invented `cost_advantage_estimate`/`speed_advantage_estimate` (`competitor-teardown.js:300-301`) enter the brief ungraded (R4).
+- **M15** `paths/blueprint-browse.js:70-72,168-171` — non-interactive auto-picks `blueprints[0]` (no declared tie-break); opportunity/confidence scores pass through ungraded; unfiltered `metadata`/`enhanced_data` spreads can silently override thesis fields.
+
+## LOW (checkpoint 2)
+
+- **L4** `ranking-pipeline.js:33` — "totalNewRecords" counts upserted (possibly identical) rows as new.
+- **L5** `apple-rss-poller.js:13-15` — default category writes the chart name ("Top Free") into the genre column.
+
+## REFUTED (checkpoint 2)
+
+1. **gplay dynamic import as silent no-op** — dependency declared (`package.json:634`) and failure surfaces as `success:false`; live-fail only in stripped worktrees.
+2. **competitor-teardown `scraped_at` queries** — correct column; only the C9 files use the phantom `polled_at`.
+3. **venture-reseeding.js** — cleanest module audited: throws on missing source AND missing thesis ("Fail loud rather than seed a blank venture", `:44-59`).
+4. **discovery-mode-versions.js dead-code suspicion** — live SSOT consumed at `discovery-mode.js:23,254,264,270`; genuinely R9-aligned versioned-prompt provenance.
+5. **normalizer.js** — a deterministic field-mapper that claims to be exactly that; no violation.
+
+## NOT-FOUNDs (checkpoint 2)
+
+Zone-A ungrounded numbers beyond H12: none. Zone-A import-depth beyond the refuted gplay site: none. Zone-B mock-indistinguishable: none (paths flaws are grounding, not determinism). Zone-B dead code: none (all four paths modules live via path-router). Evidence-grade fields anywhere in either zone: zero.
+
+## R5 VERDICT — SILENT ASSUMPTION (prediction CONFIRMED)
+
+`form_factor|formFactor` = 0 hits in all of lib/; `PWA` = 0 hits in stage-zero. Web is enforced only as a downstream PROHIBITION (`lib/eva/standards/venture-stack-policy.js:56-57` — anti-CLI patterns, "Ventures are hosted SaaS web apps") plus prompt bias (`paths/discovery-mode.js:438`, `modeling.js:86`). The R5 ladder (web-first default → PWA middle → explicit native criterion) exists nowhere; no selection-time decision artifact. Compounding irony: the pollers ingest APP-STORE rankings (native-app signal) into a web-only factory with no reconciling decision.
+
+---
+
+# FINAL ROLL-UP (both checkpoints)
+
+**11 CRITICAL / 13 HIGH / 15 MEDIUM / 5 LOW** across five zones (synthesis, top-level, data-pollers, paths, R5). **15 refuted candidates** with exonerating receipts. Spec-delta scorecard: **6 of 7 Solomon predictions CONFIRMED** (no-posture, score-not-thesis, ungrounded-LLM-scoring, silent-web, no-capability-gate-with-nuance, synthesis-fails-R8); 1 REFUTED (continuous background generation — the queue is on-demand). Exemplars worth preserving as the pattern to copy: `build-cost-estimation`'s provenance fields, `cross-reference`'s reached-DB grounding, `venture-reseeding`'s fail-loud discipline, `discovery-mode`'s typed fail-closed LLM acquisition + versioned prompts.
+
+*Ledger complete. Delta (session 06fda730), Leg B, routed to Solomon for adjudication.*
