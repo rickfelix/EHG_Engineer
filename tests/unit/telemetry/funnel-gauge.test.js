@@ -1,6 +1,6 @@
 // SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A (FR-2)
 import { describe, it, expect } from 'vitest';
-import { computeGaugeState, isGaugeWriterAlive, DEFAULT_CADENCE_HOURS } from '../../../lib/telemetry/funnel-gauge.mjs';
+import { computeGaugeState, isGaugeWriterAlive, computePaidGaugeState, DEFAULT_CADENCE_HOURS } from '../../../lib/telemetry/funnel-gauge.mjs';
 
 const NOW = new Date('2026-07-10T12:00:00.000Z');
 
@@ -85,5 +85,16 @@ describe('isGaugeWriterAlive (SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A FR-
   it('false for stale', () => {
     const pulledAt = new Date(NOW.getTime() - 40 * 3600 * 1000);
     expect(isGaugeWriterAlive({ telemetryRow: { kpis: { signups: 1 }, pulled_at: pulledAt.toISOString(), ingest_status: 'ok' }, now: NOW })).toBe(false);
+  });
+});
+
+// Coordinator ruling on FR-3 descope (SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A):
+// the "paid" stage is never fabricated -- it's an explicit, visible gated state until
+// venture-payment attribution exists.
+describe('computePaidGaugeState (coordinator-ruled FR-3 descope)', () => {
+  it('always reports gated_on_attribution — never a fabricated paid value', () => {
+    const result = computePaidGaugeState();
+    expect(result.state).toBe('gated_on_attribution');
+    expect(result.reason).toMatch(/attribution/);
   });
 });
