@@ -51,9 +51,11 @@ describe('get_pending_chairman_items — static migration contract', () => {
     expect(SQL).not.toMatch(/IN \([^)]*'flag_enablement'/);
   });
 
-  it('fixture exclusion + grants + rollback are declared', () => {
-    expect(SQL).toMatch(/is_demo IS DISTINCT FROM TRUE/);
-    expect(SQL).toMatch(/NOT LIKE '\\_\\_%'/);
+  it('fixture exclusion + grants + rollback are declared (positive-identification form, NULL-safe)', () => {
+    expect(SQL).toMatch(/NOT COALESCE\(/);
+    expect(SQL).toMatch(/is_demo IS TRUE/);
+    expect(SQL).toMatch(/LIKE '\\_\\_%'/);
+    expect(SQL).toMatch(/, false\)/); // NULL/dangling/RLS-invisible venture resolves to INCLUDE
     expect(SQL).toMatch(/GRANT EXECUTE ON FUNCTION public\.get_pending_chairman_items\(text, integer, integer\) TO authenticated/);
     expect(SQL).toMatch(/DROP FUNCTION IF EXISTS public\.get_pending_chairman_items\(text, integer, integer\)/);
   });
@@ -111,7 +113,8 @@ describe.skipIf(!POOLER)('get_pending_chairman_items — live BEGIN..ROLLBACK co
       expect(Object.keys(env).sort()).toEqual(['items', 'page', 'page_size', 'total']);
       expect(Array.isArray(env.items)).toBe(true);
       expect(typeof env.total).toBe('number');
-      expect(env.total).toBeGreaterThanOrEqual(env.items.length === 200 ? 200 : env.items.length);
+      expect(env.total).toBeGreaterThanOrEqual(1); // the seeded real approval guarantees >=1
+      expect(env.page_size).toBe(200); // requested size within the LEAST(...,200) cap is honored
 
       // TS-2: telemetry classes NEVER appear; fixture-venture specimen excluded
       for (const item of env.items) {

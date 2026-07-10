@@ -64,16 +64,17 @@ WITH actionable AS (
       d.decision_type IN ('chairman_approval', 'gate_decision')
       OR (d.decision_type IN ('escalation', 'okr_acceptance') AND d.blocking IS TRUE)
     )
-    AND (
-      d.venture_id IS NULL
-      OR (
-        (v.is_demo IS DISTINCT FROM TRUE)
-        AND v.name NOT LIKE '\_\_%'
-        AND v.name NOT ILIKE 'test venture%'
-        AND v.name NOT ILIKE '%citest%'
-        AND v.name NOT ILIKE 'canonical-source-test%'
-      )
-    )
+    -- Fixture exclusion: exclude only rows POSITIVELY identified as fixture-linked.
+    -- COALESCE(..., false) makes NULL venture name / dangling reference / RLS-invisible
+    -- venture resolve to INCLUDE — a real pending decision must never vanish because its
+    -- venture row is missing or unreadable (adversarial-review W2).
+    AND NOT COALESCE(
+      v.is_demo IS TRUE
+      OR v.name LIKE '\_\_%'
+      OR v.name ILIKE 'test venture%'
+      OR v.name ILIKE '%citest%'
+      OR v.name ILIKE 'canonical-source-test%'
+    , false)
     AND (p_decision_type IS NULL OR d.decision_type = p_decision_type)
 ),
 page AS (
@@ -81,9 +82,10 @@ page AS (
   FROM actionable
   ORDER BY
     CASE effective_priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
-    created_at ASC
-  LIMIT GREATEST(COALESCE(p_page_size, 50), 1)
-  OFFSET (GREATEST(COALESCE(p_page, 1), 1) - 1) * GREATEST(COALESCE(p_page_size, 50), 1)
+    created_at ASC,
+    id ASC -- unique tiebreaker: LIMIT/OFFSET pages must be deterministic (adversarial-review W1)
+  LIMIT LEAST(GREATEST(COALESCE(p_page_size, 50), 1), 200)
+  OFFSET (GREATEST(COALESCE(p_page, 1), 1) - 1)::bigint * LEAST(GREATEST(COALESCE(p_page_size, 50), 1), 200)
 )
 SELECT jsonb_build_object(
   'items', COALESCE(
@@ -95,7 +97,7 @@ SELECT jsonb_build_object(
   ),
   'total', (SELECT count(*) FROM actionable),
   'page', GREATEST(COALESCE(p_page, 1), 1),
-  'page_size', GREATEST(COALESCE(p_page_size, 50), 1)
+  'page_size', LEAST(GREATEST(COALESCE(p_page_size, 50), 1), 200)
 );
 $$;
 
