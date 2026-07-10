@@ -25,7 +25,8 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const SCRIPT_PATH = path.resolve(__dirname, '../leo-create-sd.js').replace(/\\/g, '/');
+// SD-ARCH-HOTSPOT-LEO-CREATE-001: code moved verbatim to lib/sd-creation/pipeline.js — pin follows the code
+const SCRIPT_PATH = path.resolve(__dirname, '../../lib/sd-creation/pipeline.js').replace(/\\/g, '/');
 const SD_TYPE_ENUM_PATH = path.resolve(__dirname, '../../lib/sd-type-enum.js').replace(/\\/g, '/');
 
 /**

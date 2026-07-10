@@ -33,8 +33,15 @@ import path from 'node:path';
 import url from 'node:url';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
-const SOURCE_PATH = path.resolve(__dirname, '../leo-create-sd.js');
-const SOURCE = fs.readFileSync(SOURCE_PATH, 'utf8');
+// SD-ARCH-HOTSPOT-LEO-CREATE-001: code moved verbatim to lib/sd-creation/source-adapters/qf.js
+// (the two claiming_session_id occurrences) and scripts/modules/leo-create-sd/direct-lane.js —
+// pin follows the code (the pinned source is the concatenation of the CLI + both moved lanes).
+const SOURCE_PATHS = [
+  path.resolve(__dirname, '../leo-create-sd.js'),
+  path.resolve(__dirname, '../../lib/sd-creation/source-adapters/qf.js'),
+  path.resolve(__dirname, '../modules/leo-create-sd/direct-lane.js'),
+];
+const SOURCE = SOURCE_PATHS.map(p => fs.readFileSync(p, 'utf8')).join('\n');
 
 function allIndicesOf(haystack, needle) {
   const indices = [];

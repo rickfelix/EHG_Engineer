@@ -10,10 +10,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SRC = path.resolve(__dirname, '../../scripts/leo-create-sd.js');
+// SD-ARCH-HOTSPOT-LEO-CREATE-001: code moved verbatim to lib/sd-creation/source-adapters/feedback.js —
+// pin follows the code (the CLI keeps the --force-liveness argv wiring; the lane body lives in the
+// adapter, so the pinned source is the concatenation of both files).
+const PINNED = [
+  path.resolve(__dirname, '../../scripts/leo-create-sd.js'),
+  path.resolve(__dirname, '../../lib/sd-creation/source-adapters/feedback.js'),
+];
 
 describe('SD-FDBK-ENH-UAT-AGENT-FEEDBACK-001: leo-create-sd.js --from-feedback STALE_PREMISE gate', () => {
-  const code = fs.readFileSync(SRC, 'utf8');
+  const code = PINNED.map(p => fs.readFileSync(p, 'utf8')).join('\n');
 
   // createFromFeedback() is one of several functions with a `const sd = await createSD(`
   // call site — scope all ordering assertions to THIS function's body, not the whole file.

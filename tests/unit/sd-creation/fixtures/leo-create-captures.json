@@ -1,0 +1,546 @@
+{
+  "generated": "2026-07-10T01:13:47.229Z",
+  "source": "scripts/leo-create-sd.js@pre-refactor",
+  "captures": {
+    "mapToDbType": {
+      "fix": "bugfix",
+      "bugfix": "bugfix",
+      "bug": {
+        "__throws": true
+      },
+      "feature": "feature",
+      "feat": "feature",
+      "infrastructure": "infrastructure",
+      "infra": "infrastructure",
+      "refactor": "refactor",
+      "documentation": "documentation",
+      "doc": "documentation",
+      "docs": "docs",
+      "database": "database",
+      "db": "database",
+      "security": "security",
+      "orchestrator": "orchestrator",
+      "orch": "orchestrator",
+      "qa": "infrastructure",
+      "testing": "infrastructure",
+      "spike": "discovery_spike",
+      "discovery_spike": "discovery_spike",
+      "ux_debt": "ux_debt",
+      "implementation": "implementation",
+      "enhancement": "feature",
+      "__bad_fyx": {
+        "__throws": true
+      },
+      "__bad_": {
+        "__throws": true
+      },
+      "__bad_null": {
+        "__throws": true
+      },
+      "__bad_undefined": {
+        "__throws": true
+      },
+      "__bad_garbage": {
+        "__throws": true
+      }
+    },
+    "inferDefaultSdTypeFromKey": {
+      "SD-LEO-INFRA-X-001": "infrastructure",
+      "SD-MAN-INFRA-Y-001": "infrastructure",
+      "SD-LEARN-FIX-Z-001": "infrastructure",
+      "SD-LEONARDO-A-001": null,
+      "SD-EHG-FEAT-001": null,
+      "QF-123": null,
+      "": null,
+      "sd-leo-x": "infrastructure"
+    },
+    "resolveSdType": {
+      "null|SD-LEO-INFRA-X-001": "infrastructure",
+      "undefined|SD-EHG-X-001": "feature",
+      "fix|SD-LEO-INFRA-X-001": "fix",
+      "|SD-MAN-INFRA-X-001": "infrastructure",
+      "orchestrator|SD-EHG-X-001": "orchestrator"
+    },
+    "buildDefaultSuccessMetrics": {
+      "feature": [
+        {
+          "metric": "Implementation completeness",
+          "target": "100% of scope items implemented"
+        },
+        {
+          "metric": "Test coverage",
+          "target": "≥80% code coverage for new code"
+        },
+        {
+          "metric": "Zero regressions",
+          "target": "0 existing tests broken"
+        },
+        {
+          "metric": "User story completion",
+          "target": "100% acceptance criteria met"
+        }
+      ],
+      "feat": [
+        {
+          "metric": "Implementation completeness",
+          "target": "100% of scope items implemented"
+        },
+        {
+          "metric": "Test coverage",
+          "target": "≥80% code coverage for new code"
+        },
+        {
+          "metric": "Zero regressions",
+          "target": "0 existing tests broken"
+        },
+        {
+          "metric": "User story completion",
+          "target": "100% acceptance criteria met"
+        }
+      ],
+      "fix": [
+        {
+          "metric": "Implementation completeness",
+          "target": "100% of scope items implemented"
+        },
+        {
+          "metric": "Test coverage",
+          "target": "≥80% code coverage for new code"
+        },
+        {
+          "metric": "Zero regressions",
+          "target": "0 existing tests broken"
+        },
+        {
+          "metric": "Issue recurrence",
+          "target": "0 recurrences after fix deployed"
+        }
+      ],
+      "bugfix": [
+        {
+          "metric": "Implementation completeness",
+          "target": "100% of scope items implemented"
+        },
+        {
+          "metric": "Test coverage",
+          "target": "≥80% code coverage for new code"
+        },
+        {
+          "metric": "Zero regressions",
+          "target": "0 existing tests broken"
+        },
+        {
+          "metric": "Issue recurrence",
+          "target": "0 recurrences after fix deployed"
+        }
+      ],
+      "refactor": [
+        {
+          "metric": "Implementation completeness",
+          "target": "100% of scope items implemented"
+        },
+        {
+          "metric": "Test coverage",
+          "target": "≥80% code coverage for new code"
+        },
+        {
+          "metric": "Zero regressions",
+          "target": "0 existing tests broken"
+        }
+      ],
+      "security": [
+        {
+          "metric": "Implementation completeness",
+          "target": "100% of scope items implemented"
+        },
+        {
+          "metric": "Test coverage",
+          "target": "≥80% code coverage for new code"
+        },
+        {
+          "metric": "Zero regressions",
+          "target": "0 existing tests broken"
+        }
+      ],
+      "infrastructure": [
+        {
+          "metric": "Implementation completeness",
+          "target": "100% of scope items implemented"
+        },
+        {
+          "metric": "Test coverage",
+          "target": "≥80% code coverage for new code"
+        },
+        {
+          "metric": "Zero regressions",
+          "target": "0 existing tests broken"
+        }
+      ],
+      "documentation": [
+        {
+          "metric": "Implementation completeness",
+          "target": "100% of scope items implemented"
+        },
+        {
+          "metric": "Test coverage",
+          "target": "≥80% code coverage for new code"
+        },
+        {
+          "metric": "Zero regressions",
+          "target": "0 existing tests broken"
+        }
+      ],
+      "docs": [
+        {
+          "metric": "Implementation completeness",
+          "target": "100% of scope items implemented"
+        },
+        {
+          "metric": "Test coverage",
+          "target": "≥80% code coverage for new code"
+        },
+        {
+          "metric": "Zero regressions",
+          "target": "0 existing tests broken"
+        }
+      ],
+      "orchestrator": [
+        {
+          "metric": "Implementation completeness",
+          "target": "100% of scope items implemented"
+        },
+        {
+          "metric": "Test coverage",
+          "target": "≥80% code coverage for new code"
+        },
+        {
+          "metric": "Zero regressions",
+          "target": "0 existing tests broken"
+        }
+      ],
+      "implementation": [
+        {
+          "metric": "Implementation completeness",
+          "target": "100% of scope items implemented"
+        },
+        {
+          "metric": "Test coverage",
+          "target": "≥80% code coverage for new code"
+        },
+        {
+          "metric": "Zero regressions",
+          "target": "0 existing tests broken"
+        }
+      ]
+    },
+    "buildDefaultStrategicObjectives": {
+      "feature": [
+        "Implement Fixture Title as specified in the SD scope",
+        "Maintain backward compatibility with existing functionality",
+        "Deliver user-facing value with clear acceptance criteria",
+        "Ensure comprehensive test coverage for new functionality"
+      ],
+      "feat": [
+        "Implement Fixture Title as specified in the SD scope",
+        "Maintain backward compatibility with existing functionality",
+        "Deliver user-facing value with clear acceptance criteria",
+        "Ensure comprehensive test coverage for new functionality"
+      ],
+      "fix": [
+        "Implement Fixture Title as specified in the SD scope",
+        "Maintain backward compatibility with existing functionality",
+        "Address root cause to prevent recurrence"
+      ],
+      "bugfix": [
+        "Implement Fixture Title as specified in the SD scope",
+        "Maintain backward compatibility with existing functionality",
+        "Address root cause to prevent recurrence"
+      ],
+      "refactor": [
+        "Implement Fixture Title as specified in the SD scope",
+        "Maintain backward compatibility with existing functionality",
+        "Improve code quality without changing external behavior"
+      ],
+      "security": [
+        "Implement Fixture Title as specified in the SD scope",
+        "Maintain backward compatibility with existing functionality",
+        "Eliminate identified security vulnerabilities"
+      ],
+      "infrastructure": [
+        "Implement Fixture Title as specified in the SD scope",
+        "Maintain backward compatibility with existing functionality"
+      ],
+      "documentation": [
+        "Implement Fixture Title as specified in the SD scope",
+        "Maintain backward compatibility with existing functionality"
+      ],
+      "docs": [
+        "Implement Fixture Title as specified in the SD scope",
+        "Maintain backward compatibility with existing functionality"
+      ],
+      "orchestrator": [
+        "Implement Fixture Title as specified in the SD scope",
+        "Maintain backward compatibility with existing functionality"
+      ],
+      "implementation": [
+        "Implement Fixture Title as specified in the SD scope",
+        "Maintain backward compatibility with existing functionality"
+      ]
+    },
+    "buildDefaultKeyChanges": {
+      "feature": [
+        "Implement core changes for: Fixture Title",
+        "Add UI components or API endpoints as required",
+        "Add tests for new functionality",
+        "Update documentation for new feature"
+      ],
+      "feat": [
+        "Implement core changes for: Fixture Title",
+        "Add UI components or API endpoints as required",
+        "Add tests for new functionality",
+        "Update documentation for new feature"
+      ],
+      "fix": [
+        "Implement core changes for: Fixture Title",
+        "Fix identified defect and add regression test",
+        "Update related documentation if needed"
+      ],
+      "bugfix": [
+        "Implement core changes for: Fixture Title",
+        "Fix identified defect and add regression test",
+        "Update related documentation if needed"
+      ],
+      "refactor": [
+        "Implement core changes for: Fixture Title",
+        "Restructure code while preserving behavior",
+        "Add or update tests to verify no regressions"
+      ],
+      "security": [
+        "Implement core changes for: Fixture Title"
+      ],
+      "infrastructure": [
+        "Implement core changes for: Fixture Title",
+        "Update infrastructure components",
+        "Verify deployment and operational readiness"
+      ],
+      "documentation": [
+        "Implement core changes for: Fixture Title"
+      ],
+      "docs": [
+        "Implement core changes for: Fixture Title"
+      ],
+      "orchestrator": [
+        "Implement core changes for: Fixture Title"
+      ],
+      "implementation": [
+        "Implement core changes for: Fixture Title"
+      ]
+    },
+    "buildDefaultSuccessCriteria": {
+      "feature": [
+        "All implementation items from scope are complete",
+        "Code passes lint and type checks",
+        "PR reviewed and approved",
+        "Feature accessible to target users"
+      ],
+      "feat": [
+        "All implementation items from scope are complete",
+        "Code passes lint and type checks",
+        "PR reviewed and approved",
+        "Feature accessible to target users"
+      ],
+      "fix": [
+        "All implementation items from scope are complete",
+        "Code passes lint and type checks",
+        "PR reviewed and approved",
+        "Root cause addressed, not just symptoms"
+      ],
+      "bugfix": [
+        "All implementation items from scope are complete",
+        "Code passes lint and type checks",
+        "PR reviewed and approved",
+        "Root cause addressed, not just symptoms"
+      ],
+      "refactor": [
+        "All implementation items from scope are complete",
+        "Code passes lint and type checks",
+        "PR reviewed and approved"
+      ],
+      "security": [
+        "All implementation items from scope are complete",
+        "Code passes lint and type checks",
+        "PR reviewed and approved"
+      ],
+      "infrastructure": [
+        "All implementation items from scope are complete",
+        "Code passes lint and type checks",
+        "PR reviewed and approved"
+      ],
+      "documentation": [
+        "All implementation items from scope are complete",
+        "Code passes lint and type checks",
+        "PR reviewed and approved"
+      ],
+      "docs": [
+        "All implementation items from scope are complete",
+        "Code passes lint and type checks",
+        "PR reviewed and approved"
+      ],
+      "orchestrator": [
+        "All implementation items from scope are complete",
+        "Code passes lint and type checks",
+        "PR reviewed and approved"
+      ],
+      "implementation": [
+        "All implementation items from scope are complete",
+        "Code passes lint and type checks",
+        "PR reviewed and approved"
+      ]
+    },
+    "buildDefaultSmokeTestSteps": {
+      "documentation|any": [],
+      "orchestrator|flag": [],
+      "infrastructure|nocode": [],
+      "infrastructure|script": [
+        {
+          "step_number": 1,
+          "instruction": "Run the modified script/gate for: T",
+          "expected_outcome": "Script executes without errors"
+        },
+        {
+          "step_number": 2,
+          "instruction": "Verify output matches expected behavior",
+          "expected_outcome": "Output is correct and complete"
+        },
+        {
+          "step_number": 3,
+          "instruction": "Confirm no regressions in related workflows",
+          "expected_outcome": "Existing functionality unchanged"
+        }
+      ],
+      "infrastructure|wizard": [
+        {
+          "step_number": 1,
+          "instruction": "Run the modified script/gate for: T",
+          "expected_outcome": "Script executes without errors"
+        },
+        {
+          "step_number": 2,
+          "instruction": "Verify output matches expected behavior",
+          "expected_outcome": "Output is correct and complete"
+        },
+        {
+          "step_number": 3,
+          "instruction": "Confirm no regressions in related workflows",
+          "expected_outcome": "Existing functionality unchanged"
+        }
+      ],
+      "feature|any": [
+        {
+          "step_number": 1,
+          "instruction": "Navigate to the relevant page/area for: My Feature",
+          "expected_outcome": "Page loads without errors"
+        },
+        {
+          "step_number": 2,
+          "instruction": "Verify the primary functionality works as expected",
+          "expected_outcome": "Core feature operates correctly with expected behavior"
+        },
+        {
+          "step_number": 3,
+          "instruction": "Test an edge case or error scenario",
+          "expected_outcome": "Appropriate error handling or graceful degradation"
+        }
+      ],
+      "bugfix|any": [
+        {
+          "step_number": 1,
+          "instruction": "Navigate to the relevant page/area for: My Fix",
+          "expected_outcome": "Page loads without errors"
+        },
+        {
+          "step_number": 2,
+          "instruction": "Verify the primary functionality works as expected",
+          "expected_outcome": "Core feature operates correctly with expected behavior"
+        },
+        {
+          "step_number": 3,
+          "instruction": "Test an edge case or error scenario",
+          "expected_outcome": "Appropriate error handling or graceful degradation"
+        }
+      ]
+    },
+    "inheritStrategicFields": {
+      "full": {
+        "category": "Infrastructure",
+        "strategic_objectives": [
+          "obj1",
+          "obj2"
+        ],
+        "key_principles": [
+          "p1"
+        ]
+      },
+      "empty": {},
+      "emptyArrays": {}
+    },
+    "mapPriority": {
+      "P0": "critical",
+      "P1": "high",
+      "P2": "medium",
+      "P3": "low",
+      "high": "medium",
+      "null": "medium"
+    },
+    "formatDependencyForDisplay": {
+      "string": "SD-X-001",
+      "null": "null",
+      "number": "42",
+      "canonical": "SD-A-001",
+      "sd_key": "SD-B-001",
+      "sd_id": "SD-C-001",
+      "weird": "{\"foo\":\"bar\"}"
+    },
+    "buildPromotionRepoOverrides": {
+      "empty": {},
+      "null": {},
+      "one": {
+        "target_application": "EHG",
+        "target_repos": [
+          "EHG"
+        ]
+      },
+      "two": {
+        "target_application": "EHG",
+        "target_repos": [
+          "EHG",
+          "EHG_Engineer"
+        ]
+      }
+    },
+    "normalizeDependsOn": {
+      "nonarray": [],
+      "strings": [
+        {
+          "sd_id": "SD-A-001"
+        },
+        {
+          "sd_id": "SD-B-001"
+        }
+      ],
+      "objects": [
+        {
+          "sd_id": "SD-C-001"
+        },
+        {
+          "sd_id": "SD-D-001"
+        }
+      ]
+    },
+    "computePlanContentHash": {
+      "empty": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "simple": "6fde591478cc8e4a5920e66f051c183cd3af984a3c6eb27b2cf4c2d1d62c77d8",
+      "normalizedEquivalence": true
+    }
+  }
+}

@@ -84,7 +84,8 @@ describe('fail-open design', () => {
   });
 
   it('leo-create-sd.js should catch DB errors on parent claim check', async () => {
-    const source = (await import('fs')).readFileSync('scripts/leo-create-sd.js', 'utf8');
+    // SD-ARCH-HOTSPOT-LEO-CREATE-001: code moved verbatim to lib/sd-creation/source-adapters/child.js — pin follows the code
+    const source = (await import('fs')).readFileSync('lib/sd-creation/source-adapters/child.js', 'utf8');
     expect(source).toContain('fail-open');
     expect(source).toContain("if (e.message?.includes('claimed by another')) throw e;");
   });
@@ -121,7 +122,8 @@ describe('handoff.js claim assertion', () => {
 // Test leo-create-sd.js parent claim check
 describe('leo-create-sd.js parent claim check', () => {
   it('should check parent claim after createSD', async () => {
-    const source = (await import('fs')).readFileSync('scripts/leo-create-sd.js', 'utf8');
+    // SD-ARCH-HOTSPOT-LEO-CREATE-001: code moved verbatim to lib/sd-creation/source-adapters/child.js — pin follows the code
+    const source = (await import('fs')).readFileSync('lib/sd-creation/source-adapters/child.js', 'utf8');
     expect(source).toContain('Assert parent claim before returning child');
     expect(source).toContain('claimGuard(parent.sd_key');
     expect(source).toContain('child creation blocked');

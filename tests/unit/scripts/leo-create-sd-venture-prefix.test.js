@@ -80,10 +80,26 @@ describe('SD-FDBK-INFRA-KEY-GENERATOR-LEAKS-001: resolveVenturePrefix sd_type-aw
   });
 });
 
+// SD-ARCH-HOTSPOT-LEO-CREATE-001: code moved verbatim to lib/sd-creation/pipeline.js (definition) and
+// the source adapters / direct lane (the 6 call sites) — pin follows the code across all seven files.
+const VENTURE_PREFIX_PINNED_FILES = [
+  '../../../lib/sd-creation/pipeline.js',
+  '../../../lib/sd-creation/source-adapters/uat.js',
+  '../../../lib/sd-creation/source-adapters/learn.js',
+  '../../../lib/sd-creation/source-adapters/feedback.js',
+  '../../../lib/sd-creation/source-adapters/qf.js',
+  '../../../lib/sd-creation/source-adapters/plan.js',
+  '../../../scripts/modules/leo-create-sd/direct-lane.js',
+];
+function readVenturePrefixPinnedSource() {
+  return VENTURE_PREFIX_PINNED_FILES
+    .map(rel => fs.readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8'))
+    .join('\n');
+}
+
 describe('SD-FDBK-INFRA-KEY-GENERATOR-LEAKS-001: call-site meta-test (derived from source)', () => {
   it('every resolveVenturePrefix call site threads the sd_type argument', () => {
-    const srcPath = fileURLToPath(new URL('../../../scripts/leo-create-sd.js', import.meta.url));
-    const src = fs.readFileSync(srcPath, 'utf8');
+    const src = readVenturePrefixPinnedSource();
     const callRegex = /resolveVenturePrefix\(([^)]*)\)/g;
     const offenders = [];
     let m;
@@ -98,8 +114,8 @@ describe('SD-FDBK-INFRA-KEY-GENERATOR-LEAKS-001: call-site meta-test (derived fr
   });
 
   it('finds the expected number of call sites (6) plus the definition', () => {
-    const srcPath = fileURLToPath(new URL('../../../scripts/leo-create-sd.js', import.meta.url));
-    const src = fs.readFileSync(srcPath, 'utf8');
+    // SD-ARCH-HOTSPOT-LEO-CREATE-001: code moved verbatim — pin follows the code (see file list above).
+    const src = readVenturePrefixPinnedSource();
     const total = (src.match(/resolveVenturePrefix\(/g) || []).length;
     // 1 definition + 6 call sites. If this changes, a call site was added/removed —
     // update the count AND ensure the new site threads sd_type (see the offender test above).

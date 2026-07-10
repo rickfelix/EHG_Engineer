@@ -21,8 +21,14 @@ import path from 'node:path';
 import url from 'node:url';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
-const SOURCE_PATH = path.resolve(__dirname, '../../scripts/leo-create-sd.js');
-const SOURCE = fs.readFileSync(SOURCE_PATH, 'utf8');
+// SD-ARCH-HOTSPOT-LEO-CREATE-001: code moved verbatim to lib/sd-creation/source-adapters/qf.js —
+// pin follows the code (TS-1 pins the CLI branch, TS-2 pins the createFromQF metadata builder,
+// so the pinned source is the concatenation of both files).
+const SOURCE_PATHS = [
+  path.resolve(__dirname, '../../scripts/leo-create-sd.js'),
+  path.resolve(__dirname, '../../lib/sd-creation/source-adapters/qf.js'),
+];
+const SOURCE = SOURCE_PATHS.map(p => fs.readFileSync(p, 'utf8')).join('\n');
 
 describe('QF-20260705-395: --from-qf route honors --migration-reviewed', () => {
   it('TS-1: the --from-qf CLI branch parses --migration-reviewed and passes migrationReviewed to createFromQF', () => {
