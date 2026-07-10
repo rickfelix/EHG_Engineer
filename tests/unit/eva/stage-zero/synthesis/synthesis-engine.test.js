@@ -97,10 +97,10 @@ const silentLogger = { log: vi.fn(), warn: vi.fn() };
 
 const validPathOutput = {
   origin_type: 'discovery',
-  // SD-LEO-INFRA-STAGE0-THESIS-CONTRACT-001: the candidate carries the thesis derivation
-  // sources (revenue_model/monthly_revenue_potential -> price_point). A candidate missing
-  // them yields a DECLARED-incomplete thesis and demotes maturity to 'seed' (tested below).
-  raw_material: { data: true, candidate: { revenue_model: 'subscription', monthly_revenue_potential: '$5K/month', automation_approach: 'communities + SEO' } },
+  // SD-LEO-INFRA-STAGE0-THESIS-CONTRACT-001: PRODUCTION shape — discovery-mode emits the
+  // ranked winner at raw_material.top_candidate (paths/discovery-mode.js), which carries
+  // the thesis derivation sources (revenue_model/monthly_revenue_potential -> price_point).
+  raw_material: { data: true, top_candidate: { revenue_model: 'subscription', monthly_revenue_potential: '$5K/month', automation_approach: 'communities + SEO' } },
   suggested_name: 'Test Venture',
   suggested_problem: 'A real problem',
   suggested_solution: 'An automated solution',
@@ -218,10 +218,20 @@ describe('runSynthesis', () => {
     expect(result.explicit_decisions.form_factor.decided_by).toBe('default');
   });
 
-  test("an incomplete thesis DEMOTES maturity 'ready' -> 'seed' (honesty over optimism)", async () => {
-    const noRevenue = { ...validPathOutput, raw_material: { data: true } }; // no candidate sources
-    const result = await runSynthesis(noRevenue, { logger: silentLogger });
+  test("SOFT-incomplete thesis (no revenue candidate, e.g. competitor-teardown shape) stays 'ready' — declared, not parked", async () => {
+    // competitor-teardown/blueprint paths carry no revenue-shaped candidate at all;
+    // demoting on soft fields would nursery-park every such venture (PR #5809 round-1).
+    const noCandidate = { ...validPathOutput, raw_material: { data: true } };
+    const result = await runSynthesis(noCandidate, { logger: silentLogger });
     expect(result.thesis.incomplete_fields).toContain('price_point');
+    expect(result.thesis.incomplete_fields.every((f) => ['price_point', 'reached_how'].includes(f))).toBe(true);
+    expect(result.maturity).toBe('ready');
+  });
+
+  test("CORE-incomplete thesis (no target_market -> no who_pays/plan) DEMOTES 'ready' -> 'seed'", async () => {
+    const noMarket = { ...validPathOutput, target_market: '', raw_material: { data: true } };
+    const result = await runSynthesis(noMarket, { logger: silentLogger });
+    expect(result.thesis.incomplete_fields).toContain('who_pays');
     expect(result.maturity).toBe('seed');
   });
 

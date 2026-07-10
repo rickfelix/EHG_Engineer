@@ -91,13 +91,19 @@ describe('FR-1: validateVentureBrief enforcement (thesis-less score REJECTED)', 
     expect(validateVentureBrief(brief).valid).toBe(true);
   });
 
-  it("a declared-incomplete thesis is representable but cannot carry maturity 'ready'", () => {
-    const incompleteThesis = { ...FULL_THESIS, price_point: undefined, incomplete_fields: ['price_point'] };
-    const rejected = validateVentureBrief(fullBrief({ thesis: incompleteThesis, maturity: 'ready' }));
+  it("a CORE-incomplete thesis (who_pays) is representable but cannot carry maturity 'ready'", () => {
+    const coreIncomplete = { ...FULL_THESIS, who_pays: undefined, incomplete_fields: ['who_pays'] };
+    const rejected = validateVentureBrief(fullBrief({ thesis: coreIncomplete, maturity: 'ready' }));
     expect(rejected.valid).toBe(false);
     expect(rejected.errors.join(' ')).toContain("demote to 'seed'");
-    const accepted = validateVentureBrief(fullBrief({ thesis: incompleteThesis, maturity: 'seed' }));
+    const accepted = validateVentureBrief(fullBrief({ thesis: coreIncomplete, maturity: 'seed' }));
     expect(accepted.valid).toBe(true);
+  });
+
+  it("a SOFT-incomplete thesis (price_point) stays 'ready'-eligible — the demand test refines it (PR #5809 round-1)", () => {
+    const softIncomplete = { ...FULL_THESIS, price_point: undefined, incomplete_fields: ['price_point'] };
+    const r = validateVentureBrief(fullBrief({ thesis: softIncomplete, maturity: 'ready' }));
+    expect(r.valid).toBe(true);
   });
 });
 
@@ -113,6 +119,9 @@ describe('FR-1: buildThesisFromSynthesis derivation with provenance', () => {
     const t = buildThesisFromSynthesis(pathOutput, {}, candidate);
     expect(t.who_pays).toBe('indie game studios');
     expect(t.provenance.who_pays.source_field).toBe('target_market');
+    // payer-uncertainty honestly flagged: target_market != payer for ad/marketplace models
+    expect(t.provenance.who_pays.weak).toBe(true);
+    expect(t.provenance.who_pays.assumption).toBe('payer_assumed_equal_to_target_market');
     expect(t.provenance.pays_for_what.source_field).toBe('suggested_solution');
     expect(t.provenance.price_point.source_field).toContain('revenue_model');
     expect(t.price_point).toContain('E0 ungraded'); // LLM estimate honestly labeled
@@ -154,10 +163,13 @@ describe('FR-2: kill criteria — machine-consumable contracts', () => {
     expect(validateKillCriteria([]).valid).toBe(false);
   });
 
-  it('an unobservable metric fails CLOSED (cannot prove survival)', () => {
+  it('an unobservable metric fails CLOSED with the unobservable flag (HOLD, never auto-kill)', () => {
     const r = evaluateKillCriterion(VALID_KILLS[0], undefined);
     expect(r.killed).toBe(true);
+    expect(r.unobservable).toBe(true); // consuming gates must HOLD, not treat as a fired falsifier
     expect(r.reason).toBe('unobservable_metric_fail_closed');
+    // a genuinely observed value never carries the flag
+    expect(evaluateKillCriterion(VALID_KILLS[0], 7).unobservable).toBeUndefined();
   });
 
   it('all five comparators evaluate correctly', () => {
@@ -234,5 +246,31 @@ describe('FR-4: venture-stack-policy consumes the form-factor decision', () => {
     expect(ruleApplies(supabaseRule, { form_factor: { value: 'native' } })).toBe(true);
     const r = scanTextForStackCompliance(['uses @supabase/supabase-js for data'], { decisions: { form_factor: { value: 'native' } } });
     expect(r.violations.map((v) => v.id)).toContain('supabase_pkg');
+  });
+
+  it('LIVE consumer wired: checkVentureStackCompliance reads ventures.metadata.explicit_decisions and passes it through', async () => {
+    const { checkVentureStackCompliance } = await import('../../../../lib/eva/bridge/venture-build-consumer.js');
+    function mockSb({ decisions }) {
+      return { from: (table) => {
+        const c = {
+          select: () => c,
+          eq: () => c,
+          maybeSingle: async () => ({ data: { metadata: { explicit_decisions: decisions } }, error: null }),
+          then: (res) => Promise.resolve(
+            table === 'venture_artifacts'
+              ? { data: [{ artifact_type: 'spec', content: CLI_TEXT, artifact_data: null }], error: null }
+              : { data: null, error: null }
+          ).then(res),
+        };
+        return c;
+      } };
+    }
+    // recorded native decision -> cli_as_product skipped in the LIVE consumer path
+    const skipped = await checkVentureStackCompliance(mockSb({ decisions: { form_factor: { value: 'native' } } }), 'v-1');
+    expect(skipped.violations.map((v) => v.id)).not.toContain('cli_as_product');
+    expect(skipped.skippedRules.map((s) => s.id)).toContain('cli_as_product');
+    // no recorded decision -> defaults govern, rule fires
+    const fires = await checkVentureStackCompliance(mockSb({ decisions: undefined }), 'v-2');
+    expect(fires.violations.map((v) => v.id)).toContain('cli_as_product');
   });
 });
