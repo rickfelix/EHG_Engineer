@@ -22,6 +22,8 @@
 
 **Refuted-candidate aspects:** none. (Note: module count is 15 components / 17 files including `index.js` + `archetype-mapping.js`; the prediction's "17" refers to the file count — immaterial.)
 
+> **RESOLVED (2026-07-10, `SD-LEO-INFRA-STAGE0-ENGINE-FAIL-CLOSED-001`, "alpha" of this wave):** the three specific receipts above are fixed in `lib/eva/stage-zero/synthesis/index.js` — every catch-fallback now carries `_failed: true`, `components_run`/`components_total` are computed from real per-module outcomes (the hardcoded `15,15` is gone), and a fail-closed maturity branch blocks `'ready'` on any component failure. The seeded-defect canary now exists (`tests/unit/eva/stage-zero/synthesis/synthesis-fail-closed.test.js`). Two rounds of adversarial review during shipping caught and fixed a genuine follow-on defect: `mentalModelAnalysis`'s null return is ambiguous between "genuinely failed" and "no curated model matched" (a normal outcome), so it is deliberately excluded from the fail-closed gate (still counted in the `components_run` gauge). One deliberately deferred, non-blocking gap: most of the other 13 components swallow LLM failures in their OWN internal try/catch and resolve normally rather than reject, so the outer fail-closed gate does not yet reach that realistic failure class — tracked as follow-on scope, not a regression (pre-fix behavior was equally blind to it). R4/R2/R3/R5/R6 (findings 2–6 below) remain open, targeted by the beta/delta/epsilon siblings in this same wave.
+
 ---
 
 ## 2. CONFIRMED — R4: ungrounded LLM numbers dominate ranking; no evidence grading exists — **CRITICAL**
