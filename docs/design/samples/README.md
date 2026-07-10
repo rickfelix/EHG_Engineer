@@ -56,4 +56,8 @@ unchanged (social proof still honestly omitted).
 | v1 baseline (parent SD) | 4.50 | PASS | `fdbd52bc` |
 | v2 distinctiveness | **4.83** | **PASS — all 6 distinctiveness checks pass, zero blockers, fabrication CLEAN** (4 advisories fixed post-score: visible illustrative caption, transform-only hover, mark contrast, light-mode margins) | `c8bd4b13` |
 
-Chairman follow-up taste verdict pending — it alone advances the WATCH-AND-REVIEW trust line.
+**Chairman taste verdict: PASS** — given in-session 2026-07-10 ~3:55 PM ET, verbatim
+"sample 2: pass", after viewing the rendered file (relayed by Adam, coordinator-recorded;
+surfaced via the open-loop sweep S7 groom). With machine 4.83 PASS + chairman PASS, the
+WATCH-AND-REVIEW trust line advances on the distinctiveness pass; feeds the Sunday
+park-or-pay review of the design pipeline.
