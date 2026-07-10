@@ -15,10 +15,26 @@ import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import { resolve } from 'path';
 import { renderLeanDecisionEmail, filterStaleLeanDecisions, DEAD_VENTURE_STATUSES } from '../lib/chairman/decision-layman.mjs';
+import { enforceCliSendGuard } from '../lib/notifications/cli-send-guard.mjs';
+import { isWithinChairmanQuietWindow } from '../lib/notifications/resend-adapter.js';
+
+enforceCliSendGuard({
+  scriptName: 'scripts/adam-decision-email.mjs',
+  flags: [{ name: '--dry-run' }, { name: '--decision', takesValue: true }],
+});
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const DRY = !!process.env.ADAM_EMAIL_DRYRUN || process.argv.includes('--dry-run');
 const EM = '—';
+
+// QF-20260709-211: explicit, visible pre-check — sendEmail() itself already suppresses at the
+// choke point (QF-20260703-195), but skipping the read/render work entirely during quiet hours
+// (rather than relying solely on an opaque suppressed:true from a downstream module) is cheaper
+// and gives an auditable reason in the log for why nothing was sent.
+if (!DRY && isWithinChairmanQuietWindow()) {
+  console.log('[adam-decision-email] quiet window (23:00-05:00 ET) — skipping, no email sent');
+  process.exit(0);
+}
 
 // --decision <id>: the escalated decision to lead with (and include other pending decisions too).
 function argValue(flag) {

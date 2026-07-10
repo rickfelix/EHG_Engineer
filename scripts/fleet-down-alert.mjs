@@ -18,6 +18,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import path from 'path';
+import { enforceCliSendGuard } from '../lib/notifications/cli-send-guard.mjs';
 
 const REQUIRED_CONSECUTIVE = Number(process.env.FLEET_DOWN_CONSECUTIVE_PULSES) > 0
   ? Number(process.env.FLEET_DOWN_CONSECUTIVE_PULSES)
@@ -84,6 +85,7 @@ function buildEmail({ claimableCount, consecutiveZero, requiredConsecutive }) {
 }
 
 async function main() {
+  enforceCliSendGuard({ scriptName: 'scripts/fleet-down-alert.mjs', flags: [{ name: '--dry-run' }] });
   const DRY = !!process.env.FLEET_DOWN_ALERT_DRYRUN || process.argv.includes('--dry-run');
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;

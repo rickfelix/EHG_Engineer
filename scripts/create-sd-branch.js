@@ -129,17 +129,20 @@ function prompt(question) {
  * Look up SD from database
  */
 async function lookupSD(supabase, sdId) {
+  // QF-20260709-082: strategic_directives/prds don't exist (pre-_v2-migration
+  // table names) -- verified against the live schema snapshot, this lookup has
+  // silently always failed and fallen through to the sd===null path below.
   const { data, error } = await supabase
-    .from('strategic_directives')
-    .select('id, title, status, target_application, branch_name')
-    .eq('id', sdId)
+    .from('strategic_directives_v2')
+    .select('id, title, status, target_application')
+    .eq('sd_key', sdId)
     .single();
 
   if (error) {
-    // Try prds table as fallback
+    // Try product_requirements_v2 as fallback
     const { data: prdData, error: prdError } = await supabase
-      .from('prds')
-      .select('sd_id, title, status, target_application')
+      .from('product_requirements_v2')
+      .select('sd_id, title, status')
       .eq('sd_id', sdId)
       .single();
 
@@ -326,21 +329,24 @@ async function createSDBranch(options = {}) {
   // Branch doesn't exist - create it
   console.log('\n🔨 Creating branch...');
 
-  // Handle uncommitted changes
+  // Handle uncommitted changes. QF-20260709-082: git stash is a REPO-WIDE stack
+  // shared across every worktree on this .git — a no-op push (nothing actually
+  // stashed) followed by an unconditional pop pops ANOTHER worktree's WIP. Only
+  // set stashed=true when the push's own output confirms it stashed something.
   let stashed = false;
   if (await hasUncommittedChanges(repoPath)) {
     console.log('   ⚠️  Uncommitted changes detected');
 
     if (options.autoStash) {
-      await gitCommand(`git stash push -m "Pre-branch ${sdId}"`, repoPath);
-      console.log('   ✅ Changes stashed');
-      stashed = true;
+      const stashResult = await gitCommand(`git stash push -m "Pre-branch ${sdId}"`, repoPath);
+      stashed = !stashResult.stdout.includes('No local changes to save');
+      console.log(stashed ? '   ✅ Changes stashed' : '   ℹ️  Nothing to stash');
     } else {
       const choice = await prompt('   Stash changes and create branch? (y/n): ');
       if (choice.toLowerCase() === 'y') {
-        await gitCommand(`git stash push -m "Pre-branch ${sdId}"`, repoPath);
-        console.log('   ✅ Changes stashed');
-        stashed = true;
+        const stashResult = await gitCommand(`git stash push -m "Pre-branch ${sdId}"`, repoPath);
+        stashed = !stashResult.stdout.includes('No local changes to save');
+        console.log(stashed ? '   ✅ Changes stashed' : '   ℹ️  Nothing to stash');
       } else {
         console.log('❌ Cannot create branch with uncommitted changes');
         process.exit(1);
@@ -400,22 +406,14 @@ async function createSDBranch(options = {}) {
     }
   }
 
-  // Update database with branch name
+  // QF-20260709-082: strategic_directives/prds don't exist, and neither
+  // strategic_directives_v2 nor product_requirements_v2 has a branch_name
+  // column (verified against the live schema) -- this write has never
+  // actually persisted anything, while unconditionally claiming success.
+  // Documented no-op rather than a misleading log; a real column would need
+  // its own migration.
   if (sd) {
-    console.log('\n📝 Updating database...');
-    const { error: updateError } = await supabase
-      .from('strategic_directives')
-      .update({ branch_name: branchName })
-      .eq('id', sdId);
-
-    if (updateError) {
-      // Try prds table
-      await supabase
-        .from('prds')
-        .update({ branch_name: branchName })
-        .eq('sd_id', sdId);
-    }
-    console.log('   ✅ Branch name recorded in database');
+    console.log('\n📝 branch_name has no live DB column -- not persisted');
   }
 
   // Success summary

@@ -50,7 +50,7 @@ FR-1 mirror-kill already covers is explicitly out of scope — see that SD's TR-
 | `metadata.co_author_pending === true` | claim-eligibility.cjs | **A** | fail-open | Guards against a worker writing a PRD before co-author convergence lands. Mirror-killed into dispatch.cjs by FR-1. |
 | `metadata.requires_human_action` (truthy) | claim-eligibility.cjs | **A** | fail-open | Generic human-action hold. Mirror-killed into dispatch.cjs by FR-1. |
 | `metadata.door_class_note === 'one_way'` | claim-eligibility.cjs | **A** | fail-open | Requires Fable-tier supervision. Deliberately still directed-assignable (coordinator can hand it to a specific Fable session) — FR-1 does NOT change this predicate's *meaning*, only that dispatch.cjs now sees it via the shared classifier instead of missing it entirely. |
-| `metadata.dispatch_auth_required === true` (NEW, FR-2) | claim-eligibility.cjs (`isDispatchAuthorized`) | **A** | **primitive only — NOT YET ENFORCED** | `isDispatchAuthorized()` correctly returns `authorized:false` for an opted-in SD with no disposition, but it is **not called from any dispatch entry point** (self-claim, sweep, or directed-assign) as of this SD — setting the flag has zero effect on real dispatch today. A future SD must wire this call into the dispatch path before it becomes load-bearing; when it does, add an `authority` allowlist check on the disposition row (do not trust any recorded `dispatch_auth` disposition regardless of who recorded it). |
+| `metadata.dispatch_auth_required === true` (NEW, FR-2) | claim-eligibility.cjs (`isDispatchAuthorized`) | **A** | **primitive only — NOT YET ENFORCED** | `isDispatchAuthorized()` correctly returns `authorized:false` for an opted-in SD with no disposition, but it is **not called from any dispatch entry point** (self-claim, sweep, or directed-assign) as of this SD — setting the flag has zero effect on real dispatch today. A future SD must wire this call into the dispatch path before it becomes load-bearing; when it does, add an `authority` allowlist check on the disposition row (do not trust any recorded `dispatch_auth` disposition regardless of who recorded it). **UPDATE (SD-ARCH-HOTSPOT-SD-START-001, PR #5771):** that future SD has now shipped — the born-un-authorized gate incl. the authority allowlist lives in `lib/claim/gates/dispatch-authorization.cjs` (flag-gated, off-by-default, observe-first; its module header is the cutover SSOT). This opt-in `isDispatchAuthorized` primitive itself remains uncalled and is superseded by that module. |
 | `row.sd_type === 'orchestrator'` | claim-eligibility.cjs | B | fail-open (excluded) | Structural — an orchestrator parent is never itself dispatchable; not an authorization question. |
 | `TEST_FIXTURE_KEY_RE` match | claim-eligibility.cjs | B | fail-open (excluded) | Reserved test-fixture namespace, structural. |
 | `metadata.not_before` future timestamp | claim-eligibility.cjs | B | fail-open (time-gated) | Auto-clears once the timestamp passes — a liveness/timing axis, not an approval axis. |
@@ -80,6 +80,13 @@ authorization) and is explicitly excluded above rather than silently folded in.
 - It does not implement the global born-DENIED-by-default flip described in this
   SD's parent scope document. That remains a separately-scoped, coordinated cutover
   requiring a backfill/grant mechanism so the live worker belt does not freeze.
+  **UPDATE (SD-ARCH-HOTSPOT-SD-START-001, PRs #5767/#5771):** the flip has since
+  shipped dormant — `lib/claim/gates/dispatch-authorization.cjs` (two-flag mode
+  ladder `dispatch_auth_born_denied` / `_enforce`, observe-never-blocks, authority
+  allowlist) plus the backfill/grant mechanism
+  `scripts/backfill-dispatch-auth-grants.mjs` (dry-run default, PRE-FLIP
+  VERIFICATION must read 0 un-granted claimables before the enforce flip). The
+  module header there is the authoritative cutover contract.
 
 ## Related
 

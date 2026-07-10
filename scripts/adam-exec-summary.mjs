@@ -40,6 +40,12 @@ import { assessAdamSourceWatchdog } from '../lib/fleet/adam-source-watchdog.mjs'
 // the once-per-hour send marker (FR-1). Replaces the stale Distance-to-quit block below.
 import { shouldSendNow, recordSent } from '../lib/fleet/exec-email-send-guard.js';
 import { resolveWindow, loadRecentWork, renderRecentWork } from '../lib/fleet/exec-email-recent-work.js';
+import { enforceCliSendGuard } from '../lib/notifications/cli-send-guard.mjs';
+
+enforceCliSendGuard({
+  scriptName: 'scripts/adam-exec-summary.mjs',
+  flags: [{ name: '--dry-run' }, { name: '--force' }],
+});
 
 const EM = '—';
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);

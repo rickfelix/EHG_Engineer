@@ -11,9 +11,15 @@ verification-packages/
 .worktrees/
 .cache/
 
-# Per-session worktree state (written by sd-start.js / create-quick-fix.js)
-# .worktree.json IS tracked (per-worktree metadata); .ehg-session.json is per-session ephemeral.
+# Per-session worktree state (written by sd-start.js / create-quick-fix.js).
+# QF-20260709-082: .worktree.json/.worktree-nm-mode are now GITIGNORED (were
+# tracked) -- a tracked copy on main is whichever session last committed with
+# stale local pointer state, causing spurious conflicts on every worktree
+# rebase against origin/main. Readers use local fs reads (lib/worktree-manager.js
+# etc.), unaffected by gitignore status.
 .ehg-session.json
+.worktree.json
+.worktree-nm-mode
 
 # Backup files (git already provides versioning)
 *.backup
