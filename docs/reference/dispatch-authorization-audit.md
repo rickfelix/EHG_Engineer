@@ -4,7 +4,7 @@
 **Status**: Approved
 **Version**: 1.0.0
 **Author**: Claude (EXEC, SD-LEO-INFRA-HANDOFF-DISPATCH-AUTHORIZATION-001)
-**Last Updated**: 2026-07-10
+**Last Updated**: 2026-07-10 (added `coordinatorReservation` row, SD-LEO-INFRA-DISPATCH-AUTH-AUTO-AUTHORIZE-001-C)
 **Tags**: dispatch-authorization, claim-eligibility, kind-a, kind-b, fail-open, fail-closed
 
 ## Purpose
@@ -60,6 +60,7 @@ FR-1 mirror-kill already covers is explicitly out of scope — see that SD's TR-
 | tier axes (`min_tier_rank`, `worker_tier_rank`, lower-tier-backlog) | claim-eligibility.cjs | B | fail-open when `ctx` absent | Capability/fit, not approval; explicitly no-op when `ctx` is undefined (directed-assign's FR-1 call always passes `ctx=undefined`). |
 | `metadata.fleet_critical === true` | worker-checkin.cjs | B (promotion) | n/a | Lifts an SD *into* the visible pool; still routes back through the classifier afterward (a fleet_critical + review-pending SD is correctly excluded — "the hold wins"). |
 | `metadata.self_claim === false`, `metadata.availability === 'idle_only'`, `metadata.coordinator_stand_down === true` | worker-checkin.cjs (self-claim gate predicate) | **out of scope** | fail-toward-active | **Worker-session** availability — a different axis entirely from SD-dispatch approval (governs whether a *worker* self-claims, not whether an *SD* is authorized). Documented here for completeness; not part of this audit's Kind-A/B scope. |
+| `coordinatorReservation(row, ctx)` — `ctx.reservations[row.sd_key]` active fence (NEW, SD-LEO-INFRA-DISPATCH-AUTH-AUTO-AUTHORIZE-001-C) | claim-eligibility.cjs | **not a `metadata.<flag>` predicate** | fail-open (`ctx.reservations` absent ⇒ eligible) | Reads a `ctx`-threaded fence sourced from a `session_coordination` row (`payload.kind='coordinator_reservation'`), not from `row.metadata` — outside this audit's literal metadata-flag scope, listed here for completeness since it lives in the SAME `INELIGIBILITY_AXES` table. Closer to Kind-A in spirit (a coordinator directive IS the boundary) but deliberately fail-open per-row on read/auth failure (TR-3) rather than fail-closed, since the fence is advisory-turned-block only while an active, coordinator-authenticated row exists. See [Fleet Coordination — Coordinator Reservation Fence](./fleet-coordination.md#coordinator-reservation-fence). |
 
 ## Findings
 
