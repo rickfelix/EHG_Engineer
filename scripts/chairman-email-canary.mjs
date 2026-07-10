@@ -19,6 +19,7 @@ import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'node:url';
 import { sendEmail } from '../lib/notifications/resend-adapter.js';
 import { checkCanaryFreshness, recordAndEvaluate } from '../lib/notifications/channel-health-recorder.js';
+import { enforceCliSendGuard } from '../lib/notifications/cli-send-guard.mjs';
 
 const CHAIRMAN_EMAIL = process.env.CHAIRMAN_EMAIL || 'codestreetlabs@gmail.com';
 
@@ -79,6 +80,10 @@ export async function checkFreshnessAndAlert({ supabase = getSupabase(), notifyC
 }
 
 async function main() {
+  enforceCliSendGuard({
+    scriptName: 'scripts/chairman-email-canary.mjs',
+    flags: [{ name: '--check-freshness' }],
+  });
   const checkFreshness = process.argv.includes('--check-freshness');
   if (checkFreshness) {
     const { stale, alarmResult } = await checkFreshnessAndAlert();

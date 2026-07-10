@@ -11,6 +11,12 @@
 import 'dotenv/config';
 import { pathToFileURL } from 'url';
 import { resolve } from 'path';
+import { enforceCliSendGuard } from '../lib/notifications/cli-send-guard.mjs';
+
+enforceCliSendGuard({
+  scriptName: 'scripts/adam-heartbeat-email.mjs',
+  flags: [{ name: '--dry-run' }, { name: '--body', takesValue: true }],
+});
 
 const DRY = !!process.env.ADAM_EMAIL_DRYRUN || process.argv.includes('--dry-run');
 const EM = '—';

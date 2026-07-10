@@ -16,6 +16,9 @@ import { pathToFileURL } from 'url';
 import { resolve } from 'path';
 import { readFileSync, writeFileSync } from 'fs';
 import { liveFleetWorkers, isFleetWorker } from '../lib/fleet/genuine-worker.mjs';
+import { enforceCliSendGuard } from '../lib/notifications/cli-send-guard.mjs';
+
+enforceCliSendGuard({ scriptName: 'scripts/coordinator-email-summary.mjs', flags: [] });
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const me = process.env.CLAUDE_SESSION_ID;
