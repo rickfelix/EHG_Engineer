@@ -326,21 +326,24 @@ async function createSDBranch(options = {}) {
   // Branch doesn't exist - create it
   console.log('\n🔨 Creating branch...');
 
-  // Handle uncommitted changes
+  // Handle uncommitted changes. QF-20260709-082: git stash is a REPO-WIDE stack
+  // shared across every worktree on this .git — a no-op push (nothing actually
+  // stashed) followed by an unconditional pop pops ANOTHER worktree's WIP. Only
+  // set stashed=true when the push's own output confirms it stashed something.
   let stashed = false;
   if (await hasUncommittedChanges(repoPath)) {
     console.log('   ⚠️  Uncommitted changes detected');
 
     if (options.autoStash) {
-      await gitCommand(`git stash push -m "Pre-branch ${sdId}"`, repoPath);
-      console.log('   ✅ Changes stashed');
-      stashed = true;
+      const stashResult = await gitCommand(`git stash push -m "Pre-branch ${sdId}"`, repoPath);
+      stashed = !stashResult.stdout.includes('No local changes to save');
+      console.log(stashed ? '   ✅ Changes stashed' : '   ℹ️  Nothing to stash');
     } else {
       const choice = await prompt('   Stash changes and create branch? (y/n): ');
       if (choice.toLowerCase() === 'y') {
-        await gitCommand(`git stash push -m "Pre-branch ${sdId}"`, repoPath);
-        console.log('   ✅ Changes stashed');
-        stashed = true;
+        const stashResult = await gitCommand(`git stash push -m "Pre-branch ${sdId}"`, repoPath);
+        stashed = !stashResult.stdout.includes('No local changes to save');
+        console.log(stashed ? '   ✅ Changes stashed' : '   ℹ️  Nothing to stash');
       } else {
         console.log('❌ Cannot create branch with uncommitted changes');
         process.exit(1);
