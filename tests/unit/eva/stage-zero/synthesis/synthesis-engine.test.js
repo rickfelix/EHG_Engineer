@@ -206,6 +206,31 @@ describe('runSynthesis', () => {
     expect(result.maturity).toBe('ready');
   });
 
+  // SD-LEO-INFRA-STAGE0-TRAVERSABILITY-REACH-001 (adversarial-review CRITICAL fix):
+  // required_capabilities was declared on the candidate but synthesis previously never
+  // carried it into the persisted brief, so seeded_from_venture's carry-forward always
+  // saw undefined in production. Two sources: raw_material.top_candidate (discovery_mode
+  // shape) and pathOutput's own top-level field (single-candidate paths shape).
+  test('threads required_capabilities from raw_material.top_candidate (discovery_mode shape) into the brief', async () => {
+    const pathOutput = {
+      ...validPathOutput,
+      raw_material: { ...validPathOutput.raw_material, top_candidate: { ...validPathOutput.raw_material.top_candidate, required_capabilities: [{ name: 'venture web deploy', kind: 'form_factor' }] } },
+    };
+    const result = await runSynthesis(pathOutput, { logger: silentLogger });
+    expect(result.required_capabilities).toEqual([{ name: 'venture web deploy', kind: 'form_factor' }]);
+  });
+
+  test('threads required_capabilities from a top-level pathOutput field (single-candidate path shape)', async () => {
+    const pathOutput = { ...validPathOutput, required_capabilities: [{ name: 'stripe billing', kind: 'integration' }] };
+    const result = await runSynthesis(pathOutput, { logger: silentLogger });
+    expect(result.required_capabilities).toEqual([{ name: 'stripe billing', kind: 'integration' }]);
+  });
+
+  test('required_capabilities is null (not fabricated) when neither source declares it', async () => {
+    const result = await runSynthesis(validPathOutput, { logger: silentLogger });
+    expect(result.required_capabilities).toBeNull();
+  });
+
   // SD-LEO-INFRA-STAGE0-THESIS-CONTRACT-001: the brief is a thesis, not a score.
   test('emits thesis + kill_criteria + explicit_decisions on every brief', async () => {
     const result = await runSynthesis(validPathOutput, { logger: silentLogger });

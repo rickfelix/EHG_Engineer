@@ -135,6 +135,23 @@ function createMockSupabase(overrides = {}) {
 
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
+// SD-LEO-INFRA-STAGE0-TRAVERSABILITY-REACH-001: competitor_teardown now prompts for and
+// gates on required_capabilities. Without an injected llmClient these tests hit the real
+// LLM (network-dependent, non-deterministic) — deterministic mock, no declared
+// capabilities, so the gate's honest no_requirements_declared auto-pass fires regardless
+// of the mocked envelope's contents.
+function mockCompetitorTeardownLlm() {
+  return {
+    _model: 'test-model',
+    complete: vi.fn().mockResolvedValue(JSON.stringify({
+      company_name: 'TestCorp', url: 'https://test.com', business_model: 'SaaS',
+      root_customer_goals: ['solve X'], automatable_components: [],
+      automation_solution: 'Automated solution', suggested_venture_name: 'Auto Venture',
+      root_customer_problem: 'Customer problem', target_market: 'SMBs',
+    })),
+  };
+}
+
 // ── Interface Validation Tests ──────────────────────────────
 
 describe('Stage 0 Interfaces', () => {
@@ -348,10 +365,11 @@ describe('Path Router', () => {
   });
 
   test('routes to competitor teardown', async () => {
+    const supabase = createMockSupabase();
     const result = await routePath(
       ENTRY_PATHS.COMPETITOR_TEARDOWN,
       { urls: ['https://competitor.com'] },
-      { logger: silentLogger }
+      { supabase, logger: silentLogger, llmClient: mockCompetitorTeardownLlm() }
     );
     expect(result.origin_type).toBe('competitor_teardown');
     expect(result.competitor_urls).toEqual(['https://competitor.com']);
@@ -493,7 +511,7 @@ describe('Stage 0 Orchestrator', () => {
         pathParams: { urls: ['https://competitor.com'] },
         options: { dryRun: true, skipSynthesis: true },
       },
-      { supabase, logger: silentLogger }
+      { supabase, logger: silentLogger, llmClient: mockCompetitorTeardownLlm() }
     );
 
     expect(result.success).toBe(true);
@@ -574,7 +592,7 @@ describe('Stage 0 Orchestrator', () => {
         pathParams: { urls: ['https://test.com'] },
         options: { dryRun: true },
       },
-      { supabase, logger: silentLogger, synthesize: customSynthesize }
+      { supabase, logger: silentLogger, synthesize: customSynthesize, llmClient: mockCompetitorTeardownLlm() }
     );
 
     expect(customSynthesize).toHaveBeenCalled();
@@ -600,7 +618,7 @@ describe('Stage 0 Orchestrator', () => {
         pathParams: { urls: ['https://test.com'] },
         options: { dryRun: true },
       },
-      { supabase, logger: silentLogger, synthesize: customSynthesize }
+      { supabase, logger: silentLogger, synthesize: customSynthesize, llmClient: mockCompetitorTeardownLlm() }
     );
 
     expect(customSynthesize).toHaveBeenCalled();

@@ -8,11 +8,19 @@ import { validatePathOutput } from '../../../../../lib/eva/stage-zero/interfaces
 
 const silentLogger = { log: vi.fn(), warn: vi.fn() };
 
-/** Mock supabase whose ventures.select().eq().single() resolves to `source`. */
-function mockSupabase(source, { error = null } = {}) {
+/**
+ * Mock supabase whose ventures.select().eq().single() resolves to `source`.
+ * SD-LEO-INFRA-STAGE0-TRAVERSABILITY-REACH-001: executeVentureReseeding now also loads
+ * the live capability envelope fail-closed before returning; v_unified_capabilities
+ * resolves to an (honestly empty, unless envelopeRows given) delivered envelope.
+ */
+function mockSupabase(source, { error = null, envelopeRows = [] } = {}) {
   const tables = [];
   const api = (table) => {
     tables.push(table);
+    if (table === 'v_unified_capabilities') {
+      return { select: vi.fn().mockReturnThis(), in: vi.fn().mockResolvedValue({ data: envelopeRows, error: null }) };
+    }
     const chain = {
       select: vi.fn(() => chain),
       eq: vi.fn(() => chain),
@@ -52,11 +60,12 @@ describe('executeVentureReseeding (FR-2)', () => {
     expect(out.raw_material.durable_thesis.archetype).toBe('b2b_saas');
   });
 
-  test('reads only the ventures thesis row — never stage_N / venture_stage_work', async () => {
+  test('reads only the ventures thesis row and the capability envelope — never stage_N / venture_stage_work', async () => {
     const supabase = mockSupabase(SOURCE);
     await executeVentureReseeding({ source_venture_id: 'venture-1' }, { supabase, logger: silentLogger });
-    // exactly one table touched, and it is `ventures` (no stage-row tables)
-    expect(supabase._tables).toEqual(['ventures']);
+    // exactly two tables touched: `ventures` (thesis) and `v_unified_capabilities`
+    // (SD-LEO-INFRA-STAGE0-TRAVERSABILITY-REACH-001 gate) — no stage-row tables.
+    expect(supabase._tables).toEqual(['ventures', 'v_unified_capabilities']);
   });
 
   test('falls back to metadata.stage_zero.solution when the column is empty', async () => {
