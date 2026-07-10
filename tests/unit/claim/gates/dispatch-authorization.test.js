@@ -123,6 +123,27 @@ describe('WIRING PINS (D8 placement + lane exemptions)', () => {
     expect(claimIdx).toBeGreaterThan(authIdx);
     expect(sdStart.slice(authIdx, claimIdx)).toMatch(/process\.exit\(1\)/); // enforce refusal path
   });
+
+  it('sd-start: the auto-FALLBACK lane is ALSO gated (self-review gap fix) with skip-polarity before its claimGuard', () => {
+    const fbIdx = sdStart.indexOf('evaluateDispatchAuthorization({ sd_key: nextSD.sdKey }');
+    expect(fbIdx).toBeGreaterThan(0);
+    const fbClaimIdx = sdStart.indexOf('claimGuard(nextSD.sdKey, session.session_id, { autoFallback: true })');
+    expect(fbClaimIdx).toBeGreaterThan(fbIdx); // check precedes the fallback claim write
+    const between = sdStart.slice(fbIdx, fbClaimIdx);
+    expect(between).toMatch(/sd_start_fallback_claim/);      // observe logging on this lane
+    expect(between).toMatch(/continue;/);                    // skip-polarity, not process.exit
+    expect(between).not.toMatch(/process\.exit/);
+  });
+
+  it('documented lane exemptions hold: stranded-final recovery + orphan-adopt + QF claims carry NO auth hook (phase-2 surface)', () => {
+    // Exactly one evaluateDispatchAuthorization call site in checkin (the self-claim
+    // choke point) — recovery/adoption/QF lanes are deliberate phase-1 exemptions.
+    const checkinHooks = (checkin.match(/evaluateDispatchAuthorization\(/g) || []).length;
+    expect(checkinHooks).toBe(1);
+    // And exactly two in sd-start (direct claim + fallback lane).
+    const sdStartHooks = (sdStart.match(/evaluateDispatchAuthorization\(/g) || []).length;
+    expect(sdStartHooks).toBe(2);
+  });
 });
 
 describe('TS-10 — backfill tool (inert, idempotent) helpers', () => {

@@ -1137,6 +1137,26 @@ async function main() {
         }
 
         console.log(`${colors.dim}   Attempt ${fallbackAttempt}/${MAX_FALLBACK_ATTEMPTS}: Trying ${nextSD.sdKey} — ${nextSD.title}${colors.reset}`);
+
+        // SD-ARCH-HOTSPOT-SD-START-001 FR-7 (self-review gap fix): the fallback lane
+        // claims a DIFFERENT SD than the one gated at 2.9 — without this check the
+        // enforce mode would be bypassed (and observe would under-count) on exactly
+        // this lane. Skip-polarity here (iterate to the next candidate), matching
+        // checkin's self-claim semantics rather than sd-start's loud direct refusal.
+        {
+          const fbAuthMode = await dispatchAuthGate.resolveDispatchAuthMode();
+          const fbVerdict = await dispatchAuthGate.evaluateDispatchAuthorization({ sd_key: nextSD.sdKey }, supabase, { mode: fbAuthMode });
+          if (fbVerdict.would_deny) {
+            console.log(`${colors.yellow}${dispatchAuthGate.formatWouldDenyLine(nextSD.sdKey, fbVerdict, 'sd_start_fallback_claim')}${colors.reset}`);
+          }
+          if (!fbVerdict.authorized) {
+            skippedSDs.push({ sdKey: nextSD.sdKey, reason: `dispatch_auth: ${fbVerdict.reason}` });
+            excludeKeys.push(nextSD.sdKey);
+            console.log(`${colors.yellow}   ⚠️  ${nextSD.sdKey} not dispatch-authorized (enforce mode) — skipping${colors.reset}`);
+            continue;
+          }
+        }
+
         claimResult = await claimGuard(nextSD.sdKey, session.session_id, { autoFallback: true });
 
         if (claimResult.success) {
