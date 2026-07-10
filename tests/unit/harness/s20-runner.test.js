@@ -9,6 +9,7 @@ import { rmSync } from 'node:fs';
 import {
   ALLOWED_DIVERGENCES, STAGE_O_MAP, POST_LAUNCH_DRIVERS, ALL_O_REQUIREMENTS,
   makeSteppingClock, completedBands, runBand, runPostLaunchDrivers, runArc,
+  allowedDivergencesFor, FORCED_STAGE_SET_DIVERGENCE, ADVANCE_POLICIES,
 } from '../../../scripts/harness/s20-run.mjs';
 import { RunJournal } from '../../../lib/harness/run-journal.mjs';
 
@@ -155,5 +156,44 @@ describe('runArc (§H7 resume + §H3 coverage close-out)', () => {
     expect(residue.length).toBeGreaterThanOrEqual(1);
     expect(residue[0].event).toMatch(/ghost-venture class/);
     expect(res.ventureId).toBe('v-fixture');
+  });
+});
+
+describe('advance policy (smoke-decode follow-up: unresolvable S20/S23 gates)', () => {
+
+  it('real-gates (default) excludes forced_stage_set; forced-stage-set enumerates it', () => {
+    expect(ADVANCE_POLICIES).toEqual(['real-gates', 'forced-stage-set']);
+    expect(allowedDivergencesFor('real-gates')).not.toContain(FORCED_STAGE_SET_DIVERGENCE);
+    expect(allowedDivergencesFor('forced-stage-set')).toContain(FORCED_STAGE_SET_DIVERGENCE);
+  });
+
+  it('forced-stage-set: journals the REAL block first, then the sanctioned forced set, and the band completes', async () => {
+    const journal = new RunJournal('t-policy-forced', { baseDir: BASE, clock: fixedClock });
+    const executeStage = vi.fn(async () => ({ artifactId: 'a', validation: { valid: true }, output: {} }));
+    const advanceStage = vi.fn(async () => { throw new Error('blocked by exit-gate enforcer: no verifier registered for a BINDING gate'); });
+    const forceStageSet = vi.fn(async () => {});
+    const r = await runBand({
+      supabase: {}, journal, ventureId: 'v1', stage: 20, clock: { now: fixedClock },
+      seams: { executeStage, advanceStage, forceStageSet }, advancePolicy: 'forced-stage-set',
+    });
+    expect(r).toMatchObject({ advanced: true, forced: true });
+    const events = journal.readAll();
+    expect(events.some((e) => e.event.includes('BLOCKED by live gates'))).toBe(true); // drivability evidence preserved
+    expect(events.find((e) => e.event.includes('allowed test-mode divergence: forced_stage_set'))).toBeTruthy();
+    expect(events.find((e) => e.event.includes('FORCED stage set'))).toBeTruthy();
+    expect(events.find((e) => e.kind === 'checkpoint').detail.band_complete).toBe(20);
+  });
+
+  it('real-gates policy is byte-identical to before: block -> checkpoint, no forced set', async () => {
+    const journal = new RunJournal('t-policy-real', { baseDir: BASE, clock: fixedClock });
+    const advanceStage = vi.fn(async () => { throw new Error('blocked'); });
+    const forceStageSet = vi.fn(async () => {});
+    const r = await runBand({
+      supabase: {}, journal, ventureId: 'v1', stage: 20, clock: { now: fixedClock },
+      seams: { executeStage: vi.fn(async () => ({ output: {}, validation: { valid: true } })), advanceStage, forceStageSet },
+    });
+    expect(r).toMatchObject({ advanced: false, executed: true });
+    expect(forceStageSet).not.toHaveBeenCalled();
+    expect(journal.readAll().some((e) => e.event.includes('FORCED'))).toBe(false);
   });
 });
