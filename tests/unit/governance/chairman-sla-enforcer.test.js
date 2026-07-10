@@ -54,7 +54,7 @@ describe('Chairman SLA Enforcer — enforceDecisionSLAs', () => {
 
   it('skips blocking decisions (chairman authority)', async () => {
     const supabase = createMockSupabase([
-      { id: 'dec-1', decision_type: 'gate_decision', created_at: '2020-01-01T00:00:00Z', blocking: true, metadata: {} },
+      { id: 'dec-1', decision_type: 'gate_decision', created_at: '2020-01-01T00:00:00Z', blocking: true, brief_data: {} },
     ]);
     const result = await enforceDecisionSLAs(supabase, { logger: { warn: vi.fn() } });
     expect(result.skipped).toBe(1);
@@ -63,7 +63,7 @@ describe('Chairman SLA Enforcer — enforceDecisionSLAs', () => {
 
   it('skips already-escalated decisions', async () => {
     const supabase = createMockSupabase([
-      { id: 'dec-2', decision_type: 'advisory', created_at: '2020-01-01T00:00:00Z', blocking: false, metadata: { escalation: { escalated_at: '2020-01-02T00:00:00Z' } } },
+      { id: 'dec-2', decision_type: 'advisory', created_at: '2020-01-01T00:00:00Z', blocking: false, brief_data: { escalation: { escalated_at: '2020-01-02T00:00:00Z' } } },
     ]);
     const result = await enforceDecisionSLAs(supabase, { logger: { warn: vi.fn() } });
     expect(result.skipped).toBe(1);
@@ -71,7 +71,7 @@ describe('Chairman SLA Enforcer — enforceDecisionSLAs', () => {
   });
 
   it('returns blocked count when blockOnViolation is true (V02: default)', async () => {
-    const overdue = { id: 'dec-3', decision_type: 'stakeholder_response', created_at: '2020-01-01T00:00:00Z', blocking: false, metadata: {} };
+    const overdue = { id: 'dec-3', decision_type: 'stakeholder_response', created_at: '2020-01-01T00:00:00Z', blocking: false, brief_data: {} };
     const supabase = createMockSupabase([overdue]);
     const result = await enforceDecisionSLAs(supabase, { logger: { warn: vi.fn() } });
     expect(result.escalated).toBe(1);
@@ -79,7 +79,7 @@ describe('Chairman SLA Enforcer — enforceDecisionSLAs', () => {
   });
 
   it('does not block when blockOnViolation is false', async () => {
-    const overdue = { id: 'dec-4', decision_type: 'advisory', created_at: '2020-01-01T00:00:00Z', blocking: false, metadata: {} };
+    const overdue = { id: 'dec-4', decision_type: 'advisory', created_at: '2020-01-01T00:00:00Z', blocking: false, brief_data: {} };
     const supabase = createMockSupabase([overdue]);
     const result = await enforceDecisionSLAs(supabase, { blockOnViolation: false, logger: { warn: vi.fn() } });
     expect(result.escalated).toBe(1);
@@ -90,7 +90,7 @@ describe('Chairman SLA Enforcer — enforceDecisionSLAs', () => {
 describe('Chairman SLA Enforcer — escalateDecision', () => {
   it('sets blocking=true in decision update when blockOnViolation=true', async () => {
     const supabase = createMockSupabase();
-    const decision = { id: 'dec-5', metadata: {}, venture_id: 'v1' };
+    const decision = { id: 'dec-5', brief_data: {}, venture_id: 'v1' };
 
     await escalateDecision(supabase, decision, {
       slaMs: 7200000,
@@ -103,13 +103,13 @@ describe('Chairman SLA Enforcer — escalateDecision', () => {
     expect(updateCall).toHaveBeenCalled();
     const payload = updateCall.mock.calls[0][0];
     expect(payload.blocking).toBe(true);
-    expect(payload.metadata.sla_violated).toBe(true);
-    expect(payload.metadata.escalation.strategy).toBe('block_and_escalate');
+    expect(payload.brief_data.sla_violated).toBe(true);
+    expect(payload.brief_data.escalation.strategy).toBe('block_and_escalate');
   });
 
   it('uses escalate_notify strategy when blockOnViolation=false', async () => {
     const supabase = createMockSupabase();
-    const decision = { id: 'dec-6', metadata: {}, venture_id: 'v1' };
+    const decision = { id: 'dec-6', brief_data: {}, venture_id: 'v1' };
 
     const result = await escalateDecision(supabase, decision, {
       slaMs: 7200000,
@@ -121,12 +121,12 @@ describe('Chairman SLA Enforcer — escalateDecision', () => {
     expect(result.blocked).toBe(false);
     const payload = supabase._chain.update.mock.calls[0][0];
     expect(payload.blocking).toBeUndefined();
-    expect(payload.metadata.escalation.strategy).toBe('escalate_notify');
+    expect(payload.brief_data.escalation.strategy).toBe('escalate_notify');
   });
 
   it('returns blocked=true when blocking mode active', async () => {
     const supabase = createMockSupabase();
-    const decision = { id: 'dec-7', metadata: {}, venture_id: 'v1' };
+    const decision = { id: 'dec-7', brief_data: {}, venture_id: 'v1' };
 
     const result = await escalateDecision(supabase, decision, {
       slaMs: 7200000,

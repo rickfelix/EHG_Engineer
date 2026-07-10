@@ -102,7 +102,7 @@ describe('selectBlockingSweepRows (pure selection for the blocking pass)', () =>
 
 describe('main — sweep passes (TS-2/TS-3/TS-4)', () => {
   it('TS-3: a due blocking row is escalated via the seam exactly once; second run dedups', async () => {
-    const decisions = [{ id: 'd1', decision_type: 'stage_gate', status: 'pending', blocking: true, created_at: iso(2 * HOUR), venture_id: null, brief_data: {}, metadata: {} }];
+    const decisions = [{ id: 'd1', decision_type: 'stage_gate', status: 'pending', blocking: true, created_at: iso(2 * HOUR), venture_id: null, brief_data: {} }];
     const sb = makeSupabase({ decisions });
     const escalate = vi.fn(async (supabase, id) => {
       const row = decisions.find((d) => d.id === id);
@@ -125,8 +125,8 @@ describe('main — sweep passes (TS-2/TS-3/TS-4)', () => {
 
   it('TS-2: enforcer runs NOTIFY-ONLY (blockOnViolation:false) with the actionable filter', async () => {
     const decisions = [
-      { id: 'a1', decision_type: 'chairman_approval', status: 'pending', blocking: false, created_at: iso(30 * HOUR), venture_id: null, brief_data: {}, metadata: {} },
-      { id: 'noise', decision_type: 'flag_review', status: 'pending', blocking: false, created_at: iso(30 * HOUR), venture_id: null, brief_data: {}, metadata: {} },
+      { id: 'a1', decision_type: 'chairman_approval', status: 'pending', blocking: false, created_at: iso(30 * HOUR), venture_id: null, brief_data: {} },
+      { id: 'noise', decision_type: 'flag_review', status: 'pending', blocking: false, created_at: iso(30 * HOUR), venture_id: null, brief_data: {} },
     ];
     const sb = makeSupabase({ decisions });
     let enforceOpts;
@@ -145,8 +145,8 @@ describe('main — sweep passes (TS-2/TS-3/TS-4)', () => {
     // so created_at must be aged relative to actual now, not the test's fixed NOW fixture constant.
     const realAged = new Date(Date.now() - 30 * HOUR).toISOString(); // past the 24h fallback SLA
     const decisions = [
-      { id: 'noise', decision_type: 'flag_review', status: 'pending', blocking: false, created_at: realAged, venture_id: null, brief_data: {}, metadata: {} },
-      { id: 'a1', decision_type: 'chairman_approval', status: 'pending', blocking: false, created_at: realAged, venture_id: null, brief_data: {}, metadata: {} },
+      { id: 'noise', decision_type: 'flag_review', status: 'pending', blocking: false, created_at: realAged, venture_id: null, brief_data: {} },
+      { id: 'a1', decision_type: 'chairman_approval', status: 'pending', blocking: false, created_at: realAged, venture_id: null, brief_data: {} },
     ];
     const sb = makeSupabase({ decisions });
     // main()'s own cutoff/actionable-filter logic uses deps.nowMs — keep that aligned with real time.
@@ -157,15 +157,15 @@ describe('main — sweep passes (TS-2/TS-3/TS-4)', () => {
     const r = await main(['node', 's', '--once'], deps);
     expect(r.exitCode).toBe(0);
     const noise = decisions.find((d) => d.id === 'noise');
-    expect(noise.metadata.escalation).toBeUndefined(); // telemetry untouched
+    expect(noise.brief_data.escalation).toBeUndefined(); // telemetry untouched
     expect(noise.blocking).toBe(false);
     const a1 = decisions.find((d) => d.id === 'a1');
-    expect(a1.metadata.escalation).toBeTruthy();       // SLA notify action recorded
+    expect(a1.brief_data.escalation).toBeTruthy();       // SLA notify action recorded
     expect(a1.blocking).toBe(false);                    // NEVER mutated (blockOnViolation:false)
   });
 
   it('dry-run performs no escalation, no stamp, no enforcement', async () => {
-    const decisions = [{ id: 'd1', decision_type: 'stage_gate', status: 'pending', blocking: true, created_at: iso(2 * HOUR), venture_id: null, brief_data: {}, metadata: {} }];
+    const decisions = [{ id: 'd1', decision_type: 'stage_gate', status: 'pending', blocking: true, created_at: iso(2 * HOUR), venture_id: null, brief_data: {} }];
     const sb = makeSupabase({ decisions });
     const escalate = vi.fn();
     const enforce = vi.fn();
