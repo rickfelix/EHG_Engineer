@@ -1,5 +1,5 @@
 // SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A (FR-2)
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { computeGaugeState, isGaugeWriterAlive, computePaidGaugeState, DEFAULT_CADENCE_HOURS } from '../../../lib/telemetry/funnel-gauge.mjs';
 
 const NOW = new Date('2026-07-10T12:00:00.000Z');
@@ -88,13 +88,56 @@ describe('isGaugeWriterAlive (SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A FR-
   });
 });
 
-// Coordinator ruling on FR-3 descope (SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A):
-// the "paid" stage is never fabricated -- it's an explicit, visible gated state until
-// venture-payment attribution exists.
-describe('computePaidGaugeState (coordinator-ruled FR-3 descope)', () => {
-  it('always reports gated_on_attribution — never a fabricated paid value', () => {
-    const result = computePaidGaugeState();
+// Coordinator ruling on FR-3 descope (SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A),
+// given a real implementation by SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002 FR-4.
+// Never fabricates a paid value -- gated_on_attribution unless resolver coverage exists.
+describe('computePaidGaugeState (SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002 FR-4)', () => {
+  function buildSupabaseStub({ readinessRows, resolvedRows, unattributedCount }) {
+    return {
+      from: vi.fn(() => ({
+        select: vi.fn((cols, opts) => {
+          if (opts?.head) {
+            // unattributed count query
+            return { eq: vi.fn(() => Promise.resolve({ count: unattributedCount, error: null })) };
+          }
+          return {
+            not: vi.fn(() => ({ limit: vi.fn(() => Promise.resolve({ data: readinessRows, error: null })) })),
+            // resolved-rows query: .eq(venture_id).eq(attribution_status).eq(livemode)
+            eq: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ data: resolvedRows, error: null })) })) })),
+          };
+        }),
+      })),
+    };
+  }
+
+  it('TS-5: reports gated_on_attribution — unchanged pre-resolver behavior — when the resolver has never run anywhere', async () => {
+    const supabase = buildSupabaseStub({ readinessRows: [], resolvedRows: [], unattributedCount: 0 });
+    const result = await computePaidGaugeState({ supabase, ventureId: 'v-1' });
     expect(result.state).toBe('gated_on_attribution');
-    expect(result.reason).toMatch(/attribution/);
+    expect(result.reason).toMatch(/never run/);
+  });
+
+  it('TS-5: reports live with a DEDUPED paid_amount_cents once resolver coverage exists — never double-counts a payment\'s multiple webhook-event rows (adversarial-review finding)', async () => {
+    const supabase = buildSupabaseStub({
+      readinessRows: [{ id: 'row-1' }],
+      resolvedRows: [
+        // ONE real payment (pi_1) captured as 3 separate ops_payment_events rows,
+        // per Stripe's own multi-event webhook behavior + the Phase-1 IDEMP-02 note.
+        { id: 'e1', amount_cents: 1000, currency: 'usd', event_type: 'checkout.session.completed', payment_intent_id: 'pi_1', stripe_charge_id: null },
+        { id: 'e2', amount_cents: 1000, currency: 'usd', event_type: 'payment_intent.succeeded', payment_intent_id: 'pi_1', stripe_charge_id: null },
+        { id: 'e3', amount_cents: 1000, currency: 'usd', event_type: 'charge.succeeded', payment_intent_id: 'pi_1', stripe_charge_id: 'ch_1' },
+        // A SECOND, genuinely distinct payment (pi_2).
+        { id: 'e4', amount_cents: 500, currency: 'usd', event_type: 'checkout.session.completed', payment_intent_id: 'pi_2', stripe_charge_id: null },
+      ],
+      unattributedCount: 2,
+    });
+    const result = await computePaidGaugeState({ supabase, ventureId: 'v-1' });
+    expect(result).toEqual({ state: 'live', paid_amount_cents: 1500, currency: 'usd', unattributed_count_fleet_wide: 2 });
+  });
+
+  it('never hides the UNATTRIBUTED line — unattributed_count_fleet_wide is present even when zero', async () => {
+    const supabase = buildSupabaseStub({ readinessRows: [{ id: 'row-1' }], resolvedRows: [], unattributedCount: 0 });
+    const result = await computePaidGaugeState({ supabase, ventureId: 'v-1' });
+    expect(result.unattributed_count_fleet_wide).toBe(0);
   });
 });

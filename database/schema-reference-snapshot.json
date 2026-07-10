@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-07-10T01:22:31.386Z",
+ "generated_at": "2026-07-10T03:21:58.938Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
  "table_count": 780,
  "view_count": 177,
@@ -431,7 +431,7 @@
   "ops_customer_health_scores": "{id,venture_id,customer_id,dimension_scores,overall_score,at_risk,trigger_type,recommended_action,metadata,computed_at,created_at,updated_at,created_by}",
   "ops_friday_scorecards": "{id,venture_id,week_date,revenue_status,customer_status,product_status,agent_status,cost_status,overall_status,alert_count,decision_items,computed_at,created_at,updated_at}",
   "ops_health_alerts": "{id,venture_id,layer,metric_type,actual_value,threshold_value,severity,status,agent_id,alert_date,resolved_at,created_at,updated_at}",
-  "ops_payment_events": "{id,stripe_event_id,stripe_charge_id,payment_intent_id,event_type,amount_cents,currency,status,livemode,event_ts,venture_id,raw_payload,created_at}",
+  "ops_payment_events": "{id,stripe_event_id,stripe_charge_id,payment_intent_id,event_type,amount_cents,currency,status,livemode,event_ts,venture_id,raw_payload,created_at,attribution_status,attribution_method,attribution_reason,resolved_at}",
   "ops_product_health": "{id,venture_id,metric_date,uptime_pct,p95_latency_ms,error_rate,infra_cost_usd,total_requests,successful_requests,error_requests,computed_at,created_at,updated_at}",
   "ops_quarterly_assessments": "{id,venture_id,assessment_type,quarter,status,scheduled_date,completed_date,findings,created_at,updated_at}",
   "ops_revenue_alerts": "{id,venture_id,metric_type,actual_value,target_value,deviation_pct,severity,status,alert_date,resolved_at,created_at,updated_at}",
