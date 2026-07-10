@@ -53,6 +53,17 @@ const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligib
 // blocking, unresolved, AND query error — the exact draftDepsSatisfied semantics it replaces
 // (with uuid-shaped refs now RESOLVING instead of dangling, a resolution-accuracy fix only).
 const { evaluateClaimDependencyGate, depsSatisfiedFromVerdict } = require('../lib/claim/gates/dependency-gate.cjs');
+// SD-ARCH-HOTSPOT-SD-START-001 FR-7: the SD-2 phase-1 dispatch-authorization polarity flip,
+// flag-gated (two-flag ladder, absent=off=byte-identical) + OBSERVE-ONLY first. Wired on the
+// SELF-CLAIM lane only (orphan-adopt + directed WORK_ASSIGNMENT are documented exemptions —
+// coordinator-initiated lanes carry their own authorization; the phase-2 enforcement surface).
+const dispatchAuth = require('../lib/claim/gates/dispatch-authorization.cjs');
+// Resolve the mode ONCE per CLI pass (one-shot process) — prospective-testing D8.
+let _dispatchAuthModePromise = null;
+function getDispatchAuthMode() {
+  if (!_dispatchAuthModePromise) _dispatchAuthModePromise = dispatchAuth.resolveDispatchAuthMode();
+  return _dispatchAuthModePromise;
+}
 // SD-LEO-INFRA-COMPLEXITY-TIERED-WORKER-ASSIGNMENT-001 (FR-3): WORK-DOWN-NEVER-UP on the PULL path.
 // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B (FR-3): --model/--effort capture at check-in.
 const { resolveWorkerTierRank, isTieringActive, normalizeModel, normalizeEffort, rankForModelEffort, ladderTopRank } = require('../lib/fleet/tier-ladder.cjs');
@@ -840,6 +851,13 @@ async function tryClaimDraftCandidate(sb, sessionId, base, d, tierCtx = {}) {
   // otherwise drive PLAN then hit the hard EXEC-transition block). Fail-open inside parentLeadPending.
   if (await parentLeadPending(sb, d)) return null;
   if (await isSdInFlight(sb, d.sd_key, sessionId)) return null; // dedup: started or live-foreign-held
+  // SD-ARCH-HOTSPOT-SD-START-001 FR-7 (D8 placement): AFTER every other gate, immediately
+  // BEFORE the claim write — so the observe-mode WOULD-DENY set equals exactly the set
+  // enforce mode would block. Observe NEVER blocks; enforce refuses (dormant until the
+  // backfill-verified cutover flips the enforce flag).
+  const authVerdict = await dispatchAuth.evaluateDispatchAuthorization(d, sb, { mode: await getDispatchAuthMode() });
+  if (authVerdict.would_deny) console.log(dispatchAuth.formatWouldDenyLine(d.sd_key, authVerdict, 'checkin_self_claim'));
+  if (!authVerdict.authorized) return null; // enforce mode: born-un-authorized SD skipped
   const claimed = await tryClaim(sb, d.sd_key, sessionId);
   if (claimed.ok) {
     return {

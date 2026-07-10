@@ -101,6 +101,8 @@ const { verifyHandoffIntegrity: verifyHandoffIntegrityGate } = cjsRequire('../li
 const { evaluateCadenceGate } = cjsRequire('../lib/claim/gates/cadence-gate.cjs');
 const queueResolver = cjsRequire('../lib/claim/queue-resolver.cjs');
 const { classifyAllDispatchIneligibility } = cjsRequire('../lib/fleet/claim-eligibility.cjs');
+// SD-ARCH-HOTSPOT-SD-START-001 FR-7: dispatch-authorization polarity gate (flag-gated, observe-first).
+const dispatchAuthGate = cjsRequire('../lib/claim/gates/dispatch-authorization.cjs');
 
 // SD-FDBK-INFRA-DEPENDENCY-BLOCKS-ADVISORY-001: pre-claim DEPENDENCY gate.
 // Dependency BLOCKS were advisory-only (computed by the sweep/dashboard but never
@@ -903,6 +905,24 @@ async function main() {
       console.log(`\n${colors.yellow}Note: Session already working on ${effectiveId}, refreshing claim...${colors.reset}`);
     } else if (session.adopted_sd_id) {
       console.log(`\n${colors.yellow}Note: Session currently working on ${session.adopted_sd_id}, switching to ${effectiveId}${colors.reset}`);
+    }
+  }
+
+  // 2.9. SD-ARCH-HOTSPOT-SD-START-001 FR-7 (D8 placement): dispatch-authorization
+  // check AFTER every eligibility gate, immediately BEFORE the claim write — the
+  // observe-mode WOULD-DENY set equals exactly what enforce mode would block.
+  // Flag ladder absent => mode 'off' => zero lookups, byte-identical behavior.
+  {
+    const authMode = await dispatchAuthGate.resolveDispatchAuthMode();
+    const authVerdict = await dispatchAuthGate.evaluateDispatchAuthorization(sd, supabase, { mode: authMode });
+    if (authVerdict.would_deny) {
+      console.log(`${colors.yellow}${dispatchAuthGate.formatWouldDenyLine(effectiveId, authVerdict, 'sd_start_direct_claim')}${colors.reset}`);
+    }
+    if (!authVerdict.authorized) {
+      console.log(`\n${colors.red}${colors.bold}🚫 ${effectiveId} is not dispatch-authorized (born-un-authorized polarity, enforce mode)${colors.reset}`);
+      console.log(`   reason: ${authVerdict.reason}`);
+      console.log(`   ${colors.dim}Grant path: a chairman/coordinator dispatch_auth disposition (see scripts/backfill-dispatch-auth-grants.mjs for the cutover tool).${colors.reset}`);
+      process.exit(1);
     }
   }
 
