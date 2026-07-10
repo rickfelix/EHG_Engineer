@@ -1425,16 +1425,27 @@ from a sequential `main()` monolith (~1,955 lines) into an **ordered pass regist
 
 | Env var | Default | Effect |
 |---------|---------|--------|
-| `SWEEP_PASS_REGISTRY` | unset (ON) | Set to `off` to run the pre-refactor inline code path (`lib/sweep/legacy-fallback.cjs`). Both paths call the same underlying implementations, so behavior parity holds; use only as an emergency rollback lever. |
+| `SWEEP_PASS_REGISTRY` | unset (ON) | Set to `off` to run the pre-refactor inline code path (`lib/sweep/legacy-fallback.cjs`). 4 of the 7 gated call sites delegate to the exact same shared function on both paths (cannot diverge); the other 3 (intent-collision, dead-letter, coordination-detectors) are genuine re-implementations in `legacy-fallback.cjs` — pinned to their `lib/sweep/passes/*.cjs` counterparts by `tests/ci/sweep-legacy-twin-parity.test.js` (SD-LEO-INFRA-SWEEP-LEGACY-KILL-SWITCH-RETIRE-001). Use only as an emergency rollback lever. |
+
+**Retirement**: the flag is not permanent-by-default. `SWEEP_PASS_REGISTRY_RETIREMENT`
+(exported const next to the flag declaration in `scripts/stale-session-sweep.cjs`) records
+the owner, the machine-checkable retirement condition, and the enumerated retirement
+action (remove the 7 gated branches, delete `lib/sweep/legacy-fallback.cjs`, delete the
+parity test, delete the record itself).
 
 Known accepted risks (follow-ups filed): `main()` invokes registry passes by positional
-index (order pinned by unit test only); intent-collision logic is duplicated between the
-registry pass and the legacy fallback (drift risk if one copy is patched alone).
+index (order pinned by unit test only); `dead-letter-planning.cjs` derives its timestamp
+from `ctx.now.getTime()` while the legacy fallback's call site computes a fresh
+`Date.now()` override — a real but currently TTL-inert (7-day granularity) source
+difference between the two paths, documented in the parity test rather than fixed
+(intentionally out of scope for SD-LEO-INFRA-SWEEP-LEGACY-KILL-SWITCH-RETIRE-001, a
+candidate fast-follow).
 
 ## Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 5.2.1 | 2026-07-10 | SWEEP_PASS_REGISTRY kill-switch given an owned, machine-readable retirement record (`SWEEP_PASS_REGISTRY_RETIREMENT`) and a CI parity test (`tests/ci/sweep-legacy-twin-parity.test.js`) pinning the three genuinely duplicated legacy twins to their pass-module counterparts (SD-LEO-INFRA-SWEEP-LEGACY-KILL-SWITCH-RETIRE-001, PR #5818). No runtime behavior change. |
 | 5.2.0 | 2026-07-09 | Sweep re-architecture (SD-ARCH-HOTSPOT-SWEEP-001, PR #5755): `main()` decomposed into ordered pass-registry (`lib/sweep/`) with per-pass isolation + `critical` rethrow, `SWEEP_PASS_REGISTRY=off` kill-switch, `evaluateSourceSideSignals` promoted to module-level pure helper. Includes QF-20260709-968 (CLAIM_FIX treats SD-row claim as authoritative over session-row binding). Cross-seat build: Golf-2 → Bravo handover with adversarial review gate (2 CRITICALs fixed pre-merge). |
 | 5.1.0 | 2026-06-04 | Added Cross-Session De-confliction Protocol behind default-OFF flag `CROSS_SESSION_DECONFLICTION` (SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001): FR-1 typed INTENT broadcast, FR-2 sweep collision detection, FR-3 targeted de-confliction reply + `acknowledged_at` stamp, FR-4 lone-signal ack+route. Enum-safe (reuses INFO/COACHING), migration-free. PR #4222. |
 | 5.0.0 | 2026-02-18 | **Breaking**: Dropped sd_claims table (SD-LEO-INFRA-CONSOLIDATE-CLAIMS-INTO-001). All claim state now in claude_sessions exclusively. Fixed isSameConversation() for UUID vs port-based terminal_id. v_active_sessions rebuilt without sd_claims JOIN. Manual release is now single-table. |
