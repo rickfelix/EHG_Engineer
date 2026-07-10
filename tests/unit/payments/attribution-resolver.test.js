@@ -129,6 +129,27 @@ describe('attribution-resolver (SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002)', () 
       const result = await resolveUnattributedEvents(supabase, { limit: 500 });
       expect(result).toEqual({ processed: 0, resolved: 0, unattributed: 0 });
     });
+
+    it('VALIDATION finding: lineage resolution is order-independent within a batch — a row needing lineage does NOT get permanently stranded as unattributed just because its metadata-carrying sibling appears LATER in the same pending batch', async () => {
+      // row-charge (needs lineage) is listed FIRST; row-checkout (carries direct
+      // metadata, and is row-charge's only possible donor via payment_intent_id)
+      // is listed SECOND. A naive single-pass, in-order resolver would mark
+      // row-charge unattributed before row-checkout ever resolves.
+      const pending = [
+        { id: 'row-charge', payment_intent_id: 'pi_shared', stripe_charge_id: null, raw_payload: { data: { object: {} } } },
+        { id: 'row-checkout', payment_intent_id: 'pi_shared', stripe_charge_id: null, raw_payload: { data: { object: { metadata: { venture_id: 'v-ordered' } } } } },
+      ];
+      const updates = [];
+      const supabase = buildSupabaseStub({ pending, candidates: [], updateSpy: (p) => updates.push(p) });
+
+      const result = await resolveUnattributedEvents(supabase, { limit: 500 });
+
+      expect(result).toEqual({ processed: 2, resolved: 2, unattributed: 0 });
+      const chargeUpdate = updates.find((u) => u.attribution_method === 'lineage_payment_intent');
+      expect(chargeUpdate.venture_id).toBe('v-ordered');
+      const checkoutUpdate = updates.find((u) => u.attribution_method === 'direct_metadata');
+      expect(checkoutUpdate.venture_id).toBe('v-ordered');
+    });
   });
 
   it('TS-2: PAT-PORT-ISOL-001 regression pin — the ingester still stamps venture_id: null unconditionally, unchanged by this SD', () => {
