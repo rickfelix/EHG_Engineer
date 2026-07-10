@@ -78,7 +78,7 @@ export async function runAdapterLivenessProbe({ supabase, ventureId, channelId, 
     .eq('channel_id', channelId);
 
   if (updateError) {
-    return { passed: false, reason: `real post landed (postId ${result.postId}) but liveness-state update failed: ${updateError.message}`, postId: result.postId };
+    return { passed: false, reason: `real post landed (postId ${result.postId}) but failed to persist liveness-state: ${updateError.message}`, postId: result.postId };
   }
 
   return { passed: true, reason: `one real post observed (postId ${result.postId}) — adapter flips WIRED-BUT-SILENT -> proven_live`, postId: result.postId };
@@ -86,7 +86,9 @@ export async function runAdapterLivenessProbe({ supabase, ventureId, channelId, 
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
-  const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabase = createClient(supabaseUrl, supabaseKey);
   (async () => {
     if (!FORCE_LOCAL && !(await flagEnabled(supabase))) {
       console.log(`[adapter-liveness-probe] flag ${ADAPTER_LIVENESS_CANARY_FLAG} is disabled — quiet refusal (enable it or pass --force-local)`);
