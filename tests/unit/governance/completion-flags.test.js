@@ -186,7 +186,10 @@ describe('TS-2 writer/consumer key contract (frozen constant identity)', () => {
 // ---------------------------------------------------------------------------
 // TS-3 — witness 3-filter invariant
 // ---------------------------------------------------------------------------
-describe('TS-3 witness tuple invariant {enhancement, harness_backlog, backlog}', () => {
+// SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 (FR-2): the pinned witness tuple's
+// category moved from 'harness_backlog' to 'completion_flag_witness' -- the describe
+// title and the assertion below are updated to match; status:'backlog' is unchanged.
+describe('TS-3 witness tuple invariant {enhancement, completion_flag_witness, backlog}', () => {
   it('status=backlog maps to ON_THE_SHELF (NOT NEW) in the real inbox lifecycle', () => {
     // Witness uses status:'backlog' so it parks on the shelf rather than nagging in NEW.
     expect(mapFeedbackLifecycle('backlog')).toBe('ON_THE_SHELF');
@@ -213,7 +216,7 @@ describe('TS-3 witness tuple invariant {enhancement, harness_backlog, backlog}',
     expect(supabase._rows).toHaveLength(1);
     const witness = supabase._rows[0];
     expect(witness.type).toBe('enhancement');
-    expect(witness.category).toBe('harness_backlog');
+    expect(witness.category).toBe('completion_flag_witness');
     expect(witness.status).toBe('backlog');
     expect(witness.metadata.no_flags).toBe(true);
   });

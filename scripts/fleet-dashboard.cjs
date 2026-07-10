@@ -1970,12 +1970,18 @@ async function printFeedback(d, deps = {}) {
   console.log('─'.repeat(72));
 
   // Untriaged feedback: pending rows not yet actioned, excluding harness backlog
-  // (surfaced as its own subsection below) to keep the two views disjoint.
+  // (surfaced as its own subsection below) AND the write-time-terminal categories
+  // (SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 FR-1 — completion_flag_witness /
+  // telemetry_aggregate / informational_note are never actionable; a plain
+  // .neq('category','harness_backlog') would let fresh witness rows leak back into
+  // this "untriaged" view, VALIDATION finding at PLAN_VERIFICATION) to keep the
+  // views disjoint.
+  const { TERMINAL_CATEGORIES } = require('../lib/governance/feedback-terminal-categories.cjs');
   const { data: untriaged, error: uErr } = await sb
     .from('feedback')
     .select('id, priority, category, title, status, created_at')
     .not('status', 'in', '(resolved,cancelled,closed)')
-    .neq('category', 'harness_backlog')
+    .not('category', 'in', `(harness_backlog,${TERMINAL_CATEGORIES.join(',')})`)
     .order('created_at', { ascending: false })
     .limit(15);
 
