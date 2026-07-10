@@ -66,16 +66,22 @@ function makeSupabase({ briefData = null } = {}) {
   return sb;
 }
 
-describe('shouldAutoEscalate (FR-1)', () => {
+describe('shouldAutoEscalate (FR-1, widened by SD-LEO-INFRA-CHAIRMAN-DECISION-SURFACING-001)', () => {
   it('adam + session_question => true', () => {
     expect(shouldAutoEscalate({ decisionType: 'session_question', raisedBy: 'adam' })).toBe(true);
   });
   it('adam + blocking => true', () => {
     expect(shouldAutoEscalate({ decisionType: 'stage_gate', blocking: true, raisedBy: 'adam' })).toBe(true);
   });
-  it('non-adam => false regardless of type/blocking', () => {
+  it('blocking => true for ANY raiser — no raiser bypass', () => {
+    expect(shouldAutoEscalate({ decisionType: 'stage_gate', blocking: true, raisedBy: 'stage_gate' })).toBe(true);
+    expect(shouldAutoEscalate({ decisionType: 'gate_decision', blocking: true, raisedBy: 'coordinator' })).toBe(true);
+    expect(shouldAutoEscalate({ blocking: true, raisedBy: null })).toBe(true);
+    expect(shouldAutoEscalate({ blocking: true })).toBe(true); // raisedBy omitted entirely
+  });
+  it('non-adam non-blocking => false (non-blocking rows escalate only via the adam session_question path)', () => {
     expect(shouldAutoEscalate({ decisionType: 'session_question', raisedBy: 'coordinator' })).toBe(false);
-    expect(shouldAutoEscalate({ blocking: true, raisedBy: null })).toBe(false);
+    expect(shouldAutoEscalate({ decisionType: 'stage_gate', blocking: false, raisedBy: 'stage_gate' })).toBe(false);
   });
   it('adam but neither session_question nor blocking => false', () => {
     expect(shouldAutoEscalate({ decisionType: 'stage_gate', blocking: false, raisedBy: 'adam' })).toBe(false);
@@ -90,7 +96,7 @@ describe('escalateChairmanDecision (FR-2/FR-3)', () => {
   it('fires the email once and stamps escalation_email_sent_at', async () => {
     const sb = makeSupabase({ briefData: { title: 'q' } });
     const spawn = vi.fn();
-    const r = await escalateChairmanDecision(sb, 'dec-1', { spawn });
+    const r = await escalateChairmanDecision(sb, 'dec-1', { spawn, quietWindow: () => false });
     expect(r.escalated).toBe(true);
     expect(spawn).toHaveBeenCalledTimes(1);
     expect(sb.rows[0].brief_data.escalation_email_sent_at).toBeTruthy();
@@ -99,7 +105,7 @@ describe('escalateChairmanDecision (FR-2/FR-3)', () => {
   it('dedup: a row already stamped does NOT spawn again', async () => {
     const sb = makeSupabase({ briefData: { title: 'q', escalation_email_sent_at: '2026-06-28T00:00:00Z' } });
     const spawn = vi.fn();
-    const r = await escalateChairmanDecision(sb, 'dec-1', { spawn });
+    const r = await escalateChairmanDecision(sb, 'dec-1', { spawn, quietWindow: () => false });
     expect(r.deduped).toBe(true);
     expect(spawn).not.toHaveBeenCalled();
   });
@@ -107,7 +113,7 @@ describe('escalateChairmanDecision (FR-2/FR-3)', () => {
   it('fail-soft: a spawn throw is swallowed (escalated:false, no throw)', async () => {
     const sb = makeSupabase({ briefData: { title: 'q' } });
     const spawn = vi.fn(() => { throw new Error('spawn boom'); });
-    const r = await escalateChairmanDecision(sb, 'dec-1', { spawn });
+    const r = await escalateChairmanDecision(sb, 'dec-1', { spawn, quietWindow: () => false });
     expect(r.escalated).toBe(false);
     expect(r.error).toMatch(/boom/);
   });
@@ -122,7 +128,7 @@ describe('escalateChairmanDecision — rate cap (QF-20260703-905)', () => {
     }
     sb.rows.push({ id: 'dec-4', created_at: new Date().toISOString(), brief_data: { title: 'q4' } });
 
-    const r = await escalateChairmanDecision(sb, 'dec-4', { spawn });
+    const r = await escalateChairmanDecision(sb, 'dec-4', { spawn, quietWindow: () => false });
     expect(r.escalated).toBe(true);
     expect(r.digest).toBe(true);
     expect(spawn).toHaveBeenCalledTimes(1);
@@ -136,10 +142,10 @@ describe('escalateChairmanDecision — rate cap (QF-20260703-905)', () => {
       sb.rows.push({ id: `seed-${i}`, created_at: new Date().toISOString(), brief_data: { escalation_email_sent_at: new Date().toISOString() } });
     }
     sb.rows.push({ id: 'dec-4', created_at: new Date().toISOString(), brief_data: {} });
-    await escalateChairmanDecision(sb, 'dec-4', { spawn }); // sends the ONE digest
+    await escalateChairmanDecision(sb, 'dec-4', { spawn, quietWindow: () => false }); // sends the ONE digest
 
     sb.rows.push({ id: 'dec-5', created_at: new Date().toISOString(), brief_data: { title: 'q5' } });
-    const r = await escalateChairmanDecision(sb, 'dec-5', { spawn });
+    const r = await escalateChairmanDecision(sb, 'dec-5', { spawn, quietWindow: () => false });
     expect(r.escalated).toBe(false);
     expect(r.suppressed).toBe('rate_cap');
     expect(spawn).toHaveBeenCalledTimes(1); // still just the one digest — never a 2nd
@@ -150,10 +156,43 @@ describe('escalateChairmanDecision — rate cap (QF-20260703-905)', () => {
     const spawn = vi.fn();
     sb.rows.push({ id: 'seed-0', created_at: new Date().toISOString(), brief_data: { escalation_email_sent_at: new Date().toISOString() } });
     sb.rows.push({ id: 'dec-2', created_at: new Date().toISOString(), brief_data: { title: 'q2' } });
-    const r = await escalateChairmanDecision(sb, 'dec-2', { spawn });
+    const r = await escalateChairmanDecision(sb, 'dec-2', { spawn, quietWindow: () => false });
     expect(r.escalated).toBe(true);
     expect(r.digest).toBeUndefined();
     expect(sb.rows.find(row => row.id === 'dec-2').brief_data.escalation_email_sent_at).toBeTruthy();
+  });
+});
+
+describe('escalateChairmanDecision — quiet-window race fix (SD-LEO-INFRA-CHAIRMAN-DECISION-SURFACING-001 FR-3)', () => {
+  it('inside the quiet window: neither stamps escalation_email_sent_at nor spawns', async () => {
+    const sb = makeSupabase({ briefData: { title: 'q' } });
+    const spawn = vi.fn();
+    const r = await escalateChairmanDecision(sb, 'dec-1', { spawn, quietWindow: () => true });
+    expect(r.escalated).toBe(false);
+    expect(r.suppressed).toBe('quiet_window');
+    expect(spawn).not.toHaveBeenCalled();
+    expect(sb.rows[0].brief_data.escalation_email_sent_at).toBeUndefined(); // row stays eligible for the sweep retry
+  });
+
+  it('outside the quiet window: stamps + spawns exactly once; a second call is deduped', async () => {
+    const sb = makeSupabase({ briefData: { title: 'q' } });
+    const spawn = vi.fn();
+    const r1 = await escalateChairmanDecision(sb, 'dec-1', { spawn, quietWindow: () => false });
+    expect(r1.escalated).toBe(true);
+    expect(sb.rows[0].brief_data.escalation_email_sent_at).toBeTruthy();
+    const r2 = await escalateChairmanDecision(sb, 'dec-1', { spawn, quietWindow: () => false });
+    expect(r2.deduped).toBe(true);
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
+  it('quiet-window suppression happens BEFORE the rate-cap read, so it never counts against the cap', async () => {
+    const sb = makeSupabase({ briefData: { title: 'q' } });
+    const spawn = vi.fn();
+    await escalateChairmanDecision(sb, 'dec-1', { spawn, quietWindow: () => true });
+    // Marker absent => a later out-of-window escalation still sends the standout email.
+    const r = await escalateChairmanDecision(sb, 'dec-1', { spawn, quietWindow: () => false });
+    expect(r.escalated).toBe(true);
+    expect(spawn).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -161,24 +200,35 @@ describe('recordPendingDecision — deterministic escalation wiring (FR-2/FR-5)'
   it('an adam session_question record fires exactly one email spawn, no in-session gate', async () => {
     const sb = makeFakeTable();
     const spawn = vi.fn();
-    const r = await recordPendingDecision(sb, { title: 'Adam needs a call', raisedBy: 'adam', decisionType: 'session_question', _spawnEscalation: spawn });
+    const r = await recordPendingDecision(sb, { title: 'Adam needs a call', raisedBy: 'adam', decisionType: 'session_question', _spawnEscalation: spawn, _quietWindow: () => false });
     expect(r.recorded).toBe(true);
     expect(r.escalated).toBe(true);
     expect(spawn).toHaveBeenCalledTimes(1);
   });
 
-  it('a non-adam record does NOT fire the email', async () => {
+  it('a non-adam NON-BLOCKING record does NOT fire the email', async () => {
     const sb = makeFakeTable();
     const spawn = vi.fn();
-    const r = await recordPendingDecision(sb, { title: 'routine', raisedBy: 'coordinator', decisionType: 'session_question', _spawnEscalation: spawn });
+    const r = await recordPendingDecision(sb, { title: 'routine', raisedBy: 'coordinator', decisionType: 'session_question', _spawnEscalation: spawn, _quietWindow: () => false });
     expect(r.recorded).toBe(true);
     expect(r.escalated).toBe(false);
     expect(spawn).not.toHaveBeenCalled();
   });
 
+  it('a BLOCKING record fires the email regardless of raiser — no raiser bypass (SD-LEO-INFRA-CHAIRMAN-DECISION-SURFACING-001 FR-1)', async () => {
+    for (const raisedBy of ['stage_gate', 'coordinator', undefined]) {
+      const sb = makeFakeTable();
+      const spawn = vi.fn();
+      const r = await recordPendingDecision(sb, { title: 'venture paused behind gate', raisedBy, decisionType: 'stage_gate', blocking: true, _spawnEscalation: spawn, _quietWindow: () => false });
+      expect(r.recorded).toBe(true);
+      expect(r.escalated).toBe(true);
+      expect(spawn).toHaveBeenCalledTimes(1);
+    }
+  });
+
   it('persists raised_by in brief_data for escalation provenance', async () => {
     const sb = makeFakeTable();
-    const r = await recordPendingDecision(sb, { title: 'q', raisedBy: 'adam', decisionType: 'session_question', _spawnEscalation: vi.fn() });
+    const r = await recordPendingDecision(sb, { title: 'q', raisedBy: 'adam', decisionType: 'session_question', _spawnEscalation: vi.fn(), _quietWindow: () => false });
     expect(r.recorded).toBe(true);
   });
 
@@ -192,6 +242,7 @@ describe('recordPendingDecision — deterministic escalation wiring (FR-2/FR-5)'
         decisionType: 'stage_gate',
         blocking: true,
         _spawnEscalation: spawn,
+        _quietWindow: () => false,
       });
       expect(r.recorded).toBe(true);
     }
