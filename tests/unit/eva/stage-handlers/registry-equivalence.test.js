@@ -7,7 +7,7 @@
  * Also covers FR-3 registry semantics (fail-soft posture, kill-switch single-impl).
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { makeRecordingSupabase, makeRecordingLogger } from '../../../fixtures/stage-worker-io-recorder.js';
@@ -95,6 +95,31 @@ describe('FR-3: registry semantics', () => {
     const logger = makeRecordingLogger();
     expect(await runStageHandler(19, { supabase: {}, logger, ventureId: V })).toBe(false);
     expect(logger.lines.warn).toBe(0);
+  });
+
+  it('every dynamic import in the relocated handlers resolves to a real file', () => {
+    // Guard for the relocation-depth bug class: the extraction re-pathed './x'
+    // sibling imports but cross-package '../../lib/gvos/*' specifiers needed one
+    // more level. A wrong depth is SILENT in production (hooks are fail-soft),
+    // so resolve every specifier statically here.
+    const handlerDir = resolve(__dirname, '../../../../lib/eva/stage-handlers');
+    for (const file of ['s11.js', 's15.js', 's17.js', 'registry.js']) {
+      const src = readFileSync(resolve(handlerDir, file), 'utf8');
+      const specs = [...src.matchAll(/import\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => m[1]);
+      for (const spec of specs) {
+        expect(existsSync(resolve(handlerDir, spec)), `${file}: unresolvable dynamic import '${spec}'`).toBe(true);
+      }
+    }
+  });
+
+  it('registry log strings match the kill-switch Map path verbatim (dispatch-observability parity)', () => {
+    const registrySrc = readFileSync(resolve(__dirname, '../../../../lib/eva/stage-handlers/registry.js'), 'utf8');
+    const workerSrc = readFileSync(resolve(__dirname, '../../../../lib/eva/stage-execution-worker.js'), 'utf8');
+    for (const fragment of ['Post-stage hook fired for S', 'failed (non-fatal):']) {
+      expect(registrySrc).toContain(fragment);
+      expect(workerSrc).toContain(fragment);
+    }
+    expect(registrySrc).not.toMatch(/Post-stage handler (fired|S)/);
   });
 
   it('kill-switch: isRegistryEnabled honors STAGE_HANDLER_REGISTRY=off', () => {
