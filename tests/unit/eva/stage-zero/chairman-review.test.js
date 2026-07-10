@@ -288,6 +288,26 @@ describe('ChairmanReview', () => {
       expect(cancelCall).toBeUndefined();
     });
 
+    // Adversarial-review round 2: supabase-js returns { data: null, error } on PostgREST faults
+    // instead of throwing — a discarded error would read as "no pending decision" and cancel
+    // anyway. A soft check failure must also fail toward PAUSE.
+    it('mint failure with a FAILED live-pending check also SKIPS the compensating cancel', async () => {
+      createOrReusePendingDecision.mockRejectedValueOnce(new Error('mint exploded'));
+      const mockSupabase = createMockSupabase({
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: 'transient 5xx' } }),
+      });
+      await expect(
+        persistVentureBrief(
+          { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+          { supabase: mockSupabase, logger: silentLogger },
+        ),
+      ).rejects.toThrow(/fail-closed/);
+      const cancelCall = mockSupabase._mockChain.update.mock.calls.find(
+        (c) => c[0]?.status === 'cancelled',
+      );
+      expect(cancelCall).toBeUndefined();
+    });
+
     // Idempotent re-run wedge closure: original run died between venture insert and mint —
     // the 23505 path re-mints (reuse-safe) for a paused-awaiting existing venture.
     it('23505 re-run with a paused-awaiting venture re-mints the pending gate', async () => {

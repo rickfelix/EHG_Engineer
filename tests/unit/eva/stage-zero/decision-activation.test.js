@@ -52,6 +52,7 @@ function makeSupabase({
     const chain = {
       select: () => chain,
       eq: () => chain,
+      order: () => chain,
       limit: () => Promise.resolve({ data: pausedVentures, error: null }),
       maybeSingle: () =>
         Promise.resolve({
