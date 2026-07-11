@@ -54,6 +54,10 @@ const EXEMPT_PATTERNS = [
   /\bscripts[/\\]coordinator-audit\.mjs\b/,                 // loop 5, */15
   /\bscripts[/\\]coordinator-email-summary\.mjs\b/,         // loop 6, */30
   /\bscripts[/\\]coordinator-startup-check\.mjs\b/,         // startup probe
+  // QF-20260710-584 / RCA c6d429fc (LEARN-129): quiet-tick is a healthy idempotent
+  // coordinator cadence (every run exits 0) but has no per-SD progress fingerprint, so
+  // the succeeding-poll exemption doesn't save it across interleaved coordinator loops.
+  /\bscripts[/\\]coordinator-quiet-tick\.mjs\b/,
   /\bsetActiveCoordinator\b/,
   /\bcoordinator[/\\]resolve\.cjs\b/,
   /\bscripts[/\\]adam-advisory\.cjs\b[^\n]*\binbox\b/,
