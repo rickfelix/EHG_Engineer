@@ -67,18 +67,26 @@ console.log('Zero-mass-fail check: every in-flight machinery SD now holds ACTIVA
 
 if (doReview && !dryRun) {
   // Observe-window review: machinery-class SDs that reached LEAD-FINAL during the
-  // advisory period, and their activation states now.
-  const { data: windowHandoffs } = await supabase
+  // advisory period, and their activation states now. Every query on this path is
+  // FAIL-LOUD (adversarial review): a swallowed error here would write a falsely-clean
+  // evidence artifact — the exact opposite of its observe-then-bind purpose.
+  const { data: windowHandoffs, error: whErr } = await supabase
     .from('sd_phase_handoffs')
     .select('sd_id')
     .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
     .gte('created_at', OBSERVE_WINDOW_START);
+  if (whErr) { console.error(`review: handoff window query failed (${whErr.message}) — NOT writing a partial artifact`); process.exit(1); }
   const windowIds = [...new Set((windowHandoffs ?? []).map((h) => h.sd_id))];
-  const { data: windowSds } = windowIds.length
+  const { data: windowSds, error: wsErr } = windowIds.length
     ? await supabase.from('strategic_directives_v2')
         .select('id, sd_key, sd_type, title, status, description, scope, key_changes, metadata, parent_sd_id')
         .in('id', windowIds)
-    : { data: [] };
+    : { data: [], error: null };
+  if (wsErr) { console.error(`review: window SD query failed (${wsErr.message}) — NOT writing a partial artifact`); process.exit(1); }
+  if (windowIds.length && (windowSds ?? []).length !== windowIds.length) {
+    console.error(`review: window SD fetch truncated (${(windowSds ?? []).length}/${windowIds.length}) — NOT writing a partial artifact`);
+    process.exit(1);
+  }
   const counts = { ACTIVATED: 0, ARMED: 0, UNWIRED: 0 };
   const unwired = [];
   for (const sd of machineryLeaves(windowSds ?? [])) {
@@ -98,11 +106,17 @@ if (doReview && !dryRun) {
     grandfathered_this_sweep: grandfatheredKeys,
     authorizing_decision: CHAIRMAN_RATIFICATION,
   };
-  const { data: selfSd } = await supabase
+  const { data: selfSd, error: selfErr } = await supabase
     .from('strategic_directives_v2').select('id, metadata').eq('sd_key', SELF_SD_KEY).single();
+  if (selfErr || !selfSd?.id) {
+    // Grandfathering writes above already committed and are idempotent — only the
+    // review artifact is missing; re-run with --review after fixing the lookup.
+    console.error(`review: could not load ${SELF_SD_KEY} (${selfErr?.message ?? 'no row'}) — artifact not written`);
+    process.exit(1);
+  }
   const { error: revErr } = await supabase
     .from('strategic_directives_v2')
-    .update({ metadata: { ...(selfSd?.metadata ?? {}), observe_window_review: review } })
+    .update({ metadata: { ...(selfSd.metadata ?? {}), observe_window_review: review } })
     .eq('id', selfSd.id);
   if (revErr) { console.error(`review write failed: ${revErr.message}`); process.exit(1); }
   console.log(`\nObserve-window review recorded on ${SELF_SD_KEY}: ${JSON.stringify(counts)}; unwired: ${unwired.length ? unwired.join(', ') : '(none)'}`);
