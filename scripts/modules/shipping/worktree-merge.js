@@ -11,9 +11,11 @@
  */
 
 import { execSync } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, realpathSync } from 'fs';
 import { resolve } from 'path';
+import { fileURLToPath } from 'url';
 import { removeWorktreeViaGit } from '../../../lib/worktree-manager.js';
+import { observeMergeWorkLadder } from '../../../lib/ship/auto-merge.mjs';
 
 function run(cmd, opts = {}) {
   try {
@@ -24,7 +26,30 @@ function run(cmd, opts = {}) {
   }
 }
 
-function main() {
+// SD-LEO-INFRA-SHIP-WITNESS-TRIO-001 (FR-1): best-effort, never-throws observation
+// of a merge that just landed via `gh pr merge` in this lane. TR-1: must never
+// block or fail the merge -- all failures caught and logged only.
+export async function observeWorktreeMerge(prNumber) {
+  try {
+    const [repoOwner, repoName] = run('gh repo view --json owner,name --jq "[.owner.login,.name] | @tsv"', { allowFail: true }).split('\t');
+    const { createSupabaseServiceClient } = await import('../../../lib/supabase-client.js');
+    const supabase = createSupabaseServiceClient();
+    await observeMergeWorkLadder({
+      prNumber,
+      repoOwner,
+      repoName,
+      tier: 'standard',
+      lane: 'worktree-merge',
+      merged: true,
+      supabase,
+      logger: console,
+    });
+  } catch (e) {
+    console.log(`   ⚠️  merge-witness observation skipped (non-fatal): ${e?.message || e}`);
+  }
+}
+
+async function main() {
   const prNumber = process.argv[2];
   if (!prNumber) {
     console.error('Usage: node worktree-merge.js <PR_NUMBER>');
@@ -46,6 +71,7 @@ function main() {
   console.log('   🔀 Merging PR on GitHub...');
   run(`gh pr merge ${prNumber} --merge`);
   console.log('   ✅ PR merged');
+  await observeWorktreeMerge(prNumber);
 
   // Step 2: Delete remote branch (gh doesn't need local checkout for this)
   console.log(`   🗑️  Deleting remote branch: ${branch}...`);
@@ -113,4 +139,19 @@ function main() {
   }
 }
 
-main();
+// Only run the CLI when invoked directly, so importing this module in a test
+// (e.g. to test observeWorktreeMerge in isolation) does not also execute main().
+const invokedDirectly = (() => {
+  try {
+    return process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+})();
+
+if (invokedDirectly) {
+  main().catch((e) => {
+    console.error(e?.message || e);
+    process.exitCode = 1;
+  });
+}
