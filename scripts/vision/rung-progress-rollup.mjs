@@ -16,6 +16,8 @@ import { makeDefaultGrepSeam } from '../../lib/vision/vdr-grep-seam.js';
 import { runRollup } from '../../lib/vision/rung-progress-rollup.mjs';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { stampLastFired } from '../../lib/periodic-liveness/stamp-last-fired.js';
+import { computeWaveLinkageCoverage, COVERAGE_THRESHOLD, STARVATION_NAME } from '../../lib/roadmap/wave-linkage-coverage.js';
+import { emitFeedback } from '../../lib/governance/emit-feedback.js';
 
 // SD-LEO-INFRA-ROADMAP-FOLD-SEAM-001 (FR-3): applied runs are a registered,
 // owned periodic process (P6 regime) — self-register the registry row and
@@ -60,6 +62,32 @@ async function main() {
   if (!res.ok) { console.error('[rung-rollup] ERROR:', res.error); process.exit(1); }
 
   if (apply) await ensureRegistryAndStamp(supabase);
+
+  // QF-20260711-045 (coordinator PRD rider on the fold-seam SD): wave-linkage
+  // coverage of claimable leaf SDs is computed every run; below the 80%
+  // threshold starvation is a NAMED failure — printed always, and on applied
+  // runs emitted durably (emitFeedback dedups by content hash, so a persisting
+  // starvation state does not spam a row per run).
+  try {
+    const cov = await computeWaveLinkageCoverage(supabase);
+    const pct = cov.coverage == null ? 'n/a (0 claimable leaves)' : `${Math.round(cov.coverage * 100)}%`;
+    console.log(`\n  Wave-linkage coverage: ${pct} (${cov.linked}/${cov.total} claimable leaves linked; threshold ${COVERAGE_THRESHOLD * 100}%)`);
+    if (cov.starved) {
+      console.error(`  ❌ ${STARVATION_NAME}: coverage below threshold — first unlinked: ${cov.unlinkedKeys.slice(0, 5).join(', ')}`);
+      if (apply) {
+        await emitFeedback({
+          supabase,
+          title: `${STARVATION_NAME}: wave-linkage coverage ${pct} < ${COVERAGE_THRESHOLD * 100}%`,
+          description: `Named starvation failure per the fold-seam PRD rider (QF-20260711-045): ${cov.linked}/${cov.total} claimable leaf SDs wave-linked. Unlinked sample: ${cov.unlinkedKeys.join(', ')}`,
+          category: 'harness_backlog',
+          severity: 'high',
+          dedup_key: STARVATION_NAME,
+        });
+      }
+    }
+  } catch (covErr) {
+    console.error(`  [coverage] WARN: wave-linkage coverage computation failed: ${covErr.message}`);
+  }
 
   console.log(`\n  Active build rung: ${res.activeRungKey} | build gauge: ${res.gaugeBuildPct}%`);
   console.log(`  ${apply ? 'APPLIED' : 'DRY-RUN (pass --apply to persist)'} — wrote ${res.written} row(s)\n`);
