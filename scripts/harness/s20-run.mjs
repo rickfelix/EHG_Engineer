@@ -311,7 +311,11 @@ async function main() {
       sweepOnly: args.includes('--sweep-only'),
       advancePolicy: flag('advance-policy', 'real-gates'),
     });
-    console.log(`HARNESS_RUN_PASS run=${res.runId} venture=${res.ventureId} covered=${res.coverage.covered.length}/${ALL_O_REQUIREMENTS.length} journal=${res.journalPath}`);
+    const { coverage } = res;
+    console.log(`HARNESS_RUN_PASS run=${res.runId} venture=${res.ventureId} positive=${coverage.positive.length}/${ALL_O_REQUIREMENTS.length} mapping_covered=${coverage.covered.length}/${ALL_O_REQUIREMENTS.length} journal=${res.journalPath}`);
+    if (coverage.blocked.length) console.log(`  BLOCKED: ${coverage.blocked.join(',')}`);
+    if (coverage.cannotDrive.length) console.log(`  CANNOT_DRIVE: ${coverage.cannotDrive.join(',')}`);
+    if (coverage.uncovered.length) console.log(`  DEAD_LOOP: ${coverage.uncovered.join(',')}`);
     process.exit(0);
   } else if (mode === 'status') {
     const journal = new RunJournal(runId);

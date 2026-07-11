@@ -97,6 +97,22 @@ describe('§H2/§H3: run journal seam', () => {
     expect(cov.findings[0].finding_type).toBe('DEAD_LOOP');
   });
 
+  it('honest-gauge fix (QF-20260711-114): blocked/cannot-drive requirements are NOT counted as positive-path success', () => {
+    const j = new RunJournal('honest-gauge-run', { baseDir: TMP, clock: fixedClock });
+    j.append({ kind: 'observation', event: 'real completion', o_requirements: ['O1'] });
+    j.append({ kind: 'finding', finding_type: 'CANNOT_DRIVE', event: 'no driver exists', o_requirements: ['O2'] });
+    j.append({ kind: 'finding', finding_type: 'FENCE_BREACH', event: 'gate blocked it', o_requirements: ['O3'] });
+    // O4 gets zero events at all -> dead loop.
+    const cov = j.checkCoverage(['O1', 'O2', 'O3', 'O4']);
+    expect(cov.disposition).toEqual({ O1: 'positive', O2: 'cannot_drive', O3: 'blocked', O4: 'dead_loop' });
+    expect(cov.positive).toEqual(['O1']);
+    expect(cov.cannotDrive).toEqual(['O2']);
+    expect(cov.blocked).toEqual(['O3']);
+    expect(cov.headline).toEqual({ positive: 1, total: 4 });
+    // Mapping-completeness (unchanged contract) still counts O1-O3 as "covered".
+    expect(cov.covered.sort()).toEqual(['O1', 'O2', 'O3']);
+  });
+
   it('unenumerated divergence journals as TEST_MODE_DIVERGENCE; enumerated ones as observations', () => {
     const j = new RunJournal('div-run', { baseDir: TMP, clock: fixedClock });
     const allowed = j.assertDivergenceAllowed('stripe_test_keys', ['stripe_test_keys']);
