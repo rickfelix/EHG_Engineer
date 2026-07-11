@@ -4,6 +4,14 @@
     "stage_17_refined": {
       "reason": "SD-LEO-FIX-REGISTER-STAGE-REFINED-001: lib/eva/stage-17/refinement.js's live Pass-1-selection refinement path needs this type; CHECK-widening migration staged pending chairman apply (metadata.requires_chairman_apply=true).",
       "migration": "database/migrations/20260711_add_stage_17_refined_artifact_type.sql"
+    },
+    "harness_run_journal": {
+      "reason": "SD-LEO-INFRA-RUN-EVIDENCE-DURABILITY-001: the S20-26 harness's finalize-mirror (lib/harness/run-journal.mjs) needs this type to persist journal evidence independent of filesystem scratch; CHECK-widening migration staged pending chairman apply (metadata.requires_chairman_apply=true).",
+      "migration": "database/migrations/20260711_add_harness_run_journal_and_distribution_block_marker.sql"
+    },
+    "distribution_block_marker": {
+      "reason": "SD-LEO-INFRA-RUN-EVIDENCE-DURABILITY-001: lib/eva/stage-templates/analysis-steps/stage-22-distribution-setup.js's persistBlockMarker() already writes this type in production and fails the CHECK constraint today (silently persisted as {persisted:false}); CHECK-widening migration staged pending chairman apply (metadata.requires_chairman_apply=true).",
+      "migration": "database/migrations/20260711_add_harness_run_journal_and_distribution_block_marker.sql"
     }
   }
 }

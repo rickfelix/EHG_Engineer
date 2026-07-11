@@ -39,7 +39,7 @@
  */
 import 'dotenv/config';
 import { createRequire } from 'node:module';
-import { RunJournal } from '../../lib/harness/run-journal.mjs';
+import { RunJournal, finalizeMirror } from '../../lib/harness/run-journal.mjs';
 import { createFixture, findFixtureVentureId, assertClean } from './s20-fixture.mjs';
 
 const require = createRequire(import.meta.url);
@@ -291,7 +291,10 @@ export async function runArc({ runId, entryStage = 20, toStage = 26, clockStart,
   for (const f of coverage.findings) journal.append({ kind: 'finding', finding_type: f.finding_type, event: f.event, o_requirements: f.o_requirements, detail: {} });
   journal.append({ kind: 'lifecycle', event: `run arc pass complete: covered=${coverage.covered.join(',') || 'none'} uncovered=${coverage.uncovered.join(',') || 'none'}`, detail: { coverage } });
 
-  return { runId, ventureId, coverage, journalPath: journal.path };
+  // FR-3/FR-4: durable DB mirror of the journal, independent of .harness-runs scratch.
+  const mirror = await finalizeMirror({ supabase, journal, ventureId, lifecycleStage: entryStage, seams: seams.finalizeMirror ? { writeArtifact: seams.finalizeMirror } : {} });
+
+  return { runId, ventureId, coverage, journalPath: journal.path, mirror };
 }
 
 async function main() {

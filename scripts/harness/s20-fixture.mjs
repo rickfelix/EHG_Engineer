@@ -33,6 +33,14 @@ import 'dotenv/config';
 import { createRequire } from 'node:module';
 import { RunJournal } from '../../lib/harness/run-journal.mjs';
 import { isFixtureVenture } from '../../lib/eva/chairman-decision-watcher.js';
+import { ARTIFACT_TYPES } from '../../lib/eva/artifact-types.js';
+
+// FR-3/FR-4 mitigation (SD-LEO-INFRA-RUN-EVIDENCE-DURABILITY-001, risk-agent 2026-07-11):
+// the finalize-mirror row lives in venture_artifacts scoped to the SAME venture_id as
+// every other fixture row, so teardown's blanket venture_id-scoped delete/residue-count
+// on that table would otherwise destroy the very evidence it is meant to survive.
+// Structurally excluded from both the delete and the residue count below.
+const HARNESS_RUN_JOURNAL_TYPE = ARTIFACT_TYPES.HARNESS_RUN_JOURNAL;
 
 const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
@@ -197,7 +205,9 @@ export async function teardownFixture(supabase, runId, { journal } = {}) {
   const deleted = {};
   if (ventureId) {
     for (const table of tables) {
-      const { error, count } = await supabase.from(table).delete({ count: 'exact' }).eq('venture_id', ventureId);
+      let query = supabase.from(table).delete({ count: 'exact' }).eq('venture_id', ventureId);
+      if (table === 'venture_artifacts') query = query.neq('artifact_type', HARNESS_RUN_JOURNAL_TYPE);
+      const { error, count } = await query;
       // Fail-soft per table (a table without venture_id or not present is journaled, not fatal)
       deleted[table] = error ? `skip: ${error.message}` : (count ?? 0);
     }
@@ -230,7 +240,9 @@ export async function assertClean(supabase, runId, { journal, ventureId: knownId
   const tables = [...new Set([...CORE_FIXTURE_TABLES, ...j.touchedTables()])].filter((t) => t !== 'ventures');
   for (const table of tables) {
     if (!ventureId) { results[table] = 0; continue; }
-    const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq('venture_id', ventureId);
+    let query = supabase.from(table).select('*', { count: 'exact', head: true }).eq('venture_id', ventureId);
+    if (table === 'venture_artifacts') query = query.neq('artifact_type', HARNESS_RUN_JOURNAL_TYPE);
+    const { count, error } = await query;
     results[table] = error ? `unverifiable: ${error.message}` : (count ?? 0);
   }
 
@@ -240,10 +252,26 @@ export async function assertClean(supabase, runId, { journal, ventureId: knownId
     if (bad) clean = false;
     console.log(`HARNESS_RESIDUE run=${runId} table=${table} rows=${n}${bad ? ' ⚠' : ''}`);
   }
+
+  // FR-2 (SD-LEO-INFRA-RUN-EVIDENCE-DURABILITY-001): ADDITIVE to the residue-absence
+  // checks above — assert the run's journal evidence IS PRESENT post-teardown. Teardown
+  // itself never touches the journal file (only DB rows, above); a missing/empty journal
+  // here means the run-evidence path regressed (e.g. .harness-runs wiped or a re-key bug).
+  const journalEntries = j.readAll();
+  const journalEvidencePresent = journalEntries.length > 0;
+  results.journal_evidence_present = journalEvidencePresent;
+  console.log(`HARNESS_JOURNAL_EVIDENCE run=${runId} present=${journalEvidencePresent} entries=${journalEntries.length}${journalEvidencePresent ? '' : ' ⚠'}`);
+  if (!journalEvidencePresent) clean = false;
+
   if (!clean) {
-    j.finding('RESIDUE', 'post-teardown residue assertion FAILED', { results });
+    if (!journalEvidencePresent) {
+      j.finding('RESIDUE', 'post-teardown journal-evidence-present assertion FAILED (journal empty/unreadable)', { results });
+    }
+    if (Object.entries(results).some(([t, n]) => t !== 'journal_evidence_present' && (typeof n !== 'number' || n > 0))) {
+      j.finding('RESIDUE', 'post-teardown residue assertion FAILED', { results });
+    }
   } else {
-    j.append({ kind: 'fence_assertion', event: 'post-teardown residue assertion PASSED (zero fixture residue)', detail: { tables: Object.keys(results) } });
+    j.append({ kind: 'fence_assertion', event: 'post-teardown residue assertion PASSED (zero fixture residue, journal evidence present)', detail: { tables: Object.keys(results) } });
   }
   console.log(`HARNESS_CLEAN=${clean} run=${runId}`);
   return { clean, results };
