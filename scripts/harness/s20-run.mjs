@@ -39,7 +39,7 @@
  */
 import 'dotenv/config';
 import { createRequire } from 'node:module';
-import { RunJournal } from '../../lib/harness/run-journal.mjs';
+import { RunJournal, finalizeMirror } from '../../lib/harness/run-journal.mjs';
 import { createFixture, findFixtureVentureId, assertClean } from './s20-fixture.mjs';
 
 const require = createRequire(import.meta.url);
@@ -317,6 +317,10 @@ export async function runArc({ runId, entryStage = 20, toStage = 26, clockStart,
   for (const f of coverage.findings) journal.append({ kind: 'finding', finding_type: f.finding_type, event: f.event, o_requirements: f.o_requirements, detail: {} });
   journal.append({ kind: 'lifecycle', event: `run arc pass complete: covered=${coverage.covered.join(',') || 'none'} uncovered=${coverage.uncovered.join(',') || 'none'}`, detail: { coverage } });
 
+  // FR-3/FR-4 (SD-LEO-INFRA-RUN-EVIDENCE-DURABILITY-001): durable system_events mirror of
+  // the journal, independent of both .harness-runs scratch and the fixture's own lifecycle.
+  const mirror = await finalizeMirror({ supabase, journal, ventureId, seams: seams.finalizeMirror ? { insertEvent: seams.finalizeMirror } : {} });
+
   // O10 run-meta verdict, graded ONCE at run level: every per-loop O-req mapped (not dead)
   // AND the containment sweep found no residue AND the journal is non-empty/durable.
   const o10AllMapped = coverage.uncovered.length === 0;
@@ -329,7 +333,7 @@ export async function runArc({ runId, entryStage = 20, toStage = 26, clockStart,
     journal.finding('DEAD_LOOP', `O10 run-meta verdict FAILED: all_mapped=${o10AllMapped} residue_clean=${o10ResidueClean} journal_durable=${o10JournalDurable}`, { o_requirements: ['O10'] });
   }
 
-  return { runId, ventureId, coverage, o10: { pass: o10Pass, allMapped: o10AllMapped, residueClean: o10ResidueClean, journalDurable: o10JournalDurable }, journalPath: journal.path };
+  return { runId, ventureId, coverage, mirror, o10: { pass: o10Pass, allMapped: o10AllMapped, residueClean: o10ResidueClean, journalDurable: o10JournalDurable }, journalPath: journal.path };
 }
 
 async function main() {
