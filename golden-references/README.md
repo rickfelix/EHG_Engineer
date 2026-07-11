@@ -48,6 +48,24 @@ Every `application-guide.md` must carry these sections, validated by
 Guides are explicit and low-context on purpose: that discipline transfers to any
 future delegate tier.
 
+## Authoring discipline — evidence-emitting references
+
+Lessons from the witness-evidence-emitter reference (`SD-LEO-INFRA-GOLDEN-REFERENCES-CANONICAL-001-D`
+retrospective), carried forward for any future reference whose subject emits or
+verifies evidence of a governed action:
+
+- **Mutation-test-first.** Write the forge/tamper/pre-declare mutation tests
+  BEFORE the acceptance-lock helpers they exercise. Authoring the happy-path
+  lock first risks a dead (never-called) helper silently satisfying it —
+  the miss tests are what prove the guard actually fires.
+- **State the independent re-derivation doctrine explicitly.** If the
+  reference's subject verifies a claim, its `## Invariants` section must name
+  the requirement described in the invariant above ("Independent re-derivation
+  source"): verify reads a store separate from both the witness and the
+  action's own return, and fails on disagreement. Do not leave this implicit —
+  spell it out so a delegate cannot accidentally wire verify to re-read the
+  claim it's supposed to be checking.
+
 ## Registry
 
 `golden-references/registry.json` is the **source of truth**: one row per reference
