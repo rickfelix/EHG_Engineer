@@ -8,8 +8,11 @@
  *         --days 30 --json) and write it to income_capture_monthly.business_expenses AND the
  *         substrate ai_burn input, ALWAYS labeled a lower bound (main-session Opus tokens are
  *         structurally uncaptured).
- *   FR-3  REVENUE: mirror income_capture_monthly.recurring_revenue into the substrate revenue input
- *         with its livemode (test-mode) flag.
+ *   FR-3  REVENUE: prefer lib/payments/attribution-resolver.js's computeAttributedRevenue()
+ *         (real Stripe attribution, SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002) when
+ *         ops_payment_events has any row fleet-wide; otherwise fall back to mirroring
+ *         income_capture_monthly.recurring_revenue (pre-attribution behavior). Updated by
+ *         SD-EHG-PRODUCT-UIUX-REMEDIATION-001-D (FR-5/H10, spec refresh 2026-07-10).
  *   FR-5  BACKFILL: price venture_token_ledger.cost_usd from token counts via lib/cost/llm-pricing.js
  *         for rows whose model is resolvable — leave unpriceable (unknown-model) rows untouched.
  *
@@ -28,6 +31,7 @@ import path from 'node:path';
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { priceFor } from '../../lib/cost/llm-pricing.js';
 import { periodMonthOf, upsertSubstrateInputs, AI_BURN_LOWER_BOUND_LABEL } from '../../lib/operator/cash-burn-substrate.js';
+import { computeAttributedRevenue } from '../../lib/payments/attribution-resolver.js';
 import { readStripeCashSlice } from '../../lib/operator/cash-sources/stripe-balance.js';
 import { readBankCashSlice } from '../../lib/operator/cash-sources/bank-read-service.js';
 import { loadTellerCertPair } from '../../lib/operator/cash-sources/token-vault.js';
@@ -176,25 +180,59 @@ async function main() {
   } catch (e) { warn('FR-2', `failed (fail-soft): ${e.message}`); result.ai_burn = { written: false, error: e.message }; }
 
   // ---- FR-3: revenue mirror ----
+  // SD-EHG-PRODUCT-UIUX-REMEDIATION-001-D (FR-5/H10, spec refresh 2026-07-10): prefer
+  // computeAttributedRevenue's real Stripe attribution (lib/payments/attribution-resolver.js,
+  // SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002) over the pre-pivot income_capture_monthly
+  // mirror. Distinguishing "attribution wired but $0 this period" (a genuine live reading)
+  // from "attribution never wired" (fall back) requires checking whether ops_payment_events
+  // has ANY row at all, not just rows in the current period.
   try {
-    // Prefer the LIVE row; fall back to the TEST-mode row, surfacing the livemode flag honestly.
-    const { data: rows, error } = await supabase
-      .from('income_capture_monthly')
-      .select('recurring_revenue, livemode')
-      .eq('period_month', periodMonth);
-    if (error) throw new Error(error.message);
-    const live = (rows || []).find((r) => r.livemode === true);
-    const test = (rows || []).find((r) => r.livemode === false);
-    const pick = live || test || null;
-    if (!pick) {
-      result.revenue = { written: false, reason: 'no income_capture_monthly row yet (left stale)' };
-    } else {
-      const revUsd = pick.recurring_revenue == null ? null : Number(pick.recurring_revenue);
-      log('FR-3', `revenue = $${revUsd} (livemode=${pick.livemode})`);
-      if (!DRY_RUN && revUsd != null) {
-        await upsertSubstrateInputs(periodMonth, { revenue_usd: revUsd, revenue_livemode: pick.livemode === true }, supabase, nowIso);
+    const { count: anyEventCount, error: anyEventErr } = await supabase
+      .from('ops_payment_events')
+      .select('id', { count: 'exact', head: true });
+    if (anyEventErr) throw new Error(anyEventErr.message);
+
+    if ((anyEventCount ?? 0) > 0) {
+      // Attribution is live fleet-wide — use it as the primary source, even if this
+      // specific period has zero matching rows (a genuine $0, not a missing source).
+      const periodStart = `${periodMonth}T00:00:00.000Z`;
+      const periodEnd = new Date(new Date(periodStart).getTime());
+      periodEnd.setUTCMonth(periodEnd.getUTCMonth() + 1);
+      const { data: periodRows, error: periodErr } = await supabase
+        .from('ops_payment_events')
+        .select('amount_cents, currency, event_type, payment_intent_id, stripe_charge_id, id')
+        .eq('livemode', true)
+        .gte('event_ts', periodStart)
+        .lt('event_ts', periodEnd.toISOString());
+      if (periodErr) throw new Error(periodErr.message);
+      const { totalCents } = computeAttributedRevenue(periodRows || []);
+      const revUsd = Number((totalCents / 100).toFixed(2));
+      log('FR-3', `revenue (attributed) = $${revUsd} (livemode=true, ${(periodRows || []).length} events)`);
+      if (!DRY_RUN) {
+        await upsertSubstrateInputs(periodMonth, { revenue_usd: revUsd, revenue_livemode: true }, supabase, nowIso);
       }
-      result.revenue = { written: !DRY_RUN && revUsd != null, value_usd: revUsd, livemode: pick.livemode === true };
+      result.revenue = { written: !DRY_RUN, value_usd: revUsd, livemode: true, source: 'attribution_resolver' };
+    } else {
+      // Attribution never wired for this fleet yet — fall back to the pre-pivot mirror.
+      // Prefer the LIVE row; fall back to the TEST-mode row, surfacing livemode honestly.
+      const { data: rows, error } = await supabase
+        .from('income_capture_monthly')
+        .select('recurring_revenue, livemode')
+        .eq('period_month', periodMonth);
+      if (error) throw new Error(error.message);
+      const live = (rows || []).find((r) => r.livemode === true);
+      const test = (rows || []).find((r) => r.livemode === false);
+      const pick = live || test || null;
+      if (!pick) {
+        result.revenue = { written: false, reason: 'no income_capture_monthly row yet (left stale)', source: 'income_capture_monthly' };
+      } else {
+        const revUsd = pick.recurring_revenue == null ? null : Number(pick.recurring_revenue);
+        log('FR-3', `revenue (fallback) = $${revUsd} (livemode=${pick.livemode})`);
+        if (!DRY_RUN && revUsd != null) {
+          await upsertSubstrateInputs(periodMonth, { revenue_usd: revUsd, revenue_livemode: pick.livemode === true }, supabase, nowIso);
+        }
+        result.revenue = { written: !DRY_RUN && revUsd != null, value_usd: revUsd, livemode: pick.livemode === true, source: 'income_capture_monthly' };
+      }
     }
   } catch (e) { warn('FR-3', `failed (fail-soft): ${e.message}`); result.revenue = { written: false, error: e.message }; }
 
