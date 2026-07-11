@@ -400,6 +400,30 @@ export class OrchestratorCompletionGuardian {
   }
 
   /**
+   * SD-LEO-FIX-ORCHESTRATOR-LEAF-ROUTER-001: honest completion-provenance phrasing.
+   * A cancelled child is terminal (never blocks completion, per isTerminalChildStatus)
+   * but is NOT "completed" — generated handoff/PRD/retrospective text must say so
+   * instead of a blanket "all N child SDs completed successfully" claim (adversarial
+   * HIGH finding on the merged QF-20260710-491: that claim was false whenever any
+   * child was cancelled).
+   */
+  _childCompletionSummary() {
+    const children = this.childData || [];
+    const cancelled = children.filter(c => c.status === 'cancelled');
+    const completed = children.filter(c => c.status === 'completed');
+    const total = children.length;
+    return {
+      total,
+      completedCount: completed.length,
+      cancelledCount: cancelled.length,
+      allGenuinelyCompleted: cancelled.length === 0,
+      phrase: cancelled.length === 0
+        ? `all ${total} child SDs completed successfully`
+        : `${completed.length}/${total} child SDs completed successfully, ${cancelled.length} cancelled`,
+    };
+  }
+
+  /**
    * Generate validation report
    */
   generateReport() {
@@ -495,8 +519,9 @@ export class OrchestratorCompletionGuardian {
 
     // Aggregate child information
     const childSummary = this.childData
-      .map((c, i) => `(${i + 1}) ${c.title}`)
+      .map((c, i) => `(${i + 1}) ${c.title}${c.status === 'cancelled' ? ' [cancelled]' : ''}`)
       .join(', ');
+    const summary = this._childCompletionSummary();
 
     const { error } = await supabase
       .from('sd_phase_handoffs')
@@ -506,18 +531,20 @@ export class OrchestratorCompletionGuardian {
         from_phase: from,
         to_phase: to,
         status: 'accepted',
-        executive_summary: `${this.parentData.title} completed. All ${this.childData.length} child SDs finished: ${childSummary}.`,
-        deliverables_manifest: `Parent orchestrator deliverables: All ${this.childData.length} child SDs completed with proper handoffs and retrospectives.`,
-        key_decisions: `Used orchestrator pattern to coordinate ${this.childData.length} parallel work streams.`,
-        known_issues: 'No outstanding issues - all child SDs completed successfully.',
-        action_items: 'All actions completed across child SDs.',
-        completeness_report: `100% complete - all ${this.childData.length} child SDs completed.`,
+        executive_summary: `${this.parentData.title} completed. Child SDs terminal: ${childSummary}.`,
+        deliverables_manifest: `Parent orchestrator deliverables: ${summary.phrase}, all with proper handoffs and retrospectives (cancelled children exempt from handoff evidence).`,
+        key_decisions: `Used orchestrator pattern to coordinate ${summary.total} parallel work streams.`,
+        known_issues: summary.allGenuinelyCompleted
+          ? 'No outstanding issues - all child SDs completed successfully.'
+          : `${summary.cancelledCount} child SD(s) cancelled — not a completion failure (cancelled is a terminal disposition), but not genuinely completed either.`,
+        action_items: 'All actions resolved across child SDs (completed or cancelled).',
+        completeness_report: `100% complete - ${summary.phrase}.`,
         resource_utilization: 'Orchestrator coordination overhead only.',
-        metadata: { orchestrator: true, child_count: this.childData.length, auto_generated: true },
+        metadata: { orchestrator: true, child_count: summary.total, completed_count: summary.completedCount, cancelled_count: summary.cancelledCount, auto_generated: true },
         created_by: 'ORCHESTRATOR-GUARDIAN',
         validation_score: 100,
         validation_passed: true,
-        validation_details: { reason: 'ORCHESTRATOR_ALL_CHILDREN_COMPLETE', auto_generated: true }
+        validation_details: { reason: 'ORCHESTRATOR_ALL_CHILDREN_TERMINAL', auto_generated: true }
       });
 
     if (error) {
@@ -539,9 +566,10 @@ export class OrchestratorCompletionGuardian {
 
     const childRequirements = this.childData.map((c, i) => ({
       id: `FR${i + 1}`,
-      requirement: `Complete ${c.id} (${c.title})`,
-      status: 'complete'
+      requirement: `${c.status === 'cancelled' ? 'Cancelled' : 'Complete'} ${c.id} (${c.title})`,
+      status: c.status === 'cancelled' ? 'cancelled' : 'complete'
     }));
+    const summary = this._childCompletionSummary();
 
     const { error } = await supabase
       .from('product_requirements_v2')
@@ -553,12 +581,12 @@ export class OrchestratorCompletionGuardian {
         status: 'completed',
         category: 'orchestrator',
         priority: this.parentData.priority || 'high',
-        executive_summary: `Parent orchestrator SD coordinating ${this.childData.length} child SDs: ${this.childData.map(c => c.title).join('; ')}.`,
+        executive_summary: `Parent orchestrator SD coordinating ${summary.total} child SDs (${summary.phrase}): ${this.childData.map(c => c.title).join('; ')}.`,
         progress: 100,
         phase: 'completed',
-        acceptance_criteria: [{ criterion: 'All child SDs completed', status: 'met' }],
+        acceptance_criteria: [{ criterion: 'All child SDs reached a terminal state', status: 'met' }],
         functional_requirements: childRequirements,
-        test_scenarios: [{ id: 'TS1', scenario: 'All child SDs completed successfully', status: 'verified' }]
+        test_scenarios: [{ id: 'TS1', scenario: summary.phrase, status: 'verified' }]
       });
 
     if (error) {
@@ -616,7 +644,7 @@ export class OrchestratorCompletionGuardian {
         retro_type: 'SD_COMPLETION',
         conducted_date: new Date().toISOString(),
         what_went_well: uniqueWentWell.length > 0 ? uniqueWentWell : [
-          `All ${this.childData.length} child SDs completed successfully`,
+          this._childCompletionSummary().phrase.replace(/^./, (c) => c.toUpperCase()),
           'Orchestrator pattern enabled parallel execution',
           'Proper LEO Protocol followed for all children'
         ],
@@ -740,11 +768,15 @@ export class OrchestratorCompletionGuardian {
    * Record successful completion for pattern learning
    */
   async recordPatternSuccess() {
+    // SD-LEO-FIX-ORCHESTRATOR-LEAF-ROUTER-001: don't blanket-credit 100% success when
+    // a child was cancelled rather than genuinely completed (adversarial LOW finding).
+    const { allGenuinelyCompleted } = this._childCompletionSummary();
+    const outcomeScore = allGenuinelyCompleted ? 100 : 50;
     await supabase
       .from('issue_patterns')
       .update({
         occurrence_count: supabase.sql`occurrence_count + 1`,
-        success_rate: supabase.sql`(success_rate * occurrence_count + 100) / (occurrence_count + 1)`,
+        success_rate: supabase.sql`(success_rate * occurrence_count + ${outcomeScore}) / (occurrence_count + 1)`,
         last_seen_sd_id: this.sdId
       })
       .eq('pattern_id', 'PAT-ORCH-001');

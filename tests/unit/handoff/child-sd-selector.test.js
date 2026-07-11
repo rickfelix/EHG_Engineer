@@ -24,6 +24,7 @@ vi.mock('../../../lib/orchestrator/dependency-dag.js', () => ({
 import {
   isChildSD,
   getNextReadyChild,
+  getReadyChildren,
   getOrchestratorContext
 } from '../../../scripts/modules/handoff/child-sd-selector.js';
 
@@ -164,6 +165,35 @@ describe('Child SD Selector', () => {
       const result = await getNextReadyChild(dualMock, 'parent-1');
 
       expect(result.sd).toBe(null);
+      expect(result.allComplete).toBe(true);
+      expect(result.reason).toContain('terminal');
+    });
+
+    it('getReadyChildren (direct, unmocked implementation): a completed+cancelled mix short-circuits to allComplete=true (SD-LEO-FIX-ORCHESTRATOR-LEAF-ROUTER-001)', async () => {
+      // Adversarial finding: getReadyChildren had ZERO direct coverage — the only other
+      // reference (tests/unit/parallel-team-spawner.test.js) fully mocks it via vi.fn().
+      // This exercises the real function body via the early-return branch (before any
+      // DAG code — buildDependencyDAG/detectCycles are bare vi.fn() with no
+      // implementation in this file, so a DAG-requiring path would fail for unrelated
+      // reasons; the all-terminal branch returns before reaching them).
+      const mockSupabase = {
+        from: () => ({
+          select: () => ({
+            eq: () => Promise.resolve({
+              data: [
+                { id: 'c1', status: 'completed' },
+                { id: 'c2', status: 'cancelled' },
+                { id: 'c3', status: 'completed' },
+              ],
+              error: null,
+            }),
+          }),
+        }),
+      };
+
+      const result = await getReadyChildren(mockSupabase, 'parent-1');
+
+      expect(result.children).toEqual([]);
       expect(result.allComplete).toBe(true);
       expect(result.reason).toContain('terminal');
     });
