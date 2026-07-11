@@ -81,22 +81,29 @@ const SOLOMON_SWEEP_BUDGET = Object.freeze({
 const SOLOMON_PER_SD_MAX = Number(process.env.SOLOMON_PER_SD_MAX) || 2;   // answers per SD
 const SOLOMON_PER_DAY_MAX = Number(process.env.SOLOMON_PER_DAY_MAX) || 20; // answers per UTC day
 
+// SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001 / FR-2: mirrors adam-advisory.cjs's KNOWN_SEND_KINDS
+// allowlist exactly -- same shared source (lib/fleet/worker-status.cjs), never a second list.
+const KNOWN_SEND_KINDS = new Set([...Object.values(PAYLOAD_KINDS), ...DIRECTIVE_KINDS]);
+
 /**
- * Build the Solomon advisory payload. INVARIANT: payload.kind=adam_advisory (reuses the
+ * Build the Solomon advisory payload. INVARIANT: payload.kind=adam_advisory by default (reuses the
  * advisory-inbox plumbing), payload.oracle=true (the Solomon marker), and NEVER signal_type /
  * intent_action. correlation_id makes the answer replyable; a reply_to (the consult's correlation)
  * is echoed under BOTH keys so the asking side's matcher pairs the answer to its consult. Exported.
  * QF-20260711-596: body sizing now goes through the shared capBody() hard-error helper (matches
  * adam-advisory.cjs/coordinator-reply.cjs/worker-signal.cjs since QF-20260710-560) instead of a
  * silent .slice() -- throws a BODY_TOO_LONG error (never silently clips) for an over-cap body.
+ * FR-2 (SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001): an explicit, validated --kind overrides the
+ * default; omitting --kind is BYTE-IDENTICAL to pre-SD behavior. An answer to a consult (replyTo
+ * set) ignores kind and always reuses the advisory lane.
  */
-function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, replyTo, via, replyClass, replyWindowMs, now }) {
+function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, replyTo, via, replyClass, replyWindowMs, now, kind }) {
   // An answer to a consult (replyTo set) is terminal -- always fire-and-forget. Otherwise: request
   // mode (expectsReply) is live-handshake; send mode defaults fire-and-forget unless the sender
   // opts into reply-needed via --reply-class (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
   const resolvedReplyClass = replyTo ? 'fire-and-forget' : (expectsReply ? 'live-handshake' : (replyClass || 'fire-and-forget'));
   const payload = {
-    kind: PAYLOAD_KINDS.ADAM_ADVISORY, // reuse the advisory inbox lane
+    kind: replyTo ? PAYLOAD_KINDS.ADAM_ADVISORY : (kind || PAYLOAD_KINDS.ADAM_ADVISORY), // reuse the advisory inbox lane
     oracle: true,                       // Solomon marker (distinguishes an oracle answer from an Adam advisory)
     sender_callsign: senderCallsign || null,
     repo: repo || null,
@@ -585,7 +592,7 @@ async function main() {
   const argv = process.argv.slice(2);
   const mode = argv[0];
   if (mode !== 'send' && mode !== 'request' && mode !== 'inbox' && mode !== 'status' && mode !== 'ack') {
-    console.error('Usage: node scripts/solomon-advisory.cjs send "<body>" [--reply-to <id>] [--to adam]  |  request "<q>" [--timeout <ms>] [--to adam]  |  inbox [--quiet] [--background]  |  ack <row-id...>  |  status [--working "<body>" [--eta <ms>]]');
+    console.error('Usage: node scripts/solomon-advisory.cjs send "<body>" [--reply-to <id>] [--to adam] [--kind <recognized_kind>]  |  request "<q>" [--timeout <ms>] [--to adam] [--kind <recognized_kind>]  |  inbox [--quiet] [--background]  |  ack <row-id...>  |  status [--working "<body>" [--eta <ms>]]');
     process.exit(2);
   }
   const sessionId = process.env.CLAUDE_SESSION_ID;
@@ -654,6 +661,15 @@ async function main() {
     console.error(`ERROR: --reply-class must be one of ${REPLY_CLASSES.join(', ')} (got "${replyClassArg}").`);
     process.exit(2);
   }
+  // SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001 / FR-2: --kind is OPTIONAL (omitting it is
+  // byte-identical to pre-SD behavior); an EXPLICITLY-supplied value must be a recognized
+  // kind or the send is rejected. Mirrors adam-advisory.cjs exactly.
+  const kIdx = argv.indexOf('--kind');
+  const kindArg = kIdx >= 0 ? argv[kIdx + 1] || null : null;
+  if (kindArg && !KNOWN_SEND_KINDS.has(kindArg)) {
+    console.error(`ERROR: --kind "${kindArg}" is not a recognized kind (see PAYLOAD_KINDS/DIRECTIVE_KINDS in lib/fleet/worker-status.cjs).`);
+    process.exit(2);
+  }
   // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: `send/request --to adam` — direct 1-hop
   // channel, gated by ADAM_SOLOMON_TWOWAY_V1 (default ON since QF-20260705-488; 'off' kills it).
   // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-4: --to also accepts
@@ -667,7 +683,7 @@ async function main() {
   const toArg = toIdx >= 0 ? (argv[toIdx + 1] || '').toLowerCase() || null : null;
   const directIdx = argv.indexOf('--direct');
   const peerArg = toArg || (directIdx >= 0 ? 'adam' : null);
-  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1, toIdx, toIdx + 1, directIdx].filter((i) => i >= 0));
+  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1, toIdx, toIdx + 1, directIdx, kIdx, kIdx + 1].filter((i) => i >= 0));
   const body = argv.slice(1).filter((a, i) => !flagValueIdxs.has(i + 1)).join(' ').trim();
   if (!body) { console.error('ERROR: advisory body required.'); process.exit(2); }
 
@@ -727,7 +743,7 @@ async function main() {
   // worker-signal.cjs already uses -- never a silent clip, never a crash-shaped stack trace.
   let payload;
   try {
-    payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via, replyClass: replyClassArg, replyWindowMs });
+    payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via, replyClass: replyClassArg, replyWindowMs, kind: kindArg });
   } catch (e) {
     if (e && e.code === 'BODY_TOO_LONG') { console.error('ERROR:', e.message); process.exit(2); }
     throw e;
@@ -808,7 +824,7 @@ module.exports = {
   computeConsultSignature, enforceSweepBudget, SOLOMON_SWEEP_BUDGET, alreadyAnswered, checkConsultQuota,
   drainInbox, resolveReplyToCorrelation, drainSolomonOutbound, captureLedgerRow,
   checkLedgerCaptureHealth, resolveSolomonAdvisoryTarget, resolveConsultOriginator, ensureOriginatorCc,
-  stampSurfaced, ackRows,
+  stampSurfaced, ackRows, KNOWN_SEND_KINDS,
 };
 
 if (require.main === module) {

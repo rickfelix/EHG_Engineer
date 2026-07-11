@@ -158,13 +158,20 @@ function extractEmbeddedPeerDirective(rawPeerArg, rawBody) {
   return { peerArg: null, body: rawBody };
 }
 
-function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass, replyWindowMs, now, addressee }) {
+// SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001 / FR-2: the known-kinds allowlist a caller may
+// explicitly stamp via --kind. Sourced from the SAME shared constants every drain already
+// filters on (lib/fleet/worker-status.cjs) -- never a second hand-maintained list.
+const KNOWN_SEND_KINDS = new Set([...Object.values(PAYLOAD_KINDS), ...DIRECTIVE_KINDS]);
+
+function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass, replyWindowMs, now, addressee, kind }) {
   // request mode (expectsReply) is always live-handshake (synchronous, bounded-timeout await);
   // send mode defaults to fire-and-forget unless the sender opts into reply-needed via --reply-class
   // (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
   const resolvedReplyClass = expectsReply ? 'live-handshake' : (replyClass || 'fire-and-forget');
   const payload = {
-    kind: PAYLOAD_KINDS.ADAM_ADVISORY,
+    // FR-2: an explicit, validated --kind overrides the default; omitting --kind is
+    // BYTE-IDENTICAL to pre-SD behavior (always adam_advisory, as it always has been).
+    kind: kind || PAYLOAD_KINDS.ADAM_ADVISORY,
     sender_callsign: senderCallsign || null,
     repo: repo || null,
     reply_class: resolvedReplyClass,
@@ -733,7 +740,7 @@ async function main() {
   const argv = process.argv.slice(2);
   const mode = argv[0];
   if (mode !== 'send' && mode !== 'request' && mode !== 'replies' && mode !== 'inbox' && mode !== 'status' && mode !== 'ack') {
-    console.error('Usage: node scripts/adam-advisory.cjs send "<body>" [--reply-to <correlation_or_row_id>] [--to solomon|<session_id>]  |  request "<question>" [--timeout <ms>] [--to solomon|<session_id>]  |  replies [--background]  |  inbox [--background] [--window <Nh|Nd>] [--sweep [--window 24h]]  |  ack <row-id...>  |  status [--working "<body>" [--eta <ms>]]');
+    console.error('Usage: node scripts/adam-advisory.cjs send "<body>" [--reply-to <correlation_or_row_id>] [--to solomon|<session_id>] [--kind <recognized_kind>]  |  request "<question>" [--timeout <ms>] [--to solomon|<session_id>] [--kind <recognized_kind>]  |  replies [--background]  |  inbox [--background] [--window <Nh|Nd>] [--sweep [--window 24h]]  |  ack <row-id...>  |  status [--working "<body>" [--eta <ms>]]');
     process.exit(2);
   }
 
@@ -820,6 +827,15 @@ async function main() {
     console.error(`ERROR: --reply-class must be one of ${REPLY_CLASSES.join(', ')} (got "${replyClassArg}").`);
     process.exit(2);
   }
+  // SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001 / FR-2: --kind is OPTIONAL (omitting it is
+  // byte-identical to pre-SD behavior); an EXPLICITLY-supplied value must be a recognized
+  // kind or the send is rejected (never a silently-inserted garbage kind no drain matches).
+  const kIdx = argv.indexOf('--kind');
+  const kindArg = kIdx >= 0 ? argv[kIdx + 1] || null : null;
+  if (kindArg && !KNOWN_SEND_KINDS.has(kindArg)) {
+    console.error(`ERROR: --kind "${kindArg}" is not a recognized kind (see PAYLOAD_KINDS/DIRECTIVE_KINDS in lib/fleet/worker-status.cjs).`);
+    process.exit(2);
+  }
   // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: `send/request --to solomon` — direct
   // 1-hop channel, gated by ADAM_SOLOMON_TWOWAY_V1 (default ON since QF-20260705-488; 'off' kills it).
   // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-4: --to also accepts
@@ -833,7 +849,7 @@ async function main() {
   const toArg = toIdx >= 0 ? (argv[toIdx + 1] || '').toLowerCase() || null : null;
   const directIdx = argv.indexOf('--direct');
   const rawPeerArg = toArg || (directIdx >= 0 ? 'solomon' : null);
-  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1, toIdx, toIdx + 1, directIdx].filter(i => i >= 0));
+  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1, rcIdx, rcIdx + 1, rwIdx, rwIdx + 1, toIdx, toIdx + 1, directIdx, kIdx, kIdx + 1].filter(i => i >= 0));
   const rawBody = argv.slice(1).filter((a, i) => !flagValueIdxs.has(i + 1)).join(' ').trim();
   // QF-20260707-114: a caller (confirmed live: Adam) sometimes embeds `--to <peer>` / `--direct`
   // INSIDE the quoted body instead of passing it as a separate CLI arg (the whole message ends
@@ -915,7 +931,7 @@ async function main() {
   }
   // FR-1: scope-tag the advisory from the sending repo (reuse-first, fail-soft).
   const { scopeKey, reuseClass, appliesToScopes } = await resolveScopeForSend(supabase, process.cwd());
-  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass: replyClassArg, replyWindowMs, addressee });
+  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass: replyClassArg, replyWindowMs, addressee, kind: kindArg });
   // R1 (QF-20260703-964): the addressee-vs-target divergence WARN lives ONE place — the
   // insertCoordinationRow choke point (lib/coordinator/dispatch.cjs) — not duplicated here.
   // SD-REFILL-00XK256L: the 2-hypothesis-bar GATE. Block an UNATTESTED urgent model-availability
@@ -1014,7 +1030,7 @@ async function drainAdamOutbound(supabase, { newSessionId, oldSessionIds } = {})
   }
 }
 
-module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS, resolveAdamAdvisoryTarget, classifyDirectTarget, extractEmbeddedPeerDirective, windowSweep, parseSweepWindowMs, DEFAULT_SWEEP_WINDOW_MS, stampSurfaced, ackRows, DEFAULT_DRAIN_WINDOW_MS };
+module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS, resolveAdamAdvisoryTarget, classifyDirectTarget, extractEmbeddedPeerDirective, windowSweep, parseSweepWindowMs, DEFAULT_SWEEP_WINDOW_MS, stampSurfaced, ackRows, DEFAULT_DRAIN_WINDOW_MS, KNOWN_SEND_KINDS };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });

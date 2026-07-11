@@ -14,7 +14,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { dispatchSolomonReminder, SOLOMON_REMINDER, buildFoundationsPointer } = require('../../scripts/coordinator-hourly-review.cjs');
+const { dispatchSolomonReminder, SOLOMON_REMINDER, buildFoundationsPointer, reconcileStaleSolomonInbound } = require('../../scripts/coordinator-hourly-review.cjs');
 
 const sb = {};
 
@@ -65,6 +65,71 @@ describe('dispatchSolomonReminder — the Solomon hourly leg', () => {
     expect(SOLOMON_REMINDER).toMatch(/CONST-002/);
     expect(SOLOMON_REMINDER).toMatch(/consult triage gate/i);
     expect(SOLOMON_REMINDER).toMatch(/task_budget/);
+  });
+});
+
+describe('reconcileStaleSolomonInbound — SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001 / FR-1 (periodic reconciliation)', () => {
+  it('retargets unread rows at every stale (non-live) Solomon identity to the live Solomon, on this hourly tick — not only on a new registration event', async () => {
+    const retarget = vi.fn(async (_sb, { staleOriginator }) => ({ retargeted: staleOriginator === 'stale-1' ? 2 : 1, error: null }));
+    const fetchAll = vi.fn(async () => ([
+      { session_id: 'live-solomon' },
+      { session_id: 'stale-1' },
+      { session_id: 'stale-2' },
+    ]));
+    const r = await reconcileStaleSolomonInbound(sb, {
+      dryRun: false, resolveSolomon: async () => 'live-solomon', fetchAll, retarget,
+    });
+    expect(r.staleCount).toBe(2);
+    expect(r.reconciled).toBe(3); // 2 + 1
+    expect(retarget).toHaveBeenCalledWith(sb, { staleOriginator: 'stale-1', liveSolomon: 'live-solomon' });
+    expect(retarget).toHaveBeenCalledWith(sb, { staleOriginator: 'stale-2', liveSolomon: 'live-solomon' });
+  });
+
+  it('no-op when there is no other Solomon identity besides the live one', async () => {
+    const retarget = vi.fn();
+    const fetchAll = vi.fn(async () => ([{ session_id: 'live-solomon' }]));
+    const r = await reconcileStaleSolomonInbound(sb, { dryRun: false, resolveSolomon: async () => 'live-solomon', fetchAll, retarget });
+    expect(r.staleCount).toBe(0);
+    expect(r.reconciled).toBe(0);
+    expect(retarget).not.toHaveBeenCalled();
+  });
+
+  it('skips (no reconcile) when there is no live Solomon — itself a cycle-down', async () => {
+    const retarget = vi.fn();
+    const fetchAll = vi.fn();
+    const r = await reconcileStaleSolomonInbound(sb, { dryRun: false, resolveSolomon: async () => null, fetchAll, retarget });
+    expect(r.reason).toBe('no_live_solomon');
+    expect(fetchAll).not.toHaveBeenCalled();
+    expect(retarget).not.toHaveBeenCalled();
+  });
+
+  it('dry-run: reports the stale count but does NOT retarget', async () => {
+    const retarget = vi.fn();
+    const fetchAll = vi.fn(async () => ([{ session_id: 'live-solomon' }, { session_id: 'stale-1' }]));
+    const r = await reconcileStaleSolomonInbound(sb, { dryRun: true, resolveSolomon: async () => 'live-solomon', fetchAll, retarget });
+    expect(r.reason).toBe('dry_run');
+    expect(r.staleCount).toBe(1);
+    expect(retarget).not.toHaveBeenCalled();
+  });
+
+  it('a per-identity retarget error is surfaced (non-fatal) and does not block reconciling the remaining stale identities', async () => {
+    const retarget = vi.fn(async (_sb, { staleOriginator }) => (
+      staleOriginator === 'stale-bad'
+        ? { retargeted: 0, error: 'db error' }
+        : { retargeted: 5, error: null }
+    ));
+    const fetchAll = vi.fn(async () => ([{ session_id: 'live-solomon' }, { session_id: 'stale-bad' }, { session_id: 'stale-ok' }]));
+    const r = await reconcileStaleSolomonInbound(sb, { dryRun: false, resolveSolomon: async () => 'live-solomon', fetchAll, retarget });
+    expect(r.reconciled).toBe(5); // only stale-ok's count, stale-bad's error is skipped not thrown
+    expect(retarget).toHaveBeenCalledTimes(2);
+  });
+
+  it('fail-open: an unexpected error (e.g. fetchAll throws) returns a non-reconciled verdict, never throws', async () => {
+    const r = await reconcileStaleSolomonInbound(sb, {
+      dryRun: false, resolveSolomon: async () => 'live-solomon', fetchAll: async () => { throw new Error('db down'); }, retarget: vi.fn(),
+    });
+    expect(r.reconciled).toBe(0);
+    expect(r.reason).toBe('error');
   });
 });
 
