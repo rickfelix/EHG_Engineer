@@ -23,6 +23,8 @@ import {
   runSweep,
   SIBLING_CLAIMED_IDS,
   PROMOTION_THRESHOLD,
+  actionText,
+  actionOwner,
 } from '../../../scripts/one-off/s1-backlog-sweep.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -342,6 +344,30 @@ describe('TS-10: retro action-item and flag_review fold-ins', () => {
     expect(result.promoted).toBe(0); // dry-run never increments promoted
     expect(result.noHighPriority).toBe(1);
     expect(result.skipped).toBe(1);
+  });
+
+  // QF-20260711-977: three action_items shapes exist in the wild. The original inline
+  // `i.item || i.action || '(no text)'` never checked the third (manually-authored
+  // SD_COMPLETION retro) shape's `.title`, so every such retro's action items promoted
+  // as literal "(no text)" / "(owner: unassigned)". Mirrors the already-fixed
+  // scripts/promote-retro-action-items.mjs (QF-20260711-253).
+  describe('actionText / actionOwner — all three known action_items shapes', () => {
+    it('retro-agent prompt-driven shape { item, owner }', () => {
+      expect(actionText({ item: 'do the thing', owner: 'a', priority: 'high' })).toBe('do the thing');
+      expect(actionOwner({ item: 'do the thing', owner: 'a', priority: 'high' })).toBe('a');
+    });
+    it('generateSmartActionItems shape { action, owner }', () => {
+      expect(actionText({ action: 'do the other thing', owner: 'b', priority: 'high' })).toBe('do the other thing');
+      expect(actionOwner({ action: 'do the other thing', owner: 'b', priority: 'high' })).toBe('b');
+    });
+    it('manually-authored SD_COMPLETION shape { title, owner_role } — the previously-broken case', () => {
+      expect(actionText({ title: 'Read source before finalizing scope', owner_role: 'PLAN', priority: 'high' })).toBe('Read source before finalizing scope');
+      expect(actionOwner({ title: 'Read source before finalizing scope', owner_role: 'PLAN', priority: 'high' })).toBe('PLAN');
+    });
+    it('falls back to the literal placeholders only when NO known field is present', () => {
+      expect(actionText({ priority: 'high' })).toBe('(no text)');
+      expect(actionOwner({ priority: 'high' })).toBe('unassigned');
+    });
   });
 
   it('foldInFlagReviewRows only ever calls defer (never approve/reject) and only on corroborated matches', async () => {
