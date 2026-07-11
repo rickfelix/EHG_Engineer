@@ -1036,6 +1036,33 @@ async function cancelStaleTestFixtures(supabase, now, actions, warnings) {
 
 async function clearStaleQfClaims(supabase, now, actions, warnings) {
   const veryStaleSeconds = STALE_THRESHOLD_SECONDS * 3; // 15min = definitely dead
+
+  // QF-20260711-176 (guard-on-every-path): TERMINAL QFs have no legitimate holder — clear
+  // claiming_session_id unconditionally (no liveness check needed). The writer-side fix
+  // (complete-quick-fix orchestrator now clears it in the completion UPDATE) covers new
+  // completions; this sweep pass reaps the historical residue class that drained the worktree
+  // pool to 20/20 WORKTREE_CREATE_FAILED (live-claim-guard blocked reaping with
+  // claimed_claimant_not_verifiably_alive — coordinator evidence 5655cb68).
+  try {
+    const { data: terminalClaimed } = await supabase
+      .from('quick_fixes')
+      .select('id, status, claiming_session_id')
+      .in('status', ['completed', 'cancelled', 'escalated'])
+      .not('claiming_session_id', 'is', null);
+    for (const qf of (terminalClaimed || [])) {
+      const { error } = await supabase
+        .from('quick_fixes')
+        .update({ claiming_session_id: null })
+        .eq('id', qf.id)
+        .eq('claiming_session_id', qf.claiming_session_id); // race guard
+      if (!error) {
+        actions.push('QF: cleared claiming_session_id on TERMINAL ' + qf.status + ' ' + qf.id + ' (no legitimate holder; unblocks worktree reaping)');
+      }
+    }
+  } catch (termErr) {
+    warnings.push('QF_TERMINAL_CLAIM_SWEEP: ' + termErr.message);
+  }
+
   try {
     const { data: claimedQfs } = await supabase
       .from('quick_fixes')
