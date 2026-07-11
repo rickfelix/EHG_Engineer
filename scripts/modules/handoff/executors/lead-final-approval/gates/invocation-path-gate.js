@@ -50,15 +50,61 @@ export function resolveInvocationMode(env = process.env) {
 }
 
 /**
- * SD-LEO-INFRA-DEFINITION-DONE-ACTIVATION-001 (G3, FR-1): activation-evidence rollout mode
- * resolver. Mirrors resolveInvocationMode's advisory-first precedent — a brand-new blocking
- * requirement must not mass-fail every in-flight machinery-class SD on day one. Advisory
- * (default) surfaces the finding as a warning; ACTIVATION_EVIDENCE_MODE=block promotes to a
- * hard fail once the classifier has been validated against real traffic (FR-6 retro sweep).
- * @param {object} [env] @returns {'advisory'|'block'}
+ * SD-LEO-INFRA-OPERATIVE-AGENT-OWNERSHIP-001-C: the flip timestamp. Machinery-class SDs
+ * whose LEAD-FINAL entry (earliest PLAN-TO-LEAD handoff) predates this stay advisory on
+ * re-runs; entrants after it get the blocking default. The 2026-07-02..07-11 advisory
+ * period was the calibration window; the chairman's 2026-07-11 ratification authorizes
+ * the promotion (observe-then-bind).
  */
-export function resolveActivationEvidenceMode(env = process.env) {
-  return (env && env.ACTIVATION_EVIDENCE_MODE) === 'block' ? 'block' : 'advisory';
+export const ACTIVATION_EVIDENCE_BLOCK_CUTOFF = '2026-07-11T20:30:00Z';
+
+/**
+ * SD-LEO-INFRA-DEFINITION-DONE-ACTIVATION-001 (G3, FR-1) + SD-LEO-INFRA-OPERATIVE-AGENT-
+ * OWNERSHIP-001-C (block promotion): activation-evidence rollout mode resolver.
+ * Precedence:
+ *   1. Explicit ACTIVATION_EVIDENCE_MODE env wins BOTH ways — 'block' forces block,
+ *      'advisory' forces advisory (the emergency rollback hatch; no revert needed).
+ *   2. Default is cutoff-aware: BLOCK for machinery SDs entering LEAD-FINAL at/after
+ *      ACTIVATION_EVIDENCE_BLOCK_CUTOFF; ADVISORY for earlier entrants (no retroactive
+ *      blocks on re-runs). A lookup ERROR resolves advisory — fail-open, never a
+ *      manufactured block (leadFinalEnteredAt: undefined means lookup failed/unknown;
+ *      null means "no prior PLAN-TO-LEAD handoff", i.e. a new entrant → block).
+ * @param {object} [env]
+ * @param {{leadFinalEnteredAt?: Date|null}} [ctx]
+ * @returns {'advisory'|'block'}
+ */
+export function resolveActivationEvidenceMode(env = process.env, ctx = {}) {
+  const explicit = env && env.ACTIVATION_EVIDENCE_MODE;
+  if (explicit === 'block') return 'block';
+  if (explicit === 'advisory') return 'advisory';
+  const enteredAt = ctx.leadFinalEnteredAt;
+  if (enteredAt === undefined) return 'advisory'; // lookup failed/unavailable — fail-open
+  if (enteredAt === null) return 'block'; // new entrant, no prior LEAD-FINAL entry
+  return enteredAt.getTime() >= Date.parse(ACTIVATION_EVIDENCE_BLOCK_CUTOFF) ? 'block' : 'advisory';
+}
+
+/**
+ * Earliest PLAN-TO-LEAD handoff for this SD = when it first entered LEAD-FINAL.
+ * Returns Date, null (no row — new entrant), or undefined (query error — the resolver
+ * fail-opens to advisory on undefined).
+ * @param {object} supabase @param {object} sd @returns {Promise<Date|null|undefined>}
+ */
+export async function getLeadFinalEntry(supabase, sd) {
+  try {
+    if (!supabase || !sd?.id) return undefined;
+    const { data, error } = await supabase
+      .from('sd_phase_handoffs')
+      .select('created_at')
+      .eq('sd_id', sd.id)
+      .eq('handoff_type', 'PLAN-TO-LEAD')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (error) return undefined;
+    return data?.created_at ? new Date(data.created_at) : null;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -249,17 +295,22 @@ async function computeActivationEvidenceVerdict(supabase, sd) {
     ]);
   }
   const finalState = evaluateActivationEvidence(sd, { hasActivatedEvidence, hasArmedRegistration });
-  const mode = resolveActivationEvidenceMode();
   console.log(`   Machinery-class (${finalState.machineryKind}): activation state = ${finalState.state}`);
   if (finalState.state !== 'UNWIRED') {
     return { passed: true, issues: [], warnings: [], details: finalState };
   }
+  // SD-LEO-INFRA-OPERATIVE-AGENT-OWNERSHIP-001-C: cutoff-aware mode, resolved only on the
+  // UNWIRED path (the only place mode matters) so the extra handoff lookup never taxes
+  // ACTIVATED/ARMED/not-applicable SDs.
+  const leadFinalEnteredAt = await getLeadFinalEntry(supabase, sd);
+  const mode = resolveActivationEvidenceMode(process.env, { leadFinalEnteredAt });
+  console.log(`   Activation-evidence mode: ${mode} (cutoff ${ACTIVATION_EVIDENCE_BLOCK_CUTOFF}; entered LEAD-FINAL ${leadFinalEnteredAt === undefined ? 'lookup-failed' : (leadFinalEnteredAt ? leadFinalEnteredAt.toISOString() : 'first time now')})`);
   const headline = `Machinery-class deliverable (${finalState.machineryKind}) has no ACTIVATED evidence and no ARMED registration (G3 Definition-of-Done amendment).`;
   const remediation = 'Record a scope_completion_chain evidence row (evidence_kind=real_event, runtime_observed_at set) once a real event is processed, OR register a periodic_process_registry row (liveness_source_ref.sd_key) with a named activation trigger if real events cannot occur yet.';
   if (mode === 'block') {
-    return { passed: false, issues: [headline, remediation], warnings: [], details: finalState };
+    return { passed: false, issues: [headline, remediation], warnings: [], details: { ...finalState, mode, cutoff: ACTIVATION_EVIDENCE_BLOCK_CUTOFF } };
   }
-  return { passed: true, issues: [], warnings: [`[ADVISORY] ${headline} ${remediation} Set ACTIVATION_EVIDENCE_MODE=block to enforce.`], details: finalState };
+  return { passed: true, issues: [], warnings: [`[ADVISORY] ${headline} ${remediation} Blocking default applies to LEAD-FINAL entrants after ${ACTIVATION_EVIDENCE_BLOCK_CUTOFF}.`], details: { ...finalState, mode, cutoff: ACTIVATION_EVIDENCE_BLOCK_CUTOFF } };
 }
 
 /**
