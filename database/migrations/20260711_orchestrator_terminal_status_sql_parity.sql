@@ -70,6 +70,7 @@ DECLARE
   total_children INT;
   completed_children INT;
   blocked_children INT;
+  cancelled_children INT;
   retrospective_exists BOOLEAN;
   lead_to_plan_exists BOOLEAN;
   plan_to_lead_exists BOOLEAN;
@@ -112,8 +113,8 @@ BEGIN
   SELECT EXISTS (SELECT 1 FROM retrospectives WHERE sd_id = sd_id_param) INTO retrospective_exists;
 
   -- SD-LEO-FIX-ORCHESTRATOR-LEAF-ROUTER-001: cancelled is a terminal disposition, same as completed.
-  SELECT COUNT(*), COUNT(*) FILTER (WHERE status IN ('completed', 'cancelled')), COUNT(*) FILTER (WHERE status = 'blocked')
-  INTO total_children, completed_children, blocked_children
+  SELECT COUNT(*), COUNT(*) FILTER (WHERE status IN ('completed', 'cancelled')), COUNT(*) FILTER (WHERE status = 'blocked'), COUNT(*) FILTER (WHERE status = 'cancelled')
+  INTO total_children, completed_children, blocked_children, cancelled_children
   FROM strategic_directives_v2 WHERE parent_sd_id = sd_id_param;
 
   SELECT t.* INTO tmpl FROM sd_workflow_templates t WHERE t.sd_type = COALESCE(sd.sd_type, 'feature') AND t.is_active = true;
@@ -173,7 +174,13 @@ BEGIN
     phase_breakdown := phase_breakdown || jsonb_build_object('RETROSPECTIVE', jsonb_build_object('weight', 15, 'complete', retrospective_exists, 'progress', CASE WHEN retrospective_exists THEN 15 ELSE 0 END, 'required', COALESCE(sd_type_profile.requires_retrospective, true), 'source', 'hardcoded'));
     IF total_children > 0 THEN
       total_progress := total_progress + (60 * completed_children / total_children);
-      phase_breakdown := phase_breakdown || jsonb_build_object('CHILDREN_completion', jsonb_build_object('weight', 60, 'complete', completed_children = total_children, 'progress', (60 * completed_children / total_children), 'total_children', total_children, 'completed_children', completed_children, 'note', completed_children || ' of ' || total_children || ' children completed', 'source', 'hardcoded'));
+      -- 'complete'/'progress' correctly weight a cancelled child the same as completed
+      -- (both terminal, neither blocks orchestrator progression — the point of this SD).
+      -- 'note' is kept honest about the split (adversarial round-3 CRITICAL: this field
+      -- previously called cancelled children "completed" verbatim, the same
+      -- false-provenance class fixed in complete_orchestrator_sd in round 2 but missed
+      -- here since this function's numeric weight itself needed no behavior change).
+      phase_breakdown := phase_breakdown || jsonb_build_object('CHILDREN_completion', jsonb_build_object('weight', 60, 'complete', completed_children = total_children, 'progress', (60 * completed_children / total_children), 'total_children', total_children, 'completed_children', completed_children - cancelled_children, 'cancelled_children', cancelled_children, 'note', CASE WHEN cancelled_children = 0 THEN completed_children || ' of ' || total_children || ' children completed' ELSE (completed_children - cancelled_children) || ' of ' || total_children || ' children completed, ' || cancelled_children || ' cancelled' END, 'source', 'hardcoded'));
     END IF;
     result := jsonb_build_object('sd_id', sd_id_param, 'sd_type', COALESCE(sd.sd_type, 'orchestrator'), 'is_orchestrator', true, 'total_progress', total_progress, 'requires_prd', COALESCE(sd_type_profile.requires_prd, false), 'requires_e2e_tests', COALESCE(sd_type_profile.requires_e2e_tests, false), 'requires_user_stories', COALESCE(sd_type_profile.requires_user_stories, false), 'requires_deliverables', COALESCE(sd_type_profile.requires_deliverables, false), 'requires_retrospective', COALESCE(sd_type_profile.requires_retrospective, true), 'phase_breakdown', phase_breakdown);
     RETURN result;
@@ -210,6 +217,7 @@ DECLARE
   total_children INT;
   completed_children INT;
   blocked_children INT;
+  cancelled_children INT;
   retrospective_exists BOOLEAN;
   lead_to_plan_exists BOOLEAN;
   plan_to_lead_exists BOOLEAN;
@@ -256,8 +264,8 @@ BEGIN
   SELECT EXISTS (SELECT 1 FROM retrospectives WHERE sd_id = sd_id_param) INTO retrospective_exists;
 
   -- SD-LEO-FIX-ORCHESTRATOR-LEAF-ROUTER-001: cancelled is a terminal disposition, same as completed.
-  SELECT COUNT(*), COUNT(*) FILTER (WHERE status IN ('completed', 'cancelled')), COUNT(*) FILTER (WHERE status = 'blocked')
-  INTO total_children, completed_children, blocked_children
+  SELECT COUNT(*), COUNT(*) FILTER (WHERE status IN ('completed', 'cancelled')), COUNT(*) FILTER (WHERE status = 'blocked'), COUNT(*) FILTER (WHERE status = 'cancelled')
+  INTO total_children, completed_children, blocked_children, cancelled_children
   FROM strategic_directives_v2 WHERE parent_sd_id = sd_id_param;
 
   SELECT t.* INTO tmpl FROM sd_workflow_templates t WHERE t.sd_type = COALESCE(sd.sd_type, 'feature') AND t.is_active = true;
@@ -318,7 +326,13 @@ BEGIN
     phase_breakdown := phase_breakdown || jsonb_build_object('RETROSPECTIVE', jsonb_build_object('weight', 15, 'complete', retrospective_exists, 'progress', CASE WHEN retrospective_exists THEN 15 ELSE 0 END, 'required', COALESCE(sd_type_profile.requires_retrospective, true), 'source', 'hardcoded'));
     IF total_children > 0 THEN
       total_progress := total_progress + (60 * completed_children / total_children);
-      phase_breakdown := phase_breakdown || jsonb_build_object('CHILDREN_completion', jsonb_build_object('weight', 60, 'complete', completed_children = total_children, 'progress', (60 * completed_children / total_children), 'total_children', total_children, 'completed_children', completed_children, 'note', completed_children || ' of ' || total_children || ' children completed', 'source', 'hardcoded'));
+      -- 'complete'/'progress' correctly weight a cancelled child the same as completed
+      -- (both terminal, neither blocks orchestrator progression — the point of this SD).
+      -- 'note' is kept honest about the split (adversarial round-3 CRITICAL: this field
+      -- previously called cancelled children "completed" verbatim, the same
+      -- false-provenance class fixed in complete_orchestrator_sd in round 2 but missed
+      -- here since this function's numeric weight itself needed no behavior change).
+      phase_breakdown := phase_breakdown || jsonb_build_object('CHILDREN_completion', jsonb_build_object('weight', 60, 'complete', completed_children = total_children, 'progress', (60 * completed_children / total_children), 'total_children', total_children, 'completed_children', completed_children - cancelled_children, 'cancelled_children', cancelled_children, 'note', CASE WHEN cancelled_children = 0 THEN completed_children || ' of ' || total_children || ' children completed' ELSE (completed_children - cancelled_children) || ' of ' || total_children || ' children completed, ' || cancelled_children || ' cancelled' END, 'source', 'hardcoded'));
     END IF;
     result := jsonb_build_object('sd_id', sd_id_param, 'sd_type', COALESCE(sd.sd_type, 'orchestrator'), 'is_orchestrator', true, 'total_progress', total_progress, 'requires_prd', COALESCE(sd_type_profile.requires_prd, false), 'requires_e2e_tests', COALESCE(sd_type_profile.requires_e2e_tests, false), 'requires_user_stories', COALESCE(sd_type_profile.requires_user_stories, false), 'requires_deliverables', COALESCE(sd_type_profile.requires_deliverables, false), 'requires_retrospective', COALESCE(sd_type_profile.requires_retrospective, true), 'phase_breakdown', phase_breakdown);
     RETURN result;
