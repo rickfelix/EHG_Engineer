@@ -63,6 +63,8 @@ import { runOrphanSweep } from '../lib/worktree-reaper/orphan-sweep.js';
 // QF-20260710-432: last-line live-claim guard — a live-claimed worktree is never
 // reaped regardless of commit count (Alpha-2 incident: zero-commit mid-PLAN reap).
 import { liveClaimBlocksRemoval } from '../lib/worktree-reaper/live-claim-guard.js';
+import { heartbeatResidencyBlocksRemoval } from '../lib/worktree-reaper/residency-guard.js';
+import { hasReapEligibleMarker, readReapEligibleMarker } from '../lib/worktree-reaper/reap-eligible-marker.js';
 // SD-LEO-INFRA-WORKTREE-CONTENTION-CLEANUP-001: single-source reapability helpers.
 // These three used to be defined locally below; the canonical home is now
 // lib/worktree-reapability.js so every removal path shares one implementation.
@@ -590,6 +592,15 @@ async function classifyWorktree(wt, ctx) {
   const categories = [];
   const reasons = {};
 
+  // SD-LEO-INFRA-WORKTREE-REAPER-RESIDENT-001 (FR-4): a .reap-eligible.json
+  // marker is the out-of-band handoff from a post-merge flow that refused to
+  // self-delete — collect it promptly, ahead of age-based classification. The
+  // removal gate (live-claim + residency guards) still decides WHEN it is safe.
+  if (hasReapEligibleMarker(wt.path)) {
+    categories.push('reap-eligible');
+    reasons['reap-eligible'] = { matched: true, reason: 'marker', evidence: readReapEligibleMarker(wt.path) || {} };
+  }
+
   const nested = isNested(wt);
   if (nested.matched) { categories.push('nested'); reasons.nested = nested; }
 
@@ -646,7 +657,8 @@ async function classifyWorktree(wt, ctx) {
 
 function stageForCategories(categories) {
   if (categories.length === 0) return { stage: null, verdict: 'keep' };
-  const hasStage1 = categories.includes('nested') || categories.includes('shipped-stale');
+  const hasStage1 = categories.includes('nested') || categories.includes('shipped-stale') ||
+                    categories.includes('reap-eligible');
   const hasStage2 = categories.includes('zombie-on-main') ||
                     categories.includes('orphan-sd') ||
                     categories.includes('idle');
@@ -1334,6 +1346,27 @@ export async function main(argv = process.argv) {
           worktree_path: wtPath,
           reason: claimGuard.reason,
           detail: claimGuard.detail || null,
+        });
+        aborted++;
+        continue;
+      }
+
+      // SD-LEO-INFRA-WORKTREE-REAPER-RESIDENT-001 (FR-4): residency guard —
+      // a FRESH-heartbeat session whose worktree_path references this target
+      // is standing in it (claim-independent: idle/parked sessions hold no
+      // claim yet still resident). Fail-closed, same as the claim guard.
+      const residency = await heartbeatResidencyBlocksRemoval(supabase, wtPath, {
+        logger: (m) => process.stderr.write(`  ${m}\n`),
+      });
+      if (residency.blocked) {
+        console.log(`  ⛔ ${path.basename(wtPath)} residency guard: ${residency.reason} — skipping`);
+        emitJsonLine({
+          schema_version: SCHEMA_VERSION,
+          timestamp: new Date().toISOString(),
+          event: 'removal_blocked_resident',
+          worktree_path: wtPath,
+          reason: residency.reason,
+          detail: residency.detail || null,
         });
         aborted++;
         continue;
