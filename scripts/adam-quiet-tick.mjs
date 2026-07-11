@@ -25,7 +25,7 @@ import 'dotenv/config';
 import { rehydrateBoard } from '../lib/adam/task-rehydrate.js';
 import { checkAndAlertStalls } from '../lib/adam/stall-alert.js';
 import { runOutboundSilenceWatchdog } from '../lib/adam/outbound-silence-watchdog.js';
-import { TABLE as TASK_LEDGER_TABLE } from '../lib/adam/task-ledger.js';
+import { TABLE as TASK_LEDGER_TABLE, syncParentRollupStatus } from '../lib/adam/task-ledger.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const require = createRequire(import.meta.url);
@@ -94,14 +94,20 @@ export async function reconcileBoard(sb) {
 
 // FR-2/FR-3 (Child B): critical-path (chairman-parent) task_ledger rows, fail-soft — a read
 // error must never abort the tick. inFlightNextStep is derived from the row's OWN rolled-up
-// status (lib/adam/task-ledger.js rollupParentStatus already writes 'in_progress' onto a parent
-// while any child is still moving): status==='in_progress' -> treated as an intended hold (a
-// known next step is itself progressing) so it never escalates even if this exact row's
-// updated_at hasn't changed this tick; status==='blocked' (or anything else) is a genuine-stall
-// candidate, matching the locked scope's noise-avoidance bias (default to NOT escalating when
-// ambiguous, per stall-detector.js's classifyStaleness contract).
+// status: status==='in_progress' -> treated as an intended hold (a known next step is itself
+// progressing) so it never escalates even if this exact row's updated_at hasn't changed this
+// tick; status==='blocked' (or anything else) is a genuine-stall candidate, matching the locked
+// scope's noise-avoidance bias (default to NOT escalating when ambiguous, per stall-detector.js's
+// classifyStaleness contract).
+// QF-20260711-503: rollupParentStatus() (lib/adam/task-ledger.js) is PURE and was previously
+// used only for the board VIEW (adam-pm-board.mjs) — nothing wrote its result back onto the
+// parent's OWN persisted status column, so this read could see a STALE status (e.g. still
+// 'blocked' from an earlier tick) even once the remaining child was unblocked and simply
+// claimable on the belt, causing a false stall escalation. syncParentRollupStatus() persists
+// the fresh rollup first so this read always reflects current children state.
 export async function readCriticalPathParents(sb) {
   try {
+    await syncParentRollupStatus(sb).catch(() => {}); // fail-soft: a sync error falls through to the pre-fix (possibly stale) read rather than aborting the tick
     // QF-20260703-229: pre-filter to OPEN nodes at the query — a done/cancelled parent has
     // stopped moving BY DEFINITION and is never a stall candidate. source_kind/source_ref are
     // read here too so checkAndAlertStalls can self-heal a sourced_sd node whose linked SD

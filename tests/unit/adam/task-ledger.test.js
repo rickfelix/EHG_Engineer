@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   createOrUpsertNode, setStatus, setBlocker,
-  rollupParentStatus, bubbleBlockers, sumTokenCost,
+  rollupParentStatus, bubbleBlockers, sumTokenCost, syncParentRollupStatus,
   STATUSES, TIERS, SOURCE_KINDS,
 } from '../../../lib/adam/task-ledger.js';
 
@@ -157,5 +157,94 @@ describe('sumTokenCost (PURE) — coarse per-parent rollup', () => {
     expect(sumTokenCost([{ token_cost: 100 }, { token_cost: 250 }, { token_cost: null }])).toBe(350);
     expect(sumTokenCost([{ token_cost: 100 }, { token_cost: 999, status: 'cancelled' }])).toBe(100);
     expect(sumTokenCost([])).toBe(0);
+  });
+});
+
+/** In-memory adam_task_ledger stub supporting select().eq().in() filter chains + the update path. */
+function makeSyncSupabase(rows) {
+  const ledger = [...rows];
+  function from(table) {
+    if (table !== 'adam_task_ledger') throw new Error(`unexpected table: ${table}`);
+    return {
+      select() {
+        const filters = [];
+        const builder = {
+          eq(col, val) { filters.push((r) => r[col] === val); return builder; },
+          in(col, vals) { filters.push((r) => vals.includes(r[col])); return builder; },
+          then(resolve, reject) {
+            const data = ledger.filter((r) => filters.every((f) => f(r)));
+            return Promise.resolve({ data, error: null }).then(resolve, reject);
+          },
+        };
+        return builder;
+      },
+      update(patch) {
+        return {
+          eq(_col, id) {
+            return {
+              select() {
+                return {
+                  maybeSingle: async () => {
+                    const row = ledger.find((r) => r.id === id);
+                    if (row) Object.assign(row, patch);
+                    return { data: row ?? null, error: null };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+  }
+  return { from, _ledger: ledger };
+}
+
+describe('syncParentRollupStatus (QF-20260711-503) — persists the rollup onto the parent row', () => {
+  it('updates a STALE parent status to match its children\'s rollup (6/7 done + 1 open -> in_progress)', async () => {
+    const sb = makeSyncSupabase([
+      { id: 'p1', tier: 'parent', status: 'blocked' }, // stale: should now be in_progress
+      ...Array.from({ length: 6 }, (_, i) => ({ id: `c${i}`, tier: 'child', parent_id: 'p1', status: 'done' })),
+      { id: 'c6', tier: 'child', parent_id: 'p1', status: 'open' }, // remaining child, claimable on the belt
+    ]);
+    const result = await syncParentRollupStatus(sb);
+    expect(result).toMatchObject({ checked: 1, updated: 1, errors: [] });
+    expect(sb._ledger.find((r) => r.id === 'p1').status).toBe('in_progress');
+  });
+
+  it('leaves an already-correct parent status untouched (no spurious update)', async () => {
+    const sb = makeSyncSupabase([
+      { id: 'p1', tier: 'parent', status: 'in_progress' },
+      { id: 'c1', tier: 'child', parent_id: 'p1', status: 'done' },
+      { id: 'c2', tier: 'child', parent_id: 'p1', status: 'open' },
+    ]);
+    const result = await syncParentRollupStatus(sb);
+    expect(result).toMatchObject({ checked: 1, updated: 0, errors: [] });
+    expect(sb._ledger.find((r) => r.id === 'p1').status).toBe('in_progress');
+  });
+
+  it('marks a parent done once every non-cancelled child is done', async () => {
+    const sb = makeSyncSupabase([
+      { id: 'p1', tier: 'parent', status: 'in_progress' },
+      { id: 'c1', tier: 'child', parent_id: 'p1', status: 'done' },
+      { id: 'c2', tier: 'child', parent_id: 'p1', status: 'done' },
+    ]);
+    const result = await syncParentRollupStatus(sb);
+    expect(result.updated).toBe(1);
+    expect(sb._ledger.find((r) => r.id === 'p1').status).toBe('done');
+  });
+
+  it('skips a parent with no children (nothing to roll up, status left as-is)', async () => {
+    const sb = makeSyncSupabase([{ id: 'p1', tier: 'parent', status: 'open' }]);
+    const result = await syncParentRollupStatus(sb);
+    expect(result).toMatchObject({ checked: 1, updated: 0, errors: [] });
+  });
+
+  it('is fail-soft: a throwing client returns a zeroed result, never throws', async () => {
+    const sb = { from: () => { throw new Error('boom'); } };
+    const result = await syncParentRollupStatus(sb);
+    expect(result.checked).toBe(0);
+    expect(result.updated).toBe(0);
+    expect(result.errors.length).toBeGreaterThan(0);
   });
 });

@@ -115,4 +115,40 @@ describe('readCriticalPathParents', () => {
     const sb = { from: () => { throw new Error('boom'); } };
     await expect(readCriticalPathParents(sb)).resolves.toEqual([]);
   });
+
+  it('QF-20260711-503: self-heals a STALE parent status before reading it — 6/7 children done + 1 open no longer false-escalates', async () => {
+    const ledger = [
+      { id: 'p1', title: 'UX remediation', updated_at: 'x', tier: 'parent', status: 'blocked' }, // stale
+      ...Array.from({ length: 6 }, (_, i) => ({ id: `c${i}`, tier: 'child', parent_id: 'p1', status: 'done' })),
+      { id: 'c6', tier: 'child', parent_id: 'p1', status: 'open' }, // remaining child, claimable on the belt
+    ];
+    function filteredSelect() {
+      const filters = [];
+      const b = {
+        select: () => b,
+        eq(col, val) { filters.push((r) => r[col] === val); return b; },
+        in(col, vals) { filters.push((r) => vals.includes(r[col])); return b; },
+        then: (resolve, reject) => Promise.resolve({ data: ledger.filter((r) => filters.every((f) => f(r))), error: null }).then(resolve, reject),
+      };
+      return b;
+    }
+    const sb = {
+      from: (table) => {
+        if (table !== 'adam_task_ledger') throw new Error(`unexpected table: ${table}`);
+        return {
+          ...filteredSelect(),
+          update(patch) {
+            return { eq: (_c, id) => ({ select: () => ({ maybeSingle: async () => {
+              const row = ledger.find((r) => r.id === id);
+              if (row) Object.assign(row, patch);
+              return { data: row ?? null, error: null };
+            } }) }) };
+          },
+        };
+      },
+    };
+    const parents = await readCriticalPathParents(sb);
+    expect(ledger.find((r) => r.id === 'p1').status).toBe('in_progress'); // persisted, not just read
+    expect(parents.find((p) => p.id === 'p1').inFlightNextStep).toBe(true); // stall-alert now sees an intended hold
+  });
 });
