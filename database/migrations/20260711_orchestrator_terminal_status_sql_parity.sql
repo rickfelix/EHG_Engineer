@@ -43,6 +43,8 @@
 --
 -- APPLY IS CHAIRMAN-GATED (requires_chairman_apply): node scripts/apply-migration.js
 -- --prod-deploy with @approved-by stamp. Trigger/function DDL on the live DB.
+-- @approved-by: codestreetlabs@gmail.com
+-- (approval given live in-session by the chairman 2026-07-11 ~3:05 PM ET, recorded by Adam ac499e67)
 --
 -- ─── ROLLBACK (verbatim prior definitions, captured live via pg_get_functiondef/
 -- pg_get_triggerdef 2026-07-11) ───
