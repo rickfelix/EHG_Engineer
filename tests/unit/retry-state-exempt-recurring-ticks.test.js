@@ -34,6 +34,11 @@ describe('isExempt — new recurring-tick exemptions (FR-1/FR-2/FR-3)', () => {
     expect(isExempt('node scripts\\worker-checkin.cjs')).toBe(true);
   });
 
+  it('QF-20260710-584: exempts the coordinator quiet-tick cadence', () => {
+    expect(isExempt('node scripts/coordinator-quiet-tick.mjs')).toBe(true);
+    expect(isExempt('node scripts\\coordinator-quiet-tick.mjs')).toBe(true);
+  });
+
   it('FR-3: a genuine repeated-failure command is NOT exempt (anti-stuck-retry guard preserved)', () => {
     expect(isExempt('node scripts/build.js')).toBe(false);
     expect(isExempt('npx vitest run tests/unit/foo.test.js')).toBe(false);
