@@ -12,7 +12,7 @@
  *
  * Builds ON (does NOT duplicate) the Phase A-D Solomon infrastructure: reuses
  * lib/coordinator/solomon-identity.cjs (getActiveSolomonId), lib/coordinator/dispatch.cjs
- * (insertCoordinationRow), scripts/worker-signal.cjs (redact/BODY_HARD_CAP/awaitCoordinatorReply),
+ * (insertCoordinationRow), scripts/worker-signal.cjs (capBody/awaitCoordinatorReply),
  * lib/coordinator/resolve.cjs (getActiveCoordinatorId/isTwoWayV2Enabled). Exports drainSolomonOutbound
  * to satisfy the existing solomon-register.cjs lazy-require. No migration.
  *
@@ -42,7 +42,7 @@
 
 const crypto = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
-const { redact, BODY_HARD_CAP, awaitCoordinatorReply } = require('./worker-signal.cjs');
+const { capBody, awaitCoordinatorReply } = require('./worker-signal.cjs');
 const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled } = require('../lib/coordinator/resolve.cjs');
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version.cjs');
@@ -82,10 +82,13 @@ const SOLOMON_PER_SD_MAX = Number(process.env.SOLOMON_PER_SD_MAX) || 2;   // ans
 const SOLOMON_PER_DAY_MAX = Number(process.env.SOLOMON_PER_DAY_MAX) || 20; // answers per UTC day
 
 /**
- * Pure: build the Solomon advisory payload. INVARIANT: payload.kind=adam_advisory (reuses the
+ * Build the Solomon advisory payload. INVARIANT: payload.kind=adam_advisory (reuses the
  * advisory-inbox plumbing), payload.oracle=true (the Solomon marker), and NEVER signal_type /
  * intent_action. correlation_id makes the answer replyable; a reply_to (the consult's correlation)
  * is echoed under BOTH keys so the asking side's matcher pairs the answer to its consult. Exported.
+ * QF-20260711-596: body sizing now goes through the shared capBody() hard-error helper (matches
+ * adam-advisory.cjs/coordinator-reply.cjs/worker-signal.cjs since QF-20260710-560) instead of a
+ * silent .slice() -- throws a BODY_TOO_LONG error (never silently clips) for an over-cap body.
  */
 function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, replyTo, via, replyClass, replyWindowMs, now }) {
   // An answer to a consult (replyTo set) is terminal -- always fire-and-forget. Otherwise: request
@@ -99,7 +102,7 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
     repo: repo || null,
     reply_class: resolvedReplyClass,
   };
-  if (body) payload.body = redact(String(body)).slice(0, BODY_HARD_CAP);
+  if (body) payload.body = capBody(String(body));
   if (correlationId) payload.correlation_id = correlationId; // replyable (always)
   if (expectsReply) payload.expects_reply = true;            // sync await (request mode only)
   if (replyTo) {
@@ -718,7 +721,17 @@ async function main() {
     try { replyTo = await resolveReplyToCorrelation(supabase, replyToArg); }
     catch (e) { console.error(`ERROR: --reply-to ${replyToArg} — ${e.message}`); process.exit(2); }
   }
-  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via, replyClass: replyClassArg, replyWindowMs });
+  // QF-20260711-596: capBody() (called inside buildAdvisoryPayload) hard-errors on an over-4096
+  // body instead of silently clipping. Caught here (not left to the generic top-level UNHANDLED
+  // handler) so an oversize send fails LOUDLY with the same BODY_TOO_LONG/exit-2 contract
+  // worker-signal.cjs already uses -- never a silent clip, never a crash-shaped stack trace.
+  let payload;
+  try {
+    payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via, replyClass: replyClassArg, replyWindowMs });
+  } catch (e) {
+    if (e && e.code === 'BODY_TOO_LONG') { console.error('ERROR:', e.message); process.exit(2); }
+    throw e;
+  }
   const subject = `[SOLOMON_ORACLE] ${payload.body.slice(0, 80)}`;
   const expiresAt = advisoryExpiresAt(Date.now());
 
