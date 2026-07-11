@@ -221,6 +221,20 @@ describe('checkThesisKillGate — binding mode', () => {
     expect(result.held).toHaveLength(1);
     expect(insertedEvents.some((e) => e.event_type === 'THESIS_KILL_HOLD')).toBe(true);
   });
+
+  it('a throwing resolver fails OPEN (never propagates as an uncaught rejection that would block advancement)', async () => {
+    const { checkThesisKillGate } = await importGateWithFlag('binding');
+    const supabase = buildSupabaseMock({ killCriteria: [dueCriterion()] });
+
+    const result = await checkThesisKillGate({
+      supabase, ventureId: VENTURE_ID, fromStage: 11, toStage: 12,
+      resolveObservedValue: () => { throw new Error('simulated resolver failure'); },
+    });
+
+    expect(result.allowed).toBe(true);
+    expect(result.fired).toHaveLength(0);
+    expect(result.held).toHaveLength(0);
+  });
 });
 
 describe('checkThesisKillGate — off mode', () => {
