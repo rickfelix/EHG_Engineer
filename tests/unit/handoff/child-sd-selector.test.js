@@ -135,6 +135,39 @@ describe('Child SD Selector', () => {
       expect(result.allComplete).toBe(true);
     });
 
+    it('should return allComplete=true when children are a mix of completed and cancelled (QF-20260710-491)', async () => {
+      let queryCount = 0;
+      const dualMock = {
+        from: () => ({
+          select: () => ({
+            eq: () => {
+              queryCount++;
+              if (queryCount === 1) {
+                return {
+                  in: () => Promise.resolve({ data: [], error: null })
+                };
+              } else {
+                return Promise.resolve({
+                  data: [
+                    { id: 'c1', status: 'completed' },
+                    { id: 'c2', status: 'cancelled' },
+                    { id: 'c3', status: 'completed' }
+                  ],
+                  error: null
+                });
+              }
+            }
+          })
+        })
+      };
+
+      const result = await getNextReadyChild(dualMock, 'parent-1');
+
+      expect(result.sd).toBe(null);
+      expect(result.allComplete).toBe(true);
+      expect(result.reason).toContain('terminal');
+    });
+
     it('should indicate blocked children when some are blocked', async () => {
       let queryCount = 0;
       const mockSupabase = {
