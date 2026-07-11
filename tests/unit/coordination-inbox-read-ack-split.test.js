@@ -15,6 +15,17 @@ describe('classifyInboxMessage', () => {
     expect(v).toEqual({ skip: false, markRead: false, markAck: false });
   });
 
+  // Retro action item (SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001, retrospective
+  // 887c2da7-f966-45d3-a7af-98110844cfb1): pin the core incident-fix invariant directly —
+  // a DIRECTIVE_KINDS row (payload.kind in the shared allowlist) must stamp delivered_at
+  // (transport receipt) on first poll, NEVER read_at, so the coordinator's hard-wake check
+  // (which gates on read_at IS NULL) is never defeated by a poll that merely saw the row
+  // exist. This is what caused the 2026-07-09 25-minute chairman-directive silence.
+  it('a DIRECTIVE_KINDS row (payload.kind=coordinator_request) stamps delivered_at, never read_at, on first poll', () => {
+    const v = classifyInboxMessage({ message_type: 'INFO', payload: { kind: 'coordinator_request' } }, { isIdle: true });
+    expect(v).toEqual({ skip: false, markRead: false, markDelivered: true, markAck: false });
+  });
+
   it('a plain INFO notification is now READ-ONLY drained on poll (read_at only; ack withheld for /checkin)', () => {
     // SD-LEO-INFRA-WORKER-INBOX-PUSH-DELIVERY-001: coordinator INFO push is delivered by the worker
     // /checkin loop (coordinator_messages[], filters acknowledged_at IS NULL), so the poll must NOT
