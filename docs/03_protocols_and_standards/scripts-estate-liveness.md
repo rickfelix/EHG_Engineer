@@ -55,3 +55,26 @@ reverse check as the safety net.
 SD-LEO-INFRA-SCRIPTS-ESTATE-RECONCILIATION-001, productizing the chairman's 2026-06-10
 scripts-sprawl review (4,562 files; 717/2,091 live candidates orphaned; scratch dirs
 accumulating ~600 files with no lifecycle).
+
+## Periodic-process registry (runtime liveness, SD-LEO-INFRA-OPERATIVE-AGENT-OWNERSHIP-001-A)
+
+Static reachability (above) answers "does anything reference this file?"; the
+`periodic_process_registry` regime answers "did this recurring process actually RUN?"
+
+- **Single registry, zero shadows.** Every recurring process — fleet GHA cron workflows,
+  `scripts/cron/*`, coordinator `STANDARD_LOOPS` — maps to exactly one registry row.
+  Enforced by `node scripts/enumerate-periodic-processes.mjs` (non-zero exit on any
+  shadow; `--report-only` to inspect). Registration is mechanical:
+  `node scripts/seed-periodic-process-registry.mjs` (owner-preserving upserts).
+- **Owner is REQUIRED** (`owner NOT NULL`, migration `20260711_..._owner_not_null.sql`,
+  rollback alongside). New rows default to the interim owner `coordinator-fleet`;
+  `node scripts/backfill-registry-owners.mjs` prints the reassignment worklist that
+  converges interim owners to addressable agents.
+- **Class-split watcher venues.** The liveness watcher runs from TWO complementary
+  invokers: `.github/workflows/periodic-liveness-watcher-cron.yml` (every 15 min,
+  `LIVENESS_CLASSES=self_stamped,eva_scheduler_heartbeat` — timestamp comparisons only)
+  and the coordinator `STANDARD_LOOPS` dev-host entry
+  (`LIVENESS_CLASSES=claude_sessions_heartbeat` — PID-anchored role sessions, which a CI
+  runner cannot evaluate without false-OVERDUE). No row is double-evaluated.
+- **UNVERIFIED is by design** for freshly registered rows: visible on the dashboard,
+  never false-alarming, until the process wires `lib/periodic-liveness/stamp-last-fired.js`.

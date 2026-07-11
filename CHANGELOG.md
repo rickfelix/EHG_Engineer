@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-07-11](#2026-07-11)
+  - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
 - [2026-07-07](#2026-07-07)
   - [Features](#features)
@@ -82,6 +83,11 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-07-11
+
+### Infrastructure
+- **Operative agent ownership substrate — unified periodic-process registry, required owners, durable class-split watcher invoker** - PR #5929 (SD-LEO-INFRA-OPERATIVE-AGENT-OWNERSHIP-001-A)
+  - **What shipped**: The shadow-registry class behind the chairman's seven-principle audit P6 is closed at the substrate layer. A shared discovery lib (`lib/periodic-liveness/enumerate-processes.mjs`) + zero-shadow sweep (`scripts/enumerate-periodic-processes.mjs`, non-zero exit on any unregistered process) enumerate all 100 recurring processes (66 fleet GHA crons, 8 `scripts/cron/*`, 26 coordinator STANDARD_LOOPS) — all now registered in `periodic_process_registry` (was 21 rows). `owner` is backfilled (interim `coordinator-fleet` + reassignment worklist via `scripts/backfill-registry-owners.mjs`) and promoted to NOT NULL via a two-phase, fail-loud, rollback-shipped migration (applied live). The liveness watcher gains a durable GHA invoker (`.github/workflows/periodic-liveness-watcher-cron.yml`) with class-split venues: CI evaluates timestamp-source rows only; PID-anchored role_session evaluation stays on the dev-host STANDARD_LOOPS entry — no row double-evaluated, no CI false-OVERDUE.
+  - **Verification**: Live sweep reports ZERO SHADOWS (100/100 mapped); `owner is_nullable=NO`; CI-mode watcher run evaluated 118 rows and explicitly skipped 3 role_session rows; 11/11 new unit tests (TR-1 class-split pins, cron-interval parser, STANDARD_LOOPS static parse) + 15/15 smoke. LEAD-TO-PLAN (94%), PLAN-TO-EXEC (98%), EXEC-TO-PLAN (91%), PLAN-TO-LEAD (95%), LEAD-FINAL-APPROVAL (98%). Retrospective 715027bd (100/100 quality).
 
 ### Bugfix
 - **Worktree-freshness protocol pre-check + payment-rail bug-class audit closes both SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002 retro action items** - PR #5917 (SD-LEO-FIX-PAYMENT-RAIL-RETRO-001)
