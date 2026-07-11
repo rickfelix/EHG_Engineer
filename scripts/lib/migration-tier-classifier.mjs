@@ -38,7 +38,10 @@ const MAX_SQL_BYTES = 200_000;
 
 // Top-level destructive / permission-altering / non-additive verbs. If any of these
 // survive in the body-stripped, allow-head-stripped residue, the migration is TIER-2.
-const FORBIDDEN_TOPLEVEL = /\b(DROP|TRUNCATE|DELETE|UPDATE|RENAME|GRANT|REVOKE|CLUSTER|REINDEX|REFRESH|VACUUM|ANALYZE|COMMENT|COPY|CALL|LISTEN|NOTIFY|IMPORT|MERGE|LOCK|DO)\b/i;
+// COMMENT is deliberately EXCLUDED (QF-20260711-804): it now has its own narrow,
+// literal-value-only allow-rule (matchCommentOnColumn) — same treatment as CREATE/ALTER,
+// which are also absent here and gated by their own RULES instead of a blanket ban.
+const FORBIDDEN_TOPLEVEL = /\b(DROP|TRUNCATE|DELETE|UPDATE|RENAME|GRANT|REVOKE|CLUSTER|REINDEX|REFRESH|VACUUM|ANALYZE|COPY|CALL|LISTEN|NOTIFY|IMPORT|MERGE|LOCK|DO)\b/i;
 
 // Destructive tokens inside a CREATE FUNCTION / VIEW body (Rule E deep-scan).
 const BODY_DESTRUCTIVE = /\b(DROP|TRUNCATE|DELETE\s+FROM|UPDATE\b[\s\S]*?\bSET\b|ALTER\s+(TABLE|VIEW|MATERIALIZED|SEQUENCE|TYPE|SCHEMA|POLICY)|GRANT|REVOKE|CALL|COPY|EXECUTE|\bDO\b|INSERT\s+INTO|MERGE)\b/i;
@@ -100,9 +103,34 @@ function dollarQuotesBalanced(sql) {
   return Object.values(counts).every((n) => n % 2 === 0);
 }
 
-/** Count top-level (not inside a string/comment/dollar body) semicolons in a residue. */
-function countTopLevelSemicolons(residue) {
-  return (residue.match(/;/g) || []).length;
+/**
+ * Count semicolons OUTSIDE any single-quoted string literal in `s`. A quoted string —
+ * e.g. a COMMENT ON COLUMN ... IS '...' value — can legitimately contain semicolons as
+ * prose punctuation; those are NOT statement boundaries and must not be miscounted as
+ * one (QF-20260711-804: a chairman-facing COMMENT string with semicolons in its prose
+ * false-triggered the under-split/embedded-semicolon checks on an otherwise provably-
+ * additive migration). Dollar-quoted bodies are already removed by stripNonDdl() before
+ * this runs, so only '...'-style literals need handling here. Escaped '' inside a
+ * string (the SQL-standard doubled-quote escape) is honored.
+ */
+function countTopLevelSemicolons(s) {
+  let count = 0;
+  let inString = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === "'") {
+      if (inString && s[i + 1] === "'") { i++; continue; } // escaped '' inside a string
+      inString = !inString;
+      continue;
+    }
+    if (ch === ';' && !inString) count++;
+  }
+  return count;
+}
+
+/** True iff `s` contains a semicolon OUTSIDE any single-quoted string literal. */
+function hasTopLevelSemicolon(s) {
+  return countTopLevelSemicolons(s) > 0;
 }
 
 /** Remove balanced parenthesized groups (iteratively, innermost-first) — bounded. */
@@ -252,7 +280,22 @@ function matchSafeCreateFnView(head, rawStmt) {
   return { token: 'create_function' };
 }
 
-const RULES = [matchCreateTableINE, matchCreateIndex, matchAdditiveAddColumn, matchPolicyOrEnableRls];
+// Rule F — COMMENT ON COLUMN <table>.<col> IS <literal-or-NULL> (QF-20260711-804). Pure
+// catalog metadata (pg_description) on an EXISTING column — no query execution, no data
+// mutation, no object coupling beyond referencing the column. The value MUST be a plain
+// constant string literal or NULL (clears the comment) — never a sub-expression/function
+// call, which could not be proven side-effect-free. COMMENT ON <anything else> (TABLE,
+// FUNCTION, ...) is intentionally NOT covered — fails closed to TIER-2 (unrecognized).
+function matchCommentOnColumn(head) {
+  const m = head.match(/^comment\s+on\s+column\s+([a-z0-9_."]+)\s+is\s+(.+)$/);
+  if (!m) return null;
+  const value = m[2].trim();
+  if (value === 'null') return { token: `comment_on_column:${m[1]}` };
+  if (!/^'(?:[^']|'')*'$/.test(value)) return null; // must be a plain string literal
+  return { token: `comment_on_column:${m[1]}` };
+}
+
+const RULES = [matchCreateTableINE, matchCreateIndex, matchAdditiveAddColumn, matchPolicyOrEnableRls, matchCommentOnColumn];
 
 /**
  * Classify a migration's risk tier. PURE; never throws; default-deny to TIER-2.
@@ -289,7 +332,7 @@ export function classifyMigration(sql) {
     for (const raw of stmts) {
       const head = normalizeHead(raw);
       if (!head) continue; // comment/whitespace-only fragment between statements
-      if (head.includes(';')) return T2('embedded_semicolon_ambiguity'); // FC-3
+      if (hasTopLevelSemicolon(head)) return T2('embedded_semicolon_ambiguity'); // FC-3
       // FC-3 (under-split): a single statement must carry exactly one command verb.
       // Catches the no-semicolon blob (two CREATEs) that a prefix-only head match
       // would false-pass, and any destructive command concatenated to an additive one.
