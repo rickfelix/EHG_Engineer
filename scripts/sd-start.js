@@ -33,6 +33,7 @@ import { assertValidClaim, ClaimIdentityError } from '../lib/claim-validity-gate
 import { hasRecentClaimReleased, formatClaimReleasedAbort, detectSdKeyDrift } from '../lib/claim-lifecycle-release.mjs';
 import sessionIdentitySot from '../lib/session-identity-sot.js';
 import { findClaudeCodePid } from '../lib/terminal-identity.js';
+import { resolveClaimIdentity, checkIdentityMismatch } from '../lib/claim/claim-identity.js';
 import { claimGuard, formatClaimFailure } from '../lib/claim-guard.mjs';
 import { checkClaimGateFreshness } from '../lib/claim/gate-freshness-check.mjs';
 // SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001 — pre-claim multi-signal evidence-of-life gate.
@@ -812,6 +813,25 @@ async function main() {
     session = await getOrCreateSession();
   }
 
+  // SD-LEO-INFRA-CLAIM-IDENTITY-INTEGRITY-001 (FR-2): identity-mismatch guard.
+  // getOrCreateSession's findExistingSession matches by getTerminalId(), whose
+  // marker/pointer fallback is last-writer-wins under concurrency — it can adopt
+  // ANOTHER live session's identity and misattribute the claim (live-evidenced:
+  // env=e2f6eecc claimed as e828c687, coordinator ask 5655cb68). A session that
+  // CONTRADICTS the caller's env identity is never used for a claim — fail loud,
+  // never misattribute. Absence of env identity is NOT a conflict (human runs).
+  const claimIdentity = resolveClaimIdentity();
+  const idCheck = checkIdentityMismatch(session, claimIdentity);
+  if (idCheck.mismatch) {
+    console.error(`${colors.red}🚫 CLAIM-IDENTITY MISMATCH — refusing to claim under an adopted identity${colors.reset}`);
+    console.error(`   env CLAUDE_SESSION_ID: ${idCheck.envId}`);
+    console.error(`   adopted session row:   ${idCheck.adoptedId}`);
+    console.error('   The adopted row belongs to a DIFFERENT session (shared-pointer race).');
+    console.error('   Remediation: ensure this session has its own claude_sessions row');
+    console.error('   (SessionStart session-register hook), then re-run sd-start.');
+    process.exit(1);
+  }
+
   // 2.1 SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-B (FR-1, TR-1, TR-2):
   // Atomically reconcile the three identity sources so claim-validity-gate sees
   // all three in agreement. No-op when SESSION_IDENTITY_SOT_ENABLED is unset/false.
@@ -1444,6 +1464,16 @@ async function main() {
   } catch (e) {
     // Non-fatal: health check failure should not block claiming
     console.debug('[sd-start] Health check error:', e?.message || e);
+  }
+
+  // SD-LEO-INFRA-CLAIM-IDENTITY-INTEGRITY-001 (FR-2): stamp identity provenance on
+  // the claim_history entry (fail-soft) — 'env' vs 'pointer_fallback' makes
+  // misattribution-prone claims queryable for the retro-audit / coordinator sweeps.
+  if (claimResult.claim.status === 'newly_acquired') {
+    try {
+      const { stampClaim } = await import('../lib/fleet/claim-stamp.cjs').then((m) => m.default || m);
+      await stampClaim(supabase, effectiveId, session.session_id, claimIdentity.source);
+    } catch { /* fail-soft: stamping must never break the claim path */ }
   }
 
   // 5. Display SD info
