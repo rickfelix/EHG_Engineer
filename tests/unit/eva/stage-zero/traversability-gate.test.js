@@ -125,7 +125,10 @@ describe('parkFailedCandidate — LIVE venture_nursery schema (FR-3 / criterion 
       })),
     };
     const failure = {
-      candidate: { name: 'ShopSync', problem_statement: 'p', solution: 's', target_market: 'm', composite_score: 95, prompt_version: 'v3' },
+      candidate: {
+        name: 'ShopSync', problem_statement: 'p', solution: 's', target_market: 'm', composite_score: 95, prompt_version: 'v3',
+        required_capabilities: [{ name: 'shopify integration', kind: 'integration' }, { name: 'venture web deploy', kind: 'form_factor' }],
+      },
       missing: [{ name: 'shopify integration', kind: 'integration' }],
       resurfacing_conditions: [{ type: 'capability_ships', capability: 'shopify integration', kind: 'integration', condition: 'viable when capability shopify integration ships' }],
     };
@@ -140,6 +143,51 @@ describe('parkFailedCandidate — LIVE venture_nursery schema (FR-3 / criterion 
     expect(row.trigger_conditions[0]).toMatchObject({ type: 'capability_ships', capability: 'shopify integration' });
     expect(row.source_ref.gate).toBe('traversability');
     expect(row.source_ref.posture_version).toBe('phase_1_process_proving@v1');
+  });
+
+  // QF-20260711-607: parkFailedCandidate's persisted candidate snapshot previously
+  // omitted required_capabilities, so a nursery re-eval's carry-forward reconstruction
+  // always found zero requirements and trivially auto-passed via no_requirements_declared
+  // regardless of whether the original envelope gap was ever fixed.
+  test('persists required_capabilities in source_ref.candidate so re-eval carry-forward can reconstruct the original requirements', async () => {
+    const inserted = [];
+    const supabase = {
+      from: vi.fn((table) => ({
+        insert: vi.fn((row) => {
+          inserted.push({ table, row });
+          return { select: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: 'n1', ...row }, error: null }) }) };
+        }),
+      })),
+    };
+    const requiredCapabilities = [{ name: 'shopify integration', kind: 'integration' }];
+    const failure = {
+      candidate: { name: 'ShopSync', composite_score: 95, required_capabilities: requiredCapabilities },
+      missing: [{ name: 'shopify integration', kind: 'integration' }],
+      resurfacing_conditions: [],
+    };
+    await parkFailedCandidate(failure, {}, { supabase, logger: silentLogger });
+
+    expect(inserted[0].row.source_ref.candidate.required_capabilities).toEqual(requiredCapabilities);
+  });
+
+  test('defaults required_capabilities to an empty array when the candidate declares none', async () => {
+    const inserted = [];
+    const supabase = {
+      from: vi.fn((table) => ({
+        insert: vi.fn((row) => {
+          inserted.push({ table, row });
+          return { select: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: 'n1', ...row }, error: null }) }) };
+        }),
+      })),
+    };
+    const failure = {
+      candidate: { name: 'MysteryCo', composite_score: 60 },
+      missing: [],
+      resurfacing_conditions: [],
+    };
+    await parkFailedCandidate(failure, {}, { supabase, logger: silentLogger });
+
+    expect(inserted[0].row.source_ref.candidate.required_capabilities).toEqual([]);
   });
 });
 
