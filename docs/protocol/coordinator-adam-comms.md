@@ -87,6 +87,17 @@ The advisory insert routes through `lib/coordinator/dispatch.cjs` `insertCoordin
 stale/dead coordinator UUID is refused with `DISPATCH_TARGET_UNKNOWN` instead of dead-lettering.
 The `broadcast-coordinator` sentinel (no live coordinator) is allowed and short-circuits validation.
 
+**Lint enforcement** (SD-LEO-INFRA-SESSION-COORDINATION-LANE-001): a raw
+`.from('session_coordination').insert(...)` outside `insertCoordinationRow` is a CI-blocking lint
+violation (`eslint-rules/no-raw-session-coordination-insert.js`). A second rule,
+`eslint-rules/no-echoed-session-coordination-target.js`, flags `target_session` sourced from an
+echoed prior-row field (`row.target_session`, `msg.target_session`, `row.sender_session`) instead
+of a fresh `getActiveAdamId`/`getActiveSolomonId`/`getActiveCoordinatorId` call -- both share
+`scripts/lint/session-coordination-insert-classguard-lint.mjs` as their driver. `insertCoordinationRow`
+itself does NOT enforce resolver-only targeting (it only validates the target exists), so a caller
+can still pass a stale/echoed session id through the choke point; see `lib/coordinator/dispatch.cjs`'s
+own comment block for the current, verified census of known gaps.
+
 ## Quick demo
 
 ```bash
