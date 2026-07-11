@@ -98,9 +98,10 @@ when the RPC call throws.
 
 ## Why this is a checklist, not a fix shipped in this SD
 
-FR-3's migrations are staged (`-- requires-chairman-apply`) and never applied via
-`--prod-deploy` by this SD — actual application is a separate, explicit chairman GO decision
-(see the chairman-gated migration convention). Finding #1's fix lives in a **different
+FR-3's migrations were staged (`-- requires-chairman-apply`) at authoring time; the chairman
+GO decision has since been exercised and **all five are LIVE in the production DB**
+(functions + `enforce_stage_advancement_artifact_gate` trigger verified in pg_proc/pg_trigger
+2026-07-11 — SD-LEO-INFRA-HARNESS-FIXTURE-ARTIFACT-001 doc-drift correction). Finding #1's fix lives in a **different
 repository** (`ehg`, not `EHG_Engineer`) and is out of this SD's EXEC scope by repo boundary,
 same rationale as census rows #16/#17. It is captured here so it blocks the chairman's actual
 `--prod-deploy` decision for `advance_venture_stage`'s FR-3 migration specifically, and routed
