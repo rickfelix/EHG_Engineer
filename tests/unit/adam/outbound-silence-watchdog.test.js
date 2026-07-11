@@ -22,7 +22,7 @@ const LIVE = 'target-live-1';
 
 /** Stub supabase: dispatches by table; session_coordination select() branches by whether
  *  .eq('payload->>kind', ...) is chained (prior-probe lookup) vs not (outbound fetch). */
-function makeStub({ outboundRows = [], sessionRows = [{ session_id: LIVE, heartbeat_at: new Date(NOW).toISOString() }], priorProbeRows = [] } = {}) {
+function makeStub({ outboundRows = [], sessionRows = [{ session_id: LIVE, heartbeat_at: new Date(NOW).toISOString() }], priorProbeRows = [], replyRows = [] } = {}) {
   const inserts = [];
   const priorProbeFilters = [];
   return {
@@ -44,6 +44,9 @@ function makeStub({ outboundRows = [], sessionRows = [{ session_id: LIVE, heartb
                 },
               }),
             }),
+            // SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001: counterparty-reply correlation fetch
+            // (.select().in('sender_session', targets).gte().limit()).
+            in: () => ({ gte: () => ({ limit: async () => ({ data: replyRows }) }) }),
           }),
           insert: async (row) => { inserts.push(row); return { data: null, error: null }; },
         };
@@ -73,6 +76,17 @@ describe('outbound-silence-watchdog: pure classification (TS-1)', () => {
     expect(isBreaching({ created_at: created30, read_at: null, payload: { kind: PROBE_KIND } }, NOW)).toBe(false);
   });
 
+  it('isBreaching: SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 — a correlated reply prevents a false breach', () => {
+    const read60 = new Date(NOW - UNACKED_BREACH_MS).toISOString();
+    const created30 = new Date(NOW - UNREAD_BREACH_MS).toISOString();
+    const original = { id: 'req-1', created_at: created30, read_at: read60, acknowledged_at: null, payload: {} };
+    const reply = { id: 'reply-1', payload: { reply_to: 'req-1' } };
+    // Without a correlated reply present: still a genuine breach.
+    expect(isBreaching(original, NOW, [original])).toBe(true);
+    // With a correlated reply present in the row window: no false breach.
+    expect(isBreaching(original, NOW, [original, reply])).toBe(false);
+  });
+
   it('classifyBreaches: live-target-only, oldest-per-target', () => {
     const older = { id: 'r1', target_session: LIVE, payload: { kind: 'coordinator_request' }, created_at: new Date(NOW - 40 * 60_000).toISOString(), read_at: null };
     const newer = { id: 'r2', target_session: LIVE, payload: { kind: 'coordinator_request' }, created_at: new Date(NOW - 35 * 60_000).toISOString(), read_at: null };
@@ -80,6 +94,15 @@ describe('outbound-silence-watchdog: pure classification (TS-1)', () => {
     const breaches = classifyBreaches([older, newer, deadTarget], new Set([LIVE]), NOW);
     expect(breaches.size).toBe(1);
     expect(breaches.get(LIVE).id).toBe('r1');
+  });
+
+  it('classifyBreaches: SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 — a correlated reply in the row set excludes that target entirely', () => {
+    const read60 = new Date(NOW - UNACKED_BREACH_MS).toISOString();
+    const created30 = new Date(NOW - UNREAD_BREACH_MS).toISOString();
+    const req = { id: 'r-corr', target_session: LIVE, payload: { kind: 'coordinator_request' }, created_at: created30, read_at: read60, acknowledged_at: null };
+    const reply = { id: 'reply-corr', target_session: 'someone-else', payload: { reply_to: 'r-corr' }, created_at: created30, read_at: null, acknowledged_at: null };
+    const breaches = classifyBreaches([req, reply], new Set([LIVE, 'someone-else']), NOW);
+    expect(breaches.has(LIVE)).toBe(false);
   });
 
   it('laneHealthAggregate: counts unread fire-and-forget at live targets, excludes probes', () => {
@@ -162,6 +185,18 @@ describe('outbound-silence-watchdog: tick wiring (TS-2..TS-5)', () => {
     expect(inserted.payload.correlation_id).toBeUndefined();
     expect(inserted.payload.request_ack).toBeUndefined();
     expect(Date.parse(inserted.expires_at) - NOW).toBe(PROBE_EXPIRES_MS);
+  });
+
+  it('SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001: a counterparty reply (sender_type != adam) suppresses the false breach', async () => {
+    // The real reply is sent BY the target (sender_type='coordinator'/'solomon'), never
+    // sender_type='adam' — so it can only be found via the separate replyRows fetch, not
+    // the outboundRows fetch. This is the adversarial-review-caught direction bug.
+    const reply = { id: 'reply-1', payload: { reply_to: breachingRow.id }, sender_session: LIVE, created_at: new Date(NOW - 40 * 60_000).toISOString() };
+    const sb = makeStub({ outboundRows: [breachingRow], priorProbeRows: [], replyRows: [reply] });
+    const result = await runOutboundSilenceWatchdog(sb, { now: NOW });
+    expect(result.probed).toHaveLength(0);
+    expect(result.escalated).toHaveLength(0);
+    expect(emitFeedback).not.toHaveBeenCalled();
   });
 
   it('MAX_PROBES_PER_TICK: more breaching live targets than the cap -> only the cap is probed', async () => {

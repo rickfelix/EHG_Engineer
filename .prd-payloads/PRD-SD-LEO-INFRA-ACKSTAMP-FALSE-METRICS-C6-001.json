@@ -1,0 +1,116 @@
+{
+  "executive_summary": "Closure map class C6 (chairman-ratified PR #5840): S5 found 422 'unacked' worker-signal rows with 0 confirmed breaches, and S2's 46 'breaches' were largely the same false-positive class plus dead addressees (already fixed by QF-20260710-750). Root cause: several consumers treat `acknowledged_at IS NULL` on a row as proof nobody replied, but a reply to a coordination message routinely arrives as a FRESH row carrying `payload.correlation_id`/`payload.reply_to`, never as an update to the original row's `acknowledged_at`. The correct 'was this answered' check already exists and is proven in three places in this codebase (`lib/adam/task-rehydrate.js`, `lib/adam/stall-alert.js::isCorrelationTerminal`, `lib/coordinator/relay-drop-gauge.cjs::satisfiesCorrelation`) but four consumers still use the bare ack-null predicate: `lib/adam/outbound-silence-watchdog.js` (chairman-escalating breach classifier), `lib/coordinator/detectors.cjs` (REPLY_STARVATION anomaly), `scripts/adam-quiet-tick.mjs` (hard-interrupt reprint), and 3 of 4 `scripts/fleet-dashboard.cjs` sections (unread-signal count, pending-acknowledgment count, Solomon pending-consult count). This SD adds one shared, tested correlation primitive and ports those four call sites onto it, leaves the two-stage read_at/acknowledged_at DRAIN semantics completely untouched (metric consumers only, not the inbox contract), and documents a full consumer census (9 sites found) with an explicit RE-KEY/RETAIN disposition for each — satisfying the SD's ALL-PATHS clause.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Shared, tested reply-correlation primitive",
+      "description": "New `lib/coordinator/reply-correlation.js` exporting `hasCorrelatedReply(row, allRows)`: returns true iff some other row in `allRows` has `payload.reply_to === row.id` OR `payload.correlation_id === (row.payload?.correlation_id || row.id)`. Generalizes the pattern already proven in `lib/adam/task-rehydrate.js`'s `repliedCorr` set and `lib/adam/stall-alert.js`'s `isCorrelationTerminal()`, but as a single reusable, independently-tested function rather than duplicated inline logic per consumer.",
+      "acceptance_criteria": [
+        "hasCorrelatedReply returns true when another row's payload.reply_to matches the row's id",
+        "hasCorrelatedReply returns true when another row's payload.correlation_id matches the row's own payload.correlation_id",
+        "hasCorrelatedReply returns false when no other row references this row by either key",
+        "hasCorrelatedReply returns false for a null/undefined row (no throw)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "outbound-silence-watchdog.js — stop escalating a correlated-but-unacked row as a breach",
+      "description": "`isBreaching(row, nowMs)` currently declares a chairman-visible breach purely on `!row.acknowledged_at` past 60min post-read. Add a `hasCorrelatedReply` check (caller supplies the candidate row set already fetched for the sweep window) so a row with a matching correlated reply is never escalated, closing the exact live-incident class this SD targets (highest-impact consumer: writes a `feedback` row with `severity: 'high'` to the chairman on false breaches).",
+      "acceptance_criteria": [
+        "A row with acknowledged_at IS NULL but a correlated reply present does NOT trigger isBreaching",
+        "A row with acknowledged_at IS NULL and no correlated reply, past the 60min threshold, still triggers isBreaching (behavior preserved for genuine breaches)",
+        "Existing UNREAD_BREACH_MS / read_at-based branch is untouched"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "detectors.cjs — REPLY_STARVATION recognizes a correlated reply as 'answered'",
+      "description": "`detectReplyStarvation`'s `answered` check currently only looks at `acknowledged_at` or `payload.routed_to_feedback_id`. Extend it to also treat `hasCorrelatedReply(sig, allSignalsInWindow)` as answered, so the REPLY_STARVATION anomaly (persisted to `coordination_events`, surfaced by `stale-session-sweep.cjs`) stops false-flagging correlated-but-unacked rows.",
+      "acceptance_criteria": [
+        "A signal with a correlated reply is excluded from the starved list even if acknowledged_at is null and read_at is null",
+        "A genuinely-starved signal (no ack, no read, no correlated reply, past threshold) is still flagged"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "adam-quiet-tick.mjs — hard-interrupt reprint converges on correlated reply",
+      "description": "`surfaceInboxItems`'s directive-row hard-interrupt currently re-prints every tick 'until acknowledged_at converges them.' A reply arriving as a fresh correlated row never converges this loop today. Add a `hasCorrelatedReply` check so a directive row with a correlated reply stops re-printing even without an ack-stamp on the original row.",
+      "acceptance_criteria": [
+        "A directive row with a correlated reply is excluded from the hard-interrupt reprint set",
+        "A directive row with neither an ack nor a correlated reply still re-prints every tick (unchanged behavior)"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "fleet-dashboard.cjs — 3 of 4 ack-null sections re-keyed on correlation",
+      "description": "`printInbox()` ('N unread signal(s)'), `printCoordination()` ('N pending acknowledgment'), and `printSolomonInbox()` ('N pending consult(s)') all count/filter on bare `acknowledged_at IS NULL`. Each is updated to exclude rows with a correlated reply from its headline count (same `hasCorrelatedReply` primitive, applied client-side against the already-fetched row set — no new queries). `printCoaching()`'s Acked/Read/Unread tally is explicitly OUT OF SCOPE (FR-6 disposition: per-message coaching ack is an intentional 1:1 semantic, not a reply-correlation scenario).",
+      "acceptance_criteria": [
+        "printInbox's 'unread signal(s)' count excludes rows with a correlated reply",
+        "printCoordination's 'pending acknowledgment' count excludes rows with a correlated reply",
+        "printSolomonInbox's 'pending consult(s)' count excludes rows with a correlated reply",
+        "printCoaching's Acked/Read/Unread tally is unchanged (documented exclusion, not a silent gap)"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Consumer census with per-consumer disposition (PR body)",
+      "description": "The PR description enumerates all 9 consumer sites found by the census (outbound-silence-watchdog.js, detectors.cjs REPLY_STARVATION, fleet-dashboard.cjs x4 sections, adam-quiet-tick.mjs, canary-trigger.cjs, stale-session-sweep.cjs + dead-letter-planning.cjs drain-gating, coordinator-quiet-tick.mjs openSignalCount) with an explicit RE-KEY or RETAIN-AS-IS disposition and one-line rationale for each — satisfying the SD's ALL-PATHS clause. RETAIN dispositions: printCoaching (intentional per-message ack, not reply-correlation), canary-trigger.cjs (direct-action semantic, not a 'reply' scenario), sweep/drain gating in stale-session-sweep.cjs/dead-letter-planning.cjs (staleness gate for auto-cleanup, not a human-facing breach/SLA metric — different mechanism than the SD's stated scope), coordinator-quiet-tick.mjs openSignalCount (internal suppress/emit gate, not surfaced to a human as a breach count).",
+      "acceptance_criteria": [
+        "PR body contains a table with all 9 consumers, disposition, and one-line rationale",
+        "Every RE-KEY disposition maps to a concrete FR (2-5) in this PRD",
+        "Every RETAIN disposition has a rationale grounded in the SD's own scope language (SLA/breach/attention metric vs. a different mechanism)"
+      ]
+    }
+  ],
+  "implementation_approach": {
+    "strategy": "One new shared primitive (FR-1) plus four surgical call-site edits (FR-2 through FR-5) that each add a single hasCorrelatedReply guard without touching the two-stage read_at/acknowledged_at DRAIN contract anywhere. The consumer census (FR-6) is a documentation deliverable in the PR body, not a code change, covering the 5 RETAIN-AS-IS sites with rationale so the SD's ALL-PATHS clause is honestly satisfied without forcing an inapplicable fix onto mechanisms that aren't actually the false-metric class (staleness gates, direct-action canary requests, intentional per-message coaching acks).",
+    "steps": [
+      "Add lib/coordinator/reply-correlation.js with hasCorrelatedReply() + unit tests",
+      "Port outbound-silence-watchdog.js isBreaching() to consult the primitive",
+      "Port detectors.cjs detectReplyStarvation() to consult the primitive",
+      "Port adam-quiet-tick.mjs surfaceInboxItems() hard-interrupt logic to consult the primitive",
+      "Port fleet-dashboard.cjs printInbox/printCoordination/printSolomonInbox to exclude correlated-reply rows from headline counts",
+      "Write the consumer census table into the PR body covering all 9 found sites"
+    ],
+    "rollback": "Each of the 4 call-site edits is an additive guard (an extra false-return condition) — reverting the PR restores the pre-fix ack-null-only behavior with no data loss, since no schema or DRAIN semantics changed."
+  },
+  "system_architecture": {
+    "overview": "Application-layer metric-consumer fix only. No schema changes — payload.correlation_id/payload.reply_to already exist and are actively used by 3 other consumers this SD reuses the pattern from. The two-stage read_at/acknowledged_at inbox-processing contract (session_coordination table) is unchanged.",
+    "components": [
+      { "name": "lib/coordinator/reply-correlation.js (new)", "responsibility": "Single source of truth for 'was this row answered by a correlated reply row'" },
+      { "name": "lib/adam/outbound-silence-watchdog.js", "responsibility": "Chairman escalation — stops false-breaching correlated-but-unacked rows" },
+      { "name": "lib/coordinator/detectors.cjs", "responsibility": "REPLY_STARVATION anomaly — stops false-flagging correlated rows" },
+      { "name": "scripts/adam-quiet-tick.mjs", "responsibility": "Hard-interrupt reprint — converges on correlated reply, not just ack" },
+      { "name": "scripts/fleet-dashboard.cjs", "responsibility": "3 of 4 ack-null-derived headline counts re-keyed on correlation" }
+    ],
+    "data_flow": "Each consumer already fetches its row window from session_coordination/worker signals; hasCorrelatedReply is applied client-side against that same already-fetched set (no new queries, no new DB round-trips)."
+  },
+  "integration_operationalization": {
+    "consumers": [
+      "Chairman (outbound-silence-watchdog escalations)",
+      "Coordinator operators (fleet-dashboard.cjs board, REPLY_STARVATION anomaly)",
+      "Adam (adam-quiet-tick.mjs hard-interrupt surfacing)"
+    ],
+    "dependencies": [
+      "payload.correlation_id / payload.reply_to JSONB convention (already populated by scripts/worker-signal.cjs, scripts/adam-advisory.cjs, and others per the census)"
+    ],
+    "data_contracts": [
+      "hasCorrelatedReply(row, allRows): boolean — pure function, no I/O"
+    ],
+    "runtime_config": [
+      "None — no new env vars or flags"
+    ],
+    "observability_rollout": "Single PR in EHG_Engineer. No migration, no chairman-gate. Post-merge: the 4 re-keyed consumers stop producing the false-positive breach/pending/starvation signals the closure map's S2/S5 rows documented; the 5 RETAIN-AS-IS sites are explicitly documented as out of scope with rationale, closing the ALL-PATHS enumeration requirement without inventing an inapplicable fix."
+  },
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "hasCorrelatedReply core matching logic", "expected": "True for reply_to match, true for correlation_id match, false otherwise, no throw on null" },
+    { "id": "TS-2", "scenario": "outbound-silence-watchdog isBreaching with a correlated reply present", "expected": "Returns false (no false breach)" },
+    { "id": "TS-3", "scenario": "outbound-silence-watchdog isBreaching with no correlated reply, past threshold", "expected": "Returns true (genuine breach still caught)" },
+    { "id": "TS-4", "scenario": "detectReplyStarvation with a correlated-reply signal", "expected": "Excluded from starved list" },
+    { "id": "TS-5", "scenario": "fleet-dashboard headline counts with a mix of correlated and uncorrelated rows", "expected": "Counts exclude only the correlated-reply rows" }
+  ],
+  "risks": [
+    { "risk": "Over-broad RETAIN-AS-IS disposition could leave a real false-metric site unfixed", "mitigation": "Each RETAIN rationale is grounded in a semantic difference from the SD's own scope language (staleness/cleanup gate vs. human-facing SLA/breach metric; direct-action vs. reply-correlation scenario) rather than a blanket 'out of scope for time' — reviewable and reversible as a fast-follow if judged wrong" },
+    { "risk": "hasCorrelatedReply requires the caller to supply the right row window (allRows) — an undersized window could miss a genuine correlated reply that arrived just outside it", "mitigation": "Each call site reuses the window it already fetches for its existing logic — no new windowing decisions introduced by this SD" }
+  ]
+}

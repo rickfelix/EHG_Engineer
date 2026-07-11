@@ -73,6 +73,20 @@ describe('detectReplyStarvation', () => {
     ];
     expect(detectReplyStarvation({ signals, now: NOW, thresholdMs: 30 * 60_000 }).matched).toBe(false);
   });
+
+  it('SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001: a correlated reply row excludes the original from starvation', () => {
+    const original = { id: 'req-1', sender_type: 'worker', sender_session: 'w1', created_at: minsAgo(45), acknowledged_at: null, read_at: null, payload: {} };
+    const reply = { id: 'reply-1', sender_type: 'coordinator', sender_session: 'c1', created_at: minsAgo(10), acknowledged_at: null, read_at: null, payload: { reply_to: 'req-1' } };
+    expect(detectReplyStarvation({ signals: [original, reply], now: NOW, thresholdMs: 30 * 60_000 }).matched).toBe(false);
+  });
+
+  it('SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001: no correlated reply present still starves (genuine case preserved)', () => {
+    const original = { id: 'req-2', sender_type: 'worker', sender_session: 'w1', created_at: minsAgo(45), acknowledged_at: null, read_at: null, payload: {} };
+    const unrelated = { id: 'other', sender_type: 'coordinator', sender_session: 'c1', created_at: minsAgo(10), acknowledged_at: null, read_at: null, payload: { reply_to: 'not-req-2' } };
+    const r = detectReplyStarvation({ signals: [original, unrelated], now: NOW, thresholdMs: 30 * 60_000 });
+    expect(r.matched).toBe(true);
+    expect(r.evidence.samples.some((s) => s.id === 'req-2')).toBe(true);
+  });
 });
 
 describe('detectStuckWorker', () => {

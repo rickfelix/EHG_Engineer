@@ -149,7 +149,9 @@ async function loadData() {
       .order('sd_key', { ascending: true }),
     supabase
       .from('session_coordination')
-      .select('id, target_session, target_sd, message_type, subject, read_at, acknowledged_at, created_at')
+      // SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001: + payload so printCoordination can
+      // exclude rows answered by a correlated reply from its pending-acknowledgment count.
+      .select('id, target_session, target_sd, message_type, subject, payload, read_at, acknowledged_at, created_at')
       .is('acknowledged_at', null)
       .order('created_at', { ascending: false })
       .limit(20),
@@ -691,7 +693,10 @@ function printCoordination(d) {
   }
 
   const unread = d.coordMessages.filter(m => !m.read_at).length;
-  const pending = d.coordMessages.filter(m => m.read_at && !m.acknowledged_at).length;
+  // SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 (closure map class C6): a reply to a
+  // coordination message routinely arrives as a fresh row (also ack-null, also in this
+  // same query) rather than an update to the original's acknowledged_at — exclude it.
+  const pending = d.coordMessages.filter(m => m.read_at && !m.acknowledged_at && !hasCorrelatedReply(m, d.coordMessages)).length;
   console.log('  ' + unread + ' unread, ' + pending + ' pending acknowledgment');
   console.log('');
 
@@ -1218,6 +1223,9 @@ const parseDeps = parseSdDependencies;
 // wire-check call-graph builder (lib/static-analysis/call-graph-builder.js)
 // can statically resolve the dependency on lib/coordinator/resolve.cjs.
 const { getActiveCoordinatorId: _getActiveCoordinatorIdForInbox } = require('../lib/coordinator/resolve.cjs');
+// SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 (closure map class C6): excludes rows
+// answered by a correlated reply from ack-null-derived headline counts.
+const { hasCorrelatedReply } = require('../lib/coordinator/reply-correlation.cjs');
 
 // ── Section: Worker-Signal Inbox (FR-3a) ──
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001
@@ -1273,17 +1281,29 @@ async function printInbox() {
 
   // QF-20260704-877: signals.length is capped by .limit(20) above, so it can never report
   // more than 20 even when the true unacknowledged backlog is larger — the label read "20
-  // unread signal(s)" indefinitely regardless of triage progress. Query the true count
-  // (same filters, no limit) so the display reflects real unread rows, not the window cap.
-  const { count: totalUnread, error: countError } = await supabase
+  // unread signal(s)" indefinitely regardless of triage progress. Query the true set (same
+  // filters, no limit) so the display reflects real unread rows, not the window cap.
+  const { data: allUnreadRows, error: countError } = await supabase
     .from('session_coordination')
-    .select('id', { count: 'exact', head: true })
+    .select('id, payload')
     .eq('target_session', coordinatorId)
     .not('payload->>signal_type', 'is', null)
     .is('acknowledged_at', null)
     .gte('created_at', signalSince);
 
-  const trueCount = countError || totalUnread == null ? signals.length : totalUnread;
+  // SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 (closure map class C6): a reply to a worker
+  // signal is sent BY the coordinator (sender_session=coordinatorId), targeting the
+  // ORIGINAL SENDER (never coordinatorId) and carrying no signal_type — it can never appear
+  // in the query above, so the correlation window must be fetched separately.
+  const { data: coordinatorReplies } = await supabase
+    .from('session_coordination')
+    .select('id, payload')
+    .eq('sender_session', coordinatorId)
+    .gte('created_at', signalSince)
+    .limit(400);
+  const correlationRows = [...(allUnreadRows || []), ...(coordinatorReplies || [])];
+  const uncorrelatedUnread = (allUnreadRows || []).filter((r) => !hasCorrelatedReply(r, correlationRows));
+  const trueCount = countError || allUnreadRows == null ? signals.length : uncorrelatedUnread.length;
   console.log('  ' + trueCount + ' unread signal(s)' +
     (trueCount > signals.length ? ' (showing newest ' + signals.length + ')' : ''));
   if (trueCount > 0) {
@@ -1508,6 +1528,26 @@ async function printSolomonInbox() {
     console.log('');
     return;
   }
+
+  if (rows.length === 0) {
+    console.log('  (no pending Solomon consults)');
+    console.log('');
+    return;
+  }
+
+  // SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 (closure map class C6): a consult's reply
+  // is Solomon's own outbound row (sender_session in targets) correlated by payload.reply_to
+  // /correlation_id, targeting the ORIGINAL REQUESTER — never visible in the targets-scoped
+  // `rows` query above, so a separate read of Solomon's own sends is required. PURE READ.
+  try {
+    const { data: solomonReplies } = await supabase
+      .from('session_coordination')
+      .select('id, payload')
+      .in('sender_session', targets)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    rows = rows.filter((r) => !hasCorrelatedReply(r, [...rows, ...(solomonReplies || [])]));
+  } catch { /* fail-open: correlation lookup unavailable → fall back to uncorrelated rows */ }
 
   if (rows.length === 0) {
     console.log('  (no pending Solomon consults)');
