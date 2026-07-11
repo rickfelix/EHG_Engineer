@@ -196,7 +196,7 @@ describe('FR-1/FR-3: quiet tick', () => {
         select: () => c,
         update: (p) => { state.op = 'update'; state.payload = p; return c; },
         eq: (col, v) => { state.filters.push([col, v]); return c; },
-        is: () => c, gte: () => c, order: () => c, limit: () => c,
+        is: () => c, gte: () => c, order: () => c, limit: () => c, or: () => c,
         single: async () => ({ data: { session_id: ADAM, metadata: { role: 'adam' } }, error: null }),
         then: (res) => {
           if (state.op === 'update') { updates.push(state); return Promise.resolve({ data: [], error: null }).then(res); }
@@ -234,6 +234,59 @@ describe('FR-1/FR-3: quiet tick', () => {
     const sb = { from: () => { throw new Error('db down'); } };
     const out = await surfaceInboxItems(sb);
     expect(out.items).toEqual([]);
+  });
+
+  it('SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001: a directive with a correlated reply stops re-printing', async () => {
+    const directive = row({ payload: { kind: DIRECTIVE_KINDS[0] } });
+    const correlatedReply = { id: 'reply-1', payload: { reply_to: directive.id }, sender_session: ADAM, target_session: 'someone-else' };
+    const sb = { from: (table) => {
+      const state = { table, filters: [], payload: null, op: 'select', usedOr: false };
+      const c = {
+        select: () => c,
+        update: (p) => { state.op = 'update'; state.payload = p; return c; },
+        eq: (col, v) => { state.filters.push([col, v]); return c; },
+        is: () => c, gte: () => c, order: () => c, limit: () => c,
+        or: () => { state.usedOr = true; return c; },
+        single: async () => ({ data: { session_id: ADAM, metadata: { role: 'adam' } }, error: null }),
+        then: (res) => {
+          if (state.op === 'update') return Promise.resolve({ data: [], error: null }).then(res);
+          if (state.table === 'claude_sessions') return Promise.resolve({ data: [{ session_id: ADAM }], error: null }).then(res);
+          // The correlation-window query (identified by .or()) sees the reply; the
+          // primary ack-null query does not (the reply targets someone-else, not Adam).
+          if (state.usedOr) return Promise.resolve({ data: [directive, correlatedReply], error: null }).then(res);
+          return Promise.resolve({ data: [directive], error: null }).then(res);
+        },
+      };
+      return c;
+    } };
+    const out = await surfaceInboxItems(sb);
+    expect(out.items.map((i) => i.id)).not.toContain(directive.id);
+    expect(out.directives).toBe(0);
+  });
+
+  it('SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001: a directive with no correlated reply still hard-interrupts', async () => {
+    const directive = row({ payload: { kind: DIRECTIVE_KINDS[0] } });
+    const sb = { from: (table) => {
+      const state = { table, filters: [], payload: null, op: 'select', usedOr: false };
+      const c = {
+        select: () => c,
+        update: (p) => { state.op = 'update'; state.payload = p; return c; },
+        eq: (col, v) => { state.filters.push([col, v]); return c; },
+        is: () => c, gte: () => c, order: () => c, limit: () => c,
+        or: () => { state.usedOr = true; return c; },
+        single: async () => ({ data: { session_id: ADAM, metadata: { role: 'adam' } }, error: null }),
+        then: (res) => {
+          if (state.op === 'update') return Promise.resolve({ data: [], error: null }).then(res);
+          if (state.table === 'claude_sessions') return Promise.resolve({ data: [{ session_id: ADAM }], error: null }).then(res);
+          if (state.usedOr) return Promise.resolve({ data: [directive], error: null }).then(res);
+          return Promise.resolve({ data: [directive], error: null }).then(res);
+        },
+      };
+      return c;
+    } };
+    const out = await surfaceInboxItems(sb);
+    expect(out.items.map((i) => i.id)).toContain(directive.id);
+    expect(out.directives).toBe(1);
   });
 });
 

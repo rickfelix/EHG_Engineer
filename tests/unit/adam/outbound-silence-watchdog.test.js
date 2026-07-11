@@ -73,6 +73,17 @@ describe('outbound-silence-watchdog: pure classification (TS-1)', () => {
     expect(isBreaching({ created_at: created30, read_at: null, payload: { kind: PROBE_KIND } }, NOW)).toBe(false);
   });
 
+  it('isBreaching: SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 — a correlated reply prevents a false breach', () => {
+    const read60 = new Date(NOW - UNACKED_BREACH_MS).toISOString();
+    const created30 = new Date(NOW - UNREAD_BREACH_MS).toISOString();
+    const original = { id: 'req-1', created_at: created30, read_at: read60, acknowledged_at: null, payload: {} };
+    const reply = { id: 'reply-1', payload: { reply_to: 'req-1' } };
+    // Without a correlated reply present: still a genuine breach.
+    expect(isBreaching(original, NOW, [original])).toBe(true);
+    // With a correlated reply present in the row window: no false breach.
+    expect(isBreaching(original, NOW, [original, reply])).toBe(false);
+  });
+
   it('classifyBreaches: live-target-only, oldest-per-target', () => {
     const older = { id: 'r1', target_session: LIVE, payload: { kind: 'coordinator_request' }, created_at: new Date(NOW - 40 * 60_000).toISOString(), read_at: null };
     const newer = { id: 'r2', target_session: LIVE, payload: { kind: 'coordinator_request' }, created_at: new Date(NOW - 35 * 60_000).toISOString(), read_at: null };
@@ -80,6 +91,15 @@ describe('outbound-silence-watchdog: pure classification (TS-1)', () => {
     const breaches = classifyBreaches([older, newer, deadTarget], new Set([LIVE]), NOW);
     expect(breaches.size).toBe(1);
     expect(breaches.get(LIVE).id).toBe('r1');
+  });
+
+  it('classifyBreaches: SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 — a correlated reply in the row set excludes that target entirely', () => {
+    const read60 = new Date(NOW - UNACKED_BREACH_MS).toISOString();
+    const created30 = new Date(NOW - UNREAD_BREACH_MS).toISOString();
+    const req = { id: 'r-corr', target_session: LIVE, payload: { kind: 'coordinator_request' }, created_at: created30, read_at: read60, acknowledged_at: null };
+    const reply = { id: 'reply-corr', target_session: 'someone-else', payload: { reply_to: 'r-corr' }, created_at: created30, read_at: null, acknowledged_at: null };
+    const breaches = classifyBreaches([req, reply], new Set([LIVE, 'someone-else']), NOW);
+    expect(breaches.has(LIVE)).toBe(false);
   });
 
   it('laneHealthAggregate: counts unread fire-and-forget at live targets, excludes probes', () => {

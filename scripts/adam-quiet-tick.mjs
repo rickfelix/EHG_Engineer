@@ -174,6 +174,7 @@ export async function surfaceInboxItems(sb) {
   try {
     const { resolveAdamSessionId } = require('./read-adam-directives.cjs');
     const { DIRECTIVE_KINDS, ADAM_EXCLUDED_KINDS } = require('../lib/fleet/worker-status.cjs');
+    const { hasCorrelatedReply } = require('../lib/coordinator/reply-correlation.cjs');
     const adamId = await resolveAdamSessionId(sb);
     if (!adamId) return { items: [], directives: 0 };
 
@@ -188,17 +189,27 @@ export async function surfaceInboxItems(sb) {
       .limit(50);
     if (error) return { items: [], directives: 0, error: error.message };
 
+    // SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 (closure map class C6): a directive's
+    // reply is Adam's own outbound row correlated by payload.reply_to/correlation_id, not
+    // an update to THIS row's acknowledged_at — fetch the correlation window once.
+    const { data: correlationWindow } = await sb
+      .from('session_coordination')
+      .select('id, payload, sender_session, target_session')
+      .or(`sender_session.eq.${adamId},target_session.eq.${adamId}`)
+      .gte('created_at', cutoffIso)
+      .limit(400);
+
     const isDirectiveRow = (r) =>
       (r.payload && (DIRECTIVE_KINDS.includes(r.payload.kind) || r.payload.reply_needed || r.payload.reply_to)) || false;
 
     // Print-once dedup applies to the ITEM class only. DIRECTIVE-class rows are HARD
-    // interrupts: they re-print EVERY tick until acknowledged_at converges them —
-    // deduping a directive would let a single missed turn hide it forever (the exact
-    // failure class this SD closes; adversarial review of PR #5802).
+    // interrupts: they re-print EVERY tick until acknowledged_at converges them OR a
+    // correlated reply is found — deduping a directive would let a single missed turn
+    // hide it forever (the exact failure class this SD closes; adversarial review of PR #5802).
     const eligible = (rows || []).filter((r) => {
       const k = r.payload && r.payload.kind;
       if (k != null && ADAM_EXCLUDED_KINDS.includes(k)) return false;
-      if (isDirectiveRow(r)) return true;
+      if (isDirectiveRow(r)) return !hasCorrelatedReply(r, correlationWindow || []);
       return !(r.payload && r.payload.tick_surfaced_at);
     });
     const capHit = (rows || []).length === 50;
