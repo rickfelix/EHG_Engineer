@@ -65,4 +65,14 @@ The chairman confirmed the **org-centered map** and rejected the EVA-as-sole-dec
 
 No re-cut needed; the map in §5 stands ratified.
 
-*Propose-only. Companion: `operating-company-satellite-architecture-v1.md` (per-satellite detail, to be re-cut to these boundaries). Committed at creation per the evidence-durability rule.*
+---
+
+## 9. RECONCILIATION against the recovered originals (PR #5958 landed byte-exact copies on main)
+
+The three docs I could not re-emit verbatim were recovered byte-exact (`operating-company-spine-spec.md`, `visual-video-generation-satellite-spec.md`, `fable-suitability-map-v1.md`, plus `fw3-effort-distribution-tier-design.md` and `crm-pipeline-operational-satellite-spec.md`). Reconciliation verdicts, checked against the originals directly:
+
+- **The originals are SSOT for their own content.** My v1 doc's compressed spine restatement and its FRESH video-satellite section (§3.2) are **superseded** by the recovered originals. In particular my §3.2 stated Gemini as the image path per the hosting standard — **wrong against the chairman's 07-10 in-session ruling** captured in the original: **RunwayML is PRIMARY for both image and video; Gemini is the live fallback behind the provider abstraction.** The original's full opportunity surface (build-time assets through venture-product capability, agent embodiment via the Characters API, the audio stack), its anti-fabrication gates (no synthesized social proof in pixels; an avatar/voice may not perform confidence the gauges don't support), and its delivery-evidence-gated envelope registration are all binding content my re-derivation compressed away. The creative-engine satellite builds from the ORIGINAL spec, with this review adding only its org framing (VP_GROWTH-owned, artifact-theater guard).
+- **One correction to §4 of this review:** I called the calendar deep-dive "not captured anywhere." The recovered spine spec §2.3(ii) DOES specify it — EVA schedules a calendar meeting with the venture's CEO, who presents against thesis and pre-registered kills. The gap is therefore **unbuilt, not unspecified** — which moves it from "design work needed" to "build work needed," a cheaper gap than I reported.
+- **No structural conflicts.** The original spine's six families match this review's restatement; its §2.3 meeting surface, §4.4 learning-speed hook, and §5.3 vigilance activity are exactly the seams my glue substrates and six-satellite re-cut attach to. The NEW contributions of this review — the evidence-fabric consolidation, the six-satellite re-cut, the CEO-factory fold-and-rebase verdict, the org-centered ratification (§8), and role knowledge-profiles — layer on top of the originals without contradiction.
+
+*Propose-only. Companion: `operating-company-satellite-architecture-v1.md` (per-satellite detail, to be re-cut to these boundaries; its spine restatement and video section yield to the recovered originals per §9). Committed at creation per the evidence-durability rule.*
