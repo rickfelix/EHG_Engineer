@@ -145,6 +145,23 @@ describe('resolveLeafWorkItem / findUnclaimedChild — descend-intent parity (TS
     expect(r.reason).toMatch(/needs completion handoff/);
   });
 
+  it('sub-orchestrator with a mix of completed + cancelled grandchildren → treated as all-terminal (QF-20260710-491)', async () => {
+    const subOrch = { id: 'uuid-sub', sd_key: 'SD-ORCH-001-SUB', status: 'in_progress', claiming_session_id: null };
+    getNextReadyChildMock.mockResolvedValue({ sd: subOrch, reason: 'urgency pick' });
+    const sb = makeSb({
+      strategic_directives_v2: [
+        parentRow,
+        { id: 'uuid-sub', sd_key: 'SD-ORCH-001-SUB' },
+        { id: 'uuid-g1', sd_key: 'SD-ORCH-001-SUB-A', status: 'completed', parent_sd_id: 'uuid-sub' },
+        { id: 'uuid-g2', sd_key: 'SD-ORCH-001-SUB-B', status: 'cancelled', parent_sd_id: 'uuid-sub' },
+      ],
+      claude_sessions: [],
+    });
+    const r = await resolveLeafWorkItem(sb, 'SD-ORCH-001', { ...seam });
+    expect(r.child.sd_key).toBe('SD-ORCH-001-SUB');
+    expect(r.reason).toMatch(/needs completion handoff/);
+  });
+
   it('all children complete → {child:null, allComplete:true} passthrough; depth cap honored', async () => {
     getNextReadyChildMock.mockResolvedValue({ sd: null, allComplete: true, reason: 'All children completed' });
     const sb = makeSb({ strategic_directives_v2: [parentRow], claude_sessions: [] });

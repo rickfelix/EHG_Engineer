@@ -11,6 +11,7 @@ import path from 'path';
 import { executeOrchestratorCompletionHook } from '../../orchestrator-completion-hook.js';
 import { publishVisionEvent, VISION_EVENTS } from '../../../../../lib/eva/event-bus/vision-events.js';
 import { closeIssuePatterns } from '../../../../../lib/governance/pattern-closure.js';
+import { isTerminalChildStatus } from '../../../../../lib/orchestrator/child-terminal-status.js';
 
 /**
  * Check and complete parent SD when all children are done
@@ -51,7 +52,8 @@ export async function checkAndCompleteParentSD(sd, supabase, { shippingResults }
       .select('id, status')
       .eq('parent_sd_id', sd.parent_sd_id);
 
-    const allComplete = siblings.every(s => s.status === 'completed');
+    // Terminal (completed or cancelled) siblings never block parent completion — QF-20260710-491.
+    const allComplete = siblings.every(s => isTerminalChildStatus(s.status));
 
     if (allComplete) {
       console.log(`   🎉 All ${siblings.length} children completed - initiating parent completion`);

@@ -15,6 +15,7 @@ import { sortByUrgency, scoreToBand } from '../auto-proceed/urgency-scorer.js';
 import { buildDependencyDAG, detectCycles, computeRunnableSet } from '../../../lib/orchestrator/dependency-dag.js';
 import { computeGateState } from '../../../lib/cadence/pre-claim-gate.mjs';
 import { isLeadDecisionPaused } from '../sd-next/status-helpers.js';
+import { isTerminalChildStatus } from '../../../lib/orchestrator/child-terminal-status.js';
 // SD-LEO-INFRA-RELEASE-SD-HONOR-ARMED-SILENCE-001: route the child-path stale-claim reap through the SAME
 // gated helper the sd-next reaper uses, so a PARKED /loop worker on a CHILD SD (armed silence, PID dead
 // between ticks) is NOT reaped/phase-reset while its window is live. Reuses the ONE shared predicate.
@@ -181,13 +182,14 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
       return { sd: null, allComplete: true, reason: 'No children found' };
     }
 
-    // Check completion status
-    const completedCount = allChildren.filter(c => c.status === 'completed').length;
+    // Check completion status. Terminal (completed or cancelled) children
+    // never block orchestrator progression — QF-20260710-491.
+    const completedCount = allChildren.filter(c => isTerminalChildStatus(c.status)).length;
     const totalCount = allChildren.length;
     const allComplete = completedCount === totalCount;
 
     if (allComplete) {
-      return { sd: null, allComplete: true, reason: `All ${totalCount} children completed` };
+      return { sd: null, allComplete: true, reason: `All ${totalCount} children terminal (completed/cancelled)` };
     }
 
     // Some children exist but none are ready (blocked or in unexpected state)
@@ -196,14 +198,14 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
       return {
         sd: null,
         allComplete: false,
-        reason: `${blockedCount} children blocked, ${completedCount}/${totalCount} completed`
+        reason: `${blockedCount} children blocked, ${completedCount}/${totalCount} terminal`
       };
     }
 
     return {
       sd: null,
       allComplete: false,
-      reason: `No ready children: ${completedCount}/${totalCount} completed`
+      reason: `No ready children: ${completedCount}/${totalCount} terminal`
     };
   } catch (err) {
     console.warn(`   [child-sd-selector] Error: ${err.message}`);
@@ -252,10 +254,10 @@ export async function getReadyChildren(supabase, parentSdId, options = {}) {
       return { children: [], allComplete: true, dagErrors: [], reason: 'No children found' };
     }
 
-    // Check if all children are completed
-    const completedCount = allChildren.filter(c => c.status === 'completed').length;
+    // Check if all children are terminal (completed or cancelled) — QF-20260710-491.
+    const completedCount = allChildren.filter(c => isTerminalChildStatus(c.status)).length;
     if (completedCount === allChildren.length) {
-      return { children: [], allComplete: true, dagErrors: [], reason: `All ${allChildren.length} children completed` };
+      return { children: [], allComplete: true, dagErrors: [], reason: `All ${allChildren.length} children terminal (completed/cancelled)` };
     }
 
     // Build DAG from ALL children

@@ -15,6 +15,7 @@
 
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { extractContracts, detectMismatches } from './executors/exec-to-plan/gates/cross-child-integration-gate.js';
+import { isTerminalChildStatus } from '../../../lib/orchestrator/child-terminal-status.js';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -134,7 +135,8 @@ export class OrchestratorCompletionGuardian {
     }
 
     this.childData = children || [];
-    const incomplete = children?.filter(c => c.status !== 'completed') || [];
+    // Terminal (completed or cancelled) children never block orchestrator completion — QF-20260710-491.
+    const incomplete = children?.filter(c => !isTerminalChildStatus(c.status)) || [];
 
     if (children?.length === 0) {
       this.validationResults.push({
