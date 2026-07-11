@@ -8,6 +8,8 @@
 -- row keeps its current decision value and gets NULL for both new columns.
 --
 -- STAGED, NOT YET APPROVED FOR APPLY. This table's existing migrations all carry an
+-- @approved-by: codestreetlabs@gmail.com
+-- (chairman verbal approval live in-session 2026-07-11 ~7:35 PM ET, recorded by Adam ac499e67 as scribe)
 -- @approved-by tag (chairman-apply-gated DDL convention); this file intentionally omits
 -- that tag until the chairman explicitly applies it (see check-migration-readiness.mjs's
 -- documented "staged, pending explicit chairman GO" pattern). Application code that depends
