@@ -29,6 +29,14 @@ function runHook(toolName, toolInput, env = {}) {
     // hold the event loop until network timeout).
     SUPABASE_URL: '',
     SUPABASE_SERVICE_ROLE_KEY: '',
+    // Pin the guard-under-test ON regardless of the host's .env: dev machines
+    // may carry LEO_WORKTREE_GUARD=off globally (inherited via ...process.env
+    // above), which silently disabled this whole suite locally while CI stayed
+    // green (QF-20260711-538). Strand recovery is pinned off so the block path
+    // is deterministic (no DB-dependent detectStrandedClaim branch). The
+    // off-switch test still works: its own env param lands after these.
+    LEO_WORKTREE_GUARD: 'on',
+    LEO_WORKTREE_STRAND_RECOVERY: 'off',
     CLAUDE_SESSION_ID: 'test-session-' + Math.random().toString(36).slice(2, 10),
     ...env,
   };
