@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS crm_pipeline_cases (
   venture_id UUID NOT NULL REFERENCES ventures(id),
   case_type TEXT NOT NULL CHECK (case_type IN ('pipeline', 'support')),
   current_stage TEXT NOT NULL,
+  -- Deal value in cents (integer, avoids float rounding) — NULL means "not yet estimated",
+  -- distinct from 0 ("estimated at zero"). Only meaningful for case_type='pipeline'.
+  deal_value_cents BIGINT,
+  deal_currency TEXT NOT NULL DEFAULT 'USD',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   FOREIGN KEY (current_stage, case_type) REFERENCES crm_pipeline_stage_defs(stage_key, case_type)
@@ -140,3 +144,26 @@ INSERT INTO crm_pipeline_stage_edges (from_stage, to_stage, case_type) VALUES
 ON CONFLICT DO NOTHING;
 
 COMMENT ON FUNCTION fn_advance_pipeline_stage IS 'Relationship engine satellite (SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-C): branching pipeline-stage transition, sibling of fn_advance_venture_stage — separate object graph, never a generalization.';
+
+-- Service-role-only writes (same posture as crm_identity_graph's tables — S-1 born-denied
+-- applied at the DB layer until the live spine authority substrate ships).
+ALTER TABLE crm_pipeline_stage_defs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY service_role_all ON crm_pipeline_stage_defs FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+ALTER TABLE crm_pipeline_stage_edges ENABLE ROW LEVEL SECURITY;
+CREATE POLICY service_role_all ON crm_pipeline_stage_edges FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+ALTER TABLE crm_pipeline_cases ENABLE ROW LEVEL SECURITY;
+CREATE POLICY service_role_all ON crm_pipeline_cases FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+ALTER TABLE crm_pipeline_transitions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY service_role_all ON crm_pipeline_transitions FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+-- fn_advance_pipeline_stage is SECURITY DEFINER and performs no internal venture-ownership
+-- check on p_case_id (the spine S-1/S-2 authority substrate it should consume is not yet
+-- live — see lib/crm/spine-consumption-client.js STUB). Restrict EXECUTE to service_role
+-- only so it cannot be reached directly via anon/authenticated RPC calls — the app-layer
+-- service functions (which run under the service-role key) are the only intended caller
+-- until spine authorization is wired in.
+REVOKE EXECUTE ON FUNCTION fn_advance_pipeline_stage(UUID, TEXT, TEXT, UUID, UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION fn_advance_pipeline_stage(UUID, TEXT, TEXT, UUID, UUID) TO service_role;

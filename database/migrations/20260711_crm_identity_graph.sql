@@ -49,3 +49,19 @@ CREATE INDEX IF NOT EXISTS idx_crm_contact_venture_access_venture_id ON crm_cont
 COMMENT ON TABLE crm_orgs IS 'Relationship engine satellite (SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-C): identity-shared org graph, provenance-stamped to a real inbound event.';
 COMMENT ON TABLE crm_contacts IS 'Relationship engine satellite: identity-shared contact graph, provenance-stamped to a real inbound event.';
 COMMENT ON TABLE crm_contact_venture_access IS 'Access-venture-scoping join: which venture may read/act on an identity-shared contact.';
+
+-- Service-role-only writes (mirrors apa_standing_assessments' posture, S-1 born-denied
+-- principle applied at the DB layer): no anon/authenticated policy is created, so RLS
+-- denies all non-service access until the live spine S-1 authority substrate ships and
+-- real venture-scoped policies can be layered on top of crm_contact_venture_access.
+ALTER TABLE crm_inbound_events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY service_role_all ON crm_inbound_events FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+ALTER TABLE crm_orgs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY service_role_all ON crm_orgs FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+ALTER TABLE crm_contacts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY service_role_all ON crm_contacts FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+ALTER TABLE crm_contact_venture_access ENABLE ROW LEVEL SECURITY;
+CREATE POLICY service_role_all ON crm_contact_venture_access FOR ALL TO service_role USING (true) WITH CHECK (true);
