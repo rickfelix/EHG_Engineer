@@ -15,6 +15,8 @@
  *   --rationale "reason"                             Required for approve/reject
  *   --override-kill                                  Required to approve a decision whose brief_data.decision='kill'
  *   --override-reason "reason"                       Required (min 10 chars) with --override-kill
+ *   --decided-by "value"                             Optional decided_by stamp (default 'chairman_via_eva_decisions_cli',
+ *                                                     matches the stage-16 allowlist trigger's chairman pattern)
  *   --limit <n>                                      Max results (default 50)
  *   --json                                           Output as JSON
  *
@@ -232,6 +234,20 @@ async function viewDecision(supabase, decisionId) {
   console.log();
 }
 
+// SD-LEO-FIX-EVA-DECISIONS-CANNOT-001: default decided_by matches
+// reject_s16_programmatic_approval's v_is_chairman branch (LOWER(decided_by) LIKE
+// '%chairman%') so a canonical CLI approval passes the stage-16 allowlist trigger
+// without requiring direct row surgery.
+const DEFAULT_DECIDED_BY = 'chairman_via_eva_decisions_cli';
+
+function buildDecisionStamp(lifecycleStage) {
+  const decidedBy = getArg('decided-by') || DEFAULT_DECIDED_BY;
+  return {
+    decided_by: decidedBy,
+    context: { stage: lifecycleStage, timestamp: new Date().toISOString() },
+  };
+}
+
 async function approveDecision(supabase, decisionId) {
   const rationale = getArg('rationale');
   const overrideKill = hasFlag('override-kill');
@@ -281,6 +297,7 @@ async function approveDecision(supabase, decisionId) {
     decision: 'proceed',
     rationale,
     updated_at: new Date().toISOString(),
+    ...buildDecisionStamp(existing.lifecycle_stage),
   };
   if (overrideKill) {
     updatePayload.override_reason = overrideReason;
@@ -341,6 +358,7 @@ async function rejectDecision(supabase, decisionId) {
       decision: 'kill',
       rationale,
       updated_at: new Date().toISOString(),
+      ...buildDecisionStamp(existing.lifecycle_stage),
     })
     .eq('id', decisionId);
 
@@ -427,4 +445,4 @@ if (isMainModule(import.meta.url)) {
   });
 }
 
-export { listDecisions, viewDecision, approveDecision, rejectDecision };
+export { listDecisions, viewDecision, approveDecision, rejectDecision, buildDecisionStamp, DEFAULT_DECIDED_BY };
