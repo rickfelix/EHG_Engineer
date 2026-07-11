@@ -42,11 +42,30 @@ const { assertSdDispatchable, isFullUuid } = require('../lib/coordinator/dispatc
 const { CLAIM_HOLDING_STATUSES, computeClaimedSdKeys } = require('../lib/claim/holding-statuses.cjs');
 const { SILENCE_HARD_CAP_MS } = require('../lib/fleet/silence-cap.cjs'); // FR-4: shared writer<=reader cap
 const { detectDormantWorkers } = require('../lib/fleet/dormancy-watchdog.cjs'); // QF-20260703-076
+const { getMarkerSessionIds } = require('../lib/fleet/cc-pid-liveness.cjs'); // SD-LEO-INFRA-FIX-RESIDUAL-PROCESS-001 FR-2/FR-3
 // SD-FDBK-ENH-CONFIRMED-LIVE-TODAY-001: pure, exported so the gate can be unit-tested without a
 // live claude_sessions table. Mirrors MASKED_STALL_DETECT_ON (coordinator-capacity-forecast.mjs) --
 // DORMANT BY DEFAULT until process_alive_at is trustworthy again (see call site below for full RCA).
 function isDormancyWatchdogEnabled(env = process.env) {
   return env.LEO_DORMANCY_WATCHDOG_ENABLED === 'on';
+}
+
+// SD-LEO-INFRA-FIX-RESIDUAL-PROCESS-001 (FR-2/FR-3, risk-agent evidence
+// 4d1be256-dbc4-4e37-a661-72ffb6453bc0): pure, exported AND-gate so the join can be
+// unit-tested without a live claude_sessions table or real pid-*.json marker files.
+// dormancyMarkers is the raw shape returned by lib/fleet/cc-pid-liveness.cjs's
+// getMarkerSessionIds() -- { [marker.session_id]: { claude_session_id, pid, alive } }.
+// CRITICAL: joins on each marker's claude_session_id field (the CLAUDE_SESSION_ID UUID
+// that claude_sessions.session_id also is), NEVER the marker's own session_id (the
+// map's OWN key, a DIFFERENT identifier) -- a naive join on the wrong key silently
+// fails open (matches nothing), making this AND-gate inert while looking shipped.
+function filterDormantByPidLiveness(dormantCandidates, dormancyMarkers) {
+  const aliveClaudeSessionIds = new Set(
+    Object.values(dormancyMarkers || {})
+      .filter((m) => m && m.alive && m.claude_session_id)
+      .map((m) => m.claude_session_id)
+  );
+  return (dormantCandidates || []).filter((d) => !aliveClaudeSessionIds.has(d.session_id));
 }
 
 const HEADLESS_ZOMBIE_MIN_MS = 15 * 60 * 1000;
@@ -1624,7 +1643,16 @@ async function main() {
         .from('claude_sessions')
         .select('session_id, loop_state, expected_silence_until, process_alive_at')
         .eq('status', 'active');
-      const dormant = detectDormantWorkers(allTracked || [], now.getTime());
+      const dormantCandidates = detectDormantWorkers(allTracked || [], now.getTime());
+      // FR-2/FR-3: AND-gate against an orthogonal failure-domain signal (OS-level PID
+      // liveness) before trusting process_alive_at alone -- process_alive_at is written
+      // ONLY by session-tick.cjs's detached daemon, which can die independently of the
+      // session itself. Computed fresh here (not reusing aliveCcPids, which is built
+      // later at this function's line ~1664 from detectIdentityCollisions() -- this
+      // block runs before that and before the no-sessions early-return, so it cannot
+      // depend on either). See filterDormantByPidLiveness's own doc for the keyspace
+      // join detail.
+      const dormant = filterDormantByPidLiveness(dormantCandidates, getMarkerSessionIds());
       const DORMANCY_ALERT_THRESHOLD = 2;
       if (dormant.length >= DORMANCY_ALERT_THRESHOLD) {
         const { emitFeedback } = await import('../lib/governance/emit-feedback.js');
@@ -3122,6 +3150,7 @@ module.exports.anyClaudeProcessRunning = anyClaudeProcessRunning;
 // does — no production behavior change.
 module.exports.isSweepResetAllowed = isSweepResetAllowed;
 module.exports.isDormancyWatchdogEnabled = isDormancyWatchdogEnabled; // SD-FDBK-ENH-CONFIRMED-LIVE-TODAY-001
+module.exports.filterDormantByPidLiveness = filterDormantByPidLiveness; // SD-LEO-INFRA-FIX-RESIDUAL-PROCESS-001
 module.exports.isHeadlessZombie = isHeadlessZombie; // QF-20260704-081
 module.exports.HEADLESS_ZOMBIE_MIN_MS = HEADLESS_ZOMBIE_MIN_MS; // QF-20260704-081
 // SD-ARCH-HOTSPOT-SWEEP-001 (PRD FR-2 / TS-3): promoted classification-time helper —

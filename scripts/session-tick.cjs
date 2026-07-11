@@ -47,6 +47,17 @@ const PARENT_REDISCOVER_TIMEOUT_MS = 3000;
 const MAX_PARENT_MISSES = 2;
 let parentMissCount = 0;
 
+// SD-LEO-INFRA-FIX-RESIDUAL-PROCESS-001 (FR-1): the tickOnce() try/catch previously swallowed
+// a persistent PATCH failure (AbortController timeout, network/auth error) with zero
+// telemetry — process_alive_at freezes while claude_sessions.status stays 'active', a live
+// freeze-while-active dormancy-watchdog false-positive source (RCA 0.9 confidence,
+// QF-20260711-407). Never changes the catch's fail-open continuation — only makes a
+// persistent failure observable.
+const PATCH_FAILURE_TELEMETRY_THRESHOLD = 3;
+const PATCH_FAILURE_HTTP_TIMEOUT_MS = 1000;
+const patchFailureNdjsonPath = path.resolve(__dirname, '../.claude/pids/spawn-errors.log');
+let consecutivePatchFailures = 0;
+
 // SD-LEO-INFRA-FIX-CLAUDE-CODE-001 (FR-4): early-exit telemetry threshold + sinks.
 // If cleanupAndExit fires within EARLY_EXIT_THRESHOLD_MS of process start, emit a
 // structured tick.early_exit event so operators can detect ancestor-discovery regressions.
@@ -285,8 +296,16 @@ async function tickOnce() {
         cleanupAndExit(0);
       }
     }
-  } catch {
-    // swallow — next tick will retry. Never crash the tick loop.
+    // FR-1: a successful tick (POST/PATCH completed without throwing) clears the streak.
+    consecutivePatchFailures = 0;
+  } catch (err) {
+    // Never crash the tick loop — next tick will retry. FR-1: make a PERSISTENT failure
+    // observable instead of silently swallowing it every time.
+    consecutivePatchFailures += 1;
+    console.error(`session-tick: write failed (consecutive=${consecutivePatchFailures}): ${err && err.message}`);
+    if (consecutivePatchFailures === PATCH_FAILURE_TELEMETRY_THRESHOLD) {
+      emitPatchFailureTelemetry(consecutivePatchFailures, err);
+    }
   } finally {
     for (const t of timers) clearTimeout(t);
   }
@@ -343,6 +362,56 @@ function emitEarlyExitTelemetry(exitCode, lifetimeMs) {
         reason: 'ancestor_pid_exited',
         latency_ms: lifetimeMs,
         metadata: { cc_parent_pid: parentPid, exit_code: exitCode, hostname: event.hostname },
+      }),
+      signal: controller.signal,
+    }).catch(() => { /* best-effort */ });
+  } catch {
+    /* best-effort */
+  }
+}
+
+// SD-LEO-INFRA-FIX-RESIDUAL-PROCESS-001 (FR-1): emit tick.patch_failure telemetry once a
+// write failure streak crosses PATCH_FAILURE_TELEMETRY_THRESHOLD. Same two-sink shape as
+// emitEarlyExitTelemetry above (durable NDJSON + best-effort DB event) — never awaited,
+// never blocks the tick loop.
+function emitPatchFailureTelemetry(streak, err) {
+  const event = {
+    timestamp: new Date().toISOString(),
+    event: 'tick.patch_failure',
+    session_id: sessionId,
+    tick_pid: process.pid,
+    consecutive_failures: streak,
+    error_message: (err && err.message) || String(err),
+    hostname: require('os').hostname(),
+  };
+  try {
+    fs.mkdirSync(path.dirname(patchFailureNdjsonPath), { recursive: true });
+    fs.appendFileSync(patchFailureNdjsonPath, JSON.stringify(event) + '\n');
+  } catch {
+    // file write failures are non-fatal — DB sink may still capture the event
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseKey) return;
+  try {
+    const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/session_lifecycle_events`;
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), PATCH_FAILURE_HTTP_TIMEOUT_MS);
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        event_type: 'tick.patch_failure',
+        session_id: sessionId,
+        pid: process.pid,
+        reason: 'consecutive_write_failures',
+        metadata: { consecutive_failures: streak, error_message: event.error_message, hostname: event.hostname },
       }),
       signal: controller.signal,
     }).catch(() => { /* best-effort */ });
