@@ -290,6 +290,49 @@ answer until its next tick. **Never** issue a sync-request while already blocked
 (mutual sync-requests deadlock). Full rules:
 `docs/protocol/crew-comms-routing-protocol.md` § "Sync-request semantics".
 
+## Periodic Solomon-lane stale-identity reconciliation (SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001)
+
+Solomon's own MODE-B advisory (`session_coordination` row `09189ed9`) found that role-mail
+retargeting for a stale Solomon identity was **event-driven only** (a new Solomon registration),
+so a resolution fault or a gap between a Solomon's death and its successor's registration could
+strand rows at a stale target for hours. `coordinator-hourly-review.cjs` now runs
+`reconcileStaleSolomonInbound(sb)` on the **same hourly tick** as the existing Solomon
+responsibilities reminder — it resolves the live Solomon (`getActiveSolomonId`), lists every
+OTHER `role=solomon` session (`fetchAllSolomons`, unfiltered by freshness), and retargets each
+stale one's still-unread rows via the already-exported `retargetStaleSolomonInbound` primitive
+in `lib/coordinator/solomon-identity.cjs`. Additive-only: no exported-signature changes to that
+module (12+ importers), Solomon-lane only (no Adam-lane extension), preserves the deliberate
+fail-open on `resolveSolomonReplyTarget` and the unread/unsettled-only invariant (an
+already-`acknowledged_at`-settled row is never re-targeted or resurfaced). Fail-open / non-fatal,
+mirroring the sibling reminder leg it sits next to.
+
+## Optional, validated typed `--kind` at send (SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001)
+
+`buildAdvisoryPayload` in both `scripts/adam-advisory.cjs` and `scripts/solomon-advisory.cjs`
+already unconditionally hardcodes `payload.kind` (`adam_advisory`) on every send — no row from
+either CLI has ever been literally untyped. Both `send`/`request` now accept an **optional**
+`--kind <recognized_kind>` flag: omitting it is byte-identical to prior behavior; an
+explicitly-supplied value is validated against `KNOWN_SEND_KINDS` (built from the SAME shared
+`PAYLOAD_KINDS` + `DIRECTIVE_KINDS` constants in `lib/fleet/worker-status.cjs` every drain
+already filters on — never a second hand-maintained list) and an unrecognized value is
+**rejected at send time**, before any `session_coordination` insert. On the Solomon lane, an
+answer to a consult (`--reply-to` set) is exempt from `--kind` — it always reuses the advisory
+lane's kind regardless of what (if anything) is passed, since an answer is terminal, not a new
+typed interaction.
+
+```bash
+# Both accept the identical optional flag:
+node scripts/adam-advisory.cjs send "<body>" --kind coordinator_request
+node scripts/solomon-advisory.cjs send "<body>" --kind solomon_consult
+```
+
+Deferred (per Solomon's own stated counterfactual — the blast radius for a lane-wide contract
+refactor was empirically 92 raw `session_coordination` insert call sites, not the ~5 he
+estimated, and no existing periodic reconciliation pass covered the gap this SD closed):
+resolver-only role-addressing enforcement (raw session-id targeting for role mail becoming a
+lint error) and a full cross-lane unified read/ack consumption-semantics census. Tracked by
+`SD-LEO-INFRA-SESSION-COORDINATION-LANE-001`.
+
 ## PID-cross-check (liveness-dispute resolution)
 
 When the coordinator and Adam disagree on which session legitimately holds a role (a
