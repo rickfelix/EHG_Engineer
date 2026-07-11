@@ -196,8 +196,13 @@ export const STANDARD_LOOPS = [
   // header warns about). Its __watcher_self__ self-stamp makes missed ticks self-evident on the
   // same dashboard it renders — the tick-evidence mitigation the retention loop lacked.
   // Twice-hourly off-minute cadence (cheap single registry scan; idempotent re-run).
-  { key: 'liveness-watcher', label: 'Periodic-process liveness watcher-of-watchers (twice-hourly, durable)', script: 'periodic-liveness-watcher.mjs', cron: '17,47 * * * *',
-    prompt: 'node scripts/periodic-liveness-watcher.mjs' },
+  // SD-LEO-INFRA-OPERATIVE-AGENT-OWNERSHIP-001-A (FR-5): class-split. The GHA durable invoker
+  // (.github/workflows/periodic-liveness-watcher-cron.yml) now owns timestamp-source rows
+  // (self_stamped/eva_scheduler_heartbeat); this dev-host entry keeps ONLY the PID-anchored
+  // role_session evaluation the venue note above justified — complementary filters, no row
+  // double-evaluated across the two venues.
+  { key: 'liveness-watcher', label: 'Periodic-process liveness watcher — role_session classes (dev-host venue)', script: 'periodic-liveness-watcher.mjs', cron: '17,47 * * * *',
+    prompt: 'LIVENESS_CLASSES=claude_sessions_heartbeat node scripts/periodic-liveness-watcher.mjs' },
   // QF-20260705-797 (J1 adversarial sweep REFUTED-DORMANT, scoped to FR-1 of
   // SD-LEO-FIX-SOLOMON-RECOMMENDATION-GUARDRAIL-001): solomon-ledger-pending-resurface.cjs
   // shipped with an npm script only — no scheduled invoker anywhere — so aged
