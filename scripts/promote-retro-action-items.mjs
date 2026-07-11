@@ -35,16 +35,19 @@ const supabase = createClient(
 
 const cutoff = new Date(Date.now() - LOOKBACK_DAYS * 24 * 3600 * 1000).toISOString();
 
-// Three shapes exist in the wild: the retro-agent's prompt-driven output uses
+// Four shapes exist in the wild: the retro-agent's prompt-driven output uses
 // { item, owner, priority }; lib/sub-agents/retro/action-items.js's programmatic
 // generateSmartActionItems() uses { action, owner, deadline, success_criteria,
 // priority, source }; a manually-authored SD_COMPLETION retrospective (e.g. via
 // scripts/one-off/insert-retro-*.cjs) uses { title, description, owner_role,
 // priority } (QF-20260711-253: '(no text)'/'unassigned' auto-promoted because
-// this third shape wasn't covered). Support all three rather than silently
-// dropping text/owner for whichever shape isn't checked.
+// this third shape wasn't covered); a fourth shape, { text, category, priority }
+// (e.g. PLAN_VERIFICATION retrospectives), also promoted as '(no text)' until
+// QF-20260711-895 added it here. Support all four rather than silently dropping
+// text/owner for whichever shape isn't checked -- if a fifth shape appears,
+// add it here too, not a one-off patch on the promoted QF.
 function actionText(item) {
-  return item.item || item.action || item.title || '(no text)';
+  return item.item || item.action || item.title || item.text || '(no text)';
 }
 
 function actionOwner(item) {
