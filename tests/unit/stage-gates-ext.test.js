@@ -647,6 +647,89 @@ describe('resolveGateContext', () => {
     expect(stageInput.constraints).toEqual({});
     expect(stageInput.approvedConstraints).toEqual({});
   });
+
+  // QF-20260710-941 (Solomon H4, Delta ledger): reader/writer shape contract.
+  // The live writer (scripts/stage-zero-queue-processor.js -> executeStageZero)
+  // nests rubric_scores/confidence under result.brief.metadata.forecast and
+  // venture_score under result.brief.metadata — never at result's top level.
+  describe('stage0Score fallback (SHAPE-DRIFT class)', () => {
+    const RUBRIC_SCORES = {
+      market_opportunity: { score: 4, rationale: 'Strong' },
+      revenue_viability: { score: 3, rationale: 'Moderate' },
+      unit_economics: { score: 3, rationale: 'Moderate' },
+      execution_feasibility: { score: 4, rationale: 'Strong' },
+      competitive_defensibility: { score: 2, rationale: 'Weak' },
+    };
+
+    function mockStageZeroRequests(resultRow) {
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: resultRow ? { result: resultRow } : null, error: null }),
+      };
+    }
+
+    it('reads rubric_scores from the LIVE nested shape (result.brief.metadata.forecast)', async () => {
+      const supabase = createMockSupabase({
+        stage_zero_requests: mockStageZeroRequests({
+          brief: { metadata: { forecast: { rubric_scores: RUBRIC_SCORES, confidence: 70 }, venture_score: 55 } },
+        }),
+      });
+
+      const { stageInput } = await resolveGateContext(supabase, 'v1', 5, { stageOutput: {} });
+
+      expect(stageInput.score).toBeGreaterThan(0);
+      expect(stageInput.score).not.toBeUndefined();
+    });
+
+    it('falls back to venture_score from the LIVE nested shape when no rubric_scores present', async () => {
+      const supabase = createMockSupabase({
+        stage_zero_requests: mockStageZeroRequests({
+          brief: { metadata: { venture_score: 80 } },
+        }),
+      });
+
+      const { stageInput } = await resolveGateContext(supabase, 'v1', 5, { stageOutput: {} });
+
+      expect(stageInput.score).toBe(8); // 80/10
+    });
+
+    it('still reads the legacy flat top-level shape (backward compatibility)', async () => {
+      const supabase = createMockSupabase({
+        stage_zero_requests: mockStageZeroRequests({
+          rubric_scores: RUBRIC_SCORES,
+          confidence: 70,
+        }),
+      });
+
+      const { stageInput } = await resolveGateContext(supabase, 'v1', 5, { stageOutput: {} });
+
+      expect(stageInput.score).toBeGreaterThan(0);
+      expect(stageInput.score).not.toBeUndefined();
+    });
+
+    it('leaves stage0Score undefined when neither shape has a score (no silent wrong value)', async () => {
+      const supabase = createMockSupabase({
+        stage_zero_requests: mockStageZeroRequests({ brief: { metadata: {} } }),
+      });
+
+      const { stageInput } = await resolveGateContext(supabase, 'v1', 5, { stageOutput: {} });
+
+      expect(stageInput.score).toBeUndefined();
+    });
+
+    it('does not query stage_zero_requests when stageOutput.score is already provided', async () => {
+      const stageZeroTable = mockStageZeroRequests({ brief: { metadata: { venture_score: 80 } } });
+      const supabase = createMockSupabase({ stage_zero_requests: stageZeroTable });
+
+      const { stageInput } = await resolveGateContext(supabase, 'v1', 5, { stageOutput: { score: 6 } });
+
+      expect(stageInput.score).toBe(6);
+      expect(stageZeroTable.maybeSingle).not.toHaveBeenCalled();
+    });
+  });
 });
 
 // ── Existing Gate Preservation (FR-4) ───────────────────────────────
