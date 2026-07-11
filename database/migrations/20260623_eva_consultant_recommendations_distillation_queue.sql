@@ -15,11 +15,12 @@
 --   * confidence_tier      -> ALREADY EXISTS (text). The ADD COLUMN IF NOT EXISTS is an explicit,
 --                             idempotent no-op kept here only to make the queue contract complete.
 --
--- DORMANT: the fleet AUTHORS and TESTS this migration; workers CANNOT self-apply prod. This is an
--- ADDITIVE, nullable change — Adam applies it via the database-agent under the chairman's additive-DDL
--- delegation. It is NOT chairman-gated (an additive nullable column needs no RLS policy). Until applied,
--- the queue writer cannot run (its insert surfaces the missing-column error rather than swallowing it) —
--- so the distiller child (idx 2) that calls the writer is sequenced AFTER this migration is applied.
+-- APPLIED 2026-07-11 (QF-20260705-893) via the chairman 3-factor --prod-deploy path (not the
+-- automated additive-DDL delegation — isDelegatableAdditive() classifies this file NOT delegatable
+-- because source_wave_item_id carries a REFERENCES clause; Rule C in
+-- scripts/lib/migration-tier-classifier.mjs deliberately excludes FK-bearing ADD COLUMN from the
+-- automated path by design). source_wave_item_id + distilled_sd_payload columns are now live —
+-- the distiller child (idx 2) writer can run.
 --
 -- Idempotent (IF NOT EXISTS) so a re-run is a no-op.
 
