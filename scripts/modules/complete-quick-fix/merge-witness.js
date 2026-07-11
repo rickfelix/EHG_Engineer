@@ -21,29 +21,47 @@ import { EXTERNAL_STEP_TIMEOUT_MS } from './constants.js';
 /** Bracket-tokenized reason code surfaced when a completion is blocked. */
 export const QF_MERGE_UNVERIFIED = 'QF_MERGE_UNVERIFIED';
 
-/** The QF's own feature branch. create-quick-fix.js pushes `qf/<QF-ID>`. */
+/** The QF's own feature branch (canonical name). create-quick-fix.js pushes `qf/<QF-ID>`. */
 export function ownBranchFor(qfId) {
   return `qf/${qfId}`;
 }
 
 /**
- * Find the PR whose head branch is the QF's OWN branch (qf/<QF-ID>). Filters by
+ * QF-20260711-959: resolve-sd-workdir.js's generic worktree resolver mints `feat/<sdKey>`
+ * for ANY sdKey — including QF ids — so a QF's real branch is not always the canonical
+ * `qf/<QF-ID>` create-quick-fix.js would push. Tolerate the prefixes actually observed in
+ * the wild WITHOUT loosening the anti-mis-attribution guarantee: this stays an EXACT match
+ * against one of the QF's own fully-enumerated candidate names, never a wildcard/fuzzy
+ * match that could accept a foreign branch.
+ */
+export const OWN_BRANCH_PREFIXES = Object.freeze(['qf', 'feat', 'fix']);
+
+/** All candidate own-branch names for a QF, canonical (`qf/`) first. */
+export function ownBranchCandidatesFor(qfId) {
+  return OWN_BRANCH_PREFIXES.map((prefix) => `${prefix}/${qfId}`);
+}
+
+/**
+ * Find the PR whose head branch is one of the QF's OWN candidate branches. Filters by
  * --head so a foreign / most-recent merged PR can never be mis-attributed.
  * @returns {{url:string, number:number, state:string, headRefName:string, mergeCommit:object}|null}
  */
 export function deriveOwnPr(qfId, testDir) {
-  const branch = ownBranchFor(qfId);
-  try {
-    const out = execSync(
-      `gh pr list --head "${branch}" --state all --json url,number,state,headRefName,mergeCommit --limit 1`,
-      { cwd: testDir, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], timeout: EXTERNAL_STEP_TIMEOUT_MS }
-    );
-    const prs = JSON.parse(out || '[]');
-    const own = Array.isArray(prs) ? prs.find((p) => p && p.headRefName === branch) : null;
-    return own || null;
-  } catch {
-    return null; // fail-closed — an unresolvable PR is unverified, not completed
+  for (const branch of ownBranchCandidatesFor(qfId)) {
+    try {
+      const out = execSync(
+        `gh pr list --head "${branch}" --state all --json url,number,state,headRefName,mergeCommit --limit 1`,
+        { cwd: testDir, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], timeout: EXTERNAL_STEP_TIMEOUT_MS }
+      );
+      const prs = JSON.parse(out || '[]');
+      const own = Array.isArray(prs) ? prs.find((p) => p && p.headRefName === branch) : null;
+      if (own) return own;
+    } catch {
+      // fail-closed for THIS candidate — an unresolvable lookup is unverified, not completed;
+      // still try the remaining candidates before giving up entirely.
+    }
   }
+  return null;
 }
 
 /** True iff `sha` is an ancestor of origin/main (the change actually landed). */
@@ -74,9 +92,10 @@ export function isReachableFromMain(sha, testDir) {
  */
 export function verifyQFMergeWitness({ qfId, prUrl, testDir }) {
   const expectedBranch = ownBranchFor(qfId);
+  const candidates = ownBranchCandidatesFor(qfId);
   const fail = (reason, extra = {}) => ({ verified: false, code: QF_MERGE_UNVERIFIED, reason, expectedBranch, ...extra });
 
-  // 1. Resolve the PR to verify — trust a supplied prUrl ONLY if it is the QF's own branch.
+  // 1. Resolve the PR to verify — trust a supplied prUrl ONLY if it is one of the QF's own candidate branches.
   let meta = null;
   let resolvedUrl = null;
   if (prUrl) {
@@ -84,7 +103,7 @@ export function verifyQFMergeWitness({ qfId, prUrl, testDir }) {
     if (n) {
       try {
         const m = fetchPRMetadata(n, testDir);
-        if (m && m.headRefName === expectedBranch) {
+        if (m && candidates.includes(m.headRefName)) {
           meta = m;
           resolvedUrl = m.url || prUrl;
         }
@@ -95,13 +114,13 @@ export function verifyQFMergeWitness({ qfId, prUrl, testDir }) {
   }
   if (!meta) {
     const own = deriveOwnPr(qfId, testDir);
-    if (own && own.headRefName === expectedBranch) {
+    if (own && candidates.includes(own.headRefName)) {
       meta = own;
       resolvedUrl = own.url;
     }
   }
   if (!meta) {
-    return fail(`no PR found whose head branch is ${expectedBranch} (branch not pushed / PR not opened, or the supplied pr_url points at a foreign PR — mis-attribution)`);
+    return fail(`no PR found whose head branch is one of [${candidates.join(', ')}] (branch not pushed / PR not opened, or the supplied pr_url points at a foreign PR — mis-attribution)`);
   }
 
   // 2. The PR must be MERGED.

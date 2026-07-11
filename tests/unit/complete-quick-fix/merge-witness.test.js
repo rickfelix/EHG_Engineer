@@ -20,6 +20,7 @@ const {
   deriveOwnPr,
   isReachableFromMain,
   ownBranchFor,
+  ownBranchCandidatesFor,
   QF_MERGE_UNVERIFIED,
 } = await import('../../../scripts/modules/complete-quick-fix/merge-witness.js');
 
@@ -191,6 +192,37 @@ describe('verifyQFMergeWitness — verified (completable) cases', () => {
     expect(w.verified).toBe(true);
     expect(w.prUrl).toBe(own.url); // self-derived, NOT the foreign #5290
     expect(w.headBranch).toBe('qf/QF-G-001');
+  });
+});
+
+describe('ownBranchCandidatesFor (QF-20260711-959: tolerate resolve-sd-workdir.js naming)', () => {
+  it('lists qf/, feat/, fix/ candidates with the canonical qf/ name first', () => {
+    expect(ownBranchCandidatesFor('QF-Z-001')).toEqual(['qf/QF-Z-001', 'feat/QF-Z-001', 'fix/QF-Z-001']);
+  });
+
+  it('deriveOwnPr matches a PR whose head is feat/<QF-ID> (resolve-sd-workdir.js naming)', () => {
+    const own = OWN('QF-Z-002', { headRefName: 'feat/QF-Z-002' });
+    mockExec({ prList: [own] });
+    const pr = deriveOwnPr('QF-Z-002', TEST_DIR);
+    expect(pr).not.toBeNull();
+    expect(pr.headRefName).toBe('feat/QF-Z-002');
+  });
+
+  it('verifyQFMergeWitness verifies a MERGED PR whose head is feat/<QF-ID>, not just qf/<QF-ID>', () => {
+    const own = OWN('QF-Z-003', { headRefName: 'feat/QF-Z-003', url: 'https://github.com/rickfelix/EHG_Engineer/pull/6700' });
+    mockExec({ prList: [own], reachable: true });
+    const w = verifyQFMergeWitness({ qfId: 'QF-Z-003', prUrl: undefined, testDir: TEST_DIR });
+    expect(w.verified).toBe(true);
+    expect(w.headBranch).toBe('feat/QF-Z-003');
+    expect(w.prUrl).toBe(own.url);
+  });
+
+  it('still refuses a branch outside the enumerated candidate set (e.g. docs/<QF-ID>) — no loosening', () => {
+    const foreignPrefixed = OWN('QF-Z-004', { headRefName: 'docs/QF-Z-004' });
+    mockExec({ prList: [foreignPrefixed] });
+    const w = verifyQFMergeWitness({ qfId: 'QF-Z-004', prUrl: undefined, testDir: TEST_DIR });
+    expect(w.verified).toBe(false);
+    expect(w.code).toBe(QF_MERGE_UNVERIFIED);
   });
 });
 
