@@ -84,24 +84,28 @@ export const POST_LAUNCH_DRIVERS = Object.freeze([
 export const ALL_O_REQUIREMENTS = Object.freeze(['O1', 'O2', 'O3', 'O4', 'O5', 'O6', 'O7', 'O8', 'O9', 'O10']);
 
 /**
- * Per-band advance policy (smoke-run decode 2026-07-10):
+ * Per-band advance policy (SD-LEO-INFRA-HARNESS-FIXTURE-ARTIFACT-001; supersedes the
+ * forced-stage-set hatch, rejected by Solomon adjudication F1 9b55e2a6 — the gate is
+ * correct, a raw stage-pointer write fabricates traversal history):
  * - 'real-gates' (DEFAULT): the band advances only through the live gate path;
  *   a block is a drivability edge and the venture stays put (stage-mismatch
  *   cascades downstream are themselves honest evidence).
- * - 'forced-stage-set': REQUIRED for any run that must traverse S20/S23 today —
- *   their declared gates are UNRESOLVABLE (prose with no registered verifier;
- *   fail-closed since PR #5801), so nothing a run produces can satisfy them.
- *   After journaling the real block, the runner performs an explicit stage set,
- *   declared through the §H2 config-diff seam as the 'forced_stage_set'
- *   divergence — sanctioned ONLY when the coordinator enumerates it pre-run.
+ * - 'fixture-artifact-seed': after journaling the real block, introspect
+ *   fn_stage_artifact_precondition and seed exactly the missing artifacts
+ *   (metadata.is_fixture provenance) via seedMissingArtifactsForStage, then retry the
+ *   REAL advance — the gate passes because its conditions are MET, never bypassed.
+ *   Declared through the §H2 config-diff seam as the 'fixture_artifact_seed'
+ *   divergence — sanctioned ONLY when the coordinator enumerates it pre-run. A block
+ *   the seeder cannot satisfy (e.g. prose exit gates with no registered verifier)
+ *   remains an honest journaled halt — there is NO raw stage-set fallback.
  */
-export const ADVANCE_POLICIES = Object.freeze(['real-gates', 'forced-stage-set']);
-export const FORCED_STAGE_SET_DIVERGENCE = 'forced_stage_set';
+export const ADVANCE_POLICIES = Object.freeze(['real-gates', 'fixture-artifact-seed']);
+export const FIXTURE_ARTIFACT_SEED_DIVERGENCE = 'fixture_artifact_seed';
 
 /** The enumerated divergence set for a given advance policy. */
 export function allowedDivergencesFor(advancePolicy = 'real-gates') {
-  return advancePolicy === 'forced-stage-set'
-    ? Object.freeze([...ALLOWED_DIVERGENCES, FORCED_STAGE_SET_DIVERGENCE])
+  return advancePolicy === 'fixture-artifact-seed'
+    ? Object.freeze([...ALLOWED_DIVERGENCES, FIXTURE_ARTIFACT_SEED_DIVERGENCE])
     : ALLOWED_DIVERGENCES;
 }
 
@@ -179,29 +183,42 @@ export async function runBand({ supabase, journal, ventureId, stage, clock, logg
       detail: { blocked: true, at_clock: clock.now() },
     });
 
-    // 'forced-stage-set' policy: traverse past the block as an ENUMERATED
-    // divergence (the real block above stays journaled as the drivability
-    // evidence). Unsanctioned use self-reports: assertDivergenceAllowed lands
-    // it as TEST_MODE_DIVERGENCE when the policy's set doesn't include it.
-    if (advancePolicy === 'forced-stage-set') {
-      journal.assertDivergenceAllowed(FORCED_STAGE_SET_DIVERGENCE, [...allowedDivergencesFor(advancePolicy)], { stage, to: stage + 1 });
-      const doForce = seams.forceStageSet || (async () => {
-        const { error } = await supabase.from('ventures').update({ current_lifecycle_stage: stage + 1 }).eq('id', ventureId);
-        if (error) throw new Error(`forced stage set failed: ${error.message}`);
-      });
+    // 'fixture-artifact-seed' policy (SD-LEO-INFRA-HARNESS-FIXTURE-ARTIFACT-001):
+    // satisfy the artifact gate instead of bypassing it. The real block above stays
+    // journaled as the drivability evidence (§H2 — the machinery's gap is recorded
+    // before it is filled); then the missing gate artifacts are seeded with is_fixture
+    // provenance and the REAL advance retried through the live trigger. Unsanctioned
+    // use self-reports: assertDivergenceAllowed lands it as TEST_MODE_DIVERGENCE when
+    // the policy's set doesn't include it. A block seeding cannot satisfy (prose exit
+    // gates) falls through to the honest checkpoint halt — no raw stage-set fallback.
+    if (advancePolicy === 'fixture-artifact-seed') {
+      journal.assertDivergenceAllowed(FIXTURE_ARTIFACT_SEED_DIVERGENCE, [...allowedDivergencesFor(advancePolicy)], { stage, to: stage + 1 });
+      const doSeed = seams.seedMissingArtifacts || (await import('./s20-fixture.mjs')).seedMissingArtifactsForStage;
       try {
-        await doForce({ supabase, ventureId, toStage: stage + 1 });
+        const seedResult = await doSeed(supabase, { ventureId, stage, runId: journal.runId, journal });
+        if (seedResult.seeded.length > 0) {
+          await advanceStage(supabase, { ventureId, fromStage: stage, toStage: stage + 1, handoffData: { harness: true, fixture_artifact_seed: seedResult.seeded } });
+          journal.append({
+            kind: 'observation',
+            event: `S${stage} -> S${stage + 1} advanced through the REAL gate path after fixture-artifact seed (${seedResult.seeded.length} type(s), gate conditions MET — never bypassed)`,
+            o_requirements: oReqs,
+            touched_tables: ['ventures', 'venture_stage_work', 'venture_artifacts'],
+            detail: { seeded: seedResult.seeded, gate_source: seedResult.source },
+          });
+          journal.append({ kind: 'checkpoint', event: `band S${stage} complete (fixture-artifact-seed policy)`, detail: { band_complete: stage } });
+          return { advanced: true, executed: true, seeded: seedResult.seeded };
+        }
+        // Nothing missing => the block is NOT the artifact gate (e.g. prose exit
+        // gates). Journal the honest edge below — seeding cannot and must not help.
         journal.append({
           kind: 'observation',
-          event: `S${stage} -> S${stage + 1} FORCED stage set (sanctioned divergence — real gates remain blocked; see prior block observation)`,
+          event: `S${stage} block is not artifact-gate-satisfiable (0 missing artifacts, source=${seedResult.source}) — honest halt, no fallback`,
           o_requirements: oReqs,
-          touched_tables: ['ventures'],
-          detail: { forced: true },
+          touched_tables: [],
+          detail: { seeded: [], gate_source: seedResult.source },
         });
-        journal.append({ kind: 'checkpoint', event: `band S${stage} complete (forced-stage-set policy)`, detail: { band_complete: stage } });
-        return { advanced: true, executed: true, forced: true };
-      } catch (fe) {
-        journal.append({ kind: 'finding', finding_type: 'CANNOT_DRIVE', event: `S${stage} forced stage set failed: ${String(fe.message).slice(0, 200)}`, o_requirements: oReqs, detail: { stage } });
+      } catch (se) {
+        journal.append({ kind: 'finding', finding_type: 'CANNOT_DRIVE', event: `S${stage} fixture-artifact seed/retry failed: ${String(se.message).slice(0, 200)}`, o_requirements: oReqs, detail: { stage } });
       }
     }
 

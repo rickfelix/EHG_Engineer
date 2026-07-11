@@ -4,7 +4,9 @@
 -- SD: SD-LEO-INFRA-STAGE-ADVANCEMENT-ARTIFACT-001 (FR-7)
 -- Date: 2026-07-04
 --
--- requires-chairman-apply: this migration is STAGED, not applied. Per the
+-- STATUS: LIVE — applied to the production DB (verified in pg_proc/pg_trigger
+-- 2026-07-11, SD-LEO-INFRA-HARNESS-FIXTURE-ARTIFACT-001 doc-drift correction;
+-- the chairman GO decision has been exercised). Historical staging note: per the
 -- chairman-gated migration convention (SD-LEO-INFRA-MIGRATION-READINESS-CHAIRMAN-
 -- GATED-EXEMPT-001), applying it is a separate, explicit chairman GO decision --
 -- this is the highest-blast-radius migration of this SD's five (it is a
