@@ -149,6 +149,48 @@ never becomes a `task-rehydrate` board node). A target still breaching after a p
 Deduped 2h/target, plus an absolute per-tick cap (`MAX_PROBES_PER_TICK=5`) as an independent
 second storm guard.
 
+## Consumption-semantics census (SD-LEO-INFRA-SESSION-COORDINATION-LANE-002, 2026-07-11)
+
+Clause (e) of the chairman-ratified Solomon MODE-B advisory (`session_coordination` row
+`09189ed9`), deferred through SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001 and
+SD-LEO-INFRA-SESSION-COORDINATION-LANE-001, asked for ONE unified consumption semantics
+across every role inbox (Adam/coordinator/Solomon/worker), with every write site to
+`read_at`/`acknowledged_at` classified and any drift migrated onto the shared three-stage
+predicate above. **Closing this clause**: a full grep census of `scripts/` and
+`lib/coordinator/` (excluding `scripts/archive/`) found **zero needs-migration sites** —
+every write site already conforms, each traceable to a specific prior fix. No code changed
+as part of this SD; this section is the auditable record so a future session does not need
+to re-run the census.
+
+### Write sites (12) — already-correct or exempt, each cited
+
+| Site | Classification | Citation |
+|---|---|---|
+| `scripts/adam-advisory.cjs` `stampSurfaced`/`ackRows` | already-correct (three-stage) | SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 |
+| `scripts/adam-advisory.cjs` `awaitCoordinatorReply` consumption | exempt | atomic reply-consumption — a synchronously-awaited reply is definitionally both seen and actioned in one step |
+| `scripts/solomon-advisory.cjs` `stampSurfaced`/`ackRows` (mirrors adam-advisory) | already-correct | QF-20260710-593 |
+| `scripts/coordinator-ack-signal.cjs` | already-correct | explicit CLI ack command, genuine action |
+| `scripts/fleet-dashboard.cjs` (signal-inbox + advisory-inbox render) | already-correct | `read_at`-only, defers ack to explicit ack commands; advisory path additionally documents the `payload.actioned_at` dual-marker (see receipt-contract table above) |
+| `scripts/worker-checkin.cjs` `ackMessage`/`surfaceCoordinatorMessages` | exempt (deliberate bounded consumption for advisory-class; directives always wait for genuine action) | SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001, SD-LEO-INFRA-WORKER-INBOX-PUSH-DELIVERY-001, QF-20260610-545 |
+| `scripts/worker-signal.cjs` `awaitCoordinatorReply` consumption (x2) | exempt | atomic reply-consumption (same as adam-advisory.cjs) |
+| `scripts/fleet-coaching.cjs` | already-correct | acks the original signal it replies to — genuine action |
+| `scripts/stale-session-sweep.cjs` WORK_ASSIGNMENT terminal-drain | already-correct | `read_at`-only; a moot-target directive is a genuine surfacing event, never bare-acked |
+| `scripts/stale-session-sweep.cjs` STUCK-signal auto-drain | exempt (narrow, ratified) | SD-LEO-INFRA-THRESHOLD-AUTO-SIGNAL-OVERFIRE-001(c) — scoped to dead-sender or >1h-stale `stuck` signals only |
+| `scripts/hooks/coordination-inbox.cjs` `classifyInboxMessage`-driven stamp | already-correct — the canonical reference implementation | see receipt-contract table above |
+| `lib/coordinator/relay-queue.cjs` `drainOne` claim-lease | exempt | repurposes `acknowledged_at` as an atomic claim/lease mutex for its own row-kind (relay requests) — adversarially reviewed; not a violation since this queue has no meaningful "seen" stage |
+| `lib/coordinator/signal-router.cjs` `stampRouted` | already-correct | acks on genuine promotion-to-`feedback` action (fingerprint aggregation) |
+
+### Read-only consumers — exempt, never mutate
+
+`scripts/read-adam-directives.cjs`, `scripts/read-adam-advisories.cjs`,
+`scripts/adam-register.cjs`, `scripts/adam-self-assessment-writer.cjs`,
+`scripts/solomon-register.cjs`, `lib/coordinator/detectors.cjs`,
+`lib/coordinator/presence-grounding-signals.cjs`, `lib/coordinator/receipts.cjs`,
+`lib/coordinator/adam-action-ack.cjs` — each read `read_at`/`acknowledged_at` for
+display, scoring, or detection only; none write the columns.
+
+**Reproducing the census**: `grep -rn "\.update({[^}]*\(read_at\|acknowledged_at\)" scripts/*.cjs lib/coordinator/*.cjs scripts/hooks/*.cjs` (excludes `scripts/archive/`, which holds only dead/superseded copies).
+
 ## Correlation echo — replies carry BOTH keys
 
 Every reply writer echoes the request's correlation under **both** `payload.reply_to`
