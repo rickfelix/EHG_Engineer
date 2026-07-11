@@ -13,20 +13,33 @@
 -- "all children completed successfully" PRD/handoff/retrospective provenance for an
 -- orchestrator that, at the DB layer, still cannot actually complete.
 --
--- Four surgical single-predicate changes (CREATE OR REPLACE FUNCTION only — no DROP, no
--- data mutation):
---   (a) get_progress_breakdown(text)  — completed_children COUNT FILTER
+-- Surgical changes (CREATE OR REPLACE FUNCTION only — no DROP, no data mutation):
+--   (a) get_progress_breakdown(text)  — single-predicate: completed_children COUNT FILTER
 --   (b) get_progress_breakdown(uuid)  — same (two overloads exist on this function name)
---   (c) complete_orchestrator_sd      — same COUNT FILTER; children_without_handoffs
---                                        logic (which decides who needs handoff evidence)
---                                        is INTENTIONALLY UNCHANGED — a cancelled child
---                                        never needs handoff evidence.
---   (d) try_auto_complete_parent_orchestrator — same COUNT FILTER
+--   (c) complete_orchestrator_sd      — COUNT FILTER (now tracks cancelled_children
+--                                        separately too) + the hardcoded completion
+--                                        narrative made conditional (adversarial round-2
+--                                        CRITICAL: this function's own success text was
+--                                        unconditionally "quality verified... completed
+--                                        successfully" even when every child was
+--                                        cancelled — the same false-provenance class the
+--                                        JS-layer OrchestratorCompletionGuardian fix in
+--                                        this SD addresses, missed here in round 1).
+--                                        children_without_handoffs logic (which decides
+--                                        who needs handoff evidence) is INTENTIONALLY
+--                                        UNCHANGED — a cancelled child never needs
+--                                        handoff evidence.
+--   (d) try_auto_complete_parent_orchestrator — COUNT FILTER, PLUS both entry guards
+--       (NEW.status terminal-check and OLD.status-changed check) updated together —
+--       NOT a single-predicate change, despite the "surgical" framing above; documented
+--       here for audit accuracy (adversarial round-2 finding).
 --   (e) trg_auto_complete_parent_orchestrator — the trigger's own WHEN clause currently
 --       fires ONLY on a transition INTO 'completed'; a child whose last terminal
 --       transition is to 'cancelled' never invokes the check at all, independent of any
---       function-body fix. WHEN clause widened to fire on a transition into EITHER
---       terminal state.
+--       function-body fix. WHEN clause widened to fire on any transition into EITHER
+--       terminal state (matching baseline: the ORIGINAL trigger fired regardless of what
+--       OLD.status was, including from the other terminal value — an earlier draft of
+--       this migration over-restricted that case; fixed in round 2).
 --
 -- APPLY IS CHAIRMAN-GATED (requires_chairman_apply): node scripts/apply-migration.js
 -- --prod-deploy with @approved-by stamp. Trigger/function DDL on the live DB.
@@ -344,9 +357,11 @@ DECLARE
   retro_exists BOOLEAN;
   total_children INT;
   completed_children INT;
+  cancelled_children INT;
   children_without_handoffs INT;
   child_quality_issues JSONB;
   child_summaries JSONB;
+  completion_narrative TEXT;
 BEGIN
   SELECT * INTO sd FROM strategic_directives_v2 WHERE id = sd_id_param;
   IF NOT FOUND THEN
@@ -371,10 +386,16 @@ BEGIN
     );
   END IF;
   -- SD-LEO-FIX-ORCHESTRATOR-LEAF-ROUTER-001: cancelled is a terminal disposition, same as completed.
+  -- cancelled_children is tracked SEPARATELY (not just derived as total-completed) so the
+  -- completion narrative below can be honest about a cancelled-containing orchestrator
+  -- instead of unconditionally claiming "quality verified" (adversarial round-2 CRITICAL:
+  -- this SQL path has its OWN hardcoded success text, independent of the JS-layer
+  -- OrchestratorCompletionGuardian provenance fix in this same SD).
   SELECT
     COUNT(*),
-    COUNT(*) FILTER (WHERE status IN ('completed', 'cancelled'))
-  INTO total_children, completed_children
+    COUNT(*) FILTER (WHERE status IN ('completed', 'cancelled')),
+    COUNT(*) FILTER (WHERE status = 'cancelled')
+  INTO total_children, completed_children, cancelled_children
   FROM strategic_directives_v2
   WHERE parent_sd_id = sd_id_param;
   children_done := (completed_children = total_children);
@@ -440,6 +461,11 @@ BEGIN
   FROM strategic_directives_v2 child
   WHERE child.parent_sd_id = sd_id_param;
 
+  completion_narrative := CASE WHEN cancelled_children = 0
+    THEN format('All %s child SDs completed with verified handoff evidence. Quality verified across all children.', total_children)
+    ELSE format('%s of %s child SDs completed with verified handoff evidence; %s cancelled (a terminal disposition, not a quality failure — cancelled children never require handoff evidence).', completed_children - cancelled_children, total_children, cancelled_children)
+  END;
+
   INSERT INTO sd_phase_handoffs (
     sd_id,
     handoff_type,
@@ -462,28 +488,30 @@ BEGIN
     'LEAD',
     'accepted',
     100,
-    format('Orchestrator auto-completion: All %s child SDs completed with verified handoff evidence. Quality verified across all children.', total_children),
+    format('Orchestrator auto-completion: %s', completion_narrative),
     child_summaries::text,
     jsonb_build_object(
-      'children_completed', completed_children,
+      'children_completed', completed_children - cancelled_children,
+      'children_cancelled', cancelled_children,
       'children_total', total_children,
       'children_without_handoffs', 0,
-      'quality_verified', true,
+      'quality_verified', cancelled_children = 0,
       'auto_completed', true,
       'completion_date', now()
     ),
     jsonb_build_array(jsonb_build_object(
-      'decision', 'Auto-complete orchestrator after all children passed quality verification',
-      'rationale', format('All %s children completed with accepted handoff records', total_children)
+      'decision', 'Auto-complete orchestrator after all children reached a terminal state',
+      'rationale', completion_narrative
     )),
     jsonb_build_array(jsonb_build_object(
-      'issue', 'None identified',
+      'issue', CASE WHEN cancelled_children = 0 THEN 'None identified' ELSE format('%s child SD(s) cancelled', cancelled_children) END,
       'severity', 'info',
-      'detail', 'All children completed successfully with handoff evidence'
+      'detail', completion_narrative
     )),
     jsonb_build_object(
       'orchestrator_auto_complete', true,
-      'children_completed', completed_children,
+      'children_completed', completed_children - cancelled_children,
+      'children_cancelled', cancelled_children,
       'total_children', total_children,
       'completion_method', 'ORCHESTRATOR_AUTO_COMPLETE'
     ),
@@ -503,10 +531,11 @@ BEGIN
   WHERE id = sd_id_param;
   RETURN jsonb_build_object(
     'success', true,
-    'message', format('Orchestrator completed: %s/%s children done (quality verified)', completed_children, total_children),
+    'message', format('Orchestrator completed: %s', completion_narrative),
     'sd_id', sd_id_param,
-    'completed_children', completed_children,
-    'quality_verified', true
+    'completed_children', completed_children - cancelled_children,
+    'cancelled_children', cancelled_children,
+    'quality_verified', cancelled_children = 0
   );
 END;
 $function$
@@ -526,12 +555,17 @@ DECLARE
   v_completed_children INT;
   v_result JSONB;
 BEGIN
-  -- SD-LEO-FIX-ORCHESTRATOR-LEAF-ROUTER-001: fire on a transition into EITHER terminal
-  -- state (the trigger's own WHEN clause below is widened correspondingly).
+  -- SD-LEO-FIX-ORCHESTRATOR-LEAF-ROUTER-001: fire on a genuine transition INTO either
+  -- terminal state (the trigger's own WHEN clause below is widened correspondingly).
+  -- Adversarial round-2: an earlier draft additionally required OLD.status to have been
+  -- non-terminal, which over-restricted beyond the original trigger's behavior — the old
+  -- trigger fired on ANY transition into 'completed' regardless of the prior value
+  -- (including a cancelled->completed correction). Matching that baseline: the only
+  -- requirement is that NEW.status is terminal and actually differs from OLD.status.
   IF NEW.status NOT IN ('completed', 'cancelled') THEN
     RETURN NEW;
   END IF;
-  IF OLD.status IN ('completed', 'cancelled') THEN
+  IF OLD.status = NEW.status THEN
     RETURN NEW;
   END IF;
   v_parent_id := NEW.parent_sd_id;
@@ -573,7 +607,9 @@ END;
 $function$
 ;
 
--- (e) trigger WHEN clause: fire on transition into EITHER terminal state, not just 'completed'.
+-- (e) trigger WHEN clause: fire on transition into EITHER terminal state, not just
+-- 'completed' — matching baseline behavior for the "old was already terminal" case
+-- (see the matching comment on try_auto_complete_parent_orchestrator above).
 DROP TRIGGER IF EXISTS trg_auto_complete_parent_orchestrator ON public.strategic_directives_v2;
 CREATE TRIGGER trg_auto_complete_parent_orchestrator
   AFTER UPDATE OF status ON public.strategic_directives_v2
@@ -581,6 +617,5 @@ CREATE TRIGGER trg_auto_complete_parent_orchestrator
   WHEN (
     (new.status)::text = ANY (ARRAY['completed'::text, 'cancelled'::text])
     AND (old.status)::text IS DISTINCT FROM (new.status)::text
-    AND (old.status)::text <> ALL (ARRAY['completed'::text, 'cancelled'::text])
   )
   EXECUTE FUNCTION try_auto_complete_parent_orchestrator();
