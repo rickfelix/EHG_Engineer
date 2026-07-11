@@ -169,17 +169,43 @@ describe('TS-1: paginated enumeration + COUNT(*) reconciliation', () => {
 
 describe('TS-2/TS-3: dedup-by-done-state — nowMs always injected, corroboration gate', () => {
   it('always passes deps.nowMs through to checkFeedbackPremiseLiveness (never the frozen-clock default)', async () => {
+    // Real proof, not a self-check: capture the actual .gte() cutoff argument sent to the
+    // DB query. recentRecount computes it as cutoffISO(recentDays, nowMs) — if nowMs were
+    // ever dropped, premise-liveness.js's cutoffISO() falls back to a hardcoded
+    // 2026-06-23 base, producing a cutoff far from our injected NOW (2026-07-11). Capturing
+    // the real argument means dropping the nowMs plumbing anywhere in the call chain makes
+    // this test fail, unlike a tautological self-assignment.
     const row = { id: 'x', title: 'some backlog item', description: '', metadata: {} };
-    let capturedNowMs;
-    const fakeSupabase = { from: () => ({ select: () => ({ eq: () => ({ gte: () => ({ or: () => ({ limit: async () => ({ data: [] }) }) }) }) }) }) };
-    // Intercept by spying on Date.now-independent behavior via a git stub that records the call happened.
+    let capturedGteArg = null;
+    const fakeSupabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            gte: (_col, val) => {
+              capturedGteArg = val;
+              return { or: () => ({ limit: async () => ({ data: [] }) }), limit: async () => ({ data: [] }) };
+            },
+          }),
+        }),
+      }),
+    };
     const git = () => '';
-    // We can't easily intercept the internal call without mocking the module; instead assert indirectly:
-    // classifyDoneState must not throw and must use the nowMs we pass (verified via outcome determinism below).
     const result = await classifyDoneState(row, { supabase: fakeSupabase, git, nowMs: NOW });
     expect(result.outcome).toBe('survivor'); // no recount, no shipped fix found -> LIVE/HOLD -> survivor bucket path handled by caller
-    capturedNowMs = NOW;
-    expect(capturedNowMs).toBe(NOW);
+
+    expect(capturedGteArg).toBeTruthy();
+    // Both recentRecount (recentDays=30) and findShippedFix (completedDays=180) issue a
+    // .gte() call against this mock's shared shape; findShippedFix's runs last, so its
+    // completedDays=180 cutoff is what's captured. Either window correctly proves nowMs
+    // propagated (both are computed from our injected NOW, not the frozen default) — the
+    // key assertion is that it is NOT the frozen-clock-based value.
+    const expectedCutoff = new Date(NOW - 180 * 24 * 3600 * 1000).toISOString();
+    expect(capturedGteArg).toBe(expectedCutoff);
+    // Sanity: the frozen-clock default (base 2026-06-23) would NOT match this — if nowMs
+    // were ever dropped from the call chain, the captured cutoff would instead be
+    // 2026-06-23 minus this window, far from our injected NOW-based value.
+    const frozenClockCutoff180 = new Date(Date.parse('2026-06-23T00:00:00Z') - 180 * 24 * 3600 * 1000).toISOString();
+    expect(capturedGteArg).not.toBe(frozenClockCutoff180);
   });
 
   it('file-corroborated STALE (confidence_score>=0.9) closes with citation', async () => {
@@ -262,6 +288,27 @@ describe('TS-7: archive atomicity + staleness check', () => {
     const stale = { created_at: daysAgo(45) };
     expect(isStaleSingleton(fresh, { nowMs: NOW })).toBe(false);
     expect(isStaleSingleton(stale, { nowMs: NOW })).toBe(true);
+  });
+
+  it('archives a stale informational singleton via ONE atomic update carrying category, archived_at, and resolution_notes together', async () => {
+    const row = {
+      id: 'stale1', category: 'harness_backlog', archived_at: null, status: 'new',
+      title: 'unique never-recurred old thing', description: '', severity: 'low',
+      created_at: daysAgo(45), metadata: {},
+    };
+    const supabase = makeSupabase({ feedbackRows: [row] });
+    const result = await runSweep(['node', 's', '--apply'], { supabase, nowMs: NOW });
+    expect(result.ledger.archived_via_reclassify).toBe(1);
+
+    const archiveUpdate = supabase._updates.find((u) => u.id === 'stale1' && u.vals.category === 'informational_note');
+    expect(archiveUpdate).toBeTruthy();
+    // Atomicity: all three fields present in the SAME update call, not split across writes.
+    expect(archiveUpdate.vals.category).toBe('informational_note');
+    expect(archiveUpdate.vals.archived_at).toBeTruthy();
+    expect(archiveUpdate.vals.resolution_notes).toBeTruthy();
+    // Only one update call touched this row's archive fields (no separate archived_at-only write).
+    const rowUpdates = supabase._updates.filter((u) => u.id === 'stale1');
+    expect(rowUpdates.filter((u) => u.vals.archived_at).length).toBe(1);
   });
 });
 
