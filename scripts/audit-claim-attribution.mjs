@@ -54,7 +54,7 @@ for (const sd of sds ?? []) {
     // A hand-off is plausible when the prior session is gone/released; two
     // sessions that BOTH remain known-live interleaving on one SD is the
     // anomaly class (misattribution or churn).
-    const prevGone = !prevSession || prevSession.status !== 'active';
+    const prevGone = !prevSession || !['active', 'idle'].includes(prevSession.status); // 'idle' is a LIVE status (adversarial review): treating it as gone silently zeroed the interleave-anomaly class
     transitions.push({
       at: cur.claimed_at,
       from: prev.session_id,
@@ -81,7 +81,7 @@ const summary = {
   anomaly_transitions: findings.reduce((n, f) => n + f.transitions.filter((t) => t.verdict === 'ANOMALY_live_interleave').length, 0),
   reroute_transitions: findings.reduce((n, f) => n + f.transitions.filter((t) => t.verdict === 'plausible_reroute').length, 0),
   cases: findings,
-  method: 'claim_history transitions cross-referenced against claude_sessions status; ANOMALY = distinct-session transition while the prior session row is still active',
+  method: 'claim_history transitions cross-referenced against claude_sessions status; ANOMALY = distinct-session transition while the prior session row is still live (active or idle)',
 };
 
 console.log(`Claim-attribution audit for ${DAY}:`);
