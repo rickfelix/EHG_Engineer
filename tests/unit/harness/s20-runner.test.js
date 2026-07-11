@@ -30,6 +30,9 @@ function fakeSupabase({ ventureExists = true, schedulerRows = 0 } = {}) {
           return Promise.resolve({ count: table.startsWith('eva_scheduler') ? schedulerRows : 0, error: null });
         },
       }),
+      // runArc()'s finalizeMirror() (SD-LEO-INFRA-RUN-EVIDENCE-DURABILITY-001) writes a
+      // durable system_events row at the end of every run.
+      insert: async () => ({ error: null }),
     }),
   };
 }

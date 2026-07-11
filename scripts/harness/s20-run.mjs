@@ -317,9 +317,9 @@ export async function runArc({ runId, entryStage = 20, toStage = 26, clockStart,
   for (const f of coverage.findings) journal.append({ kind: 'finding', finding_type: f.finding_type, event: f.event, o_requirements: f.o_requirements, detail: {} });
   journal.append({ kind: 'lifecycle', event: `run arc pass complete: covered=${coverage.covered.join(',') || 'none'} uncovered=${coverage.uncovered.join(',') || 'none'}`, detail: { coverage } });
 
-  // FR-3/FR-4 (SD-LEO-INFRA-RUN-EVIDENCE-DURABILITY-001): durable DB mirror of the
-  // journal, independent of .harness-runs scratch.
-  const mirror = await finalizeMirror({ supabase, journal, ventureId, lifecycleStage: entryStage, seams: seams.finalizeMirror ? { writeArtifact: seams.finalizeMirror } : {} });
+  // FR-3/FR-4 (SD-LEO-INFRA-RUN-EVIDENCE-DURABILITY-001): durable system_events mirror of
+  // the journal, independent of both .harness-runs scratch and the fixture's own lifecycle.
+  const mirror = await finalizeMirror({ supabase, journal, ventureId, seams: seams.finalizeMirror ? { insertEvent: seams.finalizeMirror } : {} });
 
   // O10 run-meta verdict, graded ONCE at run level: every per-loop O-req mapped (not dead)
   // AND the containment sweep found no residue AND the journal is non-empty/durable.

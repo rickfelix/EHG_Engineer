@@ -33,14 +33,6 @@ import 'dotenv/config';
 import { createRequire } from 'node:module';
 import { RunJournal } from '../../lib/harness/run-journal.mjs';
 import { isFixtureVenture } from '../../lib/eva/chairman-decision-watcher.js';
-import { ARTIFACT_TYPES } from '../../lib/eva/artifact-types.js';
-
-// FR-3/FR-4 mitigation (SD-LEO-INFRA-RUN-EVIDENCE-DURABILITY-001, risk-agent 2026-07-11):
-// the finalize-mirror row lives in venture_artifacts scoped to the SAME venture_id as
-// every other fixture row, so teardown's blanket venture_id-scoped delete/residue-count
-// on that table would otherwise destroy the very evidence it is meant to survive.
-// Structurally excluded from both the delete and the residue count below.
-const HARNESS_RUN_JOURNAL_TYPE = ARTIFACT_TYPES.HARNESS_RUN_JOURNAL;
 
 const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
@@ -266,9 +258,7 @@ export async function teardownFixture(supabase, runId, { journal } = {}) {
   const deleted = {};
   if (ventureId) {
     for (const table of tables) {
-      let query = supabase.from(table).delete({ count: 'exact' }).eq('venture_id', ventureId);
-      if (table === 'venture_artifacts') query = query.neq('artifact_type', HARNESS_RUN_JOURNAL_TYPE);
-      const { error, count } = await query;
+      const { error, count } = await supabase.from(table).delete({ count: 'exact' }).eq('venture_id', ventureId);
       // Fail-soft per table (a table without venture_id or not present is journaled, not fatal)
       deleted[table] = error ? `skip: ${error.message}` : (count ?? 0);
     }
@@ -301,9 +291,7 @@ export async function assertClean(supabase, runId, { journal, ventureId: knownId
   const tables = [...new Set([...CORE_FIXTURE_TABLES, ...j.touchedTables()])].filter((t) => t !== 'ventures');
   for (const table of tables) {
     if (!ventureId) { results[table] = 0; continue; }
-    let query = supabase.from(table).select('*', { count: 'exact', head: true }).eq('venture_id', ventureId);
-    if (table === 'venture_artifacts') query = query.neq('artifact_type', HARNESS_RUN_JOURNAL_TYPE);
-    const { count, error } = await query;
+    const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq('venture_id', ventureId);
     results[table] = error ? `unverifiable: ${error.message}` : (count ?? 0);
   }
 

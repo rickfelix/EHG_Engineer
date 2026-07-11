@@ -1,10 +1,18 @@
 /**
  * SD-LEO-INFRA-RUN-EVIDENCE-DURABILITY-001 — unit tests covering PRD
- * TS-1 (journal survives teardown at its run_id path), TS-2/TS-3 (finalize-mirror
- * loud-warn pre-apply / hard-fail post-apply), TS-5 (finalize-mirror excluded from
- * teardown's delete + residue assertion). TS-4 (post-migration CHECK acceptance) and
- * TS-6 (parity-test exemption) are covered by the migration dry-run + the existing
- * tests/unit/eva/artifact-type-db-parity.test.js suite, not duplicated here.
+ * TS-1 (journal survives teardown at its run_id path), TS-2 (finalize-mirror
+ * persists), TS-3 (finalize-mirror hard-fails loudly on write failure), TS-5
+ * (finalize-mirror row structurally immune to teardown — verified by construction,
+ * not exclusion logic, since it lives in system_events not venture_artifacts).
+ *
+ * Design note: an earlier revision persisted the mirror as a venture_artifacts row
+ * excluded from teardown's delete via .neq(). Deep-tier adversarial review found
+ * venture_artifacts.venture_id is ON DELETE CASCADE — the row would be silently
+ * destroyed the instant teardown deletes the venture, regardless of the .neq()
+ * exclusion (CASCADE fires at the FK level, not through the application's own
+ * delete queries). The mirror was moved to system_events (no FK to ventures,
+ * verified live), so these tests no longer need a "mitigation" describe block —
+ * durability now holds by construction, not by a delete-order workaround.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -14,21 +22,16 @@ import { join } from 'node:path';
 vi.mock('../../../lib/repo-paths.js', () => ({
   getRepoRoot: vi.fn(),
 }));
-vi.mock('../../../lib/eva/stage-templates/artifact-type-parity.js', () => ({
-  loadPendingChairmanGateAllowlist: vi.fn(),
-}));
 
 import { getRepoRoot } from '../../../lib/repo-paths.js';
-import { loadPendingChairmanGateAllowlist } from '../../../lib/eva/stage-templates/artifact-type-parity.js';
 import { RunJournal, finalizeMirror } from '../../../lib/harness/run-journal.mjs';
-import { teardownFixture, assertClean, CORE_FIXTURE_TABLES } from '../../../scripts/harness/s20-fixture.mjs';
+import { assertClean } from '../../../scripts/harness/s20-fixture.mjs';
 
 let TMP;
 
 beforeEach(() => {
   TMP = mkdtempSync(join(tmpdir(), 'harness-run-evidence-'));
   getRepoRoot.mockReturnValue(TMP);
-  loadPendingChairmanGateAllowlist.mockReturnValue({});
 });
 
 afterEach(() => {
@@ -72,7 +75,7 @@ describe('FR-1: RunJournal default baseDir anchored to the repo root (not cwd)',
   });
 });
 
-describe('FR-3/FR-4: finalizeMirror loud-fail gated on migration-applied state', () => {
+describe('FR-3/FR-4: finalizeMirror persists to system_events, independent of the venture lifecycle', () => {
   function makeJournal(runId = 'mirror-run') {
     const j = new RunJournal(runId);
     j.append({ kind: 'lifecycle', event: 'run started' });
@@ -81,38 +84,40 @@ describe('FR-3/FR-4: finalizeMirror loud-fail gated on migration-applied state',
 
   it('persists successfully and journals a lifecycle event when the write succeeds', async () => {
     const journal = makeJournal();
-    const writeArtifact = vi.fn(async () => 'artifact-id');
-    const result = await finalizeMirror({ supabase: {}, journal, ventureId: 'v1', lifecycleStage: 20, seams: { writeArtifact } });
+    const insertEvent = vi.fn(async () => undefined);
+    const result = await finalizeMirror({ supabase: {}, journal, ventureId: 'v1', seams: { insertEvent } });
 
     expect(result).toEqual({ persisted: true });
-    expect(writeArtifact).toHaveBeenCalledTimes(1);
+    expect(insertEvent).toHaveBeenCalledTimes(1);
     const events = journal.readAll();
     expect(events.some((e) => e.event.includes('finalize-mirror persisted'))).toBe(true);
   });
 
-  it('degrades to a loud warning (never throws) when the migration is still pending-chairman-gated', async () => {
-    loadPendingChairmanGateAllowlist.mockReturnValue({ harness_run_journal: { reason: 'staged' } });
+  it('hard-fails (throws) on any write failure — no pending-migration grace window since system_events has no CHECK blocking this write', async () => {
     const journal = makeJournal();
-    const writeArtifact = vi.fn(async () => { throw new Error('CHECK constraint violation'); });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const insertEvent = vi.fn(async () => { throw new Error('transient DB error'); });
 
-    const result = await finalizeMirror({ supabase: {}, journal, ventureId: 'v1', lifecycleStage: 20, seams: { writeArtifact } });
-
-    expect(result.persisted).toBe(false);
-    expect(result.degraded).toBe(true);
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('HARNESS_FINALIZE_MIRROR_DEGRADED'));
-    const events = journal.readAll();
-    expect(events.some((e) => e.detail?.evidence_degraded === true)).toBe(true);
-    warnSpy.mockRestore();
+    await expect(finalizeMirror({ supabase: {}, journal, ventureId: 'v1', seams: { insertEvent } }))
+      .rejects.toThrow(/finalize-mirror write failed/);
   });
 
-  it('hard-fails (throws) on a write failure once the migration is applied (exemption removed)', async () => {
-    loadPendingChairmanGateAllowlist.mockReturnValue({}); // exemption removed = migration applied
+  it('writes to system_events (not venture_artifacts) — verified by inspecting the real insert call shape', async () => {
     const journal = makeJournal();
-    const writeArtifact = vi.fn(async () => { throw new Error('unexpected DB error'); });
+    const insertCalls = [];
+    const supabase = {
+      from(table) {
+        insertCalls.push(table);
+        return { insert: async (row) => { insertCalls.push(row); return { error: null }; } };
+      },
+    };
 
-    await expect(finalizeMirror({ supabase: {}, journal, ventureId: 'v1', lifecycleStage: 20, seams: { writeArtifact } }))
-      .rejects.toThrow(/finalize-mirror write failed/);
+    await finalizeMirror({ supabase, journal, ventureId: 'v1' });
+
+    expect(insertCalls[0]).toBe('system_events');
+    const row = insertCalls[1];
+    expect(row.event_type).toBe('harness_run_journal_finalized');
+    expect(row.payload.run_id).toBe(journal.runId);
+    expect(row.venture_id).toBeUndefined(); // informational only, never a real column
   });
 });
 
@@ -122,7 +127,6 @@ describe('FR-2: assertClean asserts journal evidence PRESENT (additive to residu
     function chain(result) {
       const obj = {
         eq: (...args) => { calls.push(['eq', ...args]); return obj; },
-        neq: (...args) => { calls.push(['neq', ...args]); return obj; },
         select: (...args) => { calls.push(['select', ...args]); return obj; },
         delete: (...args) => { calls.push(['delete', ...args]); return obj; },
         then: (resolve) => resolve(result),
@@ -161,68 +165,5 @@ describe('FR-2: assertClean asserts journal evidence PRESENT (additive to residu
     journal.append({ kind: 'lifecycle', event: 'fixture created' });
     const { clean } = await assertClean(supabase, 'residue-run', { journal, ventureId: 'v1' });
     expect(clean).toBe(false);
-  });
-});
-
-describe('Mitigation: finalize-mirror row excluded from venture_id-scoped delete + residue count', () => {
-  const VENTURE_ID = 'v-mitigation-1';
-
-  /** Tracks, per table, the sequence of chained calls (eq/neq/select/delete). */
-  function makeTrackedSupabase() {
-    const perTableCalls = {};
-    function chain(table, result) {
-      perTableCalls[table] = perTableCalls[table] || [];
-      const record = (name, ...args) => perTableCalls[table].push([name, ...args]);
-      const obj = {
-        eq: (...args) => { record('eq', ...args); return obj; },
-        neq: (...args) => { record('neq', ...args); return obj; },
-        select: (...args) => { record('select', ...args); return obj; },
-        delete: (...args) => { record('delete', ...args); return obj; },
-        maybeSingle: async () => ({ data: table === 'ventures' ? { id: VENTURE_ID } : null }),
-        then: (resolve) => resolve(result),
-      };
-      return obj;
-    }
-    return {
-      perTableCalls,
-      from(table) {
-        if (table === 'ventures') return chain(table, { error: null, count: 0 });
-        return chain(table, { count: 0, error: null });
-      },
-    };
-  }
-
-  it('teardownFixture excludes artifact_type=harness_run_journal ONLY when deleting venture_artifacts, not other tables', async () => {
-    const supabase = makeTrackedSupabase();
-    const journal = new RunJournal('mitigation-run');
-    journal.append({ kind: 'lifecycle', event: 'fixture created' });
-
-    await teardownFixture(supabase, 'mitigation-run', { journal });
-
-    const artifactsCalls = supabase.perTableCalls['venture_artifacts'] || [];
-    const artifactsHasExclusion = artifactsCalls.some((c) => c[0] === 'neq' && c[1] === 'artifact_type' && c[2] === 'harness_run_journal');
-    expect(artifactsHasExclusion).toBe(true);
-
-    // A sibling core table must NOT carry the same exclusion (it's specific to
-    // venture_artifacts, where the finalize-mirror row actually lives).
-    const stageWorkCalls = supabase.perTableCalls['venture_stage_work'] || [];
-    const stageWorkHasExclusion = stageWorkCalls.some((c) => c[0] === 'neq');
-    expect(stageWorkHasExclusion).toBe(false);
-  });
-
-  it('assertClean excludes artifact_type=harness_run_journal from the venture_artifacts residue count', async () => {
-    const supabase = makeTrackedSupabase();
-    const journal = new RunJournal('mitigation-residue-run');
-    journal.append({ kind: 'lifecycle', event: 'fixture created' });
-
-    await assertClean(supabase, 'mitigation-residue-run', { journal, ventureId: VENTURE_ID });
-
-    const artifactsCalls = supabase.perTableCalls['venture_artifacts'] || [];
-    const hasExclusion = artifactsCalls.some((c) => c[0] === 'neq' && c[1] === 'artifact_type' && c[2] === 'harness_run_journal');
-    expect(hasExclusion).toBe(true);
-  });
-
-  it('CORE_FIXTURE_TABLES includes venture_artifacts (sanity — the exclusion only matters because this table is always in scope)', () => {
-    expect(CORE_FIXTURE_TABLES).toContain('venture_artifacts');
   });
 });
