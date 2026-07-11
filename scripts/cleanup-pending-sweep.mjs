@@ -249,6 +249,18 @@ export async function processCleanupPendingQueue(supabase, opts = {}) {
       continue;
     }
 
+    // SD-LEO-INFRA-WORKTREE-REAPER-RESIDENT-001 (FR-2): residency guard — this
+    // sweep deletes via fs (bypassing the git chokepoint), so it must ask the
+    // residency question itself. cwd + fresh-heartbeat worktree_path, fail-closed.
+    const { cwdResidencyBlocks, heartbeatResidencyBlocksRemoval } = await import('../lib/worktree-reaper/residency-guard.js');
+    const cwdRes = cwdResidencyBlocks(row.worktree_path);
+    const hbRes = cwdRes.blocked ? cwdRes : await heartbeatResidencyBlocksRemoval(supabase, row.worktree_path);
+    if (cwdRes.blocked || hbRes.blocked) {
+      summary.skippedUnsafe = (summary.skippedUnsafe || 0) + 1;
+      log(`${tag} SKIPPED_RESIDENT: ${(cwdRes.blocked ? cwdRes : hbRes).reason} — leaving cleanup_pending for a later sweep`);
+      continue;
+    }
+
     // FR-3: retry rm via the canonical helper (FR-1 retry layer).
     if (dryRun) {
       log(`${tag} DRY_RUN: would retry rm ${row.worktree_path}`);

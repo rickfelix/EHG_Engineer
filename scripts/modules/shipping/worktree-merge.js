@@ -14,7 +14,7 @@ import { execSync } from 'child_process';
 import { existsSync, realpathSync } from 'fs';
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { removeWorktreeViaGit } from '../../../lib/worktree-manager.js';
+import { writeReapEligibleMarker } from '../../../lib/worktree-reaper/reap-eligible-marker.js';
 import { observeMergeWorkLadder } from '../../../lib/ship/auto-merge.mjs';
 
 function run(cmd, opts = {}) {
@@ -95,12 +95,13 @@ async function main() {
     console.log('   🧹 Pruning worktree references...');
     run('git worktree prune', { cwd: mainRepoPath });
 
-    // Try to remove the worktree directory if it still exists.
-    // QF-20260511-446: route through removeWorktreeViaGit so the node_modules
-    // symlink is unlinked first — bare `git worktree remove --force` follows
-    // MSYS bash symlinks on Windows and wipes the main repo's node_modules.
+    // SD-LEO-INFRA-WORKTREE-REAPER-RESIDENT-001 (FR-3): this flow runs IN-PROCESS
+    // from inside the worktree right after the merge — deleting it here is the
+    // exact post-merge self-reap vector. Mark reap-eligible instead; the
+    // scheduled reaper collects it out-of-band once residency clears.
     if (existsSync(worktreePath)) {
-      removeWorktreeViaGit(worktreePath, mainRepoPath, { allowFail: true });
+      const marker = writeReapEligibleMarker(worktreePath, { sd_key: worktreeRelative, merged_pr: prNumber });
+      console.log(`   🏷️  Worktree marked reap-eligible${marker.written ? '' : ' (marker write failed: ' + marker.error + ')'} — scheduled reaper collects it out-of-band`);
     }
 
     // Delete local branch reference
@@ -111,7 +112,8 @@ async function main() {
       merged: true,
       pr: parseInt(prNumber),
       branch,
-      worktreeCleaned: true,
+      worktreeCleaned: false,
+      worktreeMarkedReapEligible: true,
       mainRepoPath,
       action: 'cd_to_main'
     }));

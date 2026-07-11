@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { safeRecursiveRm, safeRecursiveCp, removeWorktreeViaGit } from '../../../lib/worktree-manager.js';
+import { writeReapEligibleMarker } from '../../../lib/worktree-reaper/reap-eligible-marker.js';
 import { detectOrphanWorktreeFromMerge } from '../../../lib/exec-context-guard.mjs';
 
 // Quick-fix QF-20260211-111: Post-merge worktree cleanup for /ship
@@ -237,14 +238,23 @@ function getMainRepoPath(meta, wtPath) {
 async function cleanupCurrentWorktree(options = {}) {
   if (!isInsideWorktree()) return { cleaned: false, reason: 'not_in_worktree' };
   const wtPath = gitExec('git rev-parse --show-toplevel');
-  // QF-20260404-445: Warn if CWD is inside the worktree about to be deleted.
-  // On Windows, deleting the CWD directory corrupts the shell — subsequent
-  // commands (handoffs, node module resolution) fail with ERR_MODULE_NOT_FOUND.
+  // SD-LEO-INFRA-WORKTREE-REAPER-RESIDENT-001 (FR-2/FR-3): the former
+  // QF-20260404-445 warn-and-proceed branch here DELETED the resident
+  // worktree anyway (Golf-4 self-reap, 2026-07-11 20:09Z). Cwd-inside-target
+  // is now a HARD refusal: mark reap-eligible and hand off to the scheduled
+  // reaper, which collects once residency clears. Deleting the CWD corrupts
+  // the resident shell (ERR_MODULE_NOT_FOUND on every subsequent command).
   const cwd = process.cwd().replace(/\\/g, '/');
   const normalized = wtPath.replace(/\\/g, '/');
-  if (cwd.startsWith(normalized)) {
-    const result = await cleanupWorktreeByPath(wtPath, options);
-    return { ...result, warning: 'CWD_INSIDE_TARGET', hint: 'cd to main repo BEFORE running cleanup to avoid shell corruption' };
+  if (cwd === normalized || cwd.startsWith(normalized + '/')) {
+    const meta = getWorktreeMetadata(wtPath);
+    const marker = writeReapEligibleMarker(wtPath, { sd_key: meta?.workKey || meta?.sdKey || path.basename(wtPath) });
+    return {
+      cleaned: false,
+      reason: 'REAP_BLOCKED_RESIDENT',
+      marked: marker.written,
+      hint: 'worktree marked reap-eligible; the scheduled reaper collects it once no session is resident',
+    };
   }
   return cleanupWorktreeByPath(wtPath, options);
 }
@@ -310,6 +320,12 @@ async function cleanupWorktreeByPath(wtPath, options = {}) {
   // QF-20260511-446: pre-unlink node_modules symlink so git doesn't follow it
   // and wipe main repo's node_modules (MSYS-symlink-on-Windows wipe vector).
   const gitRemove = removeWorktreeViaGit(wtPath, mainRepoPath, { allowFail: true });
+  // SD-LEO-INFRA-WORKTREE-REAPER-RESIDENT-001: a residency BLOCK must never be
+  // force-deleted around via the fs fallback — mark reap-eligible instead.
+  if (gitRemove.blocked) {
+    const marker = writeReapEligibleMarker(wtPath, { sd_key: sdKey });
+    return { cleaned: false, reason: gitRemove.reason, marked: marker.written, mainRepoPath, workKey: sdKey };
+  }
   if (!gitRemove.ok && fs.existsSync(wtPath)) {
     safeRecursiveRm(wtPath);
     execSync('git worktree prune', { cwd: mainRepoPath, stdio: 'pipe' });
