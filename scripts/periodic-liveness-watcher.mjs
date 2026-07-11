@@ -26,8 +26,10 @@ import { pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const { hasFreshHeartbeat, hasTickAlive, hasPidAlive } = require('../lib/fleet/session-liveness.cjs');
-const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
 import { parseLivenessClasses, partitionRowsByClasses } from '../lib/periodic-liveness/class-split.mjs';
+import { resolveOwnerTarget } from '../lib/periodic-liveness/owner-target-resolver.mjs';
+import { climbLadder, resetConsecutiveMiss, emitLadderDigest } from '../lib/periodic-liveness/ladder-escalation.mjs';
+import { recordPendingDecision, escalateChairmanDecision } from '../lib/chairman/record-pending-decision.mjs';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
@@ -146,12 +148,17 @@ async function evaluateRow(row) {
   return { process_key: row.process_key, state, last_fired_at: lastFiredAt, age_ms: ageMs, reason: signalNote };
 }
 
+// SD-LEO-INFRA-OPERATIVE-AGENT-OWNERSHIP-001-B (FR-1/FR-2): owner-first routing, resolved via
+// owner-target-resolver (coordinator fallback baked in -- never dead-letters). Returns whether
+// the insert actually succeeded so the caller can latch last_state/consecutive_miss_count ONLY
+// on confirmed success (LEAD risk-agent HIGH finding: the prior unconditional latch silently and
+// permanently suppressed retries on a failed insert).
 async function emitOverdueSignal(row, evaluation) {
-  const coordinatorId = await getActiveCoordinatorId(supabase).catch(() => null);
+  const ownerTarget = await resolveOwnerTarget(supabase, row.owner);
 
-  await supabase.from('session_coordination').insert({
+  const { error } = await supabase.from('session_coordination').insert({
     message_type: 'INFO',
-    target_session: coordinatorId || 'broadcast-coordinator',
+    target_session: ownerTarget.target,
     subject: `[PERIODIC-LIVENESS] ${row.display_name || row.process_key} is OVERDUE`,
     sender_type: 'periodic-liveness-watcher',
     payload: {
@@ -159,11 +166,14 @@ async function emitOverdueSignal(row, evaluation) {
       process_key: row.process_key,
       display_name: row.display_name,
       owner: row.owner,
+      resolved_target_kind: ownerTarget.kind,
       state: 'OVERDUE',
       last_fired_at: evaluation.last_fired_at,
       age_ms: evaluation.age_ms,
     },
   });
+
+  return { emitted: !error, error: error || null, ownerTarget };
 }
 
 async function main() {
@@ -177,6 +187,7 @@ async function main() {
   }
 
   const results = [];
+  const ladderCandidates = [];
   for (const row of evaluate) {
     const evaluation = await evaluateRow(row);
     results.push(evaluation);
@@ -185,16 +196,45 @@ async function main() {
     // TRANSITION check (row.last_state !== OVERDUE -> OVERDUE), never "has this process_key ever
     // been flagged" -- the latter is a one-shot latch that goes permanently blind to every
     // subsequent recovery-then-relapse, reproducing the exact silent-death failure class this SD
-    // exists to prevent. last_state is persisted below on EVERY evaluation, recovered or not, so
-    // a process that goes OK and later OVERDUE again is correctly re-flagged.
+    // exists to prevent. A process that goes OK and later OVERDUE again is correctly re-flagged.
     if (evaluation.state === STATE.OVERDUE && row.last_state !== STATE.OVERDUE) {
-      await emitOverdueSignal(row, evaluation);
+      // First miss (fresh transition): owner-first routing (001-B FR-1/FR-2). last_state is
+      // latched ONLY on confirmed insert success -- an unconfirmed latch would silently and
+      // permanently suppress the retry on the next cycle (risk-agent HIGH finding), since the
+      // transition-dedup above would then see no change forever. Deliberately does NOT touch
+      // consecutive_miss_count here: that column may not exist yet (chairman-gated migration,
+      // FR-3), and bundling it into this update would make the WHOLE statement fail atomically
+      // pre-migration, silently breaking the last_state latch too. The ladder's own atomic RPC
+      // increment (lib/periodic-liveness/ladder-escalation.mjs) starts counting fresh from NULL
+      // on the row's first non-transition OVERDUE tick, which IS the second consecutive miss --
+      // no separate seed-to-1 needed here.
+      const result = await emitOverdueSignal(row, evaluation);
+      if (result.emitted) {
+        await supabase
+          .from('periodic_process_registry')
+          .update({ last_state: evaluation.state })
+          .eq('process_key', row.process_key);
+      } else {
+        console.error(`[periodic-liveness-watcher] emitOverdueSignal insert FAILED for ${row.process_key}: ${result.error?.message} -- last_state NOT advanced, will retry next cycle`);
+      }
+    } else if (evaluation.state === STATE.OVERDUE) {
+      // Still OVERDUE, not a fresh transition: attempt to climb the ladder (001-B FR-3). Fails
+      // soft (see lib/periodic-liveness/ladder-escalation.mjs) if the counter migration hasn't
+      // landed yet -- owner-first routing above is unaffected either way.
+      const ownerTarget = await resolveOwnerTarget(supabase, row.owner);
+      const climb = await climbLadder({ supabase, row, ownerTarget });
+      if (climb.laddered) ladderCandidates.push({ process_key: row.process_key, display_name: row.display_name });
+      await supabase.from('periodic_process_registry').update({ last_state: evaluation.state }).eq('process_key', row.process_key);
+    } else {
+      if (evaluation.state === STATE.OK) await resetConsecutiveMiss(supabase, row.process_key);
+      await supabase.from('periodic_process_registry').update({ last_state: evaluation.state }).eq('process_key', row.process_key);
     }
+  }
 
-    await supabase
-      .from('periodic_process_registry')
-      .update({ last_state: evaluation.state })
-      .eq('process_key', row.process_key);
+  // One ladder digest decision per TICK (001-B FR-3), regardless of how many rows laddered --
+  // closes the per-process chairman-flood finding (risk-agent HIGH).
+  if (ladderCandidates.length > 0) {
+    await emitLadderDigest(supabase, ladderCandidates, { recordPending: recordPendingDecision, escalate: escalateChairmanDecision });
   }
 
   // Self-liveness: upsert the watcher's own last-run row (self_stamped, session_bound=false).
@@ -231,4 +271,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   });
 }
 
-export { main as runWatcher, evaluateRow, STATE };
+export { main as runWatcher, evaluateRow, emitOverdueSignal, STATE };

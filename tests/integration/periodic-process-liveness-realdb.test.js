@@ -143,4 +143,42 @@ describe.skipIf(!HAS_REAL_DB)('Periodic-process liveness registry -- REAL DB', (
     expect(result.stamped).toBe(false);
     expect(result.reason).toBe('not_registered_as_self_stamped');
   });
+
+  // SD-LEO-INFRA-OPERATIVE-AGENT-OWNERSHIP-001-B FR-1/FR-2: owner-first routing is live and
+  // carries the resolved-target-kind marker; an unaddressable owner label (as every real fixture
+  // in this suite uses) correctly falls back to coordinator, preserving today's behavior.
+  it('001-B FR-1/FR-2: owner-first emission carries resolved_target_kind and falls back to coordinator for an unaddressable owner', async () => {
+    const processKey = await insertFixture({ suffix: 'owner_first', owner: 'test-fixture' });
+    await supabase.from('periodic_process_registry')
+      .update({ last_fired_at: new Date(Date.now() - 60_000).toISOString() })
+      .eq('process_key', processKey);
+
+    await runWatcher();
+
+    const { data: flags } = await supabase
+      .from('session_coordination')
+      .select('payload')
+      .eq('payload->>process_key', processKey)
+      .eq('payload->>state', 'OVERDUE');
+    expect(flags.length).toBe(1);
+    expect(flags[0].payload.resolved_target_kind).toBe('coordinator');
+  });
+
+  // SD-LEO-INFRA-OPERATIVE-AGENT-OWNERSHIP-001-B FR-3: the ladder's consecutive_miss_count
+  // migration is chairman/Adam-gated and has NOT been applied as of this SD's EXEC -- this proves
+  // the watcher does not crash on a second consecutive miss even so (fails soft, per
+  // lib/periodic-liveness/ladder-escalation.mjs), and owner-first routing on the FIRST miss is
+  // completely unaffected by the ladder being inactive.
+  it('001-B FR-3: a second consecutive miss does not crash the watcher even before the ladder migration lands', async () => {
+    const processKey = await insertFixture({ suffix: 'ladder_pre_migration' });
+    await supabase.from('periodic_process_registry')
+      .update({ last_fired_at: new Date(Date.now() - 60_000).toISOString() })
+      .eq('process_key', processKey);
+
+    await expect(runWatcher()).resolves.toBeDefined(); // first miss: owner-first
+    await expect(runWatcher()).resolves.toBeDefined(); // second miss: ladder attempt (fails soft)
+
+    const { data: row } = await supabase.from('periodic_process_registry').select('last_state').eq('process_key', processKey).single();
+    expect(row.last_state).toBe(STATE.OVERDUE);
+  });
 });
