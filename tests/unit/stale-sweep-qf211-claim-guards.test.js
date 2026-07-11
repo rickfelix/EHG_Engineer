@@ -125,19 +125,38 @@ describe('QF-20260525-211 (early-exit gap): QF claim clear runs before the early
   });
 
   it('does NOT double-run: the inline QF clear block was removed from main()', () => {
-    // exactly one definition site (the helper), and the old inline VERY_STALE_SECONDS gate is gone
-    expect(src.match(/from\(['"]quick_fixes['"]\)\s*\n\s*\.select\(['"]id, status, claiming_session_id['"]\)/g) || []).toHaveLength(1);
+    // Two select sites now, BOTH inside the clearStaleQfClaims helper (QF-20260711-176 added a
+    // TERMINAL-status pass alongside the QF-211 open/in_progress pass); the old inline
+    // VERY_STALE_SECONDS gate in main() stays gone.
+    const selects = src.match(/from\(['"]quick_fixes['"]\)\s*\n\s*\.select\(['"]id, status, claiming_session_id['"]\)/g) || [];
+    expect(selects).toHaveLength(2);
+    const helperIdx = src.indexOf('async function clearStaleQfClaims');
+    const helperEnd = src.indexOf('\n}', src.indexOf('QF_CLAIM_SWEEP', helperIdx));
+    let searchFrom = 0;
+    for (const m of selects) {
+      const at = src.indexOf(m, searchFrom);
+      expect(at).toBeGreaterThan(helperIdx);
+      expect(at).toBeLessThan(helperEnd);
+      searchFrom = at + m.length;
+    }
     expect(src).not.toMatch(/if\s*\(ageSec <= VERY_STALE_SECONDS\)/);
   });
 
   it('preserves QF-836 safety: race guard + conservative staleness bar', () => {
     const idx = src.indexOf('async function clearStaleQfClaims');
-    const fn = src.slice(idx, idx + 1600);
+    const fn = src.slice(idx, idx + 3600); // widened: the QF-176 terminal pass precedes the open/in_progress pass
     // only clear if still held by the same (dead) session
     expect(fn).toMatch(/\.eq\(['"]claiming_session_id['"],\s*qf\.claiming_session_id\)/);
     // leave alive/recent holders alone
     expect(fn).toMatch(/if\s*\(ageSec <= veryStaleSeconds\)\s*continue;/);
-    // only open/in_progress QFs are candidates
+    // open/in_progress QFs remain liveness-gated candidates
     expect(fn).toMatch(/\.in\(\s*['"]status['"]\s*,\s*\[\s*['"]open['"]\s*,\s*['"]in_progress['"]\s*\]/);
+  });
+
+  it('QF-20260711-176: terminal QFs are cleared unconditionally (no legitimate holder)', () => {
+    const idx = src.indexOf('async function clearStaleQfClaims');
+    const fn = src.slice(idx, idx + 3600);
+    expect(fn).toMatch(/\.in\(\s*['"]status['"]\s*,\s*\[\s*['"]completed['"]\s*,\s*['"]cancelled['"]\s*,\s*['"]escalated['"]\s*\]/);
+    expect(fn).toMatch(/TERMINAL/);
   });
 });

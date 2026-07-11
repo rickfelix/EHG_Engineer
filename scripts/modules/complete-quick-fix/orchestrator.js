@@ -67,7 +67,11 @@ export function buildMergedReconcileUpdate({ qf = {}, prUrl, mergeSha = null, no
     tests_passing: true,
     force_completed: true,
     verification_notes,
-    completed_at: qf.completed_at || nowIso
+    completed_at: qf.completed_at || nowIso,
+    // QF-20260711-176: a completed QF has no holder. Leaving claiming_session_id set made the
+    // live-claim-guard permanently block worktree reaping (claimed_claimant_not_verifiably_alive)
+    // until the pool drained to WORKTREE_CREATE_FAILED (coordinator evidence 5655cb68).
+    claiming_session_id: null
   };
 }
 
@@ -649,7 +653,10 @@ export async function completeQuickFix(qfId, options = {}) {
       verified_by: options.forceComplete ? 'FORCE_COMPLETE' : 'UAT_AGENT',
       verification_notes: finalVerificationNotes,
       files_changed: filesChanged.length > 0 ? filesChanged : null,
-      completed_at: new Date().toISOString()
+      completed_at: new Date().toISOString(),
+      // QF-20260711-176: completed QFs must not retain a holder — a lingering
+      // claiming_session_id blocks worktree reaping via the live-claim-guard.
+      claiming_session_id: null
     })
     .eq('id', qfId);
 
