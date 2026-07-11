@@ -65,6 +65,7 @@ import {
   computeDispatchMix,
   isDriftBreach,
   fetchLastNDispatchedKeys,
+  hasOpenFinding,
 } from '../lib/governance/plan-drift-detectors.js';
 
 const RECURSION_GOVERNOR_DIMENSION = 'recursion-governor-ratio';
@@ -268,17 +269,7 @@ function buildDetectorResolvers(supabase) {
       await writeThroughputSnapshot(supabase, { dimension: PLAN_DRIFT_MIX_DIMENSION, ratioResult: mixResult, breach });
       const recent = await fetchRecentSnapshots(supabase, { dimension: PLAN_DRIFT_MIX_DIMENSION, limit: 2 });
       const { sustained, streak } = detectSustainedBreach(recent, { requiredConsecutive: 2 });
-      let skipRoute = false;
-      if (sustained) {
-        const { data: openFindings } = await supabase
-          .from('feedback')
-          .select('id')
-          .eq('category', 'invariant_gauge_finding')
-          .eq('metadata->>gauge_id', 'plan-drift-mix')
-          .in('status', ['new', 'backlog', 'in_progress'])
-          .limit(1);
-        skipRoute = Array.isArray(openFindings) && openFindings.length > 0;
-      }
+      const skipRoute = sustained ? await hasOpenFinding(supabase, 'plan-drift-mix') : false;
       const mixPctStr = typeof mixResult.activeRungPct === 'number' ? `${mixResult.activeRungPct.toFixed(1)}%` : 'n/a';
       return {
         sustainedBreach: sustained,
@@ -295,40 +286,43 @@ function buildDetectorResolvers(supabase) {
 }
 
 /**
+ * Pure-ish: builds the two session_coordination insert rows (coordinator + Adam) for a
+ * plan-drift-mix advisory. Extracted from pushPlanDriftAdvisory so the row SHAPE is unit-testable
+ * without faking coordinator/Adam session resolution.
+ * @param {object} result - the plan-drift-mix detector's result
+ * @param {{ coordinatorId: (string|null), adamId: (string|null) }} recipients
+ * @returns {{ coordinatorRow: object, adamRow: (object|null) }}
+ */
+export function buildPlanDriftAdvisoryRows(result, { coordinatorId, adamId }) {
+  const mixPct = typeof result?.mix?.activeRungPct === 'number' ? result.mix.activeRungPct.toFixed(1) : 'n/a';
+  const subject = `[PLAN-DRIFT] Dispatch mix drifted from active-wave demand (active-rung share ${mixPct}%)`;
+  const body = `Sustained dispatch-mix drift detected across ${result?.streak ?? '?'} consecutive gauge-runner cycles. Active-rung share of last-N dispatched work: ${mixPct}% (mix: ${JSON.stringify(result?.mix?.mix || {})}). Coverage floor is currently clear (not starved), so this is a genuine mix drift, not a linkage-starvation false trip.`;
+  const payload = { kind: 'coordinator_advisory', gauge_id: 'plan-drift-mix', body, mix: result?.mix, streak: result?.streak };
+  const coordinatorRow = { message_type: 'INFO', target_session: coordinatorId || 'broadcast-coordinator', subject, sender_type: 'gauge-runner', payload };
+  const adamRow = adamId ? { message_type: 'INFO', target_session: adamId, subject, sender_type: 'gauge-runner', payload } : null;
+  return { coordinatorRow, adamRow };
+}
+
+/**
  * SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001 FR-6: dual-recipient advisory (coordinator + Adam), fired only
  * on a genuine sustained-breach trip that passed the re-surface-once dedup (never an unconditional
  * per-run insert -- no existing gauge pushes to session_coordination today per design-agent's
  * finding, so this push is deliberately narrow and gauge-specific rather than a generalized
- * mechanism no other gauge has asked for yet).
+ * mechanism no other gauge has asked for yet). Session-id resolution is injected (not resolved
+ * internally) so buildPlanDriftAdvisoryRows/the insert calls are testable without faking the
+ * coordinator/Adam session-resolution machinery (those helpers have their own test suites).
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
  * @param {object} result - the plan-drift-mix detector's result
+ * @param {{ coordinatorId: (string|null), adamId: (string|null) }} recipients
  */
-async function pushPlanDriftAdvisory(supabase, result) {
-  const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
-  const { resolveAdamSessionId } = require('./read-adam-directives.cjs');
-  const mixPct = typeof result?.mix?.activeRungPct === 'number' ? result.mix.activeRungPct.toFixed(1) : 'n/a';
-  const subject = `[PLAN-DRIFT] Dispatch mix drifted from active-wave demand (active-rung share ${mixPct}%)`;
-  const body = `Sustained dispatch-mix drift detected across ${result?.streak ?? '?'} consecutive gauge-runner cycles. Active-rung share of last-N dispatched work: ${mixPct}% (mix: ${JSON.stringify(result?.mix?.mix || {})}). Coverage floor is currently clear (not starved), so this is a genuine mix drift, not a linkage-starvation false trip.`;
+export async function pushPlanDriftAdvisory(supabase, result, recipients) {
+  const { coordinatorRow, adamRow } = buildPlanDriftAdvisoryRows(result, recipients);
 
-  const coordinatorId = await getActiveCoordinatorId(supabase).catch(() => null);
-  const { error: coordErr } = await supabase.from('session_coordination').insert({
-    message_type: 'INFO',
-    target_session: coordinatorId || 'broadcast-coordinator',
-    subject,
-    sender_type: 'gauge-runner',
-    payload: { kind: 'coordinator_advisory', gauge_id: 'plan-drift-mix', body, mix: result?.mix, streak: result?.streak },
-  });
+  const { error: coordErr } = await supabase.from('session_coordination').insert(coordinatorRow);
   if (coordErr) console.error(`[gauge-runner] plan-drift advisory (coordinator) failed (non-fatal): ${coordErr.message}`);
 
-  const adamId = await resolveAdamSessionId(supabase).catch(() => null);
-  if (adamId) {
-    const { error: adamErr } = await supabase.from('session_coordination').insert({
-      message_type: 'INFO',
-      target_session: adamId,
-      subject,
-      sender_type: 'gauge-runner',
-      payload: { kind: 'coordinator_advisory', gauge_id: 'plan-drift-mix', body, mix: result?.mix, streak: result?.streak },
-    });
+  if (adamRow) {
+    const { error: adamErr } = await supabase.from('session_coordination').insert(adamRow);
     if (adamErr) console.error(`[gauge-runner] plan-drift advisory (Adam) failed (non-fatal): ${adamErr.message}`);
   } else {
     console.error('[gauge-runner] plan-drift advisory: no live Adam session resolved -- coordinator leg still sent');
@@ -435,7 +429,13 @@ async function main() {
         // design -- no other gauge pushes to session_coordination yet) and dedup-gated (skipRoute
         // means either a starved short-circuit or an already-open finding -- never re-push).
         if (entry.id === 'plan-drift-mix' && !result.skipRoute) {
-          await pushPlanDriftAdvisory(supabase, result);
+          const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
+          const { resolveAdamSessionId } = require('./read-adam-directives.cjs');
+          const [coordinatorId, adamId] = await Promise.all([
+            getActiveCoordinatorId(supabase).catch(() => null),
+            resolveAdamSessionId(supabase).catch(() => null),
+          ]);
+          await pushPlanDriftAdvisory(supabase, result, { coordinatorId, adamId });
         }
       }
     } catch (e) {

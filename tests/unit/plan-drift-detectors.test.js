@@ -4,6 +4,7 @@ import {
   computeCoverage,
   computeDispatchMix,
   isDriftBreach,
+  hasOpenFinding,
   COVERAGE_FLOOR_PCT,
 } from '../../lib/governance/plan-drift-detectors.js';
 
@@ -108,5 +109,35 @@ describe('plan-drift-detectors', () => {
 
   it('COVERAGE_FLOOR_PCT matches the fold-seam SD acceptance floor', () => {
     expect(COVERAGE_FLOOR_PCT).toBe(80);
+  });
+
+  describe('hasOpenFinding (FR-5 re-surface-once dedup, TS-6)', () => {
+    const fakeSupabase = (rows, err = null) => ({
+      from: (table) => ({
+        select: () => ({
+          eq: (col1, val1) => ({
+            eq: (col2, val2) => ({
+              in: () => ({
+                limit: () => Promise.resolve({ data: rows, error: err }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    it('returns true when an OPEN finding already exists for the gauge_id', async () => {
+      const result = await hasOpenFinding(fakeSupabase([{ id: 'existing-row' }]), 'plan-drift-mix');
+      expect(result).toBe(true);
+    });
+
+    it('returns false when no OPEN finding exists (sustained breach not yet recorded, or prior one resolved)', async () => {
+      const result = await hasOpenFinding(fakeSupabase([]), 'plan-drift-mix');
+      expect(result).toBe(false);
+    });
+
+    it('throws on a query error (caught non-fatally by the caller, not swallowed here)', async () => {
+      await expect(hasOpenFinding(fakeSupabase(null, { message: 'boom' }), 'plan-drift-mix')).rejects.toThrow(/boom/);
+    });
   });
 });

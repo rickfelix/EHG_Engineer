@@ -12,6 +12,7 @@ import {
   selectEnabledEntries, tripsThreshold, buildFindingRow,
   shapeRelayDropResult, shapeStaleTreeResult,
   staleSelfScoreDetector, DEFAULT_SELF_SCORE_STALE_HOURS,
+  buildPlanDriftAdvisoryRows, pushPlanDriftAdvisory,
 } from '../../../scripts/gauge-runner.mjs';
 
 // feedback.type is constrained by feedback_type_check (database/migrations/391_quality_lifecycle_schema.sql)
@@ -329,6 +330,58 @@ describe('the 3 self-score-age registry entries (FR-4)', () => {
       expect(entry.thresholdConfig.tripWhen({ count: 0 })).toBe(false);
       expect(entry.enabled).toBe(false); // ships alongside the writers' default-OFF cadence flags
     });
+  });
+});
+
+describe('buildPlanDriftAdvisoryRows / pushPlanDriftAdvisory (SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001 FR-6, TS-5)', () => {
+  const sampleResult = { streak: 2, mix: { activeRungPct: 12.5, mix: { now: 1, next: 7 } } };
+
+  it('builds a coordinator row targeting the resolved coordinator id', () => {
+    const { coordinatorRow } = buildPlanDriftAdvisoryRows(sampleResult, { coordinatorId: 'coord-123', adamId: null });
+    expect(coordinatorRow.target_session).toBe('coord-123');
+    expect(coordinatorRow.payload.kind).toBe('coordinator_advisory');
+    expect(coordinatorRow.payload.gauge_id).toBe('plan-drift-mix');
+    expect(coordinatorRow.subject).toContain('[PLAN-DRIFT]');
+  });
+
+  it('falls back to the broadcast-coordinator sentinel when no coordinator is resolved', () => {
+    const { coordinatorRow } = buildPlanDriftAdvisoryRows(sampleResult, { coordinatorId: null, adamId: null });
+    expect(coordinatorRow.target_session).toBe('broadcast-coordinator');
+  });
+
+  it('builds an Adam row only when an Adam session id is resolved (TS-8 typed-kind contract)', () => {
+    const withAdam = buildPlanDriftAdvisoryRows(sampleResult, { coordinatorId: 'coord-1', adamId: 'adam-1' });
+    expect(withAdam.adamRow).not.toBeNull();
+    expect(withAdam.adamRow.target_session).toBe('adam-1');
+    expect(withAdam.adamRow.payload.kind).toBe('coordinator_advisory'); // registered ADAM_INBOX_KINDS entry -- never orphaned
+
+    const withoutAdam = buildPlanDriftAdvisoryRows(sampleResult, { coordinatorId: 'coord-1', adamId: null });
+    expect(withoutAdam.adamRow).toBeNull();
+  });
+
+  it('pushPlanDriftAdvisory inserts exactly one coordinator row and one Adam row when both are resolved', async () => {
+    const inserted = [];
+    const fakeSupabase = {
+      from: () => ({
+        insert: (row) => { inserted.push(row); return Promise.resolve({ error: null }); },
+      }),
+    };
+    await pushPlanDriftAdvisory(fakeSupabase, sampleResult, { coordinatorId: 'coord-1', adamId: 'adam-1' });
+    expect(inserted).toHaveLength(2);
+    expect(inserted[0].target_session).toBe('coord-1');
+    expect(inserted[1].target_session).toBe('adam-1');
+  });
+
+  it('pushPlanDriftAdvisory inserts only the coordinator row when no Adam session resolves (never blocks on it)', async () => {
+    const inserted = [];
+    const fakeSupabase = {
+      from: () => ({
+        insert: (row) => { inserted.push(row); return Promise.resolve({ error: null }); },
+      }),
+    };
+    await pushPlanDriftAdvisory(fakeSupabase, sampleResult, { coordinatorId: 'coord-1', adamId: null });
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0].target_session).toBe('coord-1');
   });
 });
 
