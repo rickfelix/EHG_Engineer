@@ -54,7 +54,10 @@ describe('verifyExternalObservation (pure, SD-LEO-INFRA-LAUNCH-MODE-POLICY-001 F
 
 describe('collectExternalObservations (I/O boundary, SD-LEO-INFRA-LAUNCH-MODE-POLICY-001 FR-2)', () => {
   const originalFetch = global.fetch;
-  afterEach(() => { global.fetch = originalFetch; });
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.useRealTimers(); // no-op/safe when a test never called useFakeTimers
+  });
 
   /** Routes by table name so applications + venture_telemetry can return distinct rows. */
   function buildSupabase({ applicationRow, telemetryRow, applicationError = null, telemetryError = null } = {}) {
@@ -110,6 +113,13 @@ describe('collectExternalObservations (I/O boundary, SD-LEO-INFRA-LAUNCH-MODE-PO
   it('SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A FR-5: gaugeWriterAlive:true and telemetryRowCount:1 for a venture with a fresh ok pull', async () => {
     global.fetch = vi.fn().mockResolvedValue({ status: 200 });
     const now = new Date('2026-07-10T12:00:00Z');
+    // Freeze the clock: collectExternalObservations does not thread an
+    // injectable `now` down to computeGaugeState (it always defaults to real
+    // `new Date()`), so without this the "2h stale" fixture below drifts
+    // further stale every day this test runs relative to the real wall
+    // clock, and eventually exceeds the module's cadence window and fails.
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
     const supabase = buildSupabase({
       applicationRow: { id: 'app-1', deployment_url: 'https://example.com', metadata: {}, metrics_cadence_hours: null },
       telemetryRow: { kpis: { signups: 3 }, pulled_at: new Date(now.getTime() - 2 * 3600 * 1000).toISOString(), ingest_status: 'ok' },
