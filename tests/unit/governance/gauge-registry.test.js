@@ -20,14 +20,14 @@ import {
 const VALID_FEEDBACK_TYPES = ['issue', 'enhancement'];
 
 describe('GAUGE_REGISTRY shape', () => {
-  it('exports exactly 20 seed entries (8 original + venture-capture-completeness, SD-LEO-INFRA-CAPTURE-FORWARD-GATE-001 + 6 loop-health-*, SD-LEO-INFRA-009-LEAF-PER-001 + 3 self-score-age stubs, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4 + expired-premise-tags, SD-LEO-INFRA-BITTER-LESSON-AUDIT-001 + operator-cash-attestation-missing, QF-20260705-915)', () => {
-    expect(GAUGE_REGISTRY).toHaveLength(20);
+  it('exports exactly 22 seed entries (8 original + venture-capture-completeness, SD-LEO-INFRA-CAPTURE-FORWARD-GATE-001 + 6 loop-health-*, SD-LEO-INFRA-009-LEAF-PER-001 + 3 self-score-age stubs, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4 + expired-premise-tags, SD-LEO-INFRA-BITTER-LESSON-AUDIT-001 + operator-cash-attestation-missing, QF-20260705-915 + plan-drift-coverage/plan-drift-mix, SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001)', () => {
+    expect(GAUGE_REGISTRY).toHaveLength(22);
   });
 
-  it('17 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
+  it('19 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
-    expect(live).toHaveLength(17);
+    expect(live).toHaveLength(19);
     expect(stubs.map((e) => e.id).sort()).toEqual(['adam_self_score_age', 'coordinator_self_score_age', 'solomon_self_score_age']);
   });
 
@@ -101,9 +101,9 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(selectEnabledEntries(undefined)).toEqual([]);
   });
 
-  it('the real GAUGE_REGISTRY selects all 17 enabled entries', () => {
+  it('the real GAUGE_REGISTRY selects all 19 enabled entries', () => {
     const selected = selectEnabledEntries(GAUGE_REGISTRY);
-    expect(selected).toHaveLength(17);
+    expect(selected).toHaveLength(19);
     expect(selected.map((e) => e.id).sort()).toEqual([
       'adam-claimed-or-built-sd',
       'coordinator-sourced-sd',
@@ -115,6 +115,8 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
       'loop-health-E_role_self_review',
       'loop-health-F_pat_registry',
       'operator-cash-attestation-missing',
+      'plan-drift-coverage',
+      'plan-drift-mix',
       'recursion-governor-ratio',
       'relay-drop',
       'ship-witness-unwitnessed-merge',
@@ -123,6 +125,21 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
       'unranked-claimable-leaves',
       'venture-capture-completeness',
     ]);
+  });
+
+  it('SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001: the two new entries have resolvable detectorFns, ownerRole coordinator, and honest-gauge tripWhen conventions', () => {
+    const coverage = GAUGE_REGISTRY.find((e) => e.id === 'plan-drift-coverage');
+    const mix = GAUGE_REGISTRY.find((e) => e.id === 'plan-drift-mix');
+    expect(coverage).toBeTruthy();
+    expect(coverage.detectorFn).toBe('plan-drift-coverage');
+    expect(coverage.ownerRole).toBe('coordinator');
+    expect(coverage.thresholdConfig.tripWhen({ starved: true })).toBe(true);
+    expect(coverage.thresholdConfig.tripWhen({ starved: false })).toBe(false);
+    expect(mix).toBeTruthy();
+    expect(mix.detectorFn).toBe('plan-drift-mix');
+    expect(mix.ownerRole).toBe('coordinator');
+    expect(mix.thresholdConfig.tripWhen({ sustainedBreach: true })).toBe(true);
+    expect(mix.thresholdConfig.tripWhen({ sustainedBreach: false })).toBe(false);
   });
 
   it('QF-20260705-915: operator-cash-attestation-missing has a resolvable detectorFn, ownerRole chairman, and the >0-count tripWhen convention', () => {
