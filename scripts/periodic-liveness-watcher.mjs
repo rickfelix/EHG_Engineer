@@ -220,21 +220,37 @@ async function main() {
     } else if (evaluation.state === STATE.OVERDUE) {
       // Still OVERDUE, not a fresh transition: attempt to climb the ladder (001-B FR-3). Fails
       // soft (see lib/periodic-liveness/ladder-escalation.mjs) if the counter migration hasn't
-      // landed yet -- owner-first routing above is unaffected either way.
-      const ownerTarget = await resolveOwnerTarget(supabase, row.owner);
-      const climb = await climbLadder({ supabase, row, ownerTarget });
-      if (climb.laddered) ladderCandidates.push({ process_key: row.process_key, display_name: row.display_name });
+      // landed yet -- owner-first routing above is unaffected either way. Adversarial-review
+      // finding (PR #5940, HIGH): even though the ladder's own internals are individually
+      // fail-soft, wrap the whole call here too -- a failure in this brand-new, non-critical
+      // escalation feature must never abort evaluation of the REMAINING registry rows this tick,
+      // nor skip the self-liveness upsert that follows this loop.
+      try {
+        const ownerTarget = await resolveOwnerTarget(supabase, row.owner);
+        const climb = await climbLadder({ supabase, row, ownerTarget });
+        if (climb.laddered) ladderCandidates.push({ process_key: row.process_key, display_name: row.display_name });
+      } catch (err) {
+        console.error(`[periodic-liveness-watcher] ladder climb FAILED (non-fatal) for ${row.process_key}: ${err.message}`);
+      }
       await supabase.from('periodic_process_registry').update({ last_state: evaluation.state }).eq('process_key', row.process_key);
     } else {
-      if (evaluation.state === STATE.OK) await resetConsecutiveMiss(supabase, row.process_key);
+      // OK/UNVERIFIED/INTENTIONALLY_DOWN all end any active OVERDUE episode -- reset the ladder
+      // counter for all of them (adversarial-review finding, PR #5940, LOW), not just OK, so a
+      // later unrelated episode never inherits a stale carried-forward count.
+      await resetConsecutiveMiss(supabase, row.process_key);
       await supabase.from('periodic_process_registry').update({ last_state: evaluation.state }).eq('process_key', row.process_key);
     }
   }
 
   // One ladder digest decision per TICK (001-B FR-3), regardless of how many rows laddered --
-  // closes the per-process chairman-flood finding (risk-agent HIGH).
+  // closes the per-process chairman-flood finding (risk-agent HIGH). Wrapped defensively (PR
+  // #5940 adversarial review) so a failure here can never skip the self-liveness upsert below.
   if (ladderCandidates.length > 0) {
-    await emitLadderDigest(supabase, ladderCandidates, { recordPending: recordPendingDecision, escalate: escalateChairmanDecision });
+    try {
+      await emitLadderDigest(supabase, ladderCandidates, { recordPending: recordPendingDecision, escalate: escalateChairmanDecision });
+    } catch (err) {
+      console.error(`[periodic-liveness-watcher] emitLadderDigest FAILED (non-fatal): ${err.message}`);
+    }
   }
 
   // Self-liveness: upsert the watcher's own last-run row (self_stamped, session_bound=false).

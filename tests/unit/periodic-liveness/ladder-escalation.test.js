@@ -60,9 +60,20 @@ describe('resetConsecutiveMiss', () => {
 });
 
 describe('emitCoordinatorRung', () => {
-  it('skips when the owner target already IS the coordinator', async () => {
+  it('skips when the owner target already IS the coordinator (kind marker)', async () => {
     const supabase = { from: vi.fn() };
     const result = await emitCoordinatorRung(supabase, { process_key: 'p1' }, { kind: 'coordinator' });
+    expect(result).toEqual({ emitted: false, reason: 'owner_already_coordinator' });
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  // Adversarial-review regression (PR #5940, HIGH): a SUCCESSFULLY resolved owner label that
+  // happens to BE the coordinator peer comes back as kind:'session', resolvedPeer:'coordinator'
+  // -- the original guard (kind==='coordinator' only) missed this and would have fired a
+  // redundant ladder rung on top of the owner-first message, both to the same coordinator.
+  it('skips when the owner target resolved TO the coordinator peer (resolvedPeer marker, kind still session)', async () => {
+    const supabase = { from: vi.fn() };
+    const result = await emitCoordinatorRung(supabase, { process_key: 'p1' }, { kind: 'session', target: 'sess-coord', resolvedPeer: 'coordinator', live: true });
     expect(result).toEqual({ emitted: false, reason: 'owner_already_coordinator' });
     expect(supabase.from).not.toHaveBeenCalled();
   });
@@ -71,9 +82,17 @@ describe('emitCoordinatorRung', () => {
     const insert = vi.fn().mockResolvedValue({ error: null });
     const supabase = { from: () => ({ insert }) };
     const getCoordinatorId = vi.fn().mockResolvedValue('sess-coord');
-    const result = await emitCoordinatorRung(supabase, { process_key: 'p1', display_name: 'P1', owner: 'adam-fleet' }, { kind: 'session', target: 'sess-adam' }, { getCoordinatorId });
+    const result = await emitCoordinatorRung(supabase, { process_key: 'p1', display_name: 'P1', owner: 'adam-fleet' }, { kind: 'session', target: 'sess-adam', resolvedPeer: 'adam' }, { getCoordinatorId });
     expect(result.emitted).toBe(true);
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ target_session: 'sess-coord', payload: expect.objectContaining({ rung: 'coordinator', process_key: 'p1' }) }));
+  });
+
+  it('fails soft (does not throw) on an insert exception', async () => {
+    const supabase = { from: () => ({ insert: () => { throw new Error('network blip'); } }) };
+    const getCoordinatorId = vi.fn().mockResolvedValue('sess-coord');
+    const result = await emitCoordinatorRung(supabase, { process_key: 'p1' }, { kind: 'session', target: 'sess-adam', resolvedPeer: 'adam' }, { getCoordinatorId });
+    expect(result.emitted).toBe(false);
+    expect(result.error).toBeInstanceOf(Error);
   });
 });
 
@@ -93,6 +112,18 @@ describe('climbLadder', () => {
     expect(result.laddered).toBe(true);
     expect(result.count).toBe(1);
     expect(emitCoordRung).toHaveBeenCalled();
+  });
+
+  // Adversarial-review regression (PR #5940, MEDIUM-HIGH): the counter only ever grows while
+  // OVERDUE persists, so an "at or past threshold" check would fire the coordinator rung on
+  // EVERY subsequent tick forever. Once-per-episode: only the tick where count EXACTLY equals
+  // the threshold ladders; later ticks (count=2, 3, ...) must not re-fire.
+  it('does not re-ladder on ticks past the threshold (fires once per escalation episode)', async () => {
+    const increment = vi.fn().mockResolvedValue({ ok: true, count: 2 });
+    const emitCoordRung = vi.fn();
+    const result = await climbLadder({ supabase: {}, row: { process_key: 'p1' }, ownerTarget: { kind: 'session' }, deps: { increment, emitCoordRung } });
+    expect(result).toEqual({ laddered: false, reason: 'already_laddered_this_episode', count: 2 });
+    expect(emitCoordRung).not.toHaveBeenCalled();
   });
 
   it('does not ladder when the increment fails soft', async () => {
@@ -147,5 +178,37 @@ describe('emitLadderDigest', () => {
 
   it('throws if the caller does not inject recordPending/escalate deps', async () => {
     await expect(emitLadderDigest({}, [{ process_key: 'p1' }])).rejects.toThrow(/requires recordPending and escalate/);
+  });
+
+  // Adversarial-review regression (PR #5940, HIGH): ports lib/adam/stall-alert.js's
+  // QF-20260710-818 fix. Without this, dismissing the digest (moving it off 'pending') gets
+  // immediately re-escalated on the very next tick while the underlying processes are still
+  // overdue, defeating the dismissal.
+  it('suppresses re-escalation when a recently-dismissed digest overlaps the current candidates', async () => {
+    const findExisting = vi.fn().mockResolvedValue(null);
+    const findDismissed = vi.fn().mockResolvedValue({ id: 'decision-dismissed', updated_at: new Date().toISOString() });
+    const candidates = [{ process_key: 'p1', display_name: 'P1' }];
+    const result = await emitLadderDigest({}, candidates, { findExisting, findDismissed, recordPending, escalate });
+    expect(recordPending).not.toHaveBeenCalled();
+    expect(result).toEqual({ emitted: true, decisionId: 'decision-dismissed', refreshed: false, escalated: false, suppressed: true });
+  });
+
+  it('does NOT suppress and creates a new digest when no dismissed digest overlaps', async () => {
+    const findExisting = vi.fn().mockResolvedValue(null);
+    const findDismissed = vi.fn().mockResolvedValue(null);
+    const candidates = [{ process_key: 'p1', display_name: 'P1' }];
+    const result = await emitLadderDigest({}, candidates, { findExisting, findDismissed, recordPending, escalate });
+    expect(recordPending).toHaveBeenCalledTimes(1);
+    expect(result.emitted).toBe(true);
+    expect(result.suppressed).toBeUndefined();
+  });
+
+  it('fails soft (does not throw) when the underlying chairman_decisions calls error out', async () => {
+    const findExisting = vi.fn().mockRejectedValue(new Error('db down'));
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const result = await emitLadderDigest({}, [{ process_key: 'p1' }], { findExisting, recordPending, escalate });
+    expect(result.emitted).toBe(false);
+    expect(result.error).toBeInstanceOf(Error);
+    errSpy.mockRestore();
   });
 });
