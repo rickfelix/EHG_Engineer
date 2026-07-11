@@ -67,9 +67,21 @@ let promoted = 0;
 let skippedAlreadyPromoted = 0;
 let skippedNoHighPriority = 0;
 
+let skippedTestFixture = 0;
+
 for (const retro of retros || []) {
   if (retro.metadata?.action_items_promoted) {
     skippedAlreadyPromoted++;
+    continue;
+  }
+
+  // QF-20260711-711: tests/integration/harness-backlog-drain-policy.db.test.js seeds
+  // fixture rows straight into this same production table (no isolated test schema
+  // exists). A leaked, un-cleaned fixture was scanned by this script's daily --apply
+  // cron and promoted into a real QF from placeholder text. Reject known-synthetic
+  // rows defensively here so a future test-cleanup failure can't repeat that.
+  if (retro.metadata?.test_fixture || retro.title === 'Test retrospective') {
+    skippedTestFixture++;
     continue;
   }
 
@@ -115,4 +127,4 @@ for (const retro of retros || []) {
   }
 }
 
-console.log(`\nSummary: ${promoted} promoted, ${skippedAlreadyPromoted} already-promoted, ${skippedNoHighPriority} with no high-priority items.`);
+console.log(`\nSummary: ${promoted} promoted, ${skippedAlreadyPromoted} already-promoted, ${skippedTestFixture} test-fixture, ${skippedNoHighPriority} with no high-priority items.`);
