@@ -27,13 +27,13 @@ function functionBody(startMarker) {
 // Re-implement the exact fallback logic inline (the script has no exports to import
 // without triggering its top-level Supabase query) to assert behavior, not just text.
 function actionText(item) {
-  return item.item || item.action || item.title || '(no text)';
+  return item.item || item.action || item.title || item.text || '(no text)';
 }
 function actionOwner(item) {
   return item.owner || item.owner_role || 'unassigned';
 }
 
-describe('QF-20260711-253: actionText/actionOwner cover all 3 known action_items shapes', () => {
+describe('QF-20260711-253 / QF-20260711-895: actionText/actionOwner cover all 4 known action_items shapes', () => {
   it('source references item.title as a fallback (the third shape)', () => {
     const body = functionBody('function actionText(');
     expect(body).toMatch(/item\.title/);
@@ -59,6 +59,17 @@ describe('QF-20260711-253: actionText/actionOwner cover all 3 known action_items
     const row = { title: 'Enumerate producers explicitly', owner_role: 'PLAN', priority: 'high' };
     expect(actionText(row)).toBe('Enumerate producers explicitly');
     expect(actionOwner(row)).toBe('PLAN');
+  });
+
+  it('shape 4 (PLAN_VERIFICATION retrospective: text/category) resolves correctly — the QF-20260711-895 bug', () => {
+    const row = { text: 'Run schema-reference-lint as a pre-push habit', category: 'PROCESS', priority: 'high' };
+    expect(actionText(row)).toBe('Run schema-reference-lint as a pre-push habit');
+    expect(actionOwner(row)).toBe('unassigned'); // shape 4 carries no owner field at all — correct fallback
+  });
+
+  it('source references item.text as a fallback (the fourth shape)', () => {
+    const body = functionBody('function actionText(');
+    expect(body).toMatch(/item\.text/);
   });
 
   it('no shape matched falls back to the placeholder, not a throw', () => {
