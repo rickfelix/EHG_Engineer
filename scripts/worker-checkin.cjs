@@ -353,7 +353,7 @@ async function tryClaim(sb, sdKey, sessionId, track) {
     const { data, error } = await sb.rpc('claim_sd', { p_sd_id: sdKey, p_session_id: sessionId, p_track });
     if (error) return { ok: false, error: error.message };
     if (data && data.success === false) return { ok: false, error: data.error || 'claim_rejected', owner: data.claimed_by };
-    await stampClaim(sb, sdKey, sessionId); // fail-soft boundary instrumentation (SD-MAN-INFRA-SAME-TURN-NEXT-001 FR-3)
+    await stampClaim(sb, sdKey, sessionId, 'env'); // fail-soft boundary instrumentation (SD-MAN-INFRA-SAME-TURN-NEXT-001 FR-3); identity always env here (hard-required at entry) — SD-LEO-INFRA-CLAIM-IDENTITY-INTEGRITY-001
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };
