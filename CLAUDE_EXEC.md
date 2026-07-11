@@ -1,8 +1,8 @@
-<!-- file_content_hash: 3dbaebf9777e6b5b -->
+<!-- file_content_hash: 4163c8ec7ed6fc9c -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-07-06 9:13:25 PM
+**Generated**: 2026-07-11 4:07:57 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -1978,6 +1978,19 @@ When you see `UPDATE-immediately-after-INSERT` in the same script (especially fo
 
 Before EXEC apply, grep for the field/function name across all callers. List every writer + consumer in PR description. Add a regression test that mutates the writer and asserts every consumer behaves correctly.
 
+## Worktree Freshness Pre-Check (Before Declaring Code Missing)
+
+**Before concluding that referenced code, a function, or a sibling SD's deliverable is missing or phantom-incomplete**, verify your worktree is current against `origin/main` first:
+
+```bash
+git fetch origin main
+git log origin/main --oneline -10 -- <suspected-missing-path>
+```
+
+If the merges show recent activity on the path in question, the "missing" code may simply be behind an unmerged/unpulled commit from another session — a routine staleness gap, not a real defect or an incomplete sibling SD.
+
+> Why: In a heavily-parallel multi-session fleet, merges land every few minutes. A 9-minute-stale worktree once made another session's in-flight PR (#5783, landing the exact function an SD's rationale depended on) look like a phantom-completed sibling SD, costing real investigation time chasing a non-issue. This pre-check is cheap (one `git fetch` + `git log`) relative to the cost of a false "code is missing" conclusion driving wrong downstream decisions (SD-LEO-FIX-PAYMENT-RAIL-RETRO-001).
+
 ## Database Schema Constraints Reference
 
 **CRITICAL**: These constraints are enforced by the database. Agents MUST use valid values to avoid insert failures.
@@ -2120,6 +2133,6 @@ Verifies version consistency between CLAUDE*.md files and database. Use --fix to
 
 ---
 
-*Generated from database: 2026-07-06*
+*Generated from database: 2026-07-11*
 *Protocol Version: 4.4.1*
 *Load when: User mentions EXEC, implementation, coding, or testing*
