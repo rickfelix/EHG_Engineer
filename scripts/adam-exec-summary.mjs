@@ -20,6 +20,7 @@ import { pathToFileURL } from 'url';
 import { resolve } from 'path';
 import { liveFleetWorkers, isFleetWorker } from '../lib/fleet/genuine-worker.mjs';
 import { renderDecisionLines, prepareDecisions, DEAD_VENTURE_STATUSES } from '../lib/chairman/decision-layman.mjs';
+import { resolveActionsStatusLabel } from '../lib/chairman/actions-status-label.mjs';
 // SD-LEO-INFRA-AUTOMATED-ONE-ROADMAP-001 (FR-4): the LIVE VDR build-% gauge, replacing the
 // static .adam-vision-build.json number.
 import { computeBuildGauge, formatGaugeForSummary } from '../lib/vision/vdr-registry.js';
@@ -55,11 +56,22 @@ const DRY = !!process.env.ADAM_EMAIL_DRYRUN || process.argv.includes('--dry-run'
 const FORCE = process.argv.includes('--force');
 
 // ── ACTIONS FOR YOU: pending chairman decisions, fetched FIRST so the quiescence gate can see them ──
+// Gauge-trust map C6: a read failure here must never render as "0 pending" / "all clear" -- the
+// original code discarded `error` entirely, so a query failure was indistinguishable from a
+// genuinely empty queue (the exact FABRICATED-on-failure edge the audit flagged). Track the
+// failure so downstream renders can say "status unknown" instead of a false all-clear, and so
+// the quiescence gate below never fail-skips a send when the count itself is unknown.
 let rows = [];
+let decisionsReadFailed = false;
 try {
-  const { data } = await db.from('chairman_pending_decisions').select('*').limit(200);
+  const { data, error } = await db.from('chairman_pending_decisions').select('*').limit(200);
+  if (error) throw error;
   rows = data || [];
-} catch { rows = []; }
+} catch (e) {
+  rows = [];
+  decisionsReadFailed = true;
+  console.warn('[adam-email] chairman_pending_decisions read failed: ' + (e?.message || e));
+}
 // FR-4 (SD-LEO-INFRA-FIX-CHAIRMAN-HOURLY-001): drop stale chairman_approvals for DEAD ventures
 // (the view never joins venture status) and collapse the auto-generated "Corrective:" gap findings
 // into one advisory line — so the chairman's action count is real, not inflated by resolved/noise
@@ -82,7 +94,9 @@ const { count: nActions, lines } = renderDecisionLines(preparedRows, new Date(t)
 // Quiescence gate (QF-20260612-437): skip the hourly send when the fleet is fully OFF — UNLESS the
 // chairman has pending actions, which must surface regardless of fleet state (they are often the very
 // reason the fleet is idle). Fails open to ACTIVE so a query error never drops a real email.
-if (!DRY && !FORCE && nActions === 0) {
+// Gauge-trust map C6: also never quiesce-skip when the decisions read itself failed -- nActions===0
+// in that case means "unknown", not "genuinely zero", and skipping could silently drop a real send.
+if (!DRY && !FORCE && nActions === 0 && !decisionsReadFailed) {
   try {
     const { createRequire } = await import('module');
     const q = createRequire(import.meta.url)('../lib/coordinator/fleet-quiescence.cjs');
@@ -281,7 +295,10 @@ const visSubj = subjectNeedle
   : (subjPct != null ? `EHG rung ${subjPct}%` : 'EHG vision n/a');
 // '(hr avg)' tag only for a CONFIDENT (non-sparse) hourly average — keep the subject honest too.
 const workerSubj = pulseSource === 'unavailable' ? 'workers n/a' : `${avgActive} active${(pulseSource === 'hourly avg' && !wc.sparse) ? ' (hr avg)' : ''}`;
-const actionsSubj = nActions ? `${nActions} ${nActions === 1 ? 'action' : 'actions'} for you` : 'all clear';
+// Gauge-trust map C6: "all clear" is a claim about a successfully-read empty queue -- a read
+// failure must say so, never fabricate the same all-clear a genuinely empty queue would show.
+const actionsStatus = resolveActionsStatusLabel({ nActions, decisionsReadFailed });
+const actionsSubj = actionsStatus.subject;
 // QF-20260627-338: when an ADAM ESCALATION is present (an Adam-flagged blocking decision), the
 // SUBJECT must STAND OUT from the routine hourly digest so the chairman instantly distinguishes it.
 // FR-1 standout subject leading with a distinct token; FR-2 routine subject unchanged otherwise.
@@ -339,7 +356,7 @@ const text = [
   ...(decisionsLine ? [decisionsLine] : []),
   '',
   '──────────────────────────────────────────────',
-  nActions ? `${nActions} ${nActions === 1 ? 'action' : 'actions'} for you` : 'No decisions need you right now.',
+  actionsStatus.plaintext,
   ...(nActions ? ['   Press and hold the text below, Select All, Copy — then paste it into Claude Code.', '──────────────────────────────────────────────', '', copyBlock] : ['──────────────────────────────────────────────']),
   '',
   `as of ${when} ET ${EM} Adam ${EM} LEO Fleet Advisor`,
@@ -353,7 +370,7 @@ const actionsHtml = nActions
   ? `<p style="font-size:14px;margin:0 0 2px"><b>${nActions} ${nActions === 1 ? 'action' : 'actions'} for you</b></p>` +
     `<p style="font-size:12px;color:#888;margin:0 0 6px">On your phone, press and hold the box below, tap "Select All", then "Copy" — then paste it into Claude Code.</p>` +
     `<pre style="font-size:13px;background:#f6f8fa;border:1px solid #e1e4e8;border-radius:4px;padding:12px;white-space:pre-wrap;margin:0;font-family:ui-monospace,Menlo,Consolas,monospace;-webkit-user-select:all;user-select:all">${esc(copyBlock)}</pre>`
-  : `<p style="font-size:14px;margin:0 0 6px"><b>No decisions need you right now.</b></p>`;
+  : `<p style="font-size:14px;margin:0 0 6px"><b>${esc(actionsStatus.html)}</b></p>`;
 const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px">' +
   `<p style="font-size:15px;margin:0 0 12px"><b>Workers:</b> ${esc(workerText)}</p>` +
   // SD-LEO-INFRA-EXEC-EMAIL-STRATEGY-ALIGNED-001: HTML↔plaintext parity for the new skeleton. Lead with
