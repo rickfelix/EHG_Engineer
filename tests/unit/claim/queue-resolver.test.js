@@ -162,6 +162,20 @@ describe('resolveLeafWorkItem / findUnclaimedChild — descend-intent parity (TS
     expect(r.reason).toMatch(/needs completion handoff/);
   });
 
+  it('findUnclaimedChild never routes a cancelled sibling as claimable work (SD-LEO-FIX-ORCHESTRATOR-LEAF-ROUTER-001)', async () => {
+    const claimed = { id: 'uuid-c1', sd_key: 'SD-ORCH-001-A', status: 'in_progress', claiming_session_id: 'live-sess' };
+    const cancelled = { id: 'uuid-c2', sd_key: 'SD-ORCH-001-B', status: 'cancelled', claiming_session_id: null, parent_sd_id: 'uuid-parent' };
+    getNextReadyChildMock.mockResolvedValue({ sd: claimed, reason: 'urgency pick' });
+    const sb = makeSb({
+      strategic_directives_v2: [parentRow, { ...claimed, parent_sd_id: 'uuid-parent' }, cancelled],
+      claude_sessions: [{ session_id: 'live-sess', sd_key: 'SD-ORCH-001-A', status: 'active' }],
+    });
+    const r = await findUnclaimedChild(sb, 'SD-ORCH-001', { ...seam });
+    // Pre-fix, the cancelled sibling would have been returned as "First unclaimed child".
+    expect(r.child).toBeNull();
+    expect(r.reason).toMatch(/No ready children/);
+  });
+
   it('all children complete → {child:null, allComplete:true} passthrough; depth cap honored', async () => {
     getNextReadyChildMock.mockResolvedValue({ sd: null, allComplete: true, reason: 'All children completed' });
     const sb = makeSb({ strategic_directives_v2: [parentRow], claude_sessions: [] });
