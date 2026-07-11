@@ -36,12 +36,12 @@ const supabase = createClient(
 const cutoff = new Date(Date.now() - LOOKBACK_DAYS * 24 * 3600 * 1000).toISOString();
 
 // Two shapes exist in the wild: the retro-agent's prompt-driven output uses
-// { item, owner, priority }; lib/sub-agents/retro/action-items.js's programmatic
-// generateSmartActionItems() uses { action, owner, deadline, success_criteria,
-// priority, source }. Support both rather than picking one and silently dropping
-// the other's text.
+// { item, owner, priority }; the real retrospectives.action_items schema (both
+// lib/sub-agents/retro/action-items.js's generateSmartActionItems() and hand-authored
+// retro rows) uses { title, description, owner_role, priority }. Support all three
+// rather than picking one and silently dropping the other's text.
 function actionText(item) {
-  return item.item || item.action || '(no text)';
+  return item.title || item.item || item.action || item.description || '(no text)';
 }
 
 const { data: retros, error } = await supabase
@@ -84,7 +84,7 @@ for (const retro of retros || []) {
   const title = `[Retro action items] ${retro.sd_id || retro.title || retro.id}`.slice(0, 100);
   const description = [
     `Auto-promoted from ${highPriority.length} high-priority action item(s) in retrospective ${retro.id} (SD ${retro.sd_id || 'n/a'}).`,
-    ...highPriority.map((i, idx) => `${idx + 1}. ${actionText(i)} (owner: ${i.owner || 'unassigned'}, success criteria: ${i.success_criteria || 'n/a'})`)
+    ...highPriority.map((i, idx) => `${idx + 1}. ${actionText(i)} (owner: ${i.owner_role || i.owner || 'unassigned'}, success criteria: ${i.success_criteria || 'n/a'})`)
   ].join('\n');
 
   try {
