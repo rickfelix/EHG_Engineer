@@ -308,6 +308,91 @@ describe('QF-20260704-319: advisory_thread correlation-terminal self-heal', () =
   });
 });
 
+describe('QF-20260710-818: manual node intended-hold suppression (status=blocked)', () => {
+  const sb = {};
+
+  it('suppresses a manual node held via status=blocked — no filing, no false-done', async () => {
+    const parents = [{
+      id: 'm1', title: 'Routed to Solomon consult', updated_at: 'fixed', status: 'blocked',
+      source_kind: 'manual', inFlightNextStep: false,
+    }];
+    const prevSnapshot = { m1: { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 } };
+
+    const { alerted } = await checkAndAlertStalls(sb, parents, prevSnapshot);
+
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+    expect(setStatus).not.toHaveBeenCalled(); // held, not finished — must not be marked done
+    expect(alerted).toEqual([]);
+  });
+
+  it('still alerts a manual node that is genuinely stale (status is open, not blocked)', async () => {
+    const parents = [{
+      id: 'm2', title: 'Genuinely stuck manual task', updated_at: 'fixed', status: 'open',
+      source_kind: 'manual', inFlightNextStep: false,
+    }];
+    const prevSnapshot = { m2: { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 } };
+
+    const { alerted } = await checkAndAlertStalls(sb, parents, prevSnapshot);
+
+    expect(recordPendingDecision).toHaveBeenCalledTimes(1);
+    expect(alerted).toEqual([{ id: 'm2', title: 'Genuinely stuck manual task', escalated: true }]);
+  });
+});
+
+describe('QF-20260710-818: dismissed stall digest cooldown (no immediate respawn)', () => {
+  const parents = [{ id: 'p1', title: 'Stuck thread', updated_at: 'fixed', inFlightNextStep: false }];
+  const prevSnapshot = { p1: { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 } };
+
+  function sbWithDismissedDigest(dismissedDigest) {
+    return {
+      from(table) {
+        if (table !== 'chairman_decisions') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) };
+        return {
+          select: () => ({
+            eq: () => ({ like: () => ({ order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }) }) }),
+            neq: () => ({ like: () => ({ order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: dismissedDigest }) }) }) }) }),
+          }),
+        };
+      },
+    };
+  }
+
+  it('suppresses re-escalation when a recently-dismissed digest covers the same node', async () => {
+    const stubSb = sbWithDismissedDigest({
+      id: 'dec-old', brief_data: { context: { node_ids: ['p1'] } }, updated_at: new Date().toISOString(),
+    });
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+    expect(alerted).toEqual([{ id: 'p1', title: 'Stuck thread', escalated: false }]);
+  });
+
+  it('still escalates when the dismissed digest does not overlap the current node_ids', async () => {
+    const stubSb = sbWithDismissedDigest({
+      id: 'dec-old', brief_data: { context: { node_ids: ['unrelated-node'] } }, updated_at: new Date().toISOString(),
+    });
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+    expect(recordPendingDecision).toHaveBeenCalledTimes(1);
+    expect(alerted).toEqual([{ id: 'p1', title: 'Stuck thread', escalated: true }]);
+  });
+
+  it('still escalates once the dismissed digest is outside the cooldown window', async () => {
+    const stubSb = sbWithDismissedDigest({
+      id: 'dec-old', brief_data: { context: { node_ids: ['p1'] } },
+      updated_at: new Date(Date.now() - 60 * 60_000).toISOString(), // 1h ago, past the 15m cooldown
+    });
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+    expect(recordPendingDecision).toHaveBeenCalledTimes(1);
+    expect(alerted).toEqual([{ id: 'p1', title: 'Stuck thread', escalated: true }]);
+  });
+
+  it('escalates normally when no dismissed digest exists at all', async () => {
+    const stubSb = sbWithDismissedDigest(null);
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+    expect(recordPendingDecision).toHaveBeenCalledTimes(1);
+    expect(alerted).toEqual([{ id: 'p1', title: 'Stuck thread', escalated: true }]);
+  });
+});
+
 describe('QF-20260703-860: supersede the open stall digest instead of inserting per tick', () => {
   it('3 ticks against a persistent stale thread: exactly ONE recordPendingDecision insert, later ticks refresh the same row via update+re-attempted escalation (which dedupes)', async () => {
     const stubSb = makeStallDigestSupabase();
