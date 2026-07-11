@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-07-11](#2026-07-11)
+  - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
 - [2026-07-07](#2026-07-07)
   - [Features](#features)
@@ -82,6 +83,11 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-07-11
+
+### Infrastructure
+- **APA Phase-2 standing entrypoint: periodic structural QA against every LIVE venture deployment URL** - PR #5928 (SD-LEO-INFRA-APA-PHASE-STANDING-001)
+  - **What shipped**: The Automated Product Assessment design's §11.1 "ride the venture's own deploy path" decision is now live as a recurring EVA scheduler round (`apa_standing`, daily cadence, `lib/eva/eva-master-scheduler.js`). `lib/apa/live-instance-acquisition.mjs` launches an SSRF-guarded headless Playwright browser against each `venture_deployments` URL (blocks non-http(s) schemes and loopback/private/link-local hosts including the cloud-metadata address, tagged with a `leo-apa-probe/1.0` User-Agent for provenance) and hands the page to the existing Child C browser-walk + Child B assertion-library (6 structural primitives: side-effect-honesty, recovery-path, persistence, no-dead-end, integrity, provenance-exists). `lib/apa/standing-assessment-round.mjs` writes one row per venture per cycle to a new `apa_standing_assessments` table (migration `20260711_apa_standing_assessments.sql`, applied live) and drives a self-fault/venture-fault dampening state machine: a single fail routes only to the coordinator lane (`recordCorrectiveFinding`); ≥2 consecutive structural fails escalate to the chairman (`recordPendingDecision`, blocking); probe-infrastructure failures (unreachable/timeout) are tagged self-fault and never escalate regardless of count. A verdict='pass' venture writes silently — zero chairman/coordinator noise by design. Zero live `venture_deployments` rows today is handled as an expected, non-error steady state (logs "0 live ventures found this cycle", stamps liveness, exits clean) so the round is correct now and needs no further changes once a venture (e.g. MarketLens) lands a routed deployment. Manual smoke entrypoint: `npm run apa:standing:probe:once` (`scripts/apa-standing-probe-once.mjs`).
+  - **Verification**: 13/13 new unit tests (`tests/unit/apa/live-instance-acquisition.test.js`, `tests/unit/apa/standing-assessment-round.test.js`), including 4 SSRF-guard cases added after adversarial security review (loopback, cloud-metadata link-local, non-http(s) scheme, allowed public https). The `apa_standing_assessments` migration was applied to production via the token-handshake process (not just dry-run) and `database/schema-reference-snapshot.json` was regenerated so `schema-reference-lint` passes. A pre-existing, unrelated flaky test (`tests/unit/eva/external-observation.test.js`, hardcoded-past-date time bomb) surfaced as a genuine CI failure during this cycle and was independently fixed on `origin/main` by another session; that fix was taken as-is on merge. LEAD-TO-PLAN (96%), PLAN-TO-EXEC (94%), EXEC-TO-PLAN (92%), PLAN-TO-LEAD (96%), LEAD-FINAL-APPROVAL (98%) — all handoffs accepted.
 
 ### Bugfix
 - **Worktree-freshness protocol pre-check + payment-rail bug-class audit closes both SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002 retro action items** - PR #5917 (SD-LEO-FIX-PAYMENT-RAIL-RETRO-001)
