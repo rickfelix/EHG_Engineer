@@ -9,13 +9,8 @@
 --     event is rejected by the database at INSERT time, not just by app-layer checks.
 --   no-stage-skipping: a BEFORE INSERT trigger validates (from_stage, to_stage, case_type)
 --     against the crm_pipeline_stage_edges allow-list (a branching graph, not a linear chain).
-
-CREATE TABLE IF NOT EXISTS crm_inbound_events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  source TEXT NOT NULL,
-  payload JSONB NOT NULL DEFAULT '{}',
-  fetched_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+--
+-- Depends on crm_inbound_events, defined in 20260711_crm_identity_graph.sql (runs first).
 
 CREATE TABLE IF NOT EXISTS crm_pipeline_stage_defs (
   stage_key TEXT NOT NULL,

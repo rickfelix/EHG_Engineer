@@ -1,12 +1,23 @@
 -- SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-C: Relationship Engine satellite (§3.1)
 -- Contact/Org identity graph: identity-shared, access-venture-scoped.
 -- Every row carries provenance to a real inbound event (never a hand-typed "lead").
+--
+-- crm_inbound_events lives here (not in the pipeline-transition-engine migration)
+-- because it is the shared provenance substrate for BOTH the identity graph and the
+-- pipeline-stage engine — both FK into it, so it must exist before either.
+
+CREATE TABLE IF NOT EXISTS crm_inbound_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source TEXT NOT NULL,
+  payload JSONB NOT NULL DEFAULT '{}',
+  fetched_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 CREATE TABLE IF NOT EXISTS crm_orgs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   domain TEXT,
-  provenance_event_id UUID NOT NULL,
+  provenance_event_id UUID NOT NULL REFERENCES crm_inbound_events(id),
   provenance_source TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -17,7 +28,7 @@ CREATE TABLE IF NOT EXISTS crm_contacts (
   org_id UUID REFERENCES crm_orgs(id),
   email TEXT,
   full_name TEXT,
-  provenance_event_id UUID NOT NULL,
+  provenance_event_id UUID NOT NULL REFERENCES crm_inbound_events(id),
   provenance_source TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
