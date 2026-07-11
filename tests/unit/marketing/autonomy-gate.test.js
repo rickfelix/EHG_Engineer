@@ -124,7 +124,7 @@ describe('recordPublishOutcome', () => {
 });
 
 describe('checkPublishAuthorization — dedup + FR-7 chairman_decisions routing', () => {
-  function makeAuthSupabase({ autonomyState = null, autonomyError = null, acceptedRow = null, acceptedError = null, existingPending = null, existingPendingError = null, insertData = { id: 'ledger-new' }, insertError = null }) {
+  function makeAuthSupabase({ autonomyState = null, autonomyError = null, acceptedRow = null, acceptedError = null, existingPending = null, existingPendingError = null, insertData = { id: 'ledger-new' }, insertError = null, ventureRow = { is_demo: false, name: 'Real Venture', launch_mode: 'live' } }) {
     let ledgerMaybeSingleCallCount = 0;
     const autonomyChain = {
       select: vi.fn().mockReturnThis(),
@@ -143,7 +143,21 @@ describe('checkPublishAuthorization — dedup + FR-7 chairman_decisions routing'
         return Promise.resolve({ data: existingPending, error: existingPendingError });
       }),
     };
-    return { from: vi.fn((table) => (table === 'venture_channel_autonomy' ? autonomyChain : ledgerChain)), ledgerChain };
+    // QF-20260710-243: fetchVentureForFixtureCheck reads its own 'ventures' table -- a dedicated
+    // chain so it never shares (and corrupts) ledgerChain's call-count-based maybeSingle mock.
+    const venturesChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn(() => Promise.resolve({ data: ventureRow, error: null })),
+    };
+    return {
+      from: vi.fn((table) => {
+        if (table === 'venture_channel_autonomy') return autonomyChain;
+        if (table === 'ventures') return venturesChain;
+        return ledgerChain;
+      }),
+      ledgerChain,
+    };
   }
 
   beforeEach(() => vi.clearAllMocks());
@@ -187,6 +201,18 @@ describe('checkPublishAuthorization — dedup + FR-7 chairman_decisions routing'
       supabase,
       expect.objectContaining({ decisionType: 'outbound_publish_approval', ventureId: 'v-1' })
     );
+  });
+
+  it('QF-20260710-243: skips the chairman_decisions notification for a fixture venture, but still writes the pending ledger row (authorization behavior unchanged)', async () => {
+    const supabase = makeAuthSupabase({
+      autonomyState: 'propose_and_approve', acceptedRow: null, existingPending: null,
+      ventureRow: { is_demo: false, name: 'Test Venture for Owned-Audience Loop', launch_mode: 'simulated' },
+    });
+    const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1', correlationId: 'corr-1' });
+
+    expect(result.allowed).toBe(false);
+    expect(supabase.ledgerChain.insert).toHaveBeenCalledWith(expect.objectContaining({ correlation_id: 'corr-1', decision: 'pending' }));
+    expect(recordPendingDecision).not.toHaveBeenCalled();
   });
 
   it('on a RETRY of the same unapproved attempt, does not insert a duplicate row or re-notify (dedup)', async () => {
