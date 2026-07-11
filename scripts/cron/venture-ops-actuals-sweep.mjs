@@ -167,7 +167,7 @@ export async function main(argv = process.argv, deps = {}) {
   // Job 3: uptime probe
   {
     const processKey = args.dryRun ? null : await ensureArmedRegistration(supabase, JOBS[2], logger);
-    let probeSummary = { checked: 0, reachable: 0, unreachable: 0, newly_surfaced: 0, errors: [] };
+    let probeSummary = { ventures_seedable: 0, checked: 0, reachable: 0, unreachable: 0, newly_surfaced: 0, errors: [] };
     if (!args.dryRun) {
       probeSummary = await (deps.runVentureUptimeProbe || runVentureUptimeProbe)({ supabase });
       try { await (deps.stampLastFired || stampLastFired)(supabase, processKey); }
@@ -176,6 +176,12 @@ export async function main(argv = process.argv, deps = {}) {
     summary.jobs[JOBS[2].key] = probeSummary;
     if (probeSummary.newly_surfaced > 0) {
       logger.warn?.(`[ops-actuals-sweep] ${probeSummary.newly_surfaced} venture(s) newly surfaced UNREACHABLE this cycle.`);
+    }
+    // NC-7 parity with jobs 1/2 (adversarial-review finding): ensureDeploymentRows failures
+    // used to be swallowed with no signal the caller could act on, which would let this job
+    // report checked=0/errors=[] — a silent green pass — even if every venture failed to seed.
+    if (!args.dryRun && ventures.length > 0 && probeSummary.checked === 0) {
+      logger.error?.(`[ops-actuals-sweep] NC-7 ESCALATION: ${JOBS[2].key} checked 0 deployments across ${ventures.length} venture(s) — investigate before trusting future silent passes.`);
     }
   }
 

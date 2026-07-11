@@ -68,17 +68,23 @@ describe('service_telemetry producer/consumer contract', () => {
       expect(insertCall.service_id).toBe('svc-id-123');
     });
 
-    it('is non-blocking (never throws) when service_key does not resolve', async () => {
+    it('is non-blocking (never throws) when service_key does not resolve, and logs a distinct warning (adversarial-review fix)', async () => {
       const failingSupabase = createMockSupabase({
         maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
         insert: vi.fn().mockReturnValue({ error: { message: 'null value in column "service_id"' } }),
       });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       await expect(reportGenericTelemetry(failingSupabase, {
         service_key: 'unknown-service',
         venture_id: MOCK_VENTURE_ID,
         event_type: 'artifact_generated',
       })).resolves.toBeUndefined();
+
+      // The unresolvable service_key gets its OWN warning, distinct from the generic
+      // insert-failure warning, so the failure is diagnosable without correlating logs.
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('did not resolve to an active ehg_services row'));
+      warnSpy.mockRestore();
     });
   });
 

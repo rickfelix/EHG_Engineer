@@ -3,7 +3,7 @@
  * Pure-logic tests for the uptime probe's threshold state machine (no network/DB).
  */
 import { describe, it, expect, vi } from 'vitest';
-import { checkReachability, computeNextProbeState, CONSTANTS } from '../../../lib/ops/venture-uptime-probe.js';
+import { checkReachability, computeNextProbeState, CONSTANTS, ensureDeploymentRows, runVentureUptimeProbe } from '../../../lib/ops/venture-uptime-probe.js';
 
 describe('computeNextProbeState (pure state machine)', () => {
   it('starts at 0 consecutive failures on a first successful check with no prior state', () => {
@@ -76,5 +76,71 @@ describe('checkReachability', () => {
 
   it('exposes the 2-consecutive-failure threshold as a named constant (matches SD risk mitigation)', () => {
     expect(CONSTANTS.CONSECUTIVE_FAILURE_THRESHOLD).toBe(2);
+  });
+});
+
+/** Minimal fake supabase for ensureDeploymentRows / runVentureUptimeProbe. */
+function makeSupabase({ ventures = [], seedInsertFails = false } = {}) {
+  const deploymentRows = [];
+  return {
+    from(table) {
+      if (table === 'ventures') {
+        return {
+          select() { return this; }, not() { return this; }, neq() { return this; },
+          then: (resolve) => resolve({ data: ventures, error: null }),
+        };
+      }
+      if (table === 'venture_deployments') {
+        const ctx = {};
+        return {
+          select() { return this; },
+          eq(col, val) { ctx[col] = val; return this; },
+          maybeSingle: async () => ({ data: deploymentRows.find((r) => r.venture_id === ctx.venture_id) || null, error: null }),
+          insert(vals) {
+            return {
+              select() { return this; },
+              single: async () => {
+                if (seedInsertFails) return { data: null, error: { message: 'permission denied for table venture_deployments' } };
+                const row = { id: `dep-${vals.venture_id}`, ...vals };
+                deploymentRows.push(row);
+                return { data: row, error: null };
+              },
+            };
+          },
+          update() { return { eq: async () => ({ error: null }) }; },
+        };
+      }
+      if (table === 'ops_product_health') {
+        return { select() { return this; }, eq() { return this; }, maybeSingle: async () => ({ data: null, error: null }), upsert: async () => ({ error: null }) };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    },
+  };
+}
+
+describe('ensureDeploymentRows / runVentureUptimeProbe (adversarial-review fix: no silent seed-failure swallowing)', () => {
+  it('ensureDeploymentRows returns errors alongside rows instead of swallowing them', async () => {
+    const supabase = makeSupabase({ ventures: [{ id: 'v1', deployment_url: 'https://x' }], seedInsertFails: true });
+    const { rows, errors } = await ensureDeploymentRows(supabase);
+    expect(rows).toHaveLength(0);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('seed insert failed');
+  });
+
+  it('runVentureUptimeProbe folds seed errors into its own errors array (visible to the sweep\'s anyErrors check)', async () => {
+    const supabase = makeSupabase({ ventures: [{ id: 'v1', deployment_url: 'https://x' }], seedInsertFails: true });
+    const summary = await runVentureUptimeProbe({ supabase, fetchFn: vi.fn() });
+    expect(summary.checked).toBe(0);
+    expect(summary.errors).toHaveLength(1); // pre-fix this was [] -> a silent green pass
+    expect(summary.ventures_seedable).toBe(1);
+  });
+
+  it('checks every successfully-seeded venture even when unrelated ventures fail to seed', async () => {
+    const fetchFn = vi.fn().mockResolvedValue({ status: 200 });
+    const supabase = makeSupabase({ ventures: [{ id: 'v1', deployment_url: 'https://x' }] });
+    const summary = await runVentureUptimeProbe({ supabase, fetchFn });
+    expect(summary.checked).toBe(1);
+    expect(summary.reachable).toBe(1);
+    expect(summary.errors).toHaveLength(0);
   });
 });

@@ -127,4 +127,23 @@ describe('venture-ops-actuals-sweep main()', () => {
 
     expect(errorLog).toHaveBeenCalledWith(expect.stringContaining('NC-7 ESCALATION'));
   });
+
+  it('logs an NC-7 escalation for the uptime-probe job too when it checks 0 deployments (adversarial-review fix: parity with jobs 1/2)', async () => {
+    const errorLog = vi.fn();
+    const collectProductHealth = vi.fn().mockResolvedValue({ venture_id: 'x' });
+    const collectRevenueMetrics = vi.fn().mockResolvedValue({ venture_id: 'x' });
+    // Simulates ensureDeploymentRows failing to seed every venture (e.g. RLS/permissions
+    // drift) — pre-fix, this returned checked=0/errors=[] and passed silently.
+    const runVentureUptimeProbe = vi.fn().mockResolvedValue({ ventures_seedable: 2, checked: 0, reachable: 0, unreachable: 0, newly_surfaced: 0, errors: ['v1: seed insert failed', 'v2: seed insert failed'] });
+    const stampLastFired = vi.fn().mockResolvedValue(undefined);
+
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabase(),
+      collectProductHealth, collectRevenueMetrics, runVentureUptimeProbe, stampLastFired,
+      logger: { log() {}, warn() {}, error: errorLog },
+    });
+
+    expect(errorLog).toHaveBeenCalledWith(expect.stringMatching(/NC-7 ESCALATION.*venture-uptime-probe/));
+    expect(result.exitCode).toBe(1); // the folded seed errors also flip anyErrors
+  });
 });
