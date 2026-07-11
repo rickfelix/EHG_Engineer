@@ -1,9 +1,9 @@
 ---
 category: guide
 status: draft
-version: 1.0.0
+version: 1.1.0
 author: Rick Felix
-last_updated: 2026-03-01
+last_updated: 2026-07-11
 tags: [guide, auto-generated]
 ---
 
@@ -44,6 +44,7 @@ tags: [guide, auto-generated]
   - [On Proceed](#on-proceed)
   - [Implementation](#implementation)
 - [Kill Gate Comparison](#kill-gate-comparison)
+- [Tier-B: Per-Venture Thesis-Kill Criteria](#tier-b-per-venture-thesis-kill-criteria-sd-leo-infra-kill-gate-tier-001)
 - [Recovery After Kill](#recovery-after-kill)
 - [Database Schema](#database-schema)
   - [chairman_decisions Table (Kill Gate Records)](#chairman_decisions-table-kill-gate-records)
@@ -52,11 +53,11 @@ tags: [guide, auto-generated]
 ---
 Category: Reference
 Status: Approved
-Version: 1.0.0
+Version: 1.1.0
 Author: DOCMON Sub-Agent
-Last Updated: 2026-02-08
+Last Updated: 2026-07-11
 Tags: [cli-venture-lifecycle, eva, reference, kill-gates]
-Related SDs: [SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001, SD-LEO-INFRA-STAGE-GATES-EXT-001]
+Related SDs: [SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001, SD-LEO-INFRA-STAGE-GATES-EXT-001, SD-LEO-INFRA-KILL-GATE-TIER-001]
 ---
 
 # Kill Gates Reference
@@ -424,6 +425,42 @@ If the venture proceeds to launch, Stage 24 also defines the post-launch monitor
 | Revise target | Stage 1 | Stage 1 or 5 | Stage 13 | Varies by issue |
 | Chairman customizable | Score threshold | All 4 thresholds | Score threshold | Metric thresholds |
 | Devil's Advocate | Yes | Yes | Yes | Yes |
+
+## Tier-B: Per-Venture Thesis-Kill Criteria (SD-LEO-INFRA-KILL-GATE-TIER-001)
+
+Distinct from the four fixed Kill Gates above (Mechanism A -- generic, hardcoded-stage, hardcoded-threshold), Tier-B evaluates **each venture's own pre-registered thesis-kill criteria** at arbitrary stages. A venture's Stage-0 thesis registers `kill_criteria` (`{id, metric, comparator, threshold, stage_by, description}`, stored on `ventures.metadata.kill_criteria`) -- falsifiable conditions unique to that venture's business thesis (e.g. "dies if fewer than 10 qualified demand-test signups by stage 12"). Before this SD, the evaluator for these criteria (`evaluateKillCriterion`) had no caller -- criteria were authored and stored but never checked.
+
+### Mechanism
+
+- **Evaluator**: `lib/eva/lifecycle/thesis-kill-evaluator.js` -- pure classification of a criterion's raw comparator result into `FIRED` / `HOLD` / `CLEAR` (honest-gauge rule: no resolvable gauge reading -> `HOLD`, never a silent pass or a fabricated kill).
+- **Orchestration**: `lib/eva/lifecycle/thesis-kill-gate.js` -- reads due criteria (`stage_by <= toStage`), logs `FIRED`/`HOLD` verdicts to `system_events`, and (binding mode only) mints a `chairman_decisions` row per fired criterion via the existing `createOrReusePendingDecision` helper, `decision_type = 'thesis_kill_tier_b:<criterionId>'` (one row per criterion -- never shared across co-firing criteria at the same stage).
+- **Wired into**: `advanceStage()` in `lib/eva/artifact-persistence-service.js`, alongside the pre-existing exit-gate check.
+- **Feature flag**: `LEO_THESIS_KILL_GATE` (`off` | `observe` | `binding`), read once at process start, **independent of** `LEO_S19_EXIT_GATE_ENFORCER`. Defaults to `observe`.
+
+### Modes
+
+| Mode | Behavior |
+|------|----------|
+| `off` | Evaluation skipped entirely. |
+| `observe` (default, current production state) | Fired/held verdicts logged to `system_events` only. Advancement never blocks. No `chairman_decisions` row minted (nothing actionable to approve). |
+| `binding` | A fired criterion blocks advancement unless its `chairman_decisions` row is approved via the existing governed override (`node scripts/eva-decisions.js approve <decisionId> --override-kill --override-reason "<reason>"`). |
+
+### Current status and known gaps
+
+- **Shipped observe-only.** Promotion to `binding` is a separate, later decision, gated on a chairman-run calibration probe (the PROBE-BETA teeth-proof spec) confirming the mechanism doesn't kill control-class ventures.
+- **No gauge source wired yet.** The default resolver returns no observation for any metric, so every armed criterion currently classifies `HOLD` -- the mechanism is a logging-only no-op in production until a real gauge-resolution source is wired (follow-on work).
+- **Coverage gap (documented, not silent).** This wiring covers the primary general-advance call path (`advanceStage()`/`fn_advance_venture_stage`) only. The direct-RPC chairman-approval path and `handoff-operations.js`'s `approveHandoff` (which uses the Mechanism-A `validateStageGate` instead) are not covered -- tracked as a follow-on scope item.
+- **Immutability-once-armed is out of scope for this SD** -- nothing currently prevents an armed criterion's threshold from being edited after registration. Raised in a prior design review as a related but separately-scoped concern.
+
+### Implementation
+
+- Evaluator: `lib/eva/lifecycle/thesis-kill-evaluator.js`
+- Orchestration + flag: `lib/eva/lifecycle/thesis-kill-gate.js`
+- Wiring: `lib/eva/artifact-persistence-service.js` (`advanceStage()`)
+- Criteria source: `lib/eva/stage-zero/thesis-contract.js` (`validateKillCriteria`, `evaluateKillCriterion`)
+- Override path (shared with Mechanism A): `scripts/eva-decisions.js`, `lib/eva/kill-override-guard.js`
+
+---
 
 ## Recovery After Kill
 
