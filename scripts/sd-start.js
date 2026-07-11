@@ -100,7 +100,7 @@ const { evaluateClaimDependencyGate } = cjsRequire('../lib/claim/gates/dependenc
 const { verifyHandoffIntegrity: verifyHandoffIntegrityGate } = cjsRequire('../lib/claim/gates/handoff-integrity.cjs');
 const { evaluateCadenceGate } = cjsRequire('../lib/claim/gates/cadence-gate.cjs');
 const queueResolver = cjsRequire('../lib/claim/queue-resolver.cjs');
-const { classifyAllDispatchIneligibility } = cjsRequire('../lib/fleet/claim-eligibility.cjs');
+const { classifyAllDispatchIneligibility, liveClaimWriteFenceReason } = cjsRequire('../lib/fleet/claim-eligibility.cjs');
 // SD-ARCH-HOTSPOT-SD-START-001 FR-7: dispatch-authorization polarity gate (flag-gated, observe-first).
 const dispatchAuthGate = cjsRequire('../lib/claim/gates/dispatch-authorization.cjs');
 
@@ -1155,6 +1155,21 @@ async function main() {
             skippedSDs.push({ sdKey: nextSD.sdKey, reason: `dispatch_auth: ${fbVerdict.reason}` });
             excludeKeys.push(nextSD.sdKey);
             console.log(`${colors.yellow}   ⚠️  ${nextSD.sdKey} not dispatch-authorized (enforce mode) — skipping${colors.reset}`);
+            continue;
+          }
+        }
+
+        // QF-20260711-272: the fallback lane must enforce the same coordinator-authority fences
+        // (requires_human_action / needs_coordinator_review / not_before) the direct path enforces
+        // at 2.9 — live-fetched, so a fence stamped after queue assembly still blocks. Skip-polarity
+        // (iterate to the next candidate), matching the dispatch-auth block above. Fail-closed:
+        // 'eligibility_check_error' also skips.
+        {
+          const fbFence = await liveClaimWriteFenceReason(supabase, nextSD.sdKey);
+          if (fbFence) {
+            skippedSDs.push({ sdKey: nextSD.sdKey, reason: `claim_fenced:${fbFence}` });
+            excludeKeys.push(nextSD.sdKey);
+            console.log(`${colors.yellow}   ⚠️  ${nextSD.sdKey} fenced (${fbFence}) — skipping${colors.reset}`);
             continue;
           }
         }

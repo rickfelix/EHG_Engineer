@@ -353,6 +353,13 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // SD-LEO-INFRA-LEO-CREATE-CROSS-001: --target-repos for cross-repo SDs
       const targetReposIdxPlan = args.indexOf('--target-repos');
       const targetReposPlan = targetReposIdxPlan !== -1 ? parseTargetReposArg(args[targetReposIdxPlan + 1]) : null;
+      // SD-LEO-INFRA-ROADMAP-FOLD-SEAM-001 (FR-2): --wave <roadmap_waves.id> | --no-wave "<reason>".
+      // Required when the plan produces an orchestrator parent (createSD's gate throws otherwise).
+      const waveIdxPlan = args.indexOf('--wave');
+      const noWaveIdxPlan = args.indexOf('--no-wave');
+      const waveDispositionPlan = waveIdxPlan !== -1
+        ? { waveId: args[waveIdxPlan + 1] }
+        : (noWaveIdxPlan !== -1 ? { noWave: args[noWaveIdxPlan + 1] } : null);
       // Path is any arg that isn't a flag or a flag's value
       const flagValuePositions = new Set(
         [
@@ -362,12 +369,14 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
           visionKeyIdx !== -1 ? visionKeyIdx + 1 : -1,
           archKeyIdx !== -1 ? archKeyIdx + 1 : -1,
           targetReposIdxPlan !== -1 ? targetReposIdxPlan + 1 : -1,
+          waveIdxPlan !== -1 ? waveIdxPlan + 1 : -1,
+          noWaveIdxPlan !== -1 ? noWaveIdxPlan + 1 : -1,
         ].filter(i => i > 0)
       );
       const knownPlanFlags = new Set([
         '--yes', '-y', '--type', '--title', '--priority', '--from-plan',
         '--vision-key', '--arch-key', '--migration-reviewed', '--security-reviewed',
-        '--target-repos', '--force-create'
+        '--target-repos', '--force-create', '--wave', '--no-wave'
       ]);
       const planPath = args.find((arg, i) =>
         i > 0 && !arg.startsWith('-') && !flagValuePositions.has(i) && !knownPlanFlags.has(arg)
@@ -382,6 +391,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         securityReviewed,
         targetRepos: targetReposPlan,
         forceCreate,
+        waveDisposition: waveDispositionPlan,
       });
       exitFromResult(planRes);
     } else if (args[0] === '--child') {

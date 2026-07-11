@@ -35,7 +35,10 @@ export async function runDirectCreation(args) {
   // are now valid in direct-args mode (closes 8a640d32 sibling-parity gap with --from-plan).
   const knownDirectFlags = new Set([
     '--venture', '--vision-key', '--arch-key', '--target-repos',
-    '--migration-reviewed', '--security-reviewed', '--yes', '-y'
+    '--migration-reviewed', '--security-reviewed', '--yes', '-y',
+    // SD-LEO-INFRA-ROADMAP-FOLD-SEAM-001 (FR-2): wave disposition flags,
+    // required when the direct lane creates an orchestrator parent.
+    '--wave', '--no-wave'
   ]);
   const unknownFlags = args.filter(a => a.startsWith('-') && !knownDirectFlags.has(a));
   if (unknownFlags.length > 0) {
@@ -346,11 +349,19 @@ export async function runDirectCreation(args) {
   const directMigrationReviewed = args.includes('--migration-reviewed');
   const directSecurityReviewed = args.includes('--security-reviewed');
 
+  // SD-LEO-INFRA-ROADMAP-FOLD-SEAM-001 (FR-2): --wave/--no-wave for orchestrator parents.
+  const directWaveIdx = args.indexOf('--wave');
+  const directNoWaveIdx = args.indexOf('--no-wave');
+  const directWaveDisposition = directWaveIdx !== -1
+    ? { waveId: args[directWaveIdx + 1] }
+    : (directNoWaveIdx !== -1 ? { noWave: args[directNoWaveIdx + 1] } : null);
+
   const createRes = await createSD({
     sdKey,
     title,
     description: enriched?.description || title,
     type,
+    wave_disposition: directWaveDisposition,
     rationale: enriched?.rationale || 'Created via /leo create',
     success_criteria: enriched?.success_criteria || null,
     key_changes: enriched?.key_changes || null,
