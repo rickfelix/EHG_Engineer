@@ -40,4 +40,16 @@ The harness ships as a permanent fixture: run script + fixture-venture template 
 ## H9 — The harness's own seeded-defect test (build-acceptance)
 Before the real run: a **dry calibration** — deliberately disable one ops loop (or break one gauge's source) and assert the harness DETECTS it (journal shows the dead loop / NO-DATA gauge as a finding). An instrument that cannot catch a dead loop cannot audit a band suspected of dead loops. Calibration green = harness GO; the same instrument-the-fixed-thing-cannot-fool standard that gated selection.
 
+## H11 — Run-evidence durability (implementation status, 2026-07-11, SD-LEO-INFRA-RUN-EVIDENCE-DURABILITY-001)
+
+§H3's "durable artifact" claim for the run journal had a real gap, found via Solomon adjudication F5+F6 on run `s2026-bravo-0711`: a 59-entry journal was reduced to a 2-entry teardown tail. Root cause (NOT "teardown deletes the journal" — teardown's DB delete never touches the filesystem journal): `RunJournal`'s journal path defaulted to a **CWD-relative** string (`.harness-runs`). A run invoked from one process/cwd and a later teardown/finalize invoked as a separate CLI process from a *different* cwd (a worktree, or a different/since-removed worktree) resolved to two different absolute paths — the later process's `existsSync()` resume-check found nothing, silently started a fresh journal, and the original file was orphaned (not deleted).
+
+**Fixed**: `RunJournal`'s default `baseDir` now anchors to `getRepoRoot()` (`lib/repo-paths.js` — stable regardless of caller cwd, including from inside a `.worktrees/<sd>` checkout), so every process that omits an explicit `baseDir` resolves to the same file for a given `run_id`.
+
+**A durable DB mirror was also added** (`finalizeMirror()` in `lib/harness/run-journal.mjs`, called at the end of `runArc()`) — the journal's full content is written to a `system_events` row at finalize, independent of the `.harness-runs` filesystem scratch entirely. **Design note (adversarial-review-caught, worth keeping in mind for any future venture-scoped durability write in this harness):** the first implementation wrote this mirror as a `venture_artifacts` row, keyed to the fixture venture. Deep-tier adversarial review found `venture_artifacts.venture_id` is `FOREIGN KEY ... ON DELETE CASCADE` — the mirror row would have been silently destroyed the instant teardown deleted the fixture's `ventures` row, defeating the entire point of the durability guarantee (and untestable pre-migration, since every prior test run degraded before the CHECK constraint existed to admit the write at all — the interaction was never exercised). `system_events` carries no FK to `ventures`, so the mirror is now structurally immune to the fixture's own lifecycle. Live-verified: a real mirror row survived with its full journal payload after its underlying venture was deleted by teardown.
+
+**Also added**: `assertClean()` (§H6 residue assertion) gained an additive journal-evidence-present check — a missing/empty journal at teardown time is now itself a `RESIDUE` finding, alongside the existing DB-residue-absence checks.
+
+---
+
 *Propose-only. Build: Bravo/Charlie/Alpha against H1–H4+H6–H9 immediately; H5 completes on the coordinator's enumeration; run Saturday; observations → cluster-2 ledger → Solomon adjudication → unified delta.*
