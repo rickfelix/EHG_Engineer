@@ -34,7 +34,11 @@ const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 // SD-LEO-INFRA-SOLOMON-HOURLY-ROLE-REFRESHER-001: resolve the LIVE Solomon session at fire time
 // (metadata.role='solomon', fresh heartbeat) via the canonical resolver — NO hardcoded UUID.
-const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
+// SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001 / FR-1: fetchAllSolomons + retargetStaleSolomonInbound
+// were already exported (FR-2 of a prior SD) but had no periodic caller -- retargeting only ever
+// happened on the NEXT Solomon registration event. Wiring them into this existing hourly tick
+// closes that gap without touching either function's signature.
+const { getActiveSolomonId, fetchAllSolomons, retargetStaleSolomonInbound } = require('../lib/coordinator/solomon-identity.cjs');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const ADAM_FRESH_S = Number(process.env.ADAM_FRESH_SECONDS || 600);
@@ -139,6 +143,55 @@ async function dispatchSolomonReminder(sb, { dryRun = DRY_RUN, resolveSolomon = 
   }
 }
 
+/**
+ * SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001 / FR-1: periodic stale-identity reconciliation for the
+ * Solomon lane. Solomon's own MODE-B advisory (session_coordination 09189ed9) instance (1): role-mail
+ * retargeting was EVENT-driven only (a new Solomon registration), so a resolution fault or a gap
+ * between a Solomon's death and its successor's registration left rows silently stranded at a stale
+ * target for hours. This rides the SAME hourly cadence as dispatchSolomonReminder (no new scheduler):
+ * resolve the live Solomon, list every OTHER role=solomon session (fetchAllSolomons, unfiltered by
+ * freshness), and retarget each stale one's still-unread rows via the existing, unmodified
+ * retargetStaleSolomonInbound primitive. Fail-open / non-fatal, mirrors the sibling reminder leg.
+ * @returns {Promise<{reconciled:number, staleCount:number, reason?:string}>}
+ */
+async function reconcileStaleSolomonInbound(sb, { dryRun = DRY_RUN, resolveSolomon = getActiveSolomonId, fetchAll = fetchAllSolomons, retarget = retargetStaleSolomonInbound } = {}) {
+  try {
+    const liveSolomon = await resolveSolomon(sb);
+    if (!liveSolomon) {
+      return { reconciled: 0, staleCount: 0, reason: 'no_live_solomon' };
+    }
+    const allSolomons = await fetchAll(sb);
+    const staleIds = Array.from(new Set(
+      (allSolomons || [])
+        .map(function (s) { return s && s.session_id; })
+        .filter(function (id) { return id && id !== liveSolomon; })
+    ));
+    if (staleIds.length === 0) {
+      return { reconciled: 0, staleCount: 0 };
+    }
+    if (dryRun) {
+      console.log('\n[HOURLY-REVIEW] Solomon reconcile: would check ' + staleIds.length + ' stale identity(ies). [dry-run, not retargeted]');
+      return { reconciled: 0, staleCount: staleIds.length, reason: 'dry_run' };
+    }
+    let reconciled = 0;
+    for (const staleId of staleIds) {
+      const result = await retarget(sb, { staleOriginator: staleId, liveSolomon });
+      if (result && result.error) {
+        console.log('[HOURLY-REVIEW] Solomon reconcile: retarget error for ' + String(staleId).slice(0, 8) + ' (non-fatal): ' + result.error);
+        continue;
+      }
+      reconciled += (result && result.retargeted) || 0;
+    }
+    if (reconciled > 0) {
+      console.log('\n[HOURLY-REVIEW] Solomon reconcile: re-targeted ' + reconciled + ' stale-addressed row(s) to the live Solomon (' + String(liveSolomon).slice(0, 8) + ').');
+    }
+    return { reconciled: reconciled, staleCount: staleIds.length };
+  } catch (e) {
+    console.log('[HOURLY-REVIEW] Solomon reconcile skipped (non-fatal): ' + e.message);
+    return { reconciled: 0, staleCount: 0, reason: 'error' };
+  }
+}
+
 async function resolveLiveAdam(sb, freshS) {
   // Filter role=adam SERVER-SIDE + order by heartbeat — an unfiltered select hits
   // Supabase's 1000-row cap and can miss Adam's row entirely.
@@ -174,6 +227,8 @@ async function main() {
   // SD-LEO-INFRA-SOLOMON-HOURLY-ROLE-REFRESHER-001: the Solomon leg runs BEFORE the Adam leg because the
   // Adam leg `return`s from main on no-Adam/dry-run; the cycle-down gate above already guards both legs.
   await dispatchSolomonReminder(sb);
+  // SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001 / FR-1: periodic stale-identity reconciliation, same tick.
+  await reconcileStaleSolomonInbound(sb);
 
   // Adam leg
   try {
@@ -277,4 +332,4 @@ if (require.main === module) {
   main().catch(function (e) { console.error('[HOURLY-REVIEW] error (non-fatal): ' + e.message); }).finally(function () { process.exit(0); });
 }
 
-module.exports = { dispatchSolomonReminder, SOLOMON_REMINDER, buildFoundationsPointer };
+module.exports = { dispatchSolomonReminder, SOLOMON_REMINDER, buildFoundationsPointer, reconcileStaleSolomonInbound };
