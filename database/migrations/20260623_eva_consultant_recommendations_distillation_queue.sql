@@ -2,6 +2,8 @@
 -- Child idx 0 (dependency root) of the Brainstorm Distillation Pipeline orchestrator
 -- (SD-LEO-INFRA-BRAINSTORM-DISTILLATION-PIPELINE-001).
 -- ADDITIVE, nullable, REVERSIBLE, idempotent. No drops/renames.
+-- @approved-by: codestreetlabs@gmail.com
+-- (additive-DDL class chairman-ratified 2026-06-16 b917c3e1; applied by Adam as scribe under the 2026-07-11 verbal-approval policy)
 --
 -- Adds the chairman review-queue substrate to eva_consultant_recommendations so a distilled
 -- brainstorm candidate can be recorded as a chairman-reviewable recommendation row that LINKS
