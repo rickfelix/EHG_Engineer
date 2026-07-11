@@ -59,7 +59,11 @@ export const ADAM_LOOPS = [
     // QUIET_TICK_INBOX_ITEM are actionable tokens — omitting them from this allowlist
     // would make an isolated directive arrival read as a NO-OP tick (the read-stamped-
     // not-processed class rebuilt at the tick layer; caught by adversarial review of PR #5802).
-    prompt: 'Run `node scripts/adam-quiet-tick.mjs`. It prints ONE QUIET_TICK summary line and self-paces. If the output contains NO QUIET_TICK_PING / QUIET_TICK_STALL_ALERT / QUIET_TICK_OUTBOUND_PROBE / QUIET_TICK_INBOX_DIRECTIVE / QUIET_TICK_INBOX_ITEM / QUIET_TICK_ERROR lines, this turn is a NO-OP: arm ScheduleWakeup(nextWakeSeconds from the output) and emit nothing else. Otherwise act on the flagged lines (QUIET_TICK_INBOX_DIRECTIVE lines are HARD interrupts — process the directed row, then `node scripts/adam-advisory.cjs ack <id>`; QUIET_TICK_INBOX_ITEM lines are directed inbox rows to action or deliberately leave pending), then arm the wakeup.',
+    // QF-20260711-095 (token-contract parity lint, scripts/lint/quiet-tick-token-parity-lint.mjs):
+    // QUIET_TICK_VENTURE_STALL_ALERT / QUIET_TICK_INBOX_CAP are ALSO emitted by
+    // adam-quiet-tick.mjs but were missing here — the exact silent-fallthrough-to-NO-OP
+    // class this comment already warns about, just for two different tokens.
+    prompt: 'Run `node scripts/adam-quiet-tick.mjs`. It prints ONE QUIET_TICK summary line and self-paces. If the output contains NO QUIET_TICK_PING / QUIET_TICK_STALL_ALERT / QUIET_TICK_VENTURE_STALL_ALERT / QUIET_TICK_OUTBOUND_PROBE / QUIET_TICK_INBOX_DIRECTIVE / QUIET_TICK_INBOX_ITEM / QUIET_TICK_INBOX_CAP / QUIET_TICK_ERROR lines, this turn is a NO-OP: arm ScheduleWakeup(nextWakeSeconds from the output) and emit nothing else. Otherwise act on the flagged lines (QUIET_TICK_INBOX_DIRECTIVE lines are HARD interrupts — process the directed row, then `node scripts/adam-advisory.cjs ack <id>`; QUIET_TICK_INBOX_ITEM lines are directed inbox rows to action or deliberately leave pending; QUIET_TICK_VENTURE_STALL_ALERT flags a stalled venture to investigate/escalate, mirroring QUIET_TICK_STALL_ALERT; QUIET_TICK_INBOX_CAP means the inbox fetch hit its cap — more rows may remain beyond this tick, re-run the drain), then arm the wakeup.',
   },
   {
     key: 'governance-scan',

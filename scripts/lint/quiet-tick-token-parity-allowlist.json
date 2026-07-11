@@ -1,0 +1,4 @@
+{
+  "_doc": "QF-20260711-095. Keys are '<emitter> -> <consumer>:<TOKEN>' for a QUIET_TICK_* token that is intentionally emitted but deliberately NOT actioned by the consumer's prompt (rare -- prefer fixing the prompt allowlist over exempting a real emitted token). Every entry MUST carry a non-empty reason.",
+  "allow": {}
+}
