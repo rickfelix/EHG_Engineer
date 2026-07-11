@@ -1,9 +1,9 @@
 {
- "generated_at": "2026-07-11T03:03:13.471Z",
+ "generated_at": "2026-07-11T16:31:33.892Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 785,
+ "table_count": 786,
  "view_count": 182,
- "check_count": 1382,
+ "check_count": 1383,
  "tables": {
   "_migration_metadata": "{key,value}",
   "activation_catalog_expectations": "{sd_id,table_name,seed_migration_path,created_at,created_by}",
@@ -37,6 +37,7 @@
   "ai_gen_provenance": "{id,chairman_decision_id,claim_id,claim_text_excerpt,source_table,source_row_id,source_field_path,confidence,created_at}",
   "ai_quality_assessments": "{id,content_type,content_id,model,temperature,scores,weighted_score,feedback,assessed_at,assessment_duration_ms,tokens_used,cost_usd,rubric_version,sd_type,pass_threshold,content_hash,band,confidence,confidence_reasoning}",
   "anthropic_plugin_registry": "{id,plugin_name,source_repo,source_path,source_commit,ehg_skill_id,fitness_score,fitness_evaluation,status,adaptation_date,last_scanned_at,created_at,updated_at}",
+  "apa_standing_assessments": "{id,venture_id,url,cycle_started_at,assessment_result,primitives_passed,primitives_total,verdict,consecutive_fail_count,created_at}",
   "app_config": "{key,value,description,created_at,updated_at}",
   "app_config_kill_switch_changes": "{id,key,old_value,new_value,changed_at,changed_by,source,metadata}",
   "app_rankings": "{id,source,app_name,developer,app_url,website_url,description,category,chart_position,chart_type,rating,review_count,installs_range,vote_count,scraped_at,created_at,updated_at}",
@@ -1037,6 +1038,7 @@
   "ai_quality_assessments.ai_quality_assessments_sd_type_check": "CHECK ((sd_type = ANY (ARRAY['feature'::text, 'bugfix'::text, 'performance'::text, 'database'::text, 'docs'::text, 'documentation'::text, 'infrastructure'::text, 'refactor'::text, 'security'::text, 'orchestrator'::text, 'qa'::text, 'enhancement'::text, 'uat'::text])))",
   "ai_quality_assessments.ai_quality_assessments_weighted_score_check": "CHECK (((weighted_score >= 0) AND (weighted_score <= 100)))",
   "anthropic_plugin_registry.anthropic_plugin_registry_status_check": "CHECK ((status = ANY (ARRAY['discovered'::text, 'evaluating'::text, 'adapted'::text, 'rejected'::text, 'outdated'::text])))",
+  "apa_standing_assessments.apa_standing_assessments_verdict_check": "CHECK ((verdict = ANY (ARRAY['pass'::text, 'fail'::text, 'error'::text])))",
   "app_rankings.app_rankings_source_check": "CHECK ((source = ANY (ARRAY['apple_appstore'::text, 'google_play'::text, 'product_hunt'::text])))",
   "applications.applications_kind_check": "CHECK (((kind)::text = ANY ((ARRAY['platform'::character varying, 'venture'::character varying])::text[])))",
   "applications.applications_status_check": "CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'inactive'::character varying, 'retired'::character varying])::text[])))",
