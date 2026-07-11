@@ -23,9 +23,24 @@ describe('FR-E1: buildAdvisoryPayload — oracle marker + reply echo', () => {
     expect(p.reply_to).toBe('consult-corr');
     expect(p.correlation_id).toBe('consult-corr'); // overrides the self correlation
   });
-  it('redacts + hard-caps the body', () => {
-    const p = m.buildAdvisoryPayload({ body: 'a'.repeat(99999) });
-    expect(p.body.length).toBeLessThan(99999);
+  it('redacts the body', () => {
+    const p = m.buildAdvisoryPayload({ body: 'plain text, nothing sensitive' });
+    expect(p.body).toBe('plain text, nothing sensitive');
+  });
+});
+
+// QF-20260711-596: buildAdvisoryPayload's body sizing goes through the shared capBody() helper
+// (same as adam-advisory.cjs/coordinator-reply.cjs/worker-signal.cjs since QF-20260710-560) — an
+// over-4096-char body throws BODY_TOO_LONG instead of the previous silent .slice(). Solomon's own
+// FW-3 advisory tail was silently clipped by the pre-fix behavior; this closes that call site.
+describe('QF-20260711-596: buildAdvisoryPayload — loud size-cap rejection (no silent clip)', () => {
+  it('throws BODY_TOO_LONG for a body over the hard cap, never silently truncates', () => {
+    expect(() => m.buildAdvisoryPayload({ body: 'a'.repeat(99999) }))
+      .toThrow(expect.objectContaining({ code: 'BODY_TOO_LONG' }));
+  });
+  it('an at-or-under-cap body still builds normally (no false-positive rejection)', () => {
+    const p = m.buildAdvisoryPayload({ body: 'a'.repeat(4096) });
+    expect(p.body.length).toBe(4096);
   });
 });
 
