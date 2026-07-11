@@ -343,4 +343,18 @@ Three call shapes, batched for context economy:
 
 ---
 
+## 13. Implementation status — standing entrypoint shipped (2026-07-11, SD-LEO-INFRA-APA-PHASE-STANDING-001)
+
+§11.1's "ride the venture's own deploy path" decision is live as a periodic entrypoint, ahead of the full Child A–E decomposition in §7:
+
+- **Instance acquisition**: `lib/apa/live-instance-acquisition.mjs` (`acquireLiveInstance`) — SSRF-guarded Playwright launch against a `venture_deployments` URL, tagged with a `leo-apa-probe/1.0` User-Agent per the §1.1 provenance discipline. This is the FR-1 "injection layer" for the remote/live case that Child A's `sandbox-harness.mjs` (local `npm run dev` boot) and Child C's `browser-executor.js` (caller-injects-page) did not cover.
+- **Assessment loop**: `lib/apa/standing-assessment-round.mjs` (`runApaStandingRound`) composes the existing Child C walk + Child B assertion library (6 primitives) per venture, per cycle.
+- **Scheduling**: registered as EVA scheduler round `apa_standing` (daily) in `lib/eva/eva-master-scheduler.js` — the existing generic periodic-round mechanism, not a bespoke cron. Manual probe: `npm run apa:standing:probe:once`.
+- **Persistence — deliberate divergence from §6**: results land in a **new** `apa_standing_assessments` table (migration `20260711_apa_standing_assessments.sql`), **not** `behavioral_verdicts`. `behavioral_verdicts` (§6, the parallel-to-`post_build_verdicts` table sharing the BUILT/PARTIAL/MISSING/DEVIATED vocabulary) was explicitly deferred to a future child SD and does not exist yet (verified against `schema-reference-snapshot.json` at implementation time). `apa_standing_assessments` is a minimal, standing-cadence-specific shape (`verdict: pass|fail|error`, `primitives_passed`/`primitives_total`, `consecutive_fail_count`) — **not** a substitute for `behavioral_verdicts`. Whoever builds §6/§7's Child D+E convergence-loop integration should treat this table as a data source to migrate/bridge from, not assume it already is `behavioral_verdicts`.
+- **Escalation**: implements a self-fault/venture-fault dampening state machine — single fail → coordinator lane only; ≥2 consecutive structural fails → chairman escalation (blocking); probe-infrastructure failures (timeout/unreachable) are self-fault and never escalate. `verdict='pass'` writes silently (no coordinator/chairman noise), matching §0.5's "silence by default on pass" intent.
+- **Not yet implemented**: the bounded exploratory click-walk (B2), full persona matrix (D), Fable UI/UX judgment (E/§12), the seeded-defect calibration suite (§10.1), findings→fix routing through the canonical triage gate (§10.3), and data-provenance assertions (§10.2a). This standing round only exercises the scripted-journey + deterministic-assertion path (§8's Phase 1 shape) on a recurring cadence — it is not yet a full-surface (§0.5.1) or staged-ladder (§8.5) pass, and per §0.5 does **not** clear an app to the chairman on its own.
+- **Known operational gap**: `venture_deployments` had 0 live rows at ship time (no venture, including MarketLens, had a routed deployment registered) — the round is coded to run cleanly against zero URLs (logs, stamps liveness, exits 0) and needs no further changes once a deployment lands.
+
+---
+
 *Solomon design proposal — propose-only. Adam co-reviews, then brings to the chairman before any SD is authored/sourced.*

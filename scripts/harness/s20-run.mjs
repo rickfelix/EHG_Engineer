@@ -84,6 +84,14 @@ export const POST_LAUNCH_DRIVERS = Object.freeze([
 export const ALL_O_REQUIREMENTS = Object.freeze(['O1', 'O2', 'O3', 'O4', 'O5', 'O6', 'O7', 'O8', 'O9', 'O10']);
 
 /**
+ * O10 is the run-META acceptance criterion (all per-loop O-reqs mapped AND containment
+ * clean AND journal durable) — no band or driver maps to it BY DESIGN, so feeding it into
+ * the per-loop coverage matrix guarantees a noise DEAD_LOOP finding on every single run
+ * (QF-20260711-967 / Solomon F4). Graded once, at run level, in runArc()'s close-out below.
+ */
+export const LOOP_O_REQUIREMENTS = Object.freeze(ALL_O_REQUIREMENTS.filter((r) => r !== 'O10'));
+
+/**
  * Per-band advance policy (SD-LEO-INFRA-HARNESS-FIXTURE-ARTIFACT-001; supersedes the
  * forced-stage-set hatch, rejected by Solomon adjudication F1 9b55e2a6 — the gate is
  * correct, a raw stage-pointer write fabricates traversal history):
@@ -303,12 +311,25 @@ export async function runArc({ runId, entryStage = 20, toStage = 26, clockStart,
 
   await containmentSweep({ supabase, journal, runId, ventureId, advancePolicy });
 
-  // §H3 coverage close-out: every O-requirement observed or first-class-found.
-  const coverage = journal.checkCoverage([...ALL_O_REQUIREMENTS]);
+  // §H3 coverage close-out: every PER-LOOP O-requirement observed or first-class-found.
+  // O10 is excluded here — it is not a loop, it is graded once below (QF-20260711-967).
+  const coverage = journal.checkCoverage([...LOOP_O_REQUIREMENTS]);
   for (const f of coverage.findings) journal.append({ kind: 'finding', finding_type: f.finding_type, event: f.event, o_requirements: f.o_requirements, detail: {} });
   journal.append({ kind: 'lifecycle', event: `run arc pass complete: covered=${coverage.covered.join(',') || 'none'} uncovered=${coverage.uncovered.join(',') || 'none'}`, detail: { coverage } });
 
-  return { runId, ventureId, coverage, journalPath: journal.path };
+  // O10 run-meta verdict, graded ONCE at run level: every per-loop O-req mapped (not dead)
+  // AND the containment sweep found no residue AND the journal is non-empty/durable.
+  const o10AllMapped = coverage.uncovered.length === 0;
+  const o10ResidueClean = !journal.readAll().some((e) => e.kind === 'finding' && e.finding_type === 'RESIDUE');
+  const o10JournalDurable = journal.readAll().length > 0;
+  const o10Pass = o10AllMapped && o10ResidueClean && o10JournalDurable;
+  if (o10Pass) {
+    journal.append({ kind: 'observation', event: 'O10 run-meta verdict: all loops mapped, containment clean, journal durable', o_requirements: ['O10'] });
+  } else {
+    journal.finding('DEAD_LOOP', `O10 run-meta verdict FAILED: all_mapped=${o10AllMapped} residue_clean=${o10ResidueClean} journal_durable=${o10JournalDurable}`, { o_requirements: ['O10'] });
+  }
+
+  return { runId, ventureId, coverage, o10: { pass: o10Pass, allMapped: o10AllMapped, residueClean: o10ResidueClean, journalDurable: o10JournalDurable }, journalPath: journal.path };
 }
 
 async function main() {
@@ -328,7 +349,11 @@ async function main() {
       sweepOnly: args.includes('--sweep-only'),
       advancePolicy: flag('advance-policy', 'real-gates'),
     });
-    console.log(`HARNESS_RUN_PASS run=${res.runId} venture=${res.ventureId} covered=${res.coverage.covered.length}/${ALL_O_REQUIREMENTS.length} journal=${res.journalPath}`);
+    const { coverage } = res;
+    console.log(`HARNESS_RUN_PASS run=${res.runId} venture=${res.ventureId} positive=${coverage.positive.length}/${LOOP_O_REQUIREMENTS.length} mapping_covered=${coverage.covered.length}/${LOOP_O_REQUIREMENTS.length} O10=${res.o10.pass ? 'pass' : 'FAILED'} journal=${res.journalPath}`);
+    if (coverage.blocked.length) console.log(`  BLOCKED: ${coverage.blocked.join(',')}`);
+    if (coverage.cannotDrive.length) console.log(`  CANNOT_DRIVE: ${coverage.cannotDrive.join(',')}`);
+    if (coverage.uncovered.length) console.log(`  DEAD_LOOP: ${coverage.uncovered.join(',')}`);
     process.exit(0);
   } else if (mode === 'status') {
     const journal = new RunJournal(runId);
