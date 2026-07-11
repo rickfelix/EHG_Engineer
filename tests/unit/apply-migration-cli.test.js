@@ -7,7 +7,7 @@
  * unless --allow-any-path, dry-run produces correct outcome marker via
  * child_process.spawnSync on the real file.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,12 +16,24 @@ import { fileURLToPath } from 'node:url';
 
 import { execSync } from 'node:child_process';
 
+const mockQuery = vi.fn();
+const mockEnd = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../scripts/lib/supabase-connection.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    createDatabaseClient: vi.fn(async () => ({ query: mockQuery, end: mockEnd })),
+  };
+});
+
 import {
   parseArgs,
   sha256,
   pathLockId,
   resolveMigrationPath,
   isMigrationCommittedToGit,
+  recordDelegatedApply,
+  DELEGATION_APPROVAL_BASIS,
 } from '../../scripts/apply-migration.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -135,4 +147,91 @@ describe('CLI dry-run end-to-end (smoke; FR-1)', () => {
     expect(res.status).toBe(0);
     expect(res.stderr).toMatch(/Usage:/);
   }, 20000);
+});
+
+// SD-LEO-INFRA-CREATE-MISSING-ADAM-001 — FR-2, FR-7: recordDelegatedApply loud-fail + fail-soft.
+describe('recordDelegatedApply (FR-2, FR-7)', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+    mockEnd.mockClear();
+  });
+
+  it('writes the ledger row with the expected 10-column INSERT shape', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    await recordDelegatedApply({
+      migration_path: 'database/migrations/x.sql',
+      migration_sha256: 'abc123',
+      delegatable: true,
+      delegatable_kind: 'additive',
+      outcome: 'applied',
+      success: true,
+    });
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+    const [sql, params] = mockQuery.mock.calls[0];
+    expect(sql).toMatch(/INSERT INTO public\.adam_delegated_apply_ledger/);
+    expect(sql).toMatch(
+      /\(migration_path, migration_sha256, delegatable, delegatable_kind, outcome, reject_factor, reason, approval_basis, success, error\)/
+    );
+    expect(params).toEqual([
+      'database/migrations/x.sql', 'abc123', true, 'additive', 'applied', null, null,
+      DELEGATION_APPROVAL_BASIS, true, null,
+    ]);
+    expect(mockEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it('never throws when the DB write fails, and surfaces a loud table-named warning (FR-2/FR-7 negative test)', async () => {
+    mockQuery.mockRejectedValueOnce(new Error('relation public.adam_delegated_apply_ledger does not exist'));
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    await expect(
+      recordDelegatedApply({ outcome: 'rejected', reject_factor: 'kill_switch' })
+    ).resolves.toBeUndefined(); // fail-soft: never rejects/throws
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[LEDGER_WRITE_FAILED=adam_delegated_apply_ledger]')
+    );
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('outcome=rejected'));
+    stderrSpy.mockRestore();
+  });
+
+  it('always closes the connection, even on write failure', async () => {
+    mockQuery.mockRejectedValueOnce(new Error('boom'));
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    await recordDelegatedApply({ outcome: 'error' });
+    expect(mockEnd).toHaveBeenCalledTimes(1);
+    vi.restoreAllMocks();
+  });
+});
+
+// SD-LEO-INFRA-CREATE-MISSING-ADAM-001 — FR-6: writer-fields ⊆ table-columns contract.
+describe('writer-fields contract (FR-6)', () => {
+  it("recordDelegatedApply's outbound columns are a subset of the migration's declared columns", () => {
+    const migrationSql = fs.readFileSync(
+      path.join(REPO, 'database', 'migrations', '20260616_adam_delegated_apply_ledger.sql'),
+      'utf8'
+    );
+    const writerColumns = [
+      'migration_path', 'migration_sha256', 'delegatable', 'delegatable_kind',
+      'outcome', 'reject_factor', 'reason', 'approval_basis', 'success', 'error',
+    ];
+    for (const col of writerColumns) {
+      expect(migrationSql, `column "${col}" missing from the ledger migration`).toMatch(
+        new RegExp(`^\\s*${col}\\s+\\S`, 'm')
+      );
+    }
+  });
+});
+
+// SD-LEO-INFRA-CREATE-MISSING-ADAM-001 — FR-5: env-flag regression guard.
+describe('LEO_ADAM_DBAPPLY_DELEGATION env flag (FR-5 regression guard)', () => {
+  it('is present in the shared .env', () => {
+    const envPath = path.join(REPO, '.env');
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    expect(envContent).toMatch(/^LEO_ADAM_DBAPPLY_DELEGATION=/m);
+  });
+
+  it('isDelegationEnabled reads it correctly (strict "on" check)', async () => {
+    const { isDelegationEnabled } = await import('../../lib/migration/adam-delegated-apply.js');
+    expect(isDelegationEnabled({ LEO_ADAM_DBAPPLY_DELEGATION: 'on' })).toBe(true);
+    expect(isDelegationEnabled({ LEO_ADAM_DBAPPLY_DELEGATION: 'true' })).toBe(false);
+    expect(isDelegationEnabled({})).toBe(false);
+  });
 });

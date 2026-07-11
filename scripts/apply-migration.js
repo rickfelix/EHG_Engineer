@@ -67,7 +67,9 @@ async function recordDelegatedApply(row) {
        DELEGATION_APPROVAL_BASIS, row.success ?? null, row.error ? String(row.error).slice(0, 4000) : null]
     );
   } catch (e) {
-    process.stderr.write(`[delegated-apply-ledger-write-failed] ${e.message} (outcome=${row.outcome})\n`);
+    // FR-2 (SD-LEO-INFRA-CREATE-MISSING-ADAM-001): loud, table-named failure signal.
+    // Fail-soft is preserved — this never throws, never blocks the apply outcome.
+    emitWarn(`[LEDGER_WRITE_FAILED=adam_delegated_apply_ledger] ${e.message} (outcome=${row.outcome})`);
   } finally {
     if (fc) await fc.end().catch(() => {});
   }
@@ -474,4 +476,12 @@ if (isEntry) {
   });
 }
 
-export { parseArgs, sha256, pathLockId, resolveMigrationPath, isMigrationCommittedToGit };
+export {
+  parseArgs,
+  sha256,
+  pathLockId,
+  resolveMigrationPath,
+  isMigrationCommittedToGit,
+  recordDelegatedApply,
+  DELEGATION_APPROVAL_BASIS,
+};
