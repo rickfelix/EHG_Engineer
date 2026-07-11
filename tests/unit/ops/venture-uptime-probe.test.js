@@ -143,4 +143,17 @@ describe('ensureDeploymentRows / runVentureUptimeProbe (adversarial-review fix: 
     expect(summary.reachable).toBe(1);
     expect(summary.errors).toHaveLength(0);
   });
+
+  // QF-20260711-772: live-verified against the real venture_deployments schema —
+  // sha is NOT NULL (no default) and status has a CHECK constraint that does not
+  // include 'seeded'. The mock supabase above doesn't enforce constraints, so these
+  // assertions pin the exact insert payload rather than relying on the mock to fail.
+  it('seeds a deployment row with sha populated and status within the CHECK constraint allow-list', async () => {
+    const supabase = makeSupabase({ ventures: [{ id: 'v1', deployment_url: 'https://x' }] });
+    const { rows, errors } = await ensureDeploymentRows(supabase);
+    expect(errors).toHaveLength(0);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].sha).toBeTruthy();
+    expect(['planned', 'deployed_no_traffic', 'routed', 'failed', 'rolled_back']).toContain(rows[0].status);
+  });
 });
