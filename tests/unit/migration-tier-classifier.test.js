@@ -8,6 +8,7 @@
  * so every case is an integration assertion, not a string-shape mock).
  */
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { classifyMigration } from '../../scripts/lib/migration-tier-classifier.mjs';
 
 // ── Adversarial corpus: every one of these MUST classify TIER-2 (never auto-applied) ──
@@ -70,6 +71,13 @@ const TIER2_CORPUS = [
   ['EXTERNAL SECURITY DEFINER comment split (FC-15)', 'CREATE FUNCTION esc() RETURNS void LANGUAGE sql EXTERNAL SECURITY/*c*/DEFINER AS $b$ SELECT 1 $b$;'],
   ['weaponized SECURITY DEFINER auth.users exfil', 'CREATE FUNCTION all_secrets() RETURNS SETOF auth.users LANGUAGE sql SECURITY/*x*/DEFINER AS $b$ SELECT * FROM auth.users $b$;'],
   ['camouflage: additive ADD COLUMN + CTAS-kill', 'ALTER TABLE foo ADD COLUMN note text;\nCREATE TABLE IF NOT EXISTS k AS SELECT pg_terminate_backend(pid) FROM pg_stat_activity;'],
+  // ── QF-20260711-804: the new COMMENT ON COLUMN rule is narrow — every unsupported
+  //    COMMENT shape must still fail closed to TIER-2. ──
+  ['COMMENT ON TABLE (unsupported form)', "COMMENT ON TABLE users IS 'the users table';"],
+  ['COMMENT ON FUNCTION (unsupported form)', "COMMENT ON FUNCTION add_two(int,int) IS 'adds two ints';"],
+  ['COMMENT ON COLUMN with a function-call value (not a literal)', 'COMMENT ON COLUMN foo.bar IS current_user;'],
+  ['COMMENT ON COLUMN with a subquery value', 'COMMENT ON COLUMN foo.bar IS (SELECT description FROM meta LIMIT 1);'],
+  ['COMMENT ON COLUMN concatenating two literals (not a single plain literal)', "COMMENT ON COLUMN foo.bar IS 'a' || 'b';"],
 ];
 
 // ── Provably-additive: every one of these MUST classify TIER-1 (auto-apply eligible) ──
@@ -84,6 +92,19 @@ const TIER1_CORPUS = [
   //    genuinely-additive forms (proves the fix is precise, not a blanket ban). ──
   ['bare CREATE FUNCTION (definition stored, not executed at apply)', 'CREATE FUNCTION add_two(a int, b int) RETURNS int LANGUAGE sql AS $$ SELECT a + b $$;'],
   ['CREATE TABLE IF NOT EXISTS with in-table volatile DEFAULT (fires on INSERT, not apply)', 'CREATE TABLE IF NOT EXISTS evt (id uuid DEFAULT gen_random_uuid(), at timestamptz DEFAULT now());'],
+  // ── QF-20260711-804: COMMENT ON COLUMN allow-rule (pure catalog metadata) ──
+  ['COMMENT ON COLUMN with a plain string literal', "COMMENT ON COLUMN users.email IS 'primary contact address';\n"],
+  ['COMMENT ON COLUMN IS NULL (clears an existing comment)', 'COMMENT ON COLUMN users.email IS NULL;'],
+  // ── QF-20260711-804 regression: a COMMENT string containing prose semicolons must
+  //    NOT be miscounted as extra statement boundaries (the exact false-reject this
+  //    QF fixes — Solomon/harness specimen: 20260623_eva_consultant_recommendations_
+  //    distillation_queue.sql's chairman-facing column comments). ──
+  ['multi-statement additive migration with a semicolon-bearing COMMENT value', `
+ALTER TABLE eva_consultant_recommendations ADD COLUMN IF NOT EXISTS distilled_sd_payload jsonb;
+ALTER TABLE eva_consultant_recommendations ADD COLUMN IF NOT EXISTS confidence_tier text;
+CREATE INDEX IF NOT EXISTS idx_ecr_conf ON eva_consultant_recommendations(confidence_tier);
+COMMENT ON COLUMN eva_consultant_recommendations.distilled_sd_payload IS 'the distilled SD JSON payload (distiller writes; chairman reviews; disposition-gate checks).';
+`],
 ];
 
 describe('classifyMigration — TIER-2 (must never auto-apply)', () => {
@@ -139,5 +160,19 @@ describe('classifyMigration — invariants', () => {
       const sql = `CREATE FUNCTION esc() RETURNS void LANGUAGE sql SECURITY${zw}DEFINER AS $b$ SELECT 1 $b$;`;
       expect(classifyMigration(sql).tier, `U+${cp.toString(16)} split must be TIER-2`).toBe(2);
     }
+  });
+
+  it('QF-20260711-804 regression: the real specimen no longer false-rejects on under-split/embedded-semicolon ambiguity', () => {
+    // Live specimen (b917c3e1): this migration's chairman-facing COMMENT ON COLUMN
+    // prose contains semicolons, which used to inflate the residue semicolon count past
+    // stmts.length (under_split_ambiguity) and separately trip the per-statement
+    // embedded-semicolon check (embedded_semicolon_ambiguity) -- both now fixed.
+    // The file still classifies TIER-2 overall for a SEPARATE, correctly-conservative
+    // reason: one ADD COLUMN carries an inline REFERENCES (FK) clause, which Rule C
+    // deliberately excludes (out of scope for this fix -- FK support is its own decision).
+    const sql = readFileSync('database/migrations/20260623_eva_consultant_recommendations_distillation_queue.sql', 'utf8');
+    const r = classifyMigration(sql);
+    expect(r.reason).not.toBe('under_split_ambiguity');
+    expect(r.reason).not.toBe('embedded_semicolon_ambiguity');
   });
 });
