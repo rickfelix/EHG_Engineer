@@ -231,6 +231,24 @@ function promoteGroup(group) {
   return { title, sourceIds };
 }
 
+// QF-20260711-977: three action_items shapes exist in the wild -- the retro-agent's
+// prompt-driven output uses { item, owner, priority }; generateSmartActionItems() uses
+// { action, owner, deadline, success_criteria, priority, source }; a manually-authored
+// SD_COMPLETION retrospective uses { title, description, owner_role, priority }. The
+// original inline `i.item || i.action || '(no text)'` never checked the third shape's
+// `.title`, so every manually-authored retro's action items promoted as literal
+// "(no text)" / "(owner: unassigned)" text. Mirrors the already-fixed
+// scripts/promote-retro-action-items.mjs actionText()/actionOwner() (QF-20260711-253)
+// -- that script has no exports (plain top-level script, not a module), so ported here
+// rather than refactored across files.
+export function actionText(item) {
+  return item.item || item.action || item.title || '(no text)';
+}
+
+export function actionOwner(item) {
+  return item.owner || item.owner_role || 'unassigned';
+}
+
 /** FR-4(a) — retro action-item fold-in: promote-retro-action-items.mjs's shape, unwindowed. */
 export async function foldInRetroActionItems(supabase, { dryRun = true } = {}) {
   const { data: retros, error } = await supabase
@@ -251,7 +269,7 @@ export async function foldInRetroActionItems(supabase, { dryRun = true } = {}) {
     const title = `[Retro action items] ${retro.sd_id || retro.title || retro.id}`.slice(0, 100);
     const description = [
       `Auto-promoted by S1 sweep from ${highPriority.length} high-priority action item(s) in retrospective ${retro.id} (SD ${retro.sd_id || 'n/a'}).`,
-      ...highPriority.map((i, idx) => `${idx + 1}. ${i.item || i.action || '(no text)'} (owner: ${i.owner || 'unassigned'})`),
+      ...highPriority.map((i, idx) => `${idx + 1}. ${actionText(i)} (owner: ${actionOwner(i)})`),
     ].join('\n');
     const cliArgs = ['scripts/create-quick-fix.js', '--title', title, '--type', 'bug', '--severity', 'medium', '--description', description];
     if (retro.target_application) cliArgs.push('--target-application', retro.target_application);
