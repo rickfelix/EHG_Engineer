@@ -87,3 +87,15 @@ Any reader that excludes `category='harness_backlog'` to build an "actionable" v
 ### Drain gauge
 
 `node scripts/fleet-dashboard.cjs draingauge` (also included in the `all` render) shows open-actionable count (`category='harness_backlog' AND archived_at IS NULL AND status` not resolved-equivalent) and oldest-actionable-age, via an exact `count()` query — not a row fetch, which PostgREST implicitly caps at 1000 rows.
+
+## S1 enumeration sweep — one-time legacy complement (SD-LEO-INFRA-HARNESS-BACKLOG-S1-ENUMERATION-SWEEP-001, 2026-07-10)
+
+The drain policy above is write-time-forward: it closes rows going forward but never touched the pre-existing backlog that accumulated before it shipped. `scripts/one-off/s1-backlog-sweep.mjs` is the one-time complement — it paginates every open `harness_backlog` row (PostgREST-safe, 1000-row pages + `COUNT(*)` reconciliation, throws `PAGINATION_MISMATCH` on drift) and dispositions each into one of:
+
+- **closed** — `classifyDoneState()` finds the underlying premise already shipped/dead (via `checkFeedbackPremiseLiveness`, widened to a 180-day completed / 30-day recent window) at `confidence_score >= 0.9`; archived with `category`, `archived_at`, and `resolution_notes` written atomically.
+- **held_for_review** — plausible-but-unconfirmed closure; left open for a human/campaign pass rather than false-closed.
+- **survivor** — genuinely open; grouped by content fingerprint (`FINGERPRINT_TYPE='harness_backlog_legacy_sweep'`) and promoted to a QF-candidate once a group hits `PROMOTION_THRESHOLD` (3), capped at `DEFAULT_MAX_PROMOTIONS` (15) per invocation.
+
+It also folds in `retrospectives.action_items` and stale `flag_review` rows via the same defer-only decision path as the write-time policy (`scripts/chairman-decisions.mjs decide ... defer` — the sweep never auto-approves/rejects, per the chairman-decision constitutional rule in `lib/chairman/decision-queue.mjs`). `SIBLING_CLAIMED_IDS` excludes rows already claimed by concurrently-running sibling SDs to avoid double-processing.
+
+**Not yet run at full scale.** The PR shipped the sweep script + tests only; a full `--apply` pass against the ~2,397-row legacy backlog is a deferred, budget-capped, multi-invocation follow-up (see the SD's PRD) — run in batches via repeated `node scripts/one-off/s1-backlog-sweep.mjs --apply` invocations, checking the printed ledger (`accountedFor` vs `liveCount`) between runs.
