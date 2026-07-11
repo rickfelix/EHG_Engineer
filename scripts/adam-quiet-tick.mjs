@@ -117,6 +117,50 @@ export async function readCriticalPathParents(sb) {
   }
 }
 
+// QF-20260710-056: the quiet-tick only watched Adam-PM-board nodes (task_ledger) —
+// a live venture stuck mid-traversal (orchestrator_state='blocked') went silently
+// undetected for ~50min because nothing else was watching it. Scoped to
+// status='active' + orchestrator_state='blocked' only (live-verified: adding a
+// workflow_status='pending' OR-clause, as the raw incident report suggested, pulled
+// in 25+ status='cancelled' dead/archived/e2e-fixture ventures whose workflow_status
+// field was simply never updated after termination — pure noise, not stalls). A
+// fresh stage_executions row means the venture is actively progressing, not
+// stalled — checked per-candidate so a venture mid-stage-transition is never
+// false-flagged. Escalates (escalated:true) only once a candidate has already been
+// seen on a prior tick, matching the codebase's default-to-NOT-escalating bias.
+const VENTURE_STALL_THRESHOLD_MS = 15 * 60 * 1000;
+
+export async function checkVentureTraversalStalls(sb, priorSnapshot = {}) {
+  const thresholdIso = new Date(Date.now() - VENTURE_STALL_THRESHOLD_MS).toISOString();
+  const snapshot = {};
+  const alerted = [];
+  try {
+    const { data: stuck } = await sb
+      .from('ventures')
+      .select('id, name, orchestrator_state, status, updated_at')
+      .eq('status', 'active')
+      .eq('orchestrator_state', 'blocked')
+      .lt('updated_at', thresholdIso);
+
+    for (const v of (stuck || [])) {
+      const { data: recent } = await sb
+        .from('stage_executions')
+        .select('id')
+        .eq('venture_id', v.id)
+        .gte('updated_at', thresholdIso)
+        .limit(1);
+      if (recent && recent.length > 0) continue; // actively executing, not stalled
+
+      const escalated = !!priorSnapshot[v.id];
+      snapshot[v.id] = priorSnapshot[v.id] || Date.now();
+      alerted.push({ id: v.id, name: v.name, orchestrator_state: v.orchestrator_state, escalated });
+    }
+  } catch (e) {
+    return { snapshot: priorSnapshot, alerted: [], error: e && e.message };
+  }
+  return { snapshot, alerted };
+}
+
 // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-3) — surface the Adam session's
 // unacked directed rows as FIRST-CLASS lines in the TICK'S OWN stdout (the act-on-flagged-
 // lines contract, same as QUIET_TICK_STALL_ALERT). Required because scriptCore truncates
@@ -227,6 +271,7 @@ async function main() {
   // {salient, stallSnapshot} — treat it as the salient half and start with no stall snapshot.
   const priorSalient = priorState.salient !== undefined ? priorState.salient : priorState;
   const priorStallSnapshot = priorState.stallSnapshot || {};
+  const priorVentureStallSnapshot = priorState.ventureStallSnapshot || {};
 
   // Child B FR-2/FR-3: intended-hold-vs-genuine-stall check on critical-path parents every
   // tick. Only a genuine stall (per stall-detector.js's classifier) ever calls
@@ -237,6 +282,15 @@ async function main() {
     stall = await checkAndAlertStalls(sb, parents, priorStallSnapshot, {});
   } catch (e) {
     stall = { snapshot: priorStallSnapshot, alerted: [], error: e && e.message };
+  }
+
+  // QF-20260710-056: a venture stuck mid-traversal is the thing that matters most —
+  // check it every tick, independent of the task_ledger stall watch above.
+  let ventureStall = { snapshot: priorVentureStallSnapshot, alerted: [] };
+  try {
+    ventureStall = await checkVentureTraversalStalls(sb, priorVentureStallSnapshot);
+  } catch (e) {
+    ventureStall = { snapshot: priorVentureStallSnapshot, alerted: [], error: e && e.message };
   }
 
   // SD-LEO-FIX-ADAM-OUTBOUND-SILENCE-001: watch Adam's own outbound rows at a live
@@ -257,7 +311,7 @@ async function main() {
   // reaches the coordinator on a real belt/venture delta, never a "still idle" status.
   const salient = await readSalientState(sb);
   const delta = detectSalientDelta(priorSalient, salient);
-  saveLastState({ salient, stallSnapshot: stall.snapshot });
+  saveLastState({ salient, stallSnapshot: stall.snapshot, ventureStallSnapshot: ventureStall.snapshot });
 
   const delaySeconds = decideCadence({ quiescent, partyOffsetS: ADAM_PARTY_OFFSET_S });
 
@@ -269,6 +323,7 @@ async function main() {
     failedCount: tick.failedCount,
     boardReconcile,
     stallAlerted: stall.alerted,
+    ventureStallAlerted: ventureStall.alerted,
     inboxSurfaced: inboxSurface.items.length,
     inboxDirectives: inboxSurface.directives,
     outboundSilence,
@@ -285,6 +340,7 @@ async function main() {
       `fail=${tick.failedCount} ` +
       `reconcile=parents:${boardReconcile.parents},errors:${boardReconcile.errors.length} ` +
       `stalls=${stall.alerted.length} ` +
+      `ventureStalls=${ventureStall.alerted.length} ` +
       `inbox=${inboxSurface.items.length}(dir:${inboxSurface.directives}) ` +
       `probes=${outboundSilence.probed.length} esc=${outboundSilence.escalated.length} ` +
       `ping=${delta.changed ? delta.fields.join(',') : 'suppressed'} ` +
@@ -295,6 +351,9 @@ async function main() {
     }
     for (const a of stall.alerted) {
       console.log(`QUIET_TICK_STALL_ALERT=adam node=${a.id} title="${a.title}" escalated=${a.escalated}`);
+    }
+    for (const v of ventureStall.alerted) {
+      console.log(`QUIET_TICK_VENTURE_STALL_ALERT=adam venture=${v.id} name="${v.name}" state=${v.orchestrator_state} escalated=${v.escalated}`);
     }
     // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-3): first-class inbox surfacing —
     // directive/reply-needed rows carry the distinct hard-interrupt token.
