@@ -57,7 +57,11 @@ async function seedRetro(overrides = {}) {
       retro_type: overrides.retro_type || 'SD_COMPLETION',
       learning_category: overrides.learning_category || 'PROCESS_IMPROVEMENT',
       action_items: overrides.action_items || [],
-      metadata: overrides.metadata || {},
+      // QF-20260711-711: this seeds directly into the shared production table (no
+      // isolated test schema). Marking rows as test fixtures lets
+      // promote-retro-action-items.mjs defensively exclude them even if this
+      // teardown ever fails to clean up again.
+      metadata: { ...(overrides.metadata || {}), test_fixture: true },
       target_application: overrides.target_application || 'EHG_Engineer',
       status: 'DRAFT',
     })
@@ -71,10 +75,19 @@ async function seedRetro(overrides = {}) {
 describeDb('Harness-backlog drain policy (live DB)', () => {
   afterEach(async () => {
     if (seededIds.length > 0) {
-      await db.from('feedback').delete().in('id', seededIds.splice(0, seededIds.length));
+      const { error } = await db.from('feedback').delete().in('id', seededIds.splice(0, seededIds.length));
+      if (error) throw new Error(`teardown: feedback cleanup failed: ${JSON.stringify(error)}`);
     }
     if (seededRetroIds.length > 0) {
-      await db.from('retrospectives').delete().in('id', seededRetroIds.splice(0, seededRetroIds.length));
+      const ids = seededRetroIds.splice(0, seededRetroIds.length);
+      // retrospectives_audit has an AFTER INSERT trigger + an ON DELETE NO ACTION FK
+      // back to retrospectives (unlike its CASCADE sibling FKs), so the parent delete
+      // below 23503s unless its own audit children are cleared first (QF-20260711-711
+      // RCA: this is exactly why 14 fixture rows silently survived 7 prior runs).
+      const { error: auditError } = await db.from('retrospectives_audit').delete().in('retrospective_id', ids);
+      if (auditError) throw new Error(`teardown: retrospectives_audit cleanup failed: ${JSON.stringify(auditError)}`);
+      const { error } = await db.from('retrospectives').delete().in('id', ids);
+      if (error) throw new Error(`teardown: retrospectives cleanup failed: ${JSON.stringify(error)}`);
     }
   });
 
