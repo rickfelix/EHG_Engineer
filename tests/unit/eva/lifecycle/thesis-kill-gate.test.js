@@ -140,11 +140,52 @@ describe('checkThesisKillGate — binding mode', () => {
     expect(createOrReusePendingDecision).toHaveBeenCalledWith(
       expect.objectContaining({
         ventureId: VENTURE_ID,
-        decisionType: 'thesis_kill_tier_b',
+        // Adversarial review (2026-07-11): decisionType is scoped PER-CRITERION
+        // (thesis_kill_tier_b:<criterionId>), not the bare constant — otherwise two
+        // criteria firing at the same stage would collapse into one merged decision row.
+        decisionType: 'thesis_kill_tier_b:kill-demand-signals',
         forceDecisionCreation: true,
         briefData: expect.objectContaining({ decision: 'kill', criterion_id: 'kill-demand-signals' }),
       })
     );
+  });
+
+  it('two distinct criteria fired at the same stage mint TWO separate decisions (never share/merge one row)', async () => {
+    const { checkThesisKillGate } = await importGateWithFlag('binding');
+    const { createOrReusePendingDecision } = await import('../../../../lib/eva/chairman-decision-watcher.js');
+    createOrReusePendingDecision.mockResolvedValue({ id: 'dec-x', isNew: true, skipped: false });
+
+    const supabase = buildSupabaseMock({
+      killCriteria: [dueCriterion({ id: 'kill-a', metric: 'metric_a' }), dueCriterion({ id: 'kill-b', metric: 'metric_b' })],
+      decisionStatus: 'pending',
+    });
+
+    const result = await checkThesisKillGate({
+      supabase, ventureId: VENTURE_ID, fromStage: 11, toStage: 12,
+      resolveObservedValue: () => 8,
+    });
+
+    expect(result.blocked_by).toHaveLength(2);
+    expect(createOrReusePendingDecision).toHaveBeenCalledTimes(2);
+    const decisionTypes = createOrReusePendingDecision.mock.calls.map((c) => c[0].decisionType);
+    expect(new Set(decisionTypes).size).toBe(2); // distinct, never collapsed into one row
+    expect(decisionTypes).toEqual(expect.arrayContaining(['thesis_kill_tier_b:kill-a', 'thesis_kill_tier_b:kill-b']));
+  });
+
+  it('a decision mint/status-read failure fails CLOSED (stays blocked, unlike the fail-open venture-read/evaluator paths)', async () => {
+    const { checkThesisKillGate } = await importGateWithFlag('binding');
+    const { createOrReusePendingDecision } = await import('../../../../lib/eva/chairman-decision-watcher.js');
+    createOrReusePendingDecision.mockRejectedValue(new Error('simulated DB failure'));
+
+    const supabase = buildSupabaseMock({ killCriteria: [dueCriterion()], decisionStatus: 'pending' });
+
+    const result = await checkThesisKillGate({
+      supabase, ventureId: VENTURE_ID, fromStage: 11, toStage: 12,
+      resolveObservedValue: () => 8,
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.blocked_by).toHaveLength(1);
   });
 
   it('a FIRED criterion WITH an approved decision (governed override) does NOT block', async () => {
@@ -188,7 +229,7 @@ describe('checkThesisKillGate — binding mode', () => {
     // Every call reuses the same decision_type/criterion — proving repeated advancement
     // attempts against an un-overridden fired criterion stay blocked, not flap or clear.
     for (const call of createOrReusePendingDecision.mock.calls) {
-      expect(call[0]).toMatchObject({ decisionType: 'thesis_kill_tier_b', briefData: expect.objectContaining({ criterion_id: 'kill-demand-signals' }) });
+      expect(call[0]).toMatchObject({ decisionType: 'thesis_kill_tier_b:kill-demand-signals', briefData: expect.objectContaining({ criterion_id: 'kill-demand-signals' }) });
     }
   });
 
