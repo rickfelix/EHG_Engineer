@@ -9,7 +9,7 @@
  * FR-5 transparency: scoreAgenticFit records sub-scores + flags + multiplier
  * FR-6 config-SSOT: weights/params overridable
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   AF_WEIGHTS,
   AGENT_LEVERAGE_FLOOR,
@@ -18,6 +18,7 @@ import {
   classifyDisadvantages,
   scoreAgenticFit,
   buildAgenticFitAdvisory,
+  analyzeAgenticFit,
 } from '../../../../lib/eva/stage-zero/synthesis/agentic-fit.js';
 import { calculateWeightedScore } from '../../../../lib/eva/stage-zero/profile-service.js';
 import { evaluateKillGate } from '../../../../lib/eva/stage-templates/stage-03.js';
@@ -163,5 +164,51 @@ describe('FR-5 transparency + FR-6 config', () => {
     );
     expect(r.fit_composite).toBe(50);
     expect(r.machine_improvement_bonus).toBe(0); // multiplier disabled via config
+  });
+});
+
+describe('QF-20260710-236: analyzeAgenticFit calls client.complete with the correct signature', () => {
+  const mockPathOutput = {
+    suggested_name: 'AutoOps Scheduler',
+    suggested_problem: 'Ops teams manually triage recurring infra alerts',
+    suggested_solution: 'Agent fleet triages + resolves recurring alert classes',
+    target_market: 'Mid-market SaaS ops teams',
+  };
+
+  const mockLLMAnalysis = {
+    agent_leverage: 85,
+    compounding: 70,
+    kill_speed: 60,
+    attention_economy: 75,
+    machine_improvement: 40,
+    disadvantage_flags: [],
+    confidence: 0.8,
+    summary: 'Strong agentic fit.',
+  };
+
+  it('invokes complete(systemPrompt, userPrompt, options) — NOT complete(singleObject)', async () => {
+    const complete = vi.fn().mockResolvedValue({ content: JSON.stringify(mockLLMAnalysis) });
+    await analyzeAgenticFit(mockPathOutput, { llmClient: { complete }, logger: { log: vi.fn(), warn: vi.fn() } });
+
+    expect(complete).toHaveBeenCalledTimes(1);
+    const args = complete.mock.calls[0];
+    // Regression guard: the historical bug passed a single object as arg 1, leaving
+    // userPrompt undefined so the adapter fell back to a literal 'Hello' turn.
+    expect(args).toHaveLength(3);
+    expect(typeof args[0]).toBe('string'); // systemPrompt
+    expect(typeof args[1]).toBe('string'); // userPrompt — must be a real prompt string, not undefined
+    expect(args[1]).toContain('AutoOps Scheduler');
+    expect(args[1].length).toBeGreaterThan(20);
+    expect(typeof args[2]).toBe('object'); // options (temperature/maxTokens)
+  });
+
+  it('produces a real scored result from the mocked LLM response (happy path)', async () => {
+    const complete = vi.fn().mockResolvedValue({ content: JSON.stringify(mockLLMAnalysis) });
+    const result = await analyzeAgenticFit(mockPathOutput, { llmClient: { complete }, logger: { log: vi.fn(), warn: vi.fn() } });
+
+    expect(result.component).toBe('agentic_fit');
+    expect(result.dimension_scores).toEqual({ agent_leverage: 85, compounding: 70, kill_speed: 60, attention_economy: 75 });
+    expect(result.agentic_fit_score).toBeGreaterThan(0);
+    expect(result.confidence).toBeCloseTo(0.8);
   });
 });
