@@ -53,4 +53,16 @@ The v1 pass's parallel-build contract survives, re-cut: **spine core first** (bi
 **What would change this review:** if you want ventures operable WITHOUT standing per-venture agent orgs (cheaper, simpler — EVA drives everything directly and "CEO" is just a reporting label), then the spine core shrinks to protocol + read model + fabric, the factory is archived rather than re-based, and agent-lifecycle drops to role contracts only. That is a coherent, cheaper company — but it is not the organization you described on the 10th, and the truth-layer/earned-autonomy machinery loses its subject. Say the word and I re-cut once more; absent that, the org-centered map above stands.
 **Verify-first (before the spine core SD is cut):** one seeded end-to-end thread on the folded factory — create one CEO+VP org for the fixture venture through the re-based identity path, have it claim one message, make one budget-checked decision, and leave one calibration row. That single thread proves the fold-in is real before six satellites take a dependency on it — the run-before-you-build lesson of this entire week.
 
+---
+
+## 8. RATIFIED — the §7 counterfactual is closed (chairman, 2026-07-11 evening)
+
+The chairman confirmed the **org-centered map** and rejected the EVA-as-sole-decision-maker variant, with rationale that is now a **binding design principle** across the spine core and agent-lifecycle satellite:
+
+- **Role-specialized decision quality:** VPs and CEOs carry genuinely distinct knowledge/skill profiles — different contexts, prompts, and expertise per role, never one brain wearing hats. Role **knowledge-profiles are first-class data** in the agent-lifecycle satellite (part of the role contract, versioned, inherited on succession).
+- **EVA is chief-of-staff, never the decision bottleneck:** context-switching overload in a single decision-maker is the named failure mode. Decisions distribute to the role closest to the domain; EVA orchestrates, aggregates, and routes exceptions — she does not decide in the roles' place. The spine's authority-distribution section encodes this: authority grants attach to the DOMAIN role, and an EVA-decides fallback on a domain matter is itself a typed exception, not a silent default.
+- **This is what makes the truth layer meaningful:** per-role calibration (the folded factory's prediction/outcome engine) only measures anything if roles genuinely decide. Earned autonomy widens per role on its own calibration record — which requires the decisions to be genuinely theirs.
+
+No re-cut needed; the map in §5 stands ratified.
+
 *Propose-only. Companion: `operating-company-satellite-architecture-v1.md` (per-satellite detail, to be re-cut to these boundaries). Committed at creation per the evidence-durability rule.*
