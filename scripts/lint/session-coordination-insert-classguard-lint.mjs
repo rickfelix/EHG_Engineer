@@ -32,6 +32,10 @@ import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { Linter } from 'eslint';
 import rule from '../../eslint-rules/no-raw-session-coordination-insert.js';
+// SD-LEO-INFRA-SESSION-COORDINATION-LANE-001 (clause a): a second, narrower class-guard
+// sharing this driver's diff/all/exclusion machinery — flags target_session sourced from an
+// echoed row field instead of a fresh identity-resolver call.
+import echoedTargetRule from '../../eslint-rules/no-echoed-session-coordination-target.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -44,6 +48,8 @@ const EXCLUDE_PATHS = new Set(['lib/coordinator/dispatch.cjs']);
 const EXCLUDE_DIR_PREFIXES = ['tests/'];
 
 const RULE_ID = 'session-coordination-insert-classguard/no-raw-session-coordination-insert';
+const ECHOED_TARGET_RULE_ID = 'session-coordination-insert-classguard/no-echoed-session-coordination-target';
+const CLASSGUARD_RULE_IDS = new Set([RULE_ID, ECHOED_TARGET_RULE_ID]);
 
 const FLAT_CONFIG = {
   languageOptions: {
@@ -56,10 +62,16 @@ const FLAT_CONFIG = {
     },
   },
   plugins: {
-    'session-coordination-insert-classguard': { rules: { 'no-raw-session-coordination-insert': rule } },
+    'session-coordination-insert-classguard': {
+      rules: {
+        'no-raw-session-coordination-insert': rule,
+        'no-echoed-session-coordination-target': echoedTargetRule,
+      },
+    },
   },
   rules: {
     [RULE_ID]: 'error',
+    [ECHOED_TARGET_RULE_ID]: 'error',
   },
 };
 
@@ -118,7 +130,7 @@ function lintFile(linter, absPath) {
     return [{ filePath: relPath, line: 0, column: 0, message: `Parse error: ${err.message}` }];
   }
   return messages
-    .filter((m) => m.ruleId === RULE_ID)
+    .filter((m) => CLASSGUARD_RULE_IDS.has(m.ruleId))
     .map((m) => ({ filePath: relPath, line: m.line, column: m.column, message: m.message }));
 }
 

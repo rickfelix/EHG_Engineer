@@ -7,6 +7,10 @@ name: Session-Coordination Raw-Insert Class-Guard Lint
 # A DB-level advisory trigger already covers existing raw producers (see database/migrations/
 # 20260702_session_coordination_insert_lint.sql) -- this lint's job is to stop NEW raw sites.
 #
+# SD-LEO-INFRA-SESSION-COORDINATION-LANE-001 (clause a): the same driver script also runs a
+# second rule, no-echoed-session-coordination-target, flagging a target_session sourced from
+# an echoed prior-row field instead of a fresh identity-resolver call.
+#
 # GENUINELY BLOCKING (no continue-on-error): this repo's `npm run lint` (eslint.config.js
 # flat-config run) is not invoked by any other CI workflow, so registering the rule only in
 # eslint.config.js would not actually enforce anything -- this dedicated workflow is the real
@@ -18,6 +22,7 @@ on:
       - 'scripts/**/*.{js,mjs,cjs}'
       - 'lib/**/*.{js,mjs,cjs}'
       - 'eslint-rules/no-raw-session-coordination-insert.js'
+      - 'eslint-rules/no-echoed-session-coordination-target.js'
       - 'scripts/lint/session-coordination-insert-classguard-lint.mjs'
       - '.github/workflows/session-coordination-insert-classguard-lint.yml'
 
