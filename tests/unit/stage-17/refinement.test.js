@@ -22,6 +22,7 @@ vi.mock('../../../lib/llm/client-factory.js', () => ({
 
 import { writeArtifact } from '../../../lib/eva/artifact-persistence-service.js';
 import { generateRefinedVariants } from '../../../lib/eva/stage-17/refinement.js';
+import { ARTIFACT_TYPES } from '../../../lib/eva/artifact-types.js';
 
 describe('refinement', () => {
   beforeEach(() => {
@@ -107,6 +108,26 @@ describe('refinement', () => {
       );
       const pricingIds = writeArtifact.mock.calls.map((call) => call[1].metadata.screenId);
       expect(pricingIds.some((id) => homeIds.includes(id))).toBe(false);
+    });
+
+    // SD-LEO-FIX-REGISTER-STAGE-REFINED-001: the live Pass-1-selection refinement path
+    // wrote artifactType: 'stage_17_refined' as a hardcoded literal not registered in
+    // ARTIFACT_TYPES nor the venture_artifacts_artifact_type_check CHECK constraint --
+    // every writeArtifact() call threw, so this path had never successfully persisted
+    // a refined variant in production. Asserts the call now sources the type from the
+    // single-source-of-truth registry (matching artifact-types.js's own "no hardcoded
+    // artifact type strings" rule), catching a future re-drift between the two.
+    test('writes artifactType from the ARTIFACT_TYPES registry (not a hardcoded literal)', async () => {
+      await generateRefinedVariants(
+        'v-1', 'Home',
+        ['<html>A1</html>', '<html>A2</html>'],
+        { colors: ['#FF5733'], typeScale: { heading: 'Inter', body: 'Roboto' } },
+        {}
+      );
+      for (const call of writeArtifact.mock.calls) {
+        expect(call[1].artifactType).toBe(ARTIFACT_TYPES.BLUEPRINT_S17_REFINED);
+      }
+      expect(ARTIFACT_TYPES.BLUEPRINT_S17_REFINED).toBe('stage_17_refined');
     });
   });
 });

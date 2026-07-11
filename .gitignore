@@ -218,6 +218,10 @@ database/*.json
 # … but the schema-reference lint snapshot is a COMMITTED artifact the CI lint
 # reads offline (SD-LEO-INFRA-SCHEMA-REFERENCE-LINT-001)
 !database/schema-reference-snapshot.json
+# … and the pending-chairman-gate allowlist is a COMMITTED, reason-required
+# exemption config the artifact-type parity test reads offline
+# (SD-LEO-FIX-REGISTER-STAGE-REFINED-001)
+!database/artifact-type-parity-pending-chairman-gate.json
 
 # One-off root level scripts
 audit_rls.js
