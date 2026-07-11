@@ -37,12 +37,36 @@ CREATE TABLE IF NOT EXISTS crm_pipeline_cases (
   current_stage TEXT NOT NULL,
   -- Deal value in cents (integer, avoids float rounding) — NULL means "not yet estimated",
   -- distinct from 0 ("estimated at zero"). Only meaningful for case_type='pipeline'.
-  deal_value_cents BIGINT,
-  deal_currency TEXT NOT NULL DEFAULT 'USD',
+  -- USD-only for now (the meeting-surface reader sums across cases into one total; mixed
+  -- currencies would silently mis-sum, so non-USD is rejected at write time below).
+  deal_value_cents BIGINT CHECK (deal_value_cents IS NULL OR deal_value_cents >= 0),
+  deal_currency TEXT NOT NULL DEFAULT 'USD' CHECK (deal_currency = 'USD'),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   FOREIGN KEY (current_stage, case_type) REFERENCES crm_pipeline_stage_defs(stage_key, case_type)
 );
+
+-- Venture-access enforcement: a pipeline case may only be opened for a (contact, venture)
+-- pair that crm_contact_venture_access actually grants — makes the grant table genuinely
+-- CONSULTED, not just written (round-2 adversarial review finding). DB-level, not just
+-- app-layer, matching the stranger-provenance/no-stage-skip guard pattern.
+CREATE OR REPLACE FUNCTION crm_enforce_pipeline_case_venture_access() RETURNS TRIGGER AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM crm_contact_venture_access
+    WHERE contact_id = NEW.contact_id AND venture_id = NEW.venture_id
+  ) THEN
+    RAISE EXCEPTION 'crm_pipeline_cases: venture-access guard rejected contact % for venture % — no crm_contact_venture_access grant',
+      NEW.contact_id, NEW.venture_id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_crm_enforce_pipeline_case_venture_access ON crm_pipeline_cases;
+CREATE TRIGGER trg_crm_enforce_pipeline_case_venture_access
+  BEFORE INSERT ON crm_pipeline_cases
+  FOR EACH ROW EXECUTE FUNCTION crm_enforce_pipeline_case_venture_access();
 
 CREATE TABLE IF NOT EXISTS crm_pipeline_transitions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -102,15 +126,21 @@ BEGIN
   IF v_current_stage IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'case_not_found');
   END IF;
-  IF v_current_stage != p_from_stage THEN
-    RETURN jsonb_build_object('success', false, 'error', 'stage_mismatch', 'expected', v_current_stage);
-  END IF;
+
+  -- Idempotency replay MUST be checked BEFORE the stage-mismatch check: a retried call
+  -- that arrives after the original transition already committed will see current_stage
+  -- advanced past p_from_stage. Checking stage-mismatch first would return a false
+  -- rejection for exactly the retry-after-success case idempotency exists to handle.
   IF p_idempotency_key IS NOT NULL THEN
     SELECT id INTO v_existing_transition_id FROM crm_pipeline_transitions
       WHERE case_id = p_case_id AND idempotency_key = p_idempotency_key;
     IF v_existing_transition_id IS NOT NULL THEN
       RETURN jsonb_build_object('success', true, 'idempotent_replay', true, 'transition_id', v_existing_transition_id);
     END IF;
+  END IF;
+
+  IF v_current_stage != p_from_stage THEN
+    RETURN jsonb_build_object('success', false, 'error', 'stage_mismatch', 'expected', v_current_stage);
   END IF;
 
   INSERT INTO crm_pipeline_transitions (case_id, from_stage, to_stage, provenance_event_id, idempotency_key)
