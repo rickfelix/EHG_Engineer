@@ -143,6 +143,41 @@ describe('recordDisposition plan_ratification gate (TS-1 / TS-6)', () => {
     expect(from).not.toHaveBeenCalled(); // negative path leaves no partial state
   });
 
+  it('repair path: plan_ratification dedup RE-APPLIES the wave effect (partial-failure heal)', async () => {
+    // Simulates: disposition row committed on a prior call, wave effect lost.
+    // The dedup path must re-run applyWaveDisposition (idempotent), not
+    // short-circuit it away forever (adversarial review CRITICAL).
+    const existingRow = { id: 'e1', payload: { question_key: 'dq_y', status: 'dispositioned' } };
+    const stamped = [];
+    const inserted = [];
+    const supabase = {
+      from: (table) => ({
+        system_events: {
+          select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: existingRow, error: null }) }) }) }),
+        },
+        roadmap_wave_items: {
+          insert: (row) => { inserted.push(row); return { select: () => ({ single: () => Promise.resolve({ data: { id: 'item-2' }, error: null }) }) }; },
+        },
+        roadmap_waves: {
+          select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { roadmap_id: 'r1' }, error: null }) }) }),
+        },
+        strategic_roadmaps: {
+          update: () => ({ in: (_c, ids) => { stamped.push(...ids); return Promise.resolve({ error: null }); } }),
+        },
+      })[table],
+    };
+    const { created } = await recordDisposition(supabase, {
+      decisionType: 'plan_ratification',
+      subject: { workstream: 'spine-core' },
+      decisionKey: 'spine-core',
+      waveDisposition: { waveId: WAVE_ID },
+    });
+    expect(created).toBe(false);
+    expect(inserted).toHaveLength(1); // effect re-applied on the dedup path
+    expect(inserted[0].source_id).toBe(deterministicSourceId('spine-core')); // workstream identity, not question_key
+    expect(stamped).toEqual(['r1']);
+  });
+
   it('TS-6 control: artifact ratification (fixture class) records without a wave disposition', async () => {
     // Existing-row dedup path exercises the full pre-insert flow without a DB.
     const existingRow = { id: 'e1', payload: { question_key: 'dq_x', status: 'dispositioned' } };
