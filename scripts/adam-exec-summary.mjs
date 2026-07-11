@@ -30,6 +30,8 @@ import { formatRungRollupLine } from '../lib/fleet/exec-email-rung-rollup.js';
 // SD-LEO-INFRA-EXEC-EMAIL-STRATEGY-ALIGNED-001 (FR-2): the ALIGNMENT section — meta-to-product ratio
 // (taper gauge) + dormant-until-revenue distance-to-quit (mission needle), both required by CLAUDE_ADAM.md.
 import { computeAlignmentLines } from '../lib/fleet/exec-email-alignment.mjs';
+// SD-LEO-INFRA-VENTURE-OPS-ACTUALS-001 (FR-5): per-venture actuals line (cost + health).
+import { computeOpsActualsLines } from '../lib/fleet/exec-email-ops-actuals.mjs';
 // SD-LEO-INFRA-VDR-GREP-SEAM-CROSSREPO-001: the shared code-grep seam so the 5 code_grep probes resolve
 // (the chairman-visible gauge measures all 11 capabilities, not just the 6 DB/KR-backed ones).
 import { makeDefaultGrepSeam } from '../lib/vision/vdr-grep-seam.js';
@@ -274,6 +276,16 @@ try {
   console.warn('[adam-email] alignment lines skipped (fail-soft): ' + (e?.message || e));
 }
 
+// ── 2e. OPS ACTUALS (SD-LEO-INFRA-VENTURE-OPS-ACTUALS-001 FR-5) ──
+// One actuals-vs-targets line per live venture (cost from venture_token_ledger + health
+// from ops_product_health). Fail-soft: computeOpsActualsLines never throws, degrades to [].
+let opsActualsLines = [];
+try {
+  opsActualsLines = await computeOpsActualsLines({ supabase: db }, { nowMs: t });
+} catch (e) {
+  console.warn('[adam-email] ops-actuals lines skipped (fail-soft): ' + (e?.message || e));
+}
+
 // ── 3. ACTIONS FOR YOU: render the pending decisions (fetched above) as a copy-paste block ──
 const LEAD_IN = "I have received the following executive decisions via email and I'm ready to address them:";
 const numbered = lines.map((l, i) => `${i + 1}. ${l}`);
@@ -352,6 +364,7 @@ const text = [
   ...(metaLine ? ['   ' + metaLine] : []),
   ...(distanceToQuitLine ? ['   ' + distanceToQuitLine] : []),
   ...(watchdogLine ? ['   ' + watchdogLine] : []),
+  ...(opsActualsLines.length ? ['', 'Venture actuals:', ...opsActualsLines.map((l) => '   ' + l)] : []),
   ...(recentText ? ['', recentText] : []),
   ...(decisionsLine ? [decisionsLine] : []),
   '',
@@ -381,6 +394,10 @@ const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px
   (metaLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(metaLine)}</div>` : '') +
   (distanceToQuitLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(distanceToQuitLine)}</div>` : '') +
   (watchdogLine ? `<div style="font-size:12px;color:#b54708;margin:2px 0 0">${esc(watchdogLine)}</div>` : '') +
+  (opsActualsLines.length
+    ? `<p style="font-size:13px;font-weight:600;margin:8px 0 0">Venture actuals:</p>` +
+      opsActualsLines.map((l) => `<div style="font-size:12px;color:#444;margin:2px 0 0">${esc(l)}</div>`).join('')
+    : '') +
   recentHtml + decisionsHtml +
   '<hr style="border:none;border-top:1px solid #e1e4e8;margin:14px 0">' +
   actionsHtml +
