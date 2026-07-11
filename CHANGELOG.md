@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-07-11](#2026-07-11)
+  - [Features](#features)
   - [Bugfix](#bugfix)
 - [2026-07-07](#2026-07-07)
   - [Features](#features)
@@ -82,6 +83,11 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-07-11
+
+### Features
+- **Chairman ventures list reaches feature parity — RAID Summary, Launch Readiness, and Stage Navigation ported from the legacy VenturesPage onto chairman-v3 VentureTable** - PR #756 (ehg) (SD-EHG-PRODUCT-UIUX-REMEDIATION-001-G)
+  - **What shipped**: `/chairman/ventures` (`VentureTable.tsx`) gains a Tabs shell — the pre-existing body (summary cards, discovery sections, phase distribution, sortable portfolio table, kill-gate/delete dialogs) is unchanged as the default Portfolio tab, plus three tabs ported from the legacy VenturesPage: RAID Summary (`VentureListView` + real `TriageSummary`/`calculateTriageCounts`, with its built-in grid/list toggle), Launch Readiness, and Stage Navigation. The ported tabs fetch `VentureDetail[]` via an independent `useVentures()` call rather than widening `useVentureLifecycle`'s narrow projection that powers the live Portfolio table, and all venture clicks route into `/chairman/ventures/:id` (never the legacy standalone route). VALIDATION at LEAD caught two false premises in the SD's own text pre-code: sibling -D's `/ventures` redirect has NOT shipped (legacy page still live), and the predicted "two data models" reconciliation was just two projections of the same table. The SD also arrived auto-created with the wrong `target_application` (EHG_Engineer) — corrected before building in the wrong repo.
+  - **Verification**: New `venture-table-parity-tabs.test.tsx` (4/4, real triage counts + a negative assertion pinning that Stage Navigation can never fall back to the legacy `/ventures/:id` route), wired into the blocking `tests-unit-ventures.yml` CI job per its add-as-you-ship convention; 115/115 regression across chairman-v3/ventures suites; full `tsc --noEmit` clean. E2E spec extended with 4 route-mocked tests, but execution is blocked machine-wide (no `.env.test` credentials in any checkout, no CI playwright job in the ehg repo — the 5 pre-existing spec tests fail identically at the sign-in wall), honestly reflected in TESTING's CONDITIONAL_PASS; SECURITY PASS (97). LEAD-TO-PLAN (95%), PLAN-TO-EXEC (98%), EXEC-TO-PLAN (92%), PLAN-TO-LEAD (94%), LEAD-FINAL-APPROVAL (96%) — all handoffs accepted.
 
 ### Bugfix
 - **Worktree-freshness protocol pre-check + payment-rail bug-class audit closes both SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002 retro action items** - PR #5917 (SD-LEO-FIX-PAYMENT-RAIL-RETRO-001)
