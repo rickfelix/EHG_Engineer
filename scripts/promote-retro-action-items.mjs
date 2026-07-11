@@ -35,13 +35,20 @@ const supabase = createClient(
 
 const cutoff = new Date(Date.now() - LOOKBACK_DAYS * 24 * 3600 * 1000).toISOString();
 
-// Two shapes exist in the wild: the retro-agent's prompt-driven output uses
+// Three shapes exist in the wild: the retro-agent's prompt-driven output uses
 // { item, owner, priority }; lib/sub-agents/retro/action-items.js's programmatic
 // generateSmartActionItems() uses { action, owner, deadline, success_criteria,
-// priority, source }. Support both rather than picking one and silently dropping
-// the other's text.
+// priority, source }; a manually-authored SD_COMPLETION retrospective (e.g. via
+// scripts/one-off/insert-retro-*.cjs) uses { title, description, owner_role,
+// priority } (QF-20260711-253: '(no text)'/'unassigned' auto-promoted because
+// this third shape wasn't covered). Support all three rather than silently
+// dropping text/owner for whichever shape isn't checked.
 function actionText(item) {
-  return item.item || item.action || '(no text)';
+  return item.item || item.action || item.title || '(no text)';
+}
+
+function actionOwner(item) {
+  return item.owner || item.owner_role || 'unassigned';
 }
 
 const { data: retros, error } = await supabase
@@ -84,7 +91,7 @@ for (const retro of retros || []) {
   const title = `[Retro action items] ${retro.sd_id || retro.title || retro.id}`.slice(0, 100);
   const description = [
     `Auto-promoted from ${highPriority.length} high-priority action item(s) in retrospective ${retro.id} (SD ${retro.sd_id || 'n/a'}).`,
-    ...highPriority.map((i, idx) => `${idx + 1}. ${actionText(i)} (owner: ${i.owner || 'unassigned'}, success criteria: ${i.success_criteria || 'n/a'})`)
+    ...highPriority.map((i, idx) => `${idx + 1}. ${actionText(i)} (owner: ${actionOwner(i)}, success criteria: ${i.success_criteria || 'n/a'})`)
   ].join('\n');
 
   try {
