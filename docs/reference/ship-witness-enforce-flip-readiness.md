@@ -1,11 +1,12 @@
-# Ship-witness: enforce-flip readiness (Ship-witness D + E)
+# Ship-witness: enforce-flip readiness (Ship-witness D + E + trio F)
 
 **SD**: SD-LEO-INFRA-SHIP-WITNESS-ENFORCE-001 (Ship-witness D), extended by
-SD-LEO-INFRA-SHIP-WITNESS-COVERAGE-001 (Ship-witness E)
+SD-LEO-INFRA-SHIP-WITNESS-COVERAGE-001 (Ship-witness E) and
+SD-LEO-INFRA-SHIP-WITNESS-TRIO-001 (Ship-witness F)
 **Status**: Approved
 **Category**: Protocol
-**Version**: 1.1.0
-**Last Updated**: 2026-07-04
+**Version**: 1.2.0
+**Last Updated**: 2026-07-11
 
 ## What this is
 
@@ -98,7 +99,13 @@ Two specimens are already banked as the rationale for this contract
   reports P4 as `not_applicable` unconditionally, even though branch
   protection (N1/P0) is now live on both platform repos. A real P4 check
   needs a dual-key audited escapeAuth table that does not exist yet — that
-  is a separate, future SD's scope, not this one's.
+  is a separate, future SD's scope, not this one's. **Update (SD F,
+  2026-07-11): the escapeAuth substrate now exists** — see "Merge-work
+  ladder trio closed" below — but it is additive-only (a new `escapeAuth`
+  sub-field on P4, gated on an explicit `adminOverride` param) and is still
+  **not** wired into `evaluateEnforcementDecision()`'s pass/fail computation,
+  which continues to read only P1/P2/P3. That wiring remains a separate,
+  future SD's scope.
 - **Wiring `evaluateEnforcementDecision` into the real `/ship` Step 6
   snippet.** This SD ships the capability and the readiness measurement, not
   the activation. Wiring it live today would exercise dead code against zero
@@ -141,6 +148,41 @@ gauge dropped from 67 to 1 after one reconcile pass; a 64-PR retroactive
 backfill of the pre-cutover backlog succeeded in full; the readiness clock
 above moved from 0/7 to 2/7. None of this was simulated — see PR #5527.
 
+## Merge-work ladder trio closed (SD F)
+
+**SD**: SD-LEO-INFRA-SHIP-WITNESS-TRIO-001 (Ship-witness F), completed 2026-07-11.
+
+Chairman-ratified closure map (PR #5840) flagged three loose ends left open
+by A/D/E as one coherent trio:
+
+1. **Lane coverage** — `evaluateMergeWorkLadder()` (via `observeMergeWorkLadder()`
+   in `lib/ship/auto-merge.mjs`) was only ever called from `/ship`'s own
+   auto-merge path and the EVA venture-build lane. The `/quick-fix` skill's
+   `mergeToMain()` (`scripts/modules/complete-quick-fix/git-operations.js`)
+   and `worktree-merge.js` both called `gh pr merge` directly with **zero**
+   ladder observation — a third, previously-undocumented class of WATCH-HOLE
+   beyond the async-`--auto` gap SD E closed. Both lanes now call
+   `observeMergeWorkLadder()` via new best-effort, never-throw wrapper
+   functions (`observeQuickFixMerge()`, `observeWorktreeMerge()`) — same
+   non-blocking guarantee as every other ladder call site.
+2. **P2 actor attribution substrate** — `evaluateP2Witness()` gained an
+   additive `actorSeparation` sub-field (backed by a new, still
+   chairman-gated-pending `ship_review_findings.metadata` column). P2's own
+   top-level pass/fail computation is unchanged — this is substrate only,
+   not a new blocking behavior.
+3. **P4 escapeAuth substrate** — see the updated "Deliberately NOT delivered"
+   entry above. `evaluateP4ProtectionIntegrity()` gained an additive
+   `escapeAuth` sub-field, gated on a new `adminOverride` param, backed by a
+   new chairman-gated-pending `ship_escape_audit` table with a
+   schema-**and**-code-enforced dual-key (merge identity + actor identity)
+   invariant.
+
+Both new migrations (`20260711_ship_review_findings_actor_metadata.sql`,
+`20260711_ship_escape_audit.sql`) are committed but **not** applied to prod
+by design — see `docs/database/ship-review-findings-actor-metadata-pending-apply.md`
+and `docs/database/ship-escape-audit-pending-apply.md`. All consuming code
+degrades gracefully (`not_evaluable`) until a chairman applies them.
+
 ## Family status
 
 - **A** — SD-LEO-INFRA-SHIP-WITNESS-MERGEWORK-001 (completed): the P1-P5
@@ -155,3 +197,7 @@ above moved from 0/7 to 2/7. None of this was simulated — see PR #5527.
   structural WATCH-HOLE gap (async auto-merge) via a reconciliation sweep;
   backfilled the historical backlog; advanced the readiness clock. See
   "Coverage gap closed" above.
+- **F** — SD-LEO-INFRA-SHIP-WITNESS-TRIO-001 (completed): closed the
+  quick-fix/worktree-merge lane WATCH-HOLE and built the P2 actor-attribution
+  and P4 escapeAuth substrates (both additive, both chairman-gated-DDL
+  pending). See "Merge-work ladder trio closed" above.
