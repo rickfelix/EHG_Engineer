@@ -139,10 +139,34 @@ describe('runArc (§H7 resume + §H3 coverage close-out)', () => {
     expect(executeStage.mock.calls.map((c) => c[0].stageNumber)).toEqual([21, 22]);
     // Coverage close-out ran: uncovered requirements landed as findings (drivers were default CANNOT_DRIVE, which COUNTS as covered).
     expect(res.coverage.covered).toEqual(expect.arrayContaining(['O3', 'O5', 'O6', 'O8']));
-    // O10 (acceptance) has no band/driver — must end as a DEAD_LOOP coverage finding, proving the matrix bites.
-    expect(res.coverage.uncovered).toContain('O10');
+    // O10 (QF-20260711-967): excluded from the per-loop matrix entirely — never a DEAD_LOOP
+    // noise finding for O10 ITSELF — and graded once at run level instead. In this scenario
+    // S20 was resumed/skipped so its O2 mapping never actually fires -> the composite
+    // honestly reports NOT all-mapped (this is real signal, not the old guaranteed-noise bug).
+    expect(res.coverage.uncovered).not.toContain('O10');
+    expect(res.coverage.uncovered).toContain('O2');
+    expect(res.o10.allMapped).toBe(false);
+    expect(res.o10.residueClean).toBe(true);
+    expect(res.o10.pass).toBe(false);
     const journal = new RunJournal(runId, { baseDir: BASE, clock: fixedClock });
-    expect(journal.readAll().some((e) => e.kind === 'finding' && (e.detail.o_requirements || e.o_requirements || []).includes('O10'))).toBe(true);
+    const o10Event = journal.readAll().find((e) => (e.o_requirements || []).includes('O10'));
+    expect(o10Event.kind).toBe('finding');
+    expect(o10Event.finding_type).toBe('DEAD_LOOP');
+  });
+
+  it('O10 passes when every band S20..S26 actually drives its O-mapping and containment is clean', async () => {
+    const runId = 't-arc-o10-pass';
+    const executeStage = vi.fn(async ({ stageNumber }) => ({ template: `stage-${stageNumber}`, artifactId: 'a', validation: { valid: true }, output: {} }));
+    const advanceStage = vi.fn(async () => ({}));
+    const res = await runArc({
+      runId, entryStage: 20, toStage: 26, clockStart: '2026-07-12T09:00:00Z',
+      supabase: fakeSupabase(), seams: { executeStage, advanceStage }, baseDir: BASE,
+    });
+    expect(res.coverage.uncovered).toEqual([]);
+    expect(res.o10).toEqual({ pass: true, allMapped: true, residueClean: true, journalDurable: true });
+    const journal = new RunJournal(runId, { baseDir: BASE, clock: fixedClock });
+    const o10Event = journal.readAll().find((e) => (e.o_requirements || []).includes('O10'));
+    expect(o10Event.kind).toBe('observation');
   });
 
   it('containment sweep journals scheduler residue as a RESIDUE finding when rows exist mid-run', async () => {
@@ -154,6 +178,9 @@ describe('runArc (§H7 resume + §H3 coverage close-out)', () => {
     const journal = new RunJournal('t-arc-residue', { baseDir: BASE, clock: fixedClock });
     const residue = journal.readAll().filter((e) => e.finding_type === 'RESIDUE');
     expect(residue.length).toBeGreaterThanOrEqual(1);
+    // O10 must fail when the run's own containment sweep found residue mid-run.
+    expect(res.o10.residueClean).toBe(false);
+    expect(res.o10.pass).toBe(false);
     expect(residue[0].event).toMatch(/ghost-venture class/);
     expect(res.ventureId).toBe('v-fixture');
   });
