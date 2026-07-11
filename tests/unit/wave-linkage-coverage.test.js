@@ -68,4 +68,23 @@ describe('computeWaveLinkageCoverage', () => {
     expect(r.coverage).toBe(COVERAGE_THRESHOLD);
     expect(r.starved).toBe(false);
   });
+
+  it('excludes test-fixture SDs from the denominator (never claimable — must not fabricate starvation)', async () => {
+    const supabase = mockSupabase({
+      sds: [
+        sd({ id: '1', key: 'SD-A' }),                       // real, linked
+        sd({ id: '2', key: 'SD-DEMO-XYZ-001' }),            // fixture — excluded
+        sd({ id: '3', key: 'SD-TEST-SCOPE-COV-123' }),      // fixture — excluded
+        sd({ id: '4', key: 'TEST-BARE-001' }),              // bare fixture prefix — excluded
+        sd({ id: '5', key: 'SD-UAT-FIX-TEST-E2E-99-001' }), // UAT e2e fixture — excluded
+      ],
+      items: [{ promoted_to_sd_key: 'SD-A' }],
+    });
+    const r = await computeWaveLinkageCoverage(supabase);
+    expect(r.total).toBe(1);
+    expect(r.linked).toBe(1);
+    expect(r.coverage).toBe(1);
+    expect(r.starved).toBe(false);
+    expect(r.unlinkedKeys).toEqual([]);
+  });
 });
