@@ -27,11 +27,19 @@ function mockSb(level) {
   };
 }
 
-const RESERVED = [3, 5, 10, 17, 18, 19];
+const RESERVED = [3, 5, 10, 16, 17, 18, 19];
 
 describe('RESERVED_CHAIRMAN_STAGES (FR-1)', () => {
-  it('contains exactly the chairman-reserved stages 3,5,10,17,18,19', () => {
+  it('contains exactly the chairman-reserved stages 3,5,10,16,17,18,19', () => {
     expect([...RESERVED_CHAIRMAN_STAGES].sort((a, b) => a - b)).toEqual(RESERVED);
+  });
+
+  // SD-LEO-FIX-RETRO-ACTION-ITEMS-001 (FR-1): stage 16 (Blueprint->Build) is reserved because the
+  // DB trigger reject_s16_programmatic_approval already unconditionally rejects a stage-16
+  // programmatic approval -- the reserved set previously didn't reflect that, letting autonomy
+  // classify stage 16 as auto_approve-able only for the RPC to then fail.
+  it('stage 16 is reserved', () => {
+    expect(RESERVED_CHAIRMAN_STAGES.has(16)).toBe(true);
   });
 });
 
@@ -52,8 +60,8 @@ describe('checkAutonomy reserved-stage backstop (FR-1)', () => {
     }
   });
 
-  it('non-reserved stage 16 at L4 is unaffected (normal matrix → auto_approve)', async () => {
-    const r = await checkAutonomy('v1', 'stage_gate', { supabase: mockSb('L4') }, 16);
+  it('non-reserved stage 20 at L4 is unaffected (normal matrix → auto_approve)', async () => {
+    const r = await checkAutonomy('v1', 'stage_gate', { supabase: mockSb('L4') }, 20);
     expect(r.action).toBe('auto_approve');
     expect(r.reserved).toBeUndefined();
   });
@@ -80,7 +88,7 @@ describe('autonomyPreCheck reserved beats chairman override (FR-1)', () => {
   });
 
   it('a non-reserved stage still honors the chairman override', async () => {
-    const r = await autonomyPreCheck('v1', 'stage_gate', overrideDeps, 16);
+    const r = await autonomyPreCheck('v1', 'stage_gate', overrideDeps, 20);
     expect(r.action).toBe('auto_approve'); // L4 override → stage_gate auto_approve
     expect(r.overridden).toBe(true);
   });
@@ -131,7 +139,10 @@ describe('stage-governance gate-type resolution (FR-2b / FR-3)', () => {
     _resetCacheForTest();
     const gov = await getStageGovernance(mockGovSb(ROWS));
     expect(gov.isReserved(18)).toBe(true);
-    expect(gov.isReserved(16)).toBe(false);
-    expect([...gov.reservedStages].sort((a, b) => a - b)).toEqual([3, 5, 10, 17, 18, 19]);
+    // SD-LEO-FIX-RETRO-ACTION-ITEMS-001 (FR-1): 16 is now reserved (see autonomy-reserved-gates
+    // describe block above) — stage-governance derives reservedStages/isReserved directly from
+    // RESERVED_CHAIRMAN_STAGES, so this must move in lockstep with that fix.
+    expect(gov.isReserved(16)).toBe(true);
+    expect([...gov.reservedStages].sort((a, b) => a - b)).toEqual([3, 5, 10, 16, 17, 18, 19]);
   });
 });
