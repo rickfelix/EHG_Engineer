@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com
 -- SD-LEO-INFRA-APA-PHASE-STANDING-001 (FR-3)
 -- Durable results table for the APA Phase-2 standing entrypoint. One row per
 -- assessed venture per cycle. No prior results table exists for APA output —
