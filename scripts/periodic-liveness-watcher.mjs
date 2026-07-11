@@ -27,6 +27,7 @@ import { pathToFileURL } from 'node:url';
 const require = createRequire(import.meta.url);
 const { hasFreshHeartbeat, hasTickAlive, hasPidAlive } = require('../lib/fleet/session-liveness.cjs');
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
+import { parseLivenessClasses, partitionRowsByClasses } from '../lib/periodic-liveness/class-split.mjs';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
@@ -35,6 +36,10 @@ const supabase = createClient(
 
 const WATCHER_SELF_KEY = '__watcher_self__';
 const STATE = Object.freeze({ OK: 'OK', OVERDUE: 'OVERDUE', UNVERIFIED: 'UNVERIFIED', INTENTIONALLY_DOWN: 'INTENTIONALLY_DOWN' });
+
+// SD-LEO-INFRA-OPERATIVE-AGENT-OWNERSHIP-001-A (FR-5/TR-1): class-split invocation — see
+// lib/periodic-liveness/class-split.mjs for the venue rationale (CI must never evaluate
+// role_session rows; hasPidAlive is host-local).
 
 function overdueThresholdMs(row) {
   return row.expected_interval_seconds * Number(row.grace_multiplier) * 1000;
@@ -165,8 +170,14 @@ async function main() {
   const { data: rows, error } = await supabase.from('periodic_process_registry').select('*').neq('process_key', WATCHER_SELF_KEY);
   if (error) throw new Error(`registry query failed: ${error.message}`);
 
+  const classes = parseLivenessClasses(process.env.LIVENESS_CLASSES);
+  const { evaluate, skipped } = partitionRowsByClasses(rows || [], classes);
+  if (classes) {
+    console.log(`[periodic-liveness-watcher] class filter active (${[...classes].join(',')}): evaluating ${evaluate.length}, skipping ${skipped.length} row(s) owned by the other venue`);
+  }
+
   const results = [];
-  for (const row of rows || []) {
+  for (const row of evaluate) {
     const evaluation = await evaluateRow(row);
     results.push(evaluation);
 
@@ -190,7 +201,10 @@ async function main() {
   await supabase.from('periodic_process_registry').upsert({
     process_key: WATCHER_SELF_KEY,
     display_name: 'periodic-liveness-watcher (self)',
-    owner: 'periodic-liveness-watcher',
+    // FR-6 (-001-A): the watchdog's own row is owned by an addressable agent (coordinator interim
+    // per the reassignment worklist), not by its own self-label — a dead watcher must escalate to
+    // someone who can restart it, not to itself.
+    owner: 'coordinator-fleet',
     process_type: 'standalone_cron',
     expected_interval_seconds: 900,
     liveness_source: 'self_stamped',

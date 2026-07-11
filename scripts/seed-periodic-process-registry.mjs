@@ -15,14 +15,23 @@
  *     stopped 2026-06-20/21) is independently detectable even if the scheduler's own top-level
  *     last_poll_at looks unrelated.
  *
- * standalone_cron entries are NOT hand-seeded here -- registry membership for that class is
- * additive-only via lib/periodic-liveness/stamp-last-fired.js's first call (FR-2), matching the
- * SD's own design note that a hand-only list becomes its own fossil.
+ * standalone_cron entries (SD-LEO-INFRA-OPERATIVE-AGENT-OWNERSHIP-001-A, FR-2): seeded
+ * MECHANICALLY from the discovered recurring-process estate (GHA cron workflows, scripts/cron/*,
+ * coordinator STANDARD_LOOPS) via lib/periodic-liveness/enumerate-processes.mjs -- the same
+ * discovery the zero-shadow sweep (scripts/enumerate-periodic-processes.mjs) enforces against, so
+ * seeder and sweep can never disagree. This replaces the original additive-only design (rows only
+ * appearing on a process's first stamp-last-fired call), which left every never-stamping process
+ * as a permanent shadow. Rows seed with liveness_source='self_stamped' and no last_fired_at:
+ * the watcher reports them UNVERIFIED (visible, never false-OVERDUE) until the process wires its
+ * own stamp -- per-process stamp wiring is deliberately out of scope here.
  *
  * Idempotent: upserts on process_key, safe to re-run (TS-5).
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { discoverAllProcesses } from '../lib/periodic-liveness/enumerate-processes.mjs';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
@@ -138,10 +147,43 @@ async function seedSchedulerRounds() {
   return upserts;
 }
 
+// FR-2: standalone_cron pass — one owned row per discovered recurring process. New rows get the
+// coordinator interim owner ('coordinator-fleet') per the parent LEAD condition (never silently
+// unowned); EXISTING rows keep their current owner — a re-run must never clobber a later
+// real-owner reassignment back to the interim (the fleet's documented re-clobber failure class).
+// Real-owner reassignment flows through the worklist emitted by
+// scripts/backfill-registry-owners.mjs.
+async function seedStandaloneCrons() {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const discovered = discoverAllProcesses(repoRoot);
+  if (discovered.length === 0) return [];
+
+  const { data: existing, error } = await supabase
+    .from('periodic_process_registry')
+    .select('process_key, owner')
+    .in('process_key', discovered.map((p) => p.process_key));
+  if (error) throw new Error(`existing-owner lookup failed: ${error.message}`);
+  const ownerByKey = new Map((existing || []).map((r) => [r.process_key, r.owner]));
+
+  return discovered.map((proc) => ({
+    process_key: proc.process_key,
+    display_name: proc.display_name,
+    owner: ownerByKey.get(proc.process_key) || 'coordinator-fleet',
+    process_type: 'standalone_cron',
+    expected_interval_seconds: proc.expected_interval_seconds,
+    liveness_source: 'self_stamped',
+    liveness_source_ref: proc.cron ? { cron: proc.cron, discovered_from: proc.source } : { discovered_from: proc.source },
+    session_bound: proc.session_bound,
+    currently_expected_active: true,
+    updated_at: new Date().toISOString(),
+  }));
+}
+
 async function main() {
   const roleUpserts = await seedRoleSessions();
   const roundUpserts = await seedSchedulerRounds();
-  const all = [...roleUpserts, ...roundUpserts];
+  const cronUpserts = await seedStandaloneCrons();
+  const all = [...roleUpserts, ...roundUpserts, ...cronUpserts];
 
   if (all.length === 0) {
     console.log('No mechanically-derivable registry rows found (0 role sessions, 0 scheduler rounds) -- nothing to seed.');
@@ -157,6 +199,7 @@ async function main() {
   console.log(`Seeded/updated ${data.length} periodic_process_registry row(s):`);
   console.log(`  role_session: ${roleUpserts.length}`);
   console.log(`  scheduler_round: ${roundUpserts.length}`);
+  console.log(`  standalone_cron: ${cronUpserts.length}`);
   for (const row of data) console.log(`  - ${row.process_key}`);
 }
 
