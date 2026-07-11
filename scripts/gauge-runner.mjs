@@ -56,8 +56,20 @@ import { getCaptureCompleteness } from '../lib/eva/venture-capture-forward.js';
 import { resolveMinExtractStage } from '../lib/eva/template-extractor.js';
 import { detectExpiredPremises } from '../lib/governance/revisit-tags.js';
 import { readSubstrateRow, computeRunway, periodMonthOf, cashAttestationMissingResult } from '../lib/operator/cash-burn-substrate.js';
+import { runRollup } from '../lib/vision/rung-progress-rollup.mjs';
+import { computeBuildGauge } from '../lib/vision/vdr-registry.js';
+import { makeDefaultGrepSeam } from '../lib/vision/vdr-grep-seam.js';
+import { buildSdRungMap } from '../lib/vision/needle-priority.mjs';
+import {
+  computeStampCoverage,
+  computeDispatchMix,
+  isDriftBreach,
+  fetchLastNDispatchedKeys,
+  hasOpenFinding,
+} from '../lib/governance/plan-drift-detectors.js';
 
 const RECURSION_GOVERNOR_DIMENSION = 'recursion-governor-ratio';
+const PLAN_DRIFT_MIX_DIMENSION = 'plan-drift-mix';
 
 // relay-drop-gauge.cjs, adam-identity.cjs, solomon-identity.cjs are CommonJS -- createRequire is
 // this codebase's established ESM-import-CJS seam (mirrors gauge-unranked-claimable-leaves.mjs's
@@ -221,7 +233,100 @@ function buildDetectorResolvers(supabase) {
       const { sustained, streak } = detectSustainedBreach(recent);
       return { count: sustained ? 1 : 0, ...ratioResult, breach, streak };
     },
+    // SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001 Layer A: stamp-coverage (starvation detector).
+    'plan-drift-coverage': async () => computeStampCoverage(supabase),
+    // Layer B: dispatch-mix drift. Self-gates on LIVE coverage (re-reads Layer A) rather than
+    // coupling to any sibling SD's completion status. Sustained-breach trip reuses the
+    // recursion-governor.js cycle-tracking pattern (same codebase_health_snapshots table, a
+    // dimension key ('plan-drift-mix') that does not collide with 'recursion-governor-ratio').
+    // Re-surface-once dedup: skips the feedback-table insert (skipRoute) when an OPEN
+    // invariant_gauge_finding already exists for this gauge_id -- routeFinding() always inserts
+    // unconditionally otherwise, and 903 existing duplicate rows confirmed no gauge dedups today.
+    'plan-drift-mix': async () => {
+      const coverage = await computeStampCoverage(supabase);
+      if (coverage.starved) {
+        return { sustainedBreach: false, starved: true, coverage, skipRoute: true, value: 'STARVED (self-gated on Layer A coverage)' };
+      }
+      let activeRungKey = null;
+      let sdRungMap = {};
+      try {
+        const grep = makeDefaultGrepSeam();
+        const computeGaugeFn = () => computeBuildGauge({ io: { supabase, grep }, visionSource: true });
+        const roll = await runRollup({ supabase, computeGaugeFn, apply: false, log: () => {} });
+        if (roll && roll.ok) activeRungKey = roll.activeRungKey || null;
+        const [{ data: waveItems }, { data: waves }] = await Promise.all([
+          supabase.from('roadmap_wave_items').select('promoted_to_sd_key, wave_id').not('promoted_to_sd_key', 'is', null),
+          supabase.from('roadmap_waves').select('id, time_horizon, metadata'),
+        ]);
+        const wavesById = Object.fromEntries((waves || []).map((w) => [w.id, w]));
+        sdRungMap = buildSdRungMap(waveItems, wavesById);
+      } catch (e) {
+        console.error(`[gauge-runner] plan-drift-mix: active-rung context unavailable (fail-soft): ${e?.message || e}`);
+      }
+      const dispatchedKeys = await fetchLastNDispatchedKeys(supabase, { limit: 20 });
+      const mixResult = computeDispatchMix(dispatchedKeys, sdRungMap, activeRungKey);
+      const breach = isDriftBreach(mixResult);
+      await writeThroughputSnapshot(supabase, { dimension: PLAN_DRIFT_MIX_DIMENSION, ratioResult: mixResult, breach });
+      const recent = await fetchRecentSnapshots(supabase, { dimension: PLAN_DRIFT_MIX_DIMENSION, limit: 2 });
+      const { sustained, streak } = detectSustainedBreach(recent, { requiredConsecutive: 2 });
+      const skipRoute = sustained ? await hasOpenFinding(supabase, 'plan-drift-mix') : false;
+      const mixPctStr = typeof mixResult.activeRungPct === 'number' ? `${mixResult.activeRungPct.toFixed(1)}%` : 'n/a';
+      return {
+        sustainedBreach: sustained,
+        starved: false,
+        coverage,
+        mix: mixResult,
+        activeRungKey,
+        streak,
+        skipRoute,
+        value: `active-rung=${mixPctStr}${sustained ? ` (SUSTAINED BREACH x${streak})` : ''}`,
+      };
+    },
   };
+}
+
+/**
+ * Pure-ish: builds the two session_coordination insert rows (coordinator + Adam) for a
+ * plan-drift-mix advisory. Extracted from pushPlanDriftAdvisory so the row SHAPE is unit-testable
+ * without faking coordinator/Adam session resolution.
+ * @param {object} result - the plan-drift-mix detector's result
+ * @param {{ coordinatorId: (string|null), adamId: (string|null) }} recipients
+ * @returns {{ coordinatorRow: object, adamRow: (object|null) }}
+ */
+export function buildPlanDriftAdvisoryRows(result, { coordinatorId, adamId }) {
+  const mixPct = typeof result?.mix?.activeRungPct === 'number' ? result.mix.activeRungPct.toFixed(1) : 'n/a';
+  const subject = `[PLAN-DRIFT] Dispatch mix drifted from active-wave demand (active-rung share ${mixPct}%)`;
+  const body = `Sustained dispatch-mix drift detected across ${result?.streak ?? '?'} consecutive gauge-runner cycles. Active-rung share of last-N dispatched work: ${mixPct}% (mix: ${JSON.stringify(result?.mix?.mix || {})}). Coverage floor is currently clear (not starved), so this is a genuine mix drift, not a linkage-starvation false trip.`;
+  const payload = { kind: 'coordinator_advisory', gauge_id: 'plan-drift-mix', body, mix: result?.mix, streak: result?.streak };
+  const coordinatorRow = { message_type: 'INFO', target_session: coordinatorId || 'broadcast-coordinator', subject, sender_type: 'gauge-runner', payload };
+  const adamRow = adamId ? { message_type: 'INFO', target_session: adamId, subject, sender_type: 'gauge-runner', payload } : null;
+  return { coordinatorRow, adamRow };
+}
+
+/**
+ * SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001 FR-6: dual-recipient advisory (coordinator + Adam), fired only
+ * on a genuine sustained-breach trip that passed the re-surface-once dedup (never an unconditional
+ * per-run insert -- no existing gauge pushes to session_coordination today per design-agent's
+ * finding, so this push is deliberately narrow and gauge-specific rather than a generalized
+ * mechanism no other gauge has asked for yet). Session-id resolution is injected (not resolved
+ * internally) so buildPlanDriftAdvisoryRows/the insert calls are testable without faking the
+ * coordinator/Adam session-resolution machinery (those helpers have their own test suites).
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {object} result - the plan-drift-mix detector's result
+ * @param {{ coordinatorId: (string|null), adamId: (string|null) }} recipients
+ */
+export async function pushPlanDriftAdvisory(supabase, result, recipients) {
+  const { coordinatorRow, adamRow } = buildPlanDriftAdvisoryRows(result, recipients);
+
+  const { error: coordErr } = await supabase.from('session_coordination').insert(coordinatorRow);
+  if (coordErr) console.error(`[gauge-runner] plan-drift advisory (coordinator) failed (non-fatal): ${coordErr.message}`);
+
+  if (adamRow) {
+    const { error: adamErr } = await supabase.from('session_coordination').insert(adamRow);
+    if (adamErr) console.error(`[gauge-runner] plan-drift advisory (Adam) failed (non-fatal): ${adamErr.message}`);
+  } else {
+    console.error('[gauge-runner] plan-drift advisory: no live Adam session resolved -- coordinator leg still sent');
+  }
 }
 
 /**
@@ -272,6 +377,14 @@ export function buildFindingRow(entry, result) {
 }
 
 async function routeFinding(supabase, entry, result) {
+  // SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001 FR-5 (re-surface-once dedup): a detector may set
+  // result.skipRoute=true when an OPEN finding for its gauge_id already exists (or the trip is a
+  // self-gated starved short-circuit that isn't a genuine drift finding) -- skip the duplicate
+  // insert. Generic extension point: any future detector can opt in the same way.
+  if (result?.skipRoute) {
+    console.log(`[gauge-runner] ${entry.id}: routing skipped (skipRoute -- already-open finding or starved short-circuit)`);
+    return;
+  }
   const { error } = await supabase.from('feedback').insert(buildFindingRow(entry, result));
   if (error) console.error(`[gauge-runner] finding-route failed for ${entry.id} (non-fatal): ${error.message}`);
 }
@@ -310,7 +423,21 @@ async function main() {
       const value = typeof result?.count === 'number' ? result.count : (result?.value ?? 'n/a');
       console.log(`GAUGE ${entry.id}=${value}`);
       results.push({ id: entry.id, value, tripped, result });
-      if (tripped) await routeFinding(supabase, entry, result);
+      if (tripped) {
+        await routeFinding(supabase, entry, result);
+        // SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001 FR-6: dual-recipient push, gauge-specific (narrow by
+        // design -- no other gauge pushes to session_coordination yet) and dedup-gated (skipRoute
+        // means either a starved short-circuit or an already-open finding -- never re-push).
+        if (entry.id === 'plan-drift-mix' && !result.skipRoute) {
+          const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
+          const { resolveAdamSessionId } = require('./read-adam-directives.cjs');
+          const [coordinatorId, adamId] = await Promise.all([
+            getActiveCoordinatorId(supabase).catch(() => null),
+            resolveAdamSessionId(supabase).catch(() => null),
+          ]);
+          await pushPlanDriftAdvisory(supabase, result, { coordinatorId, adamId });
+        }
+      }
     } catch (e) {
       console.error(`[gauge-runner] detector "${entry.id}" threw (non-fatal, advisory-only): ${e?.message || e}`);
       results.push({ id: entry.id, error: e?.message || String(e) });

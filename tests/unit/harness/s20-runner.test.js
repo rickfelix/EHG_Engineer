@@ -9,7 +9,7 @@ import { rmSync } from 'node:fs';
 import {
   ALLOWED_DIVERGENCES, STAGE_O_MAP, POST_LAUNCH_DRIVERS, ALL_O_REQUIREMENTS,
   makeSteppingClock, completedBands, runBand, runPostLaunchDrivers, runArc,
-  allowedDivergencesFor, FORCED_STAGE_SET_DIVERGENCE, ADVANCE_POLICIES,
+  allowedDivergencesFor, FIXTURE_ARTIFACT_SEED_DIVERGENCE, ADVANCE_POLICIES,
 } from '../../../scripts/harness/s20-run.mjs';
 import { RunJournal } from '../../../lib/harness/run-journal.mjs';
 
@@ -139,10 +139,34 @@ describe('runArc (§H7 resume + §H3 coverage close-out)', () => {
     expect(executeStage.mock.calls.map((c) => c[0].stageNumber)).toEqual([21, 22]);
     // Coverage close-out ran: uncovered requirements landed as findings (drivers were default CANNOT_DRIVE, which COUNTS as covered).
     expect(res.coverage.covered).toEqual(expect.arrayContaining(['O3', 'O5', 'O6', 'O8']));
-    // O10 (acceptance) has no band/driver — must end as a DEAD_LOOP coverage finding, proving the matrix bites.
-    expect(res.coverage.uncovered).toContain('O10');
+    // O10 (QF-20260711-967): excluded from the per-loop matrix entirely — never a DEAD_LOOP
+    // noise finding for O10 ITSELF — and graded once at run level instead. In this scenario
+    // S20 was resumed/skipped so its O2 mapping never actually fires -> the composite
+    // honestly reports NOT all-mapped (this is real signal, not the old guaranteed-noise bug).
+    expect(res.coverage.uncovered).not.toContain('O10');
+    expect(res.coverage.uncovered).toContain('O2');
+    expect(res.o10.allMapped).toBe(false);
+    expect(res.o10.residueClean).toBe(true);
+    expect(res.o10.pass).toBe(false);
     const journal = new RunJournal(runId, { baseDir: BASE, clock: fixedClock });
-    expect(journal.readAll().some((e) => e.kind === 'finding' && (e.detail.o_requirements || e.o_requirements || []).includes('O10'))).toBe(true);
+    const o10Event = journal.readAll().find((e) => (e.o_requirements || []).includes('O10'));
+    expect(o10Event.kind).toBe('finding');
+    expect(o10Event.finding_type).toBe('DEAD_LOOP');
+  });
+
+  it('O10 passes when every band S20..S26 actually drives its O-mapping and containment is clean', async () => {
+    const runId = 't-arc-o10-pass';
+    const executeStage = vi.fn(async ({ stageNumber }) => ({ template: `stage-${stageNumber}`, artifactId: 'a', validation: { valid: true }, output: {} }));
+    const advanceStage = vi.fn(async () => ({}));
+    const res = await runArc({
+      runId, entryStage: 20, toStage: 26, clockStart: '2026-07-12T09:00:00Z',
+      supabase: fakeSupabase(), seams: { executeStage, advanceStage }, baseDir: BASE,
+    });
+    expect(res.coverage.uncovered).toEqual([]);
+    expect(res.o10).toEqual({ pass: true, allMapped: true, residueClean: true, journalDurable: true });
+    const journal = new RunJournal(runId, { baseDir: BASE, clock: fixedClock });
+    const o10Event = journal.readAll().find((e) => (e.o_requirements || []).includes('O10'));
+    expect(o10Event.kind).toBe('observation');
   });
 
   it('containment sweep journals scheduler residue as a RESIDUE finding when rows exist mid-run', async () => {
@@ -154,46 +178,79 @@ describe('runArc (§H7 resume + §H3 coverage close-out)', () => {
     const journal = new RunJournal('t-arc-residue', { baseDir: BASE, clock: fixedClock });
     const residue = journal.readAll().filter((e) => e.finding_type === 'RESIDUE');
     expect(residue.length).toBeGreaterThanOrEqual(1);
+    // O10 must fail when the run's own containment sweep found residue mid-run.
+    expect(res.o10.residueClean).toBe(false);
+    expect(res.o10.pass).toBe(false);
     expect(residue[0].event).toMatch(/ghost-venture class/);
     expect(res.ventureId).toBe('v-fixture');
   });
 });
 
-describe('advance policy (smoke-decode follow-up: unresolvable S20/S23 gates)', () => {
+describe('advance policy (SD-LEO-INFRA-HARNESS-FIXTURE-ARTIFACT-001: seed the gate, never bypass it)', () => {
 
-  it('real-gates (default) excludes forced_stage_set; forced-stage-set enumerates it', () => {
-    expect(ADVANCE_POLICIES).toEqual(['real-gates', 'forced-stage-set']);
-    expect(allowedDivergencesFor('real-gates')).not.toContain(FORCED_STAGE_SET_DIVERGENCE);
-    expect(allowedDivergencesFor('forced-stage-set')).toContain(FORCED_STAGE_SET_DIVERGENCE);
+  it('real-gates (default) excludes fixture_artifact_seed; fixture-artifact-seed enumerates it', () => {
+    expect(ADVANCE_POLICIES).toEqual(['real-gates', 'fixture-artifact-seed']);
+    expect(allowedDivergencesFor('real-gates')).not.toContain(FIXTURE_ARTIFACT_SEED_DIVERGENCE);
+    expect(allowedDivergencesFor('fixture-artifact-seed')).toContain(FIXTURE_ARTIFACT_SEED_DIVERGENCE);
   });
 
-  it('forced-stage-set: journals the REAL block first, then the sanctioned forced set, and the band completes', async () => {
-    const journal = new RunJournal('t-policy-forced', { baseDir: BASE, clock: fixedClock });
+  it('fixture-artifact-seed: journals the REAL block first, seeds the missing artifacts, retries the REAL advance, band completes', async () => {
+    const journal = new RunJournal('t-policy-seed', { baseDir: BASE, clock: fixedClock });
     const executeStage = vi.fn(async () => ({ artifactId: 'a', validation: { valid: true }, output: {} }));
-    const advanceStage = vi.fn(async () => { throw new Error('blocked by exit-gate enforcer: no verifier registered for a BINDING gate'); });
-    const forceStageSet = vi.fn(async () => {});
+    // First advance blocked by the artifact gate; retry after seeding succeeds.
+    const advanceStage = vi.fn()
+      .mockRejectedValueOnce(new Error('STAGE_ADVANCEMENT_ARTIFACT_GATE: missing required artifact(s): market_analysis'))
+      .mockResolvedValueOnce({});
+    const seedMissingArtifacts = vi.fn(async () => ({ seeded: ['market_analysis'], source: 'canonical', blocked: true }));
     const r = await runBand({
       supabase: {}, journal, ventureId: 'v1', stage: 20, clock: { now: fixedClock },
-      seams: { executeStage, advanceStage, forceStageSet }, advancePolicy: 'forced-stage-set',
+      seams: { executeStage, advanceStage, seedMissingArtifacts }, advancePolicy: 'fixture-artifact-seed',
     });
-    expect(r).toMatchObject({ advanced: true, forced: true });
+    expect(r).toMatchObject({ advanced: true, seeded: ['market_analysis'] });
+    expect(advanceStage).toHaveBeenCalledTimes(2); // real path both times — no raw write
     const events = journal.readAll();
-    expect(events.some((e) => e.event.includes('BLOCKED by live gates'))).toBe(true); // drivability evidence preserved
-    expect(events.find((e) => e.event.includes('allowed test-mode divergence: forced_stage_set'))).toBeTruthy();
-    expect(events.find((e) => e.event.includes('FORCED stage set'))).toBeTruthy();
+    expect(events.some((e) => e.event.includes('BLOCKED by live gates'))).toBe(true); // drivability evidence preserved (§H2)
+    expect(events.find((e) => e.event.includes('allowed test-mode divergence: fixture_artifact_seed'))).toBeTruthy();
+    expect(events.find((e) => e.event.includes('after fixture-artifact seed'))).toBeTruthy();
     expect(events.find((e) => e.kind === 'checkpoint').detail.band_complete).toBe(20);
   });
 
-  it('real-gates policy is byte-identical to before: block -> checkpoint, no forced set', async () => {
-    const journal = new RunJournal('t-policy-real', { baseDir: BASE, clock: fixedClock });
-    const advanceStage = vi.fn(async () => { throw new Error('blocked'); });
-    const forceStageSet = vi.fn(async () => {});
+  it('fixture-artifact-seed: a non-artifact block (0 missing) halts honestly — no fallback, no forced set', async () => {
+    const journal = new RunJournal('t-policy-seed-prose', { baseDir: BASE, clock: fixedClock });
+    const advanceStage = vi.fn(async () => { throw new Error('blocked by exit-gate enforcer: no verifier registered for a BINDING gate'); });
+    const seedMissingArtifacts = vi.fn(async () => ({ seeded: [], source: 'canonical', blocked: false }));
     const r = await runBand({
-      supabase: {}, journal, ventureId: 'v1', stage: 20, clock: { now: fixedClock },
-      seams: { executeStage: vi.fn(async () => ({ output: {}, validation: { valid: true } })), advanceStage, forceStageSet },
+      supabase: {}, journal, ventureId: 'v1', stage: 23, clock: { now: fixedClock },
+      seams: { executeStage: vi.fn(async () => ({ output: {}, validation: { valid: true } })), advanceStage, seedMissingArtifacts },
+      advancePolicy: 'fixture-artifact-seed',
     });
     expect(r).toMatchObject({ advanced: false, executed: true });
-    expect(forceStageSet).not.toHaveBeenCalled();
+    expect(advanceStage).toHaveBeenCalledTimes(1); // no retry when nothing was seeded
+    const events = journal.readAll();
+    expect(events.find((e) => e.event.includes('not artifact-gate-satisfiable'))).toBeTruthy();
+    expect(events.some((e) => e.event.includes('FORCED'))).toBe(false); // the raw-write hatch is gone
+  });
+
+  it('real-gates policy is byte-identical to before: block -> checkpoint, no seeding attempted', async () => {
+    const journal = new RunJournal('t-policy-real', { baseDir: BASE, clock: fixedClock });
+    const advanceStage = vi.fn(async () => { throw new Error('blocked'); });
+    const seedMissingArtifacts = vi.fn(async () => ({ seeded: [], source: null, blocked: false }));
+    const r = await runBand({
+      supabase: {}, journal, ventureId: 'v1', stage: 20, clock: { now: fixedClock },
+      seams: { executeStage: vi.fn(async () => ({ output: {}, validation: { valid: true } })), advanceStage, seedMissingArtifacts },
+    });
+    expect(r).toMatchObject({ advanced: false, executed: true });
+    expect(seedMissingArtifacts).not.toHaveBeenCalled();
     expect(journal.readAll().some((e) => e.event.includes('FORCED'))).toBe(false);
+  });
+
+  it('pin: zero raw current_lifecycle_stage writes remain in the harness (the hatch is deleted)', async () => {
+    const fs = await import('node:fs');
+    const src = fs.readFileSync(new URL('../../../scripts/harness/s20-run.mjs', import.meta.url), 'utf8');
+    // Functional surface only (a historical provenance comment may still NAME the old
+    // hatch): no raw stage-pointer write, no forced-stage-set policy, no force seam.
+    expect(src).not.toMatch(/update\(\s*\{\s*current_lifecycle_stage/);
+    expect(ADVANCE_POLICIES).not.toContain('forced-stage-set');
+    expect(src).not.toMatch(/seams\.forceStageSet/);
   });
 });

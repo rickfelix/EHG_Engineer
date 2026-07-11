@@ -182,6 +182,67 @@ export async function createFixture(supabase, runId, { entryStage = 20, journal 
   return { ventureId: venture.id, name: venture.name, journal: j, seededArtifactTypes: [...required.keys()] };
 }
 
+/**
+ * Fixture-artifact seeder (SD-LEO-INFRA-HARNESS-FIXTURE-ARTIFACT-001).
+ *
+ * Satisfy the stage artifact gate INSTEAD of bypassing it (Solomon adjudication F1
+ * 9b55e2a6: the gate is correct, the forced-stage-set hatch was wrong — a stage pointer
+ * is derived state; a raw write fabricates traversal history). Introspects the LIVE
+ * fn_stage_artifact_precondition RPC for the stage's exact requirements — never a
+ * hardcoded list, so it stays correct as gates evolve — and seeds exactly the missing
+ * artifacts, provenance-marked metadata.is_fixture, via the same writeArtifact primitive
+ * the machinery uses. §H2 (instrument-don't-mock) is preserved by the CALLER: this runs
+ * only AFTER the band's real executeStage, as a journaled sanctioned divergence — the
+ * machinery's gap is recorded before it is filled.
+ *
+ * @returns {{seeded: string[], source: string|null, blocked: boolean}}
+ */
+export async function seedMissingArtifactsForStage(supabase, { ventureId, stage, runId, journal } = {}) {
+  if (!ventureId || !Number.isInteger(stage)) throw new Error('seedMissingArtifactsForStage: ventureId and integer stage required');
+
+  // Fail-loud guard: NEVER seed onto a non-fixture venture (real-venture paths are
+  // explicitly out of scope; a leak here would fabricate gate satisfaction in prod data).
+  const { data: venture, error: vErr } = await supabase
+    .from('ventures')
+    .select('id, name, is_demo, launch_mode, metadata')
+    .eq('id', ventureId)
+    .single();
+  if (vErr || !venture) throw new Error(`seedMissingArtifactsForStage: venture lookup failed: ${vErr?.message || 'not found'}`);
+  if (!isFixtureVenture(venture)) throw new Error(`seedMissingArtifactsForStage: ${venture.name} is not a fixture venture — refusing to seed`);
+
+  // Introspect the live gate: the RPC's missing_artifacts[] (text[]) IS the work list.
+  const { data: precondition, error: pErr } = await supabase
+    .rpc('fn_stage_artifact_precondition', { p_venture_id: ventureId, p_stage: stage });
+  if (pErr) throw new Error(`seedMissingArtifactsForStage: fn_stage_artifact_precondition failed: ${pErr.message}`);
+  const missing = Array.isArray(precondition?.missing_artifacts) ? precondition.missing_artifacts : [];
+  const source = precondition?.source ?? null;
+  if (!precondition?.blocked || missing.length === 0) {
+    return { seeded: [], source, blocked: precondition?.blocked === true };
+  }
+
+  const { writeArtifact } = await import('../../lib/eva/artifact-persistence-service.js');
+  const seeded = [];
+  for (const artifactType of missing) {
+    await writeArtifact(supabase, {
+      ventureId,
+      lifecycleStage: stage,
+      artifactType,
+      title: `Harness fixture-seeded ${artifactType} (S${stage} gate requirement)`,
+      artifactData: { harness_seeded: true, run_id: runId, seeded_for_stage: stage, gate_source: source },
+      metadata: { is_fixture: true, harness: { run_id: runId, seeder: 'seedMissingArtifactsForStage' } },
+      source: 'harness-s20-fixture-seeder',
+    });
+    seeded.push(artifactType);
+  }
+  journal?.append?.({
+    kind: 'observation',
+    event: `S${stage} fixture-artifact seed: ${seeded.length} missing gate artifact(s) seeded (source=${source}) so the gate passes because its conditions are MET`,
+    touched_tables: ['venture_artifacts'],
+    detail: { seeded, gate_source: source, is_fixture: true },
+  });
+  return { seeded, source, blocked: true };
+}
+
 /** Resolve the fixture venture id for a run (by the deterministic name). */
 export async function findFixtureVentureId(supabase, runId) {
   const { data } = await supabase
