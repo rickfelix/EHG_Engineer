@@ -51,3 +51,35 @@ describe('FR-1: acquireLiveInstance', () => {
     expect(result.reason).toBe('invalid_url');
   });
 });
+
+describe('SSRF guard (adversarial review): reject private/loopback/link-local hosts and non-http(s) schemes', () => {
+  it('blocks a loopback host before ever launching a browser', async () => {
+    const stub = makePlaywrightStub();
+    const result = await acquireLiveInstance('http://127.0.0.1:9999/admin', { playwright: stub });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('blocked_host');
+    expect(stub.chromium.launch).not.toHaveBeenCalled();
+  });
+
+  it('blocks the cloud-metadata link-local address', async () => {
+    const stub = makePlaywrightStub();
+    const result = await acquireLiveInstance('http://169.254.169.254/latest/meta-data', { playwright: stub });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('blocked_host');
+  });
+
+  it('blocks a non-http(s) scheme', async () => {
+    const stub = makePlaywrightStub();
+    const result = await acquireLiveInstance('file:///etc/passwd', { playwright: stub });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('blocked_scheme');
+    expect(stub.chromium.launch).not.toHaveBeenCalled();
+  });
+
+  it('allows a normal public https host through to acquisition', async () => {
+    const stub = makePlaywrightStub({ status: 200 });
+    const result = await acquireLiveInstance('https://example.com', { playwright: stub });
+    expect(result.ok).toBe(true);
+    expect(stub.chromium.launch).toHaveBeenCalled();
+  });
+});

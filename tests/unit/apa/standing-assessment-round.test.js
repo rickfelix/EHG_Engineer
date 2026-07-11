@@ -10,7 +10,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { runApaStandingRound, assessVenture } from '../../../lib/apa/standing-assessment-round.mjs';
 
-function makeSupabaseStub({ ventureDeployments = [], lastAssessment = null, insertSpy = vi.fn(async () => ({ error: null })) } = {}) {
+function makeSupabaseStub({ ventureDeployments = [], lastAssessment = null, insertSpy = vi.fn() } = {}) {
   return {
     from(table) {
       if (table === 'venture_deployments') {
@@ -35,7 +35,14 @@ function makeSupabaseStub({ ventureDeployments = [], lastAssessment = null, inse
               }),
             }),
           }),
-          insert: insertSpy,
+          insert: (row) => {
+            insertSpy(row);
+            return {
+              select: () => ({
+                single: async () => ({ data: { id: 'stub-assessment-row-id' }, error: null }),
+              }),
+            };
+          },
         };
       }
       if (table === 'venture_token_ledger') {
