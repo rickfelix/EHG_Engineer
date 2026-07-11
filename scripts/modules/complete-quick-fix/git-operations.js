@@ -12,6 +12,33 @@ import { execSync, execFileSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { EXTERNAL_STEP_TIMEOUT_MS } from './constants.js';
+import { observeMergeWorkLadder } from '../../../lib/ship/auto-merge.mjs';
+
+// SD-LEO-INFRA-SHIP-WITNESS-TRIO-001 (FR-1): best-effort, never-throws observation
+// of a merge that just landed via `gh pr merge` in this lane. Mirrors
+// lib/ship/auto-merge.mjs's own error-tolerant pattern -- observeMergeWorkLadder()
+// already catches internally, this wrapper adds a second belt-and-suspenders catch
+// plus lazy supabase client creation so a missing/broken env never affects the
+// quick-fix merge itself (TR-1: observation must never block or fail a merge).
+export async function observeQuickFixMerge({ prNumber, repoOwner, repoName, qfId }) {
+  try {
+    const { createSupabaseServiceClient } = await import('../../../lib/supabase-client.js');
+    const supabase = createSupabaseServiceClient();
+    await observeMergeWorkLadder({
+      prNumber,
+      repoOwner,
+      repoName,
+      workKey: qfId || null,
+      tier: 'quick-fix',
+      lane: 'quick-fix-mergeToMain',
+      merged: true,
+      supabase,
+      logger: console,
+    });
+  } catch (e) {
+    console.log(`   ⚠️  merge-witness observation skipped (non-fatal): ${e?.message || e}`);
+  }
+}
 
 // QF-20260511-123 / feedback 0930f169: prefer the QF worktree when cwd is inside
 // .worktrees/qf/<qfId>, so Tier-1 docs-QFs don't fall back to the parent repo's
@@ -1049,6 +1076,8 @@ export async function mergeToMain(testDir, qf, prUrl, prompt, flags = {}) {
           if (prNumber && /^\d+$/.test(prNumber)) {
             execSync(`gh pr merge ${prNumber} --merge --delete-branch`, { stdio: 'inherit', cwd: testDir });
             console.log('   ✅ PR merged and branch deleted via GitHub\n');
+            const [, repoOwner, repoName] = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\//) || [];
+            await observeQuickFixMerge({ prNumber, repoOwner, repoName, qfId: qf.id });
             return;
           }
         } catch (ghMergeErr) {
@@ -1062,6 +1091,8 @@ export async function mergeToMain(testDir, qf, prUrl, prompt, flags = {}) {
             const stateOut = execSync(`gh pr view ${prNumber} --json state`, { encoding: 'utf-8', cwd: testDir }).trim();
             if (stateOut.includes('"MERGED"')) {
               console.log('   ✅ PR merged via GitHub (post-merge cleanup may have failed; non-critical)\n');
+              const [, repoOwner, repoName] = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\//) || [];
+              await observeQuickFixMerge({ prNumber, repoOwner, repoName, qfId: qf.id });
               return;
             }
           } catch { /* unable to verify — fall through */ }

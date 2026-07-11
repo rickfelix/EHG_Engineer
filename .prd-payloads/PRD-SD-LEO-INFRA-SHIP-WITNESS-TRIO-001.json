@@ -1,0 +1,60 @@
+{
+  "title": "Ship-witness trio: mergeToMain lane-extension, ship_review_findings actor attribution, escapeAuth dual-key audit substrate",
+  "executive_summary": "Chairman-ratified closure map (PR #5840, line 52) prescribes ONE SD closing a coherent trio of open follow-up commitments from three completed sibling SDs (SHIP-WITNESS-MERGEWORK-001, -APPLICATIONS-001, -ENFORCE-001). LEAD-phase live investigation found the closure map's own paraphrase mislabeled the source of one item (attributed to retro a50dd499/APPLICATIONS-001, actually found in retro b119bba1/MERGEWORK-001) -- corrected via direct DB query, documented in strategic_directives_v2.metadata.scope_correction. The three REAL open items, each independently code-verified: (1) evaluateMergeWorkLadder() observation is wired only into the /ship and EVA venture-build merge lanes -- quick-fix's mergeToMain() and worktree-merge.js both call `gh pr merge` directly with zero observation; (2) ship_review_findings has no actor attribution columns, so P2's witness rung is permanently not_evaluable (the enforcement decision already correctly BLOCKS on not_evaluable rather than silently passing -- only the columns + evaluable logic are missing); (3) zero DDL/implementation exists for the 'escapeAuth' dual-key audit substrate that would let P4 evaluate admin-override merges specifically (ordinary branch-protection detection for P4 already works on the /ship lane via existing checkProtection wiring -- escapeAuth is a distinct, additional mechanism for auditing --admin bypass merges).",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Wire merge-witness-ladder observation into quick-fix and worktree-merge lanes",
+      "description": "scripts/modules/complete-quick-fix/git-operations.js's mergeToMain() (line ~1007) and scripts/modules/shipping/worktree-merge.js both call `gh pr merge` directly with no observation. Wire evaluateMergeWorkLadder() (or the existing observeMergeWorkLadder() wrapper in lib/ship/auto-merge.mjs) into both lanes, mirroring auto-merge.mjs's own error-tolerant pattern: observation must be best-effort and NEVER fail or block the actual merge if the observation call throws. After a merge in either lane, a merge_witness_telemetry row must be written for that lane.",
+      "priority": "P0"
+    },
+    {
+      "id": "FR-2",
+      "title": "Actor attribution for ship_review_findings P2 witness rung",
+      "description": "Add actor attribution to ship_review_findings so P2's witness evaluation is no longer permanently not_evaluable. Per this SD's own migration_plan (metadata): ZERO DDL is the default plan -- prefer writing actor attribution (actor_type/actor_role/agent_id, reusing the system_events attribution vocabulary) into an existing jsonb/metadata column if one exists on ship_review_findings, or via a correlated lookup keyed by pr_number/sd_key against session/audit data already captured elsewhere. If a column addition is genuinely unavoidable (no existing jsonb column to extend), it ships as a single additive `metadata jsonb` column via a chairman-gated (requires-chairman-apply) migration -- never self-applied, and never more than the one column. Wire evaluateP2Witness() (lib/ship/merge-witness-ladder.mjs) to consult the new attribution data so P2 can report pass/fail (not just not_evaluable) once attribution data is present for a given finding row.",
+      "priority": "P0"
+    },
+    {
+      "id": "FR-3",
+      "title": "escapeAuth dual-key audit substrate for P4 admin-override merges",
+      "description": "Build the escapeAuth DDL (chairman-gated migration, additive-only) + a dual-key audit write path so admin-override merges (the --admin flag path already observed in attemptAutoMerge's adminUsed:true outcome) get an independent, durable audit row distinct from ordinary branch-protection status. Wire evaluateEnforcementDecision()'s P4 rung (lib/ship/ship-witness-enforcement.mjs) to consult this substrate specifically for admin-override merges, so P4 can move from a stub/not_applicable-only path toward a genuinely evaluable rung for the admin-bypass case. Ordinary (non-admin) branch-protection detection is unaffected -- it already works via existing checkProtection wiring.",
+      "priority": "P0"
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "description": "All merge-witness-ladder observation calls added by FR-1 must be error-tolerant (try/catch, log-and-continue) -- an observation failure must never cause a merge to fail or roll back, matching auto-merge.mjs's existing observeMergeWorkLadder() pattern." },
+    { "id": "TR-2", "description": "Any schema change (FR-2's fallback metadata column, FR-3's escapeAuth DDL) is additive-only, ships as a staged requires-chairman-apply migration per the gated-DDL convention (never self-applied), includes RLS ENABLE + '-- @approved-by' + rollback comment block per the migration conventions flagged in retro b119bba1 item #4." },
+    { "id": "TR-3", "description": "No existing evaluateEnforcementDecision() behavior for P2/P4 on rungs that were already evaluable (the /ship lane) may regress -- existing tests for merge-witness-ladder.mjs and ship-witness-enforcement.mjs must continue to pass unchanged." }
+  ],
+  "out_of_scope": [
+    "Retro a50dd499's actual 4 action items (sibling-SD gate-check for Ship-witness C, telemetry-adoption duplicate check, applications.github_repo backfill, isTrustedRepo-wiring verification) -- these are real but unrelated to the trio as corrected; not part of this SD",
+    "The CI workflow merge step found in .github/workflows/schema-docs-update.yml -- a narrow, different automation lane, not a general code-merge path; flagged as a possible follow-up, not blocking",
+    "Flipping any lane from observe to enforce mode -- this SD only extends and hardens observation/evaluability; the actual observe-to-enforce flip decision is out of scope (per ENFORCE-001's own prior work and its 7-day-adoption-gauge precondition)"
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "description": "A quick-fix mergeToMain() run writes a merge_witness_telemetry row for that lane; a worktree-merge.js run does the same." },
+    { "id": "TS-2", "description": "If the ladder-observation call throws (simulated failure), the quick-fix/worktree-merge itself still succeeds -- observation is provably non-blocking." },
+    { "id": "TS-3", "description": "A seeded ship_review_findings row with actor attribution data present causes evaluateP2Witness() to return pass or fail (not not_evaluable); a row without it still returns not_evaluable (backward-compatible)." },
+    { "id": "TS-4", "description": "evaluateEnforcementDecision() still blocks (not silently passes) when P2 is not_evaluable -- existing behavior preserved." },
+    { "id": "TS-5", "description": "A seeded admin-override merge audit row causes evaluateEnforcementDecision()'s P4 rung to evaluate pass/fail for that merge, distinct from the ordinary branch-protection check." },
+    { "id": "TS-6", "description": "Existing merge-witness-ladder.mjs and ship-witness-enforcement.mjs test suites pass unchanged after all three FRs land (no regression on the /ship lane's existing evaluable rungs)." }
+  ],
+  "implementation_approach": {
+    "phases": [
+      { "phase": 1, "description": "FR-1: wire ladder observation into quick-fix mergeToMain and worktree-merge.js (no schema changes, lowest risk, ships first)." },
+      { "phase": 2, "description": "FR-2: actor attribution for P2 (jsonb-first, DDL only if unavoidable)." },
+      { "phase": 3, "description": "FR-3: escapeAuth DDL + P4 admin-override audit substrate." }
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": ["lib/ship/merge-witness-ladder.mjs (evaluateP2Witness, evaluateP4ProtectionIntegrity)", "lib/ship/ship-witness-enforcement.mjs (evaluateEnforcementDecision)", "scripts/ship-witness-enforce-readiness.mjs (readiness gauge, indirectly benefits from wider lane coverage)"],
+    "dependencies": ["ship_review_findings table", "merge_witness_telemetry table", "lib/ship/auto-merge.mjs's observeMergeWorkLadder() pattern", "scripts/modules/complete-quick-fix/git-operations.js", "scripts/modules/shipping/worktree-merge.js"],
+    "data_contracts": ["ship_review_findings actor attribution (jsonb-first, additive column fallback)", "escapeAuth dual-key audit substrate (new table or additive columns, chairman-gated)"],
+    "runtime_config": [],
+    "observability_rollout": "No new scheduled jobs. FR-1's wider lane coverage feeds the EXISTING ship-witness-enforce-readiness.mjs adoption gauge (more lanes now write merge_witness_telemetry) -- no new observability surface, an existing one becomes more complete."
+  },
+  "risks": [
+    { "risk": "Wiring observation into quick-fix/worktree-merge lanes could accidentally introduce a blocking dependency on ladder evaluation", "mitigation": "TR-1 mandates error-tolerant, non-blocking observation; TS-2 explicitly tests the failure-does-not-block-merge case." },
+    { "risk": "Schema changes for FR-2/FR-3 are chairman-gated DDL that cannot be self-applied", "mitigation": "TR-2 stages migrations per the gated-RPC convention; SD ships with the migration staged and documented, not silently blocked on it -- code changes that degrade gracefully without the column (not_evaluable fallback) still ship." }
+  ]
+}
