@@ -106,6 +106,25 @@ function gitUserEmail() {
   catch { return process.env.GIT_USER_EMAIL || ''; }
 }
 
+// Retro action item (SD-LEO-FIX-VENTURE-ARTIFACTS-ARTIFACT-001, #3): the genesis incident for
+// venture_artifacts_artifact_type_check was a chairman-approved migration applied to prod whose
+// SQL file was never committed to git — git history silently diverged from live DB state, and the
+// gap surfaced only later, as a follow-up task that got dropped. Make "committed to git" a HARD
+// guard on --prod-deploy itself, not a checklist step someone can skip.
+function isMigrationCommittedToGit(repoRoot, absPath) {
+  const relPath = path.relative(repoRoot, absPath).replace(/\\/g, '/');
+  try {
+    execSync(`git ls-files --error-unmatch -- "${relPath}"`, { cwd: repoRoot, stdio: ['ignore', 'ignore', 'ignore'] });
+  } catch {
+    return { ok: false, reason: `${relPath} is not tracked by git (never committed)` };
+  }
+  const dirty = execSync(`git status --porcelain -- "${relPath}"`, { cwd: repoRoot, encoding: 'utf8' }).trim();
+  if (dirty) {
+    return { ok: false, reason: `${relPath} has uncommitted changes (git status: ${dirty})` };
+  }
+  return { ok: true };
+}
+
 function resolveMigrationPath(repoRoot, rawPath, allowAnyPath) {
   const abs = path.isAbsolute(rawPath) ? rawPath : path.join(repoRoot, rawPath);
   const norm = path.normalize(abs).replace(/\\/g, '/');
@@ -249,6 +268,15 @@ async function applyMode({ args, repoRoot }) {
     if (auditClient) await auditClient.end();
     emitMarker('[MIGRATION_APPLY_DRY_RUN]');
     return 0;
+  }
+
+  const gitCheck = isMigrationCommittedToGit(repoRoot, absPath);
+  if (!gitCheck.ok) {
+    emitMarker('[MIGRATION_APPLY_PROD_FAIL_GUARDS=git_committed]');
+    process.stderr.write(`Guard rejection: ${gitCheck.reason}\n`);
+    process.stderr.write('Commit the migration file to git before --prod-deploy — never apply-then-commit.\n');
+    if (auditClient) await auditClient.end();
+    return 1;
   }
 
   if (!auditClient) {
@@ -446,4 +474,4 @@ if (isEntry) {
   });
 }
 
-export { parseArgs, sha256, pathLockId, resolveMigrationPath };
+export { parseArgs, sha256, pathLockId, resolveMigrationPath, isMigrationCommittedToGit };

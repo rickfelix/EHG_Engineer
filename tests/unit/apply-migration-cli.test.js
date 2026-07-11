@@ -14,15 +14,27 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
+import { execSync } from 'node:child_process';
+
 import {
   parseArgs,
   sha256,
   pathLockId,
   resolveMigrationPath,
+  isMigrationCommittedToGit,
 } from '../../scripts/apply-migration.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..', '..');
+
+// Isolated throwaway git repo — never touches the real EHG_Engineer working tree.
+function makeTempGitRepo() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apply-migration-git-test-'));
+  execSync('git init -q', { cwd: dir });
+  execSync('git config user.email test@example.com', { cwd: dir });
+  execSync('git config user.name test', { cwd: dir });
+  return dir;
+}
 
 describe('parseArgs', () => {
   it('extracts positional + flags + key=value', () => {
@@ -66,6 +78,37 @@ describe('resolveMigrationPath (FR-1 path allowlist)', () => {
   it('throws if file not found', () => {
     expect(() => resolveMigrationPath(REPO, 'database/migrations/does-not-exist.sql', false))
       .toThrow(/migration file not found/);
+  });
+});
+
+describe('isMigrationCommittedToGit (retro action item #3, SD-LEO-FIX-VENTURE-ARTIFACTS-ARTIFACT-001)', () => {
+  it('returns ok:false for an untracked file (never committed)', () => {
+    const dir = makeTempGitRepo();
+    const file = path.join(dir, 'untracked.sql');
+    fs.writeFileSync(file, 'SELECT 1;');
+    const r = isMigrationCommittedToGit(dir, file);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/not tracked/);
+  });
+
+  it('returns ok:false for a tracked file with uncommitted local changes', () => {
+    const dir = makeTempGitRepo();
+    const file = path.join(dir, 'mig.sql');
+    fs.writeFileSync(file, 'SELECT 1;');
+    execSync('git add mig.sql && git commit -q -m init', { cwd: dir });
+    fs.writeFileSync(file, 'SELECT 2; -- edited after commit');
+    const r = isMigrationCommittedToGit(dir, file);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/uncommitted changes/);
+  });
+
+  it('returns ok:true for a tracked file with no local modifications', () => {
+    const dir = makeTempGitRepo();
+    const file = path.join(dir, 'mig.sql');
+    fs.writeFileSync(file, 'SELECT 1;');
+    execSync('git add mig.sql && git commit -q -m init', { cwd: dir });
+    const r = isMigrationCommittedToGit(dir, file);
+    expect(r).toEqual({ ok: true });
   });
 });
 

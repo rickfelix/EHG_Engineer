@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { ARTIFACT_TYPES } from '../../../lib/eva/artifact-types.js';
+import { UPSTREAM_ARTIFACT_TYPES } from '../../../lib/eva/stage-templates/upstream-artifact-types.js';
 import { parseCheckConstraintAllowedValues } from '../../../lib/eva/stage-templates/artifact-type-parity.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -44,5 +45,23 @@ describe('ARTIFACT_TYPES registry <-> venture_artifacts CHECK constraint parity'
     const drifted = Object.values(ARTIFACT_TYPES).filter((v) => !allowed.has(v));
 
     expect(drifted, `ARTIFACT_TYPES values missing from the live constraint (add via a chairman-gated migration, then npm run schema:snapshot:lint): ${drifted.join(', ')}`).toEqual([]);
+  });
+});
+
+// Retro action item #2 (SD-LEO-FIX-VENTURE-ARTIFACTS-ARTIFACT-001): audit of other JS-registry
+// vs DB-constraint pairs found a SECOND registry writing to this same table/column with no prior
+// CI guard — lib/eva/stage-templates/upstream-artifact-types.js's UPSTREAM_ARTIFACT_TYPES (S18
+// marketing copy). Applying the same template here so this second point of failure is covered
+// before it repeats the exact incident class.
+describe('UPSTREAM_ARTIFACT_TYPES registry <-> venture_artifacts CHECK constraint parity', () => {
+  it('every canonical UPSTREAM_ARTIFACT_TYPES value is allowed by the live constraint (committed snapshot)', () => {
+    const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'));
+    const definition = snapshot.checks && snapshot.checks[CONSTRAINT_KEY];
+    expect(definition, `${CONSTRAINT_KEY} missing from database/schema-reference-snapshot.json — regenerate via: npm run schema:snapshot:lint`).toBeTruthy();
+
+    const allowed = parseCheckConstraintAllowedValues(definition);
+    const drifted = UPSTREAM_ARTIFACT_TYPES.filter((v) => !allowed.has(v));
+
+    expect(drifted, `UPSTREAM_ARTIFACT_TYPES values missing from the live constraint (add via a chairman-gated migration, then npm run schema:snapshot:lint): ${drifted.join(', ')}`).toEqual([]);
   });
 });
