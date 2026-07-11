@@ -10,6 +10,13 @@
  * the drift-comparison artifact) — different consumer, different shape; the
  * names are deliberately different so the two never compete.
  *
+ * SD-LEO-FIX-VENTURE-ARTIFACTS-ARTIFACT-001: also captures CHECK constraint
+ * definitions (public schema) under `checks`, keyed "<table>.<constraint>" ->
+ * definition text. Additive-only (existing `tables`/`views` consumers are
+ * unaffected) — lets a template/constraint parity test assert every literal
+ * enum-like value a caller emits (e.g. stage-template artifactType strings)
+ * is present in the live CHECK constraint, offline, no CI DB dependency.
+ *
  * Usage: npm run schema:snapshot:lint   (requires SUPABASE_POOLER_URL)
  * Run after applying migrations so the lint sees the new schema.
  */
@@ -47,16 +54,29 @@ if (!url) {
       else tables[r.rel] = r.cols;
     }
 
+    const { rows: checkRows } = await c.query(`
+      SELECT rel.relname AS table_name, con.conname AS constraint_name,
+             pg_get_constraintdef(con.oid) AS definition
+        FROM pg_constraint con
+        JOIN pg_class rel ON rel.oid = con.conrelid
+        JOIN pg_namespace n ON n.oid = rel.relnamespace
+       WHERE n.nspname = 'public' AND con.contype = 'c'
+       ORDER BY 1, 2`);
+    const checks = {};
+    for (const r of checkRows) checks[`${r.table_name}.${r.constraint_name}`] = r.definition;
+
     const snapshot = {
       generated_at: new Date().toISOString(),
       source: 'scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)',
       table_count: Object.keys(tables).length,
       view_count: Object.keys(views).length,
+      check_count: Object.keys(checks).length,
       tables,
       views,
+      checks,
     };
     writeFileSync(OUT, JSON.stringify(snapshot, null, 1) + '\n');
-    console.log(`wrote ${OUT}: ${snapshot.table_count} tables, ${snapshot.view_count} views/matviews`);
+    console.log(`wrote ${OUT}: ${snapshot.table_count} tables, ${snapshot.view_count} views/matviews, ${snapshot.check_count} check constraints`);
   } finally {
     await c.end();
   }
