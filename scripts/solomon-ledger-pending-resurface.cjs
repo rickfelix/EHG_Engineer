@@ -15,6 +15,10 @@ const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { getActiveAdamId } = require('../lib/coordinator/adam-identity.cjs');
 
 const DEFAULT_THRESHOLD_HOURS = 24;
+const DEFAULT_PAGE_SIZE = 50;
+// Safety cap on pages per invocation (10 * 50 = 500 rows/run) -- bounds worst-case query
+// volume for a sweep script without reintroducing the head-of-queue starvation this fixes.
+const DEFAULT_MAX_PAGES = 10;
 
 function parseThresholdHours(argv) {
   const idx = argv.indexOf('--threshold-hours');
@@ -27,18 +31,30 @@ function dedupKeyFor(ledgerId, nowMs) {
   return `solomon_ledger_pending:${ledgerId}:${new Date(nowMs).toISOString().slice(0, 10)}`;
 }
 
-/** Fetches ledger rows still pending past the threshold (primary-state check — no caching). */
-async function planStalePending(supabase, { thresholdHours = DEFAULT_THRESHOLD_HOURS, nowMs = Date.now() } = {}) {
+/**
+ * Fetches ALL ledger rows still pending past the threshold (primary-state check — no
+ * caching). QF-20260710-743: the original single .limit(50) query starved rows 51+ forever
+ * whenever the oldest 50 stale-pending rows never resolved -- pages via .range() past that
+ * window (bounded by maxPages) so the whole backlog surfaces over successive/single runs.
+ */
+async function planStalePending(supabase, { thresholdHours = DEFAULT_THRESHOLD_HOURS, nowMs = Date.now(), pageSize = DEFAULT_PAGE_SIZE, maxPages = DEFAULT_MAX_PAGES } = {}) {
   const cutoff = new Date(nowMs - thresholdHours * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
-    .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — chairman-apply-gated table, not yet in the live snapshot
-    .select('id, correlation_id, sd_key, proposal_summary, created_at')
-    .eq('decision', 'pending')
-    .lte('created_at', cutoff)
-    .order('created_at', { ascending: true })
-    .limit(50);
-  if (error) throw new Error(`planStalePending query failed: ${error.message}`);
-  return data || [];
+  const all = [];
+  for (let page = 0; page < maxPages; page++) {
+    const from = page * pageSize;
+    const { data, error } = await supabase
+      .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — chairman-apply-gated table, not yet in the live snapshot
+      .select('id, correlation_id, sd_key, proposal_summary, created_at')
+      .eq('decision', 'pending')
+      .lte('created_at', cutoff)
+      .order('created_at', { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(`planStalePending query failed: ${error.message}`);
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < pageSize) break; // last page
+  }
+  return all;
 }
 
 /** Rate-limited, deduped daily resurface: at most one inbox row per stale ledger item per day. */
