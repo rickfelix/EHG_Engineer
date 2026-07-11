@@ -454,6 +454,7 @@ async function insertDeliveredRowIfRequested(supabase, sessionId, msg) {
       .from('session_coordination')
       .insert({
         sender_session: sessionId,
+        // eslint-disable-next-line no-echoed-session-coordination-target -- transport-ack replies to msg's original sender; flagged by SD-LEO-INFRA-SESSION-COORDINATION-LANE-001's census as a stale-target risk, deferred to that SD's follow-on investigation
         target_session: msg.sender_session,
         message_type: 'INFO',
         subject: deliveredSubject,
