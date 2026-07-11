@@ -68,12 +68,38 @@ describe('TS-4: foreign_claim reconciliation fires BEFORE the hard-fail throw', 
 
   it('is fail-safe: the whole reconciliation attempt is wrapped in try/catch so any error falls through to the original hard-fail', () => {
     const idx = src.indexOf('foreign_claim reconciliation');
-    const surrounding = src.slice(idx, idx + 3600);
+    // Window widened 3600->5600 for the QF-20260711-063 worktree-containment guard inserted
+    // inside the same try block; the catch it pins is unchanged.
+    const surrounding = src.slice(idx, idx + 5600);
     expect(surrounding).toMatch(/try\s*\{/);
     expect(surrounding).toMatch(/\}\s*catch\s*\{\s*\/\*\s*fail-safe/i);
   });
 
   it('the original hard-fail behavior for a genuinely stale attempt is unchanged (still throws ClaimIdentityError with reason foreign_claim)', () => {
     expect(src).toMatch(/throw new ClaimIdentityError\(\{\s*\n\s*reason:\s*['"]foreign_claim['"]/);
+  });
+});
+
+describe('QF-20260711-063: reconciliation requires caller cwd INSIDE the SD\'s registered worktree (check-then-write)', () => {
+  it('computes worktree containment from sd.worktree_path before any WIP read', () => {
+    const containIdx = src.indexOf('callerInSdWorktree');
+    const wipIdx = src.indexOf("_require('./claim/wip-detector.cjs')");
+    expect(containIdx).toBeGreaterThan(0);
+    expect(wipIdx).toBeGreaterThan(0);
+    expect(containIdx).toBeLessThan(wipIdx);
+    expect(src).toMatch(/sd\.worktree_path\s*\?\s*path\.resolve\(sd\.worktree_path\)\s*:\s*null/);
+  });
+
+  it('an outside-worktree caller throws (falls to the foreign_claim hard-fail) BEFORE the CAS claim write — never write-then-block', () => {
+    expect(src).toMatch(/if\s*\(!callerInSdWorktree\)\s*throw new Error\(['"]reconciliation caller outside SD worktree — no steal['"]\)/);
+    // The guard throw must precede the CAS update within the reconciliation block.
+    const guardIdx = src.indexOf('reconciliation caller outside SD worktree');
+    const casIdx = src.indexOf('claiming_session_id: mySessionId, is_working_on: true');
+    expect(guardIdx).toBeGreaterThan(0);
+    expect(guardIdx).toBeLessThan(casIdx);
+  });
+
+  it('containment accepts the worktree root itself and any subdirectory (path.sep suffix), nothing else', () => {
+    expect(src).toMatch(/cwdResolved === wtRegistered \|\| cwdResolved\.startsWith\(wtRegistered \+ path\.sep\)/);
   });
 });
