@@ -12,6 +12,7 @@ import {
   selectEnabledEntries, tripsThreshold, buildFindingRow,
   shapeRelayDropResult, shapeStaleTreeResult,
   staleSelfScoreDetector, DEFAULT_SELF_SCORE_STALE_HOURS,
+  buildPlanDriftAdvisoryRows, pushPlanDriftAdvisory,
 } from '../../../scripts/gauge-runner.mjs';
 
 // feedback.type is constrained by feedback_type_check (database/migrations/391_quality_lifecycle_schema.sql)
@@ -20,14 +21,14 @@ import {
 const VALID_FEEDBACK_TYPES = ['issue', 'enhancement'];
 
 describe('GAUGE_REGISTRY shape', () => {
-  it('exports exactly 20 seed entries (8 original + venture-capture-completeness, SD-LEO-INFRA-CAPTURE-FORWARD-GATE-001 + 6 loop-health-*, SD-LEO-INFRA-009-LEAF-PER-001 + 3 self-score-age stubs, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4 + expired-premise-tags, SD-LEO-INFRA-BITTER-LESSON-AUDIT-001 + operator-cash-attestation-missing, QF-20260705-915)', () => {
-    expect(GAUGE_REGISTRY).toHaveLength(20);
+  it('exports exactly 22 seed entries (8 original + venture-capture-completeness, SD-LEO-INFRA-CAPTURE-FORWARD-GATE-001 + 6 loop-health-*, SD-LEO-INFRA-009-LEAF-PER-001 + 3 self-score-age stubs, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4 + expired-premise-tags, SD-LEO-INFRA-BITTER-LESSON-AUDIT-001 + operator-cash-attestation-missing, QF-20260705-915 + plan-drift-coverage/plan-drift-mix, SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001)', () => {
+    expect(GAUGE_REGISTRY).toHaveLength(22);
   });
 
-  it('17 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
+  it('19 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
-    expect(live).toHaveLength(17);
+    expect(live).toHaveLength(19);
     expect(stubs.map((e) => e.id).sort()).toEqual(['adam_self_score_age', 'coordinator_self_score_age', 'solomon_self_score_age']);
   });
 
@@ -101,9 +102,9 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(selectEnabledEntries(undefined)).toEqual([]);
   });
 
-  it('the real GAUGE_REGISTRY selects all 17 enabled entries', () => {
+  it('the real GAUGE_REGISTRY selects all 19 enabled entries', () => {
     const selected = selectEnabledEntries(GAUGE_REGISTRY);
-    expect(selected).toHaveLength(17);
+    expect(selected).toHaveLength(19);
     expect(selected.map((e) => e.id).sort()).toEqual([
       'adam-claimed-or-built-sd',
       'coordinator-sourced-sd',
@@ -115,6 +116,8 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
       'loop-health-E_role_self_review',
       'loop-health-F_pat_registry',
       'operator-cash-attestation-missing',
+      'plan-drift-coverage',
+      'plan-drift-mix',
       'recursion-governor-ratio',
       'relay-drop',
       'ship-witness-unwitnessed-merge',
@@ -123,6 +126,21 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
       'unranked-claimable-leaves',
       'venture-capture-completeness',
     ]);
+  });
+
+  it('SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001: the two new entries have resolvable detectorFns, ownerRole coordinator, and honest-gauge tripWhen conventions', () => {
+    const coverage = GAUGE_REGISTRY.find((e) => e.id === 'plan-drift-coverage');
+    const mix = GAUGE_REGISTRY.find((e) => e.id === 'plan-drift-mix');
+    expect(coverage).toBeTruthy();
+    expect(coverage.detectorFn).toBe('plan-drift-coverage');
+    expect(coverage.ownerRole).toBe('coordinator');
+    expect(coverage.thresholdConfig.tripWhen({ starved: true })).toBe(true);
+    expect(coverage.thresholdConfig.tripWhen({ starved: false })).toBe(false);
+    expect(mix).toBeTruthy();
+    expect(mix.detectorFn).toBe('plan-drift-mix');
+    expect(mix.ownerRole).toBe('coordinator');
+    expect(mix.thresholdConfig.tripWhen({ sustainedBreach: true })).toBe(true);
+    expect(mix.thresholdConfig.tripWhen({ sustainedBreach: false })).toBe(false);
   });
 
   it('QF-20260705-915: operator-cash-attestation-missing has a resolvable detectorFn, ownerRole chairman, and the >0-count tripWhen convention', () => {
@@ -312,6 +330,58 @@ describe('the 3 self-score-age registry entries (FR-4)', () => {
       expect(entry.thresholdConfig.tripWhen({ count: 0 })).toBe(false);
       expect(entry.enabled).toBe(false); // ships alongside the writers' default-OFF cadence flags
     });
+  });
+});
+
+describe('buildPlanDriftAdvisoryRows / pushPlanDriftAdvisory (SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001 FR-6, TS-5)', () => {
+  const sampleResult = { streak: 2, mix: { activeRungPct: 12.5, mix: { now: 1, next: 7 } } };
+
+  it('builds a coordinator row targeting the resolved coordinator id', () => {
+    const { coordinatorRow } = buildPlanDriftAdvisoryRows(sampleResult, { coordinatorId: 'coord-123', adamId: null });
+    expect(coordinatorRow.target_session).toBe('coord-123');
+    expect(coordinatorRow.payload.kind).toBe('coordinator_advisory');
+    expect(coordinatorRow.payload.gauge_id).toBe('plan-drift-mix');
+    expect(coordinatorRow.subject).toContain('[PLAN-DRIFT]');
+  });
+
+  it('falls back to the broadcast-coordinator sentinel when no coordinator is resolved', () => {
+    const { coordinatorRow } = buildPlanDriftAdvisoryRows(sampleResult, { coordinatorId: null, adamId: null });
+    expect(coordinatorRow.target_session).toBe('broadcast-coordinator');
+  });
+
+  it('builds an Adam row only when an Adam session id is resolved (TS-8 typed-kind contract)', () => {
+    const withAdam = buildPlanDriftAdvisoryRows(sampleResult, { coordinatorId: 'coord-1', adamId: 'adam-1' });
+    expect(withAdam.adamRow).not.toBeNull();
+    expect(withAdam.adamRow.target_session).toBe('adam-1');
+    expect(withAdam.adamRow.payload.kind).toBe('coordinator_advisory'); // registered ADAM_INBOX_KINDS entry -- never orphaned
+
+    const withoutAdam = buildPlanDriftAdvisoryRows(sampleResult, { coordinatorId: 'coord-1', adamId: null });
+    expect(withoutAdam.adamRow).toBeNull();
+  });
+
+  it('pushPlanDriftAdvisory inserts exactly one coordinator row and one Adam row when both are resolved', async () => {
+    const inserted = [];
+    const fakeSupabase = {
+      from: () => ({
+        insert: (row) => { inserted.push(row); return Promise.resolve({ error: null }); },
+      }),
+    };
+    await pushPlanDriftAdvisory(fakeSupabase, sampleResult, { coordinatorId: 'coord-1', adamId: 'adam-1' });
+    expect(inserted).toHaveLength(2);
+    expect(inserted[0].target_session).toBe('coord-1');
+    expect(inserted[1].target_session).toBe('adam-1');
+  });
+
+  it('pushPlanDriftAdvisory inserts only the coordinator row when no Adam session resolves (never blocks on it)', async () => {
+    const inserted = [];
+    const fakeSupabase = {
+      from: () => ({
+        insert: (row) => { inserted.push(row); return Promise.resolve({ error: null }); },
+      }),
+    };
+    await pushPlanDriftAdvisory(fakeSupabase, sampleResult, { coordinatorId: 'coord-1', adamId: null });
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0].target_session).toBe('coord-1');
   });
 });
 
