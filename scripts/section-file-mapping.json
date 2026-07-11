@@ -163,7 +163,8 @@
       "vision_arch_doc_check",
       "code_quality_pre_commit",
       "exec_atomic_insert_writer_consumer_pattern",
-      "fleet_worker_loop_continuity"
+      "fleet_worker_loop_continuity",
+      "worktree_freshness_precheck"
     ],
     "_removed_sections_note": "mandatory_phase_transitions_exec (duplicate of CORE mandatory_phase_transitions), migration_execution_delegation (duplicate of CORE migration_execution_protocol), workflow (was listed twice — removed duplicate). RCA mandate removed from generator — already in router."
   },
