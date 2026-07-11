@@ -1283,9 +1283,6 @@ async function printInbox() {
   // more than 20 even when the true unacknowledged backlog is larger — the label read "20
   // unread signal(s)" indefinitely regardless of triage progress. Query the true set (same
   // filters, no limit) so the display reflects real unread rows, not the window cap.
-  // SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 (closure map class C6): a reply to a worker
-  // signal routinely arrives as a fresh row targeting this SAME coordinatorId, so it is
-  // visible in this same query — exclude correlated-reply rows from the true-unread count.
   const { data: allUnreadRows, error: countError } = await supabase
     .from('session_coordination')
     .select('id, payload')
@@ -1294,7 +1291,18 @@ async function printInbox() {
     .is('acknowledged_at', null)
     .gte('created_at', signalSince);
 
-  const uncorrelatedUnread = (allUnreadRows || []).filter((r) => !hasCorrelatedReply(r, allUnreadRows));
+  // SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 (closure map class C6): a reply to a worker
+  // signal is sent BY the coordinator (sender_session=coordinatorId), targeting the
+  // ORIGINAL SENDER (never coordinatorId) and carrying no signal_type — it can never appear
+  // in the query above, so the correlation window must be fetched separately.
+  const { data: coordinatorReplies } = await supabase
+    .from('session_coordination')
+    .select('id, payload')
+    .eq('sender_session', coordinatorId)
+    .gte('created_at', signalSince)
+    .limit(400);
+  const correlationRows = [...(allUnreadRows || []), ...(coordinatorReplies || [])];
+  const uncorrelatedUnread = (allUnreadRows || []).filter((r) => !hasCorrelatedReply(r, correlationRows));
   const trueCount = countError || allUnreadRows == null ? signals.length : uncorrelatedUnread.length;
   console.log('  ' + trueCount + ' unread signal(s)' +
     (trueCount > signals.length ? ' (showing newest ' + signals.length + ')' : ''));
@@ -1536,6 +1544,7 @@ async function printSolomonInbox() {
       .from('session_coordination')
       .select('id, payload')
       .in('sender_session', targets)
+      .order('created_at', { ascending: false })
       .limit(200);
     rows = rows.filter((r) => !hasCorrelatedReply(r, [...rows, ...(solomonReplies || [])]));
   } catch { /* fail-open: correlation lookup unavailable → fall back to uncorrelated rows */ }

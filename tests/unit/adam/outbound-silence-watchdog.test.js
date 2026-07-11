@@ -22,7 +22,7 @@ const LIVE = 'target-live-1';
 
 /** Stub supabase: dispatches by table; session_coordination select() branches by whether
  *  .eq('payload->>kind', ...) is chained (prior-probe lookup) vs not (outbound fetch). */
-function makeStub({ outboundRows = [], sessionRows = [{ session_id: LIVE, heartbeat_at: new Date(NOW).toISOString() }], priorProbeRows = [] } = {}) {
+function makeStub({ outboundRows = [], sessionRows = [{ session_id: LIVE, heartbeat_at: new Date(NOW).toISOString() }], priorProbeRows = [], replyRows = [] } = {}) {
   const inserts = [];
   const priorProbeFilters = [];
   return {
@@ -44,6 +44,9 @@ function makeStub({ outboundRows = [], sessionRows = [{ session_id: LIVE, heartb
                 },
               }),
             }),
+            // SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001: counterparty-reply correlation fetch
+            // (.select().in('sender_session', targets).gte().limit()).
+            in: () => ({ gte: () => ({ limit: async () => ({ data: replyRows }) }) }),
           }),
           insert: async (row) => { inserts.push(row); return { data: null, error: null }; },
         };
@@ -182,6 +185,18 @@ describe('outbound-silence-watchdog: tick wiring (TS-2..TS-5)', () => {
     expect(inserted.payload.correlation_id).toBeUndefined();
     expect(inserted.payload.request_ack).toBeUndefined();
     expect(Date.parse(inserted.expires_at) - NOW).toBe(PROBE_EXPIRES_MS);
+  });
+
+  it('SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001: a counterparty reply (sender_type != adam) suppresses the false breach', async () => {
+    // The real reply is sent BY the target (sender_type='coordinator'/'solomon'), never
+    // sender_type='adam' — so it can only be found via the separate replyRows fetch, not
+    // the outboundRows fetch. This is the adversarial-review-caught direction bug.
+    const reply = { id: 'reply-1', payload: { reply_to: breachingRow.id }, sender_session: LIVE, created_at: new Date(NOW - 40 * 60_000).toISOString() };
+    const sb = makeStub({ outboundRows: [breachingRow], priorProbeRows: [], replyRows: [reply] });
+    const result = await runOutboundSilenceWatchdog(sb, { now: NOW });
+    expect(result.probed).toHaveLength(0);
+    expect(result.escalated).toHaveLength(0);
+    expect(emitFeedback).not.toHaveBeenCalled();
   });
 
   it('MAX_PROBES_PER_TICK: more breaching live targets than the cap -> only the cap is probed', async () => {
