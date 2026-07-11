@@ -46,7 +46,7 @@ const { isBuildForbiddenSession } = require('../lib/claim/build-forbidden-sessio
 const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cjs');
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate, also used by
 // scripts/stale-session-sweep.cjs CLAIM_FIX (closes the self_claim-vs-sweep writer-consumer-asymmetry).
-const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, parentLeadPending } = require('../lib/fleet/claim-eligibility.cjs');
+const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, parentLeadPending, liveClaimWriteFenceReason } = require('../lib/fleet/claim-eligibility.cjs');
 // SD-ARCH-HOTSPOT-SD-START-001 FR-2: the CONVERGED dependency gate shared with scripts/sd-start.js
 // (one resolution truth — deps array shapes + blocked_on_sd fold + sd_key-OR-id lookup). This
 // consumer applies its native FAIL-CLOSED polarity via depsSatisfiedFromVerdict: skip on
@@ -344,6 +344,11 @@ async function resolveTrack(sb, sdKey, fallback) {
 /** Attempt a claim via the canonical claim_sd RPC. Never throws. */
 async function tryClaim(sb, sdKey, sessionId, track) {
   try {
+    // QF-20260711-272: live coordinator-authority fence check at the claim-WRITE boundary —
+    // covers EVERY checkin claim lane (resume_final, orphan-adopt, draft self-claim, directed
+    // assignment) with one re-fetch, closing the stale-candidate-row race. Fail-closed.
+    const fence = await liveClaimWriteFenceReason(sb, sdKey);
+    if (fence) return { ok: false, error: `claim_fenced:${fence}` };
     const p_track = await resolveTrack(sb, sdKey, track);
     const { data, error } = await sb.rpc('claim_sd', { p_sd_id: sdKey, p_session_id: sessionId, p_track });
     if (error) return { ok: false, error: error.message };
