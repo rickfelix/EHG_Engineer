@@ -589,6 +589,21 @@ describe('isFixtureVenture', () => {
     expect(isFixtureVenture(null)).toBe(false);
     expect(isFixtureVenture(undefined)).toBe(false);
   });
+
+  // QF-20260710-243: confirmed live incident specimens (is_demo=false, name doesn't
+  // match the old regex) -- __e2e_product_review_gate_adv_...__ (Stage-23) and
+  // 'Test Venture for Owned-Audience Loop' (outbound_publish_approval).
+  it('is true for an __e2e_-prefixed name even without is_demo', () => {
+    expect(isFixtureVenture({ name: '__e2e_product_review_gate_adv_1783723784384__', is_demo: false })).toBe(true);
+  });
+
+  it('is true for launch_mode:simulated regardless of name or is_demo', () => {
+    expect(isFixtureVenture({ name: 'Test Venture for Owned-Audience Loop', is_demo: false, launch_mode: 'simulated' })).toBe(true);
+  });
+
+  it('is false for a real venture with a non-simulated launch_mode', () => {
+    expect(isFixtureVenture({ name: 'Acme Real Venture', is_demo: false, launch_mode: 'live' })).toBe(false);
+  });
 });
 
 describe('createOrReusePendingDecision: fixture-venture guard (QF-20260703-236)', () => {
