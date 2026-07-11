@@ -26,10 +26,12 @@ function createMockSupabase({ ledgerRows = [], inboxRows = [] } = {}) {
             eq: (col, val) => ({
               lte: (col2, val2) => ({
                 order: () => ({
-                  limit: async () => ({
-                    data: ledger.filter((r) => r[col] === val && r[col2] <= val2),
-                    error: null,
-                  }),
+                  range: async (from, to) => {
+                    const filtered = ledger
+                      .filter((r) => r[col] === val && r[col2] <= val2)
+                      .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
+                    return { data: filtered.slice(from, to + 1), error: null };
+                  },
                 }),
               }),
             }),
@@ -78,6 +80,35 @@ describe('planStalePending()', () => {
     });
     const rows = await planStalePending(supabase, { thresholdHours: 24, nowMs });
     expect(rows.map((r) => r.id)).toEqual(['l1']);
+  });
+
+  // QF-20260710-743: the original .limit(50) query starved every row past the oldest 50
+  // whenever the head of the queue never resolved. Pins the fix with a small pageSize so
+  // the fixture doesn't need 51+ rows to prove pagination past a single page.
+  it('pages past a single-page window so rows beyond it are not starved (QF-20260710-743)', async () => {
+    const nowMs = new Date('2026-07-05T12:00:00Z').getTime();
+    const ledgerRows = Array.from({ length: 5 }, (_, i) => ({
+      id: `l${i + 1}`,
+      decision: 'pending',
+      created_at: new Date(nowMs - (5 - i) * 48 * 60 * 60 * 1000).toISOString(), // all stale, oldest first
+    }));
+    const supabase = createMockSupabase({ ledgerRows });
+
+    const rows = await planStalePending(supabase, { thresholdHours: 24, nowMs, pageSize: 2, maxPages: 5 });
+    expect(rows.map((r) => r.id)).toEqual(['l1', 'l2', 'l3', 'l4', 'l5']);
+  });
+
+  it('respects maxPages as a bounded safety cap rather than looping forever', async () => {
+    const nowMs = new Date('2026-07-05T12:00:00Z').getTime();
+    const ledgerRows = Array.from({ length: 10 }, (_, i) => ({
+      id: `l${i + 1}`,
+      decision: 'pending',
+      created_at: new Date(nowMs - (10 - i) * 48 * 60 * 60 * 1000).toISOString(),
+    }));
+    const supabase = createMockSupabase({ ledgerRows });
+
+    const rows = await planStalePending(supabase, { thresholdHours: 24, nowMs, pageSize: 2, maxPages: 3 });
+    expect(rows).toHaveLength(6); // 3 pages * 2 per page, not the full 10
   });
 });
 
