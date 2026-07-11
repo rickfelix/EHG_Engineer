@@ -49,9 +49,21 @@ describe('FR-2: QF-aware orphan path + claim-age grace', () => {
   const fr2 = block('a QF-claiming session carries sd_key', 'const orphanedClaims');
   it('builds a quick_fixes existence set with a non-colliding column tuple (R11)', () => {
     expect(fr2).toMatch(/from\('quick_fixes'\)\.select\('id'\)/);
-    // R11: must NOT add a second select of the (id, status, claiming_session_id) tuple
+    // R11 intent: the FR-2 existence set must NOT collide with the claim-clear tuple selects.
+    // Two tuple selects are sanctioned — BOTH live inside clearStaleQfClaims (the QF-211
+    // open/in_progress pass + the QF-20260711-176 TERMINAL pass); none in the FR-2 block.
     const colliding = (SRC.match(/select\('id, status, claiming_session_id'\)/g) || []).length;
-    expect(colliding).toBe(1);
+    expect(colliding).toBe(2);
+    expect(fr2).not.toMatch(/select\('id, status, claiming_session_id'\)/);
+    const helperIdx = SRC.indexOf('async function clearStaleQfClaims');
+    const helperEnd = SRC.indexOf('\n}', SRC.indexOf('QF_CLAIM_SWEEP', helperIdx));
+    let searchFrom = 0;
+    for (let i = 0; i < colliding; i++) {
+      const at = SRC.indexOf("select('id, status, claiming_session_id')", searchFrom);
+      expect(at).toBeGreaterThan(helperIdx);
+      expect(at).toBeLessThan(helperEnd);
+      searchFrom = at + 1;
+    }
   });
   it('holds a QF claim when the QF exists OR was claimed within the grace window', () => {
     expect(fr2).toMatch(/QF_CLAIM_GRACE_SECONDS/);
