@@ -1,0 +1,40 @@
+name: Quiet-Tick Token Parity Lint
+
+# QF-20260711-095 (retro action item, SD-LEO-FIX-VENTURE-ARTIFACTS-ARTIFACT-001 family)
+# Cross-checks QUIET_TICK_* tokens emitted by an *-quiet-tick.mjs script against the tokens its
+# paired *-startup-check.mjs prompt allowlists. Generalizes a round-1 CRITICAL finding:
+# adam-quiet-tick.mjs emitted QUIET_TICK_VENTURE_STALL_ALERT/QUIET_TICK_INBOX_CAP that
+# adam-startup-check.mjs's prompt never mentioned -- those lines would silently fall through the
+# "NO-OP if output contains none of X/Y/Z" gate and never get actioned. The emitter and its
+# consumer-prompt allowlist must ship together; this lint makes that mechanical.
+#
+# ADVISORY-FIRST: the lint step is `continue-on-error: true` so it cannot turn an in-flight PR red
+# on day one. Flip to blocking (run with --enforce and drop continue-on-error) once the baseline
+# has settled.
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/adam-quiet-tick.mjs'
+      - 'scripts/adam-startup-check.mjs'
+      - 'scripts/coordinator-quiet-tick.mjs'
+      - 'scripts/coordinator-startup-check.mjs'
+      - 'scripts/lint/quiet-tick-token-parity-lint.mjs'
+      - 'scripts/lint/quiet-tick-token-parity-allowlist.json'
+      - '.github/workflows/quiet-tick-token-parity-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quiet-tick-token-parity-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Cross-check QUIET_TICK_* emitter/consumer token parity (advisory)
+        continue-on-error: true
+        run: node scripts/lint/quiet-tick-token-parity-lint.mjs
