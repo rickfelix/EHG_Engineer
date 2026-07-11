@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { ARTIFACT_TYPES } from '../../../lib/eva/artifact-types.js';
 import { UPSTREAM_ARTIFACT_TYPES } from '../../../lib/eva/stage-templates/upstream-artifact-types.js';
-import { parseCheckConstraintAllowedValues } from '../../../lib/eva/stage-templates/artifact-type-parity.js';
+import { parseCheckConstraintAllowedValues, loadPendingChairmanGateAllowlist } from '../../../lib/eva/stage-templates/artifact-type-parity.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SNAPSHOT_PATH = join(__dirname, '../../../database/schema-reference-snapshot.json');
@@ -36,15 +36,26 @@ describe('parseCheckConstraintAllowedValues (pure)', () => {
 });
 
 describe('ARTIFACT_TYPES registry <-> venture_artifacts CHECK constraint parity', () => {
-  it('every canonical ARTIFACT_TYPES value is allowed by the live constraint (committed snapshot)', () => {
+  it('every canonical ARTIFACT_TYPES value is allowed by the live constraint, or has a reasoned pending-chairman-gate exemption', () => {
     const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'));
     const definition = snapshot.checks && snapshot.checks[CONSTRAINT_KEY];
     expect(definition, `${CONSTRAINT_KEY} missing from database/schema-reference-snapshot.json — regenerate via: npm run schema:snapshot:lint`).toBeTruthy();
 
     const allowed = parseCheckConstraintAllowedValues(definition);
-    const drifted = Object.values(ARTIFACT_TYPES).filter((v) => !allowed.has(v));
+    const pending = loadPendingChairmanGateAllowlist();
+    const drifted = Object.values(ARTIFACT_TYPES).filter((v) => !allowed.has(v) && !(v in pending));
 
-    expect(drifted, `ARTIFACT_TYPES values missing from the live constraint (add via a chairman-gated migration, then npm run schema:snapshot:lint): ${drifted.join(', ')}`).toEqual([]);
+    expect(drifted, `ARTIFACT_TYPES values missing from the live constraint (add via a chairman-gated migration, then either npm run schema:snapshot:lint after it's applied, or a reasoned entry in database/artifact-type-parity-pending-chairman-gate.json while it's pending): ${drifted.join(', ')}`).toEqual([]);
+  });
+
+  it('no pending-chairman-gate allowlist entry references a value ALREADY present in the live constraint (stale — remove it)', () => {
+    const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'));
+    const definition = snapshot.checks && snapshot.checks[CONSTRAINT_KEY];
+    const allowed = parseCheckConstraintAllowedValues(definition);
+    const pending = loadPendingChairmanGateAllowlist();
+    const stale = Object.keys(pending).filter((v) => allowed.has(v));
+
+    expect(stale, `these pending-chairman-gate allowlist entries are now live in the constraint — remove them from database/artifact-type-parity-pending-chairman-gate.json: ${stale.join(', ')}`).toEqual([]);
   });
 });
 
