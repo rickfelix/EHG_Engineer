@@ -1,123 +1,123 @@
 {
-  "generated_at": "2026-07-12T11:09:27.198Z",
-  "git_commit": "feab2e0a",
+  "generated_at": "2026-07-12T12:27:42.487Z",
+  "git_commit": "c6109c67",
   "db_snapshot_hash": "2dada35e85f2199f",
   "files": {
     "CLAUDE.md": {
       "type": "full",
       "chars": 19368,
       "estimated_tokens": 4842,
-      "content_hash": "fecb7e35ac4ad8ba",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-SCRIBE-CEREMONY-CONTRACT-001\\CLAUDE.md"
+      "content_hash": "ce638102bf2e49d6",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-RELAY-RESCOPE-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
       "chars": 91064,
       "estimated_tokens": 22766,
-      "content_hash": "d95cd73fdd9624aa",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-SCRIBE-CEREMONY-CONTRACT-001\\CLAUDE_CORE.md"
+      "content_hash": "a5430529d65fe85b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-RELAY-RESCOPE-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
       "chars": 65998,
       "estimated_tokens": 16500,
-      "content_hash": "0c294804decd2ba6",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-SCRIBE-CEREMONY-CONTRACT-001\\CLAUDE_LEAD.md"
+      "content_hash": "d2ce4719e6cdf247",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-RELAY-RESCOPE-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
       "chars": 91830,
       "estimated_tokens": 22958,
-      "content_hash": "de0c5495d55a6fcf",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-SCRIBE-CEREMONY-CONTRACT-001\\CLAUDE_PLAN.md"
+      "content_hash": "14f63d6532fa8162",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-RELAY-RESCOPE-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
       "chars": 88410,
       "estimated_tokens": 22103,
-      "content_hash": "fcb74597ea0425c3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-SCRIBE-CEREMONY-CONTRACT-001\\CLAUDE_EXEC.md"
+      "content_hash": "881d9007c4e1e0f0",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-RELAY-RESCOPE-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 59333,
-      "estimated_tokens": 14834,
-      "content_hash": "08d7ad52d6bc3be7",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-SCRIBE-CEREMONY-CONTRACT-001\\CLAUDE_ADAM.md"
+      "chars": 63139,
+      "estimated_tokens": 15785,
+      "content_hash": "a7535166fa021842",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-RELAY-RESCOPE-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
       "chars": 22134,
       "estimated_tokens": 5534,
-      "content_hash": "869bdbee8873fdaf",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-SCRIBE-CEREMONY-CONTRACT-001\\CLAUDE_COORDINATOR.md"
+      "content_hash": "371453b0024b0f80",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-RELAY-RESCOPE-001\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 45828,
-      "estimated_tokens": 11457,
-      "content_hash": "abfb79d0efa0847b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-SCRIBE-CEREMONY-CONTRACT-001\\CLAUDE_SOLOMON.md"
+      "chars": 48972,
+      "estimated_tokens": 12243,
+      "content_hash": "d38e370cf8a8628e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-RELAY-RESCOPE-001\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9611,
       "estimated_tokens": 2403,
-      "content_hash": "71db4828607cfd9d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-SCRIBE-CEREMONY-CONTRACT-001\\CLAUDE_DIGEST.md"
+      "content_hash": "d86ac7b8d77da64a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-RELAY-RESCOPE-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 11664,
       "estimated_tokens": 2916,
-      "content_hash": "8279ca6b5c896dc7",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-SCRIBE-CEREMONY-CONTRACT-001\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "3eb14fa0cfcc8aba",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-RELAY-RESCOPE-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 5551,
       "estimated_tokens": 1388,
-      "content_hash": "e5bd0a236aa95307",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-SCRIBE-CEREMONY-CONTRACT-001\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "a02c50a44dc7b52b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-RELAY-RESCOPE-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 8541,
       "estimated_tokens": 2136,
-      "content_hash": "5479f07e6d9802bf",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-SCRIBE-CEREMONY-CONTRACT-001\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "2677cdc39616396c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-RELAY-RESCOPE-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 10964,
       "estimated_tokens": 2741,
-      "content_hash": "1bc3098415149d5e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-SCRIBE-CEREMONY-CONTRACT-001\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "4e0300f5fbfe94db",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-RELAY-RESCOPE-001\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 16250,
       "estimated_tokens": 4063,
-      "content_hash": "390caf9bbcd50f74",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-SCRIBE-CEREMONY-CONTRACT-001\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "6f6e30e05bd28b22",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-RELAY-RESCOPE-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 6076,
       "estimated_tokens": 1519,
-      "content_hash": "a5b131f216e429ed",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-SCRIBE-CEREMONY-CONTRACT-001\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "a0c00ffc49673c69",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-RELAY-RESCOPE-001\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
       "chars": 4705,
       "estimated_tokens": 1177,
-      "content_hash": "71543906bf173e16",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-SCRIBE-CEREMONY-CONTRACT-001\\CLAUDE_SOLOMON_DIGEST.md"
+      "content_hash": "bfd07ba89e5e046b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-CONTRACT-RELAY-RESCOPE-001\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "18b840b0b17c829e",
+    "global": "9eb9957e33dfcaf5",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -371,7 +371,7 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "f5b7cffd22ce1f0e",
+      "601": "4f238e933d1a8d77",
       "602": "ad0aecae8cdc6cb3",
       "603": "ea1eddc2cef94c83",
       "604": "a35e66b64599f81d",
@@ -381,7 +381,7 @@
       "608": "7f99a4321502367e",
       "609": "9790a74a362ff0ca",
       "610": "fb3813fc42f32f3a",
-      "611": "49d0728059b6f810",
+      "611": "28b328730678979b",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
       "614": "a4d5064f0ffbe97c",
