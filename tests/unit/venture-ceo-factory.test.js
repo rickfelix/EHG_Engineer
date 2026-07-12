@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { VentureFactory, STANDARD_VENTURE_TEMPLATE } from '../../../lib/agents/venture-ceo-factory.js';
+import { VentureFactory, STANDARD_VENTURE_TEMPLATE } from '../../lib/agents/venture-ceo-factory.js';
 
 vi.mock('uuid', () => ({
   v4: () => `mock-uuid-${Math.random().toString(36).slice(2)}`
