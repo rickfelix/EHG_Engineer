@@ -590,19 +590,53 @@ describe('isFixtureVenture', () => {
     expect(isFixtureVenture(undefined)).toBe(false);
   });
 
-  // QF-20260710-243: confirmed live incident specimens (is_demo=false, name doesn't
-  // match the old regex) -- __e2e_product_review_gate_adv_...__ (Stage-23) and
-  // 'Test Venture for Owned-Audience Loop' (outbound_publish_approval).
+  // QF-20260710-243: confirmed live incident specimen (is_demo=false, name doesn't
+  // match the old regex) -- __e2e_product_review_gate_adv_...__ (Stage-23).
   it('is true for an __e2e_-prefixed name even without is_demo', () => {
     expect(isFixtureVenture({ name: '__e2e_product_review_gate_adv_1783723784384__', is_demo: false })).toBe(true);
   });
 
-  it('is true for launch_mode:simulated regardless of name or is_demo', () => {
-    expect(isFixtureVenture({ name: 'Test Venture for Owned-Audience Loop', is_demo: false, launch_mode: 'simulated' })).toBe(true);
+  it('is true for TEST-HARNESS- and TS-fixture- name prefixes even without is_demo', () => {
+    expect(isFixtureVenture({ name: 'TEST-HARNESS-run-42', is_demo: false })).toBe(true);
+    expect(isFixtureVenture({ name: 'TS-fixture-abc', is_demo: false })).toBe(true);
   });
 
-  it('is false for a real venture with a non-simulated launch_mode', () => {
+  // SD-FDBK-FIX-ISFIXTUREVENTURE-FALSE-POSITIVES-001 (CONFIRMED, Adam grep-verified
+  // 2026-07-12): launch_mode='simulated' is REMOVED as a fixture signal -- it was a false
+  // structural assumption (real ventures are BORN launch_mode='simulated' per
+  // database/migrations/20260703_ventures_launch_mode.sql's NOT NULL DEFAULT 'simulated' +
+  // 20260705_launch_mode_flip_guard.sql's "ventures are BORN simulated" guard comment), which
+  // caused mintStageZeroGate to silently self-skip for EVERY real Stage-0 venture (confirmed
+  // live on the Image Alt Text Generator and ApexNiche ventures). A real venture at
+  // launch_mode='simulated' must never be classified as a fixture, regardless of launch_mode.
+  it('is false for a real venture at launch_mode=simulated (the confirmed false-positive)', () => {
+    expect(isFixtureVenture({ name: 'Image Alt Text Generator', is_demo: false, launch_mode: 'simulated' })).toBe(false);
+    expect(isFixtureVenture({ name: 'ApexNiche', is_demo: false, launch_mode: 'simulated' })).toBe(false);
+  });
+
+  it('launch_mode never gates the result either way', () => {
     expect(isFixtureVenture({ name: 'Acme Real Venture', is_demo: false, launch_mode: 'live' })).toBe(false);
+    expect(isFixtureVenture({ name: 'Acme Real Venture', is_demo: false, launch_mode: 'simulated' })).toBe(false);
+  });
+
+  it('is_demo=true still trips regardless of launch_mode', () => {
+    expect(isFixtureVenture({ is_demo: true, launch_mode: 'simulated' })).toBe(true);
+  });
+
+  it('a fixture-name-pattern match still trips regardless of launch_mode', () => {
+    expect(isFixtureVenture({ name: '__e2e_foo__', is_demo: false, launch_mode: 'simulated' })).toBe(true);
+  });
+
+  // Documented, accepted tradeoff (not silently dropped): the historical QF-20260710-243
+  // specimen 'Test Venture for Owned-Audience Loop' relied on launch_mode as its ONLY
+  // fixture signal (is_demo=false, name doesn't match any current pattern). Removing
+  // launch_mode means a future venture with a similarly generic "Test ..." name and no
+  // is_demo flag would no longer be caught by this predicate. The root cause for fixture
+  // factories omitting is_demo (the ventures.is_synthetic phantom-column gap) is a separate,
+  // already-acknowledged, out-of-scope issue; this predicate's name-pattern list remains the
+  // documented defense-in-depth for factories that set a recognizable prefix.
+  it('does NOT match a generic "Test ..." name with no is_demo and no recognized prefix (documented tradeoff)', () => {
+    expect(isFixtureVenture({ name: 'Test Venture for Owned-Audience Loop', is_demo: false })).toBe(false);
   });
 });
 
@@ -658,6 +692,19 @@ describe('createOrReusePendingDecision: fixture-venture guard (QF-20260703-236)'
     const supabase = makeFixtureCheckSb({ is_demo: false, name: 'Acme Real Venture' }, { onInsert });
 
     const result = await createOrReusePendingDecision({ ventureId: 'v1', stageNumber: 10, supabase, logger });
+
+    expect(result.skipped).toBeUndefined();
+    expect(onInsert).toHaveBeenCalled();
+  });
+
+  // SD-FDBK-FIX-ISFIXTUREVENTURE-FALSE-POSITIVES-001 (FR-3): the confirmed reported
+  // consequence -- a real venture at the DEFAULT launch_mode='simulated' must still mint
+  // a chairman_decisions row for the Stage-0 gate, not silently self-skip.
+  it('a real venture at launch_mode=simulated still mints a chairman_decisions row (closes the reported gate-integrity gap)', async () => {
+    const onInsert = vi.fn();
+    const supabase = makeFixtureCheckSb({ is_demo: false, name: 'Image Alt Text Generator', launch_mode: 'simulated' }, { onInsert });
+
+    const result = await createOrReusePendingDecision({ ventureId: 'v1', stageNumber: 0, supabase, logger, forceDecisionCreation: true });
 
     expect(result.skipped).toBeUndefined();
     expect(onInsert).toHaveBeenCalled();

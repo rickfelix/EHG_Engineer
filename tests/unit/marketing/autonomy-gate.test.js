@@ -203,10 +203,31 @@ describe('checkPublishAuthorization — dedup + FR-7 chairman_decisions routing'
     );
   });
 
-  it('QF-20260710-243: skips the chairman_decisions notification for a fixture venture, but still writes the pending ledger row (authorization behavior unchanged)', async () => {
+  // SD-FDBK-FIX-ISFIXTUREVENTURE-FALSE-POSITIVES-001 (supersedes the QF-20260710-243
+  // launch_mode signal, CONFIRMED false: real ventures are BORN launch_mode='simulated', so
+  // keying fixture-detection on it silently self-skipped the chairman gate for EVERY real
+  // Stage-0 venture). This exact venture shape (is_demo=false, no recognized name pattern) is
+  // now indistinguishable from a real venture and correctly proceeds to notify -- a documented,
+  // accepted tradeoff versus the historical QF's narrower is_demo-omitting-fixture-factory case.
+  it('a venture indistinguishable from real (is_demo=false, launch_mode=simulated, no fixture-name pattern) now proceeds to notify -- launch_mode is no longer a fixture signal', async () => {
     const supabase = makeAuthSupabase({
       autonomyState: 'propose_and_approve', acceptedRow: null, existingPending: null,
       ventureRow: { is_demo: false, name: 'Test Venture for Owned-Audience Loop', launch_mode: 'simulated' },
+    });
+    const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1', correlationId: 'corr-1' });
+
+    expect(result.allowed).toBe(false);
+    expect(supabase.ledgerChain.insert).toHaveBeenCalledWith(expect.objectContaining({ correlation_id: 'corr-1', decision: 'pending' }));
+    expect(recordPendingDecision).toHaveBeenCalledWith(
+      supabase,
+      expect.objectContaining({ decisionType: 'outbound_publish_approval', ventureId: 'v-1' })
+    );
+  });
+
+  it('still skips the chairman_decisions notification for a genuine fixture (is_demo=true), ledger row still written', async () => {
+    const supabase = makeAuthSupabase({
+      autonomyState: 'propose_and_approve', acceptedRow: null, existingPending: null,
+      ventureRow: { is_demo: true, name: 'Any Name', launch_mode: 'simulated' },
     });
     const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1', correlationId: 'corr-1' });
 
