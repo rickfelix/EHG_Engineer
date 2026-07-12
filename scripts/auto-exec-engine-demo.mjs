@@ -57,24 +57,23 @@ if (process.argv.includes('--rehearse')) {
   console.log(`\nrehearsal: ${allRestored ? 'ALL phases restored ✓' : 'A PHASE DID NOT RESTORE ✗'}`);
   process.exitCode = allRestored ? 0 : 1;
   setTimeout(() => process.exit(process.exitCode), 1000).unref();
-  return;
+} else {
+  // Plain run: real flag/kill-switch readers + DB audit, synthetic action.
+  const runId = (globalThis.crypto?.randomUUID && globalThis.crypto.randomUUID()) || `demo-${process.pid}`;
+  const action = makeSyntheticAction({});
+  const result = await runAutoExec(action, {
+    flagEnabled: makeFlagReader(db, FLAG_KEY),
+    killSwitchActive: makeKillSwitchReader(db),
+    policy: completeSyntheticPolicy(),
+    forbiddenClasses: [],
+    audit: makeDbAudit(db, runId),
+    observeWindowMs: 0,
+    runId,
+  });
+  console.log('\n=== synthetic engine run ===');
+  console.log(`run_id  : ${runId}`);
+  console.log(`result  : ${JSON.stringify(result)}`);
+  console.log(result.status === 'skipped'
+    ? '(flag is OFF — engine is a no-op, as designed. Enable the flag to exercise the loop.)'
+    : `(synthetic value now: ${action.read()})`);
 }
-
-// Plain run: real flag/kill-switch readers + DB audit, synthetic action.
-const runId = (globalThis.crypto?.randomUUID && globalThis.crypto.randomUUID()) || `demo-${process.pid}`;
-const action = makeSyntheticAction({});
-const result = await runAutoExec(action, {
-  flagEnabled: makeFlagReader(db, FLAG_KEY),
-  killSwitchActive: makeKillSwitchReader(db),
-  policy: completeSyntheticPolicy(),
-  forbiddenClasses: [],
-  audit: makeDbAudit(db, runId),
-  observeWindowMs: 0,
-  runId,
-});
-console.log('\n=== synthetic engine run ===');
-console.log(`run_id  : ${runId}`);
-console.log(`result  : ${JSON.stringify(result)}`);
-console.log(result.status === 'skipped'
-  ? '(flag is OFF — engine is a no-op, as designed. Enable the flag to exercise the loop.)'
-  : `(synthetic value now: ${action.read()})`);
