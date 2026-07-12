@@ -58,12 +58,48 @@ async function getGate2Result(context) {
 }
 
 /**
+ * QF-20260712-805: 2A:uiComponentsImplemented is registered OUTSIDE the aggregate scoring and
+ * hard-blocks architecture-decomposed children that never had UI components to begin with (API/
+ * data/test-layer children) -- live specimen: SD-APEXNICHE-AI-LEO-ORCH-SPRINT-2026-001-A2 burned
+ * both retries before shipping via a verified --force. A non-UI child's metadata.architecture_layer
+ * is set explicitly by the decomposition bridge (lib/eva/lifecycle-sd-bridge.js, keys data/api/ui/
+ * tests) -- only skip when it's explicitly a non-UI layer, never on an unset/legacy SD (that would
+ * silently exempt every pre-decomposition SD and mask a real gap).
+ * @param {object} context - Validator context
+ * @returns {Promise<{skip:boolean, layer?:string}>}
+ */
+async function getNonUiLayerSkip(context) {
+  const { sd_id, supabase } = context;
+  try {
+    const { resolveSdInputOrNull } = await import('../../../../../lib/sd-id-resolver.js');
+    const { sd: sdData } = await resolveSdInputOrNull(sd_id, supabase);
+    const layer = sdData?.metadata?.architecture_layer;
+    if (layer && layer !== 'ui') return { skip: true, layer };
+  } catch { /* fail-open to the existing (pre-QF) hard-check behavior */ }
+  return { skip: false };
+}
+
+/**
  * Register Gate 2 validators
  * @param {import('../core.js').ValidatorRegistry} registry
  */
 export function registerGate2Validators(registry) {
   // Section A: UI Components Implementation
   registry.register('uiComponentsImplemented', async (context) => {
+    // QF-20260712-805: API/data/test-layer architecture-decomposed children never had UI
+    // components -- skip with a logged reason instead of hard-blocking; aggregate scoring unchanged.
+    const layerSkip = await getNonUiLayerSkip(context);
+    if (layerSkip.skip) {
+      return {
+        passed: true,
+        score: 100,
+        max_score: 100,
+        issues: [],
+        warnings: [`2A skipped: architecture_layer='${layerSkip.layer}' (non-UI child)`],
+        details: { skipped: true, architecture_layer: layerSkip.layer }
+      };
+    }
+
     const result = await getGate2Result(context);
 
     // SD-LEO-FIX-FIX-GATE-SUB-001: Check sub-validator exemption before score extraction
