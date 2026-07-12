@@ -56,11 +56,11 @@ describe('SD-...-CRITICAL-WALK-BLOCKER: ordering contract (band above product-pi
   // Mirror the relevant slice of the real comparator: critical-walk-blocker band, then product-pivot
   // band (when active), then priority. (Higher priority weight sorts earlier.)
   const PW = { critical: 3, high: 2, medium: 1, med: 1, low: 0 };
-  const cmp = (a, b, pivotActive) => {
+  const cmp = (a, b) => {
     const fa = isCriticalWalkBlocker(a) ? 1 : 0, fb = isCriticalWalkBlocker(b) ? 1 : 0;
     if (fa !== fb) return fb - fa;                 // critical-walk-blocker first
-    const pp = productPivotCompare(a, b, pivotActive);
-    if (pp !== 0) return pp;                        // then product-pivot band
+    const pp = productPivotCompare(a, b);
+    if (pp !== 0) return pp;                        // then product-pivot band (always active)
     return (PW[(b.priority || '').toLowerCase()] ?? 0) - (PW[(a.priority || '').toLowerCase()] ?? 0);
   };
 
@@ -70,24 +70,24 @@ describe('SD-...-CRITICAL-WALK-BLOCKER: ordering contract (band above product-pi
 
   it('FR-1/FR-3: a HIGH critical-walk-blocker (convergence_caught, sourcing-time) outranks a MED product note WITHOUT a runtime fleet_critical', () => {
     expect(isFleetCritical(harnessWalkBlocker)).toBe(false); // no runtime hand-set
-    expect(cmp(harnessWalkBlocker, productNote, true)).toBeLessThan(0);   // walk-blocker first
-    expect(cmp(productNote, harnessWalkBlocker, true)).toBeGreaterThan(0);
+    expect(cmp(harnessWalkBlocker, productNote)).toBeLessThan(0);   // walk-blocker first
+    expect(cmp(productNote, harnessWalkBlocker)).toBeGreaterThan(0);
   });
 
   it('FR-2: a routine MED harness SD still ranks BELOW a MED product SD (product bias preserved)', () => {
     expect(productPivotRank(productNote)).toBe(0);     // product band first
     expect(productPivotRank(routineHarness)).toBe(2);  // harness band last
-    expect(cmp(productNote, routineHarness, true)).toBeLessThan(0);       // product first
-    expect(cmp(routineHarness, productNote, true)).toBeGreaterThan(0);
+    expect(cmp(productNote, routineHarness)).toBeLessThan(0);       // product first
+    expect(cmp(routineHarness, productNote)).toBeGreaterThan(0);
   });
 
   it('the S19-PROMOTE-ORDER-style walk-blocker ranks #1 among {product note, routine harness} with the pivot active', () => {
-    const ranked = [productNote, routineHarness, harnessWalkBlocker].sort((a, b) => cmp(a, b, true));
+    const ranked = [productNote, routineHarness, harnessWalkBlocker].sort((a, b) => cmp(a, b));
     expect(ranked[0]).toBe(harnessWalkBlocker);
   });
 
   it('fleet_critical===true still enrols the band (backward-compat with the dispatch-lane SD)', () => {
     const legacy = { sd_key: 'SD-LEO-INFRA-LEGACY-001', priority: 'medium', metadata: { fleet_critical: true } };
-    expect(cmp(legacy, productNote, true)).toBeLessThan(0); // legacy fleet_critical still outranks product
+    expect(cmp(legacy, productNote)).toBeLessThan(0); // legacy fleet_critical still outranks product
   });
 });
