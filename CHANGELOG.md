@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-07-12](#2026-07-12)
+  - [Security](#security)
   - [Features](#features)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -87,6 +88,13 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-07-12
+
+### Security
+- **Close cross-repo `pr_number` collision in the P2 auto-merge witness lookup** - PR #6030 (SD-FDBK-FIX-WITNESS-LOOKUP-MATCHES-001)
+  - **What shipped**: `ship_review_findings` has no `repo` column, so `lib/ship/venture-trust-gate.mjs`'s `defaultFetchReviewFinding` matched a PR's review verdict by `pr_number` alone — confirmed live at PR#2/#5 between the two `trust_tier='trusted'` venture repos (`rickfelix/apexniche-ai`, `rickfelix/marketlens`), letting one repo's passing review witness-pass an entirely different repo's PR through the VB-2 auto-merge trust gate. Fixed fail-closed: the lookup now requires `branch` and scopes by `.eq('pr_number').eq('branch')`; an omitted `branch` returns `null` immediately rather than falling back to the old unscoped match. Threaded as an additive options-object parameter through `merge-witness-ladder.mjs`, `venture-trust-gate.mjs`, `auto-merge.mjs`, `.claude/commands/ship.md`'s Step 6 template, and the second independent consumer `scripts/ship-witness-retroactive.mjs` (new `resolvePrBranch` via `gh pr view`).
+  - **Retroactive audit, run against production, not just written**: `scripts/audit-borrowed-witness-rows.mjs` replicates the pre-fix `pr_number`-only-most-recent-row query exactly and cross-checks it against every merged PR in the two trusted repos. First pass found 5 candidates; an adversarial review round caught a false-negative in the audit's own own-branch-skip logic (it wrongly treated "has any own-branch row" as safe, missing the case where a newer cross-repo row would have been served instead) — corrected, re-run, and confirmed **9 real borrowed-row exposure candidates** across 29 merged PRs. Reported to the coordinator for visibility (does not itself prove auto-merge, vs. human-merge, occurred for those specific PRs).
+  - **Scope discipline**: a durable Layer-2 fix (a real `repo` column on `ship_review_findings`, chairman-gated migration + repo-scoped reads) was explicitly descoped to fast-follow `SD-APEXNICHE-AI-LEO-GEN-WITNESS-LOOKUP-DURABLE-001`, per the original LEAD RISK sub-agent's own guidance that this fail-closed interim fix must not be gated behind a schema migration. The descope is formally recorded (`strategic_directives_v2.metadata.descoped_frs`, `user_stories` metadata) rather than silent.
+  - **Verification**: 226/226 `tests/unit/ship/` tests pass (including new fail-closed and live-collision-reproduction tests); full `tests/unit/` regression (23,284 passed, 3 pre-existing unrelated failures). Deep-tier adversarial PR review (2 rounds of genuine findings, both fixed, verified clean on round 3). LEAD VALIDATION + RISK, EXEC TESTING, PLAN_VERIFICATION VALIDATION + REGRESSION sub-agents all PASS. Handoffs EXEC-TO-PLAN 98, PLAN-TO-LEAD 97, LEAD-FINAL-APPROVAL 97.
 
 ### Features
 - **Domain-availability check for venture naming, now ON by default** - PR #6019 (SD-LEO-FEAT-NAMING-DOMAIN-AVAILABILITY-001)

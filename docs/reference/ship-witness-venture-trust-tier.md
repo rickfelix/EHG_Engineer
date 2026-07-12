@@ -3,7 +3,7 @@
 **SD**: SD-LEO-INFRA-SHIP-WITNESS-APPLICATIONS-001 (Ship-witness B)
 **Status**: Approved
 **Category**: Protocol
-**Version**: 1.1.0
+**Version**: 1.2.0
 **Last Updated**: 2026-07-12
 
 ## What this is
@@ -71,7 +71,7 @@ that decision visible.
 | Ratification term | Ladder rung | What it checks |
 |---|---|---|
 | "our-own-fleet-authored" | P1 admission | `workKey` resolves to a real `strategic_directives_v2`/`quick_fixes` row (not a synthetic/test key) |
-| "a second-session check" | P2 witness | A `ship_review_findings` row exists for the PR with `verdict='pass'` (produced by the review gate — actor-separation beyond that is `not_evaluable` today, per the ladder module's own docs) |
+| "a second-session check" | P2 witness | A `ship_review_findings` row exists for the PR **on its own branch** with `verdict='pass'` (produced by the review gate — actor-separation beyond that is `not_evaluable` today, per the ladder module's own docs). See "P2's branch scoping" below — `pr_number` alone is not a safe key. |
 | "CI-green" | P3 CI | `statusCheckRollup` shows all checks succeeded (pending/empty is `not_evaluable`, never a false pass) |
 
 P2's actor-separation dimension and P4 (branch protection, pre-P0) are never
@@ -123,6 +123,39 @@ clone/register lines). `scripts/backfill-trust-tier-elevation.mjs` (dry-run
 default, `--apply` to write, enumerated by id — never a heuristic sweep)
 normalized the two already-hand-elevated rows (MarketLens `6823cd37` got the
 provenance written; ApexNiche `3c8efc56` was already canonical).
+
+## P2's branch scoping (SD-FDBK-FIX-WITNESS-LOOKUP-MATCHES-001, SECURITY)
+
+`ship_review_findings` has no `repo` column. The original P2 default lookup
+(`defaultFetchReviewFinding` in `lib/ship/venture-trust-gate.mjs`) matched a
+PR's review verdict by `pr_number` **alone** — small sequential integers
+collide constantly across repos. This was confirmed live: `rickfelix/
+apexniche-ai` and `rickfelix/marketlens` (the only two `trust_tier='trusted'`
+repos at the time) each had merged PRs at the same `pr_number` (#1, #2, #5,
+#6, #7, #8, #9), so one repo's passing review could witness-pass an entirely
+different repo's PR. A bounded, read-only retroactive audit
+(`scripts/audit-borrowed-witness-rows.mjs`) confirmed **9 real borrowed-row
+exposure candidates** across the two trusted repos' merge history.
+
+The fix scopes the lookup by `branch` (the PR's own head branch,
+`headRefName`) instead, and is **fail-closed by design**:
+`defaultFetchReviewFinding(prNumber, supabase, { branch })` returns `null`
+immediately if `branch` is omitted — it never falls back to the old
+unscoped `pr_number`-only match. `branch` is threaded as an additive
+options-object parameter through `evaluateP2Witness` /
+`evaluateMergeWorkLadder` (`lib/ship/merge-witness-ladder.mjs`),
+`evaluateVenturePrWitness` / `createVentureTrustGate`
+(`lib/ship/venture-trust-gate.mjs`), `attemptAutoMerge` /
+`observeMergeWorkLadder` (`lib/ship/auto-merge.mjs`), and both live callers
+(`.claude/commands/ship.md` Step 5.5/6, `scripts/ship-witness-retroactive.mjs`).
+
+**Known residual limitation.** `branch` narrows the collision surface but is
+not itself repo-unique — two trusted repos could in principle share both a
+`pr_number` and a non-SD-scoped branch name. The durable fix (a real `repo`
+column on `ship_review_findings`, chairman-gated migration + repo-scoped
+reads) is fast-follow `SD-APEXNICHE-AI-LEO-GEN-WITNESS-LOOKUP-DURABLE-001`,
+explicitly split out so this fail-closed interim fix could ship without
+waiting on a schema migration.
 
 ## Where it's wired in
 
