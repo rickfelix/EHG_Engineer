@@ -2,6 +2,11 @@
  * SD-LEO-FEAT-RUNWAY-CLIENT-IMPLEMENT-001 — real RunwayML client unit tests.
  * HTTP layer mocked only, never the config gate (TEST-MASKING rule): TS-1 verifies the
  * unconfigured path without touching process.env inside a mock.
+ *
+ * testMode defaults to true (matching gemini.js's fail-safe convention) so
+ * generateAsset()'s always-empty deps object can never fire a real, billed RunwayML call by
+ * accident (adversarial review 2026-07-12, CRITICAL finding) — every network-hitting test below
+ * explicitly passes {testMode: false}.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { generateWithRunway, isRunwayConfigured } from '../../../../lib/creative/providers/runway.js';
@@ -38,9 +43,10 @@ afterEach(() => {
   process.env.RUNWAY_API_KEY = ORIGINAL_KEY;
   process.env.RUNWAYML_API_KEY = ORIGINAL_KEY_ALT;
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
-describe('generateWithRunway (TS-1..TS-9)', () => {
+describe('generateWithRunway (TS-1..TS-12)', () => {
   it('TS-1: throws ProviderNotConfiguredError when no key is set, with zero fetch calls', async () => {
     delete process.env.RUNWAY_API_KEY;
     delete process.env.RUNWAYML_API_KEY;
@@ -48,7 +54,7 @@ describe('generateWithRunway (TS-1..TS-9)', () => {
 
     const fetchImpl = fetchQueue([]);
     await expect(
-      generateWithRunway({ capability: 'image', spec: { prompt: 'test' } }, { fetchImpl, sleepImpl: noopSleep })
+      generateWithRunway({ capability: 'image', spec: { prompt: 'test' } }, { testMode: false, fetchImpl, sleepImpl: noopSleep })
     ).rejects.toBeInstanceOf(ProviderNotConfiguredError);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
@@ -61,7 +67,7 @@ describe('generateWithRunway (TS-1..TS-9)', () => {
 
     const result = await generateWithRunway(
       { capability: 'image', spec: { prompt: 'a red apple' } },
-      { fetchImpl, sleepImpl: noopSleep }
+      { testMode: false, fetchImpl, sleepImpl: noopSleep }
     );
 
     expect(result.provenance.provider).toBe('runway');
@@ -87,7 +93,7 @@ describe('generateWithRunway (TS-1..TS-9)', () => {
 
     const result = await generateWithRunway(
       { capability: 'image', spec: { prompt: 'test' } },
-      { fetchImpl, sleepImpl: noopSleep }
+      { testMode: false, fetchImpl, sleepImpl: noopSleep }
     );
 
     expect(fetchImpl).toHaveBeenCalledTimes(4); // 1 create + 3 polls
@@ -102,7 +108,7 @@ describe('generateWithRunway (TS-1..TS-9)', () => {
 
     const result = await generateWithRunway(
       { capability: 'video', spec: { prompt: 'a bouncing ball' } },
-      { fetchImpl, sleepImpl: noopSleep }
+      { testMode: false, fetchImpl, sleepImpl: noopSleep }
     );
 
     expect(result.asset.capability).toBe('video');
@@ -121,7 +127,7 @@ describe('generateWithRunway (TS-1..TS-9)', () => {
     ]);
 
     await expect(
-      generateWithRunway({ capability: 'image', spec: { prompt: 'test' } }, { fetchImpl, sleepImpl: noopSleep })
+      generateWithRunway({ capability: 'image', spec: { prompt: 'test' } }, { testMode: false, fetchImpl, sleepImpl: noopSleep })
     ).rejects.toMatchObject({
       constructor: TaskFailedError,
       code: 'CONTENT_POLICY',
@@ -129,19 +135,25 @@ describe('generateWithRunway (TS-1..TS-9)', () => {
     });
   });
 
-  it('TS-6: non-2xx HTTP response on create throws TaskFailedError(code=HTTP_<status>)', async () => {
-    const fetchImpl = fetchQueue([jsonResponse({ error: 'rate limited' }, false, 429)]);
+  it('TS-6: non-2xx HTTP response on create throws TaskFailedError(code=HTTP_<status>), redacted', async () => {
+    const fetchImpl = fetchQueue([jsonResponse({ error: 'rate limited', key: 'test-key' }, false, 429)]);
 
-    await expect(
-      generateWithRunway({ capability: 'image', spec: { prompt: 'test' } }, { fetchImpl, sleepImpl: noopSleep })
-    ).rejects.toMatchObject({ code: 'HTTP_429' });
+    let caught;
+    try {
+      await generateWithRunway({ capability: 'image', spec: { prompt: 'test' } }, { testMode: false, fetchImpl, sleepImpl: noopSleep });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught.code).toBe('HTTP_429');
+    expect(caught.cause).not.toContain('test-key');
+    expect(caught.cause).toContain('[REDACTED]');
   });
 
   it('TS-7: fetch rejection (network error) on create throws TaskFailedError(code=NETWORK_ERROR)', async () => {
     const fetchImpl = fetchQueue([new Error('ECONNRESET')]);
 
     await expect(
-      generateWithRunway({ capability: 'image', spec: { prompt: 'test' } }, { fetchImpl, sleepImpl: noopSleep })
+      generateWithRunway({ capability: 'image', spec: { prompt: 'test' } }, { testMode: false, fetchImpl, sleepImpl: noopSleep })
     ).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
   });
 
@@ -153,22 +165,56 @@ describe('generateWithRunway (TS-1..TS-9)', () => {
     await expect(
       generateWithRunway(
         { capability: 'image', spec: { prompt: 'test' } },
-        { fetchImpl, sleepImpl: noopSleep, maxPollAttempts: 5 }
+        { testMode: false, fetchImpl, sleepImpl: noopSleep, maxPollAttempts: 5 }
       )
     ).rejects.toMatchObject({ code: 'POLL_TIMEOUT' });
   });
 
-  it('TS-9: generateAsset("video", spec, {}) routes through the unmodified routing layer to Runway', async () => {
-    const fetchImpl = fetchQueue([
-      jsonResponse({ id: 'task-route' }),
-      jsonResponse({ id: 'task-route', status: 'SUCCEEDED', output: ['https://runway.example/routed.mp4'] }),
-    ]);
+  it('TS-9: generateAsset("video", spec, {}) routes through the unmodified routing layer, defaulting to a safe watermarked stub (no real network call)', async () => {
+    const fetchImpl = fetchQueue([]);
     vi.stubGlobal('fetch', fetchImpl);
 
     const { generateAsset } = await import('../../../../lib/creative/generate-asset.js');
     const result = await generateAsset('video', { prompt: 'a routed video' }, {});
 
     expect(result.provenance.provider).toBe('runway');
-    expect(result.asset.url).toBe('https://runway.example/routed.mp4');
+    expect(result.provenance.testMode).toBe(true);
+    expect(result.asset.kind).toBe('watermarked-stub');
+    expect(fetchImpl).not.toHaveBeenCalled(); // the safety-critical assertion: no real API call fired
+  });
+
+  it('TS-10: testMode defaults to true when omitted from deps -- returns a watermarked stub with zero fetch calls', async () => {
+    const fetchImpl = fetchQueue([]);
+
+    const result = await generateWithRunway(
+      { capability: 'image', spec: { prompt: 'test' } },
+      { fetchImpl, sleepImpl: noopSleep } // testMode intentionally omitted
+    );
+
+    expect(result.asset.kind).toBe('watermarked-stub');
+    expect(result.provenance.testMode).toBe(true);
+    expect(result.cost).toBe(0);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('TS-11: SUCCEEDED task with empty output array throws TaskFailedError(code=EMPTY_OUTPUT), never a broken asset', async () => {
+    const fetchImpl = fetchQueue([
+      jsonResponse({ id: 'task-empty' }),
+      jsonResponse({ id: 'task-empty', status: 'SUCCEEDED', output: [] }),
+    ]);
+
+    await expect(
+      generateWithRunway({ capability: 'image', spec: { prompt: 'test' } }, { testMode: false, fetchImpl, sleepImpl: noopSleep })
+    ).rejects.toMatchObject({ code: 'EMPTY_OUTPUT' });
+  });
+
+  it('TS-12: an unparseable JSON response body on create throws TaskFailedError(code=INVALID_RESPONSE_BODY), not a raw crash', async () => {
+    const fetchImpl = fetchQueue([
+      { ok: true, status: 200, json: async () => { throw new SyntaxError('Unexpected token'); }, text: async () => 'not json' },
+    ]);
+
+    await expect(
+      generateWithRunway({ capability: 'image', spec: { prompt: 'test' } }, { testMode: false, fetchImpl, sleepImpl: noopSleep })
+    ).rejects.toMatchObject({ code: 'INVALID_RESPONSE_BODY' });
   });
 });

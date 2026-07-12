@@ -10,10 +10,10 @@ const liveEnabled = process.env.RUN_LIVE_PROVIDER_TESTS === '1' && isRunwayConfi
 
 describe.skipIf(!liveEnabled)('generateWithRunway (TS-10, live RunwayML API)', () => {
   it('generates a real image and returns a fetchable output URL with runway provenance', async () => {
-    const result = await generateWithRunway({
-      capability: 'image',
-      spec: { prompt: 'a red apple on a white background' },
-    });
+    const result = await generateWithRunway(
+      { capability: 'image', spec: { prompt: 'a red apple on a white background' } },
+      { testMode: false } // explicit opt-in: testMode defaults to true everywhere else
+    );
 
     expect(result.provenance.provider).toBe('runway');
     expect(result.provenance.request_id).toBeTruthy();
