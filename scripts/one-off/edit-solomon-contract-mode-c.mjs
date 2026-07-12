@@ -88,7 +88,7 @@ async function main() {
     if (!c.includes(a)) throw new Error('clobber guard: missing anchor ' + name);
   }
 
-  writeFileSync(join(here, '_solomon-contract-before-image-611.md'), c);
+  writeFileSync(join(here, '_solomon-contract-before-image-611.md.bak'), c);
 
   // 1. Mode C: retitle, insert after Mode B (before the working-session para), fix "both modes"
   c = c.replace(A_HEADING, '## 3. Operating Model — Three Modes (silent by default in all)');
