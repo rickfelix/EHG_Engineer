@@ -1,23 +1,28 @@
 #!/usr/bin/env node
 /**
- * RLS anon-role tenant-predicate-sufficiency lint.
+ * RLS anon/authenticated-role tenant-predicate-sufficiency lint.
  *
  * SD-APEXNICHE-AI-MAN-FIX-FIX-CROSS-TENANT-001 FR-4.
+ * Extended to the authenticated role by SD-LEO-FIX-FINGERPRINT-CRITICAL-SECURITY-001 FR-3.
  *
- * This exact bug class -- an anon-role SELECT RLS policy referencing a
- * tenant-shaped column (venture_id/tenant_id/etc.) without binding it to the
- * caller's own identity -- already recurred once (companies table,
- * SD-LEO-GEN-SCOPE-ANON-KEY-001) before this SD's feedback-table instance
- * (venture_user_select_feedback). That lesson never became a
- * recurrence-preventing lint. This one scans migration SQL text for the
+ * This exact bug class -- a SELECT RLS policy referencing a tenant-shaped
+ * column (venture_id/tenant_id/etc.) without binding it to the caller's own
+ * identity -- has now recurred three times: companies table (anon,
+ * SD-LEO-GEN-SCOPE-ANON-KEY-001), feedback table anon policy
+ * (venture_user_select_feedback, SD-APEXNICHE-AI-MAN-FIX-FIX-CROSS-TENANT-001),
+ * and feedback table authenticated policy (select_feedback_policy,
+ * SD-LEO-FIX-FINGERPRINT-CRITICAL-SECURITY-001). The first extension of this
+ * lint covered only anon; that scope gap is exactly why the authenticated
+ * instance shipped undetected. This one scans migration SQL text for the
  * pattern directly, rather than the live DB, so it can run in CI on a PR
  * diff before a bad policy is ever applied.
  *
- * Scope: SELECT-cmd, anon-role policies ONLY. An INSERT/UPDATE/DELETE policy
- * referencing a tenant column (e.g. venture_user_insert_feedback's WITH CHECK
- * venture_id IS NOT NULL AND ...) is a DIFFERENT risk class (write-integrity/
- * spam, not read-confidentiality leakage) and is deliberately not flagged --
- * neither of this lint's two motivating real instances is an INSERT policy.
+ * Scope: SELECT-cmd, anon OR authenticated-role policies. An INSERT/UPDATE/
+ * DELETE policy referencing a tenant column (e.g. venture_user_insert_feedback's
+ * WITH CHECK venture_id IS NOT NULL AND ...) is a DIFFERENT risk class
+ * (write-integrity/spam, not read-confidentiality leakage) and is
+ * deliberately not flagged -- none of this lint's motivating real instances
+ * is an INSERT policy.
  *
  * Detection is a pragmatic regex/paren-balance extractor on CREATE POLICY
  * statements, not a full SQL parser -- mirrors this repo's own established
@@ -45,7 +50,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
 const TENANT_COLUMN_RE = /\b(venture_id|tenant_id|org_id|company_id|portfolio_id|account_id)\b/i;
-const IDENTITY_BOUND_RE = /\bauth\.(uid|jwt)\s*\(/i;
+// auth.uid()/auth.jwt() (raw caller-identity primitives) AND the established
+// SECURITY DEFINER caller-binding helpers used elsewhere in this schema
+// (product_requirements_v2, sd_phase_handoffs): fn_user_has_venture_access,
+// fn_user_has_company_access. A predicate calling any of these is
+// caller-bound even though it doesn't reference auth.*() directly itself.
+const IDENTITY_BOUND_RE = /\bauth\.(uid|jwt)\s*\(|\bfn_user_has_(venture|company)_access\s*\(/i;
+const SCOPED_ROLES = ['anon', 'authenticated'];
 
 /**
  * PURE: extract CREATE POLICY statements from SQL text as {name, table, cmd,
@@ -110,37 +121,71 @@ function extractParenBlock(text, keywordRe) {
   return null;
 }
 
-const BLANKET_TRUE_RE = /^\s*true\s*$/i;
+// Matches a USING clause that reduces to literal `true`, tolerating any
+// number of redundant wrapping parens (USING (true), USING ((true)), ...) --
+// extractParenBlock only strips the outermost USING(...) paren, so a
+// double-wrapped literal would otherwise slip past a bare /^true$/ match.
+const BLANKET_TRUE_RE = /^\s*\(*\s*true\s*\)*\s*$/i;
 
 /**
- * PURE: classify a SELECT/anon policy's violation, or null if clean. Two
- * distinct shapes, both real historical instances:
+ * A policy is in the lint's scope if its role list is anon, authenticated,
+ * PUBLIC (explicit), or PUBLIC-by-omission (Postgres default when a
+ * CREATE POLICY has no TO clause at all -- the broadest, most dangerous
+ * shape, strictly wider than anon or authenticated alone since it also
+ * covers anon+authenticated+every other role).
+ * @param {string[]} roles
+ * @returns {boolean}
+ */
+function isInScopeRoles(roles) {
+  if (!Array.isArray(roles) || roles.length === 0) return true; // implicit PUBLIC
+  return roles.some((r) => SCOPED_ROLES.includes(r) || r === 'public');
+}
+
+/**
+ * PURE: classify a SELECT-or-ALL, in-scope-role policy's violation, or null
+ * if clean. Two distinct shapes, both real historical instances:
  *   'unconditional_anon_select' -- USING (true), zero predicate at all (the
- *      companies-table incident, SD-LEO-GEN-SCOPE-ANON-KEY-001) -- flagged
- *      regardless of whether the table has any tenant-shaped column, since
- *      blanket anon SELECT access is inherently risky on its own.
+ *      companies-table incident, SD-LEO-GEN-SCOPE-ANON-KEY-001, and the
+ *      feedback-table authenticated-role instance pre-fix,
+ *      SD-FDBK-FIX-FEEDBACK-SELECT-FEEDBACK-001) -- flagged regardless of
+ *      whether the table has any tenant-shaped column, since blanket
+ *      unauthenticated-or-any-logged-in-user SELECT access is inherently
+ *      risky on its own. Name kept for stability even though it now also
+ *      fires for authenticated -- it describes the SHAPE, not the role.
  *   'unbound_tenant_predicate' -- USING references a tenant-shaped column
  *      without binding it to the caller's identity (the feedback-table
- *      instance, venture_user_select_feedback, this SD) -- partially scoped
- *      but not by CALLER, so still admits every tenant's rows.
+ *      instances, venture_user_select_feedback [anon] and
+ *      select_feedback_policy [authenticated]) -- partially scoped but not
+ *      by CALLER, so still admits every tenant's rows.
+ * Scope note: FOR ALL grants SELECT (in addition to INSERT/UPDATE/DELETE),
+ * so it carries the same read-confidentiality risk as an explicit FOR SELECT
+ * and is checked identically -- a future policy written as `FOR ALL` instead
+ * of `FOR SELECT` must not silently evade this lint.
  * @param {{cmd:string, roles:string[], using:string|null}} policy
  * @returns {string|null}
  */
 export function classifyViolation(policy) {
-  if (policy.cmd !== 'SELECT') return null;
-  if (!policy.roles.includes('anon')) return null;
+  if (policy.cmd !== 'SELECT' && policy.cmd !== 'ALL') return null;
+  if (!isInScopeRoles(policy.roles)) return null;
   if (!policy.using) return null;
   if (BLANKET_TRUE_RE.test(policy.using)) return 'unconditional_anon_select';
   if (TENANT_COLUMN_RE.test(policy.using) && !IDENTITY_BOUND_RE.test(policy.using)) return 'unbound_tenant_predicate';
   return null;
 }
 
+// PUBLIC-by-omission (empty roles, no TO clause) and explicit `TO PUBLIC`
+// both label as 'PUBLIC' -- the broadest possible grant, worth naming
+// distinctly from a plain anon/authenticated list in the reported message.
+const scopedRoleLabel = (p) => {
+  if (!Array.isArray(p.roles) || p.roles.length === 0 || p.roles.includes('public')) return 'PUBLIC';
+  return p.roles.filter((r) => SCOPED_ROLES.includes(r)).join('/');
+};
 
 const VIOLATION_MESSAGES = {
   unconditional_anon_select: (p) =>
-    `Anon-role SELECT policy '${p.name}' ON ${p.table} has an unconditional USING (true) -- any anon-key holder can read ALL rows. See SD-LEO-GEN-SCOPE-ANON-KEY-001 (companies table) for the prior real instance of this class.`,
+    `${scopedRoleLabel(p)}-role SELECT policy '${p.name}' ON ${p.table} has an unconditional USING (true) -- any ${scopedRoleLabel(p) === 'anon' ? 'anon-key holder' : 'matching-role caller'} can read ALL rows. See SD-LEO-GEN-SCOPE-ANON-KEY-001 (companies table) and SD-FDBK-FIX-FEEDBACK-SELECT-FEEDBACK-001 (feedback table, authenticated) for prior real instances of this class.`,
   unbound_tenant_predicate: (p) =>
-    `Anon-role SELECT policy '${p.name}' ON ${p.table} references tenant column '${TENANT_COLUMN_RE.exec(p.using)[1]}' in USING without binding it to auth.uid()/auth.jwt() -- any anon-key holder can read every tenant's rows. See SD-APEXNICHE-AI-MAN-FIX-FIX-CROSS-TENANT-001 (feedback table) for the prior real instance of this class.`,
+    `${scopedRoleLabel(p)}-role SELECT policy '${p.name}' ON ${p.table} references tenant column '${TENANT_COLUMN_RE.exec(p.using)[1]}' in USING without binding it to auth.uid()/auth.jwt()/fn_user_has_venture_access()/fn_user_has_company_access() -- any ${scopedRoleLabel(p) === 'anon' ? 'anon-key holder' : 'matching-role caller'} can read every tenant's rows. See SD-APEXNICHE-AI-MAN-FIX-FIX-CROSS-TENANT-001 (feedback table, anon) and SD-LEO-FIX-FINGERPRINT-CRITICAL-SECURITY-001 (feedback table, authenticated) for prior real instances of this class.`,
 };
 
 /**
