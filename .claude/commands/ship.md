@@ -453,6 +453,8 @@ await logFindings({
 });
 ```
 
+`<branch-name>` here MUST be resolved programmatically, not assumed — run `gh pr view <PR#> --json headRefName --jq .headRefName` (or `git branch --show-current` if already checked out on the PR's branch) and substitute the literal result. Do not hand-type a remembered branch name — the P2 witness lookup this feeds (Step 6 below) is scoped by this exact string, so a stale/guessed value silently degrades the lookup to `not_evaluable` (fails closed, refuses auto-merge — not a false pass, but an avoidable refusal).
+
 This creates an audit record in `ship_review_findings` for every PR shipped through the gate.
 
 ---
@@ -506,13 +508,18 @@ Promise.all([
   const result = await attemptAutoMerge({
     prNumber: <PR#>, repoOwner: owner, repoName: name,
     isTrustedRepo, witnessSupabase: supabase, workKey: '<SD-KEY or null>',
+    branch: '<branch-name>', // resolve via gh pr view --json headRefName, same value as Step 5.5 above
   });
   if (!result.ok) process.exit(result.exitCode || 1);
 });
 "
 ```
 
-SD-LEO-INFRA-SHIP-WITNESS-APPLICATIONS-001 (Ship-witness B): `isTrustedRepo` here now also admits a venture repo whose `applications.trust_tier='trusted'` AND whose PR has independently passed the P1 admission + P2 witness + P3 CI subset of the mergeWork() ladder (`lib/ship/venture-trust-gate.mjs`) — platform repos (EHG/EHG_Engineer) are unaffected, still fast-pathed with zero DB lookup. `<SD-KEY or null>` is the same value passed to Step 5's `logFindings` call.
+SD-LEO-INFRA-SHIP-WITNESS-APPLICATIONS-001 (Ship-witness B): `isTrustedRepo` here now also admits a venture repo whose `applications.trust_tier='trusted'` AND whose PR has independently passed the P1 admission + P2 witness + P3 CI subset of the mergeWork() ladder (`lib/ship/venture-trust-gate.mjs`) — platform repos (EHG/EHG_Engineer) are unaffected, still fast-pathed with zero DB lookup. `<SD-KEY or null>` and `<branch-name>` are the SAME values passed to Step 5's `logFindings` call.
+
+SD-FDBK-FIX-WITNESS-LOOKUP-MATCHES-001 (SECURITY): `branch` is REQUIRED here — the P2 witness lookup (`ship_review_findings` has no repo column) is scoped by branch to avoid a cross-repo `pr_number` collision (confirmed live: two different trusted venture repos both had passing rows at the same PR number). Omitting `branch` fails the lookup CLOSED (P2 evaluates `not_evaluable`/`fail`, never a false pass) — it never falls back to the old unscoped match, so an omitted `branch` degrades safety toward refusing auto-merge, not toward a false pass.
+
+KNOWN RESIDUAL LIMITATION (tracked, not silent): `branch` narrows the collision surface but is not itself a repo-unique key — two trusted repos could in principle share both a `pr_number` and a non-SD-scoped branch name (e.g. `main`). This is the exact reason `ship_review_findings` needs a real `repo` column; that durable fix is fast-follow `SD-APEXNICHE-AI-LEO-GEN-WITNESS-LOOKUP-DURABLE-001` (chairman-gated migration + repo-scoped reads), explicitly authorized as a separate SD by the original LEAD RISK sub-agent so this fail-closed interim fix could ship without waiting on a schema migration.
 
 If the call exits non-zero, `/ship` MUST hard-fail and skip Step 6.3 / Step 6.5 / `/learn` / next-SD selection. Do NOT rescue the exit code.
 
