@@ -1,8 +1,8 @@
-<!-- file_content_hash: 0b39451dc05cbd1f -->
+<!-- file_content_hash: 532eb53c6659f8fa -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-07-12 7:09:27 AM
+**Generated**: 2026-07-12 8:24:03 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: LEAD agent operations and strategic validation
 **Effort**: high (strategic framing, scope bounding, and sub-agent routing require full reasoning depth)
