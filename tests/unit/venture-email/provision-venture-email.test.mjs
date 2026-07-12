@@ -33,8 +33,11 @@ function memStore(initial = {}) {
       rows.set(row.domain, next);
       return { ...next };
     },
-    async storeScopedKeySecret(ventureId, domain, keyId, keyValue) {
-      secrets.push({ ventureId, domain, keyId, keyValue });
+    async storeScopedKeySecret(ventureId, domain, keyId) {
+      // Pointer-only, mirroring venture_channel_secrets (NO value column exists).
+      const secretRef = `venture_channel_secrets:${ventureId}:email`;
+      secrets.push({ ventureId, domain, keyId, secretRef });
+      return secretRef;
     },
   };
 }
@@ -91,9 +94,13 @@ describe('TS-1 happy path end-to-end', () => {
       expect(steps).toContain(s);
     }
     expect(calls.filter((c) => c[0] === 'enroll')).toHaveLength(1);
-    // secret VALUE went to the secrets store, never the mapping row or journal
-    expect(store.secrets).toEqual([{ ventureId: 'v-1', domain: 'example-venture.com', keyId: 'key-1', keyValue: 'secret-value' }]);
+    // secret_ref POINTER row persisted; the VALUE never touches store, row, or journal
+    expect(store.secrets).toEqual([{ ventureId: 'v-1', domain: 'example-venture.com', keyId: 'key-1', secretRef: 'venture_channel_secrets:v-1:email' }]);
+    expect(JSON.stringify(store.secrets)).not.toContain('secret-value');
     expect(JSON.stringify(journal.entries)).not.toContain('secret-value');
+    // the once-revealed VALUE is surfaced to the caller exactly once, for keyring injection
+    expect(res.revealedKey).toEqual({ secretRef: 'venture_channel_secrets:v-1:email', keyId: 'key-1', keyValue: 'secret-value' });
+    expect(res.planSteps.some((s) => s.includes('VENTURE_CHANNEL_SECRET_STORE'))).toBe(true);
   });
 });
 
@@ -139,12 +146,21 @@ describe('TS-3 interrupted verify-poll resumes', () => {
 });
 
 describe('TS-4 scoped-key value routing (isolation substrate)', () => {
-  it('key VALUE goes only to venture_channel_secrets; row carries ID only', async () => {
+  it('DB gets pointer + ID only; the VALUE is surfaced once via result.revealedKey', async () => {
     const store = memStore();
-    await provisionVentureEmail(venture, { registrar: happyRegistrar(), dns: happyDns(), resendDomains: happyResend(), emailRouting: happyRouting(), store, journal: memJournal() });
+    const res = await provisionVentureEmail(venture, { registrar: happyRegistrar(), dns: happyDns(), resendDomains: happyResend(), emailRouting: happyRouting(), store, journal: memJournal() });
     expect(store.rows.get('example-venture.com').scoped_key_id).toBe('key-1');
     expect(JSON.stringify(store.rows.get('example-venture.com'))).not.toContain('secret-value');
-    expect(store.secrets[0].keyValue).toBe('secret-value');
+    expect(store.secrets[0]).toEqual({ ventureId: 'v-1', domain: 'example-venture.com', keyId: 'key-1', secretRef: 'venture_channel_secrets:v-1:email' });
+    expect(res.revealedKey.keyValue).toBe('secret-value');
+  });
+
+  it('a resumed run past key_scoped never re-reveals the key (revealedKey stays null)', async () => {
+    const store = memStore({ state: 'key_scoped', row: { scoped_key_id: 'key-1', resend_domain_id: 'rd-1', cf_zone_id: 'zone-1' } });
+    const res = await provisionVentureEmail(venture, { registrar: happyRegistrar(), dns: happyDns(), resendDomains: happyResend(), emailRouting: happyRouting(), store, journal: memJournal() });
+    expect(res.state).toBe('provisioned');
+    expect(res.revealedKey).toBeNull();
+    expect(store.secrets).toEqual([]);
   });
 });
 

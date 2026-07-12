@@ -1,6 +1,7 @@
 {
   "_doc": "QF-20260712-023 (retro dc41e083 / SPINE-001-B action item): every tracked *.test.mjs file must be reachable by a named runner lane, or it is a DEAD VERIFIER — green in the editor, never executed. Vitest's unit project only includes tests/unit/org/**/*.test.mjs (node:test files are not vitest-compatible), so each .test.mjs needs an entry here naming its lane. tests/unit/test-estate-mjs-reachability.test.js enforces this: a NEW .test.mjs with no lane fails the unit suite at PR time. Do NOT add to legacy_unaudited — give new files a real runner.",
   "lanes": {
+    "tests/unit/venture-email/provision-venture-email.test.mjs": "vitest unit project include (vitest.config.js **/tests/unit/venture-email/**/*.test.mjs)",
     "tests/unit/session-tick-heartbeat.test.mjs": "npm run test:session-tick (.github/workflows/unit-tier.yml)",
     "tests/unit/session-tick-release-on-exit.test.mjs": "npm run test:session-tick (.github/workflows/unit-tier.yml)",
     "tests/unit/session-tick-spawn-observe.test.mjs": "npm run test:session-tick (.github/workflows/unit-tier.yml)"
