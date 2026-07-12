@@ -224,9 +224,12 @@ async function hasActiveClaimOnBranch(wtPath, mainRepoPath, options = {}) {
   // schema-projection lesson applies to the VIEW only, the column verified present
   // on the base table) records where each live session actually lives; match on it
   // directly. Same fail-loud doctrine as the claim query above.
+  // NB: qf_id is a VIEW-only column (v_active_sessions joins it in) — the base table
+  // does not have it; selecting it here would 42703 and degrade every cleanup to the
+  // fail-safe archive path. Schema verified against information_schema 2026-07-12.
   const { data: pathRows, error: pathError } = await supabase
     .from('claude_sessions')
-    .select('session_id, sd_key, qf_id, current_branch, heartbeat_at, worktree_path')
+    .select('session_id, sd_key, current_branch, heartbeat_at, worktree_path')
     .in('status', ['active', 'idle'])
     .gte('heartbeat_at', new Date(now - heartbeatThresholdMs).toISOString())
     .not('worktree_path', 'is', null);
@@ -244,7 +247,7 @@ async function hasActiveClaimOnBranch(wtPath, mainRepoPath, options = {}) {
       return {
         session_id: row.session_id,
         sd_key: row.sd_key,
-        qf_id: row.qf_id,
+        qf_id: null, // base table carries no qf_id; the path match itself is the evidence
         current_branch: row.current_branch,
         heartbeat_at: row.heartbeat_at,
         matched_by: 'worktree_path'

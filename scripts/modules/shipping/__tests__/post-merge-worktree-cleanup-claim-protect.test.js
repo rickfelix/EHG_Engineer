@@ -349,8 +349,10 @@ describe('static-guard — source ordering pin', () => {
     expect(src).not.toMatch(/\.select\([^)]*last_heartbeat_at[^)]*\)/);
     // QF-20260712-249: live-cwd guard pins — base-table query with heartbeat window,
     // non-null worktree_path filter, and fail-loud error handling.
+    // qf_id is deliberately ABSENT from the base-table select — claude_sessions has
+    // no such column (view-only); selecting it would 42703 on every cleanup.
     expect(src).toMatch(/\.from\('claude_sessions'\)/);
-    expect(src).toMatch(/\.select\('session_id, sd_key, qf_id, current_branch, heartbeat_at, worktree_path'\)/);
+    expect(src).toMatch(/\.select\('session_id, sd_key, current_branch, heartbeat_at, worktree_path'\)/);
     expect(src).toMatch(/\.not\('worktree_path', 'is', null\)/);
     expect(src).toMatch(/live-cwd guard query failed/);
   });
