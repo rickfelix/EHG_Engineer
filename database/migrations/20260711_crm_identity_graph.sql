@@ -1,3 +1,4 @@
+-- @delegated-by: adam
 -- SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-C: Relationship Engine satellite (§3.1)
 -- Contact/Org identity graph: identity-shared, access-venture-scoped.
 -- Every row carries provenance to a real inbound event (never a hand-typed "lead").
