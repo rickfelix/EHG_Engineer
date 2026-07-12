@@ -3,8 +3,8 @@
 **SD**: SD-LEO-INFRA-SHIP-WITNESS-APPLICATIONS-001 (Ship-witness B)
 **Status**: Approved
 **Category**: Protocol
-**Version**: 1.0.0
-**Last Updated**: 2026-07-03
+**Version**: 1.1.0
+**Last Updated**: 2026-07-12
 
 ## What this is
 
@@ -33,9 +33,13 @@ SD.
 
 `applications.trust_tier` (existing column; `ck_applications_trust_tier`
 already permits `'platform' | 'trusted' | 'external'` — no migration was
-needed for this SD). As of this SD's delivery, **zero rows use `'trusted'`**
-— promoting a specific venture repo is a separate, deliberate, chairman-gated
-operational decision, not something this SD's code performs.
+needed for this SD). As of Ship-witness B's delivery, **zero rows used
+`'trusted'`** — promoting a specific venture repo was a separate, deliberate,
+chairman-gated operational decision, not something that SD's code performed.
+(SD-LEO-INFRA-VENTURE-REPO-TRUST-001 later automated the born-trusted case for
+genuinely fleet-minted repos under chairman ratification — see the section
+below. Hand-promotion of an already-existing repo remains a manual SQL
+decision, as described here.)
 
 To promote a venture repo, issue a direct, reviewed SQL statement (there is
 no self-service script by design — see "Why no promotion script" below):
@@ -73,6 +77,52 @@ that decision visible.
 P2's actor-separation dimension and P4 (branch protection, pre-P0) are never
 required for a pass — they aren't evaluable yet at all (see
 `lib/ship/merge-witness-ladder.mjs`).
+
+## Born-trusted: fleet-minted venture repos (SD-LEO-INFRA-VENTURE-REPO-TRUST-001)
+
+Venture `applications` rows are born `trust_tier='external'` at their insert
+sites (`scripts/reroute-venture-to-bridge.mjs`, `lib/sd-creation/pipeline.js`).
+That default meant the factory's OWN merge-ready output was blocked by VB-2 and
+had to be hand-elevated per venture (MarketLens, then ApexNiche PR #1) — a
+recurring `external`-was-a-default-not-a-decision paper cut. This SD elevates
+`external`→`trusted` **automatically, but only at genuine fleet mint**, in
+`lib/eva/bridge/venture-provisioner.js`'s `repo_created` step.
+
+**The narrow, fail-closed predicate** (`lib/eva/bridge/trust-elevation.js`
+`resolveTrustElevation`) elevates only when **all** hold:
+
+1. **`repoWasMinted === true`** — the *load-bearing* discriminator. Elevation
+   runs only on the provisioner's genuine-mint path (`repoExists === false` →
+   `gh repo create`). Imported/linked/external repos already exist on GitHub, so
+   they **never enter that branch** and can never be born trusted. (CronGenius /
+   DataDistill have chairman-approved arch plans yet stay `external` precisely
+   because they are imported repos that never mint.)
+2. **`venture_id` resolves** to a real venture, **and**
+3. a **chairman-approved** row exists in `eva_architecture_plans` **or**
+   `eva_vision_documents` for that `venture_id` (vision-alone counts — MarketLens
+   has an approved vision and no arch plan).
+
+Any missing signal, unresolved venture, or query error yields **no elevation**
+(fail-closed). Trust flows from **chairman ratification of the venture**, not
+coordinator self-grant — consistent with the "keep the weight of the decision
+visible" philosophy above: this is not a self-service flip of an arbitrary repo,
+it is the automatic consequence of a chairman-ratified fleet mint.
+
+**Why born-trusted is safe:** VB-2 is unchanged and still requires
+`trust_tier='trusted'` **AND** a passing per-PR witness (P1/P2/P3). `'trusted'`
+alone grants nothing — every PR is still adjudicated. Born-trusted only removes
+the `external`-tier pre-rejection so the factory's own witness-passing PRs can
+reach the same scrutiny every trusted repo gets.
+
+**Audit shape.** Each elevation stamps
+`applications.metadata.trust_tier_elevation = { at, to:'trusted', from:'external',
+basis, approved_via, venture_id, policy:'fleet_created_ratified_program',
+decided_by }`. Elevation is idempotent (guarded on `trust_tier='external'`) and
+survives a partial-mint retry (captured at create-time, before the fragile
+clone/register lines). `scripts/backfill-trust-tier-elevation.mjs` (dry-run
+default, `--apply` to write, enumerated by id — never a heuristic sweep)
+normalized the two already-hand-elevated rows (MarketLens `6823cd37` got the
+provenance written; ApexNiche `3c8efc56` was already canonical).
 
 ## Where it's wired in
 

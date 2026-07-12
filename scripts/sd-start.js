@@ -101,7 +101,7 @@ const { evaluateClaimDependencyGate } = cjsRequire('../lib/claim/gates/dependenc
 const { verifyHandoffIntegrity: verifyHandoffIntegrityGate } = cjsRequire('../lib/claim/gates/handoff-integrity.cjs');
 const { evaluateCadenceGate } = cjsRequire('../lib/claim/gates/cadence-gate.cjs');
 const queueResolver = cjsRequire('../lib/claim/queue-resolver.cjs');
-const { classifyAllDispatchIneligibility, liveClaimWriteFenceReason } = cjsRequire('../lib/fleet/claim-eligibility.cjs');
+const { classifyAllDispatchIneligibility, liveClaimWriteFenceReason, CLAIM_WRITE_FENCE_AXES, execBoundaryHoldReason } = cjsRequire('../lib/fleet/claim-eligibility.cjs');
 // SD-ARCH-HOTSPOT-SD-START-001 FR-7: dispatch-authorization polarity gate (flag-gated, observe-first).
 const dispatchAuthGate = cjsRequire('../lib/claim/gates/dispatch-authorization.cjs');
 
@@ -179,11 +179,44 @@ function enforceHumanActionGate(sd, effectiveId) {
   // hold (the reason the old first-match classifier was avoided) while a
   // multi-axis orchestrator SD without the hold does NOT trip this gate.
   const axes = classifyAllDispatchIneligibility(sd || {});
-  if (!axes.includes('human_action_required')) return;
-  console.log(`\n${colors.red}❌ ${effectiveId} requires HUMAN ACTION — cannot be claimed${colors.reset}`);
-  console.log('   metadata.requires_human_action=true — held for chairman/coordinator review.');
+  // QF-20260711-569 (root cause CONFIRMED by live repro on SPINE-001-E): this DIRECT-path
+  // gate keyed ONLY on human_action_required, so a needs_coordinator_review fence was
+  // claimable straight through sd-start. Key on the full coordinator-authority fence set
+  // (CLAIM_WRITE_FENCE_AXES — same shared authority as QF-272/QF-937's write-boundary
+  // fences), naming whichever axis matched.
+  const fence = axes.find((a) => CLAIM_WRITE_FENCE_AXES.has(a));
+  if (!fence) return;
+  const detail = {
+    human_action_required: 'metadata.requires_human_action=true — held for chairman/coordinator action.',
+    needs_coordinator_review: 'metadata.needs_coordinator_review=true — review-HELD by the coordinator.',
+    not_before_hold: 'metadata.not_before is in the future — sequencing hold.',
+  }[fence] || fence;
+  console.log(`\n${colors.red}❌ ${effectiveId} is FENCED (${fence}) — cannot be claimed${colors.reset}`);
+  console.log(`   ${detail}`);
+  console.log('   Only coordinator/human authority clears this fence — do not work this SD.');
   console.log(`\n${colors.bold}Action:${colors.reset} Pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
   process.exit(1);
+}
+
+// SD-LEO-INFRA-PHASE-SCOPED-FENCE-001 (FR-5/FR-8): DISTINCT, NON-BLOCKING claim-time
+// display for metadata.exec_boundary_hold. Deliberately a separate function from
+// enforceHumanActionGate above -- that gate BLOCKS the claim and process.exit(1)s;
+// exec_boundary_hold must never do that (claim-allowed is the entire point of this
+// axis). Called AFTER a successful claim, purely informational.
+function displayExecBoundaryHoldNotice(sd) {
+  const hold = execBoundaryHoldReason(sd);
+  if (!hold) return;
+  console.log(`\n${colors.yellow}⏸️  EXEC-parked: ${hold.reason}${colors.reset}`);
+  if (hold.setAt) {
+    const ms = Date.now() - Date.parse(hold.setAt);
+    if (Number.isFinite(ms) && ms >= 0) {
+      const hrs = ms / 3600000;
+      const age = hrs < 1 ? `${Math.max(1, Math.round(ms / 60000))}m ago` : hrs < 48 ? `${Math.round(hrs)}h ago` : `${Math.round(hrs / 24)}d ago`;
+      console.log(`${colors.dim}   Set ${age} — claim + PLAN work proceeds normally; PLAN-TO-EXEC will WAIT until the coordinator clears this.${colors.reset}`);
+    }
+  } else {
+    console.log(`${colors.dim}   Claim + PLAN work proceeds normally; PLAN-TO-EXEC will WAIT until the coordinator clears this.${colors.reset}`);
+  }
 }
 
 // QF-20260706-786: metadata.blocked_on_sd is an ad-hoc single-dependency hold that a
@@ -1485,6 +1518,7 @@ async function main() {
   console.log(`Progress: ${sd.progress_percentage || 0}%`);
   console.log(`Type: ${sd.sd_type || 'feature'}`);
   console.log(`claiming_session_id: ${colors.green}${session.session_id}${colors.reset}`);
+  displayExecBoundaryHoldNotice(sd);
 
   // 5.04. SD-FDBK-INFRA-CASCADE-TRIGGER-OVERREACH-001 FR-3: start heartbeat
   // keep-alive subprocess. Prevents cleanup_stale_sessions cron (120s threshold)

@@ -1135,9 +1135,23 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
       currentSdId
     );
 
-    // If all children complete, orchestrator-completion-hook already fired
+    // SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001: when all children are complete the
+    // parent is STAGED at pending_approval (not completed) — the hook no longer fires
+    // from the child path. Run the parent's LEAD-FINAL-APPROVAL here so AUTO-PROCEED
+    // genuinely completes it instead of stranding it (that run fires the hook itself,
+    // and its own result carries any grandparent staging for the next iteration).
     if (allComplete) {
-      console.log('\n✅ All children complete - orchestrator completion hook triggered');
+      const chaining = currentResult?.result?.orchestratorChaining || currentResult?.orchestratorChaining;
+      const staged = chaining?.parentRoutedToLeadFinal;
+      if (staged) {
+        console.log('\n⏸  All children complete — parent staged at pending_approval');
+        console.log('   ➡️  AUTO-PROCEED: executing parent LEAD-FINAL-APPROVAL...');
+        currentSdId = completedSD.parent_sd_id;
+        currentHandoffType = 'LEAD-FINAL-APPROVAL';
+        currentResult = await handleExecuteCommand('LEAD-FINAL-APPROVAL', completedSD.parent_sd_id, args);
+        continue;
+      }
+      console.log('\n✅ All children complete - orchestrator completion handled');
       break;
     }
 

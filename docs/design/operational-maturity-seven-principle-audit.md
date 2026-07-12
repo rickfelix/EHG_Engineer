@@ -1,6 +1,7 @@
 # Seven-Principle Operational-Maturity Audit — Solomon verdicts
 
 **Status:** Solomon-authored (Fable 5 / high, 2026-07-11), propose-only (CONST-002). Chairman-commissioned via Adam (consult `c2961297`); companion to the plan-gap audit (consult `f5d4a41a` / advisory `cd261597`). Evidence gathered by 7 parallel read-only agents, adjudicated cold; all live-table counts re-verified directly against the DB on 2026-07-11.
+**Provenance note:** the shared-tree original was destroyed in the 2026-07-11 evening untracked-file loss and recovered byte-exact via PR #5958 (this copy). A verbatim re-emission from the authoring Solomon session (branch `quick-fix/QF-20260711-736`) was reconciled against this copy on 2026-07-11 — the recovered original is preferred; the re-emission differed only in the P4 row-4 done-stamp wording and trailing whitespace. Post-authoring in-tree stamps applied after ~15:30Z may have been lost with the original.
 
 **Verdict key:** EXISTS = standing, automated, live. PARTIAL = real machinery, but a named leg is dead/dormant/unsurfaced. MISSING = no standing regime.
 

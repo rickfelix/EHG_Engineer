@@ -138,6 +138,14 @@ export default defineConfig({
           include: [
             '**/__tests__/**/*.test.js',
             '**/*.test.js',
+            // SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-B: the lib/org spine tests are
+            // vitest-based but use the .test.mjs extension (matching the sibling org
+            // suites), which the .test.js globs above miss — leaving them CI-unreachable
+            // and only runnable via the dev-only vitest.worktree.config.mjs. Anchor a
+            // narrow .mjs include to tests/unit/org so exactly those vitest suites run in
+            // CI, without pulling the repo's many node:test-based .test.mjs files (which
+            // are not vitest-compatible) into this project.
+            '**/tests/unit/org/**/*.test.mjs',
           ],
           // QUARANTINE_EXCLUDE: tracked red files (tests/quarantine-manifest.json)
           // — SD-LEO-FIX-GREEN-MAIN-TRIAGE-001. The manifest is the debt register.

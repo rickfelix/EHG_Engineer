@@ -78,14 +78,15 @@ describe('classifyAllDispatchIneligibility (FR-1 / TS-1)', () => {
     expect(classifyAllDispatchIneligibility(tierGated)).toEqual([]);
   });
 
-  it('WIRING PINS (D6 + FR-6/FR-2): sd-start keys its human-action gate on axes.includes, and both CLIs consume the shared lib/claim gates', () => {
+  it('WIRING PINS (D6 + FR-6/FR-2): sd-start keys its gate on the coordinator-authority fence set, and both CLIs consume the shared lib/claim gates', () => {
     // Same static-pin style as tests/dispatch-eligibility-convergence.test.js (C):
     // cheap, deterministic proof the call sites exist — moving them requires
     // updating these pins in the same commit (TR-5).
     const sdStart = readFileSync(resolve(repoRoot, 'scripts/sd-start.js'), 'utf8');
-    // D6: the SPECIFIC-axis check — .includes('human_action_required'), never length>0.
+    // D6 + QF-20260711-569: SPECIFIC-axes check via CLAIM_WRITE_FENCE_AXES
+    // (human_action_required + needs_coordinator_review + not_before_hold), never length>0.
     expect(sdStart).toMatch(/classifyAllDispatchIneligibility\(sd \|\| \{\}\)/);
-    expect(sdStart).toMatch(/axes\.includes\('human_action_required'\)/);
+    expect(sdStart).toMatch(/CLAIM_WRITE_FENCE_AXES\.has\(a\)/);
     expect(sdStart).not.toMatch(/axes\.length\s*>\s*0/);
     // FR-6: sd-start consumes the shared gate/queue modules.
     expect(sdStart).toMatch(/lib\/claim\/gates\/dependency-gate\.cjs/);

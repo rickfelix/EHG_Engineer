@@ -48,9 +48,16 @@ function makeSupabase({ parentSD, siblings }) {
 }
 
 describe('checkAndCompleteParentSD — completed+cancelled sibling mix', () => {
-  it('proceeds to the Guardian completion path when siblings are a completed+cancelled mix (never blocks on a cancelled sibling)', async () => {
+  it('proceeds to the Guardian path when siblings are a completed+cancelled mix (never blocks on a cancelled sibling)', async () => {
+    // SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001: guardian.complete() no longer
+    // completes — it stages the parent at pending_approval and surfaces the
+    // LEAD-FINAL-APPROVAL command; helpers must report that contract faithfully.
     validateMock.mockResolvedValue({ canComplete: true });
-    completeMock.mockResolvedValue({ success: true });
+    completeMock.mockResolvedValue({
+      success: true,
+      routedToLeadFinal: true,
+      leadFinalCommand: 'node scripts/handoff.js execute LEAD-FINAL-APPROVAL parent-1'
+    });
     const parentSD = { id: 'parent-1', title: 'Parent', status: 'in_progress', sd_type: 'orchestrator' };
     const siblings = [
       { id: 'c1', status: 'completed' },
@@ -62,7 +69,10 @@ describe('checkAndCompleteParentSD — completed+cancelled sibling mix', () => {
     const result = await checkAndCompleteParentSD(sd, makeSupabase({ parentSD, siblings }));
 
     expect(GuardianCtor).toHaveBeenCalledWith('parent-1');
-    expect(result.orchestratorCompleted).toBe(true);
+    // Parent is staged, NOT completed — completion happens via its own LFA run.
+    expect(result.orchestratorCompleted).toBe(false);
+    expect(result.parentRoutedToLeadFinal).toBe(true);
+    expect(result.leadFinalCommand).toContain('LEAD-FINAL-APPROVAL parent-1');
   });
 
   it('does NOT proceed when a sibling is still genuinely in-progress (not terminal)', async () => {

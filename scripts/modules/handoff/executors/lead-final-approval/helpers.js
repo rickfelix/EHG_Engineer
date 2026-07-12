@@ -8,7 +8,9 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { executeOrchestratorCompletionHook } from '../../orchestrator-completion-hook.js';
+// SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001: the orchestrator completion hook no
+// longer fires from here — parents are staged (not completed) by the guardian, and the
+// hook fires at genuine completion inside the LFA executor (index.js).
 import { publishVisionEvent, VISION_EVENTS } from '../../../../../lib/eva/event-bus/vision-events.js';
 import { closeIssuePatterns } from '../../../../../lib/governance/pattern-closure.js';
 import { isTerminalChildStatus } from '../../../../../lib/orchestrator/child-terminal-status.js';
@@ -29,7 +31,7 @@ import { isTerminalChildStatus } from '../../../../../lib/orchestrator/child-ter
  * @param {Object} [options.shippingResults] - PR merge/cleanup results from auto-shipping (SD-LEO-INFRA-AUTO-CHAIN-MERGE-001)
  * @returns {Promise<{ orchestratorCompleted: boolean, chainContinue?: boolean, nextOrchestrator?: string }>}
  */
-export async function checkAndCompleteParentSD(sd, supabase, { shippingResults } = {}) {
+export async function checkAndCompleteParentSD(sd, supabase, { shippingResults: _shippingResults } = {}) {
   console.log('\n   Checking parent SD completion...');
 
   // Default return for non-completion cases
@@ -65,30 +67,25 @@ export async function checkAndCompleteParentSD(sd, supabase, { shippingResults }
 
         const report = await guardian.validate();
 
+        // SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001: guardian.complete() no longer
+        // completes — it STAGES the parent at pending_approval and returns
+        // { routedToLeadFinal, leadFinalCommand }. The parent completes only when its
+        // own LEAD-FINAL-APPROVAL executor runs. Do NOT fire the completion hook or
+        // report orchestratorCompleted here — the parent is not completed yet
+        // (adversarial review: the old shape stranded parents at pending_approval
+        // while chaining fired as if they had completed).
         if (report.canComplete) {
           const result = await guardian.complete();
-          if (result.success) {
-            console.log(`   ✅ Parent SD "${parentSD.title}" completed via Guardian`);
-
-            // SD-LEO-ENH-AUTO-PROCEED-001-03: Trigger orchestrator completion hook
-            // SD-LEO-ENH-AUTO-PROCEED-001-05: Returns chaining info if enabled
-            // SD-LEO-INFRA-ORCHESTRATOR-GATE-FIXES-ORCH-001-A: pass callerSessionId
-            // so the hook excludes the current session from active claim checks
-            const hookResult = await executeOrchestratorCompletionHook(
-              parentSD.id,
-              parentSD.title,
-              siblings.length,
-              { supabase, shippingResults, callerSessionId: sd.claiming_session_id }
-            );
-
+          if (result.success && result.routedToLeadFinal) {
+            console.log(`   ⏸  Parent SD "${parentSD.title}" staged at pending_approval — LEAD-FINAL-APPROVAL required:`);
+            console.log(`      ${result.leadFinalCommand}`);
             return {
-              orchestratorCompleted: true,
-              chainContinue: hookResult?.chainContinue || false,
-              nextOrchestrator: hookResult?.nextOrchestrator || null,
-              nextOrchestratorSdKey: hookResult?.nextOrchestratorSdKey || null
+              orchestratorCompleted: false,
+              parentRoutedToLeadFinal: true,
+              leadFinalCommand: result.leadFinalCommand
             };
-          } else {
-            console.log(`   ⚠️  Guardian completion failed: ${result.error}`);
+          } else if (!result.success) {
+            console.log(`   ⚠️  Guardian staging failed: ${result.error}`);
             await recordFailedCompletion(parentSD, result.error, null, supabase);
           }
         } else if (report.canAutoComplete) {
@@ -96,27 +93,16 @@ export async function checkAndCompleteParentSD(sd, supabase, { shippingResults }
           await guardian.autoCreateArtifacts();
 
           const result = await guardian.complete();
-          if (result.success) {
-            console.log(`   ✅ Parent SD "${parentSD.title}" completed (with auto-created artifacts)`);
-
-            // SD-LEO-ENH-AUTO-PROCEED-001-03: Trigger orchestrator completion hook
-            // SD-LEO-ENH-AUTO-PROCEED-001-05: Returns chaining info if enabled
-            // SD-LEO-INFRA-ORCHESTRATOR-GATE-FIXES-ORCH-001-A: pass callerSessionId
-            const hookResult = await executeOrchestratorCompletionHook(
-              parentSD.id,
-              parentSD.title,
-              siblings.length,
-              { supabase, shippingResults, callerSessionId: sd.claiming_session_id }
-            );
-
+          if (result.success && result.routedToLeadFinal) {
+            console.log(`   ⏸  Parent SD "${parentSD.title}" staged at pending_approval (artifacts auto-created) — LEAD-FINAL-APPROVAL required:`);
+            console.log(`      ${result.leadFinalCommand}`);
             return {
-              orchestratorCompleted: true,
-              chainContinue: hookResult?.chainContinue || false,
-              nextOrchestrator: hookResult?.nextOrchestrator || null,
-              nextOrchestratorSdKey: hookResult?.nextOrchestratorSdKey || null
+              orchestratorCompleted: false,
+              parentRoutedToLeadFinal: true,
+              leadFinalCommand: result.leadFinalCommand
             };
-          } else {
-            console.log(`   ⚠️  Completion failed after auto-fix: ${result.error}`);
+          } else if (!result.success) {
+            console.log(`   ⚠️  Staging failed after auto-fix: ${result.error}`);
             await recordFailedCompletion(parentSD, result.error, null, supabase);
           }
         } else {
