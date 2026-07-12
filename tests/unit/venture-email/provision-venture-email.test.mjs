@@ -34,8 +34,9 @@ function memStore(initial = {}) {
       return { ...next };
     },
     async storeScopedKeySecret(ventureId, domain, keyId) {
-      // Pointer-only, mirroring venture_channel_secrets (NO value column exists).
-      const secretRef = `venture_channel_secrets:${ventureId}:email`;
+      // Pointer-only, mirroring venture_channel_secrets (NO value column exists);
+      // domain-qualified channel key (one row per venture+domain).
+      const secretRef = `venture_channel_secrets:${ventureId}:email:${domain}`;
       secrets.push({ ventureId, domain, keyId, secretRef });
       return secretRef;
     },
@@ -95,11 +96,11 @@ describe('TS-1 happy path end-to-end', () => {
     }
     expect(calls.filter((c) => c[0] === 'enroll')).toHaveLength(1);
     // secret_ref POINTER row persisted; the VALUE never touches store, row, or journal
-    expect(store.secrets).toEqual([{ ventureId: 'v-1', domain: 'example-venture.com', keyId: 'key-1', secretRef: 'venture_channel_secrets:v-1:email' }]);
+    expect(store.secrets).toEqual([{ ventureId: 'v-1', domain: 'example-venture.com', keyId: 'key-1', secretRef: 'venture_channel_secrets:v-1:email:example-venture.com' }]);
     expect(JSON.stringify(store.secrets)).not.toContain('secret-value');
     expect(JSON.stringify(journal.entries)).not.toContain('secret-value');
     // the once-revealed VALUE is surfaced to the caller exactly once, for keyring injection
-    expect(res.revealedKey).toEqual({ secretRef: 'venture_channel_secrets:v-1:email', keyId: 'key-1', keyValue: 'secret-value' });
+    expect(res.revealedKey).toEqual({ secretRef: 'venture_channel_secrets:v-1:email:example-venture.com', keyId: 'key-1', keyValue: 'secret-value' });
     expect(res.planSteps.some((s) => s.includes('VENTURE_CHANNEL_SECRET_STORE'))).toBe(true);
   });
 });
@@ -151,8 +152,15 @@ describe('TS-4 scoped-key value routing (isolation substrate)', () => {
     const res = await provisionVentureEmail(venture, { registrar: happyRegistrar(), dns: happyDns(), resendDomains: happyResend(), emailRouting: happyRouting(), store, journal: memJournal() });
     expect(store.rows.get('example-venture.com').scoped_key_id).toBe('key-1');
     expect(JSON.stringify(store.rows.get('example-venture.com'))).not.toContain('secret-value');
-    expect(store.secrets[0]).toEqual({ ventureId: 'v-1', domain: 'example-venture.com', keyId: 'key-1', secretRef: 'venture_channel_secrets:v-1:email' });
+    expect(store.secrets[0]).toEqual({ ventureId: 'v-1', domain: 'example-venture.com', keyId: 'key-1', secretRef: 'venture_channel_secrets:v-1:email:example-venture.com' });
     expect(res.revealedKey.keyValue).toBe('secret-value');
+    // pre-persistence mint journal: a live key's ID is on record before any step can fail
+    const journal2 = memJournal();
+    const store2 = memStore();
+    await provisionVentureEmail(venture, { registrar: happyRegistrar(), dns: happyDns(), resendDomains: happyResend(), emailRouting: happyRouting(), store: store2, journal: journal2 });
+    const steps2 = journal2.entries.map((e) => e.step);
+    expect(steps2.indexOf('scoped_key_minted')).toBeGreaterThan(-1);
+    expect(steps2.indexOf('scoped_key_minted')).toBeLessThan(steps2.indexOf('scoped_key'));
   });
 
   it('a resumed run past key_scoped never re-reveals the key (revealedKey stays null)', async () => {
@@ -204,6 +212,48 @@ describe('TS-7 plan-mode without credentials', () => {
     });
     expect(res.state).toBe('plan_mode');
     expect(res.planSteps[0]).toContain('RESEND_API_KEY');
+  });
+});
+
+describe('terminal idempotency (adversarial review round 1, CRITICAL)', () => {
+  it('re-invoking a provisioned domain is a NO-OP — no adapter is touched, no key re-minted', async () => {
+    const boom = () => { throw new Error('must not be called'); };
+    const store = memStore({ state: 'provisioned' });
+    const res = await provisionVentureEmail(venture, {
+      registrar: { checkDomain: boom, registerDomain: boom },
+      dns: { listZones: boom, createZone: boom, listRecords: boom, createRecord: boom },
+      resendDomains: { countDomains: boom, findDomain: boom, enrollDomain: boom, verifyDomain: boom, mintScopedKey: boom },
+      emailRouting: { centralInbox: 'inbox@central.test', ensureDestination: boom, ensureRoutes: boom },
+      store, journal: memJournal(),
+    });
+    expect(res.state).toBe('provisioned');
+    expect(res.revealedKey).toBeNull();
+    expect(store.secrets).toEqual([]);
+  });
+});
+
+describe('DMARC-only DNS write refused (adversarial review round 1)', () => {
+  it('missing enrollment records at the DNS step fails LOUD instead of stranding at dns_written', async () => {
+    const store = memStore({ state: 'domain_enrolled', row: { resend_domain_id: 'rd-1' } });
+    const degraded = { ...happyResend(), findDomain: async () => ({ id: 'rd-1', records: [], status: 'pending' }) };
+    await expect(provisionVentureEmail(venture, {
+      registrar: happyRegistrar(), dns: happyDns(), resendDomains: degraded, emailRouting: happyRouting(),
+      store, journal: memJournal(),
+    })).rejects.toThrow(/enrollment records unavailable/);
+    // state did NOT advance to dns_written — the run is marked failed and resumable by retry
+    expect(store.rows.get('example-venture.com').provision_state).toBe('failed');
+  });
+});
+
+describe('unverified central destination is surfaced (adversarial review round 1)', () => {
+  it('fresh destination (verified=false) adds a MANUAL verification plan step but still wires routes', async () => {
+    const routing = { ...happyRouting(), ensureDestination: async () => ({ reused: false, verified: false, id: 'dest-1' }) };
+    const res = await provisionVentureEmail(venture, {
+      registrar: happyRegistrar(), dns: happyDns(), resendDomains: happyResend(), emailRouting: routing,
+      store: memStore(), journal: memJournal(),
+    });
+    expect(res.state).toBe('provisioned');
+    expect(res.planSteps.some((s) => s.includes('destination verification'))).toBe(true);
   });
 });
 
