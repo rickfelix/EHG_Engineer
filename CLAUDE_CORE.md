@@ -1,8 +1,8 @@
-<!-- file_content_hash: 17fe42551dd53842 -->
+<!-- file_content_hash: a53c98d91b22044e -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-07-06 9:13:25 PM
+**Generated**: 2026-07-12 7:09:27 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1587,11 +1587,11 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 | Pattern ID | Category | Severity | Count | Trend | Top Solution |
 |------------|----------|----------|-------|-------|--------------|
-| PAT-HF-PLANTOLEAD-e8842331 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
-| PAT-HF-LEADTOPLAN-90e39736 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
-| PAT-RETRO-PLANTOLEAD-e8842331 | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
-| PAT-RETRO-PLANTOLEAD-2ddf38d5 | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
+| PAT-HF-PLANTOLEAD-27a62713 | handoff_failure | [HIGH] high | 7 | [STABLE] | N/A |
+| PAT-RETRO-PLANTOLEAD-27a62713 | session_retrospective | [HIGH] high | 7 | [STABLE] | N/A |
 | PAT-HF-PLANTOEXEC-3e540545 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
+| PAT-HF-PLANTOLEAD-e8842331 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
+| PAT-RETRO-PLANTOLEAD-e8842331 | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
 
 ### Prevention Checklists
 
@@ -1617,60 +1617,60 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. SD-LEO-FIX-SHOW-WHICH-STAGE-001: Show which stage is being viewed when browsing venture stage history — SD Completion Retrospective [QUALITY]
-**Category**: USER_EXPERIENCE | **Date**: 6/6/2026 | **Score**: 100
+### 1. SD-LEO-INFRA-TELEMETRY-AUDIENCE-ROUTING-001 Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 7/10/2026 | **Score**: 100
 
 **Key Improvements**:
-- The SD's named target files were wrong for the actual defect. Root cause (5 Whys): (1) header showed...
-- add-prd --content failed once because the integration_operationalization key whitelist is exact: the...
+- The scope-drift defect (SQL migration not updated when JS allowlist was narrowed) should have been c...
+- TESTING sub-agent flagged 3 legitimate non-blocking follow-ups: (1) concurrent-write race behavior i...
 
 **Action Items**:
-- [ ] Update the testing-agent so that when it maps a passing test to a user story it ...
-- [ ] Document the add-prd --content integration_operationalization key whitelist (the...
+- [ ] Merge PR #5877 (implementation) and #5881 (scope-drift correction) via ship lane
+- [ ] File a QF for a lockstep CI assertion tying lib/governance/feedback-audience.js'...
 
-### 2. SD-LEO-FIX-VENTURE-PROVISIONING-PARITY-001 SD Completion Retrospective [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 6/6/2026 | **Score**: 100
+### 2. SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001 Comprehensive Retrospective [QUALITY]
+**Category**: APPLICATION_ISSUE | **Date**: 6/12/2026 | **Score**: 100
 
 **Key Improvements**:
-- {"area":"EHG app listVentures() applies neither an is_demo nor a deleted_at predicate","prevention":...
-- {"area":"The pre-existing chairman_decisions parity assertion fails on the unmodified baseline","pre...
+- Worktree reaper does not respect non-standard worktree paths — caused mid-EXEC data loss
+- Pattern-alert SD creator still leaves 4 of 8 JSONB fields unpopulated at filing time
 
 **Action Items**:
-- [ ] Open a follow-up QF to add is_demo=false and deleted_at IS NULL predicates to th...
-- [ ] Track and fix the pre-existing chairman_decisions parity assertion that fails on...
+- [ ] Enforce SD worktrees under .worktrees/<SD-KEY> and commit+push immediately after...
+- [ ] Extend pattern-alert SD creator preflight to populate all 8 JSONB fields (treat ...
 
-### 3. SD-LEO-INFRA-ENABLE-CLAIM-SWEEP-001 Retrospective [QUALITY]
-**Category**: DATABASE_SCHEMA | **Date**: 6/6/2026 | **Score**: 100
+### 3. Retrospective: SD-LEO-INFRA-CHAIRMAN-DECISION-SURFACING-001 — widen escalation to any raiser, arm the dormant SLA sweep notify-only [QUALITY]
+**Category**: APPLICATION_ISSUE | **Date**: 7/10/2026 | **Score**: 100
 
 **Key Improvements**:
-- The initial verify step queried the wrong column (schema_migrations_applied.migration_name instead o...
-- My own session claim was swept during the ~18-minute database-agent run (re-affirmed via sd-start) —...
+- The ALL-PATHS requirement (escalation must reach every producer of a blocking pending decision) coul...
+- Test-writing surfaced two real bugs in test design rather than product code: enforceDecisionSLAs cal...
 
 **Action Items**:
-- [ ] DEPLOY: update the main checkout's .claude/settings.json (or reload settings) so...
-- [ ] POST-DEPLOY VERIFY: confirm the fleet-wide claim-sweep-mid-sub-agent dormancy is...
+- [ ] When arming a "registered but never dispatched" module (C2 dormant-machinery cla...
+- [ ] When a predicate change (e.g. shouldAutoEscalate) widens WHO triggers a downstre...
 
-### 4. SD-FDBK-ENH-RETROSPECTIVES-AUTO-VALIDATE-001: Symmetric + idempotent missing_protocol_improvements quality-warning lifecycle (PR #4285) [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 6/6/2026 | **Score**: 100
+### 4. SD-LEO-FIX-ORCHESTRATOR-LEAF-ROUTER-001 Comprehensive Retrospective [QUALITY]
+**Category**: APPLICATION_ISSUE | **Date**: 7/10/2026 | **Score**: 100
 
 **Key Improvements**:
-- The two quality_issues-writing triggers should arguably be unified so a single function owns quality...
-- A missing_protocol_improvements warning still does not survive a content-change INSERT because auto_...
+- Multi-worker race on a self-claimed QF: a concurrent fleet worker merged QF-20260710-491's PR #5867 ...
+- Live regression window: from QF-20260710-491's merge until this SD's migration is applied, the JS-la...
 
 **Action Items**:
-- [ ] Add a lint/static check that flags any trigger reading or writing a column that ...
-- [ ] Open a follow-up SD to unify retrospectives quality_issues ownership into a sing...
+- [ ] Apply SD-LEO-FIX-ORCHESTRATOR-LEAF-ROUTER-001's migration once chairman-apply is...
+- [ ] Audit other DB functions/triggers with hardcoded success/completion narratives f...
 
-### 5. SD_COMPLETION Retrospective: issue_patterns completion-side closure-loop (SD-FDBK-ENH-ISSUE-PATTERNS-CLOSURE-001) [QUALITY]
-**Category**: DATABASE_SCHEMA | **Date**: 6/6/2026 | **Score**: 100
+### 5. Retrospective: SD-LEO-INFRA-CHAIRMAN-GAUGE-FABRICATIONS-FIX4-001 — Closing B3/B4/B5/C6 in the Gauge-Trust Fabrication Series [QUALITY]
+**Category**: APPLICATION_ISSUE | **Date**: 7/11/2026 | **Score**: 100
 
 **Key Improvements**:
-- CLAIM-SWEEP + WORKTREE-REAP harness bug bit hard during a ~2.5h idle gap (operator stepped away, no ...
-- Observed ~4h clock skew between the node env (reporting 19:08Z) and the system clock (15:06Z), which...
+- B5's first implementation pass only covered PortfolioSummary.tsx's two completedStages consumers; a ...
+- The first EXEC-TO-PLAN handoff attempt was rejected at 0% by GATE2_IMPLEMENTATION_FIDELITY ("[PREFLI...
 
 **Action Items**:
-- [ ] Investigate idle-gap claim-sweep coverage + node/system clock skew. The claim-sw...
-- [ ] Consider a detector that alerts if assigned-on-completed or NULL-assigned issue_...
+- [ ] B5's original fix correctly handled two of three completedStages consumers; the ...
+- [ ] Two same-day false-positive trips on this exact check (this SD's doc comment, an...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1737,7 +1737,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-07-06*
+*Generated from database: 2026-07-12*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

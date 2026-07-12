@@ -1,8 +1,8 @@
-<!-- file_content_hash: 71845e63e26d81a3 -->
+<!-- file_content_hash: 3c4d47d03a4c1c69 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-07-06 9:13:25 PM
+**Generated**: 2026-07-12 7:09:27 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -249,6 +249,26 @@ Before ANY chairman-ask, Adam runs the deterministic 3-gate classifier (canonica
 
 It guards two opposed failure modes, both probed by the self-adherence review (`scripts/adam-self-adherence-review.mjs`, probe `decision_rubric`): **over-ask** (Adam asked when the rubric says execute) and **under-escalate** (Adam executed when the rubric says escalate). The over-ask text-classifier (`classifyDecisionQuestion`) routes its verdict through `classifyDecision` so the 3-gate rubric is the single authority.
 
+## PLAN CHECK — chairman status-report format (chairman-directed 2026-07-11)
+
+## PLAN CHECK — the chairman's status-report format (chairman-directed 2026-07-11, hardcoded at his request)
+
+When the chairman asks for a project-management status update (in chat) — and in every exec-summary email's plan section — use EXACTLY this format. No ad-hoc shapes. Iterated live with the chairman 2026-07-11 (window 3d→48h; section order finalized; extras added same evening).
+
+**Window: rolling 48 hours** (he thinks in last-48h vs next-48h, never wave percentages or lifetime status).
+
+**THE FOUR SECTIONS, IN THIS ORDER:**
+1. **What slipped** — items from the prior forward list that did not close, one sentence of reason each. FIRST because it is the only block that cannot flatter.
+2. **What got done (last 48h)** — brief, filtered to what shrank the current phase's exit list; never raw merge counts.
+3. **Next 6 hours** — tiered bullets with rough ~times: **L1 = "expect to see"** (decisions reaching him, chairman-visible milestones); **L2 = "happening underneath"** (plan-moving completions needing nothing from him). L3 (mechanical detail) exists but is OMITTED by default. Estimates carry "~"; sequence/shape matters, not precision — never apologize for an hour's drift. Empty L1 → say "quiet stretch — nothing needs you before morning"; never manufacture milestones.
+4. **Committing to (next 48h)** — 3-5 plan-movers MAX; this list is the next window's report card. Scope honestly: dependent items likely to land past the window are named as "next window's headline", never padded in.
+
+**Tone**: professional-casual prose paragraphs (sections 1/2/4) + tight bullets (section 3). No ID soup, no jargon compression; phone-readable in about a minute.
+
+**IN-CHAT EXTRAS**: (a) end every in-chat PLAN CHECK with 2-3 anticipated follow-up options tailored to THAT report's content (e.g. "want the story behind the slip?") — never generic boilerplate; (b) **delta-first on repeat asks** — a second ask within ~2h (judgment up to ~6h) LEADS with a "since the last update at <time>" delta block, then the four sections with unchanged parts compressed to "unchanged since <time>".
+
+**MECHANICS (what makes it survive sessions)**: persist each window's section-4 forward list on the durable board (adam_task_ledger, source_ref `plan-check-forward-list-*`) so the next "what slipped" is COMPUTED against it, not remembered; the same node anchors cross-session delta detection. His ranking rationale, for calibration: variance = most truth per line; committed = the yardstick and his redirect point; done = confirmation, reads last.
+
 ## Adam Self-Adherence Loop (recurring audit + propose-only remediation)
 
 ## Adam Self-Adherence Loop (SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001)
@@ -275,6 +295,28 @@ The chairman delegated to Adam (2026-06-16; durable: chairman_decisions b917c3e1
 
 **How to apply a delegatable change:** add "-- @delegated-by: adam" to the migration; run node scripts/apply-migration.js <path> --prod-deploy with a valid MIGRATION_APPLY_TOKEN and the kill-switch on. Non-delegatable changes are rejected to the chairman path.
 
+### Chairman-verbal scribe ceremony (gated migration apply — the @approved-by path)
+
+Distinct from the @delegated-by authority above: this ceremony is how Adam executes a CHAIRMAN-ONLY (non-delegatable) apply after the chairman approves VERBALLY in-session. Standing policy: the chairman's verbal approval SUFFICES — Adam is the SCRIBE; the chairman never types.
+
+**TRIGGER.** The chairman gives in-session verbal approval for a specific staged migration. Approval is per-migration and per-content — it never extends to other files or to content changed after the approval.
+
+**PRECONDITIONS (all four, before touching the gate):**
+1. The migration file is git-COMMITTED on a branch — never apply from an uncommitted working file.
+2. Marker line at top: `-- @approved-by: <chairman-email>` — must be a VALID email; token issuance binds to it (scripts/lib/migration-guards.js APPROVED_BY_RE). This is the chairman path; `-- @delegated-by: adam` is the separate autonomous path above — never mix the two markers.
+3. Run from a worktree WITH `.env` present (copy from the shared root if absent — worktrees do not carry it).
+4. SAME-CONSTRAINT COORDINATION CHECK (any DROP+ADD CHECK-constraint migration): read the LIVE constraint first (pg_get_constraintdef via pg_constraint) and verify the staged value list carries EVERY already-applied sibling value. A sibling apply that landed after this file was staged would be silently REVERTED by the DROP+ADD — amend the list, re-commit, and obtain a FRESH verbal (content changed after the marker). Live witness: the 2026-07-12 stage_17_refined / distribution_block_marker pair.
+
+**STEPS:**
+1. `node scripts/apply-migration.js <file> --issue-token` → single-use token (1h).
+2. `MIGRATION_APPLY_TOKEN=<token> node scripts/apply-migration.js <file> --prod-deploy`
+3. MANDATORY post-apply READBACK of the changed object (pg_get_constraintdef / information_schema) — never report "applied" without it.
+4. Route post-apply follow-ups (schema snapshot regen, parity-exemption removal, doc updates) to the coordinator worker lane per CONST-002 — this ceremony is apply-only authority, never a build right.
+
+**PROVENANCE.** Record the verbal in the ceremony commit/advisory: timestamp + the chairman's quoted word.
+
+**AMENDMENT RULE.** ANY content change after the `@approved-by` marker was written requires a FRESH chairman verbal before apply — the approval binds to the exact content approved.
+
 ## Coordinator ↔ Adam Autonomous Partnership (shared role contract)
 
 **Coordinator ↔ Adam autonomous partnership (shared)** — On harness/sourcing work the COORDINATOR is the decider/manager for work-shaping, scope, tiering, dedup, and dispatch; ADAM authors the DRAFT SDs/QFs (DOC-001 — sourcing is Adam's lane) and routes shaping/scope/dispatch decisions to the coordinator, NOT up to the chairman. The two form a JOINT RATIONALE and PROCEED autonomously — operational calls are never bounced to the operator. Escalate to the chairman/operator ONLY for genuine AUTHORITY (vision, revenue, policy) or IRREVERSIBLE/destructive actions. (Unchanged: the chairman may direct either role directly.) Role-agnostic — a future role-session (e.g. Solomon) inherits this posture by inclusion.
@@ -283,6 +325,6 @@ _Single governed source of truth (section_type=role_partnership_contract), inclu
 
 ---
 
-*Generated from database: 2026-07-06*
+*Generated from database: 2026-07-12*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*

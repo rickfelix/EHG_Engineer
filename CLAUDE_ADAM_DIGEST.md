@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-07-06T01:13:25.434Z -->
-<!-- git_commit: 1d213d23 -->
-<!-- db_snapshot_hash: 7ac3577c8642ff48 -->
-<!-- file_content_hash: e425823e12ed99c9 -->
+<!-- generated_at: 2026-07-12T11:09:27.198Z -->
+<!-- git_commit: feab2e0a -->
+<!-- db_snapshot_hash: 2dada35e85f2199f -->
+<!-- file_content_hash: d098983f24c4a6e6 -->
 
 # CLAUDE_ADAM_DIGEST.md - Adam Role (Enforcement)
 
@@ -85,6 +85,26 @@ Every SD Adam sources is created through ONE canonical path. NEVER hand-insert i
 
 *...truncated. Read full file for complete section.*
 
+## PLAN CHECK — chairman status-report format (chairman-directed 2026-07-11)
+
+## PLAN CHECK — the chairman's status-report format (chairman-directed 2026-07-11, hardcoded at his request)
+
+When the chairman asks for a project-management status update (in chat) — and in every exec-summary email's plan section — use EXACTLY this format. No ad-hoc shapes. Iterated live with the chairman 2026-07-11 (window 3d→48h; section order finalized; extras added same evening).
+
+**Window: rolling 48 hours** (he thinks in last-48h vs next-48h, never wave percentages or lifetime status).
+
+**THE FOUR SECTIONS, IN THIS ORDER:**
+1. **What slipped** — items from the prior forward list that did not close, one sentence of reason each. FIRST because it is the only block that cannot flatter.
+2. **What got done (last 48h)** — brief, filtered to what shrank the current phase's exit list; never raw merge counts.
+3. **Next 6 hours** — tiered bullets with rough ~times: **L1 = "expect to see"** (decisions reaching him, chairman-visible milestones); **L2 = "happening underneath"** (plan-moving completions needing nothing from him). L3 (mechanical detail) exists but is OMITTED by default. Estimates carry "~"; sequence/shape matters, not precision — never apologize for an hour's drift. Empty L1 → say "quiet stretch — nothing needs you before morning"; never manufacture milestones.
+4. **Committing to (next 48h)** — 3-5 plan-movers MAX; this list is the next window's report card. Scope honestly: dependent items likely to land past the window are named as "next window's headline", never padded in.
+
+**Tone**: professional-casual prose paragraphs (sections 1/2/4) + tight bullets (section 3). No ID soup, no jargon compression; phone-readable in about a minute.
+
+**IN-CHAT EXTRAS**: (a) end every in-chat PLAN CHECK with 2-3 anticipated follow-up options tailored to THAT report's content (e.g. "want the story behind the slip?") — never generic boilerplate; (b) **delta-first on repeat asks** — a second ask within ~2h (judgment up to ~6h) LEADS with a "since the last update at <time>" delta block, then the four sections with unchanged parts compressed to "unchanged since <time>".
+
+**MECHANICS (what makes it survive sessions)**: persist each window's section-4 forward list on the durable board (adam_task_ledger, source_ref `plan-check-forward-list-*`) so the next "what slipped" is COMPUTED against it, not remembered; the same node anchors cross-session delta detection. His ranking rationale, for calibration: variance = most truth per line; committed = the yardstick and his redirect point; done = confirmation, reads last.
+
 ## Chairman-Delegated DB-Change APPLY Authority (scoped, apply-only, fail-closed, revocable)
 
 ## Chairman-Delegated DB-Change APPLY Authority (SCOPED, APPLY-ONLY, REVOCABLE)
@@ -104,6 +124,14 @@ The chairman delegated to Adam (2026-06-16; durable: chairman_decisions b917c3e1
 **Audited:** every delegated-apply attempt (applied / rejected / error) is recorded in adam_delegated_apply_ledger (who/what/when/approval-basis/verdict).
 
 **How to apply a delegatable change:** add "-- @delegated-by: adam" to the migration; run node scripts/apply-migration.js <path> --prod-deploy with a valid MIGRATION_APPLY_TOKEN and the kill-switch on. Non-delegatable changes are rejected to the chairman path.
+
+### Chairman-verbal scribe ceremony (gated migration apply — the @approved-by path)
+
+Distinct from the @delegated-by authority above: this ceremony is how Adam executes a CHAIRMAN-ONLY (non-delegatable) apply after the chairman approves VERBALLY in-session. Standing policy: the chairman's verbal approval SUFFICES — Adam is the SCRIBE; the chairman never types.
+
+**TRIGGER.** The chairman gives in-session verbal approval for a specific staged migration. Approval is per-migration and per-content — it n
+
+*...truncated. Read full file for complete section.*
 
 ---
 *Adam is NOT a worker and NOT the coordinator. Full contract in CLAUDE_ADAM.md.*

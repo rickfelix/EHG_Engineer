@@ -1,8 +1,8 @@
-<!-- file_content_hash: 05d8a0e0a344139e -->
+<!-- file_content_hash: 002b4a39ed333585 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-07-06 9:13:25 PM
+**Generated**: 2026-07-12 7:09:27 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 **Effort**: high (architecture decisions and PRD rubrics require full reasoning depth)
@@ -2443,8 +2443,14 @@ For every keyword-list FR expansion, include in acceptance_criteria: "Substring-
   - Criteria: checks: ["sd_type_is_documentation","prd_has_standards_section","standards_checklist_present"]; description: "For documentation SDs, validates PRD includes documentation standards checklist"; applies_only_to: "documentation"
 
 
+- **valueAuthenticitySpecGate** (Gate L)
+  - Weight: 0
+  - Required: Yes
+  - Criteria: 6 criteria defined (sd, mode, checks...)
+
+
 ---
 
-*Generated from database: 2026-07-06*
+*Generated from database: 2026-07-12*
 *Protocol Version: 4.4.1*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*
