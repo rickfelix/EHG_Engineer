@@ -102,6 +102,26 @@ describe('evaluateP2Witness', () => {
     expect(r.status).toBe(RUNG_STATUS.FAIL);
     expect(r.actorSeparation.status).toBe(RUNG_STATUS.PASS);
   });
+
+  // SD-FDBK-FIX-WITNESS-LOOKUP-MATCHES-001: branch is forwarded to
+  // fetchReviewFinding as an options object (additive, non-breaking) so a
+  // live implementation can scope its lookup.
+  it('forwards branch to fetchReviewFinding as {branch}', async () => {
+    let seen;
+    await evaluateP2Witness({
+      prNumber: 123, tier: 'standard', branch: 'feat/foo',
+      fetchReviewFinding: async (prNumber, opts) => { seen = { prNumber, opts }; return { verdict: 'pass' }; },
+    });
+    expect(seen).toEqual({ prNumber: 123, opts: { branch: 'feat/foo' } });
+  });
+
+  it('a legacy 1-arg fetchReviewFinding (ignores the second param) is unaffected', async () => {
+    const r = await evaluateP2Witness({
+      prNumber: 123, tier: 'standard', branch: 'feat/foo',
+      fetchReviewFinding: async (prNumber) => (prNumber === 123 ? { verdict: 'pass' } : null),
+    });
+    expect(r.status).toBe(RUNG_STATUS.PASS);
+  });
 });
 
 describe('evaluateP3CI', () => {

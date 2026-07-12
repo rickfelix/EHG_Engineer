@@ -23,6 +23,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import { evaluateMergeWorkLadder } from '../lib/ship/merge-witness-ladder.mjs';
 import { writeMergeWitnessTelemetry } from '../lib/ship/merge-witness-telemetry.mjs';
 import { verifyMerged, fetchStatusCheckRollup, detectBranchProtectionEnabled } from '../lib/ship/auto-merge.mjs';
@@ -41,6 +42,20 @@ function parseArgs(argv) {
   return out;
 }
 
+/**
+ * SD-FDBK-FIX-WITNESS-LOOKUP-MATCHES-001: resolve the PR's own head branch so
+ * the P2 witness lookup can be scoped by it (see defaultFetchReviewFinding's
+ * fail-closed contract) — a merged PR's branch may already be deleted, so a
+ * lookup failure here is expected/non-fatal, not an error.
+ */
+export function resolvePrBranch(prNumber, repoOwner, repoName) {
+  try {
+    return execFileSync('gh', ['pr', 'view', String(prNumber), '-R', `${repoOwner}/${repoName}`, '--json', 'headRefName', '--jq', '.headRefName'], { encoding: 'utf-8' }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function runRetroactiveEvaluation({ repo, pr, workKey, tier, reason, supabase }) {
   const [repoOwner, repoName] = repo.split('/');
   const prNumber = Number(pr);
@@ -48,13 +63,14 @@ export async function runRetroactiveEvaluation({ repo, pr, workKey, tier, reason
   const merged = verifyMerged(prNumber, repoOwner, repoName);
   const verifyResult = { ok: merged };
   const statusCheckRollup = fetchStatusCheckRollup(prNumber, repoOwner, repoName);
+  const branch = resolvePrBranch(prNumber, repoOwner, repoName);
 
   const verdict = await evaluateMergeWorkLadder({
     prNumber,
     workKey: workKey ?? null,
     tier: tier || 'standard',
     lookupWorkKeyReal: (wk) => defaultLookupWorkKeyReal(wk, supabase),
-    fetchReviewFinding: (n) => defaultFetchReviewFinding(n, supabase),
+    fetchReviewFinding: (n, opts) => defaultFetchReviewFinding(n, supabase, opts),
     statusCheckRollup,
     merged,
     verifyResult,
@@ -63,6 +79,7 @@ export async function runRetroactiveEvaluation({ repo, pr, workKey, tier, reason
     repoOwner,
     repoName,
     checkProtection: detectBranchProtectionEnabled,
+    branch,
   });
 
   verdict.rungs = [
