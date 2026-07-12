@@ -5,8 +5,11 @@
  * integration. Mirrors the worktree-reaper loadClaimMap pattern shipped in
  * PR #3677 (17th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001).
  *
- * Schema-correct projection (do NOT add worktree_path or last_heartbeat_at):
+ * Schema-correct VIEW projection (v_active_sessions lacks worktree_path/last_heartbeat_at):
  *   session_id, sd_key, qf_id, current_branch, heartbeat_at, computed_status
+ * QF-20260712-249 adds the live-cwd guard: a SECOND query reading worktree_path from
+ * the claude_sessions BASE TABLE (column exists there) so a released-claim session
+ * still cwd'd in the worktree blocks cleanup.
  *
  * FAIL-LOUD on postgrest schema/query errors (silent-swallow caused QF-WT-CLAIM-PROTECT-001 P0).
  */
@@ -20,10 +23,23 @@ import {
   cleanupWorktreeByPath
 } from '../post-merge-worktree-cleanup.js';
 
-// In-memory mock of supabase.from('v_active_sessions').select('...').eq('computed_status','active')
-function mockSupabase({ data = null, error = null } = {}) {
+// In-memory table-aware mock:
+//   from('v_active_sessions').select('...').eq('computed_status','active')  → { data, error }
+//   from('claude_sessions').select('...').in().gte().not(...)               → { pathData, pathError }
+// (QF-20260712-249: the live-cwd guard added a second, base-table query.)
+function mockSupabase({ data = null, error = null, pathData = [], pathError = null } = {}) {
   return {
     from(table) {
+      if (table === 'claude_sessions') {
+        const result = Promise.resolve({ data: pathData, error: pathError });
+        const chain = {
+          select() { return chain; },
+          in() { return chain; },
+          gte() { return chain; },
+          not() { return result; }
+        };
+        return chain;
+      }
       return {
         select() {
           return {
@@ -174,6 +190,67 @@ describe('hasActiveClaimOnBranch — schema + matching', () => {
     const result = await hasActiveClaimOnBranch(env.wtPath, env.main, { supabase: sb });
     expect(result).toBeNull();
   });
+
+  // QF-20260712-249 (signal fbe71ad2) — the incident case: claim already RELEASED
+  // (sd_key/qf_id null, current_branch back on main, absent from v_active_sessions)
+  // but the session is still cwd'd in the worktree running its post-completion tail.
+  // The live-cwd guard on claude_sessions.worktree_path must block cleanup.
+  it('live-cwd guard: blocks when a released-claim session still lives in the worktree', async () => {
+    const sb = mockSupabase({
+      data: [], // no claim-derived match — the old guard would have passed
+      pathData: [{
+        session_id: 'sess-tail',
+        sd_key: null,
+        qf_id: null,
+        current_branch: 'main',
+        heartbeat_at: new Date().toISOString(),
+        worktree_path: env.wtPath
+      }]
+    });
+    const result = await hasActiveClaimOnBranch(env.wtPath, env.main, { supabase: sb });
+    expect(result).not.toBeNull();
+    expect(result.session_id).toBe('sess-tail');
+    expect(result.matched_by).toBe('worktree_path');
+  });
+
+  it('live-cwd guard: Windows backslash worktree_path still matches (normalized)', async () => {
+    const sb = mockSupabase({
+      data: [],
+      pathData: [{
+        session_id: 'sess-win',
+        sd_key: null,
+        qf_id: null,
+        current_branch: 'main',
+        heartbeat_at: new Date().toISOString(),
+        worktree_path: env.wtPath.replace(/\//g, '\\') + '\\'
+      }]
+    });
+    const result = await hasActiveClaimOnBranch(env.wtPath, env.main, { supabase: sb });
+    expect(result).not.toBeNull();
+    expect(result.matched_by).toBe('worktree_path');
+  });
+
+  it('live-cwd guard: non-matching worktree_path does not block', async () => {
+    const sb = mockSupabase({
+      data: [],
+      pathData: [{
+        session_id: 'sess-other',
+        sd_key: null,
+        qf_id: null,
+        current_branch: 'main',
+        heartbeat_at: new Date().toISOString(),
+        worktree_path: path.join(env.main, '.worktrees', 'SD-SOMETHING-ELSE-001')
+      }]
+    });
+    const result = await hasActiveClaimOnBranch(env.wtPath, env.main, { supabase: sb });
+    expect(result).toBeNull();
+  });
+
+  it('live-cwd guard: FAIL-LOUD when the base-table query errors', async () => {
+    const sb = mockSupabase({ data: [], pathError: { message: 'permission denied', code: '42501' } });
+    await expect(hasActiveClaimOnBranch(env.wtPath, env.main, { supabase: sb }))
+      .rejects.toThrow(/live-cwd guard query failed/);
+  });
 });
 
 describe('cleanupWorktreeByPath — claim-protect integration', () => {
@@ -243,7 +320,11 @@ describe('static-guard — source ordering pin', () => {
 
     const idxClaim = body.indexOf('hasActiveClaimOnBranch');
     const idxUnpushed = body.indexOf('hasUnpushedCommits');
-    const idxRemove = body.indexOf('git worktree remove');
+    // QF-20260712-249: SD-LEO-INFRA-WORKTREE-REAPER-RESIDENT-001 replaced the literal
+    // `git worktree remove` with the removeWorktreeViaGit() helper — this pin had been
+    // failing silently since (suite is excluded from the default runner). Same intent:
+    // the claim check must precede the actual removal call.
+    const idxRemove = body.indexOf('removeWorktreeViaGit');
 
     expect(idxClaim).toBeGreaterThan(0);
     expect(idxUnpushed).toBeGreaterThan(idxClaim);
@@ -259,10 +340,20 @@ describe('static-guard — source ordering pin', () => {
     expect(src).toMatch(/\.from\('v_active_sessions'\)/);
     expect(src).toMatch(/\.select\('session_id, sd_key, qf_id, current_branch, heartbeat_at, computed_status'\)/);
     expect(src).toMatch(/\.eq\('computed_status', 'active'\)/);
-    // No reference to the non-existent columns IN A SELECT call
-    // (PR #3677 P0: silent-swallow on column-not-found). Comments are allowed
-    // to mention them as documentation of the lesson learned.
-    expect(src).not.toMatch(/\.select\([^)]*worktree_path[^)]*\)/);
+    // The VIEW projection must never gain the columns it does not expose
+    // (PR #3677 P0: silent-swallow on column-not-found). QF-20260712-249 narrowed
+    // this pin: worktree_path IS selected from the claude_sessions BASE TABLE
+    // (live-cwd guard) where the column exists — only the view select is forbidden
+    // from naming it. Pin the exact view select, then the base-table select.
+    expect(src).not.toMatch(/\.select\('[^']*computed_status[^']*worktree_path[^']*'\)/);
     expect(src).not.toMatch(/\.select\([^)]*last_heartbeat_at[^)]*\)/);
+    // QF-20260712-249: live-cwd guard pins — base-table query with heartbeat window,
+    // non-null worktree_path filter, and fail-loud error handling.
+    // qf_id is deliberately ABSENT from the base-table select — claude_sessions has
+    // no such column (view-only); selecting it would 42703 on every cleanup.
+    expect(src).toMatch(/\.from\('claude_sessions'\)/);
+    expect(src).toMatch(/\.select\('session_id, sd_key, current_branch, heartbeat_at, worktree_path'\)/);
+    expect(src).toMatch(/\.not\('worktree_path', 'is', null\)/);
+    expect(src).toMatch(/live-cwd guard query failed/);
   });
 });

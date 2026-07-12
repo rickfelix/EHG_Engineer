@@ -142,11 +142,13 @@ function _getSupabaseServiceClient() {
  * SD-FDBK-INFRA-POST-MERGE-WORKTREE-001 — leaf-level guard preventing the
  * cleanup from destroying a worktree another session is actively using.
  *
- * Schema-correct projection (do NOT add worktree_path or last_heartbeat_at —
- * QF-20260510-WT-CLAIM-PROTECT-001 P0 lesson): session_id, sd_key, qf_id,
- * current_branch, heartbeat_at, computed_status. FAIL-LOUD on any postgrest
- * error. Fail-soft only when no supabase client can be constructed at all
- * (transport-level absence).
+ * Schema-correct VIEW projection (v_active_sessions does not expose
+ * worktree_path or last_heartbeat_at — QF-20260510-WT-CLAIM-PROTECT-001 P0
+ * lesson): session_id, sd_key, qf_id, current_branch, heartbeat_at,
+ * computed_status. worktree_path is read by the SECOND query below from the
+ * claude_sessions BASE TABLE, where the column exists (QF-20260712-249
+ * live-cwd guard). FAIL-LOUD on any postgrest error. Fail-soft only when no
+ * supabase client can be constructed at all (transport-level absence).
  *
  * Returns the matching claim {session_id, sd_key, qf_id, current_branch,
  * heartbeat_at} or null.
@@ -175,14 +177,13 @@ async function hasActiveClaimOnBranch(wtPath, mainRepoPath, options = {}) {
       ' — refusing to proceed; silent failure here destroys actively-claimed worktrees.'
     );
   }
-  if (!data || data.length === 0) return null;
 
   const targetPath = _normalizePath(wtPath);
   if (!targetPath) return null;
   const worktreesDir = _normalizePath(path.join(mainRepoPath || '', '.worktrees'));
   const now = Date.now();
 
-  for (const row of data) {
+  for (const row of data || []) {
     if (row.heartbeat_at) {
       const hb = new Date(row.heartbeat_at).getTime();
       if (!Number.isFinite(hb) || now - hb > heartbeatThresholdMs) continue;
@@ -209,6 +210,48 @@ async function hasActiveClaimOnBranch(wtPath, mainRepoPath, options = {}) {
           heartbeat_at: row.heartbeat_at
         };
       }
+    }
+  }
+
+  // QF-20260712-249 (signal fbe71ad2) — LIVE-CWD GUARD. All three candidates above
+  // derive from the CLAIM (sd_key / qf_id / current_branch): a session whose claim
+  // released moments ago but is still cwd'd in the worktree running its
+  // post-completion tail matches none of them (and may be absent from
+  // v_active_sessions entirely), so cleanup destroyed the directory under its feet —
+  // the orphaned shell then resolved git ops to the shared main root and one
+  // `git checkout -b` hijacked HEAD for 5+ concurrent sessions. claude_sessions
+  // (BASE TABLE — v_active_sessions does not expose worktree_path; the QF-20260510
+  // schema-projection lesson applies to the VIEW only, the column verified present
+  // on the base table) records where each live session actually lives; match on it
+  // directly. Same fail-loud doctrine as the claim query above.
+  // NB: qf_id is a VIEW-only column (v_active_sessions joins it in) — the base table
+  // does not have it; selecting it here would 42703 and degrade every cleanup to the
+  // fail-safe archive path. Schema verified against information_schema 2026-07-12.
+  const { data: pathRows, error: pathError } = await supabase
+    .from('claude_sessions')
+    .select('session_id, sd_key, current_branch, heartbeat_at, worktree_path')
+    .in('status', ['active', 'idle'])
+    .gte('heartbeat_at', new Date(now - heartbeatThresholdMs).toISOString())
+    .not('worktree_path', 'is', null);
+
+  if (pathError) {
+    throw new Error(
+      `[post-merge-worktree-cleanup] live-cwd guard query failed: ${pathError.message}` +
+      (pathError.code ? ` (code=${pathError.code})` : '') +
+      " — refusing to proceed; silent failure here destroys a live session's working directory."
+    );
+  }
+
+  for (const row of pathRows || []) {
+    if (_normalizePath(row.worktree_path) === targetPath) {
+      return {
+        session_id: row.session_id,
+        sd_key: row.sd_key,
+        qf_id: null, // base table carries no qf_id; the path match itself is the evidence
+        current_branch: row.current_branch,
+        heartbeat_at: row.heartbeat_at,
+        matched_by: 'worktree_path'
+      };
     }
   }
   return null;
