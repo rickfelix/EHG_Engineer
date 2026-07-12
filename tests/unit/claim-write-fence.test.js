@@ -82,8 +82,8 @@ describe('claimGuard acquire lane consults the fence (QF-20260711-937 — orches
   const src = readFileSync(path.resolve(__dirname, '../../lib/claim-guard.mjs'), 'utf8');
 
   it('imports the shared predicate (no hand-rolled fence re-implementation)', () => {
-    expect(src).toContain("liveClaimWriteFenceReason");
-    expect(src).toContain("./fleet/claim-eligibility.cjs");
+    expect(src).toContain('liveClaimWriteFenceReason');
+    expect(src).toContain('./fleet/claim-eligibility.cjs');
   });
 
   it('consults the fence BEFORE the acquire claim_sd RPC (Case 3), refusing with the fence named', () => {
