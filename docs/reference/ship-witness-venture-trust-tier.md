@@ -157,6 +157,45 @@ reads) is fast-follow `SD-APEXNICHE-AI-LEO-GEN-WITNESS-LOOKUP-DURABLE-001`,
 explicitly split out so this fail-closed interim fix could ship without
 waiting on a schema migration.
 
+## P2's durable repo scoping (SD-APEXNICHE-AI-LEO-GEN-WITNESS-LOOKUP-DURABLE-001, SECURITY fast-follow)
+
+Layer 2 on top of the branch-scoping fix above. `ship_review_findings.repo`
+is a new **chairman-gated, additive, nullable** column
+(`database/migrations/20260712_ship_review_findings_repo_column.sql`) —
+committed but **not applied**; it may sit un-applied for an indeterminate
+period (two sibling chairman-gated migrations on this same table have sat
+un-applied for months). Every writer and the reader therefore probe column
+existence at runtime (`lib/ship/repo-column-probe.mjs::probeRepoColumnExists`,
+cached per-process) and degrade to the pre-this-SD branch-only behavior
+exactly when the column is absent — the migration landing or not landing is
+never observable as a functional regression.
+
+Once the column is populated, `defaultFetchReviewFinding` in
+`lib/ship/venture-trust-gate.mjs` scopes **primarily by `repo`**
+(`'owner/name'`, lowercase, no `.git` suffix, normalized via the shared
+`normalizeGithubRepo()` helper) — strictly stronger than `branch`, since
+branch names like `main` can collide across repos too. The legacy `branch`
+fallback (for rows written before the column existed) is additionally
+restricted to `repo IS NULL` rows: without that guard, a populated-but-
+different-repo row that merely shares the query's branch name would
+re-open the exact cross-repo collision the branch-scoping fix closed. Never
+OR'd together — primary is repo-only, fallback is branch-only-AND-repo-
+IS-NULL, and a non-null repo differing from the query's repo never matches
+under any path (verified by a dedicated regression test in
+`tests/unit/ship/venture-trust-gate.test.js`).
+
+`repo` is resolved exactly **once** per `/ship` run (`.claude/commands/ship.md`
+Step 5.5, persisted to `.claude-work/ship-repo-resolved.json`) and reused
+verbatim at Step 6's merge call — never re-resolved via a second `gh repo
+view`, so the audit row and the merge-time witness lookup can never drift.
+The same `repo` value is threaded into all 4 `ship_review_findings` insert
+sites: `lib/ship/review-findings-logger.js` (`logFindings`), the
+LEAD-FINAL-APPROVAL populator hook, `scripts/backfill-pr-tracking.js`, and
+`scripts/audit-phantom-completions.js` (whose inventory previously stored a
+bare repo name like `EHG_Engineer` — now normalized to `rickfelix/<repo>`
+before writing, closing an avoidable shape-drift the LEAD security review
+flagged).
+
 ## Where it's wired in
 
 - `lib/ship/venture-trust-gate.mjs` — the predicate + default lookups (new).
@@ -181,3 +220,8 @@ waiting on a schema migration.
   adoption-readiness gauge + gated enforce-flip capability. See
   `docs/reference/ship-witness-enforce-flip-readiness.md` for the readiness
   bar and what D deliberately did NOT activate.
+- SD-FDBK-FIX-WITNESS-LOOKUP-MATCHES-001 (completed): P2's branch-scoped
+  fail-closed fix (urgent, interim — see section above).
+- SD-APEXNICHE-AI-LEO-GEN-WITNESS-LOOKUP-DURABLE-001: P2's durable
+  repo-scoped fix (Layer 2 fast-follow, chairman-gated migration —
+  see section above).
