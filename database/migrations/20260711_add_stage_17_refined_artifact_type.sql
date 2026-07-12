@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com
 -- @chairman-gated: staged, not yet applied — see database/migrations/README or
 -- SD-LEO-FIX-REGISTER-STAGE-REFINED-001 metadata.requires_chairman_apply=true.
 -- =============================================================================
