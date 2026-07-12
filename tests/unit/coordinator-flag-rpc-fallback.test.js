@@ -24,7 +24,7 @@ const {
 // .select().filter().gte()) resolves to a benign empty result, while .maybeSingle() returns
 // the configured session row and .upsert() captures its payload.
 function makeSupabase({ rpcImpl, sessionRow = null }) {
-  const calls = { rpc: [], upserts: [] };
+  const calls = { rpc: [], upserts: [], updates: [] };
   const empty = { data: null, error: null };
   const supabase = {
     rpc: async (name, args) => {
@@ -33,7 +33,7 @@ function makeSupabase({ rpcImpl, sessionRow = null }) {
     },
     from(table) {
       const builder = {
-        update: () => builder,
+        update: (patch) => { calls.updates.push({ table, patch }); return builder; },
         select: () => builder,
         eq: () => builder,
         gte: async () => ({ data: [], error: null }),
@@ -100,6 +100,43 @@ describe('setActiveCoordinator FLAG-ON fallback when set_coordinator_flag is abs
     await setActiveCoordinator(supabase, 'sess-456');
     const coordUpsert = supabase._calls.upserts.find(u => u.payload?.metadata?.is_coordinator === true);
     expect(coordUpsert).toBeFalsy(); // RPC succeeded → no read-merge-write fallback
+  });
+});
+
+// SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-3: setActiveCoordinator's
+// broadcast-coordinator buffer drain (resolve.cjs:288 flag-off / :321 flag-on) is one of the 4
+// already-correct re-target paths RISK identified -- update-only, never touches sender_session/
+// created_at. Regression-pin, not a fix.
+describe('setActiveCoordinator broadcast-coordinator drain (FR-3 regression pin — update-only)', () => {
+  const PREV = process.env.COORDINATOR_TWOWAY_V2;
+  afterEach(() => { process.env.COORDINATOR_TWOWAY_V2 = PREV; });
+
+  it('FLAG-OFF: the drain update patch is ONLY {target_session} — never sender_session/created_at', async () => {
+    process.env.COORDINATOR_TWOWAY_V2 = 'off';
+    const supabase = makeSupabase({ rpcImpl: () => ({ error: null }) });
+    await setActiveCoordinator(supabase, 'sess-789');
+    const drainUpdate = supabase._calls.updates.find(
+      (u) => u.table === 'session_coordination' && Object.prototype.hasOwnProperty.call(u.patch || {}, 'target_session')
+    );
+    expect(drainUpdate).toBeTruthy();
+    expect(drainUpdate.patch).toEqual({ target_session: 'sess-789' });
+  });
+
+  it('FLAG-ON: the drain update patch is ONLY {target_session} — never sender_session/created_at', async () => {
+    process.env.COORDINATOR_TWOWAY_V2 = 'on';
+    const supabase = makeSupabase({
+      rpcImpl: (name) => {
+        if (name === 'set_coordinator_flag') return { error: null };
+        if (name === 'exec_sql') return { data: [{ result: [{ proname: 'set_coordinator_flag' }, { proname: 'clear_coordinator_flag' }] }], error: null };
+        return { error: null };
+      },
+    });
+    await setActiveCoordinator(supabase, 'sess-987');
+    const drainUpdate = supabase._calls.updates.find(
+      (u) => u.table === 'session_coordination' && Object.prototype.hasOwnProperty.call(u.patch || {}, 'target_session')
+    );
+    expect(drainUpdate).toBeTruthy();
+    expect(drainUpdate.patch).toEqual({ target_session: 'sess-987' });
   });
 });
 

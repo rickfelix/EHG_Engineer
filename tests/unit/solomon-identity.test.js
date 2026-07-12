@@ -18,6 +18,7 @@ const {
   isFresh,
   toMs,
   getActiveSolomonId,
+  retargetStaleSolomonInbound,
   SOLOMON_FRESH_MS,
 } = require('../../lib/coordinator/solomon-identity.cjs');
 
@@ -266,5 +267,55 @@ describe('getActiveSolomonId', () => {
     };
     const result = await getActiveSolomonId(stubSupabase);
     expect(result).toBe('sol-b'); // later solomon_since wins
+  });
+});
+
+// ── retargetStaleSolomonInbound (SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-3) ──
+// One of the 4 already-correct re-target paths RISK identified -- update-only, never touches
+// sender_session/created_at. No prior test coverage existed for this function; adding both the
+// behavioral coverage and the FR-3 regression pin together.
+
+function makeRetargetSb({ updateRows = [], updateError = null } = {}) {
+  const calls = { updates: [] };
+  return {
+    _calls: calls,
+    from(table) {
+      const builder = {
+        update(patch) { calls.updates.push({ table, patch }); return builder; },
+        eq() { return builder; },
+        is() { return builder; },
+        select() { return Promise.resolve({ data: updateRows, error: updateError }); },
+      };
+      return builder;
+    },
+  };
+}
+
+describe('retargetStaleSolomonInbound', () => {
+  it('recovers unread coordinator rows from the stale originator and reports the count', async () => {
+    const sb = makeRetargetSb({ updateRows: [{ id: 'm1' }, { id: 'm2' }] });
+    const r = await retargetStaleSolomonInbound(sb, { staleOriginator: 'stale', liveSolomon: 'live' });
+    expect(r.retargeted).toBe(2);
+    expect(r.error).toBe(null);
+  });
+
+  it('is a no-op when originator === live Solomon (nothing to recover)', async () => {
+    const sb = makeRetargetSb({ updateRows: [{ id: 'm1' }] });
+    const r = await retargetStaleSolomonInbound(sb, { staleOriginator: 'x', liveSolomon: 'x' });
+    expect(r.retargeted).toBe(0);
+  });
+
+  it('surfaces a recovery error (never silent)', async () => {
+    const sb = makeRetargetSb({ updateError: { message: 'db down' } });
+    const r = await retargetStaleSolomonInbound(sb, { staleOriginator: 'stale', liveSolomon: 'live' });
+    expect(r.retargeted).toBe(0);
+    expect(r.error).toBe('db down');
+  });
+
+  it('(FR-3 pin) the update patch is ONLY {target_session} — never sender_session/created_at', async () => {
+    const sb = makeRetargetSb({ updateRows: [{ id: 'm1' }] });
+    await retargetStaleSolomonInbound(sb, { staleOriginator: 'stale', liveSolomon: 'live' });
+    const patch = sb._calls.updates[0].patch;
+    expect(patch).toEqual({ target_session: 'live' });
   });
 });
