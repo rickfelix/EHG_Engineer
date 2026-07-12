@@ -367,6 +367,10 @@ describe('Stage Chain: Full 1→25 Pipeline with Real Outputs', () => {
         stage10Data: stageOutputs[10],
         ventureName: VENTURE_NAME,
         logger: silentLogger,
+        // SD-LEO-FEAT-NAMING-DOMAIN-AVAILABILITY-001: the domain-availability seam now runs
+        // BY DEFAULT (registrar API when credentials exist -- this integration tier DOES load
+        // real .env). Explicitly disable so this test never fires a live Cloudflare API call.
+        availabilityChecker: null,
       });
 
       expect(stageOutputs[11]).toBeDefined();

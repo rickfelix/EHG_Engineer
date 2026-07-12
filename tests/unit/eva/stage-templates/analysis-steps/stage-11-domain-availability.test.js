@@ -1,9 +1,16 @@
 /**
- * SD-LEO-FEAT-VENTURE-DOMAIN-AVAILABILITY-001 — Stage-11 availability seam.
- * OFF (default): byte-identical decision shape (all-'pending', no Availability criterion).
- * ON (injected checker): availability-weighted scoring + real domain verdict + detail.
+ * SD-LEO-FEAT-VENTURE-DOMAIN-AVAILABILITY-001 — Stage-11 availability seam, extended by
+ * SD-LEO-FEAT-NAMING-DOMAIN-AVAILABILITY-001.
+ *
+ * ON BY DEFAULT (chairman lesson-learned: a taken .com reached the CF purchase screen
+ * uncaught because the old opt-in flag was never set). With no registrar credentials in
+ * this test environment, the default now falls through to the RDAP checker -- global
+ * fetch is stubbed so this stays hermetic (no live network in a unit test).
+ * Explicit DOMAIN_AVAILABILITY_MODE='off' is the only way back to the pre-SD pending/
+ * no-criterion shape. ON (injected checker): availability-weighted scoring + real domain
+ * verdict + detail, unchanged from the original seam's behavior.
  */
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 const mockComplete = vi.fn();
 vi.mock('../../../../../lib/llm/index.js', () => ({
@@ -61,14 +68,39 @@ function run(extra = {}) {
   return analyzeStage11({ stage1Data, stage10Data: stage10Data(), logger: silentLogger, ...extra });
 }
 
-beforeEach(() => { mockComplete.mockReset(); delete process.env.DOMAIN_AVAILABILITY_MODE; });
+beforeEach(() => {
+  mockComplete.mockReset();
+  delete process.env.DOMAIN_AVAILABILITY_MODE;
+  // SD-LEO-FEAT-NAMING-DOMAIN-AVAILABILITY-001: some transitively-imported module in this
+  // stage's dependency chain self-loads .env as a side effect (confirmed live -- a bare
+  // process.env check shows these unset, but importing analyzeStage11 fills them in from
+  // the real .env, even in the "unit" vitest project). Explicitly clear both so the
+  // "no registrar credentials" scenario below is deterministic regardless of that leak.
+  delete process.env.CLOUDFLARE_REGISTRAR_API_TOKEN;
+  delete process.env.CLOUDFLARE_ACCOUNT_ID;
+});
+afterEach(() => { vi.unstubAllGlobals(); });
 
-describe('seam OFF (default)', () => {
-  it('is byte-identical to pre-SD behavior: all-pending, no Availability criterion, no domainDetail', async () => {
+describe('seam ON BY DEFAULT (SD-LEO-FEAT-NAMING-DOMAIN-AVAILABILITY-001)', () => {
+  it('with no registrar credentials, the bare default falls through to the RDAP checker and adds Availability scoring', async () => {
+    // No registrar creds in this test env -> resolveDomainAvailabilityChecker() falls
+    // through to RDAP. Stub global fetch so this stays hermetic (no live network).
+    vi.stubGlobal('fetch', async () => ({ status: 404 })); // RDAP: 404 = available
+    const result = await run();
+    expect(result.decision.availabilityChecks.domain).toBe('available');
+    expect(result.decision.domainDetail).toBeDefined();
+    expect(result.scoringCriteria.some(c => c.name === 'Availability')).toBe(true);
+    // FR-2/FR-3: the new naming-input decision record is populated, never omitted.
+    expect(result.decision.domainAvailability).toMatchObject({ availability: 'available', method: 'rdap' });
+  });
+
+  it('explicit DOMAIN_AVAILABILITY_MODE=off is the only way back to the pre-SD pending/no-criterion shape', async () => {
+    process.env.DOMAIN_AVAILABILITY_MODE = 'off';
     const result = await run();
     expect(result.decision.availabilityChecks).toEqual({ domain: 'pending', trademark: 'pending', social: 'pending' });
     expect(result.decision.domainDetail).toBeUndefined();
     expect(result.scoringCriteria.some(c => c.name === 'Availability')).toBe(false);
+    expect(result.decision.domainAvailability).toEqual({ domain: null, availability: 'unverified', price_usd: null, checked_at: null, method: 'unverified' });
   });
 
   it('explicit null checker also stays off even if env is live (injection wins)', async () => {

@@ -779,6 +779,10 @@ describe('Stage 11: analyzeStage11', () => {
       stage5Data: genStage05(),
       stage10Data: genStage10(),
       logger: silentLogger,
+      // SD-LEO-FEAT-NAMING-DOMAIN-AVAILABILITY-001: the domain-availability seam now runs
+      // BY DEFAULT (registrar API when credentials exist -- this integration tier DOES load
+      // real .env). Explicitly disable so this test never fires a live Cloudflare API call.
+      availabilityChecker: null,
     });
 
     expect(result).toHaveProperty('namingStrategy');
