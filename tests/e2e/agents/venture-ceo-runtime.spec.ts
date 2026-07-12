@@ -19,7 +19,17 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 
-test.describe('Venture CEO Runtime E2E Tests', () => {
+// QUARANTINED (SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-A, FR-7): beforeAll below inserts
+// into `eva_agents`, which does not exist in the live database (confirmed via
+// mcp__supabase__list_tables) — every test in this file has been failing at setup, not
+// exercising real behavior. It also predates the current agent_registry/agent_budgets/
+// agent_predictions schema this SD's factory/runtime code actually writes to. Superseded
+// by tests/e2e/agents/venture-ceo-verify-first.spec.ts, which exercises the real,
+// current schema end-to-end. Retiring rather than rewriting: this file's individual
+// scenarios (budget thresholds, capability validation, business hypothesis, message
+// ordering) are real coverage gaps worth restoring, but rebuilding all of them against
+// the current schema is out of this SD's scope (see PRD NC-EXEC-001 no scope creep).
+test.describe.skip('Venture CEO Runtime E2E Tests (QUARANTINED — see note above)', () => {
   let supabase: any;
   let testVentureId: string;
   let testCompanyId: string;

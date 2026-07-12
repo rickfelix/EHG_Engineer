@@ -418,3 +418,6 @@ scripts/cron/eva-watcher-task.cmd
 
 # SD-LEO-INFRA-RESTART-RESPECTS-DAEMON-DOWN-WALK-001: leo-stack daemon-down controlled-walk sentinel (operator runtime marker)
 .leo-stack-walk-mode
+
+# SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-A: spine-verify-first-run.mjs run manifests (scratch, teardown-consumed)
+scripts/harness/.spine-verify-first-runs/
