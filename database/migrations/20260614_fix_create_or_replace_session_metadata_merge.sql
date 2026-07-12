@@ -30,7 +30,13 @@ CREATE OR REPLACE FUNCTION create_or_replace_session(
   p_hostname TEXT,
   p_codebase TEXT,
   p_metadata JSONB DEFAULT '{}'::JSONB
-) RETURNS JSONB AS $$
+) RETURNS JSONB
+-- SD-FDBK-FIX-FLEET-WIDE-CLAUDE-001 amendment (Adam same-object coordination check, corr
+-- 580a91da): the LIVE function already carries this search_path hardening (added after
+-- 2026-06-14, post-dating this migration's original authoring). Preserving it here so
+-- applying this migration does not silently REVERT that hardening.
+SET search_path TO 'public', 'extensions'
+AS $$
 DECLARE
   v_terminal_identity TEXT;
   v_previous_session RECORD;
@@ -150,6 +156,24 @@ BEGIN
   RAISE NOTICE 'FIX-CREATE-REPLACE verify OK: re-init merged metadata, preserving is_coordinator + claim_flag and applying auto_proceed.';
 END
 $verify$;
+
+-- SD-FDBK-FIX-FLEET-WIDE-CLAUDE-001 amendment verify: confirm this migration did not silently
+-- revert the post-2026-06-14 search_path hardening (the exact regression Adam's same-object
+-- coordination check caught, corr 580a91da).
+DO $verify_search_path$
+DECLARE
+  v_config TEXT[];
+BEGIN
+  SELECT proconfig INTO v_config
+  FROM pg_proc
+  WHERE proname = 'create_or_replace_session';
+
+  ASSERT v_config IS NOT NULL AND 'search_path=public, extensions' = ANY(v_config),
+    'FIX-CREATE-REPLACE amendment: search_path hardening (SET search_path TO public, extensions) is missing from the deployed function';
+
+  RAISE NOTICE 'FIX-CREATE-REPLACE amendment verify OK: search_path hardening preserved.';
+END
+$verify_search_path$;
 
 -- ROLLBACK: re-apply 20260509_layer1_claiming_session_id_release_parity.sql's definition, i.e. set
 --   metadata = EXCLUDED.metadata

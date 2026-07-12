@@ -97,6 +97,15 @@ describeDb('create_or_replace_session metadata merge (SD-LEO-INFRA-FIX-CREATE-RE
     expect(sql).not.toMatch(/metadata\s*=\s*EXCLUDED\.metadata\s*,/);
   });
 
+  // SD-FDBK-FIX-FLEET-WIDE-CLAUDE-001 amendment (Adam same-object coordination check, corr
+  // 580a91da): the LIVE function already carries a post-2026-06-14 search_path hardening
+  // (SET search_path TO 'public', 'extensions') that this migration's ORIGINAL text did not
+  // preserve — applying it as originally written would have silently REVERTED that hardening.
+  it('regression guard: the migration preserves the search_path hardening, does not revert it', () => {
+    const sql = readFileSync(MIGRATION, 'utf8');
+    expect(sql).toMatch(/SET\s+search_path\s+TO\s+'public',\s*'extensions'/i);
+  });
+
   // SD-FDBK-FIX-FLEET-WIDE-CLAUDE-001 (FR-2): the two tests above only ever prove the
   // MIGRATION FILE's logic is correct — the first re-applies it inside a transaction it
   // always ROLLS BACK ("independent of whether prod has been upgraded yet", per its own
@@ -121,5 +130,8 @@ describeDb('create_or_replace_session metadata merge (SD-LEO-INFRA-FIX-CREATE-RE
       /metadata\s*=\s*COALESCE\(\s*claude_sessions\.metadata[\s\S]*\|\|[\s\S]*EXCLUDED\.metadata/
     );
     expect(deployedDef).not.toMatch(/metadata\s*=\s*EXCLUDED\.metadata\s*,/);
+    // Amendment guard: the deploy must not have regressed the pre-existing search_path
+    // hardening (the exact class of mistake Adam's coordination check caught pre-deploy).
+    expect(deployedDef).toMatch(/SET\s+search_path\s+TO\s+'public',\s*'extensions'/i);
   });
 });
