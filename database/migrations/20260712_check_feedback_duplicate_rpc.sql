@@ -1,4 +1,5 @@
 -- SD-APEXNICHE-AI-MAN-FIX-FIX-CROSS-TENANT-001 FR-1
+-- @approved-by: codestreetlabs@gmail.com
 --
 -- Additive, zero-behavior-change: a SECURITY DEFINER boolean RPC that lets the
 -- feedback-widget dedup check (currently a raw anon-role SELECT relying on the
