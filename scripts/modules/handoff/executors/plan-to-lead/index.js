@@ -397,14 +397,20 @@ export class PlanToLeadExecutor extends BaseExecutor {
       const result = await completeOrchestratorSD(this.supabase, sdId, children.length);
 
       if (!result.success) {
-        return ResultBuilder.rejected('ID_NORMALIZATION_FAILED', result.error);
+        const code = result.canonicalId ? 'ORCHESTRATOR_LEAD_FINAL_STAGING_FAILED' : 'ID_NORMALIZATION_FAILED';
+        return ResultBuilder.rejected(code, result.error);
       }
 
       // SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-E: Parent orchestrator completion
       // When all children complete, parent gets finalization commands
       // PAT-PRD-DUP-001: Import from source module (state-transitions.js doesn't re-export this)
+      // SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001: the SD is at pending_approval, not
+      // completed — LEAD-FINAL-APPROVAL must run before the finalization commands.
       const { getParentFinalizationCommands } = await import('../../../../../lib/utils/orchestrator-child-completion.js');
-      const parentCommands = getParentFinalizationCommands({ sd_key: sd.sd_key || sd.id });
+      const parentCommands = [
+        ...(result.leadFinalCommand ? [result.leadFinalCommand] : []),
+        ...getParentFinalizationCommands({ sd_key: sd.sd_key || sd.id })
+      ];
 
       return {
         success: true,
