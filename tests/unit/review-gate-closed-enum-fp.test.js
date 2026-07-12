@@ -108,4 +108,19 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
       '+ ALTER TABLE feedback DISABLE ROW LEVEL SECURITY;')))
       .toContain('auth_bypass');
   });
+
+  // splitDiffByFile header-spoof hardening — QF-20260712-610 (adversarial-review finding).
+  // In-hunk added content rendering as `+++ b/tests/...` must NOT reassign the segment
+  // path (which would leak the test-fixture exemption to the rest of a non-test file).
+  it('does NOT let in-hunk `+++ b/tests/...` content spoof a test path for later lines', () => {
+    const spoof = [
+      'diff --git a/lib/db/policy.js b/lib/db/policy.js',
+      '--- a/lib/db/policy.js',
+      '+++ b/lib/db/policy.js',
+      '@@ -1,0 +1,2 @@',
+      '+++ b/tests/evil.test.js', // added content line `++ b/tests/evil.test.js`
+      '+ await run("ALTER TABLE t DISABLE ROW LEVEL SECURITY");',
+    ].join('\n');
+    expect(names(spoof)).toContain('auth_bypass');
+  });
 });
