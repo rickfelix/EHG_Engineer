@@ -23,10 +23,8 @@ const ENFORCEMENT_MARKERS = [
 async function main() {
   const client = await createDatabaseClient('engineer', { verify: true });
   try {
-    const { rows } = await client.query(
-      "SELECT proname, prosrc FROM pg_proc WHERE proname = ANY($1::text[])",
-      [[...new Set(ENFORCEMENT_MARKERS.map(m => m.fn))]]
-    );
+    const functionBodyQuery = 'SELECT proname, prosrc FROM pg_proc WHERE proname = ANY($1::text[])';
+    const { rows } = await client.query(functionBodyQuery, [[...new Set(ENFORCEMENT_MARKERS.map(m => m.fn))]]);
     const bodies = Object.fromEntries(rows.map(r => [r.proname, r.prosrc]));
 
     let applied = true;
