@@ -25,15 +25,38 @@ const h = vi.hoisted(() => ({
 }));
 
 // createFromQF's supabase client (lib/sd-creation/context.js)
+// Real column sets — the mock reproduces PostgREST's HTTP-400 on an unknown column so a
+// select against a non-existent column (e.g. the sd_id->sd_key migration trap) fails the
+// test instead of silently returning null and shipping dead code green.
+const REAL_COLUMNS = {
+  claude_sessions: new Set(['id', 'session_id', 'status', 'sd_key', 'worktree_path', 'heartbeat_at', 'metadata']),
+  quick_fixes: null // not column-validated in these tests
+};
+
+function validateSelect(table, cols) {
+  const known = REAL_COLUMNS[table];
+  if (!known || !cols || cols === '*') return null;
+  for (const raw of cols.split(',')) {
+    const col = raw.trim();
+    if (col && !known.has(col)) {
+      return { message: `column ${table}.${col} does not exist`, code: '42703' };
+    }
+  }
+  return null;
+}
+
 vi.mock('../../lib/sd-creation/context.js', () => ({
   supabase: {
     from(table) {
       const b = {
-        select: () => b,
+        _cols: null,
+        select: (cols) => { b._cols = cols; return b; },
         eq: () => b,
         in: () => b,
         update: (payload) => { h.cfg?.onUpdate?.(payload); return b; },
         maybeSingle: async () => {
+          const colErr = validateSelect(table, b._cols);
+          if (colErr) return { data: null, error: colErr };
           if (table === 'quick_fixes') return { data: h.cfg?.qfRow ?? null, error: null };
           if (table === 'claude_sessions') return { data: h.cfg?.sessionRow ?? null, error: null };
           return { data: null, error: null };
@@ -128,7 +151,7 @@ describe('FR-1: born-claim via claim_sd', () => {
     const claims = [];
     h.cfg = {
       qfRow: baseQfRow({ claiming_session_id: 'sess-A' }),
-      sessionRow: { session_id: 'sess-A', status: 'active', sd_id: 'QF-TEST-1' },
+      sessionRow: { session_id: 'sess-A', status: 'active', sd_key: 'QF-TEST-1' },
       onClaim: (args) => claims.push(args)
     };
     await createFromQF('QF-TEST-1');
@@ -159,7 +182,7 @@ describe('FR-1: born-claim via claim_sd', () => {
     const claims = [];
     h.cfg = {
       qfRow: baseQfRow({ claiming_session_id: 'sess-A' }),
-      sessionRow: { session_id: 'sess-A', status: 'active', sd_id: 'SD-SOME-OTHER-001' },
+      sessionRow: { session_id: 'sess-A', status: 'active', sd_key: 'SD-SOME-OTHER-001' },
       onClaim: (a) => claims.push(a)
     };
     await createFromQF('QF-TEST-1');
