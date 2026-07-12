@@ -12,6 +12,8 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import collisionCheck from '../lib/fleet/collision-check.cjs';
+const { checkClaimCollision } = collisionCheck;
 
 const SELF_SD_KEY = 'SD-LEO-INFRA-CLAIM-IDENTITY-INTEGRITY-001';
 const dayArgIdx = process.argv.indexOf('--day');
@@ -51,16 +53,25 @@ for (const sd of sds ?? []) {
       continue;
     }
     const prevSession = sessionById.get(prev.session_id);
-    // A hand-off is plausible when the prior session is gone/released; two
-    // sessions that BOTH remain known-live interleaving on one SD is the
+    // A hand-off is plausible when the prior session is gone/released before the later
+    // claim; two sessions that BOTH remain known-live interleaving on one SD is the
     // anomaly class (misattribution or churn).
-    const prevGone = !prevSession || !['active', 'idle'].includes(prevSession.status); // 'idle' is a LIVE status (adversarial review): treating it as gone silently zeroed the interleave-anomaly class
+    const statusGone = !prevSession || !['active', 'idle'].includes(prevSession.status); // 'idle' is a LIVE status (adversarial review): treating it as gone silently zeroed the interleave-anomaly class
+    // QF-20260712-008: a session can stay status=active while having RELEASED this SD
+    // (claim_history records no releases). Cross-reference session_lifecycle_events so a
+    // benign release-then-reclaim is not miscounted as a live collision. Fail-open: on any
+    // lookup error checkClaimCollision returns isLiveCollision=true, preserving the anomaly.
+    let releasedBeforeReclaim = false;
+    if (!statusGone) {
+      const c = await checkClaimCollision(supabase, prev.session_id, sd.sd_key, cur.claimed_at);
+      releasedBeforeReclaim = c.isLiveCollision === false;
+    }
     transitions.push({
       at: cur.claimed_at,
       from: prev.session_id,
       to: cur.session_id,
-      prior_session_state: prevSession ? `${prevSession.status}${prevSession.released_reason ? ':' + prevSession.released_reason : ''}` : 'unknown_row',
-      verdict: prevGone ? 'plausible_reroute' : 'ANOMALY_live_interleave',
+      prior_session_state: prevSession ? `${prevSession.status}${prevSession.released_reason ? ':' + prevSession.released_reason : ''}${releasedBeforeReclaim ? ':released_before_reclaim' : ''}` : 'unknown_row',
+      verdict: (statusGone || releasedBeforeReclaim) ? 'plausible_reroute' : 'ANOMALY_live_interleave',
     });
   }
   const anomalies = transitions.filter((t) => t.verdict === 'ANOMALY_live_interleave');
@@ -81,7 +92,7 @@ const summary = {
   anomaly_transitions: findings.reduce((n, f) => n + f.transitions.filter((t) => t.verdict === 'ANOMALY_live_interleave').length, 0),
   reroute_transitions: findings.reduce((n, f) => n + f.transitions.filter((t) => t.verdict === 'plausible_reroute').length, 0),
   cases: findings,
-  method: 'claim_history transitions cross-referenced against claude_sessions status; ANOMALY = distinct-session transition while the prior session row is still live (active or idle)',
+  method: 'claim_history transitions cross-referenced against claude_sessions status AND session_lifecycle_events release markers (QF-20260712-008); ANOMALY = distinct-session transition while the prior session is still live (active/idle) AND has no release of this SD before the reclaim',
 };
 
 console.log(`Claim-attribution audit for ${DAY}:`);
