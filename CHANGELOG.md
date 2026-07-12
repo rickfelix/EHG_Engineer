@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-07-12](#2026-07-12)
+  - [Features](#features)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
 - [2026-07-11](#2026-07-11)
@@ -86,6 +87,13 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-07-12
+
+### Features
+- **Domain-availability check for venture naming, now ON by default** - PR #6019 (SD-LEO-FEAT-NAMING-DOMAIN-AVAILABILITY-001)
+  - **What shipped**: closes an opt-in trap where the Stage 11 naming decision's domain-availability check was OFF by default behind an env flag nobody set, which let a taken `.com` (`getalttext.com`) reach the Cloudflare purchase screen uncaught (chairman-reported incident). `resolveDomainAvailabilityChecker()` (`lib/venture-domains/stage-integration.js`) now runs by default with a registrar-first, RDAP-fallback resolution ladder: the Cloudflare Registrar API when credentials exist (authoritative, priced), a zero-credential RDAP check otherwise, and explicit `DOMAIN_AVAILABILITY_MODE=off` as the only opt-out. The naming decision now always carries a `domainAvailability` record (`domain`, `availability`, `price_usd`, `checked_at`, `method`) that never fabricates "available" — RDAP's `unknown` verdict maps to the honest `unverified` label.
+  - **PRD-vs-reachability correction**: the PRD named `stage-10-naming-brand.js` as the file to wire, but that file is dead/unreachable code — `stage-10.js`'s real `analysisStep` import resolves to `stage-10-customer-brand.js`. The actual naming-decision producer, verified by tracing the live `identity_brand_name` artifact writer, is `lib/eva/stage-templates/analysis-steps/stage-11-visual-identity.js`; wired there instead of the file literally named in the SD.
+  - **Live-credential safety check**: this repo's shared `.env` genuinely holds Cloudflare Registrar credentials, so an always-on-by-default checker risked firing live, paid API calls during automated test runs. Verified and fixed on two fronts: the `--project db` integration tests (`analysis-steps.test.js`, `stage-chain.test.js`), which load real `.env`, now explicitly inject `availabilityChecker: null` at the Stage 11 call site; and a genuine pre-existing `.env`-leak into the supposedly-hermetic "unit" vitest project (some transitive import of the stage-11 module self-loads `.env` as a side effect) is neutralized by explicitly clearing both Cloudflare env vars in the unit test's `beforeEach`.
+  - **Verification**: 16 new/rewritten unit tests across 2 files (all pass), TESTING sub-agent PASS 95% (backend-only SD, no dev server/UI — verification is the automated test suite). Also caught and logged (not fixed in-scope) a pre-existing, unrelated harness bug: `stage-chain.test.js`'s LLM mock never matches stage 11's real system prompt ("Naming & Visual Identity Engine" vs. the mock's stale "Go-To-Market Strategy Engine" check), cascading to 8/34 failures in that file — confirmed identical on `origin/main`, unrelated to this change.
 
 ### Infrastructure
 - **Creative engine satellite: provider-abstraction generation primitive, honest-by-design quality gate, artifact-theater guard** - PRs #5981, #5982, #5984, #5991 (SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-D)
