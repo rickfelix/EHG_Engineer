@@ -15,7 +15,12 @@
 -- user-feedback set).
 --
 -- THE FIX: mirror the already-scoped anon policy venture_user_select_feedback
--- exactly. Harness/machine rows are excluded by BOTH clauses independently
+-- exactly. NOTE (cross-SD coherence): that anon policy is itself STAGED for drop
+-- by the sibling cross-tenant SD (20260712_drop_venture_user_select_feedback_
+-- STAGED.sql) — once that applies, this policy is the sole instance of the
+-- type-scoped-but-not-caller-scoped predicate. The accepted residual (no
+-- per-venture ownership binding) is tracked for a follow-up SD at apply time.
+-- Harness/machine rows are excluded by BOTH clauses independently
 -- (defense-in-depth): machine feedback_type values don't match 'user_%', and
 -- lib/governance/emit-feedback.js exposes no venture_id parameter so every
 -- harness row has venture_id NULL.

@@ -26,11 +26,13 @@ describe('feedback authenticated-SELECT scope migration (SD-FDBK-FIX-FEEDBACK-SE
     expect(SQL).toMatch(/CREATE POLICY select_feedback_policy ON public\.feedback\s+FOR SELECT TO authenticated/);
   });
 
-  it('TS-2: scoped USING predicate carries BOTH clauses; no USING (true) survives', () => {
+  it('TS-2: scoped USING predicate pinned VERBATIM (adversarial mutant check: OR-for-AND passes clause-presence pins)', () => {
     const using = SQL.match(/USING \(([\s\S]*?)\);/);
     expect(using).toBeTruthy();
-    expect(using[1]).toContain("(feedback_type)::text LIKE 'user_%'");
-    expect(using[1]).toContain('venture_id IS NOT NULL');
+    // Full-string pin: an AND->OR mutant materially broadens the policy (every
+    // venture_id IS NOT NULL row becomes readable) while containing both clauses.
+    expect(using[1].replace(/\s+/g, ' ').trim())
+      .toBe("((feedback_type)::text LIKE 'user_%') AND (venture_id IS NOT NULL)");
     expect(SQL).not.toMatch(/USING\s*\(\s*true\s*\)/i);
   });
 
@@ -46,8 +48,11 @@ describe('feedback authenticated-SELECT scope migration (SD-FDBK-FIX-FEEDBACK-SE
     ]) {
       expect(SQL, `${foreign} belongs to another owner`).not.toContain(foreign);
     }
-    // No role broadening: only the authenticated SELECT is (re)created.
-    expect(SQL).not.toMatch(/TO (anon|public)\b/);
+    // No role broadening: the TO clause must be EXACTLY 'authenticated' (adversarial
+    // mutant check: 'TO authenticated, anon' evades a /TO (anon|public)/ pin).
+    const grantees = SQL.match(/FOR SELECT TO ([^\n]+)/i);
+    expect(grantees).toBeTruthy();
+    expect(grantees[1].trim().toLowerCase()).toBe('authenticated');
     expect(SQL.match(/CREATE POLICY/g)).toHaveLength(1);
   });
 
