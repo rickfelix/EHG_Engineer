@@ -12,6 +12,8 @@ import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 import { runSeededThread, teardownRun } from '../../../scripts/harness/spine-verify-first-run.mjs';
+import { BudgetManager } from '../../../lib/agents/venture-ceo/budget-manager.js';
+import { BudgetExhaustedException } from '../../../lib/agents/venture-ceo/exceptions.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -53,6 +55,58 @@ test.describe('Venture CEO verify-first seeded thread', () => {
     // TS-3: teardown leaves zero residue.
     const { count } = await supabase.from('ventures').select('*', { count: 'exact', head: true }).eq('id', manifest.ventureId);
     expect(count).toBe(0);
+  });
+
+  test('TS-2: budget-check failure path — an insufficient seeded budget row raises a REAL exhausted signal, not PGRST205', async () => {
+    // Drive the factory directly (same pattern as TS-4) to get one real CEO agent without
+    // running the full seeded thread's budget-check step.
+    const { VentureFactory } = await import('../../../lib/agents/venture-ceo-factory.js');
+    const { buildFixtureVentureRow } = await import('../../../scripts/harness/s20-fixture.mjs');
+
+    const runId = `e2e-budget-fail-${Date.now()}`;
+    const uniqueSuffix = randomUUID().replace(/-/g, '').slice(0, 10);
+    const ventureRow = { ...buildFixtureVentureRow(`SD-A-${runId}`), name: `TEST-${uniqueSuffix}-SD-A` };
+    const { data: venture } = await supabase.from('ventures').insert(ventureRow).select('id, name').single();
+
+    const factory = new VentureFactory(supabase);
+    const result = await factory.instantiateVenture({ ventureName: venture!.name, ventureId: venture!.id, totalTokenBudget: 25000 });
+
+    try {
+      // Seed a budget row whose daily_limit is LOWER than the estimated cost we'll check —
+      // this must raise a real BudgetExhaustedException (the ALLOWED/BLOCKED branch this
+      // SD's fix made reachable), never the PGRST205 table-missing error that threw
+      // unconditionally before agent_budgets existed.
+      await supabase.from('agent_budgets').insert({
+        agent_id: result.ceo_agent_id,
+        daily_limit: 10,
+        daily_consumed: 0,
+        monthly_limit: 10000,
+        monthly_consumed: 0,
+      });
+
+      const budgetManager = new BudgetManager(supabase, result.ceo_agent_id, venture!.id);
+      let thrown: any = null;
+      try {
+        await budgetManager.checkBudgetOrThrow('verify_first_budget_fail_scenario', 500);
+      } catch (e) {
+        thrown = e;
+      }
+
+      expect(thrown).toBeInstanceOf(BudgetExhaustedException);
+      expect(thrown.message).toContain('Daily budget exhausted');
+
+      // The BLOCKED decision must also be logged for real (the audit-trail half of FR-3).
+      const { data: logs } = await supabase.from('agent_budget_logs').select('decision').eq('agent_id', result.ceo_agent_id);
+      expect(logs!.some((l: any) => l.decision === 'BLOCKED')).toBe(true);
+    } finally {
+      await teardownRun(supabase, {
+        runId,
+        ceoAgentId: result.ceo_agent_id,
+        vpAgentIds: result.executive_agent_ids,
+        crewAgentIds: Object.values(result.crew_agent_ids || {}).flat(),
+        ventureId: venture!.id,
+      });
+    }
   });
 
   test('TS-3: teardown is idempotent — a second run against the same manifest is a clean no-op', async () => {
