@@ -217,4 +217,18 @@ describe('generateWithRunway (TS-1..TS-12)', () => {
       generateWithRunway({ capability: 'image', spec: { prompt: 'test' } }, { testMode: false, fetchImpl, sleepImpl: noopSleep })
     ).rejects.toMatchObject({ code: 'INVALID_RESPONSE_BODY' });
   });
+
+  it('TS-13: an unsupported capability throws CAPABILITY_UNSUPPORTED in BOTH testMode and live paths, never a silent stub', async () => {
+    const fetchImpl = fetchQueue([]);
+
+    await expect(
+      generateWithRunway({ capability: 'audio', spec: { prompt: 'test' } }, { fetchImpl, sleepImpl: noopSleep }) // testMode default (true)
+    ).rejects.toMatchObject({ code: 'CAPABILITY_UNSUPPORTED' });
+
+    await expect(
+      generateWithRunway({ capability: 'audio', spec: { prompt: 'test' } }, { testMode: false, fetchImpl, sleepImpl: noopSleep })
+    ).rejects.toMatchObject({ code: 'CAPABILITY_UNSUPPORTED' });
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
 });
