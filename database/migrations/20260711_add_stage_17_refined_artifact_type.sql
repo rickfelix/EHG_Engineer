@@ -1,17 +1,17 @@
--- @chairman-gated: staged, not yet applied — see database/migrations/README or
+﻿-- @chairman-gated: staged, not yet applied â€” see database/migrations/README or
 -- SD-LEO-FIX-REGISTER-STAGE-REFINED-001 metadata.requires_chairman_apply=true.
 -- =============================================================================
--- Migration: venture_artifacts_artifact_type_check — ADD 'stage_17_refined'
--- Fix: SD-LEO-FIX-REGISTER-STAGE-REFINED-001 (escalated from QF-20260711-926) —
+-- Migration: venture_artifacts_artifact_type_check â€” ADD 'stage_17_refined'
+-- Fix: SD-LEO-FIX-REGISTER-STAGE-REFINED-001 (escalated from QF-20260711-926) â€”
 --      lib/eva/stage-17/refinement.js generateRefinedVariants() (the LIVE
 --      Pass-1-selection refinement path invoked by selection-flow.js
 --      submitPass1Selection()) writes artifactType 'stage_17_refined', which is
 --      not allowed by the live CHECK constraint. Confirmed live: writeArtifact
---      throws a CHECK constraint violation on every invocation — this path has
+--      throws a CHECK constraint violation on every invocation â€” this path has
 --      never successfully persisted a refined variant in production.
 -- Scope: LIVE table public.venture_artifacts ONLY. The same-named constraint on
 --      venture_artifacts_storm_quarantine_20260704 is deliberately untouched.
--- Change class: CHECK-WIDENING by one value — cannot invalidate existing rows.
+-- Change class: CHECK-WIDENING by one value â€” cannot invalidate existing rows.
 -- Rollback: re-create the constraint without 'stage_17_refined' (prior
 --      definition = this list minus that one value).
 --
@@ -21,7 +21,7 @@
 --   2. Remove the 'stage_17_refined' entry from
 --      database/artifact-type-parity-pending-chairman-gate.json (its
 --      pending-chairman-gate exemption is no longer needed once the value is
---      live — tests/unit/eva/artifact-type-db-parity.test.js enforces this).
+--      live â€” tests/unit/eva/artifact-type-db-parity.test.js enforces this).
 -- =============================================================================
 
 ALTER TABLE public.venture_artifacts DROP CONSTRAINT venture_artifacts_artifact_type_check;
