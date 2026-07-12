@@ -92,8 +92,11 @@ recall but is NOT the source of truth.)
    different SD (worker rule 2).
 7. **Auto-teardown.** When the campaign is genuinely done — no claimable AND no sourceable work AND zero
    workers, sustained — tear down: `CronDelete` ALL loops FIRST, then `clearActiveCoordinator` + a final
-   email (durable path: `COORD_TEARDOWN_SAFETY_V2`). Don't idle cron loops indefinitely past a finished
-   campaign. An explicit operator `/coordinator start` is NOT idle — arm the loops and trust work is coming.
+   email. Don't idle cron loops indefinitely past a finished campaign. An explicit operator
+   `/coordinator start` is NOT idle — arm the loops and trust work is coming. (QF-20260712-716: the
+   `COORD_TEARDOWN_SAFETY_V2`-gated consistent-teardown helper was removed — disabled-aging flag, never
+   turned on in practice; the crons-first/pointer-second ordering above is still the intended contract,
+   just not yet wired to a helper. See `.claude/commands/coordinator.md` "For stop".)
 8. **The coordinator cannot start a worker's execution** — only `/loop` or a human paste in the worker
    window can. To restore a thinned fleet, hand the operator the wake-up prompt.
 
@@ -161,7 +164,7 @@ There is a SEPARATE failure mode (feedback `34113d39`, `category='harness_backlo
 | Capacity forecasting + predictive belt refill (duty 5) | `scripts/coordinator-capacity-forecast.mjs` (armed cron `3,13,…`, `--dispatch`) |
 | Backlog prioritization + dispatch ordering (duty 6) | `scripts/coordinator-backlog-rank.mjs` (armed cron `9,24,39,54 * * * *`, ~15min) → `metadata.dispatch_rank`, honored by `scripts/worker-checkin.cjs` `sortByDispatchRank`. Event-driven refresh (SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C) also fires on SD creation, `needs_coordinator_review` clearance (`lib/coordinator/clear-coordinator-review.js` / `scripts/clear-coordinator-review.mjs`), and predecessor SD completion, via `lib/coordinator/trigger-rank-pass.mjs` — so a freshly-claimable SD is ranked within seconds instead of waiting for the next cron tick |
 | Question→operator escalation (durable row; rendered by the Adam exec email / operator conversation) | `scripts/coordinator-escalate-question.mjs` (writes `operator_question` row) |
-| Teardown ordering / flag | `lib/coordinator/teardown-coordinator.cjs` (`COORD_TEARDOWN_SAFETY_V2`) |
+| Teardown cron inventory + matcher | `lib/coordinator/teardown-coordinator.cjs` (`listCoordinatorCrons`, `selectCoordinatorCronJobs`) |
 
 ## Comms check (radio check) — verify the two-way link at startup
 

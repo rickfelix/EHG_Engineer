@@ -22,15 +22,6 @@ const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
 // review threshold (>7d).
 const INERT_FLAGS = [
   {
-    flag_key: 'COORD_TEARDOWN_SAFETY_V2',
-    display_name: 'Coordinator Cron-Teardown Safety V2',
-    gates_what: 'Unified coordinator teardown helper that fixes the self-reversing /coordinator stop (inbox cron re-asserts the pointer).',
-    enablement_criteria: 'Operator confirms coordinator teardown is reliable across inbox-cron re-assertion.',
-    target: 'EHG_Engineer',
-    rolled_out_at: '2026-06-06T00:00:00Z',
-    risk_tier: 'medium',
-  },
-  {
     flag_key: 'COORDINATOR_TWOWAY_V2',
     display_name: 'Two-Way Coordinator (DB-canonical election)',
     gates_what: 'resolve.cjs DB-canonical coordinator election + two-way worker/coordinator signaling.',
