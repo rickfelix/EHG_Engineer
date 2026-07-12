@@ -57,7 +57,11 @@ describe('liveClaimBlocksRemoval — self-claimed QF (QF-20260712-008 incident s
 
 describe('loadClaimMap — self-claimed QF path derivation (FR-2/FR-4)', () => {
   const repoRoot = 'C:/repo';
-  const sep = (p) => p.replace(/\\/g, '/').toLowerCase(); // match normalizePath (lowercased, fwd-slash)
+  // normalizePath does path.resolve → prefix is cwd-dependent on POSIX (CI) vs Windows.
+  // Assert on the platform-agnostic SUFFIX (lowercased, forward-slash).
+  const hasQfPath = (map) =>
+    [...map.keys()].map((k) => k.replace(/\\/g, '/').toLowerCase())
+      .some((k) => k.endsWith('/.worktrees/qf/qf-20260712-008'));
 
   /** Mock the v_active_sessions .or(...) select used by loadClaimMap. */
   function claimMapSupabase(rows) {
@@ -70,8 +74,8 @@ describe('loadClaimMap — self-claimed QF path derivation (FR-2/FR-4)', () => {
       { session_id: 's1', sd_key: 'QF-20260712-008', qf_id: null, current_branch: 'qf/QF-20260712-008', heartbeat_at: now, computed_status: 'active' },
     ]);
     const map = await loadClaimMap(supabase, { repoRoot });
-    const keys = [...map.keys()].map(sep);
-    expect(keys).toContain('c:/repo/.worktrees/qf/qf-20260712-008');
+    
+    expect(hasQfPath(map)).toBe(true);
   });
 
   it('FR-4: a churning session reported computed_status=idle is still mapped (heartbeat is fresh)', async () => {
@@ -80,7 +84,7 @@ describe('loadClaimMap — self-claimed QF path derivation (FR-2/FR-4)', () => {
       { session_id: 's2', sd_key: 'QF-20260712-008', qf_id: null, current_branch: null, heartbeat_at: now, computed_status: 'idle' },
     ]);
     const map = await loadClaimMap(supabase, { repoRoot });
-    const keys = [...map.keys()].map(sep);
-    expect(keys).toContain('c:/repo/.worktrees/qf/qf-20260712-008');
+    
+    expect(hasQfPath(map)).toBe(true);
   });
 });
