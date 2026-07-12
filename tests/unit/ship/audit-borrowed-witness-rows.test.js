@@ -47,7 +47,8 @@ describe('runAudit', () => {
     const report = await runAudit({ supabase });
     expect(report.borrowedRowCandidates).toHaveLength(1);
     expect(report.borrowedRowCandidates[0]).toMatchObject({
-      repo: 'rickfelix/apexniche-ai', prNumber: 9, ownBranch: 'feat/apex-D1', donorBranch: 'feat/ml-I1', donorSdKey: 'SD-MARKETLENS-I1',
+      repo: 'rickfelix/apexniche-ai', prNumber: 9, ownBranch: 'feat/apex-D1', hasOwnRow: false,
+      donorBranch: 'feat/ml-I1', donorSdKey: 'SD-MARKETLENS-I1',
     });
   });
 
@@ -64,5 +65,35 @@ describe('runAudit', () => {
     const report = await runAudit({ supabase });
     expect(report.skippedRepos).toEqual(['rickfelix/apexniche-ai']);
     expect(report.checkedPRs).toBe(0);
+  });
+
+  it('flags a borrowed-row candidate EVEN WHEN the PR has its own row, if a NEWER cross-branch pass row exists (replicates pre-fix most-recent-wins query)', async () => {
+    H.execFileSyncMock.mockReturnValue(JSON.stringify([{ number: 9, headRefName: 'feat/apex-D1' }]));
+    const supabase = makeSupabase({
+      applications: [{ github_repo: 'rickfelix/apexniche-ai' }],
+      findings: [
+        { pr_number: 9, branch: 'feat/apex-D1', verdict: 'block', sd_key: 'SD-APEX-D1', created_at: '2026-07-01T00:00:00Z' },
+        { pr_number: 9, branch: 'feat/ml-I1', verdict: 'pass', sd_key: 'SD-MARKETLENS-I1', created_at: '2026-07-03T00:00:00Z' },
+      ],
+    });
+    const report = await runAudit({ supabase });
+    expect(report.borrowedRowCandidates).toHaveLength(1);
+    expect(report.borrowedRowCandidates[0]).toMatchObject({
+      prNumber: 9, ownBranch: 'feat/apex-D1', hasOwnRow: true, ownVerdict: 'block',
+      donorBranch: 'feat/ml-I1', donorSdKey: 'SD-MARKETLENS-I1',
+    });
+  });
+
+  it('does NOT flag when the own-branch row IS the most recent row, even if older cross-branch pass rows exist', async () => {
+    H.execFileSyncMock.mockReturnValue(JSON.stringify([{ number: 9, headRefName: 'feat/apex-D1' }]));
+    const supabase = makeSupabase({
+      applications: [{ github_repo: 'rickfelix/apexniche-ai' }],
+      findings: [
+        { pr_number: 9, branch: 'feat/ml-I1', verdict: 'pass', sd_key: 'SD-MARKETLENS-I1', created_at: '2026-07-01T00:00:00Z' },
+        { pr_number: 9, branch: 'feat/apex-D1', verdict: 'pass', sd_key: 'SD-APEX-D1', created_at: '2026-07-03T00:00:00Z' },
+      ],
+    });
+    const report = await runAudit({ supabase });
+    expect(report.borrowedRowCandidates).toEqual([]);
   });
 });

@@ -5,11 +5,14 @@
  * Read-only. Scoped to trust_tier='trusted' repos only (the only repos where
  * P2's witness result could have gated a real auto-merge decision via
  * lib/ship/venture-trust-gate.mjs). For every merged PR in a trusted repo,
- * checks whether ship_review_findings has a row for that PR's OWN branch. A
- * merged PR whose own branch has no row, but whose pr_number exists in the
- * table under a DIFFERENT branch with verdict='pass', is a "borrowed-row"
- * candidate — evidence the pre-fix pr_number-only lookup could have
- * witness-passed it off another repo's review.
+ * replicates the PRE-FIX query exactly (most-recent row for that pr_number,
+ * across ALL branches -- NOT "own branch wins if it exists": a PR whose own
+ * row is verdict='block'/'fail' could still have been borrow-passed if a
+ * NEWER same-pr_number row from a different branch existed, since the pre-fix
+ * lookup was order-by-created_at-desc-limit-1). If that most-recent row's
+ * branch differs from the PR's own branch AND its verdict is 'pass', it's a
+ * "borrowed-row" candidate — evidence the pre-fix pr_number-only lookup could
+ * have witness-passed it off another repo's (or branch's) review.
  *
  * This audit reports findings; it does NOT auto-remediate anything.
  *
@@ -49,15 +52,22 @@ export async function runAudit({ supabase } = {}) {
     if (prs === null) { report.skippedRepos.push(repo); continue; }
     for (const pr of prs) {
       report.checkedPRs++;
-      const ownRow = (findings || []).find((f) => f.pr_number === pr.number && f.branch === pr.headRefName);
-      if (ownRow) continue; // has its own row -- not a borrowed-row candidate.
-      const donorRow = (findings || [])
-        .filter((f) => f.pr_number === pr.number && f.branch !== pr.headRefName && f.verdict === 'pass')
+      // Replicate the PRE-FIX query exactly: .eq('pr_number', prNumber).order('created_at', desc).limit(1)
+      // -- most-recent-row-wins, across ALL branches, not "own branch wins if it exists". A PR whose own
+      // row is verdict='block' can still have been borrow-passed if a NEWER same-pr_number row from a
+      // different branch existed -- skipping on "has an own row" (regardless of its verdict/recency)
+      // missed exactly that case.
+      const mostRecentRow = (findings || [])
+        .filter((f) => f.pr_number === pr.number)
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
-      if (donorRow) {
+      if (!mostRecentRow) continue; // pre-fix lookup would have returned null too -- nothing to borrow.
+      if (mostRecentRow.branch === pr.headRefName) continue; // pre-fix lookup would have returned this PR's own row.
+      if (mostRecentRow.verdict === 'pass') {
+        const ownRow = (findings || []).find((f) => f.pr_number === pr.number && f.branch === pr.headRefName);
         report.borrowedRowCandidates.push({
           repo, prNumber: pr.number, ownBranch: pr.headRefName,
-          donorBranch: donorRow.branch, donorSdKey: donorRow.sd_key, donorCreatedAt: donorRow.created_at,
+          hasOwnRow: Boolean(ownRow), ownVerdict: ownRow?.verdict ?? null,
+          donorBranch: mostRecentRow.branch, donorSdKey: mostRecentRow.sd_key, donorCreatedAt: mostRecentRow.created_at,
         });
       }
     }
@@ -77,8 +87,11 @@ function printReport(report) {
   } else {
     console.log(`[audit] RESULT: ${report.borrowedRowCandidates.length} borrowed-row candidate(s) found:`);
     for (const c of report.borrowedRowCandidates) {
-      console.log(`  - ${c.repo} PR#${c.prNumber} (branch ${c.ownBranch}) has NO own ship_review_findings row, `
-        + `but pr_number=${c.prNumber} has a verdict=pass row on branch ${c.donorBranch} (sd_key=${c.donorSdKey}, ${c.donorCreatedAt}).`);
+      const ownDesc = c.hasOwnRow
+        ? `has its OWN row (verdict=${c.ownVerdict}) but it was NOT the most recent`
+        : 'has NO own ship_review_findings row';
+      console.log(`  - ${c.repo} PR#${c.prNumber} (branch ${c.ownBranch}) ${ownDesc}, `
+        + `so the pre-fix query would have returned pr_number=${c.prNumber}'s NEWER verdict=pass row on branch ${c.donorBranch} instead (sd_key=${c.donorSdKey}, ${c.donorCreatedAt}).`);
     }
   }
 }
