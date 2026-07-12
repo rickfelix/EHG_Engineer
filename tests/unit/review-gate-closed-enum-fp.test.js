@@ -93,4 +93,19 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
     expect(names(diffFor('tests/setup.test.js', '+ const key = "sk-live-abc123def456ghi789jkl012mno345";')))
       .toContain('hardcoded_secret');
   });
+
+  // CRIT-003 auth_bypass test-fixture exemption — QF-20260712-610.
+  // Witnessed live on PR #6029: a migration-pin test's NEGATIVE guard assertion
+  // (`not.toMatch(/DISABLE ROW LEVEL SECURITY/i)`) matched `disable.*(?:auth|rls|security)`
+  // and CRITICAL-blocked the PR whose test FORBIDS disabling RLS.
+  it('does NOT flag CRIT-003 on a guard assertion inside a tests/ file', () => {
+    expect(names(diffFor('tests/unit/feedback-select-policy-migration.test.js',
+      '+    expect(SQL).not.toMatch(/DISABLE ROW LEVEL SECURITY/i);')))
+      .not.toContain('auth_bypass');
+  });
+  it('STILL flags CRIT-003 on the SAME string when the file is NOT a test path', () => {
+    expect(names(diffFor('database/migrations/20260712_bad.sql',
+      '+ ALTER TABLE feedback DISABLE ROW LEVEL SECURITY;')))
+      .toContain('auth_bypass');
+  });
 });
