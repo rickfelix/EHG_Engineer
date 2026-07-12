@@ -139,6 +139,21 @@ export function buildRankMergeQuery(rankPatch, sdKey) {
     params: [JSON.stringify(rankPatch), sdKey],
   };
 }
+// SD-LEO-INFRA-DURABLE-PARK-EXPIRED-001 (FR-3): atomic counterpart to buildRankMergeQuery for the
+// two clear-stale-rank branches below, which previously did stripDispatchRank() (a pure JS
+// key-delete on an in-memory metadata snapshot) then a full-blob `.update({metadata: meta})` —
+// a concurrent writer (e.g. a coordinator setting needs_coordinator_review between this
+// function's initial row fetch and its clear-write) would be silently clobbered back. The `-`
+// jsonb operator removes only the 3 dispatch_rank* keys server-side, so it can never depend on
+// (or stomp) a stale JS-side snapshot of any other key.
+export function buildRankClearQuery(sdKey) {
+  return {
+    sql: `UPDATE strategic_directives_v2
+          SET metadata = COALESCE(metadata, '{}'::jsonb) - 'dispatch_rank' - 'dispatch_rank_at' - 'dispatch_rank_by'
+          WHERE sd_key = $1`,
+    params: [sdKey],
+  };
+}
 // SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-C (FR-2): needle-movement prioritization.
 // Reuse FR-1's rollup (active rung + per-rung progress) and the pure needle scorer to order remaining
 // work active-rung-first among same-unlock candidates. Loaded fail-soft — any read error leaves the
@@ -514,19 +529,22 @@ async function main() {
       }
     } catch (e) { console.error(`  ! ${d.sd_key}: ${e.message}`); } // fail-soft per item
   }
-  if (pgClient) { try { await pgClient.end(); } catch { /* best-effort close */ } }
 
   // ── clear stale ranks on rows no longer claimable (claimed/blocked now) ──
+  // FR-3: reuses the SAME pgClient (not yet closed) for an atomic key-removal, instead of the
+  // former stripDispatchRank()+full-blob-update — see buildRankClearQuery for why.
   if (!DRY) {
     const rankedNow = new Set(claimable.map(d => d.sd_key));
     for (const d of (sds || [])) {
       if (rankedNow.has(d.sd_key)) continue;
-      const { changed, meta } = stripDispatchRank(d.metadata);
+      const { changed } = stripDispatchRank(d.metadata);
       if (!changed) continue;
+      if (!pgClient) { console.error(`  ! skipped clear ${d.sd_key}: no atomic-merge DB client available`); continue; }
       try {
-        const { error: e } = await sb.from('strategic_directives_v2').update({ metadata: meta }).eq('sd_key', d.sd_key);
-        if (!e) clears++;
-      } catch { /* fail-soft */ }
+        const { sql, params } = buildRankClearQuery(d.sd_key);
+        await pgClient.query(sql, params);
+        clears++;
+      } catch (e) { console.error(`  ! ${d.sd_key}: ${e.message}`); } // fail-soft
     }
     // SD-FDBK-INFRA-COORDINATOR-BACKLOG-RANK-001: the loop above only sees the NON-TERMINAL load (the
     // line-65 query excludes completed/cancelled/deferred), so a dispatch_rank set while an SD was
@@ -539,15 +557,18 @@ async function main() {
         .in('status', ['completed', 'cancelled', 'deferred'])
         .not('metadata->>dispatch_rank', 'is', null);
       for (const d of (terminalRanked || [])) {
-        const { changed, meta } = stripDispatchRank(d.metadata);
+        const { changed } = stripDispatchRank(d.metadata);
         if (!changed) continue;
+        if (!pgClient) { console.error(`  ! skipped clear ${d.sd_key}: no atomic-merge DB client available`); continue; }
         try {
-          const { error: e } = await sb.from('strategic_directives_v2').update({ metadata: meta }).eq('sd_key', d.sd_key);
-          if (!e) clears++;
-        } catch { /* fail-soft per row */ }
+          const { sql, params } = buildRankClearQuery(d.sd_key);
+          await pgClient.query(sql, params);
+          clears++;
+        } catch (e) { console.error(`  ! ${d.sd_key}: ${e.message}`); } // fail-soft per row
       }
     } catch { /* fail-soft: terminal-sweep query error never kills the pass */ }
   }
+  if (pgClient) { try { await pgClient.end(); } catch { /* best-effort close */ } }
   console.log(`[BACKLOG-RANK] done — ${DRY ? 'no writes (dry-run)' : `${writes} rank(s) written, ${clears} stale rank(s) cleared`}`);
 
   // SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C (FR-4d): event-triggered runs are spawned
