@@ -1,8 +1,8 @@
-<!-- file_content_hash: 4163c8ec7ed6fc9c -->
+<!-- file_content_hash: c63173bf15a11251 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-07-11 4:07:57 AM
+**Generated**: 2026-07-12 6:15:19 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -640,6 +640,20 @@ git worktree remove C:/Users/rickf/Projects/_EHG/ehg/.worktrees/${SD_ID}
 | `git checkout` to different SD branch | Switches shared directory | Use worktrees |
 | Working in `C:/Users/rickf/Projects/_EHG/ehg` during parallel execution | Shared state conflicts | Use worktree path |
 | Branch switching mid-operation | Interrupts other instance | Complete or stash first |
+
+### Verify After Every Edit (When In Doubt)
+
+If there is ANY ambiguity about which working tree an Edit landed in — multi-session
+fleet, worktree-per-SD convention, a prior command that may have changed `cwd` — run
+`git status` (or `git diff --stat`) immediately after the Edit, not after a downstream
+symptom surfaces. Checking proactively is cheap; discovering a stray shared-root edit
+indirectly (e.g. via an unexpected test result loading stale worktree code) costs far
+more time to trace back.
+
+**Evidence**: SD-LEO-INFRA-FIX-SESSION-REGISTER-001 retrospective — all 3 fix files were
+initially edited at the shared root instead of the SD's worktree, caught only indirectly
+when a require-time test loaded the (still-unedited) worktree copy and produced
+unexpected results.
 
 ### Quick Reference
 
@@ -2133,6 +2147,6 @@ Verifies version consistency between CLAUDE*.md files and database. Use --fix to
 
 ---
 
-*Generated from database: 2026-07-11*
+*Generated from database: 2026-07-12*
 *Protocol Version: 4.4.1*
 *Load when: User mentions EXEC, implementation, coding, or testing*
