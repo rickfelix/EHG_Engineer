@@ -4,6 +4,13 @@
  * Hook: PostToolUse (no matcher — fires on every tool call)
  * Throttled: Only checks DB every 60 seconds via temp file timestamp
  *
+ * SD-LEO-INFRA-MID-FLIGHT-DIRECTIVE-001 / FR-4: this is TOOL-BOUNDARY surfacing, not
+ * true mid-call surfacing — a PostToolUse hook only fires between tool calls, so a
+ * directive arriving during one long single tool/sub-agent call is not seen until that
+ * call returns. That gap is out of scope here (no hook design can close it); the
+ * guarantee this hook provides is "seen within a few tool calls of arrival," including
+ * for a BUSY (claim-holding) session, not just an idle one draining at /checkin.
+ *
  * Reads from session_coordination table for this session.
  * When messages are found, outputs them and marks as read/acknowledged.
  *
@@ -93,8 +100,9 @@ const ADVISORY_IDLE_TYPES = ['CLAIM_RELEASED', 'CLAIM_REMINDER'];
 // if the lib is unavailable the list is empty and behavior degrades to today's
 // drain (fail-toward-current), never a hook crash.
 let DIRECTIVE_KINDS = [];
+let PRIORITY_EXEMPT_DIRECTIVE_KINDS = [];
 try {
-  ({ DIRECTIVE_KINDS } = require(path.resolve(__dirname, '../../lib/fleet/worker-status.cjs')));
+  ({ DIRECTIVE_KINDS, PRIORITY_EXEMPT_DIRECTIVE_KINDS } = require(path.resolve(__dirname, '../../lib/fleet/worker-status.cjs')));
 } catch { /* fail-open: ack-withholding disabled, hook still runs */ }
 
 // SD-LEO-FIX-FIX-COORDINATION-INBOX-001: pure, per-message inbox decision.
@@ -207,6 +215,16 @@ function classifyInboxMessage(msg, opts = {}) {
   }
   // Default — a pure notification with no follow-up action; drain on display (legacy behavior).
   return { skip: false, markRead: true, markAck: true };
+}
+
+// FR-1 (SD-LEO-INFRA-MID-FLIGHT-DIRECTIVE-001): merge priority-exempt rows (e.g. a
+// fence_notice) ahead of the oldest-N batch, deduped by id, without disturbing the
+// oldest-batch's own relative ordering (regression: non-fence directive kinds keep
+// today's plain oldest-first fairness — TS-4). Pure, synchronous, no DB calls.
+function mergePriorityExempt(priorityRows, oldestBatch) {
+  const seen = new Set((priorityRows || []).map((r) => r.id));
+  const rest = (oldestBatch || []).filter((r) => !seen.has(r.id));
+  return [...(priorityRows || []), ...rest];
 }
 
 function shouldCheck(sessionId) {
@@ -562,13 +580,36 @@ async function main() {
   } catch { /* assume not idle / not adam / not solomon if query fails */ }
 
   // Read unread coordination messages for this session
-  const { data: messages, error: tableErr } = await supabase
+  const SELECT_COLS = 'id, message_type, subject, body, payload, sender_type, sender_session, created_at';
+  const { data: oldestBatch, error: tableErr } = await supabase
     .from('session_coordination')
-    .select('id, message_type, subject, body, payload, sender_type, sender_session, created_at')
+    .select(SELECT_COLS)
     .eq('target_session', sessionId)
     .is('read_at', null)
     .order('created_at', { ascending: true })
     .limit(5);
+
+  // FR-1 (SD-LEO-INFRA-MID-FLIGHT-DIRECTIVE-001): the oldest-5 cap above starves a NEWER
+  // priority-exempt row (e.g. a fence_notice) that isn't among the 5 oldest unread rows —
+  // reused bug class from Adam's QF-20260710-743. Fetch priority-exempt unread rows
+  // separately (small, uncapped-by-position) and merge them ahead of the oldest batch.
+  // Only fires when PRIORITY_EXEMPT_DIRECTIVE_KINDS is non-empty (fail-open on lib load
+  // failure — see the guarded require above).
+  let priorityRows = [];
+  if (!tableErr && PRIORITY_EXEMPT_DIRECTIVE_KINDS.length > 0) {
+    try {
+      const { data: pr } = await supabase
+        .from('session_coordination')
+        .select(SELECT_COLS)
+        .eq('target_session', sessionId)
+        .is('read_at', null)
+        .in('payload->>kind', PRIORITY_EXEMPT_DIRECTIVE_KINDS)
+        .order('created_at', { ascending: true })
+        .limit(5);
+      priorityRows = pr || [];
+    } catch { /* fail-open: priority fetch failure falls back to oldest-batch-only behavior */ }
+  }
+  const messages = mergePriorityExempt(priorityRows, oldestBatch || []);
 
   let emittedDirective = false;
 
@@ -756,5 +797,7 @@ module.exports = {
   // SD-LEO-INFRA-COMPLETE-TWO-WAY-001 / FR-6 — exposed for unit tests
   shouldSkipCoordinatorReply,
   // SD-LEO-FIX-FIX-COORDINATION-INBOX-001 — exposed for unit tests
-  classifyInboxMessage
+  classifyInboxMessage,
+  // SD-LEO-INFRA-MID-FLIGHT-DIRECTIVE-001 / FR-1 — exposed for unit tests
+  mergePriorityExempt
 };
