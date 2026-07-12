@@ -44,8 +44,8 @@ central inbox is the reading agent's duty.
 Notes:
 - **Minimality is deliberate** (venture-simplicity doctrine): six classes, no
   more, until a live reader exists for a seventh.
-- **RFC 2142 alignment**: `support@`, `security@`, `billing@`, `abuse@` are the
-  RFC's role addresses. `abuse@` is intentionally **not** in the standard set —
+- **RFC 2142 alignment**: `support@`, `security@`, and `abuse@` are RFC 2142
+  role addresses (`billing@` is an industry convention, not an RFC 2142 name). `abuse@` is intentionally **not** in the standard set —
   it matters for mail/hosting *providers*; EHG ventures are neither. Revisit if
   a venture ever operates user-generated-content infrastructure.
 - The deferred classes exist in the STANDARD so domains reserve consistent
