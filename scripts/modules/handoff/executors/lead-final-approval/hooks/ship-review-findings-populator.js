@@ -12,6 +12,7 @@
  */
 
 import { execSync } from 'node:child_process';
+import { probeRepoColumnExists, normalizeGithubRepo } from '../../../../../../lib/ship/repo-column-probe.mjs';
 
 const KILL_SWITCH = 'LEO_SHIP_REVIEW_POPULATOR_OFF';
 
@@ -94,6 +95,12 @@ export async function runShipReviewFindingsPopulator(sd, supabase) {
     reviewed_at: prInfo.mergedAt || new Date().toISOString(),
     multi_agent: false,
   };
+  // SD-APEXNICHE-AI-LEO-GEN-WITNESS-LOOKUP-DURABLE-001 FR-5: prInfo.repo is
+  // already resolved by fetchLatestMergedPR; thread it in once the
+  // chairman-gated column exists (never breaks the insert if not).
+  if (prInfo.repo && await probeRepoColumnExists(supabase)) {
+    row.repo = normalizeGithubRepo(prInfo.repo);
+  }
   try {
     const { error } = await supabase.from('ship_review_findings').insert(row);
     if (error) {

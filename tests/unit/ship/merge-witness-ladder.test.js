@@ -122,6 +122,17 @@ describe('evaluateP2Witness', () => {
     });
     expect(r.status).toBe(RUNG_STATUS.PASS);
   });
+
+  // SD-APEXNICHE-AI-LEO-GEN-WITNESS-LOOKUP-DURABLE-001 (FR-6): repo is
+  // forwarded alongside branch, same additive contract.
+  it('forwards repo to fetchReviewFinding as {branch, repo}', async () => {
+    let seen;
+    await evaluateP2Witness({
+      prNumber: 123, tier: 'standard', branch: 'feat/foo', repo: 'rickfelix/apexniche-ai',
+      fetchReviewFinding: async (prNumber, opts) => { seen = { prNumber, opts }; return { verdict: 'pass' }; },
+    });
+    expect(seen).toEqual({ prNumber: 123, opts: { branch: 'feat/foo', repo: 'rickfelix/apexniche-ai' } });
+  });
 });
 
 describe('evaluateP3CI', () => {

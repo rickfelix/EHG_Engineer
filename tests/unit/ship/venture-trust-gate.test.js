@@ -4,7 +4,7 @@
  * pre-merge witness evaluator. Pure unit tests against fake Supabase/runner
  * stubs — no live DB.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   normalizeGithubRepo,
   fetchTrustTier,
@@ -13,6 +13,14 @@ import {
   evaluateVenturePrWitness,
   createVentureTrustGate,
 } from '../../../lib/ship/venture-trust-gate.mjs';
+import { __resetRepoColumnProbeForTests } from '../../../lib/ship/repo-column-probe.mjs';
+
+// FR-6's probeRepoColumnExists() caches its result for the process lifetime
+// (by design -- see repo-column-probe.mjs). Reset before every test in this
+// file so one test's cached probe result never leaks into the next.
+beforeEach(() => {
+  __resetRepoColumnProbeForTests();
+});
 
 const GREEN_ROLLUP = [{ status: 'COMPLETED', conclusion: 'SUCCESS' }];
 
@@ -115,13 +123,24 @@ describe('defaultFetchReviewFinding', () => {
   // SD-FDBK-FIX-WITNESS-LOOKUP-MATCHES-001: the mock builder tracks every
   // .eq() call so tests can assert the query is scoped by BOTH pr_number and
   // branch, not pr_number alone (the pre-fix vulnerability).
+  // SD-APEXNICHE-AI-LEO-GEN-WITNESS-LOOKUP-DURABLE-001 (FR-6): these tests
+  // predate the repo column's existence, so select('repo') (the probe's
+  // shape) reports "absent" (42703) -- defaultFetchReviewFinding then
+  // degrades to the exact pre-FR-6 branch-only path these tests assert.
   function makeFindingSupabase(row) {
     const eqCalls = [];
     const supabase = {
       from: (table) => {
         expect(table).toBe('ship_review_findings');
         const builder = {
-          select: () => builder,
+          select: (cols) => {
+            if (cols === 'repo') {
+              const p = Promise.resolve({ data: null, error: { code: '42703' } });
+              p.limit = () => p;
+              return p;
+            }
+            return builder;
+          },
           eq: (col, val) => { eqCalls.push([col, val]); return builder; },
           order: () => builder,
           limit: () => builder,
@@ -171,7 +190,14 @@ describe('defaultFetchReviewFinding', () => {
     const supabase = {
       from: () => {
         const builder = {
-          select: () => builder,
+          select: (cols) => {
+            if (cols === 'repo') {
+              const p = Promise.resolve({ data: null, error: { code: '42703' } });
+              p.limit = () => p;
+              return p;
+            }
+            return builder;
+          },
           eq: (col, val) => {
             eqCalls.push([col, val]);
             // Simulate a real branch-scoped query: only the matching row is returned.
@@ -191,6 +217,111 @@ describe('defaultFetchReviewFinding', () => {
     const result = await defaultFetchReviewFinding(9, supabase, { branch: 'feat/apex-D1' });
     expect(result).toEqual({ verdict: 'fail' }); // apex's own (failing) row, NEVER marketlens's passing row
     expect(eqCalls).toContainEqual(['branch', 'feat/apex-D1']);
+  });
+});
+
+// SD-APEXNICHE-AI-LEO-GEN-WITNESS-LOOKUP-DURABLE-001 (FR-6): the durable
+// Layer 2 on top of FR-1's branch scoping. Once the chairman-gated repo
+// column exists, repo becomes the PRIMARY scope; the branch fallback is
+// additionally restricted to repo IS NULL rows so it never re-opens the
+// cross-repo collision FR-1 closed.
+describe('defaultFetchReviewFinding — repo-scoped (FR-6)', () => {
+  beforeEach(() => {
+    __resetRepoColumnProbeForTests();
+  });
+
+  function makeRepoAwareSupabase({ probeError = null, row = null } = {}) {
+    const eqCalls = [];
+    const isCalls = [];
+    const supabase = {
+      from: (table) => {
+        expect(table).toBe('ship_review_findings');
+        const builder = {
+          select: () => builder,
+          eq: (col, val) => { eqCalls.push([col, val]); return builder; },
+          is: (col, val) => { isCalls.push([col, val]); return builder; },
+          order: () => builder,
+          limit: () => {
+            const p = Promise.resolve({ data: probeError ? null : [], error: probeError });
+            p.maybeSingle = () => Promise.resolve({ data: row, error: null });
+            return p;
+          },
+        };
+        return builder;
+      },
+    };
+    return { supabase, eqCalls, isCalls };
+  }
+
+  it('column present + repo supplied: scopes PRIMARILY by (normalized) repo, not branch', async () => {
+    const { supabase, eqCalls } = makeRepoAwareSupabase({ row: { verdict: 'pass' } });
+    const result = await defaultFetchReviewFinding(9, supabase, {
+      branch: 'feat/apex-D1', repo: 'rickfelix/ApexNiche-AI.git',
+    });
+    expect(result).toEqual({ verdict: 'pass' });
+    expect(eqCalls).toEqual([['pr_number', 9], ['repo', 'rickfelix/apexniche-ai']]);
+  });
+
+  it('column present, no row for this repo: returns null (never falls through to branch)', async () => {
+    const { supabase } = makeRepoAwareSupabase({ row: null });
+    const result = await defaultFetchReviewFinding(9, supabase, { branch: 'feat/apex-D1', repo: 'rickfelix/apexniche-ai' });
+    expect(result).toBeNull();
+  });
+
+  it('column present, no repo supplied: falls back to branch, scoped to repo IS NULL', async () => {
+    const { supabase, eqCalls, isCalls } = makeRepoAwareSupabase({ row: { verdict: 'fail' } });
+    const result = await defaultFetchReviewFinding(9, supabase, { branch: 'feat/apex-D1' });
+    expect(result).toEqual({ verdict: 'fail' });
+    expect(eqCalls).toEqual([['pr_number', 9], ['branch', 'feat/apex-D1']]);
+    expect(isCalls).toEqual([['repo', null]]);
+  });
+
+  it('column absent (probe reports 42703): degrades to pre-FR-6 exact branch-only behavior, no repo eq/is calls', async () => {
+    const { supabase, eqCalls, isCalls } = makeRepoAwareSupabase({ probeError: { code: '42703' }, row: { verdict: 'pass' } });
+    const result = await defaultFetchReviewFinding(9, supabase, { branch: 'feat/apex-D1', repo: 'rickfelix/apexniche-ai' });
+    expect(result).toEqual({ verdict: 'pass' });
+    expect(eqCalls).toEqual([['pr_number', 9], ['branch', 'feat/apex-D1']]);
+    expect(isCalls).toEqual([]);
+  });
+
+  it('no repo AND no branch: returns null without querying at all (fail-closed)', async () => {
+    const { supabase, eqCalls } = makeRepoAwareSupabase({});
+    const result = await defaultFetchReviewFinding(9, supabase, {});
+    expect(result).toBeNull();
+    expect(eqCalls).toEqual([]);
+  });
+
+  // SECURITY (blocker #2 from LEAD security review): the fallback's repo IS
+  // NULL guard is the load-bearing fix -- without it, a populated-but-
+  // different-repo row that merely shares this branch name would re-open
+  // the exact cross-repo fail-open FR-1 closed.
+  it('SECURITY fail-closed: a populated-but-different-repo row sharing this branch name never matches via the fallback', async () => {
+    const isCalls = [];
+    const OTHER_REPO_ROW = { verdict: 'pass', repo: 'rickfelix/marketlens', branch: 'main' };
+    const supabase = {
+      from: () => {
+        const builder = {
+          select: () => builder,
+          eq: (col, val) => { builder._eq = builder._eq || []; builder._eq.push([col, val]); return builder; },
+          is: (col, val) => { isCalls.push([col, val]); return builder; },
+          order: () => builder,
+          limit: () => {
+            const p = Promise.resolve({ data: [], error: null }); // probe: column present
+            p.maybeSingle = () => {
+              const guardApplied = isCalls.some(([c, v]) => c === 'repo' && v === null);
+              // A real `.is('repo', null)` filter excludes OTHER_REPO_ROW
+              // (its repo is non-null) -- mirror that filtering intent.
+              return Promise.resolve({ data: guardApplied ? null : OTHER_REPO_ROW, error: null });
+            };
+            return p;
+          },
+        };
+        return builder;
+      },
+    };
+    const result = await defaultFetchReviewFinding(9, supabase, { branch: 'main' });
+    expect(result).toBeNull(); // guard applied -> excluded -> null, never OTHER_REPO_ROW's verdict
+    expect(isCalls).toEqual([['repo', null]]);
   });
 });
 
@@ -313,6 +444,22 @@ describe('createVentureTrustGate', () => {
     const result = await gate('rickfelix', 'marketlens', undefined, {});
     expect(result).toBe(false);
   });
+
+  // SD-APEXNICHE-AI-LEO-GEN-WITNESS-LOOKUP-DURABLE-001 (FR-6): the gate
+  // forwards `${repoOwner}/${repoName}` down to fetchReviewFinding so a
+  // live default can scope by repo once the durable column exists.
+  it('forwards repo ("owner/name") to fetchReviewFinding', async () => {
+    const supabase = makeApplicationsSupabase([{ trust_tier: 'trusted', github_repo: 'rickfelix/marketlens' }]);
+    let seenOpts;
+    const gate = createVentureTrustGate({
+      supabase,
+      fetchStatusCheckRollup: async () => GREEN_ROLLUP,
+      lookupWorkKeyReal: async () => true,
+      fetchReviewFinding: async (prNumber, opts) => { seenOpts = opts; return { verdict: 'pass' }; },
+    });
+    await gate('rickfelix', 'marketlens', 99, { workKey: 'SD-XXX-001', tier: 'standard', branch: 'feat/x' });
+    expect(seenOpts).toEqual({ branch: 'feat/x', repo: 'rickfelix/marketlens' });
+  });
 });
 
 // SD-FDBK-FIX-WITNESS-LOOKUP-MATCHES-001 (SECURITY, TS-1): reproduces the
@@ -332,7 +479,19 @@ describe('live cross-repo collision — apexniche-ai vs marketlens (TS-1)', () =
         }
         if (table === 'ship_review_findings') {
           const builder = {
-            select: () => builder,
+            // SD-APEXNICHE-AI-LEO-GEN-WITNESS-LOOKUP-DURABLE-001 (FR-6):
+            // FINDINGS rows below have no `repo` field -- this shared mock
+            // predates the repo column, so the probe reports "absent" and
+            // defaultFetchReviewFinding degrades to its pre-FR-6 branch-only
+            // path (which these tests exercise via the real implementation).
+            select: (cols) => {
+              if (cols === 'repo') {
+                const p = Promise.resolve({ data: null, error: { code: '42703' } });
+                p.limit = () => p;
+                return p;
+              }
+              return builder;
+            },
             eq: (col, val) => { builder._filters = { ...(builder._filters || {}), [col]: val }; return builder; },
             order: () => builder,
             limit: () => builder,

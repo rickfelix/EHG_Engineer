@@ -35,6 +35,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createSupabaseServiceClient } from './lib/supabase-connection.js';
 import { extractKey } from './lib/branch-key-extractor.js';
+import { probeRepoColumnExists, normalizeGithubRepo } from '../lib/ship/repo-column-probe.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
@@ -186,6 +187,12 @@ async function processRepo(repo, opts, supabase, auditPath, resumeMarks) {
       reviewed_at: cls.mergedAt || new Date().toISOString(),
       multi_agent: false,
     };
+    // SD-APEXNICHE-AI-LEO-GEN-WITNESS-LOOKUP-DURABLE-001 FR-5: repo is
+    // already 'owner/name' (the loop var), thread it in once the
+    // chairman-gated column exists.
+    if (repo && await probeRepoColumnExists(supabase)) {
+      row.repo = normalizeGithubRepo(repo);
+    }
     const { error } = await supabase.from('ship_review_findings').insert(row);
     if (error) {
       if (error.code === '23505') {

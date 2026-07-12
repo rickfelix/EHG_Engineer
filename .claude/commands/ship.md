@@ -434,12 +434,31 @@ Review Gate: [TIER] tier (score: X.XX, keyword override: yes/no)
 - If unfixable CRITICAL: halt for chairman review
 - If Deep tier agent failure/timeout: hard-fail (do NOT degrade to Standard)
 
+**5.5. Resolve repo once (SD-APEXNICHE-AI-LEO-GEN-WITNESS-LOOKUP-DURABLE-001 FR-5):**
+
+Resolve the repo owner/name exactly once per `/ship` run, here, and persist it to a small state file so Step 6 reuses the *identical* string instead of re-invoking `gh repo view` — this eliminates any possibility of write/read drift between the audit row and the merge-time witness lookup:
+
+```bash
+node -e "
+const { execSync } = require('node:child_process');
+const fs = require('node:fs');
+const owner = execSync('gh repo view --json owner --jq .owner.login').toString().trim();
+const name = execSync('gh repo view --json name --jq .name').toString().trim();
+fs.mkdirSync('.claude-work', { recursive: true });
+fs.writeFileSync('.claude-work/ship-repo-resolved.json', JSON.stringify({ owner, name }));
+console.log(owner + '/' + name);
+"
+```
+
 **6. Log findings (MANDATORY):**
 
 After the review gate completes (regardless of verdict), log the findings for audit trail:
 
 ```javascript
 import { logFindings } from './lib/ship/review-findings-logger.js';
+import { readFileSync } from 'node:fs';
+
+const { owner, name } = JSON.parse(readFileSync('.claude-work/ship-repo-resolved.json', 'utf8'));
 
 await logFindings({
   prNumber: <PR#>,
@@ -449,7 +468,8 @@ await logFindings({
   verdict: finalVerdict, // 'pass' or 'block'
   sdKey: '<SD-KEY or null>',
   branch: '<branch-name>',
-  multiAgent: gateResult.multiAgent || false
+  multiAgent: gateResult.multiAgent || false,
+  repo: `${owner}/${name}`
 });
 ```
 
@@ -496,13 +516,16 @@ The bare `gh pr merge <PR#> --merge --delete-branch` call silently failed for mo
 ```bash
 node -e "
 require('dotenv').config();
+const fs = require('node:fs');
 Promise.all([
   import('./lib/ship/auto-merge.mjs'),
   import('./lib/ship/venture-trust-gate.mjs'),
   import('@supabase/supabase-js'),
 ]).then(async ([{ attemptAutoMerge, fetchStatusCheckRollup }, { createVentureTrustGate }, { createClient }]) => {
-  const owner = (await import('node:child_process')).execSync('gh repo view --json owner --jq .owner.login').toString().trim();
-  const name = (await import('node:child_process')).execSync('gh repo view --json name --jq .name').toString().trim();
+  // Reuse the SAME owner/name resolved once at Step 5.5 -- never re-invoke
+  // gh repo view here, so the audit row and the merge-time witness lookup
+  // can never drift (SD-APEXNICHE-AI-LEO-GEN-WITNESS-LOOKUP-DURABLE-001 FR-5).
+  const { owner, name } = JSON.parse(fs.readFileSync('.claude-work/ship-repo-resolved.json', 'utf8'));
   const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
   const isTrustedRepo = createVentureTrustGate({ supabase, fetchStatusCheckRollup });
   const result = await attemptAutoMerge({

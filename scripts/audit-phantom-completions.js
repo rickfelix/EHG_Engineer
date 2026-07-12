@@ -27,6 +27,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'node:child_process';
 import { lookupSdIdForFk } from './modules/auto-trigger-stories.mjs';
+import { probeRepoColumnExists, normalizeGithubRepo } from '../lib/ship/repo-column-probe.mjs';
 
 const args = process.argv.slice(2);
 const APPLY = args.includes('--apply');
@@ -252,11 +253,19 @@ async function main() {
       finding_count: 0,
       finding_categories: {},
       sd_key: item.sd.sd_key,
-      branch: prInfo?.branch || (isOrch ? `<orchestrator-summary>` : null),
+      branch: prInfo?.branch || (isOrch ? '<orchestrator-summary>' : null),
       multi_agent: false,
       synthesized_at: new Date().toISOString(),
       reviewed_at: prInfo?.mergedAt || new Date().toISOString(),
     };
+    // SD-APEXNICHE-AI-LEO-GEN-WITNESS-LOOKUP-DURABLE-001 FR-5: inv.repo is a
+    // BARE name ('EHG_Engineer'/'ehg'), not 'owner/name' -- normalize with
+    // the same 'rickfelix/<repo>' prefix fetchPRMergeInfo() already assumes,
+    // so this write never drifts from the canonical owner/name shape used
+    // by every other insert site (security review blocker #3).
+    if (!isOrch && inv?.repo && await probeRepoColumnExists(supabase)) {
+      row.repo = normalizeGithubRepo(`rickfelix/${inv.repo}`);
+    }
 
     const { error: insErr } = await supabase
       .from('ship_review_findings')
