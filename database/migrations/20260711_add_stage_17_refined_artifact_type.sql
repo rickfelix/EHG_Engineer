@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com
 -- @chairman-gated: APPLIED 2026-07-12 (chairman sign-off via coordinator lane,
 -- QF-20260712-058; pg_constraint readback verified) — see database/migrations/README or
 -- SD-LEO-FIX-REGISTER-STAGE-REFINED-001 metadata.requires_chairman_apply=true.
