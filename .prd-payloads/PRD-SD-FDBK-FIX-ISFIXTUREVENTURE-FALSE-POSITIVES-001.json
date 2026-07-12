@@ -1,0 +1,96 @@
+{
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Remove launch_mode==='simulated' as a fixture signal from isFixtureVenture()",
+      "description": "lib/eva/chairman-decision-watcher.js:43-48's isFixtureVenture(venture) currently returns true when venture.launch_mode === 'simulated', with its own comment (lines 36-39) asserting 'no real venture is ever launch_mode=simulated'. Verified FALSE against database/migrations/20260703_ventures_launch_mode.sql:12 (`ADD COLUMN ... launch_mode TEXT NOT NULL DEFAULT 'simulated'`) and 20260705_launch_mode_flip_guard.sql's own INSERT-guard comment ('ventures are BORN simulated') -- every real venture starts life at launch_mode='simulated' by design; promotion to 'live' is a deliberate, audited, later action. This makes isFixtureVenture() misclassify EVERY freshly-created real venture as a fixture for the entire pre-promotion window, which spans Stage-0 (confirmed live on both the new Image Alt Text Generator venture 50763b6a and live ApexNiche venture 809ec7e7). Fix: delete the `if (venture.launch_mode === 'simulated') return true;` line entirely. is_demo===true remains the primary signal; the FIXTURE_VENTURE_NAME_RE name-pattern check (already covering __e2e_/parity-test-/test-stub) remains as secondary defense-in-depth. Correct the stale doc comment (lines 34-39) to remove the false launch_mode claim and document why it was removed (real ventures default to launch_mode=simulated at birth)."
+    },
+    {
+      "id": "FR-2",
+      "title": "Guard-on-every-path audit: confirm no other fixture-detection caller keys on launch_mode",
+      "description": "Traced every isFixtureVenture consumer in the codebase (19 files reference the name, 3 are production call sites of the SHARED chairman-decision-watcher.js export: lib/marketing/autonomy-gate.js:164, lib/eva/stage-execution-worker.js:2730, lib/eva/chairman-product-review.js:181 -- all import the single fixed function, so FR-1's fix propagates automatically, no call-site changes needed). A SEPARATE, independent isFixtureVenture() implementation exists in lib/chairman/chairman-actionable.mjs:42 (a deliberate JS mirror of a canonical SQL RPC allowlist per its own header comment) -- confirmed this implementation checks ONLY is_demo and a name-pattern list (^__|^test venture|citest|^canonical-source-test), never launch_mode, so it is NOT affected by this bug and needs no change. Also confirmed database/migrations/20260704_chairman_product_review_gate_scoped_precondition_fixture_bypass.sql's SQL mirror of the JS predicate never included launch_mode either (its own self-verification check only asserts the is_demo/name-pattern substring), so it stays correct and does not need updating. This FR is a verification/documentation deliverable (no code change) confirming the fix's blast radius is fully contained to FR-1's single line."
+    },
+    {
+      "id": "FR-3",
+      "title": "Regression tests: real venture (launch_mode=simulated, is_demo=false) is NOT a fixture; a genuine fixture still is",
+      "description": "New tests/unit/eva/chairman-decision-watcher.test.js additions to the existing isFixtureVenture describe block: (1) a venture with {launch_mode:'simulated', is_demo:false, name:'Image Alt Text Generator'} (mirroring the confirmed live incident specimen) returns false -- NOT a fixture; (2) the same shape but {launch_mode:'live'} also returns false (launch_mode must never gate the result either way); (3) {is_demo:true, launch_mode:'simulated'} still returns true (is_demo remains authoritative); (4) a name matching FIXTURE_VENTURE_NAME_RE with {launch_mode:'simulated', is_demo:false} still returns true (name-pattern defense-in-depth unaffected). Also add a higher-level assertion (mintStageZeroGate's actual chairman_decisions-mint path, or the nearest existing integration test for it) proving a real, launch_mode=simulated venture reaching the Stage-0 gate actually mints a chairman_decisions row -- closing the loop on the reported consequence, not just the pure-function unit."
+    },
+    {
+      "id": "FR-4",
+      "title": "Companion fix: toVentureOriginType() mapper so reactivateVenture's origin_type=nursery_reeval never risks an enum mismatch or a wasted LLM re-map",
+      "description": "lib/eva/stage-zero/venture-nursery.js:204's reactivateVenture() path output sets origin_type:'nursery_reeval'. ventures.origin_type is a Postgres ENUM (venture_origin_type, confirmed via database/migrations/20251201_venture_origin_tracking.sql + 20260627_venture_origin_type_add_seeded_from_venture.sql: currently 'manual', 'competitor_clone', 'blueprint', 'competitor_teardown', 'discovery', 'seeded_from_venture' -- 'nursery_reeval' is NOT a member). lib/eva/stage-zero/chairman-review.js:220 inserts `origin_type: brief.origin_type` directly into ventures with no mapping step, which would raise an invalid-enum-value error if brief.origin_type is ever literally 'nursery_reeval' (today avoided only because the brief-synthesis LLM step independently re-maps it to 'discovery', at the cost of one extra LLM pass per reactivation per the SD's own confirmed observation). Fix: add an exported toVentureOriginType(originType) pure mapping function (co-located in lib/eva/stage-zero/chairman-review.js, or a small new lib/eva/stage-zero/origin-type-mapper.js if that reads cleaner) that maps 'nursery_reeval' -> 'discovery' (the same value the LLM already independently converges on, per the SD's evidence -- this is a defensive, deterministic short-circuit of an existing LLM-inferred mapping, not a new behavioral decision) and passes every other valid enum value through unchanged. Apply it at the chairman-review.js:220 insert call site: `origin_type: toVentureOriginType(brief.origin_type)`."
+    },
+    {
+      "id": "FR-5",
+      "title": "Tests for toVentureOriginType()",
+      "description": "New unit test asserting toVentureOriginType('nursery_reeval') === 'discovery', and that every other currently-valid enum member ('manual', 'competitor_clone', 'blueprint', 'competitor_teardown', 'discovery', 'seeded_from_venture') passes through unchanged (identity mapping)."
+    }
+  ],
+  "technical_requirements": [
+    { "requirement": "No new database migration -- FR-1/FR-2 read existing ventures.is_demo/name/launch_mode columns; FR-4 maps an application-layer string before insert, no schema change to venture_origin_type" },
+    { "requirement": "FR-1's fix is a single-line deletion plus a comment correction -- no change to is_demo or name-pattern logic" },
+    { "requirement": "FR-4's mapper is pure and total (never throws): unrecognized origin_type strings other than 'nursery_reeval' pass through unchanged rather than being coerced or rejected, preserving today's existing behavior for every other path" }
+  ],
+  "test_scenarios": [
+    { "scenario": "isFixtureVenture({launch_mode:'simulated', is_demo:false, name:'Image Alt Text Generator'}) returns false" },
+    { "scenario": "isFixtureVenture({launch_mode:'live', is_demo:false, name:'ApexNiche'}) returns false" },
+    { "scenario": "isFixtureVenture({is_demo:true, launch_mode:'simulated'}) returns true" },
+    { "scenario": "isFixtureVenture({launch_mode:'simulated', is_demo:false, name:'__e2e_foo__'}) returns true (name-pattern still fires)" },
+    { "scenario": "A real venture at launch_mode=simulated reaching Stage-0 actually mints a chairman_decisions row (integration-level proof of the reported consequence closing)" },
+    { "scenario": "toVentureOriginType('nursery_reeval') === 'discovery'" },
+    { "scenario": "toVentureOriginType(x) === x for every other currently-valid venture_origin_type enum member" },
+    { "scenario": "All pre-existing chairman-decision-watcher.test.js tests pass unmodified" }
+  ],
+  "acceptance_criteria": [
+    "A real venture (launch_mode=simulated OR live, is_demo=false, non-fixture name) is never classified as a fixture by isFixtureVenture(), and its Stage-0 chairman-approval gate mints a chairman_decisions row",
+    "A genuine fixture venture (is_demo=true, OR a name matching the existing FIXTURE_VENTURE_NAME_RE pattern) is still correctly skipped",
+    "All pre-existing tests in chairman-decision-watcher.test.js pass unmodified",
+    "No other production caller of isFixtureVenture keys fixture-detection on launch_mode (verified: all 3 production call sites share the single fixed export; the separate chairman-actionable.mjs implementation and its SQL mirror never referenced launch_mode and need no change)",
+    "reactivateVenture's origin_type='nursery_reeval' is deterministically mapped to a valid venture_origin_type enum value before any ventures insert, matching what the LLM synthesis step already independently converges on today",
+    "No new database migration is introduced"
+  ],
+  "risks": [
+    {
+      "risk": "A launch_mode='live' real venture could theoretically still misfire through some other undiscovered path",
+      "impact": "low",
+      "likelihood": "low",
+      "mitigation": "FR-2's guard-on-every-path audit traced every isFixtureVenture reference in the repo (19 files); the fix is applied at the single shared source, propagating to all 3 production consumers automatically"
+    },
+    {
+      "risk": "FR-4's toVentureOriginType() mapping choice ('nursery_reeval' -> 'discovery') could diverge from what the LLM would have chosen in some edge case",
+      "impact": "low",
+      "likelihood": "low",
+      "mitigation": "The SD's own confirmed evidence states the agent already currently maps to 'discovery' in practice; this codifies the existing observed behavior deterministically rather than introducing a new one"
+    },
+    {
+      "risk": "Implementation may not fully address root cause",
+      "impact": "low",
+      "likelihood": "low",
+      "mitigation": "Verify against the original evidence (feedback capture, coordinator correlation 616c3c79) and re-queue via /learn if a new leak specimen surfaces"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "lib/marketing/autonomy-gate.js, lib/eva/stage-execution-worker.js, lib/eva/chairman-product-review.js -- all inherit FR-1's fix via the shared isFixtureVenture import, no call-site changes needed",
+      "lib/eva/stage-zero/chairman-review.js -- FR-4's mapper applied at the single ventures-insert call site (line 220)"
+    ],
+    "dependencies": [
+      "ventures.launch_mode, ventures.is_demo, ventures.name (existing columns, read-only)",
+      "venture_origin_type Postgres enum (existing type, read-only -- no ALTER TYPE)",
+      "lib/eva/chairman-decision-watcher.js, lib/eva/stage-zero/chairman-review.js (existing modules, additively/correctively extended)"
+    ],
+    "data_contracts": ["No schema changes"],
+    "runtime_config": ["None -- no new env vars"],
+    "observability_rollout": [
+      "No new alerting channel -- the fix restores correct behavior on the existing chairman_decisions mint path and existing ventures insert path"
+    ]
+  },
+  "implementation_approach": {
+    "phases": [
+      { "phase": 1, "description": "Delete the launch_mode==='simulated' branch from isFixtureVenture() and correct the doc comment (FR-1)" },
+      { "phase": 2, "description": "Add toVentureOriginType() mapper and apply at the chairman-review.js insert call site (FR-4)" },
+      { "phase": 3, "description": "Add regression tests for both fixes (FR-3, FR-5)" },
+      { "phase": 4, "description": "Confirm guard-on-every-path via the already-completed grep audit (FR-2, documentation only)" }
+    ]
+  }
+}
