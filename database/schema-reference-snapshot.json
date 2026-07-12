@@ -1,9 +1,9 @@
 {
- "generated_at": "2026-07-12T10:38:08.783Z",
+ "generated_at": "2026-07-12T12:58:42.063Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 803,
+ "table_count": 804,
  "view_count": 183,
- "check_count": 1399,
+ "check_count": 1400,
  "tables": {
   "_migration_metadata": "{key,value}",
   "activation_catalog_expectations": "{sd_id,table_name,seed_migration_path,created_at,created_by}",
@@ -747,6 +747,7 @@
   "venture_distribution_channels": "{id,venture_id,channel_id,is_organic,budget_usd,credential_ref,created_at,updated_at,liveness_state,auth_verified_at,ratelimit_verified_at,first_post_observed_at,liveness_evidence_ref}",
   "venture_documents": "{id,venture_id,document_type,title,content,file_url,metadata,created_at,updated_at}",
   "venture_drafts": "{id,user_id,name,description,draft_data,research_results,created_at,updated_at,venture_id,current_step,form_data,research_status,deleted_at,competitor_analysis,market_analysis,ai_processing_status,ai_confidence_score,last_ai_update}",
+  "venture_email_identities": "{id,venture_id,domain,cf_zone_id,resend_domain_id,scoped_key_id,routes,provision_state,last_error,lock_version,created_at,updated_at}",
   "venture_exit_profiles": "{id,venture_id,exit_model,version,notes,target_buyer_type,is_current,created_by,created_at,exit_context,review_period}",
   "venture_exit_readiness": "{id,venture_id,dependency_inventory,data_export_status,secret_rotation_status,third_party_alternatives,separation_tested,last_dry_run,estimated_separation_days,notes,updated_at,separation_test_results,target_arr,actual_arr,target_customer_count,actual_customer_count,growth_rate_target,growth_rate_actual,market_multiple_current,readiness_score,readiness_threshold,chairman_review_triggered}",
   "venture_financial_contract": "{id,venture_id,capital_required,cac_estimate,ltv_estimate,unit_economics,pricing_model,price_points,revenue_projection,set_by_stage,last_refined_by_stage,refinement_history,created_at,updated_at}",
@@ -2319,6 +2320,7 @@
   "venture_design_pass_ledger.venture_design_pass_ledger_remediation_status_check": "CHECK ((remediation_status = ANY (ARRAY['not_applicable'::text, 'none_found'::text, 'remediation_in_progress'::text, 'remediation_completed'::text])))",
   "venture_distribution_channels.venture_distribution_channels_budget_usd_check": "CHECK ((budget_usd = (0)::numeric))",
   "venture_distribution_channels.venture_distribution_channels_liveness_state_check": "CHECK ((liveness_state = ANY (ARRAY['wired_but_silent'::text, 'proven_live'::text])))",
+  "venture_email_identities.venture_email_identities_provision_state_check": "CHECK ((provision_state = ANY (ARRAY['pending'::text, 'registered'::text, 'domain_enrolled'::text, 'dns_written'::text, 'verified'::text, 'key_scoped'::text, 'routes_wired'::text, 'provisioned'::text, 'plan_mode'::text, 'failed'::text])))",
   "venture_exit_profiles.venture_exit_profiles_exit_context_check": "CHECK ((exit_context = ANY (ARRAY['planning'::text, 'readiness_assessment'::text])))",
   "venture_exit_profiles.venture_exit_profiles_exit_model_check": "CHECK ((exit_model = ANY (ARRAY['full_acquisition'::text, 'licensing'::text, 'revenue_share'::text, 'acqui_hire'::text, 'asset_sale'::text, 'merger'::text])))",
   "venture_exit_profiles.venture_exit_profiles_target_buyer_type_check": "CHECK ((target_buyer_type = ANY (ARRAY['strategic'::text, 'financial'::text, 'competitor'::text, 'partner'::text, 'unknown'::text])))",

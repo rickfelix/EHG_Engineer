@@ -146,6 +146,10 @@ export default defineConfig({
             // CI, without pulling the repo's many node:test-based .test.mjs files (which
             // are not vitest-compatible) into this project.
             '**/tests/unit/org/**/*.test.mjs',
+            // SD-LEO-FEAT-PROVISION-VENTURE-EMAIL-001: same pattern as org above —
+            // vitest-based .test.mjs suites, narrowly anchored so node:test .mjs
+            // files stay out. Registered in tests/test-estate-mjs-allowlist.json.
+            '**/tests/unit/venture-email/**/*.test.mjs',
           ],
           // QUARANTINE_EXCLUDE: tracked red files (tests/quarantine-manifest.json)
           // — SD-LEO-FIX-GREEN-MAIN-TRIAGE-001. The manifest is the debt register.
