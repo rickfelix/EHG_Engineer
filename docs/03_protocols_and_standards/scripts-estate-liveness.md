@@ -1,9 +1,9 @@
 ---
 category: protocol
 status: active
-version: 1.0.0
+version: 1.1.0
 author: SD-LEO-INFRA-SCRIPTS-ESTATE-RECONCILIATION-001
-last_updated: 2026-06-11
+last_updated: 2026-07-12
 tags: [protocol, scripts, liveness, hygiene]
 ---
 # Scripts-Estate Liveness Norm
@@ -78,3 +78,16 @@ Static reachability (above) answers "does anything reference this file?"; the
   runner cannot evaluate without false-OVERDUE). No row is double-evaluated.
 - **UNVERIFIED is by design** for freshly registered rows: visible on the dashboard,
   never false-alarming, until the process wires `lib/periodic-liveness/stamp-last-fired.js`.
+
+### Post-activation verification (QF-20260712-741, retro follow-up to SD-LEO-INFRA-VENTURE-OPS-ACTUALS-001)
+
+- **Dormant-collector sweep**: `node scripts/enumerate-periodic-processes.mjs --report-only`
+  found **zero shadows** across all 103 discovered recurring processes (68 `gha_cron` +
+  9 `cron_script` + 26 `standard_loop`) — every registrable collector, including the
+  ops-actuals trio, is already registered. No dormant candidates remain.
+- **First-live-cycle check**: `ops_product_health` is advancing on its 6h cadence (rows
+  for both live ventures on both 2026-07-11 and 2026-07-12, `computed_at` tracking each
+  cron fire) with an honestly-empty `data_state` (0/0/0 requests) because its upstream
+  source, `service_telemetry`, has zero rows — expected, since no venture service-task has
+  reported an outcome yet, not a collector defect. `venture_telemetry` (the daily GHA pull)
+  is also advancing (10 rows, latest today).
