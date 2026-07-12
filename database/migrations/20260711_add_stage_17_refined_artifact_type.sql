@@ -1,4 +1,5 @@
--- @chairman-gated: staged, not yet applied — see database/migrations/README or
+-- @chairman-gated: APPLIED 2026-07-12 (chairman sign-off via coordinator lane,
+-- QF-20260712-058; pg_constraint readback verified) — see database/migrations/README or
 -- SD-LEO-FIX-REGISTER-STAGE-REFINED-001 metadata.requires_chairman_apply=true.
 -- =============================================================================
 -- Migration: venture_artifacts_artifact_type_check — ADD 'stage_17_refined'

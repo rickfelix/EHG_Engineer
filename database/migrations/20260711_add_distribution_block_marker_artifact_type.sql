@@ -1,6 +1,7 @@
 -- @approved-by: codestreetlabs@gmail.com
--- @chairman-gated: staged, not yet applied — see SD-LEO-INFRA-RUN-EVIDENCE-DURABILITY-001
--- metadata.requires_chairman_apply=true.
+-- @chairman-gated: APPLIED 2026-07-12 (chairman sign-off via coordinator lane;
+-- pg_constraint readback verified, QF-20260712-058 reconciliation) — see
+-- SD-LEO-INFRA-RUN-EVIDENCE-DURABILITY-001 metadata.requires_chairman_apply=true.
 -- =============================================================================
 -- Migration: venture_artifacts_artifact_type_check — ADD 'distribution_block_marker'
 -- Fix: SD-LEO-INFRA-RUN-EVIDENCE-DURABILITY-001 (Solomon adjudication F5) —
