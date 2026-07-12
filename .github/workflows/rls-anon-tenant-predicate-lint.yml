@@ -1,0 +1,40 @@
+name: RLS Anon-Role Tenant-Predicate-Sufficiency Lint
+
+# SD-APEXNICHE-AI-MAN-FIX-FIX-CROSS-TENANT-001 FR-4
+#
+# Blocks any PR introducing a NEW anon-role SELECT RLS policy that either (a) is
+# unconditional (USING (true) -- the companies-table incident, SD-LEO-GEN-SCOPE-ANON-KEY-001)
+# or (b) references a tenant-shaped column (venture_id/tenant_id/org_id/company_id/
+# portfolio_id/account_id) without binding it to auth.uid()/auth.jwt() (the feedback-table
+# incident, this SD) -- both real, first-hand recurrences of the same bug class. A
+# pre-existing backlog (scanned advisory-only via --all, never blocking) is NOT retroactively
+# enforced here -- this lint's job is to stop NEW non-compliant policies, matching the
+# session-coordination-insert-classguard-lint.yml precedent's own bounded-scope posture.
+#
+# GENUINELY BLOCKING (no continue-on-error): mirrors session-coordination-insert-
+# classguard-lint.yml's own rationale -- this repo's `npm run lint` is not invoked by any
+# other CI workflow, so a dedicated workflow is the real enforcement mechanism.
+
+on:
+  pull_request:
+    paths:
+      - 'database/migrations/**/*.sql'
+      - 'scripts/lint/rls-anon-tenant-predicate-lint.mjs'
+      - '.github/workflows/rls-anon-tenant-predicate-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rls-anon-tenant-predicate-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Detect new anon-role RLS policies with insufficient tenant predicates
+        run: node scripts/lint/rls-anon-tenant-predicate-lint.mjs

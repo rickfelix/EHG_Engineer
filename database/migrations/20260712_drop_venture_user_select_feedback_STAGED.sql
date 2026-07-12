@@ -1,0 +1,55 @@
+-- SD-APEXNICHE-AI-MAN-FIX-FIX-CROSS-TENANT-001 FR-3
+-- @approved-by: codestreetlabs@gmail.com
+--
+-- ================================================================
+-- STAGED -- NOT APPLIED BY THIS SD. See "Apply runbook" below.
+-- ================================================================
+--
+-- Drops venture_user_select_feedback, the anon-role SELECT RLS policy on
+-- public.feedback whose USING clause `(feedback_type LIKE 'user_%' AND
+-- venture_id IS NOT NULL)` scopes by TYPE but not by CALLER VENTURE -- any
+-- holder of the public anon key (embedded in every venture client bundle)
+-- can read every venture's user-submitted feedback (title, description,
+-- metadata) via GET /rest/v1/feedback?feedback_type=like.user_*, not just
+-- their own. This is the actual security fix; FR-1's check_feedback_duplicate
+-- RPC (already applied) and FR-2's ehg-repo client migration (PR #758) exist
+-- SOLELY to remove the one legitimate caller this policy served, so it is
+-- safe to drop.
+--
+-- WHY STAGED, NOT APPLIED HERE:
+-- LEAD-phase grounding confirmed ehg/src/integrations/feedback/
+-- feedbackDataAccess.ts (the sole intended consumer, per its own header
+-- comment) has ZERO live importers in the ehg repo today -- the sibling -E3
+-- UI layer it was built for has not shipped. That means the practical
+-- production-breakage risk of applying this migration immediately is very
+-- low. It is still kept staged rather than auto-applied because:
+--   (a) this is a live, irreversible-in-spirit RLS change on a shared
+--       production table -- a DROP POLICY is cheap to write, not cheap to
+--       have been WRONG about;
+--   (b) LEAD-phase grounding on this SD needed two rounds of correction
+--       already (the SD's own premise named the wrong client repo/file;
+--       a further pass found the RPC's original boolean return type would
+--       have silently broken submitFeedback()'s real contract) -- a third,
+--       final human/chairman checkpoint before an irreversible DROP is the
+--       appropriately humble choice given that track record, even under
+--       standing AUTO-PROCEED authorization for additive/lower-risk work;
+--   (c) matches this repo's own established chairman-gated-and-staged
+--       migration precedent for exactly this risk class.
+--
+-- APPLY RUNBOOK (for whoever applies this):
+--   1. Confirm ehg PR #758 (or its successor) is merged AND deployed to
+--      production (check the ehg repo's live main branch / deploy status,
+--      not just "PR merged" -- confirm the actual production bundle is
+--      running the RPC-based client, not the pre-migration raw-SELECT code).
+--   2. Re-run the exposure check this SD's own RCA used (see
+--      SD-APEXNICHE-AI-MAN-FIX-FIX-CROSS-TENANT-001's description) to
+--      confirm no NEW anon-role consumer of this policy has appeared since
+--      LEAD-phase grounding.
+--   3. Apply this file via the standard apply-migration.js --prod-deploy
+--      flow (git-committed + token + @approved-by guards already satisfied
+--      by this file's own header -- re-issue a fresh token, the one used
+--      for FR-1 is single-use/1h-TTL).
+--   4. Re-verify: GET /rest/v1/feedback?feedback_type=like.user_* with only
+--      the anon key returns 0 rows.
+
+DROP POLICY IF EXISTS venture_user_select_feedback ON public.feedback;
