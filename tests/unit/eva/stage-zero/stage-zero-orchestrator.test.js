@@ -37,11 +37,15 @@ vi.mock('../../../../lib/eva/stage-zero/path-router.js', () => ({
   listDiscoveryStrategies: vi.fn().mockReturnValue([]),
 }));
 
-// Mock chairman-review
-vi.mock('../../../../lib/eva/stage-zero/chairman-review.js', () => ({
-  conductChairmanReview: vi.fn(),
-  persistVentureBrief: vi.fn(),
-}));
+// Mock chairman-review. QF-20260712-860: spread importOriginal() so every real export
+// (WipLimitExceededError, WIP_LIMIT_CONFIG_KEY, TEST_FIXTURE_NAME_PREFIXES, and any future
+// addition) forwards through — an object-literal factory silently drops later-added exports,
+// which a full-suite-scale vitest isolation-reset race can then expose as a cross-file
+// undefined-import TypeError in an unrelated test file (RCA-confirmed, agentId a3eb2631b99a57084).
+vi.mock('../../../../lib/eva/stage-zero/chairman-review.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, conductChairmanReview: vi.fn(), persistVentureBrief: vi.fn() };
+});
 
 // Mock synthesis
 vi.mock('../../../../lib/eva/stage-zero/synthesis/index.js', () => ({
