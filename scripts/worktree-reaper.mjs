@@ -298,10 +298,16 @@ function getSupabaseClient() {
 async function loadClaimMap(supabase, { heartbeatThresholdMs = 2 * 60 * 60 * 1000, repoRoot = process.cwd() } = {}) {
   const map = new Map();
   if (!supabase) return map;
+  // SD-FDBK-FIX-WORKTREE-REAPER-DESTROYED-001 (FR-4, DATABASE 302bb2c7): do NOT gate on
+  // computed_status='active'. computed_status flips to 'idle' the instant a live session's
+  // sd_key reads NULL (a claim clear→reset window) and to 'stale' at heartbeat>600s — both
+  // would DROP a still-live session's row from the claim map, un-protecting its worktree.
+  // Select every non-released session (the view already excludes released) and filter for
+  // liveness by the heartbeat threshold in the loop below.
   const { data, error } = await supabase
     .from('v_active_sessions')
     .select('session_id, sd_key, qf_id, current_branch, heartbeat_at, computed_status')
-    .eq('computed_status', 'active');
+    .or('sd_key.not.is.null,qf_id.not.is.null');
   if (error) {
     throw new Error(
       `[reaper] loadClaimMap query failed: ${error.message}` +
@@ -322,7 +328,8 @@ async function loadClaimMap(supabase, { heartbeatThresholdMs = 2 * 60 * 60 * 100
     return m ? m[1] : null;
   }
   for (const row of data) {
-    if (row.computed_status && row.computed_status !== 'active') continue;
+    // FR-4: liveness is decided by heartbeat freshness ONLY (not computed_status), so a
+    // churning-but-live session (momentarily 'idle'/'stale') is retained and protected.
     if (row.heartbeat_at) {
       const hb = new Date(row.heartbeat_at).getTime();
       if (Number.isFinite(hb) && now - hb > heartbeatThresholdMs) continue;
@@ -333,7 +340,12 @@ async function loadClaimMap(supabase, { heartbeatThresholdMs = 2 * 60 * 60 * 100
       session_id: row.session_id,
       heartbeat_at: row.heartbeat_at,
     };
-    if (row.sd_key) addCandidate(path.join(worktreesDir, row.sd_key), info);
+    if (row.sd_key) {
+      // FR-2: a self-claimed QF lives in sd_key (qf_id NULL). Derive BOTH the flat
+      // .worktrees/<key> AND, for a QF-shaped key, the real typed .worktrees/qf/<key>.
+      addCandidate(path.join(worktreesDir, row.sd_key), info);
+      if (/^QF-/i.test(row.sd_key)) addCandidate(path.join(worktreesDir, 'qf', row.sd_key), info);
+    }
     if (row.qf_id) addCandidate(path.join(worktreesDir, 'qf', row.qf_id), info);
     const branchBase = branchToBasename(row.current_branch);
     if (branchBase) {
@@ -374,10 +386,12 @@ async function loadClaimedKeySet(supabase) {
   const set = new Set();
   if (!supabase) return set;
   try {
+    // FR-4: identity + non-released, not computed_status='active' (which drops a
+    // churning-but-live session whose sd_key momentarily reads NULL → 'idle').
     const { data } = await supabase
       .from('v_active_sessions')
       .select('sd_key, qf_id, computed_status')
-      .eq('computed_status', 'active');
+      .or('sd_key.not.is.null,qf_id.not.is.null');
     for (const r of data || []) {
       if (r.sd_key) set.add(r.sd_key);
       if (r.qf_id) set.add(r.qf_id);
@@ -981,9 +995,24 @@ function runPhantomOnlyMode({ repoRoot, worktrees }) {
  * @returns {Promise<object>} the runOrphanSweep result
  */
 async function runAndReportOrphanSweep({ repoRoot, worktreesDir, supabase, execute }) {
-  const owners = supabase ? await loadClaimMap(supabase).catch(() => new Map()) : new Map();
+  // SD-FDBK-FIX-WORKTREE-REAPER-DESTROYED-001 (FR-3, RCA 7c61d78f): loadClaimMap was
+  // hardened to THROW on query error (QF-20260510-WT-CLAIM-PROTECT-001), but the prior
+  // `.catch(() => new Map())` here swallowed that throw back into an EMPTY owner set —
+  // resurrecting the exact silent fail-open, so the sweep would reclaim EVERYTHING. Fail
+  // CLOSED: if the claim map cannot be built, force DRY-RUN (reclaim nothing), mirroring
+  // the Supabase-unavailable branch below. An unverifiable owner set must never widen removal.
+  let owners = new Map();
+  let claimMapFailed = false;
+  if (supabase) {
+    try {
+      owners = await loadClaimMap(supabase);
+    } catch (e) {
+      claimMapFailed = true;
+      console.log(`🧹 Orphan sweep: claim-map build FAILED (${e?.message || e}) — forcing DRY-RUN (cannot verify active-claim ownership; refusing to reclaim).`);
+    }
+  }
   const liveOwners = new Set([...owners.keys()]);
-  const effectiveExecute = execute && !!supabase;
+  const effectiveExecute = execute && !!supabase && !claimMapFailed;
   if (execute && !supabase) {
     console.log('🧹 Orphan sweep: Supabase unavailable — running DRY-RUN (cannot verify active-claim ownership).');
   }
