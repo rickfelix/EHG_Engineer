@@ -22,7 +22,7 @@ import { it, expect, beforeAll, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { describeDb, HAS_REAL_DB } from '../helpers/db-available.js';
+import { describeDb, itDb, HAS_REAL_DB } from '../helpers/db-available.js';
 import createDatabaseClient from '../../lib/supabase-connection.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -95,5 +95,31 @@ describeDb('create_or_replace_session metadata merge (SD-LEO-INFRA-FIX-CREATE-RE
     );
     // ... and must NOT contain the old replace assignment.
     expect(sql).not.toMatch(/metadata\s*=\s*EXCLUDED\.metadata\s*,/);
+  });
+
+  // SD-FDBK-FIX-FLEET-WIDE-CLAUDE-001 (FR-2): the two tests above only ever prove the
+  // MIGRATION FILE's logic is correct — the first re-applies it inside a transaction it
+  // always ROLLS BACK ("independent of whether prod has been upgraded yet", per its own
+  // top-of-file comment), and the second inspects the file's text, not the DB. Neither can
+  // detect a "migration written but never deployed" gap — which is exactly what caused the
+  // fleet-wide claude_sessions.metadata clobber incident this SD fixes: this migration
+  // (SD-LEO-INFRA-FIX-CREATE-REPLACE-001, dated 20260614) sat correct-but-undeployed for
+  // weeks while the LIVE create_or_replace_session function still ran the old
+  // `metadata = EXCLUDED.metadata` wholesale replace. This test queries the ACTUAL deployed
+  // function body (pg_get_functiondef, no transaction/rollback) so a future regression of
+  // "the fix exists in git but isn't live" is caught, not just "the fix's SQL text is
+  // correct".
+  itDb('live-deployed-state guard: the DEPLOYED create_or_replace_session actually merges metadata (not just the migration file)', async () => {
+    const { rows } = await client.query(
+      `SELECT pg_get_functiondef(oid) AS def
+         FROM pg_proc
+        WHERE proname = 'create_or_replace_session'`
+    );
+    expect(rows).toHaveLength(1);
+    const deployedDef = rows[0].def;
+    expect(deployedDef).toMatch(
+      /metadata\s*=\s*COALESCE\(\s*claude_sessions\.metadata[\s\S]*\|\|[\s\S]*EXCLUDED\.metadata/
+    );
+    expect(deployedDef).not.toMatch(/metadata\s*=\s*EXCLUDED\.metadata\s*,/);
   });
 });
