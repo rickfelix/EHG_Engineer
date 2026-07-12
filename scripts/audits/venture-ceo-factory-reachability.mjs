@@ -8,19 +8,41 @@
  *
  * Usage: node scripts/audits/venture-ceo-factory-reachability.mjs
  */
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-/** git grep -n, extended regex. Returns [] on no-match (git grep exits 1), throws on real errors. */
+// This audit's own artifacts must never feed back into its own trace: the persisted verdict
+// JSON embeds raw grep hit text (which literally contains tokens like ".commitStageTransition(")
+// and this script's own verdict narrative strings contain those same tokens. Without excluding
+// them, each rerun re-greps its own prior output -- a self-referential fixpoint that never
+// converges and fabricates false "live" hits out of the audit's own reporting.
+const SELF_ARTIFACTS = [
+  'scripts/audits/venture-ceo-factory-reachability.mjs',
+  'docs/audits/venture-ceo-factory-reachability-verdict.json',
+  'tests/unit/audits/venture-ceo-factory-reachability.test.js',
+];
+
+/** git grep -n, extended regex, excluding this audit's own artifacts. Returns [] on no-match. */
 function gitGrep(pattern, repoRoot) {
+  // execFileSync passes argv directly (no shell), so pathspecs need no quoting -- this is the
+  // fix for a real bug: the previous execSync + shell-quoted pathspec string broke under
+  // cmd.exe (which does not strip single quotes), causing "Invalid path" and a crashed run.
+  const excludePathspecs = SELF_ARTIFACTS.map((p) => `:!${p}`);
+  const args = ['grep', '-n', '-E', pattern, '--', '.', ...excludePathspecs];
   try {
-    const out = execSync(`git grep -n -E "${pattern}"`, { cwd: repoRoot, maxBuffer: 10 * 1024 * 1024 }).toString();
-    return out.split('\n').filter(Boolean).map((line) => {
-      const idx = line.indexOf(':');
-      const idx2 = line.indexOf(':', idx + 1);
-      return { file: line.slice(0, idx).replace(/\\/g, '/'), line: Number(line.slice(idx + 1, idx2)), text: line.slice(idx2 + 1).trim() };
-    });
+    const out = execFileSync('git', args, { cwd: repoRoot, maxBuffer: 10 * 1024 * 1024 }).toString();
+    return out
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const idx = line.indexOf(':');
+        const idx2 = line.indexOf(':', idx + 1);
+        return { file: line.slice(0, idx).replace(/\\/g, '/'), line: Number(line.slice(idx + 1, idx2)), text: line.slice(idx2 + 1).trim() };
+      })
+      // Belt-and-suspenders: even if a future SELF_ARTIFACTS edit lags a file rename, never
+      // let this audit's own artifacts count as evidence.
+      .filter((hit) => !SELF_ARTIFACTS.includes(hit.file));
   } catch (e) {
     if (e.status === 1) return [];
     throw e;
@@ -116,7 +138,7 @@ export function runAudit(repoRoot) {
 }
 
 function main() {
-  const repoRoot = execSync('git rev-parse --show-toplevel').toString().trim();
+  const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel']).toString().trim();
   const record = runAudit(repoRoot);
   const outPath = path.join(repoRoot, 'docs/audits/venture-ceo-factory-reachability-verdict.json');
   writeFileSync(outPath, JSON.stringify(record, null, 2) + '\n');

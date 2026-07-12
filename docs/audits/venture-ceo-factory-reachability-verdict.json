@@ -1,7 +1,7 @@
 {
   "sd_key": "SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-G",
   "prd_id": "PRD-SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-G",
-  "generated_at": "2026-07-12T15:36:31.889Z",
+  "generated_at": "2026-07-12T15:48:19.674Z",
   "verdict": "RETIRE",
   "verdict_rationale": "Both FR-1 (CEO-factory instantiation) and FR-2 (CEO-authority stage-advancement gate) are unreachable from any live production path -- the CEO-agent org layer is seed-or-theater, not exercised machinery. Per architecture doc S3.6, a RETIRE verdict shrinks phase (b) substantially; phase (b) scope should be resized (or descoped) in a follow-on SD rather than building full lifecycle machinery against dead code.",
   "s20_26_cross_check": "docs/design/spine-system-architecture-review.md:16 -- \"the venture state machine IS live -- the EVA orchestrator drives stage transitions through it today... stages run through workers; the org layer is decorative at run level\" -- independently corroborates FR-2 (simulated S20-26 run observation).",
