@@ -29,7 +29,7 @@ const STATE_SCHEMA_VERSION = 1;
 // SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001 (FR-002): pool-utilization watchdog.
 // Mirrors lib/worktree-quota.js::MAX_WORKTREE_COUNT (kept in sync; the .cjs tick
 // cannot `require` the ESM quota module, so the cap is duplicated as a constant).
-const MAX_WORKTREE_COUNT = 20;
+const MAX_WORKTREE_COUNT = 28;
 const DEFAULT_POOL_THRESHOLD = 0.8;
 
 function readState(statePath) {
