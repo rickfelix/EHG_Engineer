@@ -35,6 +35,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 import { shouldBlockKillApproval } from '../lib/eva/kill-override-guard.js';
+import { onDecisionApproved } from '../lib/eva/lifecycle/exit-wiring.js';
 
 // ── Argument Parsing ──────────────────────────────────────────
 
@@ -269,7 +270,7 @@ async function approveDecision(supabase, decisionId) {
   // Check current status
   const { data: existing, error: fetchErr } = await supabase
     .from('chairman_decisions')
-    .select('id, status, venture_id, lifecycle_stage, brief_data')
+    .select('id, status, venture_id, lifecycle_stage, brief_data, decision_type')
     .eq('id', decisionId)
     .single();
 
@@ -320,6 +321,17 @@ async function approveDecision(supabase, decisionId) {
   }
   console.log(`  Venture: ${existing.venture_id}`);
   console.log(`  Stage: ${existing.lifecycle_stage}\n`);
+
+  // SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-H: on approval of a thesis-kill decision,
+  // create a PENDING exit-init marker only — never approves/advances execute-exit itself.
+  const wiring = await onDecisionApproved({ supabase, decision: { ...existing, rationale } });
+  if (wiring.acted) {
+    console.log(
+      wiring.created
+        ? `  ➡️  Exit-init marker created (venture ${existing.venture_id} ready for manual chairman exit execution)\n`
+        : `  ⚠️  Exit-init marker write failed (non-fatal, approval still stands): ${wiring.reason}\n`,
+    );
+  }
 }
 
 async function rejectDecision(supabase, decisionId) {
