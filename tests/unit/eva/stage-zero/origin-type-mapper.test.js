@@ -20,4 +20,14 @@ describe('toVentureOriginType', () => {
     expect(toVentureOriginType(undefined)).toBeUndefined();
     expect(toVentureOriginType(null)).toBeNull();
   });
+
+  // Adversarial review (deep-tier ship gate): a plain object literal's bracket lookup walks
+  // the prototype chain, so an originType equal to an Object.prototype key would otherwise
+  // resolve to an inherited function/object instead of passing through unchanged.
+  it('passes through Object.prototype-colliding strings unchanged (no prototype-chain leak)', () => {
+    expect(toVentureOriginType('constructor')).toBe('constructor');
+    expect(toVentureOriginType('toString')).toBe('toString');
+    expect(toVentureOriginType('hasOwnProperty')).toBe('hasOwnProperty');
+    expect(toVentureOriginType('__proto__')).toBe('__proto__');
+  });
 });
