@@ -1,13 +1,24 @@
 /**
  * SD-APEXNICHE-AI-MAN-FIX-FIX-CROSS-TENANT-001 FR-4 — RLS anon-role
  * tenant-predicate-sufficiency lint.
+ * Extended to the authenticated role by SD-LEO-FIX-FINGERPRINT-CRITICAL-SECURITY-001 FR-3.
  *
- * Pins detection of BOTH real historical instances of this bug class:
+ * Pins detection of all real historical instances of this bug class:
  *   - companies table (SD-LEO-GEN-SCOPE-ANON-KEY-001): USING (true), a
  *     blanket unconditional anon SELECT.
- *   - feedback table (this SD): USING references venture_id but never binds
- *     it to the caller's identity.
- * And confirms a properly-scoped policy passes clean.
+ *   - feedback table anon policy (SD-APEXNICHE-AI-MAN-FIX-FIX-CROSS-TENANT-001):
+ *     USING references venture_id but never binds it to the caller's identity.
+ *   - feedback table authenticated policy, pre-fix shape
+ *     (SD-FDBK-FIX-FEEDBACK-SELECT-FEEDBACK-001): USING (true), unconditional
+ *     for any logged-in user -- the lint's anon-only scope originally missed
+ *     this class entirely.
+ *   - feedback table authenticated policy, post-first-fix shape
+ *     (SD-LEO-FIX-FINGERPRINT-CRITICAL-SECURITY-001): venture_id referenced
+ *     but not caller-bound -- same unbound_tenant_predicate shape as the anon
+ *     instance, just on the authenticated role.
+ * And confirms properly-scoped policies (auth.uid(), auth.jwt(), and the
+ * fn_user_has_venture_access/fn_user_has_company_access SECURITY DEFINER
+ * helper idiom) pass clean.
  */
 import { describe, it, expect } from 'vitest';
 import { extractPolicies, classifyViolation, lintSql } from '../../../scripts/lint/rls-anon-tenant-predicate-lint.mjs';
@@ -95,9 +106,44 @@ describe('classifyViolation — the two real historical instance shapes', () => 
     expect(classifyViolation(p)).toBeNull();
   });
 
-  it('does not flag a non-anon-role policy (e.g. authenticated qual=true)', () => {
+  it('AC (FR-3): flags an authenticated-role unconditional USING (true) (the feedback-table pre-fix shape, SD-FDBK-FIX-FEEDBACK-SELECT-FEEDBACK-001)', () => {
     const [p] = extractPolicies(
       'CREATE POLICY select_feedback_policy ON public.feedback FOR SELECT TO authenticated USING (true);'
+    );
+    expect(classifyViolation(p)).toBe('unconditional_anon_select');
+  });
+
+  it('AC (FR-3): flags an authenticated-role policy referencing a tenant column without caller-binding (this SD\'s own finding)', () => {
+    const [p] = extractPolicies(
+      'CREATE POLICY select_feedback_policy ON public.feedback FOR SELECT TO authenticated USING (feedback_type LIKE \'user_%\' AND venture_id IS NOT NULL);'
+    );
+    expect(classifyViolation(p)).toBe('unbound_tenant_predicate');
+  });
+
+  it('AC (FR-3): does NOT flag an authenticated-role policy bound via fn_user_has_venture_access (this SD\'s own fix)', () => {
+    const [p] = extractPolicies(
+      "CREATE POLICY select_feedback_policy ON public.feedback FOR SELECT TO authenticated USING (feedback_type LIKE 'user_%' AND venture_id IS NOT NULL AND fn_user_has_venture_access(venture_id));"
+    );
+    expect(classifyViolation(p)).toBeNull();
+  });
+
+  it('AC (FR-3): does NOT flag a policy bound via a user_company_access join subquery referencing auth.uid()', () => {
+    const [p] = extractPolicies(
+      'CREATE POLICY good ON public.modeling_requests FOR SELECT TO authenticated USING (company_id IN (SELECT company_id FROM user_company_access WHERE user_id = auth.uid() AND is_active));'
+    );
+    expect(classifyViolation(p)).toBeNull();
+  });
+
+  it('AC (FR-3): does NOT flag a policy bound via the JWT venture_id claim idiom', () => {
+    const [p] = extractPolicies(
+      "CREATE POLICY good ON public.ops_table FOR SELECT TO authenticated USING (venture_id = (auth.jwt()->'app_metadata'->>'venture_id')::uuid);"
+    );
+    expect(classifyViolation(p)).toBeNull();
+  });
+
+  it('does not flag a role not in the scoped set (e.g. service_role)', () => {
+    const [p] = extractPolicies(
+      'CREATE POLICY svc ON public.feedback FOR SELECT TO service_role USING (true);'
     );
     expect(classifyViolation(p)).toBeNull();
   });
