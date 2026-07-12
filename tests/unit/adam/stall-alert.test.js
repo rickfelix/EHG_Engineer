@@ -393,6 +393,205 @@ describe('QF-20260710-818: dismissed stall digest cooldown (no immediate respawn
   });
 });
 
+describe('SD-LEO-INFRA-STALL-CLASSIFIER-HELD-STATE-001 (FR-1): board status=blocked is an intended hold for every source_kind', () => {
+  const sb = {};
+
+  it('TS-1: a sourced_sd node with status=blocked and no held metadata never escalates', async () => {
+    const parents = [{
+      id: 'sd5', title: 'Solomon-gated design queue item', updated_at: 'fixed', status: 'blocked',
+      source_kind: 'sourced_sd', source_ref: 'SD-GATED-001', inFlightNextStep: false,
+    }];
+    const prevSnapshot = { sd5: { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 } };
+
+    const { alerted } = await checkAndAlertStalls(sb, parents, prevSnapshot);
+
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+    expect(setStatus).not.toHaveBeenCalled();
+    expect(alerted).toEqual([]);
+  });
+
+  it('TS-2: an advisory_thread node with status=blocked never escalates and is not closed', async () => {
+    const parents = [{
+      id: 'at1', title: 'Belt QF held', updated_at: 'fixed', status: 'blocked',
+      source_kind: 'advisory_thread', source_ref: 'some-correlation', inFlightNextStep: false,
+    }];
+    const prevSnapshot = { at1: { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 } };
+
+    const stubSb = sbWithCorrelationState({ hasReply: false, hasRatifiedDecision: false });
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+
+    expect(setStatus).not.toHaveBeenCalled();
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+    expect(alerted).toEqual([]);
+  });
+
+  it('a node with no source_kind at all (bare status=blocked) is still suppressed', async () => {
+    const parents = [{ id: 'x1', title: 'Fable-gated item', updated_at: 'fixed', status: 'blocked', inFlightNextStep: false }];
+    const prevSnapshot = { x1: { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 } };
+
+    const { alerted } = await checkAndAlertStalls(sb, parents, prevSnapshot);
+
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+    expect(alerted).toEqual([]);
+  });
+
+  it('regression: the retired literal suppression string is gone from the source', async () => {
+    const fs = await import('node:fs');
+    const src = fs.readFileSync(new URL('../../../lib/adam/stall-alert.js', import.meta.url), 'utf8');
+    expect(src).not.toContain('Suppressing stall alert for held manual node');
+  });
+});
+
+describe('SD-LEO-INFRA-STALL-CLASSIFIER-HELD-STATE-001 (FR-2): claimed-and-progressing SD never stalls', () => {
+  function sbWithSdProgress({ claimingSessionId, claimHistory = [], handoffs = [] } = {}) {
+    return {
+      from(table) {
+        if (table === 'strategic_directives_v2') {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: { id: 'sd-uuid-1', claiming_session_id: claimingSessionId, metadata: { claim_history: claimHistory } },
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === 'sd_phase_handoffs') {
+          return {
+            select: () => ({
+              eq: () => ({
+                order: () => ({
+                  limit: async () => ({ data: handoffs }),
+                }),
+              }),
+            }),
+          };
+        }
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) };
+      },
+    };
+  }
+
+  const prevSnapshot = { sdp1: { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 } };
+  const parents = [{
+    id: 'sdp1', title: 'Dispatch-auth phase-2 build', updated_at: 'fixed',
+    source_kind: 'sourced_sd', source_ref: 'SD-PROGRESSING-001', inFlightNextStep: false,
+  }];
+
+  it('TS-4: a fresh claim_history entry suppresses the stall even at the exact stale threshold', async () => {
+    const stubSb = sbWithSdProgress({
+      claimingSessionId: 'sess-live',
+      claimHistory: [{ claimed_at: new Date().toISOString(), session_id: 'sess-live' }],
+    });
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+    expect(alerted).toEqual([]);
+  });
+
+  it('TS-5: a fresh sd_phase_handoffs row (no recent claim_history) also suppresses the stall', async () => {
+    const stubSb = sbWithSdProgress({
+      claimingSessionId: 'sess-live',
+      claimHistory: [{ claimed_at: new Date(Date.now() - 60 * 60_000).toISOString(), session_id: 'sess-live' }],
+      handoffs: [{ created_at: new Date().toISOString() }],
+    });
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+    expect(alerted).toEqual([]);
+  });
+
+  it('an SD with no active claim is unaffected and still escalates', async () => {
+    const stubSb = sbWithSdProgress({ claimingSessionId: null });
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+    expect(recordPendingDecision).toHaveBeenCalledTimes(1);
+    expect(alerted).toEqual([{ id: 'sdp1', title: 'Dispatch-auth phase-2 build', escalated: true }]);
+  });
+
+  it('a claim/handoff outside the progress window does not suppress — still escalates', async () => {
+    const stubSb = sbWithSdProgress({
+      claimingSessionId: 'sess-stale',
+      claimHistory: [{ claimed_at: new Date(Date.now() - 60 * 60_000).toISOString(), session_id: 'sess-stale' }],
+      handoffs: [{ created_at: new Date(Date.now() - 60 * 60_000).toISOString() }],
+    });
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+    expect(recordPendingDecision).toHaveBeenCalledTimes(1);
+    expect(alerted).toEqual([{ id: 'sdp1', title: 'Dispatch-auth phase-2 build', escalated: true }]);
+  });
+
+  it('TS-6: a DB error inside the progress check degrades to "not progressing" — never silently swallows a real stall', async () => {
+    const throwingSb = {
+      from(table) {
+        if (table === 'strategic_directives_v2') {
+          return { select: () => ({ eq: () => ({ maybeSingle: async () => { throw new Error('boom'); } }) }) };
+        }
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) };
+      },
+    };
+    const { alerted } = await checkAndAlertStalls(throwingSb, parents, prevSnapshot);
+    expect(recordPendingDecision).toHaveBeenCalledTimes(1);
+    expect(alerted).toEqual([{ id: 'sdp1', title: 'Dispatch-auth phase-2 build', escalated: true }]);
+  });
+});
+
+describe('SD-LEO-INFRA-STALL-CLASSIFIER-HELD-STATE-001 (FR-3): dismissal cooloff survives set-membership drift', () => {
+  function sbWithDismissedDigest(dismissedDigest) {
+    return {
+      from(table) {
+        if (table !== 'chairman_decisions') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) };
+        return {
+          select: () => ({
+            eq: () => ({ like: () => ({ order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }) }) }),
+            neq: () => ({ like: () => ({ order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: dismissedDigest }) }) }) }) }),
+          }),
+        };
+      },
+    };
+  }
+
+  it('TS-7 (reproduces 12fe548f -> b4c46dc9 verbatim): an identical re-check of a dismissed 6-node set files nothing new', async () => {
+    const nodeIds = ['e945b024', 'b9e14859', 'ec603e38', '3e170e0e', '142cd353', '1dba6cf3'];
+    const stubSb = sbWithDismissedDigest({
+      id: 'dec-12fe548f', brief_data: { context: { node_ids: nodeIds } }, updated_at: new Date().toISOString(),
+    });
+    const parents = nodeIds.map((id) => ({ id, title: `Thread ${id}`, updated_at: 'fixed', inFlightNextStep: false }));
+    const prevSnapshot = Object.fromEntries(nodeIds.map((id) => [id, { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 }]));
+
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+
+    expect(recordPendingDecision).not.toHaveBeenCalled();
+    expect(alerted).toHaveLength(6);
+    expect(alerted.every((a) => a.escalated === false)).toBe(true);
+  });
+
+  it('TS-8: dismissed set [A,B,C] plus new node D inside cooloff -- only D surfaces as a delta', async () => {
+    const stubSb = sbWithDismissedDigest({
+      id: 'dec-old', brief_data: { context: { node_ids: ['A', 'B', 'C'] } }, updated_at: new Date().toISOString(),
+    });
+    const parents = ['A', 'B', 'C', 'D'].map((id) => ({ id, title: `Thread ${id}`, updated_at: 'fixed', inFlightNextStep: false }));
+    const prevSnapshot = Object.fromEntries(['A', 'B', 'C', 'D'].map((id) => [id, { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 }]));
+
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+
+    expect(recordPendingDecision).toHaveBeenCalledTimes(1);
+    const call = recordPendingDecision.mock.calls[0][1];
+    expect(call.context.node_ids).toEqual(['D']);
+
+    const byId = Object.fromEntries(alerted.map((a) => [a.id, a.escalated]));
+    expect(byId).toEqual({ A: false, B: false, C: false, D: true });
+  });
+
+  it('TS-9: no prior dismissal at all -- full escalation is unchanged from today', async () => {
+    const stubSb = sbWithDismissedDigest(null);
+    const parents = [{ id: 'p9', title: 'Stuck thread', updated_at: 'fixed', inFlightNextStep: false }];
+    const prevSnapshot = { p9: { updated_at: 'fixed', ticks: DEFAULT_STALE_TICKS - 1 } };
+
+    const { alerted } = await checkAndAlertStalls(stubSb, parents, prevSnapshot);
+
+    expect(recordPendingDecision).toHaveBeenCalledTimes(1);
+    expect(alerted).toEqual([{ id: 'p9', title: 'Stuck thread', escalated: true }]);
+  });
+});
+
 describe('QF-20260703-860: supersede the open stall digest instead of inserting per tick', () => {
   it('3 ticks against a persistent stale thread: exactly ONE recordPendingDecision insert, later ticks refresh the same row via update+re-attempted escalation (which dedupes)', async () => {
     const stubSb = makeStallDigestSupabase();
