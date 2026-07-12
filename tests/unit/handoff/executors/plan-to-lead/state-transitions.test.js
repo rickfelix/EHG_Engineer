@@ -144,7 +144,10 @@ describe('satisfyOrchestratorTemplateRequirements', () => {
     expect(result.satisfied).toBe(true);
     expect(result.created).toContain('retrospective');
     expect(insertFn).toHaveBeenCalledOnce();
-    expect(insertFn.mock.calls[0][0].retro_type).toBe('orchestrator_completion');
+    // SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001: must be the canonical completion
+    // type — 'orchestrator_completion' was invisible to retro-filters.js and the
+    // LEAD-FINAL-APPROVAL RETROSPECTIVE_EXISTS gate.
+    expect(insertFn.mock.calls[0][0].retro_type).toBe('SD_COMPLETION');
   });
 
   it('should create both when both missing', async () => {
