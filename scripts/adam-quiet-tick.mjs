@@ -176,6 +176,16 @@ export async function checkVentureTraversalStalls(sb, priorSnapshot = {}) {
 // NEVER read_at/acknowledged_at). Fail-soft: any error returns items:[] without aborting.
 const TICK_SURFACE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
+// SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-5 (instance 6, INBOX_CAP overflow):
+// the raw fetch and the DISPLAY budget were previously the SAME number (50) — a burst of
+// mechanical rows (ADAM_EXCLUDED_KINDS) consumed the entire raw fetch before the mechanical
+// filter ever ran client-side, starving genuinely authored items out of the window all day.
+// Split them: fetch a generous raw window (matches correlationWindow's existing .limit(400)
+// precedent a few lines below), filter mechanical rows out FIRST, THEN cap the display at 50 —
+// so mechanical noise can no longer crowd out authored content regardless of burst size.
+const INBOX_RAW_FETCH_LIMIT = 400;
+const INBOX_DISPLAY_CAP = 50;
+
 export async function surfaceInboxItems(sb) {
   try {
     const { resolveAdamSessionId } = require('./read-adam-directives.cjs');
@@ -192,7 +202,7 @@ export async function surfaceInboxItems(sb) {
       .is('acknowledged_at', null)
       .gte('created_at', cutoffIso)
       .order('created_at', { ascending: true })
-      .limit(50);
+      .limit(INBOX_RAW_FETCH_LIMIT);
     if (error) return { items: [], directives: 0, error: error.message };
 
     // SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 (closure map class C6): a directive's
@@ -215,13 +225,21 @@ export async function surfaceInboxItems(sb) {
     const eligible = (rows || []).filter((r) => {
       const k = r.payload && r.payload.kind;
       if (k != null && ADAM_EXCLUDED_KINDS.includes(k)) return false;
-      if (isDirectiveRow(r)) return !hasCorrelatedReply(r, correlationWindow || []);
+      // SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-4 (instance 3): a courtesy-ACK
+      // (kind='ack'/'coordinator_ack', already excluded from Adam's own inbox above) echoing
+      // this directive's correlation_id must never suppress the eventual genuine reply/verdict.
+      if (isDirectiveRow(r)) return !hasCorrelatedReply(r, correlationWindow || [], { excludeKinds: ADAM_EXCLUDED_KINDS });
       return !(r.payload && r.payload.tick_surfaced_at);
     });
-    const capHit = (rows || []).length === 50;
+    // FR-5: capHit now reflects a genuine authored-item backlog exceeding the display budget
+    // (eligible.length > cap) OR the raw fetch itself being truncated (rows.length hit its own
+    // higher ceiling) -- NOT "the raw window happened to contain 50 rows," which previously gave
+    // a false CAP signal even when every one of those 50 rows was mechanical noise (eligible:[]).
+    const capHit = eligible.length > INBOX_DISPLAY_CAP || (rows || []).length === INBOX_RAW_FETCH_LIMIT;
     if (eligible.length === 0) return { items: [], directives: 0, capHit };
 
-    const items = eligible.map((r) => {
+    const surfaced = eligible.slice(0, INBOX_DISPLAY_CAP);
+    const items = surfaced.map((r) => {
       const k = (r.payload && r.payload.kind) || '(untyped)';
       const isDirective = isDirectiveRow(r);
       const ageMin = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
@@ -232,7 +250,7 @@ export async function surfaceInboxItems(sb) {
     // Stamp the dedup marker on ITEM-class rows only (visibility marker — the row stays
     // unread/unacked-recoverable; directives are deliberately never marked).
     const seenAt = new Date().toISOString();
-    for (const r of eligible.filter((x) => !isDirectiveRow(x) && !(x.payload && x.payload.tick_surfaced_at))) {
+    for (const r of surfaced.filter((x) => !isDirectiveRow(x) && !(x.payload && x.payload.tick_surfaced_at))) {
       await sb.from('session_coordination').update({ payload: { ...(r.payload || {}), tick_surfaced_at: seenAt } }).eq('id', r.id);
     }
     return { items, directives: items.filter((i) => i.isDirective).length, capHit };
@@ -364,7 +382,7 @@ async function main() {
       `nextWakeSeconds=${delaySeconds} :: ${modeReason}`
     );
     if (delta.changed) {
-      console.log(`QUIET_TICK_PING=adam->coordinator reason=${delta.fields.join(',')} (real delta — offer help / sourcing)`);
+      console.log(`QUIET_TICK_PING=adam->coordinator reason=${delta.fields.join(',')} (real delta — offer help / sourcing; if sending a subject-only stub ping, stamp payload.kind='cross_party_ping' per SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-5 — mechanical, never authored)`);
     }
     for (const a of stall.alerted) {
       console.log(`QUIET_TICK_STALL_ALERT=adam node=${a.id} title="${a.title}" escalated=${a.escalated}`);

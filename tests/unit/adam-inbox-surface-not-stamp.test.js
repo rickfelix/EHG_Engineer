@@ -222,6 +222,85 @@ describe('FR-1/FR-3: quiet tick', () => {
     }
   });
 
+  // SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-5 (instance 6, INBOX_CAP overflow):
+  // a burst of mechanical rows must never starve genuinely authored items out of the raw fetch.
+  it('a burst of cross_party_ping/mechanical rows does NOT starve a real authored item out of the window', async () => {
+    const mechanicalBurst = Array.from({ length: 60 }, (_, i) =>
+      row({ payload: { kind: 'cross_party_ping' }, created_at: new Date(Date.now() - (60 - i) * 60_000).toISOString() })
+    );
+    const authored = row({ payload: { kind: 'adam_advisory' }, created_at: new Date().toISOString() });
+    const allRows = [...mechanicalBurst, authored]; // 61 raw rows — would have overflowed the OLD .limit(50) raw fetch
+    const sb = { from: (table) => {
+      const state = { table, filters: [], payload: null, op: 'select' };
+      const c = {
+        select: () => c,
+        update: (p) => { state.op = 'update'; state.payload = p; return c; },
+        eq: (col, v) => { state.filters.push([col, v]); return c; },
+        is: () => c, gte: () => c, order: () => c, limit: () => c, or: () => c,
+        single: async () => ({ data: { session_id: ADAM, metadata: { role: 'adam' } }, error: null }),
+        then: (res) => {
+          if (state.op === 'update') return Promise.resolve({ data: [], error: null }).then(res);
+          if (state.table === 'claude_sessions') return Promise.resolve({ data: [{ session_id: ADAM }], error: null }).then(res);
+          return Promise.resolve({ data: allRows, error: null }).then(res);
+        },
+      };
+      return c;
+    } };
+    const out = await surfaceInboxItems(sb);
+    // the mechanical burst is excluded (ADAM_EXCLUDED_KINDS now includes cross_party_ping);
+    // the single authored item survives instead of being crowded out by the noise.
+    expect(out.items.map((i) => i.id)).toEqual([authored.id]);
+    expect(out.items.every((i) => i.kind !== 'cross_party_ping')).toBe(true);
+  });
+
+  it('capHit reflects a genuine eligible-item backlog, not a mechanical-noise-filled raw window', async () => {
+    // 55 mechanical rows only (all excluded) -- old logic: rows.length===50-ish -> capHit:true
+    // with ZERO eligible items (misleading). New logic: capHit must be false here.
+    const mechanicalOnly = Array.from({ length: 55 }, () => row({ payload: { kind: 'cross_party_ping' } }));
+    const sb = { from: (table) => {
+      const state = { table, op: 'select' };
+      const c = {
+        select: () => c,
+        update: (p) => { state.op = 'update'; return c; },
+        eq: () => c, is: () => c, gte: () => c, order: () => c, limit: () => c, or: () => c,
+        single: async () => ({ data: { session_id: ADAM, metadata: { role: 'adam' } }, error: null }),
+        then: (res) => {
+          if (state.op === 'update') return Promise.resolve({ data: [], error: null }).then(res);
+          if (state.table === 'claude_sessions') return Promise.resolve({ data: [{ session_id: ADAM }], error: null }).then(res);
+          return Promise.resolve({ data: mechanicalOnly, error: null }).then(res);
+        },
+      };
+      return c;
+    } };
+    const out = await surfaceInboxItems(sb);
+    expect(out.items).toEqual([]);
+    expect(out.capHit).toBe(false);
+  });
+
+  it('capHit is true when authored eligible items genuinely exceed the 50-item display budget', async () => {
+    const manyAuthored = Array.from({ length: 60 }, (_, i) =>
+      row({ payload: { kind: 'adam_advisory' }, created_at: new Date(Date.now() - (60 - i) * 60_000).toISOString() })
+    );
+    const sb = { from: (table) => {
+      const state = { table, op: 'select' };
+      const c = {
+        select: () => c,
+        update: (p) => { state.op = 'update'; return c; },
+        eq: () => c, is: () => c, gte: () => c, order: () => c, limit: () => c, or: () => c,
+        single: async () => ({ data: { session_id: ADAM, metadata: { role: 'adam' } }, error: null }),
+        then: (res) => {
+          if (state.op === 'update') return Promise.resolve({ data: [], error: null }).then(res);
+          if (state.table === 'claude_sessions') return Promise.resolve({ data: [{ session_id: ADAM }], error: null }).then(res);
+          return Promise.resolve({ data: manyAuthored, error: null }).then(res);
+        },
+      };
+      return c;
+    } };
+    const out = await surfaceInboxItems(sb);
+    expect(out.items).toHaveLength(50); // display cap still 50
+    expect(out.capHit).toBe(true); // but the signal now correctly reflects real overflow
+  });
+
   it('the cron prompt allowlist includes both INBOX tokens (no-op gate cannot swallow a directive)', async () => {
     const { readFileSync } = await import('node:fs');
     const src = readFileSync(new URL('../../scripts/adam-startup-check.mjs', import.meta.url), 'utf8');
@@ -262,6 +341,47 @@ describe('FR-1/FR-3: quiet tick', () => {
     const out = await surfaceInboxItems(sb);
     expect(out.items.map((i) => i.id)).not.toContain(directive.id);
     expect(out.directives).toBe(0);
+  });
+
+  // SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-4 (instance 3): the exact courtesy-
+  // ACK-vs-canonical-verdict fixture from the PRD AC — a mechanical ack echoing the consult
+  // correlation must never suppress the directive, and the genuine reply still delivers once it
+  // arrives. Exercises the REAL surfaceInboxItems wiring (isDirectiveRow + hasCorrelatedReply +
+  // ADAM_EXCLUDED_KINDS), not just the standalone reply-correlation.cjs unit.
+  it('FR-4: a courtesy-ACK echoing the consult correlation does NOT suppress the directive; the real verdict does', async () => {
+    const directive = row({ payload: { kind: DIRECTIVE_KINDS[0], correlation_id: 'corr-fr4' } });
+    const courtesyAck = { id: 'ack-fr4', payload: { correlation_id: 'corr-fr4', kind: 'ack' }, sender_session: ADAM, target_session: 'someone-else' };
+    const buildSb = (correlationRows) => ({ from: (table) => {
+      const state = { table, filters: [], payload: null, op: 'select', usedOr: false };
+      const c = {
+        select: () => c,
+        update: (p) => { state.op = 'update'; state.payload = p; return c; },
+        eq: (col, v) => { state.filters.push([col, v]); return c; },
+        is: () => c, gte: () => c, order: () => c, limit: () => c,
+        or: () => { state.usedOr = true; return c; },
+        single: async () => ({ data: { session_id: ADAM, metadata: { role: 'adam' } }, error: null }),
+        then: (res) => {
+          if (state.op === 'update') return Promise.resolve({ data: [], error: null }).then(res);
+          if (state.table === 'claude_sessions') return Promise.resolve({ data: [{ session_id: ADAM }], error: null }).then(res);
+          if (state.usedOr) return Promise.resolve({ data: [directive, ...correlationRows], error: null }).then(res);
+          return Promise.resolve({ data: [directive], error: null }).then(res);
+        },
+      };
+      return c;
+    } });
+
+    // Only the courtesy-ACK exists so far — the directive must STILL surface (hard interrupt).
+    const beforeVerdict = await surfaceInboxItems(buildSb([courtesyAck]));
+    expect(beforeVerdict.items.map((i) => i.id)).toContain(directive.id);
+    expect(beforeVerdict.directives).toBe(1);
+
+    // The real verdict has now also arrived, correlated to the SAME id — the directive is
+    // suppressed (a genuine, non-excluded-kind reply exists), matching the C6 suppression test
+    // above. Both the courtesy-ACK and the genuine verdict were correctly classified in turn.
+    const verdict = { id: 'verdict-fr4', payload: { correlation_id: 'corr-fr4', kind: 'adam_advisory' }, sender_session: ADAM, target_session: 'someone-else' };
+    const afterVerdict = await surfaceInboxItems(buildSb([courtesyAck, verdict]));
+    expect(afterVerdict.items.map((i) => i.id)).not.toContain(directive.id);
+    expect(afterVerdict.directives).toBe(0);
   });
 
   it('SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001: a directive with no correlated reply still hard-interrupts', async () => {
