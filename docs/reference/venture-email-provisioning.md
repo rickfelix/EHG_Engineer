@@ -14,6 +14,8 @@ per-domain scoped sending key, and wires `hello@`/`support@` inbound routes to t
 central inbox — as a **resumable step machine** over
 `venture_email_identities.provision_state` (optimistic CAS on `lock_version`).
 
+**Which addresses exist and why** (the governed mailbox standard the wired routes derive from): [EHG Email-Address Standards](../03_protocols_and_standards/ehg-email-address-standards.md).
+
 ## States
 
 `pending → registered → domain_enrolled → dns_written → verified → key_scoped →
