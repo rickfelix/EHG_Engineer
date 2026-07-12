@@ -53,4 +53,44 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
   it('STILL flags an interpolated SQL keyword immediately preceded by a non-separator character', () => {
     expect(names('+ const sql = `${schema}.DELETE FROM t`;')).toContain('sql_injection');
   });
+
+  // CRIT-002 sql_injection pattern 2 (string-concat) — QF-20260711-047.
+  // The unified-diff added-line '+' marker sits at column 0 immediately before the
+  // quoted keyword on parameterized-SQL lines, so `\+\s*['"]\bSELECT` matched the diff
+  // markup itself. A positive lookbehind now requires a non-newline char before the '+',
+  // which the column-0 diff marker never has, while a genuine concat operator always does.
+  it('does NOT flag a diff-added parameterized-SQL line whose content starts with a quoted keyword', () => {
+    expect(names('+    "SELECT * FROM users WHERE id = %s",')).not.toContain('sql_injection');
+  });
+  it('does NOT flag a diff-added line with a leading-quote INSERT (parameterized)', () => {
+    expect(names('+  "INSERT INTO t (a) VALUES (?)"')).not.toContain('sql_injection');
+  });
+  it('STILL flags a genuine mid-line string-concat SQL (real injection shape)', () => {
+    expect(names('+ const q = base + "SELECT * FROM users WHERE id = " + id;')).toContain('sql_injection');
+  });
+  it('STILL flags concat SQL even when the concat operator is space-padded', () => {
+    expect(names('+ query = prefix + "DELETE FROM sessions";')).toContain('sql_injection');
+  });
+
+  // CRIT-002 / CRIT-004 test-fixture path exemption — QF-20260711-047.
+  // Hostile-input fixtures legitimately embed injection/destructive-schema strings as
+  // test DATA; a per-file diff header under tests/ exempts those two enumerations only.
+  const diffFor = (path, line) =>
+    `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,0 +1,1 @@\n${line}`;
+  it('does NOT flag CRIT-002 on a genuine concat inside a tests/ fixture file', () => {
+    expect(names(diffFor('tests/fixtures/hostile-sql.test.js', '+ const q = base + "SELECT * FROM users";')))
+      .not.toContain('sql_injection');
+  });
+  it('does NOT flag CRIT-004 (DROP TABLE) inside a .test. fixture file', () => {
+    expect(names(diffFor('apps/venture/src/db.test.ts', '+ await run("DROP TABLE users");')))
+      .not.toContain('schema_corruption');
+  });
+  it('STILL flags CRIT-002 on the SAME concat when the file is NOT a test path', () => {
+    expect(names(diffFor('src/db/query-builder.js', '+ const q = base + "SELECT * FROM users";')))
+      .toContain('sql_injection');
+  });
+  it('STILL flags CRIT-001 (hardcoded secret) even inside a test file (not exempt)', () => {
+    expect(names(diffFor('tests/setup.test.js', '+ const key = "sk-live-abc123def456ghi789jkl012mno345";')))
+      .toContain('hardcoded_secret');
+  });
 });
