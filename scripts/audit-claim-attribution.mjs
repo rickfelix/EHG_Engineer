@@ -12,7 +12,8 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import { indexReleaseEvents, classifyClaimTransition } from '../lib/fleet/claim-collision.mjs';
+import collisionCheck from '../lib/fleet/collision-check.cjs';
+const { checkClaimCollision } = collisionCheck;
 
 const SELF_SD_KEY = 'SD-LEO-INFRA-CLAIM-IDENTITY-INTEGRITY-001';
 const dayArgIdx = process.argv.indexOf('--day');
@@ -36,18 +37,6 @@ const { data: sessions, error: sErr } = await supabase
 if (sErr) { console.error(`audit: sessions query failed: ${sErr.message}`); process.exit(1); }
 const sessionById = new Map((sessions ?? []).map((s) => [s.session_id, s]));
 
-// QF-20260712-008: claim_history has no RELEASE marker, so a released-then-reclaimed SD
-// where the prior session stayed status=active false-reads as a live collision. Pull the
-// release events (SD-scoped claim-clears + session-level auto-releases/takeovers) for the
-// day so classifyClaimTransition can tell a benign re-route from a real interleave.
-const { data: lifecycleEvents, error: leErr } = await supabase
-  .from('session_lifecycle_events')
-  .select('session_id, event_type, created_at, metadata')
-  .gte('created_at', `${DAY}T00:00:00Z`)
-  .in('event_type', ['SESSION_STATUS_TRANSITION', 'SESSION_AUTO_RELEASED', 'CLAIM_TAKEOVER']);
-if (leErr) { console.error(`audit: lifecycle-events query failed: ${leErr.message}`); process.exit(1); }
-const releaseBySession = indexReleaseEvents(lifecycleEvents ?? []);
-
 const findings = [];
 for (const sd of sds ?? []) {
   const dayEntries = (sd.metadata?.claim_history ?? [])
@@ -64,20 +53,25 @@ for (const sd of sds ?? []) {
       continue;
     }
     const prevSession = sessionById.get(prev.session_id);
-    // A hand-off is plausible when the prior session is gone/released BEFORE the later
-    // claim; two sessions that BOTH remain known-live-and-holding is the anomaly class.
-    // QF-20260712-008: the release check now also consults session_lifecycle_events, so a
-    // prior session that stayed status=active but RELEASED this SD before the reclaim is
-    // correctly a re-route, not a false collision.
-    const verdict = classifyClaimTransition({ prev, cur, prevSession, releaseBySession, sdKey: sd.sd_key });
-    const releasedFlag = (verdict === 'plausible_reroute' && prevSession && ['active', 'idle'].includes(prevSession.status))
-      ? ':released_before_reclaim' : '';
+    // A hand-off is plausible when the prior session is gone/released before the later
+    // claim; two sessions that BOTH remain known-live interleaving on one SD is the
+    // anomaly class (misattribution or churn).
+    const statusGone = !prevSession || !['active', 'idle'].includes(prevSession.status); // 'idle' is a LIVE status (adversarial review): treating it as gone silently zeroed the interleave-anomaly class
+    // QF-20260712-008: a session can stay status=active while having RELEASED this SD
+    // (claim_history records no releases). Cross-reference session_lifecycle_events so a
+    // benign release-then-reclaim is not miscounted as a live collision. Fail-open: on any
+    // lookup error checkClaimCollision returns isLiveCollision=true, preserving the anomaly.
+    let releasedBeforeReclaim = false;
+    if (!statusGone) {
+      const c = await checkClaimCollision(supabase, prev.session_id, sd.sd_key, cur.claimed_at);
+      releasedBeforeReclaim = c.isLiveCollision === false;
+    }
     transitions.push({
       at: cur.claimed_at,
       from: prev.session_id,
       to: cur.session_id,
-      prior_session_state: prevSession ? `${prevSession.status}${prevSession.released_reason ? ':' + prevSession.released_reason : ''}${releasedFlag}` : 'unknown_row',
-      verdict,
+      prior_session_state: prevSession ? `${prevSession.status}${prevSession.released_reason ? ':' + prevSession.released_reason : ''}${releasedBeforeReclaim ? ':released_before_reclaim' : ''}` : 'unknown_row',
+      verdict: (statusGone || releasedBeforeReclaim) ? 'plausible_reroute' : 'ANOMALY_live_interleave',
     });
   }
   const anomalies = transitions.filter((t) => t.verdict === 'ANOMALY_live_interleave');
