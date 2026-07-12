@@ -18,26 +18,38 @@
 -- Uses lower(title)=lower(p_title) rather than the client's current ILIKE --
 -- semantically equivalent for exact-match use (avoids ILIKE's wildcard-
 -- injection quirk if a title ever contains a literal '%' character).
+--
+-- COORDINATION NOTE (sibling migration on the SAME function, applied SECOND):
+-- database/migrations/20260712_check_feedback_duplicate_rpc_fix_return_type.sql
+-- DROP+CREATEs this function with RETURNS uuid instead of RETURNS boolean --
+-- submitFeedback()'s real contract needs the matching row's id on a dedup
+-- hit, not just a boolean. Postgres cannot CREATE OR REPLACE a function with
+-- a different return type, so the sibling migration's DROP FUNCTION IF EXISTS
+-- supersedes the CREATE OR REPLACE below; the live function is uuid-returning
+-- (verified via pg_proc readback 2026-07-12). This file's DDL literal is
+-- reconciled here to match that live state for fresh-environment/disaster-
+-- recovery replay correctness -- replaying this file alone no longer
+-- reproduces what's live, but replaying it followed by the sibling file does.
 
 CREATE OR REPLACE FUNCTION public.check_feedback_duplicate(
   p_venture_id uuid,
   p_title text
 )
-RETURNS boolean
+RETURNS uuid
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.feedback
-    WHERE venture_id = p_venture_id
-      AND lower(title) = lower(p_title)
-      AND feedback_type LIKE 'user_%'
-      AND created_at > now() - interval '24 hours'
-      AND status NOT IN ('resolved', 'wont_fix')
-  );
+  SELECT id
+  FROM public.feedback
+  WHERE venture_id = p_venture_id
+    AND lower(title) = lower(p_title)
+    AND feedback_type LIKE 'user_%'
+    AND created_at > now() - interval '24 hours'
+    AND status NOT IN ('resolved', 'wont_fix')
+  ORDER BY created_at DESC
+  LIMIT 1;
 $$;
 
 REVOKE ALL ON FUNCTION public.check_feedback_duplicate(uuid, text) FROM PUBLIC;
