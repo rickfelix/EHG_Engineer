@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-07-12T11:09:27.198Z -->
-<!-- git_commit: feab2e0a -->
+<!-- generated_at: 2026-07-12T13:08:47.808Z -->
+<!-- git_commit: d0e60c7d -->
 <!-- db_snapshot_hash: 2dada35e85f2199f -->
-<!-- file_content_hash: 4c820d107bcbe13d -->
+<!-- file_content_hash: a8ea9f81bd30c7c9 -->
 
 # CLAUDE_COORDINATOR_DIGEST.md - Coordinator Role (Enforcement)
 
