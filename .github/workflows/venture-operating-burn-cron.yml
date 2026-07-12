@@ -1,0 +1,54 @@
+name: Venture Operating Burn Feed
+
+# Fail-soft scheduled feeder for SD-APEXNICHE-AI-LEO-ORCH-SPRINT-2026-001-E1.
+# Isolated from operator-cash-burn-cron.yml by design (separate workflow, separate
+# concurrency group) so a hang or failure here can never stall the operator cash/burn
+# feed. Idempotent (upsert by venture_id+source_application+period_month) and fail-soft
+# (missing credentials, no AI Gateway yet, or a not-yet-applied migration all degrade to
+# an unattested/skipped write, never a fabricated value or a job failure).
+#
+# NOTE: database/migrations/20260712_venture_operating_burn.sql is chairman-gated and
+# staged (not yet applied) as of this workflow's authoring. Runs are harmless no-ops
+# (fail-soft warnings only) until the migration is applied and CLOUDFLARE_API_TOKEN /
+# CLOUDFLARE_ACCOUNT_ID secrets are provisioned.
+
+on:
+  schedule:
+    - cron: '15 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Compute and print, do not write'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: venture-operating-burn-feed
+  cancel-in-progress: false
+
+jobs:
+  feed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+      - name: Feed venture operating burn substrate (ApexNiche AI)
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          FLAGS="--venture-id 809ec7e7-f688-4a0c-b9f8-c8a8291cf94d --source-application apex_niche_ai"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            npm run operator:venture-burn:feed -- $FLAGS --dry-run
+          else
+            npm run operator:venture-burn:feed -- $FLAGS
+          fi
