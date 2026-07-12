@@ -17,6 +17,11 @@ import {
   getParentFinalizationCommands
 } from '../../../../../lib/utils/orchestrator-child-completion.js';
 
+// SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001: orchestrator parents may no longer
+// be written to status='completed' here — they stage at pending_approval and the
+// LEAD-FINAL-APPROVAL executor is the only completion writer.
+import { routeOrchestratorToLeadFinal } from '../../lib/orchestrator-terminal-guard.js';
+
 /**
  * Finalize user stories to completed status
  *
@@ -173,40 +178,36 @@ export async function checkAndCompleteParentSD(supabase, sd) {
       return result;
     }
 
-    console.log(`   🎉 All ${siblings.length} children completed - auto-completing parent SD`);
+    console.log(`   🎉 All ${siblings.length} children completed - routing parent to LEAD-FINAL-APPROVAL`);
 
     // Satisfy template requirements before attempting completion
     // RCA: PAT-TEMPLATE-CODE-SYNC-001
     await satisfyOrchestratorTemplateRequirements(supabase, parentSD.id, parentSD.title);
 
-    // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Also reset is_working_on when auto-completing
-    const { error: updateError } = await supabase
-      .from('strategic_directives_v2')
-      .update({
-        status: 'completed',
-        progress: 100,
-        current_phase: 'COMPLETED',
-        is_working_on: false,  // Critical: prevent stale "working on" status
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', parentSD.id);
+    // SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001: never write status='completed'
+    // here — stage at pending_approval; the LEAD-FINAL-APPROVAL executor (with the
+    // canonical SD_COMPLETION retro gate) is the only completion writer.
+    const routing = await routeOrchestratorToLeadFinal(supabase, parentSD, {
+      source: 'plan-to-lead:checkAndCompleteParentSD'
+    });
 
-    if (updateError) {
-      console.log(`   ⚠️  Could not complete parent SD: ${updateError.message}`);
+    if (!routing.routed) {
       result.commandsToRun = result.childCommands;
     } else {
-      console.log(`   ✅ Parent SD "${parentSD.title}" auto-completed!`);
-      result.parentCompleted = true;
+      // Completion is now pending LEAD-FINAL-APPROVAL — not yet completed.
+      result.parentCompleted = false;
+      result.parentRoutedToLeadFinal = true;
 
-      // Get parent finalization commands (document, leo next)
-      // SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-E
-      result.parentCommands = getParentFinalizationCommands(parentSD);
+      // LEAD-FINAL first, then finalization commands (document, leo next) which
+      // must only run after genuine completion.
+      result.parentCommands = [routing.command, ...getParentFinalizationCommands(parentSD)];
       console.log(`   📋 Parent finalization commands: ${result.parentCommands.join(', ')}`);
 
       // Child commands first, then parent commands
       result.commandsToRun = [...result.childCommands, ...result.parentCommands];
 
-      // Recursively check grandparent
+      // Recursively check grandparent — it stages at pending_approval at most;
+      // its own LEAD-FINAL-APPROVAL gates enforce genuine child completion.
       if (parentSD.parent_sd_id) {
         console.log('   📊 Checking grandparent SD...');
         const grandparentResult = await checkAndCompleteParentSD(supabase, parentSD);
@@ -312,7 +313,11 @@ export async function satisfyOrchestratorTemplateRequirements(supabase, sdId, sd
         .insert({
           sd_id: sdId,
           title: `Orchestrator Completion: ${sdTitle}`,
-          retro_type: 'orchestrator_completion',
+          // SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001: must be the canonical
+          // completion type — retro-filters.js and the LEAD-FINAL-APPROVAL gate
+          // filter on retro_type='SD_COMPLETION'; the previous value
+          // 'orchestrator_completion' made this row invisible to both.
+          retro_type: 'SD_COMPLETION',
           status: 'PUBLISHED',
           generated_by: 'SUB_AGENT',
           trigger_event: 'ORCHESTRATOR_TEMPLATE_SATISFACTION',
@@ -371,37 +376,40 @@ export async function completeOrchestratorSD(supabase, sdId, childrenCount) {
   // RCA: PAT-TEMPLATE-CODE-SYNC-001
   await satisfyOrchestratorTemplateRequirements(supabase, canonicalId, sdId);
 
-  // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Also reset is_working_on when completing orchestrator
-  const { data: updateResult, error: sdError } = await supabase
+  // SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001: PLAN-TO-LEAD stages the
+  // orchestrator at pending_approval (same as standard SDs) — only the
+  // LEAD-FINAL-APPROVAL executor writes status='completed'.
+  const { data: sdRow } = await supabase
     .from('strategic_directives_v2')
-    .update({
-      status: 'completed',
-      current_phase: 'LEAD',
-      progress_percentage: 100,
-      is_working_on: false,  // Critical: prevent stale "working on" status
-      updated_at: new Date().toISOString()
-    })
+    .select('id, sd_key, created_at, status')
     .eq('id', canonicalId)
-    .select('id')
-    .single();
+    .maybeSingle();
 
-  if (sdError) {
-    console.log(`   ⚠️  SD update error: ${sdError.message}`);
-  } else if (!updateResult) {
-    console.log('   ⚠️  SD update returned no data - possible silent failure');
-  } else {
-    console.log('   ✅ Orchestrator SD status transitioned: → completed');
-    console.log('   ✅ Progress set to 100% (all children complete)');
+  const routing = await routeOrchestratorToLeadFinal(supabase, sdRow || { id: canonicalId }, {
+    source: 'plan-to-lead:completeOrchestratorSD'
+  });
+
+  if (!routing.routed) {
+    return {
+      success: false,
+      error: `Orchestrator could not be staged for LEAD-FINAL-APPROVAL (${routing.reason}). ` +
+        'A retro_type=\'SD_COMPLETION\' retrospective created after LEAD-TO-PLAN acceptance is required.',
+      handoffId,
+      childrenCount,
+      canonicalId
+    };
   }
 
-  console.log('\n🎉 ORCHESTRATOR COMPLETION: All children finished, parent SD marked complete');
+  console.log('\n⏸  ORCHESTRATOR PLAN-TO-LEAD complete: parent at pending_approval, LEAD-FINAL-APPROVAL required');
   console.log('📊 Handoff ID:', handoffId);
 
   return {
     success: true,
     handoffId,
     childrenCount,
-    canonicalId
+    canonicalId,
+    routedToLeadFinal: true,
+    leadFinalCommand: routing.command
   };
 }
 

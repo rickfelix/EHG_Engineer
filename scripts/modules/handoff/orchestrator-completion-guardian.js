@@ -16,6 +16,10 @@
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { extractContracts, detectMismatches } from './executors/exec-to-plan/gates/cross-child-integration-gate.js';
 import { isTerminalChildStatus } from '../../../lib/orchestrator/child-terminal-status.js';
+// SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001: canonical completion-retro contract
+// + terminal-transition guard (guardian may no longer write status='completed').
+import { getFilteredRetrospective } from './retro-filters.js';
+import { routeOrchestratorToLeadFinal } from './lib/orchestrator-terminal-guard.js';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -366,17 +370,18 @@ export class OrchestratorCompletionGuardian {
    * Validate retrospective exists with sufficient quality
    */
   async validateRetrospective() {
-    const { data: retro, error } = await supabase
-      .from('retrospectives')
-      .select('id, quality_score, status, key_learnings')
-      .eq('sd_id', this.sdId)
-      .single();
+    // SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001: use the canonical filter
+    // (retro_type='SD_COMPLETION', created after LEAD-TO-PLAN acceptance) instead
+    // of accepting ANY retro row — a HANDOFF retro must not satisfy completion.
+    const { retrospective: retro, error } = await getFilteredRetrospective(
+      this.sdId, this.parentData?.created_at || null, supabase, this.parentData?.sd_key || null
+    );
 
     if (error || !retro) {
       this.validationResults.push({
         check: 'RETROSPECTIVE',
         passed: false,
-        message: 'No retrospective found for orchestrator SD',
+        message: 'No SD-completion retrospective found (must be retro_type=SD_COMPLETION, created after LEAD-TO-PLAN acceptance)',
         canAutoFix: true,
         autoFixAction: 'CREATE_RETROSPECTIVE'
       });
@@ -730,38 +735,31 @@ export class OrchestratorCompletionGuardian {
    * Complete the orchestrator SD after all artifacts are in place
    */
   async complete() {
-    console.log('\n🎯 COMPLETING ORCHESTRATOR SD');
+    console.log('\n🎯 STAGING ORCHESTRATOR SD FOR LEAD-FINAL-APPROVAL');
     console.log('════════════════════════════════════════════════════════════');
 
-    // Use direct update (Supabase client should work now that artifacts exist)
-    const { data, error } = await supabase
-      .from('strategic_directives_v2')
-      .update({
-        status: 'completed',
-        progress: 100,
-        current_phase: 'COMPLETED',
-        completion_date: new Date().toISOString()
-      })
-      .eq('id', this.sdId)
-      .select('id, status, progress')
-      .single();
+    // SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001: the guardian may not write
+    // status='completed'. It stages the SD at pending_approval; only the
+    // LEAD-FINAL-APPROVAL executor (with its retro + handoff gates) completes.
+    const routing = await routeOrchestratorToLeadFinal(
+      supabase,
+      this.parentData || { id: this.sdId },
+      { source: 'orchestrator-completion-guardian' }
+    );
 
-    if (error) {
-      console.log(`\n❌ COMPLETION FAILED: ${error.message}`);
-      console.log('\n💡 This may be a LEO Protocol trigger blocking the update.');
-      console.log(`   Run: node scripts/complete-orchestrator-direct.js ${this.sdId}`);
-      return { success: false, error: error.message };
+    if (!routing.routed) {
+      console.log(`\n❌ STAGING FAILED: ${routing.reason}`);
+      console.log('   A retro_type=\'SD_COMPLETION\' retrospective (created after LEAD-TO-PLAN acceptance) is required.');
+      return { success: false, error: routing.reason };
     }
 
-    console.log('\n🎉 ORCHESTRATOR COMPLETED SUCCESSFULLY');
-    console.log(`   ID: ${data.id}`);
-    console.log(`   Status: ${data.status}`);
-    console.log(`   Progress: ${data.progress}%`);
+    console.log('\n⏸  ORCHESTRATOR STAGED — run LEAD-FINAL-APPROVAL to complete:');
+    console.log(`   ${routing.command}`);
 
-    // Record pattern success
+    // Record pattern success (artifacts staged; genuine completion via LEAD-FINAL)
     await this.recordPatternSuccess();
 
-    return { success: true, data };
+    return { success: true, routedToLeadFinal: true, leadFinalCommand: routing.command };
   }
 
   /**
