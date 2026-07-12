@@ -1,0 +1,31 @@
+{
+  "_doc": "QF-20260712-023 (retro dc41e083 / SPINE-001-B action item): every tracked *.test.mjs file must be reachable by a named runner lane, or it is a DEAD VERIFIER — green in the editor, never executed. Vitest's unit project only includes tests/unit/org/**/*.test.mjs (node:test files are not vitest-compatible), so each .test.mjs needs an entry here naming its lane. tests/unit/test-estate-mjs-reachability.test.js enforces this: a NEW .test.mjs with no lane fails the unit suite at PR time. Do NOT add to legacy_unaudited — give new files a real runner.",
+  "lanes": {
+    "tests/unit/session-tick-heartbeat.test.mjs": "npm run test:session-tick (.github/workflows/unit-tier.yml)",
+    "tests/unit/session-tick-release-on-exit.test.mjs": "npm run test:session-tick (.github/workflows/unit-tier.yml)",
+    "tests/unit/session-tick-spawn-observe.test.mjs": "npm run test:session-tick (.github/workflows/unit-tier.yml)"
+  },
+  "legacy_unaudited": {
+    "_doc": "DEBT REGISTER (pre-QF-20260712-023 files with no verified CI runner at seeding time — audit each: wire a lane and move it to lanes{}, or archive the file). Adding NEW entries here defeats the check's purpose.",
+    "files": [
+      "__tests__/scripts/b1-tri-tier-validator.test.mjs",
+      "__tests__/scripts/b2-testability-heuristic.test.mjs",
+      "tests/sd-start-dependency-gate.test.mjs",
+      "tests/unit/adam-doc-drift-review.test.mjs",
+      "tests/unit/adam-github-assessment.test.mjs",
+      "tests/unit/adam-sourcing-state-probe.test.mjs",
+      "tests/unit/adam-startup-check.test.mjs",
+      "tests/unit/calculate-sd-progress.test.mjs",
+      "tests/unit/coordinator-startup-check.test.mjs",
+      "tests/unit/db-size-monitor.test.mjs",
+      "tests/unit/pocock/weekly-deepening-report.test.mjs",
+      "tests/unit/protocol-lint/engine.test.mjs",
+      "tests/unit/sd-key-generator-ci-bypass.test.mjs",
+      "tests/unit/sd-key-generator-coverage.test.mjs",
+      "tests/unit/session-tick-patch-failure-telemetry.test.mjs",
+      "tests/unit/v-sd-next-candidates-fixture-exclusion.test.mjs",
+      "tests/unit/vision/rung-progress-rollup.test.mjs",
+      "tests/unit/worktree-stale-base-guard.test.mjs"
+    ]
+  }
+}
