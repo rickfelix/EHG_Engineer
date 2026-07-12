@@ -30,7 +30,10 @@ function listMergedPRs(repo) {
 }
 
 export async function runAudit({ supabase } = {}) {
-  const sb = supabase || createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const sb = supabase || createClient(
+    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
 
   const { data: apps, error: appsErr } = await sb.from('applications').select('github_repo').eq('trust_tier', 'trusted').not('github_repo', 'is', null);
   if (appsErr) throw new Error(`applications query failed: ${appsErr.message}`);
