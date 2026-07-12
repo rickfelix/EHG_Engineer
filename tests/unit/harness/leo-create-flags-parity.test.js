@@ -72,7 +72,7 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
 
     it('createFromQF metadata propagates security_reviewed=true when the flag is set', () => {
       const idx = src.indexOf('async function createFromQF');
-      const body = src.slice(idx, idx + 3000);
+      const body = src.slice(idx, idx + 5000);
       expect(body).toMatch(/opts\.securityReviewed\s*\?\s*\{\s*security_reviewed:\s*true\s*\}/);
     });
 
@@ -80,7 +80,7 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
     // --security-reviewed above -- it was silently dropped before reaching createFromQF.
     it('createFromQF metadata propagates migration_reviewed=true when the flag is set', () => {
       const idx = src.indexOf('async function createFromQF');
-      const body = src.slice(idx, idx + 3000);
+      const body = src.slice(idx, idx + 5000);
       expect(body).toMatch(/opts\.migrationReviewed\s*\?\s*\{\s*migration_reviewed:\s*true\s*\}/);
     });
 
@@ -95,14 +95,14 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
   describe('--from-qf bidirectional link + hardened retirement (SD-LEO-INFRA-QF-SD-ESCALATION-LINK-CANONICAL-TRACK-001)', () => {
     it('createFromQF metadata includes escalated_from_qf pointing back at the source QF id', () => {
       const idx = src.indexOf('async function createFromQF');
-      const body = src.slice(idx, idx + 3000);
+      const body = src.slice(idx, idx + 5000);
       expect(body).toMatch(/escalated_from_qf:\s*qf\.id/);
     });
 
     it('createFromQF never writes a metadata field on quick_fixes (no metadata column exists on that table)', () => {
       const idx = src.indexOf('async function createFromQF');
       const end = src.indexOf('\nasync function', idx + 1);
-      const body = src.slice(idx, end > 0 ? end : idx + 4000);
+      const body = src.slice(idx, end > 0 ? end : idx + 5500);
       const qfUpdateIdx = body.indexOf("status: 'escalated',");
       expect(qfUpdateIdx).toBeGreaterThan(-1);
       const updateBlock = body.slice(qfUpdateIdx, qfUpdateIdx + 200);
@@ -111,7 +111,7 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
 
     it('the QF retirement write is wrapped in withRetry rather than a single best-effort attempt', () => {
       const idx = src.indexOf('async function createFromQF');
-      const body = src.slice(idx, idx + 4000);
+      const body = src.slice(idx, idx + 5500);
       expect(body).toMatch(/await withRetry\(async \(\) => \{/);
       expect(body).toMatch(/maxRetries:\s*2/);
     });
@@ -124,7 +124,7 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
 
     it('exhausted retries throw an Error naming the already-created SD key and a manual recovery UPDATE', () => {
       const idx = src.indexOf('async function createFromQF');
-      const body = src.slice(idx, idx + 4500);
+      const body = src.slice(idx, idx + 6000);
       const catchIdx = body.indexOf('} catch (updErr) {');
       expect(catchIdx).toBeGreaterThan(-1);
       const catchBlock = body.slice(catchIdx, catchIdx + 700);
@@ -135,7 +135,7 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
 
     it('the wrapped update fn throws explicitly on a Supabase error (supabase-js does not throw on its own)', () => {
       const idx = src.indexOf('async function createFromQF');
-      const body = src.slice(idx, idx + 4000);
+      const body = src.slice(idx, idx + 5500);
       expect(body).toMatch(/if\s*\(updErr\)\s*throw new Error\(updErr\.message\);/);
     });
   });

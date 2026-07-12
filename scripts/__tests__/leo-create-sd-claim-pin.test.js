@@ -54,23 +54,31 @@ function allIndicesOf(haystack, needle) {
 }
 
 describe('QF-20260509-LEO-CREATE-CLAIM-PIN: leo-create-sd.js never writes non-null claiming_session_id', () => {
-  it('TS-1: source contains exactly two occurrences of `claiming_session_id` (the QF-row write + its recovery-text echo)', () => {
+  it('TS-1: source contains exactly three occurrences of `claiming_session_id` (two QF-row NULL writes + one born-claim read)', () => {
     const matches = SOURCE.match(/claiming_session_id/g) || [];
     // Occurrence 1: the QF-row NULL escalation write (inside the withRetry-wrapped update).
     // Occurrence 2: the manual-recovery SQL text inside createFromQF's thrown Error message
     // (SD-LEO-INFRA-QF-SD-ESCALATION-LINK-CANONICAL-TRACK-001 FR-2) — a string literal
     // describing recovery for a human, not code that writes to the DB.
+    // Occurrence 3: a READ — `qf.claiming_session_id` captured in createFromQF's born-claim
+    // guard (SD-LEO-INFRA-ESCALATION-CONTINUITY-AUTO-001 FR-1) to identify the QF's worker
+    // session before born-claiming the escalated SD via the claim_sd RPC. It reads the QF
+    // row's column; it is NOT a write to strategic_directives_v2 (TS-2 excludes property
+    // reads; TS-3/TS-4 still bracket it).
     // If this count grows further, TS-2/3/4 below must be updated to bracket the new sites.
-    expect(matches.length).toBe(2);
+    expect(matches.length).toBe(3);
   });
 
-  it('TS-2: every occurrence sets the value to literal `null`/`NULL` (NOT a session/process expression)', () => {
+  it('TS-2: every WRITE occurrence sets the value to literal `null`/`NULL` (property reads excluded)', () => {
     // Match `claiming_session_id` followed by `:` or `=` and (optionally whitespace) then
     // null/NULL within the next ~50 chars. Anything else (e.g. `: sessionId`,
-    // `: process.env.X`, `: getSessionId()`, etc.) fails this assertion.
+    // `: process.env.X`, `: getSessionId()`, etc.) fails this assertion. A property READ
+    // (`qf.claiming_session_id`, preceded by `.`) is not a write site and is excluded here —
+    // it is still covered by TS-4's no-propagation guard.
     const indices = allIndicesOf(SOURCE, 'claiming_session_id');
-    expect(indices.length).toBe(2);
-    for (const idx of indices) {
+    const writeIndices = indices.filter(idx => SOURCE[idx - 1] !== '.');
+    expect(writeIndices.length).toBe(2);
+    for (const idx of writeIndices) {
       const window = SOURCE.slice(idx, idx + 60);
       expect(window).toMatch(/^claiming_session_id\s*[:=]\s*null\b/i);
     }
@@ -84,9 +92,10 @@ describe('QF-20260509-LEO-CREATE-CLAIM-PIN: leo-create-sd.js never writes non-nu
     expect(sdvIndices.length).toBeGreaterThan(0); // sanity — file does reference the table
 
     const claimIndices = allIndicesOf(SOURCE, 'claiming_session_id');
-    expect(claimIndices.length).toBe(2);
+    expect(claimIndices.length).toBe(3);
 
     // Check distance from each strategic_directives_v2 reference to each claim site
+    // (all three — the two NULL writes and the born-claim read — must stay >200 chars away)
     for (const sdvIdx of sdvIndices) {
       for (const claimIdx of claimIndices) {
         const distance = Math.abs(sdvIdx - claimIdx);

@@ -150,6 +150,41 @@ async function resolveFromDB(sdKey) {
 }
 
 /**
+ * SD-LEO-INFRA-ESCALATION-CONTINUITY-AUTO-001 (FR-3): resolve a LOCAL base ref from an
+ * escalated SD's seeded QF branch. Reads strategic_directives_v2.metadata.escalated_from_branch
+ * (written by createFromQF as `qf/<qf-id>`) and returns `refs/heads/<branch>` ONLY when that
+ * ref resolves locally. Treated as a local ref (no fetch) because QF branches are unpushed.
+ * Returns null on any absence/failure (unseeded SD, missing ref, unsafe name, DB down) so the
+ * caller falls back to the origin/main default.
+ */
+export async function resolveEscalatedBaseRef(sdKey, repoRoot) {
+  try {
+    const supabase = createSupabaseServiceClient();
+    const { data } = await supabase
+      .from('strategic_directives_v2')
+      .select('metadata')
+      .eq('sd_key', sdKey)
+      .maybeSingle();
+
+    const seeded = data?.metadata?.escalated_from_branch;
+    if (!seeded || typeof seeded !== 'string') return null;
+
+    // Guard the untrusted branch name before it reaches a shell command.
+    const check = sanitizeBranchName(seeded);
+    if (!check.safe) return null;
+
+    try {
+      execSync(`git show-ref --verify --quiet refs/heads/${seeded}`, { cwd: repoRoot, stdio: 'pipe' });
+    } catch {
+      return null; // ref not present locally (e.g. multi-host) — fall back to origin/main
+    }
+    return `refs/heads/${seeded}`;
+  } catch {
+    return null; // DB unavailable — fall back to origin/main
+  }
+}
+
+/**
  * Scan .worktrees/ directory for existing worktree matching sdKey
  */
 function resolveFromScan(sdKey, repoRoot) {
@@ -362,9 +397,9 @@ async function createWorktree(sdKey, repoRoot, opts = {}) {
     if (recovered) return recovered;
     const err = new Error(
       `Path ${worktreePath} exists but is not a registered worktree, and self-recovery ` +
-      `(git worktree prune + git worktree add --force) failed — the dir may be locked by ` +
+      '(git worktree prune + git worktree add --force) failed — the dir may be locked by ' +
       `another process' cwd handle. Remove it with: npm run worktree:remove "${worktreePath}" ` +
-      `(safe pre-unlink; not raw rm -rf, which guts shared node_modules), or end the holding process and retry.`
+      '(safe pre-unlink; not raw rm -rf, which guts shared node_modules), or end the holding process and retry.'
     );
     err.errorCode = 'WORKTREE_PRE_CONDITION_FAILED';
     throw err;
@@ -413,11 +448,27 @@ async function createWorktree(sdKey, repoRoot, opts = {}) {
         cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
       });
     } else {
-      baseRef = resolveWorktreeBaseRef();
-      fetchBaseRef(repoRoot, baseRef);
-      execSync(`git worktree add -b "${branch}" "${worktreePath}" "${baseRef}"`, {
-        cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
-      });
+      // SD-LEO-INFRA-ESCALATION-CONTINUITY-AUTO-001 (FR-3): if this SD was escalated
+      // from a QF, prefer basing the NEW branch off the QF's local branch (which carries
+      // the worker's already-committed fix) so the escalated SD resumes that work instead
+      // of rebuilding off origin/main. The QF branch is a LOCAL, likely-unpushed ref, so
+      // we verify it with show-ref and base off it directly — SKIPPING fetchBaseRef, which
+      // would try `git fetch qf <id>` and fail on the unpushed ref. Any absence (unseeded
+      // SD, missing ref, DB unavailable) falls through to the origin/main default below,
+      // byte-identical to prior behaviour.
+      const escalatedBase = await resolveEscalatedBaseRef(sdKey, repoRoot);
+      if (escalatedBase) {
+        baseRef = escalatedBase;
+        execSync(`git worktree add -b "${branch}" "${worktreePath}" "${baseRef}"`, {
+          cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
+        });
+      } else {
+        baseRef = resolveWorktreeBaseRef();
+        fetchBaseRef(repoRoot, baseRef);
+        execSync(`git worktree add -b "${branch}" "${worktreePath}" "${baseRef}"`, {
+          cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
+        });
+      }
     }
   } finally {
     if (lockPath) releaseLock(lockPath);

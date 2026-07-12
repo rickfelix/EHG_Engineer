@@ -42,8 +42,11 @@ describe('QF-20260705-395: --from-qf route honors --migration-reviewed', () => {
   });
 
   it('TS-2: createFromQF\'s metadata builder spreads migration_reviewed=true when opts.migrationReviewed is set', () => {
+    // SD-LEO-INFRA-ESCALATION-CONTINUITY-AUTO-001 added metadata.escalated_from_branch
+    // between qf_target_application and the ...reviewed spreads, so the anchor is relaxed
+    // to [\s\S]*? (any intervening fields) rather than a fixed single newline.
     const metadataMatch = SOURCE.match(
-      /qf_target_application:\s*qf\.target_application,\s*\n\s*\.\.\.\(opts\.securityReviewed[\s\S]*?\n\s*\}\s*\n\s*\}\);/
+      /qf_target_application:\s*qf\.target_application,[\s\S]*?\.\.\.\(opts\.securityReviewed[\s\S]*?\n\s*\}\s*\n\s*\}\);/
     );
     expect(metadataMatch).not.toBeNull();
     const block = metadataMatch[0];
