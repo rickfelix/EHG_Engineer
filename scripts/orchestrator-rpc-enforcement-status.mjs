@@ -18,7 +18,9 @@ const ENFORCEMENT_MARKERS = [
   { fn: 'complete_orchestrator_sd', marker: 'LEAD-FINAL-APPROVAL', meaning: 'requires accepted LEAD-FINAL-APPROVAL row' },
   { fn: 'complete_orchestrator_sd', marker: "retro_type = 'SD_COMPLETION'", meaning: 'canonical retro filter' },
   { fn: 'complete_orchestrator_sd', marker: 'UNIFIED-HANDOFF-SYSTEM', meaning: 'executor-written witness allow-list (forged ADMIN_OVERRIDE rows rejected)' },
-  { fn: 'complete_orchestrator_sd', marker: 'ORCHESTRATOR_AUTO_COMPLETE', meaning: 'fabricated PLAN-TO-LEAD insert (must be ABSENT)', mustBeAbsent: true }
+  // Executable pattern, not the actor name: the actor name appears in the new body's
+  // rationale comments (preserved in pg_proc.prosrc), which would false-positive forever.
+  { fn: 'complete_orchestrator_sd', marker: 'INSERT INTO sd_phase_handoffs', meaning: 'fabricated PLAN-TO-LEAD insert (must be ABSENT)', mustBeAbsent: true }
 ];
 
 async function main() {

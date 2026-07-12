@@ -736,15 +736,14 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // run — so THIS is where the orchestrator completion hook (chaining, learn queue)
     // fires; the old direct-complete paths that used to fire it no longer complete.
     try {
-      const { data: childRows } = await this.supabase
+      const { count: childCount } = await this.supabase
         .from('strategic_directives_v2')
-        .select('id')
-        .eq('parent_sd_id', sd.id)
-        .limit(1);
-      if (childRows?.length) {
+        .select('id', { count: 'exact', head: true })
+        .eq('parent_sd_id', sd.id);
+      if (childCount > 0) {
         const { executeOrchestratorCompletionHook } = await import('../../orchestrator-completion-hook.js');
         const hookResult = await executeOrchestratorCompletionHook(
-          sd.id, sd.title, childRows.length,
+          sd.id, sd.title, childCount,
           { supabase: this.supabase, shippingResults, callerSessionId: sd.claiming_session_id }
         );
         orchestratorChainingInfo = {
@@ -814,11 +813,15 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       worktree_cleanup: worktreeCleanupResult,
       qualityScore: gateResults.normalizedScore ?? Math.round((gateResults.totalScore / gateResults.totalMaxScore) * 100),
       // SD-LEO-ENH-AUTO-PROCEED-001-05: Orchestrator chaining info
-      orchestratorChaining: orchestratorChainingInfo.orchestratorCompleted ? {
-        orchestratorCompleted: true,
+      // SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001: staged-parent info must reach the
+      // machine-readable result — console output alone loses the parent's LFA command.
+      orchestratorChaining: (orchestratorChainingInfo.orchestratorCompleted || orchestratorChainingInfo.parentRoutedToLeadFinal) ? {
+        orchestratorCompleted: orchestratorChainingInfo.orchestratorCompleted || false,
         chainContinue: orchestratorChainingInfo.chainContinue || false,
         nextOrchestrator: orchestratorChainingInfo.nextOrchestrator || null,
-        nextOrchestratorSdKey: orchestratorChainingInfo.nextOrchestratorSdKey || null
+        nextOrchestratorSdKey: orchestratorChainingInfo.nextOrchestratorSdKey || null,
+        parentRoutedToLeadFinal: orchestratorChainingInfo.parentRoutedToLeadFinal || false,
+        leadFinalCommand: orchestratorChainingInfo.leadFinalCommand || null
       } : null
     };
   }

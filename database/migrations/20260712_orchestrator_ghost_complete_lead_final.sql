@@ -159,8 +159,10 @@ BEGIN
 
   -- Completion witness: a genuine accepted LEAD-FINAL-APPROVAL handoff row WRITTEN BY
   -- THE EXECUTOR. created_by is the discriminator: privileged actors (ADMIN_OVERRIDE,
-  -- ORCHESTRATOR_AUTO_COMPLETE) can insert accepted rows via handoff_actor_policy(),
+  -- the legacy auto-complete actor) can insert accepted rows via handoff_actor_policy(),
   -- so an unqualified EXISTS would be forgeable with a single INSERT.
+  -- (Actor names deliberately not spelled out here: this comment lives inside prosrc and
+  -- scripts/orchestrator-rpc-enforcement-status.mjs greps the live body for markers.)
   SELECT EXISTS (
     SELECT 1 FROM sd_phase_handoffs
     WHERE sd_id = sd_id_param
