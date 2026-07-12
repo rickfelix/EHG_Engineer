@@ -21,10 +21,10 @@
       "id": "CRIT-002",
       "name": "sql_injection",
       "description": "String concatenation in SQL queries without parameterization",
-      "_note": "SD-LEO-INFRA-FIX-WINDOWS-SESSION-001: added a negative lookbehind to pattern 1 excluding a match immediately preceded by a URL query-string separator character, so a PostgREST REST query-string parameter whose name happens to spell one of these keywords (a pervasive, safe convention across this Supabase-REST-heavy codebase, e.g. scripts/hooks/capture-session-id.cjs line 320) is no longer treated as SQL injection. The pattern's original intended shape -- an interpolation followed later on the line by a hardcoded, standalone SQL keyword -- still matches; verified with a small standalone script (case-by-case, deleted after use, not committed).",
+      "_note": "SD-LEO-INFRA-FIX-WINDOWS-SESSION-001: added a negative lookbehind to pattern 1 excluding a match immediately preceded by a URL query-string separator character, so a PostgREST REST query-string parameter whose name happens to spell one of these keywords (a pervasive, safe convention across this Supabase-REST-heavy codebase, e.g. scripts/hooks/capture-session-id.cjs line 320) is no longer treated as SQL injection. The pattern's original intended shape -- an interpolation followed later on the line by a hardcoded, standalone SQL keyword -- still matches; verified with a small standalone script (case-by-case, deleted after use, not committed). QF-20260711-047: pattern 2 (string-concat SQL) was matching the unified-diff added-line '+' marker itself -- when scanned raw diff text, a diff-added line whose FIRST non-marker content is a quoted SQL keyword (e.g. multi-line parameterized queries like '+    \"SELECT * FROM users WHERE id = %s\",') satisfied '\\\\+\\\\s*[quote]SELECT' because the diff '+' character sits immediately before the quote. Added a positive lookbehind requiring a same-line, non-newline character before the '+' -- the diff-marker '+' is always preceded by start-of-string or a newline, while a genuine concatenation operator ('x + \"SELECT...') is always preceded by other same-line content, so this discriminates cleanly without narrowing genuine detection.",
       "patterns": [
         "\\$\\{.*\\}.*(?<![?&])\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)\\b",
-        "\\+\\s*['\"]\\s*\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)\\b",
+        "(?<=[^\\r\\n])\\+\\s*['\"]\\s*\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)\\b",
         "\\.query\\s*\\(\\s*`[^`]*\\$\\{"
       ],
       "severity": "critical",
