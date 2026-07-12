@@ -48,3 +48,35 @@ describe('hasCorrelatedReply', () => {
     expect(hasCorrelatedReply(original, [original, bare])).toBe(false);
   });
 });
+
+// SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-4 (instance 3): opts.excludeKinds —
+// a mechanical courtesy-ACK echoing a consult correlation_id must never suppress the eventual
+// genuine oracle-verdict/reply row.
+describe('hasCorrelatedReply — opts.excludeKinds (FR-4)', () => {
+  it('WITHOUT excludeKinds (default, byte-identical to pre-FR-4): a courtesy-ACK still counts as a correlated reply', () => {
+    const consult = { id: 'consult-1', payload: { correlation_id: 'corr-x' } };
+    const courtesyAck = { id: 'ack-1', payload: { correlation_id: 'corr-x', kind: 'ack' } };
+    expect(hasCorrelatedReply(consult, [consult, courtesyAck])).toBe(true);
+  });
+
+  it('WITH excludeKinds: a courtesy-ACK matching an excluded kind is ignored — the directive is NOT suppressed', () => {
+    const consult = { id: 'consult-2', payload: { correlation_id: 'corr-y' } };
+    const courtesyAck = { id: 'ack-2', payload: { correlation_id: 'corr-y', kind: 'ack' } };
+    expect(hasCorrelatedReply(consult, [consult, courtesyAck], { excludeKinds: ['ack', 'coordinator_ack'] })).toBe(false);
+  });
+
+  it('WITH excludeKinds: the genuine oracle-verdict reply (a non-excluded kind) still correlates', () => {
+    const consult = { id: 'consult-3', payload: { correlation_id: 'corr-z' } };
+    const courtesyAck = { id: 'ack-3', payload: { correlation_id: 'corr-z', kind: 'ack' } };
+    const verdict = { id: 'verdict-3', payload: { correlation_id: 'corr-z', kind: 'adam_advisory' } };
+    // Both a mechanical ack AND the real verdict exist — excludeKinds filters the ack out but
+    // the verdict still satisfies the correlation.
+    expect(hasCorrelatedReply(consult, [consult, courtesyAck, verdict], { excludeKinds: ['ack'] })).toBe(true);
+  });
+
+  it('excludeKinds only filters by kind, not by which field matched (reply_to path also respects it)', () => {
+    const req = { id: 'req-7', payload: {} };
+    const courtesyAck = { id: 'ack-4', payload: { reply_to: 'req-7', kind: 'coordinator_ack' } };
+    expect(hasCorrelatedReply(req, [req, courtesyAck], { excludeKinds: ['coordinator_ack'] })).toBe(false);
+  });
+});
