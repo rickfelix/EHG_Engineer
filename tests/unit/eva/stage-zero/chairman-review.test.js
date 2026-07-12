@@ -290,6 +290,82 @@ describe('ChairmanReview', () => {
       expect(mockSupabase.from).not.toHaveBeenCalledWith('chairman_decisions');
     });
 
+    // ── SD-FDBK-FIX-STAGE-PROMOTION-NEVER-001: nursery back-link stamp (FR-3) ──
+
+    // Wraps createMockSupabase() with a spyable venture_nursery table — every other table
+    // (ventures/eva_config/generic) keeps its existing mocked behavior unchanged.
+    function createMockSupabaseWithNursery({ isResult = { data: [{ id: 'nursery-1' }], error: null }, overrides = {} } = {}) {
+      const base = createMockSupabase(overrides);
+      const nurseryUpdateSpy = vi.fn();
+      const nurseryEqSpy = vi.fn();
+      const nurseryTable = {
+        update: vi.fn((payload) => {
+          nurseryUpdateSpy(payload);
+          return {
+            eq: vi.fn((col, val) => {
+              nurseryEqSpy(col, val);
+              return {
+                is: vi.fn(() => ({
+                  select: vi.fn().mockResolvedValue(isResult),
+                })),
+              };
+            }),
+          };
+        }),
+      };
+      const originalFrom = base.from;
+      base.from = vi.fn((table) => (table === 'venture_nursery' ? nurseryTable : originalFrom(table)));
+      base._nurseryUpdateSpy = nurseryUpdateSpy;
+      base._nurseryEqSpy = nurseryEqSpy;
+      return base;
+    }
+
+    it('stamps venture_nursery.promoted_to_venture_id + promoted_at when brief.nursery_id is present', async () => {
+      const mockSupabase = createMockSupabaseWithNursery();
+      const briefWithNursery = { ...validBrief, nursery_id: 'nursery-1' };
+
+      await persistVentureBrief(
+        { decision: 'ready', brief: briefWithNursery, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+
+      expect(mockSupabase.from).toHaveBeenCalledWith('venture_nursery');
+      expect(mockSupabase._nurseryUpdateSpy).toHaveBeenCalledTimes(1);
+      const updatePayload = mockSupabase._nurseryUpdateSpy.mock.calls[0][0];
+      expect(updatePayload.promoted_to_venture_id).toBe('v-1'); // 'v-1' is the mocked inserted venture id
+      expect(updatePayload.promoted_at).toBeTruthy();
+      expect(mockSupabase._nurseryEqSpy).toHaveBeenCalledWith('id', 'nursery-1');
+    });
+
+    it('does NOT touch venture_nursery when brief.nursery_id is absent (the common non-nursery path)', async () => {
+      const mockSupabase = createMockSupabaseWithNursery();
+
+      await persistVentureBrief(
+        { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+
+      expect(mockSupabase.from).not.toHaveBeenCalledWith('venture_nursery');
+      expect(mockSupabase._nurseryUpdateSpy).not.toHaveBeenCalled();
+    });
+
+    it('logs loudly (does not throw) when the nursery stamp UPDATE errors', async () => {
+      const mockSupabase = createMockSupabaseWithNursery({
+        isResult: { data: null, error: { message: 'stamp update failed' } },
+      });
+      const briefWithNursery = { ...validBrief, nursery_id: 'nursery-1' };
+
+      const result = await persistVentureBrief(
+        { decision: 'ready', brief: briefWithNursery, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger },
+      );
+
+      // The promotion itself must still succeed — a stamp failure is a data-integrity gap,
+      // not a reason to fail an otherwise-successful venture creation.
+      expect(result.id).toBe('v-1');
+      expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('stamp update failed'));
+    });
+
     it('the machine-forged approval insert is gone from the source (grep pin)', async () => {
       const fs = await import('node:fs');
       const url = await import('node:url');
