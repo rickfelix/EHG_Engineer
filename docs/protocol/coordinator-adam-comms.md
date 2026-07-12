@@ -392,3 +392,53 @@ When the coordinator and Adam disagree on which session legitimately holds a rol
 `session_id` is a label, not ground truth), resolve via OS process enumeration and
 on-disk session markers, not another DB read. Full protocol:
 `docs/protocol/crew-comms-routing-protocol.md` § "PID-cross-check".
+
+## Lane delivery contract module + observability gauge (SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001)
+
+Nine first-hand defect instances across two sessions (untyped rows silently skipped, dual
+body-read locations, a courtesy-ACK blocking a canonical oracle answer, a `coordinator_request`
+body-drop, subject-only STUB rows rendered as authored requests, an INBOX_CAP overflow starved
+by mechanical noise, an unvalidated re-target on a relay-confirm insert, and a resurface-dedup
+drift class) motivated a single architectural SD rather than five spot-fixes (Solomon Mode-B
+finding, ledger `bcac6f3c`). New `lib/coordination/lane-contract.cjs` — one module for SEND
+validation and canonical DRAIN reads that every future writer/reader imports:
+
+- **`validateOnSend(row, {mode})`** — typed `payload.kind` enforcement staged
+  **off/observe/enforce**, reusing `lib/claim/gates/dispatch-authorization.cjs`'s two-flag-ladder
+  shape verbatim. Ships **OFF by default**: a universally-required validator would break the live
+  fleet today (payload-less rows are deliberate in places; ~34 raw insert sites bypass the
+  existing partial choke point at `dispatch.cjs:587`). ENFORCE only after an observe-window
+  confirms near-zero unexpected violations on the named seams — no seam has been migrated to call
+  this yet in v1.
+- **`readCanonicalBody(row)`** — dual-read, `payload.body` primary with a `body`-column fallback
+  (no historical backfill). Migrated `scripts/adam-advisory.cjs`'s window-sweep print path, which
+  previously never checked the body column at all.
+
+Four other fixes shipped alongside the module:
+
+- `lib/coordinator/relay-queue.cjs`'s `drainOne` now validates the relay-confirm's echoed
+  `target_session` via `assertValidConfirmTargetSafe` (wraps `dispatch.cjs`'s
+  `assertValidTarget`) before insert — an invalid/stale asker skips only the confirm (the relay
+  itself already succeeded), closing the gap the file's own
+  `no-echoed-session-coordination-target` eslint-disable had deferred to this SD.
+- `lib/coordinator/reply-correlation.cjs`'s `hasCorrelatedReply` gained an optional
+  `opts.excludeKinds` — a courtesy-ACK (`kind=ack`/`coordinator_ack`) echoing a consult
+  correlation can no longer suppress the eventual genuine reply/verdict at
+  `adam-quiet-tick.mjs`'s `surfaceInboxItems`. Narrowly scoped to that one call site, not a
+  lane-wide dedup rewrite — 4 disjoint dedup schemes coexist deliberately.
+- A reserved `payload.kind='cross_party_ping'` (in `ADAM_EXCLUDED_KINDS`) marks the quiet-tick
+  cross-party ping mechanical, and `surfaceInboxItems`'s raw fetch was widened to 400 rows
+  (filtered BEFORE the 50-row display cap, not after) — a burst of mechanical rows can no longer
+  starve authored content out of Adam's inbox window (the INBOX_CAP-overflow-all-day class).
+- New read-only `lib/coordination/lane-lint-gauge.cjs` (CLI: `scripts/coordinator-lane-lint-gauge.cjs`)
+  reports independent counts for `untyped_row`, `bodyless_row`, `empty_sender_row`, and
+  `resurface_dedup_drift` (>1 concurrently-unacknowledged `solomon_ledger_pending_resurface` rows
+  for the same ledger item — the daily `payload->>dedup_key` only blocks a same-day repeat).
+
+Deferred / not fully closed by this SD (documented at PLAN_VERIFICATION, not silently dropped):
+`validateOnSend` is not yet wired into any live send seam (capability, not enforced behavior);
+`signal-router.cjs` and `adam-quiet-tick.mjs`'s own body-read sites are not yet migrated to
+`readCanonicalBody`; the gauge covers 4 of the 9 evidence classes directly (untyped/bodyless/
+empty-sender/resurface-drift) — a stale-target flood (instance 1, distinct from instance 6's
+empty-sender pattern) and the dual-body-*divergence* shape specifically (instance 7, as opposed
+to body absence) have no dedicated counter yet.
