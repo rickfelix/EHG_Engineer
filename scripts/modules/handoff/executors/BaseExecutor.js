@@ -254,6 +254,31 @@ export class BaseExecutor {
         }, claimConflict.issues[0] || 'SD is claimed by another active session. Pick a different SD.');
       }
 
+      // Step 1.9: QF-20260711-569 (scope-widened leg) — coordinator-authority fence at the
+      // HANDOFF boundary. SPINE-001-C executed PLAN->EXEC THROUGH a needs_coordinator_review
+      // fence because handoff gates never consulted it. Same ONE shared predicate as the
+      // claim-write fences (QF-272 / QF-937 / sd-start direct path): live row re-fetch,
+      // fail-closed, binds human_action_required / needs_coordinator_review / not_before_hold
+      // at every handoff type. options.bypassValidation remains the documented (rate-limited,
+      // reason-required) emergency hatch.
+      {
+        const { liveClaimWriteFenceReason } = createRequire(import.meta.url)('../../../../lib/fleet/claim-eligibility.cjs');
+        const fenceReason = await liveClaimWriteFenceReason(this.supabase, sd?.sd_key || sdId);
+        if (fenceReason) {
+          if (options.bypassValidation) {
+            console.log(`\n⚠️  BYPASS ACTIVE: coordinator-authority fence (${fenceReason}) overridden — emergency path, audited.`);
+          } else {
+            try { endSpan(rootSpan, { result: 'authority_fence' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+            return ResultBuilder.gateFailure('GATE_COORDINATOR_AUTHORITY_FENCE', {
+              issues: [`SD is fenced at the authority boundary: ${fenceReason}`, 'Only coordinator/human authority clears this fence (clear-coordinator-review, flag removal, not_before expiry).'],
+              score: 0,
+              max_score: 100,
+              warnings: ['Do NOT work this SD until the fence clears; pick another via npm run sd:next']
+            }, `GATE_COORDINATOR_AUTHORITY_FENCE: ${fenceReason} — handoff refused`);
+          }
+        }
+      }
+
       // Step 2: Pre-execution setup (optional, override in subclass)
       let step2Span;
       try { step2Span = startSpan('step.setup', { span_type: 'phase', step_name: 'setup', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
