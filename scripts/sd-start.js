@@ -101,7 +101,7 @@ const { evaluateClaimDependencyGate } = cjsRequire('../lib/claim/gates/dependenc
 const { verifyHandoffIntegrity: verifyHandoffIntegrityGate } = cjsRequire('../lib/claim/gates/handoff-integrity.cjs');
 const { evaluateCadenceGate } = cjsRequire('../lib/claim/gates/cadence-gate.cjs');
 const queueResolver = cjsRequire('../lib/claim/queue-resolver.cjs');
-const { classifyAllDispatchIneligibility, liveClaimWriteFenceReason } = cjsRequire('../lib/fleet/claim-eligibility.cjs');
+const { classifyAllDispatchIneligibility, liveClaimWriteFenceReason, CLAIM_WRITE_FENCE_AXES } = cjsRequire('../lib/fleet/claim-eligibility.cjs');
 // SD-ARCH-HOTSPOT-SD-START-001 FR-7: dispatch-authorization polarity gate (flag-gated, observe-first).
 const dispatchAuthGate = cjsRequire('../lib/claim/gates/dispatch-authorization.cjs');
 
@@ -179,9 +179,21 @@ function enforceHumanActionGate(sd, effectiveId) {
   // hold (the reason the old first-match classifier was avoided) while a
   // multi-axis orchestrator SD without the hold does NOT trip this gate.
   const axes = classifyAllDispatchIneligibility(sd || {});
-  if (!axes.includes('human_action_required')) return;
-  console.log(`\n${colors.red}❌ ${effectiveId} requires HUMAN ACTION — cannot be claimed${colors.reset}`);
-  console.log('   metadata.requires_human_action=true — held for chairman/coordinator review.');
+  // QF-20260711-569 (root cause CONFIRMED by live repro on SPINE-001-E): this DIRECT-path
+  // gate keyed ONLY on human_action_required, so a needs_coordinator_review fence was
+  // claimable straight through sd-start. Key on the full coordinator-authority fence set
+  // (CLAIM_WRITE_FENCE_AXES — same shared authority as QF-272/QF-937's write-boundary
+  // fences), naming whichever axis matched.
+  const fence = axes.find((a) => CLAIM_WRITE_FENCE_AXES.has(a));
+  if (!fence) return;
+  const detail = {
+    human_action_required: 'metadata.requires_human_action=true — held for chairman/coordinator action.',
+    needs_coordinator_review: 'metadata.needs_coordinator_review=true — review-HELD by the coordinator.',
+    not_before_hold: 'metadata.not_before is in the future — sequencing hold.',
+  }[fence] || fence;
+  console.log(`\n${colors.red}❌ ${effectiveId} is FENCED (${fence}) — cannot be claimed${colors.reset}`);
+  console.log(`   ${detail}`);
+  console.log('   Only coordinator/human authority clears this fence — do not work this SD.');
   console.log(`\n${colors.bold}Action:${colors.reset} Pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
   process.exit(1);
 }

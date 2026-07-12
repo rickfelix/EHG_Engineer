@@ -101,3 +101,31 @@ describe('claimGuard acquire lane consults the fence (QF-20260711-937 — orches
     expect(src).toContain('COORDINATOR-AUTHORITY FENCE');
   });
 });
+
+describe('handoff boundary consults the fence (QF-20260711-569 scope-widened leg — SPINE-001-C ran PLAN->EXEC through the fence)', () => {
+  const execSrc = readFileSync(path.resolve(__dirname, '../../scripts/modules/handoff/executors/BaseExecutor.js'), 'utf8');
+
+  it('BaseExecutor.execute consults the SHARED predicate before setup/claim and refuses with a named gate', () => {
+    const fenceIdx = execSrc.indexOf('liveClaimWriteFenceReason(this.supabase');
+    const setupIdx = execSrc.indexOf('// Step 2: Pre-execution setup');
+    const claimIdx = execSrc.indexOf('_claimSDForSession(sdId, sd)');
+    expect(fenceIdx).toBeGreaterThan(-1);
+    expect(setupIdx).toBeGreaterThan(-1);
+    expect(fenceIdx).toBeLessThan(setupIdx);
+    expect(fenceIdx).toBeLessThan(claimIdx);
+    expect(execSrc).toContain('GATE_COORDINATOR_AUTHORITY_FENCE');
+    expect(execSrc).toContain('../../../../lib/fleet/claim-eligibility.cjs');
+  });
+
+  it('a fenced SD refuses the handoff naming the fence (message embeds the live reason)', () => {
+    expect(execSrc).toMatch(/GATE_COORDINATOR_AUTHORITY_FENCE: \$\{fenceReason\} — handoff refused/);
+  });
+
+  it('only the documented bypassValidation emergency hatch crosses it, loudly', () => {
+    const fenceIdx = execSrc.indexOf('Step 1.9: QF-20260711-569');
+    expect(fenceIdx).toBeGreaterThan(-1);
+    const block = execSrc.slice(fenceIdx, fenceIdx + 2200);
+    expect(block).toContain('options.bypassValidation');
+    expect(block).toContain('BYPASS ACTIVE');
+  });
+});
