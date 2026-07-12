@@ -52,6 +52,9 @@ const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.c
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
 const { enqueueRelayRequest } = require('../lib/coordinator/relay-queue.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS, ADAM_EXCLUDED_KINDS } = require('../lib/fleet/worker-status.cjs');
+// SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-2: canonical body read (payload.body
+// primary, body-column fallback) — closes instance 4, the coordinator_request body-drop below.
+const { readCanonicalBody } = require('../lib/coordination/lane-contract.cjs');
 // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class SSOT.
 const { REPLY_CLASSES, isValidReplyClass, computeReplyExpectedBy, checkAndPingOverdueReplies } = require('../lib/coordinator/reply-class.cjs');
 // SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001: reuse the canonical Adam-session resolver for the unattended
@@ -688,7 +691,12 @@ async function windowSweep(supabase, sessionId, { windowMs = DEFAULT_SWEEP_WINDO
     const ageMin = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
     const readStamp = r.read_at ? 'read' : 'UNREAD';
     const ackStamp = r.acknowledged_at ? 'acked' : 'UNACKED';
-    const text = (r.payload && r.payload.body) || r.subject || '(empty)';
+    // SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-2 (instance 4): this print path
+    // previously checked payload.body only, never the body COLUMN -- a coordinator_request row
+    // with an 858-char body in the column printed as if empty. readCanonicalBody() dual-reads
+    // (payload.body primary, body-column fallback) before falling back to subject/'(empty)'.
+    const canonicalBody = readCanonicalBody(r);
+    const text = canonicalBody || r.subject || '(empty)';
     console.log(`  • [${kind}] (${ageMin}m) ${readStamp}/${ackStamp} id=${r.id} ${text}`);
   }
 }

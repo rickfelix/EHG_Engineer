@@ -278,7 +278,7 @@ async function main() {
       `nextWakeSeconds=${delaySeconds} :: ${modeReason}`
     );
     if (delta.changed) {
-      console.log(`QUIET_TICK_PING=coordinator->adam reason=${delta.fields.join(',')} (real delta — emit a prompt cross-party ping)`);
+      console.log(`QUIET_TICK_PING=coordinator->adam reason=${delta.fields.join(',')} (real delta — emit a prompt cross-party ping; stamp payload.kind='cross_party_ping' per SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-5 — mechanical, never authored)`);
     }
   }
   return result;

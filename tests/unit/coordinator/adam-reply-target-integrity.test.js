@@ -15,7 +15,9 @@ const { resolveAdamReplyTarget, retargetStaleAdamInbound, verifyReplyDelivered }
 // Minimal chainable supabase mock. claude_sessions reads return `freshAdams`; session_coordination
 // UPDATE...select('id') returns `retargetRows`; maybeSingle returns `verifyRow`.
 function makeSb({ freshAdams = [], retargetRows = [], retargetError = null, verifyRow = null } = {}) {
-  return {
+  const calls = { updates: [] };
+  const sb = {
+    _calls: calls,
     from(table) {
       let isUpdate = false;
       const builder = {
@@ -24,7 +26,7 @@ function makeSb({ freshAdams = [], retargetRows = [], retargetError = null, veri
         filter() { return builder; },
         eq() { return builder; },
         is() { return builder; },
-        update() { isUpdate = true; return builder; },
+        update(patch) { isUpdate = true; calls.updates.push({ table, patch }); return builder; },
         maybeSingle() { return Promise.resolve({ data: verifyRow, error: null }); },
         then(resolve, reject) {
           let result;
@@ -37,6 +39,7 @@ function makeSb({ freshAdams = [], retargetRows = [], retargetError = null, veri
       return builder;
     },
   };
+  return sb;
 }
 
 const liveRow = (id, since = '2026-06-26T00:00:00.000Z') => ({ session_id: id, heartbeat_at: new Date().toISOString(), metadata: { role: 'adam', adam_since: since } });
@@ -85,6 +88,15 @@ describe('FR-2 retargetStaleAdamInbound — recover stuck unread inbound', () =>
     const r = await retargetStaleAdamInbound(sb, { staleOriginator: 'stale', liveAdam: 'live' });
     expect(r.retargeted).toBe(0);
     expect(r.error).toBe('db down');
+  });
+
+  // SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-3: regression pin, not a fix — one
+  // of the 4 already-correct re-target paths RISK identified.
+  it('(FR-3 pin) the update patch is ONLY {target_session} — never sender_session/created_at', async () => {
+    const sb = makeSb({ retargetRows: [{ id: 'm1' }] });
+    await retargetStaleAdamInbound(sb, { staleOriginator: 'stale', liveAdam: 'live' });
+    const patch = sb._calls.updates[0].patch;
+    expect(patch).toEqual({ target_session: 'live' });
   });
 });
 

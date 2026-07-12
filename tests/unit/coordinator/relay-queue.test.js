@@ -12,10 +12,16 @@ import {
   buildRelayConfirmPayload,
   enqueueRelayRequest,
   loadQueuedRelayRequests,
+  assertValidConfirmTargetSafe,
   drainOne,
   drainRelayQueue,
 } from '../../../lib/coordinator/relay-queue.cjs';
 import { PAYLOAD_KINDS } from '../../../lib/fleet/worker-status.cjs';
+
+// SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-3: drainOne's confirm insert now
+// validates row.sender_session via assertValidTarget before use -- a real full UUID, not the
+// pre-FR-3 fixtures' bare 's1', is required for the happy-path confirm-insert assertions below.
+const LIVE_ASKER_SESSION = '11111111-1111-4111-8111-111111111111';
 
 describe('selectUndrained — pure selector (TS-4)', () => {
   it('selects only undrained relay_request rows, zero IO', () => {
@@ -118,11 +124,34 @@ describe('loadQueuedRelayRequests — server-side undrained filter (CRITICAL, ad
   });
 });
 
-function makeSupabaseStub({ updateError = null, insertError = null, claimMatches = true } = {}) {
+// targetLookup controls the claude_sessions maybeSingle() result assertValidTarget's live-session
+// check queries -- default is a fresh-heartbeat row, so pre-FR-3 tests using LIVE_ASKER_SESSION
+// keep confirming exactly as before FR-3 was added.
+function makeSupabaseStub({
+  updateError = null,
+  insertError = null,
+  claimMatches = true,
+  targetLookup = { data: { session_id: LIVE_ASKER_SESSION, heartbeat_at: new Date().toISOString() }, error: null },
+} = {}) {
   const calls = { updates: [], inserts: [] };
   return {
     calls,
     from(table) {
+      if (table === 'claude_sessions') {
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  limit() {
+                    return { maybeSingle: () => Promise.resolve(targetLookup) };
+                  },
+                };
+              },
+            };
+          },
+        };
+      }
       return {
         update(patch) {
           calls.updates.push({ table, patch });
@@ -152,7 +181,7 @@ function makeSupabaseStub({ updateError = null, insertError = null, claimMatches
 describe('drainOne — FR-2 CONFIRM-ON-RELAY (TS-7)', () => {
   it('on success, sets the same-row ACTIONED marker AND inserts a new relay_confirm row', async () => {
     const supabase = makeSupabaseStub();
-    const row = { id: 'r1', sender_session: 's1', target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
+    const row = { id: 'r1', sender_session: LIVE_ASKER_SESSION, target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
     const sendRelay = vi.fn().mockResolvedValue({ ok: true });
     const result = await drainOne(supabase, row, sendRelay, Date.parse('2026-07-01T00:00:00Z'));
     expect(result.ok).toBe(true);
@@ -168,7 +197,7 @@ describe('drainOne — FR-2 CONFIRM-ON-RELAY (TS-7)', () => {
 
   it('does not call sendRelay if the row was already claimed by another tick (Q2 race fix)', async () => {
     const supabase = makeSupabaseStub({ claimMatches: false });
-    const row = { id: 'r1', sender_session: 's1', target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
+    const row = { id: 'r1', sender_session: LIVE_ASKER_SESSION, target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
     const sendRelay = vi.fn().mockResolvedValue({ ok: true });
     const result = await drainOne(supabase, row, sendRelay);
     expect(sendRelay).not.toHaveBeenCalled();
@@ -179,7 +208,7 @@ describe('drainOne — FR-2 CONFIRM-ON-RELAY (TS-7)', () => {
 
   it('claims the row BEFORE calling sendRelay (ordering, Q2 race fix)', async () => {
     const supabase = makeSupabaseStub();
-    const row = { id: 'r1', sender_session: 's1', target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
+    const row = { id: 'r1', sender_session: LIVE_ASKER_SESSION, target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
     const sendRelay = vi.fn().mockImplementation(async () => {
       // At the moment sendRelay runs, the claim update must already have been recorded.
       expect(supabase.calls.updates).toHaveLength(1);
@@ -192,7 +221,7 @@ describe('drainOne — FR-2 CONFIRM-ON-RELAY (TS-7)', () => {
 
   it('un-claims the row (resets acknowledged_at to null) if sendRelay fails, so a future tick retries', async () => {
     const supabase = makeSupabaseStub();
-    const row = { id: 'r1', sender_session: 's1', target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
+    const row = { id: 'r1', sender_session: LIVE_ASKER_SESSION, target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
     const sendRelay = vi.fn().mockResolvedValue({ ok: false, error: 'delivery failed' });
     const result = await drainOne(supabase, row, sendRelay);
     expect(result.ok).toBe(false);
@@ -203,7 +232,7 @@ describe('drainOne — FR-2 CONFIRM-ON-RELAY (TS-7)', () => {
 
   it('un-claims the row if sendRelay THROWS instead of resolving {ok:false} (adversarial-review finding, deep-tier PR review)', async () => {
     const supabase = makeSupabaseStub();
-    const row = { id: 'r1', sender_session: 's1', target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
+    const row = { id: 'r1', sender_session: LIVE_ASKER_SESSION, target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
     const sendRelay = vi.fn().mockRejectedValue(new Error('unexpected throw'));
     const result = await drainOne(supabase, row, sendRelay);
     expect(result.ok).toBe(false);
@@ -215,7 +244,7 @@ describe('drainOne — FR-2 CONFIRM-ON-RELAY (TS-7)', () => {
 
   it('does not insert a confirm row if sendRelay fails', async () => {
     const supabase = makeSupabaseStub();
-    const row = { id: 'r1', sender_session: 's1', target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
+    const row = { id: 'r1', sender_session: LIVE_ASKER_SESSION, target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
     const sendRelay = vi.fn().mockResolvedValue({ ok: false, error: 'delivery failed' });
     const result = await drainOne(supabase, row, sendRelay);
     expect(result.ok).toBe(false);
@@ -224,13 +253,68 @@ describe('drainOne — FR-2 CONFIRM-ON-RELAY (TS-7)', () => {
 
   it('(Q3) still drains a row with a malformed/missing payload.relay_to -- confirm payload carries relayed_to:undefined rather than throwing', async () => {
     const supabase = makeSupabaseStub();
-    const row = { id: 'r1', sender_session: 's1', target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1' } }; // relay_to absent
+    const row = { id: 'r1', sender_session: LIVE_ASKER_SESSION, target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1' } }; // relay_to absent
     const sendRelay = vi.fn().mockResolvedValue({ ok: true });
     const result = await drainOne(supabase, row, sendRelay);
     expect(result.ok).toBe(true);
     expect(result.confirmed).toBe(true);
     expect(supabase.calls.inserts[0].row.payload.relayed_to).toBeUndefined();
     expect(supabase.calls.inserts[0].row.subject).toContain('relayed to undefined');
+  });
+
+  it('(FR-3 pin) the atomic claim update never touches sender_session/created_at -- the original row provenance survives the claim step unchanged', async () => {
+    const supabase = makeSupabaseStub();
+    const row = { id: 'r1', sender_session: LIVE_ASKER_SESSION, target_session: 'coord1', created_at: '2026-07-01T00:00:00Z', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
+    const sendRelay = vi.fn().mockResolvedValue({ ok: true });
+    await drainOne(supabase, row, sendRelay);
+    const claimPatch = supabase.calls.updates[0].patch;
+    expect(Object.keys(claimPatch)).toEqual(['acknowledged_at']);
+    expect(claimPatch.sender_session).toBeUndefined();
+    expect(claimPatch.created_at).toBeUndefined();
+  });
+});
+
+describe('assertValidConfirmTargetSafe — FR-3 target validation, never throws (SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001)', () => {
+  it('resolves ok:true for a full-UUID target with a fresh claude_sessions heartbeat', async () => {
+    const supabase = makeSupabaseStub();
+    const result = await assertValidConfirmTargetSafe(supabase, LIVE_ASKER_SESSION);
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('resolves ok:false (never throws) for a non-UUID, non-sentinel target', async () => {
+    const supabase = makeSupabaseStub();
+    const result = await assertValidConfirmTargetSafe(supabase, 's1');
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/not a full UUID/);
+  });
+
+  it('resolves ok:false for a full UUID matching no claude_sessions row (dead/unknown asker)', async () => {
+    const supabase = makeSupabaseStub({ targetLookup: { data: null, error: null } });
+    const result = await assertValidConfirmTargetSafe(supabase, LIVE_ASKER_SESSION);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/matches no claude_sessions row/);
+  });
+
+  it('resolves ok:false for a full UUID with a stale heartbeat (row exists but dead)', async () => {
+    const staleHeartbeat = new Date(Date.now() - 20 * 60_000).toISOString(); // 20min > 10min cutoff
+    const supabase = makeSupabaseStub({ targetLookup: { data: { session_id: LIVE_ASKER_SESSION, heartbeat_at: staleHeartbeat }, error: null } });
+    const result = await assertValidConfirmTargetSafe(supabase, LIVE_ASKER_SESSION);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/heartbeat is stale/);
+  });
+});
+
+describe('drainOne — FR-3 skips (never blocks) the confirm insert on an invalid/dead asker target', () => {
+  it('drains successfully (relay already sent) but confirmed:false when the asker session is dead', async () => {
+    const supabase = makeSupabaseStub({ targetLookup: { data: null, error: null } });
+    const row = { id: 'r1', sender_session: LIVE_ASKER_SESSION, target_session: 'coord1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1', relay_to: 'eva' } };
+    const sendRelay = vi.fn().mockResolvedValue({ ok: true });
+    const result = await drainOne(supabase, row, sendRelay);
+    expect(sendRelay).toHaveBeenCalledTimes(1); // the relay itself still went out
+    expect(result.ok).toBe(true);
+    expect(result.confirmed).toBe(false);
+    expect(result.error).toMatch(/confirm target invalid, insert skipped/);
+    expect(supabase.calls.inserts).toHaveLength(0); // no confirm row attempted against a dead target
   });
 });
 
