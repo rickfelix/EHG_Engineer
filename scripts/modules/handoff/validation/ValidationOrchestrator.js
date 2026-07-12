@@ -378,12 +378,20 @@ export class ValidationOrchestrator {
             // so a permanently-stuck race window surfaces as a real failure rather
             // than looping forever. Applies to ALL wait gates incl. prerequisite-check.
             const prior = this._resolveWaitState(context, gate.name);
-            const ceiling = hasExceededMaxWait({
-              wait_attempts: prior.wait_attempts,
-              first_wait_at: prior.first_wait_at,
-              maxAttempts: WAIT_MAX_ATTEMPTS,
-              maxWallClockMs: WAIT_MAX_WALL_CLOCK_MS
-            });
+            // SD-LEO-INFRA-PHASE-SCOPED-FENCE-001 FR-3: a gate may opt out of the
+            // ceiling entirely (gate.exemptFromWaitCeiling === true) for a WAIT that is a
+            // deliberate, coordinator-managed park rather than a transient race-window
+            // block -- e.g. exec_boundary_hold, which can legitimately outlast 24h/10
+            // attempts. Exempt gates are never escalated to FAIL; ceiling stays computed
+            // (harmless) but its result is ignored below.
+            const ceiling = gate.exemptFromWaitCeiling === true
+              ? { exceeded: false, reason: null }
+              : hasExceededMaxWait({
+                wait_attempts: prior.wait_attempts,
+                first_wait_at: prior.first_wait_at,
+                maxAttempts: WAIT_MAX_ATTEMPTS,
+                maxWallClockMs: WAIT_MAX_WALL_CLOCK_MS
+              });
 
             if (ceiling.exceeded) {
               // Escalate to a real failure. NOT a wait anymore.

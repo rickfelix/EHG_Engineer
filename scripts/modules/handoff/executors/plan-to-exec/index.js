@@ -11,6 +11,7 @@ import BaseExecutor from '../BaseExecutor.js';
 // Gate creators
 import {
   createPrerequisiteCheckGate,
+  createExecBoundaryHoldGate,
   createPrdExistsGate,
   createArchitectureVerificationGate,
   createContractComplianceGate,
@@ -141,6 +142,16 @@ export class PlanToExecExecutor extends BaseExecutor {
 
     // Prerequisite handoff check (always first after protocol read)
     gates.push(createPrerequisiteCheckGate(this.supabase));
+
+    // EXEC_BOUNDARY_HOLD Gate (SD-LEO-INFRA-PHASE-SCOPED-FENCE-001): a coordinator-set
+    // metadata.exec_boundary_hold=true parks THIS handoff (WAIT, not FAIL) without
+    // blocking claim/PLAN work. Runs early (before the heavier gate battery below) so a
+    // held SD short-circuits without burning sub-agent-evidence/BMAD/etc. cycles. Applies
+    // to both orchestrator children and standalone SDs (this array is reused by both
+    // branches below); intentionally NOT included in the parent-orchestrator gate set
+    // (getParentOrchestratorGates, a separate array) since parents auto-complete on
+    // children and never meaningfully EXEC themselves.
+    gates.push(createExecBoundaryHoldGate());
 
     // Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001)
     // DB-enforced: requires fresh sub_agent_execution_results rows for the required set
@@ -456,7 +467,7 @@ export class PlanToExecExecutor extends BaseExecutor {
       // Fetch LEAD-TO-PLAN handoff for this SD
       const { data: leadHandoff } = await this.supabase
         .from('sd_phase_handoffs')
-        .select('score, validation_details, output_artifact, created_at')
+        .select('score, validation_details, created_at')
         .eq('sd_id', sd.id)
         .eq('handoff_type', 'LEAD-TO-PLAN')
         .eq('status', 'accepted')
@@ -472,7 +483,9 @@ export class PlanToExecExecutor extends BaseExecutor {
       // Extract key evaluation data from LEAD phase
       const leadScore = leadHandoff.score;
       const validationDetails = leadHandoff.validation_details || {};
-      const outputArtifact = leadHandoff.output_artifact || {};
+      // Note: sd_phase_handoffs has no output_artifact column (schema-reference-lint,
+      // SD-LEO-INFRA-PHASE-SCOPED-FENCE-001) — the prior select errored and was silently
+      // swallowed by this method's try/catch, and the value it populated was never read.
 
       // Build compounding intelligence from prior phase
       const analysisStep = {
