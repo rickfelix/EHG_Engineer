@@ -31,7 +31,11 @@ async function validateSDCommit(sdId) {
     return 0; // Fail-open
   }
 
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  // auth timers disabled: a ref'd auto-refresh timer would keep the loop alive and stall
+  // the graceful drain below (RCA a3be960f7c3652258 — 2026-07-12).
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 
   try {
     // Query SD by various ID formats
@@ -134,14 +138,19 @@ if (!sdId) {
   process.exit(1);
 }
 
-// Properly await the async function and use returned exit code
-// This avoids libuv assertion errors on Windows by allowing proper cleanup
+// Properly await the async function and use returned exit code.
+// Do NOT process.exit() here: a live undici keep-alive socket + an in-flight getaddrinfo
+// threadpool completion make an abrupt exit race libuv's async-handle close on Windows
+// (UV_HANDLE_CLOSING abort) under CPU load from earlier hook stages (ESLint/vitest).
+// Set exitCode and let the loop drain naturally; the timer below is an unref'd backstop
+// only, so it never delays a clean fast exit (RCA a3be960f7c3652258 — 2026-07-12).
 validateSDCommit(sdId)
   .then((exitCode) => {
-    // Small delay to allow Supabase client cleanup before exiting
-    setTimeout(() => process.exit(exitCode), 50);
+    process.exitCode = exitCode;
+    setTimeout(() => process.exit(exitCode), 1000).unref();
   })
   .catch((err) => {
     console.error('Unexpected error:', err.message);
-    setTimeout(() => process.exit(1), 50);
+    process.exitCode = 1;
+    setTimeout(() => process.exit(1), 1000).unref();
   });
