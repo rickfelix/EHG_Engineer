@@ -261,6 +261,28 @@ describe('reactivateVenture (FR-2: live columns; no status column)', () => {
     expect(result.pathOutput.metadata.reactivation_reason).toBe('Market shifted');
     expect(result.pathOutput.raw_material.previous_synthesis).toEqual({ x: 1 });
   });
+
+  // QF-20260712-860: a row parked by the traversability gate (parkFailedCandidate) has no
+  // source_ref.brief — its rich content lives under source_ref.candidate instead. Confirmed
+  // on venture_nursery row ac45469b-c700-4033-87bd-95a3b6112d84 (Image Alt Text Generator).
+  test('falls back to source_ref.candidate when source_ref.brief is absent (traversability-gate-parked row)', async () => {
+    const entry = {
+      id: 'id-2', name: 'Image Alt Text Generator', description: 'A problem', promoted_to_venture_id: null,
+      source_ref: {
+        sd: 'SD-LEO-INFRA-STAGE0-TRAVERSABILITY-GATE-001',
+        gate: 'traversability',
+        candidate: { problem_statement: 'Candidate problem', solution: 'Candidate solution', target_market: 'Candidate market', composite_score: 90 },
+      },
+    };
+    const { supabase } = captureSb({ singleData: entry });
+    const result = await reactivateVenture('id-2', { reason: 'Chairman venture-2 selection' }, { supabase, logger: silentLogger });
+
+    expect(result.pathOutput.suggested_problem).toBe('Candidate problem');
+    expect(result.pathOutput.suggested_solution).toBe('Candidate solution');
+    expect(result.pathOutput.target_market).toBe('Candidate market');
+    expect(result.pathOutput.raw_material.candidate).toEqual(entry.source_ref.candidate);
+    expect(result.pathOutput.metadata.candidate).toEqual(entry.source_ref.candidate);
+  });
 });
 
 describe('recordSynthesisFeedback (unchanged table — behavior preserved)', () => {

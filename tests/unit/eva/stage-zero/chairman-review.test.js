@@ -13,6 +13,18 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// QF-20260712-860: the WIP live-count now chains .not('name', 'ilike', ...) after .in() to
+// exclude test-fixture-name-prefixed rows. Real PostgREST query builders are thenable at
+// every chain step; this mock mirrors that so `.in().not().not()...` still resolves.
+function makeCountQueryMock(count, error = null) {
+  const builder = {
+    in: vi.fn(() => builder),
+    not: vi.fn(() => builder),
+    then: (resolve) => Promise.resolve({ count, error }).then(resolve),
+  };
+  return builder;
+}
+
 // Mock transitive deps
 vi.mock('../../../../scripts/modules/sd-key-generator.js', () => ({
   generateSDKey: vi.fn().mockReturnValue('SD-TEST-001'),
@@ -35,7 +47,7 @@ vi.mock('../../../../lib/eva/chairman-decision-watcher.js', () => ({
   createOrReusePendingDecision: vi.fn().mockResolvedValue({ id: 'decision-1' }),
 }));
 
-import { conductChairmanReview, persistVentureBrief } from '../../../../lib/eva/stage-zero/chairman-review.js';
+import { conductChairmanReview, persistVentureBrief, TEST_FIXTURE_NAME_PREFIXES } from '../../../../lib/eva/stage-zero/chairman-review.js';
 import { parkVenture } from '../../../../lib/eva/stage-zero/venture-nursery.js';
 import { createOrReusePendingDecision } from '../../../../lib/eva/chairman-decision-watcher.js';
 
@@ -75,7 +87,7 @@ function createMockSupabase(overrides = {}) {
     // .maybeSingle() (served by the custom chain); the WIP count uses {head:true}.
     select: vi.fn((cols, opts) => {
       if (opts?.head) {
-        return { in: vi.fn().mockResolvedValue({ count: 0, error: null }) };
+        return makeCountQueryMock(0);
       }
       return {
         ...mockChain,
@@ -121,7 +133,7 @@ function makeGuardSupabase({ insertError = null, existingVenture = null, onSelec
     select: vi.fn((cols, opts) => {
       // WIP count query (CH-9) — not a lookup; live count 0.
       if (opts?.head) {
-        return { in: vi.fn().mockResolvedValue({ count: 0, error: null }) };
+        return makeCountQueryMock(0);
       }
       onSelect();
       // First lookup = the CH-9 up-front same-name check (returns null so the insert
@@ -573,7 +585,7 @@ describe('ChairmanReview', () => {
       const venturesAtLimit = {
         ...stub,
         select: vi.fn((cols, opts) => {
-          if (opts?.head) return { in: vi.fn().mockResolvedValue({ count: 1, error: null }) };
+          if (opts?.head) return makeCountQueryMock(1);
           return {
             eq: vi.fn(() => ({
               in: vi.fn(() => ({
@@ -596,12 +608,64 @@ describe('ChairmanReview', () => {
       ).rejects.toMatchObject({ name: 'WipLimitExceededError', limit: 1, current_count: 1 });
     });
 
+    // QF-20260712-860: e2e/test-harness residue (ventures.is_synthetic is a phantom column —
+    // name-prefix matched instead) must not count toward the WIP limit.
+    it('excludes every TEST_FIXTURE_NAME_PREFIXES entry from the live-count query via .not(ilike)', async () => {
+      const notCalls = [];
+      const stub = {
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: { id: 'co-1' }, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
+      const venturesWithSpy = {
+        ...stub,
+        insert: vi.fn(() => ({
+          select: vi.fn(() => ({
+            single: vi.fn().mockResolvedValue({ data: { id: 'v-new', name: 'RealVenture' }, error: null }),
+          })),
+        })),
+        select: vi.fn((cols, opts) => {
+          if (opts?.head) {
+            const builder = {
+              in: vi.fn(() => builder),
+              not: vi.fn((...args) => { notCalls.push(args); return builder; }),
+              then: (resolve) => Promise.resolve({ count: 0, error: null }).then(resolve),
+            };
+            return builder;
+          }
+          return {
+            eq: vi.fn(() => ({
+              in: vi.fn(() => ({
+                order: vi.fn(() => ({
+                  limit: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) })),
+                })),
+              })),
+            })),
+          };
+        }),
+      };
+      const evaConfigUnset = { select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) })) })) };
+      const supabase = { from: vi.fn((t) => (t === 'ventures' ? venturesWithSpy : t === 'eva_config' ? evaConfigUnset : { ...stub })) };
+
+      await persistVentureBrief(
+        { decision: 'ready', brief: { ...validBrief, name: 'RealVenture' }, validation: { valid: true, errors: [] } },
+        { supabase, logger: silentLogger, company_id: 'co-1' },
+      );
+
+      expect(notCalls).toEqual(
+        TEST_FIXTURE_NAME_PREFIXES.map((prefix) => ['name', 'ilike', `${prefix}%`]),
+      );
+    });
+
     it('same-name idempotent re-run returns the existing venture BEFORE the WIP gate', async () => {
       const existing = { id: 'v-existing', name: 'TestVenture', status: 'active' };
       const ventures = {
         insert: vi.fn(),
         select: vi.fn((cols, opts) => {
-          if (opts?.head) return { in: vi.fn().mockResolvedValue({ count: 99, error: null }) };
+          if (opts?.head) return makeCountQueryMock(99);
           return {
             eq: vi.fn(() => ({
               in: vi.fn(() => ({
