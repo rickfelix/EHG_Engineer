@@ -1,12 +1,12 @@
--- @delegated-by: adam
--- SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-C: Relationship Engine satellite (§3.1)
--- Branching pipeline-stage transition engine — a SIBLING of fn_advance_venture_stage,
+-- @approved-by: codestreetlabs@gmail.com
+-- SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-C: Relationship Engine satellite (Â§3.1)
+-- Branching pipeline-stage transition engine â€” a SIBLING of fn_advance_venture_stage,
 -- never a generalization of it (the linear from+1 trap). Own tables, own function,
 -- disjoint from ventures/venture_stage_transitions/stage_config.
 --
 -- Write-time guards (FR-3):
 --   stranger-provenance: crm_pipeline_transitions.provenance_event_id is NOT NULL and
---     FK-enforced against crm_inbound_events — a hand-inserted row with no real inbound
+--     FK-enforced against crm_inbound_events â€” a hand-inserted row with no real inbound
 --     event is rejected by the database at INSERT time, not just by app-layer checks.
 --   no-stage-skipping: a BEFORE INSERT trigger validates (from_stage, to_stage, case_type)
 --     against the crm_pipeline_stage_edges allow-list (a branching graph, not a linear chain).
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS crm_pipeline_cases (
   venture_id UUID NOT NULL REFERENCES ventures(id),
   case_type TEXT NOT NULL CHECK (case_type IN ('pipeline', 'support')),
   current_stage TEXT NOT NULL,
-  -- Deal value in cents (integer, avoids float rounding) — NULL means "not yet estimated",
+  -- Deal value in cents (integer, avoids float rounding) â€” NULL means "not yet estimated",
   -- distinct from 0 ("estimated at zero"). Only meaningful for case_type='pipeline'.
   -- USD-only for now (the meeting-surface reader sums across cases into one total; mixed
   -- currencies would silently mis-sum, so non-USD is rejected at write time below).
@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS crm_pipeline_cases (
 );
 
 -- Venture-access enforcement: a pipeline case may only be opened for a (contact, venture)
--- pair that crm_contact_venture_access actually grants — makes the grant table genuinely
+-- pair that crm_contact_venture_access actually grants â€” makes the grant table genuinely
 -- CONSULTED, not just written (round-2 adversarial review finding). DB-level, not just
 -- app-layer, matching the stranger-provenance/no-stage-skip guard pattern.
 CREATE OR REPLACE FUNCTION crm_enforce_pipeline_case_venture_access() RETURNS TRIGGER AS $$
@@ -57,7 +57,7 @@ BEGIN
     SELECT 1 FROM crm_contact_venture_access
     WHERE contact_id = NEW.contact_id AND venture_id = NEW.venture_id
   ) THEN
-    RAISE EXCEPTION 'crm_pipeline_cases: venture-access guard rejected contact % for venture % — no crm_contact_venture_access grant',
+    RAISE EXCEPTION 'crm_pipeline_cases: venture-access guard rejected contact % for venture % â€” no crm_contact_venture_access grant',
       NEW.contact_id, NEW.venture_id;
   END IF;
   RETURN NEW;
@@ -108,7 +108,7 @@ CREATE TRIGGER trg_crm_enforce_pipeline_stage_edge
   FOR EACH ROW EXECUTE FUNCTION crm_enforce_pipeline_stage_edge();
 
 -- Sibling of fn_advance_venture_stage: same defensive JSONB-return / no-raise shape,
--- but its own object graph — never touches ventures, venture_stage_transitions, stage_config.
+-- but its own object graph â€” never touches ventures, venture_stage_transitions, stage_config.
 CREATE OR REPLACE FUNCTION fn_advance_pipeline_stage(
   p_case_id UUID,
   p_from_stage TEXT,
@@ -174,9 +174,9 @@ INSERT INTO crm_pipeline_stage_edges (from_stage, to_stage, case_type) VALUES
   ('qualified', 'disqualified', 'pipeline')
 ON CONFLICT DO NOTHING;
 
-COMMENT ON FUNCTION fn_advance_pipeline_stage IS 'Relationship engine satellite (SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-C): branching pipeline-stage transition, sibling of fn_advance_venture_stage — separate object graph, never a generalization.';
+COMMENT ON FUNCTION fn_advance_pipeline_stage IS 'Relationship engine satellite (SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-C): branching pipeline-stage transition, sibling of fn_advance_venture_stage â€” separate object graph, never a generalization.';
 
--- Service-role-only writes (same posture as crm_identity_graph's tables — S-1 born-denied
+-- Service-role-only writes (same posture as crm_identity_graph's tables â€” S-1 born-denied
 -- applied at the DB layer until the live spine authority substrate ships).
 ALTER TABLE crm_pipeline_stage_defs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY service_role_all ON crm_pipeline_stage_defs FOR ALL TO service_role USING (true) WITH CHECK (true);
@@ -192,8 +192,8 @@ CREATE POLICY service_role_all ON crm_pipeline_transitions FOR ALL TO service_ro
 
 -- fn_advance_pipeline_stage is SECURITY DEFINER and performs no internal venture-ownership
 -- check on p_case_id (the spine S-1/S-2 authority substrate it should consume is not yet
--- live — see lib/crm/spine-consumption-client.js STUB). Restrict EXECUTE to service_role
--- only so it cannot be reached directly via anon/authenticated RPC calls — the app-layer
+-- live â€” see lib/crm/spine-consumption-client.js STUB). Restrict EXECUTE to service_role
+-- only so it cannot be reached directly via anon/authenticated RPC calls â€” the app-layer
 -- service functions (which run under the service-role key) are the only intended caller
 -- until spine authorization is wired in.
 REVOKE EXECUTE ON FUNCTION fn_advance_pipeline_stage(UUID, TEXT, TEXT, UUID, UUID) FROM PUBLIC;
