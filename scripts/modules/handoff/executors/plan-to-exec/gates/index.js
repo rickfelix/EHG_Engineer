@@ -6,6 +6,7 @@
  */
 
 export { createPrerequisiteCheckGate } from './prerequisite-check.js';
+export { createExecBoundaryHoldGate } from './exec-boundary-hold.js';
 export { createPrdExistsGate, createArchitectureVerificationGate } from './prd-gates.js';
 export { createContractComplianceGate } from './contract-gates.js';
 export { createDesignDatabaseGate, shouldValidateDesignDatabase } from './design-database-gates.js';
