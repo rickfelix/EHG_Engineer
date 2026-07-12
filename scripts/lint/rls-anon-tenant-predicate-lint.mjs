@@ -121,10 +121,28 @@ function extractParenBlock(text, keywordRe) {
   return null;
 }
 
-const BLANKET_TRUE_RE = /^\s*true\s*$/i;
+// Matches a USING clause that reduces to literal `true`, tolerating any
+// number of redundant wrapping parens (USING (true), USING ((true)), ...) --
+// extractParenBlock only strips the outermost USING(...) paren, so a
+// double-wrapped literal would otherwise slip past a bare /^true$/ match.
+const BLANKET_TRUE_RE = /^\s*\(*\s*true\s*\)*\s*$/i;
 
 /**
- * PURE: classify a SELECT/anon-or-authenticated policy's violation, or null
+ * A policy is in the lint's scope if its role list is anon, authenticated,
+ * PUBLIC (explicit), or PUBLIC-by-omission (Postgres default when a
+ * CREATE POLICY has no TO clause at all -- the broadest, most dangerous
+ * shape, strictly wider than anon or authenticated alone since it also
+ * covers anon+authenticated+every other role).
+ * @param {string[]} roles
+ * @returns {boolean}
+ */
+function isInScopeRoles(roles) {
+  if (!Array.isArray(roles) || roles.length === 0) return true; // implicit PUBLIC
+  return roles.some((r) => SCOPED_ROLES.includes(r) || r === 'public');
+}
+
+/**
+ * PURE: classify a SELECT-or-ALL, in-scope-role policy's violation, or null
  * if clean. Two distinct shapes, both real historical instances:
  *   'unconditional_anon_select' -- USING (true), zero predicate at all (the
  *      companies-table incident, SD-LEO-GEN-SCOPE-ANON-KEY-001, and the
@@ -139,19 +157,29 @@ const BLANKET_TRUE_RE = /^\s*true\s*$/i;
  *      instances, venture_user_select_feedback [anon] and
  *      select_feedback_policy [authenticated]) -- partially scoped but not
  *      by CALLER, so still admits every tenant's rows.
+ * Scope note: FOR ALL grants SELECT (in addition to INSERT/UPDATE/DELETE),
+ * so it carries the same read-confidentiality risk as an explicit FOR SELECT
+ * and is checked identically -- a future policy written as `FOR ALL` instead
+ * of `FOR SELECT` must not silently evade this lint.
  * @param {{cmd:string, roles:string[], using:string|null}} policy
  * @returns {string|null}
  */
 export function classifyViolation(policy) {
-  if (policy.cmd !== 'SELECT') return null;
-  if (!policy.roles.some((r) => SCOPED_ROLES.includes(r))) return null;
+  if (policy.cmd !== 'SELECT' && policy.cmd !== 'ALL') return null;
+  if (!isInScopeRoles(policy.roles)) return null;
   if (!policy.using) return null;
   if (BLANKET_TRUE_RE.test(policy.using)) return 'unconditional_anon_select';
   if (TENANT_COLUMN_RE.test(policy.using) && !IDENTITY_BOUND_RE.test(policy.using)) return 'unbound_tenant_predicate';
   return null;
 }
 
-const scopedRoleLabel = (p) => p.roles.filter((r) => SCOPED_ROLES.includes(r)).join('/');
+// PUBLIC-by-omission (empty roles, no TO clause) and explicit `TO PUBLIC`
+// both label as 'PUBLIC' -- the broadest possible grant, worth naming
+// distinctly from a plain anon/authenticated list in the reported message.
+const scopedRoleLabel = (p) => {
+  if (!Array.isArray(p.roles) || p.roles.length === 0 || p.roles.includes('public')) return 'PUBLIC';
+  return p.roles.filter((r) => SCOPED_ROLES.includes(r)).join('/');
+};
 
 const VIOLATION_MESSAGES = {
   unconditional_anon_select: (p) =>

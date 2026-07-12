@@ -148,6 +148,41 @@ describe('classifyViolation — the two real historical instance shapes', () => 
     expect(classifyViolation(p)).toBeNull();
   });
 
+  it('CRITICAL-fix: flags a FOR ALL policy (ALL grants SELECT too, same read-confidentiality class)', () => {
+    const [p] = extractPolicies(
+      'CREATE POLICY leaky ON public.feedback FOR ALL TO authenticated USING (venture_id IS NOT NULL);'
+    );
+    expect(classifyViolation(p)).toBe('unbound_tenant_predicate');
+  });
+
+  it('CRITICAL-fix: flags a FOR ALL, unconditional USING (true) policy', () => {
+    const [p] = extractPolicies(
+      'CREATE POLICY leaky2 ON public.feedback FOR ALL TO authenticated USING (true);'
+    );
+    expect(classifyViolation(p)).toBe('unconditional_anon_select');
+  });
+
+  it('CRITICAL-fix: flags a policy with NO TO clause (implicit PUBLIC -- broader than anon or authenticated alone)', () => {
+    const [p] = extractPolicies(
+      'CREATE POLICY leaky3 ON public.feedback FOR SELECT USING (true);'
+    );
+    expect(classifyViolation(p)).toBe('unconditional_anon_select');
+  });
+
+  it('CRITICAL-fix: flags a policy with explicit TO PUBLIC', () => {
+    const [p] = extractPolicies(
+      'CREATE POLICY leaky4 ON public.feedback FOR SELECT TO PUBLIC USING (venture_id IS NOT NULL);'
+    );
+    expect(classifyViolation(p)).toBe('unbound_tenant_predicate');
+  });
+
+  it('WARNING-fix: flags a double-parenthesized unconditional USING ((true))', () => {
+    const [p] = extractPolicies(
+      'CREATE POLICY leaky5 ON public.feedback FOR SELECT TO authenticated USING ((true));'
+    );
+    expect(classifyViolation(p)).toBe('unconditional_anon_select');
+  });
+
   it('does not flag an INSERT/UPDATE/DELETE policy referencing a tenant column (different risk class)', () => {
     const [p] = extractPolicies(
       'CREATE POLICY venture_user_insert_feedback ON public.feedback FOR INSERT TO anon WITH CHECK (venture_id IS NOT NULL);'
