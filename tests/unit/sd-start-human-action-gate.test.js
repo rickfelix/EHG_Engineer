@@ -22,17 +22,30 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(resolve(__dirname, '../..', 'scripts/sd-start.js'), 'utf8');
 
 describe('QF-20260703-295: sd-start.js HELD-SD (requires_human_action) claim gate', () => {
-  it('defines enforceHumanActionGate, keyed on the SPECIFIC human_action_required axis, that exits(1)', () => {
-    // SD-ARCH-HOTSPOT-SD-START-001 FR-6/D6: the gate now routes through the shared
-    // ALL-MATCH classifier (classifyAllDispatchIneligibility) and keys on
-    // .includes('human_action_required') — the same never-miss-a-HELD-orchestrator
-    // guarantee the old direct metadata check provided, now via one axis table.
+  it('defines enforceHumanActionGate, keyed on the coordinator-authority fence set, that exits(1)', () => {
+    // SD-ARCH-HOTSPOT-SD-START-001 FR-6/D6: the gate routes through the shared
+    // ALL-MATCH classifier (classifyAllDispatchIneligibility). QF-20260711-569
+    // (root cause confirmed on SPINE-001-E): it now keys on the FULL
+    // CLAIM_WRITE_FENCE_AXES set — human_action_required AND needs_coordinator_review
+    // AND not_before_hold — not the single human-action axis, naming the matched fence.
     const start = src.indexOf('function enforceHumanActionGate');
     expect(start).toBeGreaterThan(0);
-    const body = src.slice(start, start + 1800);
+    const body = src.slice(start, start + 2600);
     expect(body).toMatch(/classifyAllDispatchIneligibility\(sd \|\| \{\}\)/);
-    expect(body).toMatch(/axes\.includes\('human_action_required'\)/);
+    expect(body).toMatch(/CLAIM_WRITE_FENCE_AXES\.has\(a\)/);
+    expect(body).toMatch(/needs_coordinator_review/);
     expect(body).toMatch(/process\.exit\(1\)/);
+  });
+
+  it('QF-20260711-569 regression pin: a needs_coordinator_review SD is refused by the DIRECT path gate predicate', async () => {
+    // Live repro: worker 52e6c8b2 cleanly claimed fenced SPINE-001-E through this gap.
+    const { createRequire } = await import('node:module');
+    const cjsRequire = createRequire(import.meta.url);
+    const { classifyAllDispatchIneligibility, CLAIM_WRITE_FENCE_AXES } =
+      cjsRequire('../../lib/fleet/claim-eligibility.cjs');
+    const reviewHeld = { sd_type: 'infrastructure', status: 'draft', metadata: { needs_coordinator_review: true } };
+    const axes = classifyAllDispatchIneligibility(reviewHeld);
+    expect(axes.find((a) => CLAIM_WRITE_FENCE_AXES.has(a))).toBe('needs_coordinator_review');
   });
 
   it('does NOT gate via the FIRST-MATCH classifier return value or a length>0 blanket (axis-precedence-masking regression, D6)', () => {

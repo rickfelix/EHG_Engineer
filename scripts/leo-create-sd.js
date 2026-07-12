@@ -147,6 +147,13 @@ Flags:
   --scope-slice <JSON>  (--child only) Declare the slice of parent orchestrator scope this
                         child claims. JSON shape: {stages?: number[], deliverable_globs?: string[]}.
                         Example: --scope-slice='{"stages":[18]}'
+  --depends-on <list>   (--child only) Comma-separated sibling SD keys this child depends on.
+                        Set on the dependencies column ATOMICALLY with the child's insert
+                        (QF-20260711-841 born-fenced sequencing) so the shared claim-eligibility
+                        predicate (lib/fleet/claim-eligibility.cjs draftDepsSatisfied) blocks
+                        claiming until every referenced sibling completes -- no post-hoc
+                        coordinator fencing window between birth and dependency-gating.
+                        Example: --depends-on SD-LEO-ORCH-FOO-001-A,SD-LEO-ORCH-FOO-001-B
   --target-repos <list> Set metadata.target_repos[] for cross-repo SDs (comma-separated).
                         Valid values: EHG, EHG_Engineer (case-insensitive; normalized).
                         When set, PR_MERGE_VERIFICATION at LEAD-FINAL scopes its scan
@@ -422,6 +429,14 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       if (childArchKeyIdx !== -1 && args[childArchKeyIdx + 1]) {
         childOverrides.archKey = args[childArchKeyIdx + 1];
       }
+      // QF-20260711-841: --depends-on <SD-KEY>[,<SD-KEY>...] — born-fenced sequencing.
+      // Sets the child's `dependencies` column atomically with the insert (lib/sd-creation/
+      // source-adapters/child.js) so a dependent child is never claimable ahead of its
+      // prerequisite; no post-hoc coordinator fencing window.
+      const childDependsOnIdx = args.indexOf('--depends-on');
+      if (childDependsOnIdx !== -1 && args[childDependsOnIdx + 1]) {
+        childOverrides.dependsOn = args[childDependsOnIdx + 1].split(',').map((k) => k.trim()).filter(Boolean);
+      }
       // Parse --scope-slice for child creation (SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-A, US-001)
       // Accepts both `--scope-slice=<json>` and `--scope-slice <json>` forms.
       let childScopeSliceIdx = -1;
@@ -461,7 +476,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // args[1] = parent key, args[2] = index (skip flag positions)
       const childParentKey = args[1];
       const flagValuePositionsChild = new Set(
-        [childTypeIdx, childTitleIdx, childVisionKeyIdx, childArchKeyIdx, childTargetReposIdx]
+        [childTypeIdx, childTitleIdx, childVisionKeyIdx, childArchKeyIdx, childTargetReposIdx, childDependsOnIdx]
           .filter(i => i !== -1).map(i => i + 1)
       );
       // --scope-slice value (next arg) is also a flag value to skip when finding the index arg
