@@ -1,14 +1,32 @@
 -- ROLLBACK for 20260712_orchestrator_ghost_complete_lead_final.sql
 -- SD: SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001
 --
--- ⚠️  CHAIRMAN APPLY ONLY. Restores the PRIOR (permissive, ghost-complete)
--- behavior from database/migrations/20251221_orchestrator_auto_complete.sql.
--- Only use if the enforcement migration causes fleet-wide orchestrator
--- completion failures that cannot be remediated forward.
+-- ⚠️  CHAIRMAN APPLY ONLY. Restores the PRIOR (permissive, ghost-complete-capable)
+-- complete_orchestrator_sd() behavior. Only use if the enforcement migration causes
+-- fleet-wide orchestrator completion failures that cannot be remediated forward.
 --
--- To roll back: re-apply database/migrations/20251221_orchestrator_auto_complete.sql
--- verbatim — it CREATE OR REPLACEs both complete_orchestrator_sd() and
--- check_handoff_bypass() with their prior bodies. This file exists so the
--- rollback path is explicit and reviewable next to the forward migration:
+-- This file is a DOCUMENTED PROCEDURE, not a self-contained script — the prior
+-- function body lives in an earlier migration file and psql \i meta-commands are
+-- not portable across apply-migration.js / MCP apply_migration / arbitrary CWDs
+-- (adversarial review finding, 2026-07-12).
+--
+-- PROCEDURE (pick ONE, depending on what was applied before this migration):
+--
+--   Case A — 20260711_orchestrator_terminal_status_sql_parity.sql WAS applied
+--   (check: live complete_orchestrator_sd body contains 'PCVP'):
+--     Re-apply section (c) of that file — the CREATE OR REPLACE FUNCTION
+--     public.complete_orchestrator_sd block — verbatim:
+--       node scripts/apply-migration.js database/migrations/20260711_orchestrator_terminal_status_sql_parity.sql --prod-deploy
+--     (Re-applying the whole 20260711 file is idempotent for its other sections.)
+--
+--   Case B — 20260711 was NOT applied (live body has no 'PCVP' marker):
+--     Re-apply the original 20251221 definition:
+--       node scripts/apply-migration.js database/migrations/20251221_orchestrator_auto_complete.sql --prod-deploy
+--     NOTE: 20251221 also re-creates check_handoff_bypass(), a function the 20260530
+--     handoff-actor-policy SSOT migration dropped as dead — if you use Case B, drop it
+--     again afterwards: DROP FUNCTION IF EXISTS check_handoff_bypass();
+--
+-- Verify the rollback took effect (either case):
+--   node scripts/orchestrator-rpc-enforcement-status.mjs   → should report STAGED
 
-\i database/migrations/20251221_orchestrator_auto_complete.sql
+SELECT 'This rollback is a documented procedure — read the header of this file.' AS rollback_instructions;

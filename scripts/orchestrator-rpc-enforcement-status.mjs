@@ -17,7 +17,8 @@ import { createDatabaseClient } from './lib/supabase-connection.js';
 const ENFORCEMENT_MARKERS = [
   { fn: 'complete_orchestrator_sd', marker: 'LEAD-FINAL-APPROVAL', meaning: 'requires accepted LEAD-FINAL-APPROVAL row' },
   { fn: 'complete_orchestrator_sd', marker: "retro_type = 'SD_COMPLETION'", meaning: 'canonical retro filter' },
-  { fn: 'check_handoff_bypass', marker: 'ORCHESTRATOR_AUTO_COMPLETE', meaning: 'fabrication whitelist (must be ABSENT)', mustBeAbsent: true }
+  { fn: 'complete_orchestrator_sd', marker: 'UNIFIED-HANDOFF-SYSTEM', meaning: 'executor-written witness allow-list (forged ADMIN_OVERRIDE rows rejected)' },
+  { fn: 'complete_orchestrator_sd', marker: 'ORCHESTRATOR_AUTO_COMPLETE', meaning: 'fabricated PLAN-TO-LEAD insert (must be ABSENT)', mustBeAbsent: true }
 ];
 
 async function main() {

@@ -206,15 +206,12 @@ export async function checkAndCompleteParentSD(supabase, sd) {
       // Child commands first, then parent commands
       result.commandsToRun = [...result.childCommands, ...result.parentCommands];
 
-      // Recursively check grandparent — it stages at pending_approval at most;
-      // its own LEAD-FINAL-APPROVAL gates enforce genuine child completion.
-      if (parentSD.parent_sd_id) {
-        console.log('   📊 Checking grandparent SD...');
-        const grandparentResult = await checkAndCompleteParentSD(supabase, parentSD);
-        if (grandparentResult.parentCommands.length > 0) {
-          result.commandsToRun.push(...grandparentResult.parentCommands);
-        }
-      }
+      // No eager grandparent recursion: the parent is only staged at pending_approval,
+      // NOT completed, so the grandparent's children are not yet all terminal. The
+      // grandparent cascade fires when the parent GENUINELY completes via its
+      // LEAD-FINAL-APPROVAL (that executor's own parent-completion path handles it).
+      // Recursing here staged grandparents whose children were incomplete — the exact
+      // ghost-complete class this SD closes (adversarial review 2026-07-12).
     }
   } catch (error) {
     console.log(`   ⚠️  Parent completion check error: ${error.message}`);

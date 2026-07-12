@@ -730,8 +730,45 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // SD-LEO-ENH-AUTO-PROCEED-001-05: Capture chaining info for orchestrator continuation
     // SD-LEO-INFRA-AUTO-CHAIN-MERGE-001: Pass shippingResults so auto-chain can gate on merge
     let orchestratorChainingInfo = { orchestratorCompleted: false };
+
+    // SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001: with the ghost-complete paths closed,
+    // an orchestrator parent now genuinely completes HERE, via its own LEAD-FINAL-APPROVAL
+    // run — so THIS is where the orchestrator completion hook (chaining, learn queue)
+    // fires; the old direct-complete paths that used to fire it no longer complete.
+    try {
+      const { data: childRows } = await this.supabase
+        .from('strategic_directives_v2')
+        .select('id')
+        .eq('parent_sd_id', sd.id)
+        .limit(1);
+      if (childRows?.length) {
+        const { executeOrchestratorCompletionHook } = await import('../../orchestrator-completion-hook.js');
+        const hookResult = await executeOrchestratorCompletionHook(
+          sd.id, sd.title, childRows.length,
+          { supabase: this.supabase, shippingResults, callerSessionId: sd.claiming_session_id }
+        );
+        orchestratorChainingInfo = {
+          orchestratorCompleted: true,
+          chainContinue: hookResult?.chainContinue || false,
+          nextOrchestrator: hookResult?.nextOrchestrator || null,
+          nextOrchestratorSdKey: hookResult?.nextOrchestratorSdKey || null
+        };
+      }
+    } catch (hookErr) {
+      console.warn(`   ⚠️  Orchestrator completion hook error (non-blocking): ${hookErr.message}`);
+    }
+
     if (sd.parent_sd_id) {
-      orchestratorChainingInfo = await checkAndCompleteParentSD(sd, this.supabase, { shippingResults });
+      const parentInfo = await checkAndCompleteParentSD(sd, this.supabase, { shippingResults });
+      if (orchestratorChainingInfo.orchestratorCompleted) {
+        // This SD's own orchestrator-completion chaining wins; parent staging info augments it.
+        if (parentInfo.parentRoutedToLeadFinal) {
+          orchestratorChainingInfo.parentRoutedToLeadFinal = true;
+          orchestratorChainingInfo.leadFinalCommand = parentInfo.leadFinalCommand;
+        }
+      } else {
+        orchestratorChainingInfo = parentInfo;
+      }
     }
 
     // SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001: Cleanup worktree on SD completion

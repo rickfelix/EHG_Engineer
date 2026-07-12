@@ -90,8 +90,22 @@ describe('routeOrchestratorToLeadFinal', () => {
     expect(payload.status).toBe('pending_approval');
     expect(payload.status).not.toBe('completed');
     expect(payload.current_phase).toBeUndefined(); // terminal phase is written only by the LFA executor
+    // is_working_on must survive staging — the LFA canonical handoff insert requires it
+    expect(payload.is_working_on).toBeUndefined();
     // guard refuses to touch already-completed rows
     expect(sdChain.neq).toHaveBeenCalledWith('status', 'completed');
+  });
+
+  it('short-circuits with ALREADY_COMPLETED for a completed SD without touching the DB', async () => {
+    const supabase = { from: vi.fn(() => { throw new Error('no DB access expected'); }) };
+    const result = await routeOrchestratorToLeadFinal(
+      supabase,
+      { id: 'uuid-1', sd_key: 'SD-ORCH-001', status: 'completed' },
+      { source: 'test' }
+    );
+    expect(result.routed).toBe(false);
+    expect(result.reason).toBe('ALREADY_COMPLETED');
+    expect(supabase.from).not.toHaveBeenCalled();
   });
 
   it('returns STAGE_UPDATE_FAILED (no command) when the staging update errors', async () => {

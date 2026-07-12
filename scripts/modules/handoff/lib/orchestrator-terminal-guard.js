@@ -44,6 +44,11 @@ export function leadFinalCommand(sdRef) {
 export async function routeOrchestratorToLeadFinal(supabase, sd, { source = 'orchestrator-completion' } = {}) {
   const sdRef = sd.sd_key || sd.id;
 
+  if (sd.status === 'completed') {
+    console.log(`   ℹ️  [${source}] ${sdRef} already completed — nothing to stage.`);
+    return { routed: false, reason: 'ALREADY_COMPLETED', command: null };
+  }
+
   const { retrospective, leadToPlanAcceptedAt, error: retroError } = await getFilteredRetrospective(
     sd.id, sd.created_at || null, supabase, sd.sd_key || null
   );
@@ -59,11 +64,14 @@ export async function routeOrchestratorToLeadFinal(supabase, sd, { source = 'orc
     return { routed: false, reason: 'RETRO_MISSING', command: null };
   }
 
+  // is_working_on is deliberately NOT cleared: the LFA executor's canonical handoff
+  // insert (created_by='UNIFIED-HANDOFF-SYSTEM') does not skip the claim check, and
+  // enforce_is_working_on_for_handoffs rejects it when is_working_on is false —
+  // parity with completeStandardSD's staging behavior (adversarial review 2026-07-12).
   const { error: updateError } = await supabase
     .from('strategic_directives_v2')
     .update({
       status: 'pending_approval',
-      is_working_on: false,
       updated_at: new Date().toISOString()
     })
     .eq('id', sd.id)
