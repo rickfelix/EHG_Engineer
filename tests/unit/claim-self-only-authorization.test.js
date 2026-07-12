@@ -47,6 +47,36 @@ describe('isBuildForbiddenSession (FR-1 predicate)', () => {
   });
 });
 
+// SD-LEO-INFRA-FIX-SESSION-REGISTER-001 (Layer 3): a bare non_fleet:true with
+// no role key is the exact fingerprint of the ad-hoc metadata-REPLACE clobber
+// this SD's RCA investigated. The predicate must still fail-closed (block),
+// but should now surface an anomaly warning so the corrupted write is visible.
+//
+// console.warn is already a persistent vi.fn() (tests/setup.unit.js, never
+// auto-cleared between tests in this file) -- mockClear() it before each
+// assertion here instead of vi.spyOn'ing a fresh layer on top of it.
+describe('isBuildForbiddenSession anomaly flagging (Layer 3)', () => {
+  beforeEach(() => {
+    console.warn.mockClear();
+  });
+
+  it('warns and still blocks on a bare non_fleet:true with no role key', () => {
+    expect(isBuildForbiddenSession({ non_fleet: true })).toBe(true);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    expect(console.warn.mock.calls[0][0]).toMatch(/ANOMALY/);
+  });
+
+  it('does not warn for a legitimate non_fleet session that carries a role', () => {
+    expect(isBuildForbiddenSession({ non_fleet: true, role: 'adam' })).toBe(true);
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('does not warn when non_fleet is not set at all', () => {
+    expect(isBuildForbiddenSession({ role: 'worker' })).toBe(false);
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+});
+
 // claimVirtualSession self-only guard — mock the service client factory.
 const rows = new Map();
 function fakeClient() {

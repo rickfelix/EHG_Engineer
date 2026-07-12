@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { stampBranch } = require('../../lib/session-writer.cjs');
+const { resolveSessionId } = require('../../lib/hooks/session-id.cjs');
 
 /**
  * Detect the current repo context from CWD or CLAUDE_PROJECT_DIR.
@@ -37,44 +38,26 @@ function detectCurrentRepo() {
   return 'EHG_Engineer';
 }
 
-function getCurrentSessionId() {
-  // Resolution order (5f02d3c2):
-  //   1. CLAUDE_SESSION_ID env var (set by capture-session-id.cjs which runs
-  //      earlier in the SessionStart chain — most reliable when present)
-  //   2. .claude/session-identity/<uuid>.json — current marker scheme;
-  //      pick the most-recently-modified file. capture-session-id.cjs:383
-  //      writes one file per session here.
-  //   3. .claude/session-id.json — legacy single-file marker (predates the
-  //      session-identity dir, kept for backward compat)
-  //   4. ~/.claude-sessions/*.json — even-older fallback
-  if (process.env.CLAUDE_SESSION_ID) {
-    return process.env.CLAUDE_SESSION_ID;
-  }
+// SD-LEO-INFRA-FIX-SESSION-REGISTER-001: this hook previously carried its own
+// getCurrentSessionId() whose marker-file fallback picked the most-recently
+// -modified file under .claude/session-identity/*.json with NO hostname/pid
+// scoping. When CLAUDE_SESSION_ID was unset in-process (the normal case for
+// SessionStart:compact), that let one session's compact-hook read an
+// UNRELATED session's marker and upsert its own hostname/tty onto that
+// foreign session_id — see RCA 2026-07-12 (session de6e0bfb clobbered by an
+// ac499e67 compact-hook race). resolveSessionId() (lib/hooks/session-id.cjs,
+// QF-20260504-765/297/749) already solves this correctly: stdin session_id
+// (authoritative per-invocation truth from Claude Code itself) first, then
+// env, then a PID-scoped marker, and only a bare mtime-newest marker as a
+// last resort. Delegating to it here closes the smear at its source instead
+// of re-deriving a weaker local heuristic.
+async function getCurrentSessionId() {
+  const resolved = await resolveSessionId();
+  if (resolved) return resolved;
 
+  // Last-resort legacy fallback (pre-dates the shared resolver): scan
+  // ~/.claude-sessions for a file whose recorded pid matches this process.
   try {
-    const markerDir = path.resolve(__dirname, '../../.claude/session-identity');
-    if (fs.existsSync(markerDir)) {
-      const markers = fs.readdirSync(markerDir)
-        .filter(f => f.endsWith('.json'))
-        .map(f => {
-          const full = path.join(markerDir, f);
-          return { name: f, mtime: fs.statSync(full).mtimeMs };
-        })
-        .sort((a, b) => b.mtime - a.mtime);
-      if (markers.length > 0) {
-        const latest = JSON.parse(fs.readFileSync(path.join(markerDir, markers[0].name), 'utf8'));
-        if (latest.session_id) return latest.session_id;
-      }
-    }
-  } catch { /* fall through to legacy lookups */ }
-
-  try {
-    const sessionFile = path.resolve(__dirname, '../../.claude/session-id.json');
-    if (fs.existsSync(sessionFile)) {
-      const data = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
-      if (data.session_id) return data.session_id;
-    }
-
     const sessionDir = path.join(os.homedir(), '.claude-sessions');
     if (!fs.existsSync(sessionDir)) return null;
     const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.json'));
@@ -115,7 +98,7 @@ async function main() {
     return; // Supabase not available
   }
 
-  const sessionId = getCurrentSessionId();
+  const sessionId = await getCurrentSessionId();
   if (!sessionId) return;
 
   const now = new Date().toISOString();
@@ -197,9 +180,17 @@ async function main() {
   } catch { /* best-effort observability; never block SessionStart */ }
 }
 
-main().catch((err) => {
-  // Never throw — SessionStart must not abort — but surface the error so it's
-  // no longer invisible (was previously swallowed with no trace, hiding schema
-  // drift like the started_at column removal from every session's boot).
-  process.stderr.write(`[session-register] main.failed error=${err?.message || String(err)}\n`);
-});
+// SD-LEO-INFRA-FIX-SESSION-REGISTER-001: only auto-invoke main() when this
+// file is run directly as the SessionStart hook (`node .../session-register.cjs`).
+// A test file requiring this module for getCurrentSessionId() must NOT
+// trigger a live Supabase call as a require-time side effect.
+if (require.main === module) {
+  main().catch((err) => {
+    // Never throw — SessionStart must not abort — but surface the error so it's
+    // no longer invisible (was previously swallowed with no trace, hiding schema
+    // drift like the started_at column removal from every session's boot).
+    process.stderr.write(`[session-register] main.failed error=${err?.message || String(err)}\n`);
+  });
+}
+
+module.exports = { getCurrentSessionId, main };
