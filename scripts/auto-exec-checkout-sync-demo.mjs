@@ -1,28 +1,44 @@
 #!/usr/bin/env node
 /**
- * auto-exec-checkout-sync-demo — report enable-eligibility for the checkout-sync pilot.
+ * auto-exec-checkout-sync-demo — register the checkout-sync pilot's default-OFF flag
+ * in the Pending-Enablement Registry (001A) and report enable-eligibility.
  * SD-LEO-INFRA-POLICY-GATED-AUTO-001D.
  *
- * NEVER performs a real sync. This CLI exists for operator/CI visibility of the
- * pilot's structural safety proofs only. A real-scope run is gated behind a
- * deliberate operator enablement decision (see ENABLEMENT_CRITERIA).
+ * QF-20260712-201: restores the flag-gated self-registration that PR #6023
+ * (SD-APEXNICHE-AI-LEO-FIX-FLAG-GOVERNANCE-CLEANUP-001) removed. Per coordinator
+ * ruling (session_coordination c0a83561, 2026-07-12): `auto_exec_checkout_sync_v1`
+ * is a deliberate default-OFF staged-rollout flag (001C/001D Pending-Enablement
+ * machinery), not a disabled-aging one — it must not be killed. The DB row's
+ * lifecycle_state is annotated `draft` so governance review routes it through
+ * stale-off-pending (recommend: enable/defer/retire), not disabled-aging (kill).
  *
- * QF-20260712-716: the `auto_exec_checkout_sync_v1` pending-enablement flag was
- * killed as a disabled-aging flag never turned on in practice — this script never
- * actually read the flag's DB state (it only self-registered it), so removing the
- * registration changes nothing observable about the eligibility report below.
+ * NEVER performs a real sync. The flag ships OFF and is NOT enable-eligible — this
+ * CLI exists for operator/CI visibility of the pilot's status only. A real-scope run
+ * is gated behind a deliberate operator enablement decision (see ENABLEMENT_CRITERIA).
  *
  * Usage:
  *   node --env-file=.env scripts/auto-exec-checkout-sync-demo.mjs
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { registerPendingFlag } from '../lib/pending-enablement-registry.js';
 import { isEnableEligible, ENABLEMENT_CRITERIA, makeWorkersProbe } from '../lib/auto-exec-checkout-sync.js';
 
-const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
+const FLAG_KEY = 'auto_exec_checkout_sync_v1';
 
-console.log(`checkout-sync pilot: human-gated, no live flag wiring.`);
-console.log(`enablement criteria: ${ENABLEMENT_CRITERIA}`);
+const reg = await registerPendingFlag(db, {
+  flag_key: FLAG_KEY,
+  display_name: 'Policy-Gated Auto-Exec: checkout-sync (pilot)',
+  gates_what: 'Auto-execution of the main-checkout deploy-sync (highest-blast fleet op). OFF => human-gated.',
+  enablement_criteria: ENABLEMENT_CRITERIA,
+  target: 'EHG_Engineer',
+  rolled_out_at: new Date().toISOString(),
+  risk_tier: 'high', // feature_flag_risk_tier enum max is 'high' (no 'critical'); highest-blast op noted in gates_what
+});
+console.log(`flag '${FLAG_KEY}': ${reg.created ? 'registered (default-OFF)' : 'already registered'}`);
 
 // Enable-eligibility is computed from proof-of-machinery. This child ships the
 // machinery + tests but does NOT auto-assert the proofs — enabling is operator-gated.
