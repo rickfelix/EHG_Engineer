@@ -1,0 +1,188 @@
+{
+  "sd_key": "SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-G",
+  "prd_id": "PRD-SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-G",
+  "generated_at": "2026-07-12T15:48:19.674Z",
+  "verdict": "RETIRE",
+  "verdict_rationale": "Both FR-1 (CEO-factory instantiation) and FR-2 (CEO-authority stage-advancement gate) are unreachable from any live production path -- the CEO-agent org layer is seed-or-theater, not exercised machinery. Per architecture doc S3.6, a RETIRE verdict shrinks phase (b) substantially; phase (b) scope should be resized (or descoped) in a follow-on SD rather than building full lifecycle machinery against dead code.",
+  "s20_26_cross_check": "docs/design/spine-system-architecture-review.md:16 -- \"the venture state machine IS live -- the EVA orchestrator drives stage transitions through it today... stages run through workers; the org layer is decorative at run level\" -- independently corroborates FR-2 (simulated S20-26 run observation).",
+  "fr1": {
+    "onboard_venture_definition": [
+      {
+        "file": "lib/agents/eva-coo-integration.js",
+        "line": 319,
+        "text": "async onboardVenture(venture, createCeo = true) {"
+      }
+    ],
+    "onboard_venture_live_callers": [],
+    "instantiate_venture_all_live_hits": [
+      {
+        "file": "lib/agents/eva-coo-integration.js",
+        "line": 327,
+        "text": "const result = await factory.instantiateVenture({"
+      },
+      {
+        "file": "scripts/harness/spine-verify-first-run.mjs",
+        "line": 108,
+        "text": "const result = await factory.instantiateVenture({"
+      }
+    ],
+    "instantiate_venture_live_external_callers_note": "Excludes: (a) onboardVenture's own internal call in lib/agents/eva-coo-integration.js -- dead transitively once onboardVenture has 0 external callers; (b) scripts/harness/spine-verify-first-run.mjs -- manual harness, not a production trigger.",
+    "instantiate_venture_live_external_callers_hits": [],
+    "manual_harness_files_excluded": [
+      "scripts/harness/spine-verify-first-run.mjs"
+    ],
+    "harness_wiring_into_any_trigger": [],
+    "verdict": "CONFIRMED: onboardVenture has zero live callers. Its own instantiateVenture() call is therefore unreachable transitively. The only other instantiateVenture call site is scripts/harness/spine-verify-first-run.mjs, a manually-invoked verification harness with no npm-script/cron/CI wiring into it -- no production entry point reaches the CEO factory."
+  },
+  "fr2": {
+    "commit_stage_transition_live_callers": [],
+    "commit_stage_transition_test_callers": [
+      {
+        "file": "tests/unit/agents/venture-state-machine-jit-check.test.js",
+        "line": 286,
+        "text": "stateMachine.commitStageTransition({"
+      },
+      {
+        "file": "tests/unit/eva/venture-state-machine.test.js",
+        "line": 387,
+        "text": "await expect(sm.commitStageTransition({"
+      },
+      {
+        "file": "tests/unit/eva/venture-state-machine.test.js",
+        "line": 399,
+        "text": "const result = await sm.commitStageTransition({"
+      },
+      {
+        "file": "tests/unit/eva/venture-state-machine.test.js",
+        "line": 415,
+        "text": "const result = await sm.commitStageTransition({"
+      },
+      {
+        "file": "tests/unit/eva/venture-state-machine.test.js",
+        "line": 431,
+        "text": "const result = await sm.commitStageTransition({"
+      },
+      {
+        "file": "tests/unit/eva/venture-state-machine.test.js",
+        "line": 446,
+        "text": "await expect(sm.commitStageTransition({"
+      },
+      {
+        "file": "tests/unit/eva/venture-state-machine.test.js",
+        "line": 487,
+        "text": "await expect(sm.commitStageTransition({"
+      },
+      {
+        "file": "tests/unit/eva/venture-state-machine.test.js",
+        "line": 499,
+        "text": "await sm.commitStageTransition({"
+      }
+    ],
+    "commit_stage_transition_archive_callers": [],
+    "verify_ceo_authority_references": [
+      {
+        "file": "docs/design/operating-company-spine-spec.md",
+        "line": 49,
+        "text": "Audit the THREE existing artifacts AGAINST this spine — `lib/agents/venture-ceo-factory.js` (CEO + VP_STRATEGY/PRODUCT/TECH/GROWTH per venture; ONE importer), `eva-coo-integration.js` (that importer — the EVA seam), and `venture-state-machine.js` (CEO-owned transitions + verifyCeoAuthority): is each a **seed** (profile-service class — build §1/§5 onto it) or **theater** (monitoring-chain class — retire and rebuild)? The gap-analysis's live GAP-2 receipts (dead CTA #13, unreachable EVA chat #18, zero-signal attention rail #11, absent calendar scheduling) are the audit's meeting-surface fixtures. Falsifiable predictions: it likely has role instantiation without born-denied authority (S1.2 fails); no exception model (S5.1 absent); no objective functions (S3.3 absent); no liveness gauges on roles (S4.3 absent); and its meeting/report surface, if any, synthesizes numbers rather than reading provenance-reached gauges (S2.3 fails). Each confirmed → the build sequence; each refuted → this spec revises."
+      },
+      {
+        "file": "lib/agents/modules/venture-state-machine/handoff-operations.js",
+        "line": 67,
+        "text": "export async function verifyCeoAuthority(supabase, agentId) {"
+      },
+      {
+        "file": "lib/agents/modules/venture-state-machine/index.js",
+        "line": 30,
+        "text": "verifyCeoAuthority,"
+      },
+      {
+        "file": "lib/agents/venture-state-machine.js",
+        "line": 22,
+        "text": "verifyCeoAuthority,"
+      },
+      {
+        "file": "lib/agents/venture-state-machine.js",
+        "line": 238,
+        "text": "const isValidCeo = await verifyCeoAuthority(this.supabase, ceoAgentId);"
+      },
+      {
+        "file": "tests/unit/eva/venture-state-machine.test.js",
+        "line": 14,
+        "text": "verifyCeoAuthority: vi.fn(),"
+      },
+      {
+        "file": "tests/unit/eva/venture-state-machine.test.js",
+        "line": 29,
+        "text": "verifyCeoAuthority,"
+      },
+      {
+        "file": "tests/unit/eva/venture-state-machine.test.js",
+        "line": 385,
+        "text": "verifyCeoAuthority.mockResolvedValue(false);"
+      },
+      {
+        "file": "tests/unit/eva/venture-state-machine.test.js",
+        "line": 396,
+        "text": "verifyCeoAuthority.mockResolvedValue(true);"
+      },
+      {
+        "file": "tests/unit/eva/venture-state-machine.test.js",
+        "line": 412,
+        "text": "verifyCeoAuthority.mockResolvedValue(true);"
+      },
+      {
+        "file": "tests/unit/eva/venture-state-machine.test.js",
+        "line": 428,
+        "text": "verifyCeoAuthority.mockResolvedValue(true);"
+      },
+      {
+        "file": "tests/unit/eva/venture-state-machine.test.js",
+        "line": 444,
+        "text": "verifyCeoAuthority.mockResolvedValue(true);"
+      },
+      {
+        "file": "tests/unit/eva/venture-state-machine.test.js",
+        "line": 456,
+        "text": "verifyCeoAuthority.mockResolvedValue(true);"
+      },
+      {
+        "file": "tests/unit/eva/venture-state-machine.test.js",
+        "line": 496,
+        "text": "verifyCeoAuthority.mockResolvedValue(true);"
+      }
+    ],
+    "bare_advance_stage_live_callers": [
+      {
+        "file": "lib/agents/modules/venture-state-machine/handoff-operations.js",
+        "line": 192,
+        "text": "advanceResult = await advanceStage(supabase, {"
+      },
+      {
+        "file": "lib/eva/eva-orchestrator.js",
+        "line": 1318,
+        "text": "await advanceStage(supabase, {"
+      },
+      {
+        "file": "lib/eva/workers/stage-advance-worker.js",
+        "line": 77,
+        "text": "await advanceStage(this.supabase, {"
+      },
+      {
+        "file": "scripts/harness/s20-run.mjs",
+        "line": 175,
+        "text": "await advanceStage(supabase, { ventureId, fromStage: stage, toStage: stage + 1, handoffData: { harness: true } });"
+      },
+      {
+        "file": "scripts/harness/s20-run.mjs",
+        "line": 208,
+        "text": "await advanceStage(supabase, { ventureId, fromStage: stage, toStage: stage + 1, handoffData: { harness: true, fixture_artifact_seed: seedResult.seeded } });"
+      },
+      {
+        "file": "scripts/llm-canary-control.js",
+        "line": 379,
+        "text": "await advanceStage();"
+      }
+    ],
+    "verdict": "CONFIRMED: commitStageTransition() -- the sole call path to verifyCeoAuthority() -- has zero live callers (only unit tests and one archived user-story-generator script). lib/eva/eva-orchestrator.js's live stage-advancement block instantiates a VentureStateMachine but calls the bare advanceStage() function directly, never sm.commitStageTransition(); the CEO-authority gate is never exercised on the live path."
+  }
+}
