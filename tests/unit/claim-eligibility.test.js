@@ -107,6 +107,47 @@ describe('draftDepsSatisfied', () => {
     const sd = { dependencies: [], metadata: { blocked_on_sd: 'none' } };
     expect(await draftDepsSatisfied(makeSb({}), sd)).toBe(true);
   });
+
+  // SD-LEO-INFRA-BELT-CLAIM-ELIGIBILITY-001 (FR-2): metadata.soft_depends_on (single key or array)
+  // folded into the same live-status re-check, fail-open on absence.
+  it('false when metadata.soft_depends_on (string) references a not-yet-completed SD', async () => {
+    const sb = makeSb({ 'SD-GOVERNOR-D8-001': { status: 'in_progress' } });
+    const sd = { dependencies: [], metadata: { soft_depends_on: 'SD-GOVERNOR-D8-001' } };
+    expect(await draftDepsSatisfied(sb, sd)).toBe(false);
+  });
+  it('true once the metadata.soft_depends_on (string) referenced SD is completed', async () => {
+    const sb = makeSb({ 'SD-GOVERNOR-D8-001': { status: 'completed' } });
+    const sd = { dependencies: [], metadata: { soft_depends_on: 'SD-GOVERNOR-D8-001' } };
+    expect(await draftDepsSatisfied(sb, sd)).toBe(true);
+  });
+  // Live example (SD-LEO-INFRA-UNIVERSAL-LOOP-GOVERNANCE-001): Adam stamps soft_depends_on as
+  // free-form prose, not a bare key -- the referenced key must be extracted from the sentence.
+  it('extracts the referenced key from free-form prose (the live Adam-authored shape)', async () => {
+    const sb = makeSb({ 'SD-LEO-INFRA-OPERATOR-CONTRACT-GATE-001': { status: 'completed' } });
+    const sd = { dependencies: [], metadata: { soft_depends_on: 'D8 (SD-LEO-INFRA-OPERATOR-CONTRACT-GATE-001) provides merge-time enrollment; can build in parallel, integrate at PLAN' } };
+    expect(await draftDepsSatisfied(sb, sd)).toBe(true);
+  });
+  it('false when the prose-embedded referenced SD is not yet completed', async () => {
+    const sb = makeSb({ 'SD-LEO-INFRA-OPERATOR-CONTRACT-GATE-001': { status: 'in_progress' } });
+    const sd = { dependencies: [], metadata: { soft_depends_on: 'D8 (SD-LEO-INFRA-OPERATOR-CONTRACT-GATE-001) provides merge-time enrollment' } };
+    expect(await draftDepsSatisfied(sb, sd)).toBe(false);
+  });
+  it('false when metadata.soft_depends_on (array) has any not-yet-completed target', async () => {
+    const sb = makeSb({ 'SD-TEST-A-001': { status: 'completed' }, 'SD-TEST-B-001': { status: 'in_progress' } });
+    const sd = { dependencies: [], metadata: { soft_depends_on: ['SD-TEST-A-001', 'SD-TEST-B-001'] } };
+    expect(await draftDepsSatisfied(sb, sd)).toBe(false);
+  });
+  it('true once every metadata.soft_depends_on (array) target is completed', async () => {
+    const sb = makeSb({ 'SD-TEST-A-001': { status: 'completed' }, 'SD-TEST-B-001': { status: 'completed' } });
+    const sd = { dependencies: [], metadata: { soft_depends_on: ['SD-TEST-A-001', 'SD-TEST-B-001'] } };
+    expect(await draftDepsSatisfied(sb, sd)).toBe(true);
+  });
+  it('treats metadata.soft_depends_on="none", [], and absence as non-blocking (fail-open)', async () => {
+    expect(await draftDepsSatisfied(makeSb({}), { dependencies: [], metadata: { soft_depends_on: 'none' } })).toBe(true);
+    expect(await draftDepsSatisfied(makeSb({}), { dependencies: [], metadata: { soft_depends_on: [] } })).toBe(true);
+    expect(await draftDepsSatisfied(makeSb({}), { dependencies: [], metadata: {} })).toBe(true);
+    expect(await draftDepsSatisfied(makeSb({}), { dependencies: [] })).toBe(true);
+  });
 });
 
 describe('evaluateDispatchEligibility (discriminated verdict; throws on query error)', () => {
