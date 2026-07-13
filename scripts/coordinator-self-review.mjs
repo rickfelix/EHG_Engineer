@@ -16,7 +16,6 @@ const { insertCoordinationRow, isFullUuid } = createRequire(import.meta.url)('..
 import { guardMutation, resolveOwnSessionId } from '../lib/coordinator-mutation-guard.mjs';
 // SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-2: graded coordinator self-score (shared role-agnostic core).
 import { COORDINATOR_CONFIG } from '../lib/coordinator/self-score-config.mjs';
-import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 const roleScoreCore = createRequire(import.meta.url)('../lib/governance/role-self-score.cjs');
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -163,7 +162,11 @@ export async function selfReviewMain() {
     const adamBody = 'ADAM-REVIEW REQUEST (bidirectional coordinator<->Adam review, ' + delta + ' SDs shipped since last review): candid critique of how the COORDINATOR works WITH Adam — (1) assignment clarity, (2) comms latency / reply timeliness on the advisory lane, (3) dependency handling for Adam-sourced work. Adam: reciprocate with your OWN friction. Reply: /signal feedback, prefix "ADAM-COORD-FEEDBACK". Both sides self-improve (coordinator.md + CLAUDE_ADAM.md).';
     for (const a of adamParticipants) {
       try {
-        await insertCoordinationRow(db, { target_session: a, sender_session: me, subject: 'Coordinator<->Adam review (every ' + REVIEW_EVERY + ' SDs) — candid bidirectional feedback', message_type: 'COACHING', payload: { kind: 'coordinator_reply', body: adamBody } });
+        // SD-LEO-INFRA-DISTINCT-REVIEW-REQUEST-001: was kind:'coordinator_reply' — not even a
+        // DIRECTIVE_KIND, so this substantive review was fully collapsible to a routine ack
+        // (2026-07-13 co-drive review finding). review_request is a DIRECTIVE_KIND: deliver-not-
+        // consume, never auto-acked, distinct from both coordinator_request and coordinator_reply.
+        await insertCoordinationRow(db, { target_session: a, sender_session: me, subject: 'Coordinator<->Adam review (every ' + REVIEW_EVERY + ' SDs) — candid bidirectional feedback', message_type: 'COACHING', payload: { kind: 'review_request', body: adamBody } });
         adamSolicited++;
       } catch (e) { solicitFailed++; console.error('[COORD-REVIEW] adam solicit skip ' + a + ': ' + e.message.split('\n')[0]); }
     }
@@ -290,15 +293,5 @@ export async function selfReviewMain() {
 
 // Main-guard: run only when invoked directly (the cron path), not on import (tests).
 if (process.argv[1] && /coordinator-self-review\.mjs$/.test(process.argv[1].replace(/\\/g, '/'))) {
-  selfReviewMain().then(async () => {
-    // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp on every successful tick,
-    // regardless of which internal early-return branch selfReviewMain() took (not-due-by-work,
-    // suppressed-by-min-interval-floor, or full DUE processing) — reflects loop liveness (the
-    // tick ran to completion), not whether a review actually fired this cycle.
-    try {
-      await stampLastFired(db, 'standard_loop:self-review');
-    } catch (err) {
-      console.error(`[COORD-REVIEW] stampLastFired failed (non-fatal): ${err.message}`);
-    }
-  });
+  selfReviewMain();
 }

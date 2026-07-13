@@ -45,6 +45,7 @@ describe('FR-3: DIRECTIVE_KINDS allowlist', () => {
       'coordinator_directive', // SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001
       'chairman_directive', // SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B / FR-1 (broadcast chairman directive, no-auto-ack)
       'fence_notice', // SD-LEO-INFRA-MID-FLIGHT-DIRECTIVE-001 / FR-2 (priority-exempt hard-stop notice)
+      'review_request', // SD-LEO-INFRA-DISTINCT-REVIEW-REQUEST-001 (bidirectional coordinator<->Adam candid-feedback review)
     ]);
     expect(Object.isFrozen(ws.DIRECTIVE_KINDS)).toBe(true);
   });
