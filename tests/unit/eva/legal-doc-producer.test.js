@@ -100,6 +100,18 @@ describe('substituteMarkers', () => {
     const b = substituteMarkers('{{X}}-{{Y}}', { '{{X}}': '1', '{{Y}}': '2' });
     expect(a).toBe(b);
   });
+
+  it('adversarial-review fix: a substituted value containing a marker-like token is NOT re-substituted (injection guard)', () => {
+    // Single-pass replace: the template's {{CONTACT_EMAIL}} is filled with a value that
+    // itself looks like a different marker. A sequential split/join implementation would
+    // re-scan and replace that literal text on a later pass; single-pass regex replace
+    // must not, since String.replace never re-matches its own replacement output.
+    const result = substituteMarkers('Contact: {{CONTACT_EMAIL}} / Effective: {{EFFECTIVE_DATE}}', {
+      '{{CONTACT_EMAIL}}': '{{EFFECTIVE_DATE}}',
+      '{{EFFECTIVE_DATE}}': '2026-07-13',
+    });
+    expect(result).toBe('Contact: {{EFFECTIVE_DATE}} / Effective: 2026-07-13');
+  });
 });
 
 describe('generateLegalDocsForVenture — TS-1 happy path', () => {
@@ -126,6 +138,58 @@ describe('generateLegalDocsForVenture — TS-1 happy path', () => {
     expect(result.ok).toBe(true);
     expect(supabase._inserted).toHaveLength(0); // updated, not inserted
     expect(result.generated.every((g) => g.overrideId === 'existing-override-1')).toBe(true);
+  });
+
+  it('adversarial-review fix: strips protocol from a full-URL website value so CONTACT_EMAIL is a well-formed address', async () => {
+    const supabase = makeSupabase({ companyRow: { ...COMPANY_ROW, website: 'https://alttextcompliance.com/about' } });
+    const result = await generateLegalDocsForVenture({ supabase, ventureId: 'v1', logger: silentLogger });
+    expect(result.ok).toBe(true);
+    // Only the terms_of_service template (ACTIVE_TEMPLATES[0]) references {{CONTACT_EMAIL}}.
+    const tosRow = supabase._inserted.find((r) => r.template_id === 'tpl-tos');
+    expect(tosRow.generated_content).toContain('legal@alttextcompliance.com');
+    expect(tosRow.generated_content).not.toContain('legal@https://');
+    for (const row of supabase._inserted) {
+      expect(row.generated_content).not.toContain('https://'); // COMPANY_DOMAIN itself is also stripped
+    }
+  });
+});
+
+describe('generateLegalDocsForVenture — adversarial review: TOCTOU race handling', () => {
+  it('treats a 23505 unique-violation on insert as a concurrent-winner race, not a failure (no spurious chairman alert)', async () => {
+    let selectCallCount = 0;
+    const eventsInserted = [];
+    const supabase = {
+      from(table) {
+        if (table === 'ventures') return { select() { return this; }, eq() { return this; }, maybeSingle: () => Promise.resolve({ data: VENTURE_ROW, error: null }) };
+        if (table === 'companies') return { select() { return this; }, eq() { return this; }, maybeSingle: () => Promise.resolve({ data: COMPANY_ROW, error: null }) };
+        if (table === 'legal_templates') return { select() { return this; }, eq() { return this; }, in: () => Promise.resolve({ data: ACTIVE_TEMPLATES, error: null }) };
+        if (table === 'venture_legal_overrides') {
+          return {
+            select() { return this; },
+            eq() { return this; },
+            maybeSingle: () => {
+              selectCallCount += 1;
+              // Per template: 1st (odd) select is the pre-insert "existing?" check -> null.
+              // 2nd (even) select is the post-23505 re-query, simulating the concurrent
+              // winner's row that was inserted between the two selects -> the raced row.
+              return Promise.resolve({ data: selectCallCount % 2 === 1 ? null : { id: 'raced-row-id' }, error: null });
+            },
+            update() { return this; },
+            insert: () => ({
+              select() { return this; },
+              single: () => Promise.resolve({ data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint "unique_venture_template"' } }),
+            }),
+          };
+        }
+        if (table === 'eva_orchestration_events') return { insert: (row) => { eventsInserted.push(row); return Promise.resolve({ data: null, error: null }); } };
+        throw new Error(`unexpected table ${table}`);
+      },
+    };
+
+    const result = await generateLegalDocsForVenture({ supabase, ventureId: 'v1', logger: silentLogger });
+    expect(result.ok).toBe(true);
+    expect(result.generated.every((g) => g.overrideId === 'raced-row-id')).toBe(true);
+    expect(eventsInserted).toHaveLength(0); // no false partial_write_failure alert
   });
 });
 
