@@ -56,9 +56,11 @@ beforeAll(async () => {
       ...process.env,
       PORT: String(TEST_PORT),
       STRIPE_WEBHOOK_SECRET: WHSEC,
-      STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY?.startsWith('sk_test_')
-        ? process.env.STRIPE_SECRET_KEY
-        : 'sk_test_wiring_e2e_dummy',
+      // Signature verification only needs STRIPE_WEBHOOK_SECRET (PAYRAIL-SIG-001
+      // decouples constructEvent from the API key), so an obviously-fake,
+      // non-Stripe-shaped value is sufficient here and avoids ever forwarding
+      // a real Stripe secret key into this test's spawned child process.
+      STRIPE_SECRET_KEY: 'not-a-real-stripe-key-wiring-e2e-test',
       // Exercises github-ci-status.js's documented dev-mode signature bypass
       // (api/webhooks/github-ci-status.js:300) so the wiring test does not
       // need a live ci_cd_monitoring_config row to prove reachability.
