@@ -58,6 +58,9 @@ import githubRepoRoutes from './routes/github-repo.js';
 import protocolLintRoutes, { requireAdminRole } from './routes/protocol-lint.js';
 import { createChairmanScopeGuard } from '../lib/middleware/chairman-scope-guard.js';
 
+// Payment webhook handler (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001)
+import { handleStripeWebhook } from '../api/webhooks/stripe.js';
+
 // Import Story API
 import * as storiesAPI from '../src/api/stories.js';
 
@@ -128,8 +131,27 @@ const apiLimiter = rateLimit({
 });
 app.use('/api', apiLimiter);
 
+// Stripe webhook: raw-body middleware MUST run before the global express.json()
+// parser below, or signature verification loses the exact bytes it needs
+// (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001, FR-1). Registered with app.all() (not
+// app.post()) so handleStripeWebhook's own method check (405 for non-POST)
+// is reachable — app.post() would 404 non-POST requests before the handler
+// ever runs.
+app.all('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
+
 app.use(express.json());
 
+// NOTE: /api/webhooks/github-ci-status (api/webhooks/github-ci-status.js) is
+// intentionally NOT mounted here. Its ESM/CJS crash and an unauthenticated
+// dev-mode bypass were fixed (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001), but CI's
+// schema-reference-lint + a live-schema probe confirmed the handler's business
+// logic references three tables that do not exist in production
+// (ci_cd_failure_resolutions, ci_cd_pipeline_status, ci_cd_monitoring_config)
+// and three non-existent strategic_directives_v2 columns (ci_cd_status,
+// last_pipeline_run, pipeline_health_score) — database/migrations/leo-ci-cd-
+// integration.sql defines them but was never applied. Mounting a route whose
+// core logic cannot run against the real schema is unsafe; deferred to a
+// follow-up once that migration gap is properly resolved.
 // =============================================================================
 // API ROUTES
 // =============================================================================
