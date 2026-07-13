@@ -1,0 +1,173 @@
+{
+  "executive_summary": "The VISION_FIDELITY_GATE (PLAN-TO-LEAD) has never actually evaluated an SD: 2142/2142 prior evaluations short-circuited with skipped_reason=no_vision_key, because no SD-creation path ever stamped sd.metadata.vision_key. This SD closes loop L7 of the ratified Vision Loop-Completeness Map (@ f2b64a94) by stamping metadata.vision_key at the single createSD() convergence point (default to the canonical, chairman-approved VISION-EHG-L1-001 when no caller-supplied key exists), fixing two further defects discovered while making the gate genuinely runnable -- a wrong-column-name bug in the vision-fidelity sub-agent's document loaders (queried a nonexistent `key` column instead of vision_key/plan_key, which would have kept the gate permanently no-op even after stamping) and a wrong-column-name bug in the pre-existing backfill tool (wrote to two columns that don't exist on strategic_directives_v2, so every backfill write had been silently failing) -- and running that fixed backfill live against the recent-open-SD cohort so the gate has an evaluable corpus immediately.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Stamp metadata.vision_key at SD creation (gap-fill, single convergence point)",
+      "description": "lib/sd-creation/pipeline.js's createSD() -- the shared insert convergence point for every creation lane (direct-args, --from-proposal, --child, --from-plan, --from-feedback, UAT, learn) -- now stamps sd.metadata.vision_key to the canonical default DEFAULT_VISION_KEY='VISION-EHG-L1-001' whenever it is absent, mirroring the existing FR-3 min_tier_rank gap-fill pattern in the same function. An already-present vision_key (e.g. a validated --vision-key that passed enrichFromVisionArch's orphan-FK guard in direct-lane.js, or an inherited child value) is NEVER overwritten. The proposal-ingest lane (proposal-lanes.js) deliberately drops any proposal-declared vision_key before it reaches createSD (leak-guard against an unvalidated FK-by-string), so proposal-sourced SDs -- the majority of fleet SD creation -- always receive the canonical default here, which is correct since the default is a known-good hardcoded key, not an unvalidated caller-supplied one.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A new SD created via the direct-args path with no explicit vision-key override carries metadata.vision_key = 'VISION-EHG-L1-001'",
+        "A new SD created via the proposal-ingest path (which never carried vision_key before) also carries the canonical default",
+        "An SD created with an explicit, validated vision_key retains that exact value -- the gap-fill never overwrites"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Fix the vision-fidelity sub-agent's wrong-column-name query bug",
+      "description": "lib/sub-agents/vision-fidelity/index.js's loadVisionDocument() queried eva_vision_documents on `key`/`title` columns that do not exist (the real FK column is vision_key; there is no title column) -- confirmed live via a direct Supabase query against the schema. loadArchPlan() had the identical bug against eva_architecture_plans (real FK column: plan_key). Both queries always returned null regardless of a genuinely valid vision_key, which would have kept the gate permanently short-circuited into the 'vision_key not found -- advisory pass' branch even after FR-1 landed. Both queries, and the two downstream buildPrompts() references (visionDoc.key -> visionDoc.vision_key, archPlan.key -> archPlan.plan_key), are corrected.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "loadVisionDocument()'s query for a real, existing vision_key returns the actual row, not null",
+        "loadArchPlan()'s query for a real, existing plan_key (arch_key) returns the actual row, not null",
+        "executeVisionFidelity() for an SD carrying a valid vision_key reaches the LLM comparison stage (proven by an injected stub client actually being invoked) and returns a genuine PASS/FAIL/WARNING/CONDITIONAL_PASS verdict, not a skip"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Fix the pre-existing vision_key backfill tool's phantom-column bug and run it live",
+      "description": "scripts/lineage/backfill-vision-key.mjs (built by an earlier SD, SD-WRITERCONSUMER-ASYMMETRY-DETECTION-SCOPECOMPLETION-ORCH-001-0) already implements exactly the acceptance criterion 'backfill vision_key onto recent open SDs so the gate has a corpus' -- kill switch, 50-item target cap, idempotent WHERE metadata->>vision_key IS NULL, dry-run mode. A live dry-run and live run both revealed its update payload writes smoke_test_passed_at and runtime_observed_at, columns that belong to unrelated tables (scope_completion_chain / bypass_ledger / goal_evaluator_verdicts / contract_chain_links per database/migrations/20260516*.sql) and do not exist on strategic_directives_v2 -- every single backfill write had been silently failing (the script reported success for every row, but zero rows were ever actually updated) since the tool was written. The two phantom fields are removed from the update payload (lineage_verdict/lineage_attribution_confidence, which are real columns, are kept); the fixed tool is then run live against the recent-open-SD cohort.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Running the backfill writer against the recent-open-SD cohort reports error=null for every row",
+        "A queried row from that run genuinely has metadata.vision_key/arch_key set in the live database (not just a reported success with no underlying write)",
+        "The 50-item safety cap built into the tool is respected as-is (not bypassed/increased) -- this SD backfills a recent corpus, not the full historical backlog"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Test coverage: gap-fill predicate (unit) + real gate evaluation (integration)",
+      "description": "A unit test (tests/unit/fleet/vision-key-stamp-at-creation.test.js) covers the createSD gap-fill predicate in isolation -- mirroring the established tests/unit/fleet/tier-rank-starvation-durable-fix.test.js FR-3 convention, since createSD() has too many DB/side-effect dependencies for a clean direct unit test. An integration test (tests/integration/vision-key-stamp-gate-evaluates.test.js), gated on HAS_REAL_DB, creates a disposable fixture SD directly, calls the real executeVisionFidelity() with an injected LLM stub (zero LLM cost, deterministic) and an injected gitDiffFn, and asserts the gate reaches a genuine verdict for a vision_key-carrying SD while confirming the pre-fix no_vision_key skip behavior is UNCHANGED for a legacy SD with no vision_key (negative-case regression guard).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "tests/unit/fleet/vision-key-stamp-at-creation.test.js passes (6 cases: default value, stamp-when-absent x2 shapes, never-overwrite x2 shapes)",
+        "tests/integration/vision-key-stamp-gate-evaluates.test.js passes against the real database (3 cases: canonical vision resolves, gate reaches a real verdict, un-stamped baseline unchanged)",
+        "Both test files clean up their own fixture rows (afterAll delete)"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Additive-only, no schema migration",
+      "description": "All changes are code-only (JS logic + a corrected two-line SQL query filter/select clause inside existing functions). No new database columns, tables, or migrations. metadata.vision_key/arch_key are existing JSONB keys on strategic_directives_v2.metadata."
+    },
+    {
+      "id": "TR-2",
+      "title": "Zero LLM cost in automated tests",
+      "description": "executeVisionFidelity()'s llmClient and gitDiffFn parameters are first-class injection points (not test-only monkeypatching); the integration test uses them to avoid any real LLM call or git dependency."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "New SD via direct-args path with no vision-key flag",
+      "type": "unit",
+      "expected": "metadata.vision_key defaults to VISION-EHG-L1-001"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "New SD via proposal-ingest path",
+      "type": "unit",
+      "expected": "metadata.vision_key defaults to VISION-EHG-L1-001 despite proposal-lanes.js dropping any proposal-declared value"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "SD with an already-present vision_key",
+      "type": "unit",
+      "expected": "The gap-fill never overwrites the existing value"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "executeVisionFidelity for a vision_key-carrying SD against the live DB",
+      "type": "integration",
+      "expected": "Real verdict returned (PASS in the fixture case), stub LLM client invoked, no no_vision_key/missing_artifact skip"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "executeVisionFidelity for a legacy SD with no vision_key",
+      "type": "integration",
+      "expected": "skipped_reason === 'no_vision_key' -- baseline unchanged"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "Live backfill run against the recent-open-SD cohort",
+      "type": "integration",
+      "expected": "error=null for every row, and a spot-checked row genuinely has vision_key/arch_key persisted"
+    }
+  ],
+  "acceptance_criteria": [
+    "The vision-fidelity gate transitions from 100% no_vision_key-skipped to actually evaluating for any SD carrying a vision_key",
+    "A new SD created post-fix carries a vision_key and the gate returns a real PASS/FAIL/WARNING/CONDITIONAL_PASS, not no_vision_key",
+    "Recent open SDs are backfilled with vision_key so the gate has a live corpus to evaluate against immediately, not only going forward"
+  ],
+  "risks": [
+    {
+      "risk": "Defaulting every new SD to the same canonical L1 vision_key could produce noisy/irrelevant vision-fidelity comparisons for SDs whose real scope is a satellite-level L2/L3 vision, not the top-level EHG mission",
+      "mitigation": "The default only applies when no caller/inherited vision_key is present; an explicit --vision-key (validated via enrichFromVisionArch) or an inherited child value always wins. sd_type severity-policy (severity-policy.js) already runs infrastructure SDs in warn-mode and documentation/refactor in skip-mode, softening false-positive impact for non-product SDs.",
+      "severity": "low"
+    },
+    {
+      "risk": "The backfill writer's 50-item cap leaves ~3312 remaining in-scope SDs without vision_key",
+      "mitigation": "Explicitly scoped as documented, deliberate behavior: the SD's own acceptance criterion asks for 'recent open SDs ... a corpus', not full historical backfill, and the tool's cap is an intentional safety boundary (kill-switch-gated mass mutation) that this fix respects rather than bypasses. A full historical backfill is a larger, separately-scoped decision.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "scripts/modules/handoff/executors/plan-to-lead/gates/vision-fidelity.js (PLAN-TO-LEAD VISION_FIDELITY_GATE)",
+      "Any future direct/ad-hoc invocation of executeVisionFidelity()"
+    ],
+    "dependencies": [
+      "eva_vision_documents (VISION-EHG-L1-001 must remain active + chairman_approved)",
+      "eva_architecture_plans (ARCH-EHG-L1-001)"
+    ],
+    "data_contracts": [
+      "strategic_directives_v2.metadata (JSONB) -- vision_key/arch_key keys, no schema change"
+    ],
+    "runtime_config": [
+      "none"
+    ],
+    "observability_rollout": [
+      "Directly queryable: SELECT count(*) FROM strategic_directives_v2 WHERE metadata->>'vision_key' IS NOT NULL grows going forward; sub_agent_execution_results rows for VISION_FIDELITY start appearing with non-skip verdicts as new SDs pass through PLAN-TO-LEAD"
+    ]
+  },
+  "system_architecture": {
+    "summary": "Two existing files gain a corrective code fix each (query column names) and one gains an additive gap-fill stamp; a third, already-built backfill tool has its update payload corrected.",
+    "components": [
+      { "name": "lib/sd-creation/pipeline.js", "change": "Add DEFAULT_VISION_KEY constant + gap-fill stamp in createSD()" },
+      { "name": "lib/sub-agents/vision-fidelity/index.js", "change": "Fix loadVisionDocument()/loadArchPlan() column names + downstream prompt references" },
+      { "name": "scripts/lineage/backfill-vision-key.mjs", "change": "Remove two phantom columns from the update payload" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Root-caused via direct live-DB schema probes rather than assumption; fixed at the single shared convergence point rather than duplicating logic per creation lane; verified every fix live before moving to the next.",
+    "steps": [
+      "Trace the no_vision_key skip to its source in executeVisionFidelity()",
+      "Find the single createSD() convergence point and add the gap-fill stamp there (not per-lane)",
+      "Discover and fix the vision-fidelity sub-agent's wrong-column-name query bug (would have masked FR-1 entirely)",
+      "Run the pre-existing backfill tool, discover and fix its own wrong-column-name update bug, then run it live",
+      "Write and pass a unit test (gap-fill predicate) and an integration test (real gate evaluation) against the live database"
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "Create a new SD via the standard direct-args creation path, without supplying any explicit vision-key override.",
+      "expected_outcome": "The new strategic_directives_v2 row has metadata.vision_key = \"VISION-EHG-L1-001\" (the canonical default), not absent/null."
+    },
+    {
+      "step_number": 2,
+      "instruction": "Query eva_vision_documents with .eq(\"vision_key\", \"VISION-EHG-L1-001\") directly against the live DB.",
+      "expected_outcome": "Returns a real row (status=active, chairman_approved=true) -- proves the FK column-name fix in loadVisionDocument() is correct, not the nonexistent \"key\" column."
+    },
+    {
+      "step_number": 3,
+      "instruction": "Call executeVisionFidelity({sdId, supabase, dryRun:true}) for the SD from step 1, with an injected llmClient stub returning a canned comparison JSON.",
+      "expected_outcome": "result.details.skipped_reason is NOT \"no_vision_key\" and NOT missing_artifact=eva_vision_documents; the stub LLM client IS invoked; result.verdict is a real PASS/FAIL/WARNING/CONDITIONAL_PASS, not a skip."
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-VISION-KEY-STAMP-AT-SD-CREATION-001"
+  }
+}
