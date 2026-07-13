@@ -10,9 +10,16 @@ import { buildStripeSignatureHeader, buildEventRawBody } from '../../../lib/test
  * Unlike tests/integration/payments/webhook-capture.test.js (which calls
  * handleStripeWebhook directly, bypassing Express entirely), this test boots
  * the REAL server entrypoint (server/index.js) as a child process and drives
- * real HTTP requests through it — proving both webhook routes are actually
- * mounted, and that the Stripe route's express.raw() middleware is correctly
- * ordered ahead of the global express.json() parser in the running app.
+ * real HTTP requests through it — proving the Stripe route is actually
+ * mounted, and that its express.raw() middleware is correctly ordered ahead
+ * of the global express.json() parser in the running app.
+ *
+ * NOTE: /api/webhooks/github-ci-status is intentionally NOT covered here.
+ * It is not mounted in server/index.js -- its handler's business logic
+ * references three tables that do not exist in the live database
+ * (confirmed via CI's schema-reference-lint + a direct existence probe);
+ * database/migrations/leo-ci-cd-integration.sql defines them but was never
+ * applied. Mounting was deferred pending that schema gap.
  */
 const TEST_PORT = 34519;
 const BASE_URL = `http://127.0.0.1:${TEST_PORT}`;
@@ -106,19 +113,14 @@ describe('Webhook route mounting (real Express app, real HTTP)', () => {
     expect(await countRows(id)).toBe(0);
   });
 
-  it('FR-2/FR-3: github-ci-status route is mounted and reachable (not 404) after the ESM conversion', async () => {
+  it('github-ci-status is NOT mounted (deferred pending the missing-tables schema gap)', async () => {
     const res = await fetch(`${BASE_URL}/api/webhooks/github-ci-status`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-github-event': 'check_suite' },
       body: JSON.stringify({ repository: { full_name: 'rickfelix/wiring-e2e-nonexistent' }, check_suite: { conclusion: 'success' } }),
     });
 
-    // Reachability is the contract here: a 404 would mean the route is
-    // unmounted. An unsigned request with no matching ci_cd_monitoring_config
-    // row correctly fails closed with 401 (no dev-mode bypass) -- any status
-    // other than 404 proves the request reached handleGitHubWebhook.
-    expect(res.status).not.toBe(404);
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(404);
   });
 
   it('non-POST to the Stripe route returns 405 (proves the handler, not a generic router, answered)', async () => {

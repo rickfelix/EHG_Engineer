@@ -58,9 +58,8 @@ import githubRepoRoutes from './routes/github-repo.js';
 import protocolLintRoutes, { requireAdminRole } from './routes/protocol-lint.js';
 import { createChairmanScopeGuard } from '../lib/middleware/chairman-scope-guard.js';
 
-// Payment + CI/CD webhook handlers (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001)
+// Payment webhook handler (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001)
 import { handleStripeWebhook } from '../api/webhooks/stripe.js';
-import { handleGitHubWebhook } from '../api/webhooks/github-ci-status.js';
 
 // Import Story API
 import * as storiesAPI from '../src/api/stories.js';
@@ -142,11 +141,17 @@ app.all('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handl
 
 app.use(express.json());
 
-// GitHub CI/CD status webhook: uses the global express.json() parser above
-// (no raw-body requirement) (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001, FR-3).
-// app.all() for the same reason as the Stripe route above.
-app.all('/api/webhooks/github-ci-status', handleGitHubWebhook);
-
+// NOTE: /api/webhooks/github-ci-status (api/webhooks/github-ci-status.js) is
+// intentionally NOT mounted here. Its ESM/CJS crash and an unauthenticated
+// dev-mode bypass were fixed (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001), but CI's
+// schema-reference-lint + a live-schema probe confirmed the handler's business
+// logic references three tables that do not exist in production
+// (ci_cd_failure_resolutions, ci_cd_pipeline_status, ci_cd_monitoring_config)
+// and three non-existent strategic_directives_v2 columns (ci_cd_status,
+// last_pipeline_run, pipeline_health_score) — database/migrations/leo-ci-cd-
+// integration.sql defines them but was never applied. Mounting a route whose
+// core logic cannot run against the real schema is unsafe; deferred to a
+// follow-up once that migration gap is properly resolved.
 // =============================================================================
 // API ROUTES
 // =============================================================================

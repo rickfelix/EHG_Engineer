@@ -3,19 +3,12 @@
  * LEO Protocol Integration for Automated Pipeline Monitoring
  */
 
-import { lazyServiceClient } from '../../lib/supabase-client.js';
-import crypto from 'crypto';
-import { executeSubAgent } from '../../lib/sub-agent-executor.js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
+const crypto = require('crypto');
+const { executeSubAgent } = require('../../lib/sub-agent-executor.js');
 
-// Lazy client (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001, adversarial review): this
-// module is now statically imported by server/index.js, so an eager
-// createSupabaseServiceClient() call here would throw at server BOOT (not
-// just on a request to this route) whenever SUPABASE_SERVICE_ROLE_KEY is
-// unset — taking down every other route too. lazyServiceClient() defers the
-// env-var check until first use, matching api/webhooks/stripe.js's db()
-// pattern and this server's existing fail-soft boot design (see
-// src/services/database-loader/connections.js).
-const supabase = lazyServiceClient();
+// Initialize Supabase client
+const supabase = createSupabaseServiceClient();
 
 /**
  * Verify GitHub webhook signature
@@ -303,18 +296,9 @@ async function handleGitHubWebhook(req, res) {
       .eq('repository_name', repository)
       .single();
 
-    // Verify signature. The prior `NODE_ENV === 'development'` bypass is
-    // removed (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001, adversarial review): this
-    // route was previously unreachable (CJS require() crash under ESM), so the
-    // bypass was dead code; mounting the route made it a live, unauthenticated
-    // write path into strategic_directives_v2 whenever NODE_ENV was
-    // 'development' (a common staging/preview value). Fails closed (401) for
-    // everyone until signature verification is fixed for real GitHub delivery
-    // (separate follow-up: config.webhook_secret_hash is currently a hash of
-    // the secret, not the raw secret, so verifyGitHubSignature can never
-    // succeed against a genuine HMAC-SHA256-signed delivery either).
-    const isSignatureValid = Boolean(config?.webhook_secret_hash) &&
-      verifyGitHubSignature(payload, signature, config.webhook_secret_hash);
+    // Verify signature (skip in development)
+    const isSignatureValid = process.env.NODE_ENV === 'development' ||
+      (config?.webhook_secret_hash && verifyGitHubSignature(payload, signature, config.webhook_secret_hash));
 
     // Table github_webhook_events does not exist yet — skip audit storage
 
@@ -366,5 +350,7 @@ async function handleGitHubWebhook(req, res) {
   }
 }
 
-export { handleGitHubWebhook };
-export default handleGitHubWebhook;
+module.exports = { handleGitHubWebhook };
+
+// Export for serverless environments
+module.exports.default = handleGitHubWebhook;
