@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   decideRelaunchSchedule,
   evaluateSingletonRelaunch,
+  writeScheduleRecord,
   SAFE_LOOP_STATES,
 } from '../../../lib/coordinator/singleton-relaunch-trigger.js';
 
@@ -10,7 +11,7 @@ import {
 // evaluateSingletonRelaunch below; decideRelaunchSchedule covers the full pure decision matrix.
 
 function makeSupabaseStub({ pendingRows = [], insertResult = { data: { id: 'sched-1' }, error: null }, sessionRow = null } = {}) {
-  const calls = { findPending: 0, insert: 0 };
+  const calls = { findPending: 0, insert: 0, insertedRows: [] };
   return {
     from() {
       return {
@@ -30,8 +31,9 @@ function makeSupabaseStub({ pendingRows = [], insertResult = { data: { id: 'sche
           };
           return chain;
         },
-        insert() {
+        insert(row) {
           calls.insert += 1;
+          calls.insertedRows.push(row);
           return { select: () => ({ single: () => Promise.resolve(insertResult) }) };
         },
       };
@@ -156,5 +158,41 @@ describe('evaluateSingletonRelaunch (IO-orchestrated)', () => {
     expect(r.scheduled).toBe(false);
     expect(r.reason).toBe('write_failed');
     expect(r.error).toBe('insert failed');
+  });
+});
+
+// QF-20260712-972: writeScheduleRecord() previously omitted target_session, failing the
+// session_coordination valid_target CHECK ((target_session IS NOT NULL) OR (target_sd IS NOT
+// NULL)) on every insert (feedback d100a68f, confirmed live 2026-07-07). Fixed to default to
+// the documented 'broadcast-coordinator' sentinel, matching lib/coordinator/canary-trigger.cjs.
+describe('writeScheduleRecord — session_coordination valid_target CHECK', () => {
+  it('sets a non-null target_session on every insert (the CHECK-satisfying fix)', async () => {
+    const stub = makeSupabaseStub();
+    await writeScheduleRecord(stub, {
+      role: 'coordinator',
+      senderSession: 'some-session-id',
+      freshness: staleFreshness,
+      fleetActivity: quiescentFleet,
+      targetLoopState: 'exited',
+      reason: 'quiescent_window',
+    });
+    expect(stub._calls.insert).toBe(1);
+    const row = stub._calls.insertedRows[0];
+    expect(row.target_session).toBe('broadcast-coordinator');
+    expect(row.sender_session).toBe('some-session-id');
+  });
+
+  it('still sets target_session even when senderSession is omitted (default sender)', async () => {
+    const stub = makeSupabaseStub();
+    await writeScheduleRecord(stub, {
+      role: 'adam',
+      freshness: staleFreshness,
+      fleetActivity: quiescentFleet,
+      targetLoopState: 'awaiting_tick',
+      reason: 'quiescent_window',
+    });
+    const row = stub._calls.insertedRows[0];
+    expect(row.target_session).toBe('broadcast-coordinator');
+    expect(row.sender_session).toBe('singleton-relaunch-scheduler');
   });
 });
