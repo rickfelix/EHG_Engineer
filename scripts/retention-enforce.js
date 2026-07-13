@@ -96,25 +96,45 @@ export async function enforcePolicy(supabase, policy, { apply = false, runId = n
       if (selErr) throw new Error(`select failed: ${selErr.message}`);
       if (!rows || rows.length === 0) break;
 
-      // 1) ARCHIVE — must succeed before any delete (TR-1).
-      const archiveRows = rows.map((r) => ({
-        source_table: policy.table,
-        source_id: r.id != null ? String(r.id) : null,
-        row_data: r,
-        row_timestamp: r[policy.timestampColumn] || null,
-        archived_by: 'retention-enforce',
-        run_id: runId,
-      }));
-      const { error: insErr, count: insCount } = await supabase
+      // FR-6b (SD-FDBK-FIX-BUS-RETENTION-CLEANUP-001): id-cursor guard. If a prior run
+      // archived a batch but its DELETE failed partway (e.g. transient error on one chunk),
+      // a later run would re-SELECT the same still-present rows and re-INSERT duplicate
+      // retention_archive copies before retrying the delete. Check which of this batch's
+      // ids already have an archive row for this table and skip re-archiving those —
+      // only their delete is retried.
+      const candidateIds = rows.map((r) => String(r.id));
+      const { data: alreadyArchived, error: archCheckErr } = await supabase
         .from('retention_archive')
-        .insert(archiveRows, { count: 'exact' });
-      if (insErr) throw new Error(`archive insert failed (NO rows deleted this batch): ${insErr.message}`);
-      if ((insCount ?? archiveRows.length) !== archiveRows.length) {
-        throw new Error(`archive insert count mismatch (${insCount} != ${archiveRows.length}) — aborting before delete`);
-      }
-      result.archived += rows.length;
+        .select('source_id')
+        .eq('source_table', policy.table)
+        .in('source_id', candidateIds);
+      if (archCheckErr) throw new Error(`archive-dedup check failed: ${archCheckErr.message}`);
+      const archivedIdSet = new Set((alreadyArchived || []).map((a) => a.source_id));
+      const toArchive = rows.filter((r) => !archivedIdSet.has(String(r.id)));
 
-      // 2) DELETE the archived ids (chunked — URL-length safe).
+      // 1) ARCHIVE — must succeed before any delete (TR-1). Skips ids already archived by
+      // a prior run whose delete failed (see id-cursor guard above).
+      if (toArchive.length > 0) {
+        const archiveRows = toArchive.map((r) => ({
+          source_table: policy.table,
+          source_id: r.id != null ? String(r.id) : null,
+          row_data: r,
+          row_timestamp: r[policy.timestampColumn] || null,
+          archived_by: 'retention-enforce',
+          run_id: runId,
+        }));
+        const { error: insErr, count: insCount } = await supabase
+          .from('retention_archive')
+          .insert(archiveRows, { count: 'exact' });
+        if (insErr) throw new Error(`archive insert failed (NO rows deleted this batch): ${insErr.message}`);
+        if ((insCount ?? archiveRows.length) !== archiveRows.length) {
+          throw new Error(`archive insert count mismatch (${insCount} != ${archiveRows.length}) — aborting before delete`);
+        }
+        result.archived += toArchive.length;
+      }
+
+      // 2) DELETE the archived ids (chunked — URL-length safe). Includes both
+      // freshly-archived ids and already-archived-pending-delete ids from a prior run.
       const ids = rows.map((r) => r.id);
       for (const ch of chunk(ids, DELETE_CHUNK)) {
         const { error: delErr } = await supabase.from(policy.table).delete().in('id', ch);

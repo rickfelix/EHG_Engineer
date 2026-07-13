@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../../');
 
 describe('policy registry (TS-1)', () => {
-  it('registers all 7 unbounded tables with the VERIFIED timestamp columns', () => {
+  it('registers all 8 unbounded tables with the VERIFIED timestamp columns', () => {
     const m = Object.fromEntries(RETENTION_POLICIES.map((p) => [p.table, p.timestampColumn]));
     expect(m).toEqual({
       workflow_trace_log: 'created_at',
@@ -26,6 +26,8 @@ describe('policy registry (TS-1)', () => {
       permission_audit_log: 'created_at',
       // SD-REFILL-00LHUVME: eva_scheduler_metrics retention coverage
       eva_scheduler_metrics: 'created_at',
+      // SD-FDBK-FIX-BUS-RETENTION-CLEANUP-001 FR-3
+      sub_agent_execution_results: 'created_at',
     });
   });
 
@@ -73,7 +75,7 @@ describe('policy registry (TS-1)', () => {
 });
 
 // ── mock supabase builder helper ──
-function mockSupabase({ eligible = 5, rows = null, insertError = null, deleteError = null } = {}) {
+function mockSupabase({ eligible = 5, rows = null, insertError = null, deleteError = null, alreadyArchivedIds = [] } = {}) {
   const calls = { inserts: 0, deletes: 0 };
   const sampleRows = rows || Array.from({ length: eligible }, (_, i) => ({ id: `id-${i}`, created_at: '2026-01-01T00:00:00Z' }));
   const from = vi.fn((table) => {
@@ -84,6 +86,15 @@ function mockSupabase({ eligible = 5, rows = null, insertError = null, deleteErr
           if (insertError) return { error: { message: insertError }, count: null };
           return { error: null, count: rowsIn.length };
         }),
+        // FR-6b id-cursor dedup check
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            in: vi.fn(async () => ({
+              data: alreadyArchivedIds.map((id) => ({ source_id: String(id) })),
+              error: null,
+            })),
+          })),
+        })),
       };
     }
     // source table builder — chainable
@@ -149,6 +160,17 @@ describe('enforcement invariants (TS-3/TS-4)', () => {
     const r = await enforcePolicy(supabase, policy, { apply: true, env: {} });
     expect(r.error).toMatch(/delete failed after archive/);
     expect(r.archived).toBe(5);
+  });
+
+  it('FR-6b id-cursor: ids already archived by a prior failed-delete run are NOT re-archived, only re-deleted', async () => {
+    const { supabase, calls } = mockSupabase({ eligible: 5, alreadyArchivedIds: ['id-0', 'id-1'] });
+    const r = await enforcePolicy(supabase, policy, { apply: true, env: {} });
+    expect(r.error).toBeNull();
+    // Only the 3 NOT-already-archived ids get inserted into retention_archive...
+    expect(r.archived).toBe(3);
+    // ...but all 5 (including the 2 already-archived) are retried for delete.
+    expect(r.deleted).toBe(5);
+    expect(calls.inserts).toBe(1);
   });
 
   it('per-table fail-soft: enforcePolicy returns the error rather than throwing', async () => {
