@@ -1,4 +1,5 @@
 -- Migration: 20260713_legal_doc_producer_schema.sql
+-- @approved-by: codestreetlabs@gmail.com
 -- SD: SD-FDBK-FIX-BUILD-LEGAL-DOC-001 (V5, chairman-ratified 2026-07-12)
 -- Purpose: Legal-doc producer schema -- master templates + per-venture generated
 -- documents, so Stage-23 launch-readiness can check real document presence
