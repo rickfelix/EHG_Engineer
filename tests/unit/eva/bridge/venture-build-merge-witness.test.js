@@ -255,4 +255,26 @@ describe('TS-7 — dryRun=true ⇒ the witness never runs (no telemetry)', () =>
     expect(calls.length).toBe(0);
     expect((tables.merge_witness_telemetry || []).length).toBe(0);
   });
+
+  // Operator Contract fractal binding (SD-LEO-INFRA-OPERATOR-CONTRACT-GATE-001 FR-7):
+  // a venture-stage CREATOR (leaf declaring created_tables) without its operator triple
+  // is surfaced as an observe-only advisory via the SHARED validator — same verdict a
+  // harness SD gets. Never blocks the observe-only walk.
+  it('FR-7: surfaces an operator-contract advisory for a venture CREATOR leaf lacking its triple', async () => {
+    const sb = new MockSB({});
+    const deps = { prLookup: async () => ({ pr_number: 900 }), verifyMerged: async () => true, registryRows: [], retentionPolicies: [] };
+    const leaf = { id: 'leaf-oc', sd_key: 'LEAF-OC', metadata: { created_tables: ['venture_signals'] } };
+    const summary = await observeLeafMergeWitness({ supabase: sb, leaf, ventureId: VID, deps });
+    expect(summary.operatorContract).toBeTruthy();
+    expect(summary.operatorContract.verdict).toBe('fail');
+    expect(summary.operatorContract.missing).toContain('reaper');
+    expect(summary.mergedState).toBe('merged'); // advisory does NOT alter the merge observation
+  });
+
+  it('FR-7: no operator-contract advisory for a non-CREATOR leaf (no created_tables)', async () => {
+    const sb = new MockSB({});
+    const deps = { prLookup: async () => ({ pr_number: 901 }), verifyMerged: async () => true };
+    const summary = await observeLeafMergeWitness({ supabase: sb, leaf: { id: 'l2', sd_key: 'LEAF-N2', metadata: {} }, ventureId: VID, deps });
+    expect(summary.operatorContract).toBeNull();
+  });
 });
