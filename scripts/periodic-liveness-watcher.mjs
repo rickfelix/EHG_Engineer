@@ -239,13 +239,22 @@ export function hasCrossedUnverifiedThreshold(row, nowMs) {
 
 // FR-1/FR-5: last_state_changed_at only advances on a genuine last_state transition, mirroring
 // the last_state column's own per-episode dedup discipline (PR #5562) -- never reaffirmed on a
-// same-state cycle (TS-8).
-function buildStateUpdate(row, evaluation) {
-  const update = { last_state: evaluation.state };
-  if (row.last_state !== evaluation.state) {
-    update.last_state_changed_at = new Date().toISOString();
+// same-state cycle (TS-8). Kept as its OWN independently fail-soft update, NOT bundled into the
+// primary last_state write below -- adversarial-review finding on this SD's own EXEC-TO-PLAN
+// evidence (FINDING-1): this code can merge before FR-1's migration is applied out-of-band, so
+// last_state_changed_at may not exist yet; bundling it into the same statement as last_state
+// would make the WHOLE update fail atomically pre-migration, silently breaking last_state's own
+// advancement too -- exactly the failure class this file already guards against for
+// consecutive_miss_count a few lines below (see that comment for the precedent).
+async function stampStateChangeAnchor(row, evaluation) {
+  if (row.last_state === evaluation.state) return;
+  const { error } = await supabase
+    .from('periodic_process_registry')
+    .update({ last_state_changed_at: new Date().toISOString() }) // schema-lint-disable-line
+    .eq('process_key', row.process_key);
+  if (error) {
+    console.error(`[periodic-liveness-watcher] last_state_changed_at stamp FAILED (non-fatal, likely pre-migration) for ${row.process_key}: ${error.message}`);
   }
-  return update;
 }
 
 async function main() {
@@ -314,8 +323,9 @@ async function main() {
       if (result.emitted) {
         await supabase
           .from('periodic_process_registry')
-          .update(buildStateUpdate(row, evaluation))
+          .update({ last_state: evaluation.state })
           .eq('process_key', row.process_key);
+        await stampStateChangeAnchor(row, evaluation);
       } else {
         console.error(`[periodic-liveness-watcher] emitOverdueSignal insert FAILED for ${row.process_key}: ${result.error?.message} -- last_state NOT advanced, will retry next cycle`);
       }
@@ -334,7 +344,8 @@ async function main() {
       } catch (err) {
         console.error(`[periodic-liveness-watcher] ladder climb FAILED (non-fatal) for ${row.process_key}: ${err.message}`);
       }
-      await supabase.from('periodic_process_registry').update(buildStateUpdate(row, evaluation)).eq('process_key', row.process_key);
+      await supabase.from('periodic_process_registry').update({ last_state: evaluation.state }).eq('process_key', row.process_key);
+      await stampStateChangeAnchor(row, evaluation);
     } else {
       // OK/UNVERIFIED/INTENTIONALLY_DOWN all end any active OVERDUE episode -- reset the ladder
       // counter for all of them (adversarial-review finding, PR #5940, LOW), not just OK, so a
@@ -353,7 +364,8 @@ async function main() {
           console.error(`[periodic-liveness-watcher] persistent-UNVERIFIED escalation FAILED (non-fatal) for ${row.process_key}: ${err.message}`);
         }
       }
-      await supabase.from('periodic_process_registry').update(buildStateUpdate(row, evaluation)).eq('process_key', row.process_key);
+      await supabase.from('periodic_process_registry').update({ last_state: evaluation.state }).eq('process_key', row.process_key);
+      await stampStateChangeAnchor(row, evaluation);
     }
   }
 
@@ -406,4 +418,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   });
 }
 
-export { main as runWatcher, evaluateRow, emitOverdueSignal, emitPersistentUnverifiedSignal, STATE, UNVERIFIED_ESCALATION_MS };
+export { main as runWatcher, evaluateRow, emitOverdueSignal, emitPersistentUnverifiedSignal, stampStateChangeAnchor, STATE, UNVERIFIED_ESCALATION_MS };
