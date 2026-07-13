@@ -2685,8 +2685,24 @@ async function main() {
     actions.push('CLAIM_REMINDER: nudged ' + claimIntegrityIssues.length + ' idle session(s) — ' + claimIntegrityIssues.join(', '));
   }
 
-  // Clean up expired messages first
-  try { await supabase.rpc('cleanup_expired_coordination'); } catch { /* ignore */ }
+  // Clean up expired messages first. SD-FDBK-FIX-BUS-RETENTION-CLEANUP-001 (FR-1): the RPC
+  // used to throw P0003 whenever >1 row was expired, silently swallowed here for months. The
+  // RPC itself is now fixed (archive-before-delete + guard predicates); still log a genuine
+  // failure instead of swallowing it, so a future regression surfaces instead of no-op'ing.
+  try {
+    await supabase.rpc('cleanup_expired_coordination');
+  } catch (cleanupErr) {
+    console.error(`[stale-session-sweep] cleanup_expired_coordination RPC failed: ${cleanupErr.message}`);
+  }
+
+  // FR-2: converge the ack-TTL backlog (stamps acknowledged_at on 14d+ no-ack rows; deletes
+  // nothing) so the cleanup RPC's guard predicate can eventually reap them once expired too.
+  try {
+    const { convergeAckTTL } = await import('../lib/retention/session-coordination-ack-convergence.js');
+    await convergeAckTTL(supabase);
+  } catch (ackErr) {
+    console.error(`[stale-session-sweep] ack-TTL convergence failed: ${ackErr.message}`);
+  }
 
   // FIX #3 — REWORKED by FR-4 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): coordination
   // messages targeting dead/gone sessions are DEAD-LETTERED, never hard-DELETEd. Selection
