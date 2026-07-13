@@ -580,15 +580,20 @@ function isAutoStartableQF(qf, nowMs) {
  */
 async function selfClaimQuickFix(sb, sessionId, base) {
   try {
+    // factory_lane is a staged, not-yet-applied column
+    // (database/migrations/20260713_quick_fixes_factory_lane.sql) -- until a human/coordinator
+    // applies it, this SELECT fails soft (data undefined -> sortQfCandidatesBySeverity's (qfs||[])
+    // -> no QF self-claimed this tick), the same documented fail-open contract this function
+    // already has, never a throw/crash. SD self-claim (a separate, higher-priority tier) is
+    // unaffected either way. The pragma below MUST stay on the same physical line as .select( --
+    // schema-reference-extract.mjs's pragmaAt() only checks the line containing the .select( match
+    // itself (RCA'd during this SD's own round-2 adversarial review: this line's original
+    // pragma-on-its-own-line form only escaped detection by accident -- the long comment block
+    // pushed .select( past the extractor's 600-char lookahead, silently skipping the whole column
+    // list rather than being intentionally suppressed).
     const { data: qfs } = await sb
       .from('quick_fixes')
-      // schema-lint-disable-line: factory_lane is a staged, not-yet-applied column
-      // (database/migrations/20260713_quick_fixes_factory_lane.sql) -- until a human/coordinator
-      // applies it, this SELECT fails soft (data undefined -> sortQfCandidatesBySeverity's (qfs||[])
-      // -> no QF self-claimed this tick), the same documented fail-open contract this function
-      // already has, never a throw/crash. SD self-claim (a separate, higher-priority tier) is
-      // unaffected either way.
-      .select('id, status, pr_url, commit_sha, created_at, routing_tier, title, severity, not_before, factory_lane')
+      .select('id, status, pr_url, commit_sha, created_at, routing_tier, title, severity, not_before, factory_lane') // schema-lint-disable-line: factory_lane staged, see comment above
       .eq('status', 'open')
       .is('pr_url', null)
       .is('commit_sha', null)
