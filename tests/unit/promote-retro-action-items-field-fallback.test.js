@@ -4,17 +4,19 @@
  * owner_role, priority}, used by manually-authored SD_COMPLETION retrospectives),
  * producing '(no text)' / 'unassigned' auto-promoted quick-fixes with no real content.
  *
- * The script is a top-level-executing CLI (queries Supabase on import), so this is a
- * network-free source-level pin (matches the fleet-dashboard-*.test.js pattern) rather
- * than an executed unit test — it asserts the fallback chains are present in source.
+ * SD-FDBK-FIX-RETRO-ACTION-ITEM-001: actionText/actionOwner were extracted into the
+ * pure, side-effect-free scripts/lib/retro-action-item-filter.mjs (no top-level
+ * Supabase query), so this test now imports and exercises the REAL implementation
+ * directly instead of re-implementing the fallback logic inline.
  */
 import { describe, it, expect } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
+import { actionText, actionOwner } from '../../scripts/lib/retro-action-item-filter.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SRC = readFileSync(resolve(__dirname, '../../scripts/promote-retro-action-items.mjs'), 'utf8');
+const SRC = readFileSync(resolve(__dirname, '../../scripts/lib/retro-action-item-filter.mjs'), 'utf8');
 
 function functionBody(startMarker) {
   const start = SRC.indexOf(startMarker);
@@ -22,15 +24,6 @@ function functionBody(startMarker) {
   const rest = SRC.slice(start + 1);
   const nextFn = rest.search(/\nfunction /);
   return nextFn === -1 ? rest : rest.slice(0, nextFn);
-}
-
-// Re-implement the exact fallback logic inline (the script has no exports to import
-// without triggering its top-level Supabase query) to assert behavior, not just text.
-function actionText(item) {
-  return item.item || item.action || item.title || item.text || '(no text)';
-}
-function actionOwner(item) {
-  return item.owner || item.owner_role || 'unassigned';
 }
 
 describe('QF-20260711-253 / QF-20260711-895: actionText/actionOwner cover all 4 known action_items shapes', () => {
