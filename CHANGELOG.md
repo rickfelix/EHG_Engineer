@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-07-13](#2026-07-13)
+  - [Bugfix](#bugfix)
 - [2026-07-12](#2026-07-12)
   - [Security](#security)
   - [Features](#features)
@@ -86,6 +88,14 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-07-13
+
+### Bugfix
+- **Fleet bus/retention: archive-before-delete session_coordination cleanup + unbounded-table hardening** - PR #6054 (SD-FDBK-FIX-BUS-RETENTION-CLEANUP-001)
+  - **What shipped**: `cleanup_expired_coordination()` (`database/supabase/ehg_engineer/migrations/20260309_session_coordination.sql`) has thrown Postgres P0003 for months whenever more than one `session_coordination` row was expired (~20,327 confirmed live) — a scalar `RETURNING 1 INTO` that rolls back the whole DELETE, silently swallowed by an empty `catch{}` in `stale-session-sweep.cjs:2689`. Rewrote the function (new migration, `GET DIAGNOSTICS ROW_COUNT`) as archive-before-delete — snapshotting candidate ids into a temp table, inserting into `retention_archive`, verifying the count, then deleting, raising on any mismatch — with guard predicates so it only ever deletes rows that are expired AND (acknowledged OR read ≥7d ago); expired-but-never-surfaced unacknowledged rows are never touched here, routing instead through the existing dead-letter pass. Un-swallowed the caller's error. Added a companion ack-TTL convergence pass (`lib/retention/session-coordination-ack-convergence.js`, stamps `acknowledged_at`+`payload.auto_acked=true` on 14d+ no-ack rows, deletes nothing, converges a 2,716-row backlog), registered `sub_agent_execution_results` in `RETENTION_POLICIES` (previously uncovered despite high write volume), and added a new bespoke `system_events` retention pass (`lib/retention/system-events-retention.js`) preserving the single latest row per `(event_type, key)` and any non-terminal-status row — protecting three live "latest row" readers (`awaiting_disposition` lookups, manifesto activation, latest `AGENT_OUTCOME` per venture). Folded in two hardenings to `scripts/retention-enforce.js`: documented the previously-dead `policy.mode` field (set on every policy but never read by the executor) instead of silently implying live behavior, and added an id-cursor dedup guard so a partial-failure batch never re-archives already-archived rows on a later run.
+  - **One FR explicitly deferred, not silently dropped**: the chairman-ratified scope made bounding `retention_archive`'s own TTL to 365d contingent on the D6 DR restore-rehearsal drill being on a verified cadence. Investigated — that SD (`SD-LEO-INFRA-RETARGET-RESTORE-REHEARSAL-001`) is completed, but no scheduled workflow or cron invoking `scripts/dr/restore-rehearsal.mjs` was found anywhere in the repo; the drill's completion retargeted its data source, it did not establish a verified recurring schedule. Rather than purge against an unconfirmed precondition, this was documented as a follow-up. The auto-generated user-story row mirroring this FR was deleted rather than left falsely "completed" or permanently "blocked" — `user_stories.status`'s CHECK constraint has no descoped/deferred value.
+  - **Verification**: 33 new/updated unit tests across 4 files (`session-coordination-ack-convergence.test.js`, `system-events-retention.test.js`, `cleanup-expired-coordination-migration.test.js` — static content assertions pinning the fixed migration SQL since a live-DB round-trip isn't practical in this suite — and an updated `retention-policy.test.js` covering the 8th policy entry and the id-cursor guard), all passing. Independently re-verified by a REGRESSION sub-agent (confirmed `enforcePolicy()`'s signature/return shape unchanged, the existing 7 `RETENTION_POLICIES` entries byte-identical, and the `stale-session-sweep.cjs` edit fully localized to a 24-line hunk). Migration itself is deliberately NOT applied in this PR — chairman-ratified scope calls for a supervised single run before establishing weekly cadence. Handoffs LEAD-TO-PLAN 94, PLAN-TO-EXEC 93, EXEC-TO-PLAN 97, PLAN-TO-LEAD 97, LEAD-FINAL-APPROVAL 96. Retrospective `1edf21f6` (100/100 quality).
 
 ## 2026-07-12
 
