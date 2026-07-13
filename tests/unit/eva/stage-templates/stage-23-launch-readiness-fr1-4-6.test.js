@@ -4,9 +4,15 @@
  * Unit coverage for the Stage 23 launch readiness kill-gate redesign:
  *   FR-1: canonical artifact_type emission (stage-23.js TEMPLATE.analysisStep)
  *   FR-2: orphan-disposition smoke check (canonical module loads + index dispatch)
- *   FR-3: ADVISORY mode for analytics/monitoring/legal
+ *   FR-3: ADVISORY mode for analytics/monitoring
  *   FR-4: canonical-upstream preflight + SKIP fallback + stage_skipped event
  *   FR-6: backfill migration file is shaped correctly (idempotent guard, audit metadata)
+ *
+ * SD-FDBK-FIX-BUILD-LEGAL-DOC-001 (V5): 'legal' moved from ADVISORY_CATEGORIES to
+ * REQUIRED_CATEGORIES now that lib/eva/legal-doc-producer.js exists. The FR-3
+ * assertions below are updated to reflect the new 2-advisory/4-required split;
+ * buildMockSupabase gained a legalDocsPresent option so tests can control whether
+ * the venture has generated Terms of Service + Privacy Policy.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -30,7 +36,7 @@ const REPO_ROOT = resolve(__dirname, '../../../../');
 // Fixture: supabase mock that satisfies the preflight + emit contract used by
 // FR-4. `presentTypes` is the set of artifact_types the venture currently has
 // at is_current=true; an empty set triggers SKIPPED.
-function buildMockSupabase({ presentTypes = [], emitSpy } = {}) {
+function buildMockSupabase({ presentTypes = [], emitSpy, legalDocsPresent = false } = {}) {
   return {
     from(table) {
       if (table === 'venture_artifacts') {
@@ -45,6 +51,26 @@ function buildMockSupabase({ presentTypes = [], emitSpy } = {}) {
                     artifact_type: t,
                     is_current: true,
                   })),
+                  error: null,
+                });
+              },
+            };
+          },
+        };
+      }
+      if (table === 'venture_legal_overrides') {
+        return {
+          select() {
+            return {
+              eq() { return this; },
+              not() {
+                return Promise.resolve({
+                  data: legalDocsPresent
+                    ? [
+                      { generated_at: '2026-07-13T00:00:00Z', legal_templates: { template_type: 'terms_of_service' } },
+                      { generated_at: '2026-07-13T00:00:00Z', legal_templates: { template_type: 'privacy_policy' } },
+                    ]
+                    : [],
                   error: null,
                 });
               },
@@ -136,9 +162,9 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
   });
 
   describe('FR-3: ADVISORY mode', () => {
-    it('analytics, monitoring, legal are advisory; code_quality, marketing_assets, distribution_channels are required', () => {
-      expect(REQUIRED_CATEGORIES).toEqual(['code_quality', 'marketing_assets', 'distribution_channels']);
-      expect(ADVISORY_CATEGORIES).toEqual(['analytics', 'monitoring', 'legal']);
+    it('analytics, monitoring are advisory; code_quality, marketing_assets, distribution_channels, legal are required', () => {
+      expect(REQUIRED_CATEGORIES).toEqual(['code_quality', 'marketing_assets', 'distribution_channels', 'legal']);
+      expect(ADVISORY_CATEGORIES).toEqual(['analytics', 'monitoring']);
     });
 
     it('ADVISORY entries default to status=advisory in checklist (no producer needed)', async () => {
@@ -150,14 +176,14 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
         logger: silentLogger,
       });
       const advisoryEntries = result.checklist.filter(c => c.mode === 'ADVISORY');
-      expect(advisoryEntries).toHaveLength(3);
+      expect(advisoryEntries).toHaveLength(2);
       for (const entry of advisoryEntries) {
         expect(entry.status).toBe('advisory');
       }
     });
 
-    it('verdict=READY when all REQUIRED categories pass, even with ADVISORY entries unsatisfied', async () => {
-      const supabase = buildMockSupabase({ presentTypes: allUpstreamArtifacts });
+    it('verdict=READY when all REQUIRED categories pass (including legal, via a real producer check), even with ADVISORY entries unsatisfied', async () => {
+      const supabase = buildMockSupabase({ presentTypes: allUpstreamArtifacts, legalDocsPresent: true });
       const result = await analyzeStage23LaunchReadiness({
         stage20Data: { verdict: 'PASS' },
         stage21Data: { total_assets: 12 },
@@ -167,7 +193,23 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
         logger: silentLogger,
       });
       expect(result.verdict).toBe('READY');
-      expect(result.advisory_count).toBe(3);
+      expect(result.advisory_count).toBe(2);
+    });
+
+    it('verdict=HOLD when legal is REQUIRED and no legal docs have been generated (was previously silent advisory-pass)', async () => {
+      const supabase = buildMockSupabase({ presentTypes: allUpstreamArtifacts, legalDocsPresent: false });
+      const result = await analyzeStage23LaunchReadiness({
+        stage20Data: { verdict: 'PASS' },
+        stage21Data: { total_assets: 12 },
+        stage22Data: { active_channels: 4 },
+        ventureId: '00000000-0000-0000-0000-000000000004b',
+        supabase,
+        logger: silentLogger,
+      });
+      const legalEntry = result.checklist.find(c => c.category === 'legal');
+      expect(legalEntry.mode).toBe('REQUIRED');
+      expect(legalEntry.status).toBe('fail');
+      expect(result.verdict).toBe('HOLD');
     });
 
     it('verdict=HOLD when any REQUIRED category fails (advisory ignored)', async () => {
