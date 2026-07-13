@@ -2169,6 +2169,19 @@ async function main() {
 
   await fn();
 
+  // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp the process_key matching
+  // whichever mode actually ran -- 'all' backs standard_loop:dashboard, 'inbox' backs
+  // standard_loop:inbox; other sections (workers, health, etc.) are not registered
+  // periodic processes, so no-op there.
+  if (section === 'all' || section === 'inbox') {
+    try {
+      const { stampLastFired } = await import('../lib/periodic-liveness/stamp-last-fired.js');
+      await stampLastFired(supabase, section === 'all' ? 'standard_loop:dashboard' : 'standard_loop:inbox');
+    } catch (err) {
+      console.error(`[fleet-dashboard] stampLastFired failed (non-fatal): ${err.message}`);
+    }
+  }
+
   if (suppressEnabled) {
     console.log = origLog;
     const out = buf.join('\n');

@@ -84,7 +84,11 @@ describe('venture-ops-actuals-sweep main()', () => {
     expect(collectProductHealth).toHaveBeenCalledTimes(2);
     expect(collectRevenueMetrics).toHaveBeenCalledTimes(2);
     expect(runVentureUptimeProbe).toHaveBeenCalledTimes(1);
-    expect(stampLastFired).toHaveBeenCalledTimes(3); // one per job
+    // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): a 4th whole-tick stamp
+    // ('cron_script:venture-ops-actuals-sweep.mjs') was added before the per-job stamps, distinct
+    // from the three per-job ARMED-machinery keys asserted below.
+    expect(stampLastFired).toHaveBeenCalledTimes(4);
+    expect(stampLastFired.mock.calls.some(([, key]) => key === 'cron_script:venture-ops-actuals-sweep.mjs')).toBe(true);
     expect(result.summary.jobs['ops-product-health-collector'].written).toBe(2);
     expect(result.summary.jobs['ops-revenue-metrics-collector'].written).toBe(2);
     expect(result.exitCode).toBe(0);

@@ -12,6 +12,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { computeStaleFlags, formatDigest } from '../lib/feature-flags/governance-review.js';
+import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const GATE_FLAG = 'FLAG_GOVERNANCE_REVIEW_V1';
@@ -65,12 +66,21 @@ export async function reviewMain({ force = false } = {}) {
   }
 
   console.log(`[FLAG-GOV] reviewed ${reviewed} flag(s); ${result.stale.length} stale.`);
+
   return { skipped: false, stale: result.stale.length, reviewed };
 }
 
 // Main-guard: run only when invoked directly (the cron path), not on import (tests).
 if (process.argv[1] && /flag-governance-review\.mjs$/.test(process.argv[1].replace(/\\/g, '/'))) {
-  reviewMain({ force: process.argv.includes('--force') }).then((r) => {
-    if (r && r.error) process.exit(1);
+  reviewMain({ force: process.argv.includes('--force') }).then(async (r) => {
+    if (r && r.error) { process.exit(1); return; }
+    // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp on every successful tick
+    // (including the gate-off cheap no-op poll) — reflects loop liveness, not whether
+    // the governance review actually fired this cycle.
+    try {
+      await stampLastFired(db, 'standard_loop:flag-review');
+    } catch (err) {
+      console.error(`[FLAG-GOV] stampLastFired failed (non-fatal): ${err.message}`);
+    }
   });
 }

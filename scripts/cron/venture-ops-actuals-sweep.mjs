@@ -117,6 +117,15 @@ export async function main(argv = process.argv, deps = {}) {
     return { exitCode: 2, action: 'no_supabase' };
   }
 
+  // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): self-stamp the standing GHA-cron
+  // process_key BEFORE any per-job logic so a genuine invocation is always recorded, even
+  // if the ventures query or a downstream job errors (distinct from the three per-job
+  // ARMED-machinery keys below; mirrors chairman-decision-sla-sweep.mjs's own convention).
+  if (!args.dryRun) {
+    try { await (deps.stampLastFired || stampLastFired)(supabase, 'cron_script:venture-ops-actuals-sweep.mjs'); }
+    catch (err) { logger.warn?.(`[ops-actuals-sweep] cron liveness stamp failed (non-fatal): ${err.message}`); }
+  }
+
   const ventures = await fetchLiveDeploymentVentures(supabase);
   const summary = { ts: new Date().toISOString(), dry_run: args.dryRun, ventures_scanned: ventures.length, jobs: {} };
 

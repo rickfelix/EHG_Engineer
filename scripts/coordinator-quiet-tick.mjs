@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
 import 'dotenv/config';
+import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 
 const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
@@ -255,6 +256,12 @@ async function main() {
     partyOffsetS: COORD_PARTY_OFFSET_S,
     hasUnactionedDirective: unactionedDirective,
   });
+
+  try {
+    await stampLastFired(sb, 'standard_loop:quiet-tick');
+  } catch (err) {
+    console.error(`[coordinator-quiet-tick] stampLastFired failed (non-fatal): ${err.message}`);
+  }
 
   const result = {
     mode: quiescent ? 'QUIESCENT' : 'ACTIVE',

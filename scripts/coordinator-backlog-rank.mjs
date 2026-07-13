@@ -163,6 +163,7 @@ import { runRollup } from '../lib/vision/rung-progress-rollup.mjs';
 import { computeBuildGauge } from '../lib/vision/vdr-registry.js';
 import { makeDefaultGrepSeam } from '../lib/vision/vdr-grep-seam.js';
 import { needleScore, rungProgressByKey, buildSdRungMap } from '../lib/vision/needle-priority.mjs';
+import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 
 const DRY = process.argv.includes('--dry-run');
 const PRIORITY_W = { critical: 3, high: 2, medium: 1, med: 1, low: 0 };
@@ -569,6 +570,12 @@ async function main() {
       fs.appendFileSync(new URL('rank-pass-events.log', logDir),
         `${JSON.stringify({ at: now, writes, clears, dry: DRY })}\n`);
     } catch { /* observability line must never fail the pass */ }
+  }
+
+  try {
+    await stampLastFired(sb, 'standard_loop:backlog-rank');
+  } catch (err) {
+    console.error(`[BACKLOG-RANK] stampLastFired failed (non-fatal): ${err.message}`);
   }
 }
 

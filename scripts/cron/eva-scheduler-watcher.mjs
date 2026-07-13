@@ -242,6 +242,11 @@ export async function main(argv = process.argv, deps = {}) {
   if (!args.dryRun) {
     try { await (deps.stampLastFired || stampLastFired)(supabase, WATCHER_SELF_PROCESS_KEY); }
     catch (err) { logger.warn?.(`${tag} self-liveness stamp failed (non-fatal): ${err.message}`); }
+    // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): also stamp the standing GHA-cron
+    // process_key (distinct from WATCHER_SELF_PROCESS_KEY above) so the central liveness
+    // watcher can see this cron loop directly.
+    try { await (deps.stampLastFired || stampLastFired)(supabase, 'cron_script:eva-scheduler-watcher.mjs'); }
+    catch (err) { logger.warn?.(`${tag} cron liveness stamp failed (non-fatal): ${err.message}`); }
   }
 
   // 1. Liveness by heartbeat age.

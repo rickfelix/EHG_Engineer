@@ -80,6 +80,17 @@ if (require.main === module) {
   // Graceful bounded exit: avoid the Windows UV_HANDLE_CLOSING abort after undici
   // queries (same primitive as row-growth-snapshot.cjs).
   main()
+    .then(async () => {
+      // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp on every successful tick,
+      // regardless of which internal early-return branch main() took (not-due, empty
+      // rotation, or --dry-run) — reflects loop liveness.
+      try {
+        const { stampLastFired } = await import('../lib/periodic-liveness/stamp-last-fired.js');
+        await stampLastFired(createSupabaseServiceClient(), 'standard_loop:review-rotation');
+      } catch (err) {
+        console.warn(`[review-rotation] stampLastFired failed (non-fatal): ${err.message}`);
+      }
+    })
     .catch((e) => { console.warn(`[review-rotation] unexpected error (non-fatal): ${e.message}`); })
     .finally(async () => {
       try {

@@ -25,6 +25,7 @@ import { detectLoopExpiry, detectStalledLoop, detectEvaSchedulerStale } from '..
 // same pattern as detectors.cjs above). SSOT shared with stale-session-sweep.cjs (QF-20260525-542).
 import { parseSdDependencies } from '../lib/utils/parse-sd-dependencies.cjs';
 import { isDependentBlocked } from '../lib/coordinator/dep-readiness.mjs';
+import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -232,3 +233,9 @@ try {
   reviewLine = computeReviewHealth({ completedCount: completedNow || 0, lastReviewCount, threshold }).line;
 } catch (e) { reviewLine = 'unavailable (' + e.message + ')'; }
 console.log('  REVIEW HEALTH   : ' + reviewLine);
+
+try {
+  await stampLastFired(db, 'standard_loop:audit');
+} catch (err) {
+  console.error(`[coordinator-audit] stampLastFired failed (non-fatal): ${err.message}`);
+}

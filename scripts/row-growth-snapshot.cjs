@@ -118,6 +118,17 @@ if (require.main === module) {
   // sockets and lets the loop drain naturally, with an unref'd 8s backstop. Exit code is
   // always 0 — a gauge never breaks its host loop.
   main()
+    .then(async () => {
+      // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp on every successful tick,
+      // regardless of which internal early-return branch main() took (not-due, no
+      // estimates readable, first baseline, or no anomalies) — reflects loop liveness.
+      try {
+        const { stampLastFired } = await import('../lib/periodic-liveness/stamp-last-fired.js');
+        await stampLastFired(createSupabaseServiceClient(), 'standard_loop:row-growth');
+      } catch (err) {
+        console.warn(`[row-growth] stampLastFired failed (non-fatal): ${err.message}`);
+      }
+    })
     .catch((e) => { console.warn(`[row-growth] unexpected error (non-fatal): ${e.message}`); })
     .finally(async () => {
       try {

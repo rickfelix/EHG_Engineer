@@ -35,6 +35,7 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { generateRemediationSdsBatch, writeAuditLog } from '../../lib/eva/quality-findings/sd-generator.js';
+import { stampLastFired } from '../../lib/periodic-liveness/stamp-last-fired.js';
 
 const LOCK_NAME = 'fr_c_generator';
 const DEFAULT_INTERVAL_SEC = 3600;
@@ -120,6 +121,13 @@ async function runOneBatch({ supabase, dryRun }) {
 }
 
 async function runOnce({ args, supabase, owner, ttlSec }) {
+  // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): self-stamp BEFORE any lock/generator logic
+  // so a genuine invocation (each runOnce() call, in --daemon or single-shot mode) is always
+  // recorded, even if the lock is held by another tick or the generator errors below (mirrors
+  // scripts/cron/eva-scheduler-watcher.mjs / chairman-decision-sla-sweep.mjs's own convention).
+  try { await stampLastFired(supabase, 'cron_script:fr-c-generator.mjs'); }
+  catch (err) { process.stderr.write(`[fr-c-generator] liveness stamp failed (non-fatal): ${err.message}\n`); }
+
   const acquired = await tryClaimLock(supabase, owner, ttlSec);
   if (!acquired) {
     process.stdout.write('[fr-c-generator] cron lock held by another tick; no-op exit\n');

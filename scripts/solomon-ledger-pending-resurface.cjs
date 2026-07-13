@@ -89,6 +89,15 @@ async function main() {
   let supabase;
   try { supabase = createSupabaseServiceClient(); }
   catch (e) { console.error('ERROR: supabase client unavailable:', e.message); process.exit(1); }
+  // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp on every successful tick, before
+  // the no-active-Adam early-return (both are a completed tick — supabase is already live here).
+  try {
+    const { stampLastFired } = await import('../lib/periodic-liveness/stamp-last-fired.js');
+    await stampLastFired(supabase, 'standard_loop:solomon-ledger-resurface');
+  } catch (err) {
+    console.error(`[solomon-ledger-pending-resurface] stampLastFired failed (non-fatal): ${err.message}`);
+  }
+
   const adamId = await getActiveAdamId(supabase);
   if (!adamId) { console.log('SOLOMON LEDGER PENDING RESURFACE: no active Adam session found — nothing to resurface into.'); return; }
   const thresholdHours = parseThresholdHours(process.argv.slice(2));

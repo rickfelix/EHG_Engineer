@@ -37,6 +37,7 @@ import {
   BATCH_SIZE, DELETE_CHUNK, LIVENESS_MAX_AGE_DAYS,
 } from '../lib/retention/policies.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 
 dotenv.config();
 
@@ -170,6 +171,13 @@ export async function runEnforcement({ apply = false } = {}) {
   } else {
     console.log('  ✓ retention_runs stamp written');
   }
+
+  try {
+    await stampLastFired(supabase, 'standard_loop:retention');
+  } catch (err) {
+    console.warn(`  ⚠ stampLastFired failed (non-fatal): ${err.message}`);
+  }
+
   return anyError ? 1 : 0;
 }
 

@@ -49,6 +49,7 @@ import { findLeadAgingDrafts } from '../lib/coordinator/lead-aging-detector.mjs'
 // miscounted as idle WORKERS. detectIdleWithWork only knows "no sd_key" → without this, the coordinator + Adam —
 // which legitimately never hold an SD claim — read as idle workers (a false DUTY-3 no WORK_ASSIGNMENT can clear).
 import { isDispatchableFleetMember } from '../lib/fleet/session-predicates.mjs';
+import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 
 const require = createRequire(import.meta.url);
 // SD-LEO-INFRA-FLEET-HIBERNATION-001 FR-2/FR-3: the SINGLE 'line stopped' signal, consumed here so the
@@ -308,6 +309,12 @@ async function main() {
     console.log('  ✓ CHARTER CLEAN — 0 violations');
   }
   console.log('CHARTER_AUDIT_VIOLATIONS=' + summary.count);
+
+  try {
+    await stampLastFired(db, 'standard_loop:charter-audit');
+  } catch (err) {
+    console.error(`[coordinator-charter-audit] stampLastFired failed (non-fatal): ${err.message}`);
+  }
 }
 
 main().catch((err) => { console.error('[COORD-CHARTER-AUDIT] FATAL: ' + ((err && err.message) || err)); process.exit(1); });

@@ -67,6 +67,7 @@ import {
   fetchLastNDispatchedKeys,
   hasOpenFinding,
 } from '../lib/governance/plan-drift-detectors.js';
+import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 
 const RECURSION_GOVERNOR_DIMENSION = 'recursion-governor-ratio';
 const PLAN_DRIFT_MIX_DIMENSION = 'plan-drift-mix';
@@ -445,6 +446,12 @@ async function main() {
   }
 
   await writeHeartbeat(supabase, results.length);
+
+  try {
+    await stampLastFired(supabase, 'standard_loop:gauge-runner');
+  } catch (err) {
+    console.error(`[gauge-runner] stampLastFired failed (non-fatal): ${err.message}`);
+  }
 
   if (JSON_MODE) console.log(JSON.stringify({ ran: results.length, results }));
   process.exit(0); // advisory: the runner itself never fails the tick

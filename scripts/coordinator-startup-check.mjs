@@ -373,7 +373,18 @@ function main() {
     console.warn('⚠️  coordinator-startup-check hiccup (non-blocking, fail-open): ' + (err && err.message ? err.message : String(err)));
   }
   renderColdRecovery(process.argv.slice(2), process.env)
-    .then((out) => console.log(out))
+    .then(async (out) => {
+      console.log(out);
+      // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp on every successful
+      // startup-check tick (the report + cold-recovery leg are fail-open by design).
+      try {
+        const { createSupabaseServiceClient } = await import('../lib/supabase-client.cjs');
+        const { stampLastFired } = await import('../lib/periodic-liveness/stamp-last-fired.js');
+        await stampLastFired(createSupabaseServiceClient(), 'standard_loop:roles-review');
+      } catch (err) {
+        console.warn('[COORD-STARTUP] stampLastFired failed (non-fatal): ' + err.message);
+      }
+    })
     .finally(() => process.exit(0));
 }
 
