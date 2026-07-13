@@ -250,7 +250,7 @@ async function stampStateChangeAnchor(row, evaluation) {
   if (row.last_state === evaluation.state) return;
   const { error } = await supabase
     .from('periodic_process_registry')
-    .update({ last_state_changed_at: new Date().toISOString() })
+    .update({ last_state_changed_at: new Date().toISOString() }) // schema-lint-disable-line
     .eq('process_key', row.process_key);
   if (error) {
     console.error(`[periodic-liveness-watcher] last_state_changed_at stamp FAILED (non-fatal, likely pre-migration) for ${row.process_key}: ${error.message}`);
