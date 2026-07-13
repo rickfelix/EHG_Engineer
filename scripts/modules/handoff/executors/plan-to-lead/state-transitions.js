@@ -22,6 +22,52 @@ import {
 // LEAD-FINAL-APPROVAL executor is the only completion writer.
 import { routeOrchestratorToLeadFinal } from '../../lib/orchestrator-terminal-guard.js';
 
+import { normalizeAppName } from '../../../../../lib/repo-paths.js';
+
+/**
+ * Resolve a safe, registry-valid target_application for an auto-created
+ * orchestrator retrospective. Priority: sd.metadata.venture_name (if
+ * registered) -> a completed child's own retrospective.target_application ->
+ * 'EHG_Engineer'. Any lookup failure falls back to 'EHG_Engineer' rather than
+ * blocking retro creation (QF-20260713-742 / PAT-TEMPLATE-CODE-SYNC-001:
+ * the insert had no target_application at all, failing NOT NULL /
+ * trg_validate_retrospective_target_application on every orchestrator).
+ */
+async function resolveOrchestratorRetroTargetApplication(supabase, sdId) {
+  try {
+    const { data: sdRow } = await supabase
+      .from('strategic_directives_v2')
+      .select('metadata')
+      .eq('id', sdId)
+      .maybeSingle();
+
+    const ventureName = sdRow?.metadata?.venture_name;
+    if (ventureName) {
+      const needle = normalizeAppName(ventureName);
+      if (needle === 'ehg' || needle === 'ehgengineer') return ventureName;
+      const { data: apps } = await supabase.from('applications').select('name').eq('status', 'active');
+      if ((apps || []).some((a) => normalizeAppName(a.name) === needle)) return ventureName;
+    }
+
+    const { data: children } = await supabase
+      .from('strategic_directives_v2')
+      .select('id')
+      .eq('parent_sd_id', sdId);
+    if (children?.length) {
+      const { data: childRetros } = await supabase
+        .from('retrospectives')
+        .select('target_application')
+        .in('sd_id', children.map((c) => c.id))
+        .not('target_application', 'is', null)
+        .limit(1);
+      if (childRetros?.[0]?.target_application) return childRetros[0].target_application;
+    }
+  } catch {
+    // Any lookup failure falls through to the platform default below.
+  }
+  return 'EHG_Engineer';
+}
+
 /**
  * Finalize user stories to completed status
  *
@@ -305,10 +351,12 @@ export async function satisfyOrchestratorTemplateRequirements(supabase, sdId, sd
         console.warn(`[ENFORCE] skipped state-transitions orchestrator-completion INSERT for sdId=${sdId} reason=${guard.reason}`);
         return { satisfied: true, created };
       }
+      const targetApplication = await resolveOrchestratorRetroTargetApplication(supabase, sdId);
       const { error: rErr } = await supabase
         .from('retrospectives')
         .insert({
           sd_id: sdId,
+          target_application: targetApplication,
           title: `Orchestrator Completion: ${sdTitle}`,
           // SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001: must be the canonical
           // completion type — retro-filters.js and the LEAD-FINAL-APPROVAL gate
