@@ -14,6 +14,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 const state = {
   claudeSessionsRow: null,
   schedulerRow: null,
+  updateError: null,
+  updateCalls: [],
 };
 
 vi.mock('@supabase/supabase-js', () => ({
@@ -26,18 +28,23 @@ vi.mock('@supabase/supabase-js', () => ({
         order: () => chain,
         limit: () => chain,
         neq: () => chain,
+        update: (payload) => {
+          state.updateCalls.push({ table, payload });
+          return chain;
+        },
         maybeSingle: async () => {
           if (table === 'claude_sessions') return { data: state.claudeSessionsRow, error: null };
           if (table === 'eva_scheduler_heartbeat') return { data: state.schedulerRow, error: null };
           return { data: null, error: null };
         },
+        then: (resolve) => resolve({ data: null, error: state.updateError }),
       };
       return chain;
     },
   }),
 }));
 
-const { evaluateRow, STATE, hasCrossedUnverifiedThreshold, UNVERIFIED_ESCALATION_MS } = await import('../../scripts/periodic-liveness-watcher.mjs');
+const { evaluateRow, STATE, hasCrossedUnverifiedThreshold, UNVERIFIED_ESCALATION_MS, stampStateChangeAnchor } = await import('../../scripts/periodic-liveness-watcher.mjs');
 
 function roleSessionRow(overrides = {}) {
   return {
@@ -277,5 +284,33 @@ describe('hasCrossedUnverifiedThreshold', () => {
     const nowMs = Date.parse('2026-07-20T00:00:00Z');
     const row = { last_state_changed_at: '2026-07-01T00:00:00Z', updated_at: null };
     expect(hasCrossedUnverifiedThreshold(row, nowMs)).toBe(true);
+  });
+});
+
+// SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 -- pre-EXEC-TO-PLAN TESTING sub-agent FINDING-1: the
+// anchor write must be its OWN independently fail-soft update, never bundled into the primary
+// last_state write (this code can merge before FR-1's migration is applied out-of-band, so
+// last_state_changed_at may not exist yet -- bundling would make the whole statement fail
+// atomically, silently breaking last_state's own advancement too).
+describe('stampStateChangeAnchor', () => {
+  beforeEach(() => {
+    state.updateError = null;
+    state.updateCalls = [];
+  });
+
+  it('skips entirely when last_state did not change (no wasted write)', async () => {
+    await stampStateChangeAnchor({ process_key: 'x', last_state: 'OK' }, { state: 'OK' });
+    expect(state.updateCalls).toHaveLength(0);
+  });
+
+  it('issues a standalone update({last_state_changed_at}) on a genuine transition', async () => {
+    await stampStateChangeAnchor({ process_key: 'x', last_state: 'OK' }, { state: 'OVERDUE' });
+    expect(state.updateCalls).toHaveLength(1);
+    expect(Object.keys(state.updateCalls[0].payload)).toEqual(['last_state_changed_at']);
+  });
+
+  it('a failed anchor update (e.g. pre-migration missing column) logs but does not throw', async () => {
+    state.updateError = { message: 'column "last_state_changed_at" does not exist' };
+    await expect(stampStateChangeAnchor({ process_key: 'x', last_state: 'OK' }, { state: 'OVERDUE' })).resolves.toBeUndefined();
   });
 });
