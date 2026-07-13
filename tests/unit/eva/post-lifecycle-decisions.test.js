@@ -209,6 +209,25 @@ describe('handlePostLifecycleDecision', () => {
     expect(result.result.action).toBe('exit');
     expect(result.result.success).toBe(true);
   });
+
+  it('QF-20260713-172: EXIT archive update must not reference the non-existent eva_ventures.completed_at column', async () => {
+    const supabase = makeMockSupabase();
+    await handlePostLifecycleDecision(
+      { ventureId: 'venture-1', ventureContext, stageOutput, artifacts: [], decision: { type: 'exit' } },
+      { supabase, logger: silentLogger },
+    );
+
+    // supabase.from() returns the same mocked object regardless of table name,
+    // so the shared update() mock records calls from BOTH markCompleted()
+    // (targets 'ventures', sets status:'completed') and handleExit's own
+    // eva_ventures update (status:'archived') -- isolate the latter by payload.
+    const archiveCall = supabase.from().update.mock.calls.find(
+      (call) => call[0]?.status === 'archived',
+    );
+    expect(archiveCall).toBeDefined();
+    expect(archiveCall[0]).not.toHaveProperty('completed_at');
+    expect(archiveCall[0]).toHaveProperty('updated_at');
+  });
 });
 
 describe('decision options', () => {
