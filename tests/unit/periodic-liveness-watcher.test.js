@@ -37,7 +37,7 @@ vi.mock('@supabase/supabase-js', () => ({
   }),
 }));
 
-const { evaluateRow, STATE } = await import('../../scripts/periodic-liveness-watcher.mjs');
+const { evaluateRow, STATE, hasCrossedUnverifiedThreshold, UNVERIFIED_ESCALATION_MS } = await import('../../scripts/periodic-liveness-watcher.mjs');
 
 function roleSessionRow(overrides = {}) {
   return {
@@ -173,5 +173,109 @@ describe('evaluateRow', () => {
     const result = await evaluateRow(row);
     expect(result.state).toBe(STATE.UNVERIFIED);
     expect(result.reason).toBe('no_last_fired_data_available');
+  });
+
+  // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-2) -- github_actions_api branch. Decisions are
+  // pre-resolved once per watcher run (see main()) and passed in via ctx.ghaDecisions, so these
+  // tests exercise evaluateRow's consumption of that map directly (no live GitHub API call).
+  function ghaCronRow(overrides = {}) {
+    return {
+      process_key: 'gha_cron:foo.yml',
+      display_name: 'foo cron',
+      process_type: 'standalone_cron',
+      expected_interval_seconds: 3600,
+      grace_multiplier: 3,
+      liveness_source: 'github_actions_api',
+      liveness_source_ref: {},
+      session_bound: false,
+      currently_expected_active: true,
+      last_fired_at: null,
+      ...overrides,
+    };
+  }
+
+  it('github_actions_api: TS-1 a "stamp" decision with a fresh ranAtIso -> OK', async () => {
+    const row = ghaCronRow();
+    const ghaDecisions = new Map([[row.process_key, { processKey: row.process_key, decision: 'stamp', ranAtIso: FRESH_TS() }]]);
+    const result = await evaluateRow(row, { ghaDecisions });
+    expect(result.state).toBe(STATE.OK);
+  });
+
+  it('github_actions_api: TS-2 an "overdue" decision (latest scheduled run failed) -> OVERDUE, not UNVERIFIED', async () => {
+    const row = ghaCronRow();
+    const ghaDecisions = new Map([[row.process_key, { processKey: row.process_key, decision: 'overdue', ranAtIso: OLD_TS }]]);
+    const result = await evaluateRow(row, { ghaDecisions });
+    expect(result.state).toBe(STATE.OVERDUE);
+    expect(result.reason).toBe('latest_scheduled_run_failed');
+  });
+
+  it('github_actions_api: TS-3 no decision available (resolver fetch failed / not in map) -> UNVERIFIED, degrades to today\'s state', async () => {
+    const row = ghaCronRow();
+    const result = await evaluateRow(row, { ghaDecisions: new Map() });
+    expect(result.state).toBe(STATE.UNVERIFIED);
+    expect(result.reason).toBe('no_gha_run_data_available');
+  });
+
+  it('github_actions_api: a "no_data" decision (workflow registered but no matching run found) -> UNVERIFIED', async () => {
+    const row = ghaCronRow();
+    const ghaDecisions = new Map([[row.process_key, { processKey: row.process_key, decision: 'no_data' }]]);
+    const result = await evaluateRow(row, { ghaDecisions });
+    expect(result.state).toBe(STATE.UNVERIFIED);
+  });
+
+  it('github_actions_api: a "stamp" decision old enough to exceed interval*grace -> OVERDUE (generic age check still applies)', async () => {
+    const row = ghaCronRow({ expected_interval_seconds: 300, grace_multiplier: 3 });
+    const ghaDecisions = new Map([[row.process_key, { processKey: row.process_key, decision: 'stamp', ranAtIso: OLD_TS }]]);
+    const result = await evaluateRow(row, { ghaDecisions });
+    expect(result.state).toBe(STATE.OVERDUE);
+  });
+});
+
+// SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-5) -- hasCrossedUnverifiedThreshold (TS-6/TS-8).
+describe('hasCrossedUnverifiedThreshold', () => {
+  it('TS-6: >7 days since last_state_changed_at, and the previous tick was still within 7 days -> true (fresh crossing)', () => {
+    const changedAtMs = Date.parse('2026-07-10T00:00:00Z');
+    const row = {
+      last_state_changed_at: '2026-07-10T00:00:00Z',
+      updated_at: new Date(changedAtMs + UNVERIFIED_ESCALATION_MS - 60 * 60 * 1000).toISOString(), // previous tick: 6d23h in
+    };
+    const nowMs = changedAtMs + UNVERIFIED_ESCALATION_MS + 60 * 60 * 1000; // now: 7d1h in
+    expect(hasCrossedUnverifiedThreshold(row, nowMs)).toBe(true);
+  });
+
+  it('TS-6: <=7 days since last_state_changed_at -> false (not yet escalated)', () => {
+    const nowMs = Date.parse('2026-07-15T00:00:00Z');
+    const row = { last_state_changed_at: '2026-07-10T00:00:00Z', updated_at: '2026-07-14T23:45:00Z' };
+    expect(hasCrossedUnverifiedThreshold(row, nowMs)).toBe(false);
+  });
+
+  it('TS-8: fires only on the tick where the threshold is FIRST crossed, not on every subsequent tick', () => {
+    const changedAt = '2026-07-10T00:00:00Z';
+    const changedAtMs = Date.parse(changedAt);
+    // Tick that lands exactly on the crossing: previous tick (updated_at) was still <=7d old,
+    // this tick's "now" is >7d old.
+    const crossingTick = {
+      row: { last_state_changed_at: changedAt, updated_at: new Date(changedAtMs + UNVERIFIED_ESCALATION_MS - 60_000).toISOString() },
+      nowMs: changedAtMs + UNVERIFIED_ESCALATION_MS + 60_000,
+    };
+    expect(hasCrossedUnverifiedThreshold(crossingTick.row, crossingTick.nowMs)).toBe(true);
+
+    // A LATER tick, still in the same continuous UNVERIFIED episode: the previous tick
+    // (updated_at) is now ALSO past the threshold -- must not re-fire.
+    const laterTick = {
+      row: { last_state_changed_at: changedAt, updated_at: new Date(changedAtMs + UNVERIFIED_ESCALATION_MS + 60_000).toISOString() },
+      nowMs: changedAtMs + UNVERIFIED_ESCALATION_MS + 120_000,
+    };
+    expect(hasCrossedUnverifiedThreshold(laterTick.row, laterTick.nowMs)).toBe(false);
+  });
+
+  it('no last_state_changed_at recorded -> false (nothing to measure against)', () => {
+    expect(hasCrossedUnverifiedThreshold({ last_state_changed_at: null, updated_at: FRESH_TS() }, Date.now())).toBe(false);
+  });
+
+  it('no prior updated_at recorded but already past threshold -> true (treated as a fresh crossing)', () => {
+    const nowMs = Date.parse('2026-07-20T00:00:00Z');
+    const row = { last_state_changed_at: '2026-07-01T00:00:00Z', updated_at: null };
+    expect(hasCrossedUnverifiedThreshold(row, nowMs)).toBe(true);
   });
 });

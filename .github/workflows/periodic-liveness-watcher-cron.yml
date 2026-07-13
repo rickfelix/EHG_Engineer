@@ -19,6 +19,9 @@ on:
 
 permissions:
   contents: read
+  # SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-2): the GHA resolver reads
+  # GET /repos/{owner}/{repo}/actions/runs to stamp gha_cron:* rows -- requires actions: read.
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}
@@ -33,7 +36,12 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      LIVENESS_CLASSES: self_stamped,eva_scheduler_heartbeat
+      # SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-2): github_actions_api added so gha_cron:*
+      # rows are no longer silently skipped by the class-split filter (lib/periodic-liveness/
+      # class-split.mjs) -- they need the SAME network-capable CI venue as self_stamped/
+      # eva_scheduler_heartbeat, not the dev-host STANDARD_LOOPS entry.
+      LIVENESS_CLASSES: self_stamped,eva_scheduler_heartbeat,github_actions_api
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout
