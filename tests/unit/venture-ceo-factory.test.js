@@ -10,15 +10,15 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { VentureFactory, STANDARD_VENTURE_TEMPLATE } from '../../lib/agents/venture-ceo-factory.js';
+import { VentureFactory, STANDARD_VENTURE_TEMPLATE, EHG_SHARED_OPERATORS } from '../../lib/agents/venture-ceo-factory.js';
 
 vi.mock('uuid', () => ({
   v4: () => `mock-uuid-${Math.random().toString(36).slice(2)}`
 }));
 
 describe('STANDARD_VENTURE_TEMPLATE shape', () => {
-  it('has 5 executives (was 4)', () => {
-    expect(STANDARD_VENTURE_TEMPLATE.executives).toHaveLength(5);
+  it('has 6 executives (was 5)', () => {
+    expect(STANDARD_VENTURE_TEMPLATE.executives).toHaveLength(6);
   });
 
   it('includes VP_MARKETING with the expected capabilities/tools/stage_ownership', () => {
@@ -42,8 +42,8 @@ describe('STANDARD_VENTURE_TEMPLATE shape', () => {
     expect(vpMarketing).not.toHaveProperty('enabled');
   });
 
-  it('has 18 crews (was 14), 4 of which report to VP_MARKETING', () => {
-    expect(STANDARD_VENTURE_TEMPLATE.crews).toHaveLength(18);
+  it('has 21 crews (was 18), 4 of which report to VP_MARKETING', () => {
+    expect(STANDARD_VENTURE_TEMPLATE.crews).toHaveLength(21);
     const marketingCrews = STANDARD_VENTURE_TEMPLATE.crews.filter(c => c.executive_parent === 'VP_MARKETING');
     expect(marketingCrews).toHaveLength(4);
     expect(marketingCrews.map(c => c.agent_role)).toEqual(
@@ -71,8 +71,75 @@ describe('STANDARD_VENTURE_TEMPLATE shape', () => {
     }
   });
 
-  it('description reflects the 24-agent total (1 CEO + 5 VP + 18 crew)', () => {
-    expect(STANDARD_VENTURE_TEMPLATE.description).toContain('24-agent');
+  it('description reflects the 28-agent per-venture total (1 CEO + 6 VP + 21 crew)', () => {
+    expect(STANDARD_VENTURE_TEMPLATE.description).toContain('28-agent');
+  });
+});
+
+describe('SD-FDBK-ENH-ORG-TEMPLATE-DELTA-001 — org-template delta', () => {
+  const NEW_ROLES_MUST_HAVE_DUTY = ['VP_CUSTOMER', 'Sales_Crew', 'Customer_Success_Crew', 'Support_Crew'];
+
+  it('FR-1: VP_CUSTOMER is a standard per-venture executive with a continuous mandate + duty cycle + honest idle', () => {
+    const vp = STANDARD_VENTURE_TEMPLATE.executives.find(e => e.agent_role === 'VP_CUSTOMER');
+    expect(vp).toBeDefined();
+    expect(vp.stage_ownership).toEqual([]); // continuous, like VP_MARKETING
+    expect(vp.duty_cycle).toBeTruthy();
+    expect(vp.honest_idle).toBeTruthy();
+    expect(vp).not.toHaveProperty('lazy'); // unconditional, no gating flag
+  });
+
+  it('FR-1: Customer_Success_Crew + Support_Crew report to VP_CUSTOMER with duty cycles', () => {
+    const cust = STANDARD_VENTURE_TEMPLATE.crews.filter(c => c.executive_parent === 'VP_CUSTOMER');
+    expect(cust.map(c => c.agent_role).sort()).toEqual(['Customer_Success_Crew', 'Support_Crew']);
+    for (const c of cust) { expect(c.duty_cycle).toBeTruthy(); expect(c.honest_idle).toBeTruthy(); }
+  });
+
+  it('FR-2: Sales_Crew is a crew (not a VP) under VP_GROWTH with duty cycle + honest idle', () => {
+    const sales = STANDARD_VENTURE_TEMPLATE.crews.find(c => c.agent_role === 'Sales_Crew');
+    expect(sales).toBeDefined();
+    expect(sales.executive_parent).toBe('VP_GROWTH');
+    expect(sales.duty_cycle).toMatch(/outreach/i);
+    expect(sales.honest_idle).toMatch(/suppression|no outreach/i);
+    expect(STANDARD_VENTURE_TEMPLATE.executives.find(e => e.agent_role === 'VP_SALES')).toBeUndefined();
+  });
+
+  it('FR-3: the 3 mandate extensions retire the every-mandate-ends-at-a-stage defect', () => {
+    for (const role of ['VP_TECH', 'VP_PRODUCT', 'VP_GROWTH']) {
+      const vp = STANDARD_VENTURE_TEMPLATE.executives.find(e => e.agent_role === role);
+      expect(vp.post_stage_mandate, `${role} must carry a post_stage_mandate`).toBeTruthy();
+      expect(vp.honest_idle, `${role} mandate extension needs an honest-idle`).toBeTruthy();
+    }
+    // stage_ownership arrays are UNCHANGED (additive field only — no routing change).
+    expect(STANDARD_VENTURE_TEMPLATE.executives.find(e => e.agent_role === 'VP_TECH').stage_ownership).toEqual([13, 14, 15, 16, 17, 18, 19, 20, 21]);
+    expect(STANDARD_VENTURE_TEMPLATE.executives.find(e => e.agent_role === 'VP_GROWTH').stage_ownership).toEqual([22, 23, 24, 25, 26]);
+  });
+
+  it('FR-4: EHG_SHARED_OPERATORS exports exactly the 4 named commodity operators, instantiate-once', () => {
+    expect(Array.isArray(EHG_SHARED_OPERATORS)).toBe(true);
+    expect(EHG_SHARED_OPERATORS.map(o => o.agent_role).sort()).toEqual(
+      ['DATA_PLATFORM_OPERATOR', 'FINANCE_BILLING_OPERATOR', 'LEGAL_COMPLIANCE_OPERATOR', 'SECURITY_POSTURE_OPERATOR']
+    );
+    for (const op of EHG_SHARED_OPERATORS) {
+      expect(op.placement).toBe('shared'); // chairman-ratified default
+      expect(op.duty_cycle).toBeTruthy();
+      expect(op.honest_idle).toBeTruthy();
+    }
+    // They are SEPARATE from the per-venture template (instantiate once at holdco level).
+    const perVentureRoles = STANDARD_VENTURE_TEMPLATE.executives.map(e => e.agent_role);
+    for (const op of EHG_SHARED_OPERATORS) expect(perVentureRoles).not.toContain(op.agent_role);
+  });
+
+  it('FR-5 anti-decoration guard: every new role has a NON-EMPTY duty_cycle AND honest_idle', () => {
+    const newVentureRoles = [
+      ...STANDARD_VENTURE_TEMPLATE.executives.filter(e => NEW_ROLES_MUST_HAVE_DUTY.includes(e.agent_role)),
+      ...STANDARD_VENTURE_TEMPLATE.crews.filter(c => NEW_ROLES_MUST_HAVE_DUTY.includes(c.agent_role)),
+      ...EHG_SHARED_OPERATORS
+    ];
+    expect(newVentureRoles.length).toBeGreaterThanOrEqual(8);
+    for (const r of newVentureRoles) {
+      expect(typeof r.duty_cycle === 'string' && r.duty_cycle.trim().length > 0, `${r.agent_role} duty_cycle`).toBe(true);
+      expect(typeof r.honest_idle === 'string' && r.honest_idle.trim().length > 0, `${r.agent_role} honest_idle`).toBe(true);
+    }
   });
 });
 
@@ -97,28 +164,29 @@ describe('VentureFactory.instantiateVenture with mocked Supabase', () => {
     };
   });
 
-  it('creates 5 executive agents (was 4), including VP_MARKETING', async () => {
+  it('creates 6 executive agents (was 5), including VP_CUSTOMER', async () => {
     const factory = new VentureFactory(mockSupabase);
     const result = await factory.instantiateVenture({
       ventureName: 'Test Venture',
       ventureId: 'test-venture-id-123'
     });
 
-    expect(Object.keys(result.executive_agent_ids)).toHaveLength(5);
+    expect(Object.keys(result.executive_agent_ids)).toHaveLength(6);
     expect(result.executive_agent_ids).toHaveProperty('VP_MARKETING');
+    expect(result.executive_agent_ids).toHaveProperty('VP_CUSTOMER');
     expect(result.executive_agent_ids).toHaveProperty('VP_STRATEGY');
     expect(result.executive_agent_ids).toHaveProperty('VP_PRODUCT');
     expect(result.executive_agent_ids).toHaveProperty('VP_TECH');
     expect(result.executive_agent_ids).toHaveProperty('VP_GROWTH');
   });
 
-  it('total_agents_created reflects 1 CEO + 5 VP + 18 crew = 24', async () => {
+  it('total_agents_created reflects 1 CEO + 6 VP + 21 crew = 28', async () => {
     const factory = new VentureFactory(mockSupabase);
     const result = await factory.instantiateVenture({
       ventureName: 'Test Venture 2',
       ventureId: 'test-venture-id-456'
     });
 
-    expect(result.total_agents_created).toBe(24);
+    expect(result.total_agents_created).toBe(28);
   });
 });
