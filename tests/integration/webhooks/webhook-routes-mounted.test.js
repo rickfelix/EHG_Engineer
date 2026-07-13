@@ -61,10 +61,6 @@ beforeAll(async () => {
       // non-Stripe-shaped value is sufficient here and avoids ever forwarding
       // a real Stripe secret key into this test's spawned child process.
       STRIPE_SECRET_KEY: 'not-a-real-stripe-key-wiring-e2e-test',
-      // Exercises github-ci-status.js's documented dev-mode signature bypass
-      // (api/webhooks/github-ci-status.js:300) so the wiring test does not
-      // need a live ci_cd_monitoring_config row to prove reachability.
-      NODE_ENV: 'development',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -118,8 +114,11 @@ describe('Webhook route mounting (real Express app, real HTTP)', () => {
     });
 
     // Reachability is the contract here: a 404 would mean the route is
-    // unmounted. Any other status proves the request reached handleGitHubWebhook.
+    // unmounted. An unsigned request with no matching ci_cd_monitoring_config
+    // row correctly fails closed with 401 (no dev-mode bypass) -- any status
+    // other than 404 proves the request reached handleGitHubWebhook.
     expect(res.status).not.toBe(404);
+    expect(res.status).toBe(401);
   });
 
   it('non-POST to the Stripe route returns 405 (proves the handler, not a generic router, answered)', async () => {

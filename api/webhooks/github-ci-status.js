@@ -296,9 +296,18 @@ async function handleGitHubWebhook(req, res) {
       .eq('repository_name', repository)
       .single();
 
-    // Verify signature (skip in development)
-    const isSignatureValid = process.env.NODE_ENV === 'development' ||
-      (config?.webhook_secret_hash && verifyGitHubSignature(payload, signature, config.webhook_secret_hash));
+    // Verify signature. The prior `NODE_ENV === 'development'` bypass is
+    // removed (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001, adversarial review): this
+    // route was previously unreachable (CJS require() crash under ESM), so the
+    // bypass was dead code; mounting the route made it a live, unauthenticated
+    // write path into strategic_directives_v2 whenever NODE_ENV was
+    // 'development' (a common staging/preview value). Fails closed (401) for
+    // everyone until signature verification is fixed for real GitHub delivery
+    // (separate follow-up: config.webhook_secret_hash is currently a hash of
+    // the secret, not the raw secret, so verifyGitHubSignature can never
+    // succeed against a genuine HMAC-SHA256-signed delivery either).
+    const isSignatureValid = Boolean(config?.webhook_secret_hash) &&
+      verifyGitHubSignature(payload, signature, config.webhook_secret_hash);
 
     // Table github_webhook_events does not exist yet — skip audit storage
 
