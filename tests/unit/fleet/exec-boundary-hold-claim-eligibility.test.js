@@ -48,7 +48,8 @@ describe('SD-LEO-INFRA-PHASE-SCOPED-FENCE-001 FR-4/TS-3: claim-eligibility negat
 
   it('CLAIM_WRITE_FENCE_AXES does not contain exec_boundary_hold (static assertion)', () => {
     expect(CLAIM_WRITE_FENCE_AXES.has('exec_boundary_hold')).toBe(false);
-    expect([...CLAIM_WRITE_FENCE_AXES]).toEqual(['human_action_required', 'needs_coordinator_review', 'not_before_hold']);
+    // SD-FDBK-FIX-DISPATCH-ELIGIBILITY-HONOR-001: lead_blocker_active added as a 4th write-fence axis.
+    expect([...CLAIM_WRITE_FENCE_AXES]).toEqual(['human_action_required', 'needs_coordinator_review', 'not_before_hold', 'lead_blocker_active']);
   });
 
   it('a held SD with no OTHER ineligibility axis is fully claimable (regression baseline)', () => {

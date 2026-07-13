@@ -348,9 +348,22 @@ export async function loadOpenQuickFixes(supabase) {
     // Race-safety: exclude rows where pr_url or commit_sha are populated. A parallel session
     // populates those fields the moment complete-quick-fix.js begins, ~30-90s before status flips
     // to 'completed'. Filtering on status alone surfaces phantom QFs during the merge window.
+    // factory_lane is a staged, not-yet-applied column
+    // (database/migrations/20260713_quick_fixes_factory_lane.sql) -- see
+    // scripts/worker-checkin.cjs selfClaimQuickFix() for the identical fail-soft
+    // rationale. SD-FDBK-FIX-DISPATCH-ELIGIBILITY-HONOR-001: without this, the
+    // sd:next recommendation path (classifyQuickFixes -> topStartableQF) can't see
+    // factory_lane and would still emit AUTO_PROCEED_ACTION:qf_start for a
+    // coordinator-dispatch-only QF -- the same bug class this SD fixes, via the
+    // recommendation path instead of the automated self-claim loop (adversarial
+    // review finding, /ship deep-tier pass). The pragma below MUST stay on the
+    // same physical line as .select( -- schema-reference-extract.mjs's pragmaAt()
+    // only checks the line containing the .select( match itself (RCA'd during
+    // this SD's own round-2 adversarial review after the pragma-on-its-own-line
+    // form above silently failed to suppress the lint).
     const { data, error } = await supabase
       .from('quick_fixes')
-      .select('id, title, type, severity, status, estimated_loc, description, created_at, target_application, claiming_session_id, pr_url, commit_sha, not_before')
+      .select('id, title, type, severity, status, estimated_loc, description, created_at, target_application, claiming_session_id, pr_url, commit_sha, not_before, factory_lane') // schema-lint-disable-line: factory_lane staged, see comment above
       .in('status', ['open', 'in_progress'])
       .is('pr_url', null)
       .is('commit_sha', null)

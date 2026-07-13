@@ -138,7 +138,13 @@ export function classifyQuickFixes(quickFixes, triageResults = new Map(), sessio
     const notBeforeMs = qf.not_before ? Date.parse(qf.not_before) : NaN;
     const deferred = Number.isFinite(notBeforeMs) && notBeforeMs > Date.now();
 
-    return { ...qf, _triage: triage, _escalate: escalate, _claimBadge: claimBadge, _isClaimedByOther: isClaimedByOther, _verifyFirst: verifyFirst, _deferred: deferred };
+    // SD-FDBK-FIX-DISPATCH-ELIGIBILITY-HONOR-001: mirrors the isAutoStartableQF()
+    // factory_lane guard in worker-checkin.cjs. Without this, topStartableQF (and
+    // therefore AUTO_PROCEED_ACTION:qf_start) could recommend a coordinator-
+    // dispatch-only QF the automated self-claim loop already refuses.
+    const factoryLane = qf.factory_lane === true;
+
+    return { ...qf, _triage: triage, _escalate: escalate, _claimBadge: claimBadge, _isClaimedByOther: isClaimedByOther, _verifyFirst: verifyFirst, _deferred: deferred, _factoryLane: factoryLane };
   });
 
   classified.sort((a, b) => {
@@ -157,7 +163,7 @@ export function classifyQuickFixes(quickFixes, triageResults = new Map(), sessio
   // => claiming_session_id null, no PR) would otherwise be emitted as AUTO_PROCEED_ACTION:
   // qf_start and auto-started without verify-first. in_progress is either actively owned or
   // orphaned; neither is auto-startable.
-  summary.topStartableQF = classified.find(qf => qf.status === 'open' && !qf._escalate && !qf._isClaimedByOther && !qf._verifyFirst && !qf._deferred) || null;
+  summary.topStartableQF = classified.find(qf => qf.status === 'open' && !qf._escalate && !qf._isClaimedByOther && !qf._verifyFirst && !qf._deferred && !qf._factoryLane) || null;
 
   return { summary, classified };
 }
@@ -192,13 +198,18 @@ export function renderQFRow(qf, indent = '') {
     const verifyBadge = qf._verifyFirst ? `${colors.yellow}⚠ VERIFY-FIRST${colors.reset} ` : '';
     // SD-LEO-FIX-QUICK-FIXES-NEEDS-001: surface a durable time-gated defer.
     const deferBadge = qf._deferred ? `${colors.yellow}⏳ DEFERRED${colors.reset} ` : '';
-    console.log(`${indent}  ${colors.bold}${tierBadge}${colors.reset} ${badge}${verifyBadge}${deferBadge}${statusBadge}${qf.id} - ${truncate(qf.title, 45)}  ${colors.dim}${qf.severity}  ${age}${colors.reset}`);
+    // SD-FDBK-FIX-DISPATCH-ELIGIBILITY-HONOR-001: surface the coordinator-dispatch-only marker.
+    const factoryLaneBadge = qf._factoryLane ? `${colors.yellow}🏭 FACTORY-LANE${colors.reset} ` : '';
+    console.log(`${indent}  ${colors.bold}${tierBadge}${colors.reset} ${badge}${verifyBadge}${deferBadge}${factoryLaneBadge}${statusBadge}${qf.id} - ${truncate(qf.title, 45)}  ${colors.dim}${qf.severity}  ${age}${colors.reset}`);
     console.log(`${indent}       ${colors.dim}Est: ${loc} | Type: ${qf.type} | Target: ${target}${colors.reset}`);
     if (qf._verifyFirst) {
       console.log(`${indent}       ${colors.dim}⚠ open ${ageDays(qf.created_at)}d & unclaimed — may already be resolved by another SD; verify before starting (not auto-routed)${colors.reset}`);
     }
     if (qf._deferred) {
       console.log(`${indent}       ${colors.dim}⏳ gated until ${qf.not_before} — not claimable/auto-startable until then${colors.reset}`);
+    }
+    if (qf._factoryLane) {
+      console.log(`${indent}       ${colors.dim}🏭 coordinator-dispatch only — not claimable/auto-startable by a worker${colors.reset}`);
     }
   }
 }
