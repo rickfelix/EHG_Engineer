@@ -31,9 +31,24 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 /** Error categories that count as a cloud-cap failure (vs operator/config errors like 401/400). */
 export const CAP_FAILURE_CATEGORIES = Object.freeze(new Set(['rate_limit', 'overloaded', 'server', 'timeout']));
 
-export const DEFAULT_PROBE_COUNT = 5;
+// Rolling error-rate denominator. Raised 5 -> 10 (D2 rate-limit-health, chairman-ratified): at 5 a single
+// transient blip is 1/5 = 20% > the 5% error_rate_threshold -> a false ROLLING (degraded) alert. A 10-probe
+// batch halves one blip's weight to 10%, and the per-probe retry-on-transient below lets a recovering blip
+// resolve to OK before it counts at all. DETECTION-TUNING ONLY: threshold/alerting unchanged.
+export const DEFAULT_PROBE_COUNT = 10;
 export const MAX_PROBE_COUNT = 20; // clamp the only real-spend surface against a fat-finger invocation
 export const SINGLETON_ID = 'singleton';
+
+// Jitter + exponential-backoff on the probe requests (D2). Jitter de-synchronizes the batch so the probes do
+// not themselves burst into a rate limit; the transient-error retry (with exponential backoff) lets a momentary
+// 429/5xx/overloaded/timeout recover instead of counting toward the rolling error rate. Sustained degradation
+// still surfaces: retries are bounded, so a real cap fails every attempt and is recorded as a failure.
+export const DEFAULT_MAX_RETRIES = 2;       // retries per probe on a TRANSIENT (cap) error before recording a failure
+export const DEFAULT_BACKOFF_BASE_MS = 250; // exponential backoff base: attempt 0 -> 250ms, attempt 1 -> 500ms, ...
+export const DEFAULT_JITTER_MS = 100;       // max randomized inter-probe delay + additive backoff jitter (ms)
+
+/** Await ms milliseconds (injectable in tests via sleepFn so no real time passes). */
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 
 /**
  * Categorize an Anthropic SDK error into a cloud-cap signal. PURE.
@@ -130,22 +145,49 @@ export function computeNextHealthState(prev, summary) {
 
 /**
  * Run a batch of cheap probes against the injected Anthropic client. IO (but client is injected).
- * Uses models.list() — no token spend — as the health probe.
+ * Uses models.list() — no token spend — as the health probe. Applies jitter between probes and retries a
+ * probe that hits a TRANSIENT (cap-category) error with exponential backoff before recording it as a failure,
+ * so a momentary blip does not inflate the rolling error rate (D2). All delays are injectable (sleepFn/randFn)
+ * so tests pass no real time. maxRetries=0 restores the original no-retry behavior.
  * @param {object} args
  * @param {object} args.client - Anthropic SDK client (injected; fake in tests)
  * @param {number} [args.count=DEFAULT_PROBE_COUNT]
  * @param {() => number} [args.nowFn=Date.now]
+ * @param {number} [args.maxRetries=DEFAULT_MAX_RETRIES]
+ * @param {number} [args.backoffBaseMs=DEFAULT_BACKOFF_BASE_MS]
+ * @param {number} [args.jitterMs=DEFAULT_JITTER_MS]
+ * @param {(ms:number)=>Promise<void>} [args.sleepFn=sleep]
+ * @param {() => number} [args.randFn=Math.random]
  * @returns {Promise<Array<{ok:boolean, latencyMs?:number, category?:string}>>}
  */
-export async function runProbeBatch({ client, count = DEFAULT_PROBE_COUNT, nowFn = Date.now } = {}) {
+export async function runProbeBatch({
+  client, count = DEFAULT_PROBE_COUNT, nowFn = Date.now,
+  maxRetries = DEFAULT_MAX_RETRIES, backoffBaseMs = DEFAULT_BACKOFF_BASE_MS,
+  jitterMs = DEFAULT_JITTER_MS, sleepFn = sleep, randFn = Math.random,
+} = {}) {
   const results = [];
   for (let i = 0; i < count; i++) {
-    const t0 = nowFn();
-    try {
-      await client.models.list();
-      results.push({ ok: true, latencyMs: Math.max(0, nowFn() - t0) });
-    } catch (err) {
-      results.push({ ok: false, category: categorizeProbeError(err) });
+    // Jitter between probes so the batch is not a synchronized burst that itself trips a rate limit.
+    if (i > 0 && jitterMs > 0) await sleepFn(Math.floor(randFn() * jitterMs));
+    let attempt = 0;
+    for (;;) {
+      const t0 = nowFn();
+      try {
+        await client.models.list();
+        results.push({ ok: true, latencyMs: Math.max(0, nowFn() - t0) });
+        break;
+      } catch (err) {
+        const category = categorizeProbeError(err);
+        // Retry only TRANSIENT (cap-category) errors — a config error (401/400 -> 'other') is not retried.
+        if (CAP_FAILURE_CATEGORIES.has(category) && attempt < maxRetries) {
+          const backoffMs = backoffBaseMs * (2 ** attempt) + (jitterMs > 0 ? Math.floor(randFn() * jitterMs) : 0);
+          attempt++;
+          await sleepFn(backoffMs);
+          continue;
+        }
+        results.push({ ok: false, category });
+        break;
+      }
     }
   }
   return results;
@@ -159,9 +201,14 @@ export async function runProbeBatch({ client, count = DEFAULT_PROBE_COUNT, nowFn
  * @param {() => number} [args.nowFn=Date.now]
  * @param {() => string} [args.nowIso] - ISO timestamp provider (inject for tests)
  * @param {number} [args.probeCount=DEFAULT_PROBE_COUNT]
+ * @param {number} [args.maxRetries] - passthrough to runProbeBatch (transient-error retries)
+ * @param {number} [args.backoffBaseMs] - passthrough to runProbeBatch (exponential backoff base)
+ * @param {number} [args.jitterMs] - passthrough to runProbeBatch (inter-probe + backoff jitter)
+ * @param {(ms:number)=>Promise<void>} [args.sleepFn] - passthrough to runProbeBatch (inject in tests)
+ * @param {() => number} [args.randFn] - passthrough to runProbeBatch (inject in tests)
  * @returns {Promise<{summary:object, update:object}>}
  */
-export async function feedCloudHealth({ supabase, client, nowFn = Date.now, nowIso, probeCount = DEFAULT_PROBE_COUNT } = {}) {
+export async function feedCloudHealth({ supabase, client, nowFn = Date.now, nowIso, probeCount = DEFAULT_PROBE_COUNT, maxRetries, backoffBaseMs, jitterMs, sleepFn, randFn } = {}) {
   const isoFn = nowIso || (() => new Date(nowFn()).toISOString());
   const { data: prev, error: readErr } = await supabase
     .from('llm_cloud_health')
@@ -171,7 +218,7 @@ export async function feedCloudHealth({ supabase, client, nowFn = Date.now, nowI
   if (readErr) throw new Error(`[cloud-cap-feeder] read failed (fail-loud): ${readErr.message}`);
 
   const safeCount = Math.max(1, Math.min(MAX_PROBE_COUNT, Math.floor(Number(probeCount)) || DEFAULT_PROBE_COUNT));
-  const results = await runProbeBatch({ client, count: safeCount, nowFn });
+  const results = await runProbeBatch({ client, count: safeCount, nowFn, maxRetries, backoffBaseMs, jitterMs, sleepFn, randFn });
   const summary = summarizeBatch(results);
   const next = computeNextHealthState(prev, summary);
 

@@ -80,16 +80,50 @@ describe('computeNextHealthState', () => {
 });
 
 describe('runProbeBatch (injected fake client; no real calls)', () => {
-  it('records ok/latency, categorizes failures, calls list() per probe', async () => {
+  const noSleep = async () => {}; // inject so jitter/backoff pass zero real time
+
+  it('records ok/latency, categorizes failures, calls list() per probe (maxRetries:0 = no retry)', async () => {
     let i = 0;
     const client = { models: { list: vi.fn(async () => { i++; if (i === 2) throw errWith({ status: 429 }); return { data: [] }; }) } };
     let t = 0; const nowFn = () => (t += 50);
-    const results = await runProbeBatch({ client, count: 3, nowFn });
+    const results = await runProbeBatch({ client, count: 3, nowFn, maxRetries: 0, sleepFn: noSleep });
     expect(results).toHaveLength(3);
     expect(results[0].ok).toBe(true);
     expect(results[1]).toEqual({ ok: false, category: 'rate_limit' });
     expect(results[2].ok).toBe(true);
     expect(client.models.list).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries a TRANSIENT (429) blip with backoff and resolves it to OK (D2)', async () => {
+    let i = 0;
+    // First probe hits 429 once, then succeeds on retry -> should record ok, not a failure.
+    const client = { models: { list: vi.fn(async () => { i++; if (i === 1) throw errWith({ status: 429 }); return { data: [] }; }) } };
+    const sleeps = [];
+    const results = await runProbeBatch({ client, count: 2, nowFn: () => 0, maxRetries: 2, backoffBaseMs: 250, jitterMs: 0, sleepFn: async (ms) => { sleeps.push(ms); }, randFn: () => 0 });
+    expect(results.every((r) => r.ok)).toBe(true);        // blip recovered -> no failure counted
+    expect(client.models.list).toHaveBeenCalledTimes(3);  // probe0: 429 + retry; probe1: ok
+    expect(sleeps).toContain(250);                         // exponential backoff base applied on retry
+  });
+
+  it('does NOT retry a config error (401 -> other) and records the failure', async () => {
+    const client = { models: { list: vi.fn(async () => { throw errWith({ status: 401 }); }) } };
+    const results = await runProbeBatch({ client, count: 1, nowFn: () => 0, maxRetries: 2, sleepFn: async () => {}, randFn: () => 0 });
+    expect(results[0]).toEqual({ ok: false, category: 'other' });
+    expect(client.models.list).toHaveBeenCalledTimes(1);  // no retry on non-cap error
+  });
+
+  it('exhausts retries on a SUSTAINED transient error and records the failure', async () => {
+    const client = { models: { list: vi.fn(async () => { throw errWith({ status: 429 }); }) } };
+    const results = await runProbeBatch({ client, count: 1, nowFn: () => 0, maxRetries: 2, jitterMs: 0, sleepFn: async () => {}, randFn: () => 0 });
+    expect(results[0]).toEqual({ ok: false, category: 'rate_limit' });
+    expect(client.models.list).toHaveBeenCalledTimes(3);  // initial + 2 retries, then recorded
+  });
+
+  it('applies inter-probe jitter between probes', async () => {
+    const client = { models: { list: async () => ({ data: [] }) } };
+    const sleeps = [];
+    await runProbeBatch({ client, count: 3, nowFn: () => 0, maxRetries: 0, jitterMs: 100, sleepFn: async (ms) => { sleeps.push(ms); }, randFn: () => 0.5 });
+    expect(sleeps).toEqual([50, 50]); // one jitter sleep before each probe after the first (floor(0.5*100))
   });
 });
 
@@ -112,7 +146,7 @@ describe('feedCloudHealth (fake client + fake supabase, ZERO live calls/writes)'
     let i = 0;
     const client = { models: { list: async () => { i++; if (i % 2 === 0) throw errWith({ status: 429 }); return { data: [] }; } } };
     let t = 0;
-    const { summary, update } = await feedCloudHealth({ supabase: sb, client, nowFn: () => (t += 10), nowIso: () => '2026-06-14T00:00:00Z', probeCount: 4 });
+    const { summary, update } = await feedCloudHealth({ supabase: sb, client, nowFn: () => (t += 10), nowIso: () => '2026-06-14T00:00:00Z', probeCount: 4, maxRetries: 0, sleepFn: async () => {} });
     expect(summary.capFailures).toBe(2);
     expect(update.status).toBe('rolling');
     expect(update.consecutive_failures).toBe(1);
@@ -124,7 +158,7 @@ describe('feedCloudHealth (fake client + fake supabase, ZERO live calls/writes)'
     const sb = fakeSupabase({ error_rate_threshold: 0.05, consecutive_failures: 3, baseline_latency_p95_ms: null });
     const client = { models: { list: async () => ({ data: [] }) } };
     let t = 0;
-    const { update } = await feedCloudHealth({ supabase: sb, client, nowFn: () => (t += 10), nowIso: () => 'T', probeCount: 3 });
+    const { update } = await feedCloudHealth({ supabase: sb, client, nowFn: () => (t += 10), nowIso: () => 'T', probeCount: 3, maxRetries: 0, sleepFn: async () => {} });
     expect(update.status).toBe('paused');
     expect(update.consecutive_failures).toBe(0);
   });
