@@ -1,6 +1,10 @@
 {
  "_comment": "schema-reference-lint escapes (SD-LEO-INFRA-SCHEMA-REFERENCE-LINT-001). files: repo-relative paths whose DB client targets ANOTHER database (e.g. the EHG app project) or whose table names are dynamic/templated. tables: relation names to skip everywhere (e.g. tables that exist only in the EHG app DB but are referenced from cross-DB scripts). Prefer the inline pragma (schema-lint-disable-line) for single intentional lines.",
- "files": [],
+ "files": [
+  "lib/gates/operator-contract/__tests__/operator-contract.test.js",
+  "lib/gates/operator-contract/__tests__/venture-and-self-cadence.test.js"
+ ],
+ "_operator_contract_test_note": "SD-LEO-INFRA-OPERATOR-CONTRACT-GATE-001: these unit tests use deliberately-fictional fixture table names (foo_events, venture_signals) to exercise detectCreator/consumer/reaper against synthetic CREATOR diffs — they are not real relations.",
  "tables": [
   "north_star",
   "vision_ladder_rungs",
