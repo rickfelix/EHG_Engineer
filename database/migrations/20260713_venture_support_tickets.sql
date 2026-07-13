@@ -71,8 +71,18 @@ ALTER TABLE public.ventures
 ALTER TABLE public.ventures
   ADD COLUMN IF NOT EXISTS support_rail_address text;
 
-ALTER TABLE public.ventures
-  ADD CONSTRAINT ventures_support_rail_address_unique UNIQUE (support_rail_address);
+-- Postgres has no "ADD CONSTRAINT IF NOT EXISTS" -- guard explicitly so a re-run/retry of this
+-- migration (partial apply, staging->prod replay) doesn't throw "constraint already exists" and
+-- roll back the whole single-transaction migration (adversarial-review fix).
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'ventures_support_rail_address_unique'
+  ) THEN
+    ALTER TABLE public.ventures
+      ADD CONSTRAINT ventures_support_rail_address_unique UNIQUE (support_rail_address);
+  END IF;
+END $$;
 
 COMMENT ON COLUMN public.ventures.support_is_armed
   IS 'Explicit human/chairman-set FIRST CUSTOMER flag for the support pipeline. Default false. Never auto-detected (SD-FDBK-FIX-SCOPE-VENTURE-SUPPORT-001). Informational/readiness signal only -- does not block ticket intake/processing.';
@@ -93,6 +103,14 @@ CREATE INDEX IF NOT EXISTS idx_venture_support_tickets_status
   ON public.venture_support_tickets (status)
   WHERE status IN ('open', 'escalated');
 
+-- UNIQUE (venture_id, ticket_id) above does NOT dedup unattributed tickets -- Postgres treats
+-- NULLs as distinct, so forced-escalate rows (venture_id=NULL) with the same ticket_id would
+-- otherwise multiply unboundedly on redelivery. This partial index closes that gap (adversarial-
+-- review fix): ticket_id is unique among unattributed rows too.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_venture_support_tickets_unattributed_ticket_id_unique
+  ON public.venture_support_tickets (ticket_id)
+  WHERE venture_id IS NULL;
+
 -- ============================================================
 -- 4. RLS -- enabled + service_role policy in the SAME migration
 --    (SPINE-001-B anon-writable-table recurrence: an RLS-less table,
@@ -112,12 +130,20 @@ CREATE POLICY venture_support_tickets_service_role_all
 -- Unlike the 2026-04-01 venture_user_feedback channel, there is no
 -- direct-from-browser anon INSERT path for support tickets today.
 
+-- NOTE (adversarial-review, INFO): support_rail_address/support_is_armed/support_armed_at are
+-- added to the pre-existing public.ventures table via ADD COLUMN only -- this migration does not
+-- touch ventures' own RLS policies, which are out of scope here. If ventures ever grants a broad
+-- anon/authenticated SELECT, support_rail_address (a per-venture intake address) would be exposed
+-- through that existing grant, not through anything added by this migration. Auditing ventures'
+-- RLS posture as a whole is tracked separately, not duplicated per-migration.
+
 COMMIT;
 
 -- ============================================================
 -- ROLLBACK (manual, if needed):
 -- ============================================================
 -- DROP POLICY IF EXISTS venture_support_tickets_service_role_all ON public.venture_support_tickets;
+-- DROP INDEX IF EXISTS idx_venture_support_tickets_unattributed_ticket_id_unique;
 -- DROP INDEX IF EXISTS idx_venture_support_tickets_status;
 -- DROP INDEX IF EXISTS idx_venture_support_tickets_venture_created;
 -- ALTER TABLE public.ventures DROP CONSTRAINT IF EXISTS ventures_support_rail_address_unique;

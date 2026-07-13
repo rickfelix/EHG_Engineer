@@ -14,10 +14,13 @@ import {
 
 /**
  * Minimal supabase mock: records venture_support_tickets inserts (can fail the first N, to exercise
- * downgrade); resolves ventures lookups (by id or support_rail_address) from a fixture list.
+ * downgrade); simulates a real Postgres unique-violation (code 23505) when a row with the same
+ * (ticket_id, venture_id) already exists (seed via `preExisting`), and the post-conflict lookup
+ * `writeSupportTicketRow` performs to recover idempotently; resolves ventures lookups (by id or
+ * support_rail_address) from a fixture list.
  */
-export function makeSb({ failInsert = false, failFirstNInserts = 0, ventures = [] } = {}) {
-  const inserted = [];
+export function makeSb({ failInsert = false, failFirstNInserts = 0, ventures = [], preExisting = [] } = {}) {
+  const inserted = [...preExisting];
   let attempts = 0;
   const sb = {
     inserted,
@@ -27,10 +30,13 @@ export function makeSb({ failInsert = false, failFirstNInserts = 0, ventures = [
       b.update = (obj) => { b._op = 'update'; b._payload = obj; return b; };
       b.select = () => b;
       b.eq = (col, val) => { b._filters[col] = val; return b; };
+      b.is = (col, val) => { b._filters[col] = val; return b; }; // val is always null (venture_id IS NULL)
       b.neq = () => b; b.order = () => b; b.limit = () => b;
       b.single = () => {
         if (b._t === 'venture_support_tickets' && b._op === 'insert') {
           attempts += 1;
+          const conflict = inserted.some((r) => r.ticket_id === b._payload.ticket_id && r.venture_id === (b._payload.venture_id ?? null));
+          if (conflict) return Promise.resolve({ data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint' } });
           if (failInsert || attempts <= failFirstNInserts) return Promise.resolve({ data: null, error: { message: 'insert failed' } });
           const id = `vst-${inserted.length + 1}`; inserted.push({ ...b._payload, id }); return Promise.resolve({ data: { id }, error: null });
         }
@@ -41,6 +47,10 @@ export function makeSb({ failInsert = false, failFirstNInserts = 0, ventures = [
           const match = ventures.find((v) =>
             (b._filters.id !== undefined && v.id === b._filters.id) ||
             (b._filters.support_rail_address !== undefined && v.support_rail_address === b._filters.support_rail_address));
+          return Promise.resolve({ data: match || null, error: null });
+        }
+        if (b._t === 'venture_support_tickets') {
+          const match = inserted.find((r) => r.ticket_id === b._filters.ticket_id && r.venture_id === (b._filters.venture_id ?? null));
           return Promise.resolve({ data: match || null, error: null });
         }
         return Promise.resolve({ data: null, error: null });
@@ -89,6 +99,17 @@ describe('resolveVentureContext (FR-4/FR-5)', () => {
     const sb = makeSb({ ventures: [{ id: 'v-1', support_is_armed: true }] });
     const ctx = await resolveVentureContext(sb, { venture_id: 'v-1' });
     expect(ctx).toEqual({ venture_id: 'v-1', venture_armed: true, resolved: true });
+  });
+  it('PRECEDENCE (adversarial-review fix): rail_address wins over a caller-supplied venture_id when both are present', async () => {
+    // ticket claims venture_id='v-spoofed' (fully attacker-controllable on raw channel-neutral
+    // input), but arrived via a rail_address that legitimately resolves to a DIFFERENT venture --
+    // the physical channel signal must win, not the unauthenticated claim.
+    const sb = makeSb({ ventures: [
+      { id: 'v-real', support_is_armed: false, support_rail_address: 'help@acme.example' },
+      { id: 'v-spoofed', support_is_armed: false },
+    ] });
+    const ctx = await resolveVentureContext(sb, { venture_id: 'v-spoofed', rail_address: 'help@acme.example' });
+    expect(ctx.venture_id).toBe('v-real');
   });
   it('resolves via rail_address when venture_id is not already known', async () => {
     const sb = makeSb({ ventures: [{ id: 'v-2', support_is_armed: false, support_rail_address: 'billing@acme.example' }] });
@@ -208,6 +229,21 @@ describe('disposeSupportTicket (FR-3)', () => {
     const sb = makeSb({ failInsert: true });
     const ticket = normalizeSupportTicket({ subject: 'URGENT down', body: 'breach', venture_id: 'v-1' });
     await expect(disposeSupportTicket(sb, ticket, triageSupportTicket(ticket))).rejects.toBeTruthy();
+  });
+  it('IDEMPOTENT REDELIVERY (adversarial-review fix): re-processing an already-persisted attributed ' +
+     'ticket recovers via the existing row instead of crashing on the unique-violation', async () => {
+    const ticket = normalizeSupportTicket({ subject: 'URGENT down', body: 'breach', venture_id: 'v-1' });
+    const sb = makeSb({ preExisting: [{ id: 'vst-existing', ticket_id: ticket.ticket_id, venture_id: 'v-1', status: 'escalated' }] });
+    const d = await disposeSupportTicket(sb, ticket, triageSupportTicket(ticket));
+    expect(d.status).toBe('escalated');
+    expect(d.escalation_id).toBe('vst-existing'); // recovered the existing row, no duplicate/no throw
+  });
+  it('IDEMPOTENT REDELIVERY: an unattributed ticket redelivery also recovers via the NULL-venture_id row', async () => {
+    const ticket = normalizeSupportTicket({ subject: 'how to setup', body: 'account login guide' }); // no venture_id
+    const sb = makeSb({ preExisting: [{ id: 'vst-existing-null', ticket_id: ticket.ticket_id, venture_id: null, status: 'escalated' }] });
+    const d = await disposeSupportTicket(sb, ticket, triageSupportTicket(ticket));
+    expect(d.status).toBe('escalated');
+    expect(d.escalation_id).toBe('vst-existing-null');
   });
 });
 
