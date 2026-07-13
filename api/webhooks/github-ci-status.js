@@ -4,8 +4,8 @@
  */
 
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
-const crypto = require('crypto');
-const { executeSubAgent } = require('../../lib/sub-agent-executor.js');
+import crypto from 'crypto';
+import { executeSubAgent } from '../../lib/sub-agent-executor.js';
 
 // Initialize Supabase client
 const supabase = createSupabaseServiceClient();
@@ -350,7 +350,5 @@ async function handleGitHubWebhook(req, res) {
   }
 }
 
-module.exports = { handleGitHubWebhook };
-
-// Export for serverless environments
-module.exports.default = handleGitHubWebhook;
+export { handleGitHubWebhook };
+export default handleGitHubWebhook;

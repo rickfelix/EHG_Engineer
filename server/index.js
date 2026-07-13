@@ -58,6 +58,10 @@ import githubRepoRoutes from './routes/github-repo.js';
 import protocolLintRoutes, { requireAdminRole } from './routes/protocol-lint.js';
 import { createChairmanScopeGuard } from '../lib/middleware/chairman-scope-guard.js';
 
+// Payment + CI/CD webhook handlers (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001)
+import { handleStripeWebhook } from '../api/webhooks/stripe.js';
+import { handleGitHubWebhook } from '../api/webhooks/github-ci-status.js';
+
 // Import Story API
 import * as storiesAPI from '../src/api/stories.js';
 
@@ -128,7 +132,20 @@ const apiLimiter = rateLimit({
 });
 app.use('/api', apiLimiter);
 
+// Stripe webhook: raw-body middleware MUST run before the global express.json()
+// parser below, or signature verification loses the exact bytes it needs
+// (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001, FR-1). Registered with app.all() (not
+// app.post()) so handleStripeWebhook's own method check (405 for non-POST)
+// is reachable — app.post() would 404 non-POST requests before the handler
+// ever runs.
+app.all('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
+
 app.use(express.json());
+
+// GitHub CI/CD status webhook: uses the global express.json() parser above
+// (no raw-body requirement) (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001, FR-3).
+// app.all() for the same reason as the Stripe route above.
+app.all('/api/webhooks/github-ci-status', handleGitHubWebhook);
 
 // =============================================================================
 // API ROUTES
