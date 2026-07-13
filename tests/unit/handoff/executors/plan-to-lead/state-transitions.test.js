@@ -150,6 +150,129 @@ describe('satisfyOrchestratorTemplateRequirements', () => {
     expect(insertFn.mock.calls[0][0].retro_type).toBe('SD_COMPLETION');
   });
 
+  // QF-20260713-742 / PAT-TEMPLATE-CODE-SYNC-001: the insert previously had no
+  // target_application at all, failing NOT NULL / the registry-aware validation
+  // trigger on every orchestrator with zero existing retros.
+  it('should resolve target_application from sd.metadata.venture_name when registered', async () => {
+    const insertFn = vi.fn().mockResolvedValue({ error: null });
+
+    mockDb = {
+      from: vi.fn((table) => {
+        if (table === 'sd_phase_handoffs') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    limit: vi.fn().mockResolvedValue({ data: [{ id: 'existing-handoff' }], error: null }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === 'retrospectives') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+              }),
+            }),
+            insert: insertFn,
+          };
+        }
+        if (table === 'strategic_directives_v2') {
+          return {
+            select: vi.fn((cols) => {
+              if (cols === 'metadata') {
+                return {
+                  eq: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({
+                      data: { metadata: { venture_name: 'ApexNiche AI' } },
+                      error: null,
+                    }),
+                  }),
+                };
+              }
+              return { eq: vi.fn().mockResolvedValue({ data: [], error: null }) };
+            }),
+          };
+        }
+        if (table === 'applications') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ data: [{ name: 'ApexNiche AI' }], error: null }),
+            }),
+          };
+        }
+      }),
+    };
+
+    const result = await satisfyOrchestratorTemplateRequirements(mockDb, 'sd-123', 'Test SD');
+    expect(result.satisfied).toBe(true);
+    expect(insertFn.mock.calls[0][0].target_application).toBe('ApexNiche AI');
+  });
+
+  it('should fall back to EHG_Engineer when venture_name is unregistered and no child retro exists', async () => {
+    const insertFn = vi.fn().mockResolvedValue({ error: null });
+
+    mockDb = {
+      from: vi.fn((table) => {
+        if (table === 'sd_phase_handoffs') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    limit: vi.fn().mockResolvedValue({ data: [{ id: 'existing-handoff' }], error: null }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === 'retrospectives') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+              }),
+            }),
+            insert: insertFn,
+          };
+        }
+        if (table === 'strategic_directives_v2') {
+          return {
+            select: vi.fn((cols) => {
+              if (cols === 'metadata') {
+                return {
+                  eq: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({
+                      data: { metadata: { venture_name: 'Unregistered Venture' } },
+                      error: null,
+                    }),
+                  }),
+                };
+              }
+              return { eq: vi.fn().mockResolvedValue({ data: [], error: null }) };
+            }),
+          };
+        }
+        if (table === 'applications') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+            }),
+          };
+        }
+      }),
+    };
+
+    const result = await satisfyOrchestratorTemplateRequirements(mockDb, 'sd-123', 'Test SD');
+    expect(result.satisfied).toBe(true);
+    expect(insertFn.mock.calls[0][0].target_application).toBe('EHG_Engineer');
+  });
+
   it('should create both when both missing', async () => {
     const handoffInsert = vi.fn().mockResolvedValue({ error: null });
     const retroInsert = vi.fn().mockResolvedValue({ error: null });
