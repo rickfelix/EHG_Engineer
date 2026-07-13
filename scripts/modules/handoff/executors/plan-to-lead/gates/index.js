@@ -46,3 +46,9 @@ export { createRcaFeedbackLoopGate } from '../../exec-to-plan/gates/rca-feedback
 // to LEO at PLAN-TO-LEAD. Scoped-block (only a stage-config-relevant SD's real drift),
 // WARN on unrelated pre-existing drift, fail-open on execution error.
 export { createCrossRepoStageConfigDriftGate } from './cross-repo-stage-config-drift.js';
+
+// Operator Contract Gate (SD-LEO-INFRA-OPERATOR-CONTRACT-GATE-001, D8 build-vs-run)
+// Blocks a CREATOR (new table/writer/flag/detector) that lacks its OPERATOR TRIPLE
+// (consumer + armed cadence + reaper) unless a dated, audit-logged waiver applies.
+// Fail-open on execution error — only an unambiguous incomplete-triple hard-blocks.
+export { createOperatorContractGate } from '../../../../../../lib/gates/operator-contract/harness-adapter.js';

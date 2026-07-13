@@ -50,7 +50,9 @@ import {
   createChildScopeCoverageGate,
   // Vision Fidelity Gate (SD-LEO-INFRA-VISION-FIDELITY-GATE-001 FR-2)
   createVisionFidelityGate,
-  createCrossRepoStageConfigDriftGate
+  createCrossRepoStageConfigDriftGate,
+  // Operator Contract Gate (SD-LEO-INFRA-OPERATOR-CONTRACT-GATE-001, D8)
+  createOperatorContractGate
 } from './gates/index.js';
 // Note: requiresTraceabilityGates is re-exported via 'export * from ./gates/index.js'
 
@@ -351,6 +353,12 @@ export class PlanToLeadExecutor extends BaseExecutor {
     // LEAD-FINAL. Scoped-block (only this SD's real drift), WARN on unrelated pre-existing
     // drift, fail-open on execution error (DB down / sibling repo absent / git error).
     gates.push(createCrossRepoStageConfigDriftGate(this.supabase));
+
+    // Operator Contract Gate (SD-LEO-INFRA-OPERATOR-CONTRACT-GATE-001, D8 build-vs-run):
+    // a CREATOR (new table/writer/flag/detector) may not pass its final gate without its
+    // OPERATOR TRIPLE (consumer + armed cadence + reaper) or a dated, audit-logged waiver.
+    // Fail-open on execution error — only an unambiguous incomplete-triple hard-blocks.
+    gates.push(createOperatorContractGate(this.supabase, sd, appPath));
 
     // DB Content Parity — runs before /learn (SD-LEO-INFRA-CODE-CONTENT-PARITY-001)
     gates.push(createDbContentParityGate());
