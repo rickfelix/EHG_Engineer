@@ -52,7 +52,9 @@ DROP POLICY IF EXISTS loop_registry_service_role ON public.loop_registry;
 CREATE POLICY loop_registry_service_role ON public.loop_registry
   FOR ALL TO service_role USING (true) WITH CHECK (true);
 
--- Authenticated read (dashboards / distance-to-V1 query); no anon access.
-DROP POLICY IF EXISTS loop_registry_authenticated_read ON public.loop_registry;
-CREATE POLICY loop_registry_authenticated_read ON public.loop_registry
-  FOR SELECT TO authenticated USING (true);
+-- No authenticated/anon policy by design: loop_registry is GLOBAL harness-infra config
+-- (system-wide loops L1-L33) with NO tenant dimension, so an authenticated USING(true)
+-- read would expose all rows without a tenant predicate (rls-anon-tenant-predicate-lint,
+-- cf. SD-LEO-GEN-SCOPE-ANON-KEY-001 / SD-FDBK-FIX-FEEDBACK-SELECT-FEEDBACK-001). The only
+-- consumers — the closure-verifier, the distance-to-V1 query, and the monthly digest —
+-- run server-side under service_role. Least-privilege: service_role only.
