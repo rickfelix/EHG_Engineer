@@ -547,6 +547,12 @@ async function rehydrateCallsign(sb, sessionId, currentMeta) {
 function isAutoStartableQF(qf, nowMs) {
   if (!qf || qf.status !== 'open') return false;
   if (qf.pr_url || qf.commit_sha) return false;        // already in PR/commit (verify-first / merge-race guard)
+  // SD-FDBK-FIX-DISPATCH-ELIGIBILITY-HONOR-001: quick_fixes.factory_lane is the structured
+  // "coordinator-dispatch only, not worker-self-claimable" marker (replaces the pre-fix free-text
+  // "FACTORY-LANE:" convention buried in description, which this predicate could not see -- live
+  // incident: QF-20260712-481 self-claimed despite being factory-lane). Fail-closed: any truthy
+  // value excludes; only exactly false (the column default) allows self-claim.
+  if (qf.factory_lane) return false;
   if (qf.routing_tier != null && Number(qf.routing_tier) >= 3) return false;  // persisted Tier-3 -> full SD, not auto-QF
   if (TIER3_RISK_RE.test(qf.title || '')) return false;                        // risk-keyword drift -> hold for triage/human
   // SD-LEO-FIX-QUICK-FIXES-NEEDS-001: durable time-gated defer -- a QF genuinely not ready
@@ -576,7 +582,13 @@ async function selfClaimQuickFix(sb, sessionId, base) {
   try {
     const { data: qfs } = await sb
       .from('quick_fixes')
-      .select('id, status, pr_url, commit_sha, created_at, routing_tier, title, severity, not_before')
+      // schema-lint-disable-line: factory_lane is a staged, not-yet-applied column
+      // (database/migrations/20260713_quick_fixes_factory_lane.sql) -- until a human/coordinator
+      // applies it, this SELECT fails soft (data undefined -> sortQfCandidatesBySeverity's (qfs||[])
+      // -> no QF self-claimed this tick), the same documented fail-open contract this function
+      // already has, never a throw/crash. SD self-claim (a separate, higher-priority tier) is
+      // unaffected either way.
+      .select('id, status, pr_url, commit_sha, created_at, routing_tier, title, severity, not_before, factory_lane')
       .eq('status', 'open')
       .is('pr_url', null)
       .is('commit_sha', null)
