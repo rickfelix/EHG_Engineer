@@ -1,35 +1,50 @@
 /**
  * Unit pins for the support intake->triage->route pipeline.
  * SD-LEO-INFRA-SUPPORT-INTAKE-TRIAGE-001 — FR-1/FR-2/FR-3/FR-6.
+ * Re-scoped per-venture by SD-FDBK-FIX-SCOPE-VENTURE-SUPPORT-001 — FR-1..FR-6, TS-1..TS-6.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import {
-  normalizeSupportTicket, triageSupportTicket, disposeSupportTicket, SUPPORT_CATEGORIES,
+  normalizeSupportTicket, triageSupportTicket, disposeSupportTicket, resolveVentureContext,
+  runSupportPipeline, SUPPORT_CATEGORIES,
 } from '../../../lib/support/intake-pipeline.js';
 
-/** Minimal supabase mock: records feedback inserts; can fail the first N inserts (to exercise downgrade). */
-export function makeSb({ failFeedbackInsert = false, failFirstNInserts = 0 } = {}) {
+/**
+ * Minimal supabase mock: records venture_support_tickets inserts (can fail the first N, to exercise
+ * downgrade); resolves ventures lookups (by id or support_rail_address) from a fixture list.
+ */
+export function makeSb({ failInsert = false, failFirstNInserts = 0, ventures = [] } = {}) {
   const inserted = [];
   let attempts = 0;
   const sb = {
     inserted,
     from(table) {
-      const b = { _t: table, _op: null, _payload: null };
+      const b = { _t: table, _op: null, _payload: null, _filters: {} };
       b.insert = (row) => { b._op = 'insert'; b._payload = row; return b; };
       b.update = (obj) => { b._op = 'update'; b._payload = obj; return b; };
-      b.select = () => b; b.eq = () => b; b.neq = () => b; b.order = () => b; b.limit = () => b;
+      b.select = () => b;
+      b.eq = (col, val) => { b._filters[col] = val; return b; };
+      b.neq = () => b; b.order = () => b; b.limit = () => b;
       b.single = () => {
-        if (b._t === 'feedback' && b._op === 'insert') {
+        if (b._t === 'venture_support_tickets' && b._op === 'insert') {
           attempts += 1;
-          if (failFeedbackInsert || attempts <= failFirstNInserts) return Promise.resolve({ data: null, error: { message: 'insert failed' } });
-          const id = `fb-${inserted.length + 1}`; inserted.push({ ...b._payload, id }); return Promise.resolve({ data: { id }, error: null });
+          if (failInsert || attempts <= failFirstNInserts) return Promise.resolve({ data: null, error: { message: 'insert failed' } });
+          const id = `vst-${inserted.length + 1}`; inserted.push({ ...b._payload, id }); return Promise.resolve({ data: { id }, error: null });
         }
         return Promise.resolve({ data: null, error: null });
       };
-      b.maybeSingle = () => Promise.resolve({ data: null, error: null });
+      b.maybeSingle = () => {
+        if (b._t === 'ventures') {
+          const match = ventures.find((v) =>
+            (b._filters.id !== undefined && v.id === b._filters.id) ||
+            (b._filters.support_rail_address !== undefined && v.support_rail_address === b._filters.support_rail_address));
+          return Promise.resolve({ data: match || null, error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      };
       return b;
     },
   };
@@ -53,6 +68,44 @@ describe('normalizeSupportTicket (FR-1)', () => {
     expect(a.ticket_id).toBe(b.ticket_id); // content-derived, stable
     expect(() => normalizeSupportTicket(null)).not.toThrow();
     expect(() => normalizeSupportTicket(undefined)).not.toThrow();
+  });
+  it('captures venture_id when the caller already knows it (FR-4)', () => {
+    const t = normalizeSupportTicket({ subject: 'x', body: 'y', venture_id: 'v-1' });
+    expect(t.venture_id).toBe('v-1');
+  });
+  it('captures rail_address from rail_address or "to" for downstream resolution (FR-4); defaults null', () => {
+    const t1 = normalizeSupportTicket({ subject: 'x', body: 'y', rail_address: 'billing@acme.example' });
+    expect(t1.rail_address).toBe('billing@acme.example');
+    const t2 = normalizeSupportTicket({ subject: 'x', body: 'y', to: 'support@acme.example' });
+    expect(t2.rail_address).toBe('support@acme.example');
+    const t3 = normalizeSupportTicket({ subject: 'x', body: 'y' });
+    expect(t3.venture_id).toBeNull();
+    expect(t3.rail_address).toBeNull();
+  });
+});
+
+describe('resolveVentureContext (FR-4/FR-5)', () => {
+  it('resolves directly by venture_id and returns the support_is_armed flag', async () => {
+    const sb = makeSb({ ventures: [{ id: 'v-1', support_is_armed: true }] });
+    const ctx = await resolveVentureContext(sb, { venture_id: 'v-1' });
+    expect(ctx).toEqual({ venture_id: 'v-1', venture_armed: true, resolved: true });
+  });
+  it('resolves via rail_address when venture_id is not already known', async () => {
+    const sb = makeSb({ ventures: [{ id: 'v-2', support_is_armed: false, support_rail_address: 'billing@acme.example' }] });
+    const ctx = await resolveVentureContext(sb, { rail_address: 'billing@acme.example' });
+    expect(ctx.venture_id).toBe('v-2');
+    expect(ctx.venture_armed).toBe(false);
+    expect(ctx.resolved).toBe(true);
+  });
+  it('unresolvable (no venture_id, no matching rail_address) => venture_id null, resolved false', async () => {
+    const sb = makeSb({ ventures: [] });
+    const ctx = await resolveVentureContext(sb, { rail_address: 'nobody@nowhere.example' });
+    expect(ctx).toEqual({ venture_id: null, venture_armed: false, resolved: false });
+  });
+  it('FAIL-OPEN: a lookup error never throws, degrades to unresolved', async () => {
+    const hostileSb = { from() { throw new Error('db down'); } };
+    const ctx = await resolveVentureContext(hostileSb, { venture_id: 'v-1' });
+    expect(ctx).toEqual({ venture_id: null, venture_armed: false, resolved: false });
   });
 });
 
@@ -102,44 +155,80 @@ describe('triageSupportTicket (FR-2)', () => {
 });
 
 describe('disposeSupportTicket (FR-3)', () => {
-  it('auto_resolve => records a resolved feedback row, status auto_resolved', async () => {
+  it('auto_resolve with a resolved venture_id => records a venture_support_tickets row, status auto_resolved', async () => {
     const sb = makeSb();
-    const ticket = normalizeSupportTicket({ subject: 'how to setup', body: 'account login guide' });
+    const ticket = normalizeSupportTicket({ subject: 'how to setup', body: 'account login guide', venture_id: 'v-1' });
     const triage = triageSupportTicket(ticket);
     const d = await disposeSupportTicket(sb, ticket, triage);
     expect(d.status).toBe('auto_resolved');
-    expect(sb.inserted.some((r) => r.category === 'support_auto_resolved' && r.status === 'resolved')).toBe(true);
+    expect(sb.inserted.some((r) => r.venture_id === 'v-1' && r.status === 'auto_resolved')).toBe(true);
   });
-  it('escalate => writes a surfaced support_escalation feedback row (never dropped)', async () => {
+  it('escalate => writes a surfaced venture_support_tickets row, status escalated (never dropped)', async () => {
     const sb = makeSb();
-    const ticket = normalizeSupportTicket({ subject: 'URGENT down', body: 'breach' });
+    const ticket = normalizeSupportTicket({ subject: 'URGENT down', body: 'breach', venture_id: 'v-1' });
     const d = await disposeSupportTicket(sb, ticket, triageSupportTicket(ticket));
     expect(d.status).toBe('escalated');
-    expect(sb.inserted.some((r) => r.category === 'support_escalation' && r.status === 'new')).toBe(true);
+    expect(sb.inserted.some((r) => r.venture_id === 'v-1' && r.status === 'escalated')).toBe(true);
+  });
+  it('UNATTRIBUTED: no venture_id forces escalate even when triage says auto_resolve, but is still persisted (venture_id null)', async () => {
+    const sb = makeSb();
+    const ticket = normalizeSupportTicket({ subject: 'how to setup', body: 'account login guide' }); // no venture_id/rail_address
+    const triage = triageSupportTicket(ticket);
+    expect(triage.routing_decision).toBe('auto_resolve'); // triage itself is confident...
+    const d = await disposeSupportTicket(sb, ticket, triage);
+    expect(d.status).toBe('escalated'); // ...but disposition forces escalate: never auto-resolve unattributed
+    expect(d.reason).toMatch(/no venture_id resolved/);
+    expect(sb.inserted.some((r) => r.venture_id === null && r.status === 'escalated')).toBe(true);
   });
   it('DOWNGRADE: an auto_resolve whose record fails ESCALATES instead (re-routed, not dropped)', async () => {
     const sb = makeSb({ failFirstNInserts: 1 }); // the auto-resolution record fails; the escalation write succeeds
-    const ticket = normalizeSupportTicket({ subject: 'how to setup', body: 'account login guide' });
+    const ticket = normalizeSupportTicket({ subject: 'how to setup', body: 'account login guide', venture_id: 'v-1' });
     const triage = triageSupportTicket(ticket);
     expect(triage.routing_decision).toBe('auto_resolve');
     const d = await disposeSupportTicket(sb, ticket, triage);
     expect(d.status).toBe('escalated'); // re-routed, NOT silently dropped
     expect(d.reason).toMatch(/downgraded/);
-    expect(sb.inserted.some((r) => r.category === 'support_escalation')).toBe(true);
+    expect(sb.inserted.some((r) => r.status === 'escalated')).toBe(true);
   });
   it('FAIL-LOUD: a total DB outage (every write fails) throws rather than silently dropping', async () => {
-    const sb = makeSb({ failFeedbackInsert: true });
-    const ticket = normalizeSupportTicket({ subject: 'URGENT down', body: 'breach' });
+    const sb = makeSb({ failInsert: true });
+    const ticket = normalizeSupportTicket({ subject: 'URGENT down', body: 'breach', venture_id: 'v-1' });
     await expect(disposeSupportTicket(sb, ticket, triageSupportTicket(ticket))).rejects.toBeTruthy();
   });
 });
 
-describe('single-canonical reuse guard (FR-6)', () => {
-  it('the triage classifier REUSES intake-classifier.js (imports keywordClassify) — no greenfield duplicate', () => {
+describe('runSupportPipeline venture threading (SD-FDBK-FIX-SCOPE-VENTURE-SUPPORT-001 TS-1..TS-5)', () => {
+  it('TS-1/TS-2: full run with a resolvable venture rail address => venture_id populated, zero feedback-table writes', async () => {
+    const sb = makeSb({ ventures: [{ id: 'v-3', support_is_armed: false, support_rail_address: 'help@acme.example' }] });
+    const result = await runSupportPipeline(sb, { subject: 'how to setup', body: 'account login guide', rail_address: 'help@acme.example' });
+    expect(result.ticket.venture_id).toBe('v-3');
+    expect(sb.inserted.length).toBeGreaterThan(0);
+    expect(sb.inserted.every((r) => !('category' in r) || r.category !== 'support_auto_resolved')).toBe(true); // no legacy feedback-shaped rows
+  });
+  it('TS-4: unresolvable venture_id escalates rather than auto-resolving', async () => {
+    const sb = makeSb({ ventures: [] });
+    const result = await runSupportPipeline(sb, { subject: 'how to setup', body: 'account login guide' });
+    expect(result.ticket.venture_id).toBeNull();
+    expect(result.disposition.status).toBe('escalated');
+  });
+  it('TS-5: support_is_armed=false still processes the ticket correctly (informational only, not a hard gate)', async () => {
+    const sb = makeSb({ ventures: [{ id: 'v-4', support_is_armed: false }] });
+    const result = await runSupportPipeline(sb, { subject: 'how to setup', body: 'account login guide', venture_id: 'v-4' });
+    expect(result.ticket.venture_armed).toBe(false);
+    expect(result.disposition.status).toBe('auto_resolved'); // armed flag does not block a normal auto-resolve
+  });
+});
+
+describe('venture-scoped persistence guard (SD-FDBK-FIX-SCOPE-VENTURE-SUPPORT-001 TS-6, was FR-6)', () => {
+  it('persistence targets the dedicated venture_support_tickets table, NEVER the shared feedback table; classifier reuse intact', () => {
     const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../../lib/support/intake-pipeline.js'), 'utf8');
+    // still reuses the EVA intake-classifier — no greenfield duplicate (FR-6 original intent preserved)
     expect(src).toMatch(/from '\.\.\/integrations\/intake-classifier\.js'/);
     expect(src).toMatch(/keywordClassify/);
-    // venture-agnostic: no venture-specific branching baked into the pipeline
-    expect(src).not.toMatch(/venture_id|first_venture|venture-specific/i);
+    // venture-SCOPED now (this SD's whole point): venture_id threading is expected and required
+    expect(src).toMatch(/venture_id/);
+    // zero direct writes to the shared harness feedback table
+    expect(src).not.toMatch(/\.from\('feedback'\)/);
+    expect(src).toMatch(/\.from\('venture_support_tickets'\)/);
   });
 });
