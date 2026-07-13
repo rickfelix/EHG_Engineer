@@ -84,6 +84,7 @@ const { NATO, COLORS, nextAvailable, isTestSessionId, tierRankOf, pickCallsignFo
 // claim must not be stolen while the prior claimant still has real, unmerged work.
 const { isSessionAlive } = require('../lib/fleet/session-liveness.cjs');
 const { hasWip } = require('../lib/claim/wip-detector.cjs');
+const { checkQfMoot, cancelMootQf } = require('../lib/fleet/retro-qf-moot-check.cjs');
 // SD-ARCH-HOTSPOT-CHECKIN-001: resolveCheckin's rung ladder is now an explicit step pipeline.
 // Steps live in lib/checkin/steps/ (VERBATIM moves of the former inline rungs) and receive their
 // dependencies via ctx.helpers (CHECKIN_HELPERS below) — steps never require this file (circular).
@@ -593,7 +594,7 @@ async function selfClaimQuickFix(sb, sessionId, base) {
     // list rather than being intentionally suppressed).
     const { data: qfs } = await sb
       .from('quick_fixes')
-      .select('id, status, pr_url, commit_sha, created_at, routing_tier, title, severity, not_before, factory_lane') // schema-lint-disable-line: factory_lane staged, see comment above
+      .select('id, status, pr_url, commit_sha, created_at, routing_tier, title, description, severity, not_before, factory_lane') // schema-lint-disable-line: factory_lane staged, see comment above
       .eq('status', 'open')
       .is('pr_url', null)
       .is('commit_sha', null)
@@ -602,6 +603,16 @@ async function selfClaimQuickFix(sb, sessionId, base) {
     const nowMs = Date.now();
     for (const qf of sortQfCandidatesBySeverity(qfs)) {
       if (!isAutoStartableQF(qf, nowMs)) continue;
+      // SD-FDBK-FIX-RETRO-ACTION-ITEM-001 / FR-2: claim-time moot-recheck for
+      // auto-promoted retro action-item QFs -- if the SD explicitly named in
+      // this QF's description already completed/cancelled, the referenced
+      // work is stale; auto-cancel and move on rather than let a worker burn
+      // a claim cycle discovering "nothing to do" (the QF-20260713-800 class).
+      const mootCheck = await checkQfMoot(sb, qf);
+      if (mootCheck.moot) {
+        await cancelMootQf(sb, qf.id, mootCheck.sdKey, mootCheck.status);
+        continue;
+      }
       const claimed = await tryClaim(sb, qf.id, sessionId);
       if (claimed.ok) {
         return {

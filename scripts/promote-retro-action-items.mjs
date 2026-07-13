@@ -24,6 +24,7 @@
 import 'dotenv/config';
 import { execFileSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
+import { actionText, actionOwner, isActionable } from './lib/retro-action-item-filter.mjs';
 
 const apply = process.argv.includes('--apply');
 const LOOKBACK_DAYS = 7;
@@ -35,7 +36,9 @@ const supabase = createClient(
 
 const cutoff = new Date(Date.now() - LOOKBACK_DAYS * 24 * 3600 * 1000).toISOString();
 
-// Four shapes exist in the wild: the retro-agent's prompt-driven output uses
+// actionText/actionOwner/isActionable live in scripts/lib/retro-action-item-filter.mjs
+// (SD-FDBK-FIX-RETRO-ACTION-ITEM-001 / FR-1) so they are independently unit-testable.
+// Four action-item shapes exist in the wild: the retro-agent's prompt-driven output uses
 // { item, owner, priority }; lib/sub-agents/retro/action-items.js's programmatic
 // generateSmartActionItems() uses { action, owner, deadline, success_criteria,
 // priority, source }; a manually-authored SD_COMPLETION retrospective (e.g. via
@@ -46,13 +49,6 @@ const cutoff = new Date(Date.now() - LOOKBACK_DAYS * 24 * 3600 * 1000).toISOStri
 // QF-20260711-895 added it here. Support all four rather than silently dropping
 // text/owner for whichever shape isn't checked -- if a fifth shape appears,
 // add it here too, not a one-off patch on the promoted QF.
-function actionText(item) {
-  return item.item || item.action || item.title || item.text || '(no text)';
-}
-
-function actionOwner(item) {
-  return item.owner || item.owner_role || 'unassigned';
-}
 
 const { data: retros, error } = await supabase
   .from('retrospectives')
@@ -69,6 +65,7 @@ if (error) {
 let promoted = 0;
 let skippedAlreadyPromoted = 0;
 let skippedNoHighPriority = 0;
+let skippedNonActionable = 0;
 
 let skippedTestFixture = 0;
 
@@ -83,7 +80,13 @@ for (const retro of retros || []) {
   // exists). A leaked, un-cleaned fixture was scanned by this script's daily --apply
   // cron and promoted into a real QF from placeholder text. Reject known-synthetic
   // rows defensively here so a future test-cleanup failure can't repeat that.
-  if (retro.metadata?.test_fixture || retro.title === 'Test retrospective') {
+  //
+  // SD-FDBK-FIX-RETRO-ACTION-ITEM-001: gated on `apply` -- the actual incident was a
+  // REAL QF minted by an --apply run, which only happens when apply is true. The same
+  // integration test's dry-run assertions (this script called with no --apply) were
+  // broken unconditionally by the original guard since it fires regardless of mode,
+  // even though dry-run never calls create-quick-fix.js and poses no leak risk.
+  if (apply && (retro.metadata?.test_fixture || retro.title === 'Test retrospective')) {
     skippedTestFixture++;
     continue;
   }
@@ -95,8 +98,27 @@ for (const retro of retros || []) {
     continue;
   }
 
-  console.log(`\n[PROMOTABLE] retro=${retro.id} sd=${retro.sd_id} high-priority action_items=${highPriority.length}`);
-  for (const item of highPriority) console.log(`  - ${actionText(item)}`);
+  // SD-FDBK-FIX-RETRO-ACTION-ITEM-001 / FR-1: reject items that are not
+  // concretely EXEC-actionable (protocol-phase owner and/or no success
+  // criteria) BEFORE they are ever promoted into a QF. A retro whose
+  // high-priority items are ALL non-actionable is treated identically to
+  // "no high-priority items" -- non-actionable items are logged, not
+  // silently dropped, so they remain visible for a human/coordinator pass.
+  const actionable = highPriority.filter(isActionable);
+  const nonActionable = highPriority.filter(i => !isActionable(i));
+  if (nonActionable.length > 0) {
+    console.log(`\n[NON-ACTIONABLE] retro=${retro.id} sd=${retro.sd_id} rejected ${nonActionable.length} item(s):`);
+    for (const item of nonActionable) {
+      console.log(`  - ${actionText(item)} (owner: ${actionOwner(item)}, success criteria: ${item.success_criteria || 'n/a'})`);
+    }
+  }
+  if (actionable.length === 0) {
+    skippedNonActionable++;
+    continue;
+  }
+
+  console.log(`\n[PROMOTABLE] retro=${retro.id} sd=${retro.sd_id} high-priority action_items=${actionable.length}/${highPriority.length}`);
+  for (const item of actionable) console.log(`  - ${actionText(item)}`);
 
   if (!apply) {
     console.log('  [DRY RUN] would create QF-candidate here.');
@@ -105,8 +127,8 @@ for (const retro of retros || []) {
 
   const title = `[Retro action items] ${retro.sd_id || retro.title || retro.id}`.slice(0, 100);
   const description = [
-    `Auto-promoted from ${highPriority.length} high-priority action item(s) in retrospective ${retro.id} (SD ${retro.sd_id || 'n/a'}).`,
-    ...highPriority.map((i, idx) => `${idx + 1}. ${actionText(i)} (owner: ${actionOwner(i)}, success criteria: ${i.success_criteria || 'n/a'})`)
+    `Auto-promoted from ${actionable.length} high-priority action item(s) in retrospective ${retro.id} (SD ${retro.sd_id || 'n/a'}).`,
+    ...actionable.map((i, idx) => `${idx + 1}. ${actionText(i)} (owner: ${actionOwner(i)}, success criteria: ${i.success_criteria || 'n/a'})`)
   ].join('\n');
 
   try {
@@ -130,4 +152,4 @@ for (const retro of retros || []) {
   }
 }
 
-console.log(`\nSummary: ${promoted} promoted, ${skippedAlreadyPromoted} already-promoted, ${skippedTestFixture} test-fixture, ${skippedNoHighPriority} with no high-priority items.`);
+console.log(`\nSummary: ${promoted} promoted, ${skippedAlreadyPromoted} already-promoted, ${skippedTestFixture} test-fixture, ${skippedNoHighPriority} with no high-priority items, ${skippedNonActionable} with only non-actionable items.`);
