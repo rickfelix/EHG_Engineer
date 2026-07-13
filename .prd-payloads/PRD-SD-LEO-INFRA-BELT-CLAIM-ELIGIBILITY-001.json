@@ -1,0 +1,171 @@
+{
+  "title": "Belt claim-eligibility honors Adam-sourced metadata (chairman_ratified + soft_depends_on)",
+  "executive_summary": "The shared dispatch-eligibility predicate (lib/fleet/claim-eligibility.cjs), the single source of truth used by both the worker-PULL self-claim path and the coordinator/sweep-PUSH path, did not read two machine-readable metadata fields Adam already stamps at sourcing time: metadata.chairman_ratified and metadata.soft_depends_on. This left 'is this SD claimable yet' encoded only in prose/human relay instead of in the row. This PRD wires both fields into the existing predicate (INELIGIBILITY_AXES table and draftDepsSatisfied respectively) without introducing a second predicate, fail-open on absence so no existing claimable SD becomes silently unclaimable.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Claim-eligibility keys on metadata.chairman_ratified (priority)",
+      "description": "Add a new axis, chairmanRatificationPending, to the ordered INELIGIBILITY_AXES table in lib/fleet/claim-eligibility.cjs. An SD is ineligible for dispatch when metadata.chairman_ratified === false (Adam stamps this explicitly for an SD sitting draft/unfenced/ranked but awaiting chairman ratification). Absent field or chairman_ratified === true fall through unchanged (fail-open). The new reason string 'chairman_ratification_pending' is added to CLAIM_WRITE_FENCE_AXES, the same authority-fence set as needs_coordinator_review, since the ratification stamp itself is the only valid clear mechanism.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "classifyDispatchIneligibility returns 'chairman_ratification_pending' for a row with metadata.chairman_ratified === false",
+        "classifyDispatchIneligibility returns null for a row with metadata.chairman_ratified === true",
+        "classifyDispatchIneligibility returns null when metadata.chairman_ratified is absent (fail-open)",
+        "CLAIM_WRITE_FENCE_AXES.has('chairman_ratification_pending') === true"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Dispatch/belt reads metadata.soft_depends_on and auto-honors it",
+      "description": "Fold metadata.soft_depends_on into the existing draftDepsSatisfied() live-status re-check (the same function that already folds in metadata.blocked_on_sd), rather than introducing a second predicate. soft_depends_on may be a single value or an array; each entry is FREE-FORM PROSE in practice (the live example on SD-LEO-INFRA-UNIVERSAL-LOOP-GOVERNANCE-001 reads 'D8 (SD-LEO-INFRA-OPERATOR-CONTRACT-GATE-001) provides merge-time enrollment; can build in parallel, integrate at PLAN'), not a bare SD key. The referenced key is extracted via SD_KEY_TOKEN_RE (matches an SD-XXX-YYY-NNN shaped token embedded anywhere in the string) rather than treated as a literal key, which would otherwise fail to match and wrongly block an already-in-progress SD. A string with no embedded key token is non-blocking.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "draftDepsSatisfied returns false when metadata.soft_depends_on references a not-yet-completed SD (string or array form)",
+        "draftDepsSatisfied returns true once every referenced soft-dependency SD is completed",
+        "draftDepsSatisfied correctly extracts the embedded SD key from free-form prose (the live Adam-authored shape) rather than treating the whole string as a literal key",
+        "draftDepsSatisfied returns true (non-blocking) when soft_depends_on is absent, empty array, or 'none'"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Regression safety: additive, fail-open, zero newly-blocked live SDs",
+      "description": "Both FR-1 and FR-2 are purely additive to the existing eligibility predicate. Verified against the live non-terminal strategic_directives_v2 row set (26 rows at implementation time): 0 rows carry metadata.chairman_ratified === false, and the 1 row carrying metadata.soft_depends_on (SD-LEO-INFRA-UNIVERSAL-LOOP-GOVERNANCE-001, prose-form referencing the already-completed SD-LEO-INFRA-OPERATOR-CONTRACT-GATE-001) resolves to draftDepsSatisfied === true under the new logic, matching its current in_progress claimable state. Existing CLAIM_WRITE_FENCE_AXES exact-array pin test updated to include the new axis.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Live-data check: classifyDispatchIneligibility(row) is identical before/after the new chairman_ratified axis for every non-terminal SD row",
+        "Live-data check: the one live soft_depends_on-bearing SD (SD-LEO-INFRA-UNIVERSAL-LOOP-GOVERNANCE-001) resolves draftDepsSatisfied === true",
+        "No existing test in the claim-eligibility suite regresses"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Single source of truth preserved",
+      "description": "Both FRs extend lib/fleet/claim-eligibility.cjs's existing INELIGIBILITY_AXES table / draftDepsSatisfied function -- no second predicate, no new module. Shared unchanged by both the worker-checkin self_claim path and the stale-session-sweep CLAIM_FIX path."
+    },
+    {
+      "id": "TR-2",
+      "title": "Pure, synchronous axis for FR-1",
+      "description": "chairmanRatificationPending follows the existing axis contract: pure (row, ctx) => reason|null, DB-free, so it composes into both classifyDispatchIneligibility (first-match) and classifyAllDispatchIneligibility (all-match) with zero extra wiring."
+    },
+    {
+      "id": "TR-3",
+      "title": "No schema/migration change",
+      "description": "Both fields are read from the existing strategic_directives_v2.metadata JSONB column. No DDL required."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "chairman_ratified=false blocks dispatch",
+      "type": "unit",
+      "expected": "classifyDispatchIneligibility returns 'chairman_ratification_pending'"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "chairman_ratified=true is claimable",
+      "type": "unit",
+      "expected": "classifyDispatchIneligibility returns null"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "chairman_ratified absent (fail-open)",
+      "type": "unit",
+      "expected": "classifyDispatchIneligibility returns null, byte-identical to pre-change behavior"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "soft_depends_on prose references a not-yet-completed SD",
+      "type": "unit",
+      "expected": "draftDepsSatisfied returns false"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "soft_depends_on prose references an already-completed SD (live shape)",
+      "type": "unit",
+      "expected": "draftDepsSatisfied returns true, extracting the embedded key from the sentence"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "soft_depends_on array with a mix of completed/incomplete targets",
+      "type": "unit",
+      "expected": "draftDepsSatisfied returns false while any target is incomplete, true once all are completed"
+    },
+    {
+      "id": "TS-7",
+      "scenario": "Live-data regression check across all non-terminal SDs",
+      "type": "integration",
+      "expected": "Zero SDs newly blocked by either new axis; the one live soft_depends_on-bearing SD stays claimable"
+    }
+  ],
+  "acceptance_criteria": [
+    "The claim-eligibility predicate reads metadata.chairman_ratified and metadata.soft_depends_on and gates claimability on both, with fail-open on absence",
+    "Regression tests pin all transitions: chairman_ratified=false NOT claimable, =true claimable, absent claimable; soft_depends_on incomplete target NOT claimable, completed claimable, absent/none/empty claimable",
+    "No existing claimable SD becomes silently unclaimable due to a missing field (verified against the live non-terminal SD set)"
+  ],
+  "risks": [
+    {
+      "risk": "A future Adam-authored soft_depends_on string could embed a malformed or non-existent SD-key-shaped token, permanently blocking the SD",
+      "mitigation": "draftDepsSatisfied's existing dep-query already treats a referenced key with no matching row as unsatisfied (conservative), consistent with how the pre-existing dependencies/blocked_on_sd axes already behave for a bad reference -- no new failure mode introduced",
+      "severity": "low"
+    },
+    {
+      "risk": "CLAIM_WRITE_FENCE_AXES exact-array pin tests elsewhere in the suite could break on the new axis addition",
+      "mitigation": "Searched and updated the one exact-array pin test found (tests/unit/fleet/exec-boundary-hold-claim-eligibility.test.js); full claim-eligibility test suite (51 files, 580 tests) re-run green",
+      "severity": "low"
+    },
+    {
+      "risk": "SD_KEY_TOKEN_RE could false-positive-match an SD-key-shaped substring in unrelated prose",
+      "mitigation": "The regex requires the real production sd_key shape (SD- prefix plus 2+ hyphen-separated alphanumeric segments), which is specific enough that accidental prose collisions are not observed in the live data; a false match degrades to a dep-query miss (conservative unsatisfied), never a false-eligible",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "scripts/worker-checkin.cjs (self_claim path, via baselinedCandidateEligible/evaluateDispatchEligibility)",
+      "scripts/stale-session-sweep.cjs (CLAIM_FIX path, via classifyDispatchIneligibility/draftDepsSatisfied)",
+      "lib/coordinator/dispatch.cjs (DIRECTED-ASSIGN path, via classifyDispatchIneligibility with ctx=undefined)"
+    ],
+    "dependencies": [
+      "SD-LEO-INFRA-SIDE-CLAIM-ELIGIBILITY-001 (DB-side observe-only claim-eligibility trigger)",
+      "SD-FDBK-INFRA-CONVERGE-WORK-ASSIGNMENT-001 (converged dispatch + self_claim on one extended eligibility predicate)"
+    ],
+    "data_contracts": [
+      "strategic_directives_v2.metadata.chairman_ratified (boolean, Adam-stamped)",
+      "strategic_directives_v2.metadata.soft_depends_on (string or array of strings, free-form prose containing an SD-key reference, Adam-stamped)"
+    ],
+    "runtime_config": ["none"],
+    "observability_rollout": [
+      "Live-data verification script run against all 26 non-terminal SDs at implementation time confirmed zero newly-blocked rows",
+      "Regression covered by the existing unit test suite (no separate monitoring needed -- this is a pure, synchronous, DB-free predicate change plus one DB-backed dependency-check extension already exercised by existing callers)"
+    ]
+  },
+  "system_architecture": {
+    "summary": "Two additive extensions to the single shared dispatch-eligibility predicate module: a new pure axis in the INELIGIBILITY_AXES table (FR-1), and a new ref-key source folded into the existing draftDepsSatisfied dependency re-check (FR-2).",
+    "components": [
+      { "name": "lib/fleet/claim-eligibility.cjs", "change": "Add chairmanRatificationPending axis to INELIGIBILITY_AXES + CLAIM_WRITE_FENCE_AXES; add SD_KEY_TOKEN_RE constant; fold metadata.soft_depends_on into draftDepsSatisfied's refKeys derivation" },
+      { "name": "tests/unit/fleet/claim-eligibility-chairman-ratified.test.js", "change": "NEW -- FR-1 axis unit tests" },
+      { "name": "tests/unit/claim-eligibility.test.js", "change": "Extended -- FR-2 draftDepsSatisfied soft_depends_on unit tests (string, prose, array, fail-open)" },
+      { "name": "tests/unit/fleet/exec-boundary-hold-claim-eligibility.test.js", "change": "Updated exact-array CLAIM_WRITE_FENCE_AXES pin to include the new axis" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Extend the existing shared predicate in place; no new module, no schema change.",
+    "steps": [
+      "Add chairmanRatificationPending as a new entry in INELIGIBILITY_AXES (fail-open on absence, blocks only on explicit false)",
+      "Add 'chairman_ratification_pending' to CLAIM_WRITE_FENCE_AXES",
+      "Add SD_KEY_TOKEN_RE and fold metadata.soft_depends_on (string or array, prose-tolerant extraction) into draftDepsSatisfied's refKeys",
+      "Verify against live non-terminal SD data that no existing claimable SD becomes newly blocked",
+      "Add/extend unit tests for both FRs and update the one exact-array pin test that needed it"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "node -e \"const {classifyDispatchIneligibility}=require('./lib/fleet/claim-eligibility.cjs'); console.log(classifyDispatchIneligibility({sd_key:'SD-X',metadata:{chairman_ratified:false}}))\"", "expected_outcome": "Prints 'chairman_ratification_pending'" },
+    { "step_number": 2, "instruction": "node -e \"const {classifyDispatchIneligibility}=require('./lib/fleet/claim-eligibility.cjs'); console.log(classifyDispatchIneligibility({sd_key:'SD-X',metadata:{chairman_ratified:true}}))\"", "expected_outcome": "Prints 'null'" },
+    { "step_number": 3, "instruction": "npx vitest run tests/unit/claim-eligibility.test.js tests/unit/fleet/claim-eligibility-chairman-ratified.test.js", "expected_outcome": "All tests pass" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-BELT-CLAIM-ELIGIBILITY-001"
+  }
+}

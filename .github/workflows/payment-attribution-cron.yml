@@ -1,0 +1,50 @@
+name: "Payment attribution sweep (cron)"
+
+# SD-LEO-INFRA-VENTURE-REVENUE-ATTRIBUTION-ARM-001 — arms
+# lib/payments/attribution-resolver.js's resolveUnattributedEvents() on a schedule
+# instead of the manual-only scripts/backfill-payment-attribution.mjs CLI. The
+# resolver itself shipped complete under SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002;
+# its own runbook explicitly deferred scheduling — this workflow is that follow-up.
+# See scripts/cron/payment-attribution-sweep.mjs for the ARMED registration + the
+# per-cycle summary log (periodic_process_registry witness proof).
+
+on:
+  schedule:
+    # Every 6 hours — matches the sibling venture-ops-actuals-cron.yml cadence;
+    # attribution has no real-time urgency (revenue is still captured immediately
+    # by the ingester, only venture_id is deferred), so tighter polling isn't needed.
+    - cron: '35 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  sweep:
+    name: Payment-attribution resolver
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run sweep (--once)
+        run: node scripts/cron/payment-attribution-sweep.mjs --once

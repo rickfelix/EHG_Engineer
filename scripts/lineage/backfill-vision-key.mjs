@@ -140,12 +140,19 @@ export async function backfillVisionKey({ supabase, target = BACKFILL_TARGET_CAP
     if (results.length >= target) break;
     const decision = computeBackfillRow(sd);
     const nextMetadata = { ...(sd.metadata || {}), vision_key: decision.vision_key, arch_key: decision.arch_key };
+    // SD-LEO-INFRA-VISION-KEY-STAMP-AT-SD-CREATION-001: smoke_test_passed_at and
+    // runtime_observed_at are NOT columns on strategic_directives_v2 -- they belong to
+    // unrelated tables (scope_completion_chain / bypass_ledger / goal_evaluator_verdicts /
+    // contract_chain_links, database/migrations/20260516*.sql), copy-pasted in by mistake.
+    // Every update in this function has been failing with a schema-cache error on every run
+    // since this file was written, so vision_key has never actually been backfilled onto any
+    // SD -- confirmed live (a --target 50 run reported success for every row, but zero rows
+    // ended up with metadata.vision_key set). Dropped; lineage_verdict/lineage_attribution_confidence
+    // are real columns and are kept.
     const update = {
       metadata: nextMetadata,
       lineage_verdict: decision.verdict,
       lineage_attribution_confidence: decision.confidence,
-      smoke_test_passed_at: new Date().toISOString(),
-      runtime_observed_at: new Date().toISOString(),
     };
     if (dryRun) {
       results.push({ sd_key: sd.sd_key, decision, dryRun: true });
