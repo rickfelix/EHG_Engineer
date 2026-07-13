@@ -152,6 +152,20 @@ describe('triageSupportTicket (FR-2)', () => {
     const t = triageSupportTicket(normalizeSupportTicket({ subject: 'bug error broken crash', body: '' }));
     expect(SUPPORT_CATEGORIES).toContain(t.category);
   });
+  it('DB VOCABULARY PIN: emitted severities stay within venture_support_tickets_severity_check ' +
+     "('low','medium','high','critical') — a mismatch here would throw a CHECK violation on insert " +
+     'once the chairman-gated migration is applied (SD-FDBK-FIX-SCOPE-VENTURE-SUPPORT-001 VALIDATION finding)', () => {
+    const DB_ALLOWED_SEVERITIES = ['low', 'medium', 'high', 'critical'];
+    const fixtures = [
+      { subject: 'how do i reset my password', body: 'account login reset' }, // low
+      { subject: 'important: still waiting for a refund', body: 'blocked frustrated' }, // medium
+      { subject: 'URGENT: charged twice, service down', body: 'billing refund' }, // high
+    ];
+    for (const raw of fixtures) {
+      const t = triageSupportTicket(normalizeSupportTicket(raw));
+      expect(DB_ALLOWED_SEVERITIES).toContain(t.severity);
+    }
+  });
 });
 
 describe('disposeSupportTicket (FR-3)', () => {

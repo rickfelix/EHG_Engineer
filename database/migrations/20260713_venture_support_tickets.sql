@@ -29,14 +29,17 @@ CREATE TABLE IF NOT EXISTS public.venture_support_tickets (
   body text NOT NULL,
   customer_ref text,
   category text NOT NULL,
-  severity text NOT NULL DEFAULT 'normal',
+  severity text NOT NULL DEFAULT 'low',
   routing_decision text,
   status text NOT NULL DEFAULT 'open',
   resolution_notes text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
+  -- Matches triageSupportTicket()'s exact severity taxonomy (lib/support/intake-pipeline.js
+  -- SEVERITY_HIGH/SEVERITY_MED buckets emit 'high'/'medium'/'low'); 'critical' reserved for
+  -- future manual escalation, not currently emitted by the classifier.
   CONSTRAINT venture_support_tickets_severity_check
-    CHECK (severity IN ('low', 'normal', 'high', 'critical')),
+    CHECK (severity IN ('low', 'medium', 'high', 'critical')),
   CONSTRAINT venture_support_tickets_status_check
     CHECK (status IN ('open', 'auto_resolved', 'escalated', 'resolved', 'closed')),
   CONSTRAINT venture_support_tickets_ticket_id_venture_unique
