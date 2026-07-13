@@ -216,6 +216,27 @@ Claims are tracked via `claude_sessions.sd_id`. A partial unique index enforces 
 | Check claims | `SELECT * FROM claude_sessions WHERE sd_id IS NOT NULL AND status != 'terminated'` |
 | Fix stuck | `UPDATE claude_sessions SET sd_id=NULL, status='idle', released_at=NOW() WHERE session_id='...'` |
 
+## Adam-Sourced Metadata Gates
+
+SD-LEO-INFRA-BELT-CLAIM-ELIGIBILITY-001: two machine-readable `metadata` fields Adam
+stamps at SD-sourcing time, wired into the same shared eligibility predicate rather
+than left as prose the coordinator has to re-explain on every dispatch.
+
+**Chairman ratification** — `chairmanRatificationPending(row)`, an axis in
+`lib/fleet/claim-eligibility.cjs`'s `INELIGIBILITY_AXES` (and in
+`CLAIM_WRITE_FENCE_AXES`, alongside `needs_coordinator_review`). Blocks dispatch only
+when `metadata.chairman_ratified === false` — an SD Adam has explicitly marked as
+awaiting chairman approval. Fail-open: absent field or `=== true` is unaffected, so
+the overwhelming majority of SDs (which never set this field) behave unchanged.
+
+**Soft dependencies** — `metadata.soft_depends_on` (single value or array) is folded
+into the existing `draftDepsSatisfied()` live-status dependency re-check, the same
+function that already handles `dependencies` and `metadata.blocked_on_sd` — not a
+second predicate. Adam stamps this field as free-form prose in practice (e.g. `"D8
+(SD-LEO-INFRA-OPERATOR-CONTRACT-GATE-001) provides merge-time enrollment..."`), so
+`SD_KEY_TOKEN_RE` extracts the embedded `SD-XXX-YYY-NNN`-shaped token rather than
+treating the whole sentence as a literal (non-matching) key.
+
 ## Coordinator Reservation Fence
 
 SD-LEO-INFRA-DISPATCH-AUTH-AUTO-AUTHORIZE-001-C: a coordinator can fence a specific
