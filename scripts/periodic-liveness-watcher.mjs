@@ -30,6 +30,11 @@ import { parseLivenessClasses, partitionRowsByClasses } from '../lib/periodic-li
 import { resolveOwnerTarget } from '../lib/periodic-liveness/owner-target-resolver.mjs';
 import { climbLadder, resetConsecutiveMiss, emitLadderDigest } from '../lib/periodic-liveness/ladder-escalation.mjs';
 import { recordPendingDecision, escalateChairmanDecision } from '../lib/chairman/record-pending-decision.mjs';
+import { fetchScheduledRuns, latestRunPerWorkflow, classifyGhaCronRows } from '../lib/periodic-liveness/gha-run-resolver.mjs';
+import { stampFromGithubActionsRun, stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
+import { resolveGitHubRepo } from '../lib/repo-paths.js';
+
+const UNVERIFIED_ESCALATION_MS = 7 * 24 * 60 * 60 * 1000; // FR-5: >7 continuous days
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
@@ -104,7 +109,7 @@ async function resolveSchedulerRound(row) {
   return { lastFiredAt: epochMs ? new Date(epochMs).toISOString() : null };
 }
 
-async function evaluateRow(row) {
+async function evaluateRow(row, ctx = {}) {
   if (!row.currently_expected_active) {
     return { process_key: row.process_key, state: STATE.INTENTIONALLY_DOWN };
   }
@@ -112,7 +117,22 @@ async function evaluateRow(row) {
   let lastFiredAt = row.last_fired_at; // self_stamped default
   let signalNote = null;
 
-  if (row.liveness_source === 'claude_sessions_heartbeat') {
+  if (row.liveness_source === 'github_actions_api') {
+    // FR-2: pre-resolved once per watcher run (see main()) -- a per-row live API call here
+    // would multiply GitHub API calls by row count instead of one paginated fetch per cycle.
+    const decision = ctx.ghaDecisions?.get(row.process_key);
+    if (!decision || decision.decision === 'no_data') {
+      // No run data resolvable this cycle (fetch failed, token missing, or genuinely no runs
+      // found for this workflow) -- degrade to today's exact state (UNVERIFIED), never a false
+      // OVERDUE/OK alarm (FR-2 acceptance criteria).
+      return { process_key: row.process_key, state: STATE.UNVERIFIED, reason: 'no_gha_run_data_available' };
+    }
+    if (decision.decision === 'overdue') {
+      // Latest SCHEDULED run failed -- as dead as a missing one (FR-2 acceptance criteria).
+      return { process_key: row.process_key, state: STATE.OVERDUE, last_fired_at: decision.ranAtIso, reason: 'latest_scheduled_run_failed' };
+    }
+    lastFiredAt = decision.ranAtIso;
+  } else if (row.liveness_source === 'claude_sessions_heartbeat') {
     const resolved = await resolveRoleSession(row);
     lastFiredAt = resolved.lastFiredAt;
     const staleSignals = Object.entries(resolved.signals).filter(([, v]) => v === false).length;
@@ -176,6 +196,58 @@ async function emitOverdueSignal(row, evaluation) {
   return { emitted: !error, error: error || null, ownerTarget };
 }
 
+// FR-5: escalate a row that has been continuously UNVERIFIED for >7 days, the same way an
+// OVERDUE row is escalated. Mirrors emitOverdueSignal's owner-first routing shape.
+async function emitPersistentUnverifiedSignal(row) {
+  const ownerTarget = await resolveOwnerTarget(supabase, row.owner);
+
+  const { error } = await supabase.from('session_coordination').insert({
+    message_type: 'INFO',
+    target_session: ownerTarget.target,
+    subject: `[PERIODIC-LIVENESS] ${row.display_name || row.process_key} has been UNVERIFIED for over 7 days`,
+    sender_type: 'periodic-liveness-watcher',
+    payload: {
+      kind: 'periodic_liveness_flag',
+      process_key: row.process_key,
+      display_name: row.display_name,
+      owner: row.owner,
+      resolved_target_kind: ownerTarget.kind,
+      state: 'UNVERIFIED',
+      last_state_changed_at: row.last_state_changed_at,
+    },
+  });
+
+  return { emitted: !error, error: error || null, ownerTarget };
+}
+
+// FR-5: fires ONLY on the tick where the row's continuous-UNVERIFIED age first crosses the
+// 7-day threshold -- a per-episode dedup, analogous to the OVERDUE transition check above, but
+// UNVERIFIED doesn't transition state at the crossing point (it was already UNVERIFIED and stays
+// UNVERIFIED), so last_state alone can't detect it. Uses last_state_changed_at (the anchor, only
+// advanced on a genuine state transition -- FR-1) plus the row's own pre-update updated_at
+// (bumped every prior cycle regardless of state, so it stands in for "the last tick's time") to
+// detect the boundary crossing without a dedicated "already escalated" column.
+export function hasCrossedUnverifiedThreshold(row, nowMs) {
+  if (!row.last_state_changed_at) return false;
+  const changedAtMs = new Date(row.last_state_changed_at).getTime();
+  const ageMs = nowMs - changedAtMs;
+  if (ageMs <= UNVERIFIED_ESCALATION_MS) return false;
+  if (!row.updated_at) return true; // no prior tick recorded -- treat as a fresh crossing
+  const previousTickMs = new Date(row.updated_at).getTime();
+  return (previousTickMs - changedAtMs) <= UNVERIFIED_ESCALATION_MS;
+}
+
+// FR-1/FR-5: last_state_changed_at only advances on a genuine last_state transition, mirroring
+// the last_state column's own per-episode dedup discipline (PR #5562) -- never reaffirmed on a
+// same-state cycle (TS-8).
+function buildStateUpdate(row, evaluation) {
+  const update = { last_state: evaluation.state };
+  if (row.last_state !== evaluation.state) {
+    update.last_state_changed_at = new Date().toISOString();
+  }
+  return update;
+}
+
 async function main() {
   const { data: rows, error } = await supabase.from('periodic_process_registry').select('*').neq('process_key', WATCHER_SELF_KEY);
   if (error) throw new Error(`registry query failed: ${error.message}`);
@@ -186,10 +258,40 @@ async function main() {
     console.log(`[periodic-liveness-watcher] class filter active (${[...classes].join(',')}): evaluating ${evaluate.length}, skipping ${skipped.length} row(s) owned by the other venue`);
   }
 
+  // FR-2: resolve all gha_cron:* rows in ONE paginated GitHub API fetch per watcher cycle (not
+  // one call per row), and stamp successes before the per-row evaluation loop below.
+  const ghaDecisions = new Map();
+  const ghaCronRows = evaluate.filter((r) => r.liveness_source === 'github_actions_api');
+  if (ghaCronRows.length > 0) {
+    const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+    // SD-LEO-INFRA-CANONICAL-REPO-APP-001: resolve via the canonical repo-paths registry rather
+    // than a hardcoded literal (lint-repo-resolution-drift enforces this).
+    const repo = process.env.GITHUB_REPOSITORY || resolveGitHubRepo('EHG_Engineer');
+    if (!token) {
+      console.error('[periodic-liveness-watcher] GITHUB_TOKEN/GH_TOKEN missing -- gha_cron rows degrade to UNVERIFIED this cycle');
+    } else {
+      try {
+        const runs = await fetchScheduledRuns(repo, token);
+        const latestByFile = latestRunPerWorkflow(runs);
+        const classified = classifyGhaCronRows(latestByFile, ghaCronRows.map((r) => r.process_key));
+        for (const c of classified) {
+          ghaDecisions.set(c.processKey, c);
+          if (c.decision === 'stamp') {
+            await stampFromGithubActionsRun(supabase, c.processKey, c.ranAtIso);
+          }
+        }
+      } catch (err) {
+        // Degrades to today's exact state (rows stay UNVERIFIED, ghaDecisions stays empty) -- no
+        // false OVERDUE/OK alarms (FR-2 acceptance criteria).
+        console.error(`[periodic-liveness-watcher] GHA resolver FAILED (non-fatal): ${err.message}`);
+      }
+    }
+  }
+
   const results = [];
   const ladderCandidates = [];
   for (const row of evaluate) {
-    const evaluation = await evaluateRow(row);
+    const evaluation = await evaluateRow(row, { ghaDecisions });
     results.push(evaluation);
 
     // Adversarial-review finding (PR #5562, CRITICAL): dedup must be a per-episode STATE
@@ -212,7 +314,7 @@ async function main() {
       if (result.emitted) {
         await supabase
           .from('periodic_process_registry')
-          .update({ last_state: evaluation.state })
+          .update(buildStateUpdate(row, evaluation))
           .eq('process_key', row.process_key);
       } else {
         console.error(`[periodic-liveness-watcher] emitOverdueSignal insert FAILED for ${row.process_key}: ${result.error?.message} -- last_state NOT advanced, will retry next cycle`);
@@ -232,13 +334,26 @@ async function main() {
       } catch (err) {
         console.error(`[periodic-liveness-watcher] ladder climb FAILED (non-fatal) for ${row.process_key}: ${err.message}`);
       }
-      await supabase.from('periodic_process_registry').update({ last_state: evaluation.state }).eq('process_key', row.process_key);
+      await supabase.from('periodic_process_registry').update(buildStateUpdate(row, evaluation)).eq('process_key', row.process_key);
     } else {
       // OK/UNVERIFIED/INTENTIONALLY_DOWN all end any active OVERDUE episode -- reset the ladder
       // counter for all of them (adversarial-review finding, PR #5940, LOW), not just OK, so a
       // later unrelated episode never inherits a stale carried-forward count.
       await resetConsecutiveMiss(supabase, row.process_key);
-      await supabase.from('periodic_process_registry').update({ last_state: evaluation.state }).eq('process_key', row.process_key);
+      // FR-5: escalate a row that has just crossed >7 continuous days UNVERIFIED, the same way
+      // OVERDUE rows are escalated -- fires once per episode (hasCrossedUnverifiedThreshold only
+      // returns true on the tick where the threshold is first crossed).
+      if (evaluation.state === STATE.UNVERIFIED && hasCrossedUnverifiedThreshold(row, Date.now())) {
+        try {
+          const result = await emitPersistentUnverifiedSignal(row);
+          if (!result.emitted) {
+            console.error(`[periodic-liveness-watcher] emitPersistentUnverifiedSignal insert FAILED for ${row.process_key}: ${result.error?.message}`);
+          }
+        } catch (err) {
+          console.error(`[periodic-liveness-watcher] persistent-UNVERIFIED escalation FAILED (non-fatal) for ${row.process_key}: ${err.message}`);
+        }
+      }
+      await supabase.from('periodic_process_registry').update(buildStateUpdate(row, evaluation)).eq('process_key', row.process_key);
     }
   }
 
@@ -269,6 +384,10 @@ async function main() {
     last_fired_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }, { onConflict: 'process_key' });
+  // FR-3: this script's own standard_loop:liveness-watcher registry row is distinct from the
+  // __watcher_self__ upsert above (a different process_key) -- stampLastFired no-ops harmlessly
+  // if that row isn't registered yet, by design (additive registry membership).
+  await stampLastFired(supabase, 'standard_loop:liveness-watcher');
 
   const summary = results.reduce((acc, r) => { acc[r.state] = (acc[r.state] || 0) + 1; return acc; }, {});
   console.log(`[periodic-liveness-watcher] evaluated ${results.length} process(es): ${JSON.stringify(summary)}`);
@@ -287,4 +406,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   });
 }
 
-export { main as runWatcher, evaluateRow, emitOverdueSignal, STATE };
+export { main as runWatcher, evaluateRow, emitOverdueSignal, emitPersistentUnverifiedSignal, STATE, UNVERIFIED_ESCALATION_MS };
