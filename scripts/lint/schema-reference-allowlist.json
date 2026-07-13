@@ -11,11 +11,14 @@
   "vision_ladder_criteria",
   "door_routing_ledger",
   "venture_operating_burn",
-  "venture_support_tickets"
+  "venture_support_tickets",
+  "loop_registry"
  ],
  "_door_routing_ledger_note": "apply-at-cutover table (SD-LEO-INFRA-TIERED-ORCHESTRATION-FABLE-001): migration 20260705_add_door_routing_ledger.sql applies at the Tuesday DOOR_ROUTING_ENABLED flip; the flag-gated fire-and-forget writer tolerates its absence pre-cutover. Remove from this allowlist after the migration applies."
  ,
  "_venture_operating_burn_note": "chairman-gated, staged-not-applied table (SD-APEXNICHE-AI-LEO-ORCH-SPRINT-2026-001-E1): migration database/migrations/20260712_venture_operating_burn.sql is deliberately not yet applied to the live DB (per the @chairman-gated header). The fail-soft writer (scripts/operator/feed-venture-operating-burn.mjs) tolerates the table's absence -- every upsert call is wrapped in a per-step try/catch. Remove from this allowlist and re-run npm run schema:snapshot:lint after a chairman applies the migration."
  ,
  "_venture_support_tickets_note": "chairman-gated, staged-not-applied table (SD-FDBK-FIX-SCOPE-VENTURE-SUPPORT-001): migration database/migrations/20260713_venture_support_tickets.sql is deliberately not yet applied to the live DB (per the @chairman-gated header). lib/support/intake-pipeline.js's persistence call sites must fail loud (escalate, not crash) if the table is absent. Remove from this allowlist and re-run npm run schema:snapshot:lint after a chairman applies the migration."
+ ,
+ "_loop_registry_note": "chairman-gated, staged-not-applied table (SD-LEO-INFRA-UNIVERSAL-LOOP-GOVERNANCE-001): migration database/migrations/20260713_loop_registry.sql carries the @chairman-gated header and is deliberately not yet applied. The lib/loop-governance/* writers (genesis backfill, closure-verifier) are FAIL-SOFT — every upsert/update/select is wrapped so it tolerates the table's absence (applied=false/ran=false, never throws). Remove from this allowlist and re-run npm run schema:snapshot:lint after a chairman applies the migration."
 }
