@@ -16,6 +16,7 @@ const { insertCoordinationRow, isFullUuid } = createRequire(import.meta.url)('..
 import { guardMutation, resolveOwnSessionId } from '../lib/coordinator-mutation-guard.mjs';
 // SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-2: graded coordinator self-score (shared role-agnostic core).
 import { COORDINATOR_CONFIG } from '../lib/coordinator/self-score-config.mjs';
+import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 const roleScoreCore = createRequire(import.meta.url)('../lib/governance/role-self-score.cjs');
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -289,5 +290,15 @@ export async function selfReviewMain() {
 
 // Main-guard: run only when invoked directly (the cron path), not on import (tests).
 if (process.argv[1] && /coordinator-self-review\.mjs$/.test(process.argv[1].replace(/\\/g, '/'))) {
-  selfReviewMain();
+  selfReviewMain().then(async () => {
+    // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp on every successful tick,
+    // regardless of which internal early-return branch selfReviewMain() took (not-due-by-work,
+    // suppressed-by-min-interval-floor, or full DUE processing) — reflects loop liveness (the
+    // tick ran to completion), not whether a review actually fired this cycle.
+    try {
+      await stampLastFired(db, 'standard_loop:self-review');
+    } catch (err) {
+      console.error(`[COORD-REVIEW] stampLastFired failed (non-fatal): ${err.message}`);
+    }
+  });
 }

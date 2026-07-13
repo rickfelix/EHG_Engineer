@@ -11,6 +11,7 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const t = Date.now();
@@ -50,5 +51,11 @@ const RETRO_RE = /FLEET[\s-]?RETRO/i;
     console.log('[ACTION] Coordinator: cluster these into what-worked / friction / suggestions; ADJUST (wake-up prompt, coordinator behavior, or file a harness SD for recurring friction). Surface a digest to the operator when a clear pattern emerges.');
   } else {
     console.log('(no fleet retros yet — workers emit them at SD completion via /signal)');
+  }
+
+  try {
+    await stampLastFired(db, 'standard_loop:fleet-retro');
+  } catch (err) {
+    console.error(`[FLEET-RETRO] stampLastFired failed (non-fatal): ${err.message}`);
   }
 })();

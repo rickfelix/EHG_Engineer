@@ -169,6 +169,11 @@ export async function main(argv = process.argv, deps = {}) {
     const processKey = await ensureArmedRegistration(supabase, logger);
     try { await (deps.stampLastFired || stampLastFired)(supabase, processKey); }
     catch (err) { logger.warn?.(`[sla-sweep] liveness stamp failed (non-fatal): ${err.message}`); }
+    // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): also stamp the standing GHA-cron
+    // process_key (distinct from the ARMED-machinery key above) so the central liveness
+    // watcher can see this cron loop directly.
+    try { await (deps.stampLastFired || stampLastFired)(supabase, 'cron_script:chairman-decision-sla-sweep.mjs'); }
+    catch (err) { logger.warn?.(`[sla-sweep] cron liveness stamp failed (non-fatal): ${err.message}`); }
   }
 
   // One shared read of the pending set powers both the enforcer filter and the blocking pass.

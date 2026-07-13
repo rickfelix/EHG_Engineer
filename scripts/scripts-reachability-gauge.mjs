@@ -293,6 +293,18 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   // drains naturally with an unref'd backstop. Exit code always 0 — a gauge never
   // breaks its host loop.
   main()
+    .then(async () => {
+      // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp on every successful tick,
+      // regardless of which internal early-return branch main() took (not-due, or no
+      // growth/no broken aliases) — reflects loop liveness.
+      try {
+        const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
+        const { stampLastFired } = await import('../lib/periodic-liveness/stamp-last-fired.js');
+        await stampLastFired(createSupabaseServiceClient(), 'standard_loop:scripts-reachability');
+      } catch (err) {
+        console.warn(`[scripts-reachability] stampLastFired failed (non-fatal): ${err.message}`);
+      }
+    })
     .catch((e) => { console.warn(`[scripts-reachability] unexpected error (non-fatal): ${e.message}`); })
     .finally(async () => {
       try {

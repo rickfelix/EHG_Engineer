@@ -25,6 +25,7 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { computeClaimableLeaves } from './coordinator-backlog-rank.mjs';
+import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 
 const require = createRequire(import.meta.url);
 const { DISPATCH_RANK_TTL_MS } = require('./worker-checkin.cjs');
@@ -85,5 +86,13 @@ async function main() {
 
 // process.argv[1] is undefined under `node -e`/some loaders, so guard it before pathToFileURL.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main();
+  main().then(async () => {
+    // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp on every completed tick, including
+    // the fail-open "transient read error" branch (advisory gauge — the tick still ran).
+    try {
+      await stampLastFired(sb, 'standard_loop:unranked-gauge');
+    } catch (err) {
+      console.error(`[UNRANKED-GAUGE] stampLastFired failed (non-fatal): ${err.message}`);
+    }
+  });
 }

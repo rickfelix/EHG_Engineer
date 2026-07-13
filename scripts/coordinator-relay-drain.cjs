@@ -87,7 +87,16 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch((e) => {
+  main().then(async () => {
+    // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp on every successful tick,
+    // including --dry-run (no queue writes performed, but the tick still ran to completion).
+    try {
+      const { stampLastFired } = await import('../lib/periodic-liveness/stamp-last-fired.js');
+      await stampLastFired(getSupabase(), 'standard_loop:relay-drain');
+    } catch (err) {
+      console.error(`[coordinator-relay-drain] stampLastFired failed (non-fatal): ${err.message}`);
+    }
+  }).catch((e) => {
     console.error('coordinator-relay-drain failed:', (e && e.message) || e);
     process.exit(1);
   });

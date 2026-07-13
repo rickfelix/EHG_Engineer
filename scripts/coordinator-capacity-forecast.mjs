@@ -32,6 +32,7 @@ import { dirname, join } from 'path';
 // fixtures AND bare-shell stubs (neither can pass LEAD-TO-PLAN) never inflate belt depth —
 // counting them as claimable over-reports capacity and suppresses the deficit/Adam alert.
 import { isExcludedFromBelt } from '../lib/coordinator/sd-exclusion.mjs';
+import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 // SD-LEO-INFRA-BACKLOG-RANK-CLAIMABLE-ELIGIBILITY-ALIGN-001: the forecaster builds its OWN claimable
 // belt (it does not read the ranker's dispatch_rank), so it must apply the SAME shared claim-eligibility
 // predicate the worker resolver uses — else RHA-held / co_author_pending SDs inflate belt depth and the
@@ -477,6 +478,12 @@ async function main() {
 
   // machine-readable last line for the cron/log (+ sourcing-engine awareness fields, FR-2)
   console.log(`  GAUGE belt=${beltDepth} idle=${idleNow} freeing_soon=${freeingSoon} demand=${demandSoon} deficit=${Math.max(0, deficit)} verdict=${verdict} masked_stall=${maskedIds.size} engine_on=${awareness.anyOn} unpromoted=${awareness.countStr}`);
+
+  try {
+    await stampLastFired(sb, 'standard_loop:capacity-forecast');
+  } catch (err) {
+    console.error(`[capacity-forecast] stampLastFired failed (non-fatal): ${err.message}`);
+  }
 }
 
 function readMaskedCooldown() {

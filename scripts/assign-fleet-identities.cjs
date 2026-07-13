@@ -567,7 +567,21 @@ async function main() {
 module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, buildTierCallsignBands, tierRankOf, pickCallsignForTier, callsignInTierBand, identityNeedsRebroadcast };
 
 if (require.main === module) {
-  main().catch(err => {
+  main().then(async () => {
+    // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp on every successful tick,
+    // regardless of which internal early-return branch main() took (e.g. mutation-guard
+    // block or "no active workers found") — reflects loop liveness (the tick ran to
+    // completion), not whether a particular action fired this cycle. main()'s own
+    // `supabase` is local-scoped, so a fresh client is created here per the documented
+    // fallback pattern.
+    try {
+      const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
+      const { stampLastFired } = await import('../lib/periodic-liveness/stamp-last-fired.js');
+      await stampLastFired(createSupabaseServiceClient(), 'standard_loop:identity');
+    } catch (err) {
+      console.error(`[assign-fleet-identities] stampLastFired failed (non-fatal): ${err.message}`);
+    }
+  }).catch(err => {
     console.error('Fleet identity assignment failed:', err.message);
     process.exit(1);
   });

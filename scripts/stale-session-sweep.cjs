@@ -3156,10 +3156,26 @@ function planDeadLetters(unreadMsgs, { allSessionIds, deadIds }, nowMs) {
     }));
 }
 
+// SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp on every successful sweep tick,
+// regardless of which internal early-return branch main() took (e.g. the "no sessions with
+// claims" all-clear path) — this reflects loop liveness (the tick ran to completion), not
+// whether any particular action fired this cycle. Kept as its own named function (rather than
+// inlined in the .then() below) so main().then(...) stays a short chain with its rejection
+// handler close by -- see tests/unit/stale-session-sweep-builder-catch.test.js's regression
+// guard for the FATAL crash class this file was previously fixed for.
+async function stampSweepLiveness() {
+  try {
+    const { stampLastFired } = await import('../lib/periodic-liveness/stamp-last-fired.js');
+    await stampLastFired(supabase, 'standard_loop:sweep');
+  } catch (err) {
+    console.error(`[stale-session-sweep] stampLastFired failed (non-fatal): ${err.message}`);
+  }
+}
+
 // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2: guard auto-run so the pure
 // collision functions can be imported by unit tests without main() hitting the DB.
 if (require.main === module) {
-  main().catch(err => {
+  main().then(stampSweepLiveness).catch(err => {
     console.error('SWEEP FATAL:', err.message);
     process.exit(1);
   });

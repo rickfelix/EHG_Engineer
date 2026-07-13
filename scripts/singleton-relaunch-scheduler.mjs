@@ -15,6 +15,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { evaluateAllSingletons } from '../lib/coordinator/singleton-relaunch-trigger.js';
+import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 
 const ENABLED = process.env.SINGLETON_RELAUNCH_SCHEDULING_ENABLED === 'true';
 
@@ -37,6 +38,12 @@ async function main() {
     const behind = r.freshness ? r.freshness.behind : '?';
     console.log(`[singleton-relaunch-scheduler] role=${r.role} scheduled=${r.scheduled} reason=${r.reason} behind=${behind} loop_state=${r.loopState}`);
     if (r.error) console.error(`[singleton-relaunch-scheduler] role=${r.role} write error: ${r.error}`);
+  }
+
+  try {
+    await stampLastFired(supabase, 'standard_loop:singleton-relaunch');
+  } catch (err) {
+    console.error(`[singleton-relaunch-scheduler] stampLastFired failed (non-fatal): ${err.message}`);
   }
 }
 

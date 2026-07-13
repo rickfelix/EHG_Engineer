@@ -88,7 +88,17 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch((e) => {
+  main().then(async () => {
+    // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp on every successful tick,
+    // regardless of which internal early-return branch main() took (--dry-run or the
+    // RELAY_DROP_GAUGE_V1 kill-switch) — the read/report leg always ran.
+    try {
+      const { stampLastFired } = await import('../lib/periodic-liveness/stamp-last-fired.js');
+      await stampLastFired(getSupabase(), 'standard_loop:relay-drop-gauge');
+    } catch (err) {
+      console.error(`[coordinator-relay-drop-gauge] stampLastFired failed (non-fatal): ${err.message}`);
+    }
+  }).catch((e) => {
     console.error('coordinator-relay-drop-gauge failed:', (e && e.message) || e);
     process.exit(1);
   });

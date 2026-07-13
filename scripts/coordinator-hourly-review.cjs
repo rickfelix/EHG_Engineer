@@ -329,7 +329,18 @@ async function main() {
 // SD-LEO-INFRA-SOLOMON-HOURLY-ROLE-REFRESHER-001: guard the main() invocation so the Solomon leg can be
 // imported + unit-tested without running the whole hourly review.
 if (require.main === module) {
-  main().catch(function (e) { console.error('[HOURLY-REVIEW] error (non-fatal): ' + e.message); }).finally(function () { process.exit(0); });
+  main().then(async function () {
+    // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): stamp on every successful tick,
+    // regardless of which internal early-return branch main() took (supabase unavailable,
+    // CYCLE-DOWN quiescent, no-live-Adam, dry-run) — reflects loop liveness (the tick ran
+    // to completion), not whether a reminder actually fired this cycle.
+    try {
+      const { stampLastFired } = await import('../lib/periodic-liveness/stamp-last-fired.js');
+      await stampLastFired(createSupabaseServiceClient(), 'standard_loop:hourly-review');
+    } catch (err) {
+      console.error('[HOURLY-REVIEW] stampLastFired failed (non-fatal): ' + err.message);
+    }
+  }).catch(function (e) { console.error('[HOURLY-REVIEW] error (non-fatal): ' + e.message); }).finally(function () { process.exit(0); });
 }
 
 module.exports = { dispatchSolomonReminder, SOLOMON_REMINDER, buildFoundationsPointer, reconcileStaleSolomonInbound };
