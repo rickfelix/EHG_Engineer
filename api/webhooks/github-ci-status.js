@@ -3,12 +3,19 @@
  * LEO Protocol Integration for Automated Pipeline Monitoring
  */
 
-import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
+import { lazyServiceClient } from '../../lib/supabase-client.js';
 import crypto from 'crypto';
 import { executeSubAgent } from '../../lib/sub-agent-executor.js';
 
-// Initialize Supabase client
-const supabase = createSupabaseServiceClient();
+// Lazy client (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001, adversarial review): this
+// module is now statically imported by server/index.js, so an eager
+// createSupabaseServiceClient() call here would throw at server BOOT (not
+// just on a request to this route) whenever SUPABASE_SERVICE_ROLE_KEY is
+// unset — taking down every other route too. lazyServiceClient() defers the
+// env-var check until first use, matching api/webhooks/stripe.js's db()
+// pattern and this server's existing fail-soft boot design (see
+// src/services/database-loader/connections.js).
+const supabase = lazyServiceClient();
 
 /**
  * Verify GitHub webhook signature
