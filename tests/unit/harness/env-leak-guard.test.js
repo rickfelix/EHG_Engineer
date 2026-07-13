@@ -20,6 +20,7 @@ import { describe, expect, it } from 'vitest';
 const ROOT = process.cwd();
 const GUARDED = [
   'lib/supabase-client.js',
+  'lib/supabase-client.cjs',
   'lib/eva/bridge/repo-readiness.js',
   'lib/eva/bridge/replit-repo-seeder.js',
   'lib/eva/stage-execution-engine.js',
@@ -31,9 +32,10 @@ describe('unit-lane .env leak guard (QF-20260713-897)', () => {
     const src = readFileSync(join(ROOT, rel), 'utf8');
 
     it(`${rel}: the module-scope .env load is gated by the test-runner guard`, () => {
-      // The module still performs a dotenv load (not accidentally deleted)...
+      // The module still performs a dotenv load (not accidentally deleted) — matches both
+      // ESM `dotenv.config(` and CJS `require('dotenv').config(`.
       expect(
-        /\b(dotenv|dotenvx)\.config\(/.test(src),
+        /\.config\(/.test(src) && /dotenv/.test(src),
         `${rel} should still perform a dotenv load for real processes`,
       ).toBe(true);
       // ...and the load (or its invocation, for the ancestor-walk in supabase-client)
