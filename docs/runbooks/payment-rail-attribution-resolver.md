@@ -2,7 +2,7 @@
 category: runbook
 status: active
 sd: SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002
-last_updated: 2026-07-10
+last_updated: 2026-07-13
 ---
 
 # Payment Rail — Venture Attribution Resolver (Phase 2)
@@ -20,12 +20,18 @@ Phase 1 (`SD-LEO-INFRA-PAYMENT-RAIL-FOUNDATION-001`) captures every Stripe webho
 
 ## Running it
 
-- **Ongoing**: wire `resolveUnattributedEvents(supabase, { limit: 500 })` into a cron/scheduled job (not yet scheduled as of this SD — FR-5 ships the mechanism; scheduling is a follow-up).
-- **One-shot backfill**: `node scripts/backfill-payment-attribution.mjs` — loops `resolveUnattributedEvents` until a round processes zero rows. Safe to interrupt/re-run.
+- **Ongoing (ARMED, SD-LEO-INFRA-VENTURE-REVENUE-ATTRIBUTION-ARM-001)**: `scripts/cron/payment-attribution-sweep.mjs` wires `resolveUnattributedEvents(supabase, { limit: 500 })` into a registry-stamped cron (`.github/workflows/payment-attribution-cron.yml`, every 6h) — registers a `periodic_process_registry` row via `registerArmedMachinery`/`armedProcessKey` and stamps `last_fired_at` on each successful cycle, so the cron's liveness is provable (not just runnable-in-theory).
+- **One-shot backfill**: `node scripts/backfill-payment-attribution.mjs` — loops `resolveUnattributedEvents` until a round processes zero rows. Safe to interrupt/re-run; still useful for an out-of-cycle manual pass.
+
+## Provenance contract for any FUTURE checkout implementation
+
+As of 2026-07-13 (ARM-001 EXEC investigation), **no live checkout mechanism exists yet for any venture** — the live Stripe account has zero products, zero prices, zero payment links configured, and `createVentureCheckoutSession()` (`lib/payments/checkout-provenance.js`) is called by nothing in production. Building a venture's actual checkout/payment flow is out of scope for this infrastructure track (it routes through the venture factory/stage-build pipeline, not a LEO harness SD) — but **whoever builds it must call `createVentureCheckoutSession()`** (or stamp `metadata.venture_id` / `metadata.source_surface` equivalently, e.g. on a Stripe Payment Link's dashboard-configured metadata) for that venture's revenue to ever be attributed. Skipping this means every resulting `ops_payment_events` row resolves `attribution_status='unattributed'` forever — the resolver has no lineage to fall back on for a venture's *first* payment. Alt-Text (venture `50763b6a-1fad-4e1e-b2fc-296a1d66ebf9`) is the nearest venture expected to need this.
 
 ## The paid-revenue KPI (`computePaidGaugeState`)
 
 `lib/telemetry/funnel-gauge.mjs` `computePaidGaugeState({ supabase, ventureId })` is fail-closed: it returns `state: 'gated_on_attribution'` until the resolver has run at least once anywhere in the fleet (`attribution_status IS NOT NULL` on at least one row). Once resolver coverage exists, it returns `state: 'live'` with `paid_amount_cents`, `currency`, and `unattributed_count_fleet_wide` (always surfaced, never hidden, even when zero).
+
+**Confirmed intended (ARM-001 FR-5):** the readiness check above is fleet-wide, not per-venture — the *first* time the resolver processes any row anywhere (including a synthetic test-mode proof event), `gated_on_attribution` flips to `live` for every venture's gauge. This is safe: the actual `paid_amount_cents` computation separately filters `.eq('livemode', true)`, so a test-mode proof event changes only the *readiness* state, never the dollar figure.
 
 ### Revenue must be deduped by payment identity, not summed per row
 
