@@ -184,18 +184,26 @@ failure). Drill A samples ≤500 `retention_archive` rows for
 `workflow_trace_log` and proves the documented "re-insert `row_data`" restore
 path with field-level fidelity asserts; drill B copies a sample of
 `management_reviews_quarantine_20260610` and asserts per-row
-`md5(row::text)` identity. Cadence: run after any retention/quarantine schema
-change, after any platform restore, and at least quarterly.
+`md5(row::text)` identity. Cadence (QF-20260712-917, D6): automated monthly via
+`.github/workflows/dr-restore-rehearsal-cron.yml` (1st of month, 06:00 UTC;
+also `workflow_dispatch`-able on demand) — monthly trivially satisfies both the
+"quarterly baseline" and "monthly while schema churn is high" chairman-ratified
+targets without needing runtime churn detection. Also run manually after any
+retention/quarantine schema change or platform restore. Each run stamps
+`periodic_process_registry` (`gha_cron:dr-restore-rehearsal-cron.yml`) and
+rewrites the witness below via `scripts/dr/stamp-rehearsal-result.mjs`.
+PRECONDITION for `SD-FDBK-FIX-BUS-RETENTION-CLEANUP-001`'s `retention_archive`
+365d TTL step: do not enable that TTL until a rehearsal PASS below is <90d old.
 
-**Latest live run — 2026-06-10T23:31:44Z: `PASS`** (scratch schema
-`dr_rehearsal_20260610_2331`, 2.5 s):
+**Latest live run — 2026-07-13T03:06:17.381Z: `PASS`** (scratch schema
+`dr_rehearsal_20260713_0306`, 1.3 s):
 
 | Drill | Result |
 |---|---|
 | A — retention_archive → workflow_trace_log | PASS — 500 rows restored, **8,500 field checks, 0 mismatches**, 0 schema-drift keys, 0 missing rows |
 | B — quarantine copy md5 identity | PASS — 500/500 rows, md5 sets identical |
-| Statement audit | 11 statements: 5 reads, 6 scratch-writes, **0 forbidden** |
-| Cleanup | scratch schema dropped (verified `pg_namespace` count = 0 after run) |
+| Statement audit | 13 statements: 5 reads, 8 scratch-writes, **0 forbidden** |
+| Cleanup | scratch schema dropped |
 
 First full dump-driver run (same day, local, `scripts/temp/` — not
 committed): 14/14 tables, 51,816 rows, 412.0 MB NDJSON in ~98 s.

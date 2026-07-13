@@ -1,0 +1,74 @@
+name: DR restore rehearsal (cron)
+
+# QF-20260712-917 (D6, chairman-ratified 2026-07-12, doc @ aee41d6c).
+# The weekly off-box DR dump (governance-data-dump.yml) is the estate's ONLY
+# off-box copy; its restore rehearsal (npm run dr:rehearse) had no cadence --
+# last PASS was manual, 2026-06-10. Runs monthly, which trivially satisfies
+# both "quarterly baseline" and "monthly while schema churn is high" without
+# needing runtime churn detection. Read-only against sources (see
+# ops/runbooks/disaster-recovery.md §7); writes only to a throwaway scratch
+# schema the rehearsal itself drops.
+
+on:
+  schedule:
+    - cron: '0 6 1 * *'  # 1st of each month, 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  rehearse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PGHOST: ${{ secrets.PGHOST_PROD }}
+      PGPORT: ${{ secrets.PGPORT_PROD }}
+      PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
+      PGUSER: ${{ secrets.PGUSER_PROD }}
+      PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run restore rehearsal
+        continue-on-error: true
+        run: node scripts/dr/restore-rehearsal.mjs --out dr-rehearsal-report.json
+
+      - name: Stamp registry + runbook witness
+        if: always()
+        run: node scripts/dr/stamp-rehearsal-result.mjs dr-rehearsal-report.json
+
+      - name: Commit runbook update
+        if: always()
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          if git diff --quiet ops/runbooks/disaster-recovery.md; then
+            echo "No runbook changes to commit"
+          else
+            git add ops/runbooks/disaster-recovery.md
+            git commit -m "chore(dr): record $(date -u +%Y-%m-%d) restore rehearsal result
+
+          🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+          Co-Authored-By: GitHub Actions <noreply@github.com>"
+            git push || echo "Push skipped"
+          fi
