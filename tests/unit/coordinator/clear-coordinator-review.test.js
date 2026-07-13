@@ -139,6 +139,11 @@ describe('SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: buildClearReviewQuer
   it('SD-FDBK-FIX-DISPATCH-ELIGIBILITY-HONOR-001: WHERE clause allows the clear when lead_blocker is absent/null/false/empty-string', () => {
     const { sql } = buildClearReviewQuery('SD-ABC-001');
     expect(sql).toMatch(/metadata->'lead_blocker'\s+IS\s+NULL/i);
+    // TESTING sub-agent (EXEC phase) found the SQL/JS truthiness matrices diverged on an EXPLICIT
+    // JSON null value ({"lead_blocker": null}): Postgres `->` returns a JSON-null (not SQL-NULL)
+    // for a present-but-null key, so `IS NULL` alone doesn't catch it -- an explicit '= null::jsonb'
+    // check is required to match isLeadBlockerActive(null) === false (inactive) exactly.
+    expect(sql).toMatch(/metadata->'lead_blocker'\s*=\s*'null'::jsonb/i);
     expect(sql).toMatch(/metadata->'lead_blocker'\s*=\s*'false'::jsonb/i);
     expect(sql).toMatch(/jsonb_typeof\(metadata->'lead_blocker'\)\s*=\s*'string'/i);
   });
