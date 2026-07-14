@@ -163,7 +163,11 @@ export async function selfReviewMain() {
     const adamBody = 'ADAM-REVIEW REQUEST (bidirectional coordinator<->Adam review, ' + delta + ' SDs shipped since last review): candid critique of how the COORDINATOR works WITH Adam — (1) assignment clarity, (2) comms latency / reply timeliness on the advisory lane, (3) dependency handling for Adam-sourced work. Adam: reciprocate with your OWN friction. Reply: /signal feedback, prefix "ADAM-COORD-FEEDBACK". Both sides self-improve (coordinator.md + CLAUDE_ADAM.md).';
     for (const a of adamParticipants) {
       try {
-        await insertCoordinationRow(db, { target_session: a, sender_session: me, subject: 'Coordinator<->Adam review (every ' + REVIEW_EVERY + ' SDs) — candid bidirectional feedback', message_type: 'COACHING', payload: { kind: 'coordinator_reply', body: adamBody } });
+        // SD-LEO-INFRA-DISTINCT-REVIEW-REQUEST-001: was kind:'coordinator_reply' — not even a
+        // DIRECTIVE_KIND, so this substantive review was fully collapsible to a routine ack
+        // (2026-07-13 co-drive review finding). review_request is a DIRECTIVE_KIND: deliver-not-
+        // consume, never auto-acked, distinct from both coordinator_request and coordinator_reply.
+        await insertCoordinationRow(db, { target_session: a, sender_session: me, subject: 'Coordinator<->Adam review (every ' + REVIEW_EVERY + ' SDs) — candid bidirectional feedback', message_type: 'COACHING', payload: { kind: 'review_request', body: adamBody } });
         adamSolicited++;
       } catch (e) { solicitFailed++; console.error('[COORD-REVIEW] adam solicit skip ' + a + ': ' + e.message.split('\n')[0]); }
     }
