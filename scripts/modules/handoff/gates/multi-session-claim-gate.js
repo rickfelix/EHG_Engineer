@@ -80,11 +80,15 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
         return isSameConversation(currentTerminalId, s.terminal_id) !== false;
       });
 
+      // Dual-surface release: co-clears the SD-side AND nulls sd_key + worktree_* together
+      // (a bare sd_key clear trips the ck_worktree_state_consistency CHECK —
+      // SD-LEO-FIX-CLAIM-RELEASE-DESYNC-001). Mirrors release_sd's status='idle'; tryRpc:false
+      // (this branch is itself the fallback for the release_same_conversation_claims RPC).
+      const { releaseClaimBothSurfaces } = await import('../../../../lib/claim/release-claim-both-surfaces.mjs');
       for (const s of toRelease) {
-        await supabase
-          .from('claude_sessions')
-          .update({ sd_key: null, status: 'idle', released_at: new Date().toISOString() })
-          .eq('session_id', s.session_id);
+        await releaseClaimBothSurfaces(supabase, {
+          sdKey: sdId, holderSessionId: s.session_id, reason: 'stale_same_conversation', sessionStatus: 'idle', tryRpc: false,
+        });
         console.log(`   🧹 Released stale same-conversation claim: ${s.session_id.substring(0, 24)}...`);
       }
     }

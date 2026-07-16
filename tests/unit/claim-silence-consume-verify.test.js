@@ -99,7 +99,13 @@ function fakeSupabase({ owner, onRelease }) {
         };
       }
       if (table === 'claude_sessions') {
-        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: owner, error: null }) }) }) };
+        // SD-LEO-FIX-CLAIM-RELEASE-DESYNC-001: orphan-release now co-clears the session-side
+        // surface via releaseClaimBothSurfaces — the helper's session-side UPDATE + its
+        // OLD-HOLDER-GONE readback both chain two .eq() calls, so give this branch a chainable
+        // eq for select AND an update method (the old single-surface code never touched it).
+        const selChain = { eq: () => selChain, maybeSingle: async () => ({ data: owner, error: null }) };
+        const updChain = { eq: () => updChain, then: (res) => res({ error: null }) };
+        return { select: () => selChain, update: () => updChain };
       }
       return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) };
     },
