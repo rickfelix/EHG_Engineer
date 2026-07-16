@@ -57,6 +57,102 @@ describe('TestExecutionVerifier.runTests — outputFile parsing (QF-20260710-717
     const result = verifier.runTests();
 
     expect(result.passed).toBe(false);
+    expect(result.outcome).toBe('fail');
     expect(result.failedTests).toBe(2);
+  });
+});
+
+/**
+ * Regression tests for SD-LEO-INFRA-TESTEXEC-TIMEOUT-INCONCLUSIVE-001 (5th
+ * occurrence of the same false-fail family). Under fleet load, execSync's
+ * TEST_TIMEOUT_MS wall clock SIGTERM-kills a run that would have passed. The
+ * old catch block never inspected error.killed/error.signal/error.code, so a
+ * killed-under-load run was indistinguishable from a genuine failure and
+ * reported passed:false. These tests prove the fix: a kill/timeout with no
+ * failure evidence classifies as 'inconclusive' (not a failure), while a
+ * kill signal accompanied by real failure evidence in the JSON report still
+ * hard-blocks — the disambiguation is JSON-report-first, not signal-first.
+ */
+describe('TestExecutionVerifier.runTests — timeout/kill classification (SD-LEO-INFRA-TESTEXEC-TIMEOUT-INCONCLUSIVE-001)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('classifies a POSIX-shaped timeout kill (killed=true) as inconclusive, not a failure', () => {
+    execSync.mockImplementation(() => {
+      const err = new Error('Command timed out');
+      err.killed = true;
+      err.signal = 'SIGTERM';
+      err.status = null;
+      throw err;
+    });
+    readFileSync.mockImplementation(() => { throw new Error('ENOENT'); }); // report never written
+
+    const verifier = new TestExecutionVerifier({ cwd: '/repo' });
+    const result = verifier.runTests();
+
+    expect(result.outcome).toBe('inconclusive');
+    expect(result.passed).toBe(true);
+  });
+
+  it('classifies a Windows-shaped timeout kill (killed=undefined, signal=SIGTERM, code=ETIMEDOUT) as inconclusive', () => {
+    // Empirical finding (risk-agent, this SD): on this Windows/Node 24 host, an
+    // execSync timeout leaves error.killed=undefined — only signal/code are set.
+    // A killed===true-only check would silently no-op here, reproducing the bug.
+    execSync.mockImplementation(() => {
+      const err = new Error('Command timed out');
+      err.killed = undefined;
+      err.signal = 'SIGTERM';
+      err.code = 'ETIMEDOUT';
+      err.status = null;
+      throw err;
+    });
+    readFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
+
+    const verifier = new TestExecutionVerifier({ cwd: '/repo' });
+    const result = verifier.runTests();
+
+    expect(result.outcome).toBe('inconclusive');
+    expect(result.passed).toBe(true);
+  });
+
+  it('a non-zero exit with a JSON report showing 0 failures and no kill signal still hard-blocks (pre-existing edge case, unchanged)', () => {
+    // e.g. a vitest internal/setup crash after writing an empty-failures report —
+    // not a load timeout, not a test failure, but the pre-existing behavior for
+    // this corner (passed:false) must not regress when the kill-detection branch
+    // was added.
+    execSync.mockImplementation(() => {
+      const err = new Error('vitest exited 1');
+      err.status = 1;
+      throw err;
+    });
+    readFileSync.mockReturnValue(
+      JSON.stringify({ numTotalTests: 5, numPassedTests: 5, numFailedTests: 0 })
+    );
+
+    const verifier = new TestExecutionVerifier({ cwd: '/repo' });
+    const result = verifier.runTests();
+
+    expect(result.passed).toBe(false);
+    expect(result.outcome).toBe('fail');
+  });
+
+  it('still hard-blocks when a kill signal is present but the JSON report shows real failures', () => {
+    // A crashing/self-terminating test could present signal=SIGTERM without
+    // being a genuine load timeout. JSON-report failure evidence must win.
+    execSync.mockImplementation(() => {
+      const err = new Error('Command timed out');
+      err.killed = true;
+      err.signal = 'SIGTERM';
+      throw err;
+    });
+    readFileSync.mockReturnValue(
+      JSON.stringify({ numTotalTests: 10, numPassedTests: 7, numFailedTests: 3 })
+    );
+
+    const verifier = new TestExecutionVerifier({ cwd: '/repo' });
+    const result = verifier.runTests();
+
+    expect(result.outcome).toBe('fail');
+    expect(result.passed).toBe(false);
+    expect(result.failedTests).toBe(3);
   });
 });

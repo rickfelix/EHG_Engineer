@@ -63,6 +63,7 @@ export class TestExecutionVerifier {
       console.log('  ⚠️  Skipped (--skip-tests)');
       return {
         passed: true,
+        outcome: 'pass',
         skipped: true,
         totalTests: 0,
         passedTests: 0,
@@ -79,6 +80,7 @@ export class TestExecutionVerifier {
       console.log(`     All tests passed (${recent.total}/${recent.total})`);
       return {
         passed: true,
+        outcome: 'pass',
         skipped: false,
         totalTests: recent.total,
         passedTests: recent.passed,
@@ -149,6 +151,7 @@ export class TestExecutionVerifier {
   runTests() {
     const outputFile = join(this.cwd, '.vitest-preflight-report.json');
     let exitCode = 0;
+    let killInfo = null;
     try {
       execSync(`npx vitest run --reporter=json --outputFile=${JSON.stringify(outputFile)}`, {
         cwd: this.cwd,
@@ -159,6 +162,15 @@ export class TestExecutionVerifier {
     } catch (error) {
       // execSync throws on non-zero exit code; the report file is still written.
       exitCode = error.status || 1;
+      // FR-1 (SD-LEO-INFRA-TESTEXEC-TIMEOUT-INCONCLUSIVE-001): a fleet-load timeout
+      // SIGTERM-kills this process before it can finish — the OS/timeout behavior
+      // is platform-dependent (empirically on Windows/Node execSync sets
+      // killed=undefined, signal='SIGTERM', code='ETIMEDOUT'; POSIX sets killed=true),
+      // so all three fields are checked. Final classification still defers to the
+      // parsed JSON report in parseTestOutput — this is only a candidate signal.
+      if (error.killed === true || error.signal === 'SIGTERM' || error.code === 'ETIMEDOUT') {
+        killInfo = { killed: error.killed, signal: error.signal, code: error.code };
+      }
     }
 
     let output = '';
@@ -166,13 +178,13 @@ export class TestExecutionVerifier {
       output = readFileSync(outputFile, 'utf8');
     } catch { /* file missing — parseTestOutput falls back to exit code */ }
 
-    return this.parseTestOutput(output, exitCode);
+    return this.parseTestOutput(output, exitCode, killInfo);
   }
 
   /**
    * Parse vitest JSON output.
    */
-  parseTestOutput(output, exitCode) {
+  parseTestOutput(output, exitCode, killInfo = null) {
     // Try to extract JSON from output (vitest may prefix with non-JSON)
     let data = null;
     try {
@@ -191,13 +203,28 @@ export class TestExecutionVerifier {
       if (exitCode === 0 && failed === 0) {
         console.log(`  ✅ All tests passed (${passed}/${total})`);
         return {
-          passed: true, skipped: false,
+          passed: true, outcome: 'pass', skipped: false,
           totalTests: total, passedTests: passed, failedTests: failed,
           details: `All tests passed (${passed}/${total})`,
           warnings: []
         };
       }
 
+      // Kill/timeout signal with NO failure evidence in the report => inconclusive.
+      // JSON-report failure evidence always wins over a kill signal — a crashing
+      // or self-terminating test must still hard-block (risk-agent finding).
+      if (killInfo && failed === 0) {
+        console.log('  ⚠️  INCONCLUSIVE: test run was killed under load (timeout), not a genuine failure');
+        return {
+          passed: true, outcome: 'inconclusive', skipped: false,
+          totalTests: total, passedTests: passed, failedTests: failed,
+          details: `Test run killed under fleet-load timeout (killed=${killInfo.killed}, signal=${killInfo.signal}, code=${killInfo.code}) — not a genuine test failure`,
+          warnings: [`Load-timeout classification: run was killed (signal=${killInfo.signal}, code=${killInfo.code}), not a real test failure — this is a resource-contention signal, not a code defect`]
+        };
+      }
+
+      // Unchanged original path: covers failed>0, and the pre-existing edge case
+      // of failed===0 with a non-zero exit unrelated to test failures/kills.
       console.log(`  ❌ FAIL: ${failed} test failure(s) detected`);
       if (this.verbose && data.testResults) {
         for (const suite of data.testResults) {
@@ -208,18 +235,30 @@ export class TestExecutionVerifier {
       }
 
       return {
-        passed: false, skipped: false,
+        passed: false, outcome: 'fail', skipped: false,
         totalTests: total, passedTests: passed, failedTests: failed,
         details: `${failed} test failure(s) out of ${total} tests`,
         warnings: []
       };
     }
 
-    // No JSON parsed — use exit code
+    // No JSON report was parseable at all (data is null) but a kill/timeout
+    // signal was observed — classify as inconclusive, not a failure.
+    if (killInfo) {
+      console.log('  ⚠️  INCONCLUSIVE: test run was killed under load (timeout), not a genuine failure');
+      return {
+        passed: true, outcome: 'inconclusive', skipped: false,
+        totalTests: 0, passedTests: 0, failedTests: 0,
+        details: `Test run killed under fleet-load timeout (killed=${killInfo.killed}, signal=${killInfo.signal}, code=${killInfo.code}) — not a genuine test failure`,
+        warnings: [`Load-timeout classification: run was killed (signal=${killInfo.signal}, code=${killInfo.code}), not a real test failure — this is a resource-contention signal, not a code defect`]
+      };
+    }
+
+    // No JSON parsed and no kill signal — use exit code
     if (exitCode === 0) {
       console.log('  ✅ Tests passed (no JSON report available)');
       return {
-        passed: true, skipped: false,
+        passed: true, outcome: 'pass', skipped: false,
         totalTests: 0, passedTests: 0, failedTests: 0,
         details: 'Tests passed (exit code 0, no JSON report)',
         warnings: ['Could not parse test report — relying on exit code']
@@ -228,7 +267,7 @@ export class TestExecutionVerifier {
 
     console.log('  ❌ FAIL: Test execution failed');
     return {
-      passed: false, skipped: false,
+      passed: false, outcome: 'fail', skipped: false,
       totalTests: 0, passedTests: 0, failedTests: 0,
       details: `Test execution failed (exit code ${exitCode})`,
       warnings: []

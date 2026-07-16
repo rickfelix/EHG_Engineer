@@ -1,0 +1,120 @@
+{
+  "executive_summary": "scripts/modules/shipping/TestExecutionVerifier.js runTests() shells `npx vitest run` via execSync with a 5-minute timeout. Under fleet load (5-8 concurrent workers contending for CPU), a run that WOULD pass gets SIGTERM-killed at the wall clock, and the catch block never inspects error.killed/error.signal/error.code, so the kill is indistinguishable from a genuine test failure and reports passed:false, false-blocking a legitimate ship. This has recurred 5 times. This PRD delivers a distinct 'inconclusive' outcome for load-timeouts, a bounded single retry in ship-preflight, and keeps genuine failures hard-blocking unchanged — verified by unit tests simulating both Windows-shaped (killed=undefined, signal=SIGTERM, code=ETIMEDOUT) and POSIX-shaped (killed=true) kill signatures, plus an e2e retry-then-block scenario.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Detect a load-timeout kill and classify it as 'inconclusive', never as a test failure",
+      "description": "In TestExecutionVerifier.runTests() (scripts/modules/shipping/TestExecutionVerifier.js:149-170), the catch block currently does `exitCode = error.status || 1` and discards error.killed/error.signal/error.code entirely. Add detection: if (error.killed===true || error.signal==='SIGTERM' || error.code==='ETIMEDOUT') AND the JSON report (parsed by parseTestOutput) shows no numFailedTests>0 evidence, return {passed:true, outcome:'inconclusive', ...} instead of falling through to the no-JSON exit!=0 hard-fail path at line 229-235. Disambiguation MUST be JSON-report-first: a report with numFailedTests>0 always wins and hard-blocks regardless of any kill signal (a self-killing/crashing test must not be laundered into 'inconclusive'). Cross-platform: an empirical probe on this Windows/Node 24 host found execSync timeout sets killed=undefined, signal='SIGTERM', code='ETIMEDOUT' — the OR-condition across all three fields is mandatory, not optional hardening.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A simulated execSync timeout with killed=true (POSIX-shaped) yields outcome:'inconclusive', passed stays true, never passed:false 'Test execution failed'",
+        "A simulated execSync timeout with killed=undefined, signal='SIGTERM', code='ETIMEDOUT' (Windows-shaped, matches empirical probe) also yields outcome:'inconclusive'",
+        "A JSON report with numFailedTests>0 present alongside a kill signal still returns outcome:'fail', passed:false (JSON evidence overrides signal ambiguity)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Ship-preflight retries once on inconclusive instead of hard-blocking",
+      "description": "The sole caller, scripts/ship-preflight.js (~lines 241-254), currently does `results.testExecution = await testVerifier.verify(); if (!results.testExecution.passed) results.overallPassed = false;`. Wrap this call: if the first verify() returns outcome:'inconclusive', wait a short backoff and re-run verify() exactly once. If the retry also returns 'inconclusive' or 'fail', treat it as a hard block (resolve to passed:false so downstream consumers, which only understand a boolean, see a failure). If the retry returns a genuine pass, ship proceeds. Retry is capped at exactly 1 attempt — no unbounded retry loop.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A single transient inconclusive on attempt 1 followed by a genuine pass on the retry does NOT block the ship",
+        "Two consecutive inconclusive outcomes (attempt 1 + retry) DO hard-block, resolving overallPassed=false",
+        "A genuine failure (passed:false, outcome:'fail') on attempt 1 is NOT retried — it hard-blocks immediately, matching current behavior for real failures"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Genuine failures remain hard-blocking, unchanged (no gate weakening)",
+      "description": "A real non-zero exit WITH numFailedTests>0 in the parsed JSON report, and no kill signal, must continue to return passed:false / outcome:'fail' via the existing parseTestOutput path (TestExecutionVerifier.js:186-216), completely unmodified in its blocking behavior. This FR exists purely as a regression guard so FR-1's new classification branch cannot accidentally soften real-failure detection.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Existing test case in TestExecutionVerifier.outputfile.test.js covering a real non-zero-exit failure (err.status=1, no kill fields) still asserts passed:false after this change",
+        "No modification to the failed>0 branch of parseTestOutput's JSON-present code path"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Preserve backward-compatible return shape for existing consumers",
+      "description": "verify()/runTests()/parseTestOutput() currently return {passed: boolean, skipped, totalTests, passedTests, failedTests, details, warnings}. Every return path MUST keep `passed` as a boolean (ship-preflight.js:249 does `if (!results.testExecution.passed)`, and :325-332 renders passed?done:warn?warn:fail from that field). Add an ADDITIVE `outcome: 'pass'|'fail'|'inconclusive'` field alongside the existing boolean — never replace or repurpose `passed`. FR-2's ship-preflight retry wrapper resolves the inconclusive outcome to a final boolean BEFORE line 249 consumes it. Add an inconclusive-aware branch to the ship-preflight summary renderer (~lines 325-332) so a post-retry-hard-blocked inconclusive doesn't render as a bare, unexplained ❌.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "TestExecutionVerifier.outputfile.test.js's existing 2 test cases (clean pass, real failure) continue to pass unmodified, proving the boolean contract is preserved",
+        "ship-preflight.js's summary output for a hard-blocked-after-retry inconclusive names the timeout/retry cause, not a generic 'Test execution failed'"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Surface chronic-overload signal instead of silently eating retries",
+      "description": "Per risk-agent finding: an uncapped/unlogged retry-on-inconclusive could mask a fleet that is chronically overloaded (every ship silently eats a 5-10 min retry with no visibility). Each inconclusive classification (both the initial one and, separately, the retry-exhausted hard-block) MUST emit a structured warning string in the returned `warnings` array identifying it as a load-timeout classification (not a generic failure), so operators/logs can distinguish 'infra is overloaded' from 'tests are broken'.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "The 'inconclusive' return path includes a warnings entry explicitly naming the timeout/kill cause (e.g. mentions 'load timeout' or 'killed')",
+        "A retry-exhausted hard-block includes a warnings entry distinguishing it from a genuine test failure"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Single-file core change plus one caller-site change", "description": "Core classification logic lives entirely in scripts/modules/shipping/TestExecutionVerifier.js (runTests + parseTestOutput). The retry orchestration lives in the sole caller, scripts/ship-preflight.js (~L241-254, plus the summary renderer ~L325-332). No other files construct or consume TestExecutionVerifier's return shape (verified: scripts/modules/shipping/ShippingPreflightVerifier.js does NOT import TestExecutionVerifier)." },
+    { "id": "TR-2", "title": "No schema/DB change", "description": "Pure in-process JS logic change; no database migration, no new table, no RLS." },
+    { "id": "TR-3", "title": "Additive return-shape change only", "description": "Add `outcome` field; do not remove or change the type of any existing return field (`passed`, `skipped`, `totalTests`, `passedTests`, `failedTests`, `details`, `warnings`)." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "execSync throws with killed=true (POSIX-shaped timeout kill), no JSON report / no numFailedTests>0 evidence", "type": "unit", "expected": "runTests() returns outcome:'inconclusive', passed remains true (not the hard-fail false)" },
+    { "id": "TS-2", "scenario": "execSync throws with killed=undefined, signal='SIGTERM', code='ETIMEDOUT' (Windows-shaped timeout kill, matches empirical probe on this host)", "type": "unit", "expected": "runTests() returns outcome:'inconclusive' via the signal/code OR-fallback, not just the killed===true check" },
+    { "id": "TS-3", "scenario": "execSync throws with a kill signal present AND a parsed JSON report showing numFailedTests>0", "type": "unit", "expected": "Classification is 'fail'/passed:false — JSON failure evidence overrides the kill-signal ambiguity" },
+    { "id": "TS-4", "scenario": "Existing regression: real non-zero exit (err.status=1), no kill fields, no JSON report", "type": "unit", "expected": "Unchanged: passed:false, 'Test execution failed (exit code 1)' — proves no weakening of the genuine-failure path" },
+    { "id": "TS-5", "scenario": "Ship-preflight receives inconclusive on attempt 1, genuine pass on the retry", "type": "integration", "expected": "Ship proceeds (overallPassed stays true); exactly one retry was attempted" },
+    { "id": "TS-6", "scenario": "Ship-preflight receives inconclusive on attempt 1 AND on the retry", "type": "integration", "expected": "Ship hard-blocks (overallPassed=false); no further retries beyond the single one" }
+  ],
+  "acceptance_criteria": [
+    "A load timeout (killed/signal/code detected, no failure evidence in JSON) is never reported as a test failure",
+    "Ship-preflight retries exactly once on inconclusive; a single transient timeout does not block the ship",
+    "A genuine failure (real non-zero exit with numFailedTests>0, no kill signal) still hard-blocks, unchanged",
+    "JSON-report failure evidence overrides kill-signal ambiguity (a crashing/self-killing test is never laundered into 'inconclusive')",
+    "Existing 2 unit tests in TestExecutionVerifier.outputfile.test.js pass unmodified (backward compatibility proof)",
+    "e2e/integration test simulates both a killed-timeout run and a genuinely-failing run and asserts they are classified and handled differently (recurred-family acceptance)"
+  ],
+  "risks": [
+    { "risk": "A crashing or self-terminating test process could present error.signal='SIGTERM' without being a genuine load timeout, risking a false 'inconclusive' classification that masks a real bug", "mitigation": "Disambiguate JSON-report-first: any parsed report with numFailedTests>0 always hard-blocks regardless of kill signal (FR-1); only classify as inconclusive when no failure evidence exists", "severity": "high" },
+    { "risk": "Cross-platform inconsistency: Node execSync's error.killed is undefined (not true) when a timeout fires on this Windows host per empirical probe, while signal='SIGTERM' and code='ETIMEDOUT' ARE set — a killed===true-only check would silently no-op on Windows, exactly reproducing the original 5x-recurring bug", "mitigation": "Require the OR-condition across killed/signal/code (already specified in FR-1); unit tests MUST cover both the Windows-shaped and POSIX-shaped signatures (TS-1, TS-2)", "severity": "high" },
+    { "risk": "Uncapped or silent retry-on-inconclusive could mask a fleet that is chronically overloaded, with every ship silently eating a 5-10 minute retry", "mitigation": "Cap retry at exactly 1 attempt (FR-2) and emit a structured warning distinguishing timeout-classification from genuine failure on every inconclusive occurrence (FR-5)", "severity": "medium" },
+    { "risk": "Downstream consumers of TestExecutionVerifier's return shape (ship-preflight.js summary rendering) assume a pure boolean `passed` and could mis-render a new outcome value", "mitigation": "Keep `passed` as a boolean on every return path; add `outcome` as a strictly additive field; add an inconclusive-aware branch to the summary renderer (FR-4)", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["scripts/ship-preflight.js (sole caller of TestExecutionVerifier.verify())"],
+    "dependencies": ["Node.js child_process.execSync timeout behavior (verified empirically to differ Windows vs POSIX on error.killed)", "npx vitest run --reporter=json --outputFile JSON report shape (numTotalTests/numPassedTests/numFailedTests)"],
+    "data_contracts": ["none — no database schema touched"],
+    "runtime_config": ["TEST_TIMEOUT_MS constant (TestExecutionVerifier.js:20, currently 5 minutes) — unchanged by this SD; FR-3 in the original SD description (raising/scaling timeout under load) is explicitly deferred/out-of-scope for this PRD's core acceptance"],
+    "observability_rollout": ["Structured warnings array entries on every inconclusive classification and retry-exhausted hard-block (FR-5), verifiable in unit test assertions and visible in ship-preflight console output"]
+  },
+  "system_architecture": {
+    "summary": "Two-file change: TestExecutionVerifier.js gains kill/timeout detection and a distinct inconclusive outcome; ship-preflight.js gains a bounded single-retry wrapper around its sole call to verify().",
+    "components": [
+      { "name": "scripts/modules/shipping/TestExecutionVerifier.js", "change": "runTests() catch block inspects error.killed/error.signal/error.code; parseTestOutput() gains an inconclusive branch that JSON-report evidence can override" },
+      { "name": "scripts/ship-preflight.js", "change": "Wraps the existing testVerifier.verify() call (~L241-254) with a single-retry-on-inconclusive loop; summary renderer (~L325-332) gains an inconclusive-aware branch" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Add classification logic to the verifier first (unit-testable in isolation), then wire the bounded retry into the one caller, then extend the existing test file with the new cases.",
+    "steps": [
+      "Add kill/timeout detection + inconclusive outcome to TestExecutionVerifier.js runTests()/parseTestOutput(), keeping `passed` boolean and adding additive `outcome` field",
+      "Add unit tests TS-1 through TS-4 to the existing scripts/modules/shipping/__tests__/TestExecutionVerifier.outputfile.test.js",
+      "Wrap the sole call site in scripts/ship-preflight.js with a single-retry-on-inconclusive loop, capped at 1 retry, resolving to a final boolean before the existing !passed check",
+      "Extend the summary renderer with an inconclusive-aware branch",
+      "Add integration/e2e tests TS-5 and TS-6 covering the retry-then-proceed and retry-then-block paths"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Simulate an execSync timeout kill (error.killed=true, error.signal='SIGTERM') in TestExecutionVerifier.runTests()", "expected_outcome": "verify() returns outcome='inconclusive' (NOT passed:false), distinct from a real failure" },
+    { "step_number": 2, "instruction": "Run ship-preflight with a simulated inconclusive verifier result on the first attempt", "expected_outcome": "Preflight retries the verifier once with backoff; a single transient timeout does NOT block the ship" },
+    { "step_number": 3, "instruction": "Simulate a genuine test failure (non-zero exit, numFailedTests>0 in JSON report, no kill signal)", "expected_outcome": "verify() still returns passed:false and ship-preflight hard-blocks — proving the real-failure gate is unweakened" }
+  ],
+  "activation_test_id": "scripts/modules/shipping/__tests__/TestExecutionVerifier.outputfile.test.js",
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-TESTEXEC-TIMEOUT-INCONCLUSIVE-001",
+    "recurred_family": true,
+    "prior_occurrences": 5,
+    "empirical_findings": "Windows/Node 24 execSync timeout probe: killed=undefined, signal='SIGTERM', code='ETIMEDOUT', status=null (risk-agent, this session)"
+  }
+}
