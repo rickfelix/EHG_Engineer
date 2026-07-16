@@ -64,7 +64,11 @@ function pathsAreToplevelCompatible(writerNorm, expectedNorm) {
 }
 
 // Statuses that downgrade to CONDITIONAL_PASS
-const CONDITIONAL_STATUSES = new Set(['skipped', 'empty_probe', 'unresolved_intra']);
+// SD-FDBK-ENH-LLM-SUB-AGENT-001: explicit_null_intra — an explicit-null repo_path on an
+// INTRA-REPO target (EHG/EHG_Engineer) is tolerated (conditional), at parity with the
+// unresolved_intra / cwd_leak / violation intra-repo carve-outs. Cross-repo explicit_null
+// still BLOCKS (stays 'explicit_null').
+const CONDITIONAL_STATUSES = new Set(['skipped', 'empty_probe', 'unresolved_intra', 'explicit_null_intra']);
 
 /**
  * Re-classify a raw row using metadata fields that v_sub_agent_repo_compliance
@@ -119,10 +123,24 @@ function classifyRow(viewRow, rawRow, targetApp) {
     };
   }
   if (viewRow.compliance_status === 'explicit_null') {
+    // SD-FDBK-ENH-LLM-SUB-AGENT-001: intra-repo carve-out, at parity with the cwd_leak /
+    // violation path-normalization overrides and the unresolved_intra split. For an intra-repo
+    // target (EHG/EHG_Engineer, or an unknown/absent target — same tolerance the unresolved
+    // branch applies), a null repo_path is NOT a cross-repo leak — the sub-agent ran in the
+    // single repo — so it degrades to CONDITIONAL_PASS instead of blocking. A cross-repo target
+    // with explicit_null still BLOCKS below. (explicit_null was the one blocking status missing
+    // the carve-out its own header, lines 20-22, documents.)
+    if (!targetApp || INTRA_REPO_TARGETS.has(targetApp)) {
+      return {
+        status: 'explicit_null_intra',
+        reasonCode: REASON_CODES.EXPLICIT_NULL,
+        detail: `metadata.repo_path is null but intra-repo target=${targetApp || 'unknown'} (conditional; not a cross-repo leak)`
+      };
+    }
     return {
       status: 'explicit_null',
       reasonCode: REASON_CODES.EXPLICIT_NULL,
-      detail: 'metadata.repo_path key present but value is null'
+      detail: `metadata.repo_path key present but value is null (cross-repo target=${targetApp})`
     };
   }
   if (viewRow.compliance_status === 'violation') {
@@ -195,7 +213,7 @@ function classifyRow(viewRow, rawRow, targetApp) {
     return {
       status: 'healthy',
       reasonCode: REASON_CODES.HEALTHY,
-      detail: `repo_path matches applications.local_path`
+      detail: 'repo_path matches applications.local_path'
     };
   }
 
@@ -328,7 +346,7 @@ export function createSubAgentRepoResolutionGate(supabase) {
       const buckets = {
         healthy: [], legacy: [], skipped: [], empty_probe: [],
         unresolved: [], unresolved_intra: [], cwd_leak: [],
-        explicit_null: [], violation: [], unknown_application: []
+        explicit_null: [], explicit_null_intra: [], violation: [], unknown_application: []
       };
 
       const blockingDetails = [];
