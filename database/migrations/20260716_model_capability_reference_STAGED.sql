@@ -39,11 +39,13 @@ CREATE TABLE IF NOT EXISTS model_capability_reference (
 -- RLS in the SAME migration as CREATE TABLE (SPINE-001-B recurrence guard).
 ALTER TABLE model_capability_reference ENABLE ROW LEVEL SECURITY;
 
+-- Service-role ONLY by design: every consumer (runner, migrator, GT gate,
+-- routing scripts) is a server-side harness process. The table has no tenant
+-- dimension, so an authenticated/anon read policy would be an unconditional
+-- USING (true) — the exact defect class of SD-LEO-GEN-SCOPE-ANON-KEY-001 /
+-- SD-FDBK-FIX-FEEDBACK-SELECT-FEEDBACK-001. None is granted.
 CREATE POLICY model_capability_reference_service_write ON model_capability_reference
   FOR ALL TO service_role USING (true) WITH CHECK (true);
-
-CREATE POLICY model_capability_reference_authenticated_read ON model_capability_reference
-  FOR SELECT TO authenticated USING (true);
 
 COMMENT ON TABLE model_capability_reference IS
   'Measured model/effort capability per problem shape (SD-LEO-INFRA-MODEL-CAPABILITY-EVAL-001). Results-only: never stores golden-task text or answer keys. Consumers must filter trusted_for_routing=true.';
