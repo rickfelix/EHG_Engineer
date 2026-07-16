@@ -163,6 +163,13 @@ Flags:
                         --from-plan shape) stamps the fleet-claimable baseline instead of the
                         fail-safe-up ladder top, so it is never stranded unclaimable-by-construction.
   --min-tier-rank-reason "<text>"  Required companion to --min-tier-rank; recorded verbatim.
+  --min-tier-rank-owner "<text>"   Optional hold-state-contract stamp sibling (SD-LEO-INFRA-
+                        HOLD-STATE-CONTRACT-001). Only meaningful alongside --min-tier-rank.
+  --min-tier-rank-review-at <ISO-timestamp>  Optional companion — when review_at is in the
+                        past, the hold-state sweep surfaces this override for reconsideration.
+  --min-tier-rank-release-condition "<text>"  Optional companion describing what resolves
+                        this override. All three are additive: omitting them is unchanged
+                        behavior while HOLD_STATE_CONTRACT_MODE=observe (default).
                         Example: --target-repos EHG,EHG_Engineer
                         Pairs with computeReposForSD() at lead-final-approval/gates.js
                         (SD-LEO-INFRA-CROSS-REPO-MERGE-001). Supported in: direct LEO,
