@@ -21,14 +21,14 @@ import {
 const VALID_FEEDBACK_TYPES = ['issue', 'enhancement'];
 
 describe('GAUGE_REGISTRY shape', () => {
-  it('exports exactly 22 seed entries (8 original + venture-capture-completeness, SD-LEO-INFRA-CAPTURE-FORWARD-GATE-001 + 6 loop-health-*, SD-LEO-INFRA-009-LEAF-PER-001 + 3 self-score-age stubs, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4 + expired-premise-tags, SD-LEO-INFRA-BITTER-LESSON-AUDIT-001 + operator-cash-attestation-missing, QF-20260705-915 + plan-drift-coverage/plan-drift-mix, SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001)', () => {
-    expect(GAUGE_REGISTRY).toHaveLength(22);
+  it('exports exactly 23 seed entries (8 original + venture-capture-completeness, SD-LEO-INFRA-CAPTURE-FORWARD-GATE-001 + 6 loop-health-*, SD-LEO-INFRA-009-LEAF-PER-001 + 3 self-score-age stubs, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4 + expired-premise-tags, SD-LEO-INFRA-BITTER-LESSON-AUDIT-001 + operator-cash-attestation-missing, QF-20260705-915 + plan-drift-coverage/plan-drift-mix, SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001 + ghost-ceo, SD-LEO-GEN-SATELLITE-AGENT-LIFECYCLE-001)', () => {
+    expect(GAUGE_REGISTRY).toHaveLength(23);
   });
 
-  it('19 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
+  it('20 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
-    expect(live).toHaveLength(19);
+    expect(live).toHaveLength(20);
     expect(stubs.map((e) => e.id).sort()).toEqual(['adam_self_score_age', 'coordinator_self_score_age', 'solomon_self_score_age']);
   });
 
@@ -102,13 +102,14 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(selectEnabledEntries(undefined)).toEqual([]);
   });
 
-  it('the real GAUGE_REGISTRY selects all 19 enabled entries', () => {
+  it('the real GAUGE_REGISTRY selects all 20 enabled entries', () => {
     const selected = selectEnabledEntries(GAUGE_REGISTRY);
-    expect(selected).toHaveLength(19);
+    expect(selected).toHaveLength(20);
     expect(selected.map((e) => e.id).sort()).toEqual([
       'adam-claimed-or-built-sd',
       'coordinator-sourced-sd',
       'expired-premise-tags',
+      'ghost-ceo',
       'loop-health-A_applied_rate',
       'loop-health-B_signal_aggregation',
       'loop-health-C_retro_learn',
