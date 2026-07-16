@@ -29,6 +29,17 @@ vi.mock('../../../lib/eva/lifecycle-sd-bridge.js', () => ({
   convertExpansionToSD: vi.fn().mockResolvedValue({ created: true, sdKey: 'SD-TEST-EXPAND-001', errors: [] }),
 }));
 
+vi.mock('../../../lib/crm/spine-consumption-client.js', () => ({
+  routeException: vi.fn().mockResolvedValue({ routed_to: 'venture-ceo-tier', exception_type: 'NO_CAPABILITY_DEPOSIT', source: 'stub' }),
+}));
+
+vi.mock('../../../lib/governance/emit-feedback.js', () => ({
+  emitFeedback: vi.fn().mockResolvedValue({ id: 'feedback-id', deduped: false }),
+}));
+
+import { routeException } from '../../../lib/crm/spine-consumption-client.js';
+import { emitFeedback } from '../../../lib/governance/emit-feedback.js';
+
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
 function makeMockSupabase(overrides = {}) {
@@ -62,17 +73,17 @@ describe('DECISION_TYPES', () => {
 });
 
 describe('isFinalStage', () => {
-  it('should return true for stage 25', () => {
-    expect(isFinalStage(25)).toBe(true);
+  it('should return true for stage 26', () => {
+    expect(isFinalStage(26)).toBe(true);
   });
 
-  it('should return true for stage > 25', () => {
-    expect(isFinalStage(26)).toBe(true);
+  it('should return true for stage > 26', () => {
+    expect(isFinalStage(27)).toBe(true);
     expect(isFinalStage(100)).toBe(true);
   });
 
-  it('should return false for stage < 25', () => {
-    expect(isFinalStage(24)).toBe(false);
+  it('should return false for stage < 26', () => {
+    expect(isFinalStage(25)).toBe(false);
     expect(isFinalStage(1)).toBe(false);
   });
 
@@ -230,6 +241,105 @@ describe('handlePostLifecycleDecision', () => {
   });
 });
 
+describe('no-deposit capability exception (SD-LEO-GEN-SATELLITE-CAPABILITY-EXTRACTION-001, FR-2, TS-3/TS-4/TS-5)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('routes + durably persists an exception when extractedCapabilities is absent (TS-3)', async () => {
+    const supabase = makeMockSupabase();
+    const result = await handlePostLifecycleDecision(
+      { ventureId: 'venture-1', ventureContext, stageOutput, artifacts: [], decision: { type: 'continue' } },
+      { supabase, logger: silentLogger },
+    );
+
+    expect(result.handled).toBe(true);
+    expect(routeException).toHaveBeenCalledTimes(1);
+    expect(routeException).toHaveBeenCalledWith('NO_CAPABILITY_DEPOSIT', expect.objectContaining({ ventureId: 'venture-1', decisionType: 'continue' }));
+    expect(emitFeedback).toHaveBeenCalledTimes(1);
+    expect(emitFeedback).toHaveBeenCalledWith(expect.objectContaining({ category: 'capability_no_deposit' }));
+  });
+
+  it('routes + persists an exception when extractedCapabilities is an empty array (TS-3)', async () => {
+    const supabase = makeMockSupabase();
+    await handlePostLifecycleDecision(
+      { ventureId: 'venture-1', ventureContext, stageOutput, artifacts: [], decision: { type: 'sunset', extractedCapabilities: [] } },
+      { supabase, logger: silentLogger },
+    );
+
+    expect(routeException).toHaveBeenCalledTimes(1);
+    expect(emitFeedback).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT route an exception when extractedCapabilities is non-empty (TS-4, unchanged pre-existing behavior)', async () => {
+    const supabase = makeMockSupabase();
+    const result = await handlePostLifecycleDecision(
+      {
+        ventureId: 'venture-1', ventureContext, stageOutput, artifacts: [],
+        decision: { type: 'continue', extractedCapabilities: [{ name: 'cap-1', capabilityType: 'integration' }] },
+      },
+      { supabase, logger: silentLogger },
+    );
+
+    expect(result.handled).toBe(true);
+    expect(routeException).not.toHaveBeenCalled();
+    expect(emitFeedback).not.toHaveBeenCalled();
+  });
+
+  it('fails open on a routeException error, and still durably persists via emitFeedback (TS-5, durability-independence)', async () => {
+    routeException.mockRejectedValueOnce(new Error('spine routing boom'));
+    const supabase = makeMockSupabase();
+    const result = await handlePostLifecycleDecision(
+      { ventureId: 'venture-1', ventureContext, stageOutput, artifacts: [], decision: { type: 'continue' } },
+      { supabase, logger: silentLogger },
+    );
+
+    expect(result.handled).toBe(true);
+    expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('No-deposit exception routing failed'));
+    // The durability guarantee must not depend on routeException succeeding -- emitFeedback
+    // still fires (with routed_to:null since routing failed), or the exception silently
+    // vanishes exactly the way the code comment says it must not (adversarial-review fix).
+    expect(emitFeedback).toHaveBeenCalledTimes(1);
+    expect(emitFeedback).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ routed_to: null }) }));
+  });
+
+  it('fails open on an emitFeedback error without throwing (TS-5, independent try/catch)', async () => {
+    emitFeedback.mockRejectedValueOnce(new Error('feedback insert boom'));
+    const supabase = makeMockSupabase();
+    const result = await handlePostLifecycleDecision(
+      { ventureId: 'venture-1', ventureContext, stageOutput, artifacts: [], decision: { type: 'continue' } },
+      { supabase, logger: silentLogger },
+    );
+
+    expect(result.handled).toBe(true);
+    expect(routeException).toHaveBeenCalledTimes(1);
+    expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('No-deposit feedback persistence failed'));
+  });
+
+  it('never interpolates the venture name into title/description (log-injection regression guard)', async () => {
+    const supabase = makeMockSupabase();
+    await handlePostLifecycleDecision(
+      { ventureId: 'venture-1', ventureContext, stageOutput, artifacts: [], decision: { type: 'continue' } },
+      { supabase, logger: silentLogger },
+    );
+
+    const call = emitFeedback.mock.calls[0][0];
+    expect(call.title).not.toContain(ventureContext.name);
+    expect(call.description).not.toContain(ventureContext.name);
+    expect(call.metadata.venture_name).toBe(ventureContext.name);
+  });
+
+  it('passes a per-venture dedup_key so distinct ventures never collapse into one row (adversarial review round 2)', async () => {
+    const supabase = makeMockSupabase();
+    await handlePostLifecycleDecision(
+      { ventureId: 'venture-1', ventureContext, stageOutput, artifacts: [], decision: { type: 'continue' } },
+      { supabase, logger: silentLogger },
+    );
+
+    expect(emitFeedback).toHaveBeenCalledWith(expect.objectContaining({ dedup_key: 'no-deposit:venture-1:continue' }));
+  });
+});
+
 describe('decision options', () => {
   it('should build options with labels and descriptions', () => {
     const options = _internal.buildDecisionOptions(ventureContext, stageOutput);
@@ -244,8 +354,8 @@ describe('decision options', () => {
 });
 
 describe('MAX_LIFECYCLE_STAGE', () => {
-  it('should be 25', () => {
-    expect(MAX_LIFECYCLE_STAGE).toBe(25);
+  it('should be 26', () => {
+    expect(MAX_LIFECYCLE_STAGE).toBe(26);
   });
 });
 
