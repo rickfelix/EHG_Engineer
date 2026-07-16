@@ -5,8 +5,8 @@
  * is correct for its OTHER callers, so the fix is a separate creation-time helper,
  * stampPayloadForCreation(), not a change to computeMinTierRank() itself.
  */
-import { describe, it, expect } from 'vitest';
-import { computeMinTierRank, stampPayloadForCreation, FLEET_CLAIMABLE_BASELINE_RANK } from '../../../lib/fleet/sd-tier-rank.mjs';
+import { describe, it, expect, afterEach } from 'vitest';
+import { computeMinTierRank, stampPayloadForCreation, checkExplicitTierRankStamp, FLEET_CLAIMABLE_BASELINE_RANK } from '../../../lib/fleet/sd-tier-rank.mjs';
 
 describe('FLEET_CLAIMABLE_BASELINE_RANK', () => {
   it('is derived from the ladder (opus/low = rank 2), not a hand-rolled literal', () => {
@@ -60,5 +60,73 @@ describe('stampPayloadForCreation — explicit override', () => {
     const sd = { sd_key: 'SD-OVERRIDE-001', sd_type: 'feature', metadata: {} };
     expect(stampPayloadForCreation(sd, { explicitRank: 1, explicitReason: 'trivial despite the type' }))
       .toEqual({ min_tier_rank: 1, min_tier_rank_reason: 'trivial despite the type' });
+  });
+});
+
+describe('stampPayloadForCreation — hold-state contract sibling stamp (SD-LEO-INFRA-HOLD-STATE-CONTRACT-001, FR-4)', () => {
+  it('TS-7 (regression): omitting explicitOwner/explicitReviewAt/explicitReleaseCondition returns the EXACT pre-existing 2-key shape', () => {
+    const sd = { sd_key: 'SD-EXPLICIT-001', metadata: {} };
+    expect(stampPayloadForCreation(sd, { explicitRank: 4, explicitReason: 'known architectural complexity' }))
+      .toEqual({ min_tier_rank: 4, min_tier_rank_reason: 'known architectural complexity' });
+  });
+
+  it('adds owner/review_at/release_condition as sibling keys when provided, without touching min_tier_rank\'s shape', () => {
+    const sd = { sd_key: 'SD-EXPLICIT-002', metadata: {} };
+    const payload = stampPayloadForCreation(sd, {
+      explicitRank: 4, explicitReason: 'Fable-exclusive per architecture',
+      explicitOwner: 'coordinator', explicitReviewAt: '2026-08-01T00:00:00Z', explicitReleaseCondition: 'architecture review',
+      writingSessionId: 'sess-1',
+    });
+    expect(payload.min_tier_rank).toBe(4);
+    expect(typeof payload.min_tier_rank).toBe('number');
+    expect(payload.min_tier_rank_owner).toBe('coordinator');
+    expect(payload.min_tier_rank_review_at).toBe('2026-08-01T00:00:00Z');
+    expect(payload.min_tier_rank_release_condition).toBe('architecture review');
+    expect(payload.min_tier_rank_stamped_by_session).toBe('sess-1');
+  });
+
+  it('TS-3 (persisted-shape pin): the sibling stamp never changes metadata.min_tier_rank into anything but a bare finite integer', () => {
+    const sd = { sd_key: 'SD-EXPLICIT-003', metadata: {} };
+    const payload = stampPayloadForCreation(sd, {
+      explicitRank: 3, explicitReason: 'r', explicitOwner: 'o', explicitReviewAt: '2026-08-01T00:00:00Z', explicitReleaseCondition: 'c',
+    });
+    const merged = { ...sd, metadata: { ...sd.metadata, ...payload } };
+
+    // The 3 REAL consumers (per TESTING sub-agent evidence) all do Number(metadata.min_tier_rank)
+    // and fail OPEN on non-finite -- pin that they still see a valid number after the stamp lands.
+    expect(Number.isFinite(Number(merged.metadata.min_tier_rank))).toBe(true); // claim-eligibility.cjs:300 shape
+    expect(Number.isFinite(Number(merged.metadata && merged.metadata.min_tier_rank))).toBe(true); // dispatch.cjs:409 shape
+    const raw = merged.metadata ? merged.metadata.min_tier_rank : undefined; // tier-claimable.cjs:41 shape
+    expect(Number.isFinite(Number(raw))).toBe(true);
+    expect(merged.metadata.min_tier_rank).toBe(3);
+  });
+});
+
+describe('checkExplicitTierRankStamp', () => {
+  const ORIGINAL = process.env.HOLD_STATE_CONTRACT_MODE;
+  afterEach(() => { process.env.HOLD_STATE_CONTRACT_MODE = ORIGINAL; });
+
+  it('observe mode (default) never throws and logs a violation on an incomplete stamp', async () => {
+    delete process.env.HOLD_STATE_CONTRACT_MODE;
+    const inserts = [];
+    const fakeSupabase = { from: () => ({ insert: async (row) => { inserts.push(row); return { error: null }; } }) };
+    const result = await checkExplicitTierRankStamp(fakeSupabase, { explicitReason: 'r' });
+    expect(result.ok).toBe(false);
+    expect(result.mode).toBe('observe');
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0].surface).toBe('min_tier_rank');
+  });
+
+  it('enforce mode throws on an incomplete stamp', async () => {
+    process.env.HOLD_STATE_CONTRACT_MODE = 'enforce';
+    await expect(checkExplicitTierRankStamp(null, { explicitReason: 'r' })).rejects.toThrow(/Hold-state contract violation/);
+  });
+
+  it('enforce mode passes on a complete stamp', async () => {
+    process.env.HOLD_STATE_CONTRACT_MODE = 'enforce';
+    const result = await checkExplicitTierRankStamp(null, {
+      explicitReason: 'r', explicitOwner: 'o', explicitReviewAt: '2026-08-01T00:00:00Z', explicitReleaseCondition: 'c',
+    });
+    expect(result.ok).toBe(true);
   });
 });
