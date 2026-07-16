@@ -28,28 +28,36 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { pathToFileURL } from 'url';
 
 /**
- * A title correlation is only trusted when corroborated by a completed SD whose creation
- * predates (or is close to) the roadmap item's creation — never a bare title match alone.
+ * A title correlation is only trusted when corroborated by BOTH a completed SD status AND a
+ * plausible temporal ordering: the SD's completion cannot predate the roadmap item's own
+ * creation (an SD cannot have completed a task that did not yet exist as a roadmap item) —
+ * never a bare title-string match alone.
  */
 function isPlausibleMatch(item, sd) {
   if (!sd || sd.status !== 'completed') return false;
   if (!item.title || !sd.title) return false;
   if (item.title.trim().toLowerCase() !== sd.title.trim().toLowerCase()) return false;
-  return true;
+  if (['dropped', 'promoted'].includes(item.item_disposition)) return false; // never resurrect a curated-away or already-terminal item
+  if (!sd.completion_date || !item.created_at) return false;
+  const sdCompletedAt = new Date(sd.completion_date).getTime();
+  const itemCreatedAt = new Date(item.created_at).getTime();
+  if (!Number.isFinite(sdCompletedAt) || !Number.isFinite(itemCreatedAt)) return false;
+  return sdCompletedAt >= itemCreatedAt;
 }
 
 export async function runBackfill({ supabase, apply = false, log = console.log } = {}) {
   const { data: items, error: itemsErr } = await supabase
     .from('roadmap_wave_items')
-    .select('id, title, item_disposition, promoted_to_sd_key')
+    .select('id, title, item_disposition, promoted_to_sd_key, created_at')
     .is('promoted_to_sd_key', null);
   if (itemsErr) { log(`[backfill] items query failed: ${itemsErr.message}`); return { selected: 0, stamped: 0, leftOpen: 0, ambiguousSkipped: 0, applied: apply }; }
 
-  const candidates = (items || []).filter((i) => !!i.title);
+  // 'dropped' items are a deliberate human curation decision -- never a backfill candidate.
+  const candidates = (items || []).filter((i) => !!i.title && i.item_disposition !== 'dropped');
 
   const { data: completedSds, error: sdErr } = await supabase
     .from('strategic_directives_v2')
-    .select('sd_key, title, status')
+    .select('sd_key, title, status, completion_date')
     .eq('status', 'completed');
   if (sdErr) { log(`[backfill] strategic_directives_v2 query failed: ${sdErr.message}`); return { selected: candidates.length, stamped: 0, leftOpen: 0, ambiguousSkipped: 0, applied: apply }; }
 
