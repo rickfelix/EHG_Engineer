@@ -196,8 +196,6 @@ async function checkOverride(sdType, supabase) {
  */
 function getDimensionWarnings(dimensionScores) {
   if (!dimensionScores || typeof dimensionScores !== 'object') return [];
-  // QF-20260713-713: rich scorer values ({ name, score, ... } keyed by A01/V01 IDs)
-  // previously failed the typeof === 'number' filter, silently muting all warnings.
   return Object.entries(dimensionScores)
     .map(([key, value]) => [dimNameOf(key, value), dimScoreOf(value)])
     .filter(([, score]) => typeof score === 'number' && score < DIMENSION_WARNING_THRESHOLD)
@@ -317,13 +315,9 @@ export async function validateVisionScore(sd, supabase, deps = {}) {
   let thresholdAction = sd.vision_score_action ?? null;
   let dimensionScores = sd.dimension_scores ?? null;
 
-  // Fetch latest score from eva_vision_scores if EITHER piece is missing.
-  // QF-20260713-713 (non-determinism): scoreSD() syncs only the SCALAR
-  // sd.vision_score back to strategic_directives_v2 (there is no dimension_scores
-  // column on the SD), so gating this fetch on the scalar alone starved every
-  // post-first-run evaluation of dimension context — countAddressableDimensions
-  // saw {0,0}, dynamic-threshold/floor-rule narrowing vanished, and a first-run
-  // floor-rule PASS flipped to a hard BLOCK on the very next run of the same SD.
+  // Fetch if EITHER piece is missing. QF-20260713-713: scoreSD() syncs only the
+  // SCALAR back to the SD (no dimension_scores column there); gating this fetch
+  // on the scalar alone starved retries of dimension context, flipping verdicts.
   if ((visionScore === null || dimensionScores === null) && supabase && sdKey) {
     try {
       const { data } = await supabase
@@ -427,8 +421,7 @@ export async function validateVisionScore(sd, supabase, deps = {}) {
     const typePatterns = SD_TYPE_ADDRESSABLE_DIMENSIONS[sdType];
     let addressableDimScores = null;
     if (typePatterns) {
-      // Type-pattern path. QF-20260713-713: match on the dimension NAME (rich
-      // values are keyed by opaque A01/V01 IDs) and extract .score from rich values.
+      // Type-pattern path: match the dimension NAME, not the opaque A01/V01 key.
       addressableDimScores = Object.entries(dimensionScores)
         .filter(([key, value]) => {
           const name = dimNameOf(key, value).toLowerCase();
