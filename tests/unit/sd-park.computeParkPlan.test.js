@@ -7,7 +7,7 @@
  *
  * SD-LEO-INFRA-PARKED-STATUS-REPLACE-001 — covers the pure portion of TS-3 and TS-6.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { computeParkPlan, PARK_STATUS } from '../../lib/sd-park.js';
 
 const NOW = '2026-06-05T00:00:00.000Z';
@@ -92,5 +92,53 @@ describe('computeParkPlan — edge detection + metadata patch', () => {
     );
     expect(plan.edge).toBe(false);
     expect(plan.parkMetaPatch.parked_progress_original).toBeNull();
+  });
+});
+
+describe('computeParkPlan — hold-state contract (SD-LEO-INFRA-HOLD-STATE-CONTRACT-001)', () => {
+  const ORIGINAL = process.env.HOLD_STATE_CONTRACT_MODE;
+  afterEach(() => { process.env.HOLD_STATE_CONTRACT_MODE = ORIGINAL; });
+
+  it('TS-7 (regression): omitting review_at/release_condition is unchanged behavior in observe mode (default) — no throw, existing fields unaffected', () => {
+    delete process.env.HOLD_STATE_CONTRACT_MODE;
+    const plan = computeParkPlan(
+      { sd_key: 'SD-X', status: 'active', current_phase: 'EXEC', progress: 50 },
+      'set aside', 'PLAN', NOW,
+    );
+    expect(plan.holdCheck.ok).toBe(false);
+    expect(plan.holdCheck.mode).toBe('observe');
+    expect(plan.parkMetaPatch.park_reason).toBe('set aside');
+    expect(plan.parkMetaPatch).not.toHaveProperty('park_review_at');
+    expect(plan.parkMetaPatch).not.toHaveProperty('park_release_condition');
+  });
+
+  it('TS-1: enforce mode rejects a park missing review_at/release_condition before any DB write', () => {
+    process.env.HOLD_STATE_CONTRACT_MODE = 'enforce';
+    expect(() => computeParkPlan(
+      { sd_key: 'SD-X', status: 'active', current_phase: 'EXEC', progress: 50 },
+      'set aside', 'PLAN', NOW,
+    )).toThrow(/Hold-state contract violation/);
+  });
+
+  it('enforce mode accepts a park carrying the full stamp, and records review_at/release_condition', () => {
+    process.env.HOLD_STATE_CONTRACT_MODE = 'enforce';
+    const plan = computeParkPlan(
+      { sd_key: 'SD-X', status: 'active', current_phase: 'EXEC', progress: 50 },
+      'set aside', 'PLAN', NOW,
+      { reviewAt: '2026-08-01T00:00:00Z', releaseCondition: 'sibling done', writingSessionId: 'sess-1' },
+    );
+    expect(plan.holdCheck.ok).toBe(true);
+    expect(plan.parkMetaPatch.park_review_at).toBe('2026-08-01T00:00:00Z');
+    expect(plan.parkMetaPatch.park_release_condition).toBe('sibling done');
+    expect(plan.parkMetaPatch.stamped_by_session).toBe('sess-1');
+  });
+
+  it('security Q5: a caller cannot override stamped_by_session via the reason/actor fields', () => {
+    const plan = computeParkPlan(
+      { sd_key: 'SD-X', status: 'active', current_phase: 'EXEC', progress: 50 },
+      'set aside', 'PLAN', NOW,
+      { writingSessionId: 'the-real-session' },
+    );
+    expect(plan.parkMetaPatch.stamped_by_session).toBe('the-real-session');
   });
 });

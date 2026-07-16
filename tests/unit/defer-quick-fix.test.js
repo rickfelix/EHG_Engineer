@@ -1,13 +1,13 @@
 /**
  * SD-LEO-FIX-QUICK-FIXES-NEEDS-001: operator-facing not_before setter.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { parseDeferArgs, validateNotBefore, deferQuickFix } from '../../scripts/defer-quick-fix.js';
 
 describe('parseDeferArgs', () => {
   it('parses QF id, --not-before value, and --reopen flag', () => {
     const parsed = parseDeferArgs(['QF-X', '--not-before', '2026-07-05T21:00:00Z', '--reopen']);
-    expect(parsed).toEqual({ showHelp: false, qfId: 'QF-X', notBefore: '2026-07-05T21:00:00Z', reopen: true });
+    expect(parsed).toEqual({ showHelp: false, qfId: 'QF-X', notBefore: '2026-07-05T21:00:00Z', reopen: true, reason: null, owner: null, releaseCondition: null });
   });
 
   it('defaults reopen to false when omitted', () => {
@@ -21,6 +21,13 @@ describe('parseDeferArgs', () => {
 
   it('shows help with --help', () => {
     expect(parseDeferArgs(['--help'])).toEqual({ showHelp: true });
+  });
+
+  it('SD-LEO-INFRA-HOLD-STATE-CONTRACT-001: parses --reason, --owner, --release-condition', () => {
+    const parsed = parseDeferArgs(['QF-X', '--not-before', '2026-07-05T21:00:00Z', '--reason', 'waiting on X', '--owner', 'coordinator', '--release-condition', 'X lands']);
+    expect(parsed.reason).toBe('waiting on X');
+    expect(parsed.owner).toBe('coordinator');
+    expect(parsed.releaseCondition).toBe('X lands');
   });
 });
 
@@ -82,5 +89,59 @@ describe('deferQuickFix', () => {
     const stub = makeSupabaseStub(null, { message: 'permission denied' });
     await expect(deferQuickFix('QF-X', '2026-07-05T21:00:00Z', { supabaseClient: stub.client }))
       .rejects.toThrow(/permission denied/);
+  });
+});
+
+describe('deferQuickFix — hold-state contract (SD-LEO-INFRA-HOLD-STATE-CONTRACT-001)', () => {
+  const ORIGINAL = process.env.HOLD_STATE_CONTRACT_MODE;
+  afterEach(() => { process.env.HOLD_STATE_CONTRACT_MODE = ORIGINAL; });
+
+  function makeSupabaseStub(returnData, returnError = null) {
+    const update = vi.fn().mockReturnThis();
+    const eq = vi.fn().mockReturnThis();
+    const select = vi.fn().mockReturnThis();
+    const single = vi.fn().mockResolvedValue({ data: returnData, error: returnError });
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    return {
+      client: { from: () => ({ update, eq, select, single, insert }) },
+      update, eq, select, single, insert,
+    };
+  }
+
+  it('TS-7 (regression): omitting reason/owner/release_condition is unchanged behavior in observe mode (default) — update object has no stamp keys', async () => {
+    delete process.env.HOLD_STATE_CONTRACT_MODE;
+    const stub = makeSupabaseStub({ id: 'QF-X', status: 'open', not_before: '2026-07-05T21:00:00.000Z' });
+    await deferQuickFix('QF-X', '2026-07-05T21:00:00Z', { supabaseClient: stub.client });
+    expect(stub.update).toHaveBeenCalledWith({ not_before: '2026-07-05T21:00:00.000Z' });
+  });
+
+  it('TS-4: enforce mode with a full stamp writes reason/owner/release_condition alongside not_before', async () => {
+    process.env.HOLD_STATE_CONTRACT_MODE = 'enforce';
+    const stub = makeSupabaseStub({ id: 'QF-X', status: 'open', not_before: '2026-07-05T21:00:00.000Z' });
+    await deferQuickFix('QF-X', '2026-07-05T21:00:00Z', {
+      reason: 'waiting on sibling', owner: 'coordinator', releaseCondition: 'sibling merges',
+      supabaseClient: stub.client,
+    });
+    expect(stub.update).toHaveBeenCalledWith({
+      not_before: '2026-07-05T21:00:00.000Z',
+      reason: 'waiting on sibling', owner: 'coordinator', release_condition: 'sibling merges',
+    });
+  });
+
+  it('TS-1 style: enforce mode rejects a defer missing reason/owner/release_condition before any DB write', async () => {
+    process.env.HOLD_STATE_CONTRACT_MODE = 'enforce';
+    const stub = makeSupabaseStub({ id: 'QF-X' });
+    await expect(deferQuickFix('QF-X', '2026-07-05T21:00:00Z', { supabaseClient: stub.client }))
+      .rejects.toThrow(/Hold-state contract violation/);
+    expect(stub.update).not.toHaveBeenCalled();
+  });
+
+  it('observe mode (default) logs a violation but still writes not_before unchanged', async () => {
+    delete process.env.HOLD_STATE_CONTRACT_MODE;
+    const stub = makeSupabaseStub({ id: 'QF-X', status: 'open', not_before: '2026-07-05T21:00:00.000Z' });
+    const result = await deferQuickFix('QF-X', '2026-07-05T21:00:00Z', { supabaseClient: stub.client });
+    expect(result.id).toBe('QF-X');
+    expect(stub.insert).toHaveBeenCalledTimes(1);
+    expect(stub.insert.mock.calls[0][0]).toMatchObject({ surface: 'quick_fix_defer' });
   });
 });

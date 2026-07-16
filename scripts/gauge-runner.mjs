@@ -69,6 +69,8 @@ import {
 } from '../lib/governance/plan-drift-detectors.js';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { checkGhostCeos } from '../lib/agents/ghost-ceo-gauge.js';
+import { findOverdueHolds } from '../lib/governance/hold-state-sweep.js';
+import { readHoldStateMode } from '../lib/governance/hold-state-contract.js';
 
 const RECURSION_GOVERNOR_DIMENSION = 'recursion-governor-ratio';
 const PLAN_DRIFT_MIX_DIMENSION = 'plan-drift-mix';
@@ -166,6 +168,21 @@ function buildDetectorResolvers(supabase) {
       return countUnrankedClaimableLeaves(claimable, Date.now());
     },
     'relay-drop': async () => shapeRelayDropResult(await planRelayDrops(supabase)),
+    // SD-LEO-INFRA-HOLD-STATE-CONTRACT-001 (FR-6). Filters server-side to rows carrying at
+    // least one of the 3 review_at keys -- NOT a bare `.limit(N)` over "any non-null metadata"
+    // row, which on a table with thousands of SDs (5000+ live) can silently truncate before an
+    // actual candidate row, producing false negatives regardless of N. SECURITY Q1: `mode` on
+    // the result surfaces the currently-active HOLD_STATE_CONTRACT_MODE on every sweep line, so
+    // observe-mode is never mistaken for enforce-mode by a reader of the gauge output.
+    'hold-state-overdue': async () => {
+      const { data, error } = await supabase
+        .from('strategic_directives_v2')
+        .select('sd_key, status, metadata')
+        .or('metadata->>park_review_at.not.is.null,metadata->>exec_boundary_hold_review_at.not.is.null,metadata->>min_tier_rank_review_at.not.is.null')
+        .limit(5000);
+      if (error) throw new Error('hold-state-overdue query failed: ' + error.message);
+      return { ...findOverdueHolds(data, Date.now()), mode: readHoldStateMode() };
+    },
     // Filesystem detector (stale-tree precedent): parses REVISIT-IF tags from live
     // source, so moved tags stay visible; tests/fixtures excluded by default so the
     // planted miss-direction fixture never trips the live gauge.
