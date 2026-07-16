@@ -1,8 +1,8 @@
-<!-- file_content_hash: dea4ce0f131f3b89 -->
+<!-- file_content_hash: 6ce724ce53b5da95 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-07-12 9:08:47 AM
+**Generated**: 2026-07-16 1:13:36 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -2147,6 +2147,6 @@ Verifies version consistency between CLAUDE*.md files and database. Use --fix to
 
 ---
 
-*Generated from database: 2026-07-12*
+*Generated from database: 2026-07-16*
 *Protocol Version: 4.4.1*
 *Load when: User mentions EXEC, implementation, coding, or testing*

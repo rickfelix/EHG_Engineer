@@ -1,4 +1,4 @@
-<!-- file_content_hash: ea771eb4f0f54c85 -->
+<!-- file_content_hash: 11fa68d8a9c45992 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE.md - LEO Protocol Orchestrator
 
@@ -46,7 +46,7 @@ Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain
 3. **Database-first** - No markdown files as source of truth
 > Why: Markdown files drift silently and are never validated. The DB enforces schema constraints, tracks state transitions, and is the only source future sessions can query reliably to resume work.
 4. **USE PROCESS SCRIPTS** - ⚠️ Never bypass add-prd-to-database.js or handoff.js outside a documented emergency path ⚠️
-> Why: `handoff.js` and `add-prd-to-database.js` run the full gate pipeline and write canonical phase state to the DB. Bypassing them skips validation, leaves DB state inconsistent, and produces false-pass handoffs that corrupt downstream phases. Documented exceptions exist (`--bypass-validation --bypass-reason` on handoff.js, rate-limited to 3/SD and 10/day; `EMERGENCY_PUSH` for push enforcement) — use them with a ticket reference in the reason field.
+> Why: `handoff.js` and `add-prd-to-database.js` run the full gate pipeline and write canonical phase state to the DB. Bypassing them skips validation, leaves DB state inconsistent, and produces false-pass handoffs that corrupt downstream phases. Documented exceptions exist (`--bypass-validation --bypass-reason` on handoff.js — audit-logged with a 2000/day global cap and NO per-SD cap on the generic path (the oft-cited 3/SD + 10/day quota is the grill-convergence gate's purpose-built counter only — corrected per build-vs-run deep-dive D9, 2026-07-12); `EMERGENCY_PUSH` for push enforcement) — use them with a ticket reference in the reason field.
 5. **Small PRs** - ≤100 LOC target. Exceed only with documented justification (max 400 LOC) per tiered PR Size Guidelines.
 > Why: Large PRs fail review at higher rates, introduce more merge conflicts, and are harder to roll back. Retrospective analysis shows ≤100 LOC correlates with faster cycle time and fewer post-merge defects.
 6. **Priority-first** - Use `npm run prio:top3` to justify work
@@ -199,4 +199,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-07-12 9:08:47 AM | Protocol: LEO 4.4.1 | Source: Database*
+*Generated: 2026-07-16 1:13:36 PM | Protocol: LEO 4.4.1 | Source: Database*

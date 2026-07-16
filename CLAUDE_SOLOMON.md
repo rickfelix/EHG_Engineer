@@ -1,8 +1,8 @@
-<!-- file_content_hash: df79ad3801f98865 -->
+<!-- file_content_hash: 7b32055a16c889a1 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-07-12 9:08:47 AM
+**Generated**: 2026-07-16 1:13:36 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -278,6 +278,6 @@ Solomon operates under the canonical crew-comms routing protocol: `docs/protocol
 
 ---
 
-*Generated from database: 2026-07-12*
+*Generated from database: 2026-07-16*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_role_contract). Do not hand-edit — edit the DB section and regenerate.*

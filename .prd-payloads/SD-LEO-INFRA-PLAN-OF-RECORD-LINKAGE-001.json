@@ -1,0 +1,110 @@
+{
+  "executive_summary": "Wires the LEO Roadmap (strategic_roadmaps active row 3aa2f3e2, hierarchy strategic_roadmaps -> roadmap_waves -> roadmap_wave_items) as the live, self-maintaining single plan of record, per chairman ratification 2026-07-16. Adam already did the one-time data consolidation (ratify + retire legacy EVA-Intake waves + verified backfill + plan-keeper redirect). This SD wires the CODE linkage so the roadmap stays true going forward: (FR-1) stamp roadmap_wave_items.promoted_to_sd_key/done at SD-COMPLETION time (today only creation/promotion-time paths stamp it -- confirmed via direct code read of lib/sd-creation/source-adapters/roadmap-item.js, lib/integrations/roadmap-manager.js, lib/sourcing-engine/refill-auto-promote.js -- none fire at LEAD-FINAL-APPROVAL); (FR-2) redirect the chairman's PLAN CHECK status-report convention (CLAUDE_ADAM.md) to derive its four sections from roadmap_waves+roadmap_wave_items instead of the adam_task_ledger side-list; (FR-4) a comprehensive, done-state-VERIFIED backfill of the 418 currently-unstamped roadmap_wave_items rows (live count 2026-07-16, not the 741/no-count cited in early drafts). FR-3 (schedule the rung-progress rollup) is EXPLICITLY DROPPED -- confirmed via direct read of .github/workflows/wave-progress-refresher.yml that a live 6-hour cron already does this (shipped by SD-LEO-INFRA-ROADMAP-FOLD-SEAM-001) -- a 25% scope reduction per LEAD Q8.",
+  "business_context": "Chairman-directed governance consolidation (2026-07-16, recorded on SD-LEO-ORCH-ADAM-PLAN-KEEPER-001 metadata.one_plan_of_record_consolidation_proposal). CONST-002 split: Adam proposed and did the reversible data-maintenance half; this SD is the fleet-built code half. Without FR-1, every SD that completes via a path other than leo-create-sd --from-roadmap-item leaves its roadmap item permanently unstamped, so the roadmap silently drifts stale again -- exactly the failure mode a 2026-07-11 plan-gap audit already found once (strategic_roadmaps sat un-refreshed for a month). Without FR-2, the chairman's canonical status format keeps reading a side-list (adam_task_ledger) that is NOT the ratified plan of record, so 'what's next/committing' can diverge from the roadmap the chairman just declared authoritative. FR-4 closes the accumulated backlog of 418 unstamped items in one done-state-verified pass, explicitly avoiding the dedup-miss failure mode from the 2026-07-16 burn (4 already-shipped SPINE satellites were re-promoted because a prior pass matched by title, not verified completion state).",
+  "technical_context": "LEAD-phase validation-agent (evidence id ab38988e-3636-4453-b641-f39f9d97f388) confirmed: (1) roadmap_wave_items has 759 rows total, 418 unstamped, 341 already stamped; schema includes promoted_to_sd_key (text, linking field), item_disposition, wave_id (FK to roadmap_waves), source_type/source_id. (2) adam_task_ledger (1,144 rows) is genuinely a separate table/grain (parent_id, tier, status, source_kind) with no shared key to roadmap_wave_items -- FR-2's redirect is real work, not a relabeling. (3) The LEAD-FINAL-APPROVAL completion path (scripts/modules/handoff/executors/lead-final-approval/index.js) already has a purpose-built, fail-safe post-completion hook pattern (hooks/ directory: rank-on-completion-hook.js, ship-review-findings-populator.js, qf-resolution-link-advisory.js, capability-scoring-hook.js) -- each hook is a small async function imported and invoked inside its own try/catch that only warns on failure, NEVER blocks completion. FR-1 will be a new hook in this exact pattern. (4) The 'PLAN CHECK' status format (CLAUDE_ADAM.md lines 260-278) is a documented CONVENTION, not backed by a single generator script today -- Adam manually assembles it. FR-2's deliverable is a new derivation module that computes the underlying facts (slipped/done/next/committing) from roadmap tables, which Adam (and any future automation) reads instead of eyeballing adam_task_ledger; the persisted forward-list anchor mechanism on adam_task_ledger (source_ref plan-check-forward-list-*) is left in place as-is (an orthogonal audit-log/delta-detection concern, not the plan-of-record concern this SD targets). (5) The stamping mechanics to reuse for FR-1 and FR-4 both come from lib/sourcing-engine/register-first.js's buildTwoWayStamp() (used today by lib/sd-creation/source-adapters/roadmap-item.js:129-139) -- returns {promoted_to_sd_key: sdKey} for roadmap_wave_items, with a hard idempotency guard against double-promotion.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Stamp roadmap_wave_items at SD-completion time via a new LEAD-FINAL-APPROVAL hook",
+      "description": "CORRECTED per DATABASE sub-agent evidence (id 325c9993-8a77-4c40-8637-0f9327b8446f): item_disposition's CHECK constraint only allows (pending, selected, deferred, brainstormed, promoted, dropped) -- 'done' is NOT a legal value, and 'promoted' is the correct CHECK-legal terminal marker. Also, source_type's CHECK constraint does not allow 'conversion_ledger' (0 live rows use it) -- the conversion_ledger.linked_sd_key matching path is a dead path and is DROPPED from scope; the only effective match is promoted_to_sd_key = sd.sd_key. Add scripts/modules/handoff/executors/lead-final-approval/hooks/roadmap-stamp-on-completion-hook.js, exporting runRoadmapStampOnCompletionHook(sd, supabase) mirroring rank-on-completion-hook.js's shape. Logic: given the completed sd (has sd_key), bulk-UPDATE (via .eq('promoted_to_sd_key', sd.sd_key) -- promoted_to_sd_key is NOT unique, up to ~4 wave items can map to one SD, so this must never use .single()) all matching roadmap_wave_items rows where item_disposition != 'promoted', setting item_disposition = 'promoted'. Live backlog check: 101 rows currently qualify (promoted_to_sd_key set to a completed SD, item_disposition still 'pending') -- confirms this is a real, non-trivial gap. Wire the hook into index.js immediately after the existing rank-on-completion-hook.js call, in its own try/catch that only console.warns on failure -- MUST NOT touch or gate the core pending_approval->completed transition in LeadFinalApprovalExecutor (per LEAD validation-agent's explicit condition).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A roadmap_wave_item already linked (via promoted_to_sd_key = sd.sd_key) to an SD that then completes via LEAD-FINAL-APPROVAL has item_disposition flipped to 'promoted' automatically, with no manual DB edit -- and ALL matching rows are updated (bulk, not just the first match)",
+        "An SD with NO linked roadmap_wave_item completes with zero errors and zero unintended writes (hook no-ops cleanly)",
+        "The hook's own failure (e.g. a transient DB error, or a write rejected by the item_disposition CHECK constraint) does not block, delay, or fail the SD's completion -- verified by a unit test that throws inside the hook and asserts the surrounding completion flow still succeeds"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Redirect the PLAN CHECK status derivation from adam_task_ledger to the roadmap tables",
+      "description": "CORRECTED per DATABASE sub-agent evidence (id 325c9993-8a77-4c40-8637-0f9327b8446f): 'stamped' (promoted_to_sd_key IS NOT NULL) is NOT the same as 'done' -- of the 341 currently-stamped roadmap_wave_items, 225 point to CANCELLED SDs and only 101 to completed ones. 'done' MUST be derived by JOINing to strategic_directives_v2 and checking status='completed' (vocab confirmed live: completed/cancelled are the two terminal statuses in use), never by treating promoted_to_sd_key IS NOT NULL alone as done. Add lib/roadmap/plan-check-status.js exporting computePlanCheckStatus(supabase, {windowHours=48}) that returns {slipped, done, next, committing}, each an array of roadmap-item-derived entries (title, wave, disposition, linked sd_key, relevant timestamp), computed from roadmap_waves + roadmap_wave_items JOINed against strategic_directives_v2.status: 'done' = items whose linked SD has status='completed' with completion_date within windowHours; 'slipped' = items on the previously-persisted forward list (still read from adam_task_ledger's plan-check-forward-list-* anchor, left in place per NC-PLAN scope discipline) that are still not done; 'next'/'committing' = open items (item_disposition NOT IN ('promoted','dropped')) in the current/next wave ordered by the wave's existing rank/priority fields. Use createSupabaseServiceClient('engineer') for the CLI (never anon/authenticated key -- RLS would silently return zero rows with no error under the wrong role). Add a thin CLI wrapper scripts/roadmap/plan-check-status.mjs (both a human-readable and --json mode, following the adam-pm-board.mjs CLI pattern) for manual invocation. Update CLAUDE_ADAM.md's PLAN CHECK section (the 'MECHANICS' paragraph only) to name lib/roadmap/plan-check-status.js as the canonical data source for sections 1/2/3/4's underlying facts, replacing the implicit adam_task_ledger browse -- the four-section FORMAT, tone, and window (48h) rules are UNCHANGED.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "computePlanCheckStatus() returns done/next/committing derived from a live JOIN against roadmap_waves+roadmap_wave_items+strategic_directives_v2.status, verified by a seeded-fixture unit test asserting a stamped-but-cancelled-SD item is correctly EXCLUDED from 'done'",
+        "Running scripts/roadmap/plan-check-status.mjs --json against the live DB (via the service-role client) succeeds and returns a well-formed object with all 4 keys present (empty arrays are valid, never missing keys)",
+        "CLAUDE_ADAM.md's PLAN CHECK section still describes the identical 4-section chairman-facing FORMAT/tone/window after the edit -- only the MECHANICS paragraph's data-source description changes"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Comprehensive done-state-verified backfill of the 418 currently-unstamped roadmap_wave_items",
+      "description": "CORRECTED per DATABASE sub-agent evidence (id 325c9993-8a77-4c40-8637-0f9327b8446f): the conversion_ledger-link matching path is DROPPED (source_type='conversion_ledger' is CHECK-illegal, 0 live rows use it). Add scripts/one-off/backfill-roadmap-completion-linkage.mjs (dry-run by default, --apply to persist, mirroring the existing scripts/one-off/backfill-roadmap-promote-titles.js idempotent pattern). For each of the currently-unstamped roadmap_wave_items rows (recompute the live count at run time -- do not hardcode 418), attempt to match it to a genuinely-COMPLETED SD via a direct sd_key/title correlation ONLY when corroborated by strategic_directives_v2.status='completed' AND a plausible completion_date/created_at ordering (never a bare title-string match alone -- this is the exact 2026-07-16 dedup-miss failure mode being explicitly avoided). Set item_disposition='promoted' (NOT 'done' -- CHECK-illegal) alongside promoted_to_sd_key on a verified match. Use a compare-and-set WHERE promoted_to_sd_key IS NULL on every write (guards against a same-tick race with the sourcing-engine refill-auto-promote cron, which also scans unstamped rows). Items with no verifiable completed-SD match are left untouched/open (e.g. the effort-distribution satellite, which is genuinely unbuilt). Script must use createSupabaseServiceClient('engineer') (never anon/authenticated -- RLS silently returns success with zero rows written under the wrong role) and print a per-item verdict (stamped / left-open / ambiguous-skipped) and a summary count, and must be safely re-runnable (already-stamped items are skipped, not re-written).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Dry-run mode (default) prints the full stamp/skip plan against the live DB with zero writes",
+        "--apply mode stamps ONLY items with a verified completed-SD match, setting item_disposition='promoted' (the CHECK-legal terminal value); a seeded-fixture unit test proves a bare title-match-only candidate (no corroborating completed SD) is correctly left unstamped",
+        "--apply mode's writes are read-after-write verified (rowCount > 0 checked, not just absence of an error) to catch a silent RLS zero-row-match",
+        "Re-running --apply a second time immediately after the first is a no-op (idempotent) -- verified by running it twice against the same fixture and asserting zero additional writes on the second pass"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "No schema change", "description": "roadmap_wave_items.promoted_to_sd_key and item_disposition already exist; this is read/write logic against existing columns only." },
+    { "id": "TR-2", "title": "Fail-safe completion hook", "description": "FR-1's hook must never block, throw past its own try/catch, or delay SD completion -- matches the existing hook pattern in scripts/modules/handoff/executors/lead-final-approval/hooks/." },
+    { "id": "TR-3", "title": "Done-state verification, never title-only matching", "description": "FR-4's backfill must require a genuinely-completed SD as corroboration, never a bare title string match, per the 2026-07-16 dedup-miss lesson." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "FR-1: SD with a linked-but-not-yet-done roadmap_wave_item completes via the hook", "type": "unit", "expected": "roadmap_wave_item flips to done/promoted state" },
+    { "id": "TS-2", "scenario": "FR-1: SD with no linked roadmap_wave_item completes", "type": "unit", "expected": "hook no-ops cleanly, zero writes, zero errors" },
+    { "id": "TS-3", "scenario": "FR-1: hook throws internally", "type": "unit", "expected": "surrounding SD completion still succeeds (fail-safe)" },
+    { "id": "TS-4", "scenario": "FR-2: computePlanCheckStatus against a seeded fixture with known wave/item state", "type": "unit", "expected": "done/next/committing arrays match the expected derivation from roadmap tables" },
+    { "id": "TS-5", "scenario": "FR-4: dry-run against a fixture with a mix of verified-completed-match, ambiguous, and genuinely-unbuilt items", "type": "unit", "expected": "only the verified-completed-match item is planned for stamping; ambiguous and unbuilt items are left open" },
+    { "id": "TS-6", "scenario": "FR-4: --apply run twice against the same fixture", "type": "unit", "expected": "second run is a no-op, zero additional writes" }
+  ],
+  "acceptance_criteria": [
+    "FR-1/FR-2/FR-4 all pass their respective acceptance criteria above",
+    "A chairman PLAN CHECK request can be backed by a direct, current read of the LEO Roadmap (roadmap_waves+roadmap_wave_items), not adam_task_ledger",
+    "No SD completion is ever blocked, delayed, or failed by the new roadmap-stamp hook",
+    "Zero false-done stamps introduced by the FR-4 backfill (spot-checked against fixture + a live dry-run report reviewed before any --apply)"
+  ],
+  "risks": [
+    {
+      "risk": "FR-1's hook touches the high-traffic LEAD-FINAL-APPROVAL completion path used by every SD in the fleet",
+      "mitigation": "Follow the existing fail-safe hook pattern exactly (own try/catch, warn-only on failure, fire-and-forget) and do not modify LeadFinalApprovalExecutor's core transition logic, per LEAD validation-agent's explicit condition.",
+      "severity": "medium"
+    },
+    {
+      "risk": "FR-4 backfill could re-introduce the 2026-07-16 dedup-miss failure mode (title-matching a roadmap item to an SD that didn't actually build it)",
+      "mitigation": "Require corroborating strategic_directives_v2.status='completed' evidence for every stamp, never a bare title match; leave ambiguous items open rather than guessing; dry-run reviewed before --apply.",
+      "severity": "medium"
+    },
+    {
+      "risk": "FR-2's redirected derivation logic could diverge from the chairman's exact expected PLAN CHECK tone/format if the underlying data shape differs from what Adam currently curates by hand",
+      "mitigation": "FR-2 only changes the FACTS-gathering mechanics (lib/roadmap/plan-check-status.js), not the four-section format/tone/window rules in CLAUDE_ADAM.md, which remain byte-identical.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": ["scripts/modules/handoff/executors/lead-final-approval/index.js (FR-1 hook)", "Adam / future automation reading lib/roadmap/plan-check-status.js for PLAN CHECK reports (FR-2)", "Operators running the one-off backfill script manually (FR-4)"],
+    "dependencies": ["roadmap_wave_items, roadmap_waves, strategic_roadmaps tables (existing, no schema change)", "lib/sourcing-engine/register-first.js buildTwoWayStamp (existing, reused)", "adam_task_ledger (existing, forward-list anchor left in place, read-only for FR-2)"],
+    "data_contracts": ["No schema change -- read/write against existing promoted_to_sd_key/item_disposition columns only"],
+    "runtime_config": ["None -- FR-3's cron (wave-progress-refresher.yml) is out of scope, already live"],
+    "observability_rollout": ["FR-1 hook logs its outcome (stamped/no-op/failed) to the existing completion-flow console output, matching sibling hooks", "FR-4's backfill script prints a per-item verdict + summary count for manual review before/after --apply"]
+  },
+  "system_architecture": {
+    "summary": "Three independent, additive changes: a new fail-safe completion hook (FR-1), a new pure derivation module + CLI wrapper (FR-2), and a new one-off backfill script (FR-4). No shared new infrastructure; each reuses existing patterns already proven in the codebase (hook shape, buildTwoWayStamp, one-off dry-run/--apply idempotent script pattern).",
+    "components": [
+      { "name": "scripts/modules/handoff/executors/lead-final-approval/hooks/roadmap-stamp-on-completion-hook.js", "change": "NEW -- FR-1 completion-time roadmap stamp" },
+      { "name": "lib/roadmap/plan-check-status.js", "change": "NEW -- FR-2 pure derivation of PLAN CHECK facts from roadmap tables" },
+      { "name": "scripts/roadmap/plan-check-status.mjs", "change": "NEW -- FR-2 CLI wrapper" },
+      { "name": "CLAUDE_ADAM.md", "change": "EDIT -- FR-2 MECHANICS paragraph only, redirecting data source" },
+      { "name": "scripts/one-off/backfill-roadmap-completion-linkage.mjs", "change": "NEW -- FR-4 verified backfill, dry-run default" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build FR-1, FR-2, FR-4 independently (no ordering dependency between them); each ships with unit tests using seeded fixtures, not live data.",
+    "steps": [
+      "FR-1: new hook + wiring into lead-final-approval/index.js + unit tests (linked-item flip, no-op, fail-safe)",
+      "FR-2: new derivation module + CLI wrapper + CLAUDE_ADAM.md mechanics edit + unit tests against a seeded fixture",
+      "FR-4: new one-off backfill script (dry-run + --apply) + unit tests (verified-match stamps, ambiguous/unbuilt left open, idempotent re-run)",
+      "PR + review + ship"
+    ]
+  },
+  "dependencies": [
+    "SD-LEO-INFRA-SOURCING-ENGINE-REGISTER-FIRST-001 (completed) -- ships buildTwoWayStamp, reused by FR-1 and FR-4",
+    "SD-LEO-ORCH-ADAM-PLAN-KEEPER-001 (completed) -- did the data-consolidation half this SD's code half depends on",
+    "SD-LEO-INFRA-ROADMAP-FOLD-SEAM-001 (completed) -- already shipped the wave-progress cron; FR-3 explicitly dropped as a result"
+  ],
+  "activation_test_id": "tests/unit/roadmap/plan-of-record-linkage.test.js",
+  "metadata": { "sd_key": "SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001" }
+}
