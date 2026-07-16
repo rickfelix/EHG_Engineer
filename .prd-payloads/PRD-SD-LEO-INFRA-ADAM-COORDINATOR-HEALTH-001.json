@@ -1,0 +1,152 @@
+{
+  "executive_summary": "Adam's coordinator oversight today is triggered — he audits the coordinator only when something looks off or the chairman asks, and has already caught real defects that way (a masked-error dispatch-rank query under-counting claimable work; a legitimate-vs-stale fence audit). This PRD delivers a standing, cadence-run probe (scripts/adam-coordinator-health.mjs) that computes three coordinator-health KPIs — worker utilization, plan-adherence, and fail-loud integrity — every cycle, persists readings for trend/drift detection, and emits a propose-only advisory (never auto-dispatch, per CONST-002) on a breach. It reuses the existing lib/fleet/genuine-worker.mjs SSOT predicates for KPI-1, the just-shipped lib/roadmap/wave-linkage-coverage.js for KPI-2 (avoiding a parallel gauge-vs-gauge divergence), and lib/governance/gauge-registry.js conventions for KPI-3 and persistence, then arms as one new entry in scripts/adam-startup-check.mjs's ADAM_LOOPS array so oversight survives across sessions instead of depending on a human prompt.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Utilization KPI (has_claim vs idle vs live_workers)",
+      "description": "scripts/adam-coordinator-health.mjs computes KPI-1 by reusing lib/fleet/genuine-worker.mjs (liveFleetWorkers, everClaimed, isFleetWorker) and lib/fleet/session-predicates.mjs (isFixtureSession, isGenuineCountableWorker, isDispatchableFleetMember) — the same SSOT predicates fleet-dashboard.cjs and worker-checkin.cjs already use, so this probe never diverges from what workers themselves see. Live = heartbeat_at within 15 minutes. Exclude adam/solomon/coordinator roles via metadata.role / metadata.is_coordinator (mirroring worker-checkin.cjs:1232's own exclusion). Report {live_workers, claimed, idle, dispatchable_backlog_size}. Cross-repo caveat: a worker with a non-null sd_key whose SD's target_application is not EHG_Engineer (join session.sd_key -> strategic_directives_v2.target_application) shows commits_since_claim=0 in this repo's metrics and MUST be counted as claimed/active, never idle, purely because commits_since_claim=0 is not evidence of idleness for a cross-repo claim.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A seeded cross-repo claimant (has a claimed sd_key whose SD.target_application != EHG_Engineer, commits_since_claim=0) is classified as claimed/active, not idle",
+        "live_workers/claimed/idle counts match what fleet-dashboard.cjs would report for the same claude_sessions snapshot (no independent re-derivation of the predicates)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Plan-adherence KPI via wave-linkage-coverage reuse",
+      "description": "KPI-2 calls lib/roadmap/wave-linkage-coverage.js::computeWaveLinkageCoverage(supabase) rather than writing a parallel coverage computation — reuse avoids the gauge-vs-gauge SSOT divergence documented in the WAVE_LINKAGE_STARVATION institutional memory ('never broaden exclusions to silence it; never re-derive'). The function already returns coverage:null when there are zero claimable leaves (vacuous — not starvation), which IS this SD's required 'unmeasurable until linkage' semantics; the probe reports the coverage value as-is (including null) rather than translating null into 0% or 'all off-plan'. The probe additionally narrows/annotates the report to the in-flight subset (in_progress/active/pending_approval SDs) the SD text calls out, by filtering the function's starved/unlinkedKeys output against those statuses, WITHOUT re-implementing the linkage-detection logic itself.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "When computeWaveLinkageCoverage returns coverage=null (no claimable leaves), the probe's KPI-2 output is 'unmeasurable_until_linkage', never a numeric 0% or an 'off-plan' verdict",
+        "When coverage is a real percentage, the probe reports it directly (not re-derived) and lists starved/unlinkedKeys filtered to in-flight SDs only"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Fail-loud integrity guard",
+      "description": "KPI-3 independently recomputes the coordinator's self-reported dispatch/claimable-work counts (the same counts the coordinator surfaces to itself and to the chairman-facing surface) and diffs them against this probe's own independently-computed counts from FR-1/FR-2's underlying queries. Any query failure in the recomputation path MUST throw/log loudly (console.error + a non-zero divergence flag) rather than null-coalesce to 0 or 'no work' — this directly targets the class of bug documented in scripts/coordinator-backlog-rank.mjs's masked dispatch_rank column error. A mismatch beyond a defined tolerance (0 for count fields) sets integrity_ok=false and includes the specific field(s) that diverged.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A simulated query error in the recomputation path produces an explicit thrown/logged failure with integrity_ok=false, never a silently-coalesced zero result",
+        "A deliberately seeded mismatch between self-reported and recomputed counts is flagged with the specific diverging field(s) named in the output"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Persisted readings for trend + drift detection",
+      "description": "Each probe run persists a reading (timestamp, all 3 KPI values, integrity_ok, raw counts) via lib/governance/gauge-registry.js conventions (ownerRole routing, consistent with the Invariant Gauges Framework other coordinator-health-adjacent gauges already use) so trend and drift are queryable across cycles without re-running historical probes. If gauge-registry.js requires a new table for this reading shape, the migration MUST enable RLS + a service_role policy in the SAME migration file (SPINE-001-B recurrence guard) — no follow-up migration for RLS.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Two consecutive probe runs produce two distinct, queryable persisted rows with a monotonically increasing timestamp",
+        "If a new table is created, its migration file contains both the CREATE TABLE and an ENABLE ROW LEVEL SECURITY + service_role policy statement"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Propose-only drift escalation",
+      "description": "On a KPI breach (idle workers coexisting with a non-empty dispatchable backlog; integrity_ok=false; sustained off-plan dispatch once KPI-2 coverage is non-null and below a threshold), the probe calls scripts/adam-advisory.cjs's send/buildAdvisoryPayload() to insert a session_coordination advisory row (message_type=INFO, payload.kind='adam_advisory') addressed to the coordinator and the chairman-facing surface — mirroring the exact mechanism other Adam loops (offer-help, belt-countdown) already use in adam-startup-check.mjs. This path MUST NEVER call claim_sd, sd-start.js, or any dispatch-triggering function (CONST-002 — propose-only).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A simulated KPI breach produces exactly one adam_advisory session_coordination row and zero calls to any claim/dispatch function",
+        "The advisory payload names which KPI breached and includes the specific numbers that triggered it"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Idempotent arming as an Adam cron loop",
+      "description": "Add one new entry to the ADAM_LOOPS array in scripts/adam-startup-check.mjs ({key, label, script, cron, prompt}) for the coordinator-health probe, following the exact idempotent-arm pattern the existing loops use: adam-startup-check.mjs is re-run with the currently-armed CronList keys passed via --armed, and loopStatus() marks this loop as already-armed (skipping a duplicate CronCreate) if its key/prompt/script basename is already present in that set.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Running adam-startup-check.mjs twice in a row with the same --armed set produces exactly one CronCreate line for the health-loop entry on the first run and zero on the second",
+        "The new loop entry's cron cadence and prompt are rendered correctly by renderLoops()"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Reuse, don't re-derive",
+      "description": "KPI-1 must import lib/fleet/genuine-worker.mjs + lib/fleet/session-predicates.mjs; KPI-2 must import lib/roadmap/wave-linkage-coverage.js::computeWaveLinkageCoverage. No parallel re-implementation of either predicate set."
+    },
+    {
+      "id": "TR-2",
+      "title": "Single probe script, no schema-breaking changes",
+      "description": "scripts/adam-coordinator-health.mjs is net-new (does not exist today); it must not modify the shape or behavior of computeWaveLinkageCoverage, genuine-worker.mjs predicates, or the existing gauge-registry.js contract — additive only."
+    },
+    {
+      "id": "TR-3",
+      "title": "RLS-at-create for any new table",
+      "description": "If FR-4's persistence needs a new table, its CREATE TABLE migration includes ENABLE ROW LEVEL SECURITY and a service_role policy in the same file (SPINE-001-B guard)."
+    }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Cross-repo claimant not misclassified as idle", "type": "unit", "expected": "FR-1 acceptance criteria hold against a seeded claude_sessions fixture" },
+    { "id": "TS-2", "scenario": "Vacuous plan-adherence (no claimable leaves) reports unmeasurable, not off-plan", "type": "unit", "expected": "FR-2 acceptance criteria hold when computeWaveLinkageCoverage returns coverage=null" },
+    { "id": "TS-3", "scenario": "Simulated silent-failing gauge query is caught", "type": "unit", "expected": "FR-3 acceptance criteria hold: explicit failure, no null-coalesce to 0" },
+    { "id": "TS-4", "scenario": "KPI breach emits exactly one propose-only advisory, never a dispatch call", "type": "unit", "expected": "FR-5 acceptance criteria hold" },
+    { "id": "TS-5", "scenario": "Re-running adam-startup-check.mjs with the loop already armed does not duplicate CronCreate", "type": "unit", "expected": "FR-6 acceptance criteria hold" }
+  ],
+  "risks": [
+    { "risk": "Re-deriving plan-adherence instead of reusing computeWaveLinkageCoverage would create a second, divergent gauge for the same signal", "mitigation": "TR-1 mandates direct reuse; code review checks for a parallel implementation", "severity": "medium" },
+    { "risk": "New persistence table ships without RLS, recurring the SPINE-001-B class of defect", "mitigation": "TR-3 + FR-4 acceptance criterion requires RLS in the same migration file", "severity": "medium" },
+    { "risk": "Drift-escalation accidentally calls a dispatch-triggering function, violating CONST-002 propose-only doctrine", "mitigation": "FR-5 acceptance criterion explicitly asserts zero claim/dispatch calls on a simulated breach", "severity": "high" }
+  ],
+  "acceptance_criteria": [
+    "The probe runs on a cadence and writes a persisted reading with all 3 KPIs",
+    "Utilization does NOT mis-classify a cross-repo claimant as idle",
+    "Plan-adherence reports 'unmeasurable until linkage' (not 'off-plan') when stamps/claimable-leaves are absent; reports real coverage once available",
+    "A simulated silent-failing gauge query is caught by the fail-loud guard",
+    "A KPI breach emits a propose-only escalation (never auto-dispatches)"
+  ],
+  "strategic_objectives": [
+    "Convert Adam's ad-hoc coordinator audits into a durable, cadence-run, cross-session oversight loop",
+    "Avoid gauge-vs-gauge SSOT divergence by reusing the just-shipped wave-linkage-coverage and existing genuine-worker predicates rather than re-deriving them"
+  ],
+  "key_changes": [
+    { "change": "New scripts/adam-coordinator-health.mjs probe computing 3 KPIs and persisting readings", "type": "feature" },
+    { "change": "New ADAM_LOOPS entry in scripts/adam-startup-check.mjs arming the probe idempotently", "type": "feature" },
+    { "change": "Propose-only advisory wiring via scripts/adam-advisory.cjs on KPI breach", "type": "feature" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["Adam (runs the cron loop)", "Coordinator (receives propose-only advisories)", "Chairman-facing surface (sees escalations)"],
+    "dependencies": ["lib/fleet/genuine-worker.mjs", "lib/fleet/session-predicates.mjs", "lib/roadmap/wave-linkage-coverage.js", "lib/governance/gauge-registry.js", "scripts/adam-advisory.cjs", "scripts/adam-startup-check.mjs (ADAM_LOOPS)", "SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001 (completed dependency)"],
+    "data_contracts": ["New persisted-reading rows via gauge-registry.js conventions (RLS-at-create if a new table)", "session_coordination advisory rows (message_type=INFO, payload.kind=adam_advisory) — existing contract, no schema change"],
+    "runtime_config": ["Cron cadence for the new ADAM_LOOPS entry (value set at implementation time, documented in the loop's spec)"],
+    "observability_rollout": ["Persisted readings are queryable for trend/drift across cycles", "Advisory rows are visible via existing coordinator/chairman inbox surfaces"]
+  },
+  "system_architecture": {
+    "summary": "A single new probe script composes three existing SSOT surfaces (genuine-worker predicates, wave-linkage-coverage, gauge-registry conventions) into one persisted reading, escalating via the existing adam-advisory mechanism, armed via the existing ADAM_LOOPS array.",
+    "components": [
+      { "name": "scripts/adam-coordinator-health.mjs", "change": "NEW" },
+      { "name": "scripts/adam-startup-check.mjs", "change": "MODIFIED (append one ADAM_LOOPS entry)" },
+      { "name": "lib/fleet/genuine-worker.mjs", "change": "REUSED (unmodified)" },
+      { "name": "lib/roadmap/wave-linkage-coverage.js", "change": "REUSED (unmodified)" },
+      { "name": "lib/governance/gauge-registry.js", "change": "REUSED, possibly extended for a new reading shape" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Compose existing SSOT predicates and coverage functions into one probe; persist via gauge-registry conventions; escalate via adam-advisory; arm via ADAM_LOOPS.",
+    "steps": [
+      "Write scripts/adam-coordinator-health.mjs computing KPI-1 (genuine-worker.mjs + session-predicates.mjs), KPI-2 (wave-linkage-coverage.js), KPI-3 (independent recompute + diff)",
+      "Wire persistence via gauge-registry.js conventions; add RLS-at-create migration if a new table is needed",
+      "Wire drift-escalation via adam-advisory.cjs's buildAdvisoryPayload/send on a KPI breach",
+      "Add one ADAM_LOOPS entry in adam-startup-check.mjs for the new cron loop",
+      "Write unit tests for all 5 acceptance-criteria scenarios (TS-1..TS-5)"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run node scripts/adam-coordinator-health.mjs --dry-run against the live DB", "expected_outcome": "Script prints all 3 KPI readings (utilization %, plan-adherence coverage or unmeasurable-until-linkage, fail-loud diff) and exits 0 with no unhandled errors" },
+    { "step_number": 2, "instruction": "Seed a claude_sessions row with a claimed sd_key whose SD.target_application != EHG_Engineer and commits_since_claim=0, then run the probe", "expected_outcome": "Utilization KPI counts this session as active/claimed, NOT idle -- the cross-repo caveat is honored" },
+    { "step_number": 3, "instruction": "Run the probe against current DB state where SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001's stamping mechanism is live", "expected_outcome": "Plan-adherence KPI reports computeWaveLinkageCoverage's real coverage value (or unmeasurable-until-linkage if coverage is null), not a hardcoded off-plan verdict" },
+    { "step_number": 4, "instruction": "Simulate a silent-failing gauge query (force the coordinator self-report count to diverge from the independently recomputed count) and run the probe", "expected_outcome": "The fail-loud integrity guard flags the divergence explicitly rather than treating the mismatch as zero/no-work" }
+  ],
+  "metadata": {
+    "sourced_by": "adam",
+    "chairman_mandate_date": "2026-07-16",
+    "depends_on_sd": "SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001",
+    "sub_agent_findings": {
+      "validation": "READY verdict; reuse computeWaveLinkageCoverage for KPI-2 to avoid gauge-vs-gauge SSOT divergence; role-exclusion via metadata.is_coordinator/fleet_identity, not a literal role column; cross-repo detection via session.sd_key -> SD.target_application join, not a target_repos column",
+      "explore": "adam-startup-check.mjs ADAM_LOOPS is the idempotent arming point; lib/fleet/genuine-worker.mjs + session-predicates.mjs are the KPI-1 SSOT; lib/roadmap/wave-linkage-coverage.js is the KPI-2 compute surface; gauge-registry.js/gauge-runner.mjs are the natural persistence home; adam-advisory.cjs is the propose-only escalation mechanism"
+    }
+  }
+}
