@@ -73,17 +73,17 @@ describe('DECISION_TYPES', () => {
 });
 
 describe('isFinalStage', () => {
-  it('should return true for stage 25', () => {
-    expect(isFinalStage(25)).toBe(true);
+  it('should return true for stage 26', () => {
+    expect(isFinalStage(26)).toBe(true);
   });
 
-  it('should return true for stage > 25', () => {
-    expect(isFinalStage(26)).toBe(true);
+  it('should return true for stage > 26', () => {
+    expect(isFinalStage(27)).toBe(true);
     expect(isFinalStage(100)).toBe(true);
   });
 
-  it('should return false for stage < 25', () => {
-    expect(isFinalStage(24)).toBe(false);
+  it('should return false for stage < 26', () => {
+    expect(isFinalStage(25)).toBe(false);
     expect(isFinalStage(1)).toBe(false);
   });
 
@@ -313,8 +313,8 @@ describe('decision options', () => {
 });
 
 describe('MAX_LIFECYCLE_STAGE', () => {
-  it('should be 25', () => {
-    expect(MAX_LIFECYCLE_STAGE).toBe(25);
+  it('should be 26', () => {
+    expect(MAX_LIFECYCLE_STAGE).toBe(26);
   });
 });
 
