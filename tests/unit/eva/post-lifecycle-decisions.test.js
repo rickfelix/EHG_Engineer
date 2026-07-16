@@ -29,6 +29,17 @@ vi.mock('../../../lib/eva/lifecycle-sd-bridge.js', () => ({
   convertExpansionToSD: vi.fn().mockResolvedValue({ created: true, sdKey: 'SD-TEST-EXPAND-001', errors: [] }),
 }));
 
+vi.mock('../../../lib/crm/spine-consumption-client.js', () => ({
+  routeException: vi.fn().mockResolvedValue({ routed_to: 'venture-ceo-tier', exception_type: 'NO_CAPABILITY_DEPOSIT', source: 'stub' }),
+}));
+
+vi.mock('../../../lib/governance/emit-feedback.js', () => ({
+  emitFeedback: vi.fn().mockResolvedValue({ id: 'feedback-id', deduped: false }),
+}));
+
+import { routeException } from '../../../lib/crm/spine-consumption-client.js';
+import { emitFeedback } from '../../../lib/governance/emit-feedback.js';
+
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
 function makeMockSupabase(overrides = {}) {
@@ -227,6 +238,64 @@ describe('handlePostLifecycleDecision', () => {
     expect(archiveCall).toBeDefined();
     expect(archiveCall[0]).not.toHaveProperty('completed_at');
     expect(archiveCall[0]).toHaveProperty('updated_at');
+  });
+});
+
+describe('no-deposit capability exception (SD-LEO-GEN-SATELLITE-CAPABILITY-EXTRACTION-001, FR-2, TS-3/TS-4/TS-5)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('routes + durably persists an exception when extractedCapabilities is absent (TS-3)', async () => {
+    const supabase = makeMockSupabase();
+    const result = await handlePostLifecycleDecision(
+      { ventureId: 'venture-1', ventureContext, stageOutput, artifacts: [], decision: { type: 'continue' } },
+      { supabase, logger: silentLogger },
+    );
+
+    expect(result.handled).toBe(true);
+    expect(routeException).toHaveBeenCalledTimes(1);
+    expect(routeException).toHaveBeenCalledWith('NO_CAPABILITY_DEPOSIT', expect.objectContaining({ ventureId: 'venture-1', decisionType: 'continue' }));
+    expect(emitFeedback).toHaveBeenCalledTimes(1);
+    expect(emitFeedback).toHaveBeenCalledWith(expect.objectContaining({ category: 'capability_no_deposit' }));
+  });
+
+  it('routes + persists an exception when extractedCapabilities is an empty array (TS-3)', async () => {
+    const supabase = makeMockSupabase();
+    await handlePostLifecycleDecision(
+      { ventureId: 'venture-1', ventureContext, stageOutput, artifacts: [], decision: { type: 'sunset', extractedCapabilities: [] } },
+      { supabase, logger: silentLogger },
+    );
+
+    expect(routeException).toHaveBeenCalledTimes(1);
+    expect(emitFeedback).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT route an exception when extractedCapabilities is non-empty (TS-4, unchanged pre-existing behavior)', async () => {
+    const supabase = makeMockSupabase();
+    const result = await handlePostLifecycleDecision(
+      {
+        ventureId: 'venture-1', ventureContext, stageOutput, artifacts: [],
+        decision: { type: 'continue', extractedCapabilities: [{ name: 'cap-1', capabilityType: 'integration' }] },
+      },
+      { supabase, logger: silentLogger },
+    );
+
+    expect(result.handled).toBe(true);
+    expect(routeException).not.toHaveBeenCalled();
+    expect(emitFeedback).not.toHaveBeenCalled();
+  });
+
+  it('fails open: a routeException/emitFeedback error is caught and logged, never blocks the decision (TS-5)', async () => {
+    routeException.mockRejectedValueOnce(new Error('spine routing boom'));
+    const supabase = makeMockSupabase();
+    const result = await handlePostLifecycleDecision(
+      { ventureId: 'venture-1', ventureContext, stageOutput, artifacts: [], decision: { type: 'continue' } },
+      { supabase, logger: silentLogger },
+    );
+
+    expect(result.handled).toBe(true);
+    expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('No-deposit exception routing failed'));
   });
 });
 
