@@ -93,13 +93,19 @@ async function alreadyRedispatched(supabase, sdKey, { nowMs }) {
   return (data || []).some((r) => r && r.target_sd === sdKey && r.payload && r.payload.kind === 'resume');
 }
 
-/** Release an orphaned claim. PRESERVES current_phase + progress (resume, not restart). */
+/** Release an orphaned claim. PRESERVES current_phase + progress (resume, not restart).
+ * Routes through the unified dual-surface helper so the orphaned owner's session-side
+ * surface (claude_sessions.sd_key + worktree_*) is co-cleared, not just the SD-side —
+ * otherwise the belt keeps seeing the SD as CLAIMED (SD-LEO-FIX-CLAIM-RELEASE-DESYNC-001).
+ * Holder-pinned CAS also prevents clobbering a peer that legitimately took over. */
 async function releaseClaim(supabase, sd) {
-  const { error } = await supabase
-    .from('strategic_directives_v2')
-    .update({ claiming_session_id: null, is_working_on: false })
-    .eq('id', sd.id);
-  if (error) throw new Error(`releaseClaim failed for ${sd.sd_key}: ${error.message}`);
+  const { releaseClaimBothSurfaces } = await import('../lib/claim/release-claim-both-surfaces.mjs');
+  const r = await releaseClaimBothSurfaces(supabase, {
+    sdKey: sd.sd_key,
+    holderSessionId: sd.claiming_session_id,
+    reason: 'cold_recovery_orphan',
+  });
+  if (r.error) throw new Error(`releaseClaim failed for ${sd.sd_key}: ${r.error}`);
 }
 
 /** Broadcast a RESUME re-dispatch (no live worker to target on a cold start → sentinel). */

@@ -63,11 +63,20 @@ export async function claimOrchestratorForRollup(supabase, { sdKey, sessionId, r
   }
 
   if (release) {
-    const { error } = await supabase
-      .from('strategic_directives_v2')
-      .update({ is_working_on: false, claiming_session_id: null })
-      .eq('id', sd.id);
-    if (error) return { ok: false, action: 'error', reason: `release failed: ${error.message}` };
+    // Route through the unified dual-surface helper so the holder's session-side
+    // surface (claude_sessions.sd_key + worktree_*) is co-cleared, not just the
+    // SD-side — otherwise the belt keeps seeing the parent as CLAIMED
+    // (SD-LEO-FIX-CLAIM-RELEASE-DESYNC-001). sessionStatus:'idle' = unclaim the
+    // parent without retiring the holder session; holder-pinned CAS avoids
+    // clobbering a peer that re-claimed between lookup and write.
+    const { releaseClaimBothSurfaces } = await import('../lib/claim/release-claim-both-surfaces.mjs');
+    const r = await releaseClaimBothSurfaces(supabase, {
+      sdKey: sd.sd_key,
+      holderSessionId: sd.claiming_session_id,
+      reason: 'orchestrator_rollup_release',
+      sessionStatus: 'idle',
+    });
+    if (r.error) return { ok: false, action: 'error', reason: `release failed: ${r.error}` };
     return { ok: true, action: 'released', sdKey: sd.sd_key };
   }
 

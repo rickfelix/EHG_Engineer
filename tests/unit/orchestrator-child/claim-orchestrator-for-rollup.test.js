@@ -14,27 +14,32 @@ function makeMock({ sd = null, children = [], session = null } = {}) {
   const client = {
     from(table) {
       return {
+        // SD-LEO-FIX-CLAIM-RELEASE-DESYNC-001: the --release branch now co-clears BOTH
+        // surfaces via releaseClaimBothSurfaces, whose holder-pinned CAS + readback chain
+        // TWO .eq() calls. select/update builders must therefore accept chained .eq().
         select() {
-          return {
-            eq(col) {
-              return {
-                async maybeSingle() {
-                  if (table === 'strategic_directives_v2') return { data: sd, error: null };
-                  if (table === 'claude_sessions') return { data: session, error: null };
-                  return { data: null, error: null };
-                },
-                async limit() {
-                  if (table === 'strategic_directives_v2' && col === 'parent_sd_id') return { data: children, error: null };
-                  return { data: [], error: null };
-                },
-              };
+          const chain = {
+            _col: null,
+            eq(col) { chain._col = chain._col ?? col; return chain; },
+            async maybeSingle() {
+              if (table === 'strategic_directives_v2') return { data: sd, error: null };
+              if (table === 'claude_sessions') return { data: session, error: null };
+              return { data: null, error: null };
+            },
+            async limit() {
+              if (table === 'strategic_directives_v2' && chain._col === 'parent_sd_id') return { data: children, error: null };
+              return { data: [], error: null };
             },
           };
+          return chain;
         },
         update(payload) {
-          return {
-            async eq(col, val) { captured.updates.push({ table, payload, col, val }); return { error: null }; },
+          const filters = {};
+          const chain = {
+            eq(col, val) { filters[col] = val; return chain; },
+            then(res) { captured.updates.push({ table, payload, filters }); res({ error: null }); },
           };
+          return chain;
         },
       };
     },
@@ -53,11 +58,18 @@ describe('claimOrchestratorForRollup (FR-3 / AC-5)', () => {
     expect(captured.updates[0].payload).toEqual({ is_working_on: true, claiming_session_id: 'sess-me' });
   });
 
-  it('releases the parent (--release clears both columns)', async () => {
-    const { client, captured } = makeMock({ sd: { ...ORCH, is_working_on: true, claiming_session_id: 'sess-me' } });
+  it('releases the parent (--release clears BOTH surfaces)', async () => {
+    const { client, captured } = makeMock({
+      sd: { ...ORCH, is_working_on: true, claiming_session_id: 'sess-me' },
+      session: { session_id: 'sess-me', sd_key: 'SD-ORCH-001', worktree_path: '/w', worktree_branch: 'b' },
+    });
     const r = await claimOrchestratorForRollup(client, { sdKey: 'SD-ORCH-001', sessionId: 'sess-me', release: true });
     expect(r).toMatchObject({ ok: true, action: 'released' });
-    expect(captured.updates[0].payload).toEqual({ is_working_on: false, claiming_session_id: null });
+    // Dual-surface: SD-side claim fields cleared AND the holder's session-side surface co-cleared.
+    const sdU = captured.updates.find((u) => u.table === 'strategic_directives_v2');
+    const sessU = captured.updates.find((u) => u.table === 'claude_sessions');
+    expect(sdU.payload).toEqual({ claiming_session_id: null, active_session_id: null, is_working_on: false });
+    expect(sessU.payload).toMatchObject({ sd_key: null, worktree_path: null, worktree_branch: null });
   });
 
   it('refuses when the parent is claimed by a DIFFERENT live session (recent heartbeat)', async () => {
