@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../../');
 
 describe('policy registry (TS-1)', () => {
-  it('registers all 10 unbounded tables with the VERIFIED timestamp columns', () => {
+  it('registers all 11 unbounded tables with the VERIFIED timestamp columns', () => {
     const m = Object.fromEntries(RETENTION_POLICIES.map((p) => [p.table, p.timestampColumn]));
     expect(m).toEqual({
       workflow_trace_log: 'created_at',
@@ -30,6 +30,8 @@ describe('policy registry (TS-1)', () => {
       sub_agent_execution_results: 'created_at',
       // SD-LEO-FEAT-TWO-WAY-CHAIRMAN-001: sms_inbound_log retention coverage
       sms_inbound_log: 'created_at',
+      // SD-LEO-INFRA-COST-TOKEN-GOVERNANCE-001: cost_governor_log retention coverage
+      cost_governor_log: 'created_at',
       // SD-LEO-INFRA-HOLD-STATE-CONTRACT-001: hold_state_contract_violations retention coverage
       hold_state_contract_violations: 'created_at',
     });
