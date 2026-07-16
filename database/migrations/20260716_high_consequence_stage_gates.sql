@@ -28,11 +28,18 @@ ALTER TABLE venture_stages
 COMMENT ON COLUMN venture_stages.is_high_consequence IS
 'Chairman-configurable (FR-1, SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001): when true, chairman stage-gate decisions minted for this stage (createOrReusePendingDecision) are created with chairman_decisions.blocking=true, and BOTH venture-advancement chokepoints (fn_advance_venture_stage, lib/eva/stage-execution-worker.js _advanceStage) hold advancement on a pending blocking=true decision. Independent of gate_type/review_mode -- a stage can be high-consequence regardless of its existing gate classification (e.g. gate_type=''none'' stages like a first live-money/launch stage that has no gate today).';
 
+-- INCIDENT-TIME DISABLE COMMAND (security-agent post-implementation finding F8):
+-- leo_feature_flags has a CHECK constraint chk_flag_lifecycle_enabled_consistency
+-- (is_enabled = (lifecycle_state = 'enabled')), so a bare
+-- `UPDATE leo_feature_flags SET is_enabled=false WHERE flag_key='LEO_HIGH_CONSEQUENCE_GATES_ENABLED'`
+-- will FAIL the CHECK constraint. The correct disable command is:
+--   UPDATE leo_feature_flags SET is_enabled=false, lifecycle_state='disabled'
+--   WHERE flag_key='LEO_HIGH_CONSEQUENCE_GATES_ENABLED';
 INSERT INTO leo_feature_flags (flag_key, display_name, description, is_enabled, gates_what)
 VALUES (
   'LEO_HIGH_CONSEQUENCE_GATES_ENABLED',
   'High-Consequence Stage-Gate Blocking',
-  'Kill-switch for the high-consequence blocking-gate HOLD check added by SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001. Default ON (row absent, or is_enabled=true, means the check is active). Set is_enabled=false to disable the check fleet-wide without a code deploy if a bug is ever found in the EXISTS clause (security-agent finding, evidence 7b374eff -- mitigates the fail-closed blast radius of a mis-scoped check holding every venture).',
+  'Kill-switch for the high-consequence blocking-gate HOLD check added by SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001. Default ON (row absent, or is_enabled=true, means the check is active). To disable the check fleet-wide without a code deploy (e.g. a bug is found in the EXISTS clause -- security-agent finding, evidence 7b374eff -- mitigates the fail-closed blast radius of a mis-scoped check holding every venture), run: UPDATE leo_feature_flags SET is_enabled=false, lifecycle_state=''disabled'' WHERE flag_key=''LEO_HIGH_CONSEQUENCE_GATES_ENABLED'' -- setting is_enabled alone will fail chk_flag_lifecycle_enabled_consistency.',
   true,
   'fn_advance_venture_stage HIGH-CONSEQUENCE HOLD check + stage-execution-worker.js _advanceStage 4th backstop'
 )

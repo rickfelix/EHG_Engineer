@@ -69,6 +69,19 @@ divergence — unsanctioned use self-reports as `TEST_MODE_DIVERGENCE` in the ru
 S20/S23 declare unresolvable binding verifiers (no registered verifier; fail-closed since PR #5801), which
 no run output can satisfy. Disposition: deliberately exempt (test-instrument, fixture-scoped, journaled).
 
+## Post-census addition (2026-07-16)
+
+**`database/migrations/20260716_high_consequence_stage_gates.sql`** — the latest `CREATE OR REPLACE`
+of `fn_advance_venture_stage` (path #1, the chokepoint itself), adding SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001's
+high-consequence blocking-gate HOLD check (FR-3). Additive only: a new `IF v_is_high_consequence THEN ... EXISTS(...)`
+block inserted between the pre-existing product-review check and the S22-flag/artifact-precondition
+logic; the function's single canonical `UPDATE ventures SET current_lifecycle_stage` write is
+unchanged. The equivalent additive 4th backstop was added to path #5's daemon-walk chokepoint
+(`lib/eva/stage-execution-worker.js::_advanceStage`, already in the allowlist) in the same PR — both
+must carry it since path #8 (`artifact-persistence-service.js`) delegates to the RPC and only
+inherits the hold from that side. Disposition: superseded-historical-on-next-migration, same as
+every other dated `fn_advance_venture_stage` entry below.
+
 ## Disposition summary
 
 - 100% disposition: 15 of 15 identified write sites (0 undispositioned).
