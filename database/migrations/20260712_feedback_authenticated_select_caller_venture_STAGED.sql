@@ -68,7 +68,8 @@
 --      venture A's rows; with a chairman-role JWT, all matching rows are
 --      still visible (bypass preserved).
 
--- @approved-by: rickfelix2000@gmail.com
+-- @approved-by: codestreetlabs@gmail.com
+-- (chairman Rick Felix's git-committer identity; personal/notify email rickfelix2000@gmail.com)
 -- Chairman verbal approval 2026-07-16 (in-session, Adam scribe): "you have my approval
 -- to run the migration". Re-grounded at apply time: fn_user_has_venture_access exists and
 -- matches the documented shape; live select_feedback_policy predicate unchanged (no drift);
