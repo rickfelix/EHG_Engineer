@@ -22,15 +22,21 @@ function makeFakeSupabase(seed = {}) {
         if (op === 'eq') return row[col] === val;
         if (op === 'gte') return row[col] >= val;
         if (op === 'not_is_null') return row[col] !== null && row[col] !== undefined;
+        if (op === 'in') return Array.isArray(val) && val.includes(row[col]);
+        if (op === 'is') return (row[col] ?? null) === val;
         return true;
       })
     );
   }
 
   function from(table) {
-    const ctx = { filters: [], order: null, limitN: null, mode: null, countMode: false };
+    const ctx = { filters: [], order: null, limitN: null, mode: null, countMode: false, returnSelect: false };
     const api = {
       select(_cols, opts) {
+        if (ctx.mode === 'update' || ctx.mode === 'insert') {
+          ctx.returnSelect = true;
+          return api;
+        }
         ctx.mode = 'select';
         if (opts?.count === 'exact' && opts?.head) ctx.countMode = true;
         return api;
@@ -48,6 +54,8 @@ function makeFakeSupabase(seed = {}) {
       eq(col, val) { ctx.filters.push([col, 'eq', val]); return api; },
       gte(col, val) { ctx.filters.push([col, 'gte', val]); return api; },
       not(col, _op, _val) { ctx.filters.push([col, 'not_is_null', null]); return api; },
+      in(col, arr) { ctx.filters.push([col, 'in', arr]); return api; },
+      is(col, val) { ctx.filters.push([col, 'is', val]); return api; },
       order(col, { ascending } = {}) { ctx.order = { col, ascending: !!ascending }; return api; },
       limit(n) { ctx.limitN = n; return api; },
       async maybeSingle() {
@@ -63,7 +71,7 @@ function makeFakeSupabase(seed = {}) {
         if (ctx.mode === 'update') {
           const rows = applyFilters(tables[table], ctx.filters);
           rows.forEach((r) => Object.assign(r, ctx.vals));
-          resolve({ data: null, error: null });
+          resolve({ data: ctx.returnSelect ? rows.map((r) => ({ id: r.id })) : null, error: null });
           return;
         }
         // select
@@ -217,5 +225,59 @@ describe('handleInboundSmsReply — send/receive round trip against a fake provi
     const decision = sb._tables.chairman_decisions.find((d) => d.id === 'dec-5');
     expect(decision.status).toBe('pending');
     expect(decision.sms_reply_used_at).toBeFalsy();
+  });
+
+  // Adversarial review findings (deep-tier PR #6093) — regression coverage.
+  it('correlates to the most-recent-PENDING question, not simply the most-recently-sent one', async () => {
+    const now = Date.now();
+    const sb = makeFakeSupabase({
+      chairman_decisions: [
+        {
+          id: 'dec-early-open', status: 'pending', brief_data: {},
+          sms_reply_token: 'tok-early', sms_reply_token_expires_at: new Date(now + 10 * 60_000).toISOString(),
+        },
+        {
+          id: 'dec-later-answered', status: 'pending', brief_data: {},
+          sms_reply_token: 'tok-later', sms_reply_token_expires_at: new Date(now + 10 * 60_000).toISOString(),
+          sms_reply_used_at: new Date(now - 30_000).toISOString(),
+        },
+      ],
+      chairman_notifications: [
+        { id: 'n-early', channel: 'sms', recipient_phone: '+15557778888', decision_id: 'dec-early-open', created_at: new Date(now - 120_000).toISOString() },
+        { id: 'n-later', channel: 'sms', recipient_phone: '+15557778888', decision_id: 'dec-later-answered', created_at: new Date(now - 60_000).toISOString() },
+      ],
+    });
+    const result = await handleInboundSmsReply(sb, {
+      from: '+15557778888', to: '+15559999999', body: 'proceed with the earlier one',
+      messageSid: 'SM-correlate-1', signatureValid: true,
+    });
+    expect(result.resolved).toBe(true);
+    expect(result.decisionId).toBe('dec-early-open');
+    const early = sb._tables.chairman_decisions.find((d) => d.id === 'dec-early-open');
+    expect(early.sms_reply_used_at).toBeTruthy();
+    const later = sb._tables.chairman_decisions.find((d) => d.id === 'dec-later-answered');
+    expect(later.brief_data.sms_reply).toBeUndefined(); // untouched
+  });
+
+  it('two concurrent replies for the same decision: only one wins the single-use claim, no clobber', async () => {
+    const sb = makeFakeSupabase({
+      chairman_decisions: [{
+        id: 'dec-race', status: 'pending', brief_data: {},
+        sms_reply_token: 'tok-race', sms_reply_token_expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+      }],
+      chairman_notifications: [{
+        id: 'n-race', channel: 'sms', recipient_phone: '+15551110000', decision_id: 'dec-race',
+        created_at: new Date(Date.now() - 60_000).toISOString(),
+      }],
+    });
+    const [first, second] = await Promise.all([
+      handleInboundSmsReply(sb, { from: '+15551110000', to: '+15559999999', body: 'answer A', messageSid: 'SM-race-A', signatureValid: true }),
+      handleInboundSmsReply(sb, { from: '+15551110000', to: '+15559999999', body: 'answer B', messageSid: 'SM-race-B', signatureValid: true }),
+    ]);
+    const outcomes = [first.outcome, second.outcome].sort();
+    expect(outcomes).toEqual(['answered', 'no_match']);
+    const decision = sb._tables.chairman_decisions.find((d) => d.id === 'dec-race');
+    // Exactly one reply's text landed — not a merge/clobber of both.
+    expect(['answer A', 'answer B']).toContain(decision.brief_data.sms_reply.text);
   });
 });

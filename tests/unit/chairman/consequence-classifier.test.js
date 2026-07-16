@@ -48,3 +48,16 @@ describe('classifyConsequence — MEDIUM', () => {
     expect(classifyConsequence({ title: 'Approve the blog post draft?' })).toBe('medium');
   });
 });
+
+// Adversarial review findings (deep-tier PR #6093) — regression coverage for two
+// confirmed classifier bypasses.
+describe('classifyConsequence — adversarial-review regressions', () => {
+  it('venture-shutdown phrased with "venture" BEFORE "shut down" still classifies HIGH', () => {
+    expect(classifyConsequence({ title: 'Venture Zeta pivot: shut it down?' })).toBe('high');
+  });
+  it('a >=$5,000 spend phrased without a $ prefix or "dollars" suffix still classifies HIGH', () => {
+    expect(classifyConsequence({ title: 'Approve 5000 USD for the campaign?' })).toBe('high');
+    expect(classifyConsequence({ title: 'Approve a 5,000 payment to the vendor?' })).toBe('high');
+    expect(classifyConsequence({ title: 'Proceed with a 6000 spend on ads?' })).toBe('high');
+  });
+});
