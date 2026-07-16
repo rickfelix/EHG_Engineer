@@ -106,6 +106,17 @@ export const ADAM_LOOPS = [
     prompt: 'node scripts/adam-self-adherence-review.mjs',
   },
   {
+    // SD-LEO-INFRA-ADAM-COORDINATOR-HEALTH-001 (chairman mandate 2026-07-16): the mirror of
+    // self-adherence, but audits the COORDINATOR — 3 KPIs (utilization, plan-adherence,
+    // fail-loud integrity) -> a persisted reading -> a propose-only advisory on breach. Turns
+    // Adam's ad-hoc coordinator audits (already caught real defects) into a standing loop.
+    key: 'coordinator-health',
+    label: 'Adam coordinator-health audit (3-KPI probe -> readings -> propose-only advisory on breach)',
+    script: 'adam-coordinator-health.mjs',
+    cron: '20 */6 * * *',
+    prompt: 'node scripts/adam-coordinator-health.mjs',
+  },
+  {
     // SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR2): the contract-named BELT COUNTDOWN DUTY
     // (CLAUDE_ADAM.md "BELT COUNTDOWN DUTY (durable)") previously lived only in session-scoped
     // crons and DIED with every Adam session (2026-06-11 handoff drill). Arming it here makes it

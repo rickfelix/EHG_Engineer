@@ -1,0 +1,128 @@
+{
+  "executive_summary": "lib/learning/outcome-tracker.js already contains BOTH halves of a fix-effectiveness back-edge (computeEffectiveness/recordSdCompleted and detectRecurrence) but they are dark: built, never wired to real data or real callers. This SD rewires four confirmed disconnects (Adam-sourced, Solomon hand-off #4 ITEM A, 5-agent-vetted, verified against live code and DB by both an Explore pass and the LEAD validation-agent): (FR-1) outcome-tracker.js reads a near-abandoned table (leo_feedback, 1 orphan row) instead of the table the sourcing engine actually writes (feedback, 8,815 rows) -- retable, mapping resolved_by_sd_id -> resolution_sd_id; (FR-2) detectRecurrence (jaccard-similarity fingerprint matching) has zero production callers -- wire it via the existing lightweight fire-and-forget vision-events.js bus (not the heavier durable event-router.js), triggered from the canonical emitFeedback/emitFeedbackBatch insert path; (FR-3) sd_effectiveness_metrics is effectively write-only (its one reader, getOutcomeSummary, is itself uncalled) -- add a real consumer, but ONLY after FR-1 ships, since all 2,886 existing rows are pre=0/post=0/pct=null garbage computed against the near-empty leo_feedback; (FR-4) scripts/complete-quick-fix.js never touches outcome-tracker.js -- QFs are a complete blind spot in fix-effectiveness tracking.",
+  "business_context": "This is remediation of dark infrastructure, not new build -- the progenitor SD (SD-LEO-ORCH-SELF-IMPROVING-LEO-001-C, 'Outcome Loop Closure Automation', completed) built both functions but never fully wired them. Without this rewiring, the system cannot answer 'did this fix actually work' or 'is this the same defect recurring' -- exactly the questions a self-improving fleet needs answered to avoid re-shipping the same broken fix repeatedly. LEAD validation-agent confirmed no duplicate/overlapping open SD exists; this is legitimate remediation.",
+  "technical_context": "Verified by an Explore-agent pass + LEAD validation-agent (evidence 64dffe42-e6df-47fb-bebf-1a69a2dfddb7) against live code and the live DB: (1) outcome-tracker.js:83,151,301 read leo_feedback (1 orphan row, no writer anywhere in the codebase); scripts/sd-from-feedback.js:306-314 writes/updates the feedback table (8,815 rows, active). scripts/leo-analytics.js:38 has the identical disjoint-table bug and should be retabled in the same pass. (2) feedback has NO resolved_by_sd_id column -- outcome-tracker.js's reads/writes of that column (lines 152,164-165,176-177,189-192,333,335,406) must map to feedback.resolution_sd_id (125 populated rows -- the same column sd-from-feedback.js already writes at promotion time, line 311-312). (3) detectRecurrence (lines 293-388) is a pure, already-correct jaccard-similarity matcher writing outcome_signals(signal_type='pattern_recurrence') -- outcome_signals currently has 3,169 rows, ALL sd_completion, ZERO pattern_recurrence, confirming it has genuinely never fired. (4) Feedback insert volume is 68-507/day (~300 avg, bursty) -- too heavy to run detectRecurrence's 3 queries + jaccard-over-~3,288-rows + 1 insert INLINE on the feedback-creation hot path. lib/eva/event-bus/vision-events.js's publishVisionEvent()/subscribeVisionEvent() is the established, already-proven lightweight fire-and-forget bus for exactly this kind of feedback-adjacent async work (see lib/eva/event-bus/handlers/feedback-quality-updated.js as the existing analog) -- publishVisionEvent catches BOTH sync and async handler errors internally so a subscriber can never cascade a failure back to the publisher (lib/governance/emit-feedback.js, which is documented 'MUST NOT throw -- best-effort', 44 importers). This is a lighter, already-sufficient seam versus the heavier durable lib/eva/event-bus/event-router.js (ledger/DLQ/retry) that a first pass considered -- using the simpler bus avoids over-building for this scope. KNOWN COVERAGE GAP (explicitly tracked, not solved in this SD): ~40+ files insert into feedback directly rather than through emitFeedback/emitFeedbackBatch, so wiring only at the canonical emit path covers those two call sites but not raw inserts elsewhere -- documented as a residual gap, matching this codebase's convention of surfacing known limitations rather than silently over-claiming full coverage. (5) scripts/modules/complete-quick-fix/orchestrator.js has zero import of outcome-tracker.js; it already has an existing fail-soft, gated hook pattern for post-merge feedback resolution (lines 687-791, RESOLVE_FEEDBACK_ON_QF_COMPLETE) calling lib/governance/resolve-feedback.js -- the new outcome-tracker hook should follow this exact same fail-soft/gated-flag convention, as a SEPARATE call alongside (not replacing) the existing resolve-feedback.js path, since outcome-tracker becomes a second resolution-writer and must not conflict with it.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Retable outcome-tracker.js (and leo-analytics.js) reads/writes from leo_feedback to feedback",
+      "description": "In lib/learning/outcome-tracker.js, change every leo_feedback reference (lines 83,151,301, and the .select()/.update()/.filter() calls around them) to feedback, and map every resolved_by_sd_id reference (152,164-165,176-177,189-192,333,335,406) to resolution_sd_id (feedback's actual column). Apply the identical table-name fix to scripts/leo-analytics.js:38 (same disjoint-table bug, confirmed by LEAD validation-agent). No other logic changes -- this is a pure retable + column-rename pass; the jaccard/effectiveness computation logic itself is already correct and untouched.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "computeEffectiveness/recordSdCompleted read exclusively from feedback (zero remaining leo_feedback references in outcome-tracker.js)",
+        "All resolved_by_sd_id references are mapped to resolution_sd_id, verified against feedback's live schema (no column-not-found errors)",
+        "scripts/leo-analytics.js's feedback metrics read from feedback, not leo_feedback",
+        "A unit test seeding feedback fixtures (not leo_feedback) proves computeEffectiveness resolves them correctly"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Wire detectRecurrence via the fire-and-forget vision-events bus, triggered from the canonical feedback-creation path",
+      "description": "Add a new event type to lib/eva/event-bus/vision-events.js's VISION_EVENTS map (e.g. FEEDBACK_CREATED: 'feedback.created'). In lib/governance/emit-feedback.js, call publishVisionEvent(VISION_EVENTS.FEEDBACK_CREATED, { feedbackId, supabase, ... }) immediately after the successful .insert() at line 275 (and the equivalent point in emitFeedbackBatch's insert at line 422) -- fire-and-forget, matching the existing 'MUST NOT throw' contract of emitFeedback. Add a new handler file lib/eva/event-bus/handlers/feedback-created.js (mirroring feedback-quality-updated.js's registration pattern: registerFeedbackCreatedHandlers(), idempotent _registered guard) whose single subscriber calls detectRecurrence({ supabase, newFeedbackId: feedbackId }) -- publishVisionEvent's own error isolation (catches both sync and async handler errors) means this subscriber can never cascade a failure back into emitFeedback's caller, so no additional try/catch wrapping is needed beyond what detectRecurrence itself already does internally. Document the known coverage gap (raw feedback inserts bypassing emitFeedback/emitFeedbackBatch are NOT covered by this wiring) directly in the handler's file comment.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A feedback row created via emitFeedback() or emitFeedbackBatch() triggers detectRecurrence exactly once, verified by a unit test seeding two similar feedback rows above the jaccard threshold and asserting a real outcome_signals(signal_type='pattern_recurrence') insert results",
+        "A handler that throws (simulated in a unit test) does not propagate an error back to emitFeedback's caller -- emitFeedback's own return value/success path is unaffected",
+        "The known coverage gap (raw inserts bypassing emitFeedback) is documented in-code, not silently unaddressed"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Add a live consumer of sd_effectiveness_metrics (ships AFTER FR-1, not before)",
+      "description": "Add a real, reachable-from-production consumer of sd_effectiveness_metrics -- either exposing getOutcomeSummary() (lib/learning/outcome-tracker.js:390) through a new CLI script (e.g. scripts/outcome-effectiveness-summary.mjs) that a human or another automation can run to see real pre/post fix-effectiveness deltas, OR wiring it as one additional signal into an existing sourcing-priority scorer -- EXEC's choice, whichever is the smaller, more clearly-scoped change; either way it must be a genuinely CALLED path (verified reachable), not another dead export. This FR has a HARD DEPENDENCY on FR-1: shipping a consumer before the retable would surface the existing 2,886 garbage rows (pre=0/post=0/pct=null) as if they were real data -- FR-1 must land first (or in the same PR) so the consumer reads real, non-fabricated numbers from day one.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A real, callable consumer of sd_effectiveness_metrics exists and is verified reachable from a production entry point (CLI invocation or an existing scheduled/triggered path), not merely an exported-but-uncalled function",
+        "Run live against the DB after FR-1 ships: the consumer's output reflects real (non-zero-garbage) computed values for at least one SD with genuine pre/post feedback counts",
+        "No consumer is added before FR-1's retable lands (sequencing verified in the PR itself, e.g. both FRs in one PR, or FR-3 explicitly follows FR-1's merge)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Hook complete-quick-fix.js into the outcome tracker (fail-soft, alongside the existing resolve-feedback.js path)",
+      "description": "In scripts/modules/complete-quick-fix/orchestrator.js, add a new fail-soft, gated hook (mirroring the existing RESOLVE_FEEDBACK_ON_QF_COMPLETE pattern at lines 687-791) that records an outcome-tracker entry for the completed QF -- either calling recordSdCompleted with the QF's identity if its shape is QF-compatible, or a new lightweight QF-scoped equivalent if not. This is a SEPARATE, additive call alongside the existing resolve-feedback.js path -- it must NOT replace or conflict with resolve-feedback.js's existing resolution-writing behavior (outcome-tracker becomes a second, independent resolution-writer; both must coexist without racing or double-writing the same feedback row inconsistently).",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "Completing a quick-fix via scripts/complete-quick-fix.js produces a real outcome-tracker record (verified by a test asserting the hook fires on QF completion)",
+        "The existing resolve-feedback.js post-merge resolution behavior is unaffected -- a regression test confirms both paths run without conflicting writes to the same feedback row",
+        "The new hook follows the fail-soft convention (a hook failure never blocks or fails QF completion itself)"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "No schema change", "description": "feedback, leo_feedback, outcome_signals, sd_effectiveness_metrics all already exist with the needed columns (resolution_sd_id already on feedback) -- this is read/write logic and event-wiring only." },
+    { "id": "TR-2", "title": "Fire-and-forget event wiring", "description": "FR-2's detectRecurrence trigger must use vision-events.js's existing error-isolated publish/subscribe, never a synchronous inline call inside emitFeedback's hot path." },
+    { "id": "TR-3", "title": "FR-1 before FR-3 sequencing", "description": "The retable (FR-1) must land before or together with the new metrics consumer (FR-3) so the consumer never surfaces fabricated/garbage data." },
+    { "id": "TR-4", "title": "No regression to resolve-feedback.js", "description": "FR-4's new QF outcome-tracker hook must coexist with, not replace, the existing resolve-feedback.js resolution path." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "FR-1: computeEffectiveness against seeded feedback fixtures (not leo_feedback)", "type": "unit", "expected": "correctly resolves pre/post counts using resolution_sd_id" },
+    { "id": "TS-2", "scenario": "FR-2: two similar feedback rows above the jaccard threshold, created via emitFeedback()", "type": "unit", "expected": "detectRecurrence fires exactly once, writes a real outcome_signals pattern_recurrence row" },
+    { "id": "TS-3", "scenario": "FR-2: a subscriber handler that throws", "type": "unit", "expected": "emitFeedback's caller sees no error, its own success path is unaffected" },
+    { "id": "TS-4", "scenario": "FR-3: run the new consumer live against the DB after FR-1 lands", "type": "integration", "expected": "output reflects real, non-garbage computed effectiveness for at least one SD" },
+    { "id": "TS-5", "scenario": "FR-4: complete a quick-fix end-to-end", "type": "unit", "expected": "an outcome-tracker record is produced; resolve-feedback.js's existing behavior is unaffected (regression check)" }
+  ],
+  "acceptance_criteria": [
+    "FR-1/FR-2/FR-3/FR-4 all pass their respective acceptance criteria above",
+    "detectRecurrence fires for the first time ever in this system's history against real feedback data (outcome_signals gains its first pattern_recurrence row when a genuine recurrence is seeded)",
+    "sd_effectiveness_metrics gains a real, verified-reachable consumer, sequenced strictly after the FR-1 retable",
+    "Quick-fixes are no longer a blind spot in fix-effectiveness tracking",
+    "No regression to the existing resolve-feedback.js QF resolution path or to recordSdCompleted's existing lead-final-approval integration"
+  ],
+  "risks": [
+    {
+      "risk": "Retabling from leo_feedback to feedback could silently change effectiveness-computation results if the two tables have divergent historical shapes",
+      "mitigation": "Verified via Explore + validation-agent that leo_feedback is genuinely abandoned (1 orphan row, zero writers anywhere) while feedback is the live, actively-written table (8,815 rows) -- this is a bug fix, not a risky migration. Unit tests assert the new read path resolves real fixtures correctly.",
+      "severity": "low"
+    },
+    {
+      "risk": "Wiring detectRecurrence into the feedback-creation path could add latency or a new failure mode if done synchronously",
+      "mitigation": "Uses the already-proven fire-and-forget vision-events.js bus (error-isolated, both sync and async), matching the existing feedback-quality-updated.js handler pattern -- never an inline blocking call.",
+      "severity": "low"
+    },
+    {
+      "risk": "Outcome-tracker becomes a second resolution-writer (alongside resolve-feedback.js and sd-from-feedback.js), risking conflicting writes to the same feedback row",
+      "mitigation": "FR-4 is explicitly scoped as an ADDITIVE, separate call, not a replacement; a regression test confirms both paths coexist without conflicting writes.",
+      "severity": "medium"
+    },
+    {
+      "risk": "FR-2's coverage is incomplete -- ~40+ files insert into feedback directly, bypassing emitFeedback/emitFeedbackBatch",
+      "mitigation": "Explicitly documented as a known, tracked residual gap (matching this codebase's honest-limitation convention) rather than silently claiming full coverage; not solved in this SD's scope.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": ["scripts/modules/handoff/executors/lead-final-approval/index.js (existing recordSdCompleted caller, now reading real data post-FR-1)", "New FR-3 consumer of sd_effectiveness_metrics", "scripts/complete-quick-fix.js (new FR-4 hook)"],
+    "dependencies": ["feedback table (existing, no schema change)", "lib/eva/event-bus/vision-events.js publishVisionEvent/subscribeVisionEvent (existing, reused)", "lib/governance/emit-feedback.js / emitFeedbackBatch (existing, extended with a publish call)"],
+    "data_contracts": ["No schema change -- read/write against existing columns only (resolution_sd_id, outcome_signals, sd_effectiveness_metrics)"],
+    "runtime_config": ["FR-4's hook should follow the existing RESOLVE_FEEDBACK_ON_QF_COMPLETE-style gated-flag convention if a similar off-switch is warranted"],
+    "observability_rollout": ["FR-2's handler logs recurrence matches (or lack thereof) to console, matching the feedback-quality-updated.js logging convention", "FR-3's consumer output IS the observability surface for fix-effectiveness"]
+  },
+  "system_architecture": {
+    "summary": "Four independent, additive changes to already-built-but-dark infrastructure: a retable (FR-1), a new lightweight event-wiring (FR-2) reusing the existing vision-events.js bus, a new consumer (FR-3, sequenced after FR-1), and a new fail-soft QF hook (FR-4). No new infrastructure classes -- everything reuses established patterns already proven elsewhere in this codebase.",
+    "components": [
+      { "name": "lib/learning/outcome-tracker.js", "change": "EDIT -- FR-1 retable (leo_feedback->feedback, resolved_by_sd_id->resolution_sd_id)" },
+      { "name": "scripts/leo-analytics.js", "change": "EDIT -- FR-1 same retable fix at line 38" },
+      { "name": "lib/eva/event-bus/vision-events.js", "change": "EDIT -- FR-2 add FEEDBACK_CREATED event type" },
+      { "name": "lib/governance/emit-feedback.js", "change": "EDIT -- FR-2 publish FEEDBACK_CREATED after insert (emitFeedback + emitFeedbackBatch)" },
+      { "name": "lib/eva/event-bus/handlers/feedback-created.js", "change": "NEW -- FR-2 subscriber calling detectRecurrence" },
+      { "name": "scripts/outcome-effectiveness-summary.mjs (or equivalent)", "change": "NEW -- FR-3 live consumer of sd_effectiveness_metrics" },
+      { "name": "scripts/modules/complete-quick-fix/orchestrator.js", "change": "EDIT -- FR-4 new fail-soft outcome-tracker hook, additive to existing resolve-feedback.js path" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "FR-1 first (retable, unblocks FR-3). FR-2 and FR-4 can proceed independently in parallel with FR-1/FR-3. FR-3 must not ship before FR-1.",
+    "steps": [
+      "FR-1: retable outcome-tracker.js + leo-analytics.js, column-map resolved_by_sd_id->resolution_sd_id, unit tests",
+      "FR-2: new vision-events.js event type + emit-feedback.js publish calls + new handler subscribing detectRecurrence, unit tests",
+      "FR-3 (after FR-1): new live consumer of sd_effectiveness_metrics, verified against real post-FR-1 data",
+      "FR-4: new fail-soft QF completion hook, additive to resolve-feedback.js, regression test for coexistence",
+      "PR + review + ship"
+    ]
+  },
+  "dependencies": [
+    "SD-LEO-ORCH-SELF-IMPROVING-LEO-001-C (completed) -- built the dark computeEffectiveness/detectRecurrence functions this SD wires up"
+  ],
+  "activation_test_id": "tests/unit/learning/outcome-tracker-rewiring.test.js",
+  "metadata": { "sd_key": "SD-LEO-INFRA-FIX-RECURRENCE-REWIRING-001" }
+}

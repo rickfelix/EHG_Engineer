@@ -96,4 +96,52 @@ describe('runAudit', () => {
     const report = await runAudit({ supabase });
     expect(report.borrowedRowCandidates).toEqual([]);
   });
+
+  it('QF-20260713-691: reports a chronologically-impossible donor (created AFTER the PR merged) as a filtered false alarm, not a live candidate', async () => {
+    // A donor row cannot have been returned by the (real or hypothetical) pre-fix query at the
+    // moment of merge if it did not exist yet -- this was the dominant false-alarm class found
+    // when manually investigating "real-world impact" (14 of 17 raw candidates in one pass).
+    H.execFileSyncMock.mockReturnValue(JSON.stringify([{ number: 9, headRefName: 'feat/apex-D1', mergedAt: '2026-07-03T00:00:00Z' }]));
+    const supabase = makeSupabase({
+      applications: [{ github_repo: 'rickfelix/apexniche-ai' }],
+      findings: [{ pr_number: 9, branch: 'feat/ml-I1', verdict: 'pass', sd_key: 'SD-MARKETLENS-I1', created_at: '2026-07-10T00:00:00Z' }],
+    });
+    const report = await runAudit({ supabase });
+    expect(report.borrowedRowCandidates).toEqual([]);
+    expect(report.chronologicallyImpossible).toHaveLength(1);
+    expect(report.chronologicallyImpossible[0]).toMatchObject({ prNumber: 9, donorSdKey: 'SD-MARKETLENS-I1' });
+  });
+
+  it('still flags a live candidate when the donor row predates the merge (mergedAt present)', async () => {
+    H.execFileSyncMock.mockReturnValue(JSON.stringify([{ number: 9, headRefName: 'feat/apex-D1', mergedAt: '2026-07-10T00:00:00Z' }]));
+    const supabase = makeSupabase({
+      applications: [{ github_repo: 'rickfelix/apexniche-ai' }],
+      findings: [{ pr_number: 9, branch: 'feat/ml-I1', verdict: 'pass', sd_key: 'SD-MARKETLENS-I1', created_at: '2026-07-03T00:00:00Z' }],
+    });
+    const report = await runAudit({ supabase });
+    expect(report.chronologicallyImpossible).toEqual([]);
+    expect(report.borrowedRowCandidates).toHaveLength(1);
+  });
+
+  it('SECURITY (adversarial PR review): an older, genuinely-pre-merge donor is NOT hidden behind a newer, chronologically-impossible one for the same pr_number', async () => {
+    // Two cross-branch pass rows exist for the same pr_number: an OLDER one (SD-REAL-EXPOSURE,
+    // created before the merge -- a real historical exposure the pre-fix query could have returned
+    // at merge time) and a NEWER one (SD-IRRELEVANT, created after the merge -- chronologically
+    // impossible, added later by an unrelated SD). Naively sorting all rows and checking only the
+    // globally-newest one's timestamp would pick the newer row, see it postdates the merge, and
+    // wrongly report "not a real exposure" -- silently hiding the real one. The fix must scope the
+    // candidate search to rows that existed AT OR BEFORE mergedAt before taking the most recent.
+    H.execFileSyncMock.mockReturnValue(JSON.stringify([{ number: 9, headRefName: 'feat/apex-D1', mergedAt: '2026-07-05T00:00:00Z' }]));
+    const supabase = makeSupabase({
+      applications: [{ github_repo: 'rickfelix/apexniche-ai' }],
+      findings: [
+        { pr_number: 9, branch: 'feat/ml-old', verdict: 'pass', sd_key: 'SD-REAL-EXPOSURE', created_at: '2026-07-01T00:00:00Z' },
+        { pr_number: 9, branch: 'feat/ml-new', verdict: 'pass', sd_key: 'SD-IRRELEVANT', created_at: '2026-07-10T00:00:00Z' },
+      ],
+    });
+    const report = await runAudit({ supabase });
+    expect(report.borrowedRowCandidates).toHaveLength(1);
+    expect(report.borrowedRowCandidates[0]).toMatchObject({ prNumber: 9, donorSdKey: 'SD-REAL-EXPOSURE' });
+    expect(report.chronologicallyImpossible).toEqual([]);
+  });
 });

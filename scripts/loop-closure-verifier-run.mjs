@@ -15,11 +15,14 @@
  * every loop except the ones a real collector now covers (L30 first).
  *
  * GT-1 guard: with empty evidence no loop can legitimately evaluate CLOSED (edge
- * freshness of a null edge is false); registered collectors are themselves designed to
- * never supply a closure edge they cannot prove (see collectors/session-coordination-
- * retention.js). A CLOSED verdict under either baseline is a false-CLOSE — the exact
- * failure the op-co GO gate exists to prevent — so it is surfaced as GT1_VIOLATION and
- * the run exits non-zero to turn the workflow red.
+ * freshness of a null edge is false) — a CLOSED verdict for an un-collected loop_key
+ * is structurally impossible unless something is broken, so it is surfaced as
+ * GT1_VIOLATION and the run exits non-zero to turn the workflow red. A registered
+ * collector, by contrast, is designed to supply a real edge ONLY when it can prove
+ * closure (see collectors/session-coordination-retention.js's measured-decline gate,
+ * SD-LEO-INFRA-L30-CLOSURE-EDGE-001) — a CLOSED verdict for a collected loop is the
+ * intended, legitimate CAN-CLOSE proof this system was built to eventually produce,
+ * not a violation.
  *
  * Witness: stamps last_fired_at on the ARMED registry row via stampLastFired (NOT
  * registerVerifierCadence, whose upsert resets last_fired_at to null).
@@ -28,7 +31,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { runClosureVerifier, VERIFIER_PROCESS_KEY } from '../lib/loop-governance/verifier.js';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
-import { createCollectEvidence } from '../lib/loop-governance/collectors/index.js';
+import { createCollectEvidence, COLLECTORS } from '../lib/loop-governance/collectors/index.js';
 
 async function main() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -52,13 +55,26 @@ async function main() {
     `tally=${JSON.stringify(tally)}`
   );
 
-  const falseClosed = (result.verdicts || []).filter((v) => v.status === 'closed');
+  // hasOwnProperty (not bare bracket access) so a loop_key coinciding with an inherited
+  // Object.prototype name (e.g. 'constructor', 'toString') can never be mistaken for a
+  // registered collector — adversarial-review finding, SD-LEO-INFRA-L30-CLOSURE-EDGE-001.
+  const hasCollector = (loopKey) => Object.prototype.hasOwnProperty.call(COLLECTORS, loopKey);
+
+  const falseClosed = (result.verdicts || []).filter((v) => v.status === 'closed' && !hasCollector(v.loop_key));
   if (falseClosed.length > 0) {
     console.error(
-      `GT1_VIOLATION false-CLOSE: ` +
+      `GT1_VIOLATION false-CLOSE (no registered collector for): ` +
       falseClosed.map((v) => v.loop_key).join(', ')
     );
     process.exit(1);
+  }
+
+  const legitimatelyClosed = (result.verdicts || []).filter((v) => v.status === 'closed' && hasCollector(v.loop_key));
+  if (legitimatelyClosed.length > 0) {
+    console.log(
+      `[loop-closure-verifier-run] CAN-CLOSE proof: ` +
+      legitimatelyClosed.map((v) => v.loop_key).join(', ')
+    );
   }
 
   const stamp = await stampLastFired(supabase, VERIFIER_PROCESS_KEY);

@@ -20,6 +20,7 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { checkHoldStamp, buildProvenancedStamp, logHoldStateViolation } from '../lib/governance/hold-state-contract.js';
 
 dotenv.config();
 
@@ -31,15 +32,27 @@ export function parseDeferArgs(argv) {
   const qfId = args[0];
   let notBefore = null;
   let reopen = false;
+  let reason = null;
+  let owner = null;
+  let releaseCondition = null;
   for (let i = 1; i < args.length; i++) {
     if (args[i] === '--not-before') {
       notBefore = args[i + 1];
       i++;
     } else if (args[i] === '--reopen') {
       reopen = true;
+    } else if (args[i] === '--reason') {
+      reason = args[i + 1];
+      i++;
+    } else if (args[i] === '--owner') {
+      owner = args[i + 1];
+      i++;
+    } else if (args[i] === '--release-condition') {
+      releaseCondition = args[i + 1];
+      i++;
     }
   }
-  return { showHelp: false, qfId, notBefore, reopen };
+  return { showHelp: false, qfId, notBefore, reopen, reason, owner, releaseCondition };
 }
 
 export function validateNotBefore(value) {
@@ -57,19 +70,28 @@ Defer Quick-Fix — durable time-gated defer (SD-LEO-FIX-QUICK-FIXES-NEEDS-001)
 
 Usage:
   node scripts/defer-quick-fix.js <QF-ID> --not-before <ISO-timestamp> [--reopen]
+    [--reason <text>] [--owner <text>] [--release-condition <text>]
 
 Options:
   --not-before <ts>   Required. ISO-8601 timestamp. The QF is not claimable/
                       auto-startable by any picker until this time passes.
   --reopen            Also set status='open' (use when clearing a manual
                       status='escalated' defer workaround).
+  --reason <text>     Hold-state contract stamp (SD-LEO-INFRA-HOLD-STATE-CONTRACT-001):
+                      why this QF is deferred. Optional while
+                      HOLD_STATE_CONTRACT_MODE=observe (default); required
+                      once enforce mode is armed.
+  --owner <text>      Hold-state contract stamp: who reviews/releases this defer.
+  --release-condition <text>  Hold-state contract stamp: the condition under
+                      which this defer should be released.
 
 Example:
-  node scripts/defer-quick-fix.js QF-20260704-348 --not-before 2026-07-05T21:00:00Z --reopen
+  node scripts/defer-quick-fix.js QF-20260704-348 --not-before 2026-07-05T21:00:00Z --reopen \\
+    --reason "waiting on sibling QF" --owner coordinator --release-condition "sibling merges"
 `);
 }
 
-export async function deferQuickFix(qfId, notBefore, { reopen = false, supabaseClient = null } = {}) {
+export async function deferQuickFix(qfId, notBefore, { reopen = false, reason, owner, releaseCondition, writingSessionId, supabaseClient = null } = {}) {
   const validation = validateNotBefore(notBefore);
   if (!validation.valid) {
     throw new Error(validation.error);
@@ -80,14 +102,27 @@ export async function deferQuickFix(qfId, notBefore, { reopen = false, supabaseC
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
 
+  const holdCheck = checkHoldStamp({ reason, owner, review_at: validation.iso, release_condition: releaseCondition });
+  if (!holdCheck.ok && holdCheck.mode === 'observe') {
+    await logHoldStateViolation(supabase, {
+      surface: 'quick_fix_defer',
+      stamp: { reason, owner, review_at: validation.iso, release_condition: releaseCondition },
+      errors: holdCheck.errors,
+    });
+  }
+  const stamped = buildProvenancedStamp({ reason, owner, release_condition: releaseCondition }, writingSessionId);
+
   const update = { not_before: validation.iso };
   if (reopen) update.status = 'open';
+  if (stamped.reason) update.reason = stamped.reason;
+  if (stamped.owner) update.owner = stamped.owner;
+  if (stamped.release_condition) update.release_condition = stamped.release_condition;
 
   const { data, error } = await supabase
     .from('quick_fixes')
     .update(update)
     .eq('id', qfId)
-    .select('id, status, not_before')
+    .select('id, status, not_before, reason, owner, release_condition')
     .single();
 
   if (error) {
@@ -108,7 +143,13 @@ async function main() {
   }
 
   try {
-    const result = await deferQuickFix(parsed.qfId, parsed.notBefore, { reopen: parsed.reopen });
+    const result = await deferQuickFix(parsed.qfId, parsed.notBefore, {
+      reopen: parsed.reopen,
+      reason: parsed.reason,
+      owner: parsed.owner,
+      releaseCondition: parsed.releaseCondition,
+      writingSessionId: process.env.CLAUDE_SESSION_ID || null,
+    });
     console.log(`✅ ${result.id}: not_before=${result.not_before}, status=${result.status}`);
     process.exitCode = 0;
   } catch (err) {

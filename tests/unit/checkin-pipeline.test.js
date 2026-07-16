@@ -15,6 +15,9 @@ describe('checkin step registry (lib/checkin/steps/index.cjs)', () => {
       'quarantine-self-clear',
       'callsign-rehydrate',
       'roll-call',
+      // SD-LEO-INFRA-WORK-CLASS-CLAIM-001 FR-4: cooperative release-request, honored at the
+      // loop boundary — after roll-call (ctx.base exists), before resume re-attaches.
+      'release-request',
       'resume',
       'build-forbidden-guard',
       'directed-assignment',

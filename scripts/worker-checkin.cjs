@@ -579,7 +579,7 @@ function isAutoStartableQF(qf, nowMs) {
  * or null (caller then falls through to idle). Never throws (fail-open).
  * SD-LEO-INFRA-MAKE-OPEN-QFS-001.
  */
-async function selfClaimQuickFix(sb, sessionId, base) {
+async function selfClaimQuickFix(sb, sessionId, base, sessionModel) {
   try {
     // factory_lane is a staged, not-yet-applied column
     // (database/migrations/20260713_quick_fixes_factory_lane.sql) -- until a human/coordinator
@@ -601,8 +601,20 @@ async function selfClaimQuickFix(sb, sessionId, base) {
       .order('created_at', { ascending: true })
       .limit(QF_CANDIDATE_LIMIT);
     const nowMs = Date.now();
+    // SD-LEO-INFRA-WORK-CLASS-CLAIM-001 (C-QF-SEAM): the QF path was the model-blind gap —
+    // isAutoStartableQF has no capability check, so a Fable seat could always fall through to
+    // general QFs (the observed 2026-07-16 recurrence). Same fence as the SD axis, same SSOT
+    // module; no-op unless the session model is restricted (fable). Fenced QFs are surfaced
+    // via base.work_class_fenced, never silently skipped (C-STARVE observability).
+    const { workClassIneligibilityReason, deriveWorkClass } = require('../lib/fleet/work-class.cjs');
     for (const qf of sortQfCandidatesBySeverity(qfs)) {
       if (!isAutoStartableQF(qf, nowMs)) continue;
+      const wcReason = typeof sessionModel === 'string' ? workClassIneligibilityReason(qf, sessionModel) : null;
+      if (wcReason) {
+        if (!base.work_class_fenced) base.work_class_fenced = [];
+        base.work_class_fenced.push({ qf: qf.id, reason: wcReason, derived_class: deriveWorkClass(qf) });
+        continue;
+      }
       // SD-FDBK-FIX-RETRO-ACTION-ITEM-001 / FR-2: claim-time moot-recheck for
       // auto-promoted retro action-item QFs -- if the SD explicitly named in
       // this QF's description already completed/cancelled, the referenced
