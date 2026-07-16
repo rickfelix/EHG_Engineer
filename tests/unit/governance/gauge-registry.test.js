@@ -21,14 +21,14 @@ import {
 const VALID_FEEDBACK_TYPES = ['issue', 'enhancement'];
 
 describe('GAUGE_REGISTRY shape', () => {
-  it('exports exactly 23 seed entries (8 original + venture-capture-completeness, SD-LEO-INFRA-CAPTURE-FORWARD-GATE-001 + 6 loop-health-*, SD-LEO-INFRA-009-LEAF-PER-001 + 3 self-score-age stubs, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4 + expired-premise-tags, SD-LEO-INFRA-BITTER-LESSON-AUDIT-001 + operator-cash-attestation-missing, QF-20260705-915 + plan-drift-coverage/plan-drift-mix, SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001 + ghost-ceo, SD-LEO-GEN-SATELLITE-AGENT-LIFECYCLE-001)', () => {
-    expect(GAUGE_REGISTRY).toHaveLength(23);
+  it('exports exactly 24 seed entries (8 original + venture-capture-completeness, SD-LEO-INFRA-CAPTURE-FORWARD-GATE-001 + 6 loop-health-*, SD-LEO-INFRA-009-LEAF-PER-001 + 3 self-score-age stubs, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4 + expired-premise-tags, SD-LEO-INFRA-BITTER-LESSON-AUDIT-001 + operator-cash-attestation-missing, QF-20260705-915 + plan-drift-coverage/plan-drift-mix, SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001 + ghost-ceo, SD-LEO-GEN-SATELLITE-AGENT-LIFECYCLE-001 + hold-state-overdue, SD-LEO-INFRA-HOLD-STATE-CONTRACT-001)', () => {
+    expect(GAUGE_REGISTRY).toHaveLength(24);
   });
 
-  it('20 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
+  it('21 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
-    expect(live).toHaveLength(20);
+    expect(live).toHaveLength(21);
     expect(stubs.map((e) => e.id).sort()).toEqual(['adam_self_score_age', 'coordinator_self_score_age', 'solomon_self_score_age']);
   });
 
@@ -102,14 +102,15 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(selectEnabledEntries(undefined)).toEqual([]);
   });
 
-  it('the real GAUGE_REGISTRY selects all 20 enabled entries', () => {
+  it('the real GAUGE_REGISTRY selects all 21 enabled entries', () => {
     const selected = selectEnabledEntries(GAUGE_REGISTRY);
-    expect(selected).toHaveLength(20);
+    expect(selected).toHaveLength(21);
     expect(selected.map((e) => e.id).sort()).toEqual([
       'adam-claimed-or-built-sd',
       'coordinator-sourced-sd',
       'expired-premise-tags',
       'ghost-ceo',
+      'hold-state-overdue',
       'loop-health-A_applied_rate',
       'loop-health-B_signal_aggregation',
       'loop-health-C_retro_learn',
@@ -185,6 +186,15 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     const entry = GAUGE_REGISTRY.find((e) => e.id === 'venture-capture-completeness');
     expect(entry).toBeTruthy();
     expect(entry.detectorFn).toBe('venture-capture-completeness');
+    expect(entry.ownerRole).toBe('coordinator');
+    expect(entry.thresholdConfig.tripWhen({ count: 1 })).toBe(true);
+    expect(entry.thresholdConfig.tripWhen({ count: 0 })).toBe(false);
+  });
+
+  it('SD-LEO-INFRA-HOLD-STATE-CONTRACT-001: the hold-state-overdue entry has a resolvable detectorFn, ownerRole coordinator, and the >0-count tripWhen convention', () => {
+    const entry = GAUGE_REGISTRY.find((e) => e.id === 'hold-state-overdue');
+    expect(entry).toBeTruthy();
+    expect(entry.detectorFn).toBe('hold-state-overdue');
     expect(entry.ownerRole).toBe('coordinator');
     expect(entry.thresholdConfig.tripWhen({ count: 1 })).toBe(true);
     expect(entry.thresholdConfig.tripWhen({ count: 0 })).toBe(false);
