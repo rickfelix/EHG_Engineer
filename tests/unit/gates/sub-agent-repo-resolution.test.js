@@ -248,6 +248,53 @@ describe('SUB_AGENT_REPO_RESOLUTION gate', () => {
     expect(result.reasonCode).toBe(REASON_CODES.EXPLICIT_NULL);
   });
 
+  // SD-FDBK-ENH-LLM-SUB-AGENT-001: intra-repo explicit_null carve-out (parity with unresolved_intra).
+  it('CONDITIONAL_PASS (explicit_null_intra) for INTRA-REPO SD (EHG_Engineer) with explicit_null row', async () => {
+    const viewRows = [
+      { id: 'EN1', sub_agent_code: 'SECURITY', phase: 'PLAN', target_application: 'EHG_Engineer',
+        expected_repo_path: '/path/to/EHG_Engineer', metadata_repo_path: null, metadata_repo_resolved: null,
+        executed_from_cwd: null, compliance_status: 'explicit_null' }
+    ];
+    const rawRows = [{ id: 'EN1', sub_agent_code: 'SECURITY', metadata: { repo_path: null } }];
+    const gate = createSubAgentRepoResolutionGate(buildSupabase({ viewRows, rawRows }));
+
+    const result = await gate.validator({ sd: makeSD({ target_application: 'EHG_Engineer' }) });
+
+    expect(result.passed).toBe(true);                     // no longer hard-blocks
+    expect(result.score).toBeGreaterThanOrEqual(60);      // conditional band
+    expect(JSON.stringify(result)).toContain('explicit_null_intra');
+  });
+
+  it('CONDITIONAL_PASS (explicit_null_intra) for INTRA-REPO SD (EHG) with explicit_null row', async () => {
+    const viewRows = [
+      { id: 'EN2', sub_agent_code: 'SECURITY', phase: 'PLAN', target_application: 'EHG',
+        expected_repo_path: '/path/to/EHG', metadata_repo_path: null, metadata_repo_resolved: null,
+        executed_from_cwd: null, compliance_status: 'explicit_null' }
+    ];
+    const rawRows = [{ id: 'EN2', sub_agent_code: 'SECURITY', metadata: { repo_path: null } }];
+    const gate = createSubAgentRepoResolutionGate(buildSupabase({ viewRows, rawRows }));
+
+    const result = await gate.validator({ sd: makeSD({ target_application: 'EHG' }) });
+
+    expect(result.passed).toBe(true);
+    expect(JSON.stringify(result)).toContain('explicit_null_intra');
+  });
+
+  it('STILL BLOCKS explicit_null for a genuine cross-repo target (no tolerance regression)', async () => {
+    const viewRows = [
+      { id: 'EN3', sub_agent_code: 'SECURITY', phase: 'PLAN', target_application: 'crongenius',
+        expected_repo_path: '/path/to/crongenius', metadata_repo_path: null, metadata_repo_resolved: null,
+        executed_from_cwd: null, compliance_status: 'explicit_null' }
+    ];
+    const rawRows = [{ id: 'EN3', sub_agent_code: 'SECURITY', metadata: { repo_path: null } }];
+    const gate = createSubAgentRepoResolutionGate(buildSupabase({ viewRows, rawRows }));
+
+    const result = await gate.validator({ sd: makeSD({ target_application: 'crongenius' }) });
+
+    expect(result.passed).toBe(false);
+    expect(result.reasonCode).toBe(REASON_CODES.EXPLICIT_NULL);
+  });
+
   it('CONDITIONAL_PASS in 60-80 band for mixed HEALTHY + SKIPPED', async () => {
     const viewRows = [
       {
