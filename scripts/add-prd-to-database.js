@@ -260,6 +260,10 @@ if (isMainModule(import.meta.url)) {
   // rejection. Cooperative mode means stopHeartbeat does NOT release the parent session's claim.
   addPRDToDatabase(sdId, prdTitle, contentOverride)
     .then(() => {
+      // QF-20260713-991: the PRD-submission→coding transition is where PLAN-TO-EXEC gets
+      // skipped and only caught retroactively at commit time (handoff-enforcement hook).
+      console.log('\n⏭️  NEXT (required BEFORE writing implementation code):');
+      console.log(`   node scripts/handoff.js execute PLAN-TO-EXEC ${sdId}`);
       if (heartbeatActive) stopHeartbeat();
       flushAndExit(resolveExitCode('success'));
     })
