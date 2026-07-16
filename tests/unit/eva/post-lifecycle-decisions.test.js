@@ -286,7 +286,7 @@ describe('no-deposit capability exception (SD-LEO-GEN-SATELLITE-CAPABILITY-EXTRA
     expect(emitFeedback).not.toHaveBeenCalled();
   });
 
-  it('fails open: a routeException/emitFeedback error is caught and logged, never blocks the decision (TS-5)', async () => {
+  it('fails open on a routeException error, and still durably persists via emitFeedback (TS-5, durability-independence)', async () => {
     routeException.mockRejectedValueOnce(new Error('spine routing boom'));
     const supabase = makeMockSupabase();
     const result = await handlePostLifecycleDecision(
@@ -296,6 +296,37 @@ describe('no-deposit capability exception (SD-LEO-GEN-SATELLITE-CAPABILITY-EXTRA
 
     expect(result.handled).toBe(true);
     expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('No-deposit exception routing failed'));
+    // The durability guarantee must not depend on routeException succeeding -- emitFeedback
+    // still fires (with routed_to:null since routing failed), or the exception silently
+    // vanishes exactly the way the code comment says it must not (adversarial-review fix).
+    expect(emitFeedback).toHaveBeenCalledTimes(1);
+    expect(emitFeedback).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ routed_to: null }) }));
+  });
+
+  it('fails open on an emitFeedback error without throwing (TS-5, independent try/catch)', async () => {
+    emitFeedback.mockRejectedValueOnce(new Error('feedback insert boom'));
+    const supabase = makeMockSupabase();
+    const result = await handlePostLifecycleDecision(
+      { ventureId: 'venture-1', ventureContext, stageOutput, artifacts: [], decision: { type: 'continue' } },
+      { supabase, logger: silentLogger },
+    );
+
+    expect(result.handled).toBe(true);
+    expect(routeException).toHaveBeenCalledTimes(1);
+    expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('No-deposit feedback persistence failed'));
+  });
+
+  it('never interpolates the venture name into title/description (log-injection regression guard)', async () => {
+    const supabase = makeMockSupabase();
+    await handlePostLifecycleDecision(
+      { ventureId: 'venture-1', ventureContext, stageOutput, artifacts: [], decision: { type: 'continue' } },
+      { supabase, logger: silentLogger },
+    );
+
+    const call = emitFeedback.mock.calls[0][0];
+    expect(call.title).not.toContain(ventureContext.name);
+    expect(call.description).not.toContain(ventureContext.name);
+    expect(call.metadata.venture_name).toBe(ventureContext.name);
   });
 });
 

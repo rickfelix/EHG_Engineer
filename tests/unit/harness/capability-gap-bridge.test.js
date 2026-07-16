@@ -57,4 +57,17 @@ describe('bridgeCannotDriveFindings', () => {
       expect(call[0].category).not.toBe('venture_capabilities');
     }
   });
+
+  it('isolates a single failing entry: siblings still emit, the failure is reported, nothing throws', async () => {
+    emitFeedback
+      .mockResolvedValueOnce({ id: '1', deduped: false })
+      .mockRejectedValueOnce(new Error('RLS denied'))
+      .mockResolvedValueOnce({ id: '3', deduped: false });
+
+    const result = await bridgeCannotDriveFindings(supabase, { cannotDrive: ['O5', 'O6', 'O8'] }, {});
+
+    expect(result.emitted).toBe(2);
+    expect(result.failed).toEqual([{ requirementId: 'O6', reason: 'RLS denied' }]);
+    expect(emitFeedback).toHaveBeenCalledTimes(3);
+  });
 });

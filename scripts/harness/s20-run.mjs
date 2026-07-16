@@ -322,7 +322,10 @@ export async function runArc({ runId, entryStage = 20, toStage = 26, clockStart,
   // negative capability data -- bridge them into a durable capability-gap signal.
   // Fail-soft: a feedback-write failure must never fail the harness run itself.
   try {
-    await bridgeCannotDriveFindings(supabase, coverage, { harnessSource: 's20-run', runId });
+    const bridgeResult = await bridgeCannotDriveFindings(supabase, coverage, { harnessSource: 's20-run', runId });
+    if (bridgeResult.failed?.length > 0) {
+      journal.append({ kind: 'lifecycle', event: `capability-gap bridge: ${bridgeResult.failed.length} finding(s) failed to persist (non-blocking)`, detail: { failed: bridgeResult.failed } });
+    }
   } catch (err) {
     journal.append({ kind: 'lifecycle', event: `capability-gap bridge failed (non-blocking): ${err.message}` });
   }
