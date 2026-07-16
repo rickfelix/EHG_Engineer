@@ -24,7 +24,7 @@ import { execFileSync } from 'node:child_process';
 
 function listMergedPRs(repo) {
   try {
-    const out = execFileSync('gh', ['pr', 'list', '-R', repo, '--state', 'merged', '--limit', '200', '--json', 'number,headRefName'], { encoding: 'utf-8' });
+    const out = execFileSync('gh', ['pr', 'list', '-R', repo, '--state', 'merged', '--limit', '200', '--json', 'number,headRefName,mergedAt'], { encoding: 'utf-8' });
     return JSON.parse(out);
   } catch (e) {
     console.warn(`[audit] gh pr list failed for ${repo} (non-fatal, skipping): ${e?.message || e}`);
@@ -45,7 +45,7 @@ export async function runAudit({ supabase } = {}) {
   const { data: findings, error: findErr } = await sb.from('ship_review_findings').select('pr_number, branch, verdict, sd_key, created_at');
   if (findErr) throw new Error(`ship_review_findings query failed: ${findErr.message}`);
 
-  const report = { trustedRepos, checkedPRs: 0, borrowedRowCandidates: [], skippedRepos: [] };
+  const report = { trustedRepos, checkedPRs: 0, borrowedRowCandidates: [], chronologicallyImpossible: [], skippedRepos: [] };
 
   for (const repo of trustedRepos) {
     const prs = listMergedPRs(repo);
@@ -64,11 +64,21 @@ export async function runAudit({ supabase } = {}) {
       if (mostRecentRow.branch === pr.headRefName) continue; // pre-fix lookup would have returned this PR's own row.
       if (mostRecentRow.verdict === 'pass') {
         const ownRow = (findings || []).find((f) => f.pr_number === pr.number && f.branch === pr.headRefName);
-        report.borrowedRowCandidates.push({
-          repo, prNumber: pr.number, ownBranch: pr.headRefName,
+        const candidate = {
+          repo, prNumber: pr.number, ownBranch: pr.headRefName, mergedAt: pr.mergedAt,
           hasOwnRow: Boolean(ownRow), ownVerdict: ownRow?.verdict ?? null,
           donorBranch: mostRecentRow.branch, donorSdKey: mostRecentRow.sd_key, donorCreatedAt: mostRecentRow.created_at,
-        });
+        };
+        // A donor row created AFTER this PR's own mergedAt could not possibly have existed at the moment
+        // the (real or hypothetical) pre-fix query ran for this merge -- report it separately as a
+        // chronologically-impossible false alarm rather than a live candidate (retro action item,
+        // QF-20260713-691: manual per-PR timeline reconstruction found this was the dominant false-alarm
+        // class -- 14 of 15 confirmed-no-impact candidates in one investigation pass).
+        if (pr.mergedAt && new Date(mostRecentRow.created_at) > new Date(pr.mergedAt)) {
+          report.chronologicallyImpossible.push(candidate);
+        } else {
+          report.borrowedRowCandidates.push(candidate);
+        }
       }
     }
   }
@@ -82,6 +92,12 @@ function printReport(report) {
     console.log(`[audit] SKIPPED (gh pr list failed): ${report.skippedRepos.join(', ')}`);
   }
   console.log(`[audit] merged PRs checked: ${report.checkedPRs}`);
+  if (report.chronologicallyImpossible.length > 0) {
+    console.log(`[audit] FILTERED (chronologically impossible -- donor row postdates the PR's own merge, could not have been returned at merge time): ${report.chronologicallyImpossible.length}`);
+    for (const c of report.chronologicallyImpossible) {
+      console.log(`  - ${c.repo} PR#${c.prNumber} merged ${c.mergedAt}, donor row created ${c.donorCreatedAt} (${c.donorSdKey ?? 'no sd_key'}) -- donor postdates merge, not a real exposure.`);
+    }
+  }
   if (report.borrowedRowCandidates.length === 0) {
     console.log('[audit] RESULT: 0 borrowed-row candidates found.');
   } else {

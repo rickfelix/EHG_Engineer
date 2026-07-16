@@ -96,4 +96,30 @@ describe('runAudit', () => {
     const report = await runAudit({ supabase });
     expect(report.borrowedRowCandidates).toEqual([]);
   });
+
+  it('QF-20260713-691: reports a chronologically-impossible donor (created AFTER the PR merged) as a filtered false alarm, not a live candidate', async () => {
+    // A donor row cannot have been returned by the (real or hypothetical) pre-fix query at the
+    // moment of merge if it did not exist yet -- this was the dominant false-alarm class found
+    // when manually investigating "real-world impact" (14 of 17 raw candidates in one pass).
+    H.execFileSyncMock.mockReturnValue(JSON.stringify([{ number: 9, headRefName: 'feat/apex-D1', mergedAt: '2026-07-03T00:00:00Z' }]));
+    const supabase = makeSupabase({
+      applications: [{ github_repo: 'rickfelix/apexniche-ai' }],
+      findings: [{ pr_number: 9, branch: 'feat/ml-I1', verdict: 'pass', sd_key: 'SD-MARKETLENS-I1', created_at: '2026-07-10T00:00:00Z' }],
+    });
+    const report = await runAudit({ supabase });
+    expect(report.borrowedRowCandidates).toEqual([]);
+    expect(report.chronologicallyImpossible).toHaveLength(1);
+    expect(report.chronologicallyImpossible[0]).toMatchObject({ prNumber: 9, donorSdKey: 'SD-MARKETLENS-I1' });
+  });
+
+  it('still flags a live candidate when the donor row predates the merge (mergedAt present)', async () => {
+    H.execFileSyncMock.mockReturnValue(JSON.stringify([{ number: 9, headRefName: 'feat/apex-D1', mergedAt: '2026-07-10T00:00:00Z' }]));
+    const supabase = makeSupabase({
+      applications: [{ github_repo: 'rickfelix/apexniche-ai' }],
+      findings: [{ pr_number: 9, branch: 'feat/ml-I1', verdict: 'pass', sd_key: 'SD-MARKETLENS-I1', created_at: '2026-07-03T00:00:00Z' }],
+    });
+    const report = await runAudit({ supabase });
+    expect(report.chronologicallyImpossible).toEqual([]);
+    expect(report.borrowedRowCandidates).toHaveLength(1);
+  });
 });
