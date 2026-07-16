@@ -1,7 +1,7 @@
 {
- "generated_at": "2026-07-16T12:01:05.829Z",
+ "generated_at": "2026-07-16T15:45:38.824Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 808,
+ "table_count": 810,
  "view_count": 183,
  "check_count": 1406,
  "tables": {
@@ -716,6 +716,8 @@
   "user_organizations": "{id,user_id,organization_id,role,created_at}",
   "user_preferences": "{id,user_id,preference_category,preference_key,preference_value,device_type,sync_across_devices,created_at,updated_at,active_persona}",
   "user_stories": "{id,story_key,prd_id,sd_id,title,user_role,user_want,user_benefit,story_points,priority,status,sprint,acceptance_criteria,definition_of_done,depends_on,blocks,technical_notes,implementation_approach,test_scenarios,created_at,created_by,updated_at,updated_by,completed_at,completed_by,actual_points,time_spent_hours,e2e_test_path,e2e_test_status,e2e_test_last_run,e2e_test_evidence,e2e_test_failure_reason,validation_status,implementation_context,architecture_references,example_code_patterns,testing_scenarios,given_when_then,implementation_status,metadata}",
+  "v_hc_flag_enabled": "{is_enabled}",
+  "v_s22_flag_enabled": "{is_enabled}",
   "validation_audit_log": "{id,correlation_id,sd_id,sd_type,validator_name,failure_reason,artifact_id,failure_category,metadata,created_at,execution_context}",
   "validation_evidence": "{id,validation_id,evidence_type,file_path,file_name,file_size,mime_type,component_name,test_case,viewport_size,elements_found,elements_missing,accessibility_issues,performance_metrics,captured_at,created_at}",
   "validation_gate_registry": "{id,gate_key,sd_type,validation_profile,applicability,reason,created_at,updated_at}",
@@ -781,7 +783,7 @@
   "venture_stage_transitions_qparity20260610": "{id,venture_id,from_stage,to_stage,transition_type,approved_by,approved_at,handoff_data,created_at,idempotency_key}",
   "venture_stage_work": "{id,venture_id,lifecycle_stage,sd_id,stage_status,work_type,started_at,completed_at,health_score,advisory_data,created_at,updated_at}",
   "venture_stage_work_qparity20260610": "{id,venture_id,lifecycle_stage,sd_id,stage_status,work_type,started_at,completed_at,health_score,advisory_data,created_at,updated_at}",
-  "venture_stages": "{stage_number,stage_name,stage_key,description,phase_number,phase_name,chunk,gate_type,review_mode,work_type,sd_required,sd_suffix,advisory_enabled,depends_on,required_artifacts,metadata,component_path,created_at,updated_at,gate_label,app_description}",
+  "venture_stages": "{stage_number,stage_name,stage_key,description,phase_number,phase_name,chunk,gate_type,review_mode,work_type,sd_required,sd_suffix,advisory_enabled,depends_on,required_artifacts,metadata,component_path,created_at,updated_at,gate_label,app_description,is_high_consequence}",
   "venture_stages_audit": "{id,stage_number,changed_column,old_value,new_value,changed_by,changed_at}",
   "venture_telemetry": "{id,application_id,venture_id,contract_version,window_days,since,generated_at,total,by_verdict,by_mode,by_model,avg_confidence,dry_run_count,raw_payload,source_url,http_status,ingest_status,ingest_note,pulled_at,created_at,updated_at,kpis}",
   "venture_templates": "{id,source_venture_id,template_name,template_version,domain_tags,template_data,effectiveness_score,usage_count,is_current,created_at,updated_at}",
