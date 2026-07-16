@@ -8,16 +8,18 @@
  * missing invoker, called daily by .github/workflows/loop-closure-verifier-cron.yml
  * (and manually via workflow_dispatch or `node scripts/loop-closure-verifier-run.mjs`).
  *
- * Evidence collector: per-loop collectors are a separate, dependency-ordered SD (Adam's
- * lane — D5 retention is the golden-test first collector). Until they land, this runner
- * supplies the EMPTY collector, which the closure engine evaluates as STARVED — the
- * chairman-ratified honest baseline (33/33 STARVED, 2026-07-14). Collectors plug in
- * here when they exist.
+ * Evidence collector: per-loop collectors now live in a registry (SD-LEO-INFRA-LOOP-
+ * EVIDENCE-COLLECTORS-001), injected here via createCollectEvidence(supabase). A
+ * loop_key with no registered collector still gets {} (empty evidence => STARVED) —
+ * the chairman-ratified honest baseline (33/33 STARVED, 2026-07-14) is unchanged for
+ * every loop except the ones a real collector now covers (L30 first).
  *
  * GT-1 guard: with empty evidence no loop can legitimately evaluate CLOSED (edge
- * freshness of a null edge is false). A CLOSED verdict under this baseline is a
- * false-CLOSE — the exact failure the op-co GO gate exists to prevent — so it is
- * surfaced as GT1_VIOLATION and the run exits non-zero to turn the workflow red.
+ * freshness of a null edge is false); registered collectors are themselves designed to
+ * never supply a closure edge they cannot prove (see collectors/session-coordination-
+ * retention.js). A CLOSED verdict under either baseline is a false-CLOSE — the exact
+ * failure the op-co GO gate exists to prevent — so it is surfaced as GT1_VIOLATION and
+ * the run exits non-zero to turn the workflow red.
  *
  * Witness: stamps last_fired_at on the ARMED registry row via stampLastFired (NOT
  * registerVerifierCadence, whose upsert resets last_fired_at to null).
@@ -26,9 +28,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { runClosureVerifier, VERIFIER_PROCESS_KEY } from '../lib/loop-governance/verifier.js';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
-
-// Per-loop evidence collectors not wired yet — empty evidence => honest STARVED.
-const emptyEvidenceCollector = () => ({});
+import { createCollectEvidence } from '../lib/loop-governance/collectors/index.js';
 
 async function main() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -39,7 +39,7 @@ async function main() {
   }
   const supabase = createClient(url, key);
 
-  const result = await runClosureVerifier(supabase, emptyEvidenceCollector);
+  const result = await runClosureVerifier(supabase, createCollectEvidence(supabase));
   if (!result.ran) {
     console.error(`[loop-closure-verifier-run] verifier did not run: ${result.reason}`);
     process.exit(1);
@@ -55,7 +55,7 @@ async function main() {
   const falseClosed = (result.verdicts || []).filter((v) => v.status === 'closed');
   if (falseClosed.length > 0) {
     console.error(
-      `GT1_VIOLATION false-CLOSE under empty-evidence baseline: ` +
+      `GT1_VIOLATION false-CLOSE: ` +
       falseClosed.map((v) => v.loop_key).join(', ')
     );
     process.exit(1);
