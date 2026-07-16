@@ -1,7 +1,7 @@
 {
- "generated_at": "2026-07-16T15:45:38.824Z",
+ "generated_at": "2026-07-16T22:40:25.433Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 810,
+ "table_count": 811,
  "view_count": 183,
  "check_count": 1406,
  "tables": {
@@ -311,6 +311,7 @@
   "handoff_validation_rules": "{id,handoff_type,validation_rule,requirement_level,error_message,created_at}",
   "handoff_verification_gates": "{id,handoff_id,sd_id,prd_id,gate_type,gate_name,gate_description,verification_status,evidence,confidence_score,quality_score,verified_by,verified_at,verification_notes,requirements,is_mandatory,blocks_handoff,priority,assigned_to_agent,verification_agent,created_at,updated_at,auto_generated,generation_rule}",
   "hap_blocks_v2": "{hap_id,strategic_directive_id,execution_sequence_id,title,objective,detailed_description,status,timeline,timeline_rationale,tasks,task_narrative,completion_date,completion_notes,subtask_count,estimated_duration_minutes,implementation_notes,technical_considerations,created_at,updated_at,created_by,updated_by,metadata}",
+  "hold_state_contract_violations": "{id,surface,reason,owner,review_at,release_condition,errors,created_at}",
   "import_audit": "{id,import_run_id,file_path,file_checksum,tab_name,rows_processed,rows_imported,warnings,errors,status,dry_run,import_metadata,created_at}",
   "improvement_quality_assessments": "{id,improvement_id,evaluator_model,score,criteria_scores,recommendation,reasoning,evaluated_at}",
   "income_capture_monthly": "{id,period_month,recurring_revenue,business_expenses,ppo,retirement_solo_401k,se_tax,revenue_source,revenue_event_count,livemode,deduction_attestation_ref,computed_at,created_at,updated_at}",
@@ -506,7 +507,7 @@
   "provider_seat_assignments": "{id,session_id,seat_code,provider,model_id,round_number,created_at}",
   "public_portfolio": "{id,venture_id,sort_order,is_published,created_at,updated_at}",
   "quarantine_meta_qparity20260610": "{source_table,quarantined,captured_at}",
-  "quick_fixes": "{id,title,type,severity,found_during,description,steps_to_reproduce,expected_behavior,actual_behavior,screenshot_path,estimated_loc,actual_loc,files_changed,status,escalated_to_sd_id,escalation_reason,branch_name,commit_sha,pr_url,tests_passing,uat_verified,verified_by,verification_notes,created_at,started_at,completed_at,created_by,target_application,compliance_score,compliance_verdict,compliance_details,routing_tier,routing_threshold_id,claiming_session_id,actual_source_loc,actual_test_loc,force_completed,resolution_sd_id,not_before}",
+  "quick_fixes": "{id,title,type,severity,found_during,description,steps_to_reproduce,expected_behavior,actual_behavior,screenshot_path,estimated_loc,actual_loc,files_changed,status,escalated_to_sd_id,escalation_reason,branch_name,commit_sha,pr_url,tests_passing,uat_verified,verified_by,verification_notes,created_at,started_at,completed_at,created_by,target_application,compliance_score,compliance_verdict,compliance_details,routing_tier,routing_threshold_id,claiming_session_id,actual_source_loc,actual_test_loc,force_completed,resolution_sd_id,not_before,reason,owner,release_condition}",
   "raid_log": "{id,type,title,description,severity_index,status,mitigation_strategy,validation_approach,resolution_details,dependency_sd,dependency_status,category,owner,venture_id,sd_id,prd_id,metadata,created_at,updated_at}",
   "rca_auto_trigger_config": "{id,trigger_type,enabled,rate_limit_per_minute,auto_create_fix_sd,recurrence_threshold,recurrence_window_days,metadata,created_at,updated_at}",
   "rca_learning_records": "{id,rcr_id,features,label,defect_class,preventable,prevention_stage,time_to_detect_hours,time_to_resolve_hours,eva_preference_id,contributed_to_retrospective,created_at,metadata}",
