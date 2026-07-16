@@ -5,6 +5,14 @@
   "verdict": "RETIRE",
   "verdict_rationale": "Both FR-1 (CEO-factory instantiation) and FR-2 (CEO-authority stage-advancement gate) are unreachable from any live production path -- the CEO-agent org layer is seed-or-theater, not exercised machinery. Per architecture doc S3.6, a RETIRE verdict shrinks phase (b) substantially; phase (b) scope should be resized (or descoped) in a follow-on SD rather than building full lifecycle machinery against dead code.",
   "s20_26_cross_check": "docs/design/spine-system-architecture-review.md:16 -- \"the venture state machine IS live -- the EVA orchestrator drives stage transitions through it today... stages run through workers; the org layer is decorative at run level\" -- independently corroborates FR-2 (simulated S20-26 run observation).",
+  "fr1_supersession": {
+    "superseded_at": "2026-07-16T15:44:44.259Z",
+    "superseded_by": "coordinator cross-SD adjudication (session_coordination message c0fc051e-a1f0-4e44-8174-87e35402e052)",
+    "status": "FR-1 (CEO-factory instantiation/onboardVenture/instantiateVenture) is SUPERSEDED -- direction is now REVIVE, not retire. This is a snapshot correction, not a retraction: the underlying reachability finding below (zero live callers as of 2026-07-12) remains historically accurate; the chairman's subsequent direction overrides it going forward.",
+    "rationale": "Two chairman-direction facts postdate this audit: (1) SD-FDBK-ENH-EHG-OPERATING-COMPANY-001-B is chairman-approved and explicitly chartered to wire instantiateVenture into a real onboarding entry point; (2) SD-FDBK-ENH-ORG-TEMPLATE-DELTA-001 (chairman-ratified org-template delta) shipped investing INTO venture-ceo-factory.js, not retiring it.",
+    "caveat": "Settles DIRECTION only (revive, not retire). The -B wiring EXECUTION remains chairman-fenced (requires_human_action) until the operating-company switch-on decision -- no one wires instantiateVenture live until the chairman clears -B.",
+    "scope_note": "FR-2 (CEO-authority stage-advancement gate: commitStageTransition/verifyCeoAuthority) is UNAFFECTED by this supersession and remains RETIRE -- it is a structurally separate finding (a different call path with independent live-caller evidence below) and was the sole basis for SD-LEO-GEN-SATELLITE-AGENT-LIFECYCLE-001's ghost-CEO gauge + retirement notes, which stay correct as shipped."
+  },
   "fr1": {
     "onboard_venture_definition": [
       {
