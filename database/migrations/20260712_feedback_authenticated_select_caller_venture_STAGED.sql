@@ -68,6 +68,15 @@
 --      venture A's rows; with a chairman-role JWT, all matching rows are
 --      still visible (bypass preserved).
 
+-- @approved-by: rickfelix2000@gmail.com
+-- Chairman verbal approval 2026-07-16 (in-session, Adam scribe): "you have my approval
+-- to run the migration". Re-grounded at apply time: fn_user_has_venture_access exists and
+-- matches the documented shape; live select_feedback_policy predicate unchanged (no drift);
+-- consumer landscape re-checked — the ehg Quality dashboard + feedbackDataAccess read feedback,
+-- but the 2 privileged accounts (admin, owner) bypass via fn_is_chairman, and the only scoped
+-- account is the roleless one this binding intends to restrict. Net: strictly-additive predicate,
+-- low risk, conclusion unchanged from the chairman-approved premise.
+
 BEGIN;
 
 DROP POLICY IF EXISTS select_feedback_policy ON public.feedback;
