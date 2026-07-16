@@ -27,7 +27,7 @@ describe('classifyConsequence — HIGH keyword categories', () => {
 });
 
 describe('classifyConsequence — fail-closed default', () => {
-  it('unrecognized/ambiguous input classifies HIGH, not LOW or MEDIUM', () => {
+  it('unrecognized/unmatched input classifies HIGH, not LOW or MEDIUM', () => {
     expect(classifyConsequence({ title: 'xqzplorf frobnicate the widget' })).toBe('high');
     expect(classifyConsequence({})).toBe('high');
   });

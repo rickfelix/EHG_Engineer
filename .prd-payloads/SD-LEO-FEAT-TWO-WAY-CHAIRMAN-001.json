@@ -28,11 +28,11 @@
     {
       "id": "FR-3",
       "title": "Fail-closed consequence classifier",
-      "description": "lib/chairman/consequence-classifier.js exports classifyConsequence({decisionType, title, context}) -> 'low'|'medium'|'high'. Keyword/pattern match against the taxonomy in the archived plan (HIGH: kill a venture, >$5k spend, governance change, secrets/credentials, contracts, irreversible prod change). CRITICAL: fail-closed — any unrecognized, ambiguous, or unclassifiable input defaults to 'high' (never defaults to low/medium). This is net-new code; no prior consequence-taxonomy implementation exists in the repo to extend (verified by repo-wide grep). Composes with, but does not depend on, the unrelated venture-lifecycle-stage HIGH-CONSEQUENCE-STAGES concept from SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001 (unbuilt, different axis).",
+      "description": "lib/chairman/consequence-classifier.js exports classifyConsequence({decisionType, title, context}) -> 'low'|'medium'|'high'. Keyword/pattern match against the taxonomy in the archived plan (HIGH: kill a venture, >$5k spend, governance change, secrets/credentials, contracts, irreversible prod change). CRITICAL: fail-closed — any unrecognized or unclassifiable input defaults to 'high' (never defaults to low/medium). This is net-new code; no prior consequence-taxonomy implementation exists in the repo to extend (verified by repo-wide grep). Composes with, but does not depend on, the unrelated venture-lifecycle-stage HIGH-CONSEQUENCE-STAGES concept from SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001 (unbuilt, different axis).",
       "priority": "critical",
       "acceptance_criteria": [
         "Each HIGH keyword category (venture-kill, >$5k, governance, secrets/credentials, contracts, irreversible-prod) classifies HIGH",
-        "An unrecognized/ambiguous phrase classifies HIGH (fail-closed default), not LOW or MEDIUM",
+        "An unrecognized/unmatched phrase classifies HIGH (fail-closed default), not LOW or MEDIUM",
         "A plain low-stakes operational question classifies LOW"
       ]
     },
