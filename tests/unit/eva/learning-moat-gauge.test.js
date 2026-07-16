@@ -87,6 +87,17 @@ describe('computeLearningMoatGauge — timeFromDefectToShippedFix (SD-LEO-GEN-SA
     expect(gauge.lessonsEmitted).toBe(3); // unresolved rows still count, unchanged
   });
 
+  it('self-review finding: a corrupted row (resolution_date before created_at) is excluded from the latency mean, not silently included as a negative number', async () => {
+    const rows = [
+      { metadata: { venture_id: 'v1' }, created_at: hoursAgo(24), resolution_date: hoursAgo(12) }, // valid, 12h latency
+      { metadata: { venture_id: 'v2' }, created_at: hoursAgo(10), resolution_date: hoursAgo(20) }, // corrupted: resolved "before" created
+    ];
+    const { supabase } = stubSupabase(rows);
+    const gauge = await computeLearningMoatGauge(supabase);
+    expect(gauge.timeFromDefectToShippedFix).toBe(12);
+    expect(gauge.timeFromDefectToShippedFixReason).toBe('computed from 1 resolved reflection(s)');
+  });
+
   it('regression: lessonsEmitted/distinctVentures/lessonsPerTraversal unaffected by the new logic', async () => {
     const rows = [
       { metadata: { venture_id: 'v1' }, created_at: hoursAgo(24), resolution_date: hoursAgo(12) },
