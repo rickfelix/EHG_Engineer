@@ -328,6 +328,16 @@ describe('no-deposit capability exception (SD-LEO-GEN-SATELLITE-CAPABILITY-EXTRA
     expect(call.description).not.toContain(ventureContext.name);
     expect(call.metadata.venture_name).toBe(ventureContext.name);
   });
+
+  it('passes a per-venture dedup_key so distinct ventures never collapse into one row (adversarial review round 2)', async () => {
+    const supabase = makeMockSupabase();
+    await handlePostLifecycleDecision(
+      { ventureId: 'venture-1', ventureContext, stageOutput, artifacts: [], decision: { type: 'continue' } },
+      { supabase, logger: silentLogger },
+    );
+
+    expect(emitFeedback).toHaveBeenCalledWith(expect.objectContaining({ dedup_key: 'no-deposit:venture-1:continue' }));
+  });
 });
 
 describe('decision options', () => {
