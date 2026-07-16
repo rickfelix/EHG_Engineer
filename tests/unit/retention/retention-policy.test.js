@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../../');
 
 describe('policy registry (TS-1)', () => {
-  it('registers all 8 unbounded tables with the VERIFIED timestamp columns', () => {
+  it('registers all 9 unbounded tables with the VERIFIED timestamp columns', () => {
     const m = Object.fromEntries(RETENTION_POLICIES.map((p) => [p.table, p.timestampColumn]));
     expect(m).toEqual({
       workflow_trace_log: 'created_at',
@@ -28,6 +28,8 @@ describe('policy registry (TS-1)', () => {
       eva_scheduler_metrics: 'created_at',
       // SD-FDBK-FIX-BUS-RETENTION-CLEANUP-001 FR-3
       sub_agent_execution_results: 'created_at',
+      // SD-LEO-FEAT-TWO-WAY-CHAIRMAN-001: sms_inbound_log retention coverage
+      sms_inbound_log: 'created_at',
     });
   });
 

@@ -60,6 +60,8 @@ import { createChairmanScopeGuard } from '../lib/middleware/chairman-scope-guard
 
 // Payment webhook handler (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001)
 import { handleStripeWebhook } from '../api/webhooks/stripe.js';
+// Two-way chairman SMS bridge webhooks (SD-LEO-FEAT-TWO-WAY-CHAIRMAN-001)
+import { handleTwilioSmsWebhook, handleTwilioStatusCallback } from '../api/webhooks/twilio-sms.js';
 
 // Import Story API
 import * as storiesAPI from '../src/api/stories.js';
@@ -138,6 +140,14 @@ app.use('/api', apiLimiter);
 // is reachable — app.post() would 404 non-POST requests before the handler
 // ever runs.
 app.all('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
+
+// Twilio SMS bridge webhooks: Twilio POSTs application/x-www-form-urlencoded (not
+// JSON), and its signature is computed over the PARSED params (not raw bytes), so
+// these need express.urlencoded() rather than Stripe's express.raw() — but still
+// registered ahead of the global express.json() parser for the same "don't let a
+// generic body parser touch a webhook's body before its own middleware" discipline.
+app.all('/api/webhooks/twilio-sms', express.urlencoded({ extended: false }), handleTwilioSmsWebhook);
+app.all('/api/webhooks/twilio-status', express.urlencoded({ extended: false }), handleTwilioStatusCallback);
 
 app.use(express.json());
 
