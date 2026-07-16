@@ -190,6 +190,30 @@ describe('High-consequence mint-and-hold (FR-3 completion) — real _processVent
     expect(result.status).toBe('blocked');
   });
 
+  // 3rd-pass completeness check: the loop has TWO further _canAutoAdvance call sites downstream
+  // of the review-mode block (canGovernanceOverrideFailed ~line 1385, the BLOCKED/FAILED
+  // "governance override -> advance as advisory" branch ~line 1452), neither of which was given
+  // an isHighConsequence guard. This is safe ONLY because the (now HC-aware) review-mode block
+  // runs UNCONDITIONALLY earlier in the same loop iteration and always holds+breaks for a
+  // pending, non-approved high-consequence decision regardless of what processStage() itself
+  // returned -- so those two later sites are structurally unreachable for a genuine (non-fixture,
+  // not-yet-approved) high-consequence stage in the same tick. Pin that ordering guarantee
+  // directly: even when processStage() itself returns status='BLOCKED' (EVA's own internal gate
+  // logic, e.g. an unrelated business rule), a high-consequence stage must still be held by the
+  // review-mode block, never reach the later governance-override-as-advisory branch.
+  it('still HOLDS a high-consequence stage even when processStage() itself returns status=BLOCKED (proves the later governance-override-as-advisory branch is unreachable)', async () => {
+    govState.isHighConsequence = true;
+    createOrReusePendingDecision.mockResolvedValue({ id: 'hc-decision-blocked-result', isNew: true });
+    const { processStage } = await import('../../../lib/eva/eva-orchestrator.js');
+    processStage.mockResolvedValueOnce({ status: 'BLOCKED', errors: [] });
+
+    const worker = makeWorker(makeSupabase());
+    const result = await worker.processOneStage('v-hc');
+
+    expect(result.status).toBe('blocked');
+    expect(result.gate).toBe('review'); // held by the review-mode block, not the advisory-override branch
+  });
+
   it('advances (does not re-hold) once the minted high-consequence decision is already approved', async () => {
     govState.isHighConsequence = true;
     createOrReusePendingDecision.mockResolvedValue({ id: 'hc-decision-2', isNew: false });
