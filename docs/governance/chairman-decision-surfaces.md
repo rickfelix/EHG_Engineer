@@ -69,6 +69,35 @@ Two gaps closed, both on surface #1 (`chairman_decisions`):
   allowlist (row #4's predicate above) for the JS-side sweep, with a documented superset — blocking rows escalate
   by email even when a type (e.g. `stage_gate`) isn't in the console's own allowlist.
 
+## `blocking` gains enforcement teeth, not just escalation priority (SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001, 2026-07-16)
+
+Before this SD, `chairman_decisions.blocking` was read only by the escalation/SLA/ordering machinery
+described above (email priority, SLA exemption, `chairman_pending_decisions` sort order) — it never
+actually held a venture back. A pending `blocking=true` row and a pending `blocking=false` row let the
+venture advance identically once any pre-existing gate (kill/promotion/review_mode) was satisfied.
+
+Two changes close that gap:
+
+- **FR-1 — classification**: `venture_stages.is_high_consequence` (chairman-configurable, independent of
+  `gate_type`/`review_mode`) lets the chairman designate ANY stage — including one with no gate today
+  (`gate_type='none'`) — as requiring binding sign-off. Read via `stage-governance.js`'s existing cached
+  reader (`isHighConsequence(stageNumber)`).
+- **FR-2/FR-3 — minting + enforcement**: for a stage currently classified high-consequence, every mint site
+  in `lib/eva/stage-execution-worker.js` (the review-mode pause block, `_handleChairmanGate`, and the
+  pending-decision canonical-RPC resolver) now (a) sets `blocking=true`, (b) forces minting past the
+  pre-existing `stage_creates_decision` self-skip (`forceDecisionCreation`), and (c) bypasses the autonomy
+  auto-approve shortcuts entirely — a chairman-designated high-consequence stage can never be waved through
+  by an autonomy level, unlike a plain review-mode gate. Two independent chokepoints then HOLD venture
+  advancement while that row is `status='pending' AND blocking=true`: the SQL RPC `fn_advance_venture_stage`
+  and the JS daemon's `_advanceStage`. A `leo_feature_flags.LEO_HIGH_CONSEQUENCE_GATES_ENABLED` kill-switch
+  (default ON) allows disabling the new HOLD fleet-wide without a deploy.
+
+**Scope boundary (known, not silent)**: enforcement lives on the two canonical chokepoints only, matching
+every prior stage-gating feature's precedent (kill/promotion/review/artifact-precondition). At least one
+other advancement path (`lib/agents/venture-ceo/handlers.js::_updateVentureProgress`, the autonomous agent
+runtime) writes `current_lifecycle_stage` directly with no gate of any kind and is not yet covered — tracked
+in `docs/architecture/stage-advancement-path-census.md` entry #16 as a pre-existing, deferred bypass.
+
 ## Consumers (de-orphaning)
 
 - `scripts/chairman-decisions.mjs list|decide` — CLI (+ `/decisions` skill in
