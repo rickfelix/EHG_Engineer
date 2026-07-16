@@ -57,3 +57,57 @@ describe('learning-moat-gauge (FR-1)', () => {
     await expect(computeLearningMoatGauge(supabase)).rejects.toThrow(/db down/);
   });
 });
+
+// SD-LEO-GEN-SATELLITE-LEARNING-SPEED-001 FR-1/FR-2/FR-3: real timeFromDefectToShippedFix
+// computation, with the honest-zero fallback above proven unchanged.
+const hoursAgo = (h) => new Date(Date.now() - h * 3_600_000).toISOString();
+
+describe('computeLearningMoatGauge — timeFromDefectToShippedFix (SD-LEO-GEN-SATELLITE-LEARNING-SPEED-001)', () => {
+  it('real computation: mean latency across resolved rows', async () => {
+    const rows = [
+      { metadata: { venture_id: 'v1' }, created_at: hoursAgo(48), resolution_date: hoursAgo(24) }, // 24h latency
+      { metadata: { venture_id: 'v2' }, created_at: hoursAgo(96), resolution_date: hoursAgo(48) }, // 48h latency
+    ];
+    const { supabase } = stubSupabase(rows);
+    const gauge = await computeLearningMoatGauge(supabase);
+    expect(gauge.timeFromDefectToShippedFix).toBe(36);
+    expect(gauge.timeFromDefectToShippedFixReason).toBe('computed from 2 resolved reflection(s)');
+  });
+
+  it('mixed resolved/unresolved: only resolved rows contribute to the latency mean', async () => {
+    const rows = [
+      { metadata: { venture_id: 'v1' }, created_at: hoursAgo(24), resolution_date: hoursAgo(12) }, // 12h latency
+      { metadata: { venture_id: 'v2' }, created_at: hoursAgo(10), resolution_date: null },
+      { metadata: { venture_id: 'v3' }, created_at: hoursAgo(5), resolution_date: null },
+    ];
+    const { supabase } = stubSupabase(rows);
+    const gauge = await computeLearningMoatGauge(supabase);
+    expect(gauge.timeFromDefectToShippedFix).toBe(12);
+    expect(gauge.timeFromDefectToShippedFixReason).toBe('computed from 1 resolved reflection(s)');
+    expect(gauge.lessonsEmitted).toBe(3); // unresolved rows still count, unchanged
+  });
+
+  it('self-review finding: a corrupted row (resolution_date before created_at) is excluded from the latency mean, not silently included as a negative number', async () => {
+    const rows = [
+      { metadata: { venture_id: 'v1' }, created_at: hoursAgo(24), resolution_date: hoursAgo(12) }, // valid, 12h latency
+      { metadata: { venture_id: 'v2' }, created_at: hoursAgo(10), resolution_date: hoursAgo(20) }, // corrupted: resolved "before" created
+    ];
+    const { supabase } = stubSupabase(rows);
+    const gauge = await computeLearningMoatGauge(supabase);
+    expect(gauge.timeFromDefectToShippedFix).toBe(12);
+    expect(gauge.timeFromDefectToShippedFixReason).toBe('computed from 1 resolved reflection(s)');
+  });
+
+  it('regression: lessonsEmitted/distinctVentures/lessonsPerTraversal unaffected by the new logic', async () => {
+    const rows = [
+      { metadata: { venture_id: 'v1' }, created_at: hoursAgo(24), resolution_date: hoursAgo(12) },
+      { metadata: { venture_id: 'v1' }, created_at: hoursAgo(20), resolution_date: null },
+      { metadata: { venture_id: 'v2' }, created_at: hoursAgo(10), resolution_date: null },
+    ];
+    const { supabase } = stubSupabase(rows);
+    const gauge = await computeLearningMoatGauge(supabase);
+    expect(gauge.lessonsEmitted).toBe(3);
+    expect(gauge.distinctVentures).toBe(2);
+    expect(gauge.lessonsPerTraversal).toBe(1.5);
+  });
+});

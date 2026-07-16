@@ -1,0 +1,84 @@
+{
+  "executive_summary": "This SD was promoted from a stale roadmap re-promotion of the already-completed learning-speed satellite (SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-E, merged PR #5988). Verified against origin/main: traversal-reflection emission, the learning-moat gauge, anti-Goodhart quality guard, and capability ledger all already exist and are wired live. LEAD re-scoped this SD (Q8 deletion audit cut ~95% of the implied duplicate scope) to the ONE documented, legitimate residual gap: lib/eva/learning-moat-gauge.js's timeFromDefectToShippedFix field is intentionally left null with an explicit 'not yet computable' reason. This SD implements the real computation while preserving the honest-zero behavior when no resolved reflection-origin data exists yet (the current live state — zero traversal_reflection rows exist because no venture has completed a full 26-stage lifecycle traversal; verified this is a precondition-not-met state, not a wiring bug, by reading the reachable call site in lib/eva/post-lifecycle-decisions.js).",
+  "business_context": "Chairman-ratified 'build ALL satellites' batch (2026-07-11) produced several stub roadmap promotions; three of the four created today duplicate already-completed lettered children of SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-E. Rather than closing this SD as a pure no-op duplicate, LEAD identified real remaining value: the gauge's own doc comment names this exact gap as a scoped follow-up ('a follow-up, once enough reflection-sourced patterns have actually been assigned and resolved'). Closing it now means the FIRST real traversal reflection that gets resolved will produce a real, non-fabricated learning-moat number instead of a permanent null.",
+  "technical_context": "lib/eva/learning-moat-gauge.js computeLearningMoatGauge(supabase, {ventureId, sinceDays}) currently selects only `metadata` from issue_patterns filtered on metadata->>emission_type='traversal_reflection' and created_at >= since. It needs to also select `created_at` and `resolution_date`, then for the subset of rows where resolution_date IS NOT NULL, compute the latency (resolution_date - created_at) in hours for each and average them. issue_patterns.resolution_date ('Date when the pattern root cause was resolved') and issue_patterns.created_at already exist on the live schema (docs/reference/schema/engineer/tables/issue_patterns.md) — no migration needed. Live verification (2026-07-16): zero traversal_reflection rows exist in issue_patterns today, so the honest-null path is the one that will actually execute against production right now — the real-computation path must be proven via a seeded fake-supabase unit test, not live data (there is none yet). The emitter (lib/eva/traversal-reflection-emitter.js) and its call site (lib/eva/post-lifecycle-decisions.js:97-110, inside handlePostLifecycleDecision, itself called when a venture completes lifecycle stage 26 with a chairman decision) were read directly and confirmed reachable — not dead code, just an event that hasn't fired yet in this system's real usage.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Compute timeFromDefectToShippedFix from resolved reflection-origin patterns",
+      "description": "In lib/eva/learning-moat-gauge.js computeLearningMoatGauge(), expand the issue_patterns select to include created_at and resolution_date (already selecting metadata). Filter the fetched rows to those with a non-null resolution_date. For each, compute latencyHours = (new Date(resolution_date) - new Date(created_at)) / 3_600_000. If one or more such rows exist, set timeFromDefectToShippedFix to the arithmetic mean of latencyHours (rounded to 1 decimal) and set timeFromDefectToShippedFixReason to a short 'computed from N resolved reflection(s)' string. If zero such rows exist (the current live state), preserve the exact existing honest-null behavior and reason string — no regression on the documented NO-DATA-read-as-green doctrine.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Zero resolved rows (current live state) -> timeFromDefectToShippedFix is null, reason string matches the existing honest explanation",
+        "N>=1 resolved rows with known created_at/resolution_date -> timeFromDefectToShippedFix equals the correct arithmetic mean latency in hours, reason string reflects it was computed (not the null-reason string)",
+        "Unresolved rows (resolution_date IS NULL) are excluded from the latency computation but still count toward lessonsEmitted/lessonsPerTraversal as before (no regression to those two existing fields)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Preserve the honest-null NO-DATA-read-as-green invariant",
+      "description": "When zero resolved (resolution_date IS NOT NULL) reflection-origin rows exist in the query window -- the current live state, since no venture has completed a full 26-stage traversal yet -- timeFromDefectToShippedFix MUST remain exactly null with the existing documented reason string, byte-for-byte unchanged from pre-SD behavior. This is the architecture doc's own S-4 gauge doctrine (never fabricate a number to read as green) and is the primary risk this SD must not regress.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Against the live DB today (zero traversal_reflection rows), computeLearningMoatGauge() returns timeFromDefectToShippedFix: null with the pre-existing reason text",
+        "No code path can produce a fabricated non-null number from zero or all-unresolved input rows"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Unit test coverage for both the honest-zero and real-computation paths",
+      "description": "tests/unit/eva/learning-moat-gauge.test.js (new file) seeds a fake Supabase client with issue_patterns rows covering: zero resolved rows, N resolved rows with known created_at/resolution_date deltas, and a mix of resolved/unresolved rows, asserting the exact expected timeFromDefectToShippedFix value (or null) and reason string in each case, plus a regression assertion that lessonsEmitted/distinctVentures/lessonsPerTraversal are unaffected by the new logic.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "All 4 test_scenarios below pass",
+        "Test file uses a seeded fake Supabase client (no live DB dependency, no network)"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "No schema change", "description": "created_at and resolution_date already exist on issue_patterns; this is a pure read-side computation change." },
+    { "id": "TR-2", "title": "No regression to lessonsEmitted/lessonsPerTraversal", "description": "Those two existing gauge fields must compute identically to before this change." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Honest-zero: no resolved reflection rows seeded", "type": "unit", "expected": "timeFromDefectToShippedFix is null with the documented not-yet-computable reason" },
+    { "id": "TS-2", "scenario": "Real computation: 2 resolved reflection rows with known latencies (e.g. 24h and 48h)", "type": "unit", "expected": "timeFromDefectToShippedFix equals 36 (the mean), reason reflects real computation" },
+    { "id": "TS-3", "scenario": "Mixed: some resolved, some unresolved rows in the window", "type": "unit", "expected": "only resolved rows contribute to timeFromDefectToShippedFix; lessonsEmitted still counts all rows in the window" },
+    { "id": "TS-4", "scenario": "Regression: existing lessonsPerTraversal computation unchanged", "type": "unit", "expected": "distinctVentures and lessonsPerTraversal match pre-change behavior for the same seeded rows" }
+  ],
+  "acceptance_criteria": [
+    "computeLearningMoatGauge() returns a real, non-fabricated timeFromDefectToShippedFix once resolved reflection-origin issue_patterns rows exist, computed as the mean latency between created_at and resolution_date",
+    "The honest-null behavior is preserved exactly when zero resolved rows exist (proven against the live DB, which currently has zero such rows)",
+    "No regression to lessonsEmitted/lessonsPerTraversal/distinctVentures"
+  ],
+  "risks": [
+    { "risk": "Duplicating already-completed satellite work if the LEAD re-scoping analysis is wrong", "mitigation": "Verified directly against origin/main (git show) that traversal-reflection-emitter.js, learning-moat-gauge.js, venture-capability-extraction.js all exist and are wired; CHANGELOG.md confirms PR #5988 merged for SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-E. This SD touches ONLY the one field left intentionally unimplemented.", "severity": "low" },
+    { "risk": "Small sample size (or zero samples) makes the mean latency statistically thin once real data starts flowing", "mitigation": "Out of scope for this SD — matches the original architecture doc's own framing of this as a future refinement once enough data accumulates; this SD only makes the number REAL rather than fabricated, not statistically robust.", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["Any dashboard or gauge-reading code that calls computeLearningMoatGauge() and reads timeFromDefectToShippedFix"],
+    "dependencies": ["issue_patterns table (existing, no schema change)", "lib/eva/traversal-reflection-emitter.js (existing, unchanged)"],
+    "data_contracts": ["No schema change — read-side computation only"],
+    "runtime_config": ["None"],
+    "observability_rollout": ["The gauge's own return value IS the observability surface — no separate rollout needed; behavior is provably correct via seeded unit tests since live data doesn't exist yet to observe directly"]
+  },
+  "system_architecture": {
+    "summary": "Pure read-side enhancement to one existing function; no new files, no schema change.",
+    "components": [
+      { "name": "lib/eva/learning-moat-gauge.js", "change": "computeLearningMoatGauge() gains real timeFromDefectToShippedFix computation, preserving honest-null fallback" },
+      { "name": "tests/unit/eva/learning-moat-gauge.test.js", "change": "NEW — unit tests for both the honest-zero and real-computation paths" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Expand the existing select, filter resolved rows, compute mean latency, preserve honest-null fallback.",
+    "steps": [
+      "FR-1: expand select to include created_at + resolution_date; compute latency for resolved rows; mean when >=1, honest-null when 0",
+      "Unit tests for both paths + regression coverage for lessonsEmitted/lessonsPerTraversal",
+      "PR + review + ship"
+    ]
+  },
+  "dependencies": [
+    "SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-E (completed, PR #5988) — this SD extends its learning-moat-gauge.js, does not duplicate it"
+  ],
+  "activation_test_id": "tests/unit/eva/learning-moat-gauge.test.js",
+  "metadata": { "sd_key": "SD-LEO-GEN-SATELLITE-LEARNING-SPEED-001" }
+}
