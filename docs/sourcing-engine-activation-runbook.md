@@ -56,3 +56,38 @@ gated `leo-create-sd --from-roadmap-item` step).
 2. Stage curated keepers (chairman-gated): `npm run sourcing:populate -- --apply --chairman-approved [--cap=N]`
 3. Promote a sample: `node scripts/leo-create-sd.js --from-roadmap-item <id>`
 4. Confirm belt depth rises with curated keepers, without hand-sourcing and without raw-intake noise.
+
+## FR-5 — Accepted-known-state disposition (SD-LEO-INFRA-GAUGE-FINDING-KNOWN-STATE-ACK-001, staged not yet applied)
+
+Some gauge/governance findings (e.g. `WAVE_LINKAGE_STARVATION`, `lib/roadmap/wave-linkage-coverage.js`)
+are legitimately known and accepted pending a future chairman decision, yet re-fire on every cycle and
+get re-promoted as fresh SD candidates — churn the coordinator has to re-triage by hand. This mechanism
+lets the coordinator mark a finding accepted-known-state until a dated re-review, without silencing new
+variants or permanently muting the finding.
+
+**Migration** (`database/migrations/20260716_gauge_finding_dispositions.sql`, chairman-gated, staged):
+new `gauge_finding_dispositions` table (`fingerprint` UNIQUE, `re_review_at`, `reason`,
+`dispositioned_by`), RLS + service_role-only policy in the same migration.
+
+**Usage** (once applied):
+```bash
+# Accept a finding as known-state pending re-review
+node scripts/gauge-findings/disposition.js accept WAVE_LINKAGE_STARVATION \
+  --re-review 2026-07-30 --reason "pending chairman D1-D9 ruling" --by coordinator
+
+# Check / list current dispositions
+node scripts/gauge-findings/disposition.js status WAVE_LINKAGE_STARVATION
+node scripts/gauge-findings/disposition.js list
+```
+
+**Mechanism**: `scripts/sourcing-engine/refill-cron.mjs` builds a Set of fingerprints with a LIVE
+disposition (`re_review_at` in the future) once per run and threads it into
+`evaluateRefillCandidate()` (`lib/sourcing-engine/refill-candidate-validity.js`) as
+`opts.acceptedFingerprintSet` — a candidate whose `roadmap_wave_items.metadata.dedup_key` matches is
+suppressed (`REFILL_INVALID_REASONS.accepted_known_state`). Suppression auto-expires at `re_review_at`
+via query-time filtering — no cleanup job, and the finding promotes again exactly once when due.
+Requires the originating `feedback` row to carry a `dedup_key` (now persisted at
+`lib/governance/emit-feedback.js` into `metadata.dedup_key` — previously only hashed and discarded).
+
+**Status**: code shipped and tested (PR #6097); migration is `@chairman-gated` and not yet applied, so
+the mechanism is inert until applied and a disposition is written.
