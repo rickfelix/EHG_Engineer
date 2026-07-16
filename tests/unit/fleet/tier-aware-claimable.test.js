@@ -10,7 +10,9 @@
  *   (b) the unscored bucket is reachable by every tier and counted exactly once in the aggregate;
  *   (c) aggregate === sum of the exact-rank partition (incl. unscored/above-top) — no double-count —
  *       and cumulative claimable-to-tier-N === unscored + sum of exact ranks 1..N;
- *   (d) tiering-OFF (degrade-to-1) => every tier's claimable === the full aggregate;
+ *   (d) tiering-OFF (degrade-to-1) => the GLOBAL ladder is inert, but an EXPLICIT per-SD
+ *       min_tier_rank is still honored (FR-1, BELT-CLAIMABLE-ACCURACY-FLOOR-001): claimable-to-rung-r
+ *       is unscored + sum(exact 1..r) in BOTH tiering states, not the full aggregate;
  *   (e) an otherwise-ineligible SD (deferred / orchestrator / fixture / bare-shell) is excluded
  *       regardless of tier.
  */
@@ -94,19 +96,23 @@ describe('tierClaimableBreakdown — partition + cumulative invariants (FR-4c)',
   });
 });
 
-describe('tiering OFF — degrade-to-1 (FR-4d)', () => {
-  const pool = [sd('A', 1), sd('D', 4), sd('U')];
+describe('tiering OFF — global ladder inert, EXPLICIT floor still honored (FR-1, BELT-CLAIMABLE-ACCURACY-FLOOR-001)', () => {
+  const pool = [sd('A', 1), sd('D', 4), sd('U')]; // A: floor 1, D: floor 4, U: unscored
 
-  it('claimableForTier returns the full aggregate for every rung when tiering is off', () => {
-    for (let r = 1; r <= TOP; r += 1) {
-      expect(claimableForTier(pool, { workerTierRank: r, tieringActive: false })).toHaveLength(3);
-    }
+  it('claimableForTier honors an explicit per-SD min_tier_rank even when tiering is off', () => {
+    // The GLOBAL rung ladder is inert with tiering off, but an explicitly-stamped floor is a FLOOR:
+    // rung r claims A iff r>=1, D iff r>=4, U (unscored) always. A rung-1 worker cannot take D(floor 4).
+    expect(claimableForTier(pool, { workerTierRank: 1, tieringActive: false })).toHaveLength(2); // A + U
+    expect(claimableForTier(pool, { workerTierRank: 3, tieringActive: false })).toHaveLength(2); // A + U (D still floored)
+    expect(claimableForTier(pool, { workerTierRank: 4, tieringActive: false })).toHaveLength(3); // A + D + U
   });
 
-  it('breakdown cumulative is the full aggregate for every rung when tiering is off', () => {
+  it('breakdown cumulative honors explicit floors even when tiering is off (unscored + sum exact 1..r)', () => {
     const bd = tierClaimableBreakdown(pool, { tieringActive: false });
-    for (let r = 1; r <= TOP; r += 1) expect(bd.cumulative[r]).toBe(bd.aggregate);
-    // the exact partition is still computed (informational) and still sums to the aggregate
+    expect(bd.cumulative[1]).toBe(2);   // U + A
+    expect(bd.cumulative[3]).toBe(2);   // U + A (D floored at 4)
+    expect(bd.cumulative[4]).toBe(3);   // U + A + D
+    expect(bd.cumulative[TOP]).toBe(3); // everything with a rung <= TOP
     expect(bd.partitionSumsToAggregate).toBe(true);
   });
 });

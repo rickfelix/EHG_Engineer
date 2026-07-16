@@ -221,7 +221,14 @@ export async function executeSecurityAnalysis(sdId, sdData) {
 
     console.log('Executing SECURITY sub-agent programmatically...\n');
 
-    const securityResult = await executeSubAgent('SECURITY', sdId, { timeout: 120000 });
+    // SD-FDBK-ENH-LLM-SUB-AGENT-001: thread target_application (mirrors executeDesignAnalysis)
+    // so resolveSubAgentRepo resolves the intra-repo target to applications.local_path and
+    // applySubAgentRepoVerdict stamps a real repo_path — instead of emitting metadata.repo_path=null
+    // (an explicit_null the SUB_AGENT_REPO_RESOLUTION gate hard-blocks for intra-repo SDs).
+    const securityResult = await executeSubAgent('SECURITY', sdId, {
+      timeout: 120000,
+      target_application: sdData.target_application
+    });
     const securityOutput = formatSubAgentResult(securityResult, 'SECURITY');
 
     console.log('Security analysis complete!\n');

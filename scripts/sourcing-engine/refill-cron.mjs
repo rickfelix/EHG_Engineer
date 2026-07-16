@@ -114,10 +114,25 @@ async function main() {
     shippedTitleSet = new Set((shipped || []).map((s) => normalizeTitleForCompare(s.title)).filter(Boolean));
   } catch { /* fail-open: empty set -> lookalike axis no-ops */ }
 
+  // SD-LEO-INFRA-GAUGE-FINDING-KNOWN-STATE-ACK-001: build the LIVE accepted-known-state fingerprint Set
+  // ONCE per run (one bounded, re_review_at-filtered query) so the suppression axis rejects a staged
+  // candidate whose finding fingerprint has an active coordinator disposition. The query itself excludes
+  // expired dispositions (re_review_at <= now), so auto-expiry needs no separate cleanup job. Fail-open:
+  // a query error (including "table doesn't exist yet" pre-migration) yields an empty Set (axis no-ops).
+  let acceptedFingerprintSet = new Set();
+  try {
+    const { data: accepted } = await supabase
+      .from('gauge_finding_dispositions')
+      .select('fingerprint')
+      .gt('re_review_at', new Date().toISOString())
+      .limit(1000);
+    acceptedFingerprintSet = new Set((accepted || []).map((d) => d.fingerprint).filter(Boolean));
+  } catch { /* fail-open: empty set -> accepted_known_state axis no-ops */ }
+
   // SD-LEO-INFRA-CORPUS-PROMOTE-ONLY-VIA-DISTILL-001 (FR-2): forward the distilled-only flag so the
   // batch selector applies CHECK #11 — only /distill build-dispositioned items promote. Now fail-closed
   // by default (isDistilledOnly), so an un-distilled raw corpus item is never minted onto the belt.
-  const sel = selectRefillBatch(rows || [], { limit, shippedTitleSet, distilledOnly: isDistilledOnly() });
+  const sel = selectRefillBatch(rows || [], { limit, shippedTitleSet, acceptedFingerprintSet, distilledOnly: isDistilledOnly() });
   const results = [];
   // SD-LEO-INFRA-WIRE-ALREADY-SHIPPED-001 (Phase 1 — ADVISORY): wire the exported-but-unused
   // crossRefShippedTitleAdvisory into the live promotion caller (its only production call site). It

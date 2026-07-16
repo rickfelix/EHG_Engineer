@@ -26,6 +26,53 @@ import { SDGitStateReconciler } from './modules/shipping/SDGitStateReconciler.js
 import { MultiRepoCoordinator } from './modules/shipping/MultiRepoCoordinator.js';
 import { TestExecutionVerifier } from './modules/shipping/TestExecutionVerifier.js';
 import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
+
+// FR-2 (SD-LEO-INFRA-TESTEXEC-TIMEOUT-INCONCLUSIVE-001): backoff before the
+// single retry-on-inconclusive attempt.
+const INCONCLUSIVE_RETRY_BACKOFF_MS = 5000;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Run test execution verification with a single retry on 'inconclusive'
+ * (fleet-load timeout kill), resolving to a final boolean-backed result
+ * before the caller consumes `passed`. Extracted as a standalone, injectable
+ * function so it is unit-testable without invoking main() or shelling vitest.
+ *
+ * @param {{ verify: () => Promise<object> }} testVerifier
+ * @param {{ sleepFn?: (ms:number)=>Promise<void>, backoffMs?: number, log?: (msg:string)=>void }} [opts]
+ * @returns {Promise<object>} the resolved test-execution result (never 'inconclusive')
+ */
+export async function resolveTestExecutionWithRetry(testVerifier, opts = {}) {
+  const sleepFn = opts.sleepFn || sleep;
+  const backoffMs = opts.backoffMs ?? INCONCLUSIVE_RETRY_BACKOFF_MS;
+  const log = opts.log || console.log;
+
+  let result = await testVerifier.verify();
+  if (result.outcome !== 'inconclusive') return result;
+
+  log(`\n  ⚠️  Test execution inconclusive (load timeout) — retrying once after ${backoffMs}ms backoff...`);
+  await sleepFn(backoffMs);
+  const retryResult = await testVerifier.verify();
+
+  if (retryResult.outcome === 'inconclusive') {
+    // Two consecutive inconclusive results in a row: resolve to a hard
+    // block (retry budget is capped at 1) and flag it distinctly from a
+    // genuine test failure so operators can see it may be chronic overload.
+    return {
+      ...retryResult,
+      passed: false,
+      outcome: 'fail',
+      details: `${retryResult.details} — retry also inconclusive, hard-blocking (retry budget exhausted)`,
+      warnings: [
+        ...retryResult.warnings,
+        'Retry-exhausted inconclusive: two consecutive load-timeout kills — possible chronic fleet overload, not necessarily a code defect'
+      ]
+    };
+  }
+
+  return retryResult;
+}
 
 // Parse command line arguments
 function parseArgs() {
@@ -244,7 +291,10 @@ async function main() {
         cwd: worktreeResult?.cwd || process.cwd()
       });
 
-      results.testExecution = await testVerifier.verify();
+      // FR-2 (SD-LEO-INFRA-TESTEXEC-TIMEOUT-INCONCLUSIVE-001): an 'inconclusive'
+      // outcome means the run was killed by a fleet-load timeout, not a genuine
+      // failure — retry exactly once with backoff before treating it as blocking.
+      results.testExecution = await resolveTestExecutionWithRetry(testVerifier);
 
       if (!results.testExecution.passed) {
         results.overallPassed = false;
@@ -352,8 +402,11 @@ function printSummary(results) {
   console.log('');
 }
 
-// Run main
-main().catch(error => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+// Run main (guarded so tests can import resolveTestExecutionWithRetry without
+// triggering the CLI — SD-LEO-INFRA-TESTEXEC-TIMEOUT-INCONCLUSIVE-001)
+if (isMainModule(import.meta.url)) {
+  main().catch(error => {
+    console.error('Fatal error:', error);
+    process.exit(1);
+  });
+}

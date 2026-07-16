@@ -128,4 +128,35 @@ describe('emitFeedback', () => {
       emitFeedback({ supabase, title: 't', description: 'd' })
     ).rejects.toThrow(/INSERT failed: pg constraint violation/);
   });
+
+  // SD-LEO-INFRA-GAUGE-FINDING-KNOWN-STATE-ACK-001: dedup_key was previously used ONLY to compute the
+  // one-way dedup_hash (never itself persisted) — downstream consumers (e.g. the sourcing/refill staging
+  // pipeline) had no stable finding identity to read back. Persisting it into metadata.dedup_key closes
+  // that gap without changing the hash contract.
+  it('persists dedup_key into metadata.dedup_key (durable fingerprint, independent of the hash)', async () => {
+    const supabase = buildSupabase();
+    await emitFeedback({
+      supabase, title: 'WAVE_LINKAGE_STARVATION: wave-linkage coverage 62% < 80%', description: 'd',
+      dedup_key: 'WAVE_LINKAGE_STARVATION',
+    });
+    const insertCall = supabase._insert.mock.calls[0][0];
+    expect(insertCall.metadata.dedup_key).toBe('WAVE_LINKAGE_STARVATION');
+  });
+
+  it('does not overwrite a caller-supplied metadata.dedup_key with the dedup_key arg', async () => {
+    const supabase = buildSupabase();
+    await emitFeedback({
+      supabase, title: 't', description: 'd',
+      metadata: { dedup_key: 'explicit-value' }, dedup_key: 'different-value',
+    });
+    const insertCall = supabase._insert.mock.calls[0][0];
+    expect(insertCall.metadata.dedup_key).toBe('explicit-value');
+  });
+
+  it('omits metadata.dedup_key when no dedup_key is supplied (no regression)', async () => {
+    const supabase = buildSupabase();
+    await emitFeedback({ supabase, title: 't', description: 'd' });
+    const insertCall = supabase._insert.mock.calls[0][0];
+    expect(insertCall.metadata).not.toHaveProperty('dedup_key');
+  });
 });
