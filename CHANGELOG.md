@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-07-16](#2026-07-16)
+  - [Features](#features)
   - [Infrastructure](#infrastructure)
 - [2026-07-13](#2026-07-13)
   - [Infrastructure](#infrastructure)
@@ -93,6 +94,13 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-07-16
+
+### Features
+- **Chairman-designated high-consequence stage-gates now actually BLOCK the venture** - PR #6104 (SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001)
+  - **What shipped**: chairman-delegated 2026-07-14 ("operate autonomously, make high-consequence gates bind"). `chairman_decisions.blocking` existed and already drove escalation email priority + SLA exemption + queue sort order, but never actually held venture advancement — a `blocking=true` pending decision and a `blocking=false` advisory one let the venture through identically. `venture_stages.is_high_consequence` (new, chairman-configurable, independent of `gate_type`/`review_mode` — e.g. can mark a `gate_type='none'` stage like a first live-money/launch stage that has no gate today) now drives two things: every mint site in `lib/eva/stage-execution-worker.js` sets `blocking=true` and forces minting past the pre-existing `stage_creates_decision` self-skip, and both venture-advancement chokepoints (SQL RPC `fn_advance_venture_stage`, JS daemon `_advanceStage`) HOLD while that row is pending — fail-closed on evaluator error (unlike the 3 pre-existing backstops, which fail open for availability), behind a `LEO_HIGH_CONSEQUENCE_GATES_ENABLED` kill-switch.
+  - **Adversarial review caught the feature shipping inert, twice**: a Deep-tier `/ship` review (mandatory for this PR's migration-touching diff) found the first cut was inert for its own headline case — nothing ever minted the blocking row for a stage that wasn't already kill/promotion/review-gated, because the autonomy model auto-approved plain gates away before any mint call was reached. Fixed by making the review-mode block and `_handleChairmanGate` trigger on `isHighConsequence` and bypass autonomy entirely. A second adversarial pass found the fix still incomplete — a third, independent auto-approve shortcut (the pending-decision canonical-RPC resolver) lacked the same guard, and a mint failure fell through to fail-open instead of fail-closed; both closed. A third pass confirmed the gap closed and verified the ordering guarantee with a live-code test. Two secondary bugs found along the way were also fixed: the JS chokepoint silently swallowed a Supabase `{error}` response instead of throwing into its own fail-closed catch, and `createOrReusePendingDecision`'s reuse path never synced `blocking` onto an already-pending decision when a stage was reclassified.
+  - **Scope boundary (known, not silent)**: enforcement covers the two canonical chokepoints, matching every prior stage-gating feature's precedent. `lib/agents/venture-ceo/handlers.js`'s autonomous-agent path writes `current_lifecycle_stage` with no gate of any kind and is not yet covered — a pre-existing, already-censused bypass (`docs/architecture/stage-advancement-path-census.md` #16), tracked as a fast-follow candidate, not this SD's scope.
+  - **Verification**: 6600+ unit tests + 9 real-DB integration tests, zero regressions across 3 rounds of fixes. Handoffs LEAD-TO-PLAN 96, PLAN-TO-EXEC 87, EXEC-TO-PLAN 93, PLAN-TO-LEAD 95, LEAD-FINAL-APPROVAL 96.
 
 ### Infrastructure
 - **Real `timeFromDefectToShippedFix` in the learning-moat gauge** - PR #6101 (SD-LEO-GEN-SATELLITE-LEARNING-SPEED-001)
