@@ -21,13 +21,23 @@
  * Stage 6's venture_stages.is_high_consequence is temporarily flipped true in
  * beforeAll and restored to false in afterAll. This is deliberately the ONLY
  * test in the suite that mutates the shared venture_stages config row, and is
- * judged safe because: (a) gate_type='none'/review_mode='auto' means NO
- * existing production code path ever calls createOrReusePendingDecision for
- * this stage today (review-mode-pause requires review_mode='review';
- * _handleChairmanGate requires kill/promotion; product-review is hardcoded to
- * stage 23) — so no OTHER venture can acquire a blocking=true row here during
- * the test window regardless of the classification flip; (b) zero real
- * ventures are currently at stage 6, confirmed live before authoring this file.
+ * judged safe because zero real ventures are currently at stage 6 (confirmed
+ * live before authoring this file), so no other venture is affected by the
+ * flip. NOTE (adversarial-review fix, PR #6104): this suite's tests below all
+ * pre-seed the chairman_decisions row directly (insertDecision) and drive only
+ * the two ENFORCEMENT choke points in isolation -- they do NOT exercise the
+ * MINTING path (createOrReusePendingDecision actually being called for a
+ * gate_type='none' stage). An earlier draft of this comment claimed no
+ * production path ever mints a decision for such a stage, treating that as a
+ * safe, permanent assumption; a Deep-tier adversarial /ship review + RCA
+ * showed that was in fact the bug (the feature was inert for exactly this
+ * case) and it is now fixed in stage-execution-worker.js's review-mode block
+ * and _handleChairmanGate (both now trigger on is_high_consequence regardless
+ * of gate_type/review_mode, bypassing autonomy auto-approve). That mint-path
+ * fix is covered by REAL (unmocked) method-level unit tests in
+ * tests/unit/eva/stage-execution-worker-high-consequence-mint.test.js instead
+ * of here, since exercising it live would require running real processStage()
+ * stage execution, which this schema/RLS-focused suite deliberately avoids.
  *
  * Uses real Supabase service-role connection (requires .env). Skipped if no
  * real DB. Creates disposable ventures whose names do NOT match
