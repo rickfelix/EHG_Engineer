@@ -2,6 +2,13 @@
 -- Migration: cost_governor_log — durable decision log for the cost/token governor
 -- SD: SD-LEO-INFRA-COST-TOKEN-GOVERNANCE-001 (FR-3)
 -- Date: 2026-07-16
+-- @chairman-gated: additive table WITH RLS+policy — outside the Adam delegated-apply scope
+--   (additive-no-policy/rls only), so the prod apply requires the chairman @approved-by
+--   guard. Deliberately STAGED (not applied pre-ceremony): the governor-log writer
+--   (lib/cost/governor-log.js) and CLI (scripts/cost-governor.mjs) are FAIL-OPEN and tolerate
+--   the table's absence (every insert/select degrades to {ok:false}/warn, never throws).
+--   cost_governor_log is allowlisted in scripts/lint/schema-reference-lint until applied —
+--   remove that entry and re-run `npm run schema:snapshot:lint` after a chairman applies this.
 --
 -- Additive only. Creates the durable record the ENFORCING cost governor writes on
 -- every decision (regen throttle / down-tier / anomaly / threshold tune). This is the
