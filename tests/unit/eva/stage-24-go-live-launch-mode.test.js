@@ -4,7 +4,7 @@ import { analyzeStage24GoLive } from '../../../lib/eva/stage-templates/analysis-
 
 const silentLogger = { info: () => {}, warn: () => {}, error: () => {} };
 
-function buildSupabase({ ventureRow, appRow, telemetryRow } = {}) {
+function buildSupabase({ ventureRow, appRow, telemetryRow, tokenBudgetRow, chairmanDecisionRow, previewRow, guardrailUpsertError } = {}) {
   return {
     from: (table) => {
       if (table === 'ventures') {
@@ -24,6 +24,25 @@ function buildSupabase({ ventureRow, appRow, telemetryRow } = {}) {
         // SD-LEO-INFRA-LAUNCH-MODE-POLICY-002 (FR-3): the sim-label enforcement
         // reads prior launch evidence; these -001 scenarios have none (empty).
         const chain = { eq: () => chain, in: async () => ({ data: [], error: null }) };
+        return { select: () => chain };
+      }
+      // SD-LEO-INFRA-VENTURE-SUBSTRATE-WIRING-001 FR-1/FR-3: the live-mode-verified
+      // branch now also reads/writes these tables. Safe defaults (no row found) so
+      // the pre-existing -001/-002 test cases above are unaffected; guardrailUpsertError
+      // and the *Row params let the new FR-1/FR-3 test cases below exercise the wiring.
+      if (table === 'venture_token_budgets') {
+        const chain = { eq: () => chain, maybeSingle: async () => ({ data: tokenBudgetRow || null, error: null }) };
+        return { select: () => chain };
+      }
+      if (table === 'chairman_decisions') {
+        const chain = { eq: () => chain, is: () => chain, order: () => chain, limit: () => chain, maybeSingle: async () => ({ data: chairmanDecisionRow || null, error: null }) };
+        return { select: () => chain };
+      }
+      if (table === 'venture_guardrail_state') {
+        return { upsert: async () => ({ error: guardrailUpsertError || null }) };
+      }
+      if (table === 'venture_preview_instances') {
+        const chain = { eq: () => chain, order: () => chain, limit: () => chain, maybeSingle: async () => ({ data: previewRow || null, error: null }) };
         return { select: () => chain };
       }
       throw new Error(`unexpected table: ${table}`);
@@ -188,5 +207,106 @@ describe('analyzeStage24GoLive launch_mode branch (SD-LEO-INFRA-LAUNCH-MODE-POLI
     expect(evidence.verdict).toBe('PASS');
     expect(typeof evidence.external_observation.verified).toBe('boolean');
     expect(Array.isArray(evidence.external_observation.checks)).toBe(true);
+  });
+
+  // SD-LEO-INFRA-VENTURE-SUBSTRATE-WIRING-001 FR-1/FR-3: promote()/publish() and
+  // evaluateGuardrails()/persistGuardrailDecisions() had ZERO production callers.
+  // These pin that the ONLY branch reaching a real external-verification launch
+  // (never the simulated branch) wires both, and that a simulated go-live never
+  // invokes either (avoiding the "simulated-mode leakage" risk flagged at LEAD).
+  describe('SD-LEO-INFRA-VENTURE-SUBSTRATE-WIRING-001 FR-1/FR-3 wiring', () => {
+    function liveVerifiedParams(supabase) {
+      return {
+        stage23Data: { verdict: 'PASS' },
+        stage22Data: { channels: [] },
+        ventureName: 'TestVenture',
+        logger: silentLogger,
+        launchedAt: '2026-07-03T00:00:00.000Z',
+        supabase,
+        ventureId: 'venture-1',
+      };
+    }
+
+    it('simulated-mode launch NEVER invokes the guardrails/deploy wiring (no result.guardrails_persisted/promote_status)', async () => {
+      const supabase = buildSupabase({ ventureRow: { launch_mode: 'simulated' } });
+      const result = await analyzeStage24GoLive(liveVerifiedParams(supabase));
+      expect(result.launch_status).toBe('launched');
+      expect(result.artifacts[0].payload.labeled_simulation).toBe(true);
+      expect(result.guardrails_persisted).toBeUndefined();
+      expect(result.promote_status).toBeUndefined();
+    });
+
+    it('live-verified launch persists real guardrail decisions (fail-closed on unmeasured inputs, never a fabricated pass)', async () => {
+      global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+      const supabase = buildSupabase({
+        ventureRow: { launch_mode: 'live' },
+        appRow: { id: 'app-1', deployment_url: 'https://example.com', metadata: { billing_product_id: 'prod_123' }, metrics_cadence_hours: null },
+        telemetryRow: { kpis: { signups: 3 }, pulled_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(), ingest_status: 'ok' },
+        tokenBudgetRow: { budget_allocated: 250000, budget_remaining: 200000 },
+        chairmanDecisionRow: { decision: 'proceed' },
+      });
+      const result = await analyzeStage24GoLive(liveVerifiedParams(supabase));
+      expect(result.launch_status).toBe('launched');
+      expect(result.guardrails_persisted).toBe(true);
+      expect(result.guardrails_persist_error).toBeUndefined();
+    });
+
+    it('live-verified launch: a persist error is surfaced, never silently swallowed (fail-soft on the go-live result, loud on the field)', async () => {
+      global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+      const supabase = buildSupabase({
+        ventureRow: { launch_mode: 'live' },
+        appRow: { id: 'app-1', deployment_url: 'https://example.com', metadata: { billing_product_id: 'prod_123' }, metrics_cadence_hours: null },
+        telemetryRow: { kpis: { signups: 3 }, pulled_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(), ingest_status: 'ok' },
+        guardrailUpsertError: { message: 'venture_guardrail_state unavailable' },
+      });
+      const result = await analyzeStage24GoLive(liveVerifiedParams(supabase));
+      expect(result.launch_status).toBe('launched'); // the launch decision itself is not blocked by a wiring failure
+      expect(result.guardrails_persisted).toBe(false);
+      expect(result.guardrails_persist_error).toBe('venture_guardrail_state unavailable');
+    });
+
+    it('live-verified launch with no venture_preview_instances row: skips promote() (never fabricates a sha), reports skipped_no_verified_sha', async () => {
+      global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+      const supabase = buildSupabase({
+        ventureRow: { launch_mode: 'live' },
+        appRow: { id: 'app-1', deployment_url: 'https://example.com', metadata: { billing_product_id: 'prod_123' }, metrics_cadence_hours: null },
+        telemetryRow: { kpis: { signups: 3 }, pulled_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(), ingest_status: 'ok' },
+      });
+      const result = await analyzeStage24GoLive(liveVerifiedParams(supabase));
+      expect(result.launch_status).toBe('launched');
+      expect(result.promote_status).toBe('skipped_no_verified_sha');
+    });
+
+    it('live-verified launch with a verified preview sha: calls promote() in PLAN mode only (never execute:true) -- writes a planned venture_deployments row, no real deploy', async () => {
+      global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+      let insertedRow = null;
+      const supabase = buildSupabase({
+        ventureRow: {
+          launch_mode: 'live',
+          stack_descriptor: { db_provider: 'neon', deployment_target: 'cloud-run', connection: { provider: 'neon', secret_ref: 'ref-1' } },
+        },
+        appRow: { id: 'app-1', deployment_url: 'https://example.com', metadata: { billing_product_id: 'prod_123' }, metrics_cadence_hours: null },
+        telemetryRow: { kpis: { signups: 3 }, pulled_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(), ingest_status: 'ok' },
+        previewRow: { sha: 'abc1234' },
+      });
+      // promote() also queries 'ventures' (already handled) and inserts into 'venture_deployments' --
+      // wrap the base mock's `from` to add that table without duplicating the whole helper.
+      const baseFrom = supabase.from.bind(supabase);
+      supabase.from = (table) => {
+        if (table === 'venture_deployments') {
+          return {
+            insert: (row) => {
+              insertedRow = row;
+              return { select: () => ({ maybeSingle: async () => ({ data: { id: 'dep-1' }, error: null }) }) };
+            },
+          };
+        }
+        return baseFrom(table);
+      };
+      const result = await analyzeStage24GoLive(liveVerifiedParams(supabase));
+      expect(result.launch_status).toBe('launched');
+      expect(result.promote_status).toBe('planned'); // plan-mode: no deps.execute passed -- this SD never bypasses the 001-A chairman gate
+      expect(insertedRow).toMatchObject({ venture_id: 'venture-1', sha: 'abc1234', status: 'planned' });
+    });
   });
 });
