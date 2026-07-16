@@ -14,6 +14,7 @@ import {
   runProbe,
 } from '../../../scripts/adam-coordinator-health.mjs';
 import * as waveLinkage from '../../../lib/roadmap/wave-linkage-coverage.js';
+import * as genuineWorker from '../../../lib/fleet/genuine-worker.mjs';
 
 const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString();
 
@@ -71,6 +72,17 @@ describe('computeUtilization (TS-1, TS-2)', () => {
     const result = await computeUtilization(supabase);
     expect(result.idle).toBe(1);
     expect(result.dispatchable_backlog_size).toBe(1);
+  });
+
+  it('calls liveFleetWorkers directly (structural reuse-proof, TS-7) rather than recomputing the classification', async () => {
+    const spy = vi.spyOn(genuineWorker, 'liveFleetWorkers');
+    const supabase = makeFakeSupabase({
+      claude_sessions: [{ session_id: 's3', sd_key: 'SD-X', status: 'active', heartbeat_at: minutesAgo(1), metadata: {} }],
+      strategic_directives_v2: [],
+    });
+    await computeUtilization(supabase);
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
   });
 
   it('excludes adam/coordinator roles from the live-worker count', async () => {
