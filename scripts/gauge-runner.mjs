@@ -68,6 +68,7 @@ import {
   hasOpenFinding,
 } from '../lib/governance/plan-drift-detectors.js';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
+import { checkGhostCeos } from '../lib/agents/ghost-ceo-gauge.js';
 
 const RECURSION_GOVERNOR_DIMENSION = 'recursion-governor-ratio';
 const PLAN_DRIFT_MIX_DIMENSION = 'plan-drift-mix';
@@ -282,6 +283,14 @@ function buildDetectorResolvers(supabase) {
         skipRoute,
         value: `active-rung=${mixPctStr}${sustained ? ` (SUSTAINED BREACH x${streak})` : ''}`,
       };
+    },
+    // SD-LEO-GEN-SATELLITE-AGENT-LIFECYCLE-001: registry's tripWhen reads result.status
+    // directly, so `count` here is purely the console GAUGE-line display convention (matches
+    // every other count-based entry above) -- the full NO_DATA/OK/GHOSTS_FOUND distinction
+    // is preserved in the raw result embedded in any routed finding.
+    'ghost-ceo': async () => {
+      const result = await checkGhostCeos(supabase);
+      return { ...result, count: result.ghosts.length };
     },
   };
 }
