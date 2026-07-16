@@ -46,14 +46,22 @@ independent of `fn_is_chairman`. Per FR-4 ("in-scope siblings folded in"), and b
 same `raw_app_meta_data` backfill enabler, it is fixed in this SD (migration `_c_`) rather than
 deferred, so the vulnerability class is closed completely.
 
-## Backfill targets (legitimate chairman identities)
+## Backfill targets (identities the chairman-authz predicate treats as privileged)
 
-- `69c8aa7a-7661-48ed-9779-746fa6290873` — rickfelix2000@gmail.com (chairman)
-- `48d7ec58-faf9-4772-ba72-fb0c2fb297da` — test@ehg.dev (chairman)
+`fn_is_chairman()` authorizes `role IN ('chairman','admin','owner')`. The two current holders (verified live) are:
 
-> Note: `test@ehg.dev` currently holds chairman. It is backfilled to avoid lockout (preserving the
-> status quo, per the no-lockout acceptance criterion). Whether a test account *should* retain
-> chairman is a separate access-governance question for the chairman — **out of scope** for this SD.
+- `69c8aa7a-7661-48ed-9779-746fa6290873` — rickfelix2000@gmail.com — `raw_user_meta_data.role = 'admin'`
+- `48d7ec58-faf9-4772-ba72-fb0c2fb297da` — test@ehg.dev — `raw_user_meta_data.role = 'owner'`
+
+The backfill copies each identity's **actual** role value (admin / owner — not a hardcoded 'chairman')
+into `raw_app_meta_data`, and **merge-preserves** the existing app_metadata `provider`/`providers`
+keys (clobbering those would break Supabase auth). Post-fix authorization is therefore identical:
+both remain `fn_is_chairman()=TRUE`; for the archetype policy (admin/chairman only), `admin` still
+matches and `owner` still does not — exactly as before this change (no regression, no lockout).
+
+> Note: `test@ehg.dev` (role=owner) is a test account. It is backfilled to preserve the status quo
+> (no-lockout criterion). Whether a test account *should* retain owner/chairman-equivalent access is a
+> separate access-governance question for the chairman — **out of scope** for this SD.
 
 ## Deliverables (all STAGED — chairman applies, in order)
 
