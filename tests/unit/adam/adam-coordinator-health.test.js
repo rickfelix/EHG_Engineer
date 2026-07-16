@@ -15,6 +15,7 @@ import {
 } from '../../../scripts/adam-coordinator-health.mjs';
 import * as waveLinkage from '../../../lib/roadmap/wave-linkage-coverage.js';
 import * as genuineWorker from '../../../lib/fleet/genuine-worker.mjs';
+import * as coordinatorResolve from '../../../lib/coordinator/resolve.cjs';
 
 const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString();
 
@@ -30,6 +31,7 @@ function makeFakeSupabase(tables, { onInsert } = {}) {
         select() { return builder; },
         eq(col, val) { filters.push((r) => r[col] === val); return builder; },
         in(col, vals) { filters.push((r) => vals.includes(r[col])); return builder; },
+        is(col, val) { filters.push((r) => (r[col] ?? null) === val); return builder; },
         not(col, op, val) { filters.push((r) => r[col] !== val); return builder; },
         order(col, { ascending } = {}) { orderCol = col; orderAsc = ascending !== false; return builder; },
         limit(n) { limitN = n; return builder; },
@@ -67,10 +69,22 @@ describe('computeUtilization (TS-1, TS-2)', () => {
       claude_sessions: [
         { session_id: 's2', sd_key: null, claimed_at: null, worktree_path: null, continuous_sds_completed: 3, status: 'idle', heartbeat_at: minutesAgo(1), metadata: {} },
       ],
-      strategic_directives_v2: [{ id: 'x', status: 'draft' }],
+      strategic_directives_v2: [{ id: 'x', status: 'draft', claiming_session_id: null }],
     });
     const result = await computeUtilization(supabase);
     expect(result.idle).toBe(1);
+    expect(result.dispatchable_backlog_size).toBe(1);
+  });
+
+  it('excludes an already-claimed draft SD from the dispatchable backlog count (no false-positive breach signal)', async () => {
+    const supabase = makeFakeSupabase({
+      claude_sessions: [],
+      strategic_directives_v2: [
+        { id: 'x', status: 'draft', claiming_session_id: null },
+        { id: 'y', status: 'draft', claiming_session_id: 'some-worker-session' },
+      ],
+    });
+    const result = await computeUtilization(supabase);
     expect(result.dispatchable_backlog_size).toBe(1);
   });
 
@@ -126,18 +140,50 @@ describe('computePlanAdherence (TS-2)', () => {
 });
 
 describe('computeFailLoudIntegrity (TS-3)', () => {
-  it('fails loud (never null-coalesces to 0) on a query error', async () => {
-    const supabase = { from: () => ({ select: () => ({ eq: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }) }) };
+  it('fails loud (never null-coalesces to 0) on a query error in the recompute path', async () => {
+    const supabase = { from: () => ({ select: () => ({ eq: () => ({ is: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }) }) }) };
     const result = await computeFailLoudIntegrity(supabase, {});
     expect(result.integrity_ok).toBe(false);
     expect(result.error).toBe('boom');
   });
 
-  it('flags the specific diverging field on a seeded self-report mismatch', async () => {
-    const supabase = makeFakeSupabase({ strategic_directives_v2: [{ id: '1', status: 'draft' }, { id: '2', status: 'draft' }] });
-    const result = await computeFailLoudIntegrity(supabase, { selfReportedCounts: { dispatchable_count: 0 } });
+  it('fails loud on an error from the self-reported (computeClaimableLeaves) source, never coalescing to 0', async () => {
+    const supabase = makeFakeSupabase({ strategic_directives_v2: [] });
+    const claimableLeavesFn = vi.fn().mockResolvedValue({ error: { message: 'ranker failed' }, claimable: [] });
+    const result = await computeFailLoudIntegrity(supabase, { claimableLeavesFn });
+    expect(result.integrity_ok).toBe(false);
+    expect(result.error).toBe('ranker failed');
+  });
+
+  it('flags a seeded self-report OVER-count (self_reported > recomputed) as a genuine integrity violation', async () => {
+    const supabase = makeFakeSupabase({ strategic_directives_v2: [{ id: '1', status: 'draft', claiming_session_id: null }] });
+    const result = await computeFailLoudIntegrity(supabase, { selfReportedCounts: { dispatchable_count: 5 } });
     expect(result.integrity_ok).toBe(false);
     expect(result.divergent_fields).toEqual(['dispatchable_count']);
+  });
+
+  it('does NOT flag a self-reported UNDER-count as a violation (ranker narrowing the raw set is healthy, not a divergence)', async () => {
+    const supabase = makeFakeSupabase({ strategic_directives_v2: [{ id: '1', status: 'draft', claiming_session_id: null }, { id: '2', status: 'draft', claiming_session_id: null }] });
+    const result = await computeFailLoudIntegrity(supabase, { selfReportedCounts: { dispatchable_count: 0 } });
+    expect(result.integrity_ok).toBe(true);
+  });
+
+  it('by default calls a genuinely SEPARATE source (computeClaimableLeaves), not a diff against itself — the CRITICAL fix', async () => {
+    const supabase = makeFakeSupabase({ strategic_directives_v2: [{ id: '1', status: 'draft', claiming_session_id: null }] });
+    const claimableLeavesFn = vi.fn().mockResolvedValue({ claimable: [{ sd_key: 'SD-A', status: 'draft' }, { sd_key: 'SD-B', status: 'draft' }] });
+    const result = await computeFailLoudIntegrity(supabase, { claimableLeavesFn });
+    expect(claimableLeavesFn).toHaveBeenCalledTimes(1);
+    // recomputed=1 (one draft, unclaimed row) vs self_reported=2 (from the injected separate source) -> a REAL divergence
+    expect(result.integrity_ok).toBe(false);
+    expect(result.recomputed.dispatchable_count).toBe(1);
+    expect(result.self_reported.dispatchable_count).toBe(2);
+  });
+
+  it('agrees (integrity_ok=true) when the two independent sources genuinely match', async () => {
+    const supabase = makeFakeSupabase({ strategic_directives_v2: [{ id: '1', status: 'draft', claiming_session_id: null }] });
+    const claimableLeavesFn = vi.fn().mockResolvedValue({ claimable: [{ sd_key: 'SD-A', status: 'draft' }] });
+    const result = await computeFailLoudIntegrity(supabase, { claimableLeavesFn });
+    expect(result.integrity_ok).toBe(true);
   });
 });
 
@@ -212,5 +258,23 @@ describe('runProbe integration (TS-1..TS-5 wired end-to-end)', () => {
     expect(reading.integrity.integrity_ok).toBe(true);
     expect(inserted.some((i) => i.t === 'codebase_health_snapshots')).toBe(true);
     expect(inserted.some((i) => i.t === 'session_coordination')).toBe(false);
+  });
+
+  it('on a real breach, resolves the live coordinator session id (not the broadcast fallback)', async () => {
+    vi.spyOn(waveLinkage, 'computeWaveLinkageCoverage').mockResolvedValueOnce({ coverage: null, linked: 0, total: 0, starved: false, unlinkedKeys: [] });
+    vi.spyOn(coordinatorResolve, 'getActiveCoordinatorId').mockResolvedValueOnce('live-coordinator-session-1');
+    const inserted = [];
+    const supabase = makeFakeSupabase(
+      {
+        claude_sessions: [{ session_id: 'idle1', sd_key: null, claimed_at: null, worktree_path: null, continuous_sds_completed: 1, status: 'idle', heartbeat_at: minutesAgo(1), metadata: {} }],
+        strategic_directives_v2: [{ id: 'x', status: 'draft', claiming_session_id: null }],
+        codebase_health_snapshots: [],
+      },
+      { onInsert: (t, r) => inserted.push({ t, r }) },
+    );
+    await runProbe(supabase, {});
+    const advisory = inserted.find((i) => i.t === 'session_coordination');
+    expect(advisory).toBeDefined();
+    expect(advisory.r.target_session).toBe('live-coordinator-session-1');
   });
 });

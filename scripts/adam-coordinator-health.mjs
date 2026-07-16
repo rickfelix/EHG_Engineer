@@ -17,6 +17,8 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { liveFleetWorkers } from '../lib/fleet/genuine-worker.mjs';
 import { computeWaveLinkageCoverage } from '../lib/roadmap/wave-linkage-coverage.js';
+import { computeClaimableLeaves } from './coordinator-backlog-rank.mjs';
+import { getActiveCoordinatorId } from '../lib/coordinator/resolve.cjs';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 
 export const DIMENSION = 'adam_coordinator_health';
@@ -44,6 +46,7 @@ export async function computeUtilization(supabase, { nowMs = Date.now() } = {}) 
     .from('strategic_directives_v2')
     .select('id')
     .eq('status', 'draft')
+    .is('claiming_session_id', null)
     .limit(1000);
   if (bErr) throw new Error(`utilization: backlog query failed: ${bErr.message}`);
 
@@ -88,20 +91,44 @@ export async function computePlanAdherence(supabase) {
 }
 
 /**
- * KPI-3: fail-loud integrity guard. Independently recomputes the dispatchable-count signal
- * and diffs it against the coordinator's self-reported count. A query failure in the
- * recomputation path is surfaced as integrity_ok=false with the error message attached — it
- * MUST NEVER be null-coalesced into a silent 0/"no work" result (the masked dispatch_rank
- * column bug this KPI targets).
+ * KPI-3: fail-loud integrity guard. Independently recomputes a raw dispatchable-count signal
+ * (draft + unclaimed) and cross-checks it against the coordinator's OWN self-reported count —
+ * computeClaimableLeaves (scripts/coordinator-backlog-rank.mjs), the same dependency/hold-aware
+ * claimable-leaf computation the ranker and worker-checkin.cjs act on. This is a genuinely
+ * independent second code path (not a diff against itself) — the exact class of gap the masked
+ * dispatch_rank column bug exploited.
+ *
+ * Invariant, not exact equality: computeClaimableLeaves only ever NARROWS the raw draft+unclaimed
+ * set (dependency blocks, human-action holds, fixture skips all REMOVE candidates, never add) —
+ * so self_reported <= recomputed is the healthy state, verified live (11 raw drafts, 8 in-flight
+ * excluded, 10 held for human-action, 3 truly claimable). A violation (self_reported > recomputed)
+ * is the genuine integrity failure this KPI targets — the ranker reporting MORE claimable work
+ * than the raw eligible set contains is a logical impossibility under correct operation. A query
+ * failure in EITHER path is surfaced as integrity_ok=false with the error attached — it MUST NEVER
+ * be null-coalesced into a silent 0/"no work" result. selfReportedCounts (test seam) overrides the
+ * real computeClaimableLeaves call so unit tests can inject a divergence without a live DB.
  */
-export async function computeFailLoudIntegrity(supabase, { selfReportedCounts } = {}) {
-  const { data, error } = await supabase.from('strategic_directives_v2').select('id').eq('status', 'draft');
+export async function computeFailLoudIntegrity(supabase, { selfReportedCounts, claimableLeavesFn = computeClaimableLeaves } = {}) {
+  const { data, error } = await supabase
+    .from('strategic_directives_v2')
+    .select('id')
+    .eq('status', 'draft')
+    .is('claiming_session_id', null);
   if (error) {
     return { integrity_ok: false, error: error.message, divergent_fields: ['dispatchable_count'] };
   }
   const recomputed = { dispatchable_count: (data || []).length };
-  const selfReported = selfReportedCounts || recomputed;
-  const divergentFields = Object.keys(recomputed).filter((k) => recomputed[k] !== selfReported[k]);
+
+  let selfReported = selfReportedCounts;
+  if (!selfReported) {
+    const leaves = await claimableLeavesFn(supabase, { quiet: true });
+    if (leaves?.error) {
+      return { integrity_ok: false, error: leaves.error.message || String(leaves.error), divergent_fields: ['dispatchable_count'] };
+    }
+    selfReported = { dispatchable_count: (leaves?.claimable || []).filter((sd) => sd.status === 'draft').length };
+  }
+
+  const divergentFields = Object.keys(recomputed).filter((k) => (selfReported[k] ?? 0) > recomputed[k]);
   return {
     integrity_ok: divergentFields.length === 0,
     recomputed,
@@ -121,9 +148,12 @@ export function classifyBreach({ utilization, planAdherence, integrity }) {
 /**
  * Pure row-builder for the propose-only advisory (mirrors gauge-runner.mjs's
  * buildPlanDriftAdvisoryRows shape — a testable pure function, DB write kept separate).
- * NEVER calls a claim/dispatch function (CONST-002).
+ * NEVER calls a claim/dispatch function (CONST-002). Targets the coordinator only — per the
+ * established convention (gauge-runner.mjs's pushPlanDriftAdvisory), the coordinator IS the
+ * chairman-facing surface (single pane of glass); there is no separate resolvable "chairman
+ * session".
  */
-export function buildCoordinatorHealthAdvisoryRows(reading, { coordinatorId, chairmanId }) {
+export function buildCoordinatorHealthAdvisoryRows(reading, { coordinatorId }) {
   const which = [
     reading.breach.idleWithBacklog && 'idle workers + non-empty dispatchable backlog',
     reading.breach.integrityBreach && `fail-loud integrity divergence (${(reading.integrity.divergent_fields || []).join(', ')})`,
@@ -139,20 +169,13 @@ export function buildCoordinatorHealthAdvisoryRows(reading, { coordinatorId, cha
     sender_type: 'adam-coordinator-health',
     payload,
   };
-  const chairmanRow = chairmanId
-    ? { message_type: 'INFO', target_session: chairmanId, subject, sender_type: 'adam-coordinator-health', payload }
-    : null;
-  return { coordinatorRow, chairmanRow };
+  return { coordinatorRow };
 }
 
 export async function pushCoordinatorHealthAdvisory(supabase, reading, recipients = {}) {
-  const { coordinatorRow, chairmanRow } = buildCoordinatorHealthAdvisoryRows(reading, recipients);
+  const { coordinatorRow } = buildCoordinatorHealthAdvisoryRows(reading, recipients);
   const { error: cErr } = await supabase.from('session_coordination').insert(coordinatorRow);
   if (cErr) console.error(`[adam-coordinator-health] advisory (coordinator) failed (non-fatal): ${cErr.message}`);
-  if (chairmanRow) {
-    const { error: hErr } = await supabase.from('session_coordination').insert(chairmanRow);
-    if (hErr) console.error(`[adam-coordinator-health] advisory (chairman) failed (non-fatal): ${hErr.message}`);
-  }
 }
 
 /** FR-4: persist a reading via the existing codebase_health_snapshots surface (no new table). */
@@ -191,7 +214,10 @@ export async function runProbe(supabase, opts = {}) {
     breach,
   };
   await persistReading(supabase, reading);
-  if (breach.breach) await pushCoordinatorHealthAdvisory(supabase, reading, opts.recipients || {});
+  if (breach.breach) {
+    const recipients = opts.recipients || { coordinatorId: await getActiveCoordinatorId(supabase).catch(() => null) };
+    await pushCoordinatorHealthAdvisory(supabase, reading, recipients);
+  }
   return reading;
 }
 
