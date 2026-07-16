@@ -181,7 +181,24 @@ function buildDetectorResolvers(supabase) {
         .or('metadata->>park_review_at.not.is.null,metadata->>exec_boundary_hold_review_at.not.is.null,metadata->>min_tier_rank_review_at.not.is.null')
         .limit(5000);
       if (error) throw new Error('hold-state-overdue query failed: ' + error.message);
-      return { ...findOverdueHolds(data, Date.now()), mode: readHoldStateMode() };
+
+      // Real CONSUMER of hold_state_contract_violations (OPERATOR_CONTRACT gate, FR-8): the
+      // migration's own comment names this table "the calibration signal reviewed before
+      // promoting any surface to enforce mode" -- surface a recent-window count here so a
+      // coordinator reviewing this gauge sees both signals (overdue holds + observe-mode
+      // violation volume) in one place, rather than the violations table being write-only.
+      const sevenDaysAgoIso = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+      const { count: recentViolationCount, error: violationsErr } = await supabase
+        .from('hold_state_contract_violations')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', sevenDaysAgoIso);
+      if (violationsErr) throw new Error('hold-state-overdue violations query failed: ' + violationsErr.message);
+
+      return {
+        ...findOverdueHolds(data, Date.now()),
+        mode: readHoldStateMode(),
+        recentViolationCount: recentViolationCount || 0,
+      };
     },
     // Filesystem detector (stale-tree precedent): parses REVISIT-IF tags from live
     // source, so moved tags stay visible; tests/fixtures excluded by default so the
