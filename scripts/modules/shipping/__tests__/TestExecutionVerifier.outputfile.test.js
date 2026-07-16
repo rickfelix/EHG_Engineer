@@ -114,6 +114,27 @@ describe('TestExecutionVerifier.runTests — timeout/kill classification (SD-LEO
     expect(result.passed).toBe(true);
   });
 
+  it('a non-zero exit with a JSON report showing 0 failures and no kill signal still hard-blocks (pre-existing edge case, unchanged)', () => {
+    // e.g. a vitest internal/setup crash after writing an empty-failures report —
+    // not a load timeout, not a test failure, but the pre-existing behavior for
+    // this corner (passed:false) must not regress when the kill-detection branch
+    // was added.
+    execSync.mockImplementation(() => {
+      const err = new Error('vitest exited 1');
+      err.status = 1;
+      throw err;
+    });
+    readFileSync.mockReturnValue(
+      JSON.stringify({ numTotalTests: 5, numPassedTests: 5, numFailedTests: 0 })
+    );
+
+    const verifier = new TestExecutionVerifier({ cwd: '/repo' });
+    const result = verifier.runTests();
+
+    expect(result.passed).toBe(false);
+    expect(result.outcome).toBe('fail');
+  });
+
   it('still hard-blocks when a kill signal is present but the JSON report shows real failures', () => {
     // A crashing/self-terminating test could present signal=SIGTERM without
     // being a genuine load timeout. JSON-report failure evidence must win.

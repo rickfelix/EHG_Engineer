@@ -210,29 +210,40 @@ export class TestExecutionVerifier {
         };
       }
 
+      // Kill/timeout signal with NO failure evidence in the report => inconclusive.
       // JSON-report failure evidence always wins over a kill signal — a crashing
       // or self-terminating test must still hard-block (risk-agent finding).
-      if (failed > 0) {
-        console.log(`  ❌ FAIL: ${failed} test failure(s) detected`);
-        if (this.verbose && data.testResults) {
-          for (const suite of data.testResults) {
-            if (suite.status === 'failed') {
-              console.log(`     FAIL: ${suite.name}`);
-            }
-          }
-        }
-
+      if (killInfo && failed === 0) {
+        console.log('  ⚠️  INCONCLUSIVE: test run was killed under load (timeout), not a genuine failure');
         return {
-          passed: false, outcome: 'fail', skipped: false,
+          passed: true, outcome: 'inconclusive', skipped: false,
           totalTests: total, passedTests: passed, failedTests: failed,
-          details: `${failed} test failure(s) out of ${total} tests`,
-          warnings: []
+          details: `Test run killed under fleet-load timeout (killed=${killInfo.killed}, signal=${killInfo.signal}, code=${killInfo.code}) — not a genuine test failure`,
+          warnings: [`Load-timeout classification: run was killed (signal=${killInfo.signal}, code=${killInfo.code}), not a real test failure — this is a resource-contention signal, not a code defect`]
         };
       }
+
+      // Unchanged original path: covers failed>0, and the pre-existing edge case
+      // of failed===0 with a non-zero exit unrelated to test failures/kills.
+      console.log(`  ❌ FAIL: ${failed} test failure(s) detected`);
+      if (this.verbose && data.testResults) {
+        for (const suite of data.testResults) {
+          if (suite.status === 'failed') {
+            console.log(`     FAIL: ${suite.name}`);
+          }
+        }
+      }
+
+      return {
+        passed: false, outcome: 'fail', skipped: false,
+        totalTests: total, passedTests: passed, failedTests: failed,
+        details: `${failed} test failure(s) out of ${total} tests`,
+        warnings: []
+      };
     }
 
-    // No failure evidence in the JSON report (or no report at all) and a
-    // kill/timeout signal was observed — classify as inconclusive, not a failure.
+    // No JSON report was parseable at all (data is null) but a kill/timeout
+    // signal was observed — classify as inconclusive, not a failure.
     if (killInfo) {
       console.log('  ⚠️  INCONCLUSIVE: test run was killed under load (timeout), not a genuine failure');
       return {
