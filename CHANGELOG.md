@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-07-16](#2026-07-16)
+  - [Infrastructure](#infrastructure)
 - [2026-07-13](#2026-07-13)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -89,6 +91,14 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-07-16
+
+### Infrastructure
+- **Real `timeFromDefectToShippedFix` in the learning-moat gauge** - PR #6101 (SD-LEO-GEN-SATELLITE-LEARNING-SPEED-001)
+  - **What shipped**: `lib/eva/learning-moat-gauge.js`'s `computeLearningMoatGauge()` previously left `timeFromDefectToShippedFix` permanently `null` — a documented, intentional placeholder pending real resolved-reflection data. Now computes it as the mean latency (hours, rounded to 1 decimal) between `created_at` and `resolution_date` across resolved (`resolution_date IS NOT NULL`) `traversal_reflection`-origin `issue_patterns` rows, while preserving the exact honest-null behavior and reason string when zero such rows exist (the current live state — no venture has completed a full 26-stage traversal yet). No schema change; both `created_at` and `resolution_date` already existed on `issue_patterns`.
+  - **Dedup context**: this SD was a stale re-promotion of an already-completed satellite (`SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-E`, PR #5988); verified against `origin/main` that traversal-reflection emission, the gauge, the anti-Goodhart guard, and the capability ledger were already live, and rescoped to the one field the original SD's own doc comment named as a legitimate future follow-up.
+  - **Verification**: 9/9 unit tests pass (`tests/unit/eva/learning-moat-gauge.test.js`), covering the honest-zero path, real computation, mixed resolved/unresolved rows, and a regression guard added after self-review (a corrupted row with `resolution_date` before `created_at` would otherwise silently pollute the mean with a negative latency). Standard-tier self-review, no regressions to `lessonsEmitted`/`distinctVentures`/`lessonsPerTraversal`. Handoffs LEAD-FINAL-APPROVAL 97.
 
 ## 2026-07-13
 
