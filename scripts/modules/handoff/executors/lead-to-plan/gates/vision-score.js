@@ -41,6 +41,8 @@ import {
   getAddressableDimNames,
   countAddressableDimensions,
   calculateDynamicThreshold,
+  dimScoreOf,
+  dimNameOf,
 } from '../../../../../../lib/handoff/threshold-resolver.js';
 export {
   SD_TYPE_THRESHOLDS,
@@ -53,6 +55,8 @@ export {
   getAddressableDimNames,
   countAddressableDimensions,
   calculateDynamicThreshold,
+  dimScoreOf,
+  dimNameOf,
 };
 
 /**
@@ -193,6 +197,7 @@ async function checkOverride(sdType, supabase) {
 function getDimensionWarnings(dimensionScores) {
   if (!dimensionScores || typeof dimensionScores !== 'object') return [];
   return Object.entries(dimensionScores)
+    .map(([key, value]) => [dimNameOf(key, value), dimScoreOf(value)])
     .filter(([, score]) => typeof score === 'number' && score < DIMENSION_WARNING_THRESHOLD)
     .map(([dim, score]) =>
       `Dimension '${dim}': ${score}/100 (below ${DIMENSION_WARNING_THRESHOLD} warning threshold)`
@@ -310,8 +315,10 @@ export async function validateVisionScore(sd, supabase, deps = {}) {
   let thresholdAction = sd.vision_score_action ?? null;
   let dimensionScores = sd.dimension_scores ?? null;
 
-  // Fetch latest score from eva_vision_scores if not cached
-  if (visionScore === null && supabase && sdKey) {
+  // Fetch if EITHER piece is missing. QF-20260713-713: scoreSD() syncs only the
+  // SCALAR back to the SD (no dimension_scores column there); gating this fetch
+  // on the scalar alone starved retries of dimension context, flipping verdicts.
+  if ((visionScore === null || dimensionScores === null) && supabase && sdKey) {
     try {
       const { data } = await supabase
         .from('eva_vision_scores')
@@ -321,9 +328,9 @@ export async function validateVisionScore(sd, supabase, deps = {}) {
         .limit(1);
 
       if (data && data.length > 0) {
-        visionScore = data[0].total_score;
-        thresholdAction = data[0].threshold_action;
-        dimensionScores = data[0].dimension_scores ?? null;
+        visionScore = visionScore ?? data[0].total_score;
+        thresholdAction = thresholdAction ?? data[0].threshold_action;
+        dimensionScores = dimensionScores ?? data[0].dimension_scores ?? null;
       }
     } catch (e) {
       // Intentionally suppressed: DB unavailable — proceed to hard block
@@ -414,15 +421,18 @@ export async function validateVisionScore(sd, supabase, deps = {}) {
     const typePatterns = SD_TYPE_ADDRESSABLE_DIMENSIONS[sdType];
     let addressableDimScores = null;
     if (typePatterns) {
-      // Type-pattern path (unchanged behavior).
+      // Type-pattern path: match the dimension NAME, not the opaque A01/V01 key.
       addressableDimScores = Object.entries(dimensionScores)
-        .filter(([name]) => typePatterns.some(p => name.toLowerCase().includes(p.toLowerCase())))
-        .map(([, score]) => score)
+        .filter(([key, value]) => {
+          const name = dimNameOf(key, value).toLowerCase();
+          return typePatterns.some(p => name.includes(p.toLowerCase()));
+        })
+        .map(([, value]) => dimScoreOf(value))
         .filter(s => typeof s === 'number');
     } else if (!hasManualOverride) {
       // null-type auto-detect carve-out path: score the auto-detected addressable dims.
       addressableDimScores = getAddressableDimNames(sdType, dimensionScores, sd.metadata)
-        .map(name => dimensionScores[name])
+        .map(key => dimScoreOf(dimensionScores[key]))
         .filter(s => typeof s === 'number');
     }
 
