@@ -55,7 +55,12 @@ async function main() {
     `tally=${JSON.stringify(tally)}`
   );
 
-  const falseClosed = (result.verdicts || []).filter((v) => v.status === 'closed' && !COLLECTORS[v.loop_key]);
+  // hasOwnProperty (not bare bracket access) so a loop_key coinciding with an inherited
+  // Object.prototype name (e.g. 'constructor', 'toString') can never be mistaken for a
+  // registered collector — adversarial-review finding, SD-LEO-INFRA-L30-CLOSURE-EDGE-001.
+  const hasCollector = (loopKey) => Object.prototype.hasOwnProperty.call(COLLECTORS, loopKey);
+
+  const falseClosed = (result.verdicts || []).filter((v) => v.status === 'closed' && !hasCollector(v.loop_key));
   if (falseClosed.length > 0) {
     console.error(
       `GT1_VIOLATION false-CLOSE (no registered collector for): ` +
@@ -64,7 +69,7 @@ async function main() {
     process.exit(1);
   }
 
-  const legitimatelyClosed = (result.verdicts || []).filter((v) => v.status === 'closed' && COLLECTORS[v.loop_key]);
+  const legitimatelyClosed = (result.verdicts || []).filter((v) => v.status === 'closed' && hasCollector(v.loop_key));
   if (legitimatelyClosed.length > 0) {
     console.log(
       `[loop-closure-verifier-run] CAN-CLOSE proof: ` +
