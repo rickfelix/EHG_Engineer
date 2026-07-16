@@ -1,0 +1,145 @@
+{
+  "executive_summary": "Adds a two-way SMS bridge so Adam/EVA can text the chairman a LOW/MEDIUM-consequence question and have his reply resolve it automatically. Builds on ~80% existing plumbing (chairman_notifications delivery-lifecycle table, .claude/notify-sms.sh Twilio stub, rate-limiter + quiet-window machinery) and adds the two genuinely new pieces: a provider-swappable MessagingProvider seam (Twilio first impl) for OUTBOUND send, and an INBOUND signature-verified webhook that binds a reply to its originating chairman_decisions row via a single-use, TTL-bound nonce. A fail-closed consequence classifier (LOW/MEDIUM/HIGH, unknown defaults to HIGH) gates SMS eligibility — HIGH-consequence questions never leave the authenticated console. Verified by interface-level tests against a fake provider; the live Twilio account itself is chairman-gated (Business-Profile/10DLC compliance in progress) and out of this SD's control — the code ships provider-ready and fails closed (no-op) until TWILIO_* secrets are set outside this session.",
+  "business_context": "CHAIRMAN-REQUESTED 2026-07-14: push-to-wrist Q&A channel augmenting email + decision-queue, the 'exceptions find you' actuator of govern-by-exception. Sourced by Adam from 3 vendor-research docs; Solomon-adjudicated (chairman-relay, 2026-07-14) on scope/vendor/security — see docs/plans/archived/sd-leo-feat-two-way-chairman-001-plan.md for the full adjudication record (nonce/TTL binding, fail-closed classification, Twilio-as-permanent-for-this-channel, content-sensitivity orthogonal to consequence, delivery-fallback-must-not-repeat-L20-fire-once-bug).",
+  "technical_context": "Architecture verified against live code (not assumed): chairman_notifications (database/migrations/20260213_chairman_notifications.sql) has notification_type CHECK IN ('immediate','daily_digest','weekly_summary') — this is a CADENCE field, not a channel field, and the table is currently email-only (recipient_email NOT NULL, email_metadata JSONB, subject TEXT). Adding SMS requires a NEW 'channel' column (default 'email'), not repurposing notification_type as the archived plan's prose implied. Outbound sends are created by lib/notifications/orchestrator.js (sendImmediateNotification), with lib/notifications/rate-limiter.js (checkRateLimit, 10/hr default via CHAIRMAN_RATE_LIMIT_PER_HOUR) and lib/notifications/resend-adapter.js (isWithinChairmanQuietWindow, 23:00-05:00 ET) as the reusable machinery FR-5 calls for. lib/chairman/record-pending-decision.mjs's recordPendingDecision is the question surface (inserts chairman_decisions status='pending'); its escalateChairmanDecision is a SEPARATE parallel notification path (fire-and-forget email spawn, own rate cap) that does NOT touch chairman_notifications — this SD extends the orchestrator.js path for SMS, not the escalation path. No consequence-classifier code exists anywhere in the repo today (grepped for consequence_level/classifyConsequence/HIGH_CONSEQUENCE_STAGES — zero hits); SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001 (referenced in the archived plan) is a DIFFERENT concept (venture lifecycle stages, plan-only, unbuilt) and must not be conflated with this SD's decision-level classifier, which is net-new. chairman_decisions.decided_by_user_id exists (from a completed, unrelated SD) but SMS replies are unauthenticated and must never stamp it. No nonce/TTL columns exist on chairman_decisions — entirely new. Inbound webhook follows the repo's existing (req,res) handler pattern: api/webhooks/stripe.js (SDK-verified, no dev bypass) and api/webhooks/github-ci-status.js (manual HMAC + crypto.timingSafeEqual) — Twilio's X-Twilio-Signature scheme (base64 HMAC-SHA1 over full URL + sorted form params) needs its own verifier, no dev bypass (mirrors the payment-webhook posture, not the CI-status one). Test framework is Vitest (tests/unit/**); lib/test-helpers/stripe-signature.js is the precedent for an in-process deterministic signature-builder test helper.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Schema: SMS channel + nonce/TTL binding + inbound audit log",
+      "description": "Migration adds: (a) chairman_notifications.channel TEXT NOT NULL DEFAULT 'email' CHECK IN ('email','sms') + recipient_phone TEXT NULL (additive, backward compatible — existing email rows unaffected); (b) chairman_decisions.sms_reply_token TEXT NULL UNIQUE, sms_reply_token_expires_at TIMESTAMPTZ NULL, sms_reply_used_at TIMESTAMPTZ NULL (single-use enforcement), consequence_level TEXT NULL CHECK IN ('low','medium','high'); (c) new table sms_inbound_log (id, from_phone, to_phone, body_raw, provider_message_id, signature_valid BOOLEAN, matched_decision_id UUID NULL FK chairman_decisions, outcome TEXT CHECK IN ('answered','expired','no_match','invalid_signature','rate_limited'), created_at) logging EVERY inbound attempt including rejected/expired/spoofed (Adam's audit requirement) plus an index for per-number inbound rate limiting.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Migration applies cleanly; existing chairman_notifications email rows unaffected (channel defaults to 'email')",
+        "sms_reply_token is UNIQUE; a second decision cannot collide on the same nonce",
+        "sms_inbound_log accepts a row for every inbound webhook call regardless of validity outcome"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "MessagingProvider seam + Twilio implementation",
+      "description": "lib/messaging/messaging-provider.js defines the provider contract (send({to,body}) -> {provider_message_id,status}; verifyInboundSignature({url,params,signature}) -> boolean; normalizeInboundWebhook(body) -> {from,to,body,messageSid}; parseStatusCallback(body) -> {messageSid,status}). lib/messaging/providers/twilio-provider.js implements it: send() reuses the .claude/notify-sms.sh account/messaging-service env vars via the Twilio REST API (no live call possible/tested this SD — TWILIO_* secrets are chairman-gated, unset by design); verifyInboundSignature() implements Twilio's actual scheme (base64 HMAC-SHA1 over URL + sorted form params, using crypto.timingSafeEqual — not the generic raw-body HMAC-SHA256 pattern from github-ci-status.js). This is the gateway's FIRST and ONLY seam for this SD — swapping to Bandwidth/Telnyx later touches only this file, never decision logic. Full multi-tenant venture-messaging gateway is explicitly out of scope.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "twilio-provider.js implements all 4 MessagingProvider methods with no decision-logic imports",
+        "verifyInboundSignature correctly validates a signature built by the deterministic test helper and rejects a mutated payload or stripped signature",
+        "A second fake provider implementing the same interface can be swapped in for tests with zero changes to sms-bridge.js"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Fail-closed consequence classifier",
+      "description": "lib/chairman/consequence-classifier.js exports classifyConsequence({decisionType, title, context}) -> 'low'|'medium'|'high'. Keyword/pattern match against the taxonomy in the archived plan (HIGH: kill a venture, >$5k spend, governance change, secrets/credentials, contracts, irreversible prod change). CRITICAL: fail-closed — any unrecognized, ambiguous, or unclassifiable input defaults to 'high' (never defaults to low/medium). This is net-new code; no prior consequence-taxonomy implementation exists in the repo to extend (verified by repo-wide grep). Composes with, but does not depend on, the unrelated venture-lifecycle-stage HIGH-CONSEQUENCE-STAGES concept from SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001 (unbuilt, different axis).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Each HIGH keyword category (venture-kill, >$5k, governance, secrets/credentials, contracts, irreversible-prod) classifies HIGH",
+        "An unrecognized/ambiguous phrase classifies HIGH (fail-closed default), not LOW or MEDIUM",
+        "A plain low-stakes operational question classifies LOW"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Outbound: SMS-eligible question dispatch",
+      "description": "lib/chairman/sms-bridge.js: sendChairmanSmsQuestion(supabase, {decisionId, title, recommendation}, provider). Flow: fail-closed classify via FR-3; if HIGH, refuse and return {sent:false, reason:'high_consequence'} (never sends); else generate a single-use nonce token + TTL (e.g. 15 min), compose a <=160-char message (question summary + short reply prompt, referencing FR-3's decision), call provider.send(), persist a chairman_notifications row with channel='sms' + provider_message_id, and stamp chairman_decisions.sms_reply_token/expires_at. Reuses lib/notifications/rate-limiter.js checkRateLimit (filtered to channel='sms') and lib/notifications/resend-adapter.js isWithinChairmanQuietWindow BEFORE sending — inside quiet window or over the per-hour cap, the call returns deferred/rate_limited without sending (mirrors existing email semantics, FR-5's comms-rule reuse).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A HIGH-consequence decision is never sent over SMS regardless of caller intent",
+        "Composed SMS body is <=160 chars",
+        "A send inside the 23:00-05:00 ET quiet window is deferred, not sent (reusing isWithinChairmanQuietWindow)",
+        "A send exceeding the per-hour rate cap is rate_limited, not sent (reusing checkRateLimit)"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Inbound: signature-verified reply webhook",
+      "description": "api/webhooks/twilio-sms.js: (req,res) handler mirroring api/webhooks/stripe.js's no-dev-bypass posture. Verifies X-Twilio-Signature via FR-2's twilio-provider before touching the body. Always writes to sms_inbound_log (FR-1) regardless of outcome. On valid signature: normalizes the inbound body (from, body, messageSid), enforces a per-from-number rate limit (Adam's anti-spoofer-flood requirement), extracts the reply token, looks up the matching chairman_decisions row (token match + status='pending' + not expired + not already used), sanitizes the free-text reply as UNTRUSTED input (no execution of any embedded instruction — treated as opaque answer text only, prompt-injection guard), and on match: writes the answer into chairman_decisions (status resolved, brief_data.sms_reply), stamps sms_reply_used_at (single-use enforcement — a replay of the same token is rejected and logged outcome='answered' already consumed -> 'no_match'). On invalid signature/expired/no-match/rate-limited: logs the corresponding outcome, never touches chairman_decisions. NEVER stamps decided_by_user_id (SMS is unauthenticated; that field is reserved for the authenticated-console path per SD-LEO-INFRA-AUTHENTICATE-CHAIRMAN-OVERRIDES-001).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Invalid signature is rejected before any DB correlation lookup, logged outcome='invalid_signature'",
+        "A valid reply with the correct unexpired unused token resolves the matching decision exactly once",
+        "A replay of the same token after first use is rejected, logged, and does not re-resolve or double-write the decision",
+        "An expired token is rejected and logged outcome='expired', decision remains pending for the existing timeout/escalation poller to handle",
+        "decided_by_user_id is never set by this path"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Delivery status + fallback via existing timeout poller",
+      "description": "Twilio status-callback webhook (same api/webhooks/twilio-sms.js file, separate route/branch) updates the chairman_notifications row's status lifecycle (queued->sent/failed) via FR-2's parseStatusCallback. No NEW fallback daemon is built: since an unanswered SMS question leaves its chairman_decisions row status='pending', the EXISTING lib/eva/chairman-decision-timeout.js poller (already re-escalates unresolved pending/blocking decisions to email) naturally provides the delivery-fallback the archived plan calls for, without reproducing the prior fire-once bug (L20) — verified by reading that poller's existing re-escalation logic, not re-implemented.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A 'failed'/'undelivered' Twilio status callback updates the chairman_notifications row's status to 'failed'",
+        "An SMS-sent decision that times out unanswered is still picked up by the existing timeout poller (no new poller written)"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "No new fallback daemon", "description": "Reuse lib/eva/chairman-decision-timeout.js for unanswered-SMS fallback; do not write a second poller." },
+    { "id": "TR-2", "title": "No live Twilio calls in tests", "description": "All tests run against a fake MessagingProvider or a deterministic signature-builder test helper (lib/test-helpers/twilio-signature.js, mirroring lib/test-helpers/stripe-signature.js) — zero network calls, zero dependency on TWILIO_* secrets being set." },
+    { "id": "TR-3", "title": "Additive-only migration", "description": "All new columns/table are additive with safe defaults; no existing chairman_notifications or chairman_decisions row or consumer is broken." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "classifyConsequence keyword coverage + fail-closed default", "type": "unit", "expected": "HIGH keywords -> high; unrecognized -> high; low-stakes -> low" },
+    { "id": "TS-2", "scenario": "Twilio signature verification valid/invalid", "type": "unit", "expected": "valid signature -> true; mutated param or stripped signature -> false" },
+    { "id": "TS-3", "scenario": "End-to-end send/receive against fake provider", "type": "unit", "expected": "LOW-consequence question sent; correct-token reply resolves decision once; token replay rejected and logged" },
+    { "id": "TS-4", "scenario": "HIGH-consequence question never sent over SMS", "type": "unit", "expected": "sendChairmanSmsQuestion returns sent:false, reason:high_consequence, no chairman_notifications row created" },
+    { "id": "TS-5", "scenario": "Quiet-window and rate-cap reuse", "type": "unit", "expected": "send during 23:00-05:00 ET window deferred; send over per-hour cap rate_limited" },
+    { "id": "TS-6", "scenario": "Regression: existing email notification path unaffected", "type": "unit", "expected": "orchestrator.js email sends still work with channel defaulting to 'email'" }
+  ],
+  "acceptance_criteria": [
+    "Adam/EVA can send the chairman a LOW/MEDIUM-consequence question over the SMS channel (interface-level, fake provider); his reply routes back and resolves the question",
+    "HIGH-consequence questions are never SMS-eligible — verified by test, not just documentation",
+    "The provider call sits behind a swappable seam proven by an interface-level test (a second fake implementation is swappable with zero sms-bridge.js changes)",
+    "Quiet-window and per-day/per-hour rate limits are honored via the existing chairman_notifications machinery",
+    "Inbound replies are signature-validated, single-use, TTL-bound, and every attempt (including rejected/expired/spoofed) is audit-logged",
+    "No live Twilio secrets are set or required by this SD — the code fails closed (no-op) until the chairman-gated account setup completes separately"
+  ],
+  "risks": [
+    { "risk": "Chairman-gated Twilio account (Business-Profile/10DLC compliance) is not yet live, so the send path cannot be end-to-end tested with a real phone", "mitigation": "All acceptance criteria are proven at the interface level with a fake MessagingProvider per TR-2; live validation is a separate chairman-gated activation step outside this SD's control, matching the Stripe-live fail-closed precedent.", "severity": "medium" },
+    { "risk": "Conflating this SD's decision-level consequence classifier with the unrelated, unbuilt venture-lifecycle SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001", "mitigation": "FR-3 explicitly builds a net-new, self-contained classifier and documents the two concepts are different axes; no shared code is assumed or imported.", "severity": "low" },
+    { "risk": "SMS reply channel is unauthenticated — spoofing a chairman's number could attempt to answer a pending decision", "mitigation": "Fail-closed HIGH-consequence exclusion (never SMS-eligible), single-use TTL-bound nonce (reply can only answer the specific question it was issued for, never initiate), signature validation on the webhook itself, per-number inbound rate limiting, and full audit logging of rejected/spoofed attempts.", "severity": "high" },
+    { "risk": "Schema migration on shared tables (chairman_notifications, chairman_decisions) touched by other in-flight sessions", "mitigation": "All changes are additive with safe defaults (TR-3); no existing column is renamed/removed/retyped.", "severity": "medium" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["lib/notifications/orchestrator.js (extended for channel='sms')", "lib/chairman/record-pending-decision.mjs callers (future SMS-eligible question surface)", "lib/eva/chairman-decision-timeout.js (unchanged, provides fallback for unanswered SMS questions)"],
+    "dependencies": ["chairman_notifications table (existing)", "chairman_decisions table (existing)", "lib/notifications/rate-limiter.js", "lib/notifications/resend-adapter.js (isWithinChairmanQuietWindow)", "TWILIO_* env vars (chairman-gated, unset in this session — code must no-op safely when absent)"],
+    "data_contracts": ["chairman_notifications gains channel + recipient_phone (additive)", "chairman_decisions gains sms_reply_token/sms_reply_token_expires_at/sms_reply_used_at/consequence_level (additive)", "new table sms_inbound_log"],
+    "runtime_config": ["TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_MESSAGING_SERVICE, TWILIO_TO_PHONE (existing env vars from .claude/notify-sms.sh; NOT set autonomously by this SD)", "CHAIRMAN_RATE_LIMIT_PER_HOUR (existing, reused)"],
+    "observability_rollout": ["sms_inbound_log gives full audit trail of every inbound attempt", "chairman_notifications.status lifecycle gives outbound delivery observability", "No feature flag needed — the feature is inert (never sends) until TWILIO_* secrets exist, which is itself the rollout gate"]
+  },
+  "system_architecture": {
+    "summary": "A thin MessagingProvider seam sits between the existing chairman_notifications/chairman_decisions tables and Twilio; outbound reuses the existing notification orchestrator's rate-limit/quiet-window machinery, inbound is a new signature-verified webhook that closes the loop via a single-use nonce.",
+    "components": [
+      { "name": "database/migrations/2026XXXX_sms_bridge.sql", "change": "NEW — channel/recipient_phone on chairman_notifications; nonce/TTL/consequence columns on chairman_decisions; new sms_inbound_log table" },
+      { "name": "lib/messaging/messaging-provider.js", "change": "NEW — provider interface contract" },
+      { "name": "lib/messaging/providers/twilio-provider.js", "change": "NEW — Twilio implementation (send, verify signature, normalize inbound, parse status callback)" },
+      { "name": "lib/chairman/consequence-classifier.js", "change": "NEW — fail-closed LOW/MEDIUM/HIGH classifier" },
+      { "name": "lib/chairman/sms-bridge.js", "change": "NEW — outbound send orchestration + inbound reply resolution, reusing rate-limiter.js + resend-adapter.js" },
+      { "name": "api/webhooks/twilio-sms.js", "change": "NEW — inbound reply webhook + status-callback webhook" },
+      { "name": "lib/test-helpers/twilio-signature.js", "change": "NEW — deterministic signature-builder test helper" },
+      { "name": "tests/unit/chairman/consequence-classifier.test.js, tests/unit/messaging/twilio-signature.test.js, tests/unit/chairman/sms-bridge.test.js", "change": "NEW — unit tests per test_scenarios" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build bottom-up: schema first, then the provider seam, then the pure classifier, then the orchestration glue that composes them, then the webhook that exercises inbound, with tests alongside each layer.",
+    "steps": [
+      "FR-1 migration (channel/recipient_phone, nonce/TTL/consequence columns, sms_inbound_log)",
+      "FR-2 MessagingProvider interface + Twilio implementation + signature test helper",
+      "FR-3 consequence classifier + unit tests",
+      "FR-4 outbound sms-bridge send path (reusing rate-limiter + quiet-window) + unit tests",
+      "FR-5 inbound webhook (signature verify, nonce resolution, audit log, per-number rate limit) + unit tests",
+      "FR-6 status-callback handling, verify existing timeout poller covers the fallback case",
+      "Regression check: existing email notification tests still pass",
+      "PR + review + ship (no live Twilio account touched)"
+    ]
+  },
+  "dependencies": [
+    "chairman_notifications table (database/migrations/20260213_chairman_notifications.sql, existing)",
+    "chairman_decisions table + lib/chairman/record-pending-decision.mjs (existing)",
+    "lib/notifications/orchestrator.js, rate-limiter.js, resend-adapter.js (existing, reused)",
+    "lib/eva/chairman-decision-timeout.js (existing, provides fallback — not modified)",
+    "SD-LEO-INFRA-AUTHENTICATE-CHAIRMAN-OVERRIDES-001 (merged) — decided_by_user_id semantics this SD must NOT stamp for SMS replies",
+    "Chairman-gated Twilio account provisioning (Business-Profile/10DLC compliance, in progress, OUT of this session's control) — required before any live send, not before this SD ships"
+  ],
+  "activation_test_id": "tests/unit/chairman/sms-bridge.test.js",
+  "metadata": { "sd_key": "SD-LEO-FEAT-TWO-WAY-CHAIRMAN-001" }
+}
