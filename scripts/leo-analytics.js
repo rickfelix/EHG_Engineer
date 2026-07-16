@@ -35,10 +35,10 @@ async function main() {
 
   // Query all metrics sources in parallel
   const [feedbackResult, proposalsResult, patternsResult, vettingResult] = await Promise.all([
-    supabase.from('leo_feedback').select('id, status, created_at, updated_at, category, priority'),
+    supabase.from('feedback').select('id, status, created_at, updated_at, category, priority'),
     supabase.from('enhancement_proposals').select('id, status, created_at, vetted_at, approved_at, applied_at, source_type'),
     supabase.from('issue_patterns').select('id, status, severity, occurrence_count, created_at, resolution_date, category, trend'),
-    supabase.from('leo_vetting_outcomes').select('id, rubric_score, verdict, processed_by, created_at, proposal_id')
+    supabase.from('leo_vetting_outcomes').select('id, rubric_score, outcome, processed_by, created_at, proposal_id')
   ]);
 
   const feedback = feedbackResult.data || [];
@@ -95,8 +95,8 @@ function buildMetrics(feedback, proposals, patterns, vetting) {
   const avgRubricScore = vettingTotal > 0
     ? (vetting.reduce((sum, v) => sum + (v.rubric_score || 0), 0) / vettingTotal).toFixed(1)
     : '0.0';
-  const approvedVetting = vetting.filter(v => v.verdict === 'approved' || v.verdict === 'APPROVED').length;
-  const rejectedVetting = vetting.filter(v => v.verdict === 'rejected' || v.verdict === 'REJECTED').length;
+  const approvedVetting = vetting.filter(v => v.outcome === 'approved' || v.outcome === 'APPROVED').length;
+  const rejectedVetting = vetting.filter(v => v.outcome === 'rejected' || v.outcome === 'REJECTED').length;
   const vettingApprovalRate = vettingTotal > 0 ? ((approvedVetting / vettingTotal) * 100).toFixed(1) : '0.0';
 
   return {
