@@ -1,0 +1,49 @@
+name: "Loop-closure verifier (daily)"
+
+# SD-LEO-INFRA-UNIVERSAL-LOOP-GOVERNANCE-001 — the CRON-WIRE. PR #6090 armed the
+# closure verifier (g3-armed-loop-closure-verifier, daily expected interval) but no
+# recurring cron actually invoked runClosureVerifier, so loop_registry verdicts only
+# advanced on manual runs. This workflow is the real cadence: it runs the verifier
+# daily with the honest empty-evidence baseline (STARVED until per-loop evidence
+# collectors land — a separate, dependency-ordered SD), stamps the registry witness,
+# and goes red on any GT-1 false-CLOSE. The op-co GO gate requires this to fire on
+# real cadence, not just once by hand. Mirrors wave-progress-refresher.yml.
+
+on:
+  schedule:
+    # Daily, minute offset to dodge the :00/:15 cron clusters.
+    - cron: '19 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  verify-closures:
+    name: Evaluate loop_registry closures
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run loop-closure verifier
+        run: node scripts/loop-closure-verifier-run.mjs
