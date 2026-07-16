@@ -40,6 +40,7 @@
 import 'dotenv/config';
 import { createRequire } from 'node:module';
 import { RunJournal, finalizeMirror } from '../../lib/harness/run-journal.mjs';
+import { bridgeCannotDriveFindings } from '../../lib/harness/capability-gap-bridge.mjs';
 import { createFixture, findFixtureVentureId, assertClean } from './s20-fixture.mjs';
 
 const require = createRequire(import.meta.url);
@@ -316,6 +317,18 @@ export async function runArc({ runId, entryStage = 20, toStage = 26, clockStart,
   const coverage = journal.checkCoverage([...LOOP_O_REQUIREMENTS]);
   for (const f of coverage.findings) journal.append({ kind: 'finding', finding_type: f.finding_type, event: f.event, o_requirements: f.o_requirements, detail: {} });
   journal.append({ kind: 'lifecycle', event: `run arc pass complete: covered=${coverage.covered.join(',') || 'none'} uncovered=${coverage.uncovered.join(',') || 'none'}`, detail: { coverage } });
+
+  // FR-1 (SD-LEO-GEN-SATELLITE-CAPABILITY-EXTRACTION-001): CANNOT_DRIVE findings are
+  // negative capability data -- bridge them into a durable capability-gap signal.
+  // Fail-soft: a feedback-write failure must never fail the harness run itself.
+  try {
+    const bridgeResult = await bridgeCannotDriveFindings(supabase, coverage, { harnessSource: 's20-run', runId });
+    if (bridgeResult.failed?.length > 0) {
+      journal.append({ kind: 'lifecycle', event: `capability-gap bridge: ${bridgeResult.failed.length} finding(s) failed to persist (non-blocking)`, detail: { failed: bridgeResult.failed } });
+    }
+  } catch (err) {
+    journal.append({ kind: 'lifecycle', event: `capability-gap bridge failed (non-blocking): ${err.message}` });
+  }
 
   // FR-3/FR-4 (SD-LEO-INFRA-RUN-EVIDENCE-DURABILITY-001): durable system_events mirror of
   // the journal, independent of both .harness-runs scratch and the fixture's own lifecycle.
