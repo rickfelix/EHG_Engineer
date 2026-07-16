@@ -19,6 +19,11 @@
  *           (--approved | --draft)        REQUIRED: deliberate approval choice.
  *                                         --approved => active + chairman_approved
  *                                         --draft    => draft, not approved
+ *           [--chairman-ratified]         REQUIRED in addition to --approved for GOVERNED
+ *                                         vision_keys (e.g. VISION-PORTFOLIO-STRATEGY-001,
+ *                                         see lib/eva/vision-upsert.js GOVERNED_VISION_KEYS)
+ *                                         — --approved alone is silently downgraded to draft
+ *                                         for those keys (SD-LEO-INFRA-PORTFOLIO-STRATEGY-FIRST-001-A)
  *           [--venture-id <id>]           Explicit venture linkage
  *           [--brainstorm-id <id>]        Source brainstorm (auto-links a single-venture session)
  *           [--dimensions <json>]
@@ -100,7 +105,7 @@ async function cmdExtract({ source, content: contentArg }) {
   console.log(JSON.stringify(dimensions, null, 2));
 }
 
-async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dimensionsJson, brainstormId, sections: sectionsJson, content: contentArg, stdin: stdinFlag, approved: approvedFlag, draft: draftFlag }) {
+async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dimensionsJson, brainstormId, sections: sectionsJson, content: contentArg, stdin: stdinFlag, approved: approvedFlag, draft: draftFlag, chairmanRatified: chairmanRatifiedFlag }) {
   if (!visionKey) { console.error('--vision-key is required'); process.exit(1); }
   if (!level || !['L1', 'L2'].includes(level)) { console.error('--level must be L1 or L2'); process.exit(1); }
   if (!source && !sectionsJson && !contentArg && !stdinFlag) { console.error('--source, --sections, --content, or --stdin is required'); process.exit(1); }
@@ -119,6 +124,7 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
     process.exit(1);
   }
   const approved = Boolean(approvedFlag);
+  const chairmanRatified = Boolean(chairmanRatifiedFlag);
 
   // Read content from stdin when --stdin is set. Cross-platform alternative to
   // --content which hits OS CLI length limits (~8K on Windows) for large docs.
@@ -267,7 +273,7 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
   const { upsertVision } = await import('../../lib/eva/vision-upsert.js');
   const { data, error } = await upsertVision({
     supabase, visionKey, level, content, sections, dimensions,
-    ventureId, brainstormId, createdBy: 'eva-vision-command', approved,
+    ventureId, brainstormId, createdBy: 'eva-vision-command', approved, chairmanRatified,
   });
 
   if (error) { console.error('❌ Upsert failed:', error.message); process.exit(1); }
@@ -278,7 +284,11 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
   console.log(`   Level:   ${data.level}`);
   console.log(`   Version: ${data.version}`);
   console.log(`   Status:  ${data.status}`);
-  console.log(`   Approval: ${approved ? 'APPROVED (chairman_approved=true, build can start)' : 'DRAFT (not approved — review then re-run with --approved to start build)'}`);
+  // Report the ACTUAL persisted outcome (data.status/chairman_approved), not the requested
+  // --approved flag: for GOVERNED vision_keys, --approved alone is silently downgraded to
+  // draft unless --chairman-ratified is also passed (SD-LEO-INFRA-PORTFOLIO-STRATEGY-FIRST-001-A) —
+  // echoing the request instead of the outcome would misreport a governed key as activated.
+  console.log(`   Approval: ${data.status === 'active' ? 'APPROVED (chairman_approved=true, build can start)' : 'DRAFT (not approved — review then re-run with --approved [+ --chairman-ratified if this is a governed key] to start build)'}`);
   if (dimensions) console.log(`   Dimensions: ${dimensions.length} extracted`);
   if (sections) console.log(`   Sections: ${renderSectionsSummary(sections)}`);
 }
