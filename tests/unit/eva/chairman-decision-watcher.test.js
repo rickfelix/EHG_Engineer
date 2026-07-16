@@ -374,7 +374,7 @@ describe('createOrReusePendingDecision', () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: 'existing-id' } }),
+        single: vi.fn().mockResolvedValue({ data: { id: 'existing-id', blocking: false } }),
         update: updateFn,
       }),
     };
@@ -389,6 +389,57 @@ describe('createOrReusePendingDecision', () => {
       brief_data: { key: 'value' },
       summary: 'updated',
     });
+  });
+
+  // SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001 (adversarial-review fix, PR #6104): a REUSED
+  // pending decision must sync `blocking` to the caller's CURRENT classification -- a
+  // stage reclassified high-consequence AFTER a non-blocking decision was already
+  // pending must not stay blocking=false forever (the chokepoints' blocking=true EXISTS
+  // check would never see it).
+  it('syncs blocking onto an existing pending decision when the classification changed', async () => {
+    const updateFn = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    });
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: { id: 'existing-id', blocking: false } }),
+        update: updateFn,
+      }),
+    };
+
+    await createOrReusePendingDecision({
+      ventureId: 'v1', stageNumber: 10, blocking: true,
+      supabase, logger,
+    });
+
+    expect(updateFn).toHaveBeenCalledWith(
+      expect.objectContaining({ blocking: true }),
+    );
+  });
+
+  it('does NOT include blocking in the update when the classification is unchanged', async () => {
+    const updateFn = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    });
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: { id: 'existing-id', blocking: true } }),
+        update: updateFn,
+      }),
+    };
+
+    await createOrReusePendingDecision({
+      ventureId: 'v1', stageNumber: 10, blocking: true,
+      briefData: { key: 'value' },
+      supabase, logger,
+    });
+
+    expect(updateFn).toHaveBeenCalledTimes(1);
+    expect(updateFn.mock.calls[0][0]).not.toHaveProperty('blocking');
   });
 
   // SD-MAN-FIX-FIX-DUPLICATE-ARTIFACTS-001: decision_type defaults to 'stage_gate'
@@ -488,6 +539,48 @@ describe('createOrReusePendingDecision', () => {
 
     const insertedRow = insertFn.mock.calls[0][0];
     expect(insertedRow).not.toHaveProperty('attempt_number');
+  });
+
+  // SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001 (FR-2): the blocking flag (chairman-designated
+  // high-consequence classification) is threaded straight through into the INSERT.
+  it('defaults blocking to false in the insert when the caller omits it (preserves pre-existing behavior)', async () => {
+    const insertFn = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: 'new-id' }, error: null }),
+      }),
+    });
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: null }),
+        insert: insertFn,
+      }),
+    };
+
+    await createOrReusePendingDecision({ ventureId: 'v1', stageNumber: 10, supabase, logger });
+
+    expect(insertFn).toHaveBeenCalledWith(expect.objectContaining({ blocking: false }));
+  });
+
+  it('sets blocking: true in the insert when the caller passes blocking: true (chairman-designated high-consequence stage)', async () => {
+    const insertFn = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: 'new-id' }, error: null }),
+      }),
+    });
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: null }),
+        insert: insertFn,
+      }),
+    };
+
+    await createOrReusePendingDecision({ ventureId: 'v1', stageNumber: 3, blocking: true, supabase, logger });
+
+    expect(insertFn).toHaveBeenCalledWith(expect.objectContaining({ blocking: true }));
   });
 
   // SD-MAN-FIX-FIX-DUPLICATE-ARTIFACTS-001: custom decision_type is preserved

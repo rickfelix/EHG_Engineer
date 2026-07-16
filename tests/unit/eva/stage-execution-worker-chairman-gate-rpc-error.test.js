@@ -37,7 +37,7 @@ vi.mock('../../../lib/eva/autonomy-model.js', () => ({ checkAutonomy: vi.fn().mo
 // Force the current stage to be treated as a pre-execution (review) gate so the pending-decision
 // shortcut is reachable — isReview()=true short-circuits the isPreExecGate check.
 vi.mock('../../../lib/eva/stage-governance.js', () => ({
-  getStageGovernance: vi.fn().mockResolvedValue({ isReview: () => true, isBlocking: () => false }),
+  getStageGovernance: vi.fn().mockResolvedValue({ isReview: () => true, isBlocking: () => false, isHighConsequence: () => false }),
 }));
 
 import { StageExecutionWorker } from '../../../lib/eva/stage-execution-worker.js';

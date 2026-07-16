@@ -50,6 +50,7 @@ vi.mock('../../../lib/eva/stage-governance.js', () => ({
     isReview: () => false,
     isBlocking: () => false,
     isReserved: () => false,
+    isHighConsequence: () => false,
     gateTypeForAutonomy: () => 'stage_gate',
   }),
   _resetCacheForTest: vi.fn(),

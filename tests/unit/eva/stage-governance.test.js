@@ -28,22 +28,31 @@ const VENTURE_STAGES_FIXTURE = [
   { stage_number: 17, stage_name: 'Blueprint Review',            stage_key: 'blueprint_review',          gate_type: 'promotion', review_mode: 'auto', chunk: 'THE_BLUEPRINT', work_type: 'decision_gate' },
   { stage_number: 18, stage_name: 'Marketing Copy Studio',       stage_key: 'marketing_copy_studio',     gate_type: 'promotion', review_mode: 'auto', chunk: 'THE_BUILD',     work_type: 'decision_gate' },
   { stage_number: 19, stage_name: 'Sprint Planning',             stage_key: 'sprint_planning',           gate_type: 'promotion', review_mode: 'auto', chunk: 'THE_BUILD',     work_type: 'decision_gate' },
-  { stage_number: 24, stage_name: 'Go Live & Announce',          stage_key: 'go_live',                   gate_type: 'promotion', review_mode: 'auto', chunk: 'THE_LAUNCH',    work_type: 'decision_gate' },
+  { stage_number: 24, stage_name: 'Go Live & Announce',          stage_key: 'go_live',                   gate_type: 'promotion', review_mode: 'auto', chunk: 'THE_LAUNCH',    work_type: 'decision_gate', is_high_consequence: true },
   { stage_number: 25, stage_name: 'Post-Launch Review',          stage_key: 'post_launch_review',        gate_type: 'promotion', review_mode: 'auto', chunk: 'THE_LAUNCH',    work_type: 'decision_gate' },
   // review_mode=review (NOT decision_gate): 7, 8, 9, 11
   { stage_number: 7,  stage_name: 'Revenue Architecture',  stage_key: 'revenue_architecture',  gate_type: 'none', review_mode: 'review', chunk: 'THE_ENGINE',   work_type: 'artifact_only' },
   { stage_number: 8,  stage_name: 'Business Model Canvas', stage_key: 'business_model_canvas', gate_type: 'none', review_mode: 'review', chunk: 'THE_ENGINE',   work_type: 'artifact_only' },
   { stage_number: 9,  stage_name: 'Exit Strategy',         stage_key: 'exit_strategy',         gate_type: 'none', review_mode: 'review', chunk: 'THE_ENGINE',   work_type: 'artifact_only' },
   { stage_number: 11, stage_name: 'Naming & Visual Identity', stage_key: 'naming_visual_identity', gate_type: 'none', review_mode: 'review', chunk: 'THE_IDENTITY', work_type: 'artifact_only' },
+  // SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001 FR-1: chairman-designated high-consequence,
+  // independent of gate_type — 4 (gate_type=none, no other classification) and 24
+  // (already gate_type=promotion) are BOTH marked, to prove the two concepts compose
+  // rather than collide.
+  { stage_number: 4,  stage_name: 'Competitive Analysis', stage_key: 'competitive_analysis', gate_type: 'none', review_mode: 'auto', chunk: 'THE_TRUTH', work_type: 'artifact_only', is_high_consequence: true },
 ];
 
 // SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-B: single venture_stages table read.
 // One refresh == exactly one .from('venture_stages') call.
 function mockSupabase(rows, { failChannel = false } = {}) {
+  // SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001: default is_high_consequence=false on any row
+  // that doesn't explicitly set it, mirroring the DB's NOT NULL DEFAULT false — existing
+  // fixture rows above don't need updating individually.
+  const filledRows = rows === null ? rows : rows.map((r) => ({ is_high_consequence: false, ...r }));
   return {
     from: vi.fn(() => ({
       select: vi.fn(() => ({
-        order: vi.fn(async () => ({ data: rows, error: null })),
+        order: vi.fn(async () => ({ data: filledRows, error: null })),
       })),
     })),
     channel: failChannel
@@ -104,6 +113,25 @@ describe('stage-governance', () => {
     const gov = await getStageGovernance(mockSupabase(VENTURE_STAGES_FIXTURE));
     expect(gov.isPromotion(16)).toBe(true);
     expect(gov.isBlocking(16)).toBe(true);
+  });
+
+  // SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001 FR-1
+  test('isHighConsequence / highConsequenceStages derive from is_high_consequence, independent of gate_type', async () => {
+    const gov = await getStageGovernance(mockSupabase(VENTURE_STAGES_FIXTURE));
+    expect([...gov.highConsequenceStages].sort((a, b) => a - b)).toEqual([4, 24]);
+    // Stage 4: high-consequence but gate_type='none' — proves the classification
+    // does not require an existing kill/promotion gate.
+    expect(gov.isHighConsequence(4)).toBe(true);
+    expect(gov.isKill(4)).toBe(false);
+    expect(gov.isBlocking(4)).toBe(false);
+    // Stage 24: high-consequence AND gate_type='promotion' — the two concepts compose.
+    expect(gov.isHighConsequence(24)).toBe(true);
+    expect(gov.isPromotion(24)).toBe(true);
+    // Stage 3: gate_type='kill' but NOT high-consequence — no collision with isBlocking.
+    expect(gov.isKill(3)).toBe(true);
+    expect(gov.isHighConsequence(3)).toBe(false);
+    // Unclassified stage
+    expect(gov.isHighConsequence(1)).toBe(false);
   });
 
   test('cache: second call within TTL does not re-fetch (one refresh = 1 .from() call on venture_stages)', async () => {
@@ -184,5 +212,7 @@ describe('stage-governance', () => {
     expect(gov.killStages.size).toBe(0);
     expect(gov.reviewStages.size).toBe(0);
     expect(gov.isBlocking(3)).toBe(false);
+    expect(gov.highConsequenceStages.size).toBe(0);
+    expect(gov.isHighConsequence(3)).toBe(false);
   });
 });

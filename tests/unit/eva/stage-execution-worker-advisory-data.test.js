@@ -22,7 +22,7 @@ vi.mock('../../../lib/eva/shared-services.js', () => ({ emit: vi.fn().mockResolv
 vi.mock('../../../lib/eva/autonomy-model.js', () => ({ checkAutonomy: vi.fn().mockResolvedValue({ action: 'block', level: 'L0' }) }));
 // Non-gate stage governance so stageStatus is not forced and no extra branches run.
 vi.mock('../../../lib/eva/stage-governance.js', () => ({
-  getStageGovernance: vi.fn().mockResolvedValue({ isBlocking: () => false, isReview: () => false }),
+  getStageGovernance: vi.fn().mockResolvedValue({ isBlocking: () => false, isReview: () => false, isHighConsequence: () => false }),
 }));
 
 function createMockSupabase() {
