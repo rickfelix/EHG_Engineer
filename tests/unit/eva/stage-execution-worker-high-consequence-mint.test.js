@@ -141,6 +141,55 @@ describe('High-consequence mint-and-hold (FR-3 completion) — real _processVent
     expect(result.status).not.toBe('blocked');
   });
 
+  // 2nd-pass adversarial review (PR #6104): the pending-decision canonical-RPC auto-approve
+  // resolver (worker ~line 924) is a THIRD independent auto-approve path, separate from the
+  // review-mode block and _handleChairmanGate, and must also never resolve an already-minted
+  // high-consequence decision on a later tick.
+  it('does NOT auto-approve an already-minted high-consequence decision via the canonical-RPC resolver, even when isPreExecGate=true and autonomy says yes', async () => {
+    govState.isReview = true; // makes isPreExecGate=true so the resolver block is reached
+    govState.isHighConsequence = true;
+    createOrReusePendingDecision.mockResolvedValue({ id: 'hc-existing', isNew: false });
+
+    const supabase = makeSupabase();
+    const realFrom = supabase.from;
+    supabase.from = vi.fn((table) => {
+      if (table === 'chairman_decisions') {
+        // Every read path this test can reach (resolver's pre-exec lookup, the reuse-path
+        // re-check-by-id) sees the SAME still-pending row — chainable regardless of which
+        // .eq()/.single()/.maybeSingle() combination the caller uses.
+        const chain = {
+          select: () => chain,
+          eq: () => chain,
+          neq: () => chain,
+          limit: () => chain,
+          order: () => chain,
+          maybeSingle: async () => ({ data: { id: 'hc-existing', status: 'pending' }, error: null }),
+          single: async () => ({ data: { id: 'hc-existing', status: 'pending' }, error: null }),
+        };
+        return chain;
+      }
+      return realFrom(table);
+    });
+
+    const worker = makeWorker(supabase);
+    const result = await worker.processOneStage('v-hc');
+
+    expect(supabase.rpc).not.toHaveBeenCalledWith('fn_chairman_decide', expect.anything());
+    expect(result.status).toBe('blocked');
+  });
+
+  // 2nd-pass adversarial review: a mint failure for a high-consequence stage must HOLD
+  // (fail closed), not silently fall through to a later auto-advance path.
+  it('HOLDS (fail-closed) when createOrReusePendingDecision throws for a high-consequence stage', async () => {
+    govState.isHighConsequence = true;
+    createOrReusePendingDecision.mockRejectedValueOnce(new Error('db down'));
+
+    const worker = makeWorker(makeSupabase());
+    const result = await worker.processOneStage('v-hc');
+
+    expect(result.status).toBe('blocked');
+  });
+
   it('advances (does not re-hold) once the minted high-consequence decision is already approved', async () => {
     govState.isHighConsequence = true;
     createOrReusePendingDecision.mockResolvedValue({ id: 'hc-decision-2', isNew: false });
