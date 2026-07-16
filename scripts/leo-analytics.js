@@ -35,7 +35,7 @@ async function main() {
 
   // Query all metrics sources in parallel
   const [feedbackResult, proposalsResult, patternsResult, vettingResult] = await Promise.all([
-    supabase.from('leo_feedback').select('id, status, created_at, updated_at, category, priority'),
+    supabase.from('feedback').select('id, status, created_at, updated_at, category, priority'),
     supabase.from('enhancement_proposals').select('id, status, created_at, vetted_at, approved_at, applied_at, source_type'),
     supabase.from('issue_patterns').select('id, status, severity, occurrence_count, created_at, resolution_date, category, trend'),
     supabase.from('leo_vetting_outcomes').select('id, rubric_score, verdict, processed_by, created_at, proposal_id')
