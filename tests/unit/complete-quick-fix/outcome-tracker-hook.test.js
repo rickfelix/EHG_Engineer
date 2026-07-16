@@ -103,10 +103,16 @@ describe('recordQfOutcomeOnComplete routing', () => {
     expect(row.resolution_notes).toBe('Shipped via QF-20260716-001');
   });
 
-  it('routes to recordSdCompleted when the QF escalated to a real SD', async () => {
+  it('ALSO records recordSdCompleted when the QF escalated to a real SD, without skipping its own quick_fix_id-linked feedback', async () => {
+    // Regression for an adversarial-review finding: routing exclusively to
+    // recordSdCompleted (which resolves via feedback.sd_id) would silently skip
+    // tagging the feedback rows actually linked to this QF via quick_fix_id --
+    // a different linkage. recordQfCompleted must ALWAYS run too.
     const tables = {
       strategic_directives_v2: [{ id: 'SD-ESCALATED-001', status: 'completed', completion_date: null }],
-      feedback: [],
+      feedback: [
+        { id: 'fb-escalated', quick_fix_id: 'QF-20260716-002', status: 'resolved', metadata: {} },
+      ],
       outcome_signals: [],
       sd_effectiveness_metrics: [],
     };
@@ -114,8 +120,13 @@ describe('recordQfOutcomeOnComplete routing', () => {
 
     const result = await recordQfOutcomeOnComplete(supabase, { escalated_to_sd_id: 'SD-ESCALATED-001' }, 'QF-20260716-002');
 
-    expect(result.linkedFeedbackCount).toBe(0);
+    // The SD-shaped signal still fires for the escalation target.
+    expect(result.sd.linkedFeedbackCount).toBe(0);
     expect(tables.outcome_signals.some((s) => s.signal_type === 'sd_completion' && s.sd_id === 'SD-ESCALATED-001')).toBe(true);
+
+    // But the QF's OWN linked feedback is still tagged -- not silently skipped.
+    expect(result.qf.taggedCount).toBe(1);
+    expect(tables.feedback[0].metadata.outcome_tracked_via).toBe('qf_completion');
   });
 
   it('regression: coexists with resolve-feedback.js on the same row without conflicting writes', async () => {

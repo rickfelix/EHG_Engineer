@@ -808,28 +808,33 @@ async function resolveLinkedFeedbackRows(supabase, qf, qfId, prUrl, commitSha, t
  * SD-LEO-INFRA-FIX-RECURRENCE-REWIRING-001 FR-4: post-merge outcome-tracker hook.
  *
  * Additive to resolveLinkedFeedbackRows above -- never replaces resolve-feedback.js's
- * write path. recordSdCompleted is only valid when the QF escalated to a real
- * strategic_directives_v2 row (quick_fixes.escalated_to_sd_id): outcome_signals.sd_id
- * and sd_effectiveness_metrics.sd_id both carry a NOT NULL foreign key to
- * strategic_directives_v2(id), and a bare QF id (e.g. "QF-20260704-300") has no
- * matching row there -- that path would fail the FK. For the common,
- * non-escalated QF, recordQfCompleted (a schema-safe, QF-scoped equivalent) is
- * used instead.
+ * write path. recordQfCompleted always runs: it is the QF's own real linkage
+ * (feedback.quick_fix_id), and outcome_signals.sd_id / sd_effectiveness_metrics.sd_id
+ * both carry a NOT NULL foreign key to strategic_directives_v2(id), so a bare QF id
+ * (e.g. "QF-20260704-300") could never be written there directly.
+ *
+ * When the QF escalated to a real SD (quick_fixes.escalated_to_sd_id), recordSdCompleted
+ * ALSO runs -- but as an addition, not a replacement: recordSdCompleted resolves
+ * feedback via feedback.sd_id, a different linkage than the QF's own
+ * feedback.quick_fix_id, so routing to it exclusively would silently skip tagging
+ * the QF's actual linked feedback (caught in adversarial review of this SD's PR).
  *
  * @param {Object} supabase
  * @param {Object} qf - Quick-fix DB row (must include escalated_to_sd_id)
  * @param {string} qfId
  */
 export async function recordQfOutcomeOnComplete(supabase, qf, qfId) {
+  const qfResult = await recordQfCompleted({ supabase, qfId, completionTime: new Date() });
   if (qf?.escalated_to_sd_id) {
-    return recordSdCompleted({
+    const sdResult = await recordSdCompleted({
       supabase,
       sdId: qf.escalated_to_sd_id,
       actor: 'complete-quick-fix',
       completionTime: new Date()
     });
+    return { qf: qfResult, sd: sdResult };
   }
-  return recordQfCompleted({ supabase, qfId, completionTime: new Date() });
+  return qfResult;
 }
 
 /**
