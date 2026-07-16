@@ -14,7 +14,14 @@
 -- Rollback: DROP TABLE IF EXISTS public.cost_governor_log;  (no data migration to unwind)
 -- =============================================================================
 
-CREATE TABLE IF NOT EXISTS public.cost_governor_log (
+-- NOTE: the CREATE TABLE uses an UNQUALIFIED name (resolves to public via search_path).
+-- The D8 OPERATOR_CONTRACT gate's diff parser (lib/gates/operator-contract/harness-adapter.js
+-- collectSdDiff) captures the table name with [a-z0-9_]+ which stops at a '.', so a
+-- `public.`-qualified name mis-parses to 'public' and mis-keys the operator triple
+-- (signalled as a gate-bug to SD-LEO-INFRA-OPERATOR-CONTRACT-GATE-001). Unqualified here is
+-- functionally identical and parses correctly. RLS/policy/index statements below keep the
+-- explicit public. qualifier (they are not CREATE TABLE and are not parsed by that gate).
+CREATE TABLE IF NOT EXISTS cost_governor_log (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   created_at    timestamptz NOT NULL DEFAULT now(),
   decision_type text        NOT NULL CHECK (decision_type = ANY (ARRAY['regen','tier','anomaly','tune']::text[])),
