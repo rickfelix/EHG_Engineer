@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-07-12T13:08:47.808Z -->
-<!-- git_commit: d0e60c7d -->
-<!-- db_snapshot_hash: 2dada35e85f2199f -->
-<!-- file_content_hash: c91ce7e840a59204 -->
+<!-- generated_at: 2026-07-16T17:13:36.066Z -->
+<!-- git_commit: 89c5e306 -->
+<!-- db_snapshot_hash: 6bcd1672b5ba0df9 -->
+<!-- file_content_hash: 2b19bebf82ff4410 -->
 
 # CLAUDE_DIGEST.md - LEO Protocol Router (Enforcement)
 
@@ -91,7 +91,7 @@ Skipping CLAUDE_CORE.md causes: unknown SD type requirements, missed gate thresh
 3. **Database-first** - No markdown files as source of truth
 > Why: Markdown files drift silently and are never validated. The DB enforces schema constraints, tracks state transitions, and is the only source future sessions can query reliably to resume work.
 4. **USE PROCESS SCRIPTS** - ⚠️ Never bypass add-prd-to-database.js or handoff.js outside a documented emergency path ⚠️
-> Why: `handoff.js` and `add-prd-to-database.js` run the full gate pipeline and write canonical phase state to the DB. Bypassing them skips validation, leaves DB state inconsistent, and produces false-pass handoffs that corrupt downstream phases. Documented exceptions exist (`--bypass-validation --bypass-reason` on handoff.js, rate-limited to 3/SD and 10/day; `EMERGENCY_PUSH` for push enforcement) — use them with a ticket reference in the reason field.
+> Why: `handoff.js` and `add-prd-to-database.js` run the full gate pipeline and write canonical phase state to the DB. Bypassing them skips validation, leaves DB state inconsistent, and produces false-pass handoffs that corrupt downstream phases. Documented exceptions exist (`--bypass-validation --bypass-reason` on handoff.js — audit-logged with a 2000/day global cap and NO per-SD cap on the generic path (the oft-cited 3/SD + 10/day quota is the grill-convergence gate's purpose-built counter only — corrected per build-vs-run deep-dive D9, 2026-07-12); `EMERGENCY_PUSH` for push enforcement) — use them with a ticket reference in the reason field.
 5. **Small PRs** - ≤100 LOC target. Exceed only with documented justification (max 400 LOC) per tiered PR Size Guidelines.
 > Why: Large PRs fail review at higher rates, introduce more merge conflicts, and are harder to roll back. Retrospective analysis shows ≤100 LOC correlates with faster cycle time and fewer post-merge defects.
 6. **Priority-first** - Use `npm run prio:top3` to justify work
@@ -99,8 +99,7 @@ Skipping CLAUDE_CORE.md causes: unknown SD type requirements, missed gate thresh
 7. **Version check** - If stale protocol detected, run `node scripts/generate-claude-md-from-db.js`
 > Why: CLAUDE.md is auto-generated from the DB. Operating on a stale file means reading outdated rules without knowing it — the session follows a protocol that has since been superseded.
 
-*For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
-8. **Parallel-session safety** - In shared-working-tree sessions, run `npm run session:check-concurrency` before Write/Edit work; if contention is detected, i
+*For copy-paste version: see `templates/session-prologue.md` (gene
 
 *...truncated. Read full file for complete section.*
 
@@ -160,5 +159,5 @@ This command provides:
 
 ---
 
-*DIGEST generated: 2026-07-12 9:08:47 AM*
+*DIGEST generated: 2026-07-16 1:13:36 PM*
 *Protocol: 4.4.1*

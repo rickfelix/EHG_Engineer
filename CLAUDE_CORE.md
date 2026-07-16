@@ -1,8 +1,8 @@
-<!-- file_content_hash: 806af54eff236170 -->
+<!-- file_content_hash: 2d74f9c7a70eb9c2 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-07-12 9:08:47 AM
+**Generated**: 2026-07-16 1:13:36 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1628,16 +1628,16 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 - [ ] Merge PR #5877 (implementation) and #5881 (scope-drift correction) via ship lane
 - [ ] File a QF for a lockstep CI assertion tying lib/governance/feedback-audience.js'...
 
-### 2. SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001 Comprehensive Retrospective [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 6/12/2026 | **Score**: 100
+### 2. Retrospective: SD-LEO-INFRA-CHAIRMAN-GAUGE-FABRICATIONS-FIX4-001 — Closing B3/B4/B5/C6 in the Gauge-Trust Fabrication Series [QUALITY]
+**Category**: APPLICATION_ISSUE | **Date**: 7/11/2026 | **Score**: 100
 
 **Key Improvements**:
-- Worktree reaper does not respect non-standard worktree paths — caused mid-EXEC data loss
-- Pattern-alert SD creator still leaves 4 of 8 JSONB fields unpopulated at filing time
+- B5's first implementation pass only covered PortfolioSummary.tsx's two completedStages consumers; a ...
+- The first EXEC-TO-PLAN handoff attempt was rejected at 0% by GATE2_IMPLEMENTATION_FIDELITY ("[PREFLI...
 
 **Action Items**:
-- [ ] Enforce SD worktrees under .worktrees/<SD-KEY> and commit+push immediately after...
-- [ ] Extend pattern-alert SD creator preflight to populate all 8 JSONB fields (treat ...
+- [ ] B5's original fix correctly handled two of three completedStages consumers; the ...
+- [ ] Two same-day false-positive trips on this exact check (this SD's doc comment, an...
 
 ### 3. Retrospective: SD-LEO-INFRA-CHAIRMAN-DECISION-SURFACING-001 — widen escalation to any raiser, arm the dormant SLA sweep notify-only [QUALITY]
 **Category**: APPLICATION_ISSUE | **Date**: 7/10/2026 | **Score**: 100
@@ -1661,16 +1661,16 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 - [ ] Apply SD-LEO-FIX-ORCHESTRATOR-LEAF-ROUTER-001's migration once chairman-apply is...
 - [ ] Audit other DB functions/triggers with hardcoded success/completion narratives f...
 
-### 5. Retrospective: SD-LEO-INFRA-CHAIRMAN-GAUGE-FABRICATIONS-FIX4-001 — Closing B3/B4/B5/C6 in the Gauge-Trust Fabrication Series [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 7/11/2026 | **Score**: 100
+### 5. Retrospective: SD-LEO-FIX-EVA-DECISIONS-CANNOT-001 — canonical resolver now stamps decided_by/context required by the stage-16 chairman_decisions trigger [QUALITY]
+**Category**: APPLICATION_ISSUE | **Date**: 7/10/2026 | **Score**: 100
 
 **Key Improvements**:
-- B5's first implementation pass only covered PortfolioSummary.tsx's two completedStages consumers; a ...
-- The first EXEC-TO-PLAN handoff attempt was rejected at 0% by GATE2_IMPLEMENTATION_FIDELITY ("[PREFLI...
+- The RPC-based chairman_decisions writers lib/eva/eva-orchestrator.js and lib/eva/stage-execution-wor...
+- The trigger's chairman-authority check is a loose substring match (LOWER(decided_by) LIKE '%chairman...
 
 **Action Items**:
-- [ ] B5's original fix correctly handled two of three completedStages consumers; the ...
-- [ ] Two same-day false-positive trips on this exact check (this SD's doc comment, an...
+- [ ] lib/eva/eva-orchestrator.js and lib/eva/stage-execution-worker.js write to chair...
+- [ ] The trigger's chairman path only requires LOWER(decided_by) LIKE '%chairman%' wi...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1737,7 +1737,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-07-12*
+*Generated from database: 2026-07-16*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

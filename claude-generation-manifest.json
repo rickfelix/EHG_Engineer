@@ -1,123 +1,123 @@
 {
-  "generated_at": "2026-07-12T13:08:47.808Z",
-  "git_commit": "d0e60c7d",
-  "db_snapshot_hash": "2dada35e85f2199f",
+  "generated_at": "2026-07-16T17:13:36.066Z",
+  "git_commit": "89c5e306",
+  "db_snapshot_hash": "6bcd1672b5ba0df9",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 19368,
-      "estimated_tokens": 4842,
-      "content_hash": "62e98a460955ae4c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-CONTRACT-MODE-C-UPDATES-001\\CLAUDE.md"
+      "chars": 19564,
+      "estimated_tokens": 4891,
+      "content_hash": "457c67146791e50d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 91064,
-      "estimated_tokens": 22766,
-      "content_hash": "41f2b58fcaa36112",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-CONTRACT-MODE-C-UPDATES-001\\CLAUDE_CORE.md"
+      "chars": 91183,
+      "estimated_tokens": 22796,
+      "content_hash": "21c33051ab96b25a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
       "chars": 65998,
       "estimated_tokens": 16500,
-      "content_hash": "f567635f52baf111",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-CONTRACT-MODE-C-UPDATES-001\\CLAUDE_LEAD.md"
+      "content_hash": "e137b65a57cf9045",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
       "chars": 91830,
       "estimated_tokens": 22958,
-      "content_hash": "c9b1e965e554855e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-CONTRACT-MODE-C-UPDATES-001\\CLAUDE_PLAN.md"
+      "content_hash": "ddefa052cbd24b1e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
       "chars": 88410,
       "estimated_tokens": 22103,
-      "content_hash": "f0cfeb6b2d9dbd69",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-CONTRACT-MODE-C-UPDATES-001\\CLAUDE_EXEC.md"
+      "content_hash": "84f718e3b79e26a6",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 63139,
-      "estimated_tokens": 15785,
-      "content_hash": "a6adfafc70a6e5a8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-CONTRACT-MODE-C-UPDATES-001\\CLAUDE_ADAM.md"
+      "chars": 63589,
+      "estimated_tokens": 15898,
+      "content_hash": "1444fb7baa6879f6",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
       "chars": 22134,
       "estimated_tokens": 5534,
-      "content_hash": "0e6a5bb9d753fb3c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-CONTRACT-MODE-C-UPDATES-001\\CLAUDE_COORDINATOR.md"
+      "content_hash": "e574d08f3340c4c7",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
       "chars": 49861,
       "estimated_tokens": 12466,
-      "content_hash": "9b25d3d81fb2efbb",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-CONTRACT-MODE-C-UPDATES-001\\CLAUDE_SOLOMON.md"
+      "content_hash": "999ff2134a0837d2",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9611,
       "estimated_tokens": 2403,
-      "content_hash": "f8c61d29173afd81",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-CONTRACT-MODE-C-UPDATES-001\\CLAUDE_DIGEST.md"
+      "content_hash": "4f0fda6b21850616",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 11664,
       "estimated_tokens": 2916,
-      "content_hash": "32cee5d74ed754e4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-CONTRACT-MODE-C-UPDATES-001\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "9a4f07c6518f440d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 5551,
       "estimated_tokens": 1388,
-      "content_hash": "71afa7bbc609c164",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-CONTRACT-MODE-C-UPDATES-001\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "91262b87430326a2",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 8541,
       "estimated_tokens": 2136,
-      "content_hash": "f6fccfa7ef114b49",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-CONTRACT-MODE-C-UPDATES-001\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "b90e5a61601eca1e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 10964,
       "estimated_tokens": 2741,
-      "content_hash": "408f94edb089abb5",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-CONTRACT-MODE-C-UPDATES-001\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "fabdcca3b46ed643",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
-      "chars": 16250,
-      "estimated_tokens": 4063,
-      "content_hash": "e3d31145c8ecfe43",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-CONTRACT-MODE-C-UPDATES-001\\CLAUDE_ADAM_DIGEST.md"
+      "chars": 16604,
+      "estimated_tokens": 4151,
+      "content_hash": "e805990b206c8ef8",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 6076,
       "estimated_tokens": 1519,
-      "content_hash": "4c72ab2365ebbc5f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-CONTRACT-MODE-C-UPDATES-001\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "85577f8bad589f9a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
       "chars": 4705,
       "estimated_tokens": 1177,
-      "content_hash": "034a2d7a4d6d1259",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-CONTRACT-MODE-C-UPDATES-001\\CLAUDE_SOLOMON_DIGEST.md"
+      "content_hash": "614ba65aa51dd0ab",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "137cd27ee3fe4405",
+    "global": "4159fd8bda5e8db1",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -138,7 +138,7 @@
       "206": "630e37f49e96fd34",
       "207": "e445b9976ac071e4",
       "208": "a7d1a5ecfdf8499c",
-      "209": "36c316bc964a6cfe",
+      "209": "786efb98a8e2f3cb",
       "210": "f2ad58fdc48f49a2",
       "211": "5d137550e1e954b7",
       "212": "53916ba04560d9cf",
@@ -390,7 +390,7 @@
       "620": "3fd2f83a068a8381",
       "621": "5d93172c5c9c2138",
       "622": "94a8df85a96ad041",
-      "624": "598aeea1e7124569"
+      "624": "ecbc82be6b6c0dfe"
     },
     "meta": {
       "94": {

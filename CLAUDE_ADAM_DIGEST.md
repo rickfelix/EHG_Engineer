@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-07-12T13:08:47.808Z -->
-<!-- git_commit: d0e60c7d -->
-<!-- db_snapshot_hash: 2dada35e85f2199f -->
-<!-- file_content_hash: 281db935d6592cdf -->
+<!-- generated_at: 2026-07-16T17:13:36.066Z -->
+<!-- git_commit: 89c5e306 -->
+<!-- db_snapshot_hash: 6bcd1672b5ba0df9 -->
+<!-- file_content_hash: 89f43be6d23a4c88 -->
 
 # CLAUDE_ADAM_DIGEST.md - Adam Role (Enforcement)
 
@@ -103,7 +103,9 @@ When the chairman asks for a project-management status update (in chat) — and 
 
 **IN-CHAT EXTRAS**: (a) end every in-chat PLAN CHECK with 2-3 anticipated follow-up options tailored to THAT report's content (e.g. "want the story behind the slip?") — never generic boilerplate; (b) **delta-first on repeat asks** — a second ask within ~2h (judgment up to ~6h) LEADS with a "since the last update at <time>" delta block, then the four sections with unchanged parts compressed to "unchanged since <time>".
 
-**MECHANICS (what makes it survive sessions)**: persist each window's section-4 forward list on the durable board (adam_task_ledger, source_ref `plan-check-forward-list-*`) so the next "what slipped" is COMPUTED against it, not remembered; the same node anchors cross-session delta detection. His ranking rationale, for calibration: variance = most truth per line; committed = the yardstick and his redirect point; done = confirmation, reads last.
+**MECHANICS (what makes it survive sessions)**: the underlying facts for done/next/committing are DERIVED FROM THE LEO ROADMAP (roadmap_waves + roadmap_wave_items, the ratified plan of record), not eyeballed from adam_task_ledger — via lib/roadmap/plan-check-status.js computePlanCheckStatus() (CLI: node scripts/roadmap/plan-check-status.mjs [--json]). "Done" requires a JOIN to strategic_directives_v2.status='completed' — a roadmap item merely having promoted_to_sd_key set is NOT done (SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001 FR-2). The section-4 forward-list persistence anchor (adam_task_ledger, source_ref `plan-check-forward-list-*`) is UNCHANGED and still the COMPUTED-against node for "what slipped" / cross-session delta detection. His 
+
+*...truncated. Read full file for complete section.*
 
 ## Chairman-Delegated DB-Change APPLY Authority (scoped, apply-only, fail-closed, revocable)
 

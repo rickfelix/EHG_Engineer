@@ -631,6 +631,17 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       console.warn(`   ⚠️  Rank-on-completion hook failed (non-blocking): ${rankHookError.message}`);
     }
 
+    // SD-LEO-INFRA-PLAN-OF-RECORD-LINKAGE-001 (FR-1): stamp any linked roadmap_wave_items row's
+    // item_disposition to 'promoted' now that the SD has completed, so the LEO Roadmap plan of
+    // record self-maintains. Fire-and-forget, never blocks completion.
+    try {
+      const { runRoadmapStampOnCompletionHook } = await import('./hooks/roadmap-stamp-on-completion-hook.js');
+      const stampResult = await runRoadmapStampOnCompletionHook(sd, this.supabase);
+      console.log(`   [roadmap-stamp-on-completion] ${stampResult.outcome} (${stampResult.updated} row(s))`);
+    } catch (stampHookError) {
+      console.warn(`   ⚠️  Roadmap-stamp-on-completion hook failed (non-blocking): ${stampHookError.message}`);
+    }
+
     // SD-LEO-INFRA-PROGRAMMATIC-TOOL-CALLING-001: Auto-populate retrospective via programmatic scorer.
     // Generates SD-specific insights with real file references — avoids RETROSPECTIVE_QUALITY_GATE failures.
     // Fail-safe: non-blocking, never prevents SD completion.
