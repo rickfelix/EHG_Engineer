@@ -1,5 +1,6 @@
 -- Migration: Two-way chairman SMS bridge schema
 -- SD: SD-LEO-FEAT-TWO-WAY-CHAIRMAN-001 (FR-1)
+-- @approved-by: codestreetlabs@gmail.com
 --
 -- Additive only: existing chairman_notifications / chairman_decisions rows and
 -- consumers are unaffected (new columns have safe defaults / are nullable).
