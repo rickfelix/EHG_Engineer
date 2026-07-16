@@ -490,6 +490,48 @@ describe('createOrReusePendingDecision', () => {
     expect(insertedRow).not.toHaveProperty('attempt_number');
   });
 
+  // SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001 (FR-2): the blocking flag (chairman-designated
+  // high-consequence classification) is threaded straight through into the INSERT.
+  it('defaults blocking to false in the insert when the caller omits it (preserves pre-existing behavior)', async () => {
+    const insertFn = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: 'new-id' }, error: null }),
+      }),
+    });
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: null }),
+        insert: insertFn,
+      }),
+    };
+
+    await createOrReusePendingDecision({ ventureId: 'v1', stageNumber: 10, supabase, logger });
+
+    expect(insertFn).toHaveBeenCalledWith(expect.objectContaining({ blocking: false }));
+  });
+
+  it('sets blocking: true in the insert when the caller passes blocking: true (chairman-designated high-consequence stage)', async () => {
+    const insertFn = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: 'new-id' }, error: null }),
+      }),
+    });
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: null }),
+        insert: insertFn,
+      }),
+    };
+
+    await createOrReusePendingDecision({ ventureId: 'v1', stageNumber: 3, blocking: true, supabase, logger });
+
+    expect(insertFn).toHaveBeenCalledWith(expect.objectContaining({ blocking: true }));
+  });
+
   // SD-MAN-FIX-FIX-DUPLICATE-ARTIFACTS-001: custom decision_type is preserved
   it('uses custom decision_type when provided', async () => {
     const insertFn = vi.fn().mockReturnValue({

@@ -438,8 +438,16 @@ function makeRequestReviewSupabase({ artifacts = [], priorAttempt = null } = {})
           maybeSingle: vi.fn().mockResolvedValue({ data: priorAttempt }),
         };
       }
+      // SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001 (FR-2): requestProductReview now calls the REAL
+      // getStageGovernance(supabase) to derive blocking via isHighConsequence(PRODUCT_REVIEW_STAGE).
+      // Empty rows -> every stage (incl. 23) defaults to non-high-consequence, matching today's
+      // pre-existing behavior for every test in this file that doesn't care about the new flag.
+      if (table === 'venture_stages') {
+        return { select: vi.fn().mockReturnThis(), order: vi.fn().mockResolvedValue({ data: [], error: null }) };
+      }
       throw new Error(`unexpected table: ${table}`);
     }),
+    channel: vi.fn(() => { throw new Error('channel not available in this mock'); }),
   };
 }
 

@@ -20,7 +20,7 @@ vi.mock('../../../lib/eva/chairman-decision-watcher.js', () => ({ createOrReuseP
 vi.mock('../../../lib/eva/shared-services.js', () => ({ emit: vi.fn().mockResolvedValue({}) }));
 vi.mock('../../../lib/eva/autonomy-model.js', () => ({ checkAutonomy: vi.fn().mockResolvedValue({ action: 'block', level: 'L0' }) }));
 vi.mock('../../../lib/eva/stage-governance.js', () => ({
-  getStageGovernance: vi.fn().mockResolvedValue({ isBlocking: () => false, isReview: () => false }),
+  getStageGovernance: vi.fn().mockResolvedValue({ isBlocking: () => false, isReview: () => false, isHighConsequence: () => false }),
 }));
 
 import { StageExecutionWorker } from '../../../lib/eva/stage-execution-worker.js';

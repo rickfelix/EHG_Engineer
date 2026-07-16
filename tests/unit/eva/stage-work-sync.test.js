@@ -11,7 +11,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Non-gate governance by default (overridden per-test).
-const gov = { isBlocking: vi.fn(() => false), isReview: vi.fn(() => false) };
+const gov = { isBlocking: vi.fn(() => false), isReview: vi.fn(() => false), isHighConsequence: vi.fn(() => false) };
 vi.mock('../../../lib/eva/stage-governance.js', () => ({
   getStageGovernance: vi.fn(async () => gov),
 }));
