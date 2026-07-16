@@ -41,6 +41,8 @@ import {
   getAddressableDimNames,
   countAddressableDimensions,
   calculateDynamicThreshold,
+  dimScoreOf,
+  dimNameOf,
 } from '../../../../../../lib/handoff/threshold-resolver.js';
 export {
   SD_TYPE_THRESHOLDS,
@@ -53,6 +55,8 @@ export {
   getAddressableDimNames,
   countAddressableDimensions,
   calculateDynamicThreshold,
+  dimScoreOf,
+  dimNameOf,
 };
 
 /**
@@ -192,7 +196,10 @@ async function checkOverride(sdType, supabase) {
  */
 function getDimensionWarnings(dimensionScores) {
   if (!dimensionScores || typeof dimensionScores !== 'object') return [];
+  // QF-20260713-713: rich scorer values ({ name, score, ... } keyed by A01/V01 IDs)
+  // previously failed the typeof === 'number' filter, silently muting all warnings.
   return Object.entries(dimensionScores)
+    .map(([key, value]) => [dimNameOf(key, value), dimScoreOf(value)])
     .filter(([, score]) => typeof score === 'number' && score < DIMENSION_WARNING_THRESHOLD)
     .map(([dim, score]) =>
       `Dimension '${dim}': ${score}/100 (below ${DIMENSION_WARNING_THRESHOLD} warning threshold)`
@@ -310,8 +317,14 @@ export async function validateVisionScore(sd, supabase, deps = {}) {
   let thresholdAction = sd.vision_score_action ?? null;
   let dimensionScores = sd.dimension_scores ?? null;
 
-  // Fetch latest score from eva_vision_scores if not cached
-  if (visionScore === null && supabase && sdKey) {
+  // Fetch latest score from eva_vision_scores if EITHER piece is missing.
+  // QF-20260713-713 (non-determinism): scoreSD() syncs only the SCALAR
+  // sd.vision_score back to strategic_directives_v2 (there is no dimension_scores
+  // column on the SD), so gating this fetch on the scalar alone starved every
+  // post-first-run evaluation of dimension context — countAddressableDimensions
+  // saw {0,0}, dynamic-threshold/floor-rule narrowing vanished, and a first-run
+  // floor-rule PASS flipped to a hard BLOCK on the very next run of the same SD.
+  if ((visionScore === null || dimensionScores === null) && supabase && sdKey) {
     try {
       const { data } = await supabase
         .from('eva_vision_scores')
@@ -321,9 +334,9 @@ export async function validateVisionScore(sd, supabase, deps = {}) {
         .limit(1);
 
       if (data && data.length > 0) {
-        visionScore = data[0].total_score;
-        thresholdAction = data[0].threshold_action;
-        dimensionScores = data[0].dimension_scores ?? null;
+        visionScore = visionScore ?? data[0].total_score;
+        thresholdAction = thresholdAction ?? data[0].threshold_action;
+        dimensionScores = dimensionScores ?? data[0].dimension_scores ?? null;
       }
     } catch (e) {
       // Intentionally suppressed: DB unavailable — proceed to hard block
@@ -414,15 +427,19 @@ export async function validateVisionScore(sd, supabase, deps = {}) {
     const typePatterns = SD_TYPE_ADDRESSABLE_DIMENSIONS[sdType];
     let addressableDimScores = null;
     if (typePatterns) {
-      // Type-pattern path (unchanged behavior).
+      // Type-pattern path. QF-20260713-713: match on the dimension NAME (rich
+      // values are keyed by opaque A01/V01 IDs) and extract .score from rich values.
       addressableDimScores = Object.entries(dimensionScores)
-        .filter(([name]) => typePatterns.some(p => name.toLowerCase().includes(p.toLowerCase())))
-        .map(([, score]) => score)
+        .filter(([key, value]) => {
+          const name = dimNameOf(key, value).toLowerCase();
+          return typePatterns.some(p => name.includes(p.toLowerCase()));
+        })
+        .map(([, value]) => dimScoreOf(value))
         .filter(s => typeof s === 'number');
     } else if (!hasManualOverride) {
       // null-type auto-detect carve-out path: score the auto-detected addressable dims.
       addressableDimScores = getAddressableDimNames(sdType, dimensionScores, sd.metadata)
-        .map(name => dimensionScores[name])
+        .map(key => dimScoreOf(dimensionScores[key]))
         .filter(s => typeof s === 'number');
     }
 
