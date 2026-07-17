@@ -117,6 +117,24 @@ describe('loadEvalSet (TS-3, TS-6)', () => {
   it('rejects unknown classes', async () => {
     await expect(loadEvalSet(stubDb({}), 'nope')).rejects.toThrow(/unknown artifact class/);
   });
+
+  it('refuses a degenerate empty case even with a valid hash (SECURITY LOW-2)', async () => {
+    const empty = {};
+    const row = { id: 'row-empty', metadata: { record_kind: 'eval_case', case_id: undefined, content_hash: evalCaseHash(empty), case: empty } };
+    const r = await loadEvalSet(stubDb({ feedback: [row] }), 'closure_predicates');
+    expect(r.cases).toHaveLength(0);
+    expect(r.refused[0].error).toBe('EVAL_CASE_SHAPE_INVALID');
+  });
+
+  it('strips non-whitelisted keys so the consumable surface equals the hashed surface (SECURITY LOW-1)', async () => {
+    const c = corpus[0];
+    const smuggled = { ...c, injected_behavior_flag: true }; // non-whitelisted key rides outside the hash
+    const row = { id: 'row-smuggle', metadata: { record_kind: 'eval_case', case_id: c.case_id, content_hash: evalCaseHash(smuggled), case: smuggled } };
+    const r = await loadEvalSet(stubDb({ feedback: [row] }), 'closure_predicates');
+    expect(r.cases).toHaveLength(1);
+    expect(r.cases[0].injected_behavior_flag).toBeUndefined();
+    expect(r.cases[0].case_id).toBe(c.case_id);
+  });
 });
 
 describe('known-bad false-CLOSE replay (TS-4)', () => {
