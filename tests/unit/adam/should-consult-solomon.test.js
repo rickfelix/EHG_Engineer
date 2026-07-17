@@ -258,3 +258,22 @@ describe('performBoundedConsult — FR-6 captures a near-miss on verdict-delta o
     expect(out.nearMissCaptured).toBe(true);
   });
 });
+
+// SD-1 security-review follow-up (adversarial finding #2b): a MEDIUM verdict that co-occurs
+// with a SECURITY-subset hint must be FORCED to consult — the MEDIUM catch-all cannot shield
+// a send with deploy/credential/authority blast radius. Uses a stub classifier returning
+// 'medium' to isolate the module's escalation independent of the classifier's own patterns.
+describe('evaluatePreSendConsult — finding #2b: security-hint forces consult on a non-HIGH verdict', () => {
+  it('a MEDIUM verdict WITH a security hint (deploy) is forced to consult-then-send', () => {
+    const classifyConsequence = vi.fn(() => 'medium');
+    const r = evaluatePreSendConsult({ title: 'Approve the deployment to the prod host' }, { classifyConsequence });
+    expect(r.action).toBe('consult-then-send');
+    expect(r.reason).toContain('security-hint');
+  });
+  it('a MEDIUM verdict WITHOUT any security hint still proceeds (no over-broadening)', () => {
+    const classifyConsequence = vi.fn(() => 'medium');
+    const r = evaluatePreSendConsult({ title: 'Approve the blog post draft copy' }, { classifyConsequence });
+    expect(r.action).toBe('proceed');
+    expect(r.consequence).toBe('medium');
+  });
+});

@@ -1007,7 +1007,8 @@ async function main() {
               pattern_id: `NEARMISS-ADAM-CONSULT-${Date.now()}`,
               category: 'governance_near_miss',
               severity: 'high',
-              issue_summary: `${nm.summary}${nm.title ? ` [${String(nm.title).slice(0, 80)}]` : ''}`,
+              // redact() so no secret from the raw subject/body leaks into the ledger (parity with the consult lane).
+              issue_summary: redact(`${nm.summary}${nm.title ? ` [${String(nm.title).slice(0, 80)}]` : ''}`),
               source: 'adam_pre_send_consult',
               metadata: { class: 'near_miss', catch_layer: 'solomon', hardening_ref: null, source_sd: 'SD-LEO-INFRA-ADAM-PRE-SEND-001', origin: 'verdict_delta' },
             });
@@ -1020,6 +1021,9 @@ async function main() {
     } catch (e) {
       console.warn(`[adam-advisory] pre-send consult gate error (failing OPEN, send proceeds): ${(e && e.message) || e}`);
     }
+  } else if ((process.env.ADAM_PRE_SEND_CONSULT || 'on') === 'off') {
+    // Never let a silently-off safety gate leave no trace (security-review finding #5).
+    console.warn('[adam-advisory] ⚠ PRE-SEND CONSULT GATE DISABLED (ADAM_PRE_SEND_CONSULT=off) — sending without Solomon-consult review.');
   }
 
   // FR-6: route through the validated dispatch writer. insertCoordinationRow THROWS

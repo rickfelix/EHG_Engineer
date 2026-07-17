@@ -90,3 +90,18 @@ describe('classifyConsequence — SD-1 governance classes (Adam pre-send rubric)
     expect(classifyConsequence({ title: 'Approve the blog post draft?' })).toBe('medium');
   });
 });
+
+// SD-1 security-review follow-up (adversarial finding #2b): the origin-miss class reworded
+// as an approval previously escaped the fail-closed HIGH default via a MEDIUM 'approve'
+// keyword because prod<->deploy was one-directional. These must now classify HIGH.
+describe('classifyConsequence — finding #2b: prod/deploy/migrate bidirectional escapes', () => {
+  it('"the deployment to production" (deploy BEFORE prod) classifies HIGH', () => {
+    expect(classifyConsequence({ title: 'Approve the deployment to production' })).toBe('high');
+    expect(classifyConsequence({ title: 'Approve config change to production database' })).toBe('high');
+    expect(classifyConsequence({ title: 'Proceed with the callback endpoint wiring on prod host' })).toBe('high');
+  });
+  it('migration rollback/revert classifies HIGH', () => {
+    expect(classifyConsequence({ title: 'Approve rollback of the migration' })).toBe('high');
+    expect(classifyConsequence({ title: 'Revert the schema migration on staging' })).toBe('high');
+  });
+});
