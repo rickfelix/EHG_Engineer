@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com
 -- SD-LEO-INFRA-ORG-TEMPLATE-ARMING-001 (FR-2): idempotency guard for holdco-scoped
 -- (venture_id IS NULL) EHG_SHARED_OPERATORS identity rows. Postgres treats NULL as
 -- DISTINCT in the existing UNIQUE(venture_id, role_key) constraint, so two
