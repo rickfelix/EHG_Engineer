@@ -26,27 +26,17 @@ import {
   loadNewIntakeItems,
   assignToExistingWaves,
 } from '../lib/integrations/wave-clusterer.js';
+// SD-LEO-INFRA-DISTILL-ROADMAP-SINGLE-001 (FR-1): the SAME resolver PLAN CHECK uses
+// (lib/roadmap/plan-check-status.js), so distill's write path and PLAN CHECK's read path
+// can never silently disagree on which roadmap is canonical. Replaces the old
+// getBaselinedRoadmap() (required current_baseline_version > 0, which the real canonical
+// roadmap never satisfied -- the confirmed root cause of every distill run forking a
+// brand-new parallel 'EVA Intake Roadmap' instead of writing into the existing one).
+import { resolveCanonicalRoadmap } from '../lib/roadmap/canonical-roadmap.js';
 
 dotenv.config();
 
 const supabase = createSupabaseServiceClient();
-
-/**
- * Find the active baselined roadmap (status='active', baseline_version > 0).
- * Returns null if no baselined roadmap exists.
- */
-async function getBaselinedRoadmap() {
-  const { data, error } = await supabase
-    .from('strategic_roadmaps')
-    .select('id, title, status, current_baseline_version')
-    .eq('status', 'active')
-    .gt('current_baseline_version', 0)
-    .order('created_at', { ascending: false })
-    .limit(1);
-
-  if (error || !data || data.length === 0) return null;
-  return data[0];
-}
 
 /**
  * Load existing waves with sample item titles for context.
@@ -412,13 +402,21 @@ async function main() {
   console.log('Roadmap Generator');
   console.log('═'.repeat(50));
 
-  // Auto-detect mode: if a baselined roadmap exists, use incremental
+  // Auto-detect mode: if the canonical roadmap exists, use incremental against it.
+  // SD-LEO-INFRA-DISTILL-ROADMAP-SINGLE-001 (FR-1): the normal pipeline call (no --full)
+  // NEVER falls through to runFull()/createRoadmap() anymore -- that would silently fork
+  // a new parallel roadmap, the confirmed root cause this SD fixes. --full remains an
+  // explicit, deliberate escape hatch for legitimate bootstrap/recluster; it is never
+  // reachable from scripts/eva-intake-pipeline.js's normal Step 4 invocation.
   if (!forceFull) {
-    const baselinedRoadmap = await getBaselinedRoadmap();
-    if (baselinedRoadmap) {
-      await runIncremental(baselinedRoadmap, { application, dryRun, respectLocks });
+    const canonicalRoadmap = await resolveCanonicalRoadmap(supabase);
+    if (canonicalRoadmap) {
+      await runIncremental(canonicalRoadmap, { application, dryRun, respectLocks });
       return;
     }
+    console.log('  No active (canonical) roadmap found. Refusing to auto-create one (single-writer invariant).');
+    console.log('  To bootstrap the FIRST roadmap, run explicitly: node scripts/roadmap-generate.js --full');
+    process.exit(1);
   }
 
   await runFull({ title, application, dryRun });

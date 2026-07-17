@@ -1,0 +1,93 @@
+{
+  "executive_summary": "The /distill pipeline (scripts/eva-intake-pipeline.js Step 4 -> scripts/roadmap-generate.js) is a second, uncoordinated writer to the roadmap -- Adam's chairman-ratified plan-of-record (canonical strategic_roadmaps.id=3aa2f3e2-75fa-4fc8-a17e-44d553b86674, 'LEO Roadmap', status=active). Ground-truthed root cause: roadmap-generate.js's getBaselinedRoadmap() requires current_baseline_version > 0, but the canonical roadmap has never been baselined via the existing approveSequence() mechanism (current_baseline_version=0) -- so distill can NEVER find it and instead forks a brand-new 'EVA Intake Roadmap' strategic_roadmaps row EVERY run. Confirmed live: two such parallel roadmaps were created 2026-07-17 alone, 19 minutes apart, plus an older archived one from March. Verified that fixing only the discovery query is insufficient: even targeting the canonical roadmap, incremental mode's respectLocks would find zero eligible (non-approved) waves and directly INSERT a new wave via createOverflowWave() with zero Adam gate. A genuine proposal (status='proposed', the schema's own default) -> Adam-disposition (status='approved', reusing the ALREADY-EXISTING lib/integrations/roadmap-manager.js approveSequence() bulk-accept mechanism) design is required and needs NO schema migration -- roadmap_waves.status is already a closed CHECK set (proposed/approved/active/completed/archived) that exactly encodes this distinction. A second, independently-confirmed live bug is folded in: lib/roadmap/plan-check-status.js's computePlanCheckStatus() (the chairman's PLAN CHECK data source) queries roadmap_waves/roadmap_wave_items with ZERO filter -- no roadmap_id, no status -- so it is ALREADY silently mixing rows from all 4 roadmaps into the chairman-facing report today, not just a future risk.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Distill targets the single canonical roadmap; wave output lands as a PROPOSAL, never a new roadmap",
+      "description": "scripts/roadmap-generate.js's getBaselinedRoadmap() drops the `current_baseline_version > 0` requirement (a single-canonical-roadmap model only ever has ONE active strategic_roadmaps row -- baseline_version is irrelevant to discovery) and instead resolves the single `status='active'` roadmap deterministically (fail loud, never silently pick among multiples, if more than one active row exists). createRoadmap() (whole-new-roadmap creation) is removed from the normal pipeline path -- it becomes an explicit, separately-invoked bootstrap-only function, never reachable from eva-intake-pipeline.js Step 4. All distill-authored waves/items continue to land with status='proposed' (already the schema default) scoped to the canonical roadmap_id -- no schema change.",
+      "acceptance_criteria": [
+        "getBaselinedRoadmap() (or its replacement) resolves the canonical roadmap 3aa2f3e2-... without requiring current_baseline_version > 0",
+        "Running the distill pipeline end-to-end does NOT create a new strategic_roadmaps row when an active one already exists",
+        "createRoadmap() is no longer reachable from scripts/eva-intake-pipeline.js's Step 4 call path",
+        "A distill-authored wave/item lands with status='proposed' inside the canonical roadmap_id, never a new roadmap_id"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Adam disposition reconciles proposed waves -- reuse and extend the existing approveSequence() mechanism",
+      "description": "lib/integrations/roadmap-manager.js's approveSequence() (invoked via `node scripts/roadmap-promote.js --approve --roadmap-id <id>`) ALREADY implements exactly the accept-path of Adam disposition: it snapshots the wave sequence, bumps current_baseline_version (which also fixes FR-1's discovery going forward), and bulk-transitions every status='proposed' wave to status='approved'. This SD adds the missing REJECT path -- a new `--reject-wave <wave-id> --rationale \"<reason>\"` verb on scripts/roadmap-promote.js that transitions a single proposed wave to status='archived' (using the existing validateTransition() guard already imported in roadmap-manager.js) without touching the baseline version or other waves, so Adam has both accept-all and reject-one levers over distill's output.",
+      "acceptance_criteria": [
+        "node scripts/roadmap-promote.js --approve --roadmap-id <canonical-id> promotes all status='proposed' waves in the canonical roadmap to 'approved' and bumps current_baseline_version (existing behavior, verified still correct against the canonical roadmap)",
+        "A new --reject-wave <wave-id> verb transitions exactly that one wave to status='archived', validated via validateTransition('proposed','archived')",
+        "Rejecting a wave does not alter current_baseline_version or any other wave's status",
+        "Rejecting a wave that is not currently status='proposed' is refused with a clear error (mirrors validateTransition's existing guard pattern)"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Single plan surface invariant: PLAN CHECK reads only the canonical roadmap's approved waves (closes an ALREADY-LIVE cross-contamination bug)",
+      "description": "lib/roadmap/plan-check-status.js's computePlanCheckStatus() currently queries roadmap_waves and roadmap_wave_items with NO filter at all -- confirmed live to already mix rows from all 4 existing roadmaps (the canonical one plus 3 distill-forked parallel/archived ones) into the chairman-facing PLAN CHECK report. Scope both queries to the single canonical roadmap_id (resolved the same way as FR-1) and, for roadmap_waves, exclude non-approved statuses (status IN ('approved','active','completed') -- excludes 'proposed'/'archived') so an un-disposed distill proposal can never silently appear as if it were part of the ratified plan. A regression test asserts PLAN CHECK's roadmap resolution and distill's roadmap resolution (FR-1) always agree on the same roadmap_id. Non-goal: the 5 other unfiltered readers found during Explore (lib/governance/plan-drift-detectors.js, lib/vision/rung-progress-rollup.mjs, scripts/gauge-runner.mjs, scripts/coordinator-backlog-rank.mjs, scripts/adam-startup-check.mjs) share the same hazard class but are explicitly OUT OF SCOPE here (not named by the chairman-ratified hand-off) -- flagged as a documented follow-on risk in this PRD's risks section, not silently ignored.",
+      "acceptance_criteria": [
+        "computePlanCheckStatus()'s roadmap_waves query is scoped to the single canonical roadmap_id",
+        "computePlanCheckStatus()'s roadmap_waves query excludes status='proposed' and status='archived' waves",
+        "computePlanCheckStatus()'s roadmap_wave_items query is scoped to items belonging to the canonical roadmap's waves only",
+        "A test proves PLAN CHECK and distill's roadmap-resolution helper resolve to the identical roadmap_id",
+        "Running PLAN CHECK against live data no longer includes items from the 3 confirmed non-canonical roadmaps (a89b078b..., 8ffa7fdf..., ed12bf74...)"
+      ]
+    }
+  ],
+  "implementation_approach": {
+    "strategy": "Two surgical fixes (FR-1 roadmap discovery + pipeline hardening, FR-3 PLAN CHECK scoping) plus one small addition to an existing, already-correct mechanism (FR-2's reject verb) -- no new tables, no schema migration, no new proposal-staging surface, since roadmap_waves.status's existing closed set (proposed/approved/...) already IS the proposal/canonical distinction the SD asks for. This is a materially lighter-weight design than the SD's original 'add a full proposal-staging surface' framing, justified by ground-truthed evidence that the existing schema and approveSequence() mechanism already model exactly what's needed.",
+    "steps": [
+      "Fix getBaselinedRoadmap() in scripts/roadmap-generate.js to resolve the single active canonical roadmap without the current_baseline_version > 0 requirement",
+      "Guard/remove the reachable path to createRoadmap() from scripts/eva-intake-pipeline.js's normal Step 4 invocation",
+      "Add --reject-wave <id> --rationale to scripts/roadmap-promote.js / a new rejectWave() export in lib/integrations/roadmap-manager.js",
+      "Scope lib/roadmap/plan-check-status.js's computePlanCheckStatus() queries to the canonical roadmap_id + approved-status waves",
+      "Add a regression test proving distill's and PLAN CHECK's roadmap resolution agree",
+      "Document the 3 confirmed orphaned/parallel roadmaps (a89b078b..., 8ffa7fdf..., ed12bf74...) as a one-time data cleanup note in the PR body -- NOT auto-deleted by this SD's code (a chairman/Adam data decision, out of an automated fix's authority)"
+    ],
+    "rollback": "Each change is additive/surgical to existing functions; reverting restores the pre-fix direct-write behavior with no data loss. The reject-wave addition is a net-new export/verb with no existing callers to break."
+  },
+  "system_architecture": {
+    "overview": "No schema changes. Reuses the existing roadmap_waves.status vocabulary and the existing approveSequence()/roadmap-promote.js disposition tool, wiring distill's write path and PLAN CHECK's read path to agree on a single canonical strategic_roadmaps row.",
+    "components": [
+      { "name": "scripts/roadmap-generate.js", "responsibility": "Fixed canonical-roadmap discovery; distill's proposal writes now land in the SAME roadmap every run" },
+      { "name": "lib/integrations/roadmap-manager.js", "responsibility": "approveSequence() (existing, reused unchanged) + new rejectWave() export" },
+      { "name": "scripts/roadmap-promote.js", "responsibility": "Existing --approve verb (unchanged) + new --reject-wave verb -- Adam's disposition CLI" },
+      { "name": "lib/roadmap/plan-check-status.js", "responsibility": "Scoped to the single canonical, approved-only wave surface -- closes the live cross-contamination bug" }
+    ],
+    "data_flow": "distill -> roadmap-generate.js (targets canonical roadmap_id, writes status='proposed') -> Adam runs roadmap-promote.js --approve (bulk accept) or --reject-wave (single reject) -> PLAN CHECK / future roadmap-retro read ONLY the canonical roadmap_id's approved waves."
+  },
+  "integration_operationalization": {
+    "consumers": [
+      "Adam (roadmap-promote.js --approve / --reject-wave disposition CLI)",
+      "Chairman (PLAN CHECK report, now reading a single uncontaminated canonical plan)",
+      "The /distill pipeline (scripts/eva-intake-pipeline.js Step 4)"
+    ],
+    "dependencies": [
+      "Existing roadmap_waves.status closed CHECK set (no migration)",
+      "Existing lib/integrations/roadmap-manager.js approveSequence() + validateTransition()"
+    ],
+    "data_contracts": [
+      "getBaselinedRoadmap()/its replacement: resolves exactly one canonical roadmap or fails loud on ambiguity -- never silently forks",
+      "rejectWave(supabase, waveId, rationale): transitions a single status='proposed' wave to 'archived', validated"
+    ],
+    "runtime_config": [
+      "None -- no new env vars or flags beyond the new --reject-wave CLI flag"
+    ],
+    "observability_rollout": "Single PR in EHG_Engineer. No migration, no chairman-gate (no schema/DDL touched). PR body documents the 3 confirmed orphaned parallel roadmaps as a known data-cleanup item for the chairman/Adam to action separately -- this SD's code changes do not delete existing data."
+  },
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Run distill end-to-end twice in a row against a fixture DB with one active canonical roadmap", "expected": "Both runs write proposed waves into the SAME roadmap_id; zero new strategic_roadmaps rows created" },
+    { "id": "TS-2", "scenario": "roadmap-promote.js --approve --roadmap-id <canonical>", "expected": "All proposed waves in that roadmap flip to approved; current_baseline_version increments (existing behavior, re-verified against the fixed discovery path)" },
+    { "id": "TS-3", "scenario": "roadmap-promote.js --reject-wave <id> --rationale '...' on a status=proposed wave", "expected": "That wave transitions to archived; no other wave or the roadmap's baseline_version changes" },
+    { "id": "TS-4", "scenario": "roadmap-promote.js --reject-wave <id> on a wave that is NOT status=proposed", "expected": "Refused with a clear validateTransition error, no state change" },
+    { "id": "TS-5", "scenario": "computePlanCheckStatus() against a fixture with 2 roadmaps (one canonical/approved-heavy, one parallel/proposed-heavy)", "expected": "Only the canonical roadmap's approved waves/items appear in the PLAN CHECK output" },
+    { "id": "TS-6", "scenario": "Compare distill's resolved roadmap_id (FR-1) against PLAN CHECK's resolved roadmap_id (FR-3)", "expected": "Identical -- the single-plan-surface invariant" }
+  ],
+  "risks": [
+    { "risk": "5 other production readers (lib/governance/plan-drift-detectors.js, lib/vision/rung-progress-rollup.mjs, scripts/gauge-runner.mjs, scripts/coordinator-backlog-rank.mjs, scripts/adam-startup-check.mjs) share plan-check-status.js's pre-fix unfiltered-read hazard but are out of this SD's scope", "impact": "medium", "likelihood": "medium", "mitigation": "Explicitly documented here and in the PR body as a known follow-on risk (not silently dropped); a future SD can extend the same canonical-roadmap-scoping pattern to these 5 sites" },
+    { "risk": "3 existing orphaned/parallel roadmap rows (a89b078b..., 8ffa7fdf..., ed12bf74...) remain in the DB after this fix ships -- they stop growing but are not retroactively cleaned up", "impact": "low", "likelihood": "certain", "mitigation": "Documented as a one-time chairman/Adam data-decision item in the PR body; deleting production roadmap data is outside an automated bugfix's authority" },
+    { "risk": "getBaselinedRoadmap()'s replacement query, if it finds MORE than one status='active' roadmap (a data-integrity edge case), must fail loud rather than silently picking one", "impact": "low", "likelihood": "low", "mitigation": "FR-1's acceptance criteria explicitly requires fail-loud-on-ambiguity behavior, tested in TS-1's fixture setup" }
+  ]
+}
