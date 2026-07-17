@@ -95,6 +95,23 @@ describe('groupMultiPartAdvisories', () => {
   it('handles an empty input array', () => {
     expect(groupMultiPartAdvisories([])).toEqual([]);
   });
+
+  // Adversarial-review regression (PR #6191, round 3): a second row landing on an
+  // already-occupied series index (e.g. a retried/duplicate send) must never silently
+  // vanish -- it must surface as its own visible singleton, not be dropped.
+  it('never silently drops a duplicate/retried row sharing an already-occupied index', () => {
+    const rows = [
+      { ...base, id: 'row-1', subject: 'VERDICT 1/2', body: 'first' },
+      { ...base, id: 'row-1-dup', subject: 'VERDICT 1/2', body: 'retried duplicate' },
+      { ...base, id: 'row-2', subject: 'VERDICT 2/2', body: 'second' },
+    ];
+    const groups = groupMultiPartAdvisories(rows);
+    const allMemberIds = groups.flatMap((g) => g.memberIds);
+    expect(allMemberIds).toEqual(expect.arrayContaining(['row-1', 'row-1-dup', 'row-2']));
+    expect(allMemberIds).toHaveLength(3); // every input row appears in SOME group
+    const dupGroup = groups.find((g) => g.memberIds.includes('row-1-dup'));
+    expect(dupGroup.isMultiPart).toBe(false); // routed to its own singleton, not merged in
+  });
 });
 
 describe('reassembleGroupBody', () => {
