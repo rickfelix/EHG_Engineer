@@ -1479,11 +1479,20 @@ async function printAdamInbox() {
     return;
   }
 
+  // SD-LEO-FIX-SOLOMON-MULTI-PART-001: collapse a multi-part Solomon reply (split across
+  // several rows, joined by subject-line "N/M" marker) into ONE rendered entry. A
+  // marker-less advisory passes through as its own singleton group, byte-identical to
+  // before. read_at below still stamps EVERY member row of every group (delivery tracking
+  // stays per-row; only the human-facing render collapses).
+  const { groupMultiPartAdvisories } = require('../lib/coordinator/multi-part-reply.cjs');
+  const groups = groupMultiPartAdvisories(advisories);
+
   // QF-20260621-174: partition the lane so action-required advisories ALWAYS render
   // un-truncated; passive status relays (belt-countdowns) get a capped tail so they can
   // never crowd out an ask. Both subsets stamp read_at below (DELIVERED, not actioned).
-  const actionRows = advisories.filter(isActionRequiredAdvisory);
-  const statusRows = advisories.filter((a) => !isActionRequiredAdvisory(a));
+  const isActionRequiredGroup = (g) => g.rows.some(isActionRequiredAdvisory);
+  const actionRows = groups.filter(isActionRequiredGroup);
+  const statusRows = groups.filter((g) => !isActionRequiredGroup(g));
 
   console.log('  ' + advisories.length + ' unactioned (' + actionRows.length +
     ' action-required, ' + statusRows.length + ' status relay(s))');
@@ -1505,20 +1514,22 @@ async function printAdamInbox() {
   console.log('  ' + '─'.repeat(68));
 
   const ids = [];
-  const renderRow = (a) => {
-    const callsign = a.payload?.sender_callsign || '(none)';
-    const presence = formatPresence(presenceMap.get(a.sender_session));
-    const wantsReply = a.payload?.expects_reply ? 'yes' : '-';
-    const ageMin = Math.floor((Date.now() - new Date(a.created_at).getTime()) / 60_000);
+  const renderRow = (g) => {
+    const last = g.rows[g.rows.length - 1];
+    const callsign = last.payload?.sender_callsign || '(none)';
+    const presence = formatPresence(presenceMap.get(last.sender_session));
+    const wantsReply = g.rows.some((a) => a.payload?.expects_reply) ? 'yes' : '-';
+    const ageMin = Math.floor((Date.now() - new Date(last.created_at).getTime()) / 60_000);
     const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
-    const bodyPreview = (a.body || a.payload?.body || '').replace(/\n/g, ' ').substring(0, 32);
+    const partsSuffix = g.isMultiPart ? ` (${g.rows.length}${g.isComplete ? '' : '/' + g.total} parts)` : '';
+    const bodyPreview = g.body.replace(/\n/g, ' ').substring(0, 32) + partsSuffix;
     console.log('  ' + pad(callsign, 12) + pad(presence, 12) + pad(wantsReply, 8) + pad(ageStr, 8) + bodyPreview);
-    ids.push(a.id);
+    ids.push(...g.memberIds);
   };
 
-  for (const a of actionRows) renderRow(a); // action-required: never truncated
+  for (const g of actionRows) renderRow(g); // action-required: never truncated
   const STATUS_CAP = 15;
-  for (const a of statusRows.slice(0, STATUS_CAP)) renderRow(a);
+  for (const g of statusRows.slice(0, STATUS_CAP)) renderRow(g);
   if (statusRows.length > STATUS_CAP) {
     console.log('  … and ' + (statusRows.length - STATUS_CAP) + ' older status relay(s) hidden');
   }
