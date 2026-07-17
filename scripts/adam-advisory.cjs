@@ -43,7 +43,7 @@
 
 const crypto = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
-const { redact, capBody, awaitCoordinatorReply } = require('./worker-signal.cjs');
+const { redact, capBody, awaitCoordinatorReply, buildSolomonConsultPayload } = require('./worker-signal.cjs');
 const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled } = require('../lib/coordinator/resolve.cjs');
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 const { insertCoordinationRow, isSentinelTarget } = require('../lib/coordinator/dispatch.cjs');
@@ -969,6 +969,62 @@ async function main() {
   // Adam->coordinator comms-loss mode). ALL modes now get a durable 24h TTL; `timeoutMs` continues
   // to bound ONLY awaitCoordinatorReply below.
   const expiresAt = advisoryExpiresAt(Date.now());
+
+  // SD-LEO-INFRA-ADAM-PRE-SEND-001 (FR-1/3/4/5): PRE-SEND Solomon-consult gate at the send
+  // choke — mirrors the sanityCheckUrgentAdvisory precedent (runs AFTER payload build, BEFORE
+  // insertCoordinationRow). ALL logic lives in the unit-tested lib/adam/should-consult-solomon.js;
+  // this is the minimal live-path wiring. Skips a send that IS a consult to Solomon (no recursion).
+  // Default ACTIVE (kill switch: ADAM_PRE_SEND_CONSULT=off) and DEGRADE-SAFE: any gate error
+  // fails OPEN so a gate bug can never block Adam's send (Adam is never hard-blocked on Solomon).
+  if ((process.env.ADAM_PRE_SEND_CONSULT || 'on') !== 'off' && peerArg !== 'solomon') {
+    try {
+      const { evaluatePreSendConsult, performBoundedConsult } = await import('../lib/adam/should-consult-solomon.js');
+      // Adam advisories target the coordinator/Solomon, never the chairman directly, so this
+      // send path is not chairman-targeted (a chairman-facing send path would pass true).
+      const gateInput = { title: subject, body: payload.body, isChairmanTargeted: false };
+      if (evaluatePreSendConsult(gateInput).action === 'consult-then-send') {
+        const consultTimeoutMs = Number(process.env.ADAM_PRE_SEND_CONSULT_TIMEOUT_MS) || 8000;
+        const outcome = await performBoundedConsult(gateInput, {
+          timeoutMs: consultTimeoutMs,
+          // deps.consult — the REAL solomon_consult lane (buildSolomonConsultPayload + insert),
+          // bounded by awaitCoordinatorReply; null on timeout/absence => module fails OPEN.
+          consult: async () => {
+            let solomonId = null;
+            try { solomonId = await getActiveSolomonId(supabase); } catch { solomonId = null; }
+            const correlationId = crypto.randomUUID();
+            const cp = buildSolomonConsultPayload({ correlationId, body: `[PRE-SEND CONSULT] ${payload.body.slice(0, 300)}`, senderCallsign, repo: process.cwd(), severity: 'high', isAwait: true });
+            await insertCoordinationRow(supabase, { sender_session: sessionId, sender_type: 'adam', target_session: solomonId || 'broadcast-solomon', message_type: 'INFO', subject: `[SOLOMON_CONSULT] pre-send`, body: cp.body, payload: cp, expires_at: expiresAt });
+            const reply = await awaitCoordinatorReply(supabase, { sessionId, correlationId, timeoutMs: consultTimeoutMs });
+            return reply.timedOut ? null : ((reply.reply && (readCanonicalBody(reply.reply) || reply.reply.body)) || { received: true });
+          },
+          // deps.recordLedger — adam_adherence_ledger capture (existing columns, no new ones).
+          recordLedger: async (l) => { await supabase.from('adam_adherence_ledger').insert({ run_id: crypto.randomUUID(), probe: l.probe, duty: l.duty || 'pre_send_consult', verdict: l.verdict, detail: l.detail, remediation_ref: l.remediation_ref || null }); },
+          // FR-6: near-miss feeder — a verdict-delta writes a governance situation to the
+          // shared issue_patterns ledger (the sink SD-2's learning loop rides), using SD-2's
+          // metadata convention {class, catch_layer}. catch_layer='solomon' (Solomon caught it).
+          captureNearMiss: async (nm) => {
+            await supabase.from('issue_patterns').insert({
+              pattern_id: `NEARMISS-ADAM-CONSULT-${Date.now()}`,
+              category: 'governance_near_miss',
+              severity: 'high',
+              // redact() so no secret from the raw subject/body leaks into the ledger (parity with the consult lane).
+              issue_summary: redact(`${nm.summary}${nm.title ? ` [${String(nm.title).slice(0, 80)}]` : ''}`),
+              source: 'adam_pre_send_consult',
+              metadata: { class: 'near_miss', catch_layer: 'solomon', hardening_ref: null, source_sd: 'SD-LEO-INFRA-ADAM-PRE-SEND-001', origin: 'verdict_delta' },
+            });
+          },
+        });
+        if (outcome.action === 'hold-and-surface') { console.error('[adam-advisory] ⛔ PRE-SEND HOLD: consequential chairman-surface send held pending Solomon (degraded) — re-send once the consult resolves.'); process.exit(3); }
+        if (outcome.degraded) console.warn('[adam-advisory] ⚠ PRE-SEND DEGRADED-PROCEED: Solomon consult timed out; proceeding with caution — adam_adherence_ledger capture on record + consult row queued for async review.');
+        else console.log('[adam-advisory] ✓ PRE-SEND CONSULT recorded — Solomon verdict received; sending.');
+      }
+    } catch (e) {
+      console.warn(`[adam-advisory] pre-send consult gate error (failing OPEN, send proceeds): ${(e && e.message) || e}`);
+    }
+  } else if ((process.env.ADAM_PRE_SEND_CONSULT || 'on') === 'off') {
+    // Never let a silently-off safety gate leave no trace (security-review finding #5).
+    console.warn('[adam-advisory] ⚠ PRE-SEND CONSULT GATE DISABLED (ADAM_PRE_SEND_CONSULT=off) — sending without Solomon-consult review.');
+  }
 
   // FR-6: route through the validated dispatch writer. insertCoordinationRow THROWS
   // (DISPATCH_TARGET_*) on a bad/dead target instead of returning {error}, so wrap it
