@@ -29,7 +29,7 @@ const { PLAN_CONTENT_MARKER } = require('../lib/sd-enrichment-markers.cjs');
 const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'); // QF-20260525-542
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate (same one the
 // worker self_claim path uses) so CLAIM_FIX never re-affirms an orchestrator PARENT / dep-blocked SD.
-const { evaluateDispatchEligibility, classifyDispatchIneligibility } = require('../lib/fleet/claim-eligibility.cjs');
+const { evaluateDispatchEligibility, classifyDispatchIneligibility, TEST_FIXTURE_KEY_RE } = require('../lib/fleet/claim-eligibility.cjs');
 // SD-LEO-FEAT-CLAIM-ASSIGNMENT-PATH-001: the sweep is the primary scheduled WORK_ASSIGNMENT producer
 // and inserts raw (it does NOT route through insertCoordinationRow), so the dispatch-side terminal
 // guard would never reach it. Call assertSdDispatchable here so the sweep also refuses to nudge a
@@ -1606,6 +1606,90 @@ async function runCoordinatorHousekeeping(ctx) {
   }
 }
 
+/**
+ * SD-LEO-INFRA-BLOCK-TEST-SESSION-001 (FR-2/FR-3): reap a claim held by a PHANTOM
+ * session -- strategic_directives_v2.claiming_session_id set to a session_id with NO
+ * row in claude_sessions at all (never registered, or long since purged). Distinct
+ * from the FIXTURE_SESSION_RE CLAIM_FIX loop elsewhere in this file, which only
+ * iterates over EXISTING claude_sessions rows with sd_key set and so never sees a
+ * session_id that has no row on that side at all -- the exact shape of the reported
+ * leak (test-session-nswcf-fenced claimed two real SDs while never appearing in
+ * claude_sessions).
+ *
+ * Cross-signal guard (validation-agent advisory, referencing the deferred
+ * SD-REFILL-00ZDA5MQ precedent): a reaper trusting claiming_session_id ALONE can
+ * false-release an SD a DIFFERENT live session is legitimately working via a desynced
+ * active_session_id or its own claude_sessions.sd_key pointer. Before reaping, this
+ * checks all three claim signals and only reaps when NONE resolves to a live session --
+ * fails toward NOT reaping on any ambiguity.
+ *
+ * Each successful reap is race-guarded (`.eq('claiming_session_id', phantomId)` on the
+ * UPDATE) and audited to session_lifecycle_events (event_type='PHANTOM_CLAIM_REAPED')
+ * ONLY when the race-guarded update actually affected a row.
+ *
+ * @param {object} supabase - service-role client
+ * @param {{ actions: string[], warnings: string[] }} ctx - sweep-pass accumulators
+ */
+async function reapPhantomSessionClaims(supabase, { actions, warnings }) {
+  const { data: candidateRows } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key, claiming_session_id, active_session_id, status')
+    .not('claiming_session_id', 'is', null)
+    .not('status', 'in', '(completed,cancelled)');
+
+  // Never reap a SD-TEST-*/SD-DEMO-*/bare TEST-*/DEMO-* fixture key -- other live-DB test
+  // suites (e.g. claim-sd-cross-table.test.js TS-2) deliberately stamp a non-existent
+  // claiming_session_id on such fixtures mid-test; a concurrently-running production sweep
+  // must not reap that fixture out from under them.
+  const phantomClaimCandidates = (candidateRows || []).filter((sd) => !TEST_FIXTURE_KEY_RE.test(sd.sd_key));
+
+  if (!phantomClaimCandidates.length) return;
+
+  const referencedIds = new Set();
+  for (const sd of phantomClaimCandidates) {
+    if (sd.claiming_session_id) referencedIds.add(sd.claiming_session_id);
+    if (sd.active_session_id) referencedIds.add(sd.active_session_id);
+  }
+  const sdKeysForCrossCheck = phantomClaimCandidates.map((sd) => sd.sd_key);
+
+  const [{ data: liveSessionsById }, { data: liveSessionsByKey }] = await Promise.all([
+    supabase.from('claude_sessions').select('session_id').in('session_id', [...referencedIds]),
+    supabase.from('claude_sessions').select('sd_key').in('sd_key', sdKeysForCrossCheck),
+  ]);
+  const liveIdSet = new Set((liveSessionsById || []).map((s) => s.session_id));
+  const liveKeySet = new Set((liveSessionsByKey || []).map((s) => s.sd_key));
+
+  for (const sd of phantomClaimCandidates) {
+    if (liveIdSet.has(sd.claiming_session_id)) continue; // claiming_session_id has a real row -- not phantom
+    if (sd.active_session_id && liveIdSet.has(sd.active_session_id)) {
+      warnings.push('CLAIM_FIX: skipped phantom-claim reap on ' + sd.sd_key + ' -- claiming_session_id ' + String(sd.claiming_session_id).slice(0, 20) + ' is phantom but active_session_id ' + String(sd.active_session_id).slice(0, 20) + ' is live (cross-signal, not reaping)');
+      continue;
+    }
+    if (liveKeySet.has(sd.sd_key)) {
+      warnings.push('CLAIM_FIX: skipped phantom-claim reap on ' + sd.sd_key + ' -- claiming_session_id ' + String(sd.claiming_session_id).slice(0, 20) + ' is phantom but a live session already holds this SD via its own claude_sessions.sd_key pointer (cross-signal, not reaping)');
+      continue;
+    }
+
+    const phantomId = sd.claiming_session_id;
+    const { data: released, error: reapError } = await supabase
+      .from('strategic_directives_v2')
+      .update({ claiming_session_id: null, active_session_id: null, is_working_on: false })
+      .eq('sd_key', sd.sd_key)
+      .eq('claiming_session_id', phantomId) // race guard: only clear if still held by the same phantom
+      .select('sd_key');
+
+    if (!reapError && released && released.length > 0) {
+      actions.push('CLAIM_FIX: released PHANTOM session ' + String(phantomId).slice(0, 20) + ' claim on ' + sd.sd_key + ' (no claude_sessions row for this session_id)');
+      await supabase.from('session_lifecycle_events').insert({
+        event_type: 'PHANTOM_CLAIM_REAPED',
+        session_id: phantomId,
+        reason: 'phantom_session_no_claude_sessions_row',
+        metadata: { sd_key: sd.sd_key, freed_at: new Date().toISOString() },
+      });
+    }
+  }
+}
+
 async function main() {
   const now = new Date();
   const actions = [];
@@ -1988,6 +2072,14 @@ async function main() {
       actions.push('QA: reset phantom ' + sd.sd_key + ' from in_progress/' + sd.current_phase + '/' + sd.progress_percentage + '% → draft/LEAD/0% (no claiming session)');
     }
   }
+
+  // SD-LEO-INFRA-BLOCK-TEST-SESSION-001 (FR-2/FR-3): reap claims held by a PHANTOM
+  // session. Positioned AFTER the phantom-in_progress reset above and the earlier
+  // terminal-claim clears (FIX #2), so a terminal SD's claiming_session_id is already
+  // NULL by the time this pass runs -- no double-processing. Extracted to a standalone,
+  // exported function (mirroring runClaimBoundaryProbe) so it is directly testable
+  // against real tables without spawning the whole sweep as a child process.
+  await reapPhantomSessionClaims(supabase, { actions, warnings });
 
   // 3e. QA — detect and auto-enrich bare-shell SDs (FIX #6)
   // SD-FDBK-INFRA-QUALITY-GATE-COUPLED-001 (FR-1): metadata is now selected so
@@ -3230,6 +3322,10 @@ module.exports.splitCollidingSessions = splitCollidingSessions;
 // WORK_ASSIGNMENT dispatch so the single-writer gate is unit-testable (assert NO sender_type:'sweep'
 // insert happens when !allowed; insert happens when allowed).
 module.exports.dispatchWorkAssignmentsIfAllowed = dispatchWorkAssignmentsIfAllowed;
+
+// SD-LEO-INFRA-BLOCK-TEST-SESSION-001 (FR-2/FR-3): exported so the integration test drives
+// the real phantom-claim reap against real tables (no mocked gate).
+module.exports.reapPhantomSessionClaims = reapPhantomSessionClaims;
 
 // SD-LEO-INFRA-SWEEP-LEGACY-KILL-SWITCH-RETIRE-001: exported so its shape (owner/condition/
 // retirement_action all present and non-empty) is unit-testable.
