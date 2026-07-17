@@ -1,4 +1,6 @@
-# Wire sendChairmanSmsQuestion into the notification/escalation path — the outbound wire
+# Wire pending-decision escalation to ADAM (not direct-to-chairman SMS) — the outbound wire, chairman-corrected
+
+**CHAIRMAN CORRECTION 2026-07-17 (verbal, supersedes the original framing below):** *"I'm not expecting the fleet to text me. I'm expecting any questions that are needed for me to come through you as Adam."* The automatic path must TERMINATE AT ADAM, not at the chairman's phone. Revised architecture: (1) the notification/escalation path surfaces SMS-eligible pending decisions to ADAM's inbox/tick (a directed session_coordination row or a pending-decisions gauge Adam's quiet-tick reads); (2) ADAM grooms them (decision rubric: decide-and-inform what he can, batch/filter the rest) and relays what genuinely needs the chairman via ADAM's OWN send — one voice, one channel, chairman-side. `sendChairmanSmsQuestion` remains the send primitive ADAM invokes; the fleet NEVER auto-texts the chairman. The FRs below are amended accordingly: FR-1's call site routes decisions to the ADAM surface; the direct-send behavior becomes Adam-invoked only. All guards (classifier, spend lockout, quiet window, rate limit, checked bookkeeping inserts) unchanged.
 
 ## Type
 feature
