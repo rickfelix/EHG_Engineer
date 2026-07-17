@@ -41,11 +41,60 @@ describe('classifyConsequence — LOW', () => {
 });
 
 describe('classifyConsequence — MEDIUM', () => {
-  it('a small, real dollar amount below the HIGH threshold', () => {
-    expect(classifyConsequence({ title: 'Approve a $200 tool subscription?' })).toBe('medium');
+  it('a small, real dollar amount below the HIGH threshold (envelope-era behavior, lockout OFF)', () => {
+    // SD-LEO-FIX-SMS-PILOT-SPEND-001: this is the POST-envelope behavior, reachable only
+    // when the pilot spend-lockout is explicitly deactivated (the envelope SD flips it off).
+    const prev = process.env.SMS_SPEND_PILOT_LOCKOUT;
+    process.env.SMS_SPEND_PILOT_LOCKOUT = 'off';
+    try {
+      expect(classifyConsequence({ title: 'Approve a $200 tool subscription?' })).toBe('medium');
+    } finally {
+      if (prev === undefined) delete process.env.SMS_SPEND_PILOT_LOCKOUT;
+      else process.env.SMS_SPEND_PILOT_LOCKOUT = prev;
+    }
   });
   it('bounded operational approve/pause/defer without risk keywords', () => {
     expect(classifyConsequence({ title: 'Approve the blog post draft?' })).toBe('medium');
+  });
+});
+
+// SD-LEO-FIX-SMS-PILOT-SPEND-001 — chairman pilot posture 2026-07-17: ALL spend to
+// console until the financial envelope ships. Lockout is DEFAULT ON (flag absent) and
+// only the explicit value 'off' restores the $5,000-threshold behavior (fail-closed on money).
+describe('classifyConsequence — SMS pilot spend-lockout (FR-1/FR-3)', () => {
+  const withFlag = (value, fn) => {
+    const prev = process.env.SMS_SPEND_PILOT_LOCKOUT;
+    if (value === undefined) delete process.env.SMS_SPEND_PILOT_LOCKOUT;
+    else process.env.SMS_SPEND_PILOT_LOCKOUT = value;
+    try { return fn(); } finally {
+      if (prev === undefined) delete process.env.SMS_SPEND_PILOT_LOCKOUT;
+      else process.env.SMS_SPEND_PILOT_LOCKOUT = prev;
+    }
+  };
+
+  it('DEFAULT ON (flag absent): a $200 spend routes to console (high)', () => {
+    withFlag(undefined, () => {
+      expect(classifyConsequence({ title: 'Approve a $200 tool subscription?' })).toBe('high');
+    });
+  });
+  it('explicit on-values keep the lockout: any detected amount is high', () => {
+    for (const v of ['on', 'true', '1', '']) {
+      withFlag(v, () => {
+        expect(classifyConsequence({ title: 'Approve a $49 payment?' })).toBe('high');
+      });
+    }
+  });
+  it('non-spend decisions are UNAFFECTED under lockout (still SMS-eligible medium/low)', () => {
+    withFlag(undefined, () => {
+      expect(classifyConsequence({ title: 'Approve the blog post draft?' })).toBe('medium');
+      expect(classifyConsequence({ title: 'Which time works better for the call, 2pm or 4pm?' })).toBe('low');
+    });
+  });
+  it("only the explicit 'off' value restores the $5,000 threshold", () => {
+    withFlag('off', () => {
+      expect(classifyConsequence({ title: 'Approve a $200 tool subscription?' })).toBe('medium');
+      expect(classifyConsequence({ title: 'Approve the $6,000 vendor payment?' })).toBe('high');
+    });
   });
 });
 
