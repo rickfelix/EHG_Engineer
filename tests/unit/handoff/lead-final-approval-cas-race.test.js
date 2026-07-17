@@ -189,4 +189,25 @@ describe('LeadFinalApprovalExecutor.executeSpecific — loser reconciles instead
     expect(result.won).toBe(true);
     expect(supabase._state.sdRow.status).toBe('completed');
   });
+
+  it('CAS miss for a NON-completion reason (e.g. cancelled) is rejected, not fabricated as a completion (adversarial /ship review finding)', async () => {
+    // The shared row's status changed away from 'pending_approval' for some reason
+    // OTHER than a peer completing it — e.g. a chairman cancellation, or an unrelated
+    // reset. Blindly treating any CAS miss as "already completed" would fabricate a
+    // false completion record; this must instead surface a distinct rejection.
+    const supabase = makeSharedSupabase({ ...SD_ROW, status: 'cancelled' });
+    const exec = makeExecutor(supabase);
+    const staleSnapshot = { ...SD_ROW, status: 'pending_approval', active_session_id: 'this-session' };
+    const result = await exec.executeSpecific('sd-uuid-race-1', staleSnapshot, {}, { normalizedScore: 95 });
+
+    expect(result.success).toBe(false);
+    expect(result.reasonCode).toBe('CAS_MISS_UNEXPECTED_STATUS');
+    // This invocation's own leo_handoff_executions pre-insert was still cleaned up
+    // (no orphaned pending row) even on this rejection path.
+    expect(supabase._state.lhe).toHaveLength(0);
+    // NOTE: the pre-existing (out-of-scope, unmodified by this fix) canonical
+    // sd_phase_handoffs write happens BEFORE the CAS check runs at all — a known,
+    // separately-tracked residual (TESTING EXEC-phase review + retrospective action
+    // item), not something this fix's CAS-miss branch can retroactively undo.
+  });
 });

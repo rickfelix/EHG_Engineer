@@ -525,19 +525,32 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     }
 
     if (!casWon) {
-      // Lost the race: a concurrent invocation already flipped status away from
-      // 'pending_approval'. Clean up OUR OWN pre-inserted leo_handoff_executions row
-      // (by id — never the winner's) so no duplicate accepted/pending row survives,
-      // then reconcile via the existing idempotent already-completed path instead of
-      // re-running (or duplicating) the post-completion side effects below.
-      console.log('   ℹ️  CAS guard: SD was already transitioned by a concurrent invocation — reconciling as already-completed.');
+      // CAS miss means status was no longer 'pending_approval' at UPDATE time — but
+      // NOT necessarily because a peer completed it. Re-read fresh state and verify
+      // status==='completed' before treating this as the benign concurrent-completion
+      // race; any other status (cancelled, reset, manually altered) must NOT be
+      // silently reconciled as a fabricated completion (adversarial /ship review
+      // finding: blindly reconciling here could report false success for an SD that
+      // was never actually completed).
+      console.log('   ℹ️  CAS guard: status was no longer pending_approval — re-reading to determine cause.');
       await cleanupLosingPreInsert(this.supabase, preInsertedRowId);
       const { data: freshSd } = await this.supabase
         .from('strategic_directives_v2')
         .select('*')
         .eq('id', sd.id)
         .maybeSingle();
-      await this._reconcileCanonicalLfaRow(freshSd || sd, gateResults);
+
+      if (freshSd?.status !== 'completed') {
+        console.log(`   ❌ CAS miss was NOT a concurrent completion (fresh status: '${freshSd?.status}') — refusing to fabricate a completion record.`);
+        return ResultBuilder.rejected(
+          'CAS_MISS_UNEXPECTED_STATUS',
+          `Terminal UPDATE's compare-and-set found status already changed away from 'pending_approval', but the fresh status is '${freshSd?.status}', not 'completed' — this is NOT the benign concurrent-completion race. Re-investigate before re-running LEAD-FINAL-APPROVAL.`,
+          { freshStatus: freshSd?.status ?? null }
+        );
+      }
+
+      console.log('   ℹ️  Confirmed: a concurrent invocation completed the SD — reconciling as already-completed.');
+      await this._reconcileCanonicalLfaRow(freshSd, gateResults);
       return {
         success: true,
         sdId,
