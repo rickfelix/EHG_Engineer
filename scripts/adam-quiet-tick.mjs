@@ -32,11 +32,21 @@ const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
 const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs');
 const { decideCadence, detectSalientDelta, runCoresFailSoft } = require('../lib/coordinator/quiet-tick.cjs');
+// SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2/FR-3): surface which Claude account the fleet
+// is running under, and detect a genuine account switch across ticks.
+const { getAccountIdentity, detectAccountSwitch } = require('../lib/fleet/account-identity.cjs');
+const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
+const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 
 const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
 const LAST_STATE_FILE = join(REPO_ROOT, '.adam-quiet-tick-last.json');
+// SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-3): a SEPARATE identity-only state file, kept
+// independent of detectSalientDelta's tracked-field set (beltZero/openSignalCount/venture1State)
+// so the two concerns don't have to share a shape. Mirrors LAST_STATE_FILE's own
+// try/catch-load, JSON.stringify-write, single-slot pattern (see loadLastState/saveLastState).
+const ACCOUNT_IDENTITY_STATE_FILE = join(REPO_ROOT, '.account-identity-last.json');
 const ADAM_PARTY_OFFSET_S = 420; // phase Adam's park 7min after the coordinator's (FR-5).
 
 function makeClient() {
@@ -279,6 +289,15 @@ function saveLastState(s) {
   try { writeFileSync(LAST_STATE_FILE, JSON.stringify(s)); } catch { /* fail-soft */ }
 }
 
+// SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-3): mirrors loadLastState/saveLastState's
+// pattern for a dedicated single-slot identity state file.
+function loadLastAccountIdentity() {
+  try { return JSON.parse(readFileSync(ACCOUNT_IDENTITY_STATE_FILE, 'utf8')); } catch { return null; }
+}
+function saveLastAccountIdentity(s) {
+  try { writeFileSync(ACCOUNT_IDENTITY_STATE_FILE, JSON.stringify(s)); } catch { /* fail-soft */ }
+}
+
 async function main() {
   const asJson = process.argv.includes('--json');
   const sb = makeClient();
@@ -293,6 +312,12 @@ async function main() {
     quiescent = false;
     modeReason = 'assess_error_fail_active: ' + (e && e.message);
   }
+
+  // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2/FR-3): which Claude account is this fleet
+  // running under, and did it just switch? getAccountIdentity() is fail-safe (never throws;
+  // null when the config is missing/malformed).
+  const currentIdentity = getAccountIdentity();
+  const acctLabel = (currentIdentity && currentIdentity.email) || 'unknown';
 
   // FR-1: inbox-monitor always runs (cheap, catch /signal); the offer-help core
   // is delta-gated below, so only the inbox core needs composing here.
@@ -348,12 +373,39 @@ async function main() {
   const delta = detectSalientDelta(priorSalient, salient);
   saveLastState({ salient, stallSnapshot: stall.snapshot, ventureStallSnapshot: ventureStall.snapshot });
 
+  // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-3): cold-start rule — loadLastAccountIdentity()
+  // returning null (no prior state file / first tick after deploy-restart) means
+  // detectAccountSwitch always reports changed:false; the baseline write below still happens
+  // silently. A switch only fires when a PRIOR state EXISTED and differs from currentIdentity.
+  const priorIdentity = loadLastAccountIdentity();
+  const acctSwitch = detectAccountSwitch(priorIdentity, currentIdentity);
+  if (currentIdentity) saveLastAccountIdentity(currentIdentity);
+  if (acctSwitch.changed) {
+    // Fail-soft: a notification failure (identity resolution, dispatch refusal, DB hiccup) must
+    // never abort the tick — the console line below is the durable, always-emitted signal.
+    try {
+      const coordinatorId = await getActiveCoordinatorId(sb);
+      if (coordinatorId) {
+        await insertCoordinationRow(sb, {
+          sender_type: 'adam',
+          target_session: coordinatorId,
+          message_type: 'INFO',
+          subject: '[ACCOUNT_SWITCH] Adam session Claude account changed',
+          body: `Adam's Claude account switched from ${acctSwitch.event.from.email} (${acctSwitch.event.from.orgName}) ` +
+            `to ${acctSwitch.event.to.email} (${acctSwitch.event.to.orgName}).`,
+          payload: { kind: 'account_switch_notice', ...acctSwitch.event, reply_class: 'fire-and-forget' },
+        });
+      }
+    } catch { /* fail-soft — see comment above */ }
+  }
+
   const delaySeconds = decideCadence({ quiescent, partyOffsetS: ADAM_PARTY_OFFSET_S });
 
   const result = {
     party: 'adam',
     mode: quiescent ? 'QUIESCENT' : 'ACTIVE',
     modeReason,
+    acct: acctLabel,
     cores: tick.summary,
     failedCount: tick.failedCount,
     boardReconcile,
@@ -364,6 +416,7 @@ async function main() {
     outboundSilence,
     crossPartyPing: delta.changed,
     pingFields: delta.fields,
+    accountSwitch: acctSwitch.changed,
     nextWakeSeconds: delaySeconds,
   };
 
@@ -371,7 +424,7 @@ async function main() {
     console.log(JSON.stringify(result));
   } else {
     console.log(
-      `QUIET_TICK=adam mode=${result.mode} cores=[${tick.summary}] ` +
+      `QUIET_TICK=adam mode=${result.mode} acct=${acctLabel} cores=[${tick.summary}] ` +
       `fail=${tick.failedCount} ` +
       `reconcile=parents:${boardReconcile.parents},errors:${boardReconcile.errors.length} ` +
       `stalls=${stall.alerted.length} ` +
@@ -383,6 +436,9 @@ async function main() {
     );
     if (delta.changed) {
       console.log(`QUIET_TICK_PING=adam->coordinator reason=${delta.fields.join(',')} (real delta — offer help / sourcing; if sending a subject-only stub ping, stamp payload.kind='cross_party_ping' per SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-5 — mechanical, never authored)`);
+    }
+    if (acctSwitch.changed) {
+      console.log(`ACCOUNT_SWITCH detected: adam session Claude account changed from ${acctSwitch.event.from.email} to ${acctSwitch.event.to.email} — notice sent to active coordinator`);
     }
     for (const a of stall.alerted) {
       console.log(`QUIET_TICK_STALL_ALERT=adam node=${a.id} title="${a.title}" escalated=${a.escalated}`);
