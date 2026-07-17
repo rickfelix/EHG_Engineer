@@ -98,3 +98,43 @@ advice-uptake (`applied`/total) · advice-accuracy (`worked`/`applied`) · syste
 became shipped fixes) · escalations-avoided (resolved at the Solomon rung that would have reached the
 Chairman) · cost-per-accepted-proposal. A cluster consistently declined/inaccurate or with
 unjustifiable cost-per-accepted-proposal is a candidate to drop — Solomon earns scope empirically.
+
+---
+
+## 7. Fable-suitability Mode-B priority source (SD-LEO-INFRA-FABLE-SUITABILITY-MAP-001-C)
+
+> **Status: INERT-BUT-REACHABLE.** A read seam that projects the Fable-suitability map (children A+B)
+> into a versioned candidate contract Mode-B can consult as an additional priority source. Nothing in
+> production calls it yet (Solomon parked; child A's table STAGED) — but it is proven reachable, not
+> dark-shipped. Registering it here means un-parking is wire-up, not archaeology.
+
+**Read contract**
+- Entry point: `lib/fable-suitability/mode-b-seam.mjs` → `readModeBCandidates(supabase, { dutyCluster?, limit? })`.
+- Version: `MODE_B_CONTRACT_VERSION` (currently `1`) — bump on any candidate-shape change so an
+  un-parking Mode-B detects a mismatch instead of silently mis-reading.
+- Candidate shape: `{ contract_version, region_key, repo, duty_cluster, composite_score, score_version,
+  scored_at, rationale, source:'fable-suitability-map' }`, highest `composite_score` first.
+- Source view: child A's `v_fable_suitability_map_current`.
+- Return states: `{ status:'ok', candidates[] }`, or `{ status:'CEREMONY_PENDING', candidates:[] }`
+  while child A's table is STAGED (reachable but dormant, no throw).
+
+**Reachability proof (anti dark-ship, RISK R3)**
+- Dry-run: `node scripts/fable-suitability/dry-run.mjs --no-model` executes the *real*
+  produce → score → persist path over a live codebase slice and writes a ranked artifact.
+- Versioned contract e2e: `tests/database/fable-suitability-seam.db.test.js` drives
+  fan-out → child-A persist → `readModeBCandidates` and asserts a **fixture** Mode-B consumer reads
+  the versioned contract back (no full-seam mock — recurred-family rule).
+
+**Un-park wire-up (couples to the §3 Fable-pin trigger)**
+1. Apply child A's `fable_suitability_map` migration (chairman ceremony) — until then the seam is
+   `CEREMONY_PENDING`.
+2. Schedule `runFanout` (`lib/fable-suitability/fanout.mjs`) with a **Sonnet-floor** reasoning-depth
+   client — **NEVER Fable**; Fable is the expensive tier this map exists to *protect*, not consume.
+   Enable the living-update loop (`lib/fable-suitability/living-update.mjs`) and watch its freshness
+   gauge (`computeFreshness`) so staleness is observable (LIVENESS ≠ CLOSURE).
+3. Register `readModeBCandidates` as a Mode-B priority source in Solomon's launch config, checking
+   `contract_version === MODE_B_CONTRACT_VERSION`. This slots in at Stage **B** above (Mode-B sweeps),
+   which already auto-enables on the Solomon Fable-pin swap.
+
+The launch-time pointer lives on the SD (`metadata.solomon_modeb_seam`: entry point + contract version
++ this runbook path).
