@@ -5,10 +5,21 @@
  * SD-CLAUDE-CODE-2.1.0-LEO-001 - Phase 2 Hook Infrastructure
  *
  * Restores session state from the most recent LOCAL checkpoint file
- * ($HOME/.claude-checkpoints) after a restart on the SAME host. This is a
- * single-machine restore aid — NOT distributed crash recovery; the authoritative
- * cross-session/cross-machine state lives in the DB (claude_sessions). Use this only
- * to re-attach quickly after a local restart; for true session identity/state, query the DB.
+ * ($HOME/.claude-checkpoints/<session_id>/) after a restart on the SAME host.
+ * This is a single-machine restore aid — NOT distributed crash recovery; the
+ * authoritative cross-session/cross-machine state lives in the DB
+ * (claude_sessions). Use this only to re-attach quickly after a local restart;
+ * for true session identity/state, query the DB.
+ *
+ * SD-LEO-FIX-SESSION-RESTORE-HOOK-001: getAvailableCheckpoints() previously
+ * globbed EVERY checkpoint file in the single machine-shared checkpoint
+ * directory and picked the most-recent by mtime with ZERO session_id filtering
+ * — on a fleet host running several concurrent Claude Code sessions, a restore
+ * could silently apply a completely different, unrelated session's state
+ * (current_sd, current_phase, git info) as if it were the invoking session's
+ * own. Now resolves the real session_id via the canonical resolveSessionId()
+ * (lib/hooks/session-id.cjs, stdin-first) and reads only that session's own
+ * checkpoint subdirectory.
  *
  * Can be invoked manually or as a PreToolUse (once) hook for session init.
  *
@@ -19,23 +30,36 @@
 
 const fs = require('fs');
 const path = require('path');
+const { resolveSessionId } = require('../../lib/hooks/session-id.cjs');
 
-const SESSION_STATE_FILE = path.join(process.env.HOME || '/tmp', '.claude-session-state.json');
-const CHECKPOINT_DIR = path.join(process.env.HOME || '/tmp', '.claude-checkpoints');
+const HOME_DIR = process.env.HOME || '/tmp';
+const CHECKPOINT_ROOT = path.join(HOME_DIR, '.claude-checkpoints');
+
+function sessionStateFile(sessionId) {
+  return path.join(HOME_DIR, `.claude-session-state-${sessionId}.json`);
+}
+
+function checkpointDir(sessionId) {
+  return path.join(CHECKPOINT_ROOT, sessionId);
+}
 
 /**
- * Get list of available checkpoints sorted by recency
+ * Get list of available checkpoints for ONE session, sorted by recency.
+ * Reads ONLY that session's own checkpoint subdirectory — never globs the
+ * shared parent directory, so a concurrent peer session's checkpoints are
+ * never candidates for this session's restore.
  */
-function getAvailableCheckpoints() {
+function getAvailableCheckpoints(sessionId) {
   try {
-    if (!fs.existsSync(CHECKPOINT_DIR)) {
+    const dir = checkpointDir(sessionId);
+    if (!fs.existsSync(dir)) {
       return [];
     }
 
-    const files = fs.readdirSync(CHECKPOINT_DIR)
+    const files = fs.readdirSync(dir)
       .filter(f => f.startsWith('cp_') && f.endsWith('.json'))
       .map(f => {
-        const filePath = path.join(CHECKPOINT_DIR, f);
+        const filePath = path.join(dir, f);
         const stat = fs.statSync(filePath);
         return {
           filename: f,
@@ -107,9 +131,9 @@ function restoreFromCheckpoint(checkpoint) {
 /**
  * Save restored session state
  */
-function saveSessionState(state) {
+function saveSessionState(state, sessionId) {
   try {
-    fs.writeFileSync(SESSION_STATE_FILE, JSON.stringify(state, null, 2));
+    fs.writeFileSync(sessionStateFile(sessionId), JSON.stringify(state, null, 2));
     return true;
   } catch (error) {
     console.error('[recover-session] Error saving session state:', error.message);
@@ -139,15 +163,26 @@ function printRecoverySummary(checkpoint, restoredState, recoveryTime) {
 /**
  * Main recovery execution
  */
-function main() {
+async function main() {
   const startTime = Date.now();
   console.log('[recover-session] Starting session recovery...');
 
-  // Get available checkpoints
-  const checkpoints = getAvailableCheckpoints();
+  // SD-LEO-FIX-SESSION-RESTORE-HOOK-001: resolve the REAL Claude session_id
+  // (stdin-first). Fail closed — an unresolved identity must NOT fall back to
+  // "most recent checkpoint across the whole shared directory"; that fallback
+  // is exactly the cross-session-leak bug being fixed.
+  const sessionId = await resolveSessionId();
+  if (!sessionId) {
+    console.error('[recover-session] Could not resolve session_id — cannot safely restore (fail-closed, not global-fallback)');
+    console.log('[recover-session] Starting fresh session');
+    return;
+  }
+
+  // Get available checkpoints for THIS session only
+  const checkpoints = getAvailableCheckpoints(sessionId);
 
   if (checkpoints.length === 0) {
-    console.log('[recover-session] No checkpoints available');
+    console.log('[recover-session] No checkpoints available for this session');
     console.log('[recover-session] Starting fresh session');
     return;
   }
@@ -168,7 +203,7 @@ function main() {
       const fallbackCheckpoint = loadCheckpoint(secondRecent.path);
       if (fallbackCheckpoint) {
         const restoredState = restoreFromCheckpoint(fallbackCheckpoint);
-        if (saveSessionState(restoredState)) {
+        if (saveSessionState(restoredState, sessionId)) {
           const recoveryTime = Date.now() - startTime;
           printRecoverySummary(fallbackCheckpoint, restoredState, recoveryTime);
           return;
@@ -177,13 +212,14 @@ function main() {
     }
 
     console.error('[recover-session] All recovery attempts failed');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   // Restore from checkpoint
   const restoredState = restoreFromCheckpoint(checkpoint);
 
-  if (saveSessionState(restoredState)) {
+  if (saveSessionState(restoredState, sessionId)) {
     const recoveryTime = Date.now() - startTime;
     printRecoverySummary(checkpoint, restoredState, recoveryTime);
 
@@ -195,17 +231,22 @@ function main() {
     }
   } else {
     console.error('[recover-session] Failed to save restored state');
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
-// Execute if run directly
+// Execute if run directly. Explicit process.exit() afterward, preserving any
+// exitCode set above — resolveSessionId()'s stdin listeners can otherwise
+// keep the process alive past this script's expected lifetime.
 if (require.main === module) {
-  main();
+  main().finally(() => process.exit(process.exitCode || 0));
 }
 
 module.exports = {
   getAvailableCheckpoints,
   loadCheckpoint,
-  restoreFromCheckpoint
+  restoreFromCheckpoint,
+  saveSessionState,
+  sessionStateFile,
+  checkpointDir
 };

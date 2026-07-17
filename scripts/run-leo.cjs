@@ -704,11 +704,23 @@ async function recoveryMenu() {
       label: 'View Session State',
       description: 'See current session details',
       action: () => {
-        const statePath = path.join(process.env.HOME || '/tmp', '.claude-session-state.json');
-        if (fs.existsSync(statePath)) {
-          const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+        // SD-LEO-FIX-SESSION-RESTORE-HOOK-001: persist-session-state.cjs now
+        // writes a per-session state file (.claude-session-state-<session_id>.json)
+        // instead of one machine-global file, so there is no longer a single
+        // canonical path to read. Show the most-recently-modified session state
+        // file on this host, labeled as such.
+        const homeDir = process.env.HOME || '/tmp';
+        const stateFiles = fs.existsSync(homeDir)
+          ? fs.readdirSync(homeDir)
+              .filter(f => f.startsWith('.claude-session-state-') && f.endsWith('.json'))
+              .map(f => ({ file: f, path: path.join(homeDir, f), mtime: fs.statSync(path.join(homeDir, f)).mtimeMs }))
+              .sort((a, b) => b.mtime - a.mtime)
+          : [];
+
+        if (stateFiles.length > 0) {
+          const state = JSON.parse(fs.readFileSync(stateFiles[0].path, 'utf8'));
           console.log('\n' + '═'.repeat(60));
-          console.log('SESSION STATE');
+          console.log('SESSION STATE (most recent of ' + stateFiles.length + ' session(s) on this host)');
           console.log('═'.repeat(60));
           console.log('Session ID:', state.session_id);
           console.log('Current SD:', state.current_sd || 'none');
@@ -731,11 +743,20 @@ async function recoveryMenu() {
       action: async () => {
         const confirm = await question('\nAre you sure? This deletes all checkpoints. [y/N]: ');
         if (confirm.toLowerCase() === 'y') {
-          const statePath = path.join(process.env.HOME || '/tmp', '.claude-session-state.json');
-          const checkpointDir = path.join(process.env.HOME || '/tmp', '.claude-checkpoints');
-          if (fs.existsSync(statePath)) fs.unlinkSync(statePath);
-          if (fs.existsSync(checkpointDir)) {
-            fs.readdirSync(checkpointDir).forEach(f => fs.unlinkSync(path.join(checkpointDir, f)));
+          // SD-LEO-FIX-SESSION-RESTORE-HOOK-001: checkpoints now live under
+          // per-session subdirectories (.claude-checkpoints/<session_id>/), and
+          // state files are per-session (.claude-session-state-<session_id>.json)
+          // — glob and remove all of each, recursively, rather than a flat
+          // unlinkSync loop (which throws EISDIR on the new subdirectory entries).
+          const homeDir = process.env.HOME || '/tmp';
+          const checkpointRoot = path.join(homeDir, '.claude-checkpoints');
+          if (fs.existsSync(checkpointRoot)) {
+            fs.rmSync(checkpointRoot, { recursive: true, force: true });
+          }
+          if (fs.existsSync(homeDir)) {
+            fs.readdirSync(homeDir)
+              .filter(f => f.startsWith('.claude-session-state-') && f.endsWith('.json'))
+              .forEach(f => fs.unlinkSync(path.join(homeDir, f)));
           }
           console.log('✅ Session state cleared.');
         }
