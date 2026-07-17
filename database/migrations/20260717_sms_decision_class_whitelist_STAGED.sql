@@ -46,8 +46,12 @@ CREATE TABLE IF NOT EXISTS sms_decision_class_whitelist (
 
   -- The decision class that is SMS-eligible. Stored NORMALIZED (lowercased/trimmed) by the
   -- chairman ceremony — the read helper normalizes the inbound decisionType the same way and
-  -- does an EXACT .eq compare (never a substring/ilike widen).
-  decision_class TEXT NOT NULL UNIQUE,
+  -- does an EXACT .eq compare (never a substring/ilike widen). The CHECK enforces the
+  -- normalization at INSERT time so a ceremony typo (e.g. 'Schedule' or ' schedule ') FAILS LOUD
+  -- rather than silently seeding a permanently-dead row no normalized input can ever match
+  -- (deep-tier adversarial review of PR #6200 — fail-safe, real-money control hardening).
+  decision_class TEXT NOT NULL UNIQUE
+    CHECK (decision_class = lower(btrim(decision_class)) AND decision_class <> ''),
 
   -- A class can be de-listed without deleting its audit row: active=false = console-only again.
   active BOOLEAN NOT NULL DEFAULT true,
