@@ -189,18 +189,29 @@ Dependency Field Guide:
   The "dependencies" column (JSONB array) is the CORRECT place for SD prerequisites.
   Format: [{"sd_id": "SD-XXX-001"}, {"sd_id": "SD-YYY-002"}]
 
+  It is the ONLY dependency home honored by EVERY consumer — sd:next's
+  queue display, AUTO-PROCEED skip/process, the worker claim lanes, AND
+  prio:top3 — so it stays the recommended place for prerequisites.
+
   This column controls:
     - Whether an SD shows as BLOCKED or READY in sd:next
     - Whether AUTO-PROCEED will skip or process the SD
     - Unresolved dependency warnings in the queue display
 
-  DO NOT put dependency info in the "metadata" field — it will NOT be
-  enforced by the queue system. Common mistakes:
-    metadata.depends_on, metadata.dependencies, metadata.blocked_by,
-    metadata.prerequisite_sds — all ignored by the dependency resolver.
+  Metadata dependency keys are PARTIALLY honored — do NOT assume the
+  "metadata" field is inert (updated by SD-LEO-INFRA-MAKE-WSJF-SELF-001):
+    metadata.dependencies, metadata.depends_on, metadata.blocked_by_sd_key,
+    metadata.blocked_on_sd  → NOW honored by the worker claim lanes
+      (lib/claim/gates/dependency-gate.cjs, lib/fleet/claim-eligibility.cjs)
+      and by prio:top3 (scripts/wsjf-priority-fetcher.js), via
+      extractAllDependencyRefs() in lib/utils/parse-sd-dependencies.cjs.
+      sd:next's OWN resolver still ignores these (EXCEPT blocked_by_sd_key),
+      so an SD relying on them alone can still display READY in the queue.
+    metadata.blocked_by, metadata.prerequisite_sds  → still ignored by
+      every resolver (sd:next only WARNS they look misplaced).
 
-  The only metadata dependency key that IS checked is:
-    metadata.blocked_by_sd_key — soft/conditional blocker (single SD key)
+  metadata.blocked_by_sd_key — soft/conditional blocker (single SD key);
+    honored by BOTH sd:next and the worker claim lanes.
 
 Venture Context:
   Venture prefix is resolved in order: --venture flag > VENTURE env var > active session venture.
