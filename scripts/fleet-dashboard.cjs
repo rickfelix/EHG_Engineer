@@ -1405,6 +1405,36 @@ async function resolveInboxAudience({ argv = process.argv, env = process.env, cl
 // distinct intake surface the coordinator must drain (clearCoordinatorReview IS the
 // dispatch authorization). Without this, a whole wave of held SDs can sit invisible
 // while the coordinator reports belt-empty. Read-only: never mutates the flag.
+
+// ── Section: Chairman-gated QFs (SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001) ──
+// QFs whose APPLY is chairman-gated (owner='chairman' + release_condition — the
+// QF-508/QF-970 class) are EXCLUDED from the worker-facing open-QF lane so idle workers
+// stop burning claim/triage cycles on them. This surface keeps the hold AUDITABLE:
+// every gated row renders here with age + condition until released via
+// scripts/release-chairman-gated-qf.js — never silently lost.
+async function printChairmanGatedQfs() {
+  const { isChairmanGatedQF } = require('../lib/fleet/qf-gated-hold.cjs');
+  const { data: rows, error } = await supabase
+    .from('quick_fixes')
+    .select('id, title, status, owner, release_condition, created_at')
+    .not('release_condition', 'is', null)
+    .not('status', 'in', '(completed,cancelled)')
+    .order('created_at', { ascending: true })
+    .limit(30);
+  if (error) { return; } // additive surface — degrade silently, never break the dashboard
+  const gated = (rows || []).filter(isChairmanGatedQF);
+  if (gated.length === 0) return; // render nothing when no holds exist (no empty-section noise)
+  console.log('CHAIRMAN-GATED QFS (excluded from worker lane until released)');
+  console.log('─'.repeat(72));
+  for (const qf of gated) {
+    const ageDays = Math.floor((Date.now() - Date.parse(qf.created_at)) / 86_400_000);
+    console.log('  ' + pad(qf.id, 20) + pad(qf.status, 12) + pad(ageDays + 'd', 6) + (qf.title || '').substring(0, 34));
+    console.log('    condition: ' + String(qf.release_condition).replace(/\n/g, ' ').substring(0, 100));
+  }
+  console.log('  Release: node scripts/release-chairman-gated-qf.js <QF-ID> --reason "<why>"');
+  console.log('');
+}
+
 async function printReviewHeldSds() {
   console.log('REVIEW-HELD SDS');
   console.log('─'.repeat(72));
@@ -2150,8 +2180,8 @@ async function main() {
     workers:       () => printWorkers(d),
     orchestrator:  () => printOrchestrator(d),
     available:     () => printAvailable(d),
-    quickfixes:    () => printQuickFixes(d), // QF-20260525-836
-    qf:            () => printQuickFixes(d), // QF-20260525-836 (alias)
+    quickfixes:    async () => { printQuickFixes(d); await printChairmanGatedQfs(); }, // QF-20260525-836 + SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001
+    qf:            async () => { printQuickFixes(d); await printChairmanGatedQfs(); }, // QF-20260525-836 (alias)
     revival:       () => printRevivalPending(d),
     coordination:  () => printCoordination(d),
     coaching:      async () => await printCoaching(d),
@@ -2186,6 +2216,8 @@ async function main() {
       await printAdamInbox();
       // QF-20260704-742: third intake surface — SDs held with metadata.needs_coordinator_review.
       await printReviewHeldSds();
+      // SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001: fourth intake surface — chairman-gated QF holds.
+      await printChairmanGatedQfs();
     },
     adam:          async () => await printAdamInbox(), // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B
     solomon:       async () => { await printSolomonInbox(); await printSolomonLedgerRollup(); }, // SD-LEO-INFRA-SOLOMON-CONSULT-001F + SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001
@@ -2217,6 +2249,7 @@ async function main() {
       await printDrainGauge(); // SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 (FR-9) — harness-backlog drain gauge
       await printAdamInbox(); // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B — Adam advisory lane
       await printReviewHeldSds(); // QF-20260704-742 — third intake surface: needs_coordinator_review holds
+      await printChairmanGatedQfs(); // SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001 — auditable gated-QF holds
       await printSolomonInbox(); // SD-LEO-INFRA-SOLOMON-CONSULT-001F — Solomon oracle consult lane (dormant until SOLOMON_CONSULT_V1)
       await printSolomonLedgerRollup(); // SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001 (FR-5) — accuracy + cost-per-accepted rollup
       await printWorkingContext(); // SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001 (FR-3) — standing context dual-render

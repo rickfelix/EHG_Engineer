@@ -7,6 +7,10 @@ import { execSync } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { parseHarnessBacklog } from './harness-backlog-parser.js';
+// SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001: canonical chairman-gated-hold predicate (CJS
+// module; ESM default-import interop). Shared with worker-checkin + the coordinator dashboard.
+import qfGatedHold from '../../../lib/fleet/qf-gated-hold.cjs';
+const { isChairmanGatedQF } = qfGatedHold;
 
 /**
  * Log a query failure with structured context for diagnostics.
@@ -363,7 +367,7 @@ export async function loadOpenQuickFixes(supabase) {
     // form above silently failed to suppress the lint).
     const { data, error } = await supabase
       .from('quick_fixes')
-      .select('id, title, type, severity, status, estimated_loc, description, created_at, target_application, claiming_session_id, pr_url, commit_sha, not_before, factory_lane') // schema-lint-disable-line: factory_lane staged, see comment above
+      .select('id, title, type, severity, status, estimated_loc, description, created_at, target_application, claiming_session_id, pr_url, commit_sha, not_before, factory_lane, owner, release_condition') // schema-lint-disable-line: factory_lane staged, see comment above
       .in('status', ['open', 'in_progress'])
       .is('pr_url', null)
       .is('commit_sha', null)
@@ -375,7 +379,13 @@ export async function loadOpenQuickFixes(supabase) {
       return [];
     }
 
-    return data || [];
+    // SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001: chairman-gated holds (owner='chairman' +
+    // release_condition — the QF-508/QF-970 class) are false open work for the worker-facing
+    // lane: every idle worker re-discovers them and re-concludes "blocked on chairman".
+    // Excluded here (Track C display + AUTO_PROCEED_ACTION source); they remain visible on
+    // the coordinator surface (fleet-dashboard CHAIRMAN-GATED section) until released via
+    // scripts/release-chairman-gated-qf.js. Shared predicate — never re-derive inline.
+    return (data || []).filter((qf) => !isChairmanGatedQF(qf));
   } catch {
     return [];
   }

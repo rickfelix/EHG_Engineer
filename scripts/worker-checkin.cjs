@@ -47,6 +47,9 @@ const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cj
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate, also used by
 // scripts/stale-session-sweep.cjs CLAIM_FIX (closes the self_claim-vs-sweep writer-consumer-asymmetry).
 const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, parentLeadPending, liveClaimWriteFenceReason } = require('../lib/fleet/claim-eligibility.cjs');
+// SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001: canonical chairman-gated-hold predicate (shared
+// with sd-next data-loaders + the coordinator dashboard so the sites can never drift).
+const { isChairmanGatedQF } = require('../lib/fleet/qf-gated-hold.cjs');
 // SD-ARCH-HOTSPOT-SD-START-001 FR-2: the CONVERGED dependency gate shared with scripts/sd-start.js
 // (one resolution truth — deps array shapes + blocked_on_sd fold + sd_key-OR-id lookup). This
 // consumer applies its native FAIL-CLOSED polarity via depsSatisfiedFromVerdict: skip on
@@ -563,6 +566,11 @@ function isAutoStartableQF(qf, nowMs) {
     const notBefore = Date.parse(qf.not_before);
     if (Number.isFinite(notBefore) && notBefore > nowMs) return false;
   }
+  // SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001: chairman-gated hold (owner='chairman' +
+  // release_condition) -- the QF-508/QF-970 class whose APPLY awaits a chairman condition.
+  // Stays status='open' but is false open work for a worker: exclude until released via
+  // scripts/release-chairman-gated-qf.js. Visible on the coordinator surface, never lost.
+  if (isChairmanGatedQF(qf)) return false;
   const created = qf.created_at ? Date.parse(qf.created_at) : NaN;
   if (!Number.isFinite(created)) return false;
   const ageDays = (nowMs - created) / (24 * 60 * 60 * 1000);
@@ -594,7 +602,7 @@ async function selfClaimQuickFix(sb, sessionId, base, sessionModel) {
     // list rather than being intentionally suppressed).
     const { data: qfs } = await sb
       .from('quick_fixes')
-      .select('id, status, pr_url, commit_sha, created_at, routing_tier, title, description, severity, not_before, factory_lane') // schema-lint-disable-line: factory_lane staged, see comment above
+      .select('id, status, pr_url, commit_sha, created_at, routing_tier, title, description, severity, not_before, factory_lane, owner, release_condition') // schema-lint-disable-line: factory_lane staged, see comment above
       .eq('status', 'open')
       .is('pr_url', null)
       .is('commit_sha', null)
