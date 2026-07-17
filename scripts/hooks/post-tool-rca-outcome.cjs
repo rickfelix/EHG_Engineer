@@ -68,15 +68,42 @@ function stateFilePath(sessionId) {
   return path.join(dir, `last-outcome-${sessionId}.json`);
 }
 
+// SD-LEO-FIX-RCA-HASH-COLLISION-001: strip per-run volatile tokens (absolute paths,
+// timestamps, UUIDs, large numeric ids) from a body line before it's mixed into the
+// digest, so a genuinely-identical recurrence still collides even when those details
+// differ between runs (e.g. a different tmp-file path each time), while leaving the
+// semantic content that distinguishes two DIFFERENT failures untouched.
+function normalizeVolatileTokens(line) {
+  return line
+    // Windows absolute path (drive-letter-prefixed) — stop before a trailing
+    // ":line[:col]" suffix so that positional info stays visible in the digest.
+    .replace(/[A-Za-z]:\\[^\s'":]+/g, '<PATH>')
+    // Unix ABSOLUTE path only (must start with '/', not preceded by a non-space/
+    // quote char) — a bare relative repo path like "scripts/foo.js" is semantic
+    // (which file the error is in) and must NOT be normalized away, or two
+    // genuinely different failures in different files would wrongly collide.
+    .replace(/(?<![^\s'"])\/(?:[^\s'"/]+\/)*[^\s'"/]+/g, '<PATH>')
+    .replace(/\b\d{4}-\d{2}-\d{2}[T ][\d:.]+(?:Z|[+-]\d{2}:?\d{2})?\b/g, '<TS>')
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '<UUID>')
+    .replace(/\b\d{6,}\b/g, '<NUM>');
+}
+
 function digestStderr(stderr) {
   if (typeof stderr !== 'string' || !stderr) return '';
   // First-line canonicalization — captures the failure shape without tying
   // the digest to volatile fields like file paths or timestamps in subsequent lines.
-  const firstLine = stderr.split(/\r?\n/, 1)[0] || '';
-  return crypto.createHash('sha256').update(firstLine).digest('hex').slice(0, 16);
+  const lines = stderr.split(/\r?\n/).filter((l) => l.length > 0);
+  const firstLine = lines[0] || '';
+  // SD-LEO-FIX-RCA-HASH-COLLISION-001: first-line-only hashing collided for distinct
+  // failures whose first line is a count/summary (e.g. "N violation(s):") and whose
+  // actual identity lives on later lines — mix in a normalized digest of a bounded
+  // window of body lines so distinct failures split while genuine recurrences (same
+  // shape, different volatile detail) still collapse to one digest.
+  const body = lines.slice(1, 6).map(normalizeVolatileTokens).join('\n');
+  return crypto.createHash('sha256').update(`${firstLine}\n${body}`).digest('hex').slice(0, 16);
 }
 
-(async () => {
+async function run() {
   try {
     // Feature-flag gate.
     const flag = (process.env.LEO_RCA_OUTCOME_CAPTURE || 'on').toLowerCase();
@@ -188,4 +215,10 @@ function digestStderr(stderr) {
   } finally {
     process.exit(0);
   }
-})();
+}
+
+module.exports = { digestStderr, normalizeVolatileTokens, stateFilePath };
+
+if (require.main === module) {
+  run();
+}

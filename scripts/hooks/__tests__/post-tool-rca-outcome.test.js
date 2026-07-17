@@ -53,13 +53,13 @@ describe('L4 — post-tool-rca-outcome.cjs', () => {
     expect(written.exit_code).toBe(1);
     expect(written.stderr_sha).toMatch(/^[0-9a-f]{16}$/);
     expect(typeof written.captured_at).toBe('string');
-    // stderr_sha should be a digest of the FIRST LINE only
-    const crypto = require('crypto');
-    const expectedSha = crypto
-      .createHash('sha256')
-      .update('ReferenceError: foo is not defined')
-      .digest('hex')
-      .slice(0, 16);
+    // SD-LEO-FIX-RCA-HASH-COLLISION-001: stderr_sha is no longer a digest of the
+    // first line alone (that was the false-merge bug) — it mixes in a normalized
+    // digest of a bounded body-line window. Compute the expected value via the
+    // hook's own exported digestStderr so this assertion can never drift from
+    // the real implementation.
+    const { digestStderr } = require(HOOK_PATH);
+    const expectedSha = digestStderr('ReferenceError: foo is not defined\n  at line 5');
     expect(written.stderr_sha).toBe(expectedSha);
   });
 
@@ -239,5 +239,103 @@ describe('Static-source guard — hook contract integrity', () => {
       /claimedSdKey\s*=\s*st\.sd\?\.id\s*\|\|\s*st\.sd\?\.sd_key/
     );
     expect(claimedSdKeyMatch).toBeTruthy();
+  });
+});
+
+describe('digestStderr (SD-LEO-FIX-RCA-HASH-COLLISION-001: distinct RCAs split, genuine recurrences still collide)', () => {
+  it('Golf-verified case — two distinct missing-field errors sharing a count-only first line now produce DIFFERENT digests', () => {
+    const { digestStderr } = require(HOOK_PATH);
+    const a = digestStderr('✗ PRD contract: 1 violation(s):\n .executive_summary missing');
+    const b = digestStderr('✗ PRD contract: 1 violation(s):\n .functional_requirements missing');
+    expect(a).not.toBe(b);
+  });
+
+  it('a genuinely-identical recurrence with a different volatile absolute path still collides to the SAME digest', () => {
+    const { digestStderr } = require(HOOK_PATH);
+    const a = digestStderr('Error: ENOENT\n at C:\\Users\\rickf\\AppData\\Local\\Temp\\abc123.tmp');
+    const b = digestStderr('Error: ENOENT\n at C:\\Users\\rickf\\AppData\\Local\\Temp\\xyz789.tmp');
+    expect(a).toBe(b);
+  });
+
+  it('a genuinely-identical recurrence with a different timestamp still collides to the SAME digest', () => {
+    const { digestStderr } = require(HOOK_PATH);
+    const a = digestStderr('FAIL: gate rejected\n at 2026-07-17T14:16:47.153Z');
+    const b = digestStderr('FAIL: gate rejected\n at 2026-07-18T09:02:11.900Z');
+    expect(a).toBe(b);
+  });
+
+  it('a genuinely-identical recurrence with a different UUID still collides to the SAME digest', () => {
+    const { digestStderr } = require(HOOK_PATH);
+    const a = digestStderr('claim conflict\n owner=11111111-2222-3333-4444-555555555555');
+    const b = digestStderr('claim conflict\n owner=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    expect(a).toBe(b);
+  });
+
+  it('two genuinely different failure bodies still produce different digests (no over-normalization)', () => {
+    const { digestStderr } = require(HOOK_PATH);
+    const a = digestStderr('gate failed\n reason: missing acceptance_criteria');
+    const b = digestStderr('gate failed\n reason: missing test_scenarios');
+    expect(a).not.toBe(b);
+  });
+
+  it('a single-line stderr with no body still digests deterministically', () => {
+    const { digestStderr } = require(HOOK_PATH);
+    const a = digestStderr('simple one-line failure');
+    const b = digestStderr('simple one-line failure');
+    expect(a).toBe(b);
+    expect(a).toHaveLength(16);
+  });
+
+  it('empty/non-string input returns an empty string (unchanged contract)', () => {
+    const { digestStderr } = require(HOOK_PATH);
+    expect(digestStderr('')).toBe('');
+    expect(digestStderr(null)).toBe('');
+    expect(digestStderr(undefined)).toBe('');
+  });
+});
+
+describe('normalizeVolatileTokens (helper used by digestStderr body normalization)', () => {
+  it('replaces Windows absolute paths', () => {
+    const { normalizeVolatileTokens } = require(HOOK_PATH);
+    expect(normalizeVolatileTokens('at C:\\Users\\rickf\\file.js:12')).toBe('at <PATH>:12');
+  });
+
+  it('replaces Unix-style absolute paths', () => {
+    const { normalizeVolatileTokens } = require(HOOK_PATH);
+    expect(normalizeVolatileTokens('at /home/user/repo/file.js')).toBe('at <PATH>');
+  });
+
+  it('leaves a relative repo path untouched (semantic — distinguishes which file failed)', () => {
+    const { normalizeVolatileTokens } = require(HOOK_PATH);
+    expect(normalizeVolatileTokens('at scripts/modules/handoff/retro-filters.js:130')).toBe(
+      'at scripts/modules/handoff/retro-filters.js:130'
+    );
+  });
+
+  it('two different failures distinguished only by relative file path still produce different digests', () => {
+    const { digestStderr } = require(HOOK_PATH);
+    const a = digestStderr('TypeError: undefined\n at scripts/foo.js:12');
+    const b = digestStderr('TypeError: undefined\n at scripts/bar.js:12');
+    expect(a).not.toBe(b);
+  });
+
+  it('leaves dotted field names (no slash) untouched', () => {
+    const { normalizeVolatileTokens } = require(HOOK_PATH);
+    expect(normalizeVolatileTokens('.executive_summary missing')).toBe('.executive_summary missing');
+  });
+
+  it('replaces ISO timestamps', () => {
+    const { normalizeVolatileTokens } = require(HOOK_PATH);
+    expect(normalizeVolatileTokens('at 2026-07-17T14:16:47.153Z')).toBe('at <TS>');
+  });
+
+  it('replaces UUIDs', () => {
+    const { normalizeVolatileTokens } = require(HOOK_PATH);
+    expect(normalizeVolatileTokens('id=11111111-2222-3333-4444-555555555555')).toBe('id=<UUID>');
+  });
+
+  it('replaces large numeric ids but leaves small numbers alone', () => {
+    const { normalizeVolatileTokens } = require(HOOK_PATH);
+    expect(normalizeVolatileTokens('run 1234567890 with 3 retries')).toBe('run <NUM> with 3 retries');
   });
 });
