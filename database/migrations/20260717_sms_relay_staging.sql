@@ -1,6 +1,15 @@
 -- Migration: SMS inbound relay staging + persistent auto-suspend
 -- SD: SD-LEO-FEAT-SMS-INBOUND-RELAY-001 (FR-2, FR-3)
 -- @approved-by: codestreetlabs@gmail.com
+-- @chairman-gated: three new RLS-enabled tables (sms_relay_staging, sms_inbound_suspensions,
+--   sms_relay_secret) — outside the additive-no-rls delegated-apply scope, so the prod apply
+--   requires the chairman/operator to run it explicitly (node scripts/apply-migration.js
+--   --prod-deploy), consistent with sms-relay/README.md's chairman-gated cutover checklist
+--   in the ehg repo. Deliberately STAGED (not applied as of this PR): the referencing code in
+--   lib/chairman/sms-bridge.js is fail-soft against the tables' absence — supabase-js resolves
+--   query errors as {data:null,error} rather than throwing, so checkAndApplyAutoSuspend() and
+--   drainSmsRelayStaging() degrade to "not suspended" / "nothing to drain" pre-apply, and the
+--   currently-live webhook path (api/webhooks/twilio-sms.js) is unaffected until cutover.
 --
 -- Additive only. Builds the INSERT-only staging surface a future untrusted public
 -- relay (separate EHG/Vercel project, hooks.execholdings.ai — not yet deployed as of
