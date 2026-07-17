@@ -75,13 +75,19 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     const [sdResult, qfResult] = await Promise.all([
       supabase.from('strategic_directives_v2').select('id', { count: 'exact', head: true })
         .gte('created_at', since).eq('metadata->>sourced_by', 'adam'),
-      supabase.from('quick_fixes').select('id', { count: 'exact', head: true })
-        .gte('created_at', since),
+      // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: fetch id+title (not a head-count) so
+      // fixture-titled test QFs don't inflate the sourcing gauge.
+      supabase.from('quick_fixes').select('id, title').gte('created_at', since).limit(1000),
     ]);
     if (sdResult.error) throw sdResult.error;
     if (qfResult.error) throw qfResult.error;
-    if (Number.isFinite(sdResult.count) && Number.isFinite(qfResult.count)) {
-      facts.sourcedInWindow = sdResult.count + qfResult.count;
+    const { isFixtureQf } = await import('../lib/governance/fixture-exclusion.mjs');
+    // Adversarial-review fix (PR #6186): preserve the original HONEST-unknown contract —
+    // a null data payload (the data:null-without-error Supabase trap) must leave the fact
+    // null/unknown, never a confidently-fabricated low count.
+    if (Number.isFinite(sdResult.count) && Array.isArray(qfResult.data)) {
+      const qfCount = qfResult.data.filter((qf) => !isFixtureQf(qf)).length;
+      facts.sourcedInWindow = sdResult.count + qfCount;
     }
   } catch { /* leave null -> unknown */ }
 

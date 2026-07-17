@@ -37,6 +37,9 @@ function makeSupabase(spec) {
       eq() { return builder; },
       in() { return builder; },
       not() { return builder; },
+      // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: the sourcedInWindow QF lane switched from a
+      // head-count to `.select('id, title').limit(1000)` so it can filter fixture-titled QFs.
+      limit() { return builder; },
       // insert flows: capture the row, then allow .select().single()
       insert(row) {
         if (table === 'feedback') calls.feedbackInsert.push(row);
@@ -107,7 +110,14 @@ describe('resolveFacts (FR-1b/2/3/4) — measured vs honestly-unknown', () => {
     const sb = makeSupabase({
       session_coordination: COUNT(0),
       strategic_directives_v2: COUNT(0), // no SD drafts this window
-      quick_fixes: COUNT(5), // 5 QFs filed in-window — the previously-blind lane
+      // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: the QF lane now fetches rows (id+title) and
+      // counts non-fixture ones, so seed 5 REAL-titled QFs (not a head-count). A fixture-
+      // titled row here would be correctly excluded — proven separately in the exclusion suite.
+      quick_fixes: ROWS([
+        { id: 'QF-1', title: 'real fix one' }, { id: 'QF-2', title: 'real fix two' },
+        { id: 'QF-3', title: 'real fix three' }, { id: 'QF-4', title: 'real fix four' },
+        { id: 'QF-5', title: 'real fix five' },
+      ]), // 5 QFs filed in-window — the previously-blind lane
       issue_patterns: ROWS([]),
       sub_agent_execution_results: COUNT(0),
       audit_log: COUNT(0),
