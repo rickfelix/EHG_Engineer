@@ -7,11 +7,16 @@
  * BEFORE any write for terminal SDs (completed/cancelled/deferred) and terminal QFs
  * (completed/cancelled/escalated) — while leaving real claims and the existence guard intact.
  *
+ * SD-LEO-INFRA-BLOCK-TEST-SESSION-001: claim_sd now ALSO rejects any caller session_id with
+ * no live claude_sessions row (a PHANTOM caller), fired before this suite's own terminal-status
+ * and sd_not_found guards. PROBE_SESSION must therefore be a real registered session for every
+ * assertion in this file, not just the happy-path claim.
+ *
  * Live-DB integration test, gated like the other tests/database suites so CI skips cleanly
  * without service-role creds. The guard fires before any UPDATE, so the terminal probes are
  * inherently net-zero (asserted explicitly).
  */
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
 
@@ -35,8 +40,21 @@ async function firstSdWithStatus(status) {
 }
 
 describe.skipIf(!HAS_REAL_DB)('claim_sd rejects terminal-status items (SD-LEO-FIX-CLAIM-RPC-TERMINAL-001)', () => {
+  beforeAll(async () => {
+    await supabase.from('claude_sessions').upsert({
+      session_id: PROBE_SESSION,
+      status: 'idle',
+      heartbeat_at: new Date().toISOString(),
+      machine_id: 'test-machine',
+      terminal_id: `test-${PROBE_SESSION}`,
+      hostname: 'test-host',
+      codebase: 'EHG_Engineer',
+      sd_key: null,
+    }, { onConflict: 'session_id' });
+  });
+
   afterAll(async () => {
-    await supabase.from('claude_sessions').update({ sd_key: null }).eq('session_id', PROBE_SESSION);
+    await supabase.from('claude_sessions').delete().eq('session_id', PROBE_SESSION);
   });
 
   it('rejects a completed SD with sd_terminal_status and does NOT stomp claiming_session_id', async () => {
