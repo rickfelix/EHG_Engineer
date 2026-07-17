@@ -4,7 +4,7 @@
  * in-memory fake Supabase client (no live DB, no live Twilio account required).
  */
 import { describe, it, expect, vi } from 'vitest';
-import { sendChairmanSmsQuestion, handleInboundSmsReply } from '../../../lib/chairman/sms-bridge.js';
+import { sendChairmanSmsQuestion, handleInboundSmsReply, drainSmsRelayStaging, AUTO_SUSPEND_INVALID_SIGNATURE_THRESHOLD } from '../../../lib/chairman/sms-bridge.js';
 import { isMessagingProvider } from '../../../lib/messaging/messaging-provider.js';
 
 /** Minimal in-memory multi-table fake supporting the exact query shapes sms-bridge.js uses. */
@@ -13,6 +13,8 @@ function makeFakeSupabase(seed = {}) {
     chairman_notifications: [...(seed.chairman_notifications || [])],
     chairman_decisions: [...(seed.chairman_decisions || [])],
     sms_inbound_log: [...(seed.sms_inbound_log || [])],
+    sms_inbound_suspensions: [...(seed.sms_inbound_suspensions || [])],
+    sms_relay_staging: [...(seed.sms_relay_staging || [])],
   };
   let seq = 0;
 
@@ -279,5 +281,111 @@ describe('handleInboundSmsReply — send/receive round trip against a fake provi
     const decision = sb._tables.chairman_decisions.find((d) => d.id === 'dec-race');
     // Exactly one reply's text landed — not a merge/clobber of both.
     expect(['answer A', 'answer B']).toContain(decision.brief_data.sms_reply.text);
+  });
+
+  // SD-LEO-FEAT-SMS-INBOUND-RELAY-001 FR-3 additions.
+  it('ambiguous: 2+ simultaneously-eligible pending candidates are rejected, not guessed', async () => {
+    const now = Date.now();
+    const sb = makeFakeSupabase({
+      chairman_decisions: [
+        { id: 'dec-amb-1', status: 'pending', brief_data: {}, sms_reply_token_expires_at: new Date(now + 10 * 60_000).toISOString() },
+        { id: 'dec-amb-2', status: 'pending', brief_data: {}, sms_reply_token_expires_at: new Date(now + 10 * 60_000).toISOString() },
+      ],
+      chairman_notifications: [
+        { id: 'n-amb-1', channel: 'sms', recipient_phone: '+15556667777', decision_id: 'dec-amb-1', created_at: new Date(now - 120_000).toISOString() },
+        { id: 'n-amb-2', channel: 'sms', recipient_phone: '+15556667777', decision_id: 'dec-amb-2', created_at: new Date(now - 60_000).toISOString() },
+      ],
+    });
+    const result = await handleInboundSmsReply(sb, {
+      from: '+15556667777', to: '+15559999999', body: 'yes',
+      messageSid: 'SM-ambiguous-1', signatureValid: true,
+    });
+    expect(result.resolved).toBe(false);
+    expect(result.outcome).toBe('ambiguous');
+    expect(sb._tables.chairman_decisions.find((d) => d.id === 'dec-amb-1').sms_reply_used_at).toBeFalsy();
+    expect(sb._tables.chairman_decisions.find((d) => d.id === 'dec-amb-2').sms_reply_used_at).toBeFalsy();
+    expect(sb._tables.sms_inbound_log[0].outcome).toBe('ambiguous');
+  });
+
+  it('a persistently-suspended number is fail-closed rejected even with a valid signature', async () => {
+    const sb = makeFakeSupabase({
+      chairman_decisions: [{ id: 'dec-susp', status: 'pending', brief_data: {}, sms_reply_token_expires_at: new Date(Date.now() + 10 * 60_000).toISOString() }],
+      chairman_notifications: [{ id: 'n-susp', channel: 'sms', recipient_phone: '+15550001111', decision_id: 'dec-susp', created_at: new Date().toISOString() }],
+      sms_inbound_suspensions: [{ from_phone: '+15550001111', suspended_at: new Date().toISOString(), reason: 'flood', cleared_at: null }],
+    });
+    const result = await handleInboundSmsReply(sb, {
+      from: '+15550001111', to: '+15559999999', body: 'yes',
+      messageSid: 'SM-suspended-1', signatureValid: true,
+    });
+    expect(result.resolved).toBe(false);
+    expect(result.outcome).toBe('suspended');
+    expect(sb._tables.sms_inbound_log[0].outcome).toBe('suspended');
+    const decision = sb._tables.chairman_decisions.find((d) => d.id === 'dec-susp');
+    expect(decision.sms_reply_used_at).toBeFalsy();
+  });
+
+  it('a cleared suspension no longer blocks the number', async () => {
+    const sb = makeFakeSupabase({
+      sms_inbound_suspensions: [{ from_phone: '+15550002222', suspended_at: new Date(Date.now() - 3_600_000).toISOString(), reason: 'flood', cleared_at: new Date().toISOString() }],
+    });
+    const result = await handleInboundSmsReply(sb, {
+      from: '+15550002222', to: '+15559999999', body: 'yes',
+      messageSid: 'SM-cleared-1', signatureValid: true,
+    });
+    expect(result.outcome).not.toBe('suspended');
+  });
+
+  it('flood of invalid-signature attempts trips a PERSISTENT auto-suspend past the threshold', async () => {
+    const sb = makeFakeSupabase();
+    let last;
+    for (let i = 0; i < AUTO_SUSPEND_INVALID_SIGNATURE_THRESHOLD; i++) {
+      last = await handleInboundSmsReply(sb, {
+        from: '+15559990000', to: '+15559999999', body: 'spoof',
+        messageSid: `SM-flood-${i}`, signatureValid: false,
+      });
+    }
+    expect(last.outcome).toBe('invalid_signature');
+    expect(sb._tables.sms_inbound_suspensions.some((s) => s.from_phone === '+15559990000' && !s.cleared_at)).toBe(true);
+
+    // The NEXT attempt — even with a valid signature — is now fail-closed rejected,
+    // and this rejection is NOT gated by the 60-minute rolling rate-limit window
+    // (which sms_inbound_log's own count would otherwise re-evaluate every request).
+    const after = await handleInboundSmsReply(sb, {
+      from: '+15559990000', to: '+15559999999', body: 'yes now valid',
+      messageSid: 'SM-flood-post', signatureValid: true,
+    });
+    expect(after.outcome).toBe('suspended');
+  });
+});
+
+describe('drainSmsRelayStaging', () => {
+  it('processes undrained rows through handleInboundSmsReply and stamps drained_at on all of them', async () => {
+    const sb = makeFakeSupabase({
+      chairman_decisions: [{ id: 'dec-drain', status: 'pending', brief_data: {}, sms_reply_token_expires_at: new Date(Date.now() + 10 * 60_000).toISOString() }],
+      chairman_notifications: [{ id: 'n-drain', channel: 'sms', recipient_phone: '+15551239999', decision_id: 'dec-drain', created_at: new Date().toISOString() }],
+      sms_relay_staging: [
+        { id: 'stg-1', provider_message_id: 'SM-stg-1', from_phone: '+15551239999', to_phone: '+15559999999', body_raw: 'approved', signature_valid: true, received_at: new Date(Date.now() - 1000).toISOString(), drained_at: null },
+        { id: 'stg-2', provider_message_id: 'SM-stg-2', from_phone: '+15550000001', to_phone: '+15559999999', body_raw: 'no candidate for this one', signature_valid: true, received_at: new Date().toISOString(), drained_at: null },
+      ],
+    });
+
+    const result = await drainSmsRelayStaging(sb);
+
+    expect(result.drained).toBe(2);
+    expect(result.results.find((r) => r.id === 'stg-1').outcome).toBe('answered');
+    expect(result.results.find((r) => r.id === 'stg-2').outcome).toBe('no_match');
+    expect(sb._tables.sms_relay_staging.every((r) => r.drained_at)).toBe(true);
+    const decision = sb._tables.chairman_decisions.find((d) => d.id === 'dec-drain');
+    expect(decision.brief_data.sms_reply.text).toBe('approved');
+  });
+
+  it('a row already drained is not reprocessed', async () => {
+    const sb = makeFakeSupabase({
+      sms_relay_staging: [
+        { id: 'stg-old', provider_message_id: 'SM-old', from_phone: '+15551110000', to_phone: '+15559999999', body_raw: 'x', signature_valid: true, received_at: new Date(Date.now() - 60_000).toISOString(), drained_at: new Date().toISOString() },
+      ],
+    });
+    const result = await drainSmsRelayStaging(sb);
+    expect(result.drained).toBe(0);
   });
 });
