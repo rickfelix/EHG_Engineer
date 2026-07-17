@@ -1,0 +1,69 @@
+{
+  "title": "Foresight Board Phase-1 Data Schemas & Scoring Model",
+  "executive_summary": "Implements the four foundational Postgres tables and the venture scoring model from the chairman-authored EHG Venture Foresight Board spec (docs/design/ehg-venture-foresight-board-spec.md sections 8 and 13). This is a data-layer child of orchestrator SD-LEO-INFRA-EHG-VENTURE-FORESIGHT-001 -- tables are populated by sibling child C's workflow engine (out of scope here); this SD ships schema plus a standalone, unit-tested scoring module.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Create forecast_records table per spec section 8.5, extended with pair-level chaining-option fields (venture_a, venture_b, capability_edge, trigger, review_at, decay_at) per the sourcing plan's genuine delta beyond the spec, with RLS enabled and a service_role policy in the same migration.",
+      "acceptance_criteria": ["Table exists with all section 8.5 columns plus the 6 chaining-option columns", "ENABLE ROW LEVEL SECURITY and a service_role FOR ALL policy are in the same migration file as CREATE TABLE", "A row can be inserted matching the documented field shape"]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Create specialist_assessments and council_adjudications tables per spec sections 8.8 and 8.9, preserving minority_view and dissent_flags as first-class non-nullable-by-default-empty columns (never silently dropped), with RLS in the same migration.",
+      "acceptance_criteria": ["Both tables exist with all section 8.8/8.9 columns", "minority_view and dissent_flags columns exist and are queryable", "RLS enabled with service_role policy in the same migration"]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "Create venture_decision_dossiers table per spec section 8.10, referencing council_adjudication_ids as a logical array reference (not a hard foreign key, since cross-child references must stay loosely coupled per VALIDATION sub-agent finding), with RLS in the same migration.",
+      "acceptance_criteria": ["Table exists with all section 8.10 columns", "council_adjudication_ids is a UUID array column, not a hard FK constraint", "RLS enabled with service_role policy in the same migration"]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "Implement the section 13 venture scoring model as a pure, standalone module: weighted-criteria score (8 criteria summing to 100), pass/fail gate check (5 gates: legal, ethical, financial, security, data-access) that overrides a high weighted score, and confidence-adjusted scoring returning the full section 13.2 output shape.",
+      "acceptance_criteria": ["Scoring function reproduces the spec's own worked example: raw=82, confidence=0.55 -> confidence_adjusted=45", "A venture failing any one of the 5 pass/fail gates returns a non-passing overall recommendation regardless of weighted score (tested with a ~90 weighted score + 1 failed gate)", "Output includes raw_score, evidence_confidence, confidence_adjusted_score, and gate_results -- not a bare number"]
+    }
+  ],
+  "technical_requirements": [
+    { "requirement": "Must document the built-not-wired seam honestly rather than fabricating a writer.", "detail": "COMMENT ON TABLE for each of the 4 tables must state that sibling child SD-LEO-INFRA-EHG-VENTURE-FORESIGHT-001-C (workflow engine) is the intended writer and that the table is unpopulated until that child ships -- per RISK sub-agent finding, this must never be masked by a fabricated test writer." },
+    { "requirement": "Must keep cross-child references logical (UUID/text), never hard foreign keys, since sibling child A ships file-based content (no DB row to reference) and spec section 8.7 VentureCandidate is Phase-2 scope.", "detail": "perspective_id, council_id, and venture_candidate_id columns are UUID/text columns without FK constraints to non-existent tables." },
+    { "requirement": "Must pin the scoring module's confidence scale and rounding rule explicitly, since the spec leaves both unpinned and an ambiguous implementation could silently misinform a downstream venture decision.", "detail": "confidence input is 0-1 (not 0-100); confidence_adjusted_score = round(raw_score * confidence); documented in a code comment citing spec section 13.2." }
+  ],
+  "system_architecture": {
+    "summary": "A single database migration adding 4 tables (forecast_records, specialist_assessments, council_adjudications, venture_decision_dossiers) each with RLS, plus a standalone JS scoring module with no database dependency.",
+    "components": [
+      { "name": "Migration: foresight board Phase-1 schemas", "description": "database/migrations/<timestamp>_foresight_board_phase1_schemas.sql -- 4 CREATE TABLE statements, each immediately followed by ENABLE ROW LEVEL SECURITY + service_role policy." },
+      { "name": "Scoring module", "description": "lib/foresight/scoring/venture-score.js -- pure function(s) implementing spec section 13: weighted criteria, pass/fail gates, confidence adjustment." }
+    ]
+  },
+  "implementation_approach": {
+    "migration_first": "Write and apply the migration before the scoring module, since the scoring module is independent of the schema and can be tested standalone.",
+    "namespacing": "Scoring module lives under lib/foresight/scoring/ (a new namespace) per VALIDATION sub-agent's advisory, to avoid conflation with the 3 existing unrelated scorers (plane1-scoring.js, blueprint-scoring rubric, stage-capability-weights.js).",
+    "no_fabricated_writer": "Do not write a fake/mock producer to populate these tables for test-green purposes -- unit tests exercise schema shape via direct insert and the scoring module in isolation, never an end-to-end workflow claim."
+  },
+  "risks": [
+    { "risk": "RLS omitted or added in a follow-up migration instead of the same one, leaving tables briefly world-readable.", "impact": "high", "likelihood": "low", "mitigation": "RLS + service_role policy statements are in the SAME migration file as each CREATE TABLE, verified before EXEC-TO-PLAN." },
+    { "risk": "Scoring module's pass/fail gate override is implemented as an afterthought and a high weighted score silently passes despite a failed gate.", "impact": "high", "likelihood": "medium", "mitigation": "Explicit unit test asserts a ~90 weighted score with 1 failed gate returns a non-passing recommendation." },
+    { "risk": "Confidence-adjusted scoring formula is ambiguous (0-1 vs 0-100 scale, rounding) and a wrong implementation ships silently.", "impact": "medium", "likelihood": "medium", "mitigation": "Unit test reproduces the spec's own worked numeric example (82, 0.55 -> 45) as the acceptance bar." },
+    { "risk": "Tables ship with no live writer until sibling child C completes -- could be mistaken for full delivery.", "impact": "low", "likelihood": "high", "mitigation": "COMMENT ON TABLE documents child C as the intended writer; SD success criteria and retrospective explicitly state the tables are unpopulated by design until C ships, not a defect." }
+  ],
+  "test_scenarios": [
+    { "scenario": "Migration creates all 4 tables with RLS enabled", "steps": "Apply the migration against a test database; query pg_tables and pg_policies for each of the 4 tables.", "expected_result": "All 4 tables exist, relrowsecurity=true, and at least one service_role policy exists per table." },
+    { "scenario": "Insert a row into each table matching the spec's documented field shape", "steps": "Insert a representative row into forecast_records (including chaining-option fields), specialist_assessments, council_adjudications, and venture_decision_dossiers.", "expected_result": "All 4 inserts succeed without constraint violations." },
+    { "scenario": "Scoring module reproduces the spec's worked example", "steps": "Call the scoring function with raw_score=82, confidence=0.55, no failed gates.", "expected_result": "confidence_adjusted_score=45." },
+    { "scenario": "Scoring module gate override", "steps": "Call the scoring function with a weighted score of approximately 90 and one failed pass/fail gate (e.g. security_viability=false).", "expected_result": "Overall recommendation is not a pass, regardless of the weighted score." }
+  ],
+  "acceptance_criteria": [
+    "forecast_records, specialist_assessments, council_adjudications, venture_decision_dossiers tables exist and match the spec section 8 field lists (plus the chaining-option delta on forecast_records)",
+    "Every CREATE TABLE statement is paired with RLS + a service_role policy in the same migration file",
+    "The scoring module reproduces the spec's own worked example (raw 82, confidence 0.55 -> confidence-adjusted 45)",
+    "A pass/fail gate failure overrides a high weighted score in the scoring module's output",
+    "COMMENT ON TABLE documents sibling child C as the intended writer for all 4 tables"
+  ],
+  "integration_operationalization": {
+    "consumers": ["Sibling child SD-LEO-INFRA-EHG-VENTURE-FORESIGHT-001-C (workflow engine) -- the intended writer, out of scope here"],
+    "dependencies": ["docs/design/ehg-venture-foresight-board-spec.md sections 8 and 13 (landed to main)"],
+    "data_contracts": ["ForecastRecord (spec 8.5 + chaining-option delta)", "SpecialistAssessment (spec 8.8)", "CouncilAdjudication (spec 8.9)", "VentureDecisionDossier (spec 8.10)", "Venture scoring model output shape (spec 13.2)"],
+    "runtime_config": [],
+    "observability_rollout": ["Unit tests are the sole verification surface for this SD; no live traffic exists until sibling child C ships."]
+  }
+}
