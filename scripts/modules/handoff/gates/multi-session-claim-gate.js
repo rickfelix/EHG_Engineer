@@ -142,11 +142,18 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
     // FR-2: genuine foreign claim per Surface A. Delegate the "is that owner actually alive"
     // determination to the SAME primitives assertValidClaim uses, evaluated against the OWNER's
     // OWN claude_sessions row — never re-derive liveness from v_active_sessions.computed_status.
-    const { data: ownerRow } = await supabase
+    const { data: ownerRow, error: ownerErr } = await supabase
       .from('claude_sessions')
       .select('status, is_alive, heartbeat_at, expected_silence_until, hostname, terminal_id, tty, sd_key, codebase')
       .eq('session_id', ownerSessionId)
       .maybeSingle();
+
+    if (ownerErr) {
+      // Surfaced (not silent) — a transient error here must not read as an undetected
+      // "owner missing" pass. Deep-tier adversarial review flagged the asymmetry with the
+      // Surface A query above, which explicitly checks/surfaces its own error.
+      console.log(`   ⚠️  Could not read owner's claude_sessions row: ${ownerErr.message}`);
+    }
 
     const nowMs = Date.now();
     const ownerIsDead = ownerIsDeadByLiveness(ownerRow, nowMs);
@@ -163,7 +170,7 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
         score: 100,
         max_score: 100,
         issues: [],
-        warnings: []
+        warnings: ownerErr ? [`Owner liveness computed with a missing owner row (DB error: ${ownerErr.message}) — treated as dead/fail-open`] : []
       };
     }
 
