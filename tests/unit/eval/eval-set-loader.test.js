@@ -118,12 +118,36 @@ describe('loadEvalSet (TS-3, TS-6)', () => {
     await expect(loadEvalSet(stubDb({}), 'nope')).rejects.toThrow(/unknown artifact class/);
   });
 
-  it('refuses a degenerate empty case even with a valid hash (SECURITY LOW-2)', async () => {
+  it('refuses a degenerate empty case — corpus intersection catches it first (SECURITY LOW-2 + W1)', async () => {
     const empty = {};
     const row = { id: 'row-empty', metadata: { record_kind: 'eval_case', case_id: undefined, content_hash: evalCaseHash(empty), case: empty } };
     const r = await loadEvalSet(stubDb({ feedback: [row] }), 'closure_predicates');
     expect(r.cases).toHaveLength(0);
-    expect(r.refused[0].error).toBe('EVAL_CASE_SHAPE_INVALID');
+    expect(r.refused[0].error).toBe('EVAL_CASE_NOT_IN_CORPUS'); // shape guard remains as defense-in-depth behind this
+  });
+
+  it('refuses a forged self-hashed row not derivable from the in-repo corpus (W1 floor-gaming guard)', async () => {
+    const forged = {
+      case_id: 'CP-999-forged', synthetic: false, known_bad: true,
+      loop: { loop_key: 'L99', predicate_type: 'edge_freshness', closure_predicate: { window_seconds: 60 } },
+      evidence: {}, now: '2026-07-14T12:00:00.000Z',
+      engine_verdict_expected: 'starved', adjudicated_status: 'starved', adjudication_evidence: 'forged',
+    };
+    const row = { id: 'row-forged', metadata: { record_kind: 'eval_case', case_id: forged.case_id, content_hash: evalCaseHash(forged), case: forged } };
+    const r = await loadEvalSet(stubDb({ feedback: [row, ...corpus.map((c) => sealedRow(c))] }), 'closure_predicates');
+    expect(r.refused.some((x) => x.error === 'EVAL_CASE_NOT_IN_CORPUS' && x.case_id === 'CP-999-forged')).toBe(true);
+    expect(r.cases).toHaveLength(4); // legit corpus unaffected; forged row never counts toward the floor
+    expect(r.bookkeeping.real_count).toBe(4);
+  });
+
+  it('refuses a stale superseded seal after a fixture edit (W2 double-count guard)', async () => {
+    const current = corpus[0];
+    const staleVersion = { ...current, adjudication_evidence: 'old wording before fixture edit' };
+    const staleRow = { id: 'row-stale', metadata: { record_kind: 'eval_case', case_id: current.case_id, content_hash: evalCaseHash(staleVersion), case: staleVersion } };
+    const r = await loadEvalSet(stubDb({ feedback: [staleRow, ...corpus.map((c) => sealedRow(c))] }), 'closure_predicates');
+    expect(r.refused.some((x) => x.error === 'EVAL_CASE_NOT_IN_CORPUS')).toBe(true);
+    expect(r.cases).toHaveLength(4); // the current version loads exactly once
+    expect(r.cases.filter((c) => c.case_id === current.case_id)).toHaveLength(1);
   });
 
   it('strips non-whitelisted keys so the consumable surface equals the hashed surface (SECURITY LOW-1)', async () => {

@@ -119,6 +119,9 @@ export async function sealEvalSet({ supabase, artifactClass, apply = false, seal
     .from('system_events')
     .select('idempotency_key')
     .eq('event_type', cls.eventType);
+  if (mirrorRead.error) {
+    log(`  WARN: mirror reconciliation skipped — system_events read failed: ${mirrorRead.error.message}`);
+  }
   if (!mirrorRead.error) {
     const have = new Set([...(mirrorRead.data || []).map((r) => r.idempotency_key), ...mirroredThisRun]);
     let repaired = 0;
