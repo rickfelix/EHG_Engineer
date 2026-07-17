@@ -42,6 +42,9 @@ const supabase = createSupabaseServiceClient();
 // coordinator standing-report (fleet-quiescence) and this dashboard read it from
 // one source. Behavior-identical to the prior local copies.
 const { isProcessRunning, getMarkerSessionIds, getAliveCcPids } = require('../lib/fleet/cc-pid-liveness.cjs');
+// SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2): surface which Claude account this dashboard's
+// session is running under in the WORKERS header line.
+const { getAccountIdentity } = require('../lib/fleet/account-identity.cjs');
 
 const STALE_THRESHOLD = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS, 10) || 300;
 
@@ -445,8 +448,13 @@ function printWorkers(d) {
     headerSuffix = '  [MC unavailable — falling back to binary classification]';
   }
 
+  // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2): fail-safe — null/unavailable prints
+  // 'unknown' rather than crashing the dashboard render.
+  const identity = getAccountIdentity();
+  const acctLabel = (identity && identity.email) || 'unknown';
+
   console.log('');
-  console.log('WORKERS [' + now.toLocaleTimeString() + ']' + headerSuffix);
+  console.log('WORKERS [' + now.toLocaleTimeString() + ']' + headerSuffix + '  acct=' + acctLabel);
   console.log('─'.repeat(hasCollision ? 100 : 88));
 
   if (d.activeSessions.length === 0) {

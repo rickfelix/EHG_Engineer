@@ -33,6 +33,9 @@ const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs
 const { decideCadence, detectSalientDelta, runCoresFailSoft } = require('../lib/coordinator/quiet-tick.cjs');
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
 const { DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
+// SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2): surface which Claude account this fleet is
+// running under in the tick's status line.
+const { getAccountIdentity } = require('../lib/fleet/account-identity.cjs');
 // SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001 FR-1 (adversarial-review finding): a
 // chairman_directive rides on target_session='broadcast' (never a real session id — see
 // scripts/issue-chairman-directive.cjs), so it can NEVER match the target_session=coordinatorId
@@ -249,6 +252,11 @@ async function main() {
   ]);
   const unactionedDirective = sessionDirective || chairmanDirective;
 
+  // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2): fail-safe — null/unavailable prints 'unknown'
+  // rather than crashing the tick.
+  const currentIdentity = getAccountIdentity();
+  const acctLabel = (currentIdentity && currentIdentity.email) || 'unknown';
+
   // FR-5/FR-6: self-paced next wake (capped at 15min when quiescent, never 300s;
   // overridden to a short hard-wake band when a directive is pending, per FR-1 above).
   const delaySeconds = decideCadence({
@@ -266,6 +274,7 @@ async function main() {
   const result = {
     mode: quiescent ? 'QUIESCENT' : 'ACTIVE',
     modeReason: unactionedDirective ? `${modeReason} [DIRECTIVE_HARD_WAKE]` : modeReason,
+    acct: acctLabel,
     cores: tick.summary,
     failedCount: tick.failedCount,
     skippedCount: tick.skippedCount,
@@ -279,7 +288,7 @@ async function main() {
   } else {
     // ONE summary line for the whole tick.
     console.log(
-      `QUIET_TICK=coordinator mode=${result.mode} cores=[${tick.summary}] ` +
+      `QUIET_TICK=coordinator mode=${result.mode} acct=${acctLabel} cores=[${tick.summary}] ` +
       `fail=${tick.failedCount} skip=${tick.skippedCount} ` +
       `ping=${delta.changed ? delta.fields.join(',') : 'suppressed'} ` +
       `nextWakeSeconds=${delaySeconds} :: ${modeReason}`
