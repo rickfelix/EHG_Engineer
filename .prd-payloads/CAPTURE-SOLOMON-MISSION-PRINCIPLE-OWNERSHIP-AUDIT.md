@@ -16,7 +16,10 @@ Source: Solomon advisory bfea7e74 (bundles with the R&D-operator hand-down 7f6cd
 (a) Stage-0 consumption wiring — deps.dataFeed at lib/eva/stage-zero/synthesis/index.js (currently passes NO dataFeed); producer+consumer same SD. (b) Modeling-information custody — llm_models registry + landscape reference + eval-harness data pipeline managed by the operator; custodian ≠ doctrine-setter.
 
 ## Follow-on candidates (Adam ranks; not yet sourced)
-1. P7 compounding links (Adam↔EVA, EVA↔CEO/VP, cross-venture lesson transfer)
+1. P7 compounding links (Adam↔EVA, EVA↔CEO/VP, cross-venture lesson transfer) — partially addressed by the operator's calibration loop (e2a1f9fe)
 2. P3 combination engine (lands with Foresight Board Phase-1 — note build-content-now correction e0db75d9)
-3. Vessel-gate (what did this venture teach the system — add to kill/exit gates)
-P4 = chairman-only; WAIT for his ruling (Solomon surfacing directly).
+
+## UPDATES same evening (Solomon relays e2a1f9fe + 287ed704)
+- **P4 RULING DELIVERED — hold released**: chairman ratified AMENDING the principle → "maximize decision quality within the capacity we have." Sourced as QF-AMEND-MISSION-PRINCIPLE-4-CAPACITY-001 (doc amendment + stale-quote sweep; wording nod on the PR).
+- **Vessel finding — RIDER, not a separate SD** (chairman recalled prior compounding work; hand-off #6 = machinery half): the MEASUREMENT half ("what did this venture teach the system" at kill/complete) lands as a rider on the R&D operator's calibration duty. Folded into SD-EHG-ORG-RESEARCH-INTELLIGENCE-OPERATOR-001 FR-5a(c).
+- **Modeling-custody CORRECTED**: primary custody = Stage-0 ECONOMIC models' reference data (market-size baselines, benchmark unit economics, adoption priors, comparables) + the calibration loop; LLM registry demoted to secondary. Folded into FR-5a.
