@@ -138,10 +138,19 @@ export default [
       // sms_reply is only actionable through consumeSmsReply(), which enforces the undo
       // window + single-execution claim + atomic spend-cap debit. The path-allowlist for the
       // seam/writer + tests is applied in a later override block.
-      'no-restricted-syntax': ['error', {
-        selector: "MemberExpression[property.name='sms_reply']",
-        message: 'Direct brief_data.sms_reply reads are forbidden — use consumeSmsReply() (SD-LEO-FEAT-SMS-CHAIRMAN-DECISION-001-B FR-1/FR-2)'
-      }]
+      'no-restricted-syntax': ['error',
+        {
+          // dot / optional-chain read: brief_data.sms_reply / brief_data?.sms_reply
+          selector: "MemberExpression[property.name='sms_reply']",
+          message: 'Direct brief_data.sms_reply reads are forbidden — use consumeSmsReply() (SD-LEO-FEAT-SMS-CHAIRMAN-DECISION-001-B FR-1/FR-2)'
+        },
+        {
+          // bracket read with a string literal: brief_data['sms_reply'] (deep-tier SECURITY
+          // review PR #6208 — the property.name selector above misses computed access).
+          selector: "MemberExpression[computed=true][property.value='sms_reply']",
+          message: 'Direct brief_data[\'sms_reply\'] reads are forbidden — use consumeSmsReply() (SD-LEO-FEAT-SMS-CHAIRMAN-DECISION-001-B FR-1/FR-2)'
+        }
+      ]
     }
   },
   // SD-LEO-FEAT-SMS-CHAIRMAN-DECISION-001-B FR-2: path-allowlist for the anti-direct-read

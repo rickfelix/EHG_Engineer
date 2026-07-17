@@ -118,11 +118,20 @@ COMMENT ON COLUMN sms_inbound_log.outcome IS
   'answered|expired|no_match|invalid_signature|rate_limited|ambiguous|suspended|undone (inbound UNDO cancelled a spend within the window, FR-3)';
 
 -- ============================================================
--- debit_sms_daily_spend: ATOMIC per-decision + daily-cumulative cap debit.
+-- debit_sms_daily_spend: SERIALIZED per-decision + daily-cumulative cap debit.
 -- Returns 1 when the spend was approved and the ledger row inserted; 0 when over-cap
--- (per-decision OR daily-cumulative). The SUM-check-and-INSERT is a single statement, so
--- two concurrent calls for DIFFERENT same-day decisions cannot both pass the daily cap —
--- the second sees the first's committed row in the SUM (cross-decision TOCTOU close).
+-- (per-decision OR daily-cumulative).
+--
+-- CONCURRENCY (deep-tier SECURITY review, PR #6208): a single SUM-check-and-INSERT
+-- statement is NOT sufficient under READ COMMITTED (the Supabase default) — two
+-- concurrent transactions inserting DIFFERENT same-day decisions each read a snapshot
+-- that excludes the other's still-uncommitted ledger row, so both can see SUM=0, both
+-- pass 0+300<=500, and both commit -> $600 > cap. To actually serialize cross-decision
+-- debits we take a per-DAY transaction-scoped advisory lock FIRST: pg_advisory_xact_lock
+-- on hashtext('sms_daily_spend|' || current_date). All debits for the same day now run
+-- one-at-a-time within the lock, so the SUM the second caller reads includes the first's
+-- committed row. The lock auto-releases at transaction end (xact-scoped); day-keying keeps
+-- contention to same-day callers only. This closes the cross-decision daily-cap TOCTOU.
 -- ============================================================
 CREATE OR REPLACE FUNCTION debit_sms_daily_spend(
   p_decision_id UUID,
@@ -148,8 +157,12 @@ BEGIN
     RETURN 0;
   END IF;
 
-  -- Daily-cumulative cap: atomic SUM-check-and-INSERT. The INSERT commits ONLY when
-  -- today's committed total plus this amount is within the daily cap; otherwise 0 rows.
+  -- Serialize all debits for THIS day so the daily SUM below is race-free even under
+  -- READ COMMITTED (see the CONCURRENCY note above). Xact-scoped: releases on COMMIT/ROLLBACK.
+  PERFORM pg_advisory_xact_lock(hashtext('sms_daily_spend|' || current_date::text));
+
+  -- Daily-cumulative cap: SUM-check-and-INSERT, now serialized by the advisory lock so a
+  -- concurrent same-day debit cannot slip a second uncommitted row past this SUM.
   INSERT INTO sms_approved_spend_ledger (decision_id, amount_usd)
   SELECT p_decision_id, p_amount
   WHERE (
@@ -170,4 +183,4 @@ REVOKE EXECUTE ON FUNCTION debit_sms_daily_spend(UUID, NUMERIC, NUMERIC, NUMERIC
 GRANT EXECUTE ON FUNCTION debit_sms_daily_spend(UUID, NUMERIC, NUMERIC, NUMERIC) TO service_role;
 
 COMMENT ON FUNCTION debit_sms_daily_spend(UUID, NUMERIC, NUMERIC, NUMERIC) IS
-  'Atomic per-decision + daily-cumulative SMS spend-cap debit (SD-LEO-FEAT-SMS-CHAIRMAN-DECISION-001-B FR-2). Returns 1 (approved, ledger row inserted) or 0 (over-cap). The daily SUM-check-and-INSERT is a single statement so concurrent consumes of different same-day decisions cannot both overshoot the daily cap. service_role EXECUTE only.';
+  'Serialized per-decision + daily-cumulative SMS spend-cap debit (SD-LEO-FEAT-SMS-CHAIRMAN-DECISION-001-B FR-2). Returns 1 (approved, ledger row inserted) or 0 (over-cap). A per-day pg_advisory_xact_lock serializes same-day debits so the daily SUM is race-free under READ COMMITTED and concurrent consumes of different same-day decisions cannot both overshoot the daily cap. service_role EXECUTE only.';
