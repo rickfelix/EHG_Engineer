@@ -1,0 +1,89 @@
+{
+  "executive_summary": "Solomon (the oracle) occasionally splits a long answer across multiple session_coordination rows (payload.kind='adam_advisory'), tagged in the subject line with an 'N/M' marker (e.g. 'COMMISSION VERDICT 1/2' ... 'COMMISSION VERDICT 2/2'). Ground-truthed against live rows (2026-07-17): the SD's original assumption -- group parts by a shared payload.correlation_id -- is FALSE. Solomon's own body text on a live part-2 row explains why: 'the send-path dedup blocks a second row on the same correlation, so the contract-documented ordered-parts mechanism cannot deliver -- part 2 rides clean' -- meaning part 2 is written with a FRESH, unrelated correlation_id as a workaround. The only signal reliably shared across parts is the subject-line 'N/M' marker plus the leading title text before it (e.g. 'COMMISSION VERDICT'), scoped to the same (target_session, sender_session). Today's consumer chain -- lib/coordinator/adam-advisory-store.cjs selectUnactionedAdvisories/stampActioned/fetchAdvisory, rendered by scripts/fleet-dashboard.cjs printAdamInbox and scripts/read-adam-advisories.cjs, retired one row at a time by scripts/coordinator-ack-adam.cjs --advisory <id> -- treats every row as an independent advisory, so a multi-part reply surfaces as N duplicate lines and can be partially acked (part 1 retired, part 2 silently orphaned, or vice versa). This PRD adds one pure grouping module keyed on the ground-truthed subject-marker signal and wires it into the render + ack paths so a split reply surfaces and is retired as ONE logical unit.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Pure multi-part grouping primitive keyed on the subject N/M marker",
+      "description": "New lib/coordinator/multi-part-reply.cjs exporting parsePartMarker(subject) -- strips known leading bracket tags (e.g. '[SOLOMON_ORACLE] [oracle] ') then matches a '<title> N/M' pattern, returning {prefix, index, total} or null when no marker is present. Exports groupMultiPartAdvisories(rows) -- groups rows sharing the same (target_session, sender_session, normalized prefix, total) into one logical-reply group ordered by parsed index ascending (NOT created_at, so out-of-order arrival still reassembles correctly); a row with no parseable marker is its own singleton group (byte-identical single-part behavior). Exports reassembleGroupBody(orderedRows) -- joins each part's body (payload.body falling back to the body column) in index order. All three are pure functions, no I/O.",
+      "acceptance_criteria": [
+        "parsePartMarker returns null for a subject with no N/M pattern (single-part case)",
+        "parsePartMarker extracts {prefix, index, total} from a subject like '[SOLOMON_ORACLE] [oracle] COMMISSION VERDICT 1/2 -- roadmap-anchored retro...'",
+        "groupMultiPartAdvisories groups two rows sharing (target_session, sender_session, prefix, total) into one group, ordered by index even when the higher-index row arrives first",
+        "groupMultiPartAdvisories does NOT merge two rows that share a subject prefix but target different sessions or different sender_sessions",
+        "groupMultiPartAdvisories marks a group isComplete=false when fewer than 'total' distinct indices have arrived",
+        "a marker-less row passes through as its own singleton group with isMultiPart=false"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Render path collapses a multi-part series into one logical entry",
+      "description": "scripts/fleet-dashboard.cjs printAdamInbox() and scripts/read-adam-advisories.cjs group the fetched advisories via groupMultiPartAdvisories() before rendering, printing ONE line per logical reply (using the last part's metadata for callsign/age/presence and the reassembled body for the preview, with a '(N parts)' suffix on a multi-part group) instead of one line per raw row. The read_at stamp still applies to every member row in every group (delivery tracking is per-row; only the human-facing render collapses).",
+      "acceptance_criteria": [
+        "A 2-part Solomon series renders as ONE line in printAdamInbox, not two",
+        "A single-part advisory renders unchanged (byte-identical to current output)",
+        "read_at is stamped on BOTH member rows of a 2-part group after render"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Ack path retires an entire multi-part series together, never part N alone while part N+1 sits unread",
+      "description": "lib/coordinator/adam-advisory-store.cjs adds resolveGroupForAdvisory(supabase, advisoryRow) -- re-queries the last 7 days of (target_session, sender_session) sibling rows and applies groupMultiPartAdvisories to find the full group a given advisory id belongs to (degrades to a safe singleton group on any lookup fault or when no marker is present) -- and stampActionedGroup(supabase, group, nowIso) -- stamps payload.actioned_at on every member row. scripts/coordinator-ack-adam.cjs --advisory <id> resolves the group FIRST, then acks every member id in one call, and prints an explicit WARNING (never silent) when the resolved group is incomplete (fewer parts have arrived than the marker's own stated total) so the coordinator knows more of the answer may still be in flight.",
+      "acceptance_criteria": [
+        "Acking part 1's id when part 2 already exists as a sibling row acks BOTH rows in the same invocation",
+        "Acking the only id in a single-part (marker-less) advisory behaves exactly as before (no regression)",
+        "Acking a part whose series is INCOMPLETE (e.g. only 1 of 2 parts has arrived) stamps the arrived part(s) and prints an explicit incomplete-series warning naming the missing index/indices",
+        "fetchAdvisory's select list includes 'subject' (required by parsePartMarker; previously only sender_session/target_session/payload/read_at were selected)"
+      ]
+    }
+  ],
+  "implementation_approach": {
+    "strategy": "One new pure grouping module (FR-1) plus two surgical consumer-side wiring changes (FR-2 render collapse, FR-3 group-aware ack) across the 4 call sites confirmed exhaustive by an Explore pass (lib/coordinator/adam-advisory-store.cjs, scripts/fleet-dashboard.cjs, scripts/read-adam-advisories.cjs, scripts/coordinator-ack-adam.cjs). Deliberately does NOT touch payload.correlation_id semantics, the send-path dedup Solomon's own body text describes, or the unrelated parent_correlation_id tail-inheritance mechanism in solomon_advice_outcome_ledger (a different concern scoped to ledger decisions, not to session_coordination advisory rows).",
+    "steps": [
+      "Add lib/coordinator/multi-part-reply.cjs (parsePartMarker, groupMultiPartAdvisories, reassembleGroupBody) + unit tests",
+      "Add resolveGroupForAdvisory + stampActionedGroup to lib/coordinator/adam-advisory-store.cjs; add 'subject' to fetchAdvisory's select",
+      "Wire scripts/fleet-dashboard.cjs printAdamInbox() to render grouped entries",
+      "Wire scripts/read-adam-advisories.cjs to render grouped entries",
+      "Wire scripts/coordinator-ack-adam.cjs --advisory <id> to resolve + ack the whole group, with an incomplete-series warning"
+    ],
+    "rollback": "Every change is additive (a new module plus a grouping pass inserted before existing render/ack logic); a marker-less advisory is untouched byte-for-byte. Reverting the PR restores per-row rendering/acking with no data loss -- no schema or DRAIN semantics changed."
+  },
+  "system_architecture": {
+    "overview": "Application-layer consumer fix only. No schema changes -- subject text and payload.body already exist on every session_coordination row. No new tables, no migration.",
+    "components": [
+      { "name": "lib/coordinator/multi-part-reply.cjs (new)", "responsibility": "Pure subject-marker parsing + grouping + body reassembly" },
+      { "name": "lib/coordinator/adam-advisory-store.cjs", "responsibility": "resolveGroupForAdvisory + stampActionedGroup -- the group-aware read/ack primitives" },
+      { "name": "scripts/fleet-dashboard.cjs printAdamInbox()", "responsibility": "Collapsed one-line-per-logical-reply render" },
+      { "name": "scripts/read-adam-advisories.cjs", "responsibility": "Read-only peek, same collapsed render" },
+      { "name": "scripts/coordinator-ack-adam.cjs", "responsibility": "Group-aware ack -- retires every part of a series together" }
+    ],
+    "data_flow": "Each consumer already fetches its row window (selectUnactionedAdvisories / fetchAdvisory); groupMultiPartAdvisories is applied client-side against that same already-fetched (or a small targeted re-query for ack) set -- no new query pattern, no new DB round-trips beyond the ack path's single bounded sibling lookup."
+  },
+  "integration_operationalization": {
+    "consumers": [
+      "Coordinator operators (fleet-dashboard.cjs ADAM ADVISORY INBOX render, coordinator-ack-adam.cjs ack verb)"
+    ],
+    "dependencies": [
+      "Subject-line 'N/M' convention Solomon already emits on split replies (observed live, not newly invented)"
+    ],
+    "data_contracts": [
+      "parsePartMarker(subject): {prefix, index, total} | null -- pure, no I/O",
+      "groupMultiPartAdvisories(rows): Array<{id, memberIds, rows, isMultiPart, isComplete, total, body}> -- pure, no I/O"
+    ],
+    "runtime_config": [
+      "None -- no new env vars or flags"
+    ],
+    "observability_rollout": "Single PR in EHG_Engineer. No migration, no chairman-gate. Post-merge: a multi-part Solomon reply surfaces once in the coordinator's ADAM ADVISORY INBOX and is retired as one unit via a single ack, closing the duplicate-surfacing / partial-ack class this SD targets."
+  },
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "parsePartMarker on a bracket-tagged multi-part subject vs. a plain single-part subject", "expected": "Returns {prefix, index, total} for the marker case, null for the plain case" },
+    { "id": "TS-2", "scenario": "groupMultiPartAdvisories with 2 parts arriving out of order (index 2 row created before index 1 row)", "expected": "Group's rows are ordered [index 1, index 2] regardless of created_at order" },
+    { "id": "TS-3", "scenario": "groupMultiPartAdvisories with rows sharing a subject prefix but different target_session", "expected": "Two separate singleton/groups, never merged" },
+    { "id": "TS-4", "scenario": "printAdamInbox render with a mock 2-part Solomon series plus one single-part advisory", "expected": "Two rendered lines total (one collapsed multi-part line, one single-part line), not three" },
+    { "id": "TS-5", "scenario": "coordinator-ack-adam.cjs --advisory <part-1-id> when part 2 already exists as a sibling row", "expected": "Both rows' payload.actioned_at get stamped in the same invocation" },
+    { "id": "TS-6", "scenario": "coordinator-ack-adam.cjs --advisory <part-1-id> when part 2 has NOT yet arrived (series total=2, only 1 seen)", "expected": "Part 1 is stamped actioned_at; an explicit incomplete-series warning is printed naming the missing index" }
+  ],
+  "risks": [
+    { "risk": "A future change to Solomon's subject-marker convention (e.g. dropping the N/M pattern) would silently degrade every multi-part reply to independent singletons again", "mitigation": "This is the identical failure mode as today (no regression) -- a marker-less row was always treated as its own advisory; the fix is additive, not a replacement of a more-robust mechanism that would be lost" },
+    { "risk": "The 7-day sibling lookback window in resolveGroupForAdvisory could miss a genuine part 2 that arrives more than 7 days after part 1", "mitigation": "Multi-part replies observed live arrive within ~1 minute of each other; 7 days is a generous safety margin, and a miss degrades to acking the known part(s) with no data loss -- never a false merge" }
+  ]
+}
