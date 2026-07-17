@@ -62,7 +62,12 @@ test.describe('Shared-operator holdco arming', () => {
       expect(secondRun.already_existed.sort()).toEqual(SHARED_ROLE_KEYS.sort());
 
       // Exactly one identity row per role_key, holdco-scoped (venture_id IS NULL).
+      // Adversarial-review finding: Set(...).size alone would pass even with a
+      // duplicate row for one role_key (e.g. 5 rows, one role_key appearing
+      // twice) -- exactly the defect class the FR-2 partial unique index exists
+      // to prevent. Assert the raw row count too.
       const identities = await getSharedIdentityIds(SHARED_ROLE_KEYS);
+      expect(identities).toHaveLength(4);
       const seenRoleKeys = identities.map((i: any) => i.role_key);
       expect(new Set(seenRoleKeys).size).toBe(4);
     } finally {
