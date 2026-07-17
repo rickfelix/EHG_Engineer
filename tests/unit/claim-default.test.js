@@ -31,7 +31,7 @@ describe('isSameConversation DENY-on-ambiguity', () => {
 
 // Test that multi-session gate treats ambiguous as BLOCK (not ALLOW)
 describe('multi-session-claim-gate ambiguous handling', () => {
-  it('should treat ambiguous terminal_id as conflict (return true)', async () => {
+  it('should treat ambiguous terminal_id as conflict (falls through to BLOCK)', async () => {
     // Read the gate source to verify the logic changed
     const fs = await import('fs');
     const path = await import('path');
@@ -40,15 +40,33 @@ describe('multi-session-claim-gate ambiguous handling', () => {
 
     // Verify DENY-on-ambiguity is in place
     expect(source).toContain('DENY-on-ambiguity');
-    expect(source).toContain('return true;');
 
-    // Verify old ALLOW pattern is removed
+    // SD-LEO-INFRA-MULTI-SESSION-CLAIM-001: the gate was rewritten to read Surface A
+    // (strategic_directives_v2.claiming_session_id) first and delegate liveness to
+    // lib/claim-validity-gate.js's primitives. The ambiguous branch no longer needs an
+    // explicit `return true;` inside a .filter() callback (the old shape) — it now simply
+    // does NOT early-return a pass, so control falls through to the BLOCK banner further
+    // down. Pin the BEHAVIORAL invariant instead of the old literal code shape: within the
+    // ambiguous-handling window, there is no early "pass: true" escape, and the old removed
+    // ALLOW pattern is absent.
     const ambiguousIdx = source.indexOf("sameConvo === 'ambiguous'");
+    expect(ambiguousIdx).toBeGreaterThan(-1);
     // Window widened: QF-20260404-512 inserted a PID-liveness block between
     // `sameConvo === 'ambiguous'` and the DENY-on-ambiguity comment.
     const ambiguousBlock = source.substring(ambiguousIdx, ambiguousIdx + 1500);
     expect(ambiguousBlock).not.toContain('treating as same conversation');
     expect(ambiguousBlock).toContain('DENY-on-ambiguity');
+    // The ambiguous branch legitimately still contains ONE conditional pass — the pre-existing
+    // QF-20260404-512 carve-out for a CONFIRMED-DEAD claiming PID (not a same-conversation
+    // guess). That carve-out is gated behind `catch` on a `process.kill(pid, 0)` liveness probe;
+    // pin that it stays conditional (inside the try/catch), not an unconditional escape.
+    expect(ambiguousBlock).toMatch(/catch\s*\{[\s\S]{0,400}pass:\s*true/);
+
+    // The ambiguous block must be followed (within the rest of the function) by the BLOCK
+    // banner, confirming the fallthrough actually reaches a blocking return.
+    const restOfFunction = source.substring(ambiguousIdx);
+    expect(restOfFunction).toContain('BLOCKED: SD CLAIMED BY ANOTHER ACTIVE SESSION');
+    expect(restOfFunction).toContain('pass: false');
   });
 });
 

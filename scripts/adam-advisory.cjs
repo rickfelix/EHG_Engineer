@@ -993,7 +993,7 @@ async function main() {
             try { solomonId = await getActiveSolomonId(supabase); } catch { solomonId = null; }
             const correlationId = crypto.randomUUID();
             const cp = buildSolomonConsultPayload({ correlationId, body: `[PRE-SEND CONSULT] ${payload.body.slice(0, 300)}`, senderCallsign, repo: process.cwd(), severity: 'high', isAwait: true });
-            await insertCoordinationRow(supabase, { sender_session: sessionId, sender_type: 'adam', target_session: solomonId || 'broadcast-solomon', message_type: 'INFO', subject: `[SOLOMON_CONSULT] pre-send`, body: cp.body, payload: cp, expires_at: expiresAt });
+            await insertCoordinationRow(supabase, { sender_session: sessionId, sender_type: 'adam', target_session: solomonId || 'broadcast-solomon', message_type: 'INFO', subject: `[SOLOMON_CONSULT] pre-send`, body: cp.body, payload: cp, expires_at: expiresAt }, { targetRoleHint: 'solomon' });
             const reply = await awaitCoordinatorReply(supabase, { sessionId, correlationId, timeoutMs: consultTimeoutMs });
             return reply.timedOut ? null : ((reply.reply && (readCanonicalBody(reply.reply) || reply.reply.body)) || { received: true });
           },
@@ -1035,7 +1035,9 @@ async function main() {
     const { data, error } = await insertCoordinationRow(
       supabase,
       { sender_session: sessionId, sender_type: 'adam', target_session: target, message_type: 'INFO', subject, body: payload.body, payload, expires_at: expiresAt },
-      { select: 'id', single: true }
+      // SD-LEO-INFRA-SEND-TIME-TARGET-001 / FR-2: `--to solomon` is statically a Solomon-role
+      // target — hint the target-drain warn so a resolved UUID needs no identity lookup.
+      { select: 'id', single: true, targetRoleHint: toSolomon ? 'solomon' : undefined }
     );
     if (error) { console.error('ERROR: failed to insert advisory:', error.message); process.exit(1); }
     inserted = data;

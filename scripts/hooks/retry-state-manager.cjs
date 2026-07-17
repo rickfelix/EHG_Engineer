@@ -90,6 +90,60 @@ const EXEMPT_PATTERNS = [
   /\bgh\s+pr\s+checks\b/,
 ];
 
+// SD-LEO-FIX-EXEMPT-REGISTERED-RECURRING-001: config-driven registration of recurring-tick
+// exemptions, so adding a scheduled cadence script (adam-quiet-tick etc.) is a reviewed
+// config PR instead of a code change. SAFETY PROPERTIES (risk ca54579b — both BLOCKING):
+//   1. The config lives at a GIT-TRACKED path resolved __dirname-relative (NEVER the
+//      LEO_RETRY_STATE_DIR-overridable state dir) — PR review is the teeth-erosion guard.
+//   2. Entries are FULL basenames with extension only (validated below), escaped and
+//      compiled into the same anchored `scripts/<name>` family as the builtins — an entry
+//      can only ever exempt one physical script; bare prefixes ("adam") or extensions
+//      (".mjs") that would disable a script family are rejected before compilation.
+//   3. Fail-safe NARROWS, never widens: missing/unreadable/malformed config → builtin
+//      EXEMPT_PATTERNS only; a rejected entry is skipped, never approximated.
+// TRADEOFF (shared with every builtin entry): isExempt is exit-code-blind, so a
+// persistently FAILING allowlisted tick is invisible to this repeat-guard — tick health
+// is owned by the periodic-liveness watcher lane, not LEARN-129.
+const TICK_EXEMPTIONS_CONFIG = path.resolve(__dirname, 'recurring-tick-exemptions.json');
+const TICK_ENTRY_RE = /^[A-Za-z0-9._-]+\.(mjs|cjs|js)$/;
+const TICK_ENTRY_MAX = 32;
+
+function loadConfigExemptions() {
+  const compiled = [];
+  try {
+    if (!fs.existsSync(TICK_EXEMPTIONS_CONFIG)) return compiled;
+    const parsed = JSON.parse(fs.readFileSync(TICK_EXEMPTIONS_CONFIG, 'utf8'));
+    const entries = Array.isArray(parsed && parsed.exempt_scripts) ? parsed.exempt_scripts : [];
+    for (const entry of entries.slice(0, TICK_ENTRY_MAX)) {
+      const script = entry && typeof entry.script === 'string' ? entry.script : '';
+      const reason = entry && typeof entry.reason === 'string' ? entry.reason.trim() : '';
+      if (!TICK_ENTRY_RE.test(script) || !reason) {
+        process.stderr.write(`[retry-state-manager] tick-exemption entry rejected (needs full basename + extension and a reason): ${JSON.stringify(script)}\n`);
+        continue;
+      }
+      try {
+        const escaped = script.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        compiled.push(new RegExp(`\\bscripts[/\\\\]${escaped}\\b`));
+      } catch {
+        // A single uncompilable entry is skipped — never approximated into a wider pattern.
+      }
+    }
+    if (entries.length > TICK_ENTRY_MAX) {
+      process.stderr.write(`[retry-state-manager] tick-exemption config capped at ${TICK_ENTRY_MAX} entries (${entries.length} present)\n`);
+    }
+    if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+      process.stderr.write(`[retry-state-manager] tick-exemption config loaded: ${compiled.length} entr${compiled.length === 1 ? 'y' : 'ies'}\n`);
+    }
+  } catch (err) {
+    // Fail-safe: config trouble can only NARROW exemptions (builtins still apply) and must
+    // never block a tool call (this module runs inside a fail-open PreToolUse hook).
+    process.stderr.write(`[retry-state-manager] tick-exemption config unreadable (builtins only): ${err.message}\n`);
+  }
+  return compiled;
+}
+
+const CONFIG_EXEMPT_PATTERNS = loadConfigExemptions();
+
 /**
  * Whether a Bash command should bypass invocation tracking entirely (allowlist backstop).
  * Returns false for any non-string input.
@@ -98,7 +152,8 @@ const EXEMPT_PATTERNS = [
  */
 function isExempt(commandStr) {
   if (typeof commandStr !== 'string' || !commandStr) return false;
-  return EXEMPT_PATTERNS.some(rx => rx.test(commandStr));
+  return EXEMPT_PATTERNS.some(rx => rx.test(commandStr)) ||
+    CONFIG_EXEMPT_PATTERNS.some(rx => rx.test(commandStr));
 }
 
 // SD-LEO-INFRA-RCA-AUTOSIGNAL-FALSE-POSITIVE-001 (Control 2 — structural read-only
