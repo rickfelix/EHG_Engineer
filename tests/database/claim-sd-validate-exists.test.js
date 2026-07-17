@@ -7,10 +7,16 @@
  * quick_fixes.id) that returns {success:false, error:'sd_not_found'} for phantom ids —
  * while leaving real claims (and the takeover/QF/cross-table logic) unchanged.
  *
+ * SD-LEO-INFRA-BLOCK-TEST-SESSION-001: claim_sd now ALSO rejects any caller session_id
+ * with no live claude_sessions row (a PHANTOM caller), fired before this suite's own
+ * sd_not_found guard. PROBE_SESSION must therefore be a real registered session for
+ * every assertion in this file, not just the happy-path claim — mirroring the
+ * convention already used in claim-sd-refuse-live-foreign.test.js / claim-sd-cross-table.test.js.
+ *
  * Live-DB integration test, gated like the other tests/database suites so CI skips
  * cleanly without service-role creds.
  */
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
 
@@ -28,8 +34,21 @@ const HAS_REAL_DB = process.env.SUPABASE_URL
 const PROBE_SESSION = 'test-claim-validate-exists-session';
 
 describe.skipIf(!HAS_REAL_DB)('claim_sd rejects non-existent ids (SD-FDBK-FIX-CLAIM-RPC-VALIDATE-001)', () => {
+  beforeAll(async () => {
+    await supabase.from('claude_sessions').upsert({
+      session_id: PROBE_SESSION,
+      status: 'idle',
+      heartbeat_at: new Date().toISOString(),
+      machine_id: 'test-machine',
+      terminal_id: `test-${PROBE_SESSION}`,
+      hostname: 'test-host',
+      codebase: 'EHG_Engineer',
+      sd_key: null,
+    }, { onConflict: 'session_id' });
+  });
+
   afterAll(async () => {
-    await supabase.from('claude_sessions').update({ sd_key: null }).eq('session_id', PROBE_SESSION);
+    await supabase.from('claude_sessions').delete().eq('session_id', PROBE_SESSION);
   });
 
   it('returns sd_not_found for a non-existent SD id (no phantom self-claim)', async () => {
