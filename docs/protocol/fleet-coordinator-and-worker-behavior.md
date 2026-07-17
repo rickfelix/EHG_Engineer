@@ -175,6 +175,8 @@ Before relying on the worker<->coordinator channel (especially overnight / unatt
 
 Run it at `/coordinator start` (after identity assignment) and any time you need to TRUST signal delivery. **Worker rule:** poll your coordination inbox **as a `/loop` step each iteration** (`/checkin`, or `node scripts/fleet-dashboard.cjs inbox` / worker-inbox) — never a hand-rolled bounded Bash poll (overshoots the 120000ms Bash timeout → exit-143) — ACK a comms check in one line, then continue and `ScheduleWakeup` so the next iteration re-fires.
 
+**Role canaries (Solomon leg — SD-LEO-INFRA-SEND-TIME-TARGET-001):** a canary/radio-check directed at **Solomon** must ride `kind=comms_check` — NEVER a default `adam_advisory` (Solomon's inbox never auto-drains that kind; the 2026-07-17 good-morning canary orphaned exactly this way). `solomon-advisory.cjs inbox` surfaces Solomon-directed `comms_check` rows first-class with the ack instruction. More generally, every send path now emits a `[target-drain]` WARN when the outgoing `payload.kind` is not in the target role's drain set (`DRAIN_SETS` in `lib/fleet/worker-status.cjs`) — warn-only; treat a warn as "this delivery will orphan, pick a kind the role drains."
+
 ---
 ### Related documentation
 - [The LEO Harness](./README.md) — canonical overview tying the roles, channels, loop model, and failure modes together.

@@ -280,6 +280,21 @@ async function drainInbox(supabase, sessionId, { quiet = false, background = fal
   if (error) { console.error('ERROR: solomon inbox query failed:', error.message); process.exit(1); }
 
   const rows = (allRows || []).filter((r) => isReplyRow(r) || isSolomonInboxRow(r));
+  // SD-LEO-INFRA-SEND-TIME-TARGET-001 / FR-3: Solomon-directed canary coverage. comms_check
+  // was listed handler-owned (EXCLUDED_KINDS) but NO Solomon-side handler existed — a
+  // comms_check sent to Solomon orphaned silently (the exact class this SD closes send-side).
+  // Surface it FIRST-CLASS with the ack instruction; never consumed here (ack via `ack <id>`
+  // or a /signal reply, mirroring the worker comms-check contract).
+  const commsChecks = (allRows || []).filter((r) => r && r.payload && r.payload.kind === 'comms_check');
+  if (commsChecks.length > 0) {
+    console.log(`📡 ${commsChecks.length} comms_check (radio check) directed at Solomon — reply to confirm the two-way link:`);
+    for (const r of commsChecks) {
+      const ageMin = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
+      const text = (r.payload && r.payload.body) || r.body || r.subject || '(empty)';
+      console.log(`  📡 [comms_check] id=${r.id} (${ageMin}m) ${text}`);
+      console.log(`     Ack: node scripts/solomon-advisory.cjs ack ${r.id}  (or reply on the sender's channel)`);
+    }
+  }
   const orphaned = (allRows || []).filter(isOrphanedSolomonRow);
   if (orphaned.length > 0) {
     console.warn(`⚠ ${orphaned.length} unread Solomon-directed row${orphaned.length === 1 ? '' : 's'} with unrecognized/untyped kind NOT auto-drained (visibility — NOT consumed):`);
@@ -768,7 +783,9 @@ async function main() {
     const { data, error } = await insertCoordinationRow(
       supabase,
       { sender_session: sessionId, sender_type: 'solomon', target_session: target, message_type: 'INFO', subject, body: payload.body, payload, expires_at: expiresAt },
-      { select: 'id', single: true }
+      // SD-LEO-INFRA-SEND-TIME-TARGET-001 / FR-2: `--to adam` is statically an Adam-role
+      // target — hint the target-drain warn so a resolved UUID needs no identity lookup.
+      { select: 'id', single: true, targetRoleHint: toAdam ? 'adam' : undefined }
     );
     if (error) { console.error('ERROR: failed to insert advisory:', error.message); process.exit(1); }
     inserted = data;
