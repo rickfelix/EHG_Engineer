@@ -8,14 +8,15 @@ const require = createRequire(import.meta.url);
 const { resolveGroupForAdvisory, stampActionedGroup } = require('../../../lib/coordinator/adam-advisory-store.cjs');
 
 // Minimal thenable supabase builder matching the query chain resolveGroupForAdvisory /
-// stampActionedGroup (via stampActioned) actually issue.
-function makeSupabase({ selectResult, updateResult = { error: null } } = {}) {
+// stampActionedGroup (via stampActioned) actually issue. Captures eq()/order() args so
+// tests can assert the query SHAPE, not just its result.
+function makeSupabase({ selectResult, updateResult = { error: null }, captured = {} } = {}) {
   const chain = {
     from() { return chain; },
     select() { return chain; },
-    eq() { return chain; },
+    eq(k, v) { (captured.eq = captured.eq || []).push([k, v]); return chain; },
     gte() { return chain; },
-    order() { return chain; },
+    order(k, opts) { captured.order = [k, opts]; return chain; },
     limit() { return Promise.resolve(selectResult); },
     update() { return chain; },
     then(res, rej) { return Promise.resolve(updateResult).then(res, rej); },
@@ -49,6 +50,29 @@ describe('resolveGroupForAdvisory', () => {
     const supabase = makeSupabase({ selectResult: { data: null, error: { message: 'boom' } } });
     const group = await resolveGroupForAdvisory(supabase, advisoryRow);
     expect(group.memberIds).toEqual(['row-1']);
+  });
+
+  // Adversarial-review regression (PR #6191): the sibling query MUST order newest-first —
+  // ascending + limit(50) silently returned the OLDEST 50 rows, excluding the current
+  // advisory's own recent siblings (or even itself) on a busy (target_session,
+  // sender_session) pair with >50 rows in the lookback window.
+  it('orders the sibling query created_at DESCENDING (newest-first), not ascending', async () => {
+    const advisoryRow = { id: 'row-1', target_session: 'coord-1', sender_session: 'solomon-1', subject: 'VERDICT 1/2' };
+    const captured = {};
+    const supabase = makeSupabase({ selectResult: { data: [advisoryRow], error: null }, captured });
+    await resolveGroupForAdvisory(supabase, advisoryRow);
+    expect(captured.order).toEqual(['created_at', { ascending: false }]);
+  });
+
+  // Adversarial-review regression (PR #6191): scope the sibling lookup to adam_advisory
+  // rows only, so an unrelated row between the same session pair that coincidentally
+  // carries a numeric "N/M"-shaped subject is never pulled into the group.
+  it('scopes the sibling query to payload->>kind=adam_advisory', async () => {
+    const advisoryRow = { id: 'row-1', target_session: 'coord-1', sender_session: 'solomon-1', subject: 'VERDICT 1/2' };
+    const captured = {};
+    const supabase = makeSupabase({ selectResult: { data: [advisoryRow], error: null }, captured });
+    await resolveGroupForAdvisory(supabase, advisoryRow);
+    expect(captured.eq).toContainEqual(['payload->>kind', 'adam_advisory']);
   });
 });
 
