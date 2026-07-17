@@ -70,12 +70,13 @@ describe('groupMultiPartAdvisories', () => {
     expect(groups).toHaveLength(2);
   });
 
-  it('marks a group isComplete=false when fewer than "total" distinct indices have arrived', () => {
+  it('marks a group isComplete=false when fewer than "total" distinct indices have arrived, tracking which indices ARE present', () => {
     const rows = [{ ...base, id: 'row-1', subject: 'VERDICT 1/3', body: 'only part' }];
     const groups = groupMultiPartAdvisories(rows);
     expect(groups[0].isComplete).toBe(false);
     expect(groups[0].total).toBe(3);
     expect(groups[0].memberIds).toEqual(['row-1']);
+    expect(groups[0].presentIndices).toEqual([1]); // caller can diff against 1..total to name missing parts
   });
 
   it('passes a marker-less row through as its own singleton group', () => {

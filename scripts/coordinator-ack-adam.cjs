@@ -155,7 +155,9 @@ async function main() {
   console.log('  advisory_id:', advisoryId);
   if (group.isMultiPart) console.log('  series_member_ids:', group.memberIds.join(', '));
   if (group.isMultiPart && !group.isComplete) {
-    console.warn(`  ⚠ INCOMPLETE SERIES: only ${group.memberIds.length} of ${group.total} part(s) have arrived — additional part(s) may still be en route; re-run ack once they land.`);
+    const missing = Array.from({ length: group.total }, (_, i) => i + 1)
+      .filter((i) => !group.presentIndices.includes(i));
+    console.warn(`  ⚠ INCOMPLETE SERIES: only ${group.memberIds.length} of ${group.total} part(s) have arrived (missing part(s): ${missing.join(', ')}) — additional part(s) may still be en route; re-run ack once they land.`);
   }
   console.log('  actioned_at:', nowIso);
 
