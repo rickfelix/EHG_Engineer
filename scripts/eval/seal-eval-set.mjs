@@ -28,6 +28,7 @@ import { createClient } from '@supabase/supabase-js';
 import { EVAL_SET_CLASSES, EVAL_SET_CORPORA } from '../../lib/eval/eval-set-fixtures.mjs';
 import { evalCaseHash, computeFloorBookkeeping } from '../../lib/eval/eval-set-loader.mjs';
 import { isMissingTableError } from './migrate-sealed-baselines.mjs';
+import { TABLE as PROPOSALS_TABLE } from '../../lib/governance/shadow-trial/proposal-writer.mjs';
 
 function argValue(flag) {
   const i = process.argv.indexOf(flag);
@@ -57,8 +58,11 @@ export async function sealEvalSet({ supabase, artifactClass, apply = false, seal
   // governed_change_proposals, sealing requires a staged proposal for this class.
   // Pre-ceremony (table absent) this warns and proceeds: refusing would deadlock
   // legitimate re-seals before the ceremony has even begun.
+  // Referenced via the owning module's TABLE constant (child A convention for the
+  // chairman-gated STAGED table — the schema-reference lint rightly flags literal
+  // references to not-yet-applied tables).
   const guardProbe = await supabase
-    .from('governed_change_proposals')
+    .from(PROPOSALS_TABLE)
     .select('id, status, proposed_diff')
     .eq('artifact_class', artifactClass)
     .limit(10);
