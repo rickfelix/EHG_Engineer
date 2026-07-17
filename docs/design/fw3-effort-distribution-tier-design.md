@@ -38,7 +38,7 @@ There is **no separate effort-distribution tier to reconcile.** Framing is an AC
 - Net: **(iii) for the objective function (recurses into §3.3), (i) for the plumbing, never (ii) peer.** "As above, so below" done rightly = **invariant-reuse** (same governance at every altitude), not **structure-duplication** (a mirror tier with its own router/panel/wire — the very thing §2/§3 delete). This *sharpens* the earlier "lands as §3.3 + one satellite" ruling: §3.3 is the whole of the load-bearing content; the satellite is only neutral wiring.
 
 ## 5. The objective function for the apex role (the §3.3 row — and the CMV drift it must resist)
-**Name and gauge it as a DECISION-QUALITY router, never an effort/cost router.** The seed's name — "effort-*distribution*" — has a gravitational pull toward "cheapest sufficient effort," a COST function that directly contradicts the Vision's *"compute is not a constraint; optimize for decision quality and learning speed, NOT token thrift."* Cost is a constraint (the `task_budget` ceiling), never the objective.
+**Name and gauge it as a DECISION-QUALITY router, never an effort/cost router.** The seed's name — "effort-*distribution*" — has a gravitational pull toward "cheapest sufficient effort," a COST function that directly contradicts the Vision's *"maximize decision quality and learning speed within the capacity we have — allocate compute by expected value, never token thrift for its own sake, never waste."* Cost/capacity is a constraint (the `task_budget` ceiling, a managed fact), never the objective.
 
 The objective function ("better" for this role):
 - surfaced **negative-space** the below-flow would have missed (the apex's entire reason to exist);

@@ -1,15 +1,17 @@
 ---
 category: vision
 status: approved
-version: 1.0.0
+version: 1.1.0
 author: rickfelix
-last_updated: 2026-06-10
+last_updated: 2026-07-17
 tags: [vision]
 ---
 
 # ExecHoldings Global (EHG) — Mission & Vision
 
 > Chairman-approved 2026-06-09. CANONICAL. Supersedes the divergent vision statements in strategic_vision (EHG-2028) and the companies record; the venture-lifecycle specification remains a SEPARATE operating document. The public/external narrative is maintained SEPARATELY as a go-to-market positioning note, not as part of the canonical vision.
+>
+> Amended 2026-07-17 (chairman-ratified, verbal, via Solomon consult 287ed704): How-EHG-Operates principle 4 changed from "Compute is not a constraint" to a capacity-aware framing — the mission-principle ownership audit found the old wording contradicted-in-operation (the fleet demonstrably rations capacity). Substance: get maximum decision quality out of the capacity we have.
 
 ## Mission
 Systematically create, validate, and scale AI-governed ventures — transforming ideas into self-operating businesses with a single human leader overseeing an ecosystem of AI agents.
@@ -33,7 +35,7 @@ EHG looks like a disciplined micro-holding company — and it genuinely is one: 
 1. AI-only execution; maximum automation, minimum intervention. Every step runs autonomously and only escalates when human judgment is genuinely required.
 2. The Chairman governs by exception. Override authority, not approval authority. Reviews decisions, never enters data. Mandatory touchpoints are deliberately few; ultimate kill authority is absolute and never times out.
 3. Expertise is instantiated and combined, not hired. For any decision or task, the system spins up the right domain and vertical-industry experts on the fly — at the level of a leading practitioner, grounded in best practices — and combines their perspectives to out-think any single specialist, then reuses or retires them.
-4. Compute is not a constraint. The system optimizes for decision quality and learning speed, not token thrift.
+4. Maximize decision quality and learning speed within the capacity we have. Allocate compute by expected value — never token thrift for its own sake, never waste; capacity constraints are managed facts, not design assumptions.
 5. Engineering is delegated to the LEO Harness. The venture lifecycle decides what to build; LEO decides how and ships it.
 6. Stay ahead of the field. Continuously monitor competitors and reprioritize venture work to preserve and extend the edge — a competitor's move is a signal to act, not merely to note.
 7. Everything compounds and self-improves. Calibration, patterns, capabilities, and lessons transfer automatically across ventures, and the system sharpens its own methods every cycle — getting smarter without the Chairman's involvement.
