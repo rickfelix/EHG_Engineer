@@ -482,6 +482,7 @@
     "fleet:freeze-drill": "node scripts/freeze-drill.mjs",
     "sre:scripts-reachability": "node scripts/scripts-reachability-gauge.mjs",
     "subagents:collect": "node scripts/collect-subagent-evidence.js",
+    "eval:verify-fable5-seal": "node scripts/eval/verify-fable5-baseline-seal.mjs",
     "gov:situation-report": "node scripts/governance/catch-layer-migration-report.mjs",
     "gov:register-loop": "node scripts/governance/register-governance-situation-loop.mjs",
     "gov:run-probes": "node lib/governance/probe-runner.mjs",
