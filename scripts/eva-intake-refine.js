@@ -30,7 +30,7 @@ import { readFileSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dedup, extractDedupContext } from '../lib/integrations/refine-dedup.js';
-import { reconcile, extractReconcileContext } from '../lib/integrations/refine-reconcile.js';
+import { reconcile, extractReconcileContext, enforceInstitutionDiscipline } from '../lib/integrations/refine-reconcile.js';
 import { score, extractScoringContext } from '../lib/integrations/refine-score.js';
 import { promote, groupForPromotion } from '../lib/integrations/refine-promote.js';
 
@@ -47,6 +47,9 @@ const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const skipPromote = args.includes('--skip-promote');
 const extractReconcile = args.includes('--extract-reconcile');
+// SD-LEO-INFRA-DISTILL-REFINE-RECONCILE-001 (FR-3): reconcile is STANDING (default-on) —
+// this escape hatch exists so standing means default-on, not un-disableable.
+const skipReconcile = args.includes('--skip-reconcile');
 const extractDedup = args.includes('--extract-dedup');
 const extractScoring = args.includes('--extract-scoring');
 
@@ -344,6 +347,45 @@ async function runPromotion(waves, scoringResults) {
 // metadata JSONB column AND write a non-fallback source title back to the title column, so a
 // promoted SD carries a human/source title instead of a fallback. Extracted from main() as a pure,
 // exported function for unit-testability. Returns the count persisted (rows updated without error).
+/**
+ * SD-LEO-INFRA-DISTILL-REFINE-RECONCILE-001 (FR-2/FR-3): persist each item's reconcile
+ * disposition to metadata.refine_disposition (JSONB — the reconcile disposition set has no
+ * DB CHECK; roadmap_wave_items.item_disposition is a SEPARATE flow-state enum). The
+ * enforceInstitutionDiscipline guard is applied FIRST so a weak/pointerless
+ * already_institutionalized can never be persisted (it degrades to novel). This standing
+ * persistence is what lets the chairman-queue enqueue (eva-distill-brainstorm --apply) gate
+ * out done/institutionalized items while keeping them auditable via the stored pointer.
+ * @param {Array} waves
+ * @param {Array} reconcileResults - [{ item_index, status, matched_sd_key?, matched_section_id?, ... }]
+ * @param {{supabase: import('@supabase/supabase-js').SupabaseClient}} deps
+ * @returns {Promise<number>} count persisted
+ */
+export async function persistReconcile(waves, reconcileResults, { supabase }) {
+  const allItems = (waves || []).flatMap(w => w.items);
+  let persisted = 0;
+  for (const raw of (reconcileResults || [])) {
+    const r = enforceInstitutionDiscipline(raw);
+    const item = allItems[r.item_index - 1];
+    if (!item || !item.id) continue;
+    const existingMeta = item.metadata || {};
+    const disposition = {
+      status: r.status,
+      matched_sd_key: r.matched_sd_key || null,
+      matched_section_id: r.matched_section_id || null,
+      matched_section_title: r.matched_section_title || null,
+      confidence: Number(r.confidence) || 0,
+      ...(r.institution_note ? { institution_note: r.institution_note } : {}),
+      reconciled_at: new Date().toISOString(),
+    };
+    const { error } = await supabase
+      .from('roadmap_wave_items')
+      .update({ metadata: { ...existingMeta, refine_disposition: disposition } })
+      .eq('id', item.id);
+    if (!error) persisted++;
+  }
+  return persisted;
+}
+
 export async function persistScores(waves, scoringResults, { supabase }) {
   let persisted = 0;
   for (const waveResult of (scoringResults || [])) {
@@ -527,10 +569,21 @@ async function main() {
       console.warn('  Falling back to token-based reconciliation.');
       reconcileResults = await runReconcile(waves);
     }
+  } else if (skipReconcile) {
+    // SD-LEO-INFRA-DISTILL-REFINE-RECONCILE-001 (FR-3): standing = default-on, but explicitly disableable.
+    console.log('\n── Step 2: Reconcile ── SKIPPED (--skip-reconcile)\n');
   } else if (fromStep <= 2 && !extractReconcile) {
     reconcileResults = await runReconcile(waves);
   } else if (!reconcileFile) {
     console.log('\n── Step 2: Reconcile ── SKIPPED\n');
+  }
+
+  // SD-LEO-INFRA-DISTILL-REFINE-RECONCILE-001 (FR-2/FR-3): persist reconcile dispositions
+  // (guard-enforced) so the chairman-queue enqueue can gate on them. Standing on the
+  // default path; a no-op under --dry-run / --skip-reconcile (no results).
+  if (reconcileResults && reconcileResults.length > 0 && !dryRun) {
+    const persistedR = await persistReconcile(waves, reconcileResults, { supabase });
+    console.log(`  Persisted ${persistedR} reconcile disposition(s) to metadata.refine_disposition`);
   }
 
   // --extract-scoring: output scoring context for Claude Code inline analysis, then stop

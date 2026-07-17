@@ -61,8 +61,21 @@ export async function loadTopWaveItems(supabase, topN = 20) {
     refine_composite_score:
       typeof r.metadata?.refine_composite_score === 'number' ? r.metadata.refine_composite_score : null,
   }));
-  scored.sort((a, b) => (b.refine_composite_score ?? -1) - (a.refine_composite_score ?? -1));
-  return scored.slice(0, n);
+  // SD-LEO-INFRA-DISTILL-REFINE-RECONCILE-001 (FR-3): make reconcile STANDING — a scored
+  // item whose persisted reconcile disposition is a done-state (a completed SD covers it)
+  // or already-institutionalized (an existing protocol/role duty absorbs it) does NOT
+  // consume a novel-work review slot. It is NOT dropped: its metadata.refine_disposition
+  // (with the section/SD pointer) stays on the row for chairman spot-check. FAIL-OPEN:
+  // any item with no reconcile disposition, or an unrecognized one, still surfaces — never
+  // fail-closed-suppress. `already_institutionalized` only reaches this metadata after the
+  // enforceInstitutionDiscipline guard (>=85 confidence + verifiable section pointer).
+  const RECONCILED_OUT = new Set(['already_done', 'already_institutionalized']);
+  const eligible = scored.filter((r) => {
+    const status = r.metadata?.refine_disposition?.status;
+    return !RECONCILED_OUT.has(status);
+  });
+  eligible.sort((a, b) => (b.refine_composite_score ?? -1) - (a.refine_composite_score ?? -1));
+  return eligible.slice(0, n);
 }
 
 /**
@@ -154,7 +167,7 @@ async function main() {
   // FR-1: read-only disposition-coverage probe (no distillation, no writes).
   if (args.includes('--coverage')) {
     const cov = await dispositionCoverage(supabase);
-    console.log(`\n── Brainstorm corpus disposition coverage ──`);
+    console.log('\n── Brainstorm corpus disposition coverage ──');
     console.log(`   ${cov.detail}`);
     console.log(`   coverage: ${cov.value === null ? 'unknown' : (cov.value * 100).toFixed(2) + '%'} (status=${cov.status})`);
     return;
