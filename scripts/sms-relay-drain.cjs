@@ -72,7 +72,7 @@ async function main() {
     if (result && result.drained > 0) {
       const tally = {};
       for (const r of result.results || []) tally[r.outcome] = (tally[r.outcome] || 0) + 1;
-      // NO SMS body text — only counts + per-outcome tally (answered/no_match/ambiguous/suspended).
+      // NO SMS body text — only the drained count + the per-outcome tally keyed by drainSmsRelayStaging's outcome classes.
       console.log(`[sms-relay-drain] drained=${result.drained} tally=${JSON.stringify(tally)}`);
     }
   } catch (e) {
