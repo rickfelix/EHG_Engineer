@@ -999,6 +999,19 @@ async function main() {
           },
           // deps.recordLedger — adam_adherence_ledger capture (existing columns, no new ones).
           recordLedger: async (l) => { await supabase.from('adam_adherence_ledger').insert({ run_id: crypto.randomUUID(), probe: l.probe, duty: l.duty || 'pre_send_consult', verdict: l.verdict, detail: l.detail, remediation_ref: l.remediation_ref || null }); },
+          // FR-6: near-miss feeder — a verdict-delta writes a governance situation to the
+          // shared issue_patterns ledger (the sink SD-2's learning loop rides), using SD-2's
+          // metadata convention {class, catch_layer}. catch_layer='solomon' (Solomon caught it).
+          captureNearMiss: async (nm) => {
+            await supabase.from('issue_patterns').insert({
+              pattern_id: `NEARMISS-ADAM-CONSULT-${Date.now()}`,
+              category: 'governance_near_miss',
+              severity: 'high',
+              issue_summary: `${nm.summary}${nm.title ? ` [${String(nm.title).slice(0, 80)}]` : ''}`,
+              source: 'adam_pre_send_consult',
+              metadata: { class: 'near_miss', catch_layer: 'solomon', hardening_ref: null, source_sd: 'SD-LEO-INFRA-ADAM-PRE-SEND-001', origin: 'verdict_delta' },
+            });
+          },
         });
         if (outcome.action === 'hold-and-surface') { console.error('[adam-advisory] ⛔ PRE-SEND HOLD: consequential chairman-surface send held pending Solomon (degraded) — re-send once the consult resolves.'); process.exit(3); }
         if (outcome.degraded) console.warn('[adam-advisory] ⚠ PRE-SEND DEGRADED-PROCEED: Solomon consult timed out; proceeding with caution — adam_adherence_ledger capture on record + consult row queued for async review.');

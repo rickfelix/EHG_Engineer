@@ -14,6 +14,7 @@ import {
   evaluatePreSendConsult,
   performBoundedConsult,
   deriveTriageGates,
+  detectVerdictDelta,
   DEFAULT_CONSULT_TIMEOUT_MS,
 } from '../../../lib/adam/should-consult-solomon.js';
 import { VERDICT } from '../../../lib/adam/execute-vs-escalate.js';
@@ -208,5 +209,52 @@ describe('deriveTriageGates — caller may escalate but never downgrade', () => 
     // routed through the canonical authority => ESCALATE (not a routine EXECUTE)
     const { classifyDecision } = await import('../../../lib/adam/execute-vs-escalate.js');
     expect(classifyDecision(gates).verdict).toBe(VERDICT.ESCALATE);
+  });
+});
+
+// FR-6: verdict-delta near-miss feeder.
+describe('detectVerdictDelta — FR-6 verdict-delta detector', () => {
+  it('flags a MATERIALLY-AMENDED verdict as a delta', () => {
+    expect(detectVerdictDelta('This is a service-role-on-public-host hole; re-architect the webhook.')).toBe(true);
+    expect(detectVerdictDelta('You should not deploy this as-is — revise the endpoint auth.')).toBe(true);
+    expect(detectVerdictDelta({ body: 'Reject: change the secret handling first.' })).toBe(true);
+  });
+  it('does NOT flag a plain concurrence or an absent/structured verdict', () => {
+    expect(detectVerdictDelta('Approved, proceed — looks good.')).toBe(false);
+    expect(detectVerdictDelta('I agree with the plan.')).toBe(false);
+    expect(detectVerdictDelta({ received: true })).toBe(false);
+    expect(detectVerdictDelta(null)).toBe(false);
+  });
+});
+
+describe('performBoundedConsult — FR-6 captures a near-miss on verdict-delta only', () => {
+  it('an amending verdict triggers EXACTLY ONE captureNearMiss and marks nearMissCaptured', async () => {
+    const captureNearMiss = vi.fn(async () => {});
+    const out = await performBoundedConsult(
+      { title: 'Deploy the Stripe webhook endpoint to prod', isChairmanTargeted: false },
+      { timeoutMs: 500, consult: async () => 'Reject — re-architect: this exposes a credentials hole.', captureNearMiss },
+    );
+    expect(out.action).toBe('send');
+    expect(out.nearMissCaptured).toBe(true);
+    expect(captureNearMiss).toHaveBeenCalledTimes(1);
+  });
+  it('a concurring verdict captures NOTHING (no ledger pollution)', async () => {
+    const captureNearMiss = vi.fn(async () => {});
+    const out = await performBoundedConsult(
+      { title: 'Deploy the Stripe webhook endpoint to prod', isChairmanTargeted: false },
+      { timeoutMs: 500, consult: async () => 'Approved, proceed — looks good.', captureNearMiss },
+    );
+    expect(out.action).toBe('send');
+    expect(out.nearMissCaptured).toBe(false);
+    expect(captureNearMiss).toHaveBeenCalledTimes(0);
+  });
+  it('a near-miss capture FAILURE never blocks the send (best-effort)', async () => {
+    const captureNearMiss = vi.fn(async () => { throw new Error('issue_patterns write failed'); });
+    const out = await performBoundedConsult(
+      { title: 'Grant admin access and re-architect the deploy', isChairmanTargeted: false },
+      { timeoutMs: 500, consult: async () => 'Revise: do not grant that authority.', captureNearMiss },
+    );
+    expect(out.action).toBe('send');
+    expect(out.nearMissCaptured).toBe(true);
   });
 });
