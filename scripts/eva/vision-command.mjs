@@ -48,6 +48,11 @@ import { parseMarkdownToSections, buildDefaultMapping } from './markdown-to-sect
 import { buildSectionKeyMapping, getSectionSchema, validateSections } from './document-section-registry.mjs';
 import { renderSectionsToMarkdown, renderSectionsSummary } from './sections-to-markdown-renderer.mjs';
 import { readStdin } from '../../lib/utils/read-stdin.mjs';
+// SD-LEO-INFRA-PORTFOLIO-STRATEGY-FIRST-001-A: the same GOVERNED_VISION_KEYS gate cmdUpsert
+// applies via upsertVision() must also apply to cmdAddendum's direct DB write below — an
+// adversarial review (PR #6138) found the addendum path bypassed ratification entirely,
+// letting an already-active governed document's content change with no re-ratification.
+import { buildAddendumUpdatePayload } from '../../lib/eva/vision-upsert.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../');
@@ -311,21 +316,10 @@ async function cmdAddendum({ visionKey, section, brainstormId }) {
     process.exit(1);
   }
 
-  // Build addendum entry
-  const addendum = {
-    section,
-    added_at: new Date().toISOString(),
-    added_by: 'eva-vision-command',
-    ...(brainstormId ? { source_brainstorm_id: brainstormId } : {}),
-  };
-
-  const currentAddendums = existing.addendums || [];
-  const updatedAddendums = [...currentAddendums, addendum];
-
-  // Re-extract dimensions from combined content
-  const combinedContent = `${existing.content}\n\n---\n\n## Addendum ${updatedAddendums.length}\n\n${section}`;
+  // Re-extract dimensions from the combined content (addendum text is appended to existing content)
+  const pendingCombinedContent = `${existing.content}\n\n---\n\n## Addendum ${(existing.addendums || []).length + 1}\n\n${section}`;
   console.error(`\n🤖 Re-extracting dimensions from updated content...`);
-  const dimensions = await extractDimensions(combinedContent);
+  const dimensions = await extractDimensions(pendingCombinedContent);
 
   if (dimensions) {
     const weightSum = dimensions.reduce((sum, d) => sum + (d.weight || 0), 0);
@@ -334,25 +328,36 @@ async function cmdAddendum({ visionKey, section, brainstormId }) {
     }
   }
 
-  const updatePayload = {
-    addendums: updatedAddendums,
-    extracted_dimensions: dimensions,
-    content: combinedContent,
-    updated_at: new Date().toISOString(),
-  };
-  if (brainstormId) updatePayload.source_brainstorm_id = brainstormId;
+  // SD-LEO-INFRA-PORTFOLIO-STRATEGY-FIRST-001-A: this is a second write path to
+  // eva_vision_documents that would otherwise bypass upsertVision()'s
+  // GOVERNED_VISION_KEYS gate entirely (adversarial review, PR #6138) — an
+  // addendum to an already-ACTIVE governed document would change its content
+  // while leaving status='active'/chairman_approved=true untouched, surfacing
+  // unratified content to stage-zero ideation as "chairman-ratified".
+  // buildAddendumUpdatePayload() mirrors upsertVision's "each revision needs
+  // its own ratification" rule: any addendum to a governed key demotes the
+  // row back to draft, requiring an explicit --approved --chairman-ratified
+  // upsert to re-activate.
+  const { updatePayload, updatedAddendums } = buildAddendumUpdatePayload({
+    visionKey, existing, section, dimensions, brainstormId,
+  });
+  if (updatePayload.status === 'draft') {
+    console.warn(`\n   ⚠️  ${visionKey} is a GOVERNED vision_key — this addendum demotes it back to draft.`);
+    console.warn(`      Re-run: node scripts/eva/vision-command.mjs upsert --vision-key ${visionKey} --level L1 --approved --chairman-ratified --content <updated content> to re-ratify.`);
+  }
 
   const { data, error } = await supabase
     .from('eva_vision_documents')
     .update(updatePayload)
     .eq('vision_key', visionKey)
-    .select('id, vision_key, version')
+    .select('id, vision_key, version, status, chairman_approved')
     .single();
 
   if (error) { console.error('❌ Addendum failed:', error.message); process.exit(1); }
 
   console.log('\n✅ Addendum added:');
   console.log(`   Key:      ${data.vision_key}`);
+  console.log(`   Status:   ${data.status}`);
   console.log(`   Addendums: ${updatedAddendums.length}`);
   if (dimensions) console.log(`   Dimensions re-extracted: ${dimensions.length}`);
 }
