@@ -2,9 +2,9 @@
 
 - **Category**: Reference
 - **Status**: Approved
-- **Version**: 1.0.0
-- **Author**: SD-LEO-FEAT-PROVISION-VENTURE-EMAIL-001
-- **Last Updated**: 2026-07-12
+- **Version**: 1.1.0
+- **Author**: SD-LEO-FEAT-PROVISION-VENTURE-EMAIL-001, SD-LEO-INFRA-VENTURE-SUBSTRATE-WIRING-001
+- **Last Updated**: 2026-07-17
 - **Tags**: venture-email, resend, cloudflare, provisioning, secrets
 
 One-call per-venture email identity: `provisionVentureEmail(venture)` in
@@ -53,6 +53,16 @@ domains (Pro cap 10; SES re-evaluation at venture 11+). AUP witness:
 `guardSequenceSend({captureRecordId})` refuses sequence-sends without a
 capture-record reference (typed `AupWitnessError`).
 
+## Callers
+
+`EVACOOIntegration.onboardVenture()` (`lib/agents/eva-coo-integration.js`) calls
+`provisionVentureEmail` when `venture.domain` is present, fail-soft (a provisioning
+error is captured on the result, never thrown/blocking), surfacing `revealedKey` on
+the return object per the pointer convention above (SD-LEO-INFRA-VENTURE-SUBSTRATE-WIRING-001).
+`onboardVenture()` itself has no live production caller yet — this wiring activates
+once SD-FDBK-ENH-EHG-OPERATING-COMPANY-001-B lands a real venture-onboarding entry
+point; until then this is unit-tested but not reachable end-to-end.
+
 ## Operational notes
 
 - DMARC ships `p=none`; graduation to `p=quarantine` is a scheduled follow-up after
@@ -60,4 +70,5 @@ capture-record reference (typed `AupWitnessError`).
 - A freshly created central-inbox routing destination is unverified until the inbox
   owner confirms Cloudflare's email — surfaced as a MANUAL plan step.
 - Tests: `tests/unit/venture-email/provision-venture-email.test.mjs` (vitest unit
-  lane; registered in `tests/test-estate-mjs-allowlist.json`).
+  lane; registered in `tests/test-estate-mjs-allowlist.json`),
+  `tests/unit/agents/eva-coo-integration-onboard-email.test.js` (caller-side wiring).
