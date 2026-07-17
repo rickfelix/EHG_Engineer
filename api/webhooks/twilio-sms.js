@@ -39,6 +39,18 @@ function resolveWebhookUrl(req, envVar) {
 
 const EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 
+/**
+ * SD-LEO-FEAT-SMS-INBOUND-RELAY-001 FR-4: the public relay (EHG, hooks.execholdings.ai)
+ * carves this handler's direct-write path out into an isolated, credential-less surface.
+ * Once the operator confirms the relay is live and the red-team acceptance gate is green,
+ * setting SMS_RELAY_CUTOVER_COMPLETE=true here decommissions this path WITHOUT deleting
+ * or redeploying it — a rollback is just unsetting the flag. Until then (default/unset),
+ * behavior is completely unchanged.
+ */
+function relayCutoverComplete() {
+  return process.env.SMS_RELAY_CUTOVER_COMPLETE === 'true';
+}
+
 // Twilio's MessageStatus values (queued/sending/sent/delivered/undelivered/failed) are more
 // granular than chairman_notifications.status's CHECK constraint
 // ('queued'|'sent'|'failed'|'rate_limited'|'deferred') — map onto the closest valid value
@@ -55,6 +67,15 @@ const TWILIO_STATUS_TO_NOTIFICATION_STATUS = {
 export async function handleTwilioSmsWebhook(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  if (relayCutoverComplete()) {
+    // Decommissioned (FR-4) — the public relay is now the only live inbound path. This
+    // handler stays mounted (not removed) for an instant rollback, but no longer touches
+    // chairman_decisions with a service-role client, and no longer logs to sms_inbound_log
+    // (the relay + trusted consumer own that audit trail post-cutover).
+    res.set('Content-Type', 'text/xml');
+    return res.status(200).send(EMPTY_TWIML);
   }
 
   const url = resolveWebhookUrl(req, 'TWILIO_SMS_WEBHOOK_URL');
