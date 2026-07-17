@@ -379,10 +379,15 @@ async function main() {
   // silently. A switch only fires when a PRIOR state EXISTED and differs from currentIdentity.
   const priorIdentity = loadLastAccountIdentity();
   const acctSwitch = detectAccountSwitch(priorIdentity, currentIdentity);
-  if (currentIdentity) saveLastAccountIdentity(currentIdentity);
-  if (acctSwitch.changed) {
-    // Fail-soft: a notification failure (identity resolution, dispatch refusal, DB hiccup) must
-    // never abort the tick — the console line below is the durable, always-emitted signal.
+  let acctNotified = false;
+  if (!acctSwitch.changed) {
+    // Cold start / stable tick: no notification to send, always advance the baseline.
+    if (currentIdentity) saveLastAccountIdentity(currentIdentity);
+  } else {
+    // Fail-soft, but NOT silent-drop: the baseline is only advanced on CONFIRMED delivery
+    // (below). If the coordinator lookup fails or the DB insert throws, priorIdentity stays
+    // persisted, so the NEXT tick sees the same delta and retries — a security-relevant
+    // "which account is the fleet authenticated as" switch is never lost, only delayed.
     try {
       const coordinatorId = await getActiveCoordinatorId(sb);
       if (coordinatorId) {
@@ -395,8 +400,10 @@ async function main() {
             `to ${acctSwitch.event.to.email} (${acctSwitch.event.to.orgName}).`,
           payload: { kind: 'account_switch_notice', ...acctSwitch.event, reply_class: 'fire-and-forget' },
         });
+        acctNotified = true;
       }
-    } catch { /* fail-soft — see comment above */ }
+    } catch { /* fail-soft — see comment above; acctNotified stays false, baseline not advanced */ }
+    if (acctNotified && currentIdentity) saveLastAccountIdentity(currentIdentity);
   }
 
   const delaySeconds = decideCadence({ quiescent, partyOffsetS: ADAM_PARTY_OFFSET_S });
@@ -417,6 +424,7 @@ async function main() {
     crossPartyPing: delta.changed,
     pingFields: delta.fields,
     accountSwitch: acctSwitch.changed,
+    accountSwitchNotified: acctSwitch.changed ? acctNotified : null,
     nextWakeSeconds: delaySeconds,
   };
 
@@ -438,7 +446,10 @@ async function main() {
       console.log(`QUIET_TICK_PING=adam->coordinator reason=${delta.fields.join(',')} (real delta — offer help / sourcing; if sending a subject-only stub ping, stamp payload.kind='cross_party_ping' per SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-5 — mechanical, never authored)`);
     }
     if (acctSwitch.changed) {
-      console.log(`ACCOUNT_SWITCH detected: adam session Claude account changed from ${acctSwitch.event.from.email} to ${acctSwitch.event.to.email} — notice sent to active coordinator`);
+      const noticeStatus = acctNotified
+        ? 'notice sent to active coordinator'
+        : 'notice NOT sent (no active coordinator / send error) — will retry next tick';
+      console.log(`ACCOUNT_SWITCH detected: adam session Claude account changed from ${acctSwitch.event.from.email} to ${acctSwitch.event.to.email} — ${noticeStatus}`);
     }
     for (const a of stall.alerted) {
       console.log(`QUIET_TICK_STALL_ALERT=adam node=${a.id} title="${a.title}" escalated=${a.escalated}`);
