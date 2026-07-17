@@ -15,6 +15,10 @@ function makeFakeSupabase(seed = {}) {
     sms_inbound_log: [...(seed.sms_inbound_log || [])],
     sms_inbound_suspensions: [...(seed.sms_inbound_suspensions || [])],
     sms_relay_staging: [...(seed.sms_relay_staging || [])],
+    // SD-LEO-FEAT-SMS-CHAIRMAN-DECISION-001-A FR-1: send path now also reads the SMS
+    // decision-class allow-list (isWhitelistedDecisionClass). Seed it so LOW/MEDIUM sends
+    // that SHOULD go through have their class whitelisted; unseeded = console-only (default).
+    sms_decision_class_whitelist: [...(seed.sms_decision_class_whitelist || [])],
   };
   let seq = 0;
 
@@ -128,11 +132,15 @@ describe('sendChairmanSmsQuestion', () => {
   });
 
   it('sends a LOW-consequence question, persists the notification + token', async () => {
-    const sb = makeFakeSupabase({ chairman_decisions: [{ id: 'dec-2', status: 'pending', brief_data: {} }] });
+    const sb = makeFakeSupabase({
+      chairman_decisions: [{ id: 'dec-2', status: 'pending', brief_data: {} }],
+      sms_decision_class_whitelist: [{ decision_class: 'schedule', active: true }],
+    });
     const provider = makeFakeProvider();
     const result = await sendChairmanSmsQuestion(sb, {
       decisionId: 'dec-2', chairmanUserId: 'u1', chairmanEmail: 'chairman@example.com',
       chairmanPhone: '+15551234567', title: 'Which time works better for the call, 2pm or 4pm?',
+      decisionType: 'schedule',
     }, provider, { quietWindow: () => false });
     expect(result.sent).toBe(true);
     expect(result.consequence).toBe('low');
@@ -147,12 +155,16 @@ describe('sendChairmanSmsQuestion', () => {
 
 describe('handleInboundSmsReply — send/receive round trip against a fake provider', () => {
   it('a correct reply resolves the matching decision exactly once; a replay is rejected', async () => {
-    const sb = makeFakeSupabase({ chairman_decisions: [{ id: 'dec-3', status: 'pending', brief_data: {} }] });
+    const sb = makeFakeSupabase({
+      chairman_decisions: [{ id: 'dec-3', status: 'pending', brief_data: {} }],
+      sms_decision_class_whitelist: [{ decision_class: 'status_checkin', active: true }],
+    });
     const provider = makeFakeProvider();
 
     const sendResult = await sendChairmanSmsQuestion(sb, {
       decisionId: 'dec-3', chairmanUserId: 'u1', chairmanEmail: 'chairman@example.com',
       chairmanPhone: '+15551234567', title: 'FYI: quick venture status check-in?',
+      decisionType: 'status_checkin',
     }, provider, { quietWindow: () => false });
     expect(sendResult.sent).toBe(true);
 
