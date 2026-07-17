@@ -178,25 +178,81 @@ function prepareRawOutput(output) {
 }
 
 /**
- * Get active SD from session state
- * @returns {string|null} SD ID if found
+ * Read `state.sd.id` from a `.claude` state file, tolerant of BOM/parse errors.
+ * @returns {string|null}
  */
-function getActiveSD() {
-  const fs = require('fs');
-  const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || detectProjectDir();
-  const SESSION_STATE_FILE = path.join(PROJECT_DIR, '.claude', 'unified-session-state.json');
-
+function readSdIdFromFile(fs, filePath) {
   try {
-    if (fs.existsSync(SESSION_STATE_FILE)) {
-      const content = fs.readFileSync(SESSION_STATE_FILE, 'utf8');
-      const cleanContent = content.replace(/^\uFEFF/, '');
-      const state = JSON.parse(cleanContent);
+    if (fs.existsSync(filePath)) {
+      const state = JSON.parse(fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, ''));
       return state.sd?.id || null;
     }
   } catch (_e) {
-    // Ignore errors
+    // fail-soft \u2014 treat an unreadable/corrupt state file as "not found"
   }
   return null;
+}
+
+/**
+ * Resolve the active SD for an evidence row \u2014 SESSION-SCOPED, immune to the shared-file
+ * race (SD-LEO-INFRA-SUB-AGENT-EVIDENCE-001).
+ *
+ * THE BUG THIS FIXES: the previous body read ONLY the SHARED
+ * `.claude/unified-session-state.json`, which ~10 concurrent workers overwrite \u2014 so a
+ * worker's evidence attributed to whichever SD last wrote that file, corrupting
+ * `sub_agent_execution_results` (the surface every SUBAGENT_EVIDENCE gate rests on).
+ *
+ * Resolution order (first hit wins), each stamped so auditors/gates can distrust the racy path:
+ *   1. `claim-lookup`         \u2014 CLAUDE_SESSION_ID \u2192 strategic_directives_v2.claiming_session_id
+ *                               (Surface A, authoritative; a session's own claim can't be raced).
+ *   2. `session-file`         \u2014 `.claude/session-state-<session_id>.json` (per-session, never shared).
+ *   3. `shared-file-fallback` \u2014 the shared unified file (LAST RESORT; the racy legacy path).
+ *   4. `none`                 \u2014 nothing resolved.
+ * FAIL-SOFT throughout: any lookup error falls through to the next source and NEVER throws,
+ * preserving the recorder's best-effort contract.
+ *
+ * @returns {Promise<{sdId: string|null, attributionSource: string}>}
+ */
+async function getActiveSD(deps = {}) {
+  // deps (all optional) are injectable for unit tests — default to the real modules.
+  const fs = deps.fs || require('fs');
+  const resolveCreateClient = typeof deps.createClient === 'function'
+    ? deps.createClient
+    : require('@supabase/supabase-js').createClient;
+  const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || detectProjectDir();
+  const sessionId = process.env.CLAUDE_SESSION_ID;
+
+  // 1. Authoritative: the invoking session's own claim (immune to the shared-file race).
+  if (sessionId) {
+    try {
+      require('dotenv').config({ path: path.join(__dirname, '../..', '.env') });
+      const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (url && key) {
+        const supabase = resolveCreateClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+        const { data } = await supabase
+          .from('strategic_directives_v2')
+          .select('id')
+          .eq('claiming_session_id', sessionId)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (data && data.id) return { sdId: data.id, attributionSource: 'claim-lookup' };
+      }
+    } catch (_e) {
+      // fail-soft \u2192 next source
+    }
+
+    // 2. Per-session state file (never shared, so never raced by peers).
+    const sessionFileId = readSdIdFromFile(fs, path.join(PROJECT_DIR, '.claude', `session-state-${sessionId}.json`));
+    if (sessionFileId) return { sdId: sessionFileId, attributionSource: 'session-file' };
+  }
+
+  // 3. LAST RESORT: the shared unified file (the racy legacy path). Stamp it so it's distrusted.
+  const sharedId = readSdIdFromFile(fs, path.join(PROJECT_DIR, '.claude', 'unified-session-state.json'));
+  if (sharedId) return { sdId: sharedId, attributionSource: 'shared-file-fallback' };
+
+  return { sdId: null, attributionSource: 'none' };
 }
 
 /**
@@ -344,8 +400,8 @@ async function processHookInput(hookInput) {
   // Prepare raw_output (FR-3)
   const rawOutput = prepareRawOutput(toolResult);
 
-  // Get active SD if available
-  const sdId = getActiveSD();
+  // Get active SD if available — session-scoped resolution (SD-LEO-INFRA-SUB-AGENT-EVIDENCE-001).
+  const { sdId, attributionSource } = await getActiveSD();
 
   // Build record
   const record = {
@@ -361,7 +417,9 @@ async function processHookInput(hookInput) {
     metadata: {
       tool_call_id: toolCallId,
       recorded_by: 'task-subagent-recorder.cjs',
-      recorded_at: new Date().toISOString()
+      recorded_at: new Date().toISOString(),
+      // FR-2: how the SD was resolved, so gates/auditors can distrust 'shared-file-fallback' rows.
+      attribution_source: attributionSource
     }
   };
 
@@ -445,4 +503,10 @@ function main() {
   }, 5000);
 }
 
-main();
+// Only run the stdin hook when executed directly — `require()` (unit tests) must not block on stdin.
+if (require.main === module) {
+  main();
+}
+
+// SD-LEO-INFRA-SUB-AGENT-EVIDENCE-001: export the resolver for the concurrent-session regression test.
+module.exports = { getActiveSD, readSdIdFromFile };
