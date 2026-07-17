@@ -349,3 +349,103 @@ describe('retro-gate freshness boundary is pinned to LEAD-TO-PLAN (SD-FDBK-INFRA
     expect(retrospective).toBeNull(); // freshness filter still rejects a stale pre-LEAD retro
   });
 });
+
+/**
+ * SD-LEO-FIX-RETROSPECTIVE-EXISTS-GATE-001 — regression: sd_phase_handoffs.accepted_at
+ * is a `timestamp without time zone` column; PostgREST returns it as a naive string with
+ * no Z/offset suffix. Real Postgres casts a naive literal passed into `.gt()` using the DB
+ * SESSION's TimeZone setting (not necessarily UTC) — this mock emulates that exact cast
+ * (session TZ = America/New_York, UTC-4 in July) to reproduce the witnessed false-fail: a
+ * naive boundary shifts by the session-timezone offset relative to `retrospectives.created_at`
+ * (always an absolute-UTC timestamptz), so a genuinely-fresh retro can read as stale. Passing
+ * an already-UTC-normalized ('Z'-suffixed) value sidesteps the cast entirely — proving
+ * resolveLeadToPlanAcceptedAt's parseAsUTC normalization is what fixes the false-fail, not a
+ * widened window (FR-1's explicit no-widening constraint).
+ */
+function buildSessionTzCastSupabase({ handoffRow = null, rows = [] } = {}) {
+  const SESSION_TZ_OFFSET_MS = 4 * 60 * 60 * 1000; // America/New_York, UTC-4 (EDT)
+
+  const retroChain = () => {
+    const eqs = {};
+    let orPred = null; let gtPred = null; let orderDesc = false;
+    const c = {
+      select: () => c,
+      eq: (col, val) => { eqs[col] = val; return c; },
+      or: (str) => { orPred = str; return c; },
+      gt: (col, val) => { gtPred = { col, val }; return c; },
+      is: () => c,
+      order: (_col, opts) => { orderDesc = opts && opts.ascending === false; return c; },
+      limit: () => c,
+      maybeSingle: () => {
+        let out = rows.filter((r) => Object.entries(eqs).every(([k, v]) => r[k] === v));
+        if (orPred) out = out.filter((r) => r.retrospective_type == null || r.retrospective_type === 'SD_COMPLETION');
+        if (gtPred) {
+          const hasTZ = /Z$|[+-]\d{2}:?\d{2}$/.test(gtPred.val);
+          // Emulate Postgres casting a naive literal via the session TimeZone (bug reproduction);
+          // an already-explicit-UTC value casts as its true absolute instant (the fix).
+          const boundaryMs = hasTZ
+            ? new Date(gtPred.val).getTime()
+            : new Date(`${gtPred.val}Z`).getTime() + SESSION_TZ_OFFSET_MS;
+          out = out.filter((r) => new Date(r[gtPred.col]).getTime() > boundaryMs);
+        }
+        if (orderDesc) out = [...out].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+        return Promise.resolve({ data: out[0] || null, error: null });
+      },
+    };
+    return c;
+  };
+  return {
+    from: vi.fn((table) => {
+      if (table === 'sd_phase_handoffs') {
+        const c = {
+          select: () => c, eq: () => c, order: () => c, limit: () => c,
+          maybeSingle: () => Promise.resolve({ data: handoffRow, error: null }),
+        };
+        return c;
+      }
+      if (table === 'retrospectives') return { select: () => retroChain() };
+      return { select: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) };
+    }),
+  };
+}
+
+describe('getFilteredRetrospective — naive timestamp UTC normalization (SD-LEO-FIX-RETROSPECTIVE-EXISTS-GATE-001)', () => {
+  it('resolveLeadToPlanAcceptedAt normalizes a naive (no-Z) accepted_at to an explicit UTC ISO string', async () => {
+    const supabase = buildSupabase({ handoffRow: { accepted_at: '2026-04-01T20:00:00' } });
+    const result = await resolveLeadToPlanAcceptedAt('sd-uuid', null, supabase);
+    expect(result).toBe('2026-04-01T20:00:00.000Z');
+  });
+
+  it('resolveLeadToPlanAcceptedAt normalizes an offset-suffixed accepted_at to the equivalent UTC instant', async () => {
+    const supabase = buildSupabase({ handoffRow: { accepted_at: '2026-04-01T16:00:00-04:00' } });
+    const result = await resolveLeadToPlanAcceptedAt('sd-uuid', null, supabase);
+    expect(result).toBe('2026-04-01T20:00:00.000Z');
+  });
+
+  it('end-to-end: a retro timestamped inside the window but on the other side of the ET/UTC boundary now PASSES (witnessed false-fail shape, FR-3)', async () => {
+    const sdUuid = 'sd-uuid';
+    // Naive accepted_at as PostgREST actually returns it for a `timestamp without time zone` column.
+    const naiveAcceptedAt = '2026-04-01T20:00:00';
+    // Genuinely fresh: created 1 hour after the true (UTC) LEAD-TO-PLAN instant.
+    const freshRetroCreatedAt = '2026-04-01T21:00:00.000Z';
+    const supabase = buildSessionTzCastSupabase({
+      handoffRow: { accepted_at: naiveAcceptedAt },
+      rows: [{ id: 'fresh', sd_id: sdUuid, retro_type: 'SD_COMPLETION', retrospective_type: null, created_at: freshRetroCreatedAt }],
+    });
+    const { retrospective } = await getFilteredRetrospective(sdUuid, null, supabase);
+    expect(retrospective?.id).toBe('fresh');
+  });
+
+  it('end-to-end: a genuinely stale/absent retro still FAILS after normalization (no behavioral widening, FR-1)', async () => {
+    const sdUuid = 'sd-uuid';
+    const naiveAcceptedAt = '2026-04-01T20:00:00';
+    // Created well before the LEAD-TO-PLAN boundary — must remain excluded.
+    const staleRetroCreatedAt = '2026-03-15T00:00:00.000Z';
+    const supabase = buildSessionTzCastSupabase({
+      handoffRow: { accepted_at: naiveAcceptedAt },
+      rows: [{ id: 'stale', sd_id: sdUuid, retro_type: 'SD_COMPLETION', retrospective_type: null, created_at: staleRetroCreatedAt }],
+    });
+    const { retrospective } = await getFilteredRetrospective(sdUuid, null, supabase);
+    expect(retrospective).toBeNull();
+  });
+});
