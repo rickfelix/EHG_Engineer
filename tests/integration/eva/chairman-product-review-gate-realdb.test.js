@@ -45,7 +45,7 @@ import { resolve } from 'path';
 // `node scripts/adam-decision-email.mjs` spawn) as a production feature (FR-4: never strand a
 // venture with nobody having asked the chairman). That side effect must NEVER fire from an
 // automated test run -- it would attempt to send a real chairman email referencing a disposable
-// __e2e_product_review_gate_* venture on every CI execution. The wiring itself (does _advanceStage
+// ProductReviewGate-RealDB-* venture on every CI execution. The wiring itself (does _advanceStage
 // call requestProductReview on block, does it NOT call it on release) is already covered by fully
 // mocked unit tests (tests/unit/eva/stage-execution-worker-product-review-gate.test.js); this
 // integration test's job is the GATE mechanics against real Postgres constraints, not the
@@ -77,7 +77,12 @@ async function createVenture(tag) {
   const { data, error } = await supabase
     .from('ventures')
     .insert({
-      name: `__e2e_product_review_gate_${tag}_${ts}__`,
+      // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002: renamed off the watcher's FIXTURE_VENTURE_NAME_RE
+      // (QF-20260710-243 widened it to match __e2e_*, latently breaking the sanity pin below) onto
+      // the HCGate suite's *-RealDB-* convention: misses the WRITE-guard regex (real code path
+      // preserved) while the extended SURFACE patterns ('%-realdb-%') cover any interrupted-teardown
+      // residue so it can never reach the chairman queue/digest.
+      name: `ProductReviewGate-RealDB-${tag}-${ts}`,
       problem_statement: 'Disposable venture for SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001 real-DB gate test',
       current_lifecycle_stage: 23,
       is_demo: false,

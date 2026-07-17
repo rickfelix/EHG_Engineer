@@ -50,6 +50,7 @@ describe.skipIf(!HAS_REAL_DB)('fn_advance_venture_stage canonical artifact sourc
       .from('ventures')
       .insert({
         name: `canonical-source-test-${Date.now()}`,
+        is_demo: true, // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002: fixture flagged at creation
         current_lifecycle_stage: 22,
         status: 'active',
         problem_statement: 'Integration test for FR-2 canonical artifact source migration',

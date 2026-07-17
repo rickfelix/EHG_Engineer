@@ -51,6 +51,7 @@ describe.skipIf(!HAS_REAL_DB)('Marketing Producer Binding (SD-EHG-MARKETING-DIST
     const { error: ventureError } = await supabase.from('ventures').insert({
       id: testVentureId,
       name: 'Test Venture for Producer Binding',
+      is_demo: true, // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002: fixture flagged at creation
       company_id: testCompanyId,
       problem_statement: 'Producer binding integration test',
       current_lifecycle_stage: 1,

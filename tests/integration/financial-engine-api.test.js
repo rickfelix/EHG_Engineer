@@ -79,6 +79,7 @@ describe.skipIf(!HAS_REAL_DB)('Financial Engine API', () => {
     const { error: ventureError } = await supabase.from('ventures').insert({
       id: testVentureId,
       name: 'Test Venture for Financial Engine',
+      is_demo: true, // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002: fixture flagged at creation
       company_id: testCompanyId,
       problem_statement: 'Test problem statement for financial engine API tests',
       current_lifecycle_stage: 1,

@@ -15,6 +15,7 @@ import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import { resolve } from 'path';
 import { renderLeanDecisionEmail, filterStaleLeanDecisions, DEAD_VENTURE_STATUSES } from '../lib/chairman/decision-layman.mjs';
+import { isEscalationActionable, isFixtureVenture } from '../lib/chairman/chairman-actionable.mjs';
 import { enforceCliSendGuard } from '../lib/notifications/cli-send-guard.mjs';
 import { isWithinChairmanQuietWindow } from '../lib/notifications/resend-adapter.js';
 
@@ -70,16 +71,34 @@ if (rows.length === 0) {
 // 2026-07-02: 9 of 12 pending rows were such noise. Fail-soft: a venture-status lookup error simply
 // skips the filter (show all), mirroring adam-exec-summary.mjs's dead-venture pattern.
 let deadVentureIds = new Set();
+let fixtureVentureIds = new Set();
 try {
   const vids = [...new Set(rows.filter((r) => r.venture_id).map((r) => r.venture_id))];
   if (vids.length) {
-    const { data: vrows, error: vErr } = await db.from('ventures').select('id, status').in('id', vids);
+    const { data: vrows, error: vErr } = await db.from('ventures').select('id, status, name, is_demo').in('id', vids);
     if (!vErr) {
       const found = new Set((vrows || []).map((v) => v.id));
       deadVentureIds = new Set(vids.filter((id) => !found.has(id) || (vrows || []).some((v) => v.id === id && DEAD_VENTURE_STATUSES.has(String(v.status || '').toLowerCase()))));
+      // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002 (FR-1): fixture ventures resolve fail-INCLUDE
+      // (missing/unreadable venture row is NOT treated as a fixture), matching the console RPC.
+      fixtureVentureIds = new Set((vrows || []).filter((v) => isFixtureVenture(v)).map((v) => v.id));
     }
   }
 } catch (e) { console.warn('[adam-decision-email] venture-status filter skipped (fail-soft): ' + (e?.message || e)); }
+
+// SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002 (FR-1): the digest applies the SAME
+// chairman-actionable predicate as the SLA sweep (isEscalationActionable — the documented
+// console-superset that admits blocking non-console rows — plus the shared fixture
+// exclusion). No chairman surface is more permissive than this pair; before this filter,
+// fixture decisions the console correctly hid still reached the chairman by email.
+const preActionable = rows.length;
+rows = rows.filter((r) => isEscalationActionable(r) && !fixtureVentureIds.has(r.venture_id));
+const nonActionableCount = preActionable - rows.length;
+if (nonActionableCount > 0) console.log(`[adam-decision-email] ${nonActionableCount} non-actionable/fixture row(s) excluded by shared predicate`);
+if (rows.length === 0) {
+  console.log('[adam-decision-email] no chairman-actionable decisions after predicate — nothing to send');
+  process.exit(0);
+}
 const { kept, excludedCount } = filterStaleLeanDecisions(rows, { deadVentureIds, primaryId });
 
 const { subject, lines } = renderLeanDecisionEmail(kept, new Date(), { primaryId });
