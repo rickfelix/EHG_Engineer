@@ -10,8 +10,9 @@
 --
 -- GOVERNANCE — WHO IS STOPPED BY WHAT (reviewed by security-agent 2026-07-16, empirically verified):
 --   * anon / ordinary authenticated users are stopped at the RLS LAYER: chairman_constraints has no
---     permissive INSERT/UPDATE policy for them, and chairman_constraints_proposals only lets them SELECT.
---     They cannot stage, ratify, or write an active constraint.
+--     permissive INSERT/UPDATE policy for them, and chairman_constraints_proposals has no policy that
+--     lets them read, stage, ratify, or write anything (SELECT is chairman-only). They cannot read a
+--     proposal's rationale or create an active constraint.
 --   * service_role BYPASSES RLS (rolbypassrls=true) and runs the EVA evolve-loop, so for THAT principal
 --     RLS is NOT the barrier — the barrier is APPLICATION-CODE DISCIPLINE: the propose path only ever
 --     writes the inert chairman_constraints_proposals table, and ratifyProposedConstraint's GATE 1
@@ -59,11 +60,14 @@ CREATE INDEX IF NOT EXISTS idx_ccp_constraint_key ON chairman_constraints_propos
 -- RLS on the proposals staging table (feedback_supabase_tables_need_rls_at_create_time).
 ALTER TABLE chairman_constraints_proposals ENABLE ROW LEVEL SECURITY;
 
--- Read: any authenticated user may see proposals (transparency of the evolve-loop).
+-- Read: CHAIRMAN ONLY. Proposals carry strategic rationale for a chairman-authority surface, so an
+-- unconditional USING (true) would over-expose them to every authenticated user (rls-anon-tenant-
+-- predicate-lint / SD-LEO-GEN-SCOPE-ANON-KEY-001 class). The propose path runs as service_role
+-- (BYPASSes RLS) and the ratify path runs as the chairman, so no legitimate flow needs broader read.
 DROP POLICY IF EXISTS ccp_select ON chairman_constraints_proposals;
 CREATE POLICY ccp_select ON chairman_constraints_proposals
   FOR SELECT TO authenticated
-  USING (true);
+  USING (fn_is_chairman());
 
 -- Ratify: ONLY a chairman may mutate a proposal (status -> ratified/rejected). This is the gate.
 DROP POLICY IF EXISTS ccp_update_chairman ON chairman_constraints_proposals;
