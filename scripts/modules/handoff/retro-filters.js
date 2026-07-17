@@ -21,6 +21,32 @@
  */
 
 /**
+ * SD-LEO-FIX-RETROSPECTIVE-EXISTS-GATE-001: sd_phase_handoffs.accepted_at is a
+ * `timestamp without time zone` column in some environments — PostgREST returns it
+ * as a naive string (no Z / offset suffix). Passed as-is into the `.gt('created_at',
+ * ...)` filter below, PostgREST/Postgres casts that naive literal to timestamptz
+ * using the DB SESSION's TimeZone setting (not necessarily UTC), shifting the actual
+ * freshness boundary by the session-timezone offset (e.g. ET vs UTC) versus
+ * `retrospectives.created_at`, which is stored as an absolute UTC instant. A
+ * genuinely-fresh SD-completion retrospective created shortly after LEAD-TO-PLAN can
+ * then read as older than the (wrongly-shifted) boundary — false "no retrospective
+ * found". Same bug class already fixed in
+ * scripts/modules/handoff/gates/subagent-evidence-gate.js and lib/handoff/wait-verdict.js;
+ * this is the third, previously-unpatched call site sharing the same
+ * sd_phase_handoffs.accepted_at column. Mirrors those fixes exactly — normalize to an
+ * explicit-UTC ISO string before it is used in any date comparison.
+ *
+ * @param {string|Date|null} ts
+ * @returns {Date|null}
+ */
+function parseAsUTC(ts) {
+  if (!ts) return null;
+  if (ts instanceof Date) return ts;
+  const hasTZ = /Z$|[+-]\d{2}:?\d{2}$/.test(ts);
+  return new Date(hasTZ ? ts : `${ts}Z`);
+}
+
+/**
  * QF-20260704-127: ctx.sd.id has been observed carrying the SD's legacy uuid_id
  * column instead of its canonical id (same corruption class as QF-20260703-906,
  * which patched PREREQUISITE_HANDOFF_CHECK inline) — for child SDs specifically,
@@ -69,8 +95,11 @@ export async function resolveLeadToPlanAcceptedAt(sdUuid, sdCreatedAt, supabase)
     .limit(1)
     .maybeSingle();
 
-  if (handoff?.accepted_at) return handoff.accepted_at;
-  if (sdCreatedAt) return sdCreatedAt;
+  // Normalize to an explicit-UTC ISO string (parseAsUTC above) — the raw column value
+  // may be a naive (no-Z) timestamp string; used downstream both as the .gt() filter
+  // value and in the gate's human-facing error message, so both must be unambiguous.
+  if (handoff?.accepted_at) return parseAsUTC(handoff.accepted_at).toISOString();
+  if (sdCreatedAt) return parseAsUTC(sdCreatedAt).toISOString();
   return new Date(0).toISOString();
 }
 
