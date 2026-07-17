@@ -78,7 +78,14 @@ async function main() {
   const files = collectFiles(root, join(root, dir), [], 200);
   const regions = buildRegionBatch(files, root, 'EHG_Engineer', duty).slice(0, max);
 
-  const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  // Disable the auth auto-refresh timer + session persistence: this is a one-shot CLI, and the
+  // lingering setInterval handle is what trips the Windows libuv teardown assertion on exit
+  // (fable-suitability dry-run must honor its documented exit-0 contract, FR-4).
+  const supabase = createClient(
+    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  );
   const client = noModel ? deterministicClient : requireInjectedClient();
 
   const result = await runFanout({
@@ -112,5 +119,7 @@ function requireInjectedClient() {
 
 const invokedDirectly = !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (invokedDirectly) {
-  main().then(() => process.exit(0)).catch((err) => { console.error('dry-run failed:', err.message); process.exit(1); });
+  // Set exitCode and let the event loop drain naturally (auth timer disabled above) rather than a
+  // hard process.exit that trips the Windows libuv teardown assertion mid-handle-close.
+  main().then(() => { process.exitCode = 0; }).catch((err) => { console.error('dry-run failed:', err.message); process.exitCode = 1; });
 }
