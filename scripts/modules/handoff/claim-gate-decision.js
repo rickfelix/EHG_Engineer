@@ -27,12 +27,22 @@ export function decideExecuteClaimGate(guardResult, bypassRequested) {
  * Decide whether BaseExecutor Step 1.3 must hard-fail on the assertValidClaim return.
  * Handoffs are claim-holder-only: an unclaimed SD (NULL claim, or a claim the gate
  * just auto-released from a stale owner) requires explicit re-claim via sd-start.
+ *
+ * SD-LEO-FIX-POST-MERGE-AUTOMATION-001 FR-2: an SD can also be "unclaimed" because it
+ * already reached status='completed' moments ago (LEAD-FINAL-APPROVAL clears the claim
+ * as part of completing). That is not a foreign/abandoned claim — it is benign and must
+ * NOT hard-block, or a concurrent invocation racing the completing session gets a
+ * misleading NO_CLAIM rejection instead of the existing idempotent already-completed
+ * path. sdStatus is only honored when the caller re-reads it FRESH at decision time
+ * (a stale snapshot would reopen the exact race this closes) — see BaseExecutor.js.
  * @param {{ownership?:string, reason?:string, released_owner_session?:string}|null} claimCheck
  * @param {string} sdKey
- * @returns {{block:boolean, detail?:string}}
+ * @param {string} [sdStatus] - fresh strategic_directives_v2.status read at decision time
+ * @returns {{block:boolean, detail?:string, alreadyCompleted?:boolean}}
  */
-export function evaluateClaimCheckForHandoff(claimCheck, sdKey) {
+export function evaluateClaimCheckForHandoff(claimCheck, sdKey, sdStatus) {
   if (!claimCheck || claimCheck.ownership !== 'unclaimed') return { block: false };
+  if (sdStatus === 'completed') return { block: false, alreadyCompleted: true };
   const detail = claimCheck.released_owner_session
     ? `claim was auto-released from stale owner ${claimCheck.released_owner_session} (reason=${claimCheck.reason}) — explicit re-claim required`
     : 'no session holds the claim';
