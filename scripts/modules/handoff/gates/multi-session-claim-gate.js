@@ -246,7 +246,10 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
       issues: [
         `SD ${sdId} is claimed by another active session (${ownerRow?.hostname || 'unknown'}, heartbeat: ${heartbeatAgeHuman})`
       ],
-      warnings: [],
+      // Surface any owner-row read error here too — the BLOCK path can still be reached with
+      // ownerErr set (e.g. ownerRow null from a DB error, but isOwnerProcessAlive independently
+      // true), and dropping it here would silently reintroduce the visibility gap round-1 fixed.
+      warnings: ownerErr ? [`Owner liveness computed with a missing owner row (DB error: ${ownerErr.message}) — proceeding to BLOCK on available signals`] : [],
       claimDetails: {
         sessionId: ownerSessionId,
         hostname: ownerRow?.hostname,
