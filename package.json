@@ -487,6 +487,8 @@
     "effort:attribute": "node scripts/effort-experiment/attribute-tokens.mjs",
     "cost:report": "node scripts/llm-cost-report.mjs",
     "cost:waste-ledger": "node scripts/cost-waste-ledger.mjs",
+    "cost:governor": "node scripts/cost-governor.mjs",
+    "cost:governor-cron": "node scripts/cost-governor-cron.mjs",
     "review:rotation": "node scripts/subsystem-review-rotation.cjs",
     "policy:check": "node scripts/auto-exec-policy-check.mjs",
     "engine:demo": "node scripts/auto-exec-engine-demo.mjs",

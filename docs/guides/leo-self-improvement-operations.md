@@ -576,17 +576,37 @@ const result = await debate.runDebate(proposal);
 **Key Module**: `lib/learning/outcome-tracker.js`
 
 **Tables**:
+- `feedback`: the live feedback table (SD-LEO-INFRA-FIX-RECURRENCE-REWIRING-001 retabled
+  this module off the near-abandoned `leo_feedback`, which had a single orphan row and no
+  writers). `resolution_sd_id` is the column that links a resolved feedback row back to
+  the SD that closed it.
 - `enhancement_proposals.outcome_signal`: success/failure/partial
 - `enhancement_proposals.loop_closed_at`: closure timestamp
 - `outcome_signals`: Tracks sd_completion, pattern_recurrence events
+- `sd_effectiveness_metrics`: pre/post feedback-count deltas around an SD's completion window
 
-**Features** (SD-LEO-ORCH-SELF-IMPROVING-LEO-001 / Outcome Loop Closure):
+**Features** (SD-LEO-ORCH-SELF-IMPROVING-LEO-001 / Outcome Loop Closure, rewired by
+SD-LEO-INFRA-FIX-RECURRENCE-REWIRING-001):
 - `recordSdCompleted()`: Auto-marks linked feedback as resolved on SD completion
-- `computeEffectiveness()`: Calculates pre/post feedback delta (30-day window)
-- `detectRecurrence()`: Jaccard similarity matching (threshold 0.75) for pattern recurrence
-- `getOutcomeSummary()`: Aggregates completion signals, metrics, and recurrence data
+- `computeEffectiveness()`: Calculates pre/post feedback delta (30-day window), persisted to
+  `sd_effectiveness_metrics`
+- `detectRecurrence()`: Jaccard similarity matching (threshold 0.75) for pattern recurrence.
+  Wired to fire on every `feedback` insert made via `lib/governance/emit-feedback.js`
+  (`emitFeedback`/`emitFeedbackBatch`), fire-and-forget via the `feedback.created` vision
+  event (`lib/eva/event-bus/handlers/feedback-created.js`) — previously built but never
+  called, so `outcome_signals` never gained a `pattern_recurrence` row. Known gap: feedback
+  rows inserted directly (bypassing `emitFeedback`) are not covered.
+- `getOutcomeSummary()`: Aggregates completion signals, metrics, and recurrence data for one
+  SD. Exposed via `node scripts/outcome-effectiveness-summary.mjs <SD-KEY>` — previously
+  built but had no caller.
+- `recordQfCompleted()`: Quick-fix-scoped equivalent of `recordSdCompleted()`, since QFs
+  aren't `strategic_directives_v2` rows and can't satisfy `outcome_signals`/
+  `sd_effectiveness_metrics`'s FK to that table. Hooked into
+  `scripts/modules/complete-quick-fix/orchestrator.js` on QF completion (fail-soft, gated
+  by `OUTCOME_TRACKER_ON_QF_COMPLETE`), additive to the existing feedback auto-resolve path.
 
-**Manual Intervention**: None (fully automated on SD completion via LEAD-FINAL-APPROVAL)
+**Manual Intervention**: None (fully automated on SD completion via LEAD-FINAL-APPROVAL,
+and on QF completion via `complete-quick-fix.js`)
 
 ---
 

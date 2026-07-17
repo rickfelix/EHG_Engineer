@@ -1,4 +1,9 @@
 {
   "_doc": "ARTIFACT_TYPES registry values (lib/eva/artifact-types.js) that are registered in code but NOT YET allowed by the live venture_artifacts_artifact_type_check CHECK constraint, because the widening migration is chairman-gated and staged (not yet applied) -- mirrors the requires_chairman_apply convention used by scripts/check-migration-readiness.mjs. Every entry MUST cite the staged migration file and a reason. tests/unit/eva/artifact-type-db-parity.test.js enforces two things: (1) every drifted value not covered here still fails CI (real drift keeps failing), and (2) any entry here that IS already present in the live constraint snapshot fails CI too (a stale exemption that should have been removed once the migration was applied and the schema snapshot regenerated via `npm run schema:snapshot:lint`).",
-  "allow": {}
+  "allow": {
+    "truth_demand_thesis": {
+      "migration": "database/migrations/20260716_add_truth_demand_thesis_artifact_type.sql",
+      "reason": "S21 distribution step (stage-22-distribution-setup.js) reads truth_demand_thesis as its HARD input and binding-blocks without it, but the CHECK constraint never allowed the value — the artifact is unwritable (writer-consumer asymmetry at schema layer). Widening migration staged, chairman-gated per the distribution_block_marker precedent. Confirmed live 2026-07-16 on the adjudicated ApexNiche AI thesis insert (venture 809ec7e7, stage 19, approaching S21)."
+    }
+  }
 }

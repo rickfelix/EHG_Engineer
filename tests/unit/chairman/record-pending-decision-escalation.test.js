@@ -15,42 +15,59 @@ import {
   recordPendingDecision,
 } from '../../../lib/chairman/record-pending-decision.mjs';
 
-/** Minimal in-memory chairman_decisions table backing insert/select/eq/gte/update/maybeSingle —
- *  enough surface for record-pending-decision.mjs's query shapes, nothing more. */
-function makeFakeTable() {
+/** Resolve a filter column that may be a `brief_data->>key` JSONB path (SD-LEO-INFRA-CHAIRMAN-DECISION-EMAIL-001
+ *  FR-1 send-time rate cap + FR-2 CAS) or a plain top-level column. */
+function getCell(row, col) {
+  const m = /^brief_data->>(.+)$/.exec(col);
+  if (m) return row.brief_data ? row.brief_data[m[1]] : undefined;
+  return row[col];
+}
+function rowMatches(row, filters) {
+  return filters.every(([col, op, val]) => {
+    const cell = getCell(row, col);
+    if (op === '>=') return cell != null && cell >= val;            // .gte (ISO-Zulu lexicographic)
+    if (op === 'is') return val === null ? (cell == null) : (cell === val); // .is(path, null) — CAS predicate
+    return cell === val;                                            // .eq
+  });
+}
+
+/** In-memory chairman_decisions table. Supports the query shapes record-pending-decision.mjs uses:
+ *  insert / select / eq / gte(brief_data->>marker) / is(brief_data->>marker, null) [CAS] /
+ *  update(...).select('id') [conditional-UPDATE RETURNING] / maybeSingle. */
+function makeFakeTable({ updateError = null } = {}) {
   let seq = 0;
   const rows = [];
-  function matches(row, filters) {
-    return filters.every(([col, op, val]) => (op === '>=' ? row[col] >= val : row[col] === val));
-  }
   return {
     rows,
     from() {
-      const ctx = { filters: [] };
+      const ctx = { filters: [], selected: false };
       const api = {
         insert(row) {
           ctx.op = 'insert';
           ctx.row = { id: `dec-${++seq}`, created_at: new Date().toISOString(), ...row };
           return api;
         },
-        select() { if (!ctx.op) ctx.op = 'select'; return api; },
+        select() { if (!ctx.op) ctx.op = 'select'; ctx.selected = true; return api; },
         eq(col, val) { ctx.filters.push([col, '=', val]); return api; },
         gte(col, val) { ctx.filters.push([col, '>=', val]); return api; },
+        is(col, val) { ctx.filters.push([col, 'is', val]); return api; },
         update(vals) { ctx.op = 'update'; ctx.vals = vals; return api; },
         async maybeSingle() {
-          const row = rows.find(r => matches(r, ctx.filters));
-          return { data: row ? { brief_data: row.brief_data } : null };
+          const row = rows.find(r => rowMatches(r, ctx.filters));
+          return { data: row ? { brief_data: row.brief_data } : null, error: null };
         },
         then(resolve) {
           if (ctx.op === 'insert') {
             rows.push(ctx.row);
             resolve({ data: [{ id: ctx.row.id }], error: null });
           } else if (ctx.op === 'update') {
-            const row = rows.find(r => matches(r, ctx.filters));
-            if (row) Object.assign(row, ctx.vals);
-            resolve({ data: null, error: null });
+            if (updateError) { resolve({ data: null, error: { message: updateError } }); return; }
+            // CAS: only rows matching ALL filters (id + marker-is-null) are updated + returned.
+            const matched = rows.filter(r => rowMatches(r, ctx.filters));
+            matched.forEach(r => Object.assign(r, ctx.vals));
+            resolve({ data: ctx.selected ? matched.map(r => ({ id: r.id })) : null, error: null });
           } else {
-            resolve({ data: rows.filter(r => matches(r, ctx.filters)).map(r => ({ brief_data: r.brief_data })), error: null });
+            resolve({ data: rows.filter(r => rowMatches(r, ctx.filters)).map(r => ({ id: r.id, brief_data: r.brief_data })), error: null });
           }
         },
       };
@@ -254,5 +271,67 @@ describe('recordPendingDecision — deterministic escalation wiring (FR-2/FR-5)'
     const pureStandoutCount = sb.rows.filter(r => r.brief_data?.escalation_email_sent_at && !r.brief_data?.digest_sent_at).length;
     expect(pureStandoutCount).toBe(3);
     expect(digestCount).toBe(1);
+  });
+});
+
+describe('SD-LEO-INFRA-CHAIRMAN-DECISION-EMAIL-001 FR-1 — rate cap counts by ACTUAL send time (defect 1)', () => {
+  it('OLD-BACKLOG repro: 3 decisions created >1h ago but EMAILED just now DO count toward the cap → the 4th folds to a digest (not another standout)', async () => {
+    const sb = makeFakeTable();
+    const spawn = vi.fn();
+    const twoDaysAgo = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+    const justNow = new Date().toISOString();
+    // The exact flood shape: old created_at (invisible to the buggy created_at cap) + a RECENT send marker.
+    for (let i = 0; i < 3; i++) {
+      sb.rows.push({ id: `old-${i}`, created_at: twoDaysAgo, brief_data: { escalation_email_sent_at: justNow } });
+    }
+    sb.rows.push({ id: 'dec-4', created_at: twoDaysAgo, brief_data: { title: 'old q' } });
+
+    const r = await escalateChairmanDecision(sb, 'dec-4', { spawn, quietWindow: () => false });
+    // Under the OLD created_at filter these would read emails=0 → a 4th standout (the flood). Send-time
+    // counting sees emails=3 → the cap trips → ONE digest.
+    expect(r.digest).toBe(true);
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
+  it('a send marker OLDER than the window is EXCLUDED from the cap (still folds correctly on the boundary)', async () => {
+    const sb = makeFakeTable();
+    const spawn = vi.fn();
+    const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+    // 3 rows whose ONLY marker is >1h old → not counted → under cap → a normal standout, not a digest.
+    for (let i = 0; i < 3; i++) {
+      sb.rows.push({ id: `stale-${i}`, created_at: new Date().toISOString(), brief_data: { escalation_email_sent_at: twoHoursAgo } });
+    }
+    sb.rows.push({ id: 'dec-x', created_at: new Date().toISOString(), brief_data: { title: 'q' } });
+    const r = await escalateChairmanDecision(sb, 'dec-x', { spawn, quietWindow: () => false });
+    expect(r.escalated).toBe(true);
+    expect(r.digest).toBeUndefined(); // stale markers didn't count → under cap → standout
+  });
+});
+
+describe('SD-LEO-INFRA-CHAIRMAN-DECISION-EMAIL-001 FR-2 — atomic stamp-before-spawn CAS (defect 2)', () => {
+  it('two concurrent escalations of the SAME decision spawn EXACTLY once (CAS mutual exclusion)', async () => {
+    const sb = makeFakeTable();
+    const spawn = vi.fn();
+    sb.rows.push({ id: 'race-1', created_at: new Date().toISOString(), brief_data: { title: 'q' } });
+    const [a, b] = await Promise.all([
+      escalateChairmanDecision(sb, 'race-1', { spawn, quietWindow: () => false }),
+      escalateChairmanDecision(sb, 'race-1', { spawn, quietWindow: () => false }),
+    ]);
+    expect(spawn).toHaveBeenCalledTimes(1);                 // exactly one winner
+    const winners = [a, b].filter(r => r.escalated === true).length;
+    const losers = [a, b].filter(r => r.deduped === true).length;
+    expect(winners).toBe(1);
+    expect(losers).toBe(1);
+    expect(sb.rows[0].brief_data.escalation_email_sent_at).toBeTruthy();
+  });
+
+  it('FAIL-CLOSED: a CAS UPDATE error does NOT spawn (never emit an email we could not durably record)', async () => {
+    const sb = makeFakeTable({ updateError: 'db unavailable' });
+    const spawn = vi.fn();
+    sb.rows.push({ id: 'dec-1', created_at: new Date().toISOString(), brief_data: { title: 'q' } });
+    const r = await escalateChairmanDecision(sb, 'dec-1', { spawn, quietWindow: () => false });
+    expect(r.escalated).toBe(false);
+    expect(r.error).toMatch(/db unavailable/);
+    expect(spawn).not.toHaveBeenCalled();                  // fail-closed
   });
 });

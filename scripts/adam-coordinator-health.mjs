@@ -20,6 +20,15 @@ import { computeWaveLinkageCoverage } from '../lib/roadmap/wave-linkage-coverage
 import { computeClaimableLeaves } from './coordinator-backlog-rank.mjs';
 import { getActiveCoordinatorId } from '../lib/coordinator/resolve.cjs';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+// SD-LEO-INFRA-COORDINATOR-HEALTH-KPI-001: the 5-sharpening delta (Solomon cold-review).
+// KPI-0 outcome/flow is the PRIMARY axis; the base 3 KPIs stay untouched below.
+import { execSync } from 'child_process';
+import {
+  computeOutcomeFlow, classifyFailureClasses, fetchStuckWithoutHold,
+  deriveDispatchReasons, evaluateReasonBand, sampleFalseCompletions, selectCohort,
+  FALSE_COMPLETION_SAMPLE, OUTCOME_WINDOW_DAYS,
+} from '../lib/oversight/coordinator-health-sharpenings.mjs';
+import { registerOversightLoop } from '../lib/oversight/coordinator-health-recompute.mjs';
 
 export const DIMENSION = 'adam_coordinator_health';
 export const IN_FLIGHT_STATUSES = ['in_progress', 'active', 'pending_approval'];
@@ -158,6 +167,11 @@ export function buildCoordinatorHealthAdvisoryRows(reading, { coordinatorId }) {
     reading.breach.idleWithBacklog && 'idle workers + non-empty dispatchable backlog',
     reading.breach.integrityBreach && `fail-loud integrity divergence (${(reading.integrity.divergent_fields || []).join(', ')})`,
     reading.breach.planBreach && `plan-adherence starved (coverage ${(reading.plan_adherence.coverage * 100).toFixed(1)}%)`,
+    // SD-LEO-INFRA-COORDINATOR-HEALTH-KPI-001: the coordinator sees WHICH of the
+    // six classes fired, not just 'breach'.
+    ...(reading.breach.firing_failure_classes || []).map((c) => `failure class ${c}`),
+    reading.breach.band_breach && 'dispatch reason-code distribution outside band',
+    reading.breach.recomputeBreach && 'raw-SQL recompute divergence (S4)',
   ].filter(Boolean);
   const subject = `[ADAM-COORDINATOR-HEALTH] KPI breach: ${which.join('; ')}`;
   const body = `Coordinator-health probe reading at ${reading.timestamp}: utilization=${JSON.stringify(reading.utilization)}, plan_adherence=${JSON.stringify(reading.plan_adherence)}, integrity=${JSON.stringify(reading.integrity)}. Propose-only advisory — no dispatch action taken.`;
@@ -201,19 +215,121 @@ export async function persistReading(supabase, reading) {
   if (error) console.error(`[adam-coordinator-health] persist failed (non-fatal): ${error.message}`);
 }
 
+/**
+ * SD-LEO-INFRA-COORDINATOR-HEALTH-KPI-001: FALSE_COMPLETION git verifier — a
+ * DB-completed SD must leave a trace on origin/main. 'unverifiable' (git/remote
+ * unavailable) is a DISTINCT status, never a silent pass and never a crash.
+ */
+export function gitGrepMainForSd(sdKey) {
+  try {
+    const out = execSync(`git log origin/main --grep="${String(sdKey).replace(/["\\$`]/g, '')}" -1 --format=%h`, {
+      encoding: 'utf8', timeout: 15000, stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return out.trim().length > 0;
+  } catch {
+    return 'unverifiable';
+  }
+}
+
+/**
+ * SD-LEO-INFRA-COORDINATOR-HEALTH-KPI-001 (S1-S3, S5 wire-through): the
+ * sharpened signals computed alongside — never instead of — the base 3 KPIs.
+ * Fail-soft per signal: a sharpening fault degrades that signal to an error
+ * marker, it never takes down the base probe.
+ */
+export async function computeSharpenings(supabase, { utilization, integrity, nowMs = Date.now(), gitGrep = gitGrepMainForSd } = {}) {
+  let outcomeFlow = null; let dispatchReasons = null; let bandVerdict = null;
+  let stuckRows = []; let falseCompletionSample = null;
+  try { outcomeFlow = await computeOutcomeFlow(supabase, { nowMs }); } catch (e) { outcomeFlow = { status: 'error', error: e.message }; }
+  try {
+    // S3 classifies the SAME first-claim-in-window cohort KPI-0 measures —
+    // currently-claimed rows are the wrong source (claiming_session_id clears on
+    // completion/release, live-verified as an all-zeros distribution).
+    const sinceIso = new Date(nowMs - (OUTCOME_WINDOW_DAYS + 21) * 24 * 60 * 60 * 1000).toISOString();
+    // NOTE: provenance_source is a feedback-table column, NOT an SD column — selecting
+    // it here 400s the whole query (live-verified; the fail-soft catch masked it).
+    const { data, error } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, metadata, created_at')
+      .gte('created_at', sinceIso)
+      .limit(2000);
+    if (error) throw new Error(error.message);
+    dispatchReasons = deriveDispatchReasons(selectCohort(data || [], nowMs));
+    bandVerdict = evaluateReasonBand(dispatchReasons);
+  } catch (e) { bandVerdict = { band_ok: true, error: e.message }; }
+  try { stuckRows = await fetchStuckWithoutHold(supabase, { nowMs }); } catch { stuckRows = []; }
+  try {
+    // Sample RECENT completions only (non-null completion_date within ~4 windows):
+    // ancient/null-dated rows predate merge-trace conventions and would make the
+    // FALSE_COMPLETION class permanently noisy (live-verified on first dry-run).
+    const recentIso = new Date(nowMs - OUTCOME_WINDOW_DAYS * 4 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: recentCompleted } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, metadata, target_application')
+      .eq('status', 'completed')
+      .gte('completion_date', recentIso)
+      .order('completion_date', { ascending: false })
+      .limit(FALSE_COMPLETION_SAMPLE);
+    falseCompletionSample = sampleFalseCompletions(recentCompleted || [], gitGrep);
+  } catch (e) { falseCompletionSample = { samples: [], false_completions: [], error: e.message }; }
+  const failureClasses = classifyFailureClasses({ outcomeFlow, utilization, integrity, stuckRows, falseCompletionSample });
+  return { outcomeFlow, dispatchReasons, bandVerdict, failureClasses };
+}
+
 export async function runProbe(supabase, opts = {}) {
   const utilization = await computeUtilization(supabase, opts);
   const planAdherence = await computePlanAdherence(supabase);
   const integrity = await computeFailLoudIntegrity(supabase, opts);
-  const breach = classifyBreach({ utilization, planAdherence, integrity });
+  const baseBreach = classifyBreach({ utilization, planAdherence, integrity });
+  // KPI-0 delta: outcome/flow leads the reading (S1); the six classes + band
+  // extend the breach signal (S2/S3) without altering the base classifier.
+  const sharp = await computeSharpenings(supabase, { ...opts, utilization, integrity });
+  // S4: verify the countable core via the pg RAW-SQL path (a genuinely different
+  // code path from the supabase-js the metrics flow through). pg-unavailable is
+  // surfaced loudly every run but does not breach; a CONNECTED recompute that
+  // diverges (or can't produce a field) does — never null-coalesced.
+  let recompute = { status: 'unavailable', recompute_ok: null };
+  try {
+    const { createDatabaseClient } = await import('../lib/supabase-connection.js');
+    const pg = await createDatabaseClient('engineer', { verify: false });
+    try {
+      const { recomputeViaRawSql, compareReadings } = await import('../lib/oversight/coordinator-health-recompute.mjs');
+      const raw = await recomputeViaRawSql(pg);
+      const { count: inFlightCount } = await supabase
+        .from('strategic_directives_v2')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['in_progress', 'pending_approval', 'active']);
+      const probeCounts = { in_flight: inFlightCount, draft_unclaimed: utilization.dispatchable_backlog_size };
+      const cmp = compareReadings(probeCounts, raw);
+      recompute = { status: 'compared', ...cmp, probe: probeCounts, raw };
+    } finally { await pg.end().catch(() => {}); }
+  } catch (e) { recompute = { status: 'unavailable', recompute_ok: null, error: e.message }; }
+  const firingClasses = sharp.failureClasses.filter((c) => c.firing);
+  const breach = {
+    ...baseBreach,
+    breach: baseBreach.breach || firingClasses.length > 0 || sharp.bandVerdict?.band_ok === false || recompute.recompute_ok === false,
+    firing_failure_classes: firingClasses.map((c) => c.cls),
+    band_breach: sharp.bandVerdict?.band_ok === false,
+    recomputeBreach: recompute.recompute_ok === false,
+  };
   const reading = {
     timestamp: new Date().toISOString(),
+    outcome_flow: sharp.outcomeFlow,
     utilization,
     plan_adherence: planAdherence,
     integrity,
+    failure_classes: sharp.failureClasses,
+    dispatch_reasons: { ...(sharp.dispatchReasons || {}), band: sharp.bandVerdict },
+    recompute,
     breach,
   };
   await persistReading(supabase, reading);
+  // S5: idempotent registration keeps the oversight loop's registry row (and
+  // its ITEM-2 predicate) self-healing; non-fatal by contract.
+  try {
+    const reg = await registerOversightLoop(supabase);
+    if (!reg.registered) console.error(`[adam-coordinator-health] loop_registry registration failed (non-fatal): ${reg.error}`);
+  } catch (e) { console.error(`[adam-coordinator-health] loop_registry registration threw (non-fatal): ${e.message}`); }
   if (breach.breach) {
     const recipients = opts.recipients || { coordinatorId: await getActiveCoordinatorId(supabase).catch(() => null) };
     await pushCoordinatorHealthAdvisory(supabase, reading, recipients);
@@ -230,14 +346,23 @@ async function main() {
   }
   const supabase = createClient(url, key);
   const dryRun = process.argv.includes('--dry-run');
-  const reading = dryRun
-    ? {
-        timestamp: new Date().toISOString(),
-        utilization: await computeUtilization(supabase),
-        plan_adherence: await computePlanAdherence(supabase),
-        integrity: await computeFailLoudIntegrity(supabase),
-      }
-    : await runProbe(supabase);
+  let reading;
+  if (dryRun) {
+    const utilization = await computeUtilization(supabase);
+    const integrity = await computeFailLoudIntegrity(supabase);
+    const sharp = await computeSharpenings(supabase, { utilization, integrity });
+    reading = {
+      timestamp: new Date().toISOString(),
+      outcome_flow: sharp.outcomeFlow,
+      utilization,
+      plan_adherence: await computePlanAdherence(supabase),
+      integrity,
+      failure_classes: sharp.failureClasses,
+      dispatch_reasons: { ...(sharp.dispatchReasons || {}), band: sharp.bandVerdict },
+    };
+  } else {
+    reading = await runProbe(supabase);
+  }
   console.log(JSON.stringify(reading, null, 2));
 }
 
