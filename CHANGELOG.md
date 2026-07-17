@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-07-17](#2026-07-17)
+  - [Security](#security)
 - [2026-07-16](#2026-07-16)
   - [Features](#features)
   - [Infrastructure](#infrastructure)
@@ -92,6 +94,14 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-07-17
+
+### Security
+- **Block phantom test-session claims + reap in the sweep** - PR #6155 (SD-LEO-INFRA-BLOCK-TEST-SESSION-001)
+  - **What shipped**: `claim_sd()` — the SECURITY DEFINER RPC every fleet worker uses to claim SD/QF work — never validated that the calling `p_session_id` had a live `claude_sessions` row; its terminal `UPDATE claude_sessions` silently no-oped on a missing row while the paired `strategic_directives_v2`/`quick_fixes` UPDATE ran unconditionally, so a phantom/never-registered session (witnessed live incident: `test-session-nswcf-fenced`, zero rows in `claude_sessions`) claimed two real SDs. Fixed with a claim-time existence guard immediately after the advisory lock (mirrors the existing `session_not_found` idiom already used by `release_session()`), applied to production via the token-gated `apply-migration.js --prod-deploy` ceremony. A new `reapPhantomSessionClaims()` pass in `scripts/stale-session-sweep.cjs` reaps any already-leaked phantom claim, cross-signal-guarded (checks `claiming_session_id`, `active_session_id`, and `claude_sessions.sd_key` before reaping, so it never false-releases a claim a *different* live session legitimately holds), race-guarded on release, audited via `session_lifecycle_events`.
+  - **Scope correction found during LEAD**: the SD's own scope text suggested an additional `test-session-*-fenced` regex fence. Dropped after reading `tests/database/seat-busy-fence.test.js` directly — it deliberately registers a real `claude_sessions` row for that exact literal session id to exercise unrelated seat-busy-fence/checkin logic via the real `worker-checkin.cjs` CLI; the regex would have rejected that legitimately-registered session and corrupted the test's intent. The general NOT-EXISTS check alone is durable (the witnessed incident session had zero rows) and doesn't collide with it.
+  - **Verification**: 8 new tests (`tests/database/claim-sd-phantom-session-guard.test.js`, `tests/integration/phantom-session-reap.integration.test.js`) pass against the live DB; 20-test regression sweep across `claim-sd-validate-exists`/`claim-sd-terminal-status`/`claim-sd-cross-table`/`claim-sd-refuse-live-foreign` plus the specifically-protected `seat-busy-fence` suite (2/2) all pass. Deep-tier adversarial review: no CRITICAL/WARNING findings. RISK, DATABASE, TESTING (LEAD+EXEC), VALIDATION (LEAD+VERIFY), Explore, SECURITY, REGRESSION sub-agents all PASS/CONDITIONAL_PASS. Handoffs LEAD-TO-PLAN 95, PLAN-TO-EXEC 96, EXEC-TO-PLAN 94, PLAN-TO-LEAD 97, LEAD-FINAL-APPROVAL 99.
 
 ## 2026-07-16
 
