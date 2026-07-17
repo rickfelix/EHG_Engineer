@@ -47,10 +47,7 @@ export async function attemptCasCompletion(supabase, sd, updateFields) {
 export async function cleanupLosingPreInsert(supabase, rowId) {
   if (!rowId) return;
   try {
-    const { error } = await supabase
-      .from('leo_handoff_executions')
-      .delete()
-      .eq('id', rowId);
+    const { error } = await supabase.from('leo_handoff_executions').delete().eq('id', rowId);
     if (error) {
       console.warn(`   ⚠️  [LFA_CAS_LOSER_CLEANUP_FAILED] row_id=${rowId} reason=${error.message}`);
     }
