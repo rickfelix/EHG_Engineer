@@ -18,6 +18,8 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { processFindings } from '../../lib/eva/consultant/confidence-engine.js';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
+import { fingerprint as sharedFingerprint } from '../../lib/shared/content-fingerprint.cjs';
+import { resolveActiveVentureByName } from '../../lib/venture-name-resolver.js';
 
 dotenv.config();
 
@@ -29,6 +31,64 @@ const TODAY = new Date().toISOString().split('T')[0];
 function cutoffDate(days = LOOKBACK_DAYS) {
   return new Date(Date.now() - days * 86400000).toISOString();
 }
+
+// ─── FR-1: stable per-finding fingerprint ─────────────────────
+// Several analyzers embed runtime-computed numbers directly in the rendered title
+// (percentages, counts, day-deltas) that change every run even when the underlying
+// condition is unchanged. Strip these before hashing so the identity is stable.
+export function stripVolatileNumbers(text) {
+  return String(text || '')
+    .replace(/\d+(\.\d+)?%/g, '#PCT#')
+    // Day-deltas like "9d"/"14d" have no word boundary between the digit and the unit
+    // letter (both are \w), so the generic \b\d+\b rule below never touches them --
+    // handle this glued-unit shape explicitly, before the generic numeric pass.
+    .replace(/\d+d\b/g, '#DAYS#')
+    .replace(/\b\d+\b/g, '#NUM#');
+}
+
+/**
+ * Stable per-finding identity, independent of an analyzer's rendered numeric text.
+ * Prefers sources[0] (a stable entity id) as the identity anchor when the analyzer
+ * provides one; otherwise derives identity from domain + a volatile-number-normalized
+ * title. Reuses lib/shared/content-fingerprint.cjs's fingerprint()/normalize() rather
+ * than inventing new hashing logic (TR-1).
+ */
+export function computeFindingFingerprint(finding) {
+  const anchor = Array.isArray(finding.sources) && finding.sources.length > 0
+    ? String(finding.sources[0])
+    : stripVolatileNumbers(finding.title);
+  return sharedFingerprint(finding.domain, anchor);
+}
+
+// FR-6: pure predicate so "near-total suppression" is independently unit-testable
+// without a full pipeline mock -- the counts themselves (candidateCount vs
+// insertedCount) are what make a fully-suppressed run mechanically detectable.
+export function isNearTotalSuppression(candidateCount, insertedCount) {
+  return candidateCount > 0 && insertedCount === 0;
+}
+
+// ─── FR-4: venture-status grounding ────────────────────────────
+// Case-insensitive, exact-match venture lookup (reuses lib/venture-name-resolver.js's
+// existing safe .ilike() pattern, per security-agent PLAN-phase review -- never a
+// hand-built .or() filter string). Returns false (safe no-op) for a non-venture entity
+// (e.g. "EHG_Engineer"/"EHG", which are platform repos, not ventures) rather than
+// suppressing or erroring. `client` is injectable for tests; production call sites
+// default to the module-level supabase (mirrors analyzeOKRDrift's convention).
+export async function isNamedVentureCancelled(name, client = supabase) {
+  const venture = await resolveActiveVentureByName(client, name);
+  if (!venture) return false;
+  return venture.status === 'cancelled';
+}
+
+// ─── FR-3 (evidence floor half): generic engineering vocabulary that must never, on
+// its own, count as evidence of genuine cross-venture capability overlap.
+const OVERLAP_STOPWORDS = new Set([
+  'implement', 'implementation', 'changes', 'change', 'description', 'details', 'detail',
+  'update', 'updates', 'updated', 'add', 'added', 'adding', 'status', 'before', 'after',
+  'feature', 'features', 'fix', 'fixes', 'fixed', 'create', 'created', 'support', 'improve',
+  'improved', 'improvement', 'required', 'requires', 'using', 'based', 'system', 'systems',
+  'default', 'existing', 'various', 'several', 'through', 'because', 'should', 'would',
+]);
 
 // ─── Domain 1: Retrospective Mining ───────────────────────────
 async function analyzeRetrospectives() {
@@ -262,9 +322,11 @@ async function analyzeProtocolHealth() {
 }
 
 // ─── Domain 6: Cross-Venture Capability Reuse Detection ──────
-async function analyzeCrossVentureReuse() {
+// `client` is injectable for tests (mirrors analyzeOKRDrift's convention); production
+// call sites (the domainAnalyzers array below) call it with no arg.
+export async function analyzeCrossVentureReuse(client = supabase) {
   // Live column is completion_date (SD-LEO-FIX-FIX-PHANTOM-COLUMN-002).
-  const { data: sds } = await supabase
+  const { data: sds } = await client
     .from('strategic_directives_v2')
     .select('id, sd_key, title, key_changes, success_criteria, target_application')
     .eq('status', 'completed')
@@ -294,12 +356,28 @@ async function analyzeCrossVentureReuse() {
         const app1Changes = changesByApp[apps[i]].map(c => c.change.toLowerCase());
         const app2Changes = changesByApp[apps[j]].map(c => c.change.toLowerCase());
 
-        // Check for keyword overlap in changes
-        const keywords1 = new Set(app1Changes.join(' ').split(/\s+/).filter(w => w.length > 5));
-        const keywords2 = new Set(app2Changes.join(' ').split(/\s+/).filter(w => w.length > 5));
+        // Check for keyword overlap in changes. FR-3 (evidence floor): generic
+        // engineering vocabulary (OVERLAP_STOPWORDS) is excluded so a stopword-only
+        // overlap can never count as evidence of genuine capability reuse.
+        const keywords1 = new Set(
+          app1Changes.join(' ').split(/\s+/).filter(w => w.length > 5 && !OVERLAP_STOPWORDS.has(w))
+        );
+        const keywords2 = new Set(
+          app2Changes.join(' ').split(/\s+/).filter(w => w.length > 5 && !OVERLAP_STOPWORDS.has(w))
+        );
         const overlap = [...keywords1].filter(k => keywords2.has(k));
 
         if (overlap.length >= 3) {
+          // FR-4: venture-status grounding -- never recommend reuse involving a
+          // cancelled/scrapped venture. A non-venture entity (e.g. EHG_Engineer/EHG)
+          // safely no-ops (isNamedVentureCancelled returns false), so this only ever
+          // suppresses on a confirmed cancelled match, never a false positive.
+          const [app1Cancelled, app2Cancelled] = await Promise.all([
+            isNamedVentureCancelled(apps[i], client),
+            isNamedVentureCancelled(apps[j], client),
+          ]);
+          if (app1Cancelled || app2Cancelled) continue;
+
           findings.push({
             title: `Potential capability reuse between ${apps[i]} and ${apps[j]}`,
             description: `${overlap.length} shared keywords in key_changes: ${overlap.slice(0, 5).join(', ')}. Review for shared service extraction.`,
@@ -411,11 +489,33 @@ export async function consultantAnalysisHandler(options = {}) {
     }
   }
 
+  // FR-6: candidate count recorded before any suppression, so a near-total-suppression
+  // run is mechanically detectable (candidate_count > 0, inserted_count === 0) rather
+  // than only describable in prose.
+  const candidateCount = allRawFindings.length;
+
+  // FR-1/FR-2/TR-3: fingerprint every candidate and suppress a finding whose fingerprint
+  // already exists with an unexpired re_review_at BEFORE it is ever scored or inserted.
+  const withFingerprints = allRawFindings.map((f) => ({ ...f, fingerprint: computeFindingFingerprint(f) }));
+  const uniqueFingerprints = [...new Set(withFingerprints.map((f) => f.fingerprint))];
+  const nowIso = new Date().toISOString();
+  const { data: existingUnexpired } = uniqueFingerprints.length > 0
+    ? await supabase
+        .from('eva_consultant_recommendations')
+        .select('fingerprint')
+        .in('fingerprint', uniqueFingerprints)
+        .or(`re_review_at.is.null,re_review_at.gt.${nowIso}`)
+    : { data: [] };
+  const suppressedFingerprints = new Set((existingUnexpired || []).map((r) => r.fingerprint).filter(Boolean));
+  const survivors = withFingerprints.filter((f) => !suppressedFingerprints.has(f.fingerprint));
+  const dedupSuppressedCount = withFingerprints.length - survivors.length;
+
   // Run through confidence engine pipeline
-  const processed = await processFindings(supabase, allRawFindings);
+  const processed = await processFindings(supabase, survivors);
 
   // Store findings in eva_consultant_recommendations
   let insertedCount = 0;
+  const reReviewAt = new Date(Date.now() + LOOKBACK_DAYS * 86400000).toISOString();
   for (const finding of processed) {
     const { error } = await supabase
       .from('eva_consultant_recommendations')
@@ -431,6 +531,8 @@ export async function consultantAnalysisHandler(options = {}) {
         analysis_domain: finding.domain,
         confidence_tier: finding.tier,
         detected_by: 'consultant-analysis-round.mjs',
+        fingerprint: finding.fingerprint,
+        re_review_at: reReviewAt,
       }, { onConflict: 'recommendation_date,title' });
 
     if (!error) insertedCount++;
@@ -443,12 +545,24 @@ export async function consultantAnalysisHandler(options = {}) {
     domainsAnalyzed: Object.keys(domainSummary).length,
     domainSummary,
     rawFindingsTotal: allRawFindings.length,
+    candidateCount,
+    dedupSuppressedCount,
     processedFindings: processed.length,
     insertedCount,
     highConfidence: processed.filter(f => f.tier === 'high').length,
     mediumConfidence: processed.filter(f => f.tier === 'medium').length,
     graduated: processed.filter(f => f.graduated).length,
   };
+
+  // FR-6: near-total suppression is logged as a countable signal, not just describable
+  // in prose -- lets monitoring distinguish a genuinely quiet week from an over-
+  // aggressive dedup/grounding regression.
+  if (isNearTotalSuppression(candidateCount, insertedCount)) {
+    console.warn(
+      `[consultant-analysis] SUPPRESSION_ALERT: ${candidateCount} candidate(s) generated, 0 inserted ` +
+      `(dedup_suppressed=${dedupSuppressedCount}) -- possible over-aggressive dedup/grounding regression.`
+    );
+  }
 
   console.log(`[consultant-analysis] Complete: ${processed.length} findings (${summary.highConfidence} high, ${summary.mediumConfidence} medium, ${summary.graduated} graduated)`);
 
