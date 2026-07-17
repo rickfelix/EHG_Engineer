@@ -371,9 +371,13 @@ async function loadData() {
       .select('id, title, status, claiming_session_id, created_at, owner, release_condition')
       .in('status', ['open', 'in_progress'])
       .order('created_at', { ascending: true });
-    // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: fixture-titled QFs (ZZZ_/TEST-/UAT test
-    // residue) must not inflate the QUICK FIXES (N) count or render as real open work.
-    const { isFixtureQf } = require('../lib/governance/fixture-exclusion.mjs');
+    // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: fixture-titled QFs (ZZZ_/dunder residue)
+    // must not inflate the QUICK FIXES (N) count or render as real open work.
+    // Filter availability degrades to UNFILTERED rows (adversarial-review fix, PR #6186):
+    // if require(esm) is unavailable on an older runtime, showing fixtures beats hiding
+    // ALL open work behind the outer catch's empty section.
+    let isFixtureQf = () => false;
+    try { ({ isFixtureQf } = require('../lib/governance/fixture-exclusion.mjs')); } catch { /* unfiltered fallback */ }
     quickFixes = (qfRows || []).filter((qf) => !isFixtureQf(qf));
   } catch { /* degrade-safe: empty QF section */ }
 

@@ -82,8 +82,11 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     if (sdResult.error) throw sdResult.error;
     if (qfResult.error) throw qfResult.error;
     const { isFixtureQf } = await import('../lib/governance/fixture-exclusion.mjs');
-    const qfCount = (qfResult.data || []).filter((qf) => !isFixtureQf(qf)).length;
-    if (Number.isFinite(sdResult.count)) {
+    // Adversarial-review fix (PR #6186): preserve the original HONEST-unknown contract —
+    // a null data payload (the data:null-without-error Supabase trap) must leave the fact
+    // null/unknown, never a confidently-fabricated low count.
+    if (Number.isFinite(sdResult.count) && Array.isArray(qfResult.data)) {
+      const qfCount = qfResult.data.filter((qf) => !isFixtureQf(qf)).length;
       facts.sourcedInWindow = sdResult.count + qfCount;
     }
   } catch { /* leave null -> unknown */ }

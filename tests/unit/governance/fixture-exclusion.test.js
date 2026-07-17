@@ -20,27 +20,37 @@ import { computePortfolioMaturity } from '../../../lib/capabilities/scanner-cont
 import { loadOpenQuickFixes, loadSDHierarchy } from '../../../scripts/modules/sd-next/data-loaders.js';
 
 describe('predicate matrix (TS-1)', () => {
-  test('fixture SD keys match', () => {
+  test('fixture SD keys match (unambiguous shapes only)', () => {
     for (const key of [
       'ZZZ_OKR_ALIGNMENTS_SCHEMA_TEST_SD', 'TEST-F3-RACE-1784287684096-bl1',
-      'TEST-LAYER-CLAIMING-SD-1784287683799', 'SD-TEST-MRO18ZP0-ORCH-001',
+      'TEST-LAYER-CLAIMING-SD-1784287683799', // epoch-stamped generator residue
       'SD-DEMO-ANYTHING-001', 'UAT-RUN-42', 'UAT_FIXTURE_7', '__e2e_probe',
       'SD-UAT-FIX-TEST-E2E-1781186358703-001', 'SD-LEO-FEAT-TEST-E2E-XYZ',
-      'TEST-HARNESS-CASE-9',
     ]) {
       expect(isFixtureSdKey(key), key).toBe(true);
     }
   });
 
-  test('real SD keys never match (non-over-exclusion)', () => {
+  test('real SD keys never match (non-over-exclusion — the fatal failure mode)', () => {
     for (const key of [
       'SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001', 'SD-EHG-PRODUCT-UIUX-REMEDIATION-001',
       'SD-UAT-020', 'SD-UAT-002', // real historic UAT SDs — must NOT be excluded
+      // Adversarial-review CRITICAL pin (PR #6186): the SD-TEST-MANAGEMENT/TEST-MGMT
+      // family is REAL completed work — the broad ^(SD-)?TEST branch that excluded it
+      // was removed; these must stay visible to hierarchy/count consumers forever.
+      'SD-TEST-MANAGEMENT-001', 'SD-TEST-MGMT-SCHEMA-001', 'TEST-MGMT-FIXES-001', 'TEST-LIFECYCLE-001',
       'SD-LEO-INFRA-SEND-TIME-TARGET-001', 'SD-LATEST-METRICS-001', 'SD-FASTEST-PATH-001',
       'SD-APEXNICHE-AI-LEO-ORCH-SPRINT-2026-001-G',
     ]) {
       expect(isFixtureSdKey(key), key).toBe(false);
     }
+  });
+
+  test('accepted recall loss: prefix-only fixtures without strong shapes do NOT match (precision first)', () => {
+    // Missing a fixture slightly inflates a count; excluding a real row silently loses
+    // work. These prefix-only shapes are indistinguishable from real keys, so they pass.
+    expect(isFixtureSdKey('SD-TEST-MRO18ZP0-ORCH-001')).toBe(false);
+    expect(isFixtureSdKey('TEST-HARNESS-CASE-9')).toBe(false);
   });
 
   test('metadata.is_fixture short-circuits; missing input fails open', () => {
@@ -61,12 +71,18 @@ describe('predicate matrix (TS-1)', () => {
     expect(isFixtureVenture({})).toBe(false);
   });
 
-  test('QF predicate: fixture ids/titles match, real ones do not', () => {
+  test('QF predicate: unambiguous fixture ids/titles match, real ones never do', () => {
     expect(isFixtureQf({ id: 'QF-TEST-123', title: 'anything' })).toBe(true);
     expect(isFixtureQf({ id: 'QF-20260717-794', title: 'ZZZ_ probe row' })).toBe(true);
-    expect(isFixtureQf({ id: 'QF-20260717-794', title: '[TEST] harness row' })).toBe(true);
+    expect(isFixtureQf({ id: 'QF-20260717-794', title: '__e2e residue row' })).toBe(true);
     expect(isFixtureQf({ id: 'QF-20260717-794', title: '[Retro action items] real fix' })).toBe(false);
     expect(isFixtureQf({ id: 'QF-20260717-794', title: 'Fix latest test failures in CI' })).toBe(false); // 'test' mid-title — real
+    // Adversarial-review CRITICAL pin (PR #6186): real bug reports titled 'Test-…' exist
+    // (live: 'Test-fixture ventures leak stage gates…') — the bare TEST-/UAT-/DEMO title
+    // branches were removed; these must never be hidden from dispatch surfaces.
+    expect(isFixtureQf({ id: 'QF-20260703-236', title: 'Test-fixture ventures leak stage gates into the LIVE chairman decision queue' })).toBe(false);
+    expect(isFixtureQf({ id: 'QF-20260703-773', title: 'Test-fixture key guard misses bare TEST-*/DEMO- keys' })).toBe(false);
+    expect(isFixtureQf({ id: 'QF-20260717-794', title: '[TEST] harness row' })).toBe(false); // bracket tag unverified as fixture marker — precision first
     expect(isFixtureQf(null)).toBe(false);
   });
 
