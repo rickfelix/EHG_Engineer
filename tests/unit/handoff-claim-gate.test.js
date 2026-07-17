@@ -75,6 +75,56 @@ describe('evaluateClaimCheckForHandoff (BaseExecutor Step 1.3 seam)', () => {
   });
 });
 
+describe('evaluateClaimCheckForHandoff sdStatus exemption (SD-LEO-FIX-POST-MERGE-AUTOMATION-001 FR-2)', () => {
+  // Post-merge automation vs worker LEAD-FINAL claim race: an SD can be "unclaimed"
+  // either because it's genuinely foreign/abandoned (must still block — 2026-06-12
+  // ghost-completion protection) or because it just completed moments ago and
+  // released its own claim (must NOT block — route to the idempotent already-
+  // completed path instead). 4-combination matrix: {ownership} x {sdStatus}.
+
+  it('unclaimed + status=completed → no block, alreadyCompleted signaled', () => {
+    const v = evaluateClaimCheckForHandoff({ ownership: 'unclaimed' }, 'SD-Z', 'completed');
+    expect(v).toEqual({ block: false, alreadyCompleted: true });
+  });
+
+  it('unclaimed + status=pending_approval → still blocks (foreign/abandoned claim protection unchanged)', () => {
+    const v = evaluateClaimCheckForHandoff({ ownership: 'unclaimed' }, 'SD-Z', 'pending_approval');
+    expect(v.block).toBe(true);
+    expect(v.alreadyCompleted).toBeUndefined();
+  });
+
+  it('unclaimed + no sdStatus argument (legacy 2-arg callers) → still blocks, unchanged behavior', () => {
+    const v = evaluateClaimCheckForHandoff({ ownership: 'unclaimed' }, 'SD-Z');
+    expect(v.block).toBe(true);
+    expect(v.alreadyCompleted).toBeUndefined();
+  });
+
+  it('claimed (ownership=mine) + status=completed → still passes via the ownership=mine path, not the exemption', () => {
+    const v = evaluateClaimCheckForHandoff({ ownership: 'mine' }, 'SD-Z', 'completed');
+    expect(v).toEqual({ block: false });
+    expect(v.alreadyCompleted).toBeUndefined();
+  });
+
+  it('orphan auto-release (unclaimed, released_owner_session set) + status=completed → exemption still wins (not a foreign-claim block)', () => {
+    const v = evaluateClaimCheckForHandoff(
+      { ownership: 'unclaimed', reason: 'stale', released_owner_session: 'dead-session-1' },
+      'SD-Z',
+      'completed'
+    );
+    expect(v).toEqual({ block: false, alreadyCompleted: true });
+  });
+
+  it('orphan auto-release + status NOT completed → still blocks with full detail (ghost-completion protection unchanged)', () => {
+    const v = evaluateClaimCheckForHandoff(
+      { ownership: 'unclaimed', reason: 'stale', released_owner_session: 'dead-session-1' },
+      'SD-Z',
+      'in_progress'
+    );
+    expect(v.block).toBe(true);
+    expect(v.detail).toContain('dead-session-1');
+  });
+});
+
 describe('recorder session attribution (FR-4)', () => {
   it('created_by carries CLAUDE_SESSION_ID when set', () => {
     process.env.CLAUDE_SESSION_ID = 'session-abc';
