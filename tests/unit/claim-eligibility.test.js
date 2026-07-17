@@ -31,6 +31,13 @@ function makeSb(sdRows, opts = {}) {
               const data = arr.map((k) => (sdRows[k] ? { sd_key: k, status: sdRows[k].status } : null)).filter(Boolean);
               return { data, error: null };
             },
+            // draftDepsSatisfied now resolves via .or(sd_key.in.(...),id.in.(...)) so uuid refs match too.
+            or: async (filter) => {
+              if (opts.errorOnIn) return { data: null, error: { message: 'deps boom' } };
+              const keys = [...new Set([...filter.matchAll(/"([^"]+)"/g)].map((m) => m[1]))];
+              const data = keys.map((k) => (sdRows[k] ? { id: sdRows[k].id ?? k, sd_key: sdRows[k].sd_key ?? k, status: sdRows[k].status } : null)).filter(Boolean);
+              return { data, error: null };
+            },
           };
         },
       };
@@ -57,6 +64,12 @@ function makeSbForEligibility(sdRows, opts = {}) {
             in: async (_col, arr) => {
               if (opts.errorOnIn) return { data: null, error: { message: 'deps boom' } };
               const data = arr.map((k) => (sdRows[k] ? { sd_key: k, status: sdRows[k].status } : null)).filter(Boolean);
+              return { data, error: null };
+            },
+            or: async (filter) => {
+              if (opts.errorOnIn) return { data: null, error: { message: 'deps boom' } };
+              const keys = [...new Set([...filter.matchAll(/"([^"]+)"/g)].map((m) => m[1]))];
+              const data = keys.map((k) => (sdRows[k] ? { id: sdRows[k].id ?? k, sd_key: sdRows[k].sd_key ?? k, status: sdRows[k].status } : null)).filter(Boolean);
               return { data, error: null };
             },
           };
@@ -105,6 +118,24 @@ describe('draftDepsSatisfied', () => {
   });
   it('treats metadata.blocked_on_sd="none" as non-blocking', async () => {
     const sd = { dependencies: [], metadata: { blocked_on_sd: 'none' } };
+    expect(await draftDepsSatisfied(makeSb({}), sd)).toBe(true);
+  });
+
+  // Adversarial-review round-1 pins: uuid refs resolve via the id column (parity with the
+  // claim gate's dual-column resolution — no more checkin-vs-sweep claim ping-pong), and
+  // a non-SD-shaped blocked_by_sd_key stamp never becomes a dangling hard blocker.
+  it('uuid-shaped ref to a COMPLETED SD is satisfied (resolved via id column)', async () => {
+    const uuid = '15491075-873d-4d38-808b-23fe9c8aa893';
+    const sb = makeSb({ [uuid]: { id: uuid, sd_key: 'SD-REAL-001', status: 'completed' } });
+    expect(await draftDepsSatisfied(sb, { dependencies: [{ sd_id: uuid }] })).toBe(true);
+  });
+  it('uuid-shaped ref to a non-completed SD still blocks', async () => {
+    const uuid = '15491075-873d-4d38-808b-23fe9c8aa893';
+    const sb = makeSb({ [uuid]: { id: uuid, sd_key: 'SD-REAL-001', status: 'in_progress' } });
+    expect(await draftDepsSatisfied(sb, { dependencies: [{ sd_id: uuid }] })).toBe(false);
+  });
+  it('non-SD-shaped metadata.blocked_by_sd_key ("N/A") does not block (canonical shape guard)', async () => {
+    const sd = { dependencies: [], metadata: { blocked_by_sd_key: 'N/A' } };
     expect(await draftDepsSatisfied(makeSb({}), sd)).toBe(true);
   });
 

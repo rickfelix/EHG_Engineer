@@ -160,6 +160,16 @@ describe('FR-3 — fresh dispatch_rank ordering', () => {
   });
 });
 
+describe('adversarial-review pin: dep-query errors fail LOUD, never as a silent-empty report', () => {
+  it('a dependency batch-query error rejects instead of silently excluding every dep-bearing SD', async () => {
+    const { fetcher } = makeFetcher({
+      candidates: [sd({ id: 'SD-HAS-DEP-001', metadata: { depends_on: ['SD-FEEDER-001'] } })],
+      depError: { message: 'transient boom' },
+    });
+    await expect(fetcher.getTop3Priorities()).rejects.toBeTruthy();
+  });
+});
+
 describe('FR-4a extractor identity — the fetcher uses the SHARED extractor', () => {
   it('extractAllDependencyRefs from lib/utils/parse-sd-dependencies.cjs is what runs (spy + source pin)', async () => {
     vi.mocked(extractAllDependencyRefs).mockClear();

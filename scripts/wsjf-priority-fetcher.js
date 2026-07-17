@@ -53,10 +53,14 @@ class WSJFPriorityFetcher {
       const completedRefs = new Set();
       if (allRefs.length > 0) {
         const list = allRefs.map((k) => `"${String(k).replace(/"/g, '')}"`).join(',');
-        const { data: depRows } = await this.supabase
+        const { data: depRows, error: depError } = await this.supabase
           .from('strategic_directives_v2')
           .select('id, sd_key, status')
           .or(`sd_key.in.(${list}),id.in.(${list})`);
+        // Adversarial-review fix: a swallowed error here left completedRefs empty and
+        // silently excluded EVERY dep-bearing candidate from top3 — surface it like the
+        // candidate query above so a DB hiccup fails loud, not as a phantom-empty report.
+        if (depError) throw depError;
         for (const r of depRows || []) {
           if (r.status !== 'completed') continue;
           if (r.sd_key) completedRefs.add(r.sd_key);
