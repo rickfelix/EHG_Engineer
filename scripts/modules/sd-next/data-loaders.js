@@ -201,10 +201,14 @@ export async function loadSDHierarchy(supabase) {
 
     if (!sds) return { allSDs, sdHierarchy };
 
-    // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: fixture-keyed SDs (ZZZ_, TEST-, UAT-,
-    // SD-TEST-…) leaked into the queue tree as real work (live examples: SD-TEST-MRO18ZP0
-    // and ZZZ_OKR_ALIGNMENTS rows rendering in Track views). Filter at the single load
-    // point for the hierarchy instead of per display site.
+    // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: unambiguously-keyed fixture SDs (ZZZ_ /
+    // dunder prefixes, named e2e families, epoch-stamped generator keys like
+    // TEST-F3-RACE-1784287684096-bl1) leaked into the queue tree as real work. Filter at
+    // the single load point for the hierarchy instead of per display site. PRECISION-FIRST
+    // (adversarial-review, PR #6186): prefix-only keys like SD-TEST-MRO18ZP0 are NOT
+    // excluded — they are indistinguishable from the real SD-TEST-MANAGEMENT/TEST-MGMT
+    // family, and excluding a real SD silently drops it from every allSDs consumer, which
+    // is far worse than a fixture slightly padding the tree.
     const realSds = sds.filter((sd) => !isFixtureSdKey(sd.sd_key, sd.metadata));
 
     // Build lookup map and hierarchy
