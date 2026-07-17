@@ -42,8 +42,8 @@ describe('DRAIN_SETS (FR-1)', () => {
     expect(DRAIN_SETS.solomon).not.toContain(PAYLOAD_KINDS.ADAM_ADVISORY);
   });
 
-  test('every role drains all DIRECTIVE_KINDS except worker (worker drains its directed subset)', () => {
-    for (const role of ['solomon', 'adam', 'coordinator']) {
+  test('every role drains all DIRECTIVE_KINDS (worker inbox surfaces the full directive allowlist)', () => {
+    for (const role of ['solomon', 'adam', 'coordinator', 'worker']) {
       for (const kind of DIRECTIVE_KINDS) {
         expect(DRAIN_SETS[role]).toContain(kind);
       }
@@ -132,6 +132,7 @@ describe('solomon-advisory drainInbox surfaces comms_check (FR-3)', () => {
 
   function mockSupabase(rows) {
     const updates = [];
+    const inFilters = [];
     const chain = {
       select() { return chain; },
       eq() { return chain; },
@@ -139,9 +140,9 @@ describe('solomon-advisory drainInbox surfaces comms_check (FR-3)', () => {
       order() { return chain; },
       limit() { return Promise.resolve({ data: rows, error: null }); },
       update(p) { updates.push(p); return chain; },
-      in() { return Promise.resolve({ data: [], error: null }); },
+      in(col, vals) { inFilters.push([col, vals]); return chain; },
     };
-    return { from() { return chain; }, _updates: updates };
+    return { from() { return chain; }, _updates: updates, _inFilters: inFilters };
   }
 
   test('a Solomon-directed comms_check row renders with the ack instruction and is not consumed', async () => {
@@ -161,5 +162,14 @@ describe('solomon-advisory drainInbox surfaces comms_check (FR-3)', () => {
     expect(warned).not.toContain('cc-row-1');
     // acknowledged_at is never stamped by the drain (surface, don't consume).
     expect(client._updates.every((u) => !('acknowledged_at' in u))).toBe(true);
+  });
+
+  test('drainInbox reads BOTH the session lane and the broadcast-solomon sentinel lane (adversarial fix)', async () => {
+    const client = mockSupabase([]);
+    await drainInbox(client, 'solomon-session-id', { quiet: true });
+    const targetFilter = client._inFilters.find(([col]) => col === 'target_session');
+    expect(targetFilter).toBeDefined();
+    expect(targetFilter[1]).toContain('solomon-session-id');
+    expect(targetFilter[1]).toContain('broadcast-solomon');
   });
 });

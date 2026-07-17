@@ -270,10 +270,16 @@ async function drainInbox(supabase, sessionId, { quiet = false, background = fal
   // recoverable filter is acknowledged_at IS NULL, never read_at IS NULL — a row this drain surfaces but
   // the reasoning turn doesn't genuinely act on must stay recoverable on the NEXT drain instead of
   // silently vanishing the moment it's first read-stamped.
+  // Adversarial-review fix (PR #6170): also read the 'broadcast-solomon' sentinel lane.
+  // Senders fall back to that sentinel exactly when Solomon's identity is transiently
+  // unresolvable (adam-advisory resolveAdamAdvisoryTarget) — the overnight/canary scenario —
+  // and no Solomon-side consumer read those rows at all, so a fallback comms_check/consult
+  // orphaned silently while DRAIN_SETS.solomon vouched for delivery. Solomon IS the intended
+  // consumer of its own sentinel; drain both lanes.
   const { data: allRows, error } = await supabase
     .from('session_coordination')
     .select('id, sender_session, sender_type, message_type, subject, body, payload, created_at')
-    .eq('target_session', sessionId)
+    .in('target_session', [sessionId, 'broadcast-solomon'])
     .is('acknowledged_at', null)
     .order('created_at', { ascending: true })
     .limit(100);
@@ -358,7 +364,10 @@ async function ackRows(supabase, ids, { expectedTarget = null } = {}) {
       .update({ acknowledged_at: now })
       .eq('id', id)
       .is('acknowledged_at', null);
-    if (expectedTarget) q = q.eq('target_session', expectedTarget);
+    // Adversarial-review fix (PR #6170): drainInbox now also surfaces the 'broadcast-solomon'
+    // sentinel lane (Solomon is that sentinel's intended consumer), so the ownership scope
+    // must admit those rows too or a surfaced fallback row could never be acked.
+    if (expectedTarget) q = q.in('target_session', [expectedTarget, 'broadcast-solomon']);
     const { data, error } = await q.select('id, read_at');
     if (error) { console.error(`ERROR: ack failed for ${id}: ${error.message}`); continue; }
     if (data && data.length > 0) {
