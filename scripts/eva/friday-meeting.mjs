@@ -184,9 +184,11 @@ async function gatherPerformanceReview() {
   let baselineItems = 0;
   let completedItems = 0;
   if (baseline) {
+    // sd_baseline_items has sd_id, not sd_key — selecting the non-existent
+    // column made supabase return data:null, silently zeroing both counters.
     const { data: items } = await supabase
       .from('sd_baseline_items')
-      .select('sd_key, is_ready')
+      .select('sd_id, is_ready')
       .eq('baseline_id', baseline.id);
     baselineItems = (items || []).length;
     completedItems = (items || []).filter(i => i.is_ready).length;
