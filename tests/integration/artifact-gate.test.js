@@ -61,6 +61,7 @@ describe.skipIf(!HAS_REAL_DB)('fn_advance_venture_stage artifact precondition ga
       .from('ventures')
       .insert({
         name: `artifact-gate-test-${Date.now()}`,
+        is_demo: true, // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002: fixture flagged at creation
         current_lifecycle_stage: 1,
         status: 'active',
         problem_statement: 'Test venture for artifact gate integration tests'

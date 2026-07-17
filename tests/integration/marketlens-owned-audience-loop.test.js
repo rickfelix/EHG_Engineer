@@ -51,6 +51,7 @@ describe.skipIf(!HAS_REAL_DB)('MarketLens Owned-Audience Content Loop (integrati
     await supabase.from('ventures').insert({
       id: testVentureId,
       name: 'Test Venture for Owned-Audience Loop',
+      is_demo: true, // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002: fixture flagged at creation
       company_id: testCompanyId,
       problem_statement: 'Test problem statement',
       current_lifecycle_stage: 24,

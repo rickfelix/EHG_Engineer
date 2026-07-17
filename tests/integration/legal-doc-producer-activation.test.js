@@ -54,6 +54,7 @@ describe.skipIf(!HAS_REAL_DB)('Legal-doc producer activation invariant (SD-FDBK-
     const { error: ventureError } = await supabase.from('ventures').insert({
       id: testVentureId,
       name: 'Activation Invariant Test Venture',
+      is_demo: true, // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002: fixture flagged at creation
       company_id: testCompanyId,
       problem_statement: 'legal-doc-producer activation invariant integration test',
       value_proposition: 'Proves the schema-worker-consumer chain end to end',

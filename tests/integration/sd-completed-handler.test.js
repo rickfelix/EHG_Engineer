@@ -63,7 +63,7 @@ async function createTestVenture() {
 
   const { data, error } = await supabase
     .from('ventures')
-    .insert({ name: `Test Venture (sd-completed-tests-${PREFIX})` })
+    .insert({ name: `Test Venture (sd-completed-tests-${PREFIX})`, is_demo: true })
     .select('id')
     .single();
 

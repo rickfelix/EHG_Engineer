@@ -40,7 +40,9 @@ async function createVenture(tag) {
   const { data, error } = await supabase
     .from('ventures')
     .insert({
-      name: `__e2e_stage_artifact_gate_${tag}_${ts}__`,
+      // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002: *-RealDB-* convention — misses the write-guard
+      // regex (real path preserved), matches the extended surface patterns (residue protected).
+      name: `StageArtifactGate-RealDB-${tag}-${ts}`,
       problem_statement: 'Disposable venture for SD-LEO-INFRA-STAGE-ADVANCEMENT-ARTIFACT-001 real-DB gate test',
       current_lifecycle_stage: FIXTURE_STAGE,
       is_demo: false,

@@ -73,6 +73,7 @@ describe.skipIf(!HAS_REAL_DB)('Marketing Distribution API', () => {
     const { error: ventureError } = await supabase.from('ventures').insert({
       id: testVentureId,
       name: 'Test Venture for Marketing',
+      is_demo: true, // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002: fixture flagged at creation
       company_id: testCompanyId,
       problem_statement: 'Test problem statement',
       current_lifecycle_stage: 1,
