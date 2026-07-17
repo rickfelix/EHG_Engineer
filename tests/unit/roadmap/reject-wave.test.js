@@ -5,22 +5,50 @@
 import { describe, it, expect } from 'vitest';
 import { rejectWave } from '../../../lib/integrations/roadmap-manager.js';
 
-function makeSupabase(wave) {
+// Models the real supabase-js update-builder chain: eq() is chainable (returns the
+// same builder), select() is the terminal thenable. currentStatus is the row's live
+// state at write time -- separate from the snapshot returned by the initial select,
+// so a compare-and-swap guard (.eq('status','proposed')) can be exercised.
+function makeSupabase(wave, { raceStatus } = {}) {
   const updates = [];
+  let currentStatus = wave ? wave.status : null;
   return {
     _updates: updates,
-    from(table) {
+    from() {
       return {
         select() {
           return {
             eq() {
-              return { single: () => Promise.resolve(wave ? { data: wave, error: null } : { data: null, error: { message: 'not found' } }) };
+              return {
+                single: () => {
+                  if (!wave) return Promise.resolve({ data: null, error: { message: 'not found' } });
+                  const snapshot = { ...wave, status: currentStatus };
+                  // Simulate a concurrent transition landing between this read and the write below.
+                  if (raceStatus) currentStatus = raceStatus;
+                  return Promise.resolve({ data: snapshot, error: null });
+                },
+              };
             },
           };
         },
         update(payload) {
           updates.push(payload);
-          return { eq: () => Promise.resolve({ error: null }) };
+          const filters = {};
+          const builder = {
+            eq(col, val) {
+              filters[col] = val;
+              return builder;
+            },
+            select() {
+              const matches = wave && filters.id === wave.id && (filters.status === undefined || filters.status === currentStatus);
+              if (matches) {
+                currentStatus = payload.status;
+                return Promise.resolve({ data: [{ id: wave.id }], error: null });
+              }
+              return Promise.resolve({ data: [], error: null });
+            },
+          };
+          return builder;
         },
       };
     },
@@ -68,5 +96,17 @@ describe('rejectWave', () => {
     const supabase = makeSupabase(wave);
     await rejectWave(supabase, 'wave-4', 'reason');
     expect(supabase._updates[0].metadata.rejection_rationale).toBe('reason');
+  });
+
+  // Adversarial review finding (PR #6202): check-then-act between the read and the
+  // write is not atomic. If the wave transitions away from 'proposed' (e.g. a
+  // concurrent approveSequence() bulk-approve) in that gap, the blind UPDATE must not
+  // silently stomp it back to 'archived' -- the compare-and-swap .eq('status','proposed')
+  // on the write should cause zero rows to match, and rejectWave must surface that as
+  // an explicit error rather than reporting success.
+  it('aborts (does not silently apply) when the wave transitions away from proposed between read and write', async () => {
+    const wave = { id: 'wave-5', status: 'proposed', metadata: {} };
+    const supabase = makeSupabase(wave, { raceStatus: 'approved' });
+    await expect(rejectWave(supabase, 'wave-5', 'oops')).rejects.toThrow(/transitioned concurrently/);
   });
 });
