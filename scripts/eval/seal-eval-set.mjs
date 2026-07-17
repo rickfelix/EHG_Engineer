@@ -52,6 +52,30 @@ export async function sealEvalSet({ supabase, artifactClass, apply = false, seal
     return { applied: false, planned: planned.length, sealed: 0, skipped: 0, bookkeeping };
   }
 
+  // SELF-REFERENCE GUARD (SD-LEO-INFRA-SHADOW-TRIAL-RATIFICATION-001-C FR-4): the
+  // eval-set is itself a governed artifact — once the chairman ceremony applies
+  // governed_change_proposals, sealing requires a staged proposal for this class.
+  // Pre-ceremony (table absent) this warns and proceeds: refusing would deadlock
+  // legitimate re-seals before the ceremony has even begun.
+  const guardProbe = await supabase
+    .from('governed_change_proposals')
+    .select('id, status')
+    .eq('artifact_class', artifactClass)
+    .limit(10);
+  if (guardProbe.error) {
+    if (isMissingTableError(guardProbe.error)) {
+      log('SELF-REFERENCE GUARD: governed_change_proposals not applied (ceremony pending) — warn-and-proceed.');
+    } else {
+      log(`SELF-REFERENCE GUARD: probe failed (${guardProbe.error.message}) — warn-and-proceed (fail-open on infrastructure error).`);
+    }
+  } else {
+    const stagedProposal = (guardProbe.data || []).find((p) => ['staged', 'shadow_run', 'packet_attached'].includes(p.status));
+    if (!stagedProposal) {
+      throw new Error(`seal-eval-set: SELF-REFERENCE GUARD — no staged governed_change_proposals row for artifact_class=${artifactClass}; corpus mutations require a staged proposal (child C FR-4)`);
+    }
+    log(`SELF-REFERENCE GUARD: staged proposal ${stagedProposal.id} (${stagedProposal.status}) authorizes this seal.`);
+  }
+
   const existing = await supabase
     .from('feedback')
     .select('id, metadata')
