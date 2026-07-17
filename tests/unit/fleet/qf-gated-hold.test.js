@@ -80,8 +80,11 @@ describe('releaseChairmanGatedQf (FR-4 / TS-4, TS-5)', () => {
     const updateChain = {
       update(p) { updates.push(p); return updateChain; },
       eq() { return updateChain; },
+      // Concurrency guard (adversarial fix): the update is conditioned on the marker still
+      // being present via .not('release_condition','is',null).
+      not() { return updateChain; },
       select() { return updateChain; },
-      single() { return Promise.resolve({ data: { id: row.id, status: row.status, owner: null, release_condition: null }, error: null }); },
+      maybeSingle() { return Promise.resolve({ data: { id: row.id, status: row.status, owner: null, release_condition: null }, error: null }); },
     };
     let call = 0;
     return {

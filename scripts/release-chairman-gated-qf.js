@@ -60,13 +60,19 @@ export async function releaseChairmanGatedQf(qfId, { reason, releasingSessionId,
   const stamp = `[GATED-RELEASE ${new Date().toISOString()}] by session ${releasingSessionId || '(unknown)'}: ${String(reason).trim()} (was: ${String(row.release_condition).replace(/\n/g, ' ').slice(0, 200)})`;
   const notes = row.verification_notes ? `${row.verification_notes}\n${stamp}` : stamp;
 
+  // Adversarial-review fix (PR #6178): condition the update on the marker still being
+  // present so a concurrent double-release can't both succeed and double-append stamps
+  // (read-then-update is otherwise non-atomic). Zero rows updated ⇒ someone else released
+  // between our read and write — surface that instead of a silent success.
   const { data, error } = await supabase
     .from('quick_fixes')
     .update({ owner: null, release_condition: null, verification_notes: notes })
     .eq('id', qfId)
+    .not('release_condition', 'is', null)
     .select('id, status, owner, release_condition')
-    .single();
+    .maybeSingle();
   if (error) throw new Error(`release failed for ${qfId}: ${error.message}`);
+  if (!data) throw new Error(`${qfId} was released concurrently by another session — no double-stamp written`);
   return data;
 }
 

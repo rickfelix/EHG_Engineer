@@ -365,7 +365,10 @@ async function loadData() {
   try {
     const { data: qfRows } = await supabase
       .from('quick_fixes')
-      .select('id, title, status, claiming_session_id, created_at')
+      // owner/release_condition: SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001 — the main list
+      // must MARK gated rows (adversarial-review fix, PR #6178), not render them as
+      // ordinary claimable open work while only the dedicated section knows better.
+      .select('id, title, status, claiming_session_id, created_at, owner, release_condition')
       .in('status', ['open', 'in_progress'])
       .order('created_at', { ascending: true });
     quickFixes = qfRows || [];
@@ -648,7 +651,11 @@ function printQuickFixes(d) {
   for (const qf of qfs) {
     const ageH = qf.created_at ? Math.max(0, Math.round((now - Date.parse(qf.created_at)) / 3600000)) + 'h' : '?';
     const holder = qf.claiming_session_id ? String(qf.claiming_session_id).substring(0, 8) : '—';
-    console.log('  ' + pad(qf.id, 18) + pad(qf.status, 12) + pad(ageH, 6) + pad(holder, 10) + (qf.title || '').substring(0, 40));
+    // SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001: gated rows are NOT claimable open work —
+    // badge them here so the primary list agrees with the worker-lane exclusion.
+    const { isChairmanGatedQF } = require('../lib/fleet/qf-gated-hold.cjs');
+    const gatedBadge = isChairmanGatedQF(qf) ? ' ⛔CHAIRMAN-GATED' : '';
+    console.log('  ' + pad(qf.id, 18) + pad(qf.status, 12) + pad(ageH, 6) + pad(holder, 10) + (qf.title || '').substring(0, 40) + gatedBadge);
   }
   console.log('');
 }
@@ -1414,11 +1421,16 @@ async function resolveInboxAudience({ argv = process.argv, env = process.env, cl
 // scripts/release-chairman-gated-qf.js — never silently lost.
 async function printChairmanGatedQfs() {
   const { isChairmanGatedQF } = require('../lib/fleet/qf-gated-hold.cjs');
+  // Adversarial-review fixes (PR #6178): owner filtered SERVER-side (ilike) so non-chairman
+  // release_condition rows can't crowd chairman holds out of the limit window ("never
+  // silently lost" contract); 'closed' is a real terminal status (auto-close migration) —
+  // excluded so a superseded gated QF doesn't display as an active hold forever.
   const { data: rows, error } = await supabase
     .from('quick_fixes')
     .select('id, title, status, owner, release_condition, created_at')
     .not('release_condition', 'is', null)
-    .not('status', 'in', '(completed,cancelled)')
+    .ilike('owner', 'chairman')
+    .not('status', 'in', '(completed,cancelled,closed)')
     .order('created_at', { ascending: true })
     .limit(30);
   if (error) { return; } // additive surface — degrade silently, never break the dashboard
