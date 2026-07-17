@@ -2,6 +2,7 @@
 -- Migration: market_signal_scanner_budget — scanner-scoped FinOps ceiling
 -- SD: SD-LEO-INFRA-MARKET-SIGNAL-SCANNER-001 (FR-5)
 -- Date: 2026-07-16
+-- @approved-by: codestreetlabs@gmail.com
 --
 -- Additive only. Home for the market-signal-scanner's monthly FinOps cap
 -- ($25/mo default), read/written by lib/market-signal-scanner/budget-guard.js

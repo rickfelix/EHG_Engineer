@@ -2,6 +2,7 @@
 -- Migration: market_signal_observations — attested-provenance raw observation store
 -- SD: SD-LEO-INFRA-MARKET-SIGNAL-SCANNER-001 (FR-1)
 -- Date: 2026-07-16
+-- @approved-by: codestreetlabs@gmail.com
 --
 -- Additive only. Home for the raw observation tuples every market-signal-scanner
 -- source fetcher writes (source, raw_value, source_url, content_hash, fetched_at,
