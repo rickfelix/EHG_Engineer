@@ -1,0 +1,131 @@
+{
+  "executive_summary": "Build and run the chairman-ratified market-signal scanner (M1-M5, Solomon design doc 8fee0f44 on qf-736) as a genuinely free-tier thin slice, re-timed forward off its original 'after substrate cluster' sequencing per chairman ruling 2026-07-16 (Solomon-confirmed: no hard technical dependency). LEAD-phase research (parallel workflow, 4 independent investigations) found the two hard architectural seams this SD depends on -- venture_nursery writes and periodic_process_registry cron liveness -- already have proven, copy-paste production patterns. The blocker was entirely data-acquisition: none of the design doc's original 5 sources (Google Trends, Meta Ad Library, Keepa, job-posting APIs, Reddit) have existing credentials or integration code, and 2 of 5 (Keepa paid, job-posting APIs access-restricted) are not viable in a thin slice. This PRD rescopes to 3 sources verified LIVE-REACHABLE during LEAD research, all $0 direct cost: the WordPress.org Plugin Directory public JSON API (api.wordpress.org, no auth/key required -- confirmed live via a direct HTTP call returning real install-count/rating data), Reddit (free-tier API, one-time OAuth app registration, zero ongoing cost), and Google Trends (free/unofficial endpoint). Critically, this 3-source combination satisfies the design doc's own hard M2 triangulation rule (>=3 signal families, >=1 must be MONEY-IN or STICKINESS -- attention alone never qualifies) which a naive 'Trends + Reddit only' scope would NOT satisfy: WordPress.org install-count deltas supply MONEY-IN, WordPress.org rating/num_ratings persistence supplies STICKINESS, Reddit complaint-mining supplies STRUCTURAL, and Google Trends supplies ATTENTION.",
+  "business_context": "Portfolio strategy = standing need for continuous venture sourcing from venture #2 onward (the chairman's build-vs-instantiate correction: BUILDING a perpetually-needed capability is not premature, only instantiating idle agent-rows before need is decor). The scanner feeds the ALREADY-LIVE venture_nursery (16 rows) -> Stage-0 synthesis -> chairman gate chain -- the exact seam that minted venture-2. Without this SD, venture-3+ nomination stays vibes-and-engine-scores, the outcome venture-2's own thesis explicitly declined to stand on.",
+  "technical_context": "LEAD-phase parallel research (4 independent Explore-agent investigations, synthesized): (1) venture_nursery schema confirmed live (database/migrations/20260209_stage0_venture_entry_schema.sql) -- NOT NULL columns are only name + maturity_level (default 'seed'); source_type must be one of {brainstorm,todoist,youtube,competitor_analysis,discovery_mode,manual} -- this scanner uses 'discovery_mode'; source_ref (jsonb) is the ONLY provenance vessel (no dedicated metadata column), so full attested provenance (source, query, run id, SD key, raw observation hash) goes there. Proven writer pattern: lib/eva/stage-zero/venture-nursery.js parkVenture() / lib/eva/stage-zero/traversability-gate.js parkFailedCandidate(). (2) periodic_process_registry (database/migrations/20260704_periodic_process_registry.sql) + lib/periodic-liveness/stamp-last-fired.js stampLastFired() is the write path; the canonical register-then-stamp pattern is ensureRegistryAndStamp() in scripts/vision/rung-progress-rollup.mjs:26-50 (copy verbatim). .github/workflows/wave-progress-refresher.yml is the copy-paste GHA cron template (checkout -> setup-node@v4 -> npm ci --ignore-scripts -> run CLI; already has concurrency + timeout-minutes guards) -- change cron to weekly. (3) NO existing credentials/integration code exists anywhere in this codebase for Google Trends, Meta Ad Library, Keepa, job-posting APIs, or Reddit (confirmed via repo-wide grep + .env.example inspection) -- but a live HTTP call during LEAD research to api.wordpress.org/plugins/info/1.0/{slug}.json confirmed it's a real, free, no-auth, no-key JSON API returning downloaded (install count), ratings/num_ratings, added (creation date); api.wordpress.org/plugins/info/1.2/?action=query_plugins&request[search]={term} confirmed a real search/discovery endpoint (active_installs, downloaded, tags) for finding NEW candidate niches, not just monitoring known ones. (4) No generic FinOps budget-cap utility exists; lib/marketing/budget-governor.js is the closest reusable SHAPE (checkBudget/recordSpend, monthly cap + stop-loss, fail-closed if no budget row) but is schema-coupled to the marketing domain's channel_budgets table -- this SD builds a small scanner-scoped guard following that shape, not reusing the table. (5) Honest-idle convention: lib/eva/stage-zero/data-pollers/staleness.js exports NO_DATA_MARKER + stalenessStamp(), mirrored by lib/agents/ghost-ceo-gauge.js's own NO_DATA_MARKER -- each gauge defines its own scoped, greppable, test-pinned 'NO-DATA: <reason>' constant; this is the pattern to follow (no single shared honestIdle() helper exists). DATA_PLATFORM_OPERATOR (lib/agents/venture-ceo-factory.js EHG_SHARED_OPERATORS array, ~line 228) already carries capabilities:['telemetry_ingest','kpi_rollup','experiment_readouts'] and an honest_idle doctrine string -- this scanner is a natural extension of that operator's domain, referenced as ownership context but the operator's own instantiation is OUT of this SD's scope (owned by SD-LEO-INFRA-SHARED-ORG-SERVICES-001 / SD-LEO-INFRA-ORG-TEMPLATE-ARMING-001, a separate SD).",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Three-source signal ingestion satisfying the M2 hard triangulation rule",
+      "description": "Build lib/market-signal-scanner/sources/ with 3 independent fetchers: (a) wordpress-plugins.js -- calls api.wordpress.org/plugins/info/1.2/?action=query_plugins&request[search]={term} for niche discovery and api.wordpress.org/plugins/info/1.0/{slug}.json for per-candidate detail; derives MONEY-IN (90-day slope of active_installs/downloaded vs 12mo baseline) and STICKINESS (rating/num_ratings persistence, added-date-derived longevity) family scores. (b) reddit.js -- OAuth app-registered fetcher (one-time setup, documented in .env.example) mining target subreddits for complaint-velocity language; derives STRUCTURAL family score. (c) google-trends.js -- free/unofficial endpoint fetcher for search-volume slope; derives ATTENTION family score. Each fetcher stores raw observations with (source, raw_value, source_url, content_hash, fetched_at, transform_version) per the design doc's attested-provenance rule -- a score that cannot be recomputed from stored raw observations is invalid.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "wordpress-plugins.js successfully calls the live api.wordpress.org endpoints and returns real (non-fabricated) install-count and rating data for a test plugin slug",
+        "All 3 fetchers store raw observations with full provenance tuple; a unit test proves a score recomputed from stored raw+transform_version matches the original score byte-for-byte",
+        "Reddit fetcher requires only a one-time free OAuth app registration -- documented in .env.example with re-issue-source comment, matching this codebase's existing convention"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Scoring engine implementing NicheScore with hard triangulation + thesis-conditioned terms",
+      "description": "Build lib/market-signal-scanner/scoring.js implementing the design doc's formula: NicheScore = w_m*MoneyIn + w_s*Stickiness + w_a*Attention + w_x*Structural - P_gaming - P_staleness - P_correlation, multiplied by T_entry and C_fit. Hard triangulation rule enforced as a gate BEFORE scoring counts: >=3 families must agree AND >=1 must be MONEY-IN or STICKINESS (attention-only combinations never nominate, no matter how many attention sources agree). Independence discipline: signals sharing a causal-event window (within ~30d of a detected spike) don't count as a second family unless money-in persists >=60d past attention decay. Hard screens (thesis-fails niches: brand-moat/trust, paid-acquisition-dominated, network-effect, platform-hostage, enterprise-motion) implemented as an explicit reject list, logged with reason.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Unit test: a 2-family candidate (e.g. ATTENTION + STRUCTURAL only, no MONEY-IN/STICKINESS) is correctly rejected by the triangulation gate",
+        "Unit test: a 3-family candidate with MONEY-IN present (WordPress.org install deltas + Reddit complaints + Trends) is correctly nominated",
+        "Unit test: an attention-only combination (even with many correlated attention sources) never nominates",
+        "T_entry and C_fit multipliers computed per the formula; a hard-screen-failing niche (e.g. brand-moat category) is rejected regardless of raw score"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Wire nominations into the live venture_nursery seam with attested provenance",
+      "description": "Reuse the proven insert shape from lib/eva/stage-zero/venture-nursery.js parkVenture() (or an equivalent new thin wrapper if that function's signature doesn't fit a scanner-sourced candidate). Write source_type='discovery_mode', maturity_level='seed' (default), and source_ref carrying {source:'market-signal-scanner', run_id, sd_key, niche_score, family_scores, raw_observation_refs} for full traceability -- there is no dedicated metadata column, so source_ref is the only provenance vessel.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A nursery row is written for a nominated candidate; source_type='discovery_mode' and source_ref contains the documented provenance shape",
+        "No regression to existing venture_nursery writers (parkVenture/parkFailedCandidate) or readers (checkNurseryTriggers, getNurseryHealth, discovery-mode.js)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Weekly armed cron + periodic_process_registry stamping (operate-by-default, D8)",
+      "description": "New .github/workflows/market-signal-scan.yml, modeled on .github/workflows/wave-progress-refresher.yml (checkout -> setup-node@v4 -> npm ci --ignore-scripts -> run scripts/market-signal-scan.mjs), weekly schedule, concurrency + timeout-minutes guards. Registration via ensureRegistryAndStamp() pattern copied from scripts/vision/rung-progress-rollup.mjs:26-50 -- upsert into periodic_process_registry on process_key (process_type='standalone_cron', liveness_source='self_stamped'), then stampLastFired() from lib/periodic-liveness/stamp-last-fired.js on each run. Shipped ARMED in the same PR, not a dark/off-by-default flag.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "The GHA workflow file is valid YAML and mirrors wave-progress-refresher.yml's structure with a weekly cron schedule",
+        "periodic_process_registry gains a row for the scanner's process_key with process_type='standalone_cron', liveness_source='self_stamped', BEFORE the first scheduled run (registration happens at PR-merge time via ensureRegistryAndStamp, not lazily)"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Scanner-scoped FinOps budget guard ($25/mo ceiling, in-code enforced)",
+      "description": "New lib/market-signal-scanner/budget-guard.js modeled on lib/marketing/budget-governor.js's shape (checkBudget/recordSpend/getBudgetSummary) but scanner-scoped -- NOT reusing the marketing-coupled channel_budgets table. Since all 3 v1 sources are $0 direct cost, the $25/mo ceiling in this thin slice is effectively a compute/LLM-adjudication budget (e.g. any LLM calls used for complaint-mining text classification), not a data-acquisition budget -- document this explicitly so a future paid-tier source (Keepa, Meta Ad Library) integration knows the ceiling it must share.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "Budget guard unit-tested: checkBudget() fails closed if no budget row exists; recordSpend() correctly accumulates against the monthly cap",
+        "A scan cycle that would exceed the $25/mo ceiling is blocked before incurring further spend, with a logged reason"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Honest-idle NO-DATA reporting on 0-nomination cycles",
+      "description": "Following the NO_DATA_MARKER convention (lib/eva/stage-zero/data-pollers/staleness.js, mirrored by lib/agents/ghost-ceo-gauge.js): export a scoped, greppable, test-pinned constant e.g. NO_DATA_MARKER = 'NO-DATA: market-signal-scan found zero candidates clearing triangulation this cycle -- do not fabricate a nomination'. A scan cycle finding zero qualifying niches logs this marker and writes no venture_nursery row -- never manufactures a nominee to look busy.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "Unit test: a scan cycle with zero triangulation-passing candidates returns/logs the NO_DATA_MARKER constant and writes zero venture_nursery rows",
+        "The constant is greppable and test-pinned (a regression test fails if the marker string or its 'do not fabricate' semantics are silently removed)"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "No schema change to venture_nursery or periodic_process_registry", "description": "Both tables already have every column this SD needs (source_ref jsonb for provenance, process_key/liveness_source for cron registration) -- confirmed via live schema read during LEAD research." },
+    { "id": "TR-2", "title": "New scanner-scoped tables only if genuinely needed", "description": "Raw observation storage (source, raw_value, source_url, content_hash, fetched_at, transform_version tuples) and the FinOps budget-tracking row need a home -- EXEC decides whether existing JSONB columns suffice or a small new migration is warranted (2 new tables max: raw observations, scanner budget). Document the decision in the PR." },
+    { "id": "TR-3", "title": "Reddit OAuth app registration is a one-time human action", "description": "Unlike a pure-code dependency, Reddit requires registering a free OAuth app (developer console, no cost) -- this is a human action outside EXEC's control; the PRD flags it so LEAD/coordinator can track it as a pre-merge or post-merge (env-gated, inert-until-configured) dependency, following the same 'merge inert behind unset env' pattern already used elsewhere in this codebase (e.g. SD-LEO-FEAT-TWO-WAY-CHAIRMAN-001's Twilio secrets)." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "WordPress.org fetcher live call", "type": "integration", "expected": "Returns real install-count/rating data for a known plugin slug, matching the LEAD-phase live-verified shape" },
+    { "id": "TS-2", "scenario": "Triangulation gate: 2-family candidate", "type": "unit", "expected": "Rejected -- does not nominate" },
+    { "id": "TS-3", "scenario": "Triangulation gate: 3-family candidate with MONEY-IN present", "type": "unit", "expected": "Nominated -- writes a venture_nursery row with full provenance" },
+    { "id": "TS-4", "scenario": "Attention-only combination (any number of attention sources)", "type": "unit", "expected": "Never nominates, regardless of score magnitude" },
+    { "id": "TS-5", "scenario": "0-nomination cycle", "type": "unit", "expected": "NO_DATA_MARKER logged, zero venture_nursery rows written" },
+    { "id": "TS-6", "scenario": "Budget guard at ceiling", "type": "unit", "expected": "checkBudget() blocks further spend once the $25/mo cap is reached" },
+    { "id": "TS-7", "scenario": "periodic_process_registry registration", "type": "integration", "expected": "A row exists for the scanner's process_key after ensureRegistryAndStamp() runs, before any scheduled fire" }
+  ],
+  "acceptance_criteria": [
+    "All 6 FRs pass their respective acceptance criteria above",
+    "The scanner nominates using only $0-direct-cost sources (WordPress.org Plugin Directory API, Reddit free tier, Google Trends) while satisfying the design doc's M2 hard triangulation rule",
+    "Deferred sources (Meta Ad Library, Keepa, job-posting APIs) are explicitly documented as a later increment, not silently dropped",
+    "No regression to existing venture_nursery or periodic_process_registry consumers"
+  ],
+  "risks": [
+    { "risk": "WordPress.org plugin ecosystem may not map cleanly onto general 'venture niche' candidates (it's software/SaaS-specific)", "mitigation": "Acceptable for a thin slice -- SaaS/tooling niches are squarely within EHG's demonstrated executable channel set (venture-2's own wedge); broader niche coverage is a natural fast-follow once nomination value is proven, matching the design doc's own MVP-first philosophy.", "severity": "low" },
+    { "risk": "Reddit's free-tier API terms or rate limits could change", "mitigation": "Fetcher built with the existing generic rate-limiter pattern (lib/notifications/rate-limiter.js). A Reddit outage removes the STRUCTURAL family, leaving only WordPress.org's MONEY-IN + STICKINESS (2 families) -- below the >=3-families rule, so the scanner correctly reports NO_DATA (honest degradation) rather than silently relaxing the triangulation rule.", "severity": "low" },
+    { "risk": "Google Trends' unofficial/free endpoint is not an officially supported API and could break without notice", "mitigation": "ATTENTION is the smallest-weighted family (w_a=0.15) and never sufficient alone. A Trends outage leaves WordPress.org (MONEY-IN+STICKINESS) + Reddit (STRUCTURAL) -- still 3 families, so the scanner keeps nominating correctly with ATTENTION absent; only a simultaneous Trends+Reddit outage would drop below the threshold and correctly report NO_DATA.", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["Stage-0 synthesis (existing, reads venture_nursery -- unchanged consumer path)", "Monthly chairman digest (future increment, not this SD's scope per the design doc's phased consumer list)", "Stage-21 freshness re-check (future increment)"],
+    "dependencies": ["venture_nursery (existing, no schema change)", "periodic_process_registry + lib/periodic-liveness/stamp-last-fired.js (existing)", "Reddit OAuth app registration (one-time human action, env-gated)"],
+    "data_contracts": ["source_ref jsonb shape on venture_nursery rows: {source, run_id, sd_key, niche_score, family_scores, raw_observation_refs}", "Raw observation tuple: (source, raw_value, source_url, content_hash, fetched_at, transform_version)"],
+    "runtime_config": ["REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET env vars (new, documented in .env.example)", "MARKET_SIGNAL_SCANNER_MONTHLY_BUDGET_CAP env var or in-code constant ($25 default)"],
+    "observability_rollout": ["Scanner logs family scores + triangulation verdict per candidate", "NO_DATA_MARKER logged on 0-nomination cycles", "periodic_process_registry last_fired_at is the liveness dashboard's read path (existing convention)"]
+  },
+  "system_architecture": {
+    "summary": "New lib/market-signal-scanner/ module (sources/, scoring.js, budget-guard.js) + a new CLI entry (scripts/market-signal-scan.mjs) + a new weekly GHA workflow. Writes into the existing venture_nursery and periodic_process_registry tables via their proven insert/upsert patterns. No modification to any existing scanner/gauge/operator code in this SD (DATA_PLATFORM_OPERATOR's own instantiation is a separate SD).",
+    "components": [
+      { "name": "lib/market-signal-scanner/sources/wordpress-plugins.js", "change": "NEW -- MONEY-IN + STICKINESS fetcher" },
+      { "name": "lib/market-signal-scanner/sources/reddit.js", "change": "NEW -- STRUCTURAL (complaint-mining) fetcher" },
+      { "name": "lib/market-signal-scanner/sources/google-trends.js", "change": "NEW -- ATTENTION fetcher" },
+      { "name": "lib/market-signal-scanner/scoring.js", "change": "NEW -- NicheScore formula + triangulation gate + hard screens" },
+      { "name": "lib/market-signal-scanner/budget-guard.js", "change": "NEW -- $25/mo FinOps ceiling" },
+      { "name": "scripts/market-signal-scan.mjs", "change": "NEW -- CLI entry point, writes to venture_nursery, registers/stamps periodic_process_registry" },
+      { "name": ".github/workflows/market-signal-scan.yml", "change": "NEW -- weekly armed cron" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build sources independently (each is a small, isolated fetcher), then the scoring engine (pure logic, heavily unit-testable), then wire into venture_nursery + periodic_process_registry, then the cron workflow, then the budget guard and honest-idle reporting.",
+    "steps": [
+      "FR-1: 3 source fetchers with attested-provenance raw observation storage",
+      "FR-2: scoring engine (NicheScore, triangulation gate, thesis-conditioned T_entry/C_fit, hard screens) -- heavily unit tested",
+      "FR-3: venture_nursery writer wiring",
+      "FR-4: weekly armed cron + periodic_process_registry registration",
+      "FR-5: FinOps budget guard",
+      "FR-6: honest-idle NO-DATA reporting",
+      "PR + review + ship"
+    ]
+  },
+  "dependencies": [
+    "SD-FDBK-ENH-ORG-TEMPLATE-DELTA-001 (completed) -- defined the DATA_PLATFORM_OPERATOR this scanner is conceptually owned by (operator instantiation itself is a separate, later SD)"
+  ],
+  "activation_test_id": "tests/unit/market-signal-scanner/scoring.test.js",
+  "metadata": { "sd_key": "SD-LEO-INFRA-MARKET-SIGNAL-SCANNER-001" }
+}

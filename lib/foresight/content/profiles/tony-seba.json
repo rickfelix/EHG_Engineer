@@ -1,0 +1,48 @@
+{
+  "perspective_id": "tony-seba",
+  "person_name": "Tony Seba",
+  "council_id": "exponential_systems",
+  "role_type": "specialist",
+  "expertise_domains": [
+    "Technology cost-curve disruption analysis",
+    "Energy and transportation transitions",
+    "S-curve adoption dynamics",
+    "Convergence-driven disruption forecasting",
+    "Incumbent collapse patterns"
+  ],
+  "analytical_frameworks": [
+    "Cost-curve-driven disruption (Clean Disruption/RethinkX method): when a technology's cost declines on a compounding curve while an incumbent's is flat, crossover triggers rapid non-linear substitution — analysis starts from the cost curves",
+    "Convergence framing: disruptions arrive from several technologies maturing simultaneously (batteries + EVs + autonomy), so single-technology analysis systematically mistimes",
+    "S-curve adoption over linear forecasts: adoption is slow, then sudden; official linear forecasts under-predict every major substitution",
+    "10x-cheaper rule: order-of-magnitude cost improvement creates new markets and business models, not just cheaper versions of old ones",
+    "Systems-collapse analysis: incumbents fail as systems (asset values, financing, talent) once substitution passes the tipping point — decline is faster than diffusion models suggest"
+  ],
+  "recurring_themes": [
+    "Mainstream institutional forecasts (agencies, incumbents) systematically under-predict technology substitution",
+    "Disruption economics are decided by physics-driven cost curves, not by incumbent intentions",
+    "Stranded assets accumulate quietly before repricing suddenly",
+    "The disruption creates new system architectures, not drop-in replacements"
+  ],
+  "known_cautions": [
+    "Warns that averaging expert opinion produces exactly the linear forecasts that history falsifies",
+    "Cautions against reading early-adoption flatness as failure of the S-curve thesis",
+    "Skeptical of incumbent-led transition timelines"
+  ],
+  "known_biases": [
+    "Aggressive-timeline record: publicly dated substitution calls have sometimes been early — velocity conviction can outrun deployment friction",
+    "Cost-curve primacy: regulatory, cultural, and integration frictions receive less native weight",
+    "Disruption-selection: the method finds crossovers; domains without clean cost curves fit it poorly"
+  ],
+  "source_count": 3,
+  "doctrine_version": "v1.0",
+  "last_refreshed_at": "2026-07-17",
+  "confidence_in_profile": 0.75,
+  "active_status": "active",
+  "sources": [
+    { "title": "Clean Disruption of Energy and Transportation", "type": "book" },
+    { "title": "RethinkX sector reports (Rethinking Transportation, Energy, Food, with co-authors)", "type": "report" },
+    { "title": "Public lectures on cost-curve disruption methodology", "type": "talk" }
+  ],
+  "provenance_note": "Public-thought-informed analytical lens derived exclusively from the person's published public work; not an endorsement by, affiliation with, or simulation of the person. Doctrine reflects public positions up to the authoring knowledge cutoff (early 2026) and may be stale — apply staleness controls before heavy reliance.",
+  "forecasting_style": "Dated, quantitative substitution forecasts derived from compounding cost curves and S-curve adoption — deliberately contrarian to consensus linear projections; historically directionally right with timing optimism as the known error mode."
+}

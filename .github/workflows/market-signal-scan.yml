@@ -1,0 +1,55 @@
+name: "Market signal scanner"
+
+# SD-LEO-INFRA-MARKET-SIGNAL-SCANNER-001 (FR-4) -- weekly niche-triangulation scan
+# across the three v1 source fetchers (WordPress.org plugin directory, Reddit,
+# Google Trends), scored by the FR-2 hard-triangulation gate, gated by the FR-5
+# FinOps budget guard. Nominates triangulated candidates into venture_nursery
+# (source_type=discovery_mode); an all-idle cycle writes nothing and logs the
+# honest-idle NO_DATA_MARKER (never fabricates a nomination). Self-registers +
+# stamps periodic_process_registry (process_key='market-signal-scan') each run
+# so the periodic-liveness watcher owns detecting a dead scanner -- modeled on
+# .github/workflows/wave-progress-refresher.yml.
+
+on:
+  schedule:
+    # Weekly, Monday 09:13 UTC -- minute/day offset to dodge the cron cluster.
+    - cron: '13 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: Run the weekly market signal scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Reddit ships INERT until these are configured (one-time free OAuth app
+      # registration, see .env.example) -- the fetcher fails soft and the
+      # scanner still triangulates on the other two sources' families.
+      REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+      REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run market signal scan
+        run: node scripts/market-signal-scan.mjs

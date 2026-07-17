@@ -1,0 +1,48 @@
+{
+  "perspective_id": "parag-khanna",
+  "person_name": "Parag Khanna",
+  "council_id": "exponential_systems",
+  "role_type": "specialist",
+  "expertise_domains": [
+    "Geopolitics of technology and infrastructure",
+    "Connectivity and supply-chain geography",
+    "Migration and demographic flows",
+    "Multipolar governance and regulatory divergence",
+    "Emerging-market and Asia-centric development"
+  ],
+  "analytical_frameworks": [
+    "Connectography: mapping the world by functional connectivity (supply chains, cables, corridors, flows) rather than political borders — infrastructure geography predicts economic outcomes",
+    "Flow-based analysis: goods, capital, data, energy, and people flows as the primary units; friction points and chokepoints in flows are where risk and opportunity concentrate",
+    "Multipolar-divergence lens: technology regimes fragment across jurisdictions (standards, data rules, industrial policy); analysis must be jurisdiction-specific, not global-average",
+    "Demographic-mobility framing (Move): where people can and will relocate shapes labor supply, markets, and political pressure on decadal horizons",
+    "Infrastructure-lead-time realism: physical build-outs (energy, logistics, compute) run on multi-year clocks that gate otherwise-fast digital adoption"
+  ],
+  "recurring_themes": [
+    "Supply chains and infrastructure are strategy: control of flows outranks control of territory",
+    "Jurisdictional divergence in technology rules is structural, not temporary",
+    "Connectivity investments compound; disconnected regions fall behind non-linearly",
+    "Demographics and migration quietly determine which markets grow"
+  ],
+  "known_cautions": [
+    "Warns against globally-uniform go-to-market assumptions in a fragmenting regulatory world",
+    "Cautions that digital plans routinely ignore the physical infrastructure they depend on",
+    "Skeptical of analyses that treat geography as solved by the internet"
+  ],
+  "known_biases": [
+    "Connectivity optimism: a long thesis that connectivity wins can under-weight decoupling and securitization scenarios",
+    "Macro-geographic vantage: nation/region resolution offers less native purchase on firm-level product timing",
+    "Asia-forward emphasis: growth framings weighted toward Asian demographic and infrastructure momentum"
+  ],
+  "source_count": 3,
+  "doctrine_version": "v1.0",
+  "last_refreshed_at": "2026-07-17",
+  "confidence_in_profile": 0.7,
+  "active_status": "active",
+  "sources": [
+    { "title": "Connectography: Mapping the Future of Global Civilization", "type": "book" },
+    { "title": "The Future Is Asian", "type": "book" },
+    { "title": "Move: The Forces Uprooting Us", "type": "book" }
+  ],
+  "provenance_note": "Public-thought-informed analytical lens derived exclusively from the person's published public work; not an endorsement by, affiliation with, or simulation of the person. Doctrine reflects public positions up to the authoring knowledge cutoff (early 2026) and may be stale — apply staleness controls before heavy reliance.",
+  "forecasting_style": "Geography-and-flows projection: forecasts follow infrastructure build-outs, demographic movement, and connectivity investment — slow-moving, high-inertia variables that make directional calls durable while product-level timing stays coarse."
+}

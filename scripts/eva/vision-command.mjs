@@ -19,6 +19,11 @@
  *           (--approved | --draft)        REQUIRED: deliberate approval choice.
  *                                         --approved => active + chairman_approved
  *                                         --draft    => draft, not approved
+ *           [--chairman-ratified]         REQUIRED in addition to --approved for GOVERNED
+ *                                         vision_keys (e.g. VISION-PORTFOLIO-STRATEGY-001,
+ *                                         see lib/eva/vision-upsert.js GOVERNED_VISION_KEYS)
+ *                                         — --approved alone is silently downgraded to draft
+ *                                         for those keys (SD-LEO-INFRA-PORTFOLIO-STRATEGY-FIRST-001-A)
  *           [--venture-id <id>]           Explicit venture linkage
  *           [--brainstorm-id <id>]        Source brainstorm (auto-links a single-venture session)
  *           [--dimensions <json>]
@@ -43,6 +48,11 @@ import { parseMarkdownToSections, buildDefaultMapping } from './markdown-to-sect
 import { buildSectionKeyMapping, getSectionSchema, validateSections } from './document-section-registry.mjs';
 import { renderSectionsToMarkdown, renderSectionsSummary } from './sections-to-markdown-renderer.mjs';
 import { readStdin } from '../../lib/utils/read-stdin.mjs';
+// SD-LEO-INFRA-PORTFOLIO-STRATEGY-FIRST-001-A: the same GOVERNED_VISION_KEYS gate cmdUpsert
+// applies via upsertVision() must also apply to cmdAddendum's direct DB write below — an
+// adversarial review (PR #6138) found the addendum path bypassed ratification entirely,
+// letting an already-active governed document's content change with no re-ratification.
+import { buildAddendumUpdatePayload, rejectStringFlagValue } from '../../lib/eva/vision-upsert.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../');
@@ -100,10 +110,18 @@ async function cmdExtract({ source, content: contentArg }) {
   console.log(JSON.stringify(dimensions, null, 2));
 }
 
-async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dimensionsJson, brainstormId, sections: sectionsJson, content: contentArg, stdin: stdinFlag, approved: approvedFlag, draft: draftFlag }) {
+async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dimensionsJson, brainstormId, sections: sectionsJson, content: contentArg, stdin: stdinFlag, approved: approvedFlag, draft: draftFlag, chairmanRatified: chairmanRatifiedFlag }) {
   if (!visionKey) { console.error('--vision-key is required'); process.exit(1); }
   if (!level || !['L1', 'L2'].includes(level)) { console.error('--level must be L1 or L2'); process.exit(1); }
   if (!source && !sectionsJson && !contentArg && !stdinFlag) { console.error('--source, --sections, --content, or --stdin is required'); process.exit(1); }
+
+  // Reject a value on any of these three bare boolean flags (see
+  // rejectStringFlagValue's docblock) BEFORE the mutual-exclusivity checks below,
+  // so `--approved false` (etc.) errors instead of silently parsing as approved.
+  for (const [flagValue, flagName] of [[approvedFlag, '--approved'], [draftFlag, '--draft'], [chairmanRatifiedFlag, '--chairman-ratified']]) {
+    const err = rejectStringFlagValue(flagValue, flagName);
+    if (err) { console.error(err); process.exit(1); }
+  }
 
   // FR-2 (SD-LEO-FEAT-DELIBERATE-VISION-APPROVAL-001): approval must be a
   // DELIBERATE, explicit chairman choice — never a silent default. Require
@@ -119,6 +137,7 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
     process.exit(1);
   }
   const approved = Boolean(approvedFlag);
+  const chairmanRatified = Boolean(chairmanRatifiedFlag);
 
   // Read content from stdin when --stdin is set. Cross-platform alternative to
   // --content which hits OS CLI length limits (~8K on Windows) for large docs.
@@ -267,7 +286,7 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
   const { upsertVision } = await import('../../lib/eva/vision-upsert.js');
   const { data, error } = await upsertVision({
     supabase, visionKey, level, content, sections, dimensions,
-    ventureId, brainstormId, createdBy: 'eva-vision-command', approved,
+    ventureId, brainstormId, createdBy: 'eva-vision-command', approved, chairmanRatified,
   });
 
   if (error) { console.error('❌ Upsert failed:', error.message); process.exit(1); }
@@ -278,7 +297,11 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
   console.log(`   Level:   ${data.level}`);
   console.log(`   Version: ${data.version}`);
   console.log(`   Status:  ${data.status}`);
-  console.log(`   Approval: ${approved ? 'APPROVED (chairman_approved=true, build can start)' : 'DRAFT (not approved — review then re-run with --approved to start build)'}`);
+  // Report the ACTUAL persisted outcome (data.status/chairman_approved), not the requested
+  // --approved flag: for GOVERNED vision_keys, --approved alone is silently downgraded to
+  // draft unless --chairman-ratified is also passed (SD-LEO-INFRA-PORTFOLIO-STRATEGY-FIRST-001-A) —
+  // echoing the request instead of the outcome would misreport a governed key as activated.
+  console.log(`   Approval: ${data.status === 'active' ? 'APPROVED (chairman_approved=true, build can start)' : 'DRAFT (not approved — review then re-run with --approved [+ --chairman-ratified if this is a governed key] to start build)'}`);
   if (dimensions) console.log(`   Dimensions: ${dimensions.length} extracted`);
   if (sections) console.log(`   Sections: ${renderSectionsSummary(sections)}`);
 }
@@ -301,21 +324,10 @@ async function cmdAddendum({ visionKey, section, brainstormId }) {
     process.exit(1);
   }
 
-  // Build addendum entry
-  const addendum = {
-    section,
-    added_at: new Date().toISOString(),
-    added_by: 'eva-vision-command',
-    ...(brainstormId ? { source_brainstorm_id: brainstormId } : {}),
-  };
-
-  const currentAddendums = existing.addendums || [];
-  const updatedAddendums = [...currentAddendums, addendum];
-
-  // Re-extract dimensions from combined content
-  const combinedContent = `${existing.content}\n\n---\n\n## Addendum ${updatedAddendums.length}\n\n${section}`;
+  // Re-extract dimensions from the combined content (addendum text is appended to existing content)
+  const pendingCombinedContent = `${existing.content}\n\n---\n\n## Addendum ${(existing.addendums || []).length + 1}\n\n${section}`;
   console.error(`\n🤖 Re-extracting dimensions from updated content...`);
-  const dimensions = await extractDimensions(combinedContent);
+  const dimensions = await extractDimensions(pendingCombinedContent);
 
   if (dimensions) {
     const weightSum = dimensions.reduce((sum, d) => sum + (d.weight || 0), 0);
@@ -324,25 +336,36 @@ async function cmdAddendum({ visionKey, section, brainstormId }) {
     }
   }
 
-  const updatePayload = {
-    addendums: updatedAddendums,
-    extracted_dimensions: dimensions,
-    content: combinedContent,
-    updated_at: new Date().toISOString(),
-  };
-  if (brainstormId) updatePayload.source_brainstorm_id = brainstormId;
+  // SD-LEO-INFRA-PORTFOLIO-STRATEGY-FIRST-001-A: this is a second write path to
+  // eva_vision_documents that would otherwise bypass upsertVision()'s
+  // GOVERNED_VISION_KEYS gate entirely (adversarial review, PR #6138) — an
+  // addendum to an already-ACTIVE governed document would change its content
+  // while leaving status='active'/chairman_approved=true untouched, surfacing
+  // unratified content to stage-zero ideation as "chairman-ratified".
+  // buildAddendumUpdatePayload() mirrors upsertVision's "each revision needs
+  // its own ratification" rule: any addendum to a governed key demotes the
+  // row back to draft, requiring an explicit --approved --chairman-ratified
+  // upsert to re-activate.
+  const { updatePayload, updatedAddendums } = buildAddendumUpdatePayload({
+    visionKey, existing, section, dimensions, brainstormId,
+  });
+  if (updatePayload.status === 'draft') {
+    console.warn(`\n   ⚠️  ${visionKey} is a GOVERNED vision_key — this addendum demotes it back to draft.`);
+    console.warn(`      Re-run: node scripts/eva/vision-command.mjs upsert --vision-key ${visionKey} --level L1 --approved --chairman-ratified --content <updated content> to re-ratify.`);
+  }
 
   const { data, error } = await supabase
     .from('eva_vision_documents')
     .update(updatePayload)
     .eq('vision_key', visionKey)
-    .select('id, vision_key, version')
+    .select('id, vision_key, version, status, chairman_approved')
     .single();
 
   if (error) { console.error('❌ Addendum failed:', error.message); process.exit(1); }
 
   console.log('\n✅ Addendum added:');
   console.log(`   Key:      ${data.vision_key}`);
+  console.log(`   Status:   ${data.status}`);
   console.log(`   Addendums: ${updatedAddendums.length}`);
   if (dimensions) console.log(`   Dimensions re-extracted: ${dimensions.length}`);
 }
