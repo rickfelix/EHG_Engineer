@@ -1,8 +1,8 @@
-<!-- file_content_hash: 6ce724ce53b5da95 -->
+<!-- file_content_hash: 6fa474dcbe574d1d -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-07-16 1:13:36 PM
+**Generated**: 2026-07-17 5:50:52 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -152,6 +152,7 @@ Before writing code, review the PRD's `test_scenarios` and `testing_strategy` an
 2. **Export key functions independently** — Pipeline stages, validators, and transforms should be importable/callable outside their runtime context
 3. **Use injectable dependencies** — Database clients, API callers, and config should be parameters, not hardcoded imports, for functions that will need testing
 4. **Design clear seams** — When building multi-step workflows, each step should be independently testable with well-defined inputs/outputs
+5. **Uniformity audit (verify before EXEC-TO-PLAN)** — if you applied a client-injectable/testability pattern to some of the N functions this SD adds or modifies, enumerate all N and confirm the pattern is applied to EVERY one — especially the SD's own headline/CRITICAL-priority fix. Ask "which functions did NOT get the pattern?" and justify each exception explicitly. Partial application is how a core fix ships untested: in one SD, 3 of 4 new functions followed the pattern and the unpatterned 4th was the headline dedup gate.
 
 Ask yourself: "If the testing-agent had to write tests for this, would the architecture make that easy or painful?"
 
@@ -2147,6 +2148,6 @@ Verifies version consistency between CLAUDE*.md files and database. Use --fix to
 
 ---
 
-*Generated from database: 2026-07-16*
+*Generated from database: 2026-07-17*
 *Protocol Version: 4.4.1*
 *Load when: User mentions EXEC, implementation, coding, or testing*

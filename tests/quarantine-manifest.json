@@ -1363,6 +1363,16 @@
       "quarantined_at": "2026-07-08T01:00:00.000Z",
       "quarantined_by": "ccdd0c1c-19b0-481c-834c-082f2cd96776",
       "triage_note": "Hardcoded fixture date (NOW=2026-07-05) rots as real wall-clock time advances past it: resolveCheckin()/isAutoStartableQF() use real Date.now() internally (no injectable clock), so once STALE_QF_DAYS has elapsed since the fixture date, isAutoStartableQF's staleness ceiling rejects the fixture QFs — breaking acceptance #1/#3 (idle instead of self_claimed_qf). Deterministic, not flaky; will not self-heal. This was the REQUIRED 'Run Unit Tier (quarantine-aware)' branch-protection check, blocking every PR fleet-wide until quarantined. Un-quarantine once resolveCheckin/isAutoStartableQF accept an injectable nowMs (or the fixture re-anchors to a mocked clock)."
+    },
+    {
+      "file": "lib/loop-governance/collectors/__tests__/session-coordination-retention.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'open' to be 'closed' // Object.is equality",
+      "linked_ref": "feedback:58c1c3c7-59c8-4c31-9722-61b24d1d0bb0",
+      "quarantined_at": "2026-07-17T12:47:58.218Z",
+      "quarantined_by": "89b12649-6a0a-44ce-9208-424b564f6611",
+      "triage_note": "GT-1 golden regression test ('status is closed when the reaper last fired 29 days ago AND the backlog shows a measured decline') fails deterministically (fixed clock 2026-07-16T12:00:00Z, not time-flaky) on a clean origin/main checkout — verified in an isolated throwaway worktree with zero file overlap with SD-LEO-FEAT-SMS-INBOUND-RELAY-001. Pre-existing regression, not caused by this SD; discovered only because it blocked this SD's required unit-tier CI check on merge.",
+      "triaged_by": "SD-LEO-FEAT-SMS-INBOUND-RELAY-001"
     }
   ]
 }
