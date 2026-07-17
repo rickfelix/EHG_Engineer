@@ -1,0 +1,74 @@
+{
+  "title": "Foresight Board Phase-1 Workflow Engine (Specialist + Adjudicator + EVA Synthesis + Dossier Generation)",
+  "executive_summary": "Implements the workflow engine that OPERATES the Foresight Board built by sibling children A (doctrine content) and B (schemas + scoring). Given a venture candidate, runs the specialist assessment workflow (spec section 11 schema) per council, the adjudicator workflow (section 12 schema) per council, EVA cross-council synthesis (section 10 step 6), and Venture Decision Dossier generation (section 8.10, reusing sibling B's scoreVenture()). Implements the Venture-Screen operating mode (section 9.2) as the concrete Phase-1 target. Model routing (section 17) uses the EXISTING lib/llm getLLMClient({purpose}) factory -- no new routing infrastructure. All orchestrators accept an injected LLM client so the test suite never makes live API calls.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Implement lib/foresight/workflow/specialist-runner.js: given a council + specialist profile + venture candidate, build a third-person analytical prompt (spec section 11 schema fields: perspective_id, venture_candidate_id, executive_conclusion, observations[], opportunities, risks, assumptions, minority_or_counter_view, recommended_action, recommended_experiment, overall_confidence) using the profile's analytical_frameworks/recurring_themes/known_cautions/known_biases and the council's primary_questions, call an injected llmClient at purpose:'analysis', parse the structured JSON response, and insert one specialist_assessments row.",
+      "acceptance_criteria": ["Given a mock llmClient returning canned section-11-shaped JSON, one specialist_assessments row is inserted per call with fingerprint-free evidence_reviewed/findings/opportunities/risks/assumptions/confidence/recommended_action/dissent_flags populated from the parsed response", "The built prompt text contains no first-person voice or 'You are <person>' framing (reuses the profile's own anti-impersonation-linted content verbatim)", "A non-JSON or schema-incomplete LLM response returns a structured {parseError: true, ...} result and does NOT insert a row"]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Implement lib/foresight/workflow/adjudicator-runner.js: given a council's adjudicator profile + its 3 specialist_assessments rows, build a comparison prompt (spec section 12 schema fields: council_id, venture_candidate_id, consensus, material_disagreements, minority_view, shared_assumptions, weakest_assumptions, evidence_quality, council_confidence, EHG_implications, recommended_action, recommended_experiments, monitoring_triggers, kill_conditions) per section 10 step 5 (consensus/dissent/evidence-judgment/confidence/EHG-implications/recommended-action), call an injected llmClient at purpose:'generation', parse the response, and insert one council_adjudications row.",
+      "acceptance_criteria": ["Given 3 mock specialist_assessments and a mock llmClient returning canned section-12-shaped JSON, one council_adjudications row is inserted with minority_view preserved (never dropped, defaults to '' if the response omits it, matching sibling B's NOT NULL DEFAULT '' constraint)", "recommended_experiments/monitoring_triggers/kill_conditions are stored as arrays (jsonb), matching sibling B's schema", "A parse failure returns a structured error without inserting a row"]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "Implement lib/foresight/workflow/eva-synthesis.js: given all 5 councils' council_adjudications rows for one venture candidate, build an EVA cross-council synthesis prompt (spec section 10 step 6: agreements across councils, contradictions across councils, assumptions affecting multiple councils, dependencies, potential portfolio synergies, reusable EHG capabilities, opportunity costs, Rick decisions required), call an injected llmClient at purpose:'generation', parse the response into key_assumptions/major_disagreements/recommended_posture/next_experiment/experiment_budget/expected_information_gain/cost_of_waiting/reversibility/rick_decision_required, compute overall_score/overall_confidence by calling sibling B's scoreVenture() directly (never reimplementing section 13 logic), and insert one venture_decision_dossiers row with council_adjudication_ids referencing all 5 input rows.",
+      "acceptance_criteria": ["Given 5 mock council_adjudications, a mock llmClient, and criterion/gate/confidence inputs, the inserted venture_decision_dossiers row's overall_score/overall_confidence exactly match a direct scoreVenture() call with the same inputs", "council_adjudication_ids is a uuid[] containing exactly the 5 input council_adjudications ids (matching sibling B's no-hard-FK design)", "A parse failure returns a structured error without inserting a row"]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "Implement lib/foresight/workflow/run-venture-screen.js: a top-level orchestrator implementing the Venture-Screen operating mode (spec section 9.2) that, given a venture_candidate_id, loads the 5 councils + 20 profiles (sibling A's loadCouncils()/loadProfiles()), runs FR-1 for each of the 3 specialists per council (15 total), runs FR-2 for each of the 5 councils, then runs FR-3 once across all 5 council_adjudications, returning a summary of all inserted row ids.",
+      "acceptance_criteria": ["Given a venture_candidate_id and a mock llmClient returning valid canned responses for every call, runVentureScreen() inserts exactly 15 specialist_assessments rows, 5 council_adjudications rows, and 1 venture_decision_dossiers row, and returns their ids", "If any single specialist or adjudicator call returns a parse error, that error is collected and surfaced in the return value; the run continues for the remaining councils rather than aborting entirely (a bad response from one lens must not block evaluation of the other four)", "No live LLM API calls occur in the test suite (llmClient is always injected/mocked in tests)"]
+    }
+  ],
+  "technical_requirements": [
+    { "requirement": "Model routing must reuse the existing LLM factory verbatim, never reimplementing tier selection.", "detail": "Specialist calls use getLLMClient({purpose:'analysis'}) (mid-tier per lib/llm/client-factory.js getPurposeTier). Adjudicator and EVA-synthesis calls use getLLMClient({purpose:'generation'}) (high-tier). The orchestrators accept the client as an injected parameter (or default to calling getLLMClient internally) so tests can substitute a mock." },
+    { "requirement": "Scoring logic must never be duplicated.", "detail": "eva-synthesis.js imports scoreVenture from lib/foresight/scoring/venture-score.js (sibling B) and calls it directly for the dossier's overall_score/overall_confidence/gate_results." },
+    { "requirement": "Profile content must be consumed verbatim, never re-authored.", "detail": "specialist-runner.js and adjudicator-runner.js import loadCouncils/loadProfiles from lib/foresight/content/index.mjs (sibling A) and build prompts from the existing analytical_frameworks/recurring_themes/known_cautions/known_biases/primary_questions fields -- no new doctrine content is authored in this SD." },
+    { "requirement": "Parse failures must be structured, not thrown exceptions, and must never corrupt partial DB state.", "detail": "Each runner's parser returns {parseError: true, raw, reason} on malformed JSON or missing required fields; the calling orchestrator checks this before attempting any INSERT, so a bad LLM response never produces a malformed row." }
+  ],
+  "system_architecture": {
+    "summary": "4 new JS modules under lib/foresight/workflow/, each split into a pure prompt-builder function, a pure response-parser function, and a thin DB-inserting orchestrator function that accepts an injected llmClient and supabase client. No new database migrations, no new LLM infrastructure, no UI.",
+    "components": [
+      { "name": "specialist-runner.js", "description": "buildSpecialistPrompt(profile, council, ventureCandidate), parseSpecialistOutput(rawText), runSpecialistAssessment({profile, council, ventureCandidate, llmClient, supabase}) -> inserts specialist_assessments" },
+      { "name": "adjudicator-runner.js", "description": "buildAdjudicatorPrompt(adjudicatorProfile, council, specialistAssessments), parseAdjudicatorOutput(rawText), runAdjudication({adjudicatorProfile, council, specialistAssessments, ventureCandidateId, llmClient, supabase}) -> inserts council_adjudications" },
+      { "name": "eva-synthesis.js", "description": "buildEvaSynthesisPrompt(councilAdjudications, ventureCandidate), parseEvaSynthesisOutput(rawText), runEvaSynthesis({councilAdjudications, ventureCandidateId, criterionScores, gateResults, confidence, llmClient, supabase}) -> calls scoreVenture(), inserts venture_decision_dossiers" },
+      { "name": "run-venture-screen.js", "description": "runVentureScreen(ventureCandidateId, {supabase, llmClient}) -> loads councils/profiles, runs specialist-runner x15, adjudicator-runner x5, eva-synthesis x1, returns {specialistAssessmentIds, councilAdjudicationIds, dossierId, errors}" }
+    ]
+  },
+  "implementation_approach": {
+    "prompt_and_parser_first": "Write and unit-test the pure buildXPrompt()/parseXOutput() functions first (no DB, no LLM) -- these are the highest-value, most-testable surface. Orchestrators wire them to DB inserts second.",
+    "injectable_llm_client": "Every orchestrator function takes llmClient as a parameter (default: getLLMClient({purpose: ...}) if omitted) so unit tests always inject a mock returning canned JSON -- no ANTHROPIC_API_KEY/GEMINI_API_KEY required for the test suite, matching sibling B's precedent for injectable dependencies.",
+    "namespacing": "New code lives under lib/foresight/workflow/ (a new subdirectory alongside sibling A's lib/foresight/content/ and sibling B's lib/foresight/scoring/), keeping the three children's deliverables cleanly separated within the shared lib/foresight/ namespace."
+  },
+  "risks": [
+    { "risk": "LLM response does not match the expected structured schema (section 11/12 JSON shape)", "impact": "medium", "likelihood": "medium", "mitigation": "Parsers validate required fields and return a structured parse-error result rather than throwing; orchestrators check this before any INSERT." },
+    { "risk": "Real-money LLM calls in automated tests make CI flaky/expensive", "impact": "medium", "likelihood": "low", "mitigation": "All orchestrators accept an injected llmClient; unit tests inject a mock returning canned JSON. No live API key required for the test suite." },
+    { "risk": "Scoring logic duplicated/diverges from sibling B's venture-score.js", "impact": "low", "likelihood": "low", "mitigation": "eva-synthesis.js imports and calls scoreVenture() directly rather than reimplementing section 13 logic." },
+    { "risk": "One bad specialist/adjudicator response aborts the entire venture-screen run", "impact": "medium", "likelihood": "medium", "mitigation": "run-venture-screen.js collects per-call errors into an errors array and continues processing remaining councils rather than throwing on first failure." }
+  ],
+  "test_scenarios": [
+    { "scenario": "Specialist assessment with a mock LLM response", "steps": "Call runSpecialistAssessment() with a mock llmClient returning canned section-11 JSON for one profile+council+venture candidate.", "expected_result": "One specialist_assessments row inserted with all fields populated from the parsed response." },
+    { "scenario": "Adjudication with 3 mock specialist assessments", "steps": "Call runAdjudication() with 3 canned specialist_assessments rows and a mock llmClient returning section-12 JSON.", "expected_result": "One council_adjudications row inserted, minority_view preserved." },
+    { "scenario": "EVA synthesis reuses scoreVenture() exactly", "steps": "Call runEvaSynthesis() with 5 mock council_adjudications, explicit criterionScores/gateResults/confidence, and a mock llmClient.", "expected_result": "The inserted dossier's overall_score/overall_confidence match a direct scoreVenture() call with the same criterionScores/gateResults/confidence." },
+    { "scenario": "Full venture-screen run end-to-end with mocks", "steps": "Call runVentureScreen(ventureCandidateId, {supabase, llmClient: mockClient}) with a mock client returning valid canned JSON for every call.", "expected_result": "15 specialist_assessments + 5 council_adjudications + 1 venture_decision_dossiers rows inserted, dossier's council_adjudication_ids references all 5." },
+    { "scenario": "Malformed LLM response for one specialist does not abort the run", "steps": "Call runVentureScreen() with a mock client returning malformed (non-JSON) output for exactly one specialist call.", "expected_result": "The run completes; the malformed call's error is present in the returned errors array; the other 14 specialist calls and all downstream adjudication/synthesis for unaffected councils still complete." }
+  ],
+  "acceptance_criteria": [
+    "specialist-runner.js, adjudicator-runner.js, eva-synthesis.js, run-venture-screen.js all exist under lib/foresight/workflow/ and export the functions described in system_architecture",
+    "runVentureScreen() with a mock LLM client produces 15 specialist_assessments + 5 council_adjudications + 1 venture_decision_dossiers rows, correctly linked",
+    "eva-synthesis.js's dossier scoring exactly matches a direct scoreVenture() call (sibling B, never reimplemented)",
+    "All prompts built from sibling A's profiles remain third-person (no impersonation)",
+    "A malformed LLM response for any single call is handled as a structured error, not a crash, and does not block the rest of the run",
+    "No live LLM API calls occur in the unit test suite"
+  ],
+  "integration_operationalization": {
+    "consumers": ["Future Phase-2 automation (signal-triggered venture screening) and any future dashboard SD -- both out of scope here, this SD ships the invocable engine only"],
+    "dependencies": ["lib/foresight/content/index.mjs (sibling A, completed)", "lib/foresight/scoring/venture-score.js + the 4 Phase-1 tables (sibling B, completed)", "lib/llm/client-factory.js getLLMClient (existing, pre-dating this SD)"],
+    "data_contracts": ["Specialist output (spec section 11)", "Adjudicator output (spec section 12)", "Venture Decision Dossier (spec section 8.10 + section 13 scoring)"],
+    "runtime_config": [],
+    "observability_rollout": ["Unit tests with an injected mock LLM client are the sole verification surface for this SD; a live end-to-end run with a real venture candidate and real LLM calls is a manual/operator-triggered verification step, not automated CI, per spec section 20's Phase-1 cut (no continuous automation)."]
+  }
+}
