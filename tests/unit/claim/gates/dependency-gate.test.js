@@ -135,6 +135,40 @@ describe('TS-2 caller polarities — the D3/D4 parity pins', () => {
   });
 });
 
+// ── ADDITIVE — SD-LEO-INFRA-MAKE-WSJF-SELF-001 FR-1/FR-4b: superset metadata sources ──
+describe('FR-1 superset (SD-LEO-INFRA-MAKE-WSJF-SELF-001) — metadata dep sources produce refs', () => {
+  it('metadata.dependencies entries produce refs', () => {
+    const refs = extractDependencyRefs(sdWith([], { dependencies: [{ sd_key: 'SD-MD-001' }, 'SD-ME-001 waiting', { sd_key: 'none' }] }));
+    expect(refs).toEqual(['SD-MD-001', 'SD-ME-001']);
+  });
+
+  it('metadata.depends_on produces refs (single string AND array shapes)', () => {
+    expect(extractDependencyRefs(sdWith([], { depends_on: 'SD-DO-001' }))).toEqual(['SD-DO-001']);
+    expect(extractDependencyRefs(sdWith([], { depends_on: ['SD-DO-001', { sd_id: 'SD-DO-002' }] })))
+      .toEqual(['SD-DO-001', 'SD-DO-002']);
+  });
+
+  it('metadata.blocked_by_sd_key produces a ref (and its none-sentinel is dropped)', () => {
+    expect(extractDependencyRefs(sdWith([], { blocked_by_sd_key: 'SD-BB-001' }))).toEqual(['SD-BB-001']);
+    expect(extractDependencyRefs(sdWith([], { blocked_by_sd_key: 'none' }))).toEqual([]);
+  });
+
+  it('a metadata.depends_on dep on a non-completed SD BLOCKS through the full gate', async () => {
+    const sb = makeSb({ rows: [{ id: 'u-do', sd_key: 'SD-DO-001', status: 'in_progress' }] });
+    const v = await evaluateClaimDependencyGate(sb, sdWith([], { depends_on: 'SD-DO-001' }));
+    expect(v.blocking.map((d) => d.sd_id)).toEqual(['SD-DO-001']);
+    expect(depsSatisfiedFromVerdict(v)).toBe(false);
+  });
+
+  it('a SELF-ref via metadata.depends_on evaluates as a blocked dep without throwing', async () => {
+    const sb = makeSb({ rows: [{ id: 'uuid-1', sd_key: 'SD-SELF-001', status: 'draft' }] });
+    const v = await evaluateClaimDependencyGate(sb, sdWith([], { depends_on: 'SD-SELF-001' }));
+    expect(v.queryError).toBeNull();
+    expect(v.blocking.map((d) => d.sd_id)).toEqual(['SD-SELF-001']);
+    expect(depsSatisfiedFromVerdict(v)).toBe(false);
+  });
+});
+
 describe('module purity (FR-2 AC — D5 audit ownership + no CLI side effects)', () => {
   const raw = readFileSync(
     resolve(dirname(fileURLToPath(import.meta.url)), '../../../../lib/claim/gates/dependency-gate.cjs'),
