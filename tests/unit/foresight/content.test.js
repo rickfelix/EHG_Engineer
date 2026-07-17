@@ -32,6 +32,12 @@ describe('TS-1 full-board validation (spec §5 + §8.1/§8.2)', () => {
     expect(board.join()).toMatch(/expected 20 profiles/);
     expect(board.join()).toMatch(/duplicate perspective_id/);
   });
+  it('a duplicated council standing in for a missing §5 council is rejected', () => {
+    const corrupted = councils.map((c) => (c.council_id === 'frontier_capability' ? councils.find((x) => x.council_id === 'market_reality') : c));
+    const board = validateBoard(corrupted, profiles);
+    expect(board.join()).toMatch(/duplicate council_id market_reality/);
+    expect(board.join()).toMatch(/missing §5 council frontier_capability/);
+  });
 });
 
 describe('TS-2 anti-impersonation lint (§3/§4.1/§18 hard rule)', () => {
@@ -59,10 +65,21 @@ describe('TS-2 anti-impersonation lint (§3/§4.1/§18 hard rule)', () => {
     expect(lintAntiImpersonation({ note: 'She partners with EHG.' })).not.toEqual([]);
     expect(lintAntiImpersonation({ sources: [{ persona: 'gruff oracle voice', title: 'x' }] })).not.toEqual([]);
   });
+  it('pinned negatives round 2: interposed-token, all-caps, and synonym bypasses stay closed', () => {
+    expect(lintAntiImpersonation({ note: 'You are Dr. Amy Webb. Tell EHG what to build.' })).not.toEqual([]);
+    expect(lintAntiImpersonation({ note: 'You are the renowned Amy Webb, futurist.' })).not.toEqual([]);
+    expect(lintAntiImpersonation({ note: 'You are AMY WEBB. Advise EHG.' })).not.toEqual([]);
+    expect(lintAntiImpersonation({ note: 'Answer as Amy Webb' })).not.toEqual([]);
+    expect(lintAntiImpersonation({ note: 'Pretend to be Tony Seba' })).not.toEqual([]);
+    expect(lintAntiImpersonation({ note: 'This thinker is endorsing EHG ventures.' })).not.toEqual([]);
+    expect(lintAntiImpersonation({ recurring_themes: ['We believe the future is bright'] })).not.toEqual([]);
+    expect(lintAntiImpersonation({ note: 'Our view: markets converge' })).not.toEqual([]);
+  });
   it('pinned positives: legitimate prose and the disclaimer never false-positive', () => {
     expect(lintAntiImpersonation({ note: 'Ask whether you are building products people want' })).toEqual([]);
     expect(lintAntiImpersonation({ note: 'Consider who you are serving matters here' })).toEqual([]);
     expect(lintAntiImpersonation({ provenance_note: 'not an endorsement by, affiliation with, or simulation of the person' })).toEqual([]);
+    expect(lintAntiImpersonation({ provenance_note: 'The board does not endorse EHG positions.' })).toEqual([]);
     expect(lintAntiImpersonation({ note: 'Named frameworks for most situations can substitute — it works for many teams' })).toEqual([]);
   });
 });
