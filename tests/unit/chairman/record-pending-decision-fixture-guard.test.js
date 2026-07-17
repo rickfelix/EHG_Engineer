@@ -33,7 +33,9 @@ describe('recordPendingDecision fixture guard', () => {
   it('refuses to record a decision for a fixture venture (name pattern)', async () => {
     const db = makeFakeDb({ venture: { id: 'v1', name: 'HCGate-RealDB-unclassified-noop-1', is_demo: false } });
     const r = await recordPendingDecision(db, { title: 'q', ventureId: 'v1' });
-    expect(r).toEqual({ recorded: false, skipped_fixture: true });
+    expect(r.recorded).toBe(false);
+    expect(r.skipped_fixture).toBe(true);
+    expect(r.error).toMatch(/fixture venture/); // descriptive skip reason for recorded/error callers (W1)
     expect(db.inserted).toHaveLength(0);
   });
 

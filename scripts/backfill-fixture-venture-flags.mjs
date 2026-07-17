@@ -61,3 +61,8 @@ if (updErr) {
   process.exit(1);
 }
 console.log(`Flagged ${candidates.length} venture(s) is_demo=true.`);
+// Durable audit trail: every flipped row had is_demo != true before this run, so this
+// line IS the rollback recipe (adversarial-review W2 — is_demo semantics are system-wide,
+// not chairman-only; a wrongly-flagged real venture must be recoverable).
+console.log('ROLLBACK (if any row above is a real venture): node -e "supabase.from(\'ventures\').update({is_demo:false}).in(\'id\',[...])" with ids:');
+console.log(JSON.stringify(candidates.map((v) => v.id)));

@@ -91,8 +91,14 @@ try {
 // console-superset that admits blocking non-console rows — plus the shared fixture
 // exclusion). No chairman surface is more permissive than this pair; before this filter,
 // fixture decisions the console correctly hid still reached the chairman by email.
+// PRIMARY EXEMPTION (adversarial-review CRITICAL): the --decision row is exempt from the
+// ACTIONABILITY leg only — its spawner already decided it deserves this email (e.g.
+// chairman-product-review escalates non-blocking product_review rows that no other surface
+// carries, and escalation_email_sent_at is stamped at spawn, so dropping it here would
+// strand the decision on every surface with no retry). The FIXTURE leg still applies to the
+// primary — the HCGate flood specimen was itself a --decision primary and must stay filtered.
 const preActionable = rows.length;
-rows = rows.filter((r) => isEscalationActionable(r) && !fixtureVentureIds.has(r.venture_id));
+rows = rows.filter((r) => (isEscalationActionable(r) || r.id === primaryId) && !fixtureVentureIds.has(r.venture_id));
 const nonActionableCount = preActionable - rows.length;
 if (nonActionableCount > 0) console.log(`[adam-decision-email] ${nonActionableCount} non-actionable/fixture row(s) excluded by shared predicate`);
 if (rows.length === 0) {
