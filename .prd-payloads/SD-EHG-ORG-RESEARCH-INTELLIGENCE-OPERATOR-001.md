@@ -14,10 +14,12 @@ Chairman-directed 2026-07-17 (evening thread; Solomon framing 7f6cdda5, all poin
 Add RESEARCH_INTELLIGENCE_OPERATOR to EHG_SHARED_OPERATORS (same template-delta pattern as ORG-TEMPLATE-DELTA-001): shared placement; duty_cycle = periodic live-research refresh of a STANDING model/tech-landscape reference (a table/doc every consumer reads) + triage of intake signal streams; honest_idle = "no fresh landscape events → reference stands, no fabricated updates"; arming stays a separate named action per the rail's design.
 ### FR-2: Standing landscape reference (compute-continuously, read-many)
 Create the standing reference surface (DB table or governed doc) the operator maintains: model landscape, tech-trajectory signals, adoption-relevant events. Consumers read it; nothing recomputes per-venture from stale knowledge.
-### FR-3: Wire tech-trajectory's dataFeed (IN this SD — the operator IS the producer)
-Feed `dataFeed.getTechSignals()` from the standing reference so Stage-0 tech-trajectory reads live signals instead of training data. Not a separate SD (Solomon: the operator is the feed's producer).
+### FR-3: Wire tech-trajectory's dataFeed AT THE LIVE CALL SITE (chairman-directed: producer + consumer in the SAME SD)
+Feed `dataFeed.getTechSignals()` from the standing reference so Stage-0 tech-trajectory reads live signals instead of training data. CHAIRMAN ADDITION (Mode-C bundle bfea7e74): the consumer modification is IN-SCOPE — wire `deps.dataFeed` at the live synthesis call site (`lib/eva/stage-zero/synthesis/index.js`, which currently passes NO dataFeed, starving the hook), and audit the other synthesis components for the same read where relevant. No generator-without-consumer.
 ### FR-4: Intake-stream triage lane
 Route the eva_youtube_intake AI-news lane to this operator as HINTS it triages (ending the reference-graveyard), including deciding which videos merit deep (Gemini) analysis.
+### FR-5a: Modeling-information CUSTODY (chairman-directed, Mode-C bundle)
+The operator MANAGES the model-related data assets: the `llm_models` registry (currently static/hand-curated — the frontier-upgrade migration was never executed as written; same unowned-goes-stale pattern), the standing landscape reference (FR-2), and the DATA pipeline feeding the model-capability eval harness. BOUNDARY (custodian ≠ doctrine-setter): the operator curates DATA; routing DOCTRINE stays with the eval harness + coordinator; eval design/grading stays Solomon (Cluster-5).
 ### FR-5: EHG model-adoption input
 The operator's reference informs EHG's OWN model-adoption/re-tiering decisions (live use case: today's Fable lockout). Foresight-Board linkage: when the Frontier Capability council builds, this operator is its research arm (no collision — council Phase-1 defers ingestion).
 
