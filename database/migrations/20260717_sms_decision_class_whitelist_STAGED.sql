@@ -29,9 +29,9 @@
 --     fail-closed). Reads never need INSERT/UPDATE/DELETE, so the REVOKE does not affect them.
 --
 -- STAGED — NOT YET APPROVED FOR APPLY. requires-chairman-apply. Do NOT auto-apply on merge;
--- no @approved-by. APPLY RUNBOOK (chairman ceremony):
+-- no approved-by attestation. APPLY RUNBOOK (chairman ceremony):
 --   (1) chairman verbal/written approval;
---   (2) apply via the standard migration path with an @approved-by attestation commit,
+--   (2) apply via the standard migration path with an approved-by attestation commit,
 --       AS THE TABLE OWNER (postgres) — the owner is exempt from the REVOKE and is the ONLY
 --       principal that seeds/widens the whitelist (INSERT rows here as part of the ceremony);
 --   (3) run `npm run schema:snapshot:lint` and commit the regenerated snapshot in the same PR
