@@ -94,6 +94,21 @@ function createMockCircuitBreaker(state = 'CLOSED') {
 }
 
 /**
+ * Helper: find an emitted metric row across all insert() calls.
+ *
+ * SD-LEO-FIX-EVA-SCHEDULER-METRICS-001 batches metric writes, so insert() is
+ * called with an array of rows rather than one row per call — flatten before
+ * searching. Callers must flush the scheduler's MetricsWriter before using this.
+ */
+function findMetric(mockSupabase, predicate) {
+  const rows = mockSupabase.insert.mock.calls.flatMap((call) => {
+    const arg = call[0];
+    return Array.isArray(arg) ? arg : [arg];
+  });
+  return rows.find(predicate);
+}
+
+/**
  * Helper: build a venture queue entry returned by the RPC or fallback query.
  */
 function makeVentureEntry(overrides = {}) {
@@ -316,17 +331,15 @@ describe('EvaMasterScheduler', () => {
       configureMockForPoll(mockSupabase, { ventures, queueDepth: 5 });
 
       await scheduler.poll();
+      await scheduler._metricsWriter.flush();
 
-      // _emitMetric calls .from('eva_scheduler_metrics').insert({...})
-      const insertCalls = mockSupabase.insert.mock.calls;
-      const pollMetric = insertCalls.find(
-        (call) => call[0]?.event_type === 'scheduler_poll',
-      );
+      // _emitMetric enqueues into MetricsWriter, flushed as one batched insert([...])
+      const pollMetric = findMetric(mockSupabase, (m) => m?.event_type === 'scheduler_poll');
       expect(pollMetric).toBeDefined();
-      expect(pollMetric[0].dispatched_count).toBeGreaterThanOrEqual(1);
-      expect(pollMetric[0].queue_depth).toBe(5);
-      expect(pollMetric[0].paused).toBe(false);
-      expect(pollMetric[0].duration_ms).toBeGreaterThanOrEqual(0);
+      expect(pollMetric.dispatched_count).toBeGreaterThanOrEqual(1);
+      expect(pollMetric.queue_depth).toBe(5);
+      expect(pollMetric.paused).toBe(false);
+      expect(pollMetric.duration_ms).toBeGreaterThanOrEqual(0);
     });
 
     test('should emit scheduler_dispatch metric per venture', async () => {
@@ -334,14 +347,12 @@ describe('EvaMasterScheduler', () => {
       configureMockForPoll(mockSupabase, { ventures });
 
       await scheduler.poll();
+      await scheduler._metricsWriter.flush();
 
-      const insertCalls = mockSupabase.insert.mock.calls;
-      const dispatchMetric = insertCalls.find(
-        (call) => call[0]?.event_type === 'scheduler_dispatch',
-      );
+      const dispatchMetric = findMetric(mockSupabase, (m) => m?.event_type === 'scheduler_dispatch');
       expect(dispatchMetric).toBeDefined();
-      expect(dispatchMetric[0].venture_id).toBe('v-metric');
-      expect(dispatchMetric[0].outcome).toBe('success');
+      expect(dispatchMetric.venture_id).toBe('v-metric');
+      expect(dispatchMetric.outcome).toBe('success');
     });
 
     test('should increment _pollCount and _totalDispatches', async () => {
@@ -551,15 +562,13 @@ describe('EvaMasterScheduler', () => {
       configureMockForPoll(mockSupabase, { ventures: [venture] });
 
       await scheduler.poll();
+      await scheduler._metricsWriter.flush();
 
-      const insertCalls = mockSupabase.insert.mock.calls;
-      const cadenceMetric = insertCalls.find(
-        (call) => call[0]?.event_type === 'scheduler_cadence_limited',
-      );
+      const cadenceMetric = findMetric(mockSupabase, (m) => m?.event_type === 'scheduler_cadence_limited');
       expect(cadenceMetric).toBeDefined();
-      expect(cadenceMetric[0].venture_id).toBe('v-cadence-metric');
-      expect(cadenceMetric[0].stages_dispatched).toBe(2);
-      expect(cadenceMetric[0].max_stages_per_cycle).toBe(2);
+      expect(cadenceMetric.venture_id).toBe('v-cadence-metric');
+      expect(cadenceMetric.stages_dispatched).toBe(2);
+      expect(cadenceMetric.max_stages_per_cycle).toBe(2);
     });
 
     test('should stop early if processStage returns BLOCKED', async () => {
@@ -689,15 +698,13 @@ describe('EvaMasterScheduler', () => {
       configureMockForPoll(mockSupabase, { ventures: [], queueDepth: 2 });
 
       await scheduler.poll();
+      await scheduler._metricsWriter.flush();
 
-      const insertCalls = mockSupabase.insert.mock.calls;
-      const pollMetric = insertCalls.find(
-        (call) => call[0]?.event_type === 'scheduler_poll',
-      );
+      const pollMetric = findMetric(mockSupabase, (m) => m?.event_type === 'scheduler_poll');
       expect(pollMetric).toBeDefined();
-      expect(pollMetric[0].paused).toBe(true);
-      expect(pollMetric[0].pause_reason).toBe('circuit_breaker_open');
-      expect(pollMetric[0].dispatched_count).toBe(0);
+      expect(pollMetric.paused).toBe(true);
+      expect(pollMetric.pause_reason).toBe('circuit_breaker_open');
+      expect(pollMetric.dispatched_count).toBe(0);
     });
 
     test('should emit scheduler_circuit_breaker_pause metric', async () => {
@@ -712,13 +719,11 @@ describe('EvaMasterScheduler', () => {
       configureMockForPoll(mockSupabase, { ventures: [], queueDepth: 1 });
 
       await scheduler.poll();
+      await scheduler._metricsWriter.flush();
 
-      const insertCalls = mockSupabase.insert.mock.calls;
-      const cbPauseMetric = insertCalls.find(
-        (call) => call[0]?.event_type === 'scheduler_circuit_breaker_pause',
-      );
+      const cbPauseMetric = findMetric(mockSupabase, (m) => m?.event_type === 'scheduler_circuit_breaker_pause');
       expect(cbPauseMetric).toBeDefined();
-      expect(cbPauseMetric[0].pause_reason).toBe('circuit_breaker_open');
+      expect(cbPauseMetric.pause_reason).toBe('circuit_breaker_open');
     });
 
     test('should treat circuit breaker as CLOSED when no adapter is provided', async () => {
@@ -843,6 +848,7 @@ describe('EvaMasterScheduler', () => {
       });
 
       await scheduler.poll();
+      await scheduler._metricsWriter.flush();
 
       expect(scheduler._metricsWriteFailures).toBeGreaterThan(0);
       expect(mockLogger.warn).toHaveBeenCalledWith(
@@ -862,10 +868,11 @@ describe('EvaMasterScheduler', () => {
         throw new Error('connection lost');
       });
 
-      // Should not throw
+      // Should not throw (enqueue is synchronous; the failure surfaces on flush)
       await expect(
         scheduler._emitMetric({ event_type: 'test_metric' }),
       ).resolves.toBeUndefined();
+      await expect(scheduler._metricsWriter.flush()).resolves.toBeUndefined();
 
       expect(scheduler._metricsWriteFailures).toBe(1);
     });
@@ -962,13 +969,17 @@ describe('EvaMasterScheduler', () => {
       mockSupabase.insert.mockReturnValue(mockSupabase);
 
       await scheduler._emitMetric({ event_type: 'test_metric' });
+      await scheduler._metricsWriter.flush();
 
+      // insert() receives a batched array of rows, not a single row
       expect(mockSupabase.insert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          event_type: 'test_metric',
-          scheduler_instance_id: scheduler.instanceId,
-          occurred_at: expect.any(String),
-        }),
+        expect.arrayContaining([
+          expect.objectContaining({
+            event_type: 'test_metric',
+            scheduler_instance_id: scheduler.instanceId,
+            occurred_at: expect.any(String),
+          }),
+        ]),
       );
     });
   });
@@ -1112,13 +1123,14 @@ describe('EvaMasterScheduler', () => {
       processStage.mockRejectedValue(new Error('kaboom'));
 
       await scheduler.poll();
+      await scheduler._metricsWriter.flush();
 
-      const insertCalls = mockSupabase.insert.mock.calls;
-      const failureMetric = insertCalls.find(
-        (call) => call[0]?.event_type === 'scheduler_dispatch' && call[0]?.outcome === 'failure',
+      const failureMetric = findMetric(
+        mockSupabase,
+        (m) => m?.event_type === 'scheduler_dispatch' && m?.outcome === 'failure',
       );
       expect(failureMetric).toBeDefined();
-      expect(failureMetric[0].failure_reason).toBe('kaboom');
+      expect(failureMetric.failure_reason).toBe('kaboom');
     });
 
     test('should update error_count on queue entry when processStage throws', async () => {
@@ -1336,6 +1348,31 @@ describe('EvaMasterScheduler', () => {
       expect(scheduler._timer).toBeNull();
     });
 
+    test('should flush buffered metrics on stop (SD-LEO-FIX-EVA-SCHEDULER-METRICS-001)', async () => {
+      scheduler.poll = vi.fn().mockResolvedValue(undefined);
+
+      await scheduler.start();
+      // start() catches up any due builtin jobs/rounds, which may themselves
+      // queue metrics -- drain those first so the assertions below are scoped
+      // to only the row this test explicitly enqueues.
+      await scheduler._metricsWriter.flush();
+      mockSupabase.insert.mockClear();
+
+      // Below maxBatch and the flush timer hasn't fired -- still buffered.
+      await scheduler._emitMetric({ event_type: 'buffered_at_shutdown' });
+      expect(scheduler._metricsWriter.pendingCount).toBe(1);
+      expect(mockSupabase.insert).not.toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ event_type: 'buffered_at_shutdown' })]),
+      );
+
+      await scheduler.stop();
+
+      expect(scheduler._metricsWriter.pendingCount).toBe(0);
+      expect(mockSupabase.insert).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ event_type: 'buffered_at_shutdown' })]),
+      );
+    });
+
     test('should not stop if not running', async () => {
       await scheduler.stop(); // should be a no-op
       expect(mockLogger.log).not.toHaveBeenCalledWith(
@@ -1526,14 +1563,12 @@ describe('EvaMasterScheduler', () => {
       mockSupabase.insert.mockReturnValue(mockSupabase);
 
       await scheduler.runRound('metric_round');
+      await scheduler._metricsWriter.flush();
 
-      const insertCalls = mockSupabase.insert.mock.calls;
-      const roundMetric = insertCalls.find(
-        call => call[0]?.event_type === 'scheduler_round',
-      );
+      const roundMetric = findMetric(mockSupabase, (m) => m?.event_type === 'scheduler_round');
       expect(roundMetric).toBeDefined();
-      expect(roundMetric[0].metadata.round_type).toBe('metric_round');
-      expect(roundMetric[0].metadata.outcome).toBe('success');
+      expect(roundMetric.metadata.round_type).toBe('metric_round');
+      expect(roundMetric.metadata.outcome).toBe('success');
     });
 
     test('listRounds should return all registered rounds', () => {
