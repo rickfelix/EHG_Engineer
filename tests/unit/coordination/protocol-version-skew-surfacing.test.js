@@ -16,6 +16,9 @@ function stub(rows) {
   const selectChain = {
     select() { return selectChain; },
     eq() { return selectChain; },
+    // SD-LEO-INFRA-SEND-TIME-TARGET-001: Solomon drainInbox now two-lane scopes the target
+    // via .in('target_session', [sessionId, 'broadcast-solomon']).
+    in() { return selectChain; },
     is() { return selectChain; },
     // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001: drainInbox now window-scopes (gte)
     // and runs an advisory older-rows head-count (terminal .lt).
