@@ -12,6 +12,17 @@
 -- fn_relay_insert_sms_candidate — a failed-verification request never reaches this RPC,
 -- so signature_valid is TRUE by construction for every staged row. It is stored (not
 -- hardcoded in the consumer) as a defense-in-depth invariant assertion, not a filter.
+--
+-- SECURITY REVIEW FINDING (SEC-1, closed by this migration): EXECUTE-on-RPC-only grants
+-- restrict WHICH TABLES the relay's credential can touch, but do NOT by themselves
+-- authenticate the CALLER — anyone holding the project anon key (which Supabase anon
+-- keys are designed to be distributable, and MAY already be public in a deployed
+-- frontend bundle sharing this project) could call this RPC directly over PostgREST,
+-- bypassing the relay's HMAC verification entirely, and stage a forged candidate reply
+-- (signature_valid was previously hardcoded TRUE with no caller check). p_relay_secret
+-- below closes this: only the relay (which holds the secret as a private, never-shipped
+-- serverless-function env var, distinct from the anon key) can produce a request the RPC
+-- accepts. This is the "distinct, scoped credential" TR-5 refers to.
 
 -- ============================================================
 -- sms_relay_staging: INSERT-only candidate replies from the untrusted public relay
@@ -43,20 +54,50 @@ COMMENT ON COLUMN sms_relay_staging.drained_at IS 'Stamped by the trusted consum
 ALTER TABLE sms_relay_staging ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
--- fn_relay_insert_sms_candidate: the ONLY write path the relay's credential can reach
+-- sms_relay_secret: singleton, RLS-deny-all holder of the relay's shared secret.
+-- Readable ONLY from inside a SECURITY DEFINER function (bypasses RLS) or a
+-- service_role connection — never by anon/authenticated, so leaking the anon key
+-- alone is insufficient to read or guess it.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS sms_relay_secret (
+  id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  secret_value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE sms_relay_secret IS 'Singleton row holding the relay-only shared secret (SEC-1 hardening, SD-LEO-FEAT-SMS-INBOUND-RELAY-001) — set by the operator, never by the fleet, via a direct service_role insert. RLS-deny-all: no policy is defined for any role, so only a SECURITY DEFINER function body or a service_role connection can read it.';
+
+ALTER TABLE sms_relay_secret ENABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- fn_relay_insert_sms_candidate: the ONLY write path the relay's credential can reach.
+-- Requires BOTH anon-key EXECUTE grant AND the correct p_relay_secret (SEC-1) — anon-key
+-- possession alone (which may already be public, e.g. shipped in a frontend bundle
+-- sharing this project) is insufficient to stage a forged candidate reply.
 -- ============================================================
 CREATE OR REPLACE FUNCTION fn_relay_insert_sms_candidate(
   p_provider_message_id TEXT,
   p_from_phone TEXT,
   p_to_phone TEXT,
-  p_body_raw TEXT
+  p_body_raw TEXT,
+  p_relay_secret TEXT
 )
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
+DECLARE
+  v_expected_secret TEXT;
 BEGIN
+  SELECT secret_value INTO v_expected_secret FROM sms_relay_secret WHERE id = 1;
+  IF v_expected_secret IS NULL OR p_relay_secret IS NULL OR p_relay_secret != v_expected_secret THEN
+    -- Same uniform failure as every other reject path (TR-3) — the caller learns
+    -- nothing about WHY the call failed from this alone.
+    RAISE EXCEPTION 'fn_relay_insert_sms_candidate: unauthorized'
+      USING ERRCODE = '28000';
+  END IF;
+
   IF p_provider_message_id IS NULL OR length(trim(p_provider_message_id)) = 0 THEN
     RAISE EXCEPTION 'fn_relay_insert_sms_candidate: provider_message_id is required'
       USING ERRCODE = '22004';
@@ -75,12 +116,13 @@ END;
 $$;
 
 -- Execution surface: closed by default (functions are PUBLIC-executable unless revoked),
--- opened ONLY to anon — the relay authenticates with the project's anon key, scoped down
--- to exactly this one INSERT-only operation. No read/update/delete grant is ever given.
-REVOKE EXECUTE ON FUNCTION fn_relay_insert_sms_candidate(TEXT, TEXT, TEXT, TEXT) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION fn_relay_insert_sms_candidate(TEXT, TEXT, TEXT, TEXT) FROM authenticated;
-GRANT EXECUTE ON FUNCTION fn_relay_insert_sms_candidate(TEXT, TEXT, TEXT, TEXT) TO anon;
-GRANT EXECUTE ON FUNCTION fn_relay_insert_sms_candidate(TEXT, TEXT, TEXT, TEXT) TO service_role;
+-- opened ONLY to anon — the relay authenticates with the project's anon key AS ONE OF TWO
+-- factors (the p_relay_secret check above is the other). No read/update/delete grant is
+-- ever given.
+REVOKE EXECUTE ON FUNCTION fn_relay_insert_sms_candidate(TEXT, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION fn_relay_insert_sms_candidate(TEXT, TEXT, TEXT, TEXT, TEXT) FROM authenticated;
+GRANT EXECUTE ON FUNCTION fn_relay_insert_sms_candidate(TEXT, TEXT, TEXT, TEXT, TEXT) TO anon;
+GRANT EXECUTE ON FUNCTION fn_relay_insert_sms_candidate(TEXT, TEXT, TEXT, TEXT, TEXT) TO service_role;
 
 -- ============================================================
 -- sms_inbound_suspensions: persistent auto-suspend, survives the 60-min rolling window
