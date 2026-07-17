@@ -39,7 +39,11 @@ describe('loadOpenQuickFixes — merge race safety', () => {
   });
 
   it('returns rows when loader gets data', async () => {
-    const rows = [{ id: 'QF-TEST-001', status: 'open', pr_url: null, commit_sha: null }];
+    // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: use a realistic date-stamped id, NOT a
+    // 'QF-TEST-…' placeholder — the loader now filters fixture-shaped ids/titles out of
+    // the worker lane, and a QF-TEST- id is (correctly) classified as a fixture. This
+    // test's intent is the pass-through of real rows, so the id must look real.
+    const rows = [{ id: 'QF-20260717-001', title: 'real open quick fix', status: 'open', pr_url: null, commit_sha: null }];
     const supabase = makeSupabase({ data: rows, error: null });
     const result = await loadOpenQuickFixes(supabase);
     expect(result).toEqual(rows);
