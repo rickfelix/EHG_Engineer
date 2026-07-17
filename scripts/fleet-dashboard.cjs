@@ -1428,8 +1428,12 @@ async function printChairmanGatedQfs() {
   const { data: rows, error } = await supabase
     .from('quick_fixes')
     .select('id, title, status, owner, release_condition, created_at')
+    // '%chairman%' (not exact): the canonical predicate is trim-tolerant and defer-quick-fix
+    // writes owner verbatim, so a padded ' chairman ' must still reach this surface (round-2
+    // adversarial finding — exact ilike silently lost it). Overmatches like 'vice-chairman'
+    // are rejected by the client-side isChairmanGatedQF re-check below (exact after trim).
     .not('release_condition', 'is', null)
-    .ilike('owner', 'chairman')
+    .ilike('owner', '%chairman%')
     .not('status', 'in', '(completed,cancelled,closed)')
     .order('created_at', { ascending: true })
     .limit(30);
