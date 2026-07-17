@@ -62,13 +62,14 @@ function mockExploreThenMultiline({ explore = exploreBody(), multiline = multili
 
 function makeSupabaseMock({ priorRows = [] } = {}) {
   const insert = vi.fn().mockResolvedValue({ error: null });
-  const gte = vi.fn().mockResolvedValue({ data: priorRows, error: null });
+  const lte = vi.fn().mockResolvedValue({ data: priorRows, error: null });
+  const gte = vi.fn(() => ({ lte }));
   const eq3 = vi.fn(() => ({ gte }));
   const eq2 = vi.fn(() => ({ eq: eq3 }));
   const eq1 = vi.fn(() => ({ eq: eq2 }));
   const select = vi.fn(() => ({ eq: eq1 }));
   const from = vi.fn(() => ({ select, insert }));
-  return { from, __insert: insert, __gte: gte };
+  return { from, __insert: insert, __gte: gte, __lte: lte };
 }
 
 describe('google-trends source fetcher', () => {
@@ -211,7 +212,10 @@ describe('google-trends source fetcher', () => {
 
     const result = await fetchSignal({ query: { term: 'growing-niche' }, supabase });
 
-    // recent avg (20) - baseline avg over ALL prior rows (10+20)/2=15 => 5
-    expect(result.readings[0].slope_90d_vs_baseline).toBe(5);
+    // Corrected (non-contaminated) computation, per lib/market-signal-scanner/slope.js:
+    // baseline = only the row strictly older than 90 days (meanInterest=10);
+    // recent = only the row within the last 90 days (meanInterest=20) -- the two
+    // windows never overlap. Percent-change slope = (20-10)/10*100 = 100.
+    expect(result.readings[0].slope_90d_vs_baseline).toBe(100);
   });
 });

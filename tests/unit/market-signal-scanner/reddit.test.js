@@ -11,13 +11,14 @@ const savedClientSecret = process.env.REDDIT_CLIENT_SECRET;
 
 function makeSupabaseMock({ priorRows = [] } = {}) {
   const insert = vi.fn().mockResolvedValue({ error: null });
-  const gte = vi.fn().mockResolvedValue({ data: priorRows, error: null });
+  const lte = vi.fn().mockResolvedValue({ data: priorRows, error: null });
+  const gte = vi.fn(() => ({ lte }));
   const eq3 = vi.fn(() => ({ gte }));
   const eq2 = vi.fn(() => ({ eq: eq3 }));
   const eq1 = vi.fn(() => ({ eq: eq2 }));
   const select = vi.fn(() => ({ eq: eq1 }));
   const from = vi.fn(() => ({ select, insert }));
-  return { from, __insert: insert, __gte: gte };
+  return { from, __insert: insert, __gte: gte, __lte: lte };
 }
 
 function mockTokenThenSearch(searchChildren) {

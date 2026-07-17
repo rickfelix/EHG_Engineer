@@ -158,6 +158,40 @@ describe('market-signal-scan CLI wiring (FR-3/FR-4)', () => {
     expect(payload.current_score).toBe(payload.source_ref.synthesis_snapshot.niche_score);
   });
 
+  it('(a-regression) a parkVenture insert failure for one niche does not abort the remaining candidates in the cycle (adversarial-review fix, PR #6142)', async () => {
+    const callOrder = [];
+    const fetchers = makeCallOrderTrackingFetchers(callOrder);
+    const supabase = makeFakeSupabase({ callOrder });
+    const warnLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+
+    let calls = 0;
+    const flakyParkVentureFn = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error('simulated numeric field overflow');
+      return { id: 'nursery-2' };
+    });
+
+    const result = await runScan({
+      supabase,
+      fetchers,
+      parkVentureFn: flakyParkVentureFn,
+      candidates: [
+        { term: 'niche one', category: '', keywords: [], description: '' },
+        { term: 'niche two', category: '', keywords: [], description: '' },
+      ],
+      logger: warnLogger,
+    });
+
+    expect(flakyParkVentureFn).toHaveBeenCalledTimes(2);
+    expect(result.nominations).toBe(1); // only the second (successful) nomination counts
+    expect(warnLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('niche one')
+    );
+    expect(warnLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('simulated numeric field overflow')
+    );
+  });
+
   it('(b) a niche that fails triangulation produces NO venture_nursery insert call', async () => {
     const callOrder = [];
     // Only 2 distinct families (structural + attention), no money_in/stickiness -- must fail.

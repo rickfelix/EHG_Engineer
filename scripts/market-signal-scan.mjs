@@ -201,16 +201,24 @@ export async function runScan(deps = {}) {
     };
 
     // Proven insert path -- never a hand-rolled duplicate of parkVenture's insert logic.
-    await parkVentureFn(
-      brief,
-      {
-        reason: `market-signal-scan triangulated nomination (families: ${score.families.join('+')})`,
-        reviewSchedule: '90d',
-      },
-      { supabase, logger }
-    );
-    nominations += 1;
-    logger.log(`[market-signal-scan] NOMINATED "${niche.term}" -- nicheScore=${score.nicheScore.toFixed(4)}`);
+    // Wrapped: a single niche's insert failure (e.g. a future scoring regression
+    // producing an out-of-range current_score) must not abort the remaining
+    // candidates in this cycle, nor skip the registry liveness stamp that runs
+    // after the loop (adversarial-review fix, PR #6142).
+    try {
+      await parkVentureFn(
+        brief,
+        {
+          reason: `market-signal-scan triangulated nomination (families: ${score.families.join('+')})`,
+          reviewSchedule: '90d',
+        },
+        { supabase, logger }
+      );
+      nominations += 1;
+      logger.log(`[market-signal-scan] NOMINATED "${niche.term}" -- nicheScore=${score.nicheScore.toFixed(4)}`);
+    } catch (err) {
+      logger.warn(`[market-signal-scan] "${niche.term}": parkVenture insert failed (non-fatal, continuing cycle): ${err?.message || err}`);
+    }
   }
 
   // Honest-idle: zero nominations this cycle -> log the marker, write nothing.
