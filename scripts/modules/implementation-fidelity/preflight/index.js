@@ -41,6 +41,39 @@ export function stripClassificationLabelEnums(text) {
   return text.replace(CLASSIFICATION_LABEL_ENUM_RE, LABEL_ENUM_PLACEHOLDER);
 }
 
+// SD-LEO-FIX-SHIP-ESCAPE-AUDIT-001 (3rd FP family in this scan, after QF-20260527-303
+// identifier-case and LABEL-FP-001 classification enums): GENERATED artifact files carry
+// third-party DATA, not this SD's decisions — e.g. database/schema-reference-snapshot.json
+// reproduces every CHECK constraint in the database verbatim, so a PEER table's enum value
+// ('ambiguous' in sms_inbound_log's outcome CHECK) false-trips any SD whose process
+// mandates the same-PR snapshot regen. Exclude generated files' diff sections from the
+// ambiguity scan; hand-written files are unaffected and still gate.
+const AMBIGUITY_SCAN_EXEMPT_FILES = [
+  'database/schema-reference-snapshot.json',
+];
+
+/**
+ * Filter a unified diff down to ADDED lines ('+', excluding '+++' headers) while
+ * dropping lines belonging to generated files exempt from the ambiguity scan.
+ * File attribution follows '+++ b/<path>' section headers. Pure: no I/O.
+ * @param {string} combinedDiff
+ * @returns {string}
+ */
+export function addedLinesForAmbiguityScan(combinedDiff) {
+  if (!combinedDiff || typeof combinedDiff !== 'string') return '';
+  const kept = [];
+  let inExemptFile = false;
+  for (const line of combinedDiff.split(/\r?\n/)) {
+    if (line.startsWith('+++')) {
+      const filePath = line.replace(/^\+\+\+ [ab]\//, '').trim();
+      inExemptFile = AMBIGUITY_SCAN_EXEMPT_FILES.some((f) => filePath === f || filePath.endsWith(`/${f}`));
+      continue;
+    }
+    if (line.startsWith('+') && !inExemptFile) kept.push(line);
+  }
+  return kept.join('\n');
+}
+
 /**
  * Run all preflight checks
  *
@@ -150,10 +183,9 @@ async function checkAmbiguityResolution(sd_id, validation, supabase) {
       // ONLY — excluding '+++' file headers — so a marker word present only in a removed
       // or context line no longer false-positives this preflight check.
       // CRLF-safe (crongenius autocrlf=true). Multi-repo combinedDiff handled (concatenated).
-      const diff = combinedDiff
-        .split(/\r?\n/)
-        .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
-        .join('\n');
+      // SD-LEO-FIX-SHIP-ESCAPE-AUDIT-001: generated-artifact file sections (schema
+      // snapshot) are excluded — their content is reproduced database DATA, not decisions.
+      const diff = addedLinesForAmbiguityScan(combinedDiff);
 
       // QF-20260527-303: tighten ambiguity patterns to avoid identifier-context
       // false positives. The prior /ambiguous/gi matched ESLint rule names like
@@ -292,10 +324,9 @@ async function checkStubbedCode(sd_id, validation, supabase) {
       // FR-4 (SD-LEO-INFRA-VENTURE-AWARE-COMPLETION-001): same added-lines-only fix as the
       // scan above — a commit that REMOVES a stub marker must not false-positive on the
       // removed line. Scan '+' added lines only (exclude '+++' headers).
-      const diff = combinedDiff
-        .split(/\r?\n/)
-        .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
-        .join('\n');
+      // SD-LEO-FIX-SHIP-ESCAPE-AUDIT-001: generated-artifact file sections (schema
+      // snapshot) are excluded — their content is reproduced database DATA, not decisions.
+      const diff = addedLinesForAmbiguityScan(combinedDiff);
 
       const stubbedCodePatterns = [
         /throw new Error\(['"]not implemented/gi,
