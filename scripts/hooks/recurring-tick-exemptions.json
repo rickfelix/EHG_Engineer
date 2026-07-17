@@ -1,0 +1,24 @@
+{
+  "_doc": [
+    "SD-LEO-FIX-EXEMPT-REGISTERED-RECURRING-001 — registered recurring-tick exemptions for the",
+    "RCA 3x-same-target counter (retry-state-manager.cjs LEARN-129 lineage).",
+    "POLICY: entries are FULL script basenames with extension (validated: ^[A-Za-z0-9._-]+\\.(mjs|cjs|js)$),",
+    "compiled into anchored scripts/<name> patterns — one entry can only ever exempt one physical script.",
+    "Each entry REQUIRES a reason. Max 32 entries. Adding an entry needs a reviewed PR: this file being",
+    "git-tracked IS the teeth-erosion guard (risk ca54579b). Only register scripts that are scheduled,",
+    "idempotent cadences (every healthy run exits 0 on the same target by design).",
+    "TRADEOFF (shared with the builtin EXEMPT_PATTERNS): exemption is exit-code-blind — a persistently",
+    "FAILING registered tick is invisible to this repeat-guard; tick health is owned by the",
+    "periodic-liveness watcher lane instead."
+  ],
+  "exempt_scripts": [
+    {
+      "script": "adam-quiet-tick.mjs",
+      "reason": "Adam hibernation aggregator, healthy idempotent ~4-min cadence; tripped false 3x-blocks daily forcing EMERGENCY_RCA_BYPASS / PowerShell detours (feedback cc659006, advisory 79135adb)"
+    },
+    {
+      "script": "adam-startup-check.mjs",
+      "reason": "Adam startup probe re-run on session/loop restarts — parity with the builtin-exempt coordinator-startup-check.mjs"
+    }
+  ]
+}
