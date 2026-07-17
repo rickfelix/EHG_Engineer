@@ -7,21 +7,34 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { resolveGroupForAdvisory, stampActionedGroup } = require('../../../lib/coordinator/adam-advisory-store.cjs');
 
-// Minimal thenable supabase builder matching the query chain resolveGroupForAdvisory /
-// stampActionedGroup (via stampActioned) actually issue. Captures eq()/order() args so
-// tests can assert the query SHAPE, not just its result.
+// STRICT supabase builder mirroring @supabase/postgrest-js's REAL staged shape: .from()
+// returns a query-builder exposing ONLY select/insert/update/... — filter methods
+// (.eq/.gte/.order/.limit) exist ONLY on the object .select() returns. A round-2
+// adversarial review caught a real bug that a permissive "everything-on-one-object" mock
+// had hidden: production code called .eq() directly on .from(...), which throws against
+// the real client (TypeError: ...eq is not a function) but was silently swallowed by
+// resolveGroupForAdvisory's own try/catch. This mock enforces the same call-order
+// constraint so that class of bug fails a test instead of passing one. Captures
+// eq()/order() args so tests can assert the query SHAPE, not just its result.
 function makeSupabase({ selectResult, updateResult = { error: null }, captured = {} } = {}) {
-  const chain = {
-    from() { return chain; },
-    select() { return chain; },
-    eq(k, v) { (captured.eq = captured.eq || []).push([k, v]); return chain; },
-    gte() { return chain; },
-    order(k, opts) { captured.order = [k, opts]; return chain; },
+  const filterChain = {
+    eq(k, v) { (captured.eq = captured.eq || []).push([k, v]); return filterChain; },
+    gte() { return filterChain; },
+    order(k, opts) { captured.order = [k, opts]; return filterChain; },
     limit() { return Promise.resolve(selectResult); },
-    update() { return chain; },
+  };
+  const updateChain = {
+    eq() { return updateChain; },
     then(res, rej) { return Promise.resolve(updateResult).then(res, rej); },
   };
-  return chain;
+  return {
+    from() {
+      return {
+        select() { return filterChain; },
+        update() { return updateChain; },
+      };
+    },
+  };
 }
 
 describe('resolveGroupForAdvisory', () => {
