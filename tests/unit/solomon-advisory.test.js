@@ -251,6 +251,9 @@ describe('QF-20260710-593: ackRows — the action-time stamp', () => {
         update: (payload) => { state.payload = payload; return c; },
         eq: (col, v) => { state.guards.push(['eq', col, v]); return c; },
         is: (col, v) => { state.guards.push(['is', col, v]); return c; },
+        // SD-LEO-INFRA-SEND-TIME-TARGET-001: ownership scope moved from .eq to .in so the
+        // broadcast-solomon sentinel lane (now surfaced by drainInbox) can be acked too.
+        in: (col, v) => { state.guards.push(['in', col, v]); return c; },
         select: async () => { updates.push(state); return { data: [{ id: 'id-1', read_at: '2026-07-10T00:00:00Z' }], error: null }; },
       };
       return c;
@@ -266,10 +269,11 @@ describe('QF-20260710-593: ackRows — the action-time stamp', () => {
     expect(updates[0].guards).toContainEqual(['is', 'acknowledged_at', null]);
   });
 
-  it('ownership guard: with expectedTarget the update is scoped to target_session', async () => {
+  it('ownership guard: with expectedTarget the update is scoped to target_session (+ sentinel lane)', async () => {
     const { supabase, updates } = ackMock();
     await m.ackRows(supabase, ['id-1'], { expectedTarget: 'solomon-sess' });
     expect(updates).toHaveLength(1);
-    expect(updates[0].guards).toContainEqual(['eq', 'target_session', 'solomon-sess']);
+    // SD-LEO-INFRA-SEND-TIME-TARGET-001: scope admits the session AND its sentinel lane.
+    expect(updates[0].guards).toContainEqual(['in', 'target_session', ['solomon-sess', 'broadcast-solomon']]);
   });
 });
