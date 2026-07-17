@@ -89,6 +89,11 @@ describe('computeConfidenceAdjustedScore (spec 13.2 worked example)', () => {
   it('clamps a negative confidence to 0', () => {
     expect(computeConfidenceAdjustedScore(82, -0.5)).toBe(0);
   });
+
+  it('treats a non-finite rawScore as 0 rather than propagating NaN', () => {
+    expect(computeConfidenceAdjustedScore(NaN, 0.55)).toBe(0);
+    expect(computeConfidenceAdjustedScore(undefined, 0.55)).toBe(0);
+  });
 });
 
 describe('scoreVenture (full section 13.2 output shape)', () => {
