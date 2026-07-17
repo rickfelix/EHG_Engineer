@@ -18,7 +18,11 @@
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { spawnSync } from 'node:child_process';
 import dotenv from 'dotenv';
+import { createRequire } from 'node:module';
 import { repoUnfitReason } from '../lib/fleet/qf-repo-fitness.js';
+
+// SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001: canonical chairman-gated-hold predicate (CJS).
+const { isChairmanGatedQF } = createRequire(import.meta.url)('../lib/fleet/qf-gated-hold.cjs');
 
 dotenv.config();
 
@@ -55,6 +59,21 @@ async function main() {
     console.error(`✗ Quick-fix ${qfId} NOT claimed: ${unfitReason}`);
     await safeExit(3);
   }
+
+  // SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001 (adversarial-review fix, PR #6178): enforce the
+  // chairman-gated hold at the CLAIM boundary too — the discovery-lane exclusions alone left
+  // this path able to claim a gated QF by explicit id and start chairman-gated work without
+  // release. Fail-open on read error (never wedge ungated claims on a DB hiccup).
+  try {
+    const { data: holdRow } = await supabase
+      .from('quick_fixes').select('owner, release_condition').eq('id', qfId).maybeSingle();
+    if (holdRow && isChairmanGatedQF(holdRow)) {
+      console.error(`✗ Quick-fix ${qfId} NOT claimed: CHAIRMAN-GATED hold`);
+      console.error(`  release condition: ${String(holdRow.release_condition).replace(/\n/g, ' ').slice(0, 160)}`);
+      console.error(`  Release first: node scripts/release-chairman-gated-qf.js ${qfId} --reason "<why>"`);
+      await safeExit(3);
+    }
+  } catch { /* fail-open — the gate must never wedge ungated claims */ }
 
   const { data, error } = await supabase.rpc('claim_sd', {
     p_sd_id: qfId,
