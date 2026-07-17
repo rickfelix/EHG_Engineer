@@ -37,6 +37,7 @@ import {
 import { runComplianceWithRefinement } from './compliance-loop.js';
 import { prompt, displayCompletionSummary } from './cli.js';
 import { resolveFeedback, parseAndExpandFeedbackFooters } from '../../../lib/governance/resolve-feedback.js';
+import { recordSdCompleted, recordQfCompleted } from '../../../lib/learning/outcome-tracker.js';
 import { checkResolverFreshness, logResolverFreshnessBanner } from '../../../lib/governance/check-resolver-freshness.js';
 import { execSync } from 'child_process';
 
@@ -696,6 +697,18 @@ export async function completeQuickFix(qfId, options = {}) {
     }
   }
 
+  // SD-LEO-INFRA-FIX-RECURRENCE-REWIRING-001 FR-4: outcome-tracker completion hook.
+  // ADDITIVE to the feedback auto-resolve block above -- a second, independent
+  // resolution-writer; never replaces resolve-feedback.js's own writes.
+  // Fail-soft + gated. Env opt-out: OUTCOME_TRACKER_ON_QF_COMPLETE=0.
+  if (process.env.OUTCOME_TRACKER_ON_QF_COMPLETE !== '0') {
+    try {
+      await recordQfOutcomeOnComplete(supabase, qf, qfId);
+    } catch (err) {
+      console.log(`   ⚠️  Outcome-tracker record skipped: ${err?.message || err}\n`);
+    }
+  }
+
   console.log('📍 Quick-Fix Complete!\n');
 
   return qf;
@@ -789,6 +802,39 @@ async function resolveLinkedFeedbackRows(supabase, qf, qfId, prUrl, commitSha, t
       console.log(`   ⚠️  feedback ${uuid} → resolve failed: ${result.error || 'unknown'}`);
     }
   }
+}
+
+/**
+ * SD-LEO-INFRA-FIX-RECURRENCE-REWIRING-001 FR-4: post-merge outcome-tracker hook.
+ *
+ * Additive to resolveLinkedFeedbackRows above -- never replaces resolve-feedback.js's
+ * write path. recordQfCompleted always runs: it is the QF's own real linkage
+ * (feedback.quick_fix_id), and outcome_signals.sd_id / sd_effectiveness_metrics.sd_id
+ * both carry a NOT NULL foreign key to strategic_directives_v2(id), so a bare QF id
+ * (e.g. "QF-20260704-300") could never be written there directly.
+ *
+ * When the QF escalated to a real SD (quick_fixes.escalated_to_sd_id), recordSdCompleted
+ * ALSO runs -- but as an addition, not a replacement: recordSdCompleted resolves
+ * feedback via feedback.sd_id, a different linkage than the QF's own
+ * feedback.quick_fix_id, so routing to it exclusively would silently skip tagging
+ * the QF's actual linked feedback (caught in adversarial review of this SD's PR).
+ *
+ * @param {Object} supabase
+ * @param {Object} qf - Quick-fix DB row (must include escalated_to_sd_id)
+ * @param {string} qfId
+ */
+export async function recordQfOutcomeOnComplete(supabase, qf, qfId) {
+  const qfResult = await recordQfCompleted({ supabase, qfId, completionTime: new Date() });
+  if (qf?.escalated_to_sd_id) {
+    const sdResult = await recordSdCompleted({
+      supabase,
+      sdId: qf.escalated_to_sd_id,
+      actor: 'complete-quick-fix',
+      completionTime: new Date()
+    });
+    return { qf: qfResult, sd: sdResult };
+  }
+  return qfResult;
 }
 
 /**

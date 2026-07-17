@@ -24,14 +24,16 @@ import { CRITICAL_PROTOCOL_FILES } from '../../lib/governance/checkout-freshness
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-test('ADAM_LOOPS has the 9 expected tick loops with the expected keys', () => {
+test('ADAM_LOOPS has the 11 expected tick loops with the expected keys', () => {
   // self-adherence added by SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001 (child E);
   // belt-countdown added by SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR2 — durable contract duty);
   // doc-drift + github-assessment added by SD-LEO-INFRA-REGISTER-TWO-EVERY-001 (every-3-day propose-only duties);
   // board-reconcile added by SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DISCIPLINE-001-B (durable contract duty);
-  // heartbeat-email added by QF-20260702-433 (chairman directive 2026-07-02 — half-hourly all-good reassurance email).
-  assert.equal(ADAM_LOOPS.length, 9);
-  assert.deepEqual(ADAM_LOOPS.map((l) => l.key), ['governance-scan', 'inbox-monitor', 'offer-help', 'self-adherence', 'belt-countdown', 'doc-drift', 'github-assessment', 'board-reconcile', 'heartbeat-email']);
+  // heartbeat-email added by QF-20260702-433 (chairman directive 2026-07-02 — half-hourly all-good reassurance email);
+  // quiet-tick added by SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001 (folds inbox-monitor/belt-countdown/offer-help);
+  // coordinator-health added by SD-LEO-INFRA-ADAM-COORDINATOR-HEALTH-001 (3-KPI coordinator oversight probe).
+  assert.equal(ADAM_LOOPS.length, 11);
+  assert.deepEqual(ADAM_LOOPS.map((l) => l.key), ['quiet-tick', 'governance-scan', 'inbox-monitor', 'offer-help', 'self-adherence', 'coordinator-health', 'belt-countdown', 'doc-drift', 'github-assessment', 'board-reconcile', 'heartbeat-email']);
   ADAM_LOOPS.forEach((l) => {
     assert.ok(l.cron && typeof l.cron === 'string', `${l.key} has a cron`);
     assert.ok(l.prompt && typeof l.prompt === 'string', `${l.key} has a prompt`);
@@ -134,16 +136,16 @@ test('loopStatus: armed on key, prompt or script match, MISSING when provided-bu
   assert.equal(loopStatus(offer, { provided: true, set: new Set([offer.prompt]) }), 'armed');
 });
 
-test('end-to-end CSV verdict: --armed with all 9 loop KEYS → nothing to arm (no duplicate re-arm)', () => {
+test('end-to-end CSV verdict: --armed with all loop KEYS → nothing to arm (no duplicate re-arm)', () => {
   const armed = parseArmedSet(['--armed', ADAM_LOOPS.map((l) => l.key).join(',')], {});
   const out = renderLoops(armed);
-  assert.match(out, /All 9 Adam tick loops armed\. Nothing to arm\./);
+  assert.match(out, new RegExp(`All ${ADAM_LOOPS.length} Adam tick loops armed\\. Nothing to arm\\.`));
   assert.doesNotMatch(out, /MISSING/);
 });
 
 test('renderLoops emits CronCreate specs for the not-yet-armed loops (idempotent note)', () => {
   const out = renderLoops(parseArmedSet([], {}));
-  assert.match(out, /ADAM RECURRING TICK \(9 loops\)/);
+  assert.match(out, new RegExp(`ADAM RECURRING TICK \\(${ADAM_LOOPS.length} loops\\)`));
   assert.match(out, /CronCreate\(\{ cron: "0 13 \* \* \*"/); // governance-scan spec emitted
   assert.match(out, /idempotent/i);
 });
@@ -151,7 +153,7 @@ test('renderLoops emits CronCreate specs for the not-yet-armed loops (idempotent
 test('renderLoops reports "Nothing to arm" when all loops are in the armed set', () => {
   const armedSet = new Set(ADAM_LOOPS.map((l) => l.prompt));
   const out = renderLoops({ provided: true, set: armedSet });
-  assert.match(out, /All 9 Adam tick loops armed\. Nothing to arm\./);
+  assert.match(out, new RegExp(`All ${ADAM_LOOPS.length} Adam tick loops armed\\. Nothing to arm\\.`));
 });
 
 test('renderResponsibilities is fail-open (bad repoRoot → fallback, never throws)', () => {
