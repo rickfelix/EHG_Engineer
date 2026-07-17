@@ -1,0 +1,57 @@
+name: "SMS relay-staging drain (cron)"
+
+# SD-LEO-FEAT-WIRE-DRAINSMSRELAYSTAGING-SCHEDULED-001 — drainSmsRelayStaging() in
+# lib/chairman/sms-bridge.js had ZERO production call sites (registered-verifier-never-
+# dispatched class, same as chairman-decision-sla-cron.yml): after the Twilio webhook is cut
+# over to hooks.execholdings.ai, inbound chairman SMS replies land in sms_relay_staging and
+# would never drain into chairman_decisions. This workflow is the named dispatcher: it runs
+# the one-shot runner, which drains staged rows into decisions. The runner is a NO-OP until
+# SMS_RELAY_DRAIN_ENABLED is set, so this cron is safe to arm before cutover. Static wiring
+# pinned by tests/unit/cron/sms-relay-drain-wiring.test.js — renaming this file or the runner
+# script fails CI.
+#
+# CADENCE NOTE: the SD specced a 30s interval, which implies a persistent server loop —
+# server/index.js has no such loop pattern and inventing one was out of scope ("do not invent
+# a new scheduler"). GitHub Actions schedule granularity is ~5 minutes minimum, so this runs
+# every 5 minutes; a few-minutes latency on chairman SMS-reply resolution is acceptable.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  drain:
+    name: Drain sms_relay_staging into chairman_decisions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # FR-2 enable gate — set to true (repo variable) only once the relay cutover is live.
+      # Until then the runner is inert, so arming this cron early is safe.
+      SMS_RELAY_DRAIN_ENABLED: ${{ vars.SMS_RELAY_DRAIN_ENABLED }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Drain SMS relay staging
+        run: node scripts/sms-relay-drain.cjs

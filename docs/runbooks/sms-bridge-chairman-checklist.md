@@ -88,7 +88,14 @@ direct-write path as the only live inbound route:
    `node scripts/apply-migration.js --prod-deploy`.
 8. Run `npm run security:sms-relay-redteam -- --target=deployed` and confirm the checklist
    passes before pointing Twilio's webhook at the relay.
-9. Only after 6-8 are green: flip Twilio's "A message comes in" webhook to the relay URL,
+9. **Enable the relay DRAIN before the flip** (SD-LEO-FEAT-WIRE-DRAINSMSRELAYSTAGING-SCHEDULED-001):
+   set the repo variable `SMS_RELAY_DRAIN_ENABLED=true` so the `sms-relay-drain-cron` workflow
+   (`scripts/sms-relay-drain.cjs`, every ~5 min) starts draining `sms_relay_staging` into
+   `chairman_decisions`. Trigger one manual run (`workflow_dispatch`) and confirm a clean drain.
+   The drain MUST be live BEFORE step 10, or the first inbound replies pile up undrained. (Use a
+   dedicated flag, NOT `SMS_RELAY_CUTOVER_COMPLETE` — that one is set *after* the flip in step 10,
+   which would start the drain too late.)
+10. Only after 6-9 are green: flip Twilio's "A message comes in" webhook to the relay URL,
    then set `SMS_RELAY_CUTOVER_COMPLETE=true` on the EHG_Engineer deployment to decommission
    the old direct-write handler.
 
