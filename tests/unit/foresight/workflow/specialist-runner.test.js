@@ -78,6 +78,15 @@ describe('runSpecialistAssessment', () => {
     expect(row.opportunities).toEqual(['Opportunity A']);
   });
 
+  it('returns the full parsed output alongside the inserted id (callers must forward real findings, not the static profile)', async () => {
+    const supabase = createMockSupabase();
+    const llmClient = createMockLLMClient([SAMPLE_SPECIALIST_OUTPUT]);
+
+    const result = await runSpecialistAssessment({ profile: SAMPLE_PROFILE, council: SAMPLE_COUNCIL, ventureCandidate: SAMPLE_VENTURE_CANDIDATE, supabase, llmClient });
+
+    expect(result.output).toEqual(SAMPLE_SPECIALIST_OUTPUT);
+  });
+
   it('defaults dissent_flags to an empty array when minority_or_counter_view is absent', async () => {
     const supabase = createMockSupabase();
     const output = { ...SAMPLE_SPECIALIST_OUTPUT, minority_or_counter_view: '' };

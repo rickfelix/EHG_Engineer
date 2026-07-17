@@ -70,6 +70,15 @@ describe('runAdjudication', () => {
     expect(row.kill_conditions).toEqual(['Capability regresses']);
   });
 
+  it('returns the full parsed output alongside the inserted id (callers must forward real findings, not a bare id)', async () => {
+    const supabase = createMockSupabase();
+    const llmClient = createMockLLMClient([SAMPLE_ADJUDICATOR_OUTPUT]);
+
+    const result = await runAdjudication({ adjudicatorProfile: SAMPLE_ADJUDICATOR_PROFILE, council: SAMPLE_COUNCIL, specialistAssessments: SPECIALIST_ROWS, ventureCandidateId: 'vc-test-001', supabase, llmClient });
+
+    expect(result.output).toEqual(SAMPLE_ADJUDICATOR_OUTPUT);
+  });
+
   it('defaults minority_view to empty string when absent (matches sibling B NOT NULL DEFAULT constraint)', async () => {
     const supabase = createMockSupabase();
     const output = { ...SAMPLE_ADJUDICATOR_OUTPUT, minority_view: undefined };
