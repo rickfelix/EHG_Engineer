@@ -290,8 +290,18 @@ export async function runProbe(supabase, opts = {}) {
   // diverges (or can't produce a field) does — never null-coalesced.
   let recompute = { status: 'unavailable', recompute_ok: null };
   try {
-    const { createDatabaseClient } = await import('../lib/supabase-connection.js');
-    const pg = await createDatabaseClient('engineer', { verify: false });
+    // Injectable pg-client factory (SD-LEO-FIX-ADAM-COORDINATOR-HEALTH-001): the
+    // default reproduces prior behavior EXACTLY, but a caller (the unit tests) can
+    // inject a stub so no live Postgres connection is opened and the recompute is
+    // deterministic — the raw-SQL client is created OUTSIDE the injected supabase,
+    // so without this seam the unit test's outcome flipped on ambient DB
+    // reachability. Mirrors the claimableLeavesFn / gitGrep injectable-default
+    // precedent used elsewhere in this file.
+    const makePgClient = opts.makePgClient || (async () => {
+      const { createDatabaseClient } = await import('../lib/supabase-connection.js');
+      return createDatabaseClient('engineer', { verify: false });
+    });
+    const pg = await makePgClient();
     try {
       const { recomputeViaRawSql, compareReadings } = await import('../lib/oversight/coordinator-health-recompute.mjs');
       const raw = await recomputeViaRawSql(pg);

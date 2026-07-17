@@ -245,6 +245,13 @@ describe('persistReading (TS-6)', () => {
 });
 
 describe('runProbe integration (TS-1..TS-5 wired end-to-end)', () => {
+  // SD-LEO-FIX-ADAM-COORDINATOR-HEALTH-001: runProbe's raw-SQL recompute creates its
+  // OWN pg client (createDatabaseClient) OUTSIDE the injected supabase; without an
+  // injectable seam the test's pass/fail flipped on ambient DB reachability. Inject a
+  // stub that forces the pre-existing recompute-unavailable path (recompute_ok=null,
+  // no breach) — deterministic, no live connection.
+  const pgDisabled = async () => { throw new Error('pg-disabled-in-unit'); };
+
   it('runs all three KPIs, persists a reading, and skips the advisory when there is no breach', async () => {
     vi.spyOn(waveLinkage, 'computeWaveLinkageCoverage').mockResolvedValueOnce({ coverage: null, linked: 0, total: 0, starved: false, unlinkedKeys: [] });
     const inserted = [];
@@ -252,7 +259,8 @@ describe('runProbe integration (TS-1..TS-5 wired end-to-end)', () => {
       { claude_sessions: [], strategic_directives_v2: [], codebase_health_snapshots: [] },
       { onInsert: (t, r) => inserted.push({ t, r }) },
     );
-    const reading = await runProbe(supabase, {});
+    const reading = await runProbe(supabase, { makePgClient: pgDisabled });
+    expect(reading.recompute.recompute_ok).toBeNull(); // pg seam stubbed — no live recompute, deterministic
     expect(reading.utilization).toBeDefined();
     expect(reading.plan_adherence.status).toBe('unmeasurable_until_linkage');
     expect(reading.integrity.integrity_ok).toBe(true);
@@ -272,9 +280,26 @@ describe('runProbe integration (TS-1..TS-5 wired end-to-end)', () => {
       },
       { onInsert: (t, r) => inserted.push({ t, r }) },
     );
-    await runProbe(supabase, {});
+    await runProbe(supabase, { makePgClient: pgDisabled });
     const advisory = inserted.find((i) => i.t === 'session_coordination');
     expect(advisory).toBeDefined();
     expect(advisory.r.target_session).toBe('live-coordinator-session-1');
+  });
+
+  it('a divergent recompute via the INJECTED pg seam drives a breach + advisory (runProbe->recomputeBreach glue)', async () => {
+    // Covers the recompute-breach glue the pg stub otherwise bypasses: an injected
+    // fake pg that "connects" and returns finite raw counts diverges from the empty
+    // fake-supabase-derived probe -> recompute_ok=false -> breach -> advisory.
+    vi.spyOn(waveLinkage, 'computeWaveLinkageCoverage').mockResolvedValueOnce({ coverage: null, linked: 0, total: 0, starved: false, unlinkedKeys: [] });
+    const inserted = [];
+    const supabase = makeFakeSupabase(
+      { claude_sessions: [], strategic_directives_v2: [], codebase_health_snapshots: [] },
+      { onInsert: (t, r) => inserted.push({ t, r }) },
+    );
+    const fakePg = { query: async () => ({ rows: [{ n: 7 }] }), end: async () => {} };
+    const reading = await runProbe(supabase, { makePgClient: async () => fakePg, recipients: { coordinatorId: 'c-test' } });
+    expect(reading.recompute.recompute_ok).toBe(false);
+    expect(reading.breach.recomputeBreach).toBe(true);
+    expect(inserted.some((i) => i.t === 'session_coordination')).toBe(true);
   });
 });
