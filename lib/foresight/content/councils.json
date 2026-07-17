@@ -1,0 +1,110 @@
+[
+  {
+    "council_id": "frontier_capability",
+    "council_name": "Frontier Capability Council",
+    "purpose": "Determine what has recently become technically possible, reliable, or economical enough to enable new ventures.",
+    "adjudicator_perspective_id": "alex-wissner-gross",
+    "specialist_perspective_ids": ["jack-clark", "nathan-benaich", "rodney-brooks"],
+    "required_output_type": "Technical Opportunity Brief",
+    "default_prompt_version": "v1.0",
+    "status": "active",
+    "primary_questions": [
+      "What new capability has emerged?",
+      "What evidence shows that it works?",
+      "Is it available in production or only in a demonstration?",
+      "What does it currently cost?",
+      "What reliability limitations remain?",
+      "What is likely to improve within 12, 24, and 60 months?",
+      "Which capabilities are becoming commodities?",
+      "What new venture categories could this capability enable?",
+      "What is technically overhyped?"
+    ]
+  },
+  {
+    "council_id": "human_transition",
+    "council_name": "Human Transition Council",
+    "purpose": "Identify new customer needs, anxieties, behaviors, skills gaps, trust gaps, and institutional problems created by technological change.",
+    "adjudicator_perspective_id": "sinead-bovell",
+    "specialist_perspective_ids": ["marina-gorbis", "heather-mcgowan", "rumman-chowdhury"],
+    "required_output_type": "Emerging Human Need Brief",
+    "default_prompt_version": "v1.0",
+    "status": "active",
+    "primary_questions": [
+      "Who is affected by the change?",
+      "Which tasks, roles, or behaviors are changing?",
+      "What new pain is being created?",
+      "What old pain is becoming easier to solve?",
+      "Who experiences the problem?",
+      "Who pays to solve it?",
+      "What trust or adoption barriers exist?",
+      "What new educational, supervisory, or governance needs emerge?",
+      "Could the proposed solution reduce human agency or create harmful dependency?"
+    ]
+  },
+  {
+    "council_id": "strategic_foresight",
+    "council_name": "Strategic Foresight Council",
+    "purpose": "Determine whether a venture remains attractive across multiple plausible futures.",
+    "adjudicator_perspective_id": "amy-webb",
+    "specialist_perspective_ids": ["peter-schwartz", "sohail-inayatullah", "jamais-cascio"],
+    "required_output_type": "Venture Resilience Brief",
+    "default_prompt_version": "v1.0",
+    "status": "active",
+    "primary_questions": [
+      "What assumptions must be true?",
+      "What critical uncertainties could change the outcome?",
+      "What future scenarios should EHG consider?",
+      "Does the venture survive when technology improves faster than expected?",
+      "Does it survive when adoption is slower?",
+      "Does it survive regulatory restrictions?",
+      "Does it survive provider consolidation or commoditization?",
+      "What commitments are reversible?",
+      "What events should cause EHG to accelerate, pause, or exit?"
+    ]
+  },
+  {
+    "council_id": "exponential_systems",
+    "council_name": "Exponential Systems Council",
+    "purpose": "Determine whether technology, costs, infrastructure, policy, geography, and institutional readiness are aligned sufficiently for a venture.",
+    "adjudicator_perspective_id": "azeem-azhar",
+    "specialist_perspective_ids": ["carlota-perez", "tony-seba", "parag-khanna"],
+    "required_output_type": "Systems Timing Brief",
+    "default_prompt_version": "v1.0",
+    "status": "active",
+    "primary_questions": [
+      "Which cost curves are changing?",
+      "Which technologies are converging?",
+      "What infrastructure is required?",
+      "What geographic or jurisdictional differences matter?",
+      "What regulatory conditions affect the opportunity?",
+      "Is the market too early, ready, rapidly scaling, or becoming commoditized?",
+      "Are incumbents structurally disadvantaged?",
+      "What supply-chain, compute, energy, or capital dependencies exist?",
+      "Is a temporary subsidy being mistaken for sustainable economics?"
+    ]
+  },
+  {
+    "council_id": "market_reality",
+    "council_name": "Market Reality Council",
+    "purpose": "Determine whether a future-oriented opportunity can become a practical, defensible, distributable, and profitable EHG venture.",
+    "adjudicator_perspective_id": "benedict-evans",
+    "specialist_perspective_ids": ["ben-thompson", "horace-dediu", "rita-mcgrath"],
+    "required_output_type": "Commercial Viability Brief",
+    "default_prompt_version": "v1.0",
+    "status": "active",
+    "primary_questions": [
+      "Who is the initial customer?",
+      "Who is the buyer?",
+      "Who controls the budget?",
+      "How severe and frequent is the problem?",
+      "Why would the customer switch?",
+      "How will EHG reach the customer?",
+      "Is the sales motion compatible with an AI-agent-operated company?",
+      "What creates retention?",
+      "What creates defensibility?",
+      "Is AI the product, an enabling capability, or a replaceable feature?",
+      "What prevents a larger platform from copying the product?",
+      "Why should EHG enter now?"
+    ]
+  }
+]
