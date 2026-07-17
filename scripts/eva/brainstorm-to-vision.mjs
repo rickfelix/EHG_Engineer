@@ -20,6 +20,14 @@
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { getValidationClient } from '../../lib/llm/client-factory.js';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
+// SD-LEO-INFRA-PORTFOLIO-STRATEGY-FIRST-001-A: this pipeline's "most recent active
+// L1 vision" resolution (below) is a THIRD direct-write path to eva_vision_documents
+// that a second-pass adversarial review (PR #6138) found could silently pick up a
+// GOVERNED vision_key (e.g. VISION-PORTFOLIO-STRATEGY-001) once it is chairman-ratified
+// and coexists at L1 alongside the mission/vision doc — then append brainstorm content
+// to it via a raw .update() with no ratification check at all, reproducing the exact
+// bug class this SD closed for the CLI's addendum path. Excluded at the query below.
+import { GOVERNED_VISION_KEYS } from '../../lib/eva/vision-upsert.js';
 
 const VISION_RELEVANT_OUTCOMES = ['sd_created', 'significant_departure'];
 const MAX_LLM_CONTENT_CHARS = 15000;
@@ -114,15 +122,19 @@ async function main() {
 
   if (!unlinked.length) { console.log('✅ All sessions already linked to vision docs.'); return; }
 
-  // Dynamically resolve L1 vision doc (most recent active L1)
-  const { data: l1Vision } = await supabase
+  // Dynamically resolve L1 vision doc (most recent active L1, excluding GOVERNED
+  // keys — see import note above). Fetch a small window of candidates ordered by
+  // recency and pick the first non-governed one, rather than relying on a
+  // limit(1) that could silently select a governed artifact.
+  const { data: l1Candidates } = await supabase
     .from('eva_vision_documents')
     .select('id, vision_key, content, addendums, version')
     .eq('level', 'L1')
     .eq('status', 'active')
     .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(GOVERNED_VISION_KEYS.size + 5);
+
+  const l1Vision = (l1Candidates || []).find(v => !GOVERNED_VISION_KEYS.has(v.vision_key)) || null;
 
   if (!l1Vision) {
     console.warn('   ⚠️  No active L1 vision document found — significant_departure sessions will be skipped');

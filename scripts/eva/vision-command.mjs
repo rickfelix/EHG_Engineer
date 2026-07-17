@@ -129,6 +129,15 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
     process.exit(1);
   }
   const approved = Boolean(approvedFlag);
+  // SD-LEO-INFRA-PORTFOLIO-STRATEGY-FIRST-001-A: the shared parseArgs() treats any
+  // non-`--`-prefixed following token as a value, so `--chairman-ratified false`
+  // parses to the STRING 'false', which Boolean('false') coerces to true — silently
+  // ratifying when an operator plainly intended the opposite (adversarial review,
+  // PR #6138). --chairman-ratified is documented as a bare flag; reject any value.
+  if (typeof chairmanRatifiedFlag === 'string') {
+    console.error(`--chairman-ratified takes no value (got "${chairmanRatifiedFlag}") — pass it bare to ratify, or omit it entirely to leave the document unratified.`);
+    process.exit(1);
+  }
   const chairmanRatified = Boolean(chairmanRatifiedFlag);
 
   // Read content from stdin when --stdin is set. Cross-platform alternative to
