@@ -131,7 +131,43 @@ export default [
       'no-console': 'off',  // Allow console in CLI tools and scripts
       'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
       'semi': ['error', 'always'],
-      'quotes': ['error', 'single', { avoidEscape: true }]
+      'quotes': ['error', 'single', { avoidEscape: true }],
+      // SD-LEO-FEAT-SMS-CHAIRMAN-DECISION-001-B FR-2 (coordinator hard mandate): forbid any
+      // direct member read of brief_data.sms_reply. This is an AST rule (a grep cannot tell
+      // the legit object-literal WRITE in handleInboundSmsReply from an illicit READ) — an
+      // sms_reply is only actionable through consumeSmsReply(), which enforces the undo
+      // window + single-execution claim + atomic spend-cap debit. The path-allowlist for the
+      // seam/writer + tests is applied in a later override block.
+      'no-restricted-syntax': ['error',
+        {
+          // dot / optional-chain read: brief_data.sms_reply / brief_data?.sms_reply
+          selector: "MemberExpression[property.name='sms_reply']",
+          message: 'Direct brief_data.sms_reply reads are forbidden — use consumeSmsReply() (SD-LEO-FEAT-SMS-CHAIRMAN-DECISION-001-B FR-1/FR-2)'
+        },
+        {
+          // bracket read with a string literal: brief_data['sms_reply'] (deep-tier SECURITY
+          // review PR #6208 — the property.name selector above misses computed access).
+          selector: "MemberExpression[computed=true][property.value='sms_reply']",
+          message: 'Direct brief_data[\'sms_reply\'] reads are forbidden — use consumeSmsReply() (SD-LEO-FEAT-SMS-CHAIRMAN-DECISION-001-B FR-1/FR-2)'
+        }
+      ]
+    }
+  },
+  // SD-LEO-FEAT-SMS-CHAIRMAN-DECISION-001-B FR-2: path-allowlist for the anti-direct-read
+  // rule above — the sanctioned writer/seam (lib/chairman/sms-bridge.js, which houses both
+  // handleInboundSmsReply's write and consumeSmsReply's read) and all test files (which
+  // legitimately assert on brief_data.sms_reply). A later flat-config block overrides the
+  // earlier rule, so these paths turn the rule OFF while it stays ON everywhere else.
+  {
+    files: [
+      'lib/chairman/sms-bridge.js',
+      '**/*.test.js',
+      '**/*.test.mjs',
+      '**/__tests__/**',
+      'tests/**'
+    ],
+    rules: {
+      'no-restricted-syntax': 'off'
     }
   },
   // TypeScript files configuration
