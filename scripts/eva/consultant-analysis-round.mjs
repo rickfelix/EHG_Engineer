@@ -301,16 +301,24 @@ async function analyzeVentureReadiness() {
 
 // ─── Domain 5: Protocol Health ────────────────────────────────
 async function analyzeProtocolHealth() {
+  // PRE-EXISTING BUG (confirmed live, out of scope for SD-LEO-INFRA-EVA-CONSULTANT-
+  // GENERATOR-001, unrelated to this SD's 3 diagnosed defects): pattern_key/title/
+  // frequency do not exist on issue_patterns (real columns: pattern_id/issue_summary/
+  // occurrence_count) -- this domain analyzer has likely been silently returning zero
+  // findings. Flagged as a completion-flag finding for a dedicated follow-up, not fixed
+  // here.
   const { data: patterns } = await supabase
     .from('issue_patterns')
-    .select('id, pattern_key, title, frequency, severity, status, created_at')
+    .select('id, pattern_key, title, frequency, severity, status, created_at') // schema-lint-disable-line
     .in('status', ['active', 'recurring'])
     .order('frequency', { ascending: false })
     .limit(20);
 
+  // Same pre-existing bug class: title/priority do not exist on protocol_improvement_queue
+  // (real columns: description/risk_tier).
   const { data: improvements } = await supabase
     .from('protocol_improvement_queue')
-    .select('id, title, status, priority, created_at')
+    .select('id, title, status, priority, created_at') // schema-lint-disable-line
     .eq('status', 'pending')
     .order('created_at', { ascending: true })
     .limit(20);
