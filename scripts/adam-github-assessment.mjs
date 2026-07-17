@@ -98,9 +98,12 @@ export async function resolveGithubHealth(supabase, { windowDays = WINDOW_DAYS, 
 
   // (1b) open red-merge QFs.
   try {
-    const { count } = await supabase.from('quick_fixes')
-      .select('id', { count: 'exact', head: true }).eq('status', 'open').ilike('title', '%red-merge%');
-    if (Number.isFinite(count)) facts.openRedMergeQfs = count;
+    // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: fetch titles so a fixture-titled test QF
+    // mentioning red-merge can't inflate the gauge.
+    const { data: rmRows } = await supabase.from('quick_fixes')
+      .select('id, title').eq('status', 'open').ilike('title', '%red-merge%').limit(500);
+    const { isFixtureQf } = await import('../lib/governance/fixture-exclusion.mjs');
+    facts.openRedMergeQfs = (rmRows || []).filter((qf) => !isFixtureQf(qf)).length;
   } catch { /* null */ }
 
   // (2) failed CI runs in window.

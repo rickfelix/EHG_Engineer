@@ -46,6 +46,10 @@ describe('FR-1: selectUnactionedAdvisories gates on payload.actioned_at IS NULL'
     expect(error).toBeNull();
     expect(rows).toHaveLength(1);
     expect(captured.eq).toContainEqual(['payload->>kind', 'adam_advisory']);
+    // SD-LEO-FIX-SOLOMON-MULTI-PART-001 (adversarial-review fix, PR #6191): target_session
+    // MUST be selected — the multi-part grouping consumer keys a series on it, and this
+    // selector unions rows from two different targets (coordinatorId + broadcast sentinel).
+    expect(captured.select).toContain('target_session');
     expect(captured.is).toContainEqual(['payload->>actioned_at', null]); // the FR-1 re-surface gate
     expect(captured.in).toEqual(['target_session', ['coord-uuid-aaaa', BROADCAST_COORDINATOR]]);
     expect(captured.limit).toBe(5);

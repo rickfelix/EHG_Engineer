@@ -39,7 +39,7 @@ require('dotenv').config();
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { isTwoWayV2Enabled } = require('../lib/coordinator/resolve.cjs');
 const { isFullUuid } = require('../lib/coordinator/dispatch.cjs');
-const { fetchAdvisory, stampActioned } = require('../lib/coordinator/adam-advisory-store.cjs');
+const { fetchAdvisory, resolveGroupForAdvisory, stampActionedGroup } = require('../lib/coordinator/adam-advisory-store.cjs');
 const { sendCoordinatorReply } = require('./coordinator-reply.cjs');
 const { resolveAdamReplyTarget, retargetStaleAdamInbound, verifyReplyDelivered } = require('../lib/coordinator/adam-identity.cjs');
 
@@ -141,11 +141,24 @@ async function main() {
   if (!adv) { console.error('ERROR: advisory not found:', advisoryId); process.exit(1); }
 
   // Stage 2: stamp actioned_at — the only thing that retires the advisory (idempotent).
+  // SD-LEO-FIX-SOLOMON-MULTI-PART-001 (FR-3): resolve the FULL multi-part group this
+  // advisory belongs to FIRST, then ack every member together — never retire part N
+  // while a sibling part sits unactioned. A marker-less advisory resolves to its own
+  // singleton group, byte-identical to the prior single-row ack.
   const nowIso = new Date().toISOString();
-  const { error: sErr } = await stampActioned(supabase, adv, nowIso);
+  const group = await resolveGroupForAdvisory(supabase, adv);
+  const { error: sErr } = await stampActionedGroup(supabase, group, nowIso);
   if (sErr) { console.error('ERROR: failed to stamp actioned_at:', sErr.message); process.exit(1); }
-  console.log('✓ Advisory actioned (retired)');
+  console.log('✓ Advisory actioned (retired)' + (group.isMultiPart
+    ? ` — multi-part series, ${group.memberIds.length}${group.isComplete ? '' : '/' + group.total} part(s) acked together`
+    : ''));
   console.log('  advisory_id:', advisoryId);
+  if (group.isMultiPart) console.log('  series_member_ids:', group.memberIds.join(', '));
+  if (group.isMultiPart && !group.isComplete) {
+    const missing = Array.from({ length: group.total }, (_, i) => i + 1)
+      .filter((i) => !group.presentIndices.includes(i));
+    console.warn(`  ⚠ INCOMPLETE SERIES: only ${group.memberIds.length} of ${group.total} part(s) have arrived (missing part(s): ${missing.join(', ')}) — additional part(s) may still be en route; re-run ack once they land.`);
+  }
   console.log('  actioned_at:', nowIso);
 
   const disposition = typeof flags.disposition === 'string' ? flags.disposition : null;

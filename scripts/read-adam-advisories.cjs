@@ -15,6 +15,9 @@ require('dotenv').config();
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
 const { selectUnactionedAdvisories } = require('../lib/coordinator/adam-advisory-store.cjs');
+// SD-LEO-FIX-SOLOMON-MULTI-PART-001: collapse a split Solomon reply (subject "N/M" marker)
+// into ONE peeked entry, matching printAdamInbox's render. Stamps nothing either way.
+const { groupMultiPartAdvisories } = require('../lib/coordinator/multi-part-reply.cjs');
 
 async function main() {
   let supabase;
@@ -29,15 +32,18 @@ async function main() {
   console.log('─'.repeat(60));
   if (!rows.length) { console.log('  (no unactioned Adam advisories)'); return; }
 
-  console.log(`  ${rows.length} unactioned advisory(ies):`);
-  for (const a of rows) {
-    const callsign = (a.payload && a.payload.sender_callsign) || '(none)';
-    const intent = a.payload && a.payload.expects_reply ? 'awaiting-reply' : 'fire-and-forget';
-    const delivered = a.read_at ? 'delivered' : 'new';
-    const ageMin = Math.floor((Date.now() - new Date(a.created_at).getTime()) / 60_000);
+  const groups = groupMultiPartAdvisories(rows);
+  console.log(`  ${groups.length} unactioned advisory(ies):`);
+  for (const g of groups) {
+    const last = g.rows[g.rows.length - 1];
+    const callsign = (last.payload && last.payload.sender_callsign) || '(none)';
+    const intent = g.rows.some((a) => a.payload && a.payload.expects_reply) ? 'awaiting-reply' : 'fire-and-forget';
+    const delivered = last.read_at ? 'delivered' : 'new';
+    const ageMin = Math.floor((Date.now() - new Date(last.created_at).getTime()) / 60_000);
     const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
-    const body = (a.body || (a.payload && a.payload.body) || '').replace(/\n/g, ' ');
-    console.log(`  • ${a.id}`);
+    const partsSuffix = g.isMultiPart ? ` (${g.rows.length}${g.isComplete ? '' : '/' + g.total} parts)` : '';
+    const body = g.body.replace(/\n/g, ' ');
+    console.log(`  • ${g.id}${partsSuffix}`);
     console.log(`      ${callsign} | ${intent} | ${delivered} | ${ageStr} ago`);
     console.log(`      ${body}`);
   }
