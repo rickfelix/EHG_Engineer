@@ -67,6 +67,33 @@ export function isNearTotalSuppression(candidateCount, insertedCount) {
   return candidateCount > 0 && insertedCount === 0;
 }
 
+/**
+ * FR-2: fingerprint every candidate finding and suppress one whose fingerprint already
+ * exists in eva_consultant_recommendations with an unexpired re_review_at, BEFORE it is
+ * ever scored or inserted (TR-3). A finding whose matching row's re_review_at has
+ * PASSED is deliberately NOT suppressed -- the time-bound release valve that keeps
+ * suppression from being permanent. `client` is injectable for tests; production calls
+ * default to the module-level supabase.
+ * @param {object} client - supabase client
+ * @param {Array} rawFindings - raw findings from the domain analyzers
+ * @param {string} [nowIso] - injectable "now" for deterministic expiry tests
+ * @returns {Promise<{ survivors: Array, dedupSuppressedCount: number }>}
+ */
+export async function filterAlreadySuppressed(client, rawFindings, nowIso = new Date().toISOString()) {
+  const withFingerprints = rawFindings.map((f) => ({ ...f, fingerprint: computeFindingFingerprint(f) }));
+  const uniqueFingerprints = [...new Set(withFingerprints.map((f) => f.fingerprint))];
+  const { data: existingUnexpired } = uniqueFingerprints.length > 0
+    ? await client
+        .from('eva_consultant_recommendations')
+        .select('fingerprint')
+        .in('fingerprint', uniqueFingerprints)
+        .or(`re_review_at.is.null,re_review_at.gt.${nowIso}`)
+    : { data: [] };
+  const suppressedFingerprints = new Set((existingUnexpired || []).map((r) => r.fingerprint).filter(Boolean));
+  const survivors = withFingerprints.filter((f) => !suppressedFingerprints.has(f.fingerprint));
+  return { survivors, dedupSuppressedCount: withFingerprints.length - survivors.length };
+}
+
 // ─── FR-4: venture-status grounding ────────────────────────────
 // Case-insensitive, exact-match venture lookup (reuses lib/venture-name-resolver.js's
 // existing safe .ilike() pattern, per security-agent PLAN-phase review -- never a
@@ -496,19 +523,7 @@ export async function consultantAnalysisHandler(options = {}) {
 
   // FR-1/FR-2/TR-3: fingerprint every candidate and suppress a finding whose fingerprint
   // already exists with an unexpired re_review_at BEFORE it is ever scored or inserted.
-  const withFingerprints = allRawFindings.map((f) => ({ ...f, fingerprint: computeFindingFingerprint(f) }));
-  const uniqueFingerprints = [...new Set(withFingerprints.map((f) => f.fingerprint))];
-  const nowIso = new Date().toISOString();
-  const { data: existingUnexpired } = uniqueFingerprints.length > 0
-    ? await supabase
-        .from('eva_consultant_recommendations')
-        .select('fingerprint')
-        .in('fingerprint', uniqueFingerprints)
-        .or(`re_review_at.is.null,re_review_at.gt.${nowIso}`)
-    : { data: [] };
-  const suppressedFingerprints = new Set((existingUnexpired || []).map((r) => r.fingerprint).filter(Boolean));
-  const survivors = withFingerprints.filter((f) => !suppressedFingerprints.has(f.fingerprint));
-  const dedupSuppressedCount = withFingerprints.length - survivors.length;
+  const { survivors, dedupSuppressedCount } = await filterAlreadySuppressed(supabase, allRawFindings);
 
   // Run through confidence engine pipeline
   const processed = await processFindings(supabase, survivors);
