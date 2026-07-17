@@ -29,7 +29,10 @@ const ENGINE_ALLOWED_SPECIFIERS = new Set([
  * the shadow-run engine core). scanContent still contributes its fail-closed
  * non-literal-import detection.
  */
-const IMPORT_SPEC = /(?:import\s[^'"]*from\s*|import\s*\(\s*|require\s*\(\s*)['"]([^'"]+)['"]/g;
+// SECURITY M3: `export { x } from '...'` re-exports smuggle bindings past
+// import-only regexes — the classifier covers import, require, dynamic import
+// AND export-from forms.
+const IMPORT_SPEC = /(?:import\s[^'"]*from\s*|import\s*\(\s*|require\s*\(\s*|export\s+(?:\*|\{[^}]*\})\s+from\s*)['"]([^'"]+)['"]/g;
 function engineViolations(content, filePath) {
   const violations = scanContent(content, filePath).filter((v) => v.kind === 'violation:non_literal_import');
   IMPORT_SPEC.lastIndex = 0;

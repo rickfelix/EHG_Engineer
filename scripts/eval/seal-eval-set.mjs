@@ -59,21 +59,28 @@ export async function sealEvalSet({ supabase, artifactClass, apply = false, seal
   // legitimate re-seals before the ceremony has even begun.
   const guardProbe = await supabase
     .from('governed_change_proposals')
-    .select('id, status')
+    .select('id, status, proposed_diff')
     .eq('artifact_class', artifactClass)
     .limit(10);
   if (guardProbe.error) {
     if (isMissingTableError(guardProbe.error)) {
       log('SELF-REFERENCE GUARD: governed_change_proposals not applied (ceremony pending) — warn-and-proceed.');
     } else {
-      log(`SELF-REFERENCE GUARD: probe failed (${guardProbe.error.message}) — warn-and-proceed (fail-open on infrastructure error).`);
+      // FAIL CLOSED (SECURITY M2): once the table can exist, a permissions/transient
+      // probe failure must not silently bypass a governed-artifact guard.
+      throw new Error(`seal-eval-set: SELF-REFERENCE GUARD probe failed (${guardProbe.error.message}) — refusing to seal (fail-closed; only a missing table warn-and-proceeds)`);
     }
   } else {
-    const stagedProposal = (guardProbe.data || []).find((p) => ['staged', 'shadow_run', 'packet_attached'].includes(p.status));
-    if (!stagedProposal) {
-      throw new Error(`seal-eval-set: SELF-REFERENCE GUARD — no staged governed_change_proposals row for artifact_class=${artifactClass}; corpus mutations require a staged proposal (child C FR-4)`);
+    // CONTENT BINDING (SECURITY M1): a staged proposal authorizes only the seals it
+    // NAMES — its proposed_diff must reference at least one content hash being
+    // sealed. A stale/unrelated staged row for the class no longer authorizes
+    // arbitrary future seals.
+    const active = (guardProbe.data || []).filter((p) => ['staged', 'shadow_run', 'packet_attached'].includes(p.status));
+    const bound = active.find((p) => planned.some(({ content_hash }) => String(p.proposed_diff || '').includes(content_hash)));
+    if (!bound) {
+      throw new Error(`seal-eval-set: SELF-REFERENCE GUARD — no staged governed_change_proposals row for artifact_class=${artifactClass} references the content hashes being sealed; corpus mutations require a staged proposal naming this change (child C FR-4)`);
     }
-    log(`SELF-REFERENCE GUARD: staged proposal ${stagedProposal.id} (${stagedProposal.status}) authorizes this seal.`);
+    log(`SELF-REFERENCE GUARD: staged proposal ${bound.id} (${bound.status}) content-binds this seal.`);
   }
 
   const existing = await supabase

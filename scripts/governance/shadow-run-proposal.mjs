@@ -46,6 +46,10 @@ const supabase = createClient(
 
 const loopKey = argValue('--loop-key') || 'L7';
 const broken = process.argv.includes('--broken');
+// SECURITY L1: the degenerate demo proposal must never be STAGED for real —
+// post-ceremony it would upsert a genuine staged row. Without the explicit demo
+// env the broken variant runs the shadow replay on the in-memory proposal only.
+const allowBrokenStage = process.env.SHADOW_TRIAL_DEMO === '1';
 
 // ── Read-only snapshot of the proposal's target artifact ──
 const before = await supabase.from('loop_registry')
@@ -73,10 +77,15 @@ const proposal = {
   proposed_predicate: proposedPredicate,
 };
 
-// ── Stage (ceremony-aware) ──
-const staged = await stageProposal(supabase, proposal);
+// ── Stage (ceremony-aware; broken demo never stages without SHADOW_TRIAL_DEMO=1) ──
+const staged = broken && !allowBrokenStage
+  ? { staged: false, demo_dry: true }
+  : await stageProposal(supabase, proposal);
+if (staged.demo_dry) console.log('DEMO-DRY: --broken proposal is never staged without SHADOW_TRIAL_DEMO=1 — replaying in-memory only.');
 const proposalId = staged.staged ? staged.id : null;
-if (staged.ceremony_pending) {
+if (staged.demo_dry) {
+  // logged above; continue the in-memory advisory pipeline
+} else if (staged.ceremony_pending) {
   console.log('CEREMONY_PENDING: governed_change_proposals not applied yet — continuing on the in-memory proposal (persisted chain activates with the chairman ceremony).');
 } else if (staged.staged) {
   console.log(`Proposal staged: ${staged.id}`);

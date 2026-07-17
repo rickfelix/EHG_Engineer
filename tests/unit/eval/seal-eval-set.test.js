@@ -14,14 +14,15 @@ import { evalCaseHash } from '../../../lib/eval/eval-set-loader.mjs';
  * the child-C self-reference guard warn-and-proceeds; pass `proposals` to simulate
  * the post-ceremony table (guard then requires a staged row).
  */
-function stubDb({ existingHashes = [], readError = null, proposals = undefined } = {}) {
+function stubDb({ existingHashes = [], readError = null, proposals = undefined, guardError = null } = {}) {
   const inserts = { feedback: [], system_events: [] };
   const MISSING = { code: 'PGRST205', message: "Could not find the table 'public.governed_change_proposals' in the schema cache" };
   return {
     inserts,
     from(table) {
       const result = table === 'governed_change_proposals'
-        ? (proposals === undefined ? { data: null, error: MISSING } : { data: proposals, error: null })
+        ? (guardError ? { data: null, error: guardError }
+           : proposals === undefined ? { data: null, error: MISSING } : { data: proposals, error: null })
         : (readError
             ? { data: null, error: readError }
             : { data: existingHashes.map((h) => ({ id: `x-${h}`, metadata: { content_hash: h } })), error: null });
@@ -96,10 +97,24 @@ describe('self-reference guard (child C FR-4)', () => {
     expect(r.sealed).toBe(4);
   });
 
-  it('post-ceremony with a staged proposal: seal authorized', async () => {
-    const db = stubDb({ proposals: [{ id: 'gp-1', status: 'staged' }] });
+  it('post-ceremony with a CONTENT-BOUND staged proposal: seal authorized (M1)', async () => {
+    const boundHash = evalCaseHash(EVAL_SET_CORPORA.closure_predicates[0]);
+    const db = stubDb({ proposals: [{ id: 'gp-1', status: 'staged', proposed_diff: `corpus reseal covering ${boundHash}` }] });
     const r = await sealEvalSet({ supabase: db, artifactClass: 'closure_predicates', apply: true, log: silent });
     expect(r.applied).toBe(true);
+  });
+
+  it('post-ceremony: a stale/unrelated staged proposal does NOT authorize (M1 content binding)', async () => {
+    const db = stubDb({ proposals: [{ id: 'gp-old', status: 'staged', proposed_diff: 'some unrelated earlier change' }] });
+    await expect(sealEvalSet({ supabase: db, artifactClass: 'closure_predicates', apply: true, log: silent }))
+      .rejects.toThrow(/SELF-REFERENCE GUARD/);
+  });
+
+  it('generic (non-missing-table) probe error FAILS CLOSED (M2)', async () => {
+    const db = stubDb({ guardError: { code: '42501', message: 'permission denied' } });
+    await expect(sealEvalSet({ supabase: db, artifactClass: 'closure_predicates', apply: true, log: silent }))
+      .rejects.toThrow(/fail-closed/);
+    expect(db.inserts.feedback).toHaveLength(0);
   });
 
   it('post-ceremony with NO staged proposal: seal refused', async () => {
