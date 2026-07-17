@@ -150,6 +150,38 @@ describe('draftDepsSatisfied', () => {
   });
 });
 
+// ── ADDITIVE — SD-LEO-INFRA-MAKE-WSJF-SELF-001 FR-1/FR-4b: draftDepsSatisfied now delegates
+// to the SHARED superset extractor (lib/utils/parse-sd-dependencies.cjs extractAllDependencyRefs),
+// folding metadata.dependencies / metadata.depends_on / metadata.blocked_by_sd_key too. ──
+describe('draftDepsSatisfied — FR-1 superset metadata sources (SD-LEO-INFRA-MAKE-WSJF-SELF-001)', () => {
+  it('false when metadata.dependencies references a not-yet-completed SD', async () => {
+    const sb = makeSb({ 'SD-MD-001': { status: 'in_progress' } });
+    expect(await draftDepsSatisfied(sb, { dependencies: [], metadata: { dependencies: [{ sd_key: 'SD-MD-001' }] } })).toBe(false);
+  });
+  it('false when metadata.depends_on references a not-yet-completed SD', async () => {
+    const sb = makeSb({ 'SD-DO-001': { status: 'draft' } });
+    expect(await draftDepsSatisfied(sb, { dependencies: [], metadata: { depends_on: 'SD-DO-001' } })).toBe(false);
+  });
+  it('false when metadata.blocked_by_sd_key references a not-yet-completed SD', async () => {
+    const sb = makeSb({ 'SD-BB-001': { status: 'active' } });
+    expect(await draftDepsSatisfied(sb, { dependencies: [], metadata: { blocked_by_sd_key: 'SD-BB-001' } })).toBe(false);
+  });
+  it('true once every metadata-source target is completed', async () => {
+    const sb = makeSb({ 'SD-MD-001': { status: 'completed' }, 'SD-DO-001': { status: 'completed' }, 'SD-BB-001': { status: 'completed' } });
+    const sd = { dependencies: [], metadata: { dependencies: [{ sd_key: 'SD-MD-001' }], depends_on: 'SD-DO-001', blocked_by_sd_key: 'SD-BB-001' } };
+    expect(await draftDepsSatisfied(sb, sd)).toBe(true);
+  });
+  it('none-sentinels in the metadata sources stay non-blocking', async () => {
+    const sd = { dependencies: [], metadata: { dependencies: [{ sd_key: 'none' }], depends_on: 'none', blocked_by_sd_key: 'none' } };
+    expect(await draftDepsSatisfied(makeSb({}), sd)).toBe(true);
+  });
+  it('a SELF-ref via metadata.depends_on evaluates as blocked (false) without throwing', async () => {
+    const sb = makeSb({ 'SD-SELF-001': { status: 'draft' } });
+    const sd = { sd_key: 'SD-SELF-001', dependencies: [], metadata: { depends_on: 'SD-SELF-001' } };
+    expect(await draftDepsSatisfied(sb, sd)).toBe(false);
+  });
+});
+
 describe('evaluateDispatchEligibility (discriminated verdict; throws on query error)', () => {
   it('orchestrator parent -> ineligible(orchestrator_parent)', async () => {
     const sb = makeSbForEligibility({ 'SD-ORCH-001': { sd_type: 'orchestrator', dependencies: [] } });
