@@ -121,4 +121,15 @@ describe('HandoffOrchestrator.precheckHandoff applies gate policies', () => {
     const ctx = validateGatesAllMock.mock.calls[0][1];
     expect(ctx.prd).toEqual(prdRow);
   });
+
+  it('SD-FDBK-INFRA-FIX-GATE-SUBAGENT-001: populates handoffType in the precheck context so GATE_SUBAGENT_EVIDENCE resolves REQUIRED_SUBAGENTS correctly (was undefined -> always [])', async () => {
+    applyGatePoliciesMock.mockResolvedValue({
+      filteredGates: [{ name: 'GATE_KEEP' }], resolutions: [], fallbackUsed: false
+    });
+    const orchestrator = makeOrchestrator(INFRA_SD, [{ name: 'GATE_KEEP' }]);
+    await orchestrator.precheckHandoff('PLAN-TO-LEAD', 'X');
+
+    const ctx = validateGatesAllMock.mock.calls[0][1];
+    expect(ctx.handoffType).toBe('PLAN-TO-LEAD');
+  });
 });

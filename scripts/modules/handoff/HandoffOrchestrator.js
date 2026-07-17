@@ -472,7 +472,11 @@ export class HandoffOrchestrator {
         prd: precheckPrd,
         options,
         precheckMode: true,
-        supabase: this.supabase
+        supabase: this.supabase,
+        // SD-FDBK-INFRA-FIX-GATE-SUBAGENT-001: without this, subagent-evidence-gate.js's
+        // REQUIRED_SUBAGENTS[ctx.handoffType] always resolved to [] (undefined key), so
+        // GATE_SUBAGENT_EVIDENCE has been fail-open fleet-wide since introduction.
+        handoffType: normalizedType
       };
       const gatesWithRules = await this.validationOrchestrator.buildGatesFromRules(
         filteredGates,
@@ -685,7 +689,11 @@ export class HandoffOrchestrator {
           prd,
           prdId: prd?.id,
           options: {},
-          supabase: this.supabase
+          supabase: this.supabase,
+          // SD-FDBK-INFRA-FIX-GATE-SUBAGENT-001: without this, subagent-evidence-gate.js's
+          // REQUIRED_SUBAGENTS[ctx.handoffType] always resolved to [] (undefined key), so
+          // GATE_SUBAGENT_EVIDENCE has been fail-open fleet-wide since introduction.
+          handoffType: normalizedType
         };
 
         // Build final gate set from rules + policy-filtered gates

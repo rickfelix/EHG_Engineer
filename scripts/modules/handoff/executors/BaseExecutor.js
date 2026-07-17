@@ -354,7 +354,11 @@ export class BaseExecutor {
         prdId: prd?.id,  // Also provide prdId for convenience
         options: options ? structuredClone(options) : {},  // Deep copy options
         supabase: this.supabase,  // Supabase client cannot be cloned (has methods)
-        gitContext  // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Cached git state (branch, diffFiles, gitRoot)
+        gitContext,  // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Cached git state (branch, diffFiles, gitRoot)
+        // SD-FDBK-INFRA-FIX-GATE-SUBAGENT-001: without this, subagent-evidence-gate.js's
+        // REQUIRED_SUBAGENTS[ctx.handoffType] always resolved to [] (undefined key), so
+        // GATE_SUBAGENT_EVIDENCE has been fail-open fleet-wide since introduction.
+        handoffType: this.handoffType
       };
 
       // SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 FR-5/TR-4: surface prior consecutive-wait
