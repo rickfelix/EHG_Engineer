@@ -1339,6 +1339,65 @@ async function printInbox() {
   console.log('');
 }
 
+// ── Section: Worker-scoped inbox (SD-LEO-FIX-FLEET-WORKER-DIRECTIVE-001) ──
+// The `inbox` subcommand used to render the COORDINATOR inbox unconditionally, so a
+// WORKER following the fleet-loop fallback saw the coordinator's rows and its own
+// WORK_ASSIGNMENTs sat unread (worker-verified: Charlie; reproduced by Bravo 2026-07-17).
+// This renderer shows rows targeted at the CALLER's session. Read-only by design: it
+// never stamps read_at/acknowledged_at — receipt semantics stay with the coordinator
+// lane (coordinator-ack-signal.cjs) and /checkin.
+async function printWorkerInbox(sessionId, client = supabase) {
+  console.log('MY INBOX (session ' + sessionId.slice(0, 8) + '…)');
+  console.log('─'.repeat(72));
+
+  const { data: rows, error } = await client
+    .from('session_coordination')
+    .select('id, sender_session, subject, body, payload, message_type, created_at, read_at, acknowledged_at')
+    .eq('target_session', sessionId)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (error) {
+    console.log('  (inbox query failed: ' + error.message + ')');
+    console.log('');
+    return;
+  }
+  if (!rows || rows.length === 0) {
+    console.log('  (no messages directed at this session)');
+    console.log('');
+    return;
+  }
+
+  console.log('  ' + pad('Kind', 20) + pad('State', 8) + pad('Age', 8) + 'Subject / body');
+  console.log('  ' + '─'.repeat(68));
+  for (const r of rows) {
+    const kind = r.payload?.kind || r.payload?.signal_type || r.message_type || '?';
+    const state = r.acknowledged_at ? 'acked' : (r.read_at ? 'read' : 'UNREAD');
+    const ageMin = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
+    const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
+    const preview = ((r.subject ? r.subject + ' — ' : '') + (r.body || r.payload?.body || ''))
+      .replace(/\n/g, ' ').substring(0, 60);
+    console.log('  ' + pad(kind, 20) + pad(state, 8) + pad(ageStr, 8) + preview);
+  }
+  console.log('');
+  console.log('  (read-only view — ack/receipt semantics live in /checkin and the coordinator lane)');
+  console.log('');
+}
+
+// Decides which inbox the `inbox` subcommand renders (SD-LEO-FIX-FLEET-WORKER-DIRECTIVE-001).
+// Coordinator view ONLY for the active coordinator itself or an explicit --coordinator flag;
+// otherwise the caller's own session inbox. A caller with NO resolvable session gets an
+// explicit diagnosis instead of the old silent coordinator fallback (that silence was the bug).
+async function resolveInboxAudience({ argv = process.argv, env = process.env, client = supabase } = {}) {
+  if (argv.includes('--coordinator')) return { mode: 'coordinator' };
+  const callerId = env.CLAUDE_SESSION_ID || null;
+  let coordinatorId = null;
+  try { coordinatorId = await _getActiveCoordinatorIdForInbox(client); } catch { coordinatorId = null; }
+  if (callerId && coordinatorId && callerId === coordinatorId) return { mode: 'coordinator' };
+  if (callerId) return { mode: 'worker', sessionId: callerId };
+  return { mode: 'unresolved' };
+}
+
 // ── Section: Review-held SDs (QF-20260704-742) ──
 // The inbox tick covered the worker-signal lane (printInbox) and the Adam advisory lane
 // (printAdamInbox), but had no surface at all for SDs parked with
@@ -2103,6 +2162,17 @@ async function main() {
     drain:         () => printDrainAgents(d),
     strand:        async () => await printStrandAgeGauge(), // SD-LEO-INFRA-ADOPTED-RESUME-FINAL-001 (FR-2)
     inbox:         async () => {
+      // SD-LEO-FIX-FLEET-WORKER-DIRECTIVE-001: the coordinator view is no longer the
+      // unconditional default — a worker invoking the fallback gets ITS OWN inbox.
+      const audience = await resolveInboxAudience();
+      if (audience.mode === 'worker') {
+        await printWorkerInbox(audience.sessionId);
+        return;
+      }
+      if (audience.mode === 'unresolved') {
+        console.log('  (cannot resolve caller session — set CLAUDE_SESSION_ID for your own inbox, or pass --coordinator for the coordinator view)');
+        return;
+      }
       // FR-1 (SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B): chairman directives surface FIRST —
       // bypasses the printInbox signal_type gate (chairman_directive carries no signal_type).
       await printChairmanDirectives();
@@ -2199,7 +2269,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth, printAvailable };
+module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.
