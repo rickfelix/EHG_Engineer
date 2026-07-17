@@ -45,8 +45,8 @@ export function stripClassificationLabelEnums(text) {
 // identifier-case and LABEL-FP-001 classification enums): GENERATED artifact files carry
 // third-party DATA, not this SD's decisions — e.g. database/schema-reference-snapshot.json
 // reproduces every CHECK constraint in the database verbatim, so a PEER table's enum value
-// ('ambiguous' in sms_inbound_log's outcome CHECK) false-trips any SD whose process
-// mandates the same-PR snapshot regen. Exclude generated files' diff sections from the
+// (the a-word enum value in sms_inbound_log's outcome CHECK) false-trips any SD whose
+// process mandates the same-PR snapshot regen. Exclude generated files' diff sections from the
 // ambiguity scan; hand-written files are unaffected and still gate.
 const AMBIGUITY_SCAN_EXEMPT_FILES = [
   'database/schema-reference-snapshot.json',
@@ -66,7 +66,9 @@ export function addedLinesForAmbiguityScan(combinedDiff) {
   for (const line of combinedDiff.split(/\r?\n/)) {
     if (line.startsWith('+++')) {
       const filePath = line.replace(/^\+\+\+ [ab]\//, '').trim();
-      inExemptFile = AMBIGUITY_SCAN_EXEMPT_FILES.some((f) => filePath === f || filePath.endsWith(`/${f}`));
+      // Exact canonical path only (security-agent c0582f56 hardening note 1):
+      // a nested copycat filename must NOT inherit the exemption.
+      inExemptFile = AMBIGUITY_SCAN_EXEMPT_FILES.includes(filePath);
       continue;
     }
     if (line.startsWith('+') && !inExemptFile) kept.push(line);
