@@ -24,8 +24,8 @@ function readSource(rel) {
 describe('BaseExecutor claim-gate fresh-status re-read (SD-LEO-FIX-POST-MERGE-AUTOMATION-001)', () => {
   const src = readSource('scripts/modules/handoff/executors/BaseExecutor.js');
 
-  it('only re-reads when ownership is unclaimed (happy path pays no extra query)', () => {
-    expect(src).toMatch(/claimCheck\?\.ownership === 'unclaimed'/);
+  it('only re-reads when ownership is unclaimed AND the exemption is eligible (happy path pays no extra query)', () => {
+    expect(src).toMatch(/exemptionEligible && claimCheck\?\.ownership === 'unclaimed'/);
   });
 
   it('re-reads via sdRepo.getById, not a raw supabase call bypassing the repo layer', () => {
@@ -36,8 +36,22 @@ describe('BaseExecutor claim-gate fresh-status re-read (SD-LEO-FIX-POST-MERGE-AU
     expect(src).toMatch(/this\.sdRepo\.getById\(sdId\)\.catch\(\(\) => null\)/);
   });
 
-  it('the fresh status (not the Step-1 snapshot) feeds evaluateClaimCheckForHandoff', () => {
-    expect(src).toMatch(/evaluateClaimCheckForHandoff\(claimCheck, sdKeyForGate, freshSdForGate\?\.status\)/);
+  it('the fresh status feeds evaluateClaimCheckForHandoff only when exemption-eligible; otherwise undefined (legacy always-block behavior)', () => {
+    expect(src).toMatch(/evaluateClaimCheckForHandoff\(claimCheck, sdKeyForGate, exemptionEligible \? freshSdForGate\?\.status : undefined\)/);
+  });
+
+  it('security scoping: exemption eligibility is gated on handoffType === LEAD-FINAL-APPROVAL (SEC review finding)', () => {
+    // A CONDITIONAL_PASS security review (EXEC-TO-PLAN) found that scoping the
+    // sdStatus exemption to ALL handoff types would let an unclaimed session clear
+    // the claim gate on an already-completed SD for handoffs OTHER than
+    // LEAD-FINAL-APPROVAL (e.g. PLAN-TO-LEAD reverting status, PLAN-TO-EXEC/
+    // EXEC-TO-PLAN mutating current_phase) — only LEAD-FINAL-APPROVAL's executor
+    // has a compensating already-completed reconcile path.
+    expect(src).toMatch(/const exemptionEligible = this\.handoffType === 'LEAD-FINAL-APPROVAL';/);
+    const declIdx = src.indexOf("const exemptionEligible = this.handoffType === 'LEAD-FINAL-APPROVAL';");
+    const usageIdx = src.indexOf('exemptionEligible ? freshSdForGate');
+    expect(declIdx).toBeGreaterThan(-1);
+    expect(usageIdx).toBeGreaterThan(declIdx);
   });
 
   it('alreadyCompleted propagates the fresh row downstream by reassigning sd (not just a local var)', () => {

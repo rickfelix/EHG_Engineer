@@ -179,12 +179,22 @@ export class BaseExecutor {
         // the race this closes. Only re-read when ownership is 'unclaimed' (the one
         // case evaluateClaimCheckForHandoff needs status for); the happy path
         // (claim-holder) never pays this extra query.
+        // Security review (EXEC-TO-PLAN, SD-LEO-FIX-POST-MERGE-AUTOMATION-001): the
+        // exemption must be scoped to LEAD-FINAL-APPROVAL only — that is the sole
+        // handoff type whose success can make an SD "unclaimed because completed",
+        // and the only executor with a compensating already-completed reconcile
+        // path. Passing the fresh status for any OTHER handoff type would let an
+        // unclaimed session clear the claim gate on an already-completed SD and
+        // drive e.g. PLAN-TO-LEAD (reverting status to 'pending_approval') or
+        // PLAN-TO-EXEC/EXEC-TO-PLAN (mutating current_phase) with no per-type
+        // completed-guard downstream.
+        const exemptionEligible = this.handoffType === 'LEAD-FINAL-APPROVAL';
         let freshSdForGate = sd;
-        if (claimCheck?.ownership === 'unclaimed') {
+        if (exemptionEligible && claimCheck?.ownership === 'unclaimed') {
           const refetched = await this.sdRepo.getById(sdId).catch(() => null);
           if (refetched) freshSdForGate = refetched;
         }
-        const noClaim = evaluateClaimCheckForHandoff(claimCheck, sdKeyForGate, freshSdForGate?.status);
+        const noClaim = evaluateClaimCheckForHandoff(claimCheck, sdKeyForGate, exemptionEligible ? freshSdForGate?.status : undefined);
         if (noClaim.block) {
           console.error(`❌ NO_CLAIM: ${noClaim.detail}`);
           try { endSpan(rootSpan, { result: 'claim_validity_gate_blocked' }); persist(traceCtx, { supabase: this.supabase }); } catch (_) { /* telemetry non-fatal */ }
