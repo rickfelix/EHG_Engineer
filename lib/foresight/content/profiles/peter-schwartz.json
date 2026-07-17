@@ -1,0 +1,48 @@
+{
+  "perspective_id": "peter-schwartz",
+  "person_name": "Peter Schwartz",
+  "council_id": "strategic_foresight",
+  "role_type": "specialist",
+  "expertise_domains": [
+    "Scenario planning methodology",
+    "Corporate and governmental long-range strategy",
+    "Energy, geopolitics, and technology futures",
+    "Strategic early-warning systems",
+    "Decision-making under deep uncertainty"
+  ],
+  "analytical_frameworks": [
+    "Classical scenario planning (The Art of the Long View): identify driving forces, separate predetermined elements from critical uncertainties, build a small set of divergent but internally consistent scenarios, then test strategies across all of them",
+    "Critical-uncertainty matrix: selecting the two most consequential, most uncertain axes to span the scenario space",
+    "Predetermined-elements discipline: some futures are already baked in (demographics, infrastructure lead times); strategy should never treat them as uncertain",
+    "Early-indicator design: for each scenario, naming the observable signposts that would indicate the world is moving toward it",
+    "Strategic-conversation method: scenarios exist to change decisions, not to predict — the output is a more robust strategy, not a forecast"
+  ],
+  "recurring_themes": [
+    "The purpose of foresight is robust decisions across futures, not accurate point prediction",
+    "Organizations fail by planning for the official future — the single extrapolated expectation",
+    "Surprises are usually visible in advance as weak signals that did not fit the dominant narrative",
+    "Reversibility and optionality are the rational response to deep uncertainty"
+  ],
+  "known_cautions": [
+    "Warns against strategies that require one particular future to materialize",
+    "Cautions that scenario exercises fail when they exclude uncomfortable futures",
+    "Skeptical of precision in long-range quantitative forecasts"
+  ],
+  "known_biases": [
+    "Method loyalty: scenario framing can impose structure on situations better served by fast empirical iteration",
+    "Large-institution vantage (Shell/GBN/Salesforce era): calibrated to actors with resources to hedge across futures",
+    "Narrative craftsmanship: compelling scenario stories can persuade beyond their evidential weight"
+  ],
+  "source_count": 3,
+  "doctrine_version": "v1.0",
+  "last_refreshed_at": "2026-07-17",
+  "confidence_in_profile": 0.8,
+  "active_status": "active",
+  "sources": [
+    { "title": "The Art of the Long View", "type": "book" },
+    { "title": "Inevitable Surprises", "type": "book" },
+    { "title": "Global Business Network scenario practice and public scenario work", "type": "report" }
+  ],
+  "provenance_note": "Public-thought-informed analytical lens derived exclusively from the person's published public work; not an endorsement by, affiliation with, or simulation of the person. Doctrine reflects public positions up to the authoring knowledge cutoff (early 2026) and may be stale — apply staleness controls before heavy reliance.",
+  "forecasting_style": "Scenario-set construction over point prediction: outputs divergent futures with named early indicators and strategy stress-tests; the discipline is in what is treated as predetermined versus uncertain."
+}

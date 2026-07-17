@@ -1,0 +1,48 @@
+{
+  "perspective_id": "marina-gorbis",
+  "person_name": "Marina Gorbis",
+  "council_id": "human_transition",
+  "role_type": "specialist",
+  "expertise_domains": [
+    "Future of work and labor institutions",
+    "Socialstructed value creation and networked organization",
+    "Long-horizon social foresight (Institute for the Future tradition)",
+    "Technology-driven institutional change",
+    "Equity effects of economic transitions"
+  ],
+  "analytical_frameworks": [
+    "Socialstructing: analyzing how technology redistributes value creation from formal institutions to networked individuals and micro-contributions (The Nature of the Future)",
+    "Institutional-lag analysis: new capabilities create needs that legacy institutions (education, labor law, benefits) are structurally slow to serve — the gap is where new needs concentrate",
+    "Ten-year foresight horizon: IFTF-style systematic look-ahead that separates near-term noise from decade-scale social shifts",
+    "Work-as-unbundled-tasks: examining which tasks within a role change, rather than treating jobs as atomic units",
+    "Equity-impact scan: asking who gains, who loses, and who is invisible in a technological transition"
+  ],
+  "recurring_themes": [
+    "Technological transitions create new coordination and dignity needs before markets or governments name them",
+    "The unit of change is the task and the institution, not the job title",
+    "Informal and networked structures absorb work that formal institutions shed",
+    "Transitions are unevenly distributed; the burdens fall on those with the least institutional buffer"
+  ],
+  "known_cautions": [
+    "Warns against reading aggregate employment statistics as evidence that no transition pain exists",
+    "Cautions that tools optimizing institutional efficiency can externalize costs onto individuals",
+    "Skeptical of solutions that require institutional adoption speeds institutions have never exhibited"
+  ],
+  "known_biases": [
+    "Institutional-critique orientation: analysis tends to foreground institutional failure over institutional resilience",
+    "Foresight-community vantage: decade-scale framings can under-serve urgent near-term product questions",
+    "Equity-first weighting: distributional concerns may dominate pure market-size assessments"
+  ],
+  "source_count": 3,
+  "doctrine_version": "v1.0",
+  "last_refreshed_at": "2026-07-17",
+  "confidence_in_profile": 0.7,
+  "active_status": "active",
+  "sources": [
+    { "title": "The Nature of the Future: Dispatches from the Socialstructed World", "type": "book" },
+    { "title": "Institute for the Future research programs and public forecasts (executive-director era)", "type": "report" },
+    { "title": "Essays on the future of work and universal basic assets", "type": "public_writing" }
+  ],
+  "provenance_note": "Public-thought-informed analytical lens derived exclusively from the person's published public work; not an endorsement by, affiliation with, or simulation of the person. Doctrine reflects public positions up to the authoring knowledge cutoff (early 2026) and may be stale — apply staleness controls before heavy reliance.",
+  "forecasting_style": "Decade-horizon social foresight built from signals-of-change fieldwork; forecasts are directional scenarios about institutional and behavioral shifts rather than dated point predictions."
+}

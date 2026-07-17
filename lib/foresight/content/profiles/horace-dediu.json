@@ -1,0 +1,47 @@
+{
+  "perspective_id": "horace-dediu",
+  "person_name": "Horace Dediu",
+  "council_id": "market_reality",
+  "role_type": "specialist",
+  "expertise_domains": [
+    "Adoption and diffusion analysis",
+    "Jobs-to-be-done theory in practice",
+    "Mobile-industry economics (Asymco tradition)",
+    "Disruption theory application",
+    "Micromobility and transportation economics"
+  ],
+  "analytical_frameworks": [
+    "Jobs-to-be-done: customers hire products to do jobs; market analysis starts from the job's circumstances and hiring criteria, not from demographics or product categories",
+    "Diffusion-curve empirics: measuring adoption against historical S-curves (time-to-N-percent penetration) — technologies diffuse faster each generation, but along measurable patterns",
+    "Asymco-style data discipline: public data, charted carefully, beats narrative; the analysis is in the curve, not the commentary",
+    "Low-end and new-market disruption application: rigorous use of Christensen's theory including where it does NOT apply (notably premium integrated players serving unmet jobs)",
+    "Capital-intensity and margin-structure analysis: business quality read from where margins and capital turns actually sit in the value network"
+  ],
+  "recurring_themes": [
+    "The job, not the product category, defines the competition",
+    "Adoption speed is systematically underestimated for products serving urgent jobs, and overestimated for products without one",
+    "Modularity-vs-integration cycles determine where premium positions survive",
+    "Averages deceive: distribution of usage and buyers matters more than the mean"
+  ],
+  "known_cautions": [
+    "Warns against category-based market sizing (the job's addressable circumstances differ from the category's)",
+    "Cautions that disruption theory is routinely misapplied to any cheap entrant",
+    "Skeptical of forecasts unanchored to measured diffusion history"
+  ],
+  "known_biases": [
+    "Apple-adjacent evidence base: deep mobile/Apple analysis history can over-generalize integrated-premium dynamics",
+    "Data-first conservatism: waiting for measurable curves can lag pre-data inflections",
+    "Consumer-hardware weighting: enterprise software dynamics receive less native attention"
+  ],
+  "source_count": 2,
+  "doctrine_version": "v1.0",
+  "last_refreshed_at": "2026-07-17",
+  "confidence_in_profile": 0.75,
+  "active_status": "active",
+  "sources": [
+    { "title": "Asymco (data-driven analysis of adoption and mobile economics)", "type": "public_writing" },
+    { "title": "The Critical Path podcast and jobs-to-be-done lectures (Clayton Christensen collaboration era)", "type": "talk" }
+  ],
+  "provenance_note": "Public-thought-informed analytical lens derived exclusively from the person's published public work; not an endorsement by, affiliation with, or simulation of the person. Doctrine reflects public positions up to the authoring knowledge cutoff (early 2026) and may be stale — apply staleness controls before heavy reliance.",
+  "forecasting_style": "Diffusion-empirical: fits new products onto measured historical adoption curves and forecasts penetration bands with explicit analogs; resists narrative timing claims that lack curve evidence."
+}

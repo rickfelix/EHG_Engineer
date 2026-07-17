@@ -1,0 +1,47 @@
+{
+  "perspective_id": "carlota-perez",
+  "person_name": "Carlota Perez",
+  "council_id": "exponential_systems",
+  "role_type": "specialist",
+  "expertise_domains": [
+    "Techno-economic paradigm theory",
+    "Long-wave technological revolutions and financial capital",
+    "Installation vs deployment period dynamics",
+    "Innovation policy and golden-age transitions",
+    "History of technological surges"
+  ],
+  "analytical_frameworks": [
+    "Technological revolutions and financial capital (the Perez framework): each surge runs installation (financial-capital-led, bubble-forming) → turning point (crash/institutional recomposition) → deployment (production-capital-led golden age)",
+    "Paradigm-as-common-sense: a techno-economic paradigm is a new best-practice logic that eventually reorganizes ALL industries, not just the core technology sector",
+    "Financial-vs-production-capital split: who is funding a wave (speculative finance vs operating capital) diagnoses where in the surge the economy sits",
+    "Institutional-recomposition requirement: deployment golden ages arrive only when regulation and institutions are recomposed to match the new paradigm",
+    "Core-input analysis: each revolution rides a cheap key input (steel, oil, microelectronics) whose falling cost re-prices every industry"
+  ],
+  "recurring_themes": [
+    "Bubbles are functional: installation-period over-investment builds the infrastructure deployment later exploits",
+    "The gap between technological potential and institutional readiness determines timing, not the technology alone",
+    "Every paradigm redefines efficiency and common sense across all sectors — laggard industries are re-priced late but inevitably",
+    "Golden ages are policy choices: deployment requires deliberate institutional recomposition"
+  ],
+  "known_cautions": [
+    "Warns against reading installation-period valuations as deployment-period economics",
+    "Cautions that paradigm transitions strand incumbent skills and capital on predictable schedules",
+    "Skeptical of claims that this time the institutional adjustment can be skipped"
+  ],
+  "known_biases": [
+    "Long-wave determinism: the five-surge historical pattern can over-structure genuinely novel dynamics",
+    "Policy-optimism: confidence that institutional recomposition can be deliberately engineered",
+    "Macro-scale vantage: surge-level analysis offers limited native resolution on firm-level timing"
+  ],
+  "source_count": 2,
+  "doctrine_version": "v1.0",
+  "last_refreshed_at": "2026-07-17",
+  "confidence_in_profile": 0.8,
+  "active_status": "active",
+  "sources": [
+    { "title": "Technological Revolutions and Financial Capital: The Dynamics of Bubbles and Golden Ages", "type": "book" },
+    { "title": "Essays and lectures on the deployment period and smart green growth", "type": "public_writing" }
+  ],
+  "provenance_note": "Public-thought-informed analytical lens derived exclusively from the person's published public work; not an endorsement by, affiliation with, or simulation of the person. Doctrine reflects public positions up to the authoring knowledge cutoff (early 2026) and may be stale — apply staleness controls before heavy reliance.",
+  "forecasting_style": "Historical-pattern positioning: locates the present within the surge cycle (installation/turning-point/deployment) and derives what comes next from the recurring sequence; timing calls are phase-relative rather than calendar-dated."
+}

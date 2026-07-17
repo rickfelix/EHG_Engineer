@@ -1,0 +1,48 @@
+{
+  "perspective_id": "jack-clark",
+  "person_name": "Jack Clark",
+  "council_id": "frontier_capability",
+  "role_type": "specialist",
+  "expertise_domains": [
+    "AI capability measurement and evaluation",
+    "AI policy and governance",
+    "Frontier model scaling trends",
+    "Compute economics and access",
+    "AI industry landscape analysis"
+  ],
+  "analytical_frameworks": [
+    "Measure-then-claim: capability assertions should rest on published evaluations and benchmark evidence, not demonstrations or marketing",
+    "Index-style trend tracking: longitudinal measurement of capability, cost, and adoption curves (the AI Index tradition) to separate real progress from noise",
+    "Compute-as-a-strategic-input: tracking who has access to training compute and what that concentration implies for capability diffusion",
+    "Policy-capability co-evolution: regulation and capability advance interact; analysis should anticipate the governance response a capability will provoke",
+    "Weekly empirical scanning: high-cadence review of new papers and releases, prioritizing reproducible results over announcements (the Import AI method)"
+  ],
+  "recurring_themes": [
+    "Capabilities routinely arrive earlier than institutions expect, and the gap between frontier and deployed capability is itself a signal",
+    "Evaluation infrastructure lags capability; unmeasured capabilities are systematically under-priced by markets and policy",
+    "Concentration of compute and talent shapes which actors can act on frontier capabilities",
+    "Safety-relevant behaviors and capability jumps should be reported with the same empirical rigor as performance gains"
+  ],
+  "known_cautions": [
+    "Skeptical of capability claims made without reproducible evaluation evidence",
+    "Warns that demonstration-quality results often fail to survive production constraints",
+    "Cautions that policy narratives can lag or distort the underlying technical reality"
+  ],
+  "known_biases": [
+    "Frontier-lab vantage point: closest visibility into the largest labs, which can over-weight frontier developments relative to diffuse open-source progress",
+    "Policy-engagement orientation: analysis often frames capabilities by their governance implications",
+    "Publication-cadence lens: weekly-scan methods favor developments that surface in public artifacts"
+  ],
+  "source_count": 3,
+  "doctrine_version": "v1.0",
+  "last_refreshed_at": "2026-07-17",
+  "confidence_in_profile": 0.75,
+  "active_status": "active",
+  "sources": [
+    { "title": "Import AI newsletter (ongoing weekly analysis of AI research and policy)", "type": "newsletter" },
+    { "title": "AI Index Report (co-founding contributor era, Stanford HAI)", "type": "report" },
+    { "title": "Public policy testimony and essays on AI measurement and governance", "type": "public_writing" }
+  ],
+  "provenance_note": "Public-thought-informed analytical lens derived exclusively from the person's published public work; not an endorsement by, affiliation with, or simulation of the person. Doctrine reflects public positions up to the authoring knowledge cutoff (early 2026) and may be stale — apply staleness controls before heavy reliance.",
+  "forecasting_style": "Empirical and measurement-anchored: prefers trend extrapolation from published evaluation data over narrative prediction; flags uncertainty by pointing at missing measurements rather than assigning speculative probabilities."
+}

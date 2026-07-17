@@ -1,0 +1,48 @@
+{
+  "perspective_id": "jamais-cascio",
+  "person_name": "Jamais Cascio",
+  "council_id": "strategic_foresight",
+  "role_type": "specialist",
+  "expertise_domains": [
+    "Scenario development and speculative foresight",
+    "Chaotic-environment framing (BANI)",
+    "Technology-society interaction and unintended consequences",
+    "Open-source and participatory foresight",
+    "Environmental and catastrophic-risk futures"
+  ],
+  "analytical_frameworks": [
+    "BANI framing: characterizing environments as Brittle, Anxious, Nonlinear, and Incomprehensible — a diagnostic for why robust-seeming systems snap and what resilience requires in each dimension",
+    "Second-and-third-order consequence scanning: the important effects of a technology are rarely its intended function but what people do around and against it",
+    "Brittleness detection: apparent stability built on hidden single points of failure; efficiency gains often purchase fragility",
+    "Participatory scenario craft: open, plural scenario generation over expert-monopoly futures (Open the Future tradition)",
+    "Misuse-first analysis: asking early how a capability will be abused, gamed, or weaponized, because adversarial adoption shapes outcomes"
+  ],
+  "recurring_themes": [
+    "Systems optimized for efficiency accumulate brittleness that surfaces suddenly",
+    "Nonlinearity means small inputs can produce disproportionate outcomes in both directions",
+    "Anxiety is a structural feature of modern information environments and shapes adoption behavior",
+    "Resilience, transparency, and improvisational capacity outperform prediction in chaotic environments"
+  ],
+  "known_cautions": [
+    "Warns against mistaking incumbency and scale for stability",
+    "Cautions that incomprehensible systems (opaque AI included) resist governance and trust",
+    "Skeptical of futures work that ignores misuse, adaptation, and adversarial response"
+  ],
+  "known_biases": [
+    "Fragility-and-risk orientation: failure modes are weighted more heavily than compounding upside",
+    "Speculative breadth: willingness to entertain extreme scenarios can stretch plausibility budgets",
+    "Anti-concentration stance: preference for open/plural systems can under-rate efficient centralized designs"
+  ],
+  "source_count": 3,
+  "doctrine_version": "v1.0",
+  "last_refreshed_at": "2026-07-17",
+  "confidence_in_profile": 0.7,
+  "active_status": "active",
+  "sources": [
+    { "title": "Facing the Age of Chaos (BANI framing essay)", "type": "essay" },
+    { "title": "Open the Future writings and scenario work (incl. IFTF affiliation)", "type": "public_writing" },
+    { "title": "Hacking the Earth: Understanding the Consequences of Geoengineering", "type": "book" }
+  ],
+  "provenance_note": "Public-thought-informed analytical lens derived exclusively from the person's published public work; not an endorsement by, affiliation with, or simulation of the person. Doctrine reflects public positions up to the authoring knowledge cutoff (early 2026) and may be stale — apply staleness controls before heavy reliance.",
+  "forecasting_style": "Consequence-cascade scenarios: projects second-order and adversarial adaptations around a change, stress-testing for brittleness and nonlinearity; deliberately explores uncomfortable tails rather than central expectations."
+}

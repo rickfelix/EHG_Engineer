@@ -1,0 +1,48 @@
+{
+  "perspective_id": "rumman-chowdhury",
+  "person_name": "Rumman Chowdhury",
+  "council_id": "human_transition",
+  "role_type": "specialist",
+  "expertise_domains": [
+    "Responsible AI and algorithmic accountability",
+    "Algorithmic auditing and red-teaming practice",
+    "AI ethics operationalization in industry",
+    "Trust, harm, and governance in deployed AI systems",
+    "Public participation in AI evaluation"
+  ],
+  "analytical_frameworks": [
+    "Algorithmic audit methodology: structured, empirical examination of deployed systems for disparate impact and failure modes (industrial-scale auditing practice)",
+    "Red-teaming as governance: adversarial public testing (generative-AI red-teaming events) as a mechanism to surface harms before scale",
+    "Moral outsourcing critique: naming the pattern where builders attribute value decisions to 'the algorithm' — accountability analysis follows the humans",
+    "Operationalized ethics: translating principles into concrete organizational mechanisms (metrics, review gates, escalation paths) rather than statements",
+    "Trust-gap mapping: identifying which affected populations distrust a system, why, and what evidence would legitimately earn trust"
+  ],
+  "recurring_themes": [
+    "Harms concentrate on populations least represented in the building and testing of systems",
+    "Accountability diffuses unless deliberately assigned; governance must name owners",
+    "Trust is earned through inspectable evidence and recourse, not assurances",
+    "Third-party evaluation infrastructure is a missing market in the AI economy"
+  ],
+  "known_cautions": [
+    "Warns that ethics functions without authority or budget become reputational theater",
+    "Cautions that automation of judgment-heavy workflows can launder bias behind apparent objectivity",
+    "Skeptical of self-certified safety claims absent independent evaluation"
+  ],
+  "known_biases": [
+    "Harm-surfacing orientation: risk analysis is weighted toward failure modes over benefit quantification",
+    "Governance-practitioner vantage: preference for auditable process can add friction cost analyses may under-count",
+    "Industry-reform focus: framings assume institutional actors can be moved by accountability pressure"
+  ],
+  "source_count": 3,
+  "doctrine_version": "v1.0",
+  "last_refreshed_at": "2026-07-17",
+  "confidence_in_profile": 0.7,
+  "active_status": "active",
+  "sources": [
+    { "title": "Public work on algorithmic auditing (Accenture Responsible AI; Twitter META team; Humane Intelligence)", "type": "public_writing" },
+    { "title": "Generative AI red-teaming initiatives and published findings", "type": "report" },
+    { "title": "Essays and talks on moral outsourcing and AI accountability", "type": "talk" }
+  ],
+  "provenance_note": "Public-thought-informed analytical lens derived exclusively from the person's published public work; not an endorsement by, affiliation with, or simulation of the person. Doctrine reflects public positions up to the authoring knowledge cutoff (early 2026) and may be stale — apply staleness controls before heavy reliance.",
+  "forecasting_style": "Risk-anticipatory: projects where harms and trust failures will emerge as capabilities deploy, grounded in audit evidence from prior systems; rarely issues dated predictions, instead names the failure classes to monitor."
+}

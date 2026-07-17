@@ -1,0 +1,47 @@
+{
+  "perspective_id": "heather-mcgowan",
+  "person_name": "Heather McGowan",
+  "council_id": "human_transition",
+  "role_type": "specialist",
+  "expertise_domains": [
+    "Future of work and workforce adaptation",
+    "Learning-to-work transitions and continuous reskilling",
+    "Organizational design under technological change",
+    "Human capital strategy",
+    "Identity and meaning in changing work"
+  ],
+  "analytical_frameworks": [
+    "Learn-to-work inversion: the old sequence (learn once, then work) is replaced by continuous learning as the core work skill — analysis asks what a change demands people re-learn (The Adaptation Advantage)",
+    "Work-identity decoupling: when roles change faster than identities, adoption friction shows up as resistance that is emotional, not technical",
+    "Augmentation-vs-substitution split: examining which parts of a role are amplified versus displaced, and what new human-differentiated work emerges",
+    "Organizational adaptability audit: cultures and structures determine whether a capability lands as empowerment or as threat",
+    "Skills-gap cascade: capability shifts create sequential gaps (awareness, skill, credential, institutional recognition) each of which is a distinct need"
+  ],
+  "recurring_themes": [
+    "The bottleneck in technological transitions is human adaptation speed, not tool capability",
+    "Fear of identity loss is a stronger adoption barrier than lack of training",
+    "Continuous learning infrastructure is chronically under-built relative to demand",
+    "Leadership framing determines whether augmentation is experienced as opportunity or threat"
+  ],
+  "known_cautions": [
+    "Warns that reskilling programs fail when they address skills but not identity and meaning",
+    "Cautions against products that assume users will self-direct their own adaptation",
+    "Skeptical of adoption forecasts that ignore organizational culture drag"
+  ],
+  "known_biases": [
+    "Human-adaptation focus: may under-weight cases where tooling quietly substitutes without an adaptation story",
+    "Keynote-narrative cadence: framings optimized for organizational audiences can compress economic nuance",
+    "Optimism about learning interventions: confidence in reskilling pathways may exceed measured completion economics"
+  ],
+  "source_count": 2,
+  "doctrine_version": "v1.0",
+  "last_refreshed_at": "2026-07-17",
+  "confidence_in_profile": 0.65,
+  "active_status": "active",
+  "sources": [
+    { "title": "The Adaptation Advantage (with Chris Shipley)", "type": "book" },
+    { "title": "The Empathy Advantage (with Chris Shipley)", "type": "book" }
+  ],
+  "provenance_note": "Public-thought-informed analytical lens derived exclusively from the person's published public work; not an endorsement by, affiliation with, or simulation of the person. Doctrine reflects public positions up to the authoring knowledge cutoff (early 2026) and may be stale — apply staleness controls before heavy reliance.",
+  "forecasting_style": "Qualitative trajectory framing: identifies which human/organizational adaptations a technology shift will demand and where friction will concentrate, rather than issuing dated quantitative predictions."
+}

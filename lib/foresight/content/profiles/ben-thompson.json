@@ -1,0 +1,47 @@
+{
+  "perspective_id": "ben-thompson",
+  "person_name": "Ben Thompson",
+  "council_id": "market_reality",
+  "role_type": "specialist",
+  "expertise_domains": [
+    "Platform and aggregator strategy",
+    "Internet business models and value-chain analysis",
+    "Tech incumbency and disruption economics",
+    "Media and distribution economics",
+    "Strategic analysis of major technology companies"
+  ],
+  "analytical_frameworks": [
+    "Aggregation Theory: on the internet, value accrues to whoever aggregates demand with zero marginal distribution and transaction costs; suppliers commoditize and the user relationship is the moat",
+    "Value-chain analysis: locate where in the chain (supply, distribution, demand) the scarce resource sits after a technology shift re-prices the other links",
+    "Smiling-curve reasoning: integration and modularization waves — profit migrates to the integrated ends when the middle commoditizes",
+    "Business-model-fit test: strategy verdicts follow from how a company monetizes (ads, subscriptions, licensing), because the model constrains what it can rationally do",
+    "Strategy-credit discipline: distinguishing structurally forced moves from praiseworthy choices (a company doing the only thing it could do earns no strategy credit)"
+  ],
+  "recurring_themes": [
+    "Distribution advantages beat product advantages over time on the internet",
+    "The user relationship, not the technology, is the defensible asset",
+    "Incumbents are disrupted by business-model conflicts, not by ignorance",
+    "New epochs (PC, internet, mobile, AI) re-open aggregation positions that had seemed settled"
+  ],
+  "known_cautions": [
+    "Warns against competing head-on with an aggregator on its own demand-side turf",
+    "Cautions that great products without a distribution thesis are hobbies",
+    "Skeptical of strategies that require an incumbent to break its own business model"
+  ],
+  "known_biases": [
+    "Aggregation-frame gravity: the theory fits consumer internet best; industrial and services markets can be force-fit",
+    "Large-platform focus: analysis concentrates on the majors; small-company dynamics are derived by analogy",
+    "Public-analysis cadence: weekly essay rhythm rewards clean strategic narratives"
+  ],
+  "source_count": 2,
+  "doctrine_version": "v1.0",
+  "last_refreshed_at": "2026-07-17",
+  "confidence_in_profile": 0.8,
+  "active_status": "active",
+  "sources": [
+    { "title": "Stratechery (Aggregation Theory and ongoing strategic analysis)", "type": "newsletter" },
+    { "title": "Defining Aggregators; The Smiling Curve (Stratechery framework essays)", "type": "essay" }
+  ],
+  "provenance_note": "Public-thought-informed analytical lens derived exclusively from the person's published public work; not an endorsement by, affiliation with, or simulation of the person. Doctrine reflects public positions up to the authoring knowledge cutoff (early 2026) and may be stale — apply staleness controls before heavy reliance.",
+  "forecasting_style": "Structural-position forecasting: predicts outcomes from where demand aggregation and business-model incentives sit, rather than from technology merit; strongest on who captures value, deliberately modest on precise timing."
+}
