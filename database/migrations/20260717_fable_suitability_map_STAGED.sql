@@ -74,10 +74,20 @@ CREATE INDEX IF NOT EXISTS idx_fable_suitability_cluster ON fable_suitability_ma
 CREATE INDEX IF NOT EXISTS idx_fable_suitability_region ON fable_suitability_map (region_key, repo, score_version DESC);
 
 -- Latest-per-region read surface (child C / reader consume this, not the raw history).
-CREATE OR REPLACE VIEW v_fable_suitability_map_current AS
+-- security_invoker = on is MANDATORY: without it a Postgres view runs with the view OWNER's
+-- privileges (the table owner, who bypasses RLS), and Supabase exposes public-schema views to
+-- anon/authenticated via PostgREST by default — so a plain SELECT * view would leak every
+-- ranking + the full evidence jsonb, defeating the base table's chairman-only RLS. This is the
+-- exact recurring leak class already remediated three times in this repo (fix_security_definer_views
+-- 20251216 / 20260211 / 20260602). security_invoker makes the view honor the querying role's RLS.
+CREATE OR REPLACE VIEW v_fable_suitability_map_current
+WITH (security_invoker = on) AS
 SELECT DISTINCT ON (region_key, repo) *
 FROM fable_suitability_map
 ORDER BY region_key, repo, score_version DESC;
+
+-- Belt-and-braces: even with security_invoker, do not expose the view to the API roles.
+REVOKE ALL ON v_fable_suitability_map_current FROM anon, authenticated;
 
 COMMENT ON COLUMN fable_suitability_map.region_key IS
   'Deterministic region identity: canonical repo id + declared coarse structural boundary, normalized (lowercase/forward-slash). CHECK-enforced so child B cannot emit a drifting/path-derived key — stability is required for the section-11 advice-outcome ledger JOIN.';
