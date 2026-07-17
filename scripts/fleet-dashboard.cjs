@@ -371,7 +371,10 @@ async function loadData() {
       .select('id, title, status, claiming_session_id, created_at, owner, release_condition')
       .in('status', ['open', 'in_progress'])
       .order('created_at', { ascending: true });
-    quickFixes = qfRows || [];
+    // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: fixture-titled QFs (ZZZ_/TEST-/UAT test
+    // residue) must not inflate the QUICK FIXES (N) count or render as real open work.
+    const { isFixtureQf } = require('../lib/governance/fixture-exclusion.mjs');
+    quickFixes = (qfRows || []).filter((qf) => !isFixtureQf(qf));
   } catch { /* degrade-safe: empty QF section */ }
 
   return {

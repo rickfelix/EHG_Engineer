@@ -11,6 +11,9 @@ import { parseHarnessBacklog } from './harness-backlog-parser.js';
 // module; ESM default-import interop). Shared with worker-checkin + the coordinator dashboard.
 import qfGatedHold from '../../../lib/fleet/qf-gated-hold.cjs';
 const { isChairmanGatedQF } = qfGatedHold;
+// SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: canonical fixture-exclusion predicates —
+// ZZZ_/UAT/TEST fixture rows must not render as real queue/tree/QF work.
+import { isFixtureSdKey, isFixtureQf } from '../../../lib/governance/fixture-exclusion.mjs';
 
 /**
  * Log a query failure with structured context for diagnostics.
@@ -198,8 +201,14 @@ export async function loadSDHierarchy(supabase) {
 
     if (!sds) return { allSDs, sdHierarchy };
 
+    // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: fixture-keyed SDs (ZZZ_, TEST-, UAT-,
+    // SD-TEST-…) leaked into the queue tree as real work (live examples: SD-TEST-MRO18ZP0
+    // and ZZZ_OKR_ALIGNMENTS rows rendering in Track views). Filter at the single load
+    // point for the hierarchy instead of per display site.
+    const realSds = sds.filter((sd) => !isFixtureSdKey(sd.sd_key, sd.metadata));
+
     // Build lookup map and hierarchy
-    for (const sd of sds) {
+    for (const sd of realSds) {
       const sdId = sd.sd_key || sd.id;
       allSDs.set(sdId, sd);
       allSDs.set(sd.id, sd); // Also map by UUID
@@ -385,7 +394,9 @@ export async function loadOpenQuickFixes(supabase) {
     // Excluded here (Track C display + AUTO_PROCEED_ACTION source); they remain visible on
     // the coordinator surface (fleet-dashboard CHAIRMAN-GATED section) until released via
     // scripts/release-chairman-gated-qf.js. Shared predicate — never re-derive inline.
-    return (data || []).filter((qf) => !isChairmanGatedQF(qf));
+    // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: fixture-titled QFs excluded alongside
+    // chairman-gated holds — neither is real open work for the Track C lane.
+    return (data || []).filter((qf) => !isChairmanGatedQF(qf) && !isFixtureQf(qf));
   } catch {
     return [];
   }
