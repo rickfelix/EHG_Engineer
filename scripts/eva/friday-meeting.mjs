@@ -133,10 +133,14 @@ async function captureOkrSnapshot() {
 // ─── Section 1: Performance Review ───────────────────────────
 
 async function gatherPerformanceReview() {
-  // Get latest management review
+  // Get latest WEEKLY management review. The review_type filter is load-bearing:
+  // the portfolio_review round writes ad_hoc rows with none of these four
+  // columns, so an unfiltered latest-row read would render an empty Performance
+  // Review whenever a portfolio row is newest (SD-LEO-INFRA-PORTFOLIO-STRATEGY-FIRST-001-C).
   const { data: review } = await supabase
     .from('management_reviews')
     .select('review_date, planned_sds, actual_sds, okr_snapshot, pipeline_snapshot')
+    .eq('review_type', 'weekly')
     .order('review_date', { ascending: false })
     .limit(1)
     .single();
@@ -180,9 +184,11 @@ async function gatherPerformanceReview() {
   let baselineItems = 0;
   let completedItems = 0;
   if (baseline) {
+    // sd_baseline_items has sd_id, not sd_key — selecting the non-existent
+    // column made supabase return data:null, silently zeroing both counters.
     const { data: items } = await supabase
       .from('sd_baseline_items')
-      .select('sd_key, is_ready')
+      .select('sd_id, is_ready')
       .eq('baseline_id', baseline.id);
     baselineItems = (items || []).length;
     completedItems = (items || []).filter(i => i.is_ready).length;

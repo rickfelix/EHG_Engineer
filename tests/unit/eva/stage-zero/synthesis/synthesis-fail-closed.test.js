@@ -52,7 +52,10 @@ vi.mock('../../../../../lib/eva/stage-zero/synthesis/design-evaluation.js', () =
 vi.mock('../../../../../lib/eva/stage-zero/synthesis/narrative-risk.js', () => ({
   analyzeNarrativeRisk: vi.fn().mockResolvedValue({ component: 'narrative_risk', nr_score: 35, nr_band: 'NR-Moderate', nr_interpretation: 'Watch assumptions', component_scores: { decision_sensitivity: 40, demand_distortion: 30, hype_persistence: 25, influence_exposure: 20 }, narrative_flags: [], confidence: 0.7, confidence_caveat: '', summary: 'ok' }),
 }));
-vi.mock('../../../../../lib/eva/stage-zero/synthesis/tech-trajectory.js', () => ({
+// SD-LEO-INFRA-PORTFOLIO-STRATEGY-FIRST-001-B: preserve real exports (AXIS_WEIGHTS vocabulary
+// consumed by chaining-score.js) — mock only the analyzer.
+vi.mock('../../../../../lib/eva/stage-zero/synthesis/tech-trajectory.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   analyzeTechTrajectory: vi.fn().mockResolvedValue({ component: 'tech_trajectory', trajectory_score: 67, axes: { reasoning_autonomy: { current: 65, bull_6m: 85, base_6m: 75, bear_6m: 68, venture_impact: 'test' }, cost_deflation: { current: 50, bull_6m: 80, base_6m: 65, bear_6m: 45, venture_impact: 'test' }, multimodal_expansion: { current: 40, bull_6m: 70, base_6m: 55, bear_6m: 42, venture_impact: 'test' } }, competitive_timing: { signal: 'opening', confidence: 0.7, window_months: 6, rationale: 'test' }, next_disruption_event: { event: 'Test', estimated_months: 4, invalidation_scope: 'test' }, gap_windows: [], confidence_caveat: '', summary: 'ok', data_feed_active: false }),
 }));
 vi.mock('../../../../../lib/eva/stage-zero/synthesis/attention-capital.js', () => ({
