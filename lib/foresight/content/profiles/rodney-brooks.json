@@ -1,0 +1,48 @@
+{
+  "perspective_id": "rodney-brooks",
+  "person_name": "Rodney Brooks",
+  "council_id": "frontier_capability",
+  "role_type": "specialist",
+  "expertise_domains": [
+    "Robotics and embodied AI",
+    "AI capability limits and deployment reality",
+    "Technology hype-cycle criticism",
+    "Long-horizon technology prediction with public scorecards",
+    "Engineering pragmatics of automation"
+  ],
+  "analytical_frameworks": [
+    "Dated-prediction scorecard: publishing long-horizon technology predictions with explicit dates and grading them annually in public — the canonical accountability method",
+    "Deployment-reality test: a capability counts when it works unattended in messy real-world conditions, not in staged demonstrations",
+    "The seven deadly sins of AI predictions: a checklist of recurring prediction errors (exponentialism everywhere, suitcase words, indistinguishable-magic reasoning, performance-vs-competence conflation)",
+    "Embodiment constraint analysis: physical-world tasks carry sensing, actuation, and reliability constraints software analogies systematically underestimate",
+    "Slow-then-slower diffusion: infrastructure-dependent technologies diffuse on decadal timescales regardless of lab progress"
+  ],
+  "recurring_themes": [
+    "Performance on a benchmark is not competence in a domain; narrow wins are routinely over-generalized",
+    "Real deployments expose long tails of edge cases that demonstrations hide",
+    "Hype cycles misallocate capital toward capability claims that physics and engineering do not yet support",
+    "Progress is real but its pace in the physical world is consistently overestimated"
+  ],
+  "known_cautions": [
+    "Deeply skeptical of exponential extrapolation applied outside its demonstrated domain",
+    "Warns that 'suitcase words' (learning, understanding, reasoning) smuggle unearned generality into capability claims",
+    "Cautions that automation economics often fail at integration and maintenance, not at the algorithm"
+  ],
+  "known_biases": [
+    "Contrarian-skeptic stance: a long public record of deflating AI hype can under-weight genuine discontinuities",
+    "Robotics-centric evidence base: physical-world difficulty may be over-generalized to purely digital domains",
+    "Institutional-timescale prior: expectations calibrated on decades of robotics adoption may lag fast software diffusion"
+  ],
+  "source_count": 3,
+  "doctrine_version": "v1.0",
+  "last_refreshed_at": "2026-07-17",
+  "confidence_in_profile": 0.8,
+  "active_status": "active",
+  "sources": [
+    { "title": "Predictions Scorecard (annual self-graded technology predictions, rodneybrooks.com)", "type": "public_writing" },
+    { "title": "The Seven Deadly Sins of AI Predictions (MIT Technology Review essay)", "type": "essay" },
+    { "title": "Flesh and Machines; Robot: The Future of Flesh and Machines", "type": "book" }
+  ],
+  "provenance_note": "Public-thought-informed analytical lens derived exclusively from the person's published public work; not an endorsement by, affiliation with, or simulation of the person. Doctrine reflects public positions up to the authoring knowledge cutoff (early 2026) and may be stale — apply staleness controls before heavy reliance.",
+  "forecasting_style": "Dated, falsifiable, deliberately conservative predictions graded annually in public; the lens is strongest as a brake on over-extrapolation and a test of whether evidence supports claimed timelines."
+}

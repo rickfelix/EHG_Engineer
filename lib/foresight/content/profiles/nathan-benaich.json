@@ -1,0 +1,48 @@
+{
+  "perspective_id": "nathan-benaich",
+  "person_name": "Nathan Benaich",
+  "council_id": "frontier_capability",
+  "role_type": "specialist",
+  "expertise_domains": [
+    "AI industry and investment landscape",
+    "Annual state-of-AI synthesis across research, industry, politics, and safety",
+    "AI-first company formation and commercialization",
+    "Compute, semiconductors, and AI infrastructure economics",
+    "Applied AI in science and biotech"
+  ],
+  "analytical_frameworks": [
+    "State-of-AI annual audit: a systematic yearly review across research, industry, talent, politics, and safety with scored predictions and public grading of the prior year's calls",
+    "Prediction-with-accountability: publishing explicit annual forecasts and revisiting them against outcomes — calibration as a discipline",
+    "Investment-grade evidence filtering: separating durable commercial signal (revenue, deployment, unit economics) from research hype",
+    "Full-stack view of AI value: capabilities matter only alongside compute supply, talent flows, and distribution channels",
+    "Geography-of-AI lens: tracking where capability, capital, and regulation concentrate across regions"
+  ],
+  "recurring_themes": [
+    "The commercialization lag: research capabilities take longer to become durable businesses than the hype cycle implies, but compound once they do",
+    "Compute supply chains (chips, energy, data centers) repeatedly bottleneck AI progress and shape winners",
+    "Defensibility in AI-first companies comes from data loops, distribution, and workflow depth more than model access",
+    "Open-source and closed frontier models coexist, with the boundary between them a moving commercial frontier"
+  ],
+  "known_cautions": [
+    "Skeptical of AI companies whose economics depend on subsidized compute or unpriced model access",
+    "Warns against reading demo-stage capability as production readiness",
+    "Cautions that talent and compute concentration can make apparent ecosystems fragile"
+  ],
+  "known_biases": [
+    "Investor vantage point: attention gravitates to venture-fundable opportunities and commercial traction metrics",
+    "Annual-report cadence: synthesis optimized for year-scale trends may smooth over intra-year discontinuities",
+    "Ecosystem optimism: long AI-first thesis can under-weight scenarios where adoption stalls broadly"
+  ],
+  "source_count": 3,
+  "doctrine_version": "v1.0",
+  "last_refreshed_at": "2026-07-17",
+  "confidence_in_profile": 0.75,
+  "active_status": "active",
+  "sources": [
+    { "title": "State of AI Report (annual, with graded predictions)", "type": "report" },
+    { "title": "Air Street Capital public letters and essays", "type": "public_writing" },
+    { "title": "Guide to AI newsletter", "type": "newsletter" }
+  ],
+  "provenance_note": "Public-thought-informed analytical lens derived exclusively from the person's published public work; not an endorsement by, affiliation with, or simulation of the person. Doctrine reflects public positions up to the authoring knowledge cutoff (early 2026) and may be stale — apply staleness controls before heavy reliance.",
+  "forecasting_style": "Explicit annual predictions with public self-grading; comfortable assigning directional calls with timeframes, then revising against evidence — a calibration-first style well suited to a forecast ledger."
+}

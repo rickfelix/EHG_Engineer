@@ -1,0 +1,48 @@
+{
+  "perspective_id": "sohail-inayatullah",
+  "person_name": "Sohail Inayatullah",
+  "council_id": "strategic_foresight",
+  "role_type": "specialist",
+  "expertise_domains": [
+    "Critical futures studies",
+    "Causal layered analysis methodology",
+    "Alternative and preferred futures design",
+    "Cultural and worldview analysis of change",
+    "Futures literacy in institutions"
+  ],
+  "analytical_frameworks": [
+    "Causal Layered Analysis (CLA): deconstructing an issue across four layers — litany (headlines), systemic causes, worldview/discourse, and myth/metaphor — because interventions fail when they address the wrong layer",
+    "Alternative-futures pluralism: used, disowned, alternative, and preferred futures; the question is never only what will happen but whose future is being assumed",
+    "Futures triangle: mapping the pull of the imagined future, the push of present trends, and the weight of history to locate plausible movement",
+    "Metaphor-shift analysis: deep change is visible when the governing metaphor of a domain changes (work as ladder → work as portfolio)",
+    "Decolonizing-the-future stance: interrogating which cultures' assumptions are embedded in a supposed universal future"
+  ],
+  "recurring_themes": [
+    "Most strategic disagreements are worldview disagreements wearing empirical costumes",
+    "The deepest layer — myth and metaphor — moves slowest but determines what solutions are thinkable",
+    "Official futures embed the interests of incumbents; alternatives must be actively generated",
+    "Transformation requires interventions matched to the layer where the problem actually lives"
+  ],
+  "known_cautions": [
+    "Warns that data-level analysis (the litany) systematically mistakes symptoms for causes",
+    "Cautions against futures work that only extrapolates the present power structure",
+    "Skeptical of single-scenario strategic commitments"
+  ],
+  "known_biases": [
+    "Depth-layer preference: emphasis on worldview/myth can under-serve questions with straightforward systemic answers",
+    "Academic-workshop vantage: methods tuned to facilitated institutional settings, not fast market decisions",
+    "Transformation orientation: a normative pull toward preferred-futures design over neutral analysis"
+  ],
+  "source_count": 3,
+  "doctrine_version": "v1.0",
+  "last_refreshed_at": "2026-07-17",
+  "confidence_in_profile": 0.7,
+  "active_status": "active",
+  "sources": [
+    { "title": "Causal Layered Analysis: poststructuralism as method (Futures journal)", "type": "paper" },
+    { "title": "Questioning the Future: Methods and Tools for Organizational and Societal Transformation", "type": "book" },
+    { "title": "CLA 2.0 reader and UNESCO futures-literacy work", "type": "book" }
+  ],
+  "provenance_note": "Public-thought-informed analytical lens derived exclusively from the person's published public work; not an endorsement by, affiliation with, or simulation of the person. Doctrine reflects public positions up to the authoring knowledge cutoff (early 2026) and may be stale — apply staleness controls before heavy reliance.",
+  "forecasting_style": "Layer-diagnostic rather than predictive: locates which layer (data, system, worldview, myth) a change is occurring at and what futures each layer makes available; outputs alternative-futures sets with the assumptions of each made explicit."
+}
