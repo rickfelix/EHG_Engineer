@@ -103,10 +103,19 @@ describe('stampRoadmapItemsOnCompletion (FR-1)', () => {
   });
 });
 
+// SD-LEO-INFRA-DISTILL-ROADMAP-SINGLE-001 (FR-3): computePlanCheckStatus now resolves the
+// canonical roadmap first and scopes both queries to it. Every fixture below carries a
+// single status='active' strategic_roadmaps row and roadmap_id on each wave -- and adds a
+// second, unrelated roadmap+wave pair (a parallel distill-forked one, plus a proposed wave
+// INSIDE the canonical roadmap) to prove the new scoping actually excludes what it should.
+const CANONICAL_ROADMAP_ID = 'canonical-roadmap';
+const CANONICAL_ROADMAP_FIXTURE = [{ id: CANONICAL_ROADMAP_ID, title: 'LEO Roadmap', status: 'active', current_baseline_version: 0 }];
+
 describe('computePlanCheckStatus (FR-2)', () => {
   it('excludes a stamped-but-cancelled-SD item from done (stamped != done)', async () => {
     const tables = {
-      roadmap_waves: [{ id: 'wave-1', title: 'Wave 1', sequence_rank: 1, status: 'active', progress_pct: 50 }],
+      strategic_roadmaps: CANONICAL_ROADMAP_FIXTURE,
+      roadmap_waves: [{ id: 'wave-1', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Wave 1', sequence_rank: 1, status: 'active', progress_pct: 50 }],
       roadmap_wave_items: [
         { id: 'i1', wave_id: 'wave-1', title: 'Cancelled work', promoted_to_sd_key: 'SD-CANCELLED-001', item_disposition: 'promoted', priority_rank: 1 },
         { id: 'i2', wave_id: 'wave-1', title: 'Completed work', promoted_to_sd_key: 'SD-DONE-001', item_disposition: 'promoted', priority_rank: 2 },
@@ -125,9 +134,10 @@ describe('computePlanCheckStatus (FR-2)', () => {
 
   it('excludes done/dropped items from next/committing and orders by wave sequence_rank then priority_rank', async () => {
     const tables = {
+      strategic_roadmaps: CANONICAL_ROADMAP_FIXTURE,
       roadmap_waves: [
-        { id: 'wave-2', title: 'Wave 2', sequence_rank: 2, status: 'active', progress_pct: 0 },
-        { id: 'wave-1', title: 'Wave 1', sequence_rank: 1, status: 'active', progress_pct: 0 },
+        { id: 'wave-2', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Wave 2', sequence_rank: 2, status: 'active', progress_pct: 0 },
+        { id: 'wave-1', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Wave 1', sequence_rank: 1, status: 'active', progress_pct: 0 },
       ],
       roadmap_wave_items: [
         { id: 'i1', wave_id: 'wave-2', title: 'Later item', promoted_to_sd_key: null, item_disposition: 'pending', priority_rank: 1 },
@@ -145,7 +155,8 @@ describe('computePlanCheckStatus (FR-2)', () => {
 
   it('surfaces the forward list from adam_task_ledger (ordered by created_at) into slipped', async () => {
     const tables = {
-      roadmap_waves: [{ id: 'wave-1', title: 'Wave 1', sequence_rank: 1, status: 'active', progress_pct: 0 }],
+      strategic_roadmaps: CANONICAL_ROADMAP_FIXTURE,
+      roadmap_waves: [{ id: 'wave-1', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Wave 1', sequence_rank: 1, status: 'active', progress_pct: 0 }],
       roadmap_wave_items: [
         { id: 'i1', wave_id: 'wave-1', title: 'Not yet closed item', promoted_to_sd_key: null, item_disposition: 'pending', priority_rank: 1 },
       ],
@@ -160,8 +171,8 @@ describe('computePlanCheckStatus (FR-2)', () => {
     expect(status.slipped.map((s) => s.item_id)).toEqual(['i1']);
   });
 
-  it('always returns all 4 keys, even with zero data (never missing keys)', async () => {
-    const tables = { roadmap_waves: [], roadmap_wave_items: [], adam_task_ledger: [], strategic_directives_v2: [] };
+  it('always returns all 4 keys, even with zero wave/item data (never missing keys)', async () => {
+    const tables = { strategic_roadmaps: CANONICAL_ROADMAP_FIXTURE, roadmap_waves: [], roadmap_wave_items: [], adam_task_ledger: [], strategic_directives_v2: [] };
     const supabase = makeFakeSupabase(tables);
     const status = await computePlanCheckStatus(supabase);
     expect(status).toHaveProperty('slipped');
@@ -176,10 +187,63 @@ describe('computePlanCheckStatus (FR-2)', () => {
         if (table === 'adam_task_ledger') {
           return { select: () => ({ ilike: () => ({ order: () => ({ limit: () => ({ then: (resolve) => resolve({ data: null, error: { message: 'ledger down' } }) }) }) }) }) };
         }
-        return { select: () => ({ order: () => ({ then: (resolve) => resolve({ data: [], error: null }) }) }) };
+        if (table === 'strategic_roadmaps') {
+          return { select: () => ({ eq: () => Promise.resolve({ data: CANONICAL_ROADMAP_FIXTURE, error: null }) }) };
+        }
+        return { select: () => ({ eq: () => ({ in: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }), order: () => ({ then: (resolve) => resolve({ data: [], error: null }) }) }) };
       },
     };
     await expect(computePlanCheckStatus(supabase)).rejects.toThrow(/ledger down/);
+  });
+
+  // SD-LEO-INFRA-DISTILL-ROADMAP-SINGLE-001 (FR-3): the actual single-plan-surface
+  // invariant this SD adds -- prove BOTH the roadmap_id scoping and the status-filter
+  // scoping independently, so a mix of parallel-roadmap and un-disposed-proposal rows
+  // can never leak into the chairman-facing report.
+  it('excludes waves/items belonging to a DIFFERENT (parallel, non-canonical) roadmap', async () => {
+    const tables = {
+      strategic_roadmaps: [...CANONICAL_ROADMAP_FIXTURE, { id: 'parallel-roadmap', title: 'EVA Intake Roadmap', status: 'draft', current_baseline_version: 0 }],
+      roadmap_waves: [
+        { id: 'wave-canonical', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Ratified wave', sequence_rank: 1, status: 'active', progress_pct: 0 },
+        { id: 'wave-parallel', roadmap_id: 'parallel-roadmap', title: 'Distill-forked wave', sequence_rank: 1, status: 'proposed', progress_pct: 0 },
+      ],
+      roadmap_wave_items: [
+        { id: 'i1', wave_id: 'wave-canonical', title: 'Canonical item', promoted_to_sd_key: null, item_disposition: 'pending', priority_rank: 1 },
+        { id: 'i2', wave_id: 'wave-parallel', title: 'Parallel-roadmap item', promoted_to_sd_key: null, item_disposition: 'pending', priority_rank: 1 },
+      ],
+      adam_task_ledger: [],
+      strategic_directives_v2: [],
+    };
+    const supabase = makeFakeSupabase(tables);
+    const status = await computePlanCheckStatus(supabase);
+    expect(status.next.map((n) => n.item_id)).toEqual(['i1']);
+    expect(status.next.some((n) => n.item_id === 'i2')).toBe(false);
+  });
+
+  it('excludes a status=proposed wave INSIDE the canonical roadmap (an un-disposed distill proposal)', async () => {
+    const tables = {
+      strategic_roadmaps: CANONICAL_ROADMAP_FIXTURE,
+      roadmap_waves: [
+        { id: 'wave-ratified', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Ratified wave', sequence_rank: 1, status: 'approved', progress_pct: 0 },
+        { id: 'wave-proposed', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Un-disposed distill proposal', sequence_rank: 2, status: 'proposed', progress_pct: 0 },
+      ],
+      roadmap_wave_items: [
+        { id: 'i1', wave_id: 'wave-ratified', title: 'Ratified item', promoted_to_sd_key: null, item_disposition: 'pending', priority_rank: 1 },
+        { id: 'i2', wave_id: 'wave-proposed', title: 'Proposed item', promoted_to_sd_key: null, item_disposition: 'pending', priority_rank: 1 },
+      ],
+      adam_task_ledger: [],
+      strategic_directives_v2: [],
+    };
+    const supabase = makeFakeSupabase(tables);
+    const status = await computePlanCheckStatus(supabase);
+    expect(status.next.map((n) => n.item_id)).toEqual(['i1']);
+    expect(status.next.some((n) => n.item_id === 'i2')).toBe(false);
+  });
+
+  it('throws when no active (canonical) roadmap exists — never silently reports an empty plan', async () => {
+    const tables = { strategic_roadmaps: [], roadmap_waves: [], roadmap_wave_items: [], adam_task_ledger: [], strategic_directives_v2: [] };
+    const supabase = makeFakeSupabase(tables);
+    await expect(computePlanCheckStatus(supabase)).rejects.toThrow(/no active \(canonical\) roadmap/);
   });
 });
 

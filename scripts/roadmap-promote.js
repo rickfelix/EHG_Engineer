@@ -9,7 +9,7 @@
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
-import { promoteWaveToSDs, approveSequence, getRoadmapStats } from '../lib/integrations/roadmap-manager.js';
+import { promoteWaveToSDs, approveSequence, getRoadmapStats, rejectWave } from '../lib/integrations/roadmap-manager.js';
 
 dotenv.config();
 
@@ -22,12 +22,21 @@ async function main() {
   const approveFlag = args.includes('--approve');
   const roadmapIdFlag = args.indexOf('--roadmap-id');
   const roadmapId = roadmapIdFlag >= 0 ? args[roadmapIdFlag + 1] : null;
+  const rejectWaveFlag = args.indexOf('--reject-wave');
+  const rejectWaveId = rejectWaveFlag >= 0 ? args[rejectWaveFlag + 1] : null;
   const rationaleFlag = args.indexOf('--rationale');
-  const rationale = rationaleFlag >= 0 ? args[rationaleFlag + 1] : 'Approved via CLI';
+  const rationale = rationaleFlag >= 0 ? args[rationaleFlag + 1] : (rejectWaveId ? 'Rejected via CLI' : 'Approved via CLI');
   const dryRun = args.includes('--dry-run');
 
   if (approveFlag && roadmapId) {
     return handleApprove(roadmapId, rationale);
+  }
+
+  // SD-LEO-INFRA-DISTILL-ROADMAP-SINGLE-001 (FR-2): the reject-path sibling of --approve --
+  // Adam's disposition CLI now has both an accept-all-proposed lever (approveSequence, above)
+  // and a reject-exactly-one-proposed-wave lever.
+  if (rejectWaveId) {
+    return handleReject(rejectWaveId, rationale);
   }
 
   if (!waveId) {
@@ -35,6 +44,8 @@ async function main() {
     console.log('  node scripts/roadmap-promote.js --wave-id <uuid>              Promote wave items to SDs');
     console.log('  node scripts/roadmap-promote.js --wave-id <uuid> --dry-run    Preview without creating');
     console.log('  node scripts/roadmap-promote.js --approve --roadmap-id <uuid> Approve wave sequence');
+    console.log('    --rationale "reason"                                        (optional rationale)');
+    console.log('  node scripts/roadmap-promote.js --reject-wave <uuid>          Reject a single proposed wave');
     console.log('    --rationale "reason"                                        (optional rationale)');
     process.exit(0);
   }
@@ -104,6 +115,17 @@ async function main() {
     console.log(`    Errors: ${result.errors.length}`);
     result.errors.forEach(e => console.log(`      ✗ ${e}`));
   }
+  console.log('═'.repeat(60));
+}
+
+async function handleReject(waveId, rationale) {
+  console.log(`\nRejecting proposed wave: ${waveId}`);
+  console.log('═'.repeat(60));
+
+  const result = await rejectWave(supabase, waveId, rationale);
+
+  console.log(`  ✓ Wave ${result.waveId} transitioned: ${result.previousStatus} → archived`);
+  console.log(`  ✓ Rationale: ${rationale}`);
   console.log('═'.repeat(60));
 }
 
