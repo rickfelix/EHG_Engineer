@@ -34,6 +34,14 @@ import { getTerminalId } from '../../../../lib/terminal-identity.js';
 // Handles ambiguous case where one terminal_id has PID suffix and the other doesn't
 import { isSameConversation } from '../../../../lib/claim-guard.mjs';
 
+// SD-LEO-INFRA-MULTI-SESSION-CLAIM-001 (FR-1/FR-2): the SAME liveness primitives
+// lib/claim-validity-gate.js's assertValidClaim uses for its foreign_claim path —
+// delegated here instead of re-deriving liveness from v_active_sessions.computed_status
+// (a heartbeat-only view that misses the silence-window / PID-alive escape hatches and
+// can read a dead peer's technically-fresh heartbeat as "active").
+import { ownerIsDeadByLiveness, shouldReleaseStaleOwner, isOwnerProcessAlive } from '../../../../lib/claim-validity-gate.js';
+import { isWithinArmedSilenceWindow } from '../../../../lib/fleet/silence-cap.cjs';
+
 /**
  * Validate that no session on another machine has claimed this SD
  *
@@ -93,87 +101,35 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
       }
     }
 
-    // Query v_active_sessions for any active claim on this SD
-    const { data, error } = await supabase
-      .from('v_active_sessions')
-      .select('session_id, sd_key, sd_title, hostname, tty, terminal_id, heartbeat_age_human, heartbeat_age_seconds, computed_status, codebase')
+    // SD-LEO-INFRA-MULTI-SESSION-CLAIM-001 (FR-1): read strategic_directives_v2.claiming_session_id
+    // (Surface A) FIRST — this is the AUTHORITATIVE claim owner used by every other claim-checking
+    // code path (lib/claim-validity-gate.js's assertValidClaim). v_active_sessions/claude_sessions
+    // is advisory context only from here on, never the decision authority. A stale/phantom sd_key
+    // stamp on some OTHER session's own claude_sessions row (Surface B) must never override the
+    // caller's genuine Surface-A ownership — that was the exact witnessed bug (2026-07-17 01:57Z).
+    const { data: sdRow, error: sdErr } = await supabase
+      .from('strategic_directives_v2')
+      .select('claiming_session_id')
       .eq('sd_key', sdId)
-      .in('computed_status', ['active']);
+      .maybeSingle();
 
-    if (error) {
+    if (sdErr) {
       // DB error → fail-open (don't block on infrastructure issues)
-      console.log(`   ⚠️  Could not check session claims: ${error.message}`);
+      console.log(`   ⚠️  Could not read Surface A claiming_session_id: ${sdErr.message}`);
       console.log('   → Proceeding (fail-open on DB error)');
       return {
         pass: true,
         score: 80,
         max_score: 100,
         issues: [],
-        warnings: [`Could not verify session claims: ${error.message}`]
+        warnings: [`Could not verify Surface A ownership: ${sdErr.message}`]
       };
     }
 
-    // Filter out claims from the SAME Claude Code conversation.
-    // PAT-SESSION-IDENTITY-002: A single Claude Code conversation spawns multiple
-    // CLI processes (sd:start, handoff.js), each with different PIDs and session IDs.
-    // These share the same hostname AND terminal_id (based on parent PID).
-    // Two DIFFERENT Claude Code conversations on the same machine have the same
-    // hostname but DIFFERENT terminal_ids — those ARE conflicts.
-    //
-    // RCA-TERMINAL-IDENTITY-CHAIN-BREAK-001: When findClaudeCodePid() fails
-    // (e.g., npm run subprocess), terminal_id falls back to SSE-port-only
-    // (win-cc-{port} instead of win-cc-{port}-{pid}). Use isSameConversation()
-    // for three-case matching: true/false/'ambiguous'.
-    const otherClaims = (data || []).filter(claim => {
-      // Exact session ID match → always exclude (backward compat)
-      if (claim.session_id === currentSessionId) return false;
-      // Same hostname check first
-      if (claim.hostname && claim.hostname === currentHostname) {
-        // Use three-case terminal_id matching from claim-guard
-        const sameConvo = isSameConversation(currentTerminalId, claim.terminal_id);
-        if (sameConvo === true) return false; // Definitely same conversation
-        if (sameConvo === 'ambiguous') {
-          // Quick-fix QF-20260404-512: Before blocking on ambiguity, check if
-          // the claiming session's PID is still alive. When terminal_id uses the
-          // unstable win-pid-* fallback, every Bash call gets a new PID, making
-          // the claiming PID dead by definition. A dead PID means the claim is
-          // from the same conversation's prior Bash invocation, not a competitor.
-          const claimPidMatch = claim.terminal_id?.match(/^win-pid-(\d+)$/);
-          if (claimPidMatch) {
-            const claimPid = parseInt(claimPidMatch[1], 10);
-            try {
-              process.kill(claimPid, 0); // Signal 0 = existence check, no actual kill
-            } catch {
-              // PID is dead — this is a stale claim from a prior Bash invocation
-              console.log(`   ✅ Ambiguous terminal_id but claiming PID ${claimPid} is dead — allowing (same conversation)`);
-              return false;
-            }
-          }
-          // SD-LEO-INFRA-CLAIM-DEFAULT-LEO-001: DENY-on-ambiguity
-          // Ambiguous identity (e.g., UUID vs win-cc format mismatch) now blocks
-          // rather than allowing passthrough. Blocking a handoff is recoverable;
-          // allowing duplicate work from a different session is not.
-          console.log(`   ⚠️  Ambiguous terminal_id match (${currentTerminalId} vs ${claim.terminal_id}) — BLOCKING (DENY-on-ambiguity)`);
-          return true;
-        }
-        // sameConvo === false → different conversation on same machine → conflict
-      }
-      return true;
-    });
+    const ownerSessionId = sdRow?.claiming_session_id ?? null;
 
-    if (otherClaims.length === 0) {
-      // Check if we passed due to same-conversation exclusion (log for visibility)
-      const sameConversationClaims = (data || []).filter(
-        claim => claim.session_id !== currentSessionId &&
-                 claim.hostname === currentHostname &&
-                 isSameConversation(currentTerminalId, claim.terminal_id) !== false
-      );
-      if (sameConversationClaims.length > 0) {
-        console.log(`   ✅ SD claimed by same-conversation session (${sameConversationClaims[0].session_id?.substring(0, 24)}...) — allowing`);
-        console.log(`      (hostname: ${currentHostname}, terminal_id: ${currentTerminalId})`);
-      } else {
-        console.log('   ✅ No conflicting session claims found');
-      }
+    if (!ownerSessionId || ownerSessionId === currentSessionId) {
+      console.log('   ✅ Surface A (strategic_directives_v2.claiming_session_id) confirms this session owns the claim (or SD is unclaimed) — passing');
       return {
         pass: true,
         score: 100,
@@ -183,26 +139,94 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
       };
     }
 
-    // Another active session (different machine OR different conversation) has this SD → BLOCK
-    const claim = otherClaims[0];
-    const isSameMachine = claim.hostname === currentHostname;
+    // FR-2: genuine foreign claim per Surface A. Delegate the "is that owner actually alive"
+    // determination to the SAME primitives assertValidClaim uses, evaluated against the OWNER's
+    // OWN claude_sessions row — never re-derive liveness from v_active_sessions.computed_status.
+    const { data: ownerRow, error: ownerErr } = await supabase
+      .from('claude_sessions')
+      .select('status, is_alive, heartbeat_at, expected_silence_until, hostname, terminal_id, tty, sd_key, codebase')
+      .eq('session_id', ownerSessionId)
+      .maybeSingle();
+
+    if (ownerErr) {
+      // Surfaced (not silent) — a transient error here must not read as an undetected
+      // "owner missing" pass. Deep-tier adversarial review flagged the asymmetry with the
+      // Surface A query above, which explicitly checks/surfaces its own error.
+      console.log(`   ⚠️  Could not read owner's claude_sessions row: ${ownerErr.message}`);
+    }
+
+    const nowMs = Date.now();
+    const ownerIsDead = ownerIsDeadByLiveness(ownerRow, nowMs);
+    const ownerIsSilenced = isWithinArmedSilenceWindow(ownerRow?.expected_silence_until, nowMs);
+    const ownerPidAlive = isOwnerProcessAlive(ownerSessionId);
+    // Owner's OWN session-side sd_key no longer points at this SD → they've moved on (drift).
+    const ownerHasSdKeyDrifted = !!ownerRow && ownerRow.sd_key !== sdId;
+
+    if (shouldReleaseStaleOwner({ ownerHasSdKeyDrifted, ownerIsDead, ownerIsSilenced, ownerPidAlive })) {
+      console.log(`   ✅ Surface-A owner ${ownerSessionId.substring(0, 24)}... is dead/drifted (delegated liveness check) — no real conflict, passing`);
+      console.log(`      (ownerIsDead=${ownerIsDead}, ownerIsSilenced=${ownerIsSilenced}, ownerPidAlive=${ownerPidAlive}, sdKeyDrifted=${ownerHasSdKeyDrifted})`);
+      return {
+        pass: true,
+        score: 100,
+        max_score: 100,
+        issues: [],
+        warnings: ownerErr ? [`Owner liveness computed with a missing owner row (DB error: ${ownerErr.message}) — treated as dead/fail-open`] : []
+      };
+    }
+
+    // Owner is genuinely alive per Surface A + delegated liveness. Preserve the EXISTING
+    // same-conversation carve-out (PAT-SESSION-IDENTITY-002): multiple CLI subprocesses from
+    // ONE Claude Code instance share hostname + terminal_id and must not be treated as a conflict.
+    if (ownerRow?.hostname && ownerRow.hostname === currentHostname) {
+      const sameConvo = isSameConversation(currentTerminalId, ownerRow.terminal_id);
+      if (sameConvo === true) {
+        console.log(`   ✅ SD claimed by same-conversation session (${ownerSessionId.substring(0, 24)}...) — allowing`);
+        return { pass: true, score: 100, max_score: 100, issues: [], warnings: [] };
+      }
+      if (sameConvo === 'ambiguous') {
+        // Quick-fix QF-20260404-512: Before blocking on ambiguity, check if the claiming
+        // session's PID is still alive. When terminal_id uses the unstable win-pid-* fallback,
+        // every Bash call gets a new PID, making the claiming PID dead by definition.
+        const claimPidMatch = ownerRow.terminal_id?.match(/^win-pid-(\d+)$/);
+        if (claimPidMatch) {
+          const claimPid = parseInt(claimPidMatch[1], 10);
+          try {
+            process.kill(claimPid, 0); // Signal 0 = existence check, no actual kill
+          } catch {
+            console.log(`   ✅ Ambiguous terminal_id but claiming PID ${claimPid} is dead — allowing (same conversation)`);
+            return { pass: true, score: 100, max_score: 100, issues: [], warnings: [] };
+          }
+        }
+        // SD-LEO-INFRA-CLAIM-DEFAULT-LEO-001: DENY-on-ambiguity — blocking a handoff is
+        // recoverable; allowing duplicate work from a different session is not.
+        console.log(`   ⚠️  Ambiguous terminal_id match (${currentTerminalId} vs ${ownerRow.terminal_id}) — BLOCKING (DENY-on-ambiguity)`);
+      }
+      // sameConvo === false → different conversation on same machine → conflict, falls through to BLOCK
+    }
+
+    // Genuine foreign LIVE claim on a different conversation → BLOCK
+    const isSameMachine = ownerRow?.hostname === currentHostname;
+    const heartbeatAgeSeconds = ownerRow?.heartbeat_at
+      ? Math.round((nowMs - new Date(ownerRow.heartbeat_at).getTime()) / 1000)
+      : null;
+    const heartbeatAgeHuman = heartbeatAgeSeconds != null ? `${heartbeatAgeSeconds}s ago` : 'unknown';
 
     console.log('');
     console.log('   ┌─────────────────────────────────────────────────────────────┐');
     console.log('   │  🚫 BLOCKED: SD CLAIMED BY ANOTHER ACTIVE SESSION           │');
     console.log('   ├─────────────────────────────────────────────────────────────┤');
     console.log(`   │  SD:            ${sdId}`);
-    console.log(`   │  Session:       ${claim.session_id?.substring(0, 36) || 'unknown'}`);
-    console.log(`   │  Hostname:      ${claim.hostname || 'unknown'}`);
-    console.log(`   │  Terminal ID:   ${claim.terminal_id || 'unknown'}`);
-    console.log(`   │  TTY:           ${claim.tty || 'unknown'}`);
-    console.log(`   │  Heartbeat:     ${claim.heartbeat_age_human || 'unknown'}`);
-    console.log(`   │  Codebase:      ${claim.codebase || 'unknown'}`);
+    console.log(`   │  Session:       ${ownerSessionId?.substring(0, 36) || 'unknown'}`);
+    console.log(`   │  Hostname:      ${ownerRow?.hostname || 'unknown'}`);
+    console.log(`   │  Terminal ID:   ${ownerRow?.terminal_id || 'unknown'}`);
+    console.log(`   │  TTY:           ${ownerRow?.tty || 'unknown'}`);
+    console.log(`   │  Heartbeat:     ${heartbeatAgeHuman}`);
+    console.log(`   │  Codebase:      ${ownerRow?.codebase || 'unknown'}`);
     if (isSameMachine) {
       console.log('   ├─────────────────────────────────────────────────────────────┤');
       console.log('   │  ⚠️  SAME MACHINE, DIFFERENT CONVERSATION                   │');
       console.log(`   │  Your terminal_id:  ${currentTerminalId}`);
-      console.log(`   │  Their terminal_id: ${claim.terminal_id || 'unknown'}`);
+      console.log(`   │  Their terminal_id: ${ownerRow?.terminal_id || 'unknown'}`);
     }
     console.log('   ├─────────────────────────────────────────────────────────────┤');
     console.log('   │  Another Claude Code instance is actively working on this   │');
@@ -220,17 +244,20 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
       score: 0,
       max_score: 100,
       issues: [
-        `SD ${sdId} is claimed by another active session (${claim.hostname || 'unknown'}, heartbeat: ${claim.heartbeat_age_human || 'unknown'})`
+        `SD ${sdId} is claimed by another active session (${ownerRow?.hostname || 'unknown'}, heartbeat: ${heartbeatAgeHuman})`
       ],
-      warnings: [],
+      // Surface any owner-row read error here too — the BLOCK path can still be reached with
+      // ownerErr set (e.g. ownerRow null from a DB error, but isOwnerProcessAlive independently
+      // true), and dropping it here would silently reintroduce the visibility gap round-1 fixed.
+      warnings: ownerErr ? [`Owner liveness computed with a missing owner row (DB error: ${ownerErr.message}) — proceeding to BLOCK on available signals`] : [],
       claimDetails: {
-        sessionId: claim.session_id,
-        hostname: claim.hostname,
-        terminalId: claim.terminal_id,
-        tty: claim.tty,
-        heartbeatAgeHuman: claim.heartbeat_age_human,
-        heartbeatAgeSeconds: claim.heartbeat_age_seconds,
-        codebase: claim.codebase,
+        sessionId: ownerSessionId,
+        hostname: ownerRow?.hostname,
+        terminalId: ownerRow?.terminal_id,
+        tty: ownerRow?.tty,
+        heartbeatAgeHuman,
+        heartbeatAgeSeconds,
+        codebase: ownerRow?.codebase,
         isSameMachine
       }
     };
