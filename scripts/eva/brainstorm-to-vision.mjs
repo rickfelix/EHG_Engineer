@@ -27,7 +27,7 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 // and coexists at L1 alongside the mission/vision doc — then append brainstorm content
 // to it via a raw .update() with no ratification check at all, reproducing the exact
 // bug class this SD closed for the CLI's addendum path. Excluded at the query below.
-import { GOVERNED_VISION_KEYS } from '../../lib/eva/vision-upsert.js';
+import { GOVERNED_VISION_KEYS, selectFirstNonGoverned } from '../../lib/eva/vision-upsert.js';
 
 const VISION_RELEVANT_OUTCOMES = ['sd_created', 'significant_departure'];
 const MAX_LLM_CONTENT_CHARS = 15000;
@@ -134,7 +134,7 @@ async function main() {
     .order('created_at', { ascending: false })
     .limit(GOVERNED_VISION_KEYS.size + 5);
 
-  const l1Vision = (l1Candidates || []).find(v => !GOVERNED_VISION_KEYS.has(v.vision_key)) || null;
+  const l1Vision = selectFirstNonGoverned(l1Candidates);
 
   if (!l1Vision) {
     console.warn('   ⚠️  No active L1 vision document found — significant_departure sessions will be skipped');

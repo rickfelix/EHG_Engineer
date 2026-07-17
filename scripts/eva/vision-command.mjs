@@ -52,7 +52,7 @@ import { readStdin } from '../../lib/utils/read-stdin.mjs';
 // applies via upsertVision() must also apply to cmdAddendum's direct DB write below — an
 // adversarial review (PR #6138) found the addendum path bypassed ratification entirely,
 // letting an already-active governed document's content change with no re-ratification.
-import { buildAddendumUpdatePayload } from '../../lib/eva/vision-upsert.js';
+import { buildAddendumUpdatePayload, rejectStringFlagValue } from '../../lib/eva/vision-upsert.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../');
@@ -115,6 +115,14 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
   if (!level || !['L1', 'L2'].includes(level)) { console.error('--level must be L1 or L2'); process.exit(1); }
   if (!source && !sectionsJson && !contentArg && !stdinFlag) { console.error('--source, --sections, --content, or --stdin is required'); process.exit(1); }
 
+  // Reject a value on any of these three bare boolean flags (see
+  // rejectStringFlagValue's docblock) BEFORE the mutual-exclusivity checks below,
+  // so `--approved false` (etc.) errors instead of silently parsing as approved.
+  for (const [flagValue, flagName] of [[approvedFlag, '--approved'], [draftFlag, '--draft'], [chairmanRatifiedFlag, '--chairman-ratified']]) {
+    const err = rejectStringFlagValue(flagValue, flagName);
+    if (err) { console.error(err); process.exit(1); }
+  }
+
   // FR-2 (SD-LEO-FEAT-DELIBERATE-VISION-APPROVAL-001): approval must be a
   // DELIBERATE, explicit chairman choice — never a silent default. Require
   // exactly one of --approved / --draft so registering a vision is an explicit
@@ -129,15 +137,6 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
     process.exit(1);
   }
   const approved = Boolean(approvedFlag);
-  // SD-LEO-INFRA-PORTFOLIO-STRATEGY-FIRST-001-A: the shared parseArgs() treats any
-  // non-`--`-prefixed following token as a value, so `--chairman-ratified false`
-  // parses to the STRING 'false', which Boolean('false') coerces to true — silently
-  // ratifying when an operator plainly intended the opposite (adversarial review,
-  // PR #6138). --chairman-ratified is documented as a bare flag; reject any value.
-  if (typeof chairmanRatifiedFlag === 'string') {
-    console.error(`--chairman-ratified takes no value (got "${chairmanRatifiedFlag}") — pass it bare to ratify, or omit it entirely to leave the document unratified.`);
-    process.exit(1);
-  }
   const chairmanRatified = Boolean(chairmanRatifiedFlag);
 
   // Read content from stdin when --stdin is set. Cross-platform alternative to
