@@ -28,6 +28,7 @@ import { createClient } from '@supabase/supabase-js';
 import { EVAL_SET_CLASSES, EVAL_SET_CORPORA } from '../../lib/eval/eval-set-fixtures.mjs';
 import { evalCaseHash, computeFloorBookkeeping } from '../../lib/eval/eval-set-loader.mjs';
 import { isMissingTableError } from './migrate-sealed-baselines.mjs';
+import { TABLE as PROPOSALS_TABLE } from '../../lib/governance/shadow-trial/proposal-writer.mjs';
 
 function argValue(flag) {
   const i = process.argv.indexOf(flag);
@@ -50,6 +51,40 @@ export async function sealEvalSet({ supabase, artifactClass, apply = false, seal
   if (!apply) {
     log('Dry-run (default) — nothing written. Re-run with --apply to seal.');
     return { applied: false, planned: planned.length, sealed: 0, skipped: 0, bookkeeping };
+  }
+
+  // SELF-REFERENCE GUARD (SD-LEO-INFRA-SHADOW-TRIAL-RATIFICATION-001-C FR-4): the
+  // eval-set is itself a governed artifact — once the chairman ceremony applies
+  // governed_change_proposals, sealing requires a staged proposal for this class.
+  // Pre-ceremony (table absent) this warns and proceeds: refusing would deadlock
+  // legitimate re-seals before the ceremony has even begun.
+  // Referenced via the owning module's TABLE constant (child A convention for the
+  // chairman-gated STAGED table — the schema-reference lint rightly flags literal
+  // references to not-yet-applied tables).
+  const guardProbe = await supabase
+    .from(PROPOSALS_TABLE)
+    .select('id, status, proposed_diff')
+    .eq('artifact_class', artifactClass)
+    .limit(10);
+  if (guardProbe.error) {
+    if (isMissingTableError(guardProbe.error)) {
+      log('SELF-REFERENCE GUARD: governed_change_proposals not applied (ceremony pending) — warn-and-proceed.');
+    } else {
+      // FAIL CLOSED (SECURITY M2): once the table can exist, a permissions/transient
+      // probe failure must not silently bypass a governed-artifact guard.
+      throw new Error(`seal-eval-set: SELF-REFERENCE GUARD probe failed (${guardProbe.error.message}) — refusing to seal (fail-closed; only a missing table warn-and-proceeds)`);
+    }
+  } else {
+    // CONTENT BINDING (SECURITY M1): a staged proposal authorizes only the seals it
+    // NAMES — its proposed_diff must reference at least one content hash being
+    // sealed. A stale/unrelated staged row for the class no longer authorizes
+    // arbitrary future seals.
+    const active = (guardProbe.data || []).filter((p) => ['staged', 'shadow_run', 'packet_attached'].includes(p.status));
+    const bound = active.find((p) => planned.some(({ content_hash }) => String(p.proposed_diff || '').includes(content_hash)));
+    if (!bound) {
+      throw new Error(`seal-eval-set: SELF-REFERENCE GUARD — no staged governed_change_proposals row for artifact_class=${artifactClass} references the content hashes being sealed; corpus mutations require a staged proposal naming this change (child C FR-4)`);
+    }
+    log(`SELF-REFERENCE GUARD: staged proposal ${bound.id} (${bound.status}) content-binds this seal.`);
   }
 
   const existing = await supabase

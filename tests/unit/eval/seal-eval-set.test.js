@@ -8,20 +8,27 @@ import { sealEvalSet } from '../../../scripts/eval/seal-eval-set.mjs';
 import { EVAL_SET_CORPORA } from '../../../lib/eval/eval-set-fixtures.mjs';
 import { evalCaseHash } from '../../../lib/eval/eval-set-loader.mjs';
 
-/** Stub with insert tracking; existing seals injectable per test. */
-function stubDb({ existingHashes = [], readError = null } = {}) {
+/**
+ * Stub with insert tracking; existing seals injectable per test.
+ * governed_change_proposals defaults to MISSING TABLE (pre-ceremony live state) so
+ * the child-C self-reference guard warn-and-proceeds; pass `proposals` to simulate
+ * the post-ceremony table (guard then requires a staged row).
+ */
+function stubDb({ existingHashes = [], readError = null, proposals = undefined, guardError = null } = {}) {
   const inserts = { feedback: [], system_events: [] };
+  const MISSING = { code: 'PGRST205', message: "Could not find the table 'public.governed_change_proposals' in the schema cache" };
   return {
     inserts,
     from(table) {
+      const result = table === 'governed_change_proposals'
+        ? (guardError ? { data: null, error: guardError }
+           : proposals === undefined ? { data: null, error: MISSING } : { data: proposals, error: null })
+        : (readError
+            ? { data: null, error: readError }
+            : { data: existingHashes.map((h) => ({ id: `x-${h}`, metadata: { content_hash: h } })), error: null });
+      const thenable = { then: (resolve) => resolve(result), limit: () => Promise.resolve(result) };
       return {
-        select: () => ({
-          eq: () => Promise.resolve(
-            readError
-              ? { data: null, error: readError }
-              : { data: existingHashes.map((h) => ({ id: `x-${h}`, metadata: { content_hash: h } })), error: null }
-          ),
-        }),
+        select: () => ({ eq: () => thenable }),
         insert(row) {
           inserts[table].push(row);
           return {
@@ -79,5 +86,47 @@ describe('sealEvalSet (TS-1)', () => {
 
   it('rejects unknown classes', async () => {
     await expect(sealEvalSet({ supabase: stubDb(), artifactClass: 'nope', log: silent })).rejects.toThrow(/unknown artifact class/);
+  });
+});
+
+describe('self-reference guard (child C FR-4)', () => {
+  it('pre-ceremony (proposals table missing): warns and proceeds', async () => {
+    const db = stubDb(); // governed_change_proposals defaults to MISSING
+    const r = await sealEvalSet({ supabase: db, artifactClass: 'closure_predicates', apply: true, log: silent });
+    expect(r.applied).toBe(true);
+    expect(r.sealed).toBe(4);
+  });
+
+  it('post-ceremony with a CONTENT-BOUND staged proposal: seal authorized (M1)', async () => {
+    const boundHash = evalCaseHash(EVAL_SET_CORPORA.closure_predicates[0]);
+    const db = stubDb({ proposals: [{ id: 'gp-1', status: 'staged', proposed_diff: `corpus reseal covering ${boundHash}` }] });
+    const r = await sealEvalSet({ supabase: db, artifactClass: 'closure_predicates', apply: true, log: silent });
+    expect(r.applied).toBe(true);
+  });
+
+  it('post-ceremony: a stale/unrelated staged proposal does NOT authorize (M1 content binding)', async () => {
+    const db = stubDb({ proposals: [{ id: 'gp-old', status: 'staged', proposed_diff: 'some unrelated earlier change' }] });
+    await expect(sealEvalSet({ supabase: db, artifactClass: 'closure_predicates', apply: true, log: silent }))
+      .rejects.toThrow(/SELF-REFERENCE GUARD/);
+  });
+
+  it('generic (non-missing-table) probe error FAILS CLOSED (M2)', async () => {
+    const db = stubDb({ guardError: { code: '42501', message: 'permission denied' } });
+    await expect(sealEvalSet({ supabase: db, artifactClass: 'closure_predicates', apply: true, log: silent }))
+      .rejects.toThrow(/fail-closed/);
+    expect(db.inserts.feedback).toHaveLength(0);
+  });
+
+  it('post-ceremony with NO staged proposal: seal refused', async () => {
+    const db = stubDb({ proposals: [] });
+    await expect(sealEvalSet({ supabase: db, artifactClass: 'closure_predicates', apply: true, log: silent }))
+      .rejects.toThrow(/SELF-REFERENCE GUARD/);
+    expect(db.inserts.feedback).toHaveLength(0);
+  });
+
+  it('dry-run never consults the guard (no writes to authorize)', async () => {
+    const db = stubDb({ proposals: [] });
+    const r = await sealEvalSet({ supabase: db, artifactClass: 'closure_predicates', log: silent });
+    expect(r.applied).toBe(false);
   });
 });
