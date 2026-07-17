@@ -102,7 +102,7 @@ export class BaseExecutor {
       // Step 1: Load SD
       let step1Span;
       try { step1Span = startSpan('step.loadSD', { span_type: 'phase', step_name: 'loadSD', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
-      const sd = await this.sdRepo.getById(sdId);
+      let sd = await this.sdRepo.getById(sdId);
       try { endSpan(step1Span); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
 
       // Step 1.3: SD-LEO-INFRA-FAIL-CLOSED-CLAIM-001 — Fail-closed claim identity + worktree isolation.
@@ -173,7 +173,18 @@ export class BaseExecutor {
         // an unclaimed SD must be explicitly claimed (sd-start) before any
         // session may drive the pipeline (2026-06-12 parallel-driver incident).
         const { evaluateClaimCheckForHandoff } = await import('../claim-gate-decision.js');
-        const noClaim = evaluateClaimCheckForHandoff(claimCheck, sdKeyForGate);
+        // SD-LEO-FIX-POST-MERGE-AUTOMATION-001 FR-2: the `sd` loaded at Step 1 can be
+        // stale by the time we reach this check — a concurrent invocation may have
+        // completed the SD (and cleared its own claim) in between, which is exactly
+        // the race this closes. Only re-read when ownership is 'unclaimed' (the one
+        // case evaluateClaimCheckForHandoff needs status for); the happy path
+        // (claim-holder) never pays this extra query.
+        let freshSdForGate = sd;
+        if (claimCheck?.ownership === 'unclaimed') {
+          const refetched = await this.sdRepo.getById(sdId).catch(() => null);
+          if (refetched) freshSdForGate = refetched;
+        }
+        const noClaim = evaluateClaimCheckForHandoff(claimCheck, sdKeyForGate, freshSdForGate?.status);
         if (noClaim.block) {
           console.error(`❌ NO_CLAIM: ${noClaim.detail}`);
           try { endSpan(rootSpan, { result: 'claim_validity_gate_blocked' }); persist(traceCtx, { supabase: this.supabase }); } catch (_) { /* telemetry non-fatal */ }
@@ -183,6 +194,12 @@ export class BaseExecutor {
             max_score: 100,
             warnings: [`Acquire the claim first: node scripts/sd-start.js ${sdKeyForGate}`]
           }, `NO_CLAIM: ${sdKeyForGate} is unclaimed — handoffs require the claim-holding session`);
+        }
+        if (noClaim.alreadyCompleted) {
+          console.log(`   ℹ️  [claim-gate] ${sdKeyForGate} is unclaimed but already status='completed' — proceeding without re-claim (idempotent reconcile path handles it downstream).`);
+          // Propagate the fresh row so setup()/executeSpecific() see status='completed',
+          // not the Step-1 snapshot that may still show 'pending_approval'.
+          sd = freshSdForGate;
         }
       } catch (e) {
         if (e?.name === 'ClaimIdentityError') {

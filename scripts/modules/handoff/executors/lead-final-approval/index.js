@@ -37,6 +37,10 @@ import { checkProgressBreakdownLheReady } from '../../pre-checks/pending-migrati
 // Workflow definitions for prerequisite chain diagnosis (SD-LEARN-FIX-ADDRESS-PAT-RETRO-002)
 import { getWorkflowForType } from '../../cli/workflow-definitions.js';
 
+// SD-LEO-FIX-POST-MERGE-AUTOMATION-001 FR-2: CAS guard on the terminal completion
+// UPDATE + loser-side pre-insert cleanup (post-merge automation vs worker race).
+import { attemptCasCompletion, cleanupLosingPreInsert } from './cas-completion.js';
+
 /**
  * Auto-rescore the original SD after a corrective SD completes.
  * SD-MAN-INFRA-VISION-RESCORE-ON-COMPLETION-001
@@ -391,9 +395,14 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     if (insertStatus === 'accepted') {
       insertPayload.accepted_at = new Date().toISOString();
     }
-    const { error: preInsertError } = await this.supabase
+    const { data: preInsertRow, error: preInsertError } = await this.supabase
       .from('leo_handoff_executions')
-      .insert(insertPayload);
+      .insert(insertPayload)
+      .select('id')
+      .maybeSingle();
+    // SD-LEO-FIX-POST-MERGE-AUTOMATION-001 FR-2: captured so a losing invocation
+    // (CAS guard below) can delete THIS row specifically, never the winner's.
+    const preInsertedRowId = preInsertRow?.id ?? null;
 
     if (preInsertError) {
       console.log(`   ⚠️  Pre-insert into leo_handoff_executions failed: ${preInsertError.message}`);
@@ -490,18 +499,20 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // SD-MAN-INFRA-SAME-TURN-NEXT-001 FR-3: capture the completing session id
     // BEFORE the update below nulls active_session_id.
     const completedBySession = process.env.CLAUDE_SESSION_ID || sd.active_session_id || null;
-    const { error: sdError } = await this.supabase
-      .from('strategic_directives_v2')
-      .update({
-        status: 'completed',
-        current_phase: 'COMPLETED',
-        progress_percentage: 100,
-        is_working_on: false,
-        active_session_id: null,
-        completion_date: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', sd.id);
+    // SD-LEO-FIX-POST-MERGE-AUTOMATION-001 FR-2: CAS guard (.eq('status','pending_approval'))
+    // — a concurrent invocation (e.g. post-merge automation racing this worker session) may
+    // have already completed the SD between our claim-check and this UPDATE. An unconditional
+    // UPDATE would silently "succeed" for both invocations; the CAS guard makes the loser
+    // observe zero affected rows instead of a false success.
+    const { won: casWon, error: sdError } = await attemptCasCompletion(this.supabase, sd, {
+      status: 'completed',
+      current_phase: 'COMPLETED',
+      progress_percentage: 100,
+      is_working_on: false,
+      active_session_id: null,
+      completion_date: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
 
     if (sdError) {
       console.log(`   ❌ Failed to update SD: ${sdError.message}`);
@@ -511,6 +522,29 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         'SD_UPDATE_FAILED',
         `Failed to update SD to completed: ${sdError.message}`
       );
+    }
+
+    if (!casWon) {
+      // Lost the race: a concurrent invocation already flipped status away from
+      // 'pending_approval'. Clean up OUR OWN pre-inserted leo_handoff_executions row
+      // (by id — never the winner's) so no duplicate accepted/pending row survives,
+      // then reconcile via the existing idempotent already-completed path instead of
+      // re-running (or duplicating) the post-completion side effects below.
+      console.log('   ℹ️  CAS guard: SD was already transitioned by a concurrent invocation — reconciling as already-completed.');
+      await cleanupLosingPreInsert(this.supabase, preInsertedRowId);
+      const { data: freshSd } = await this.supabase
+        .from('strategic_directives_v2')
+        .select('*')
+        .eq('id', sd.id)
+        .maybeSingle();
+      await this._reconcileCanonicalLfaRow(freshSd || sd, gateResults);
+      return {
+        success: true,
+        sdId,
+        message: 'SD already completed by a concurrent invocation — reconciled idempotently',
+        alreadyCompleted: true,
+        concurrentRaceLost: true
+      };
     }
 
     console.log('   ✅ SD status transitioned: pending_approval → completed');
