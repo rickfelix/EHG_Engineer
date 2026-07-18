@@ -55,6 +55,12 @@ function relayCutoverComplete() {
 // granular than chairman_notifications.status's CHECK constraint
 // ('queued'|'sent'|'failed'|'rate_limited'|'deferred') — map onto the closest valid value
 // rather than widening a shared table's constraint for this one channel.
+//
+// NOTE: this collapse (delivered->'sent') applies ONLY to the shared chairman_notifications
+// audit row, whose CHECK lacks a 'delivered' state. It must NEVER apply to the owed-state
+// table sms_outbound_obligations, whose whole purpose (FR-1/FR-2) is to carry delivery-truth:
+// there, delivered is a DISTINCT terminal state set ONLY on MessageStatus=delivered. See
+// applyOwedDeliveryTruth below.
 const TWILIO_STATUS_TO_NOTIFICATION_STATUS = {
   queued: 'queued',
   sending: 'queued',
@@ -63,6 +69,38 @@ const TWILIO_STATUS_TO_NOTIFICATION_STATUS = {
   undelivered: 'failed',
   failed: 'failed',
 };
+
+// SD-LEO-INFRA-SMS-CHANNEL-HARDENING-001-B FR-2: map a Twilio MessageStatus onto the owed-row
+// state change — delivery-truth, keyed to provider_message_id (the Twilio SID). A 201-accept
+// alone is 'queued'/'sending'/'sent' and NEVER sets delivered_at; delivered is the ONLY status
+// that stamps delivered_at; undelivered/failed flip the row onto the reconcile/retry/alert path
+// (FR-3). Transient statuses return null => no owed-row write (the row stays on its send path).
+function owedRowUpdateForStatus(status, nowIso) {
+  if (status === 'delivered') return { status: 'delivered', delivered_at: nowIso };
+  if (status === 'undelivered') return { status: 'undelivered' };
+  if (status === 'failed') return { status: 'failed' };
+  return null; // queued/sending/sent — transient, leave the owed row on its send path
+}
+
+/**
+ * Stamp delivery-truth onto the owed obligation row matched by provider_message_id (FR-2).
+ * FAIL-SOFT: while the STAGED sms_outbound_obligations migration is unapplied the table is
+ * absent and supabase-js resolves the update to {data:null,error} (or throws in a fake) — either
+ * way this degrades to a no-op and never crashes the callback path. Runs AFTER the 401 signature
+ * reject, so a forged callback can never reach it.
+ */
+async function applyOwedDeliveryTruth(supabase, { messageSid, status }) {
+  const patch = owedRowUpdateForStatus(status, new Date().toISOString());
+  if (!patch) return;
+  try {
+    await supabase
+      .from('sms_outbound_obligations')
+      .update(patch)
+      .eq('provider_message_id', messageSid);
+  } catch {
+    /* table absent (STAGED) — fail-soft no-op */
+  }
+}
 
 export async function handleTwilioSmsWebhook(req, res) {
   if (req.method !== 'POST') {
@@ -99,7 +137,14 @@ export async function handleTwilioSmsWebhook(req, res) {
   return res.status(200).send(EMPTY_TWIML);
 }
 
-export async function handleTwilioStatusCallback(req, res) {
+/**
+ * @param {object} req
+ * @param {object} res
+ * @param {{supabase?: object, provider?: object}} [deps] - test seams (default: module
+ *   service-role client + the real twilioProvider), mirroring the injectable-seam convention
+ *   used elsewhere in the chairman path.
+ */
+export async function handleTwilioStatusCallback(req, res, { supabase, provider = twilioProvider } = {}) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -107,23 +152,31 @@ export async function handleTwilioStatusCallback(req, res) {
   const params = (req.body && typeof req.body === 'object') ? req.body : {};
   const url = resolveWebhookUrl(req, 'TWILIO_STATUS_CALLBACK_URL');
   const signature = req.headers['x-twilio-signature'];
-  const signatureValid = Boolean(url) && twilioProvider.verifyInboundSignature({ url, params, signature });
+  const signatureValid = Boolean(url) && provider.verifyInboundSignature({ url, params, signature });
 
+  // Signature reject BEFORE any database write — a forged/invalid-signature callback can
+  // neither mark an undelivered message delivered nor mutate any obligation (FR-2 / TR-4).
   if (!signatureValid) {
     return res.status(401).json({ error: 'Invalid signature' });
   }
 
-  const { messageSid, status } = twilioProvider.parseStatusCallback(params);
+  const sb = supabase || db();
+  const { messageSid, status } = provider.parseStatusCallback(params);
   if (messageSid) {
     // FR-6: delivery status only — no new fallback daemon. An unanswered SMS
     // question stays chairman_decisions.status='pending', which the EXISTING
     // lib/eva/chairman-decision-timeout.js poller already re-escalates to email.
+    // chairman_notifications keeps its existing collapsed mapping (its CHECK lacks 'delivered').
     const mappedStatus = TWILIO_STATUS_TO_NOTIFICATION_STATUS[status] || 'failed';
-    await db()
+    await sb
       .from('chairman_notifications')
       .update({ status: mappedStatus })
       .eq('provider_message_id', messageSid)
       .eq('channel', 'sms');
+
+    // FR-2: delivery-truth on the owed-state row — delivered ONLY on MessageStatus=delivered;
+    // undelivered/failed onto the reconcile path; a 201-accept alone is never delivered.
+    await applyOwedDeliveryTruth(sb, { messageSid, status });
   }
 
   return res.status(200).json({ received: true });
