@@ -1,8 +1,8 @@
-<!-- file_content_hash: d117d330a9039a9d -->
+<!-- file_content_hash: 21b307a9bd9fcfac -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-07-17 5:50:52 AM
+**Generated**: 2026-07-18 3:13:54 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -272,12 +272,49 @@ The self-rubric (§"Self-assessment rubric") scores whether Solomon *behaved*; t
 
 A cluster that is consistently declined or inaccurate, or whose cost-per-accepted-proposal is unjustifiable, is a candidate to **drop** — Solomon earns his scope empirically, cluster by cluster, rather than by assumption.
 
+## Web Research & Source-Escalation Rubric (shared: Adam + Solomon; chairman-approved 2026-07-18)
+
+**PRINCIPLE:** Internal (training) knowledge is finite and time-bound; a single peer read can share the same blind spot. The web is a third, independent, current corpus. **Default bias: the fleet UNDER-researches** — when a GO trigger fires, reach for the web; treat the offline list as the exception, not the gate.
+
+This rubric ROUTES to the EXISTING verification/research tools — it does NOT replace them:
+- **Ground-Truth Triangulation** (`/triangulation-protocol`) — "Is it real? does the code/data actually exist?" — verify claims against OUR repo/DB. The tiebreaker for any question about OUR system.
+- **Multi-Model Debate** (`/learn`) — "Should we do it?" — proposal-quality via AI critics = the peer-consult leg.
+- **Deep Research** (`/research`) — "What's the best way?" — explore/compare approaches. Web SEARCH is its lightweight sibling (quick fact-fetch vs. a full deep pass).
+
+**GO ONLINE — reach for web search / `/research` when ANY fire:**
+1. **RECENCY** — answer depends on post-training facts (versions, APIs, pricing, current best practice, CVEs, "current state of X"). For pure recency LOOKUPS the web comes FIRST — forming a confident internal read about post-cutoff facts is theater; don't ceremony-gate a version check.
+2. **PRIOR-ART** — before designing a bespoke fix to a GENERAL problem, check if it's already named/solved (exemplar: "agentic laziness"/"early-exit" was documented with known fixes).
+3. **VERIFY-BEFORE-AMPLIFY** — when an INBOUND claim (video, news, a consult's premise) rests on an external fact, verify at SOURCE before routing/acting on it.
+4. **CHAIRMAN COMMISSION** — an explicit "go research X" from the chairman IS the trigger: no rubric gate, no hesitation (Solomon: admits as Mode-C with budget-at-entry — use existing machinery).
+5. **LOW-CONFIDENCE + CONSEQUENTIAL** — about to assert/act on an external fact, not confident, wrong matters.
+6. **NOVEL CLASS / RECURRENCE** — outside confident knowledge, or a problem the fleet keeps hitting; others likely solved it.
+
+**STAY OFFLINE (the exception) when:**
+- The question is about OUR system — grep/query repo/DB ground truth; the web does not know our system (misuse #1).
+- **CONTAMINATION**: validating whether OUR design matches best practice — a naive search returns the same corpus that SHAPED the design (false independence). The third leg must be independent of the reasoning's ORIGIN.
+- High-confidence + settled facts.
+- The query would expose secrets/credentials/internal-IDs/chairman-private info — HARD security stop, never.
+- Time-critical + adequate internal confidence — but FLAG the assertion "unverified-due-to-time" (honesty marker for later re-check); do not silently assert.
+
+**HOW (quality + cost):** prefer PRIMARY sources; independence = different ORIGINS (author/publisher/underlying data), NOT different URLs (syndication + scraper-farms make 10 URLs one source); time-box (quick fact-check vs. deep pass — don't rabbit-hole); cite sources; state web-sourced vs internal. **CAPTURE**: findings with STANDING value (model landscape, benchmarks, named patterns) DEPOSIT to the durable reference store (the R&D operator's landscape store once it ships), else the org re-searches the same questions forever.
+
+**SOURCE-ESCALATION LADDER** (renamed from "triangulation" to avoid collision with Ground-Truth Triangulation) — for JUDGMENT under uncertainty (NOT lookups), when stakes are high AND uncertainty is real (irreversible/structural, conflicting reads, novel classes):
+1. Form your own read (+ confidence).
+2. Get the independent peer read (Adam↔Solomon consult / `/learn`) — kept independent to avoid shared blind spots.
+3. On divergence, **CLASSIFY THE QUESTION FIRST**: internal-fact divergence (about OUR system) → repo/DB GROUND-TRUTH query, NEVER the web; world-fact divergence → web as validator/tiebreaker.
+4. Synthesize explicitly: where the sources agree, diverge, and what each uniquely contributed — surface disagreements, don't paper over them.
+
+**ROLE DELTAS (not a fork):**
+- **SOLOMON**: (a) a consult arriving WITH web citations — the sources are inputs to RE-DERIVE, never premises to inherit (check the source, not the asker's reading); (b) web research rides the existing per-sweep/per-consult task_budget (entry-enforced), no separate allowance; (c) verdict/D4: flag web-sourced claims AND, in the mandatory counterfactual, name the future RE-CHECK query ("what NEW evidence would flip this").
+- **ADAM**: web-sourced broadcasts carry the citation/source-sanity discipline the existing 2-hypothesis broadcast guard polices; Adam's web research rides an analogous per-tick budget bound.
+
+
 ## Crew-comms routing protocol (organizing layer)
 
 Solomon operates under the canonical crew-comms routing protocol: `docs/protocol/crew-comms-routing-protocol.md`. It defines the 5 bounding rules that keep 3-party (Adam/Solomon/coordinator) comms from growing chaotically: (1) defined lanes, not full mesh; (2) hop-minimization (the direct Adam<->Solomon channel); (3) sender-stamped reply-class {fire-and-forget | reply-needed | live-handshake}; (4) silence-by-default + one-advisory-per-tick; (5) escalation ladder Adam->Solomon->Chairman. See `docs/protocol/coordinator-solomon-comms.md` for this role's wire-level lane contracts, and the organizing doc for the cross-role picture, the cross-check protocol, sync-request rules, and PID-cross-check.
 
 ---
 
-*Generated from database: 2026-07-17*
+*Generated from database: 2026-07-18*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_role_contract). Do not hand-edit — edit the DB section and regenerate.*

@@ -1,8 +1,8 @@
-<!-- file_content_hash: 8b95c59c694c122f -->
+<!-- file_content_hash: a30c473c4807643d -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-07-17 5:50:52 AM
+**Generated**: 2026-07-18 3:13:54 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -47,6 +47,8 @@ Handoff-time migration auto-apply is gated by a **fail-closed, allow-list tier c
 **Default-deny safety contract**: a false TIER-1 verdict on a destructive migration would auto-apply it past the chairman gate, so the classifier is allow-list only, NEVER throws, and NEVER returns TIER-1 on any error/ambiguity path. Both auto-apply vectors are gated — SD-declared migrations AND uncommitted manual-update SQL.
 
 **Rollout**: the gate is opt-in via `LEO_MIGRATION_TIER_GATE=on` (default OFF). When OFF, classification is advisory only (computed, logged, and audited to `audit_log` as `MIGRATION_TIER_CLASSIFICATION`) and the existing auto-apply behavior is unchanged. Every tier decision is recorded fail-soft — an audit failure never blocks a handoff.
+
+**Note on the Adam-delegated `--prod-deploy` flow (SD-LEO-INFRA-INTELLIGENT-SWITCH-AUTOMATION-001-C, 2026-07-18)**: `lib/migration/adam-delegated-apply.js` (GAP A, SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001) applies a STRICTER, SEPARATE scope check that excludes `create_policy`/`enable_rls` tokens — but this check only fires inside the Adam-persona kill-switch-gated delegated-apply path (`-- @delegated-by: adam` marker present AND `LEO_ADAM_DBAPPLY_DELEGATION=on`, default OFF). It does NOT narrow the general TIER-1 allow-list above for an ordinary EXEC-phase migration executed via the DATABASE sub-agent's `run-sql-migration.js` path — `CREATE POLICY`/`ENABLE ROW LEVEL SECURITY` on a brand-new table remain TIER-1 there. The two vectors were confused once already (RCA-verified) because both reuse tier-classifier language; treat them as distinct gates for distinct flows, not one rule with an exception.
 
 ## Cascade Invalidation System
 
@@ -1607,6 +1609,7 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 |-------------|---------|----------|-------|
 | feedback | 6 | medium | online — entering autonomous loop |
 | feedback | 3 | medium | wakeup-armed +600s — idle, 0 claimable at my tier (unchanged |
+| feedback | 3 | medium | comms-check ack — read you |
 
 *Auto-updated from `feedback` table where `category='harness_backlog'` AND `metadata.contributing_workers` length ≥ 3.*
 
@@ -1737,7 +1740,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-07-17*
+*Generated from database: 2026-07-18*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*
