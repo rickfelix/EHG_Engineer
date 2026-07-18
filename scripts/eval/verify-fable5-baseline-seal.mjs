@@ -24,7 +24,11 @@ async function main() {
     .eq('category', 'model_capability_baseline');
   if (error) {
     console.error(`Fatal: baseline corpus read failed: ${error.message}`);
-    process.exit(1);
+    // Same process.exitCode reasoning as below — a forced process.exit() right after
+    // this Supabase query returns is exactly when its HTTP handle is still closing;
+    // this branch is even MORE likely to hit the libuv race than the success path.
+    process.exitCode = 1;
+    return;
   }
 
   const result = verifyBaselineSeal(data || []);
@@ -56,4 +60,7 @@ async function main() {
   process.exitCode = result.verdict === 'SEALED' ? 0 : 1;
 }
 
-main();
+main().catch((err) => {
+  console.error(`Fatal: unexpected error: ${err?.message || err}`);
+  process.exitCode = 1;
+});
