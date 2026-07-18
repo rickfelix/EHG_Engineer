@@ -61,6 +61,12 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(`Fatal: unexpected error: ${err?.message || err}`);
+  // Round-2 adversarial /ship review finding: set exitCode BEFORE the console.error
+  // call, not after — if the error write itself throws (e.g. EPIPE on a closed pipe),
+  // the exit-code assignment must already be in effect, or the process could fall
+  // through to the default exit code (0) for what should be a hard failure.
   process.exitCode = 1;
+  try {
+    console.error(`Fatal: unexpected error: ${err?.message || err}`);
+  } catch { /* stderr write failed — exitCode is already set above */ }
 });
