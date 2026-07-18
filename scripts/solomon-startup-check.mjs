@@ -19,6 +19,9 @@ import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { getClaudeModel } from '../lib/config/model-config.js';
+// SD-LEO-INFRA-ALWAYS-SWEEP-DESIGN-OF-RECORD-001: the sweep-mode resolver reads the design-of-record
+// policy (leo_protocol_sections id=611 metadata.sweep_policy) via the canonical service-role client.
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 // SD-LEO-INFRA-SINGLETON-STALE-TREE-STALENESS-GAUGE-001: Solomon previously had NO checkout-freshness
 // check at all (Adam and the coordinator already did) — this closes that gap.
 import { checkoutFreshness, freshnessBadge, CRITICAL_PROTOCOL_FILES } from '../lib/governance/checkout-freshness.js';
@@ -46,6 +49,63 @@ export function solomonSweepMode(pin = getClaudeModel('solomon'), env = process.
 
 export function isProactiveSweepEnabled(pin = getClaudeModel('solomon'), env = process.env) {
   return solomonSweepMode(pin, env) === 'proactive';
+}
+
+// SD-LEO-INFRA-ALWAYS-SWEEP-DESIGN-OF-RECORD-001: the DESIGN-OF-RECORD row for Solomon's sweep policy.
+// The pin-derivation above (solomonSweepMode) is a STALE-PIN gauge: getClaudeModel('solomon') resolves
+// the CONFIGURED pin (claude-opus-4-8), NOT the live serving model — so a live Fable-5 session with the
+// opus pin resolves 'consult', a /model switch never reaches the resolver, and a returning Fable pin
+// does NOT auto-revert. The chairman-ratified ALWAYS-SWEEP policy is therefore encoded authoritatively
+// as leo_protocol_sections id=611 metadata.sweep_policy='always' (a re-seed-safe metadata slot — the
+// content seed never touches metadata). resolveSolomonSweepMode() below reads that policy as the
+// authoritative source and DEMOTES the pin-derivation to a fail-safe fallback. Do NOT re-introduce
+// pure pin-derivation for the live path.
+const SWEEP_POLICY_ROW_ID = 611;
+
+/**
+ * Read the design-of-record sweep policy: leo_protocol_sections id=611 metadata.sweep_policy.
+ * Returns the policy string (e.g. 'always') or null. FAIL-SOFT: any read error → null (never throws),
+ * so the caller can fall back to the legacy pin-derivation. An optional client may be injected (tests);
+ * otherwise the canonical service-role client is used.
+ * @param {import('@supabase/supabase-js').SupabaseClient} [client]
+ * @returns {Promise<string|null>}
+ */
+export async function getSolomonSweepPolicy(client) {
+  try {
+    const sb = client || createSupabaseServiceClient();
+    const { data, error } = await sb
+      .from('leo_protocol_sections')
+      .select('metadata')
+      .eq('id', SWEEP_POLICY_ROW_ID)
+      .single();
+    if (error) return null;
+    const policy = data?.metadata?.sweep_policy;
+    return typeof policy === 'string' ? policy : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * AUTHORITATIVE sweep-mode resolver (async — reads the design-of-record at tick time). Precedence:
+ *   (1) SOLOMON_SWEEP_MODE env override ('proactive'|'consult') → return it (unchanged escape hatch);
+ *   (2) design-of-record policy === 'always' → 'proactive', REGARDLESS of pin / live model / /model switch;
+ *   (3) else (policy unset OR DB-read failure) → FAIL-SAFE to the legacy sync solomonSweepMode(pin, env).
+ * Never throws (getSolomonSweepPolicy is fail-soft) — safe to call from the fail-open deep-sweep tick.
+ * @param {{env?: object, pin?: string, client?: import('@supabase/supabase-js').SupabaseClient}} [opts]
+ * @returns {Promise<'proactive'|'consult'>}
+ */
+export async function resolveSolomonSweepMode({ env = process.env, pin = getClaudeModel('solomon'), client } = {}) {
+  const override = String(env.SOLOMON_SWEEP_MODE || '').trim().toLowerCase();
+  if (override === 'proactive' || override === 'consult') return override;
+  const policy = await getSolomonSweepPolicy(client);
+  if (policy === 'always') return 'proactive';
+  return solomonSweepMode(pin, env);
+}
+
+/** Async authoritative variant of isProactiveSweepEnabled — delegates to resolveSolomonSweepMode. */
+export async function resolveIsProactiveSweepEnabled(opts = {}) {
+  return (await resolveSolomonSweepMode(opts)) === 'proactive';
 }
 
 // The Solomon role contract (durable). Loaded on /solomon startup; referenced here for the summary.
@@ -119,10 +179,12 @@ export const SOLOMON_LOOPS = [
     label: 'Solomon Mode-B deep-reasoning sweep (agent judgment; HARD task_budget at entry, before any Read/Grep)',
     script: null, // agent-prompt tick — the deep sweep is reasoning, not a script
     cron: '0 */6 * * *',
-    // SD-LEO-INFRA-SOLOMON-MODEB-FABLE-PIN-TRIGGER-001: the tick resolves its MODE at tick time from the
-    // LIVE Solomon pin (solomonSweepMode). Fable pin -> proactive backlog sweep; else -> consult-only
-    // (today's behavior). Mode-B activation is coupled to the Fable-5 pin swap, not the §11 ledger.
-    prompt: 'Solomon deep-sweep tick: (1) FIRST enforce the per-sweep task_budget at ENTRY (node -e require("./scripts/solomon-advisory.cjs").enforceSweepBudget — count/wall-clock/token) BEFORE any Read/Grep; if over budget, STOP. (2) Resolve the sweep MODE at TICK TIME from the LIVE Solomon model pin and log it: node -e "import(\'./scripts/solomon-startup-check.mjs\').then(m=>process.stdout.write(m.solomonSweepMode()))". (3a) If mode===proactive (Fable pin — SD-LEO-INFRA-SOLOMON-MODEB-FABLE-PIN-TRIGGER-001): pull ONE §4 backlog item, investigate the LIVE codebase with deep analysis, and surface EXACTLY ONE propose-only finding via node scripts/solomon-advisory.cjs send "<finding>" (dedup + quota + silence-by-default enforced). (3b) Else (consult mode, default): drain the consult inbox and answer the highest-value open solomon_consult with deep analysis via node scripts/solomon-advisory.cjs send "<answer>" --reply-to <consult-correlation> (dedup + quota enforced). Propose, NEVER execute/build in either mode (CONST-002).',
+    // SD-LEO-INFRA-SOLOMON-MODEB-FABLE-PIN-TRIGGER-001 + SD-LEO-INFRA-ALWAYS-SWEEP-DESIGN-OF-RECORD-001:
+    // the tick resolves its MODE at tick time via resolveSolomonSweepMode — which reads the DESIGN-OF-RECORD
+    // policy (leo_protocol_sections id=611 metadata.sweep_policy) as authoritative (always -> proactive,
+    // REGARDLESS of the configured pin / live model / a /model switch), env override still wins, and it
+    // fail-safes to the legacy pin-derivation when the policy is unset or the DB read fails.
+    prompt: 'Solomon deep-sweep tick: (1) FIRST enforce the per-sweep task_budget at ENTRY (node -e require("./scripts/solomon-advisory.cjs").enforceSweepBudget — count/wall-clock/token) BEFORE any Read/Grep; if over budget, STOP. (2) Resolve the sweep MODE at TICK TIME from the DESIGN-OF-RECORD policy (fail-safe to the live pin) and log it: node -e "import(\'./scripts/solomon-startup-check.mjs\').then(m=>m.resolveSolomonSweepMode()).then(x=>process.stdout.write(x))". (3a) If mode===proactive (always-sweep policy of record, or a Fable pin fallback): pull ONE §4 backlog item, investigate the LIVE codebase with deep analysis, and surface EXACTLY ONE propose-only finding via node scripts/solomon-advisory.cjs send "<finding>" (dedup + quota + silence-by-default enforced). (3b) Else (consult mode, default): drain the consult inbox and answer the highest-value open solomon_consult with deep analysis via node scripts/solomon-advisory.cjs send "<answer>" --reply-to <consult-correlation> (dedup + quota enforced). Propose, NEVER execute/build in either mode (CONST-002).',
   },
 ];
 
