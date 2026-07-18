@@ -14,6 +14,7 @@
  */
 
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
+import { stampAcceptedWaveItem } from '../../lib/eva/consultant/stamp-accepted-wave-item.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -67,10 +68,11 @@ async function processFeedback(action, recId, notes) {
     return;
   }
 
-  // Fetch recommendation
+  // Fetch recommendation. SD-LEO-INFRA-UNIFY-BELT-REFILL-001 (FR-2): also pull source_wave_item_id so an
+  // accept can stamp the originating roadmap_wave_items row build-eligible.
   const { data: rec, error: fetchErr } = await supabase
     .from('eva_consultant_recommendations')
-    .select('id, title, trend_id, application_domain, status')
+    .select('id, title, trend_id, application_domain, status, source_wave_item_id')
     .eq('id', recId)
     .single();
 
@@ -100,6 +102,18 @@ async function processFeedback(action, recId, notes) {
   }
 
   console.log(`✅ Recommendation "${rec.title}" marked as ${action}`);
+
+  // SD-LEO-INFRA-UNIFY-BELT-REFILL-001 (FR-2): on accept, stamp the originating roadmap_wave_items row
+  // build-eligible (item_disposition='selected') so it becomes a belt-refill candidate. Fail-soft: a stamp
+  // error is logged but must not abort the accept. Null source_wave_item_id is a clean no-op.
+  if (action === 'accepted') {
+    const stamp = await stampAcceptedWaveItem(supabase, rec.source_wave_item_id);
+    if (stamp.stamped) {
+      console.log(`   🎯 Wave item ${rec.source_wave_item_id} marked build-eligible (item_disposition='selected')`);
+    } else if (stamp.reason === 'error') {
+      console.error(`   ⚠️  Build-eligible stamp failed (accept still recorded): ${stamp.error}`);
+    }
+  }
 
   // Feedback loop: adjust trend confidence for accepted recommendations
   if (action === 'accepted' && rec.trend_id) {

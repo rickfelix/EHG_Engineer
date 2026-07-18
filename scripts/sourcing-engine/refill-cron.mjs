@@ -69,6 +69,37 @@ export function collectShippedTitleAdvisories(batch, shippedTitleSet) {
   return { matches, byReason };
 }
 
+/**
+ * SD-LEO-INFRA-UNIFY-BELT-REFILL-001 (FR-3): resolve the ACTIVE roadmap's wave ids so the candidate query
+ * is scoped to the plan-of-record only. Mirrors the existing active-roadmap SSOT predicate
+ * (strategic_roadmaps.status='active') used by lib/roadmap/wave-disposition.js and
+ * scripts/eva/friday-meeting.mjs — NOT a new/duplicate flag. PostgREST cannot filter a grandparent in one
+ * .from() call, so this is done as two bounded pre-queries (active roadmap ids -> their wave ids) and the
+ * caller applies the resulting .in('wave_id', ...) filter.
+ *
+ * FAIL-CLOSED: on any error, no active roadmap, or zero active waves, returns [] so the caller promotes
+ * NOTHING (never a full-corpus fallback — the belt-flood defect this SD closes).
+ *
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @returns {Promise<string[]>} the active roadmap's wave ids (empty => fail-closed, promote nothing)
+ */
+export async function resolveActiveWaveIds(supabase) {
+  const { data: roadmaps, error: rErr } = await supabase
+    .from('strategic_roadmaps')
+    .select('id')
+    .eq('status', 'active');
+  if (rErr) { console.error('refill-cron: active-roadmap lookup failed:', rErr.message); return []; }
+  const roadmapIds = (roadmaps || []).map((r) => r.id).filter(Boolean);
+  if (roadmapIds.length === 0) return [];
+
+  const { data: waves, error: wErr } = await supabase
+    .from('roadmap_waves')
+    .select('id')
+    .in('roadmap_id', roadmapIds);
+  if (wErr) { console.error('refill-cron: active-wave lookup failed:', wErr.message); return []; }
+  return (waves || []).map((w) => w.id).filter(Boolean);
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const apply = args.includes('--apply');
@@ -90,12 +121,25 @@ async function main() {
     process.exit(0);
   }
 
-  // Staged = item_disposition='pending' AND not yet promoted.
+  // SD-LEO-INFRA-UNIFY-BELT-REFILL-001 (FR-3): scope the candidate query to the ACTIVE roadmap's waves so
+  // draft/archived roadmap items are never eligible belt candidates. FAIL-CLOSED: no active roadmap / zero
+  // active waves => promote NOTHING (never a full-corpus fallback).
+  const activeWaveIds = await resolveActiveWaveIds(supabase);
+  if (activeWaveIds.length === 0) {
+    console.log('[SKIP] no active roadmap / zero active waves (fail-closed). No candidates fetched, nothing promoted.');
+    process.exit(0);
+  }
+
+  // Staged = item_disposition IN ('pending','selected') AND not yet promoted, within the active roadmap.
+  // SD-LEO-INFRA-UNIFY-BELT-REFILL-001 (FR-1d): broaden from .eq('pending') to .in(['pending','selected'])
+  // so chairman-accepted 'selected' rows are actually fetched (an 'pending' un-accepted row still fails
+  // CHECK #11 downstream under the default fail-closed distilledOnly gate).
   const { data: rows, error } = await supabase
     .from('roadmap_wave_items')
     // lane is live (sourcing-engine activation migrations) but postdates the schema-reference snapshot.
     .select('id, title, source_type, source_id, item_disposition, promoted_to_sd_key, lane, wave_id, metadata') // schema-lint-disable-line
-    .eq('item_disposition', 'pending')
+    .in('item_disposition', ['pending', 'selected'])
+    .in('wave_id', activeWaveIds)
     .is('promoted_to_sd_key', null)
     .limit(1000);
 
