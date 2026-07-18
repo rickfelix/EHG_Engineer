@@ -1,0 +1,52 @@
+{
+  "status": "PASS",
+  "verdict": "PASS",
+  "confidence": 95,
+  "confidence_score": 95,
+  "summary": "Explore of the Stage-0 dataFeed wiring gap for SD-LEO-INFRA-RESEARCH-INTELLIGENCE-OPERATOR-001-B. Confirmed the consumption hook, traced the full call chain to the single production entry point, verified Child A's shipped standing-reference table/module contract, and audited all 14 synthesis components for the same unfed-hook pattern.",
+  "findings": [
+    {
+      "area": "consumption contract",
+      "file": "lib/eva/stage-zero/synthesis/tech-trajectory.js",
+      "lines": "41-47,147",
+      "detail": "analyzeTechTrajectory(pathOutput, deps={}) destructures deps.dataFeed=null and calls `const externalSignals = dataFeed ? await dataFeed.getTechSignals() : null` (line 47). externalSignals is JSON.stringified into the LLM prompt as signalContext; data_feed_active mirrors dataFeed!==null (line 147). Contract: dataFeed exposes async getTechSignals()."
+    },
+    {
+      "area": "call chain",
+      "file": "lib/eva/stage-zero/synthesis/index.js",
+      "lines": "84,133",
+      "detail": "runSynthesis(pathOutput, deps={}) forwards the whole deps object untouched to analyzeTechTrajectory(pathOutput, deps) inside the Promise.all (line 133). No dataFeed is added or stripped."
+    },
+    {
+      "area": "production entry point / injection site",
+      "file": "lib/eva/stage-zero/stage-zero-orchestrator.js",
+      "lines": "40,64-65,106",
+      "detail": "executeStageZero(params, deps={}) is the sole production caller of runSynthesis. It builds `enrichedDeps = { ...deps, strategicContext }` (line 65) and passes enrichedDeps to synthesizeFn (line 106). deps.dataFeed is never set by any caller -> the hook is permanently null. THIS (line 65) is the correct, minimal injection point: construct dataFeed from deps.supabase here."
+    },
+    {
+      "area": "dataFeed construction audit",
+      "file": "codebase-wide grep",
+      "detail": "grep for dataFeed/getTechSignals across lib/ and scripts/ finds references ONLY in tech-trajectory.js. No dataFeed object is constructed anywhere -> this is a greenfield construction within an existing hook, not a broken-wiring bug."
+    },
+    {
+      "area": "Child A dependency (standing reference table)",
+      "file": "database/migrations/20260718_research_intelligence_reference.sql",
+      "detail": "Child A shipped table research_intelligence_reference (id, entry_type CHECK in tech_landscape/model_landscape/market_size/unit_economics/comparables, subject, payload jsonb, source_refs jsonb, confidence, version, is_current, superseded_by, created_by, created_at, updated_at) with RLS + partial unique index on (entry_type,subject) WHERE is_current. Child B reads entry_type IN ('tech_landscape','model_landscape') AND is_current."
+    },
+    {
+      "area": "Child A operator module (reuse candidate)",
+      "file": "lib/agents/research-intelligence-operator.js",
+      "detail": "Exports REFERENCE_ENTRY_TYPES, buildReferenceEntry, ingestAcceptedSignals, etc. Provides the row shape / entry_type vocabulary Child B's data-feed reads back. Child B is a read-only consumer of this table; it does not write."
+    },
+    {
+      "area": "synthesis component audit (all 14)",
+      "detail": "Audited agentic-fit, archetype-mapping, archetypes, attention-capital, build-cost-estimation, chairman-constraints, cross-reference, design-evaluation, mental-model-analysis, moat-architecture, narrative-risk, portfolio-evaluation, time-horizon, virality + tech-trajectory. Only tech-trajectory.js declares/consumes a dataFeed-shaped external-signal hook. No other component has an analogous starved injection point -> no additional wiring required (document 'none exist')."
+    }
+  ],
+  "risks": [
+    "getTechSignals must be honest-idle: return null on zero current rows so tech-trajectory keeps its existing training-data-only fallback rather than injecting an empty/fabricated signal block.",
+    "Must preserve caller-provided deps.dataFeed (test override) and not break skipSynthesis/dryRun paths.",
+    "Read path must use is_current filter to respect the one-current-version-per-subject invariant."
+  ],
+  "recommended_scope": "1 new module (data-feed.js) + 1 additive injection line in stage-zero-orchestrator.js + unit tests. Additive, non-breaking, no change to tech-trajectory analysis logic."
+}
