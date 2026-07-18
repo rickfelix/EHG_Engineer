@@ -188,9 +188,13 @@ async function main() {
   // Phase 1 advisory pass (pure helper) — surfaces lookalike matches WITHOUT changing any verdict.
   const { matches: advisoryMatches, byReason: advisoryByReason } =
     collectShippedTitleAdvisories(sel.batch, shippedTitleSet);
+  // SD-LEO-INFRA-SOFT-RESERVE-LONGEST-IDLE-001 (TR-3 batch-spread): one shared reserved-session set
+  // across the whole batch so each successive leaf soft-reserves to a DISTINCT longest-idle worker —
+  // no single worker hoards every fresh leaf and no long TTL fences all peers from all leaves at once.
+  const reserveState = { reservedSessions: new Set() };
   for (const item of sel.batch) {
     // Gate 2 (write) flows through to the only writer; apply:false => dry-run no-op.
-    results.push(await promoteStagedCandidate(supabase, item, { apply }));
+    results.push(await promoteStagedCandidate(supabase, item, { apply, reserveState }));
   }
   const promoted = results.filter((r) => r.promoted).length;
 
