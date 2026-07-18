@@ -14,9 +14,11 @@
  */
 
 import { executeSubAgent, listAllSubAgents } from '../lib/sub-agent-executor.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 // Parse command line arguments
-function parseArgs() {
+// SD-LEO-INFRA-EVIDENCE-PHASE-DERIVATION-001 (FR-4): exported for direct unit testing.
+export function parseArgs() {
   const args = process.argv.slice(2);
   const parsed = {
     code: null,
@@ -41,6 +43,12 @@ function parseArgs() {
       parsed.options.prd_id = args[++i];
     } else if (arg === '--table-name' || arg === '--table') {
       parsed.options.table_name = args[++i];
+    } else if (arg === '--phase') {
+      // SD-LEO-INFRA-EVIDENCE-PHASE-DERIVATION-001 (FR-4): explicit string-valued
+      // flag -- must NOT fall through to the generic boolean-flag branch below,
+      // which would silently coerce this to `true` and drop the phase value.
+      const value = args[++i];
+      parsed.options.phase = typeof value === 'string' ? value : null;
     } else if (arg.startsWith('--')) {
       // Boolean flag (e.g., --full-e2e)
       const flagName = arg.slice(2).replace(/-/g, '_');
@@ -73,6 +81,9 @@ OPTIONAL FLAGS (sub-agent specific):
   --no-auto-migrations    Don't auto-execute migrations (DATABASE)
   --diagnose-rls          Diagnose RLS policy issues via Supabase CLI (DATABASE)
   --table-name <table>    Specify table for RLS diagnosis (DATABASE)
+  --phase <phase>         Explicit SD phase to stamp on the stored evidence row
+                          (e.g. EXEC_TO_PLAN). Optional -- omitted calls derive
+                          phase from the SD's own current_phase automatically.
 
 UTILITY OPTIONS:
   --list, -l              List all available sub-agents
@@ -236,4 +247,8 @@ async function main() {
 }
 
 // Run
-main();
+// SD-LEO-INFRA-EVIDENCE-PHASE-DERIVATION-001 (FR-4): guard entrypoint execution
+// so a test file can `import { parseArgs } from ...` without triggering main().
+if (isMainModule(import.meta.url)) {
+  main();
+}
