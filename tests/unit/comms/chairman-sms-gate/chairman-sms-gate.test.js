@@ -66,9 +66,16 @@ describe('chairman-sms-gate sendChairmanSMS()', () => {
     expect(sender.send).not.toHaveBeenCalled();
   });
 
-  it('TS-6: no live Twilio — the default sender fails closed rather than sending un-injected', async () => {
-    // With no injected sender, a pass+sms decision must NOT silently send via a real client.
-    await expect(sendChairmanSMS(wellFormedDecision(), DAYTIME, { console: silentConsole }))
-      .rejects.toThrow(/no Twilio sender configured/);
+  it('TS-6: default sender DELEGATES to the -B durable path and fails SOFT (no throw) — SD-LEO-INFRA-ADAM-OUTBOUND-WIRE-LIVE-001 FR-2', async () => {
+    // FR-2 wired makeDefaultSender (the former throw-stub) to the -B durable send path
+    // (enqueueChairmanSms) — NOT a second Twilio client. With no recipient/durable state it must fail
+    // SOFT (never throw) so the guaranteed chairman EMAIL escalation delivers. The RUBRIC fail-closed
+    // guarantee is UNCHANGED — a bad decision is still HELD before send (see the blocked/fail-closed
+    // cases above); only the TRANSPORT is now fail-soft.
+    const prev = process.env.CHAIRMAN_PHONE;
+    delete process.env.CHAIRMAN_PHONE; // force the no-recipient soft-fail branch (no durable I/O)
+    const res = await sendChairmanSMS(wellFormedDecision(), DAYTIME, { console: silentConsole });
+    expect(res.sent).toBe(true); // rubric admitted; transport soft-failed to the email fallback, no throw
+    if (prev !== undefined) process.env.CHAIRMAN_PHONE = prev;
   });
 });
