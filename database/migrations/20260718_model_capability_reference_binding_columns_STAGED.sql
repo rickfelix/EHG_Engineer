@@ -27,3 +27,47 @@ COMMENT ON COLUMN model_capability_reference.bound_at IS
   'When the ground-truth binding gate (lib/eval/ground-truth-gate.mjs, EVAL-002-C) flipped trusted_for_routing=true. NULL until a grader verdict reproduces an independently-adjudicated verdict.';
 COMMENT ON COLUMN model_capability_reference.binding_id IS
   'Provenance id of the binding run that flipped trusted_for_routing. Set ONLY by the sole-writer gate/regression path; NULL otherwise (incl. after a stale-bind clear).';
+
+-- ---------------------------------------------------------------------------
+-- SOLE-WRITER INVARIANT AT THE DB TIER (RISK e25f3adf, C1 CRITICAL).
+-- The circular-binding hazard is that ANY writer (the canonical child-C binder,
+-- the EVAL-001 sibling script, an ad-hoc psql/service-role UPDATE, a future code
+-- path) could flip trusted_for_routing=true with no adjudicated provenance. Code
+-- guards catch only the writers we know about; this trigger is the durable root-
+-- cause fix — it structurally REJECTS any UPDATE that transitions
+-- trusted_for_routing from false/NULL to true UNLESS the same NEW row carries
+-- BOTH binding_id AND bound_at. It therefore makes circular binding impossible
+-- regardless of which code path attempts the write.
+--
+-- SCOPE: BEFORE UPDATE only. It NEVER constrains true->false — clearing a stale
+-- bind (trusted_for_routing=false, bound_at=NULL, binding_id=NULL) must always be
+-- allowed so a bind cannot outlive the evidence that justified it.
+--
+-- ADDITIVE + IDEMPOTENT: CREATE OR REPLACE FUNCTION; DROP TRIGGER IF EXISTS then
+-- CREATE TRIGGER. Reuses the base table's RLS/service-role policy — no new grants.
+-- By design this file carries NO approved-by attestation; the chairman applies it
+-- at the gated ceremony after review.
+
+CREATE OR REPLACE FUNCTION model_capability_reference_enforce_binding_provenance()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  -- Only guard the false/NULL -> true transition. OLD IS DISTINCT FROM TRUE is
+  -- true when OLD was false OR NULL; leaves true->true and true->false untouched.
+  IF NEW.trusted_for_routing IS TRUE
+     AND (OLD.trusted_for_routing IS DISTINCT FROM TRUE)
+     AND (NEW.binding_id IS NULL OR NEW.bound_at IS NULL) THEN
+    RAISE EXCEPTION
+      'trusted_for_routing cannot be set true without binding provenance (binding_id + bound_at) — sole-writer invariant, RISK e25f3adf C1'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_model_capability_reference_binding_provenance ON model_capability_reference;
+CREATE TRIGGER trg_model_capability_reference_binding_provenance
+  BEFORE UPDATE ON model_capability_reference
+  FOR EACH ROW
+  EXECUTE FUNCTION model_capability_reference_enforce_binding_provenance();
