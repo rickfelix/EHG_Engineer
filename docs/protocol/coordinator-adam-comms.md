@@ -442,3 +442,18 @@ Deferred / not fully closed by this SD (documented at PLAN_VERIFICATION, not sil
 empty-sender/resurface-drift) — a stale-target flood (instance 1, distinct from instance 6's
 empty-sender pattern) and the dual-body-*divergence* shape specifically (instance 7, as opposed
 to body absence) have no dedicated counter yet.
+
+### Write-side complement (SD-LEO-INFRA-COACHING-BODY-COLUMN-001)
+
+`readCanonicalBody` fixes this defect class from the READER side (tolerate either location).
+This SD closed the WRITE side for one class of offender: `scripts/coordinator-self-review.mjs`'s
+two solicitation sends and `scripts/coordinator-comms-check.mjs`'s ping (all `message_type:
+'COACHING'`) wrote `payload.body` only, leaving the top-level `body` column NULL — invisible to
+any reader keyed on that column with no `payload.body` fallback (e.g.
+`scripts/hooks/coordination-inbox.cjs`, which prints `"Details: " + msg.body` with no fallback,
+and is NOT migrated to `readCanonicalBody`). Each site now sets a top-level `body` mirroring the
+same variable already feeding `payload.body`, verified by a static-source regression
+(`tests/unit/coordinator-coaching-body-column.test.js`). Three same-bug-class sites in a
+different message family (`message_type: 'INFO'` — `coordinator-capacity-forecast.mjs` ×2,
+`gauge-runner.mjs` ×1) were deliberately left untouched (out of this SD's "coaching/self-review
+emitter" scope) — a fast-follow candidate, same as the still-unmigrated reader sites above.
