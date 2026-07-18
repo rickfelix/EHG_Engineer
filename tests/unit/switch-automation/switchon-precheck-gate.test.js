@@ -9,7 +9,7 @@
  *     DOES fire for a reversible request (positive control), and cannot be flipped by
  *     any opts permutation (no observe/advisory escape hatch).
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   authorizeSwitchOn,
 } from '../../../lib/switch-automation/switchon-precheck-gate.js';
@@ -208,5 +208,88 @@ describe('GUARDRAIL-2 — structural enforcement at the caller / anti-test-maski
       expect(decision.authorized).toBe(false);
       expect(autoProceed).not.toHaveBeenCalled();
     }
+  });
+});
+
+/**
+ * COND-2 (TESTING) — the 3 DEFENSIVE fail-closed branches of authorizeSwitchOn are
+ * unreachable through the real (total) classifier, so we force them by mocking
+ * classifySwitchOn. These are the gate's error-safety net; they MUST fail closed.
+ *
+ * The gate imports classifySwitchOn via a static ESM import, so we mock the classifier
+ * MODULE with vi.doMock (non-hoisted, scoped) + vi.resetModules and load the gate via a
+ * fresh dynamic import per case. A PARTIAL mock (importActual) keeps SWITCHON_VERDICT and
+ * NEVER_AUTO_CLASSES real so the gate's switch/case labels stay defined — only
+ * classifySwitchOn's behavior is overridden. The top-of-file static-import tests above are
+ * unaffected: vi.doMock only intercepts imports issued AFTER it, and resetModules is undone
+ * in afterEach — so the prior 66 tests keep using the real classifier.
+ */
+const CLASSIFIER_PATH = '../../../lib/switch-automation/reversibility-classifier.js';
+
+describe('COND-2 — defensive fail-closed branches (classifier mocked to force them)', () => {
+  afterEach(() => {
+    vi.doUnmock(CLASSIFIER_PATH);
+    vi.resetModules();
+    vi.restoreAllMocks();
+  });
+
+  // Load a fresh gate whose classifySwitchOn is replaced by `impl`; SWITCHON_VERDICT and
+  // NEVER_AUTO_CLASSES remain the real exports (partial mock).
+  async function loadGateWithClassifier(impl) {
+    vi.resetModules();
+    vi.doMock(CLASSIFIER_PATH, async () => {
+      const actual = await vi.importActual(CLASSIFIER_PATH);
+      return { ...actual, classifySwitchOn: impl, default: impl };
+    });
+    const mod = await import('../../../lib/switch-automation/switchon-precheck-gate.js');
+    return mod.authorizeSwitchOn;
+  }
+
+  // Caller-harness proof (GUARDRAIL-2 pattern): auto-proceed fires only on authorized===true.
+  function driveWith(authorize, request) {
+    const autoProceed = vi.fn();
+    const decision = authorize(request);
+    if (decision.authorized === true) autoProceed(request);
+    return { decision, autoProceed };
+  }
+
+  it('classifier THROWS → fail-closed-error, hard-stop, no auto-proceed (try/catch path)', async () => {
+    const authorize = await loadGateWithClassifier(() => { throw new Error('boom'); });
+    const { decision, autoProceed } = driveWith(authorize, { component: 'x', action: 'enable-scheduler' });
+    expect(decision.authorized).toBe(false);
+    expect(decision.route_to_chairman).toBe(true);
+    expect(decision.reason).toBe('fail-closed-error');
+    expect(autoProceed).not.toHaveBeenCalled();
+  });
+
+  it('classifier returns MALFORMED result (no string verdict) → fail-closed-error, no auto-proceed', async () => {
+    for (const bad of [{}, { verdict: 123 }, null, undefined]) {
+      const authorize = await loadGateWithClassifier(() => bad);
+      const { decision, autoProceed } = driveWith(authorize, { component: 'x', action: 'enable-scheduler' });
+      expect(decision.authorized, `malformed=${JSON.stringify(bad)}`).toBe(false);
+      expect(decision.route_to_chairman).toBe(true);
+      expect(decision.reason).toBe('fail-closed-error');
+      expect(autoProceed).not.toHaveBeenCalled();
+      vi.doUnmock(CLASSIFIER_PATH);
+    }
+  });
+
+  it('classifier returns UNEXPECTED verdict string → fail-closed hard-stop, no auto-proceed (switch default)', async () => {
+    const authorize = await loadGateWithClassifier(() => ({ verdict: 'bogus-verdict', neverAuto: false }));
+    const { decision, autoProceed } = driveWith(authorize, { component: 'x', action: 'enable-scheduler' });
+    expect(decision.authorized).toBe(false);
+    expect(decision.route_to_chairman).toBe(true);
+    expect(decision.reason).toBe('fail-closed-error');
+    expect(autoProceed).not.toHaveBeenCalled();
+  });
+
+  it('SANITY: with the real classifier restored, a reversible request still authorizes (mock did not leak)', async () => {
+    vi.resetModules();
+    const mod = await import('../../../lib/switch-automation/switchon-precheck-gate.js');
+    const r = mod.authorizeSwitchOn({
+      component: 'ops-scheduler', action: 'enable-scheduler',
+      reversible: true, inRole: true, isReversibleByMechanism: true,
+    });
+    expect(r.authorized).toBe(true);
   });
 });
