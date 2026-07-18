@@ -85,8 +85,11 @@ COMMENT ON TABLE chairman_switchon_policy IS
 -- listed here for the chairman's approval review; the INSERT itself runs as the table owner
 -- during apply, per the runbook above, not as part of this STAGED file).
 -- ============================================================
--- venture-gate-binding-flip, live-money-enablement, public-launch, first-external-send,
+-- venture-gate-binding-flip, live-venture-deploy, live-money-enablement,
+-- live-payment-account-creation, dns-mutation, public-launch, first-external-send,
 -- venture-selection, venture-kill, venture-promote, gate-config-change, gate-threshold-change,
 -- gate-skiplist-change, agent-authority-expansion, credential-grant-expansion,
 -- freeze-machinery, kill-switch-machinery, policy-ratchet-self-reference
--- (verbatim match to lib/switch-automation/reversibility-classifier.js NEVER_AUTO_CLASSES)
+-- (verbatim match to lib/switch-automation/reversibility-classifier.js NEVER_AUTO_CLASSES.
+--  live-venture-deploy / live-payment-account-creation / dns-mutation satisfy GUARDRAIL-1's
+--  explicit enumeration requirement.)
