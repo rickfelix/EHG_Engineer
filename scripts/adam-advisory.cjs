@@ -961,6 +961,32 @@ async function main() {
     );
     process.exit(3);
   }
+  // SD-LEO-INFRA-SMS-CHANNEL-HARDENING-001-D: the ADAM OUTBOUND GATE. Runs over EVERY Adam outbound
+  // right after the alarm bar and before dispatch, mirroring the sanityCheckUrgentAdvisory precedent.
+  // Pure classifier composing lib/adam authorities (classifyDecision + rationale-bar) into three
+  // checks: advisory rationale bar (BLOCK), should-answer rubric (BLOCK), Solomon-review (WARN).
+  // WIRE_CHECK-safe string-literal dynamic import (CJS->ESM, same form as scope-registry at ~L230).
+  // A tripped BLOCK is overridable with --outbound-verified / ADAM_OUTBOUND_VERIFIED=1 (audit-logged,
+  // mirrors --alarm-verified). Degrade-safe: any gate error fails OPEN — a gate bug never hard-blocks Adam.
+  try {
+    const { checkAdamOutbound } = await import('../lib/coordinator/adam-outbound-gate.js');
+    const gate = checkAdamOutbound(
+      { body: payload.body, kind: payload.kind, addressee, expectsReply, mode },
+      {},
+    );
+    if (gate.tripped) {
+      const outboundAttested = argv.includes('--outbound-verified') || process.env.ADAM_OUTBOUND_VERIFIED === '1';
+      if (gate.verdict === 'block' && !outboundAttested) {
+        console.error(`\n[adam-advisory] ⛔ ADAM OUTBOUND GATE blocked this send:\n  - ${gate.reasons.join('\n  - ')}\n` +
+          `Fix the outbound (add rationale / own the decision / consult Solomon), or attest with --outbound-verified (or ADAM_OUTBOUND_VERIFIED=1).\n`);
+        process.exit(4);
+      }
+      // WARN-only (or attested block): surface the reasons, do not block.
+      console.error(`[adam-advisory] ⚠️  Adam Outbound Gate ${outboundAttested ? 'BYPASSED (attested)' : 'warning'}: ${gate.reasons.join('; ')}`);
+    }
+  } catch (err) {
+    console.error(`[adam-advisory] Adam Outbound Gate skipped (fail-open): ${err.message}`);
+  }
   const subject = `[ADAM_ADVISORY] ${payload.body.slice(0, 80)}`;
   // SD-LEO-INFRA-ADAM-ADVISORY-COMMS-001 (RCA 076cf785): expires_at is the DURABLE delivery TTL
   // (how long the row stays discoverable / survives the expired-row sweep) and is decoupled from
