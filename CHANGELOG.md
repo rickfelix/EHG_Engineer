@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-07-18](#2026-07-18)
+  - [Bugfix](#bugfix)
 - [2026-07-17](#2026-07-17)
   - [Security](#security)
   - [Infrastructure](#infrastructure)
@@ -96,6 +98,15 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-07-18
+
+### Bugfix
+- **Retro-flagged E2E evidence gap on SMS-relay user stories, fixed at the root (STORIES sub-agent boilerplate for no-UI features)** - PR #6216 (SD-LEO-FIX-RETRO-ACTION-ITEMS-003)
+  - **What shipped**: a retro action item auto-promoted from SD-LEO-FEAT-SMS-INBOUND-RELAY-001's own retrospective flagged an unverified E2E-coverage requirement. Investigation found the real defect: all 5 `user_stories` rows for that already-shipped feature (US-001..US-005) carried STORIES-sub-agent-generated boilerplate `acceptance_criteria` — generic UI-navigation/form-submission language ("the user has navigated to the area...") for a feature that is a backend Twilio webhook relay with **no UI at all** — and their `e2e_test_path` pointed at unrelated, pre-existing spec files (`accessibility-venture-creation.spec.ts`, `board-governance.spec.ts`, `api-coverage-audit.spec.ts`) with zero SMS/relay content. `e2e_test_status='created'` and `e2e_test_last_run=null` on all 5 meant no story had ever had verified passing evidence linked to it, despite the feature having shipped with real coverage. Fixed via `scripts/one-off/fix-sms-relay-story-evidence.mjs`, which repointed each story at its actual covering evidence (`tests/unit/chairman/sms-bridge.test.js`, `tests/unit/webhooks/twilio-sms.test.js`, the `ehg` repo's `tests/unit/sms-relay/*`, and `scripts/security/sms-relay-redteam.js`), ran that evidence for real (35/35 tests passing, independently re-verified by the TESTING sub-agent), and stamped genuine `e2e_test_status`/`e2e_test_last_run` from the actual run rather than rubber-stamping. This SD's own 3 auto-generated `user_stories` carried the identical boilerplate defect — a self-referential confirmation the gap is systemic, not isolated to one feature — and were fixed the same way.
+  - **Root cause, not just symptom**: the STORIES sub-agent's boilerplate-generation pipeline doesn't distinguish backend/no-UI features from UI features, and the downstream gates that consume `e2e_test_path`/`e2e_test_status` (`lib/sub-agents/testing/phases/phase4-evidence.js`, `plan-to-lead/gates/acceptance-criteria-validation.js`) accept any truthy path string with no content/relevance verification — so nothing in the pipeline ever catches a wrong or boilerplate reference. Retrospective (id `07ce73e2-19d1-47ea-a672-596a12d5bb5d`, quality 90/100) captures this as a fleet-wide action item: sweep other backend SDs for the same defect class, and add content-relevance checking to the consuming gates.
+  - **Harness bug found and worked around, not silently bypassed**: `GATE2_IMPLEMENTATION_FIDELITY`'s "unresolved ambiguities" preflight check false-positived on this SD twice (once at EXEC-TO-PLAN, again at PLAN-TO-LEAD's internal Gate-2 re-check) — it matched two completely unrelated directories (`test-venture`, `test-cicd`: generic Vite/React scaffold projects with zero references to this SD's key anywhere in their tree) and flagged vendored TypeScript/Babel compiler-diagnostic strings containing the word "ambiguous" as blocking markers. Confirmed via direct `grep -ril` investigation before acting; used the documented `--bypass-validation --bypass-reason` path both times (audit-logged, CI's `Bypass Validation Result`/`LEO Protocol Bypass Detection` checks both passed), and filed a `gate-bug` signal to the coordinator with the full false-positive evidence rather than silently working around it.
+  - **Verification**: TESTING sub-agent independently re-ran the evidence (35/35 passing) and confirmed the change surface was exactly one new file (no application/relay code touched); SECURITY sub-agent confirmed no credentials or secret material in the new acceptance-criteria text and no posture regression on the shipped feature. Handoffs LEAD-TO-PLAN 95, PLAN-TO-EXEC 94, EXEC-TO-PLAN 95 (bypass), PLAN-TO-LEAD 93 (bypass), LEAD-FINAL-APPROVAL 95.
 
 ## 2026-07-17
 
