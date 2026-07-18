@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-07-17T09:50:52.534Z -->
-<!-- git_commit: a2c351ac -->
-<!-- db_snapshot_hash: 6bcd1672b5ba0df9 -->
-<!-- file_content_hash: 4b0be9f04d7c5313 -->
+<!-- generated_at: 2026-07-18T19:22:44.213Z -->
+<!-- git_commit: 7d833b49 -->
+<!-- db_snapshot_hash: 15274e313a3b8c43 -->
+<!-- file_content_hash: 882e7b49dd19a10a -->
 
 # CLAUDE_LEAD_DIGEST.md - LEAD Phase (Enforcement)
 
@@ -132,5 +132,5 @@ These are kept for reference but should NEVER be used as templates.
 
 ---
 
-*DIGEST generated: 2026-07-17 5:50:52 AM*
+*DIGEST generated: 2026-07-18 3:22:44 PM*
 *Protocol: 4.4.1*
