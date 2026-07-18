@@ -1,18 +1,24 @@
 #!/usr/bin/env node
 /**
- * ground-truth-gate.mjs — fail-closed trust flip for model_capability_reference
- * (SD-LEO-INFRA-MODEL-CAPABILITY-EVAL-001 FR-5).
+ * ground-truth-gate.mjs — ADVISORY adversarial-split signal for
+ * model_capability_reference (SD-LEO-INFRA-MODEL-CAPABILITY-EVAL-001 FR-5).
  *
- * trusted_for_routing defaults false on every row, and THIS SCRIPT is the only
- * code path allowed to set it true. It does so only when the graded table
- * REPRODUCES >= 1 already-adjudicated result, including an ADVERSARIAL
- * negative (spec Part 5 verification_plan: e.g. a delegate-tier/low-effort
- * failure on a sealed task the high-effort Fable-5 run passed) — a
- * positives-only reproduction is a rubber stamp and does not count.
+ * ADVISORY ONLY — MUST NEVER FLIP ROUTING TRUST (RISK e25f3adf C1, sole-writer
+ * invariant). The CANONICAL binder is lib/eval/ground-truth-gate.mjs
+ * `bindTrustedForRouting` (SD-LEO-INFRA-MODEL-CAPABILITY-EVAL-002-C, child C):
+ * it is the SOLE code path allowed to set trusted_for_routing=true, and it binds
+ * ONLY against an INDEPENDENTLY-ADJUDICATED oracle, stamping binding_id + bound_at.
+ *
+ * This EVAL-001 script computes and REPORTS an adversarial-split heuristic over
+ * already-graded rows (a task with a clears_bar=true row AND a clears_bar=false
+ * row from a different model/effort — a positives-only reproduction is a rubber
+ * stamp and does not count). But that split is SELF-GRADED, not adjudicated, so
+ * under the fail-closed doctrine it must NOT bind: this script performs NO write
+ * to trusted_for_routing. It surfaces the signal and exits; binding is the child-C
+ * binder's job alone.
  *
  * Consumers (intelligent-switch routing, coordinator dispatch tiering, Solomon
- * mode-resolution) MUST filter trusted_for_routing=true. Until this gate
- * passes it exits non-zero and no row is trusted.
+ * mode-resolution) MUST filter trusted_for_routing=true.
  *
  * Run from the repo SHARED ROOT: node scripts/eval/ground-truth-gate.mjs [--dry]
  */
@@ -60,18 +66,18 @@ async function main() {
   if (error) { console.error('read failed (table missing = ceremony pending):', error.message); process.exitCode = 2; return; }
 
   const verdict = evaluateGroundTruth(data || []);
-  console.log(`ground-truth-gate: ${verdict.pass ? 'PASS' : 'BLOCKED'} — ${verdict.reason}`);
+  console.log(`ground-truth-gate (ADVISORY): ${verdict.pass ? 'REPRODUCED-SPLIT' : 'BLOCKED'} — ${verdict.reason}`);
   if (!verdict.pass) { process.exitCode = 1; return; }
 
-  if (dry) { console.log('--dry: trust flip skipped'); return; }
-  const gradedIds = (data || []).filter(r => r.graded_at).map(r => r.id);
-  const up = await supabase
-    .from('model_capability_reference')
-    .update({ trusted_for_routing: true })
-    .in('id', gradedIds)
-    .select('id');
-  if (up.error) { console.error('trust flip failed:', up.error.message); process.exitCode = 1; return; }
-  console.log(`trusted_for_routing=true on ${up.data.length} graded row(s). Routing consumers may now read them.`);
+  // ADVISORY ONLY (RISK e25f3adf C1, sole-writer invariant): this script has no
+  // adjudicated oracle, so it MUST NOT flip trusted_for_routing. Binding is owned
+  // exclusively by lib/eval/ground-truth-gate.mjs bindTrustedForRouting (child C),
+  // which reproduces an independently-adjudicated verdict and stamps binding_id +
+  // bound_at. Report the split signal and stop — no row is modified here.
+  const gradedCount = (data || []).filter(r => r.graded_at).length;
+  console.log(dry
+    ? `--dry: advisory only — ${gradedCount} graded row(s) show an adversarial split; the child-C binder owns any flip (no row modified).`
+    : `advisory only — ${gradedCount} graded row(s) show an adversarial split, but routing trust is NOT flipped here; the child-C binder (lib/eval/ground-truth-gate.mjs) is the sole writer. No row modified.`);
 }
 
 const isMain = process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]));
