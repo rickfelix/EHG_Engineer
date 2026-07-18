@@ -18,6 +18,7 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { stampLastFired } from '../../lib/periodic-liveness/stamp-last-fired.js';
 import { computeWaveLinkageCoverage, COVERAGE_THRESHOLD, STARVATION_NAME } from '../../lib/roadmap/wave-linkage-coverage.js';
 import { emitFeedback } from '../../lib/governance/emit-feedback.js';
+import { buildPlanLinkageRetroPayload, PLAN_LINKAGE_RETRO_CATEGORY } from '../../lib/roadmap/plan-linkage-retro.js';
 
 // SD-LEO-INFRA-ROADMAP-FOLD-SEAM-001 (FR-3): applied runs are a registered,
 // owned periodic process (P6 regime) — self-register the registry row and
@@ -83,6 +84,26 @@ async function main() {
           severity: 'high',
           dedup_key: STARVATION_NAME,
         });
+      }
+    }
+    // SD-LEO-INFRA-PLAN-LINKAGE-BELT-001 (FR-3): always emit a dated retro row (not only
+    // on starvation) so the plan-linked fraction becomes a queryable time series in the
+    // feedback table — no new metrics table. The starvation emission above is unchanged
+    // and continues to fire independently when coverage drops below threshold.
+    if (apply) {
+      try {
+        const { data: priorRows, error: priorErr } = await supabase
+          .from('feedback')
+          .select('metadata, created_at')
+          .eq('category', PLAN_LINKAGE_RETRO_CATEGORY)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (priorErr) throw new Error(priorErr.message);
+        const priorRow = (priorRows && priorRows[0]) || null;
+        const payload = buildPlanLinkageRetroPayload(cov, priorRow);
+        await emitFeedback({ supabase, severity: 'low', source_type: 'periodic_process', ...payload });
+      } catch (retroErr) {
+        console.error(`  [plan-linkage-retro] WARN: retro metric emit failed: ${retroErr.message}`);
       }
     }
   } catch (covErr) {

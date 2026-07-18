@@ -70,7 +70,9 @@ describe('SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: TS-3 concurrency-saf
   it('buildClearReviewQuery uses the same `||`-merge shape (no full-blob overwrite)', () => {
     const { sql, params } = buildClearReviewQuery('SD-TEST-002');
     expect(sql).toMatch(/\|\|\s*'\{"needs_coordinator_review":\s*false\}'::jsonb/);
-    expect(params).toEqual(['SD-TEST-002']);
+    // SD-LEO-INFRA-PLAN-LINKAGE-BELT-001 (FR-1b): params now carry the classified default
+    // unlinked_reason as $2, for the CASE WHEN plan_linkage IS NULL fragment.
+    expect(params).toEqual(['SD-TEST-002', 'emergent-fix']);
   });
 
   it('buildClearReviewQuery also guards against NULL metadata via COALESCE', () => {

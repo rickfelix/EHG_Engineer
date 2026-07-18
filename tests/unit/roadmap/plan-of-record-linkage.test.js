@@ -32,6 +32,20 @@ function makeFakeSupabase(tables) {
       is(col, val) { filters.push((r) => (val === null ? r[col] == null : r[col] === val)); return builder; },
       in(col, vals) { filters.push((r) => r[col] != null && vals.includes(r[col])); return builder; },
       ilike(col, pattern) { const re = likeToRegex(pattern); filters.push((r) => re.test(r[col] ?? '')); return builder; },
+      // SD-LEO-INFRA-PLAN-LINKAGE-BELT-001 (FR-2): minimal PostgREST-shaped OR-filter parser
+      // (col.op.value,col.op.value) — enough to model computeAdmissionsByLinkage's `.or()` call.
+      or(filterString) {
+        filters.push((r) => filterString.split(',').some((cond) => {
+          const [col, op, ...rest] = cond.split('.');
+          const val = rest.join('.');
+          if (op === 'gte') return r[col] != null && r[col] >= val;
+          if (op === 'lte') return r[col] != null && r[col] <= val;
+          if (op === 'eq') return r[col] === val;
+          if (op === 'is') return val === 'null' ? r[col] == null : r[col] === val;
+          return false;
+        }));
+        return builder;
+      },
       order(col, opts) { orderCol = col; orderAsc = opts?.ascending !== false; return builder; },
       limit(n) { limitN = n; return builder; },
       update(payload) { updatePayload = payload; return builder; },

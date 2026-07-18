@@ -164,6 +164,7 @@ import { computeBuildGauge } from '../lib/vision/vdr-registry.js';
 import { makeDefaultGrepSeam } from '../lib/vision/vdr-grep-seam.js';
 import { needleScore, rungProgressByKey, buildSdRungMap } from '../lib/vision/needle-priority.mjs';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
+import { planLinkageCompare } from '../lib/roadmap/plan-linkage-comparator.js';
 
 const DRY = process.argv.includes('--dry-run');
 const PRIORITY_W = { critical: 3, high: 2, medium: 1, med: 1, low: 0 };
@@ -421,6 +422,11 @@ async function main() {
     // FR-1 LEAD-advancement nudge: vision-loop drafts ahead of other claimable SDs at the same unlock level.
     const va = visionLoopDraft(a) ? 1 : 0, vb = visionLoopDraft(b) ? 1 : 0;
     if (vb !== va) return vb - va;
+    // SD-LEO-INFRA-PLAN-LINKAGE-BELT-001 (FR-4, chairman-ratified 2026-07-18): at equal
+    // objectively-scored urgency (every comparator above tied), plan-linked work wins.
+    // Additive tie-break only — never reached unless everything above is already 0.
+    const pl = planLinkageCompare(a, b);
+    if (pl !== 0) return pl;
     const pa = PRIORITY_W[String(a.priority || '').toLowerCase()] ?? 0;
     const pb = PRIORITY_W[String(b.priority || '').toLowerCase()] ?? 0;
     if (pb !== pa) return pb - pa;

@@ -23,6 +23,19 @@ function renderHuman(status) {
   for (const n of status.next) lines.push(`   - ${n.title} [${n.wave || 'unwaved'}] (${n.disposition})`);
   lines.push('', `4. Committing to (next 48h) (${status.committing.length}):`);
   for (const c of status.committing) lines.push(`   - ${c.title} [${c.wave || 'unwaved'}]`);
+  // SD-LEO-INFRA-PLAN-LINKAGE-BELT-001 (FR-2): belt admissions by plan linkage
+  const link = status.admissions_by_linkage || { by_wave: [], unlinked: [], fence_lifts: [] };
+  lines.push('', `5. Belt admissions this window, by plan linkage:`);
+  if (link.by_wave.length === 0 && link.unlinked.length === 0) {
+    lines.push('   (none)');
+  } else {
+    for (const w of link.by_wave) lines.push(`   - ${w.count} toward ${w.wave_title || w.wave_id || 'unwaved'}`);
+    for (const u of link.unlinked) lines.push(`   - ${u.count} unlinked (${u.reason})`);
+  }
+  if (link.fence_lifts.length > 0) {
+    lines.push('   Fence-lifts:');
+    for (const f of link.fence_lifts) lines.push(`     - ${f.sd_key} — ${f.reason}`);
+  }
   return lines.join('\n');
 }
 
