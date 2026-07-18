@@ -7,8 +7,11 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { enqueueChairmanSms, smsOutboundObligationsLive } from '../../../lib/chairman/sms-bridge.js';
-import { reconcileOutboundSms } from '../../../lib/chairman/sms-outbound-worker.js';
+import { reconcileOutboundSms, maskPhone } from '../../../lib/chairman/sms-outbound-worker.js';
 import { handleTwilioStatusCallback } from '../../../api/webhooks/twilio-sms.js';
+
+const MIN = 60 * 1000;
+const ago = (ms) => new Date(Date.now() - ms).toISOString();
 
 // ---------------------------------------------------------------------------------------
 // In-memory fake Supabase supporting the exact query shapes the owed-state code issues:
@@ -204,6 +207,99 @@ describe('reconcileOutboundSms (FR-3)', () => {
     expect(summary.ran).toBe(false);
     expect(summary.reason).toBe('table_absent');
     expect(provider.send).not.toHaveBeenCalled();
+  });
+});
+
+// =======================================================================================
+// SECURITY MEDIUM-2 — sent-no-callback delivery-timeout reconcile
+// =======================================================================================
+describe('sent-no-callback delivery-timeout (MEDIUM-2)', () => {
+  it('a sent row older than the timeout with delivered_at NULL is reconciled (re-armed under cap)', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 0, provider_message_id: 'SM-old', sent_at: ago(20 * MIN), delivered_at: null })] });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider, sentDeliveryTimeoutMs: 15 * MIN });
+    expect(summary.sentTimedOut).toBe(1);
+    // re-armed to owed, then re-sent by the send pass in the same run (bounded retry)
+    expect(provider.send).toHaveBeenCalledTimes(1);
+    expect(sb._tables.sms_outbound_obligations[0].status).toBe('sent');
+    expect(sb._tables.sms_outbound_obligations[0].delivered_at).toBeNull(); // still never DELIVERED (201 != delivered)
+  });
+
+  it('a sent row WITHIN the timeout is left alone (still awaiting a legitimate callback)', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 0, provider_message_id: 'SM-fresh', sent_at: ago(5 * MIN), delivered_at: null })] });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider, sentDeliveryTimeoutMs: 15 * MIN });
+    expect(summary.sentTimedOut).toBe(0);
+    expect(provider.send).not.toHaveBeenCalled();
+    expect(sb._tables.sms_outbound_obligations[0].status).toBe('sent');
+  });
+
+  it('a sent row AT the cap alerts + goes terminal failed (not re-sent)', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 3, provider_message_id: 'SM-cap', sent_at: ago(30 * MIN), delivered_at: null })] });
+    const provider = okProvider();
+    const alert = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider, maxAttempts: 3, sentDeliveryTimeoutMs: 15 * MIN, alert });
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(provider.send).not.toHaveBeenCalled();
+    expect(summary.alerted).toBe(1);
+    expect(sb._tables.sms_outbound_obligations[0].status).toBe('failed');
+  });
+});
+
+// =======================================================================================
+// SECURITY MEDIUM-1 — sending-crash reaper (with no-double-send guard)
+// =======================================================================================
+describe('sending-crash reaper (MEDIUM-1)', () => {
+  it('a stuck sending row past the claim-timeout with NO provider_message_id is reaped and re-sent', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sending', attempts: 0, claimed_at: ago(10 * MIN), claimed_by: 'dead-worker', provider_message_id: null, sent_at: null })] });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider, claimTimeoutMs: 5 * MIN });
+    expect(summary.reaped).toBe(1);
+    expect(provider.send).toHaveBeenCalledTimes(1); // never sent before -> safe to re-send
+    expect(sb._tables.sms_outbound_obligations[0].status).toBe('sent');
+  });
+
+  it('a stuck sending row that ALREADY had a provider_message_id is NOT re-sent (routed to sent-timeout)', async () => {
+    // claimed 6 min ago: past the 5-min claim-timeout (reaped) but its estimated sent_at is within
+    // the 15-min sent-timeout, so it is flipped to 'sent' and left for a later callback — never re-sent.
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sending', attempts: 1, claimed_at: ago(6 * MIN), claimed_by: 'dead-worker', provider_message_id: 'SM-was-sent', sent_at: null })] });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider, claimTimeoutMs: 5 * MIN, sentDeliveryTimeoutMs: 15 * MIN });
+    expect(summary.reaped).toBe(1);
+    expect(provider.send).not.toHaveBeenCalled(); // NO double-send
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.status).toBe('sent');
+    expect(row.provider_message_id).toBe('SM-was-sent'); // SID preserved
+  });
+
+  it('a sending row still WITHIN the claim-timeout (live worker) is left alone', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sending', attempts: 0, claimed_at: ago(1 * MIN), claimed_by: 'live-worker', provider_message_id: null, sent_at: null })] });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider, claimTimeoutMs: 5 * MIN });
+    expect(summary.reaped).toBe(0);
+    expect(provider.send).not.toHaveBeenCalled();
+    expect(sb._tables.sms_outbound_obligations[0].status).toBe('sending');
+  });
+});
+
+// =======================================================================================
+// SECURITY LOW — phone masking
+// =======================================================================================
+describe('phone masking (LOW)', () => {
+  it('maskPhone reveals only the last 4 digits', () => {
+    expect(maskPhone('+15551234567')).toBe('***4567');
+    expect(maskPhone('')).toBe('<no-phone>');
+    expect(maskPhone(null)).toBe('<no-phone>');
+  });
+
+  it('the default alert never logs the full phone number', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'undelivered', attempts: 3, recipient_phone: '+15551234567', last_error: 'carrier reject' })] });
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await reconcileOutboundSms(sb, { provider: okProvider(), maxAttempts: 3 }); // default alert path
+    const logged = spy.mock.calls.map((c) => c.join(' ')).join('\n');
+    spy.mockRestore();
+    expect(logged).toContain('***4567');
+    expect(logged).not.toContain('+15551234567');
   });
 });
 
