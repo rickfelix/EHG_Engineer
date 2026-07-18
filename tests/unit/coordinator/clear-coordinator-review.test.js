@@ -53,7 +53,9 @@ describe('SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: clearCoordinatorRevi
     expect(client.queries).toHaveLength(1); // no follow-up SELECT on the success path
     expect(client.queries[0].sql).toMatch(/\|\|/);
     expect(client.queries[0].sql).toMatch(/^\s*UPDATE/i);
-    expect(client.queries[0].params).toEqual(['SD-TEST-001']);
+    // SD-LEO-INFRA-PLAN-LINKAGE-BELT-001 (FR-1b): params now carry the classified default
+    // unlinked_reason as $2, for the CASE WHEN plan_linkage IS NULL fragment.
+    expect(client.queries[0].params).toEqual(['SD-TEST-001', 'emergent-fix']);
     expect(client.end).toHaveBeenCalledOnce();
   });
 
@@ -128,7 +130,17 @@ describe('SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: buildClearReviewQuer
     expect(sql).toMatch(/^\s*UPDATE strategic_directives_v2/);
     expect(sql).toMatch(/SET metadata = COALESCE\(metadata,\s*'\{\}'::jsonb\)\s*\|\|\s*'\{"needs_coordinator_review":\s*false\}'::jsonb/);
     expect(sql).toMatch(/WHERE sd_key = \$1/);
-    expect(params).toEqual(['SD-ABC-001']);
+    expect(params).toEqual(['SD-ABC-001', 'emergent-fix']);
+  });
+
+  it('SD-LEO-INFRA-PLAN-LINKAGE-BELT-001 (FR-1b): stamps a default classified plan_linkage ONLY when absent, idempotent on an already-stamped row', () => {
+    const { sql, params } = buildClearReviewQuery('SD-LEO-INFRA-SOME-FIX-001');
+    expect(sql).toMatch(/CASE WHEN metadata->'plan_linkage' IS NULL/);
+    expect(sql).toMatch(/THEN jsonb_build_object\('plan_linkage', jsonb_build_object\(/);
+    expect(sql).toMatch(/'unlinked_reason',\s*\$2::text/);
+    expect(sql).toMatch(/ELSE '\{\}'::jsonb END/);
+    // harness-prefixed key classifies as harness-upkeep, not the generic emergent-fix default
+    expect(params).toEqual(['SD-LEO-INFRA-SOME-FIX-001', 'harness-upkeep']);
   });
 
   it('guards against NULL metadata via COALESCE (Postgres NULL || jsonb = NULL, verified live in adversarial review)', () => {

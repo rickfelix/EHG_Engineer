@@ -1472,7 +1472,7 @@ async function printReviewHeldSds() {
 
   const { data: held, error } = await supabase
     .from('strategic_directives_v2')
-    .select('sd_key, title, status')
+    .select('sd_key, title, status, metadata')
     .eq('metadata->>needs_coordinator_review', 'true')
     .not('status', 'in', '(completed,cancelled)');
 
@@ -1486,6 +1486,16 @@ async function printReviewHeldSds() {
     console.log('  (no SDs held for coordinator review)');
     console.log('');
     return;
+  }
+
+  // SD-LEO-INFRA-PLAN-LINKAGE-BELT-001 (FR-4): review order also prefers plan-linked work
+  // at equal standing — same shared comparator as coordinator-backlog-rank.mjs's dispatch
+  // sort (dynamic import: this file is CJS, the comparator lives in an ESM lib module).
+  try {
+    const { planLinkageCompare } = await import('../lib/roadmap/plan-linkage-comparator.js');
+    held.sort(planLinkageCompare);
+  } catch (cmpErr) {
+    console.log('  (plan-linkage ordering unavailable, falling back to query order: ' + cmpErr.message + ')');
   }
 
   console.log('  ' + held.length + ' SD(s) held for review');
