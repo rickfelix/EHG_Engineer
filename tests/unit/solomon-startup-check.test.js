@@ -10,6 +10,7 @@ import {
   SOLOMON_LOOPS, ROLE_CONTEXT_DOC, parseDurableDutyMarkers, missingDurableDuties,
   loopStatus, parseArmedSet, renderContractParity, slugifyDuty, wiredDutySlugs,
   solomonSweepMode, isProactiveSweepEnabled,
+  resolveSolomonSweepMode, getSolomonSweepPolicy, resolveIsProactiveSweepEnabled,
   renderFreshness, buildReport, SOLOMON_CRITICAL_PATHS,
 } from '../../scripts/solomon-startup-check.mjs';
 import { buildSelfAdherenceVerdict } from '../../scripts/solomon-self-adherence-review.mjs';
@@ -160,6 +161,82 @@ describe('SD-LEO-INFRA-SOLOMON-MODEB-FABLE-PIN-TRIGGER-001: solomonSweepMode Fab
     expect(solomonSweepMode('claude-fable-5', { SOLOMON_SWEEP_MODE: 'consult' })).toBe('consult');
     expect(solomonSweepMode('claude-opus-4-8', { SOLOMON_SWEEP_MODE: 'PROACTIVE' })).toBe('proactive'); // case-insensitive
     expect(solomonSweepMode('claude-fable-5', { SOLOMON_SWEEP_MODE: 'garbage' })).toBe('proactive'); // invalid override ignored
+  });
+});
+
+// SD-LEO-INFRA-ALWAYS-SWEEP-DESIGN-OF-RECORD-001: the authoritative resolver reads the design-of-record
+// policy (leo_protocol_sections id=611 metadata.sweep_policy) and DEMOTES the pin-derivation to a
+// fail-safe fallback — fixing the verified bug where a live Fable-5 session with the configured opus pin
+// resolved 'consult' because getClaudeModel('solomon') reads the pin, not the live serving model.
+describe('SD-LEO-INFRA-ALWAYS-SWEEP-DESIGN-OF-RECORD-001: resolveSolomonSweepMode (design-of-record authoritative)', () => {
+  const noEnv = {}; // isolate from the ambient process.env override
+
+  // Stub the supabase client's .from(id).select().eq().single() chain.
+  //   policy: the metadata.sweep_policy value to return (undefined → metadata {} i.e. policy unset)
+  //   throws: if set, the client throws on read (simulates DB unreachable)
+  function stubClient({ policy, throws = false } = {}) {
+    return {
+      from() {
+        if (throws) throw new Error('DB unreachable');
+        const metadata = policy === undefined ? {} : { sweep_policy: policy };
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({ data: { metadata }, error: null }),
+            }),
+          }),
+        };
+      },
+    };
+  }
+
+  it('TS-1 (core fix): policy=always → proactive EVEN with the opus pin + empty env (pin no longer forces consult)', async () => {
+    const client = stubClient({ policy: 'always' });
+    expect(await resolveSolomonSweepMode({ env: noEnv, pin: 'claude-opus-4-8', client })).toBe('proactive');
+    // and the async proactive helper agrees
+    expect(await resolveIsProactiveSweepEnabled({ env: noEnv, pin: 'claude-opus-4-8', client })).toBe(true);
+  });
+
+  it('TS-2: a /model switch / different pin does NOT flip it away from always-sweep when policy=always', async () => {
+    const client = stubClient({ policy: 'always' });
+    // pin stays opus (a /model switch never reaches the resolver) — still proactive
+    expect(await resolveSolomonSweepMode({ env: noEnv, pin: 'claude-opus-4-8', client })).toBe('proactive');
+    // an unrelated pin (sonnet) — policy still wins, still proactive
+    expect(await resolveSolomonSweepMode({ env: noEnv, pin: 'claude-sonnet-5', client })).toBe('proactive');
+    // an empty/undefined pin — policy still wins
+    expect(await resolveSolomonSweepMode({ env: noEnv, pin: '', client })).toBe('proactive');
+  });
+
+  it('TS-5: SOLOMON_SWEEP_MODE env override still wins (precedence 1) even when policy=always', async () => {
+    const client = stubClient({ policy: 'always' });
+    expect(await resolveSolomonSweepMode({ env: { SOLOMON_SWEEP_MODE: 'consult' }, pin: 'claude-fable-5', client })).toBe('consult');
+    expect(await resolveSolomonSweepMode({ env: { SOLOMON_SWEEP_MODE: 'proactive' }, pin: 'claude-opus-4-8', client })).toBe('proactive');
+  });
+
+  it('TS-3: policy UNSET (null) → falls back to legacy pin-derivation (fable→proactive, opus→consult)', async () => {
+    const client = stubClient({ policy: undefined }); // metadata {} → getSolomonSweepPolicy returns null
+    expect(await resolveSolomonSweepMode({ env: noEnv, pin: 'claude-fable-5', client })).toBe('proactive');
+    expect(await resolveSolomonSweepMode({ env: noEnv, pin: 'claude-opus-4-8', client })).toBe('consult');
+  });
+
+  it('TS-4 (fail-safe): DB-read failure (client throws) → falls back to legacy, never throws', async () => {
+    const client = stubClient({ throws: true });
+    await expect(resolveSolomonSweepMode({ env: noEnv, pin: 'claude-fable-5', client })).resolves.toBe('proactive');
+    await expect(resolveSolomonSweepMode({ env: noEnv, pin: 'claude-opus-4-8', client })).resolves.toBe('consult');
+    // getSolomonSweepPolicy itself is fail-soft (returns null, never throws)
+    expect(await getSolomonSweepPolicy(client)).toBe(null);
+  });
+
+  it('getSolomonSweepPolicy returns the policy string from row 611 metadata', async () => {
+    expect(await getSolomonSweepPolicy(stubClient({ policy: 'always' }))).toBe('always');
+    expect(await getSolomonSweepPolicy(stubClient({ policy: undefined }))).toBe(null);
+  });
+
+  it('TS-6: the legacy sync solomonSweepMode is UNCHANGED (pin-derivation preserved)', () => {
+    // guarded here too so a resolver refactor cannot silently alter the sync fallback contract
+    expect(solomonSweepMode('claude-fable-5', noEnv)).toBe('proactive');
+    expect(solomonSweepMode('claude-opus-4-8', noEnv)).toBe('consult');
+    expect(solomonSweepMode('claude-opus-4-8', { SOLOMON_SWEEP_MODE: 'proactive' })).toBe('proactive');
   });
 });
 
