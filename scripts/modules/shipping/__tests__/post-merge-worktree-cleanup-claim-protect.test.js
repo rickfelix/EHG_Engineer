@@ -258,7 +258,11 @@ describe('cleanupWorktreeByPath — claim-protect integration', () => {
   beforeEach(() => { env = setupTmpRepo(); });
   afterEach(() => cleanupTmp(env));
 
-  it('archives instead of deletes when active claim matches', async () => {
+  // P0 fix (feedback 65ef1075, Golf-3 2026-07-17): a LIVE claim must LEAVE the
+  // worktree fully in place. The prior behavior archived (moved) it, which yanked
+  // the active session's working dir out from under it — the reported P0. Archiving
+  // preserves the files but breaks the live session; leave-in-place preserves both.
+  it('leaves the worktree fully in place when active claim matches (does NOT move/archive)', async () => {
     const sb = mockSupabase({
       data: [{
         session_id: 'sess-A',
@@ -273,11 +277,11 @@ describe('cleanupWorktreeByPath — claim-protect integration', () => {
     expect(result.cleaned).toBe(false);
     expect(result.reason).toBe('active_claim_protect');
     expect(result.claim?.session_id).toBe('sess-A');
-    // archive succeeded → original wtPath no longer present
-    expect(fs.existsSync(env.wtPath)).toBe(false);
-    // archive should exist under .worktrees/_archive
-    const archiveDir = path.join(env.main, '.worktrees', '_archive');
-    expect(fs.existsSync(archiveDir)).toBe(true);
+    // Live claim → worktree left untouched at its original path.
+    expect(fs.existsSync(env.wtPath)).toBe(true);
+    // Nothing was moved: no _archive dir was created, and the result carries no archivePath.
+    expect(fs.existsSync(path.join(env.main, '.worktrees', '_archive'))).toBe(false);
+    expect(result.archivePath).toBeUndefined();
   });
 
   it('proceeds with cleanup when no active claim matches', async () => {
@@ -288,19 +292,36 @@ describe('cleanupWorktreeByPath — claim-protect integration', () => {
   });
 
   // R-6 (testing-agent binding): PostgrestError must NOT escape cleanupWorktreeByPath.
-  // Translate to fail-SAFE — treat unknown DB state as if a claim is held + archive
-  // (preserves work). This is the crucial UX guarantee for /ship CLI on a transient
-  // DB blip — a thrown PostgrestError would have been worse than the bug being fixed.
-  it('R-6: fail-safe on PostgrestError — archives, returns reason=db_error_fail_safe, no throw', async () => {
+  // Translate to fail-SAFE — treat unknown DB state as if a claim is held. P0 fix
+  // (feedback 65ef1075): "as if a claim is held" means LEAVE IN PLACE, not archive.
+  // Moving a possibly-live worktree is the exact P0; leave-in-place preserves the
+  // work AND avoids breaking a live session. A thrown PostgrestError is still averted.
+  it('R-6: fail-safe on PostgrestError — leaves worktree in place, reason=db_error_fail_safe, no throw', async () => {
     const sb = mockSupabase({ error: { message: 'connection terminated', code: 'XX000' } });
     const result = await cleanupWorktreeByPath(env.wtPath, { supabase: sb });
     expect(result.cleaned).toBe(false);
     expect(result.reason).toBe('db_error_fail_safe');
     expect(result.error).toMatch(/connection terminated/);
-    // Archive on fail-safe to preserve work (worktree may have uncommitted state).
+    // Fail-safe = do not touch the worktree (it may host a live session).
+    expect(fs.existsSync(env.wtPath)).toBe(true);
+    expect(fs.existsSync(path.join(env.main, '.worktrees', '_archive'))).toBe(false);
+    expect(result.archivePath).toBeUndefined();
+  });
+
+  // Surgical-fix pin: the delete-abort path (unpushed commits, NO active claim) must
+  // STILL archive — the P0 fix only stops archiving on the live-claim/DB-error paths,
+  // it must not regress code-loss prevention where there is genuinely no live session.
+  it('still archives on unpushed_commits when no active claim (code-loss prevention intact)', async () => {
+    // Create an unpushed commit in the worktree, with no matching active claim.
+    fs.writeFileSync(path.join(env.wtPath, 'unpushed.txt'), 'work in progress');
+    execSync('git add . && git commit -m "unpushed work"', { cwd: env.wtPath, stdio: 'pipe' });
+    const sb = mockSupabase({ data: [] }); // no claim
+    const result = await cleanupWorktreeByPath(env.wtPath, { supabase: sb });
+    expect(result.cleaned).toBe(false);
+    expect(result.reason).toBe('unpushed_commits');
+    // Delete-abort with unpushed code → archived (moved) to preserve recoverable copy.
     expect(fs.existsSync(env.wtPath)).toBe(false);
-    const archiveDir = path.join(env.main, '.worktrees', '_archive');
-    expect(fs.existsSync(archiveDir)).toBe(true);
+    expect(fs.existsSync(path.join(env.main, '.worktrees', '_archive'))).toBe(true);
   });
 });
 

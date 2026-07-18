@@ -330,27 +330,40 @@ async function cleanupWorktreeByPath(wtPath, options = {}) {
   try {
     claim = await hasActiveClaimOnBranch(wtPath, mainRepoPath, options);
   } catch (err) {
-    const archive = archiveWorktree(wtPath, sdKey);
+    // P0 fix (feedback 65ef1075, Golf-3 2026-07-17): on unknown DB state we fail SAFE
+    // by treating the worktree as if a live claim is held — which means LEAVE IT
+    // COMPLETELY IN PLACE. The prior behavior archived here, but archiveWorktree()
+    // MOVES the tree (fs.renameSync → _archive) + `git worktree prune`, destroying a
+    // live session's working directory out from under it. Not touching it preserves
+    // both the work AND the live session; a genuinely-dead worktree is reaped later
+    // via the stale-heartbeat path. Archiving is only correct on the actual
+    // delete-abort path (unpushed_commits below), where no live session is present.
     console.warn(JSON.stringify({
       event: 'worktree.cleanup_blocked_by_db_error',
       wtPath, sdKey, error: err.message,
-      archivePath: archive.archivePath,
+      action: 'left_in_place',
       timestamp: new Date().toISOString()
     }));
-    return { cleaned: false, reason: 'db_error_fail_safe', error: err.message, ...archive, mainRepoPath, workKey: sdKey };
+    return { cleaned: false, reason: 'db_error_fail_safe', error: err.message, mainRepoPath, workKey: sdKey };
   }
   if (claim) {
-    const archive = archiveWorktree(wtPath, sdKey);
+    // P0 fix (feedback 65ef1075, Golf-3 2026-07-17): a live worker still holds the
+    // claim (fresh heartbeat) or is cwd'd here (live-cwd guard) → LEAVE THE WORKTREE
+    // COMPLETELY IN PLACE. Do NOT archive: archiveWorktree() moves the tree to
+    // _archive and prunes it from git, which yanked the active session's working dir
+    // out from under it (witnessed: dir gone from disk + `git worktree list`, copy in
+    // _archive, cleaned:false reported all the same). For a live claim there is nothing
+    // to "preserve" by moving — the owner is alive and will clean up / ship normally.
     const blockedEntry = {
       event: 'worktree.cleanup_blocked_by_claim',
       wtPath,
       sdKey,
       claim,
-      archivePath: archive.archivePath,
+      action: 'left_in_place',
       timestamp: new Date().toISOString()
     };
     console.warn(JSON.stringify(blockedEntry));
-    return { cleaned: false, reason: 'active_claim_protect', claim, ...archive, mainRepoPath, workKey: sdKey };
+    return { cleaned: false, reason: 'active_claim_protect', claim, mainRepoPath, workKey: sdKey };
   }
 
   // SD-MAN-INFRA-WORKTREE-CODE-LOSS-001 (FR-2): Block cleanup if unpushed commits
