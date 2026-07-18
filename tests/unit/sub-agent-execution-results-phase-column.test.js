@@ -21,6 +21,7 @@ function makeMockSupabase(captureTarget) {
       return {
         select() { return this; },
         eq() { return this; },
+        is() { return this; },
         gte() { return this; },
         order() { return this; },
         limit() { return Promise.resolve({ data: [], error: null }); },
