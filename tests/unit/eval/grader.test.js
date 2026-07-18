@@ -240,4 +240,37 @@ describe('rankPairwise (comparator SSOT)', () => {
     const ranked = rankPairwise(rows);
     expect(ranked.T1[0].effort).toBe('high'); // higher cost-normalized quality leads
   });
+
+  it('is a TOTAL, deterministic order on ties (equal cost_norm) — stable across input permutations', () => {
+    // Three runs with IDENTICAL cost_norm (same quality & tokens) but distinct labels.
+    const mk = (effort) => ({ task_id: 'T1', model_id: 'm', effort, quality_score: 0.8, tokens: 1000 });
+    const a = rankPairwise([mk('low'), mk('medium'), mk('high')]).T1.map((r) => r.effort);
+    const b = rankPairwise([mk('high'), mk('low'), mk('medium')]).T1.map((r) => r.effort);
+    expect(a).toEqual(b); // deterministic regardless of input order (label tiebreak)
+    expect(a).toEqual(['high', 'low', 'medium']); // localeCompare of 'm:<effort>'
+  });
+});
+
+describe('gradeGoldenTasks robustness', () => {
+  it('skips a single malformed run (missing model_id) without rejecting the whole batch', async () => {
+    const loader = async () => ({
+      source: 'system_events', integrityErrors: [],
+      sets: [{
+        task_id: 'FAB5-R2-01', shape: SHAPE_OF['FAB5-R2-01'], task_text: 'PROMPT for FAB5-R2-01',
+        sealed_runs: [
+          { effort: 'high', model_id: 'fable-5', tokens: 1000, wall_clock: 5000, run_at: '2026-07-16T00:00:00Z', output: 'run output FAB5-R2-01/high' },
+          { effort: 'low', model_id: null, tokens: 1000, wall_clock: 5000, run_at: '2026-07-16T00:00:00Z', output: 'run output FAB5-R2-01/low' }, // malformed: no model_id
+        ],
+      }],
+    });
+    const { rows, stats, integrityErrors } = await gradeGoldenTasks(null, {
+      gradeFn: gradeFor, loader, keyAccessor: makeKeyAccessor(),
+    });
+    expect(rows).toHaveLength(1); // the good run still emits
+    expect(rows[0].effort).toBe('high');
+    expect(stats.skipped).toBe(1);
+    expect(integrityErrors).toEqual([
+      expect.objectContaining({ task_id: 'FAB5-R2-01', effort: 'low', error: 'REFERENCE_ROW_INVALID' }),
+    ]);
+  });
 });
