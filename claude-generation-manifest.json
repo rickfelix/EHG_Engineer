@@ -1,123 +1,123 @@
 {
-  "generated_at": "2026-07-17T09:50:52.534Z",
-  "git_commit": "a2c351ac",
-  "db_snapshot_hash": "6bcd1672b5ba0df9",
+  "generated_at": "2026-07-18T19:22:44.213Z",
+  "git_commit": "7d833b49",
+  "db_snapshot_hash": "15274e313a3b8c43",
   "files": {
     "CLAUDE.md": {
       "type": "full",
       "chars": 19564,
       "estimated_tokens": 4891,
-      "content_hash": "b84f22d05a12cfbc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\QF-20260717-397\\CLAUDE.md"
+      "content_hash": "c90461fee18ebdab",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 91183,
-      "estimated_tokens": 22796,
-      "content_hash": "6bd4768e44fde446",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\QF-20260717-397\\CLAUDE_CORE.md"
+      "chars": 92157,
+      "estimated_tokens": 23040,
+      "content_hash": "247cc3e21d3ebd2d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
       "chars": 65998,
       "estimated_tokens": 16500,
-      "content_hash": "7d5aa419cb46c6dc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\QF-20260717-397\\CLAUDE_LEAD.md"
+      "content_hash": "9fcbd969289b94b6",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
       "chars": 91830,
       "estimated_tokens": 22958,
-      "content_hash": "536d599396006de8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\QF-20260717-397\\CLAUDE_PLAN.md"
+      "content_hash": "517a88a14d676134",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
       "chars": 88941,
       "estimated_tokens": 22236,
-      "content_hash": "ce9a25af0ed156fe",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\QF-20260717-397\\CLAUDE_EXEC.md"
+      "content_hash": "6258fd85a688f740",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 63589,
-      "estimated_tokens": 15898,
-      "content_hash": "e3c4b47a69a976de",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\QF-20260717-397\\CLAUDE_ADAM.md"
+      "chars": 93022,
+      "estimated_tokens": 23256,
+      "content_hash": "b896fbad449de3dd",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_ADAM.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
       "chars": 22134,
       "estimated_tokens": 5534,
-      "content_hash": "cb167b65c1795af8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\QF-20260717-397\\CLAUDE_COORDINATOR.md"
+      "content_hash": "9a87d599c0e652e3",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 49861,
-      "estimated_tokens": 12466,
-      "content_hash": "9c71f8301eee3a0f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\QF-20260717-397\\CLAUDE_SOLOMON.md"
+      "chars": 54600,
+      "estimated_tokens": 13650,
+      "content_hash": "5ee13864dc28b1a5",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9611,
       "estimated_tokens": 2403,
-      "content_hash": "f799a4c9e25589a3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\QF-20260717-397\\CLAUDE_DIGEST.md"
+      "content_hash": "9051666433e55754",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 11664,
       "estimated_tokens": 2916,
-      "content_hash": "c8a75328f3f2b6c3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\QF-20260717-397\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "e6c5ce7840974d11",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 5551,
       "estimated_tokens": 1388,
-      "content_hash": "9bdf0f46f057f8c9",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\QF-20260717-397\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "ffc688a16e9f5dbf",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 8541,
       "estimated_tokens": 2136,
-      "content_hash": "fa45cbe4c691d5cd",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\QF-20260717-397\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "95d34dd2ffb19b5e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 10964,
       "estimated_tokens": 2741,
-      "content_hash": "81758a392c126222",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\QF-20260717-397\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "a338a34170eade03",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
-      "chars": 16604,
-      "estimated_tokens": 4151,
-      "content_hash": "ef767cd27d91d5a8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\QF-20260717-397\\CLAUDE_ADAM_DIGEST.md"
+      "chars": 18755,
+      "estimated_tokens": 4689,
+      "content_hash": "ad78e37128ffb9d4",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 6076,
       "estimated_tokens": 1519,
-      "content_hash": "6d823ceef971bc5d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\QF-20260717-397\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "e2135734df23f153",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
       "chars": 4705,
       "estimated_tokens": 1177,
-      "content_hash": "039d07dbc7f0293a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\QF-20260717-397\\CLAUDE_SOLOMON_DIGEST.md"
+      "content_hash": "16826a32c7fd2e19",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "e39c0c64923a49d4",
+    "global": "9f000abd12104fd0",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -294,7 +294,7 @@
       "435": "dc205008f2747ac6",
       "436": "8115bd7ee9303db3",
       "439": "08a9d4b4ea40618b",
-      "444": "781e786b53cb090f",
+      "444": "12b759c26cede8e8",
       "449": "86f83ca9a7afe8cc",
       "450": "94087ec605b29ee4",
       "452": "5bb15e4ce5af0b4e",
@@ -371,7 +371,7 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "4f238e933d1a8d77",
+      "601": "020b0e0ff59285ff",
       "602": "ad0aecae8cdc6cb3",
       "603": "ea1eddc2cef94c83",
       "604": "a35e66b64599f81d",
@@ -381,7 +381,7 @@
       "608": "7f99a4321502367e",
       "609": "9790a74a362ff0ca",
       "610": "fb3813fc42f32f3a",
-      "611": "8d30cde91fbb8150",
+      "611": "d8842540b8e0efc3",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
       "614": "a4d5064f0ffbe97c",
@@ -390,7 +390,8 @@
       "620": "3fd2f83a068a8381",
       "621": "5d93172c5c9c2138",
       "622": "94a8df85a96ad041",
-      "624": "ecbc82be6b6c0dfe"
+      "624": "ecbc82be6b6c0dfe",
+      "625": "1fd11ec189bfb049"
     },
     "meta": {
       "94": {
@@ -1752,6 +1753,11 @@
         "section_type": "adam_role_contract",
         "target_file": null,
         "title": "PLAN CHECK — chairman status-report format (chairman-directed 2026-07-11)"
+      },
+      "625": {
+        "section_type": "adam_role_contract",
+        "target_file": null,
+        "title": "Pre-Send Solomon-Consult Rubric — the L1 gate (SD-LEO-INFRA-ADAM-PRE-SEND-001)"
       }
     }
   }
