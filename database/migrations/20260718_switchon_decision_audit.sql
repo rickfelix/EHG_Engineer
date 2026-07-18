@@ -34,6 +34,11 @@ DROP POLICY IF EXISTS switchon_decision_audit_service_role ON public.switchon_de
 CREATE POLICY switchon_decision_audit_service_role ON public.switchon_decision_audit
   FOR ALL TO service_role USING (true) WITH CHECK (true);
 
+-- Chairman-only read: this is a governance audit trail, not tenant/customer data --
+-- a blanket `authenticated USING (true)` would let any logged-in user read every
+-- switch-on decision. Mirrors sibling A's chairman_switchon_policy pattern
+-- (fn_is_chairman()) rather than an unconditional grant
+-- (RLS-ANON-TENANT-PREDICATE-LINT class: unconditional_anon_select).
 DROP POLICY IF EXISTS switchon_decision_audit_authenticated_read ON public.switchon_decision_audit;
 CREATE POLICY switchon_decision_audit_authenticated_read ON public.switchon_decision_audit
-  FOR SELECT TO authenticated USING (true);
+  FOR SELECT TO authenticated USING (fn_is_chairman());
