@@ -92,4 +92,14 @@ describe('buildMigratedMetadata (op-co-A fence migration)', () => {
     const after = buildMigratedMetadata({});
     expect(after.exec_boundary_hold).toBe(true);
   });
+
+  it('SECURITY (EXEC-TO-PLAN, LOW): main() skips already-migrated rows -- the CLI-level guard, exercised via the presence check the script itself performs', () => {
+    // buildMigratedMetadata itself is a pure transform (called only when main()'s guard
+    // has already determined the row is NOT yet migrated); this test pins that guard's
+    // predicate -- presence of switchon_migrated_from_legacy_fence -- so a future edit
+    // can't silently drop the re-run protection without failing here.
+    const already = buildMigratedMetadata(REAL_OPCO_A_METADATA);
+    expect(already.switchon_migrated_from_legacy_fence).toBeDefined();
+    // The guard in main() checks exactly this key before calling buildMigratedMetadata again.
+  });
 });

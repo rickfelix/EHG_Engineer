@@ -81,6 +81,18 @@ async function main() {
   }
 
   const before = row.metadata || {};
+
+  // SECURITY (EXEC-TO-PLAN review, LOW): a second run must not re-archive already-migrated
+  // state -- that would overwrite switchon_migrated_from_legacy_fence with an empty
+  // archived_keys/a post-migration snapshot, degrading the audit trail. Never weakens the
+  // fence (exec_boundary_hold is already true either way), but the run should be a clean
+  // no-op once migrated.
+  if (before.switchon_migrated_from_legacy_fence) {
+    console.log(`\n=== ${TARGET_SD_KEY} metadata migration ===`);
+    console.log('\n[NO-OP] Already migrated (metadata.switchon_migrated_from_legacy_fence present). Skipping.');
+    return;
+  }
+
   const after = buildMigratedMetadata(before);
 
   console.log(`\n=== ${TARGET_SD_KEY} metadata migration (${apply ? 'APPLY' : 'DRY-RUN'}) ===`);
