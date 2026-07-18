@@ -39,9 +39,14 @@ COMMENT ON COLUMN model_capability_reference.binding_id IS
 -- BOTH binding_id AND bound_at. It therefore makes circular binding impossible
 -- regardless of which code path attempts the write.
 --
--- SCOPE: BEFORE UPDATE only. It NEVER constrains true->false — clearing a stale
--- bind (trusted_for_routing=false, bound_at=NULL, binding_id=NULL) must always be
--- allowed so a bind cannot outlive the evidence that justified it.
+-- SCOPE: BEFORE INSERT OR UPDATE. On UPDATE it guards only the false/NULL->true
+-- transition; it NEVER constrains true->false — clearing a stale bind
+-- (trusted_for_routing=false, bound_at=NULL, binding_id=NULL) must always be
+-- allowed so a bind cannot outlive the evidence that justified it. On INSERT it
+-- rejects a row born trusted_for_routing=true without provenance (there is no OLD
+-- to transition from — a trusted INSERT is itself the false/NULL->true edge). This
+-- INSERT arm closes the direct-INSERT hole the UPDATE-only guard left open
+-- (SECURITY re-verify LOW residual, EVAL-002-C).
 --
 -- ADDITIVE + IDEMPOTENT: CREATE OR REPLACE FUNCTION; DROP TRIGGER IF EXISTS then
 -- CREATE TRIGGER. Reuses the base table's RLS/service-role policy — no new grants.
@@ -53,10 +58,14 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  -- Only guard the false/NULL -> true transition. OLD IS DISTINCT FROM TRUE is
-  -- true when OLD was false OR NULL; leaves true->true and true->false untouched.
+  -- Guard the false/NULL -> true edge on BOTH INSERT and UPDATE.
+  --  UPDATE: OLD IS DISTINCT FROM TRUE is true when OLD was false OR NULL, so
+  --          true->true and true->false are left untouched.
+  --  INSERT: OLD does not exist (its fields are NULL under FOR EACH ROW), so a
+  --          row born trusted_for_routing=true is itself the false/NULL->true edge
+  --          and is guarded. Gate on TG_OP so the OLD reference is only read on UPDATE.
   IF NEW.trusted_for_routing IS TRUE
-     AND (OLD.trusted_for_routing IS DISTINCT FROM TRUE)
+     AND (TG_OP = 'INSERT' OR OLD.trusted_for_routing IS DISTINCT FROM TRUE)
      AND (NEW.binding_id IS NULL OR NEW.bound_at IS NULL) THEN
     RAISE EXCEPTION
       'trusted_for_routing cannot be set true without binding provenance (binding_id + bound_at) — sole-writer invariant, RISK e25f3adf C1'
@@ -68,6 +77,6 @@ $$;
 
 DROP TRIGGER IF EXISTS trg_model_capability_reference_binding_provenance ON model_capability_reference;
 CREATE TRIGGER trg_model_capability_reference_binding_provenance
-  BEFORE UPDATE ON model_capability_reference
+  BEFORE INSERT OR UPDATE ON model_capability_reference
   FOR EACH ROW
   EXECUTE FUNCTION model_capability_reference_enforce_binding_provenance();
