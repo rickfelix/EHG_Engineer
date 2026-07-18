@@ -1,0 +1,84 @@
+{
+  "executive_summary": "One-time archive of 2 pre-guard duplicate draft 'EVA Intake Roadmap' rows in strategic_roadmaps (a89b078b, 8ffa7fdf), created 2026-07-17 by two Solomon /distill runs before the now-shipped single-writer guard (SD-LEO-INFRA-DISTILL-ROADMAP-SINGLE-001). Chairman-confirmed 2026-07-17: the LEO Roadmap (3aa2f3e2, active, vision-linked) is the sole plan-of-record. Ground truth independently re-verified live 2026-07-18 (twice, by both the worker and an independent VALIDATION sub-agent pass): all 4 strategic_roadmaps rows match the SD's stated shape exactly; all 1080 roadmap_wave_items across the 2 draft roadmaps' 9 waves (731 todoist + 349 youtube) are pure intake-table references with zero unresolved source_id, zero promoted_to_sd_key, and zero populated title/metadata/disposition/lane/priority_rank/brainstorm_session_id fields -- confirming the roadmaps are a clustering VIEW over the intake backlog SSOT (the 1080 items map to only 497 distinct intake rows, an expected overlap artifact of the two /distill runs), not a store of unique authored content. No counterfactual migration is needed.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Archive the 2 pre-guard duplicate draft roadmap rows",
+      "description": "UPDATE strategic_roadmaps SET status='archived' WHERE id IN ('a89b078b-836c-437f-9c40-09fb6b23a41a', '8ffa7fdf-5d67-42a7-b135-2f7200fe9da0'). Reversible (status flip, no delete). Row ed12bf74 (already archived, Mar-8 2026) and row 3aa2f3e2 (LEO Roadmap, active) are explicitly untouched.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Both target rows have status='archived' after the change",
+        "Row ed12bf74's status is unchanged (still archived, no re-touch)",
+        "Row 3aa2f3e2 (LEO Roadmap) status/vision_key/all other fields are unchanged",
+        "No row is hard-deleted -- the operation is a reversible status update only"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Post-cleanup acceptance verification",
+      "description": "Verify count(*) FROM strategic_roadmaps WHERE status='active' = 1 (LEO Roadmap only) after the archive. This SD does not re-run a distill pipeline (out of scope -- the single-writer guard from SD-LEO-INFRA-DISTILL-ROADMAP-SINGLE-001 is already shipped and verified separately); it only confirms the DB-state acceptance criterion the SD's own scope names.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A query confirms exactly 1 active strategic_roadmaps row post-archive",
+        "The active row's id is 3aa2f3e2 (LEO Roadmap)"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Pre-write dependency safety check (no external referrer breaks)",
+      "description": "Before writing, confirm zero rows in roadmap_baseline_snapshots reference either target roadmap id, zero loop_registry rows reference any of their 9 child waves, and zero strategic_directives_v2 rows reference either target id in metadata -- independently verified by the LEAD-TO-PLAN VALIDATION sub-agent pass already, re-confirmed here as an explicit script-level precondition so the archive script itself hard-stops (not just a human eyeballing it beforehand) if a referrer appears between review and execution.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "The archive script queries roadmap_baseline_snapshots, loop_registry, and strategic_directives_v2.metadata for any reference to the 2 target ids or their 9 child wave ids before writing",
+        "If any referrer is found, the script aborts with a clear message and makes zero writes (fail-closed)",
+        "Given the already-verified zero-referrer state, the script proceeds to FR-1's archive step"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "No hard deletes", "description": "strategic_roadmaps is shared governed state; the operation is a status update, never a DELETE, so the change is reversible by a human/coordinator flipping status back." },
+    { "id": "TR-2", "title": "No mutation of roadmap_waves / roadmap_wave_items", "description": "Only the parent strategic_roadmaps.status column changes. Child waves/items under the archived roadmaps are left as-is (already-verified pure intake references, orphaned-but-harmless under an archived parent)." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Pre-archive ground truth matches the SD's stated shape", "type": "unit", "expected": "4 strategic_roadmaps rows with the exact ids/status/vision_key the SD names" },
+    { "id": "TS-2", "scenario": "Archive updates exactly the 2 target rows", "type": "integration", "expected": "a89b078b and 8ffa7fdf become status=archived; 3aa2f3e2 and ed12bf74 unchanged" },
+    { "id": "TS-3", "scenario": "Post-archive active count", "type": "integration", "expected": "count(status=active)=1, id=3aa2f3e2" }
+  ],
+  "acceptance_criteria": [
+    "After cleanup, count(*) FROM strategic_roadmaps WHERE status='active' = 1 (LEO Roadmap only)",
+    "Both draft duplicate rows reversibly archived (status update, not delete)",
+    "Row ed12bf74 and the LEO Roadmap row are provably untouched"
+  ],
+  "risks": [
+    { "risk": "A draft roadmap row is discovered mid-cleanup to hold unique authored content not backed by an intake row", "mitigation": "Already verified pre-EXEC (1080/1080 items pure intake-references, full resolution check by an independent VALIDATION pass, not just a spot-check): the counterfactual does not manifest, so no migration step is needed", "severity": "low" },
+    { "risk": "A live consumer reads strategic_roadmaps.status='draft' rows and would break on archive", "mitigation": "The standing single-writer guard SD already treats status transitions as normal lifecycle; archived rows are the expected terminal state for retired drafts", "severity": "low" },
+    { "risk": "A future re-run of the script (accidental or against a different environment) re-applies the archive update or targets the wrong ids", "mitigation": "The script defaults to a dry-run mode (following the repo's existing scripts/one-off/backfill-roadmap-promote-titles.js precedent) and requires an explicit --apply flag plus a hardcoded, reviewed id allowlist -- never a dynamic WHERE title= match, which could catch an unintended future row", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["Chairman/Adam roadmap views (LEO Roadmap remains the sole active plan-of-record)"],
+    "dependencies": ["SD-LEO-INFRA-DISTILL-ROADMAP-SINGLE-001 (merged, the standing single-writer guard preventing recurrence)"],
+    "data_contracts": ["strategic_roadmaps.status (existing column, no schema change)"],
+    "runtime_config": ["none"],
+    "observability_rollout": ["One-off DB update via a scripted, session-attributed change; no feature flag needed"]
+  },
+  "system_architecture": {
+    "summary": "Pure data cleanup -- a scoped UPDATE against strategic_roadmaps, no code/schema change.",
+    "components": [
+      { "name": "scripts/one-off/archive-duplicate-roadmaps.mjs", "change": "NEW (one-shot data migration script)" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Re-verify ground truth live, run the archive update via a small attributable script, verify the acceptance count.",
+    "steps": [
+      "Re-query strategic_roadmaps + roadmap_waves + roadmap_wave_items to reconfirm ground truth immediately before the write",
+      "UPDATE the 2 target rows to status=archived",
+      "Verify the post-archive active count and row identity"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Query strategic_roadmaps for all 4 rows before the change", "expected_outcome": "Matches the SD's documented ground truth exactly" },
+    { "step_number": 2, "instruction": "Run the archive script", "expected_outcome": "a89b078b and 8ffa7fdf flip to status=archived" },
+    { "step_number": 3, "instruction": "Query count(*) WHERE status=active", "expected_outcome": "Exactly 1, id=3aa2f3e2" }
+  ],
+  "metadata": { "sd_key": "SD-LEO-INFRA-ROADMAP-DUPLICATE-CLEANUP-001" }
+}
