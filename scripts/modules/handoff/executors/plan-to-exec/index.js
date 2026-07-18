@@ -151,7 +151,7 @@ export class PlanToExecExecutor extends BaseExecutor {
     // branches below); intentionally NOT included in the parent-orchestrator gate set
     // (getParentOrchestratorGates, a separate array) since parents auto-complete on
     // children and never meaningfully EXEC themselves.
-    gates.push(createExecBoundaryHoldGate());
+    gates.push(createExecBoundaryHoldGate(this.supabase));
 
     // Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001)
     // DB-enforced: requires fresh sub_agent_execution_results rows for the required set

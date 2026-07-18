@@ -19,7 +19,11 @@ describe('TS-5: new migrations are TIER-1-eligible (additive-only)', () => {
       // Strip SQL line-comments before checking statements -- the file's own doc
       // comments legitimately mention ALTER/DROP/GRANT/REVOKE in prose, which must not
       // false-positive this static check.
-      const sql = raw.split('\n').map((line) => line.replace(/--.*$/, '')).join('\n');
+      // [-D fix, pre-existing bug] `.` never matches \r (a JS line-terminator char for
+      // regex purposes), so on a CRLF file `--.*$` couldn't consume a line's trailing \r
+      // and silently failed to match at all, leaving GRANT/REVOKE-mentioning comment
+      // prose unstripped. Match everything up to (not including) any CR/LF instead.
+      const sql = raw.split('\n').map((line) => line.replace(/--[^\r\n]*/, '')).join('\n');
       // Every ALTER TABLE statement present must be the additive "ENABLE ROW LEVEL
       // SECURITY" form (CLAUDE_CORE.md's own TIER-1 allow-list) -- never ALTER COLUMN,
       // DROP COLUMN, RENAME, etc.
