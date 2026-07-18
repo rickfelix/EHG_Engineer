@@ -153,7 +153,7 @@ export async function selfReviewMain() {
   const body = 'COORDINATOR-FEEDBACK REQUEST (recurring review of the COORDINATOR, triggered by ' + delta + ' SDs shipped since the last review): candid critique of how the coordinator is running the fleet — (1) what worked (routing/sourcing/RCA/conflict-resolution/keeping you fed), (2) friction caused BY the coordinator (slow/missing replies, mis-routing, bad SD sourcing, unclear guidance, missed signals), (3) ONE concrete thing to do differently. Be blunt. Reply: /signal feedback, prefix "COORDINATOR-FEEDBACK".';
   for (const w of workers) {
     try {
-      await insertCoordinationRow(db, { target_session: w, sender_session: me, subject: 'Coordinator review (every ' + REVIEW_EVERY + ' SDs) — your candid feedback', message_type: 'COACHING', payload: { kind: 'coordinator_reply', body } });
+      await insertCoordinationRow(db, { target_session: w, sender_session: me, subject: 'Coordinator review (every ' + REVIEW_EVERY + ' SDs) — your candid feedback', message_type: 'COACHING', body, payload: { kind: 'coordinator_reply', body } });
       solicited++;
     } catch (e) { solicitFailed++; console.error('[COORD-REVIEW] solicit skip ' + w + ': ' + e.message.split('\n')[0]); }
   }
@@ -167,7 +167,7 @@ export async function selfReviewMain() {
         // DIRECTIVE_KIND, so this substantive review was fully collapsible to a routine ack
         // (2026-07-13 co-drive review finding). review_request is a DIRECTIVE_KIND: deliver-not-
         // consume, never auto-acked, distinct from both coordinator_request and coordinator_reply.
-        await insertCoordinationRow(db, { target_session: a, sender_session: me, subject: 'Coordinator<->Adam review (every ' + REVIEW_EVERY + ' SDs) — candid bidirectional feedback', message_type: 'COACHING', payload: { kind: 'review_request', body: adamBody } });
+        await insertCoordinationRow(db, { target_session: a, sender_session: me, subject: 'Coordinator<->Adam review (every ' + REVIEW_EVERY + ' SDs) — candid bidirectional feedback', message_type: 'COACHING', body: adamBody, payload: { kind: 'review_request', body: adamBody } });
         adamSolicited++;
       } catch (e) { solicitFailed++; console.error('[COORD-REVIEW] adam solicit skip ' + a + ': ' + e.message.split('\n')[0]); }
     }

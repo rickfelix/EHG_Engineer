@@ -81,7 +81,7 @@ const ACK_RE = /comms.?check ack|read you/i;
       console.log('  ⚠ NO-ACK   ' + String(wid).slice(0, 8) + '  (' + cs + ')  ping ' + age + 'm unacked' + (lastPing.read_at ? ' (read, no reply)' : ' (never read → worker not polling inbox)') + ' — re-send + fix prompt');
     }
     const body = '📡 COMMS CHECK (radio check) from coordinator ' + String(me).slice(0, 8) + '. Confirm the two-way link: reply ONCE with  /signal feedback "comms-check ack — read you"  then continue your work. One-line ack only.';
-    await insertCoordinationRow(db, { sender_session: me, target_session: wid, message_type: 'COACHING', subject: 'COMMS CHECK', payload: { body, kind: 'comms_check', sent_at: new Date().toISOString() }, created_at: new Date().toISOString() });
+    await insertCoordinationRow(db, { sender_session: me, target_session: wid, message_type: 'COACHING', subject: 'COMMS CHECK', body, payload: { body, kind: 'comms_check', sent_at: new Date().toISOString() }, created_at: new Date().toISOString() });
     if (!lastPing) console.log('  📨 SENT     ' + String(wid).slice(0, 8) + '  (' + cs + ')  comms-check ping — awaiting ack');
   }
   console.log('[ACTION] ✓=link good · ⏳=wait a tick · ⚠=worker not reading inbox (add an inbox-poll + ack step to its loop prompt).');
