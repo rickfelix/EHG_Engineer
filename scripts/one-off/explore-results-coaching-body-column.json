@@ -1,0 +1,14 @@
+{
+  "verdict": "PASS",
+  "confidence": 95,
+  "summary": "Discovery pass confirmed the only session_coordination inserts with message_type='COACHING' that lacked a top-level body column were the 3 sites already fixed (scripts/coordinator-self-review.mjs lines ~156 and ~170, scripts/coordinator-comms-check.mjs line ~84). All other COACHING-typed writers (scripts/fleet-coaching.cjs sendCoaching/sendDeconflictionReply, lib/coordinator/adam-action-ack.cjs applyEscalation) already set a top-level body alongside their payload and were never bugged. No production call site remains that writes payload.body without a matching top-level body for this message class.",
+  "findings": [
+    "scripts/coordinator-comms-check.mjs:84 -- fixed, now has top-level body",
+    "scripts/coordinator-self-review.mjs:156 -- fixed, now has top-level body",
+    "scripts/coordinator-self-review.mjs:170 -- fixed, now has top-level body: adamBody",
+    "scripts/fleet-coaching.cjs:89 (sendCoaching) -- already correct (pre-existing)",
+    "scripts/fleet-coaching.cjs:172 (sendDeconflictionReply) -- already correct (pre-existing)",
+    "lib/coordinator/adam-action-ack.cjs:291 -- already correct (pre-existing)",
+    "scripts/adam-self-adherence-review.mjs -- read-only consumer of payload.body, never inserts a COACHING row -- not in scope"
+  ]
+}
