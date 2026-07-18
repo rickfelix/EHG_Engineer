@@ -114,16 +114,20 @@ describe('SD-FDBK-ENH-ORG-TEMPLATE-DELTA-001 — org-template delta', () => {
     expect(STANDARD_VENTURE_TEMPLATE.executives.find(e => e.agent_role === 'VP_GROWTH').stage_ownership).toEqual([22, 23, 24, 25, 26]);
   });
 
-  it('FR-4: EHG_SHARED_OPERATORS exports exactly the 4 named commodity operators, instantiate-once', () => {
+  it('FR-4: EHG_SHARED_OPERATORS exports the 5 named commodity operators (incl. RESEARCH_INTELLIGENCE_OPERATOR), instantiate-once', () => {
     expect(Array.isArray(EHG_SHARED_OPERATORS)).toBe(true);
     expect(EHG_SHARED_OPERATORS.map(o => o.agent_role).sort()).toEqual(
-      ['DATA_PLATFORM_OPERATOR', 'FINANCE_BILLING_OPERATOR', 'LEGAL_COMPLIANCE_OPERATOR', 'SECURITY_POSTURE_OPERATOR']
+      ['DATA_PLATFORM_OPERATOR', 'FINANCE_BILLING_OPERATOR', 'LEGAL_COMPLIANCE_OPERATOR', 'RESEARCH_INTELLIGENCE_OPERATOR', 'SECURITY_POSTURE_OPERATOR']
     );
     for (const op of EHG_SHARED_OPERATORS) {
       expect(op.placement).toBe('shared'); // chairman-ratified default
       expect(op.duty_cycle).toBeTruthy();
       expect(op.honest_idle).toBeTruthy();
     }
+    // SD-LEO-INFRA-RESEARCH-INTELLIGENCE-OPERATOR-001-A: the 5th operator ships defined-but-unarmed.
+    const research = EHG_SHARED_OPERATORS.find(o => o.agent_role === 'RESEARCH_INTELLIGENCE_OPERATOR');
+    expect(research).toBeTruthy();
+    expect(research.armed).toBe(false);
     // They are SEPARATE from the per-venture template (instantiate once at holdco level).
     const perVentureRoles = STANDARD_VENTURE_TEMPLATE.executives.map(e => e.agent_role);
     for (const op of EHG_SHARED_OPERATORS) expect(perVentureRoles).not.toContain(op.agent_role);
