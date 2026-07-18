@@ -48,7 +48,7 @@ describe('SD-LEO-INFRA-PLAN-LINKAGE-BELT-001: chain-order anti-gaming proof (FR-
   it('NOT TIED case: a prior objective comparator (e.g. unlockScore) already decides -> linkage is NEVER consulted', () => {
     // Unlinked SD has the objectively higher unlock score -- that comparator alone must decide,
     // and must NOT be overridden by plan_linkage even though linked=false loses the tie-break.
-    const unlockFavorsUnlinked = (a, b) => (a === unlinked ? -1 : 1); // unlinked wins on unlockScore
+    const unlockFavorsUnlinked = (a) => (a === unlinked ? -1 : 1); // unlinked wins on unlockScore
     const priorComparators = [() => 0, () => 0, () => 0, unlockFavorsUnlinked];
     const result = fullChainCompare(linked, unlinked, priorComparators);
     expect(result).toBeGreaterThan(0); // unlinked (b relative to a=linked) still wins -- anti-gaming holds
