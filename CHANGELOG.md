@@ -6,6 +6,7 @@
 - [2026-07-17](#2026-07-17)
   - [Security](#security)
   - [Infrastructure](#infrastructure)
+  - [Bugfix](#bugfix)
 - [2026-07-16](#2026-07-16)
   - [Features](#features)
   - [Infrastructure](#infrastructure)
@@ -125,6 +126,13 @@
   - **Recurred-family rule applied**: a prior fix (`SD-LEO-FIX-FIX-MULTI-SESSION-001`) had already addressed a related facet of this same gate, yet this Surface-A/Surface-B divergence recurred afterward — so per the recurred-family rule, a live-DB e2e acceptance test (not just mocked units) was required and added: `tests/integration/multi-session-claim-gate-surface-a.integration.test.js` seeds real `strategic_directives_v2` + `claude_sessions` rows reproducing the exact witnessed scenario (rightful owner not blocked by the phantom peer) plus the inverse no-regression case (a genuinely live foreign claim still blocks).
   - **Deep-tier adversarial review caught two real (fixed) findings, confirmed clean on the third pass**: round 1 found the owner-row `claude_sessions` lookup silently discarded its Supabase error, unlike the Surface A query above it — fixed by surfacing the error in the gate's `warnings`. Round 2 found the same error was still dropped on a different exit path (the BLOCK branch, reachable when the read errors but the owner's PID is independently alive) — fixed so both reachable exit paths surface it consistently. Round 3 confirmed clean.
   - **Verification**: 29 tests (15 rewritten unit + 12 unit + 2 live-DB e2e) pass; 102-test regression sweep across `tests/unit/claim/` and `tests/unit/session-writer/` clean. VALIDATION, Explore, TESTING (LEAD+EXEC), SECURITY, RETRO sub-agents all PASS. Handoffs LEAD-TO-PLAN 95, PLAN-TO-EXEC 98, EXEC-TO-PLAN 94, PLAN-TO-LEAD 97, LEAD-FINAL-APPROVAL 99.
+
+### Bugfix
+- **Batch eva_scheduler_metrics writes on the scheduler-tick path** - PR #6201 (SD-LEO-FIX-EVA-SCHEDULER-METRICS-001)
+  - **What shipped**: `eva_scheduler_metrics` grew ~110k rows/day. Grounding found retention was already delivered by a prior SD (`SD-REFILL-00LHUVME`) — a live `RETENTION_POLICIES` entry (90-day hot window) enforced by a weekly GHA cron — verified live against the DB (oldest row 37 days old, correctly configured, just not yet age-triggered). The unaddressed gap was the write path: `EvaMasterScheduler._emitMetric()` inserted one row per call across 12 per-tick call sites. Added `lib/eva/metrics-writer.js` (`MetricsWriter`), which buffers rows and flushes them as bulk `insert()` calls on a size (20 rows) or time (5s) trigger; `EvaMasterScheduler.stop()` now awaits a final flush on graceful shutdown so no buffered metric is lost. 4 other low-frequency direct-insert call sites (`domain-handler.js`, `okr-monthly-handler.js`, `okr-mid-month-review.js`) were intentionally left unbatched — not meaningful contributors to the growth rate.
+  - **Explore-review finding closed same-session**: batching a bulk array insert means one FK-violating row (e.g. a metric for a since-deleted venture — `eva_scheduler_metrics.venture_id` has no `ON DELETE CASCADE`) could roll back an entire batch of otherwise-good rows, a new failure-correlation mode the pre-batching single-row-insert code didn't have. Fixed with a row-by-row retry fallback in `MetricsWriter.flush()` so only the genuinely bad row is lost.
+  - **CI caught a real regression before merge**: `MetricsWriter`'s constructor initially threw if `supabase`/`table` were missing, but `lib/eva/rounds-scheduler.js` instantiates a module-level `EvaMasterScheduler` singleton without a DB client for registration-only use — eagerly imported by `lib/eva/event-bus/event-router.js` and transitively by ~59 test files, all of which failed at import time. Fixed by making construction lenient (matching the pre-existing `this.supabase = deps.supabase` possibly-undefined contract); `flush()` already failed soft if a write were attempted with no client configured.
+  - **Verification**: `lib/eva/metrics-writer.js` (new, 14 unit tests) + updated `tests/unit/eva-master-scheduler.test.js` metric-emission assertions for the batched-array `insert()` shape, plus a new `stop()`-flushes-buffered-metrics regression test. TESTING and SECURITY sub-agents (EXEC phase) both PASS. Handoffs LEAD-TO-PLAN 96, PLAN-TO-EXEC 95, EXEC-TO-PLAN 98, PLAN-TO-LEAD 98, LEAD-FINAL-APPROVAL 97.
 
 ## 2026-07-16
 
