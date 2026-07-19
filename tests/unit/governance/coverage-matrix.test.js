@@ -134,17 +134,20 @@ describe('enumerateDbTables (pg client)', () => {
 describe('enumerateMessageLanes (pg client enum + supabase signal_type window)', () => {
   it('combines structural enum labels (always active) with data-driven signal_type lanes', async () => {
     const pgClient = { query: () => Promise.resolve({ rows: [{ enumlabel: 'STOP_REQUESTED' }, { enumlabel: 'SAVE_WARNING' }] }) };
+    // FR-6 (count-truncation discipline): the signal_type window now paginates via
+    // fetchAllPaginated, so the chain ends .order(...).range(from, to).
+    const signalRows = [{ payload: { signal_type: 'stuck' }, created_at: new Date().toISOString() }];
     const supabase = {
-      from: () => ({
-        select: () => ({
-          not: () => ({
-            gte: () => Promise.resolve({
-              data: [{ payload: { signal_type: 'stuck' }, created_at: new Date().toISOString() }],
-              error: null,
-            }),
-          }),
-        }),
-      }),
+      from: () => {
+        const chain = {
+          select: () => chain,
+          not: () => chain,
+          gte: () => chain,
+          order: () => chain,
+          range: (from, to) => Promise.resolve({ data: signalRows.slice(from, to + 1), error: null }),
+        };
+        return chain;
+      },
     };
     const rows = await enumerateMessageLanes(pgClient, supabase);
     expect(rows).toEqual(expect.arrayContaining([
@@ -200,18 +203,29 @@ describe('regenerateCoverageMatrix: stale-marking on vanished surfaces', () => {
       from: (table) => {
         if (table === 'applications') return { select: () => ({ is: () => Promise.resolve({ data: [], error: null }) }) };
         if (table === 'session_coordination') {
-          return { select: () => ({ not: () => ({ gte: () => Promise.resolve({ data: [], error: null }) }) }) };
+          // FR-6 (count-truncation discipline): enumerateMessageLanes now paginates —
+          // chain ends .order(...).range(from, to).
+          const chain = {
+            select: () => chain, not: () => chain, gte: () => chain, order: () => chain,
+            range: () => Promise.resolve({ data: [], error: null }),
+          };
+          return chain;
         }
         if (table === 'coverage_matrix') {
           return {
-            select: () => ({
-              eq: (col, val) => {
-                if (col === 'surface_class' && val === 'db_table') {
-                  return Promise.resolve({ data: [{ surface_key: 'vanished_table' }], error: null });
-                }
-                return Promise.resolve({ data: [], error: null });
-              },
-            }),
+            // FR-6: the existing-rows read paginates — chain ends .eq(...).order(...).range(from, to).
+            select: () => {
+              let rows = [];
+              const chain = {
+                eq: (col, val) => {
+                  rows = (col === 'surface_class' && val === 'db_table') ? [{ surface_key: 'vanished_table' }] : [];
+                  return chain;
+                },
+                order: () => chain,
+                range: (from, to) => Promise.resolve({ data: rows.slice(from, to + 1), error: null }),
+              };
+              return chain;
+            },
             upsert: (rows) => { upserts.push(...rows); return Promise.resolve({ error: null }); },
             update: (patch) => ({
               eq: () => ({

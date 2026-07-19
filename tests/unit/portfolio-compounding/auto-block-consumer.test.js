@@ -84,15 +84,29 @@ describe('evaluateAutoBlock — fail-open', () => {
 });
 
 describe('runAutoBlockCheck — IO wrapper fail-open', () => {
+  // FR-6 (count-truncation discipline): loadEnabledPatterns now paginates via
+  // fetchAllPaginated, so the chain ends in .order(...).range(from, to).
+  function chainSb(result) {
+    const chain = {
+      select: () => chain,
+      eq: () => chain,
+      order: () => chain,
+      range: async (from, to) => (result.error
+        ? result
+        : { data: (result.data || []).slice(from, to + 1), error: null }),
+    };
+    return { from: () => chain };
+  }
+
   it('returns advisory + enabledCount=0 when the DB read fails (never blocks)', async () => {
-    const supabase = { from: () => ({ select: () => ({ eq: () => ({ eq: async () => ({ data: null, error: { message: 'db down' } }) }) }) }) };
+    const supabase = chainSb({ data: null, error: { message: 'db down' } });
     const r = await runAutoBlockCheck({ supabase, context: 'fs.rmSync(', enforce: true });
     expect(r.blocked).toBe(false);
     expect(r.enabledCount).toBe(0);
   });
 
   it('loads enabled patterns and advises by default', async () => {
-    const supabase = { from: () => ({ select: () => ({ eq: () => ({ eq: async () => ({ data: curated, error: null }) }) }) }) };
+    const supabase = chainSb({ data: curated, error: null });
     const r = await runAutoBlockCheck({ supabase, context: { text: 'fs.rmSync(x)' }, env: {} });
     expect(r.enabledCount).toBe(2);
     expect(r.verdict).toBe('ADVISE'); // env enforce unset -> advisory

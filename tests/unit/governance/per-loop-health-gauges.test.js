@@ -143,8 +143,9 @@ describe('fetchLoopStageRows', () => {
     const orderCalls = [];
     await fetchLoopStageRows(makeSb([], orderCalls), 'A_applied_rate', { limit: 10 });
     expect(orderCalls[0]).toEqual({ col: 'entered_at', opts: { ascending: false } });
-    // The pagination tiebreaker is a secondary order — the primary DESC recency order stays first.
-    expect(orderCalls.map((c) => c.col)).toEqual(['entered_at', 'cycle_id']);
+    // The pagination tiebreakers are secondary orders — the primary DESC recency order stays
+    // first; (cycle_id, stage) make the sort total for stable page boundaries.
+    expect(orderCalls.map((c) => c.col)).toEqual(['entered_at', 'cycle_id', 'stage']);
   });
 
   it('returns truncated:false when fewer rows than the limit are returned', async () => {

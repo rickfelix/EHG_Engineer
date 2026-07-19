@@ -6,8 +6,8 @@
   "bounded-by-design": 2995,
   "needs-review": 1822,
   "already-exact": 175,
-  "paginated": 101,
-  "tripwired": 20,
+  "paginated": 106,
+  "tripwired": 15,
   "non-live-path": 4053
  },
  "ledger_sites": [
@@ -2854,61 +2854,31 @@
    "exemption_note": "per-SD gate_bypass audit entries — small per-sd_key set"
   },
   {
-   "site": "lib/governance/auto-block-consumer.js:94",
-   "classification": "tripwired",
-   "auto_classification": "needs-review",
-   "exemption_note": "FR-6: exact-cap console.warn tripwire applied after the await (fail-open loader contract; unit-test chain stubs expose no .order/.range)"
-  },
-  {
    "site": "lib/governance/chairman-override-auditor.js:77",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": "per-SD chairman override-request history — small per-sd_id set"
   },
   {
-   "site": "lib/governance/coverage-matrix-referent-audit.js:111",
-   "classification": "tripwired",
-   "auto_classification": "needs-review",
-   "exemption_note": "FR-6: assertNotCapTruncated applied at the sampleCandidates site (fail-loud matches the throw policy)"
-  },
-  {
-   "site": "lib/governance/coverage-matrix-referent-audit.js:22",
-   "classification": "tripwired",
-   "auto_classification": "needs-review",
-   "exemption_note": "FR-6: assertNotCapTruncated applied at the rows destructure (fail-loud matches the throw policy; chain stubs expose no .order/.range)"
-  },
-  {
-   "site": "lib/governance/coverage-matrix.js:145",
-   "classification": "tripwired",
-   "auto_classification": "needs-review",
-   "exemption_note": "FR-6: assertNotCapTruncated applied after the await in enumerateMessageLanes (fail-loud matches the throw policy)"
-  },
-  {
-   "site": "lib/governance/coverage-matrix.js:170",
+   "site": "lib/governance/coverage-matrix.js:173",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": "applications registry (deleted_at IS NULL) — small enumerated set"
   },
   {
-   "site": "lib/governance/coverage-matrix.js:277",
-   "classification": "tripwired",
-   "auto_classification": "needs-review",
-   "exemption_note": "FR-6: assertNotCapTruncated applied after the fetch in regenerateCoverageMatrix (fail-loud matches the throw policy)"
-  },
-  {
-   "site": "lib/governance/cross-venture-capability-graph.js:116",
+   "site": "lib/governance/cross-venture-capability-graph.js:120",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": "active strategy_objectives — small governed objective set"
   },
   {
-   "site": "lib/governance/cross-venture-capability-graph.js:139",
+   "site": "lib/governance/cross-venture-capability-graph.js:143",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": "per-capability venture rows — bounded by the (operationally tiny) venture count"
   },
   {
-   "site": "lib/governance/cross-venture-capability-graph.js:28",
+   "site": "lib/governance/cross-venture-capability-graph.js:32",
    "classification": "tripwired",
    "auto_classification": "needs-review",
    "exemption_note": "FR-6: exact-cap console.warn tripwire applied after the empty-check (module never throws to callers; chain stubs expose no .order/.range)"
@@ -2944,13 +2914,13 @@
    "exemption_note": "eq(last_seen_sd_id=workKey)-bounded pattern probe — small per-work-key set"
   },
   {
-   "site": "lib/governance/pattern-closure.js:121",
+   "site": "lib/governance/pattern-closure.js:125",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": "update-returning select — bounded by the atomic resolve UPDATE result set (.in(toResolve))"
   },
   {
-   "site": "lib/governance/pattern-closure.js:64",
+   "site": "lib/governance/pattern-closure.js:68",
    "classification": "tripwired",
    "auto_classification": "needs-review",
    "exemption_note": "FR-6: exact-cap console.warn tripwire applied after the candidate read (never-throw contract; chain stubs expose no .order/.range)"

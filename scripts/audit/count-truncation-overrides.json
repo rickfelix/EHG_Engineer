@@ -409,55 +409,10 @@
   "match": "id, gate_name, severity, reason",
   "note": "per-SD gate_bypass audit entries — small per-sd_key set"
  },
- "lib/governance/auto-block-consumer.js:94": {
-  "classification": "tripwired",
-  "match": "auto_block_on_match",
-  "note": "FR-6: exact-cap console.warn tripwire applied after the await (fail-open loader contract; unit-test chain stubs expose no .order/.range)"
- },
  "lib/governance/chairman-override-auditor.js:77": {
   "classification": "bounded-by-design",
   "match": "id, decision_type, status, context, created_at",
   "note": "per-SD chairman override-request history — small per-sd_id set"
- },
- "lib/governance/coverage-matrix-referent-audit.js:22": {
-  "classification": "tripwired",
-  "match": "surface_class, surface_key, status, is_active, first_seen_at",
-  "note": "FR-6: assertNotCapTruncated applied at the rows destructure (fail-loud matches the throw policy; chain stubs expose no .order/.range)"
- },
- "lib/governance/coverage-matrix-referent-audit.js:111": {
-  "classification": "tripwired",
-  "match": "surface_class, surface_key",
-  "note": "FR-6: assertNotCapTruncated applied at the sampleCandidates site (fail-loud matches the throw policy)"
- },
- "lib/governance/coverage-matrix.js:145": {
-  "classification": "tripwired",
-  "match": "payload, created_at",
-  "note": "FR-6: assertNotCapTruncated applied after the await in enumerateMessageLanes (fail-loud matches the throw policy)"
- },
- "lib/governance/coverage-matrix.js:170": {
-  "classification": "bounded-by-design",
-  "match": "normalized_name",
-  "note": "applications registry (deleted_at IS NULL) — small enumerated set"
- },
- "lib/governance/coverage-matrix.js:277": {
-  "classification": "tripwired",
-  "match": ".select('surface_key')",
-  "note": "FR-6: assertNotCapTruncated applied after the fetch in regenerateCoverageMatrix (fail-loud matches the throw policy)"
- },
- "lib/governance/cross-venture-capability-graph.js:28": {
-  "classification": "tripwired",
-  "match": "capability_key:name",
-  "note": "FR-6: exact-cap console.warn tripwire applied after the empty-check (module never throws to callers; chain stubs expose no .order/.range)"
- },
- "lib/governance/cross-venture-capability-graph.js:116": {
-  "classification": "bounded-by-design",
-  "match": "target_capabilities, time_horizon",
-  "note": "active strategy_objectives — small governed objective set"
- },
- "lib/governance/cross-venture-capability-graph.js:139": {
-  "classification": "bounded-by-design",
-  "match": "venture_id:origin_venture_id, maturity_level",
-  "note": "per-capability venture rows — bounded by the (operationally tiny) venture count"
  },
  "lib/governance/emit-feedback.js:54": {
   "classification": "bounded-by-design",
@@ -483,16 +438,6 @@
   "classification": "bounded-by-design",
   "match": "eq('last_seen_sd_id', workKey)",
   "note": "eq(last_seen_sd_id=workKey)-bounded pattern probe — small per-work-key set"
- },
- "lib/governance/pattern-closure.js:64": {
-  "classification": "tripwired",
-  "match": "pattern_id, prevention_checklist",
-  "note": "FR-6: exact-cap console.warn tripwire applied after the candidate read (never-throw contract; chain stubs expose no .order/.range)"
- },
- "lib/governance/pattern-closure.js:121": {
-  "classification": "bounded-by-design",
-  "match": ".select('pattern_id');",
-  "note": "update-returning select — bounded by the atomic resolve UPDATE result set (.in(toResolve))"
  },
  "lib/governance/portfolio-calibrator.js:86": {
   "classification": "bounded-by-design",
@@ -538,5 +483,35 @@
   "classification": "bounded-by-design",
   "match": "venture_id, delivers_capabilities, sd_key",
   "note": ".in(venture_id)-bounded SD read — bounded by the real-venture id list"
+ },
+ "lib/governance/coverage-matrix.js:173": {
+  "classification": "bounded-by-design",
+  "match": "normalized_name",
+  "note": "applications registry (deleted_at IS NULL) — small enumerated set"
+ },
+ "lib/governance/cross-venture-capability-graph.js:120": {
+  "classification": "bounded-by-design",
+  "match": "target_capabilities, time_horizon",
+  "note": "active strategy_objectives — small governed objective set"
+ },
+ "lib/governance/cross-venture-capability-graph.js:143": {
+  "classification": "bounded-by-design",
+  "match": "venture_id:origin_venture_id, maturity_level",
+  "note": "per-capability venture rows — bounded by the (operationally tiny) venture count"
+ },
+ "lib/governance/cross-venture-capability-graph.js:32": {
+  "classification": "tripwired",
+  "match": "capability_key:name",
+  "note": "FR-6: exact-cap console.warn tripwire applied after the empty-check (module never throws to callers; chain stubs expose no .order/.range)"
+ },
+ "lib/governance/pattern-closure.js:125": {
+  "classification": "bounded-by-design",
+  "match": ".select('pattern_id');",
+  "note": "update-returning select — bounded by the atomic resolve UPDATE result set (.in(toResolve))"
+ },
+ "lib/governance/pattern-closure.js:68": {
+  "classification": "tripwired",
+  "match": "pattern_id, prevention_checklist",
+  "note": "FR-6: exact-cap console.warn tripwire applied after the candidate read (never-throw contract; chain stubs expose no .order/.range)"
  }
 }
