@@ -10,6 +10,8 @@
  *   paginated           — .range( on the same chain, or routed through fetchAllPaginated
  *   non-live-path       — file lives under an archived/one-off/deprecated path (see
  *                         NON_LIVE_PATH_RES); applied BEFORE the chain heuristics
+ *   tripwired           — assertNotCapTruncated/warnIfCapTruncated on the chain (or via
+ *                         override when the wrapper sits at a distant destructure site)
  *   needs-review        — none of the above: candidate gauge/bulk site (FR-6/FR-7 ledger)
  *
  * Non-live-path rationale (FR-6 batch 3): scripts/archive/, scripts/one-off/,
