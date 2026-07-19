@@ -260,16 +260,21 @@ function stateFilePath(sessionId) {
  * Build a stable signature for a tool invocation.
  *
  * SD-LEO-INFRA-RCA-TIERED-SIGNATURE-001: optional `lastOutcome` param mixes a
- * digest of {exit_code, stderr_sha} into the Bash signature so iterative TDD
- * (different failure each retry) does NOT collapse into the stuck-loop signature.
+ * digest of {exit_code, stderr_sha, stdout_sha} into the Bash signature so iterative
+ * TDD (different failure each retry) does NOT collapse into the stuck-loop signature.
  * Same outcome → same digest → stuck-loop detection preserved.
+ *
+ * SD-LEO-INFRA-RCA-TIERED-SIGNATURE-FALSE-POSITIVE-001: stdout_sha is the primary real
+ * differentiator on Claude Code — stderr_sha is near-always '' (real stderr is never
+ * delivered on this harness; error text lands in stdout instead), so stderr_sha+exit_code
+ * alone systematically collapsed distinct failures into one signature.
  *
  * Edit/Write/MultiEdit signatures are unchanged — file_path is the natural key.
  *
  * @param {string} toolName
  * @param {Object} input
- * @param {{exit_code?: number|string, stderr_sha?: string}} [lastOutcome] - optional outcome
- *        from the prior tool call (captured by post-tool-rca-outcome.cjs).
+ * @param {{exit_code?: number|string, stderr_sha?: string, stdout_sha?: string}} [lastOutcome] -
+ *        optional outcome from the prior tool call (captured by post-tool-rca-outcome.cjs).
  *        Without it, returns the legacy command-only signature (back-compat).
  * @returns {string|null}
  */
@@ -292,14 +297,21 @@ function signatureFor(toolName, input, lastOutcome) {
     if (!cmd) return null;
     const hash = bashCmdHash(cmd);
     // Outcome admixture (back-compat: missing/malformed lastOutcome → command-only signature).
+    // SD-LEO-INFRA-RCA-TIERED-SIGNATURE-FALSE-POSITIVE-001: also admix stdout_sha — on
+    // Claude Code, stderr_sha is near-always '' (real stderr is never delivered; error
+    // text lands in stdout instead), so stderr_sha ALONE zeroed out the digest's entropy
+    // and distinct failures collapsed into one signature. stdout_sha carries the real
+    // distinguishing content. Trigger condition includes stdout_sha so a lastOutcome
+    // carrying ONLY stdout_sha (no exit_code/stderr_sha) still gets outcome admixture.
     if (
       lastOutcome &&
       typeof lastOutcome === 'object' &&
-      (lastOutcome.exit_code !== undefined || lastOutcome.stderr_sha !== undefined)
+      (lastOutcome.exit_code !== undefined || lastOutcome.stderr_sha !== undefined || lastOutcome.stdout_sha !== undefined)
     ) {
       const ec = lastOutcome.exit_code === undefined ? '' : String(lastOutcome.exit_code);
       const ss = typeof lastOutcome.stderr_sha === 'string' ? lastOutcome.stderr_sha : '';
-      const outcomeDigest = crypto.createHash('sha256').update(`${ec}|${ss}`).digest('hex').slice(0, 8);
+      const so = typeof lastOutcome.stdout_sha === 'string' ? lastOutcome.stdout_sha : '';
+      const outcomeDigest = crypto.createHash('sha256').update(`${ec}|${ss}|${so}`).digest('hex').slice(0, 8);
       return `Bash:${hash}:${outcomeDigest}`;
     }
     return `Bash:${hash}`;

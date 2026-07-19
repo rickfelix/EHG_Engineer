@@ -1,0 +1,73 @@
+{
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Capture a real content fingerprint (stdout_sha) alongside the existing stderr_sha",
+      "priority": "critical",
+      "description": "scripts/hooks/post-tool-rca-outcome.cjs gains digestStdoutTail(stdout) (generalized from the existing digestStderr via a shared digestContent(firstLine + normalized bounded body-window) helper), captures tool_response.stdout (fallback .output) UNCONDITIONALLY (not gated on inferred failure), and writes a new stdout_sha field into .claude/last-outcome-<session>.json alongside the existing tool_name/exit_code/stderr_sha/command_sha fields. ROOT CAUSE (empirically confirmed, not assumed): Claude Code's Bash tool_response never populates real stderr content or a numeric exit_code -- confirmed by the coordinator-confirmed RCA (session 89b12649, 169-session proof: stderr_sha only ever {'', sha256('')}, exit_code only ever {0,null}) AND independently re-confirmed live during this SD's own investigation by capturing a genuine failure's real PostToolUse payload: {stdout: '<all error text + an uncaught native crash message>', stderr: '', interrupted: false, isImage: false, noOutputExpected: false} -- structurally IDENTICAL in shape to a successful command's tool_response, with zero distinguishing boolean/field difference; only stdout CONTENT differs. Additive-only change: the existing stderr_sha/exit_code fields and their consumers (Control 1+2's noFailureSignal read-only-command exemption) are left byte-identical in semantics.",
+      "acceptance_criteria": [
+        "digestStdoutTail(stdout) returns a 16-hex-char digest for non-empty input, '' for empty/non-string input, using the same first-line + normalized-body-window approach as digestStderr",
+        "The outcome file written by post-tool-rca-outcome.cjs includes a stdout_sha field for every Bash invocation where stdout has content, independent of whether exit_code/stderr_sha are populated",
+        "Independently verified (Explore sub-agent, this SD's LEAD-TO-PLAN phase, PASS 95%) that no other consumer in the repo reads stderr_sha in a way this addition could break -- confirmed via full-repo grep of .stderr_sha property access (exactly 2 production sites, both inside retry-state-manager.cjs itself)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Mix stdout_sha into the Bash retry signature's outcome digest",
+      "priority": "critical",
+      "description": "scripts/hooks/retry-state-manager.cjs's signatureFor() mixes lastOutcome.stdout_sha into the Bash outcome digest (SHA256 of exit_code|stderr_sha|stdout_sha, truncated to 8 hex chars) alongside the existing exit_code/stderr_sha fields, producing signatures shaped Bash:<cmdHash>:<outcomeDigest>. The outcome-admixture trigger condition is extended so a lastOutcome carrying ONLY stdout_sha (no exit_code/stderr_sha) still gets outcome admixture instead of falling back to the legacy command-only signature. SCOPE BOUNDARY (VALIDATION-imposed, LEAD-TO-PLAN CONDITIONAL_PASS->corrected): this FR fixes signature DIFFERENTIATION only. It does NOT touch, and does NOT fix, the separate succeeding-poll exemption in recordAndCount() (scripts/hooks/retry-state-manager.cjs, from SD-FDBK-FIX-RCA-TIERED-ENFORCEMENT-001) or the Control 4 absence-of-failure exit_code inference (post-tool-rca-outcome.cjs, from SD-LEO-INFRA-RCA-AUTOSIGNAL-FALSE-POSITIVE-001) -- both are pre-existing, separately-shipped, separately-tested features; bundling a fix to them into this PR would be a materially larger, riskier change requiring its own RCA-informed design. See the KNOWN LIMITATIONS section below and follow-up SD-LEO-INFRA-SUCCEEDING-POLL-EXEMPTION-001 (filed this session, priority=high, by VALIDATION's explicit recommendation).",
+      "acceptance_criteria": [
+        "3 distinct real-shaped Bash failures on the same command (identical command text, distinct stdout content, real-harness-shaped lastOutcome with NO matching command_sha carried -- i.e. the succeeding-poll exemption does not apply) each produce a DISTINCT signature and track attempts=1 under their own signature -- no false collapse into a shared stuck-loop signature",
+        "A legitimately-different 4th attempt (distinct stdout content again, e.g. an eventual success) on the same command also gets a fresh signature at attempts=1 -- not hard-blocked by the accumulated count of a prior (now-distinct) signature",
+        "REGRESSION GUARD: 3 IDENTICAL real-shaped failures (same stdout content each time, no matching command_sha) still correctly accumulate to attempts=3 under ONE shared signature -- the stuck-loop detection this feature exists for is preserved, not weakened, by the stdout_sha admixture",
+        "KNOWN LIMITATION test (not a failure of this FR, an honest documentation of a DIFFERENT, pre-existing defect): when a matching command_sha IS carried on lastOutcome (the dominant real-world shape once outcome capture has fired at least once for a repeated command), the succeeding-poll exemption in recordAndCount() pre-empts signature-based counting entirely BEFORE this FR's stdout_sha admixture is even consulted -- attempts stays 0 across repeats, regardless of stdout content. This is proven by a dedicated test and tracked as its own follow-up SD (SD-LEO-INFRA-SUCCEEDING-POLL-EXEMPTION-001), NOT silently claimed as fixed by this SD"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "De-mask the test suite against the REAL Claude Code tool_response shape",
+      "priority": "critical",
+      "description": "New test file tests/unit/rca-tiered-signature-real-payload.test.js exercises the fix end-to-end using ONLY the empirically-real payload shape (no exit_code field, stderr always '', distinguishing content only in stdout) -- the exact shape the RCA proved is the ONLY shape Claude Code ever produces, in contrast to the pre-existing test suite (scripts/hooks/__tests__/retry-state-manager-outcome-mix.test.js and incidental cases elsewhere) which constructs synthetic lastOutcome objects with distinct stderr_sha values per attempt, a shape that never occurs in production and which is why the pre-fix collapse shipped green. This SD's new test file FIRST demonstrates the pre-fix collapse explicitly (stderr_sha alone is constant across 3 distinct real-shaped failures) before proving the post-fix signature differentiation. Pre-existing test-mask sites (identified by the Explore sub-agent this SD's LEAD-TO-PLAN phase) are catalogued but explicitly NOT modified -- out of scope for this SD, which fixes the PRODUCTION code path, not every pre-existing test fixture.",
+      "acceptance_criteria": [
+        "tests/unit/rca-tiered-signature-real-payload.test.js exists and passes, using ONLY the real empirically-captured tool_response shape ({stdout, stderr:'', interrupted:false, isImage:false, noOutputExpected:false}, no exit_code/is_error/isError/error field anywhere)",
+        "The test file includes an explicit 'PRE-FIX REGRESSION DOCUMENTATION' case proving stderr_sha alone collapses to a single constant value across 3 distinct real-shaped failures -- the exact defect being fixed, made undeniable rather than merely asserted in prose",
+        "Full relevant test suite (post-tool-rca-outcome.test.js, retry-state-manager*.test.js, the new de-masking file) passes with zero regressions"
+      ]
+    }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "type": "unit", "scenario": "digestStdoutTail on empty/non-string input", "expected": "Returns ''" },
+    { "id": "TS-2", "type": "unit", "scenario": "digestStdoutTail on two distinct governance-trigger error strings", "expected": "Two different 16-hex digests" },
+    { "id": "TS-3", "type": "unit", "scenario": "digestStdoutTail on a genuinely-identical recurrence differing only by a volatile timestamp", "expected": "Same digest (normalization preserved)" },
+    { "id": "TS-4", "type": "unit", "scenario": "post-tool-rca-outcome.cjs writes stdout_sha into the outcome file for a real-shaped Bash payload with non-empty stdout, empty stderr", "expected": "stdout_sha is a 16-hex digest matching digestStdoutTail(stdout) exactly" },
+    { "id": "TS-5", "type": "unit", "scenario": "signatureFor: stdout_sha alone (no exit_code/stderr_sha) triggers outcome admixture", "expected": "Signature format Bash:<hash>:<8-hex-digest>, distinct from the command-only baseline" },
+    { "id": "TS-6", "type": "unit", "scenario": "signatureFor: same exit_code+stderr_sha but different stdout_sha", "expected": "Distinct signatures" },
+    { "id": "TS-7", "type": "unit", "scenario": "signatureFor: identical {exit_code, stderr_sha, stdout_sha}", "expected": "Identical signature (stuck-loop detection preserved)" },
+    { "id": "TS-8", "type": "integration", "scenario": "recordAndCount: 3 distinct real-shaped failures (no matching command_sha) on the same command", "expected": "3 distinct signatures, each attempts=1; a legitimately-different 4th attempt also gets a fresh signature at attempts=1 -- not hard-blocked" },
+    { "id": "TS-9", "type": "integration", "scenario": "recordAndCount: 3 IDENTICAL real-shaped failures (no matching command_sha)", "expected": "One shared signature, attempts increments 1,2,3 -- stuck-loop detection (teeth) preserved" },
+    { "id": "TS-10", "type": "integration", "scenario": "KNOWN LIMITATION: recordAndCount with a matching command_sha carried on lastOutcome (the dominant real-world repeat-command shape) for 3 IDENTICAL real-shaped failures", "expected": "attempts stays 0 across all 3 (the succeeding-poll exemption pre-empts counting) -- documented honestly as a pre-existing, separate defect NOT fixed by this SD, tracked in follow-up SD-LEO-INFRA-SUCCEEDING-POLL-EXEMPTION-001" },
+    { "id": "TS-11", "type": "unit", "scenario": "Regression: full pre-existing test suite for both hook files (post-tool-rca-outcome.test.js, retry-state-manager*.test.js) with the additive stdout_sha change", "expected": "Zero regressions, all pre-existing tests still pass unmodified" }
+  ],
+  "risks": [
+    {
+      "risk": "The succeeding-poll exemption's over-broad match (command_sha + Control-4-inferred exit_code:0) means this fix's real-world impact is narrower than the SD's original problem narrative implied -- it fully protects the signature-differentiation layer but does not restore end-to-end 3-strikes efficacy for the dominant same-command-repeat blind-retry pattern",
+      "severity": "high",
+      "mitigation": "VALIDATION-caught during LEAD-TO-PLAN adversarial review (not silently shipped). Filed as a first-class, high-priority follow-up SD (SD-LEO-INFRA-SUCCEEDING-POLL-EXEMPTION-001) rather than bundled into this SD's smaller, safer, well-tested scope. This SD's own test suite includes an explicit KNOWN LIMITATION test (TS-10) so the gap is a regression canary, not a silent claim of completeness."
+    },
+    {
+      "risk": "digestStdoutTail's normalizeVolatileTokens reuse could over-normalize genuinely-distinguishing stdout content (e.g. two different failures whose only difference is a large number that happens to look like a volatile numeric id), causing an unintended re-collapse",
+      "severity": "low",
+      "mitigation": "Reuses the EXACT SAME, already-tested normalizeVolatileTokens function shipped by SD-LEO-FIX-RCA-HASH-COLLISION-001 for digestStderr -- no new normalization logic introduced, so no new over-normalization risk beyond what that already-verified function carries. Existing tests (post-tool-rca-outcome.test.js's normalizeVolatileTokens suite) already cover this boundary."
+    },
+    {
+      "risk": "Capturing stdout unconditionally (not gated on inferred failure) could grow the outcome file size or leak sensitive command output into .claude/last-outcome-<session>.json",
+      "severity": "low",
+      "mitigation": "digestStdoutTail only stores a bounded 16-hex-char SHA256 digest of a truncated (first line + 5 body lines) window -- never the raw stdout text itself. The outcome file's total size growth is negligible (one short string field), and no raw command output is persisted."
+    },
+    {
+      "risk": "This session's own investigation found the shared repo root (used for hook execution via CLAUDE_PROJECT_DIR) was stale relative to origin/main (checked out on an unrelated docs-changelog branch from earlier session work), meaning production hooks may be running an OLDER version of retry-state-manager.cjs/post-tool-rca-outcome.cjs than what ships in this PR until the shared root is updated",
+      "severity": "medium",
+      "mitigation": "Out of scope for this SD to fix (a separate session/environment-hygiene issue, not a code defect) -- flagged via /signal harness-bug this session for coordinator awareness. The fix itself is correct and will take effect fleet-wide once the shared root's checkout is refreshed to include this merged commit (the normal path once the PR merges to main and the shared root's session or a maintenance job re-syncs)."
+    }
+  ]
+}

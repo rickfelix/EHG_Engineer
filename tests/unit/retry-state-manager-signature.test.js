@@ -53,4 +53,24 @@ describe('signatureFor content discrimination (SD-FDBK-ENH-PRE-TOOL-ENFORCE-001)
   it('Edit: missing file_path → null (unchanged guard)', () => {
     expect(signatureFor('Edit', {})).toBeNull();
   });
+
+  it('SD-LEO-INFRA-RCA-TIERED-SIGNATURE-FALSE-POSITIVE-001: Bash — stdout_sha alone (no exit_code/stderr_sha) still triggers outcome admixture', () => {
+    const baseline = signatureFor('Bash', { command: 'x' });
+    const withStdoutSha = signatureFor('Bash', { command: 'x' }, { stdout_sha: 'abc123' });
+    expect(withStdoutSha).not.toBe(baseline);
+    expect(withStdoutSha).toMatch(/^Bash:[0-9a-f]{16}:[0-9a-f]{8}$/);
+  });
+
+  it('SD-LEO-INFRA-RCA-TIERED-SIGNATURE-FALSE-POSITIVE-001: Bash — same exit_code+stderr_sha but different stdout_sha → distinct signatures', () => {
+    const a = signatureFor('Bash', { command: 'x' }, { exit_code: 0, stderr_sha: '', stdout_sha: 'aaa' });
+    const b = signatureFor('Bash', { command: 'x' }, { exit_code: 0, stderr_sha: '', stdout_sha: 'bbb' });
+    expect(a).not.toBe(b);
+  });
+
+  it('SD-LEO-INFRA-RCA-TIERED-SIGNATURE-FALSE-POSITIVE-001: Bash — identical {exit_code, stderr_sha, stdout_sha} → identical signature (stuck-loop detection preserved)', () => {
+    const outcome = { exit_code: 0, stderr_sha: '', stdout_sha: 'same' };
+    const a = signatureFor('Bash', { command: 'x' }, outcome);
+    const b = signatureFor('Bash', { command: 'x' }, outcome);
+    expect(a).toBe(b);
+  });
 });

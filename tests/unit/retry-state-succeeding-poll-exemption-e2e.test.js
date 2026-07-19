@@ -15,6 +15,13 @@
  * (post-tool-rca-outcome.cjs via spawnSync) with a Claude-SHAPED payload and threads its
  * actual output (or absence) into recordAndCount(), proving enforcement at the counter
  * through the true writer→reader seam rather than a hand-crafted object.
+ *
+ * MERGED with SD-LEO-INFRA-RCA-TIERED-SIGNATURE-FALSE-POSITIVE-001 (stdout_sha capture,
+ * built concurrently and merged the same window): post-tool-rca-outcome.cjs now ALSO
+ * captures a stdout_sha content digest, so a last-outcome file IS written whenever stdout
+ * has content (even though exit_code itself is never fabricated). The assertions below
+ * were updated accordingly (file written, exit_code stays null) -- the core proof (the
+ * succeeding-poll exemption cannot fire without a genuine exit_code:0) is unchanged.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createRequire } from 'module';
@@ -79,9 +86,14 @@ describe('SUCCEEDING-POLL-EXEMPTION-001 — real writer→reader seam', () => {
     const attempts = [];
     for (let i = 0; i < 3; i++) {
       const lastOutcome = driveHook(claudeShapedFailurePayload());
-      // Post-fix: absence-of-failure is no longer fabricated into exit_code:0, so the hook
-      // writes NO last-outcome file for a Claude-shaped failure — the lie is gone at source.
-      expect(lastOutcome).toBeUndefined();
+      // Combined with SD-LEO-INFRA-RCA-TIERED-SIGNATURE-FALSE-POSITIVE-001 (stdout_sha
+      // capture): the hook NOW writes a last-outcome file for a Claude-shaped failure
+      // (stdout has real content), but exit_code stays null (never fabricated to 0) —
+      // so the succeeding-poll exemption's `lo.exit_code===0` condition is never
+      // satisfied, and the fabricated-success lie is still gone at the source.
+      expect(lastOutcome).toBeDefined();
+      expect(lastOutcome.exit_code).toBeNull();
+      expect(lastOutcome.stdout_sha).toMatch(/^[0-9a-f]{16}$/);
       const r = await recordAndCount(SESSION, null, 'Bash', { command: FAIL_CMD }, {
         rcaCheck: noReset, now: 1000 + i * 1000, lastOutcome,
       });
@@ -97,9 +109,13 @@ describe('SUCCEEDING-POLL-EXEMPTION-001 — real writer→reader seam', () => {
       tool_response: { stdout: 'ok', stderr: '' }, // Claude success shape: no exit_code
     };
     const lastOutcome = driveHook(successPayload);
-    expect(lastOutcome).toBeUndefined(); // no fabricated exit_code:0 reaches the reader
+    // Combined with stdout_sha capture: a file IS now written (stdout has content 'ok'),
+    // but exit_code stays null -- the succeeding-poll exemption's `lo.exit_code===0`
+    // condition is never satisfied, so it still cannot fire on a fabricated success.
+    expect(lastOutcome).toBeDefined();
+    expect(lastOutcome.exit_code).toBeNull();
 
-    // Because no succeeding poll was recorded, a subsequent identical FAILURE is NOT
+    // Because no exit_code:0 was recorded, a subsequent identical FAILURE is NOT
     // exempted — it accumulates rather than being masked by an inferred success.
     const r = await recordAndCount(SESSION, null, 'Bash', { command: FAIL_CMD }, {
       rcaCheck: noReset, now: 1000, lastOutcome,
