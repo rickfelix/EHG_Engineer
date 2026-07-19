@@ -87,6 +87,7 @@ export const RESPONSIBILITIES = [
 // — dropped as a phantom/typo'd scope-text reference, not implemented.
 export const STANDARD_LOOPS = [
   { key: 'sweep',       label: 'Stale-session sweep',  script: 'stale-session-sweep.cjs',   cron: '*/5 * * * *',
+    gha_backed: true,
     prompt: 'node scripts/stale-session-sweep.cjs' },
   // SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: the quiet-tick cutover (docs/protocol/
   // fleet-hibernation-quiet-tick.md). ONE self-pacing LLM tick composes the folded loops below
@@ -115,6 +116,7 @@ export const STANDARD_LOOPS = [
   // SD-LEO-INFRA-ACTIVATE-FEATURE-FLAG-001 (FR-5): daily feature-flag governance review.
   // Gated default-OFF behind leo_feature_flags FLAG_GOVERNANCE_REVIEW_V1 → cheap no-op until enabled.
   { key: 'flag-review', label: 'Feature-flag governance review', script: 'flag-governance-review.mjs', cron: '0 9 * * *',
+    gha_backed: true,
     prompt: 'node scripts/flag-governance-review.mjs' },
   // Work-triggered tri-party self-review: cheap poller (no-op below COORD_REVIEW_EVERY completed-SD delta),
   // fires the coordinator<->workers<->Adam review only when due. SD-LEO-INFRA-ARM-CANONICALIZE-WORK-001.
@@ -142,6 +144,7 @@ export const STANDARD_LOOPS = [
   // (reuses backlog-rank's own claimable computation); offset from backlog-rank's own cadence so it
   // always observes a just-refreshed rank rather than racing it.
   { key: 'unranked-gauge', label: 'Eligible-but-unranked-leaf-count invariant gauge', script: 'gauge-unranked-claimable-leaves.mjs', cron: '9,24,39,54 * * * *',
+    gha_backed: true,
     prompt: 'node scripts/gauge-unranked-claimable-leaves.mjs' },
   // QF-20260702-976: the OPERATING layer for SD-LEO-INFRA-COORDINATOR-ORCHESTRATED-SINGLETON-REFRESH-001-A.
   // The trigger + scheduler logic (lib/coordinator/singleton-relaunch-trigger.js, scripts/
@@ -155,23 +158,27 @@ export const STANDARD_LOOPS = [
   // and the human-gated spawn step). Cheap (git + a few DB reads); offset from the other */15-ish
   // loops so it doesn't cluster.
   { key: 'singleton-relaunch', label: 'Singleton-relaunch quiescent-window scheduler (detection + scheduling only)', script: 'singleton-relaunch-scheduler.mjs', cron: '7,22,37,52 * * * *',
+    gha_backed: true,
     prompt: 'npm run singleton-relaunch:run' },
   // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-1/FR-2: drains
   // the tracked relay-request queue deliberately (never processed inline in the active
   // thread) and writes the CONFIRM-ON-RELAY receipt. Frequent — a queued relay-request is
   // exactly as urgent when the fleet is quiet (confirmed incident #1: ~2h undrained).
   { key: 'relay-drain', label: 'Relay-request queue drain + confirm-on-relay', script: 'coordinator-relay-drain.cjs', cron: '1,16,31,46 * * * *',
+    gha_backed: true,
     prompt: 'node scripts/coordinator-relay-drain.cjs' },
   // FR-3: the drop-gauge — flags any inbound RELAY/DECISION/REVIEW row with no matching
   // outbound within the window (default ~15min). Offset from relay-drain so it observes a
   // just-drained queue rather than racing it.
   { key: 'relay-drop-gauge', label: 'Unactioned relay/decision/review drop gauge', script: 'coordinator-relay-drop-gauge.cjs', cron: '11,26,41,56 * * * *',
+    gha_backed: true,
     prompt: 'node scripts/coordinator-relay-drop-gauge.cjs' },
   // SD-LEO-INFRA-ENABLE-WIRE-AUTOMATIC-001 (FR-2a): restore the worker fleet-retro to a schedule
   // (it had drifted to manual — last ran ~2.5d ago). Re-arms the existing, idempotent capture/
   // synthesis script (reuses the feedback/issue_patterns pipeline; dedups on metadata.retro_key).
   // Cheap read+insert; */30 captures session_coordination FLEET-RETRO signals before they are swept.
   { key: 'fleet-retro',  label: 'Worker fleet-retro (periodic capture/synthesis)', script: 'coordinator-fleet-retro.mjs', cron: '*/30 * * * *',
+    gha_backed: true,
     prompt: 'node scripts/coordinator-fleet-retro.mjs' },
   // SD-LEO-INFRA-STANDING-ROW-GROWTH-001: daily governance-table row-growth gauge.
   // Snapshots estimated row counts (PostgREST head+estimated — pg statistics, no COUNT(*))
@@ -180,6 +187,7 @@ export const STANDARD_LOOPS = [
   // due-gated (~22h), so an extra arm or manual run is a cheap no-op. Catches the
   // management_reviews-45k / sd_baseline_items-13k class within a day, not by accident.
   { key: 'row-growth',  label: 'Governance row-growth gauge (daily)', script: 'row-growth-snapshot.cjs', cron: '30 8 * * *',
+    gha_backed: true,
     prompt: 'node scripts/row-growth-snapshot.cjs' },
   // SD-LEO-INFRA-CODIFY-SUBSYSTEM-REVIEW-001: weekly subsystem-review rotation.
   // Stateless (registry = completed SDs stamping metadata.subsystem_review); posts ONE
@@ -187,6 +195,7 @@ export const STANDARD_LOOPS = [
   // /review-subsystem command. Due-gated ~6 days; extra arms/manual runs are no-ops.
   // Converts idle-fleet gaps into review supply (4 reviews -> 27 evidenced SDs on 2026-06-10).
   { key: 'review-rotation', label: 'Subsystem review rotation (weekly)', script: 'subsystem-review-rotation.cjs', cron: '0 9 * * 1',
+    gha_backed: true,
     prompt: 'node scripts/subsystem-review-rotation.cjs' },
   // SD-LEO-INFRA-SCRIPTS-ESTATE-RECONCILIATION-001 (FR-1): weekly scripts-estate reachability
   // gauge. Scans scripts/** against the reference haystack (package.json, .github, .husky,
@@ -195,6 +204,7 @@ export const STANDARD_LOOPS = [
   // (orphan_count +>=10 week-over-week) or broken npm aliases. Internally due-gated (~6d),
   // so an extra arm or manual run is a cheap no-op. Advisory — never CI-blocking.
   { key: 'scripts-reachability', label: 'Scripts-estate reachability gauge (weekly)', script: 'scripts-reachability-gauge.mjs', cron: '40 9 * * 1',
+    gha_backed: true,
     prompt: 'node scripts/scripts-reachability-gauge.mjs' },
   // SD-MAN-INFRA-RETENTION-OPS-FINISHER-001: weekly archive-not-delete retention enforcement
   // (machinery shipped + chairman-GO'd by SD-LEO-INFRA-RETENTION-POLICY-UNBOUNDED-001; 196k rows
@@ -219,12 +229,14 @@ export const STANDARD_LOOPS = [
   // for unwired machinery was itself unwired. Hourly cadence — cheap, and the gauges'
   // detector functions are internally due-gated/idempotent, so an extra run is a no-op.
   { key: 'gauge-runner', label: 'Invariant-gauges execution surface (hourly, durable)', script: 'gauge-runner.mjs', cron: '0 * * * *',
+    gha_backed: true,
     prompt: 'node scripts/gauge-runner.mjs --json' },
   // QF-20260704-493: feedback-consumption SLA gauge daily reminder (Solomon referent-audit
   // cell [4]) — actionable feedback categories (adam_adherence_drift, completion_flag,
   // coordinator_review, harness_backlog escalations) had no consumption deadline. Internally
   // rate-limited/deduped per category per day (metadata.sla_key), so an extra run is a no-op.
   { key: 'feedback-sla', label: 'Feedback-consumption SLA breach reminder (daily)', script: 'coordinator-feedback-sla-gauge.cjs', cron: '45 9 * * *',
+    gha_backed: true,
     prompt: 'node scripts/coordinator-feedback-sla-gauge.cjs' },
   // QF-20260705-533 (J1 adversarial sweep REFUTED-DORMANT): the watcher-of-watchers
   // (periodic-liveness-watcher.mjs, SD-LEO-INFRA-PERIODIC-PROCESS-LIVENESS-001) shipped with NO
@@ -250,6 +262,7 @@ export const STANDARD_LOOPS = [
   // to once per stale ledger row per day via its own payload.dedup_key, so a frequent tick is
   // safe. Also composed into scripts/coordinator-quiet-tick.mjs's COMPOSED_CORES.
   { key: 'solomon-ledger-resurface', label: 'Solomon ledger-pending resurface (aged advice-outcome rows -> Adam inbox)', script: 'solomon-ledger-pending-resurface.cjs', cron: '13,43 * * * *',
+    gha_backed: true,
     prompt: 'node scripts/solomon-ledger-pending-resurface.cjs' },
 ];
 
@@ -340,7 +353,8 @@ export function renderLoops(armed) {
     }
     const status = loopStatus(loop, armed);
     const badge = status === 'armed' ? '✅ armed' : status === 'MISSING' ? '❌ MISSING' : '… unverified';
-    lines.push(`  [${badge}] ${loop.key.padEnd(10)} ${loop.label}`);
+    const ghaMarker = loop.gha_backed ? ' [GHA-backed]' : '';
+    lines.push(`  [${badge}] ${loop.key.padEnd(10)} ${loop.label}${ghaMarker}`);
     lines.push(`              cron: ${loop.cron}   prompt: ${loop.prompt}`);
     if (status !== 'armed') toArm.push(loop);
   }

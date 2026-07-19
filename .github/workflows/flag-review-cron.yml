@@ -1,0 +1,44 @@
+name: "Feature-flag governance review (cron)"
+
+# SD-LEO-INFRA-DURABLE-COORDINATOR-LOOPS-001 / FR-2 — additive GHA-backed trigger for
+# STANDARD_LOOPS key `flag-review` (scripts/coordinator-startup-check.mjs). Always-on so
+# it survives a coordinator session death; the STANDARD_LOOPS session-armed entry stays in
+# place unchanged as a redundant backup (idempotent — an occasional double-fire is safe).
+
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  flag-review:
+    name: Feature-flag governance review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Feature-flag governance review
+        run: node scripts/flag-governance-review.mjs
