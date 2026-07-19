@@ -46,6 +46,45 @@ export const RESPONSIBILITIES = [
 // SD-LEO-INFRA-ACTIVATE-FEATURE-FLAG-001 (FR-5) added the daily flag-governance review loop.
 // SD-LEO-INFRA-ARM-CANONICALIZE-WORK-001 added the work-triggered tri-party self-review loop so a
 // coordinator restart re-arms it instead of leaving it dormant (its state file had silently frozen). ──
+//
+// SD-LEO-INFRA-DURABLE-COORDINATOR-LOOPS-001 / FR-1 — SCRIPT-SHAPED vs JUDGMENT-SHAPED
+// classification (durability migration table). A `gha_backed: true` entry means this loop also
+// has an always-on GitHub Actions cron that survives a coordinator session death (ADDITIVE, not
+// exclusive — this STANDARD_LOOPS entry stays session-armed as a harmless redundant backup, per
+// the shipped retention/backlog-rank precedent; see the FR-2 GHA workflow batch for the file list).
+//
+//   key                        | class          | GHA-backed?              | rationale
+//   ---------------------------|----------------|---------------------------|--------------------------------
+//   sweep                      | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic sweep, no judgment
+//   quiet-tick                 | JUDGMENT-SHAPED| no                        | folds flag/audit/advisory triage
+//   dashboard                  | (report)       | no (out of FR-1 scope)    | deterministic but not migrated by this SD
+//   identity                   | (report)       | no (out of FR-1 scope)    | deterministic but not migrated by this SD
+//   inbox (folded)             | JUDGMENT-SHAPED| no                        | folded into quiet-tick
+//   audit (folded)             | JUDGMENT-SHAPED| no                        | folded into quiet-tick
+//   charter-audit (folded)     | JUDGMENT-SHAPED| no                        | self-audit, remediate-then-verify judgment
+//   flag-review                | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic governance review script
+//   self-review                | JUDGMENT-SHAPED| no                        | LLM-driven tri-party self-review
+//   hourly-review               | JUDGMENT-SHAPED| no                        | LLM-driven responsibilities review
+//   capacity-forecast (folded) | JUDGMENT-SHAPED| no                        | predictive forecasting, folded into quiet-tick
+//   backlog-rank (folded)      | SCRIPT-SHAPED  | YES (backlog-rank-cron.yml)| already migrated — excluded from FR-2
+//   unranked-gauge             | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic invariant gauge
+//   singleton-relaunch          | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic detection+scheduling only
+//   relay-drain                | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic queue drain
+//   relay-drop-gauge           | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic invariant gauge
+//   fleet-retro                | SCRIPT-SHAPED  | pending (FR-2 batch)      | capture is deterministic (label says capture/synthesis — FR-2 scopes strictly to the capture path; any judgment-shaped synthesis stays session-armed)
+//   row-growth                 | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic daily snapshot
+//   review-rotation            | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic rotation bookkeeping (WHICH subsystem is reviewed next), not the review itself
+//   scripts-reachability        | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic weekly gauge
+//   retention                  | SCRIPT-SHAPED  | YES (retention-enforce-cron.yml) | already migrated — excluded from FR-2
+//   roles-review                | JUDGMENT-SHAPED| no                        | coordinator self-review of duties
+//   gauge-runner                | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic invariant-gauge execution surface
+//   feedback-sla                | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic SLA-breach reminder
+//   liveness-watcher            | SCRIPT-SHAPED  | PARTIAL (periodic-liveness-watcher-cron.yml owns self_stamped/eva_scheduler_heartbeat/github_actions_api classes) | this STANDARD_LOOPS entry keeps only the PID-anchored claude_sessions_heartbeat class a CI runner can't evaluate — FR-2 does NOT duplicate the already-GHA-backed classes
+//   solomon-ledger-resurface     | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic aged-row resurface
+//
+// NOTE: the original SD scope text also named a "root-freshness" loop. It does not exist anywhere
+// in this array or the codebase (verified by VALIDATION, evidence row dd2f16c2-9c2e-424e-b7fb-94e76860b590)
+// — dropped as a phantom/typo'd scope-text reference, not implemented.
 export const STANDARD_LOOPS = [
   { key: 'sweep',       label: 'Stale-session sweep',  script: 'stale-session-sweep.cjs',   cron: '*/5 * * * *',
     prompt: 'node scripts/stale-session-sweep.cjs' },

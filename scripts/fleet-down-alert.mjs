@@ -19,10 +19,76 @@ import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import path from 'path';
 import { enforceCliSendGuard } from '../lib/notifications/cli-send-guard.mjs';
+import { getActiveCoordinatorId } from '../lib/coordinator/resolve.cjs';
 
 const REQUIRED_CONSECUTIVE = Number(process.env.FLEET_DOWN_CONSECUTIVE_PULSES) > 0
   ? Number(process.env.FLEET_DOWN_CONSECUTIVE_PULSES)
   : 3;
+
+// SD-LEO-INFRA-DURABLE-COORDINATOR-LOOPS-001 / FR-3: a coordinator's own death is a DISTINCT
+// outage class from the worker-fleet-down case above (a live worker fleet with no coordinator
+// still drains claimable work; the risk here is the coordinator's standing responsibilities —
+// sweeps, gauges, dispatch-rank — silently going unattended for 43h+, per Solomon tri-role
+// evidence). Deliberately a SEPARATE, independently-named constant from
+// lib/coordinator/resolve.cjs's own internal STALE_THRESHOLD_MIN (10min) — that constant governs
+// resolve.cjs's own multi-source resolution chain and has unrelated blast radius; changing it to
+// serve this alert would silently affect every OTHER getActiveCoordinatorId() caller fleet-wide.
+const DEAD_COORDINATOR_STALE_MIN = Number(process.env.DEAD_COORDINATOR_STALE_MIN) > 0
+  ? Number(process.env.DEAD_COORDINATOR_STALE_MIN)
+  : 15;
+// This leg runs on fleet-down-alert-cron.yml's existing ~15min cadence (11,26,41,56 * * * *) —
+// used only to size the edge-trigger window below, not to gate execution.
+const DEAD_COORDINATOR_CRON_INTERVAL_MIN = Number(process.env.DEAD_COORDINATOR_CRON_INTERVAL_MIN) > 0
+  ? Number(process.env.DEAD_COORDINATOR_CRON_INTERVAL_MIN)
+  : 15;
+
+/**
+ * Pure decision: should we page the chairman that the coordinator itself is dead?
+ *
+ * No new table is introduced for edge-trigger dedup (TR-4: no schema changes). Instead this
+ * derives dedup purely from elapsed time since the last known coordinator heartbeat: the alert
+ * fires only on the tick where elapsed time FIRST crosses the staleness threshold (a window one
+ * cron interval wide just past the threshold) — the next tick's elapsed time will already be past
+ * that window, so it self-suppresses without persisted state, mirroring evaluateFleetDownAlert()'s
+ * edge-triggered intent with a continuous-timestamp signal instead of discrete pulses.
+ *
+ * @param {Object} args
+ * @param {string|null} args.lastCoordinatorHeartbeatAt - ISO timestamp of the most recently
+ *   known coordinator session's heartbeat (from claude_sessions, regardless of whether that
+ *   session is still the currently-elected coordinator), or null if none has ever been seen.
+ * @param {Date} [args.now] - injectable clock for tests.
+ * @param {number} [args.staleMin=DEAD_COORDINATOR_STALE_MIN]
+ * @param {number} [args.cronIntervalMin=DEAD_COORDINATOR_CRON_INTERVAL_MIN]
+ * @returns {{alert:boolean, reason:string, elapsedMin:number|null}}
+ */
+export function evaluateDeadCoordinatorAlert({
+  lastCoordinatorHeartbeatAt,
+  now = new Date(),
+  staleMin = DEAD_COORDINATOR_STALE_MIN,
+  cronIntervalMin = DEAD_COORDINATOR_CRON_INTERVAL_MIN,
+} = {}) {
+  if (!lastCoordinatorHeartbeatAt) {
+    return { alert: false, reason: 'no coordinator has ever been seen — insufficient history to confirm a dead-coordinator outage', elapsedMin: null };
+  }
+  const last = new Date(lastCoordinatorHeartbeatAt);
+  if (Number.isNaN(last.getTime())) {
+    return { alert: false, reason: 'invalid lastCoordinatorHeartbeatAt', elapsedMin: null };
+  }
+  const nowTs = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
+  const elapsedMin = (nowTs.getTime() - last.getTime()) / 60000;
+
+  if (elapsedMin < staleMin) {
+    return { alert: false, reason: `coordinator heartbeat is ${elapsedMin.toFixed(1)}min old, within the ${staleMin}min staleness window`, elapsedMin };
+  }
+  if (elapsedMin >= staleMin + cronIntervalMin) {
+    return { alert: false, reason: `coordinator has been dead for ${elapsedMin.toFixed(1)}min — already past the first alertable tick (edge-trigger dedup)`, elapsedMin };
+  }
+  return {
+    alert: true,
+    reason: `DEAD COORDINATOR: no coordinator heartbeat for ${elapsedMin.toFixed(1)}min (>= ${staleMin}min threshold)`,
+    elapsedMin,
+  };
+}
 
 /**
  * Pure decision: should we email the operator that the fleet is sustained-down?
@@ -84,30 +150,20 @@ function buildEmail({ claimableCount, consecutiveZero, requiredConsecutive }) {
   return { subject, text, html };
 }
 
-async function main() {
-  enforceCliSendGuard({ scriptName: 'scripts/fleet-down-alert.mjs', flags: [{ name: '--dry-run' }] });
-  const DRY = !!process.env.FLEET_DOWN_ALERT_DRYRUN || process.argv.includes('--dry-run');
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    console.error('[fleet-down-alert] missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY');
-    process.exit(2);
-  }
-  const db = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
-
+async function checkWorkerFleetDown(db, DRY) {
   // Read one more than the window so the edge-trigger dedup can inspect the pulse before it.
   const { data: pulses, error: pErr } = await db
     .from('fleet_worker_pulse')
     .select('active_count, captured_at')
     .order('captured_at', { ascending: false })
     .limit(REQUIRED_CONSECUTIVE + 1);
-  if (pErr) { console.error('[fleet-down-alert] pulse query failed:', pErr.message); process.exit(2); }
+  if (pErr) { console.error('[fleet-down-alert] pulse query failed:', pErr.message); return; }
 
   // Claimable-work-exists: count candidates the fleet could pick up right now.
   const { count: claimableCount, error: cErr } = await db
     .from('v_sd_next_candidates')
     .select('*', { count: 'exact', head: true });
-  if (cErr) { console.error('[fleet-down-alert] claimable query failed:', cErr.message); process.exit(2); }
+  if (cErr) { console.error('[fleet-down-alert] claimable query failed:', cErr.message); return; }
 
   const verdict = evaluateFleetDownAlert({
     pulses: pulses || [],
@@ -127,6 +183,61 @@ async function main() {
   const mod = await import(pathToFileURL(path.resolve('lib/notifications/resend-adapter.js')).href);
   const r = await mod.sendEmail({ from: 'LEO Fleet Reliability <onboarding@resend.dev>', to, subject: email.subject, html: email.html, text: email.text });
   console.log('[fleet-down-alert] email sent:', r?.id || JSON.stringify(r));
+}
+
+// SD-LEO-INFRA-DURABLE-COORDINATOR-LOOPS-001 / FR-3: independent of checkWorkerFleetDown above —
+// a live worker fleet does not imply a live coordinator (the coordinator's standing
+// responsibilities — sweeps, gauges, dispatch-rank — are a distinct outage class). Deliberately
+// kept as a SEPARATE function with its own query and its own edge-trigger state, so a bug in one
+// predicate can never mask or entangle the other (TESTING gate finding, non-regression scenario).
+async function checkDeadCoordinator(db, DRY) {
+  const coordinatorId = await getActiveCoordinatorId(db);
+
+  // Regardless of whether a coordinator is CURRENTLY elected, find the most recent heartbeat any
+  // coordinator-flagged session has ever reported — this is what evaluateDeadCoordinatorAlert()'s
+  // elapsed-time edge-trigger needs, and it degrades gracefully to "no alert" if none exists yet.
+  const { data: rows, error } = await db
+    .from('claude_sessions')
+    .select('heartbeat_at')
+    .eq('metadata->>is_coordinator', 'true')
+    .order('heartbeat_at', { ascending: false })
+    .limit(1);
+  if (error) { console.error('[fleet-down-alert] coordinator-heartbeat query failed:', error.message); return; }
+
+  const lastCoordinatorHeartbeatAt = rows && rows[0] ? rows[0].heartbeat_at : null;
+  const verdict = evaluateDeadCoordinatorAlert({ lastCoordinatorHeartbeatAt, now: new Date() });
+  console.log(`[dead-coordinator-alert] activeCoordinatorId=${coordinatorId || 'null'} ${verdict.alert ? 'ALERT' : 'no-alert'}: ${verdict.reason}`);
+
+  if (!verdict.alert) return;
+
+  const message = {
+    type: 'status',
+    body: `DEAD COORDINATOR: no active-coordinator heartbeat for ${verdict.elapsedMin.toFixed(0)}min. Coordinator standing duties (sweeps, gauges, dispatch-rank) are unattended. Start/restart a coordinator session.`,
+    kind: 'dead_coordinator_alert',
+    dedupeKey: `dead-coordinator-${new Date().toISOString().slice(0, 13)}`,
+  };
+  if (DRY) {
+    console.log('[dead-coordinator-alert] [DRY] would page chairman via sendChairmanSMS:', message.body);
+    return;
+  }
+  const { sendChairmanSMS } = await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/chairman-sms-gate/index.js')).href);
+  const r = await sendChairmanSMS(message, { now: new Date() });
+  console.log('[dead-coordinator-alert] sendChairmanSMS result:', JSON.stringify(r));
+}
+
+async function main() {
+  enforceCliSendGuard({ scriptName: 'scripts/fleet-down-alert.mjs', flags: [{ name: '--dry-run' }] });
+  const DRY = !!process.env.FLEET_DOWN_ALERT_DRYRUN || process.argv.includes('--dry-run');
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    console.error('[fleet-down-alert] missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY');
+    process.exit(2);
+  }
+  const db = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+
+  await checkWorkerFleetDown(db, DRY);
+  await checkDeadCoordinator(db, DRY);
 }
 
 // Run main() only as a CLI (guarded so tests can import the pure helper).
