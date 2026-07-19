@@ -24,16 +24,17 @@ import { CRITICAL_PROTOCOL_FILES } from '../../lib/governance/checkout-freshness
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-test('ADAM_LOOPS has the 11 expected tick loops with the expected keys', () => {
+test('ADAM_LOOPS has the 12 expected tick loops with the expected keys', () => {
   // self-adherence added by SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001 (child E);
   // belt-countdown added by SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR2 — durable contract duty);
   // doc-drift + github-assessment added by SD-LEO-INFRA-REGISTER-TWO-EVERY-001 (every-3-day propose-only duties);
   // board-reconcile added by SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DISCIPLINE-001-B (durable contract duty);
-  // heartbeat-email added by QF-20260702-433 (chairman directive 2026-07-02 — half-hourly all-good reassurance email);
+  // heartbeat-sms (was heartbeat-email, QF-20260702-433) + morning-brief-sms added by QF-20260719-343
+  //   (contract c3/c4, leo_protocol_sections id=601, chairman-directed 2026-07-19);
   // quiet-tick added by SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001 (folds inbox-monitor/belt-countdown/offer-help);
   // coordinator-health added by SD-LEO-INFRA-ADAM-COORDINATOR-HEALTH-001 (3-KPI coordinator oversight probe).
-  assert.equal(ADAM_LOOPS.length, 11);
-  assert.deepEqual(ADAM_LOOPS.map((l) => l.key), ['quiet-tick', 'governance-scan', 'inbox-monitor', 'offer-help', 'self-adherence', 'coordinator-health', 'belt-countdown', 'doc-drift', 'github-assessment', 'board-reconcile', 'heartbeat-email']);
+  assert.equal(ADAM_LOOPS.length, 12);
+  assert.deepEqual(ADAM_LOOPS.map((l) => l.key), ['quiet-tick', 'governance-scan', 'inbox-monitor', 'offer-help', 'self-adherence', 'coordinator-health', 'belt-countdown', 'doc-drift', 'github-assessment', 'board-reconcile', 'heartbeat-sms', 'morning-brief-sms']);
   ADAM_LOOPS.forEach((l) => {
     assert.ok(l.cron && typeof l.cron === 'string', `${l.key} has a cron`);
     assert.ok(l.prompt && typeof l.prompt === 'string', `${l.key} has a prompt`);
