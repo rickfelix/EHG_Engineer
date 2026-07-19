@@ -43,6 +43,18 @@ const { CLAIM_HOLDING_STATUSES, computeClaimedSdKeys } = require('../lib/claim/h
 const { SILENCE_HARD_CAP_MS } = require('../lib/fleet/silence-cap.cjs'); // FR-4: shared writer<=reader cap
 const { detectDormantWorkers } = require('../lib/fleet/dormancy-watchdog.cjs'); // QF-20260703-076
 const { getMarkerSessionIds } = require('../lib/fleet/cc-pid-liveness.cjs'); // SD-LEO-INFRA-FIX-RESIDUAL-PROCESS-001 FR-2/FR-3
+
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 2 — the sweep ACTS on what it
+// fetches, so a read silently capped at the PostgREST 1000-row max means claims not
+// released / SDs not reconciled with no error. Unbounded processing reads paginate to
+// completion; each site keeps its own pre-existing error policy (fail-open catch or
+// destructured-error check) — fetchAllPaginated throws on a page error, so converted
+// sites wrap in try/catch mirroring their prior behavior.
+let _fapModule = null;
+async function fapPaginate(queryFactory, opts) {
+  _fapModule ||= await import('../lib/db/fetch-all-paginated.mjs');
+  return _fapModule.fetchAllPaginated(queryFactory, opts);
+}
 // SD-FDBK-ENH-CONFIRMED-LIVE-TODAY-001: pure, exported so the gate can be unit-tested without a
 // live claude_sessions table. Mirrors MASKED_STALL_DETECT_ON (coordinator-capacity-forecast.mjs) --
 // DORMANT BY DEFAULT until process_alive_at is trustworthy again (see call site below for full RCA).
@@ -488,13 +500,17 @@ function detectCrossSessionCollisions(classified, intents) {
  */
 async function loadRecentIntents(sb, windowMin = INTENT_WINDOW_MIN) {
   const cutoff = new Date(Date.now() - windowMin * 60_000).toISOString();
-  const { data, error } = await sb
-    .from('session_coordination')
-    .select('id, sender_session, target_session, payload, body, created_at')
-    .gte('created_at', cutoff)
-    .not('payload->>' + INTENT_PAYLOAD_KEYS.action, 'is', null);
-  if (error) return { rows: [], error };
-  return { rows: data || [], error: null };
+  try {
+    const rows = await fapPaginate(() => sb
+      .from('session_coordination')
+      .select('id, sender_session, target_session, payload, body, created_at')
+      .gte('created_at', cutoff)
+      .not('payload->>' + INTENT_PAYLOAD_KEYS.action, 'is', null)
+      .order('id', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
+    return { rows: rows || [], error: null };
+  } catch (e) {
+    return { rows: [], error: e }; // prior { rows: [], error } error-path shape preserved
+  }
 }
 
 // SD-LEO-INFRA-FLEET-LIVENESS-MONTE-001 (US-005): MC gating constants.
@@ -1008,6 +1024,14 @@ async function cancelStaleTestFixtures(supabase, now, actions, warnings) {
       return;
     }
 
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 2 — NOT paginated: the
+    // chainable mock in stale-session-sweep-test-fixture-cancel.test.js has no
+    // .order()/.range(), and fapPaginate would break it. Leaked SD-TEST-% fixtures are an
+    // operationally tiny set; tripwire on the exact-cap signature instead of paginating.
+    if ((staleFixtures || []).length === 1000) {
+      warnings.push('TEST_FIXTURE_SWEEP: fetch returned exactly 1000 rows (PostgREST cap) — stale-fixture list may be truncated');
+    }
+
     for (const fixture of (staleFixtures || [])) {
       // Canonical cancellation shape (matches scripts/cancel-sd.js): top-level
       // cancellation_reason column, not metadata -- never overwrite metadata here.
@@ -1044,11 +1068,15 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
   // pool to 20/20 WORKTREE_CREATE_FAILED (live-claim-guard blocked reaping with
   // claimed_claimant_not_verifiably_alive — coordinator evidence 5655cb68).
   try {
-    const { data: terminalClaimed } = await supabase
-      .from('quick_fixes')
-      .select('id, status, claiming_session_id')
-      .in('status', ['completed', 'cancelled', 'escalated', 'closed']) // QF-20260719-702
-      .not('claiming_session_id', 'is', null);
+    let terminalClaimed = [];
+    try {
+      terminalClaimed = await fapPaginate(() => supabase
+        .from('quick_fixes')
+        .select('id, status, claiming_session_id')
+        .in('status', ['completed', 'cancelled', 'escalated', 'closed']) // QF-20260719-702
+        .not('claiming_session_id', 'is', null)
+        .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    } catch { terminalClaimed = []; } // prior behavior: read error ignored
     for (const qf of (terminalClaimed || [])) {
       const { error } = await supabase
         .from('quick_fixes')
@@ -1064,11 +1092,15 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
   }
 
   try {
-    const { data: claimedQfs } = await supabase
-      .from('quick_fixes')
-      .select('id, status, claiming_session_id')
-      .in('status', ['open', 'in_progress'])
-      .not('claiming_session_id', 'is', null);
+    let claimedQfs = [];
+    try {
+      claimedQfs = await fapPaginate(() => supabase
+        .from('quick_fixes')
+        .select('id, status, claiming_session_id')
+        .in('status', ['open', 'in_progress'])
+        .not('claiming_session_id', 'is', null)
+        .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    } catch { claimedQfs = []; } // prior behavior: read error ignored
 
     if (claimedQfs && claimedQfs.length > 0) {
       const holderIds = [...new Set(claimedQfs.map(q => q.claiming_session_id))];
@@ -1299,12 +1331,16 @@ async function runQaFixtureScan(ctx) {
   const pendingApproval = (claimedSdStatus || []).filter(sd => sd.status === 'pending_approval');
   // Also check standalone SDs not already in claimedSdStatus
   const claimedKeys = new Set((claimedSdStatus || []).map(sd => sd.sd_key));
-  const { data: allPendingApproval } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, status, current_phase, progress_percentage, completion_date')
-    .eq('status', 'pending_approval')
-    // FR-3: never QA-reset ephemeral SD-TEST-* fixtures.
-    .not('sd_key', 'like', TEST_FIXTURE_SD_KEY_LIKE);
+  let allPendingApproval = [];
+  try {
+    allPendingApproval = await fapPaginate(() => supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, status, current_phase, progress_percentage, completion_date')
+      .eq('status', 'pending_approval')
+      // FR-3: never QA-reset ephemeral SD-TEST-* fixtures.
+      .not('sd_key', 'like', TEST_FIXTURE_SD_KEY_LIKE)
+      .order('sd_key', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { allPendingApproval = []; } // prior behavior: read error ignored
 
   const activeClaimSdIds = new Set(classified.filter(s => s.status === 'ACTIVE').map(s => s.sd_key));
   // FR-3 (defense-in-depth): also drop any fixture that slipped past the query filter.
@@ -1377,13 +1413,17 @@ async function runQaFixtureScan(ctx) {
   // QF-20260508-997: cancelled SDs share the same orphan-claim profile as completed ones — the
   // owning session has long since exited but the row still carries claiming_session_id, blocking
   // re-pickup and inflating active-claims counts. Same fix applies; status filter widened.
-  const { data: terminalWithClaims } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key, status, claiming_session_id, is_working_on')
-    .in('status', ['completed', 'cancelled'])
-    .not('claiming_session_id', 'is', null)
-    // FR-3: never touch ephemeral SD-TEST-* fixtures.
-    .not('sd_key', 'like', TEST_FIXTURE_SD_KEY_LIKE);
+  let terminalWithClaims = [];
+  try {
+    terminalWithClaims = await fapPaginate(() => supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, status, claiming_session_id, is_working_on')
+      .in('status', ['completed', 'cancelled'])
+      .not('claiming_session_id', 'is', null)
+      // FR-3: never touch ephemeral SD-TEST-* fixtures.
+      .not('sd_key', 'like', TEST_FIXTURE_SD_KEY_LIKE)
+      .order('sd_key', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { terminalWithClaims = []; } // prior behavior: read error ignored
 
   for (const sd of (terminalWithClaims || [])) {
     const { error } = await supabase
@@ -1448,11 +1488,15 @@ async function runCoordinatorHousekeeping(ctx) {
 
       // Resolve callsign → current live session_id.
       const liveCutoff = new Date(Date.now() - 10 * 60_000).toISOString();
-      const { data: live } = await supabase
-        .from('claude_sessions')
-        .select('session_id, metadata')
-        .gte('heartbeat_at', liveCutoff)
-        .filter('metadata->>fleet_identity', 'not.is', null);
+      let live = [];
+      try {
+        live = await fapPaginate(() => supabase
+          .from('claude_sessions')
+          .select('session_id, metadata')
+          .gte('heartbeat_at', liveCutoff)
+          .filter('metadata->>fleet_identity', 'not.is', null)
+          .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
+      } catch { live = []; } // prior behavior: read error ignored
       const owner = (live || []).find(s => s.metadata?.fleet_identity?.callsign === callsign);
 
       if (!owner) {
@@ -1562,10 +1606,14 @@ async function runCoordinatorHousekeeping(ctx) {
       let sourceableBacklogCount = null;
       try {
         const { sourceableBacklog } = await import('./lib/sourceable-backlog.mjs');
-        const { data: bl } = await supabase.from('feedback')
+        // FR-6 batch 2: harness_backlog is >1000 rows LIVE — an unpaginated read here was an
+        // active cap hit (silently undercounted backlog). Paginate to completion; the enclosing
+        // catch preserves the prior error path (count stays null → probe reports unknown).
+        const bl = await fapPaginate(() => supabase.from('feedback')
           .select('id, status, title, metadata')
-          .eq('category', 'harness_backlog').in('status', ['open', 'new', 'backlog']);
-        sourceableBacklogCount = Array.isArray(bl) ? sourceableBacklog(bl).length : null;
+          .eq('category', 'harness_backlog').in('status', ['open', 'new', 'backlog'])
+          .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+        sourceableBacklogCount = sourceableBacklog(bl || []).length;
       } catch { /* unresolved → probe returns unknown (fail-loud) */ }
       let advisoryBody = null;
       try {
@@ -1631,11 +1679,15 @@ async function runCoordinatorHousekeeping(ctx) {
  * @param {{ actions: string[], warnings: string[] }} ctx - sweep-pass accumulators
  */
 async function reapPhantomSessionClaims(supabase, { actions, warnings }) {
-  const { data: candidateRows } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key, claiming_session_id, active_session_id, status')
-    .not('claiming_session_id', 'is', null)
-    .not('status', 'in', '(completed,cancelled)');
+  let candidateRows = [];
+  try {
+    candidateRows = await fapPaginate(() => supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, claiming_session_id, active_session_id, status')
+      .not('claiming_session_id', 'is', null)
+      .not('status', 'in', '(completed,cancelled)')
+      .order('sd_key', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { candidateRows = []; } // prior behavior: read error ignored (no reap this tick)
 
   // Never reap a SD-TEST-*/SD-DEMO-*/bare TEST-*/DEMO-* fixture key -- other live-DB test
   // suites (e.g. claim-sd-cross-table.test.js TS-2) deliberately stamp a non-existent
@@ -1700,17 +1752,20 @@ async function main() {
   const collisionsDetected = [];
 
   // 1. Get all sessions with SD claims
-  const { data: sessions, error: sessErr } = await supabase
-    .from('v_active_sessions')
-    // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2: include current_branch so the
-    // branchSessions map (and the new INTENT collision reader) see real branch data. The
-    // column already exists on v_active_sessions; it was simply not selected before, which
-    // also left the pre-existing WORKTREE_CONFLICT branch check (L~1046) effectively inert.
-    .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, is_virtual, parent_session_id, terminal_id, current_branch')
-    .not('sd_key', 'is', null)
-    .order('heartbeat_age_seconds', { ascending: true });
-
-  if (sessErr) {
+  // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2: include current_branch so the
+  // branchSessions map (and the new INTENT collision reader) see real branch data. The
+  // column already exists on v_active_sessions; it was simply not selected before, which
+  // also left the pre-existing WORKTREE_CONFLICT branch check (L~1046) effectively inert.
+  let sessions;
+  try {
+    sessions = await fapPaginate(() => supabase
+      .from('v_active_sessions')
+      .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, is_virtual, parent_session_id, terminal_id, current_branch')
+      .not('sd_key', 'is', null)
+      .order('heartbeat_age_seconds', { ascending: true })
+      .order('session_id', { ascending: true })); // unique tiebreaker APPENDED after the non-unique order (FR-6)
+  } catch (sessErr) {
+    // prior behavior: destructured-error check → log + exit(1)
     console.log('ERROR: Failed to query sessions — ' + sessErr.message);
     process.exit(1);
   }
@@ -1750,10 +1805,14 @@ async function main() {
   // trustworthiness. Flip LEO_DORMANCY_WATCHDOG_ENABLED=on to re-enable.
   if (isDormancyWatchdogEnabled()) {
     try {
-      const { data: allTracked } = await supabase
-        .from('claude_sessions')
-        .select('session_id, loop_state, expected_silence_until, process_alive_at')
-        .eq('status', 'active');
+      let allTracked = [];
+      try {
+        allTracked = await fapPaginate(() => supabase
+          .from('claude_sessions')
+          .select('session_id, loop_state, expected_silence_until, process_alive_at')
+          .eq('status', 'active')
+          .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
+      } catch { allTracked = []; } // prior behavior: read error ignored
       const dormantCandidates = detectDormantWorkers(allTracked || [], now.getTime());
       // FR-2/FR-3: AND-gate against an orthogonal failure-domain signal (OS-level PID
       // liveness) before trusting process_alive_at alone -- process_alive_at is written
@@ -2040,14 +2099,18 @@ async function main() {
   // (status=in_progress + claiming_session_id IS NULL). These are invisible to
   // sd:next's workable filter and silently park work until manual reset. Reset
   // to draft/LEAD so the queue surfaces them for the next worker.
-  const { data: phantomInProgress } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key, current_phase, progress_percentage')
-    .eq('status', 'in_progress')
-    .is('claiming_session_id', null)
-    // FR-3: never reset ephemeral SD-TEST-* fixtures (witnessed phantom churn of
-    // SD-TEST-MQ7XBNBM-ORCH-001 reset in_progress/EXEC/100% → draft every tick).
-    .not('sd_key', 'like', TEST_FIXTURE_SD_KEY_LIKE);
+  let phantomInProgress = [];
+  try {
+    phantomInProgress = await fapPaginate(() => supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, current_phase, progress_percentage')
+      .eq('status', 'in_progress')
+      .is('claiming_session_id', null)
+      // FR-3: never reset ephemeral SD-TEST-* fixtures (witnessed phantom churn of
+      // SD-TEST-MQ7XBNBM-ORCH-001 reset in_progress/EXEC/100% → draft every tick).
+      .not('sd_key', 'like', TEST_FIXTURE_SD_KEY_LIKE)
+      .order('sd_key', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { phantomInProgress = []; } // prior behavior: read error ignored
 
   for (const sd of (phantomInProgress || [])) {
     // SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 (FR-3, AC-4/AC-5): generalized
@@ -2088,13 +2151,17 @@ async function main() {
   // search below, which previously ran unconditionally and produced
   // wrong-topic matches (e.g. substring 'venture'+'design' matching an
   // unrelated 'venture-detail-page-reDESIGN' file).
-  const { data: pendingSDs } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key, title, description, scope, metadata')
-    .in('status', ['draft', 'ready'])
-    .not('sd_key', 'like', '%ORCH-STAGE-VENTURE-WORKFLOW-001-%')
-    // FR-3: never enrich ephemeral SD-TEST-* fixtures.
-    .not('sd_key', 'like', TEST_FIXTURE_SD_KEY_LIKE);
+  let pendingSDs = [];
+  try {
+    pendingSDs = await fapPaginate(() => supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, title, description, scope, metadata')
+      .in('status', ['draft', 'ready'])
+      .not('sd_key', 'like', '%ORCH-STAGE-VENTURE-WORKFLOW-001-%')
+      // FR-3: never enrich ephemeral SD-TEST-* fixtures.
+      .not('sd_key', 'like', TEST_FIXTURE_SD_KEY_LIKE)
+      .order('sd_key', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { pendingSDs = []; } // prior behavior: read error ignored
   const bareShellSDs = (pendingSDs || []).filter(sd => {
     if (sd.description && sd.description.startsWith('Child SD of')) return false;
     return !sd.description || sd.description === sd.title || (sd.description.length < 100 && sd.scope === sd.title);
@@ -2539,11 +2606,15 @@ async function main() {
   } catch { /* fail-open — guard error must not suppress sweep coordinator duties */ }
 
   // 6b. QA — Claim Integrity: detect idle sessions with no SD claim and nudge them
-  const { data: idleSessions } = await supabase
-    .from('v_active_sessions')
-    .select('session_id, sd_key, heartbeat_age_seconds, heartbeat_age_human, computed_status, tty')
-    .is('sd_key', null)
-    .order('heartbeat_age_seconds', { ascending: true });
+  let idleSessions = [];
+  try {
+    idleSessions = await fapPaginate(() => supabase
+      .from('v_active_sessions')
+      .select('session_id, sd_key, heartbeat_age_seconds, heartbeat_age_human, computed_status, tty')
+      .is('sd_key', null)
+      .order('heartbeat_age_seconds', { ascending: true })
+      .order('session_id', { ascending: true })); // unique tiebreaker APPENDED after the non-unique order (FR-6)
+  } catch { idleSessions = []; } // prior behavior: read error ignored
 
   const aliveIdle = (idleSessions || []).filter(s => s.heartbeat_age_seconds < STALE_THRESHOLD_SECONDS);
   const claimIntegrityIssues = [];
@@ -2824,13 +2895,17 @@ async function main() {
   } else try {
     const SWEEP_INTERVAL_MS = 5 * 60_000;
     const assignAgeCutoff = new Date(nowMs - SWEEP_INTERVAL_MS).toISOString();
-    const { data: openAssignments } = await supabase
-      .from('session_coordination')
-      .select('id, target_sd, created_at')
-      .eq('message_type', 'WORK_ASSIGNMENT')
-      .is('read_at', null)
-      .not('target_sd', 'is', null)
-      .lt('created_at', assignAgeCutoff);
+    let openAssignments = [];
+    try {
+      openAssignments = await fapPaginate(() => supabase
+        .from('session_coordination')
+        .select('id, target_sd, created_at')
+        .eq('message_type', 'WORK_ASSIGNMENT')
+        .is('read_at', null)
+        .not('target_sd', 'is', null)
+        .lt('created_at', assignAgeCutoff)
+        .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    } catch { openAssignments = []; } // prior behavior: read error ignored
     const assignTargets = [...new Set((openAssignments || []).map(a => a.target_sd).filter(Boolean))];
     const sdAssignTargets = assignTargets.filter(k => !/^QF-/.test(k));
     const qfAssignTargets = assignTargets.filter(k => /^QF-/.test(k));
@@ -2864,11 +2939,15 @@ async function main() {
   } else try {
     const stuckAgeCutoff = new Date(nowMs - 60 * 60_000).toISOString();   // >1h old → stale
     const liveCutoff = new Date(nowMs - 10 * 60_000).toISOString();       // fresh heartbeat ≤10min → alive
-    const { data: stuckSignals } = await supabase
-      .from('session_coordination')
-      .select('id, sender_session, created_at')
-      .eq('payload->>signal_type', 'stuck')
-      .is('acknowledged_at', null);
+    let stuckSignals = [];
+    try {
+      stuckSignals = await fapPaginate(() => supabase
+        .from('session_coordination')
+        .select('id, sender_session, created_at')
+        .eq('payload->>signal_type', 'stuck')
+        .is('acknowledged_at', null)
+        .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    } catch { stuckSignals = []; } // prior behavior: read error ignored
     const stuck = stuckSignals || [];
     let liveSenders = new Set();
     const senderIds = [...new Set(stuck.map(s => s.sender_session).filter(Boolean))];
@@ -3166,11 +3245,15 @@ async function main() {
       console.log('[SWEEP] coordinator-flag-clear SKIPPED — not the canonical coordinator.');
     } else {
       const cutoff = new Date(Date.now() - 10 * 60_000).toISOString();
-      const { data: stale } = await supabase
-        .from('claude_sessions')
-        .select('session_id, metadata, heartbeat_at')
-        .filter('metadata->>is_coordinator', 'eq', 'true')
-        .lt('heartbeat_at', cutoff);
+      let stale = [];
+      try {
+        stale = await fapPaginate(() => supabase
+          .from('claude_sessions')
+          .select('session_id, metadata, heartbeat_at')
+          .filter('metadata->>is_coordinator', 'eq', 'true')
+          .lt('heartbeat_at', cutoff)
+          .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
+      } catch { stale = []; } // prior behavior: read error ignored
       let cleared = 0;
       for (const s of stale || []) {
         const next = { ...(s.metadata || {}) };
