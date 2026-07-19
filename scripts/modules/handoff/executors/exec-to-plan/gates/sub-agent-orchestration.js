@@ -5,6 +5,8 @@
  * Orchestrates sub-agents for PLAN_VERIFY phase
  */
 
+import { fetchAllPaginated } from '../../../../../../lib/db/fetch-all-paginated.mjs';
+
 // External validators (will be lazy loaded)
 let orchestrate;
 
@@ -177,16 +179,15 @@ async function getSecurityBaseline(supabase) {
   };
 
   try {
-    const { data: issues, error } = await supabase
+    // Count/truncation discipline (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6):
+    // cross-SD open-security-issue sweep — a capped read silently understates the
+    // baseline. Error policy preserved: any failure → defaultBaseline (catch below).
+    const issues = await fetchAllPaginated(() => supabase
       .from('sd_baseline_issues')
-      .select('description, metadata')
+      .select('description, metadata, id')
       .eq('category', 'security')
-      .in('status', ['open', 'acknowledged', 'in_progress']);
-
-    if (error) {
-      console.log(`   ℹ️  Security baseline query: ${error.message}`);
-      return defaultBaseline;
-    }
+      .in('status', ['open', 'acknowledged', 'in_progress'])
+      .order('id')); // unique-key tiebreaker for stable pagination
 
     if (!issues || issues.length === 0) {
       return defaultBaseline;

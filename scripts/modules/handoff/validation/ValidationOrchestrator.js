@@ -23,6 +23,7 @@ import {
 
 // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Gate telemetry
 import { startSpan, endSpan } from '../../../../lib/telemetry/workflow-timer.js';
+import { fetchAllPaginated } from '../../../../lib/db/fetch-all-paginated.mjs';
 
 // SD-LEO-INFRA-HARDENING-001: Import threshold profiles for gate enforcement
 import { THRESHOLD_PROFILES } from '../../sd-type-checker.js';
@@ -698,13 +699,20 @@ export class ValidationOrchestrator {
       return this.constraintsCache.filter(c => c.table_name === tableName);
     }
 
-    const { data, error } = await this.supabase
-      .from('leo_schema_constraints')
-      .select('*')
-      .order('table_name');
-
-    if (error) {
-      if (error.code === '42P01') {
+    // Count/truncation discipline (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6):
+    // full-registry read — a capped read would silently drop constraints from
+    // pre-validation. Error policy preserved: missing-table → [], other errors THROW
+    // (fail-closed). fetchAllPaginated wraps errors in plain Error (code lost), so the
+    // 42P01 missing-relation case is matched on message text.
+    let data;
+    try {
+      data = await fetchAllPaginated(() => this.supabase
+        .from('leo_schema_constraints')
+        .select('*')
+        .order('table_name')
+        .order('id')); // unique-key tiebreaker for stable pagination
+    } catch (error) {
+      if (/42P01|does not exist|Could not find the table/i.test(error.message || '')) {
         console.log('ℹ️  leo_schema_constraints table not yet created - skipping pre-validation');
         return [];
       }
@@ -821,17 +829,22 @@ export class ValidationOrchestrator {
     console.log(`📥 Loading validation rules from database for ${handoffType}...`);
 
     try {
-      const { data, error } = await this.supabase
-        .from('leo_validation_rules')
-        .select('*')
-        .eq('handoff_type', handoffType)
-        .eq('active', true)
-        .order('gate', { ascending: true })
-        .order('execution_order', { ascending: true });
-
-      if (error) {
-        // Check for table not existing
-        if (error.code === '42P01') {
+      // Count/truncation discipline (FR-6): paginate rules read past the PostgREST cap.
+      // Error policy preserved: missing table → [], any other error → outer catch → []
+      // (fail-open to hardcoded gates, as before).
+      let data;
+      try {
+        data = await fetchAllPaginated(() => this.supabase
+          .from('leo_validation_rules')
+          .select('*')
+          .eq('handoff_type', handoffType)
+          .eq('active', true)
+          .order('gate', { ascending: true })
+          .order('execution_order', { ascending: true })
+          .order('id')); // unique-key tiebreaker for stable pagination
+      } catch (error) {
+        // 42P01 matched on message text — fetchAllPaginated wraps errors (code lost)
+        if (/42P01|does not exist|Could not find the table/i.test(error.message || '')) {
           console.warn('⚠️  leo_validation_rules table not found - using hardcoded gates only');
           return [];
         }
@@ -1015,12 +1028,13 @@ export class ValidationOrchestrator {
    */
   async getValidationRulesSummary() {
     try {
-      const { data, error } = await this.supabase
+      // Count/truncation discipline (FR-6): summary spans ALL active rules — a capped
+      // read silently understates totals. Errors throw into the existing catch below.
+      const data = await fetchAllPaginated(() => this.supabase
         .from('leo_validation_rules')
-        .select('gate, handoff_type, rule_name, weight, required, active')
-        .eq('active', true);
-
-      if (error) throw error;
+        .select('gate, handoff_type, rule_name, weight, required, active, id')
+        .eq('active', true)
+        .order('id'));
 
       const summary = {
         totalRules: data.length,

@@ -13,6 +13,7 @@ import { execSync } from 'child_process';
 import { createRequire } from 'module';
 import { shouldSkipAndContinue, executeSkipAndContinue } from '../skip-and-continue.js';
 import { resolveRepoPath, ENGINEER_ROOT, isVentureRepo, resolveGateRepoContext } from '../../../../lib/repo-paths.js';
+import { fetchAllPaginated } from '../../../../lib/db/fetch-all-paginated.mjs';
 // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Shared git context to eliminate redundant execSync calls
 import { SharedGitContext } from '../shared-git-context.js';
 
@@ -1474,18 +1475,17 @@ export class BaseExecutor {
    */
   async _fetchAutonomousDirectives(enforcementPoint, phase) {
     try {
-      const { data, error } = await this.supabase
+      // Count/truncation discipline (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6):
+      // directives registry read — a capped read would silently drop blocking directives.
+      // Error policy preserved: any failure → [] (fail-open, catch below).
+      const data = await fetchAllPaginated(() => this.supabase
         .from('leo_autonomous_directives')
-        .select('directive_code, title, content, is_blocking')
+        .select('directive_code, title, content, is_blocking, id')
         .eq('active', true)
         .eq('enforcement_point', enforcementPoint)
         .contains('applies_to_phases', [phase])
-        .order('display_order');
-
-      if (error) {
-        console.log(`   [Directives] ⚠️ Could not fetch directives: ${error.message}`);
-        return [];
-      }
+        .order('display_order')
+        .order('id')); // unique-key tiebreaker for stable pagination
 
       return data || [];
     } catch (err) {

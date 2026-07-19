@@ -27,6 +27,7 @@ const STOP_KEYWORDS_DEFAULT = [
 ];
 
 import { shouldSkipForType } from '../../../../../../lib/handoff/gate-skip-detection.js';
+import { fetchAllPaginated } from '../../../../../../lib/db/fetch-all-paginated.mjs';
 
 export function createAdrsConsultedGate(supabase) {
   return {
@@ -61,10 +62,20 @@ export function createAdrsConsultedGate(supabase) {
       }
 
       // Collect accepted ADR titles + numbers as stop-keyword corpus
-      const { data: adrs } = await supabase
-        .from('pocock_adrs')
-        .select('adr_number, title')
-        .eq('status', 'accepted');
+      // Count/truncation discipline (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001
+      // FR-6): full accepted-ADR corpus read — a capped read would silently shrink the
+      // stop-keyword corpus. Error policy preserved: read failure degrades to an empty
+      // corpus (fail-open), exactly as the prior ignored-error destructure did.
+      let adrs = [];
+      try {
+        adrs = await fetchAllPaginated(() => supabase
+          .from('pocock_adrs')
+          .select('adr_number, title')
+          .eq('status', 'accepted')
+          .order('adr_number')); // unique-key tiebreaker for stable pagination
+      } catch (adrErr) {
+        console.log(`   ⚠️  GATE_ADRS_CONSULTED: ADR corpus read failed (${adrErr.message}) — proceeding with empty corpus`);
+      }
 
       const adrCorpus = (adrs || []).map(a => ({
         number: a.adr_number,
@@ -118,9 +129,9 @@ export function createAdrsConsultedGate(supabase) {
         await supabase.from('feedback').insert({
           title: `Refactor SD ${sd.sd_key || sd.id} missing ADR citations`,
           description: [
-            `Refactor SD touches canonical decisions but does not cite them in adrs_consulted.`,
+            'Refactor SD touches canonical decisions but does not cite them in adrs_consulted.',
             `Missing: ${missing.map(m => m.canonical).join(', ')}`,
-            `Required action: review the listed ADRs and either (a) populate strategic_directives_v2.adrs_consulted with the relevant ADR-NNNN strings or (b) refine the SD scope so it does not contradict those decisions.`,
+            'Required action: review the listed ADRs and either (a) populate strategic_directives_v2.adrs_consulted with the relevant ADR-NNNN strings or (b) refine the SD scope so it does not contradict those decisions.',
           ].join('\n'),
           severity: 'medium',
           category: 'adrs_consulted_missing',

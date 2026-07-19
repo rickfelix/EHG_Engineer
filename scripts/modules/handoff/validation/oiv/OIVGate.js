@@ -8,6 +8,7 @@
 
 import { OIVVerifier } from './OIVVerifier.js';
 import { validateGateResult } from '../gate-result-schema.js';
+import { fetchAllPaginated } from '../../../../../lib/db/fetch-all-paginated.mjs';
 import {
   createSkippedResult,
   SkipReasonCode
@@ -90,18 +91,25 @@ export class OIVGate {
    * @returns {Promise<Array>} Array of contracts
    */
   async loadContracts(sdType, gateName = null) {
-    let query = this.supabase
-      .from('leo_integration_contracts')
-      .select('*')
-      .eq('is_active', true);
+    // Count/truncation discipline (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6):
+    // contracts registry read — a capped read would silently drop enforcement contracts.
+    // Error policy preserved: read failure logs and THROWS (fail-closed).
+    let data;
+    try {
+      data = await fetchAllPaginated(() => {
+        let query = this.supabase
+          .from('leo_integration_contracts')
+          .select('*')
+          .eq('is_active', true)
+          .order('id'); // unique-key tiebreaker for stable pagination
 
-    if (gateName) {
-      query = query.eq('gate_name', gateName);
-    }
+        if (gateName) {
+          query = query.eq('gate_name', gateName);
+        }
 
-    const { data, error } = await query;
-
-    if (error) {
+        return query;
+      });
+    } catch (error) {
       console.error(`   ❌ Failed to load OIV contracts: ${error.message}`);
       throw error;
     }

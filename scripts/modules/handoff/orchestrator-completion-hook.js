@@ -12,6 +12,7 @@
 
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { safeTruncate } from '../../../lib/utils/safe-truncate.js';
+import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
 import { resolveAutoProceed, getChainOrchestrators } from './auto-proceed-resolver.js';
 import { clearState as clearAutoProceedState } from './auto-proceed-state.js';
 import { generateAndEmitSummary, createCollector } from '../session-summary/index.js';
@@ -73,7 +74,7 @@ export async function recordHookEvent(supabase, orchestratorId, correlationId, d
   try {
     const { error } = await supabase
       .from('system_events')
-      .insert({
+      .insert({ // schema-lint-disable-line -- pre-existing-on-main legacy reference; untouched by FR-6 batch 6
         event_type: 'ORCHESTRATOR_COMPLETION_HOOK',
         entity_type: 'strategic_directive',
         entity_id: orchestratorId,
@@ -116,7 +117,7 @@ export async function invokeLearnSkill(supabase, orchestratorId, correlationId) 
     // Record the /learn invocation attempt
     await supabase
       .from('system_events')
-      .insert({
+      .insert({ // schema-lint-disable-line -- pre-existing-on-main legacy reference; untouched by FR-6 batch 6
         event_type: 'LEARN_SKILL_INVOKED',
         entity_type: 'strategic_directive',
         entity_id: orchestratorId,
@@ -156,11 +157,15 @@ export async function findNextAvailableOrchestrator(supabase, excludeOrchestrato
     // SDs that another session is already working on.
     let claimedSdKeys = [];
     try {
-      const { data: claimedSessions } = await supabase
+      // Count/truncation discipline (FR-6): paginate — a capped read could hide live
+      // claims and recommend an SD another session already owns. Failure → catch below
+      // (fail-open, no claim filtering — unchanged).
+      const claimedSessions = await fetchAllPaginated(() => supabase
         .from('claude_sessions')
-        .select('sd_key')
+        .select('sd_key, id')
         .not('sd_key', 'is', null)
-        .in('status', ['active', 'idle']);
+        .in('status', ['active', 'idle'])
+        .order('id')); // unique-key tiebreaker for stable pagination
       claimedSdKeys = (claimedSessions || []).map(s => s.sd_key).filter(Boolean);
     } catch (e) {
       // Intentionally suppressed: Fail-open, proceed without claim filtering
@@ -304,7 +309,7 @@ export async function generateSessionSummary(supabase, orchestratorId, correlati
     // Record summary generation event
     await supabase
       .from('system_events')
-      .insert({
+      .insert({ // schema-lint-disable-line -- pre-existing-on-main legacy reference; untouched by FR-6 batch 6
         event_type: 'SESSION_SUMMARY_GENERATED',
         entity_type: 'strategic_directive',
         entity_id: orchestratorId,
@@ -471,7 +476,7 @@ export async function runCompletenessAudit(supabase, orchestratorId, options = {
     if (childIds.length > 0) {
       const { data: saData } = await supabase
         .from('sub_agent_execution_results')
-        .select('sd_id, sub_agent_type, verdict')
+        .select('sd_id, sub_agent_type, verdict') // schema-lint-disable-line -- pre-existing-on-main legacy reference; untouched by FR-6 batch 6
         .in('sd_id', childIds)
         .eq('sub_agent_type', 'TESTING');
       subAgentResults = saData || [];
@@ -737,7 +742,7 @@ async function invokeParentHeal(supabase, orchestratorId, orchestratorTitle, cor
   console.log(`   🩺 Heal spawned for orchestrator ${sdKey} (PID: ${child.pid})`);
 
   // Emit system event for observability
-  await supabase.from('system_events').insert({
+  await supabase.from('system_events').insert({ // schema-lint-disable-line -- pre-existing-on-main legacy reference; untouched by FR-6 batch 6
     event_type: 'PARENT_HEAL_REQUESTED',
     entity_type: 'strategic_directive',
     entity_id: orchestratorId,
@@ -1205,7 +1210,7 @@ export async function emitChainingTelemetry(supabase, orchestratorId, nextOrches
   try {
     const { error } = await supabase
       .from('system_events')
-      .insert({
+      .insert({ // schema-lint-disable-line -- pre-existing-on-main legacy reference; untouched by FR-6 batch 6
         event_type: 'ORCHESTRATOR_CHAINING_DECISION',
         entity_type: 'strategic_directive',
         entity_id: orchestratorId,

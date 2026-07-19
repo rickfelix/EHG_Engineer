@@ -10,6 +10,7 @@
 
 import { createSupabaseServiceClient } from '../../../../lib/supabase-client.js';
 import { getSDWorkflow } from './sd-workflow.js';
+import { fetchAllPaginated } from '../../../../lib/db/fetch-all-paginated.mjs';
 
 /**
  * Verify SD completion
@@ -77,18 +78,22 @@ export async function verifySDCompletion(sdId) {
 export async function getPendingApprovalSDs() {
   const supabase = createSupabaseServiceClient();
 
-  const { data: sds, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, title, status, current_phase, sd_type, updated_at')
-    .eq('status', 'pending_approval')
-    .eq('is_active', true)
-    .order('updated_at', { ascending: true });
+  // Count/truncation discipline (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6):
+  // cross-SD stuck-approval sweep — a capped read would silently hide stuck SDs.
+  // Error policy preserved: any failure → { error, sds: [] }.
+  try {
+    const sds = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, status, current_phase, sd_type, updated_at')
+      .eq('status', 'pending_approval')
+      .eq('is_active', true)
+      .order('updated_at', { ascending: true })
+      .order('id')); // unique-key tiebreaker for stable pagination
 
-  if (error) {
+    return { sds: sds || [] };
+  } catch (error) {
     return { error: error.message, sds: [] };
   }
-
-  return { sds: sds || [] };
 }
 
 /**

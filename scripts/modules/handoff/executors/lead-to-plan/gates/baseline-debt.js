@@ -8,6 +8,8 @@
  * WARNS if: Total open issues > 10 or stale non-critical > 5
  */
 
+import { fetchAllPaginated } from '../../../../../../lib/db/fetch-all-paginated.mjs';
+
 /**
  * Check baseline debt
  *
@@ -68,12 +70,18 @@ export async function checkBaselineDebt(sd, supabase) {
     }
 
     // Query stale issues (>30 days old and still open)
+    // Count/truncation discipline (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6):
+    // cross-SD stale-issue sweep — a capped read could hide stale criticals and FALSE
+    // PASS this gate. A read failure now throws into the outer catch (pass score 90 +
+    // warning), where the prior ignored-error destructure silently full-passed at 100 —
+    // failure never improves the verdict.
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const { data: staleIssues } = await supabase
+    const staleIssues = await fetchAllPaginated(() => supabase
       .from('sd_baseline_issues')
       .select('issue_key, category, severity, created_at')
       .eq('status', 'open')
-      .lt('created_at', thirtyDaysAgo);
+      .lt('created_at', thirtyDaysAgo)
+      .order('issue_key')); // unique-key tiebreaker for stable pagination
 
     const issues = [];
     const warnings = [];

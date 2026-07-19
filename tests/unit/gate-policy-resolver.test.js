@@ -36,25 +36,34 @@ const mockGates = [
 // Mock Supabase factories
 // ---------------------------------------------------------------------------
 
+/**
+ * Chainable, thenable query-builder mock.
+ * fetch-all-paginated (FR-6 count/truncation discipline) appends .order() and
+ * .range() to the chain, so the builder supports the full chain and resolves
+ * (or rejects) when awaited.
+ */
+function makeBuilder(result, rejectWith = null) {
+  const b = {};
+  for (const m of ['select', 'order', 'abortSignal', 'range', 'eq', 'not', 'in']) {
+    b[m] = vi.fn().mockReturnValue(b);
+  }
+  b.then = (resolve, reject) => (rejectWith
+    ? Promise.reject(rejectWith).then(resolve, reject)
+    : Promise.resolve(result).then(resolve, reject));
+  return b;
+}
+
 /** Creates a mock Supabase client that returns given policies */
 function createMockSupabase(policies = []) {
   return {
-    from: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        abortSignal: vi.fn().mockResolvedValue({ data: policies, error: null })
-      })
-    })
+    from: vi.fn(() => makeBuilder({ data: policies, error: null }))
   };
 }
 
 /** Creates a mock Supabase client that returns a DB error */
 function createErrorSupabase(message = 'DB connection failed') {
   return {
-    from: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        abortSignal: vi.fn().mockResolvedValue({ data: null, error: { message } })
-      })
-    })
+    from: vi.fn(() => makeBuilder({ data: null, error: { message } }))
   };
 }
 
@@ -63,11 +72,7 @@ function createThrowingSupabase(errorName = 'AbortError') {
   const err = new Error('Aborted');
   err.name = errorName;
   return {
-    from: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        abortSignal: vi.fn().mockRejectedValue(err)
-      })
-    })
+    from: vi.fn(() => makeBuilder(null, err))
   };
 }
 

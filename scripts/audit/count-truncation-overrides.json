@@ -513,5 +513,790 @@
   "classification": "bounded-by-design",
   "match": ".select('id');",
   "note": "update-returning select — bounded by the retarget UPDATE result set"
+ },
+ "scripts/modules/handoff/auto-approve-prd.js:206": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, sd_type')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/auto-complete-deliverables.js:163": {
+  "classification": "bounded-by-design",
+  "match": ".select('sub_agent_code, verdict, confidence, metadata, executed_at')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/auto-complete-deliverables.js:174": {
+  "classification": "bounded-by-design",
+  "match": ".select('handoff_type, status, metadata, created_at')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/auto-complete-deliverables.js:185": {
+  "classification": "bounded-by-design",
+  "match": ".select('story_key, validation_status, acceptance_criteria')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/auto-complete-deliverables.js:447": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, deliverable_name, deliverable_type, priority, completion_status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/auto-complete-deliverables.js:605": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, deliverable_name, deliverable_type')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/auto-complete-deliverables.js:639": {
+  "classification": "bounded-by-design",
+  "match": ".select('completion_status, priority, metadata')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/blocker-resolution.js:79": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, status, progress')",
+  "note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/child-sd-selector.js:173": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, status')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/child-sd-selector.js:246": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_key, title, status, priority, current_phase, sequence_rank, crea",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/child-sd-selector.js:370": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_key, title, status, current_phase, sequence_rank')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/child-sd-selector.js:54": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_key, title, status, priority, current_phase, sequence_rank, crea",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/claim-swapper.js:52": {
+  "classification": "bounded-by-design",
+  "match": "const { data, error } = await query.select('session_id, sd_key');",
+  "note": "update-returning .select() on .eq(session_id[,sd_key]) — bounded by rows updated in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/cli/cli-main.js:1281": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_key, status, claiming_session_id')",
+  "note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/cli/cli-main.js:784": {
+  "classification": "bounded-by-design",
+  "match": ".select('handoff_type, status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/cli/completion-verification.js:43": {
+  "classification": "bounded-by-design",
+  "match": ".select('handoff_type, status, created_at')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/db/HandoffRepository.js:194": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/db/HandoffRepository.js:220": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/db/HandoffRepository.js:48": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "active template rows per (from_agent,to_agent) pair — operationally tiny registry (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/BaseExecutor.js:1082": {
+  "classification": "bounded-by-design",
+  "match": ".select('session_id, sd_key, claimed_at, heartbeat_at')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/gates/cross-child-integration-gate.js:215": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_key, title')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/gates/cross-child-integration-gate.js:233": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_id, deliverables_manifest, handoff_type')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/gates/deliverables-completeness.js:162": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, deliverable_name, completion_status, metadata, created_by')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/gates/deliverables-completeness.js:200": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, deliverable_name, completion_status, metadata, created_by')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/gates/rca-feedback-loop-gate.js:98": {
+  "classification": "bounded-by-design",
+  "match": ".select('id,phase,metadata,created_at,sub_agent_code')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/gates/rca-gate.js:24": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, priority, capa_status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/gates/subagent-enforcement-validation.js:103": {
+  "classification": "bounded-by-design",
+  "match": ".select('sub_agent_code, verdict, created_at')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/gates/user-story-coverage.js:66": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, story_key, title, status, validation_status, acceptance_criteria, c",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/gates/wireframe-qa-validation.js:79": {
+  "classification": "bounded-by-design",
+  "match": ".select('title, artifact_type')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/gates/wiring-validation.js:95": {
+  "classification": "bounded-by-design",
+  "match": ".select('check_type, status, signals_detected, waived_by')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/parent-orchestrator.js:49": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_key, status, current_phase, title, scope, scope_slice')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/retrospective.js:37": {
+  "classification": "bounded-by-design",
+  "match": ".select('pattern_id, issue_summary, category, severity, proven_solutions, preven",
+  "note": "sd-scoped .or() linkage read — bounded by rows referencing this SD (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/retrospective.js:467": {
+  "classification": "bounded-by-design",
+  "match": ".select());",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/retrospective.js:472": {
+  "classification": "bounded-by-design",
+  "match": ".select());",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/state-transitions.js:26": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, e2e_test_path, status, validation_status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/test-evidence.js:113": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, story_id, title, status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-final-approval/cas-completion.js:33": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-final-approval/gates.js:1079": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_key, title, status')",
+  "note": "SDs linked to one architecture plan (.or metadata arch_key match) — bounded by plan scope; truncation degrades toward false-fail (uncovered phases), never false-pass (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-final-approval/gates.js:252": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-final-approval/gates.js:282": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-final-approval/gates.js:323": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-final-approval/gates.js:938": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-final-approval/gates/automated-uat-gate.js:61": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, story_key, acceptance_criteria, status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-final-approval/helpers.js:213": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-final-approval/helpers.js:260": {
+  "classification": "bounded-by-design",
+  "match": ".select('handoff_type, validation_score, status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-final-approval/helpers.js:54": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, status')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-final-approval/hooks/capability-scoring-hook.js:31": {
+  "classification": "bounded-by-design",
+  "match": ".select('capability_key')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-final-approval/index.js:1115": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": "sd-scoped .or() linkage read (strategic_directive_id/resolution_sd_id eq this SD) — bounded by rows referencing this SD (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-final-approval/index.js:1128": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": "sd_key-scoped feedback linkage read (.ilike on this SD key) — bounded by rows referencing this SD (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-final-approval/index.js:1152": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": "sd_key-scoped metadata linkage read (deferred_from_sd_key eq this SD) — bounded by rows referencing this SD (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-final-approval/index.js:1195": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-final-approval/index.js:269": {
+  "classification": "bounded-by-design",
+  "match": ".select('handoff_type')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-to-plan/gates/baseline-debt.js:59": {
+  "classification": "bounded-by-design",
+  "match": ".select('*');",
+  "note": "aggregated per-category summary VIEW — one row per category, bounded by category count (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-to-plan/gates/phase-coverage.js:102": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_key, title, status, parent_sd_id')",
+  "note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-to-plan/gates/phase-coverage.js:74": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_key, title, status, parent_sd_id')",
+  "note": "SDs linked to one architecture plan (.or metadata arch_key match) — bounded by plan scope; truncation degrades toward false-fail (uncovered phases), never false-pass (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-to-plan/gates/phase-coverage.js:95": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_key')",
+  "note": "bounded by explicit .in(sd_key) orchestrator-id list (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-to-plan/retrospective.js:30": {
+  "classification": "bounded-by-design",
+  "match": ".select('pattern_id, issue_summary, category, severity, proven_solutions, preven",
+  "note": "sd-scoped .or() linkage read — bounded by rows referencing this SD (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-to-plan/retrospective.js:354": {
+  "classification": "bounded-by-design",
+  "match": ".select());",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/lead-to-plan/retrospective.js:359": {
+  "classification": "bounded-by-design",
+  "match": ".select());",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/display-helpers.js:107": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, status, e2e_test_path, e2e_test_status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/gates/architectural-pattern-checklist.js:180": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/gates/bugfix-coverage-preflight.js:39": {
+  "classification": "bounded-by-design",
+  "match": ".select('story_key, status, validation_status, acceptance_criteria, title')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/gates/deliverables-planning.js:72": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, deliverable_name, completion_status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/gates/infrastructure-consumer-check.js:545": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, user_want, user_benefit, technical_notes, implementation_app",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/gates/migration-data-verification.js:260": {
+  "classification": "bounded-by-design",
+  "match": ".select('title, metadata')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js:208": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, deliverable_name')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js:238": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_key, status')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js:280": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_key, status')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js:291": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, dependencies')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js:328": {
+  "classification": "bounded-by-design",
+  "match": ".select('vision_key, status, content')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js:355": {
+  "classification": "bounded-by-design",
+  "match": ".select('plan_key, status, vision_key, content')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/gates/sub-agent-repo-resolution.js:240": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/gates/sub-agent-repo-resolution.js:306": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, created_at, sd_id, sub_agent_code, phase, target_application, expec",
+  "note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/gates/sub-agent-repo-resolution.js:310": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sub_agent_code, metadata')",
+  "note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/gates/wireframe-required.js:51": {
+  "classification": "bounded-by-design",
+  "match": ".select('artifact_type, title')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/index.js:111": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/parent-orchestrator.js:81": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_key, title, status, parent_sd_id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/retrospective.js:26": {
+  "classification": "bounded-by-design",
+  "match": ".select('pattern_id, issue_summary, category, severity, proven_solutions, preven",
+  "note": "sd-scoped .or() linkage read — bounded by rows referencing this SD (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/retrospective.js:268": {
+  "classification": "bounded-by-design",
+  "match": ".select());",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/retrospective.js:273": {
+  "classification": "bounded-by-design",
+  "match": ".select());",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/acceptance-criteria-validation.js:26": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/acceptance-criteria-validation.js:58": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, status, validation_status, acceptance_criteria, e2e_test_sta",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/acceptance-criteria-validation.js:88": {
+  "classification": "bounded-by-design",
+  "match": ".select('user_story_id')",
+  "note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/architecture-plan-validation.js:123": {
+  "classification": "bounded-by-design",
+  "match": ".select('title, acceptance_criteria')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/architecture-plan-validation.js:45": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/child-scope-coverage.js:47": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, deliverable_name, deliverable_type')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/child-scope-coverage.js:53": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, status')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/child-scope-coverage.js:80": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_id, deliverable_name, deliverable_type, completion_status')",
+  "note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/failure-chain-ordering.js:90": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_key, title')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/git-commit-enforcement.js:116": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_key, status')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js:152": {
+  "classification": "bounded-by-design",
+  "match": ".select('handoff_type, status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js:425": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js:607": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at');",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js:705": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at');",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js:78": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js:87": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js:965": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at');",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/prerequisite-check.js:197": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_key, status')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/retrospective-quality.js:28": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, status')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/smoke-test-evidence.js:85": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/success-metrics-achievement.js:88": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/success-metrics-gate.js:111": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/success-metrics-gate.js:217": {
+  "classification": "bounded-by-design",
+  "match": ".select('handoff_type, status, validation_score')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/success-metrics-gate.js:224": {
+  "classification": "bounded-by-design",
+  "match": ".select('status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/success-metrics-verification.js:42": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/user-story-existence.js:29": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/user-story-existence.js:92": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, status, validation_status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/vision-completion-score.js:26": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/index.js:383": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, status')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/plan-verification.js:134": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/plan-verification.js:30": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_key, status')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/plan-verification.js:66": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/state-transitions.js:205": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, status')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/state-transitions.js:48": {
+  "classification": "bounded-by-design",
+  "match": "const { data: apps } = await supabase.from('applications').select('name').eq('st",
+  "note": "active applications registry — operationally tiny table (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/state-transitions.js:54": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/state-transitions.js:87": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, status, validation_status, e2e_test_path, e2e_test_status');",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/extract-deliverables-from-prd.js:239": {
+  "classification": "bounded-by-design",
+  "match": ".select();",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/extract-deliverables-from-prd.js:80": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, story_key')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/failure-pattern-capture.js:115": {
+  "classification": "bounded-by-design",
+  "match": ".select('pattern_id');",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/failure-pattern-capture.js:42": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, handoff_type, validation_score, rejection_reason, validation_detail",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/gates/db-content-parity-gate.js:70": {
+  "classification": "bounded-by-design",
+  "match": "let query = supabase.from(table).select(Object.keys(expected_columns).join(', ')",
+  "note": ".maybeSingle() applied to the query after a dynamic filter loop — single-row read the chain heuristic cannot see (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/gates/fr-delivery-classifier.js:93": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, user_want, acceptance_criteria, technical_notes, status, val",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/gates/fr-delivery-traceability-gate.js:25": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/gates/multi-session-claim-gate.js:81": {
+  "classification": "bounded-by-design",
+  "match": ".select('session_id, hostname, terminal_id')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/gates/ship-review-findings-proof.js:48": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, pr_number, verdict, branch, synthesized_at, reviewed_at')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/gates/subagent-evidence-gate.js:236": {
+  "classification": "bounded-by-design",
+  "match": ".select('sub_agent_code, created_at, verdict')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/HandoffOrchestrator.js:459": {
+  "classification": "bounded-by-design",
+  "match": "const bySdId = await this.supabase.from('product_requirements_v2').select('*').e",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/HandoffOrchestrator.js:462": {
+  "classification": "bounded-by-design",
+  "match": "const byDirective = await this.supabase.from('product_requirements_v2').select('",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/map-e2e-tests-to-stories.js:107": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, story_key, title, e2e_test_path')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/orchestrator-completion-guardian.js:129": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, status, progress')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/orchestrator-completion-guardian.js:195": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_id, deliverables_manifest, handoff_type')",
+  "note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/orchestrator-completion-guardian.js:266": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, deliverable_name, completion_status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/orchestrator-completion-guardian.js:305": {
+  "classification": "bounded-by-design",
+  "match": ".select('handoff_type, status, validation_score')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/orchestrator-completion-guardian.js:569": {
+  "classification": "bounded-by-design",
+  "match": ".select('title, executive_summary')",
+  "note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/orchestrator-completion-guardian.js:611": {
+  "classification": "bounded-by-design",
+  "match": ".select('key_learnings, what_went_well, what_needs_improvement')",
+  "note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/orchestrator-completion-hook.js:235": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_key, title, status, priority, category, created_at, updated_at, ",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/orchestrator-completion-hook.js:352": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, status, priority, current_phase, parent_sd_id')",
+  "note": "bounded by .limit(limit) display slice (default 200) — variable limit invisible to the chain heuristic (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/orchestrator-completion-hook.js:461": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_key, title, status, current_phase, sd_type, metadata')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/orchestrator-completion-hook.js:479": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_id, sub_agent_type, verdict')",
+  "note": "bounded by explicit .in() child-id list (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/orchestrator-completion-hook.js:815": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_key, claiming_session_id')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/orchestrator-completion-hook.js:951": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_key')",
+  "note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/pre-checks/prerequisite-preflight.js:534": {
+  "classification": "bounded-by-design",
+  "match": ".select('story_key')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/recording/HandoffRecorder.js:237": {
+  "classification": "bounded-by-design",
+  "match": ".select();",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/recording/HandoffRecorder.js:430": {
+  "classification": "bounded-by-design",
+  "match": ".select();",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/recording/HandoffRecorder.js:531": {
+  "classification": "bounded-by-design",
+  "match": ".select();",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/recording/HandoffRecorder.js:627": {
+  "classification": "bounded-by-design",
+  "match": ".select();",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/recording/HandoffRecorder.js:684": {
+  "classification": "bounded-by-design",
+  "match": ".select();",
+  "note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/recording/HandoffRecorder.js:801": {
+  "classification": "bounded-by-design",
+  "match": ".select('pattern_id, issue_summary, category, severity')",
+  "note": "sd-scoped .or() linkage read — bounded by rows referencing this SD (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/validation/validator-registry/gates/additional-validators.js:133": {
+  "classification": "bounded-by-design",
+  "match": ".select('sub_agent_code, verdict')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/validation/validator-registry/gates/additional-validators.js:239": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, status, validation_status')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/validation/validator-registry/gates/gate-1-plan-to-exec.js:39": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/validators/wireframe-qa-validator.js:97": {
+  "classification": "bounded-by-design",
+  "match": ".select('title, description, evidence')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/verifiers/lead-to-plan/dependency-validation.js:100": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, sd_key, status, title')",
+  "note": "bounded by the SD dependencies id-list expanded into .or() (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/verifiers/plan-to-exec/PlanToExecVerifier.js:101": {
+  "classification": "bounded-by-design",
+  "match": "const result = await this.supabase.from('product_requirements_v2').select('*').e",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/verifiers/plan-to-exec/PlanToExecVerifier.js:107": {
+  "classification": "bounded-by-design",
+  "match": "const result = await this.supabase.from('product_requirements_v2').select('*').e",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/verifiers/plan-to-exec/PlanToExecVerifier.js:113": {
+  "classification": "bounded-by-design",
+  "match": "const fallback = await this.supabase.from('product_requirements_v2').select('*')",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "scripts/modules/handoff/verifiers/plan-to-exec/PlanToExecVerifier.js:180": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, story_key, title, status, user_role, user_want, user_benefit, accep",
+  "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
  }
 }

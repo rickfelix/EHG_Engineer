@@ -8,6 +8,8 @@
  * Part of SD-LEO-INFRA-IMPLEMENT-STANDALONE-AUTO-001
  */
 
+import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
+
 /**
  * Find the next workable SD from the queue, excluding claimed and completed SDs.
  *
@@ -82,11 +84,15 @@ export async function selectNextSD(supabase, options = {}) {
  */
 export async function getClaimedSdKeys(supabase) {
   try {
-    const { data: claimedSessions } = await supabase
+    // Count/truncation discipline (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6):
+    // paginate — a capped read could hide live claims and hand out an already-claimed
+    // SD. Failure → catch below (fail-open, no claim filtering — unchanged).
+    const claimedSessions = await fetchAllPaginated(() => supabase
       .from('claude_sessions')
-      .select('sd_key')
+      .select('sd_key, id')
       .not('sd_key', 'is', null)
-      .in('status', ['active', 'idle']);
+      .in('status', ['active', 'idle'])
+      .order('id')); // unique-key tiebreaker for stable pagination
     return (claimedSessions || []).map(s => s.sd_key).filter(Boolean);
   } catch {
     // Fail-open: proceed without claim filtering

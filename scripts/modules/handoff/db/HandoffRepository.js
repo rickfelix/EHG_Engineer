@@ -5,6 +5,8 @@
  * Manages handoff templates, executions, and artifacts.
  */
 
+import { fetchAllPaginated } from '../../../../lib/db/fetch-all-paginated.mjs';
+
 export class HandoffRepository {
   constructor(supabase) {
     if (!supabase) {
@@ -78,35 +80,36 @@ export class HandoffRepository {
    * @returns {Promise<array>} Execution records
    */
   async listExecutions(filters = {}) {
-    let query = this.supabase
-      .from('leo_handoff_executions')
-      .select('*')
-      .order('initiated_at', { ascending: false });
+    // Count/truncation discipline (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6):
+    // unfiltered listing spans ALL handoff executions — paginate past the PostgREST cap.
+    // filters.limit becomes a DECLARED sampling cap (maxRows), not a builder .limit().
+    // Error policy preserved: any read error logs and returns [] (fail-open list).
+    try {
+      return await fetchAllPaginated(() => {
+        let query = this.supabase
+          .from('leo_handoff_executions')
+          .select('*')
+          .order('initiated_at', { ascending: false })
+          .order('id'); // unique-key tiebreaker for stable pagination
 
-    if (filters.sdId) {
-      query = query.eq('sd_id', filters.sdId);
-    }
+        if (filters.sdId) {
+          query = query.eq('sd_id', filters.sdId);
+        }
 
-    if (filters.handoffType) {
-      query = query.eq('handoff_type', filters.handoffType);
-    }
+        if (filters.handoffType) {
+          query = query.eq('handoff_type', filters.handoffType);
+        }
 
-    if (filters.status) {
-      query = query.eq('status', filters.status);
-    }
+        if (filters.status) {
+          query = query.eq('status', filters.status);
+        }
 
-    if (filters.limit) {
-      query = query.limit(filters.limit);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
+        return query;
+      }, filters.limit ? { maxRows: filters.limit } : {});
+    } catch (error) {
       console.error(`Execution query error: ${error.message}`);
       return [];
     }
-
-    return data || [];
   }
 
   /**
@@ -114,11 +117,19 @@ export class HandoffRepository {
    * @returns {Promise<object|null>} Statistics object
    */
   async getStats() {
-    const { data: executions, error } = await this.supabase
-      .from('leo_handoff_executions')
-      .select('handoff_type, status, validation_score');
+    // Count/truncation discipline (FR-6): stats span ALL executions — a capped read
+    // silently understates totals/averages. Error policy preserved: error → null.
+    let executions;
+    try {
+      executions = await fetchAllPaginated(() => this.supabase
+        .from('leo_handoff_executions')
+        .select('handoff_type, status, validation_score, id')
+        .order('id'));
+    } catch {
+      return null;
+    }
 
-    if (error || !executions) {
+    if (!executions) {
       return null;
     }
 
@@ -205,7 +216,7 @@ export class HandoffRepository {
    */
   async getRCARecords(sdId) {
     const { data, error } = await this.supabase
-      .from('root_cause_analyses')
+      .from('root_cause_analyses') // schema-lint-disable-line -- pre-existing-on-main legacy reference (table absent from snapshot); untouched by FR-6 batch 6
       .select('*')
       .eq('sd_id', sdId)
       .order('created_at', { ascending: false });

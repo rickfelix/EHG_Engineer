@@ -1,12 +1,12 @@
 {
  "sd": "SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001",
  "generated_by": "scripts/audit/count-truncation-inventory.mjs",
- "total_sites": 9166,
+ "total_sites": 9172,
  "by_classification": {
-  "bounded-by-design": 2995,
-  "needs-review": 1822,
-  "already-exact": 175,
-  "paginated": 106,
+  "bounded-by-design": 3153,
+  "needs-review": 1653,
+  "already-exact": 177,
+  "paginated": 121,
   "tripwired": 15,
   "non-live-path": 4053
  },
@@ -646,10 +646,9 @@
    "exemption_note": "pending+unfulfilled worker_spawn_requests — operationally tiny set with expiry window (mirrors fleet-dashboard.cjs:200)"
   },
   {
-   "site": "lib/coordinator/dispatch.cjs:772",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": "insert-returning select — bounded by the inserted row(s)"
+   "site": "lib/coordinator/dispatch.cjs:787",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
    "site": "lib/coordinator/drain-gauge.cjs:39",
@@ -710,6 +709,26 @@
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": "update-returning select — bounded by the retarget UPDATE result set"
+  },
+  {
+   "site": "lib/coordinator/succession.cjs:138",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "lib/coordinator/succession.cjs:200",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "lib/coordinator/succession.cjs:71",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "lib/coordinator/succession.cjs:98",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
    "site": "lib/creative/theater-guard.js:58",
@@ -7258,873 +7277,945 @@
   },
   {
    "site": "scripts/modules/handoff/auto-approve-prd.js:206",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/auto-complete-deliverables.js:163",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/auto-complete-deliverables.js:174",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/auto-complete-deliverables.js:185",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/auto-complete-deliverables.js:447",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/auto-complete-deliverables.js:605",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/auto-complete-deliverables.js:639",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/blocker-resolution.js:79",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/child-sd-selector.js:173",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/child-sd-selector.js:246",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/child-sd-selector.js:370",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/child-sd-selector.js:54",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/claim-swapper.js:52",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "update-returning .select() on .eq(session_id[,sd_key]) — bounded by rows updated in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/cli/cli-main.js:1281",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/cli/cli-main.js:784",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
-   "site": "scripts/modules/handoff/cli/completion-verification.js:42",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/handoff/cli/completion-verification.js:43",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
-   "site": "scripts/modules/handoff/cli/completion-verification.js:82",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/handoff/db/HandoffRepository.js:194",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
-   "site": "scripts/modules/handoff/cli/execution-helpers.js:119",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/handoff/db/HandoffRepository.js:220",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
-   "site": "scripts/modules/handoff/cli/execution-helpers.js:127",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/handoff/db/HandoffRepository.js:48",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "active template rows per (from_agent,to_agent) pair — operationally tiny registry (FR-6 batch 6 review)"
   },
   {
-   "site": "scripts/modules/handoff/db/HandoffRepository.js:119",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/handoff/db/HandoffRepository.js:183",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/handoff/db/HandoffRepository.js:209",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/handoff/db/HandoffRepository.js:46",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/handoff/db/HandoffRepository.js:83",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/handoff/executors/BaseExecutor.js:1081",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/handoff/executors/BaseExecutor.js:1479",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/handoff/executors/BaseExecutor.js:1082",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/exec-to-plan/gates/cross-child-integration-gate.js:215",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/exec-to-plan/gates/cross-child-integration-gate.js:233",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/exec-to-plan/gates/deliverables-completeness.js:162",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/exec-to-plan/gates/deliverables-completeness.js:200",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/exec-to-plan/gates/rca-feedback-loop-gate.js:98",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/exec-to-plan/gates/rca-gate.js:24",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/handoff/executors/exec-to-plan/gates/sub-agent-orchestration.js:182",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/exec-to-plan/gates/subagent-enforcement-validation.js:103",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/exec-to-plan/gates/user-story-coverage.js:66",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/exec-to-plan/gates/wireframe-qa-validation.js:79",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/exec-to-plan/gates/wiring-validation.js:95",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/exec-to-plan/parent-orchestrator.js:49",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/exec-to-plan/retrospective.js:37",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sd-scoped .or() linkage read — bounded by rows referencing this SD (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/exec-to-plan/retrospective.js:467",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/exec-to-plan/retrospective.js:472",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/exec-to-plan/state-transitions.js:26",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/exec-to-plan/test-evidence.js:113",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-final-approval/cas-completion.js:33",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-final-approval/gates.js:1079",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "SDs linked to one architecture plan (.or metadata arch_key match) — bounded by plan scope; truncation degrades toward false-fail (uncovered phases), never false-pass (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-final-approval/gates.js:252",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-final-approval/gates.js:282",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-final-approval/gates.js:323",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-final-approval/gates.js:938",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-final-approval/gates/automated-uat-gate.js:61",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-final-approval/helpers.js:213",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-final-approval/helpers.js:260",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-final-approval/helpers.js:54",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-final-approval/hooks/capability-scoring-hook.js:31",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-final-approval/index.js:1115",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sd-scoped .or() linkage read (strategic_directive_id/resolution_sd_id eq this SD) — bounded by rows referencing this SD (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-final-approval/index.js:1128",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sd_key-scoped feedback linkage read (.ilike on this SD key) — bounded by rows referencing this SD (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-final-approval/index.js:1152",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sd_key-scoped metadata linkage read (deferred_from_sd_key eq this SD) — bounded by rows referencing this SD (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-final-approval/index.js:1195",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-final-approval/index.js:269",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
-   "site": "scripts/modules/handoff/executors/lead-to-plan/gates/adrs-consulted.js:66",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/handoff/executors/lead-to-plan/gates/baseline-debt.js:57",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/handoff/executors/lead-to-plan/gates/baseline-debt.js:74",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/handoff/executors/lead-to-plan/gates/baseline-debt.js:59",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "aggregated per-category summary VIEW — one row per category, bounded by category count (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-to-plan/gates/phase-coverage.js:102",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-to-plan/gates/phase-coverage.js:74",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "SDs linked to one architecture plan (.or metadata arch_key match) — bounded by plan scope; truncation degrades toward false-fail (uncovered phases), never false-pass (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-to-plan/gates/phase-coverage.js:95",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded by explicit .in(sd_key) orchestrator-id list (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-to-plan/retrospective.js:30",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sd-scoped .or() linkage read — bounded by rows referencing this SD (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-to-plan/retrospective.js:354",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/lead-to-plan/retrospective.js:359",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/display-helpers.js:107",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/gates/architectural-pattern-checklist.js:180",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/gates/bugfix-coverage-preflight.js:39",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/gates/deliverables-planning.js:72",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/gates/infrastructure-consumer-check.js:545",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/gates/migration-data-verification.js:260",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js:208",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js:238",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js:280",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js:291",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js:328",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js:355",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/gates/sub-agent-repo-resolution.js:240",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/gates/sub-agent-repo-resolution.js:306",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/gates/sub-agent-repo-resolution.js:310",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/gates/wireframe-required.js:51",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/index.js:111",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/parent-orchestrator.js:81",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/retrospective.js:26",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sd-scoped .or() linkage read — bounded by rows referencing this SD (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/retrospective.js:268",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-exec/retrospective.js:273",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/acceptance-criteria-validation.js:26",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/acceptance-criteria-validation.js:58",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/acceptance-criteria-validation.js:88",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/architecture-plan-validation.js:123",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/architecture-plan-validation.js:45",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/child-scope-coverage.js:47",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/child-scope-coverage.js:53",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/child-scope-coverage.js:80",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/failure-chain-ordering.js:90",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/git-commit-enforcement.js:116",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js:152",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js:425",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js:607",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js:705",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js:78",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js:87",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js:965",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/prerequisite-check.js:197",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/retrospective-quality.js:28",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/smoke-test-evidence.js:85",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/success-metrics-achievement.js:88",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/success-metrics-gate.js:111",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/success-metrics-gate.js:217",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/success-metrics-gate.js:224",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/success-metrics-verification.js:42",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/user-story-existence.js:29",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/user-story-existence.js:92",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/gates/vision-completion-score.js:26",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/index.js:383",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/plan-verification.js:134",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/plan-verification.js:30",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/plan-verification.js:66",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/state-transitions.js:205",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/state-transitions.js:48",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "active applications registry — operationally tiny table (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/state-transitions.js:54",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/executors/plan-to-lead/state-transitions.js:87",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/extract-deliverables-from-prd.js:239",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/extract-deliverables-from-prd.js:80",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/failure-pattern-capture.js:115",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/failure-pattern-capture.js:42",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/handoff/gate-policy-resolver.js:50",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/gates/db-content-parity-gate.js:70",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".maybeSingle() applied to the query after a dynamic filter loop — single-row read the chain heuristic cannot see (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/gates/fr-delivery-classifier.js:93",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/gates/fr-delivery-traceability-gate.js:25",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/gates/multi-session-claim-gate.js:81",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/gates/ship-review-findings-proof.js:48",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/gates/subagent-evidence-gate.js:236",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/HandoffOrchestrator.js:459",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/HandoffOrchestrator.js:462",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/map-e2e-tests-to-stories.js:107",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/orchestrator-completion-guardian.js:129",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/orchestrator-completion-guardian.js:195",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/orchestrator-completion-guardian.js:266",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/orchestrator-completion-guardian.js:305",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/orchestrator-completion-guardian.js:569",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/orchestrator-completion-guardian.js:611",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded by explicit .in() id-list (FR-6 batch 6 review)"
   },
   {
-   "site": "scripts/modules/handoff/orchestrator-completion-hook.js:161",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/handoff/orchestrator-completion-hook.js:235",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
-   "site": "scripts/modules/handoff/orchestrator-completion-hook.js:230",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/handoff/orchestrator-completion-hook.js:352",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded by .limit(limit) display slice (default 200) — variable limit invisible to the chain heuristic (FR-6 batch 6 review)"
   },
   {
-   "site": "scripts/modules/handoff/orchestrator-completion-hook.js:347",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/handoff/orchestrator-completion-hook.js:461",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
-   "site": "scripts/modules/handoff/orchestrator-completion-hook.js:456",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/handoff/orchestrator-completion-hook.js:479",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded by explicit .in() child-id list (FR-6 batch 6 review)"
   },
   {
-   "site": "scripts/modules/handoff/orchestrator-completion-hook.js:474",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/handoff/orchestrator-completion-hook.js:815",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
-   "site": "scripts/modules/handoff/orchestrator-completion-hook.js:810",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/handoff/orchestrator-completion-hook.js:946",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/handoff/orchestrator-completion-hook.js:951",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/pre-checks/prerequisite-preflight.js:534",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/handoff/queue-selector.js:87",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/recording/HandoffRecorder.js:237",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/recording/HandoffRecorder.js:430",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/recording/HandoffRecorder.js:531",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/recording/HandoffRecorder.js:627",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/recording/HandoffRecorder.js:684",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/recording/HandoffRecorder.js:801",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/handoff/validation/oiv/OIVGate.js:95",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/handoff/validation/ValidationOrchestrator.js:1020",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/handoff/validation/ValidationOrchestrator.js:703",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/handoff/validation/ValidationOrchestrator.js:826",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sd-scoped .or() linkage read — bounded by rows referencing this SD (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/validation/validator-registry/gates/additional-validators.js:133",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/validation/validator-registry/gates/additional-validators.js:239",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/validation/validator-registry/gates/gate-1-plan-to-exec.js:39",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/handoff/validation/validator-registry/gates/value-authenticity-spec-gate.js:267",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/validators/wireframe-qa-validator.js:97",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/verifiers/lead-to-plan/dependency-validation.js:100",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded by the SD dependencies id-list expanded into .or() (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/verifiers/plan-to-exec/PlanToExecVerifier.js:101",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/verifiers/plan-to-exec/PlanToExecVerifier.js:107",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/verifiers/plan-to-exec/PlanToExecVerifier.js:113",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/handoff/verifiers/plan-to-exec/PlanToExecVerifier.js:180",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
   },
   {
    "site": "scripts/modules/human-verification-validator.js:126",
