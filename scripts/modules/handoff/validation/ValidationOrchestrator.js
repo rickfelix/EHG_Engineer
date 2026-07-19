@@ -712,6 +712,7 @@ export class ValidationOrchestrator {
         .order('table_name')
         .order('id')); // unique-key tiebreaker for stable pagination
     } catch (error) {
+      // Caveat: 'does not exist' also matches 42703 column errors (e.g. a dropped id column) — schema drift would self-mask as 'table not created'; verdict-neutral since preValidateData swallows either way.
       if (/42P01|does not exist|Could not find the table/i.test(error.message || '')) {
         console.log('ℹ️  leo_schema_constraints table not yet created - skipping pre-validation');
         return [];
