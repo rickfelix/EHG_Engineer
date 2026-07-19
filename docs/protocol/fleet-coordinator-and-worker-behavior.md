@@ -1,9 +1,9 @@
 ---
 category: documentation
 status: approved
-version: 1.0.0
+version: 1.1.0
 author: rickfelix
-last_updated: 2026-07-18
+last_updated: 2026-07-19
 tags: [documentation, protocol]
 ---
 
@@ -13,10 +13,10 @@ tags: [documentation, protocol]
 
 - **Category**: Protocol
 - **Status**: Approved
-- **Version**: 1.1.0
-- **Last Updated**: 2026-06-08
-- **Tags**: fleet, coordinator, worker, cron, self-review, adam
-- **Author**: SD-LEO-INFRA-ARM-CANONICALIZE-WORK-001
+- **Version**: 1.2.0
+- **Last Updated**: 2026-07-19
+- **Tags**: fleet, coordinator, worker, cron, self-review, adam, durability, gha-cron
+- **Author**: SD-LEO-INFRA-DURABLE-COORDINATOR-LOOPS-001
 
 Memory-independent source of truth for how the LEO fleet **coordinator** and its **worker** sessions
 behave. It exists so these behaviors survive even if an agent's personal auto-memory is lost, or a
@@ -166,6 +166,17 @@ There is a SEPARATE failure mode (feedback `34113d39`, `category='harness_backlo
 | Backlog prioritization + dispatch ordering (duty 6) | `scripts/coordinator-backlog-rank.mjs` (armed cron `9,24,39,54 * * * *`, ~15min) → `metadata.dispatch_rank`, honored by `scripts/worker-checkin.cjs` `sortByDispatchRank`. Event-driven refresh (SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C) also fires on SD creation, `needs_coordinator_review` clearance (`lib/coordinator/clear-coordinator-review.js` / `scripts/clear-coordinator-review.mjs`), and predecessor SD completion, via `lib/coordinator/trigger-rank-pass.mjs` — so a freshly-claimable SD is ranked within seconds instead of waiting for the next cron tick. Chairman-ratified plan-linkage tie-break (SD-LEO-INFRA-PLAN-LINKAGE-BELT-001, 2026-07-18): at equal standing on every prior objective comparator (unlock score, product-pivot band, needle, priority), plan-linked SDs (`metadata.plan_linkage.linked=true`, stamped at creation or fence-lift) sort first — `lib/roadmap/plan-linkage-comparator.js`, shared by both this ranker and `scripts/fleet-dashboard.cjs`'s fence-review ordering. Belt-admission linkage is also surfaced in `PLAN CHECK` (`lib/roadmap/plan-check-status.js` section 5) and the roadmap retro (`scripts/vision/rung-progress-rollup.mjs`, feedback category `plan_linkage_retro`) |
 | Question→operator escalation (durable row; rendered by the Adam exec email / operator conversation) | `scripts/coordinator-escalate-question.mjs` (writes `operator_question` row) |
 | Teardown cron inventory + matcher | `lib/coordinator/teardown-coordinator.cjs` (`listCoordinatorCrons`, `selectCoordinatorCronJobs`) |
+| SCRIPT-SHAPED loop durability (GHA-backed, additive) | `.github/workflows/*-cron.yml` per migrated `STANDARD_LOOPS` entry (`gha_backed:true` marker in `scripts/coordinator-startup-check.mjs`) |
+| Dead-coordinator chairman page | `scripts/fleet-down-alert.mjs` (`evaluateDeadCoordinatorAlert`) → `.github/workflows/fleet-down-alert-cron.yml` |
+
+## Two-layer durability contract (SD-LEO-INFRA-DURABLE-COORDINATOR-LOOPS-001)
+
+`CronCreate` is structurally session-only (in-memory, 7-day cap) — every `STANDARD_LOOPS` entry armed via `/coordinator start` dies with the coordinator session that armed it. A coordinator crash orphans all of them until an operator manually restarts. This is addressed by two independent layers, not one:
+
+1. **Durable layer (GHA-backed, SCRIPT-SHAPED loops).** Deterministic loops with no LLM judgment (sweep, gauge-runner, unranked-gauge, relay-drain, relay-drop-gauge, solomon-ledger-resurface, row-growth, feedback-sla, flag-review, scripts-reachability, review-rotation, fleet-retro-capture, plus the already-shipped retention and backlog-rank) get an always-on GitHub Actions cron matching their `STANDARD_LOOPS` schedule. **The design is ADDITIVE, not exclusive** — the GHA cron becomes the primary reliable trigger, but the `STANDARD_LOOPS` session-armed entry stays in place as a harmless redundant backup (idempotent/fail-soft scripts tolerate an occasional double-fire), matching the pattern `retention-enforce-cron.yml` and `backlog-rank-cron.yml` already shipped. This was chosen over a flag-gated mutually-exclusive design (`gha_backed`-suppresses-session-arming) because that design was never implemented anywhere and would have diverged from the already-shipped, already-proven precedent. A `gha_backed: true` field is stamped on each migrated `STANDARD_LOOPS` entry, purely as an informational/reporting marker — it does not gate anything.
+2. **Session-armed layer (JUDGMENT-SHAPED loops).** LLM-driven review/adjudication loops (quiet-tick, self-review, hourly-review, roles-review, audit, charter-audit, capacity-forecast, dashboard, identity) require a live coordinator session and stay re-armed at every `/coordinator start` — they are not migrated, because a GHA runner cannot perform the judgment they require.
+
+**Coordinator death itself is a third, separate failure mode** from any individual loop dying: the coordinator's *standing* responsibilities (sweeps, gauges, dispatch-rank) go silently unattended, and — before this SD — nothing paged anyone (the 43h coverage-gap class from Solomon tri-role evidence). `scripts/fleet-down-alert.mjs`'s `evaluateDeadCoordinatorAlert()` runs alongside the existing worker-fleet-down check (independent predicate, own edge-triggered dedup, no shared state) inside `fleet-down-alert-cron.yml` — itself already always-on GHA, for the same reason the worker-fleet alert is: this is exactly the path that must survive the coordinator's own death. It checks `getActiveCoordinatorId()` (`lib/coordinator/resolve.cjs`) for `null`, or the most recently seen coordinator-flagged session's heartbeat exceeding a dedicated 15-minute staleness constant (deliberately independent of `resolve.cjs`'s own internal 10-minute `STALE_THRESHOLD_MIN`, which governs an unrelated resolution chain), and pages the chairman via `sendChairmanSMS()` (`lib/comms/adam-outbound/chairman-sms-gate/index.js`) rather than the worker-fleet alert's plain email.
 
 ## Comms check (radio check) — verify the two-way link at startup
 

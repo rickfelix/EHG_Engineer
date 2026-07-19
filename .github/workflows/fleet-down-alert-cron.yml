@@ -8,6 +8,13 @@ name: "Fleet-down alert (cron)"
 # Oscillation-robust: scripts/fleet-down-alert.mjs requires ~3 consecutive active_count==0 pulses
 # (~45min) AND claimable work, with edge-triggered dedup so a long outage emails once, not every run.
 # Read-only against fleet_worker_pulse + v_sd_next_candidates; sends at most one email per outage.
+#
+# SD-LEO-INFRA-DURABLE-COORDINATOR-LOOPS-001 / FR-3: this run also independently checks for a
+# DEAD COORDINATOR (getActiveCoordinatorId() null OR heartbeat stale >15min) and pages the
+# chairman via sendChairmanSMS() — a distinct outage class from the worker-fleet-down case above,
+# closing the 43h coverage-gap where the coordinator itself (not the worker fleet) was dead and
+# nothing paged the chairman. Same always-on-Actions rationale applies doubly here: this is
+# EXACTLY the moment the coordinator-audit path can't run.
 
 on:
   schedule:
@@ -25,7 +32,7 @@ concurrency:
 
 jobs:
   alert:
-    name: Email the operator on a sustained fleet-down
+    name: Email the operator on a sustained fleet-down / page chairman on a dead coordinator
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -34,6 +41,11 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       CLAUDE_NOTIFY_EMAIL: ${{ secrets.CLAUDE_NOTIFY_EMAIL }}
+      CHAIRMAN_PHONE: ${{ secrets.CHAIRMAN_PHONE }}
+      TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+      TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+      TWILIO_MESSAGING_SERVICE: ${{ secrets.TWILIO_MESSAGING_SERVICE }}
+      TWILIO_STATUS_CALLBACK_URL: ${{ secrets.TWILIO_STATUS_CALLBACK_URL }}
 
     steps:
       - name: Checkout
@@ -48,5 +60,5 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
-      - name: Check fleet pulse and alert if sustained-down
+      - name: Check fleet pulse / dead-coordinator, alert if either condition trips
         run: node scripts/fleet-down-alert.mjs
