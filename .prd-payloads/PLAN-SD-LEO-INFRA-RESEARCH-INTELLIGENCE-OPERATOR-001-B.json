@@ -1,0 +1,171 @@
+{
+  "executive_summary": "Stage-0 synthesis component tech-trajectory.js has an async dataFeed.getTechSignals() hook (lib/eva/stage-zero/synthesis/tech-trajectory.js:41-47) that has never been fed: no caller anywhere constructs a dataFeed object, so every venture's technology-trajectory analysis runs on a training-data-only fallback with the hardcoded caveat 'Framework-informed projections based on training data. Not real-time signals.'. The plumbing is already faithful end-to-end -- runSynthesis (synthesis/index.js:133) forwards deps untouched to analyzeTechTrajectory, and its sole production caller executeStageZero (stage-zero-orchestrator.js:65,106) spreads deps into enrichedDeps. This child closes the 'nobody constructed the object' gap by adding a new module lib/eva/stage-zero/data-feed.js whose getTechSignals() reads Child A's standing table research_intelligence_reference (is_current tech_landscape/model_landscape rows), and by constructing+injecting that dataFeed at the single injection site in executeStageZero. Verified via unit tests with a mock supabase client and an orchestrator wiring assertion; an audit of all 14 synthesis components confirms tech-trajectory is the only starved dataFeed hook, so no other component is wired. Additive and non-breaking; tech-trajectory's own analysis logic and prompt are unchanged.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Stage-0 dataFeed module backed by the standing reference table",
+      "description": "Add lib/eva/stage-zero/data-feed.js exporting createStageZeroDataFeed(supabase, { logger } = {}). It returns an object exposing async getTechSignals() that reads Child A's standing table research_intelligence_reference (database/migrations/20260718_research_intelligence_reference.sql) filtering entry_type IN ('tech_landscape','model_landscape') AND is_current = true, and maps each row to a compact signal { subject, entry_type, confidence, version, payload, source_refs }. Honest-idle: if supabase is missing, the query errors, or zero current rows are returned, getTechSignals() resolves to null and NEVER fabricates a signal -- preserving tech-trajectory.js's existing training-data-only fallback (signalContext stays empty). The returned shape matches the existing consumption contract at tech-trajectory.js:47 which JSON.stringifies the value into the LLM prompt when truthy.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "createStageZeroDataFeed(supabase) returns an object with typeof feed.getTechSignals === 'function'",
+        "getTechSignals() queries research_intelligence_reference with entry_type IN ('tech_landscape','model_landscape') and is_current filter",
+        "Rows present -> resolves to a non-empty array of compact signal objects each carrying subject + entry_type + payload + source_refs",
+        "Zero rows, a supabase error, or a null client -> resolves to null (honest-idle, no throw, no fabricated signal)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Construct and inject the dataFeed at the single Stage-0 injection site",
+      "description": "In lib/eva/stage-zero/stage-zero-orchestrator.js executeStageZero, construct the dataFeed once and thread it through enrichedDeps so it reaches synthesis. At the enrichedDeps assignment (currently line 65: `const enrichedDeps = { ...deps, strategicContext };`), set dataFeed = deps.dataFeed || (supabase ? createStageZeroDataFeed(supabase, { logger }) : null) and include it: `const enrichedDeps = { ...deps, strategicContext, dataFeed };`. A caller-provided deps.dataFeed (e.g. a test double) always wins; when only supabase is present, this is the FIRST place in the codebase that ever constructs the dataFeed object. enrichedDeps already flows to runSynthesis (line 106) which forwards it to analyzeTechTrajectory, so tech-trajectory begins receiving live signals with no change to its own code.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "executeStageZero constructs dataFeed from deps.supabase when deps.dataFeed is not supplied",
+        "A caller-supplied deps.dataFeed is preserved (not overwritten)",
+        "enrichedDeps includes dataFeed and is the object passed to runSynthesis, so analyzeTechTrajectory receives a non-null deps.dataFeed",
+        "skipSynthesis and dryRun paths are unaffected (no new required behavior on those branches)"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Audit all 14 synthesis components for the same unfed-hook pattern",
+      "description": "Audit every component orchestrated by runSynthesis (synthesis/index.js) -- agentic-fit, archetype-mapping, archetypes, attention-capital, build-cost-estimation, chairman-constraints, cross-reference, design-evaluation, mental-model-analysis, moat-architecture, narrative-risk, portfolio-evaluation, time-horizon, virality, and tech-trajectory -- for a dataFeed-shaped external-signal injection hook that is declared-but-never-fed. A codebase-wide grep for dataFeed/getTechSignals confirms the pattern exists ONLY in tech-trajectory.js. Conclusion recorded here in the PRD: tech-trajectory is the sole consumer; no other synthesis component has an analogous starved hook, so no additional wiring is performed (per the parent SD's 'or documents that none exist').",
+      "priority": "high",
+      "acceptance_criteria": [
+        "grep of lib/eva/stage-zero/synthesis/ shows dataFeed and getTechSignals appear only in tech-trajectory.js",
+        "PRD documents that the other 13 components have no analogous unfed external-signal hook and therefore require no wiring"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Unit tests: honest-idle read path and orchestrator wiring",
+      "description": "Add tests/unit/eva/stage-zero/data-feed.test.js using a hand-rolled mock supabase client (mirroring the from().select().eq()/chained-query pattern used by sibling stage-zero tests) that asserts: (a) getTechSignals() maps returned tech_landscape/model_landscape rows to compact signals, (b) an empty result resolves to null, (c) a query error resolves to null (no throw), (d) the query targets research_intelligence_reference with the is_current + entry_type filter. Add an orchestrator wiring assertion (extend or add a stage-zero-orchestrator test) proving executeStageZero passes a constructed dataFeed into the synthesize function and that a caller-provided deps.dataFeed is preserved. Tests are deterministic and require no live DB.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "data-feed test covers rows-present, empty-result, and error paths with a mock supabase client",
+        "wiring test asserts the synthesize function receives deps.dataFeed !== null when supabase is present",
+        "wiring test asserts a caller-supplied deps.dataFeed is used unchanged",
+        "New tests pass under npx vitest run and require no live database"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Additive and non-breaking",
+      "description": "One new module (data-feed.js) plus one additive change to the enrichedDeps line in stage-zero-orchestrator.js. No change to tech-trajectory.js analysis logic or its LLM prompt (out of scope). No schema change -- read-only consumer of Child A's existing research_intelligence_reference table."
+    },
+    {
+      "id": "TR-2",
+      "title": "Honest-idle read semantics",
+      "description": "getTechSignals() must fail closed to null (never throw, never fabricate) on missing client / query error / zero rows, so the tech-trajectory fallback path is preserved exactly when no live signals exist. Read path uses the is_current filter to honor the one-current-version-per-(entry_type,subject) invariant enforced by Child A's partial unique index."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "getTechSignals maps current tech_landscape/model_landscape rows to compact signals",
+      "type": "unit",
+      "expected": "Returns an array of { subject, entry_type, confidence, version, payload, source_refs } for the mock rows"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "getTechSignals is honest-idle on empty result",
+      "type": "unit",
+      "expected": "Resolves to null (not [] and not a fabricated signal) so tech-trajectory keeps its training-data-only fallback"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "getTechSignals fails closed on supabase error or missing client",
+      "type": "unit",
+      "expected": "Resolves to null without throwing"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "executeStageZero constructs and injects the dataFeed into synthesis",
+      "type": "unit",
+      "expected": "The synthesize function receives deps.dataFeed !== null when supabase is present; analyzeTechTrajectory would report data_feed_active true"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "Caller-provided deps.dataFeed is preserved",
+      "type": "unit",
+      "expected": "executeStageZero does not overwrite an injected deps.dataFeed (test double wins)"
+    }
+  ],
+  "acceptance_criteria": [
+    "New data-feed.js module reads Child A's research_intelligence_reference (is_current tech_landscape/model_landscape) and is honest-idle (null on empty/error)",
+    "executeStageZero constructs+injects the dataFeed at the single injection site; analyzeTechTrajectory receives it for the first time",
+    "Audit records tech-trajectory as the sole starved dataFeed hook among the 14 synthesis components",
+    "Unit tests (mock supabase + orchestrator wiring) pass; ESLint clean; no new regressions vs the live-DB baseline"
+  ],
+  "risks": [
+    {
+      "risk": "Injecting an empty/fabricated signal block would change tech-trajectory output when no live data exists",
+      "mitigation": "getTechSignals returns null (not []) on empty/error so signalContext stays empty and the existing fallback is preserved byte-for-byte",
+      "severity": "medium"
+    },
+    {
+      "risk": "Overwriting a caller-supplied deps.dataFeed would break test overrides and future callers",
+      "mitigation": "Construction is `deps.dataFeed || (supabase ? createStageZeroDataFeed(...) : null)` -- caller value always wins",
+      "severity": "low"
+    },
+    {
+      "risk": "Reading non-current rows would violate the single-current-version invariant",
+      "mitigation": "Query filters is_current = true, matching Child A's partial unique index on (entry_type, subject) WHERE is_current",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "lib/eva/stage-zero/synthesis/tech-trajectory.js analyzeTechTrajectory() -- calls deps.dataFeed.getTechSignals() (line 47) and stamps data_feed_active (line 147)",
+      "lib/eva/stage-zero/synthesis/index.js runSynthesis() -- forwards enrichedDeps (including dataFeed) to all synthesis components",
+      "lib/eva/stage-zero/stage-zero-orchestrator.js executeStageZero() -- the injection site that constructs the dataFeed and owns enrichedDeps"
+    ],
+    "dependencies": [
+      "UPSTREAM: Child A (SD-LEO-INFRA-RESEARCH-INTELLIGENCE-OPERATOR-001-A) standing table research_intelligence_reference + migration 20260718_research_intelligence_reference.sql -- the data source getTechSignals reads",
+      "UPSTREAM: deps.supabase (service-role client) provided to executeStageZero -- required to construct a live dataFeed; absent -> dataFeed is null and fallback is used",
+      "PEER (not touched): Child C reads market_size/unit_economics/comparables from the same table via modeling.js; Child D reads superseded rows -- out of scope here"
+    ],
+    "data_contracts": [
+      "READ-ONLY of research_intelligence_reference: id, entry_type, subject, payload (jsonb), source_refs (jsonb), confidence, version, is_current (all existing columns from Child A's migration -- no new columns, no ALTER)",
+      "Filter contract: entry_type IN ('tech_landscape','model_landscape') AND is_current = true",
+      "getTechSignals() output contract: null OR Array<{ subject, entry_type, confidence, version, payload, source_refs }> (consumed by tech-trajectory via JSON.stringify)"
+    ],
+    "runtime_config": [
+      "No new env vars or feature flags. Behavior is data-gated: with zero current tech_landscape/model_landscape rows the feed is null and Stage-0 behavior is identical to today.",
+      "Requires SUPABASE service-role credentials already present for Stage-0 (deps.supabase) -- no additional configuration."
+    ],
+    "observability_rollout": [
+      "Observability: tech-trajectory result already carries data_feed_active (true once a live feed with signals is injected) -- observable in synthesis output/metadata per venture run",
+      "Rollout: additive and inert until Child A's operator writes tech_landscape/model_landscape rows (operator ships defined-but-unarmed), so this can merge safely ahead of live data",
+      "Rollback: revert the single enrichedDeps line (or pass deps.dataFeed=null) to restore the training-data-only fallback; the new module is otherwise unreferenced"
+    ]
+  },
+  "system_architecture": {
+    "summary": "One new read-only data-feed module + one additive injection line thread Child A's standing reference into the long-dormant tech-trajectory hook.",
+    "components": [
+      { "name": "lib/eva/stage-zero/data-feed.js", "change": "NEW: createStageZeroDataFeed(supabase) with honest-idle getTechSignals() reading research_intelligence_reference" },
+      { "name": "lib/eva/stage-zero/stage-zero-orchestrator.js", "change": "Additive: construct dataFeed and include it in enrichedDeps (single line at the enrichedDeps assignment)" },
+      { "name": "tests/unit/eva/stage-zero/data-feed.test.js", "change": "NEW: mock-supabase unit tests for the read path + honest-idle" },
+      { "name": "tests/unit/eva/stage-zero/stage-zero-orchestrator-datafeed.test.js", "change": "NEW: orchestrator wiring assertion (dataFeed constructed + injected, caller override preserved)" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build the read-only feed, inject it at the single production entry point, prove it with mock-supabase unit tests, audit the rest.",
+    "steps": [
+      "Create lib/eva/stage-zero/data-feed.js: createStageZeroDataFeed(supabase,{logger}) -> { getTechSignals() } reading is_current tech_landscape/model_landscape rows, null on empty/error",
+      "Edit stage-zero-orchestrator.js enrichedDeps line to construct+include dataFeed (caller override wins)",
+      "Add data-feed.test.js (rows/empty/error) + orchestrator wiring test with mock supabase / mock synthesize",
+      "Run ESLint on touched files, targeted vitest, then full regression scan; confirm zero new failures overlap touched modules",
+      "Record the 14-component audit result (tech-trajectory is the sole hook) in this PRD"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "npx vitest run tests/unit/eva/stage-zero/data-feed.test.js", "expected_outcome": "Rows-present maps to signals; empty result and error both resolve to null; suite passes" },
+    { "step_number": 2, "instruction": "npx vitest run tests/unit/eva/stage-zero/stage-zero-orchestrator-datafeed.test.js", "expected_outcome": "executeStageZero passes a non-null dataFeed into synthesize when supabase is present, and preserves a caller-supplied deps.dataFeed" },
+    { "step_number": 3, "instruction": "npx vitest run --reporter=dot and grep the failed-file list for data-feed / stage-zero-orchestrator / tech-trajectory", "expected_outcome": "No new failing files attributable to touched modules vs the pre-existing live-DB baseline" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-RESEARCH-INTELLIGENCE-OPERATOR-001-B"
+  }
+}
