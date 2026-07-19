@@ -8,7 +8,18 @@
  *   already-exact       — uses { count: 'exact' } (usually with head: true)
  *   bounded-by-design   — .single()/.maybeSingle()/.limit(N<cap) on the same chain
  *   paginated           — .range( on the same chain, or routed through fetchAllPaginated
+ *   non-live-path       — file lives under an archived/one-off/deprecated path (see
+ *                         NON_LIVE_PATH_RES); applied BEFORE the chain heuristics
  *   needs-review        — none of the above: candidate gauge/bulk site (FR-6/FR-7 ledger)
+ *
+ * Non-live-path rationale (FR-6 batch 3): scripts/archive/, scripts/one-off/,
+ * scripts/_deprecated/ (and any /_deprecated/ or /archive/one-time/ segment) are not
+ * live execution surfaces — archived code, already-run one-offs, and deprecated twins.
+ * A capped read there cannot silently truncate production behavior. The truncation
+ * discipline applies at resurrection time: un-archiving a file necessarily moves it
+ * OUT of these paths, so the audit re-flags its sites automatically on the next run.
+ * Non-live sites are counted in by_classification but omitted from ledger_sites to
+ * keep the checked-in artifact lean.
  * Classifications are heuristic; scripts/audit/count-truncation-overrides.json
  * (site key "path:line") force-classifies any site and records exemption notes.
  *
@@ -60,6 +71,17 @@ function chainWindow(lines, idx) {
   return win;
 }
 
+const NON_LIVE_PATH_RES = [
+  /^scripts\/archive\//,
+  /^scripts\/one-off\//,
+  /^scripts\/_deprecated\//,
+  /\/_deprecated\//,
+  /\/archive\/one-time\//,
+];
+export function isNonLivePath(rel) {
+  return NON_LIVE_PATH_RES.some((re) => re.test(rel));
+}
+
 export function classifyChain(win) {
   if (/count:\s*['"]exact['"]/.test(win)) return 'already-exact';
   if (/\.single\(\)|\.maybeSingle\(\)/.test(win)) return 'bounded-by-design';
@@ -81,11 +103,12 @@ export function buildInventory({ root = ROOT } = {}) {
     if (!fs.existsSync(abs)) continue;
     for (const file of walk(abs)) {
       const rel = path.relative(root, file).replace(/\\/g, '/');
+      const nonLive = isNonLivePath(rel); // applied BEFORE chain heuristics — see header rationale
       const lines = fs.readFileSync(file, 'utf8').split('\n');
       lines.forEach((line, i) => {
         if (!/\.select\s*\(/.test(line) || /\/\/|\/\*|^\s*\*/.test(line.slice(0, line.indexOf('.select')))) return;
         const key = `${rel}:${i + 1}`;
-        const auto = classifyChain(chainWindow(lines, i));
+        const auto = nonLive ? 'non-live-path' : classifyChain(chainWindow(lines, i));
         // An override without a note is ignored (falls back to auto): a note-less override
         // could silently drop a needs-review site from the checked-in ledger with no trace.
         // An override with a `match` content-anchor is ignored when the line no longer
@@ -111,7 +134,10 @@ export function buildInventory({ root = ROOT } = {}) {
   // ledger (FR-6/FR-7 scope) plus any override-exempted site (auditability of the
   // exemption). Auto-classified bounded/exact/paginated sites appear as counts only —
   // re-running this script re-derives them deterministically.
-  const ledger = sites.filter((s) => s.classification === 'needs-review' || s.exemption_note);
+  // Non-live-path sites are counted above but excluded from the ledger artifact.
+  const ledger = sites.filter(
+    (s) => s.classification !== 'non-live-path' && (s.classification === 'needs-review' || s.exemption_note)
+  );
   return {
     sd: 'SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001',
     generated_by: 'scripts/audit/count-truncation-inventory.mjs',
