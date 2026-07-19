@@ -630,6 +630,9 @@ async function drainInbox(supabase, sessionId, { quiet = false, background = fal
     // adam_advisory+oracle:true leg — wire-plumbing only (this SD does not implement the
     // fail-closed pick-vs-instrument ROUTING; that is a sibling FW-3 child SD's scope), so a
     // pick-class framing is flagged loudly rather than silently auto-sourced without visibility.
+    // Like the orphan/skew warnings above (see line ~615), this warn is UNCONDITIONAL — never
+    // gated by --quiet/background (quiet only suppresses the empty-lane no-op message) — so a
+    // background/cron drain still emits it to stderr rather than silently dropping it.
     const framingClass = r.payload && r.payload.framing_class;
     const framingTag = framingClass ? ` framing:${framingClass}` : '';
     if (framingClass === FRAMING_CLASSES.PICK) {
