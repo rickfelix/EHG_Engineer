@@ -104,9 +104,17 @@ function normalizeVolatileTokens(line) {
 // normalized window of the next few body lines — bounded so huge output doesn't blow
 // up the hash input, and normalized so volatile per-run tokens (paths, timestamps,
 // UUIDs, large numeric ids) don't split a genuine recurrence into distinct digests.
+// SECURITY (EXEC-TO-PLAN review, SD-LEO-INFRA-RCA-TIERED-SIGNATURE-FALSE-POSITIVE-001):
+// this diff makes digestContent fire on real stdout content far more often than the
+// stderr-only predecessor (stdout is populated on this harness; stderr is near-always
+// empty) — cap each line's length BEFORE normalization/hashing so a single
+// pathologically long line can't dominate the regex/hash work. Defense-in-depth only;
+// the existing regexes are already linear (no catastrophic-backtracking risk).
+const MAX_DIGEST_LINE_LENGTH = 500;
+
 function digestContent(text) {
   if (typeof text !== 'string' || !text) return '';
-  const lines = text.split(/\r?\n/).filter((l) => l.length > 0);
+  const lines = text.split(/\r?\n/).filter((l) => l.length > 0).map((l) => l.slice(0, MAX_DIGEST_LINE_LENGTH));
   const firstLine = lines[0] || '';
   const body = lines.slice(1, 6).map(normalizeVolatileTokens).join('\n');
   return crypto.createHash('sha256').update(`${firstLine}\n${body}`).digest('hex').slice(0, 16);
