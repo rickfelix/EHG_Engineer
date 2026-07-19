@@ -53,7 +53,10 @@ const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
 const { enqueueRelayRequest } = require('../lib/coordinator/relay-queue.cjs');
-const { PAYLOAD_KINDS, DIRECTIVE_KINDS, ADAM_EXCLUDED_KINDS, FRAMING_CLASSES } = require('../lib/fleet/worker-status.cjs');
+const { PAYLOAD_KINDS, DIRECTIVE_KINDS, ADAM_EXCLUDED_KINDS } = require('../lib/fleet/worker-status.cjs');
+// SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-C: fail-closed pick-vs-instrument routing predicate
+// (consumes the -B framing_class contract; FRAMING_CLASSES matching now lives in the router).
+const { routeFraming, FRAMING_ROUTES } = require('../lib/governance/fw3-framing-router.cjs');
 // SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-2: canonical body read (payload.body
 // primary, body-column fallback) — closes instance 4, the coordinator_request body-drop below.
 const { readCanonicalBody } = require('../lib/coordination/lane-contract.cjs');
@@ -540,6 +543,50 @@ async function renderChairmanDirectives(supabase, role, { quiet = false } = {}) 
  * DELIVERED-but-unacked directive stays recoverable via scripts/read-adam-directives.cjs (the
  * acknowledged_at IS NULL tier) until Adam genuinely acts.
  */
+/**
+ * SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-C (FR-2/FR-3): record a chairman-escalation
+ * pending decision for a pick/unproven oracle framing. Idempotent per advisory row id
+ * (probe-before-insert on brief_data->context->>advisory_row_id; drainInbox is
+ * single-process so retries serialize). Returns true iff the row is durably queued
+ * (pre-existing counts). NEVER throws — fail-soft for drain liveness, loud on failure.
+ */
+async function recordFramingEscalation(supabase, r, routed) {
+  try {
+    const { data: existing } = await supabase
+      .from('chairman_decisions')
+      .select('id')
+      .eq('brief_data->context->>advisory_row_id', String(r.id))
+      .limit(1);
+    if (existing && existing.length > 0) return true; // already queued (idempotent)
+    const body = (r.payload && r.payload.body) || r.body || r.subject || '';
+    const { recordPendingDecision } = await import('../lib/chairman/record-pending-decision.mjs');
+    const res = await recordPendingDecision(supabase, {
+      title: `Framing escalation (${routed.reason}): ${String(body).slice(0, 120) || '(no body)'}`,
+      // RISK condition (a): blocking:false + non-session_question decisionType makes
+      // shouldAutoEscalate() provably false — queue-only, zero per-row standout email/SMS.
+      decisionType: 'framing_escalation',
+      blocking: false,
+      raisedBy: 'adam',
+      context: {
+        advisory_row_id: String(r.id),
+        framing_class: (r.payload && r.payload.framing_class) || 'unproven',
+        reason: routed.reason,
+        lane_analog: routed.laneAnalog,
+        sender_session: r.sender_session || null,
+        excerpt: String(body).slice(0, 400),
+      },
+    });
+    if (!res || res.recorded !== true) {
+      console.error(`  ✖ ESCALATION WRITE FAILED (id=${r.id}): ${(res && res.error) || 'unknown'}`);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error(`  ✖ ESCALATION WRITE FAILED (id=${r.id}): ${(e && e.message) || e}`);
+    return false;
+  }
+}
+
 async function drainInbox(supabase, sessionId, { quiet = false, background = false, windowMs = DEFAULT_DRAIN_WINDOW_MS } = {}) {
   // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-4): recoverable filter is
   // acknowledged_at IS NULL — a row any background/legacy pass read-stamped still surfaces
@@ -626,19 +673,25 @@ async function drainInbox(supabase, sessionId, { quiet = false, background = fal
     // instead of silently misreading the row — surfaced, not consumed-differently (still drained).
     const skew = detectVersionSkew(r.payload);
     if (skew) console.warn(`  ⚠ PROTOCOL VERSION SKEW: sender v${skew.senderVersion}, receiver v${skew.receiverVersion} (id=${r.id})`);
-    // SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-B: surface payload.framing_class on the
-    // adam_advisory+oracle:true leg — wire-plumbing only (this SD does not implement the
-    // fail-closed pick-vs-instrument ROUTING; that is a sibling FW-3 child SD's scope), so a
-    // pick-class framing is flagged loudly rather than silently auto-sourced without visibility.
-    // Like the orphan/skew warnings above (see line ~615), this warn is UNCONDITIONAL — never
-    // gated by --quiet/background (quiet only suppresses the empty-lane no-op message) — so a
-    // background/cron drain still emits it to stderr rather than silently dropping it.
+    // SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-C: fail-closed pick-vs-instrument ROUTING
+    // (supersedes the -B interim PICK-CLASS warn). pick/unproven oracle framings route to the
+    // chairman-escalation fork (recordPendingDecision -> decision-scheduler surfacing) with
+    // EXPLICIT non-auto-escalating params (blocking:false, decisionType:'framing_escalation')
+    // so shouldAutoEscalate() is provably false — rows QUEUE, no per-row standout email/SMS
+    // (RISK conditions a+b). instrument framings render sourcing-eligible and flow as today.
+    // Escalation writes are fail-SOFT for drain liveness but LOUD on failure, and a failed
+    // write is rendered routing:escalation-write-failed — never as safely routed.
     const framingClass = r.payload && r.payload.framing_class;
     const framingTag = framingClass ? ` framing:${framingClass}` : '';
-    if (framingClass === FRAMING_CLASSES.PICK) {
-      console.warn(`  ⚠ PICK-CLASS FRAMING (id=${r.id}): CMV/portfolio-altitude framing on the oracle leg — fail-closed chairman-escalation routing is not yet wired here (tracked by a sibling FW-3 child SD); do not auto-source.`);
+    const routed = routeFraming(r);
+    let routingTag = '';
+    if (routed.route === FRAMING_ROUTES.CHAIRMAN_ESCALATION) {
+      const ok = await recordFramingEscalation(supabase, r, routed);
+      routingTag = ok ? ' routing:chairman-escalation' : ' routing:escalation-write-failed';
+    } else if (routed.route === FRAMING_ROUTES.ADAM_SOURCING) {
+      routingTag = ' routing:adam-sourcing';
     }
-    console.log(`  • [${lane}/${kind}${framingTag}] id=${r.id} (${ageMin}m) ${text}`);
+    console.log(`  • [${lane}/${kind}${framingTag}${routingTag}] id=${r.id} (${ageMin}m) ${text}`);
     ids.push(r.id);
   }
   // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-1): stamp routing by context —
