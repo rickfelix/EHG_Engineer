@@ -19,6 +19,8 @@
 // "selected from the library" if its text contains a matching ID token — this is how
 // the spec-time selection (this SD) and the runtime execution (pair-half B) round-trip
 // by ID without either side re-deriving the other's shape (SSOT §4.3).
+import { fetchAllPaginated } from '../../../../../../lib/db/fetch-all-paginated.mjs';
+
 const LIBRARY_CRITERION_ID_PATTERN = /\bVA-T[0-4]-[a-z0-9-]+\b/i;
 
 // Trigger predicate (SSOT §1-L2): only leaves whose output the product presents as a
@@ -264,7 +266,14 @@ function registerValueAuthenticityGate(registry) {
     let libraryCriterionIds = new Set();
     try {
       if (supabase) {
-        const { data } = await supabase.from('value_authenticity_criteria_library').select('criterion_id');
+        // Count/truncation discipline (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001
+        // FR-6): full library read — a capped read would silently drop valid criterion
+        // IDs and manufacture false MOCK_SATISFIABLE findings. Failure → catch below
+        // (fail-open to empty set, unchanged).
+        const data = await fetchAllPaginated(() => supabase
+          .from('value_authenticity_criteria_library')
+          .select('criterion_id')
+          .order('criterion_id')); // unique-key tiebreaker for stable pagination
         libraryCriterionIds = new Set((data || []).map(r => r.criterion_id.toUpperCase()));
       }
     } catch {

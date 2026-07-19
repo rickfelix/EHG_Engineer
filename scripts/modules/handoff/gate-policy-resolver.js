@@ -12,6 +12,8 @@
  *   4. No match → gate included by default (fail-open)
  */
 
+import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
+
 // In-memory cache with TTL
 let _policyCache = null;
 let _policyCacheTimestamp = 0;
@@ -41,20 +43,32 @@ async function fetchPolicies(supabase) {
   }
 
   try {
-    // Use AbortController for timeout
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), DB_TIMEOUT_MS);
-
-    const { data, error } = await supabase
-      .from('validation_gate_registry')
-      .select('gate_key, sd_type, validation_profile, applicability, reason')
-      .abortSignal(controller.signal);
-
-    clearTimeout(timeout);
-
-    if (error) {
-      console.log(`   [GatePolicyResolver] ⚠️ DB query error: ${error.message}`);
-      return null;
+    // Count/truncation discipline (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6):
+    // the registry is a full-table policy read — a capped read would silently drop
+    // gate policies and misapply gates. Error policy preserved: any failure → null
+    // (callers fall back to default gate inclusion, fail-open).
+    // Per-PAGE timeout (adversarial-review fix): each queryFactory call gets a FRESH
+    // AbortController with its own DB_TIMEOUT_MS budget — a single controller spanning
+    // the whole pagination would abort legitimate multi-page reads once the registry
+    // exceeds one page, and (cache never populated) re-stall every resolution after.
+    // nextPageSignal retires the prior page's timer (that page's await has settled);
+    // the last timer is cleared in finally, so no timer leaks either way.
+    let pageTimer;
+    const nextPageSignal = () => {
+      clearTimeout(pageTimer);
+      const controller = new AbortController();
+      pageTimer = setTimeout(() => controller.abort(), DB_TIMEOUT_MS);
+      return controller.signal;
+    };
+    let data;
+    try {
+      data = await fetchAllPaginated(() => supabase
+        .from('validation_gate_registry')
+        .select('gate_key, sd_type, validation_profile, applicability, reason, id')
+        .order('id')
+        .abortSignal(nextPageSignal()));
+    } finally {
+      clearTimeout(pageTimer);
     }
 
     // Update cache
@@ -62,7 +76,8 @@ async function fetchPolicies(supabase) {
     _policyCacheTimestamp = now;
     return _policyCache;
   } catch (err) {
-    if (err.name === 'AbortError') {
+    // fetchAllPaginated wraps page errors in a plain Error — match aborts by message too
+    if (err.name === 'AbortError' || /abort/i.test(err.message || '')) {
       console.log(`   [GatePolicyResolver] ⚠️ DB query timeout (${DB_TIMEOUT_MS}ms)`);
     } else {
       console.log(`   [GatePolicyResolver] ⚠️ DB error: ${err.message}`);

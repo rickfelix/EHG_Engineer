@@ -114,26 +114,30 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
   today.setHours(0, 0, 0, 0);
 
   // Count bypasses for this SD (audit metadata only, no enforcement)
-  const { data: sdBypasses, error: _sdError } = await supabase
+  // Count/truncation discipline (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6):
+  // exact head-count — rows.length was capped at 1000 by PostgREST, which made the
+  // 2000/day global threshold below UNREACHABLE (enforcement was silently dead).
+  const { count: sdBypassCount, error: _sdError } = await supabase
     .from('validation_audit_log')
-    .select('id')
+    .select('id', { count: 'exact', head: true })
     .eq('failure_category', 'bypass')
     .eq('sd_id', canonicalSdId || sdId)
     .gte('created_at', today.toISOString());
 
-  // Check global bypasses today
-  const { data: globalBypasses, error: globalError } = await supabase
+  // Check global bypasses today (exact head-count — see FR-6 note above)
+  const { count: globalBypassCount, error: globalError } = await supabase
     .from('validation_audit_log')
-    .select('id')
+    .select('id', { count: 'exact', head: true })
     .eq('failure_category', 'bypass')
     .gte('created_at', today.toISOString());
 
   // SD-LEO-FIX-ID-FORMAT-001: User approved bypass rate limit increase on 2026-01-26
   // Original limit was 10, increased to 2000 to accommodate high-volume automation
-  if (!globalError && globalBypasses && globalBypasses.length >= 2000) {
+  // Error policy preserved: on count error the limit check is skipped (fail-open).
+  if (!globalError && typeof globalBypassCount === 'number' && globalBypassCount >= 2000) {
     console.error('');
     console.error('❌ BYPASS RATE LIMIT: Max 2000 global bypasses per day reached');
-    console.error(`   ${globalBypasses.length} bypasses have been used today`);
+    console.error(`   ${globalBypassCount} bypasses have been used today`);
     console.error('');
     return { success: false };
   }
@@ -166,8 +170,8 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
         bypassed_gate: bypassedGate,
         rubric_category: rubricResult.category,
         rubric_matched_rule: rubricResult.matchedRule,
-        sd_bypasses_today: (sdBypasses?.length || 0) + 1,
-        global_bypasses_today: (globalBypasses?.length || 0) + 1
+        sd_bypasses_today: (sdBypassCount ?? 0) + 1,
+        global_bypasses_today: (globalBypassCount ?? 0) + 1
       },
       execution_context: 'cli'
     });
@@ -179,8 +183,8 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
     console.log('⚠️  BYPASS MODE ENABLED (SD-LEARN-010:US-005)');
     console.log('─'.repeat(50));
     console.log(`   Reason: ${bypassReason}`);
-    console.log(`   SD Bypasses Today: ${(sdBypasses?.length || 0) + 1}`);
-    console.log(`   Global Bypasses Today: ${(globalBypasses?.length || 0) + 1}/2000`);
+    console.log(`   SD Bypasses Today: ${(sdBypassCount ?? 0) + 1}`);
+    console.log(`   Global Bypasses Today: ${(globalBypassCount ?? 0) + 1}/2000`);
     console.log('   ⚠️  Bypass logged to validation_audit_log for review');
     console.log('─'.repeat(50));
   }
