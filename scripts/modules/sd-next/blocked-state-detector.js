@@ -151,7 +151,8 @@ async function batchLoadBlockerData(supabase, childIds) {
   try {
     handoffs = await fetchAllPaginated(() => supabase
       .from('sd_phase_handoffs')
-      .select('sd_id, handoff_type, status, context') // schema-lint-disable-line — legacy column absent from snapshot (pre-existing on main; fail-open); moved into diff by FR-6 rewrap
+      .select('sd_id, handoff_type, status, context')
+ // schema-lint-disable-line — legacy column absent from snapshot (pre-existing on main; fail-open); moved into diff by FR-6 rewrap
       .in('sd_id', childIds)
       .eq('status', 'blocked')
       .order('created_at', { ascending: false })
@@ -171,7 +172,8 @@ async function batchLoadBlockerData(supabase, childIds) {
   try {
     failures = await fetchAllPaginated(() => supabase
       .from('sd_gate_results')
-      .select('sd_id, gate_name, result, details') // schema-lint-disable-line — legacy columns absent from snapshot (pre-existing on main; fail-open); moved into diff by FR-6 rewrap
+      .select('sd_id, gate_name, result, details')
+ // schema-lint-disable-line — legacy columns absent from snapshot (pre-existing on main; fail-open); moved into diff by FR-6 rewrap
       .in('sd_id', childIds)
       .eq('result', 'failed')
       .order('created_at', { ascending: false })
