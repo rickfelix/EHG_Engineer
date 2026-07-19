@@ -1,0 +1,136 @@
+{
+  "executive_summary": "Child A of the 4-child decomposition of SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001 (FR-1 of the parent PRD). Implements a pure, delivery-mechanism-agnostic data/content generator — lib/chairman/daily-review/roadmap-status-doc.js exporting buildRoadmapStatusDoc(supabase, {sinceIso, velocityLookbackDays}) — that composes LIVE plan-of-record data (per-wave item counts + calibrated probability + overall % from the canonical roadmap, plus a self-contained velocity-based forecast date range) with a 'what moved yesterday / plan for today' narrative (SDs completed since sinceIso + SDs currently in_progress, read directly from strategic_directives_v2). Returns {title, sections[], plainTextBody} so children B (SMS text), C (Drive Doc), D (MMS-Gantt) can consume either the rendered text or the structured per-section data without re-deriving any query. Fail-soft per section: a missing canonical roadmap or a query error degrades that section to a labelled unavailable state — the function never throws, so downstream children can always render something. No Twilio/Google Drive/MMS code is introduced here; that is B/C/D's scope.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "buildRoadmapStatusDoc() — plan-of-record section",
+      "description": "Resolve the single canonical roadmap via lib/roadmap/canonical-roadmap.js resolveCanonicalRoadmap(supabase) (the same resolver plan-check-status.js and distill's write path use, so this can never silently disagree on which roadmap is canonical). Query roadmap_waves (id, title, sequence_rank, status, progress_pct, confidence_score) scoped to that roadmap_id and status IN (approved, active, completed) — mirroring the exact column/status shape scripts/roadmap-status.js already displays. Query roadmap_wave_items (id, wave_id, item_disposition, promoted_to_sd_key) for those waves and derive, per wave: item_counts {total, promoted}. Compute overall_pct = 100 * (total promoted across all waves) / (total items across all waves). roadmap_waves.confidence_score IS the calibrated probability (0.00-1.00) — surface it verbatim as calibrated_probability, do not re-derive it.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Returns a plan_of_record section with, per canonical-roadmap wave: item_counts {total, promoted}, calibrated_probability (roadmap_waves.confidence_score), progress_pct, and an overall_pct across all waves",
+        "When no canonical roadmap exists, the section is available:false with a labelled reason — the function does not throw",
+        "Unit test (tests/unit/chairman/daily-review-roadmap-status-doc.test.js) asserts the shape against a seeded fake-Supabase fixture with 2+ waves and mixed item dispositions"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "buildRoadmapStatusDoc() — forecast date range",
+      "description": "Compute an optimistic(+20% velocity)/expected/pessimistic(-20% velocity) forecast date range from strategic_directives_v2 completion velocity over a configurable lookback window (default 14 days), applied against remaining_count = total roadmap items - promoted roadmap items. This mirrors the existing confidence-tiering pattern in scripts/sd-burnrate.js (low/medium/high by completedCount thresholds) but is a fresh, self-contained calculation with NO dependency on sd_execution_baselines being populated (that older baseline-snapshot system may or may not have an active row at any given time). This is deliberately NOT lib/vision/build-completion-forecast.mjs's computeForecast() — that module forecasts portfolio infra-BUILD-gauge completion (a VDR components/nature='buildable' metric), a different domain than roadmap-WAVE-item completion; reusing it here would require feeding it semantically unrelated inputs. Documented as a PLAN-phase judgment call superseding the parent PRD's FR-1 prose, which named build-completion-forecast.mjs generically for 'forecast date ranges' without distinguishing the two domains.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Returns confidence='insufficient_data' with null dates when velocity is 0 or remaining_count is 0",
+        "Returns optimistic_date <= expected_date <= pessimistic_date when velocity > 0 and remaining_count > 0",
+        "confidence is 'high' at >=5 completions in the lookback window, 'medium' at >=2, 'low' otherwise (mirrors sd-burnrate.js tiering)",
+        "Unit test covers both the velocity>0 and velocity=0 branches"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "buildRoadmapStatusDoc() — yesterday-vs-today narrative",
+      "description": "Query strategic_directives_v2 directly (NOT scoped through roadmap_wave_items) for: (a) SDs with status='completed' AND completion_date >= sinceIso (default: 24h ago) — 'what moved yesterday'; (b) SDs with status='in_progress' — 'plan for today' / in-flight. Broader than roadmap-linked SDs by design, per the child SD's own scope ('SDs completed + in-flight since the prior morning', not 'roadmap items completed').",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "completed_since includes only SDs with completion_date >= sinceIso; excludes ones outside the window",
+        "in_flight includes all status='in_progress' SDs regardless of roadmap linkage",
+        "Unit test seeds SDs inside/outside the window and asserts correct inclusion/exclusion"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Top-level {title, sections[], plainTextBody} contract + formatDailyReviewText-equivalent rendering",
+      "description": "buildRoadmapStatusDoc() returns {title, sections: [{id, heading, available, text, data}], plainTextBody, generated_at}. sections[0].id='plan_of_record', sections[1].id='narrative' — each carries both a human-readable text rendering (text) and the underlying structured data (data) so B (SMS, needs short text), C (Drive Doc, needs the fuller plainTextBody or per-section text), and D (MMS-Gantt, needs plan_of_record.data.waves for chart data) can each consume what they need without re-querying. plainTextBody is the full rendered document (title + both sections), plain text only — no HTML, no delivery-mechanism-specific markup (no MediaUrl/SMS-segment concerns).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Returned object has title, sections (array of 2, ids plan_of_record and narrative in that order), plainTextBody, generated_at",
+        "plainTextBody contains both section headings and content, uses no HTML tags",
+        "Unit test asserts the full top-level shape and both section ids/order"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Reuse canonical-roadmap resolution", "description": "Import and call lib/roadmap/canonical-roadmap.js resolveCanonicalRoadmap(supabase) rather than re-deriving canonical-roadmap resolution logic — avoids the multi-roadmap ambiguity bug already found and fixed elsewhere (SD-LEO-INFRA-DISTILL-ROADMAP-SINGLE-001)." },
+    { "id": "TR-2", "title": "No delivery-mechanism coupling", "description": "This module must not import Twilio, Google Drive/Docs, or any MMS/SMS client — it is a pure data/content generator consumed by children B/C/D, which own delivery." },
+    { "id": "TR-3", "title": "Service-role client required", "description": "All Supabase queries assume the injected client is service-role — RLS silently returns zero rows (no error) under anon/authenticated, same caveat already documented in lib/roadmap/plan-check-status.js." },
+    { "id": "TR-4", "title": "Fail-soft per section, never throw", "description": "Each of the two section builders (plan-of-record, narrative) is independently wrapped so a query failure in one degrades only that section to an unavailable-labelled state; the other section still renders. buildRoadmapStatusDoc() itself never rejects/throws under a data-source failure." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "No canonical roadmap exists", "type": "unit", "expected": "plan_of_record section is available:false with a labelled reason; function does not throw" },
+    { "id": "TS-2", "scenario": "roadmap_waves/roadmap_wave_items query throws", "type": "unit", "expected": "plan_of_record degrades to available:false with the error message surfaced in text; narrative section still builds independently" },
+    { "id": "TS-3", "scenario": "Mixed wave items with promoted/pending dispositions across 2 waves", "type": "unit", "expected": "per-wave item_counts, calibrated_probability, progress_pct correct; overall_pct = total promoted / total items across all waves" },
+    { "id": "TS-4", "scenario": "Zero recent completions", "type": "unit", "expected": "forecast.confidence='insufficient_data', dates null" },
+    { "id": "TS-5", "scenario": "2+ recent completions within lookback, item backlog remaining", "type": "unit", "expected": "optimistic_date <= expected_date <= pessimistic_date; confidence tier matches completion count" },
+    { "id": "TS-6", "scenario": "SDs completed inside vs outside the sinceIso window", "type": "unit", "expected": "completed_since includes only in-window rows" },
+    { "id": "TS-7", "scenario": "in_progress vs draft/completed SDs", "type": "unit", "expected": "in_flight includes only status='in_progress' rows, regardless of roadmap linkage" },
+    { "id": "TS-8", "scenario": "Full happy-path call with both sections populated", "type": "unit", "expected": "top-level {title, sections[2], plainTextBody, generated_at} shape correct; plainTextBody contains both section headings, no HTML tags" }
+  ],
+  "acceptance_criteria": [
+    "buildRoadmapStatusDoc() returns wave item-counts, overall %, per-wave progress + calibrated probability sourced live from strategic_roadmaps/roadmap_waves/roadmap_wave_items (not hardcoded)",
+    "The output includes a forecast date range (optimistic/expected/pessimistic) with an explicit confidence tier",
+    "The narrative lists SDs completed since sinceIso (prior morning) and currently in-flight SDs (status=in_progress), independent of roadmap linkage",
+    "A missing/failed data source degrades that section to a labelled unavailable state, never throws",
+    "No Twilio/Drive/MMS import anywhere in this module",
+    "Zero new regressions attributable to touched modules"
+  ],
+  "risks": [
+    {
+      "risk": "Downstream children B/C/D consume a shape that later needs to change once they're actually built",
+      "mitigation": "The final {title, sections[], plainTextBody} contract is documented verbatim in this PRD and mirrors the parent PRD's FR-1 signature; each section also carries structured .data alongside .text so a consumer needing raw numbers (D's Gantt) isn't forced to parse text",
+      "severity": "low"
+    },
+    {
+      "risk": "The forecast-range approach (self-contained velocity calc) diverges from the parent PRD's prose naming lib/vision/build-completion-forecast.mjs",
+      "mitigation": "Documented explicitly in FR-2 as a deliberate PLAN-phase correction — that module forecasts a different metric (portfolio infra-build gauge, not roadmap-wave completion); reusing it would require semantically mismatched inputs. Flagged as a completion-flag finding for chairman visibility.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Child B (SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-B): calls buildRoadmapStatusDoc() and sends plainTextBody (or a summarized excerpt) as the SMS body",
+      "Child C (SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-C): calls buildRoadmapStatusDoc() and writes title + plainTextBody (or per-section text) into the private Google Doc body",
+      "Child D (SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-D): calls buildRoadmapStatusDoc() and reads sections[0].data.waves for Gantt chart data"
+    ],
+    "dependencies": [
+      "lib/roadmap/canonical-roadmap.js resolveCanonicalRoadmap()",
+      "roadmap_waves / roadmap_wave_items tables (read-only)",
+      "strategic_directives_v2 (read-only: status, completion_date, current_phase, updated_at)"
+    ],
+    "data_contracts": [
+      "buildRoadmapStatusDoc(supabase, {sinceIso?, velocityLookbackDays?}) -> Promise<{title, sections: [{id, heading, available, text, data}], plainTextBody, generated_at}>",
+      "sections[0] (id='plan_of_record').data: {available, roadmap_id, roadmap_title, waves:[{wave_id,title,status,progress_pct,calibrated_probability,item_counts:{total,promoted}}], overall_pct, forecast:{confidence,optimistic_date,expected_date,pessimistic_date,velocity_per_day,remaining_count}}",
+      "sections[1] (id='narrative').data: {since_iso, completed_since:[{sd_key,title,completed_at,target_application}], in_flight:[{sd_key,title,current_phase,target_application,updated_at}]}"
+    ],
+    "runtime_config": [
+      "No new environment variables — reuses the existing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY the caller already provides",
+      "opts.sinceIso defaults to 24h ago; opts.velocityLookbackDays defaults to 14"
+    ],
+    "observability_rollout": [
+      "Unit tests (tests/unit/chairman/daily-review-roadmap-status-doc.test.js) prove both sections' happy-path and fail-soft-degraded behavior",
+      "No runtime rollout — this is a pure library function; B/C/D each wire it into their own cron/delivery path in their own SDs"
+    ]
+  },
+  "system_architecture": {
+    "summary": "One new pure module composing two independently fail-soft sections (roadmap plan-of-record, SD-completion narrative) into a single delivery-agnostic content object.",
+    "components": [
+      { "name": "lib/chairman/daily-review/roadmap-status-doc.js", "change": "NEW — buildRoadmapStatusDoc(supabase, opts): plan-of-record section (live roadmap/wave/item data + self-contained forecast range) + narrative section (completed-since + in-flight SDs); fail-soft per section" },
+      { "name": "tests/unit/chairman/daily-review-roadmap-status-doc.test.js", "change": "NEW unit tests" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Single self-contained module, two independently-degrading section builders composed by one top-level function.",
+    "steps": [
+      "Resolve the canonical roadmap; if none, plan-of-record section degrades gracefully",
+      "Query roadmap_waves + roadmap_wave_items for the canonical roadmap; compute per-wave item counts, calibrated probability, overall %",
+      "Compute a self-contained velocity-based forecast date range from strategic_directives_v2 completion history",
+      "Query strategic_directives_v2 for completed-since-sinceIso and in_progress SDs to build the narrative section",
+      "Compose both sections into {title, sections[], plainTextBody, generated_at}; write unit tests covering happy-path and fail-soft-degraded cases"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run `node -e \"import('./lib/chairman/daily-review/roadmap-status-doc.js').then(m => m.buildRoadmapStatusDoc(supabase).then(r => console.log(JSON.stringify(r,null,2))))\"` against a live Supabase service-role client.", "expected_outcome": "Returns {title, sections[2], plainTextBody, generated_at} without throwing, whether or not a canonical roadmap currently exists." },
+    { "step_number": 2, "instruction": "Run `npx vitest run tests/unit/chairman/daily-review-roadmap-status-doc.test.js`.", "expected_outcome": "All test cases pass, including the fail-soft/degraded-section cases." },
+    { "step_number": 3, "instruction": "Inspect plainTextBody from step 1's live result.", "expected_outcome": "Contains both 'PLAN OF RECORD' and 'WHAT MOVED YESTERDAY / PLAN FOR TODAY' sections, plain text, no HTML or delivery-mechanism markup." }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-A"
+  }
+}
