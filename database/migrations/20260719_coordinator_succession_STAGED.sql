@@ -8,8 +8,11 @@
 --       ended) so successions are auditable and the 43h-coverage-gap class is measurable.
 -- FR-4: coordinator_follow_ons — durable promise registry inherited across successions
 --       (the cycle-6 VERIFIED class: promises stop dying with session memory).
--- RLS ships IN THIS SAME MIGRATION (hard repo rule: RLS-at-create), mirroring the
--- service-role-write / permissive-read posture of the coordination tables.
+-- RLS ships IN THIS SAME MIGRATION (hard repo rule: RLS-at-create). Posture is
+-- SERVICE-ROLE ONLY: these tables hold fleet-internal coordination metadata read and
+-- written exclusively by service-role clients; no authenticated/anon policy exists at
+-- all (rls-anon-tenant-predicate-lint: an unconditional authenticated USING(true) read
+-- is the SD-LEO-GEN-SCOPE-ANON-KEY-001 / SD-FDBK-FIX-FEEDBACK-SELECT class).
 
 BEGIN;
 
@@ -36,8 +39,6 @@ ALTER TABLE coordinator_role_history ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY coordinator_role_history_service_write ON coordinator_role_history
   FOR ALL TO service_role USING (true) WITH CHECK (true);
-CREATE POLICY coordinator_role_history_read ON coordinator_role_history
-  FOR SELECT TO authenticated USING (true);
 
 -- ── FR-4: follow-on registry ─────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS coordinator_follow_ons (
@@ -64,8 +65,6 @@ ALTER TABLE coordinator_follow_ons ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY coordinator_follow_ons_service_write ON coordinator_follow_ons
   FOR ALL TO service_role USING (true) WITH CHECK (true);
-CREATE POLICY coordinator_follow_ons_read ON coordinator_follow_ons
-  FOR SELECT TO authenticated USING (true);
 
 -- ── Self-verify (tables + RLS presence, per TESTING GAP-4) ───────────────────
 DO $verify$
@@ -81,9 +80,9 @@ BEGIN
   SELECT relrowsecurity INTO rls_follow  FROM pg_class WHERE oid = 'public.coordinator_follow_ons'::regclass;
   ASSERT rls_history, 'RLS not enabled on coordinator_role_history';
   ASSERT rls_follow,  'RLS not enabled on coordinator_follow_ons';
-  ASSERT (SELECT count(*) FROM pg_policies WHERE tablename = 'coordinator_role_history') >= 2,
+  ASSERT (SELECT count(*) FROM pg_policies WHERE tablename = 'coordinator_role_history') >= 1,
     'coordinator_role_history policies missing';
-  ASSERT (SELECT count(*) FROM pg_policies WHERE tablename = 'coordinator_follow_ons') >= 2,
+  ASSERT (SELECT count(*) FROM pg_policies WHERE tablename = 'coordinator_follow_ons') >= 1,
     'coordinator_follow_ons policies missing';
 END
 $verify$;
