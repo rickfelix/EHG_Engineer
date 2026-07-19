@@ -564,8 +564,9 @@ export async function triageQuickFixes(quickFixes, supabase) {
 
 /**
  * Load unscheduled roadmap items (architecture phases without a scheduled SD).
- * Queries roadmap_wave_items where source_type='architecture_phase' and
- * promoted_to_sd_key IS NULL.
+ * Queries v_plan_of_record_remainder where source_type='architecture_phase' and
+ * remainder_state is an open state (promotable_now, gated_on_chairman, or
+ * in_flight_or_sequence_blocked).
  *
  * @param {Object} supabase - Supabase client
  * @returns {Promise<Array>} Array of unscheduled roadmap item objects
