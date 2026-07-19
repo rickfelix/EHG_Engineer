@@ -48,5 +48,85 @@
   "classification": "tripwired",
   "match": "sd_key, title, status, metadata",
   "note": "warnIfCapTruncated applied before the empty-check (review-held SDs)"
+ },
+ "scripts/stale-session-sweep.cjs:1015": {
+  "classification": "tripwired",
+  "match": "'id, sd_key, status'",
+  "note": "NOT paginated (FR-6 batch 2): the chainable mock in stale-session-sweep-test-fixture-cancel.test.js has no .order()/.range(); leaked SD-TEST-% fixtures are an operationally tiny set — exact-cap tripwire warning applied at the destructure site instead"
+ },
+ "scripts/stale-session-sweep.cjs:1223": {
+  "classification": "bounded-by-design",
+  "match": "'sd_key, status, completion_date, claiming_session_id'",
+  "note": ".in()-bounded lookup — bounded by claimedSdKeys derived from the classified session list"
+ },
+ "scripts/stale-session-sweep.cjs:1294": {
+  "classification": "bounded-by-design",
+  "match": ".select('id').in('id', qfClaimedKeys)",
+  "note": ".in()-bounded lookup — bounded by qfClaimedKeys (QF-claiming sessions)"
+ },
+ "scripts/stale-session-sweep.cjs:1300": {
+  "classification": "bounded-by-design",
+  "match": ".select('session_id, claimed_at').in('session_id', qfSessionIds)",
+  "note": ".in()-bounded lookup — bounded by qfSessionIds (QF-claiming sessions)"
+ },
+ "scripts/stale-session-sweep.cjs:1367": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_id')",
+  "note": ".in()-bounded lookup — bounded by stuckApprovalIds (id+sd_key pairs of stuck pending_approval SDs)"
+ },
+ "scripts/stale-session-sweep.cjs:1392": {
+  "classification": "bounded-by-design",
+  "match": ".select();",
+  "note": "update-returning select, bounded by the mutation predicate (.eq sd_key STUCK_100 completion)"
+ },
+ "scripts/stale-session-sweep.cjs:1446": {
+  "classification": "bounded-by-design",
+  "match": ".select();",
+  "note": "update-returning select, bounded by the mutation predicate (.eq sd_key terminal-claim clear)"
+ },
+ "scripts/stale-session-sweep.cjs:1752": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_key');",
+  "note": "update-returning select, bounded by the mutation predicate (.eq sd_key + race-guarded claiming_session_id)"
+ },
+ "scripts/stale-session-sweep.cjs:1907": {
+  "classification": "bounded-by-design",
+  "match": "worktree_path,last_tool_at,claimed_at,metadata",
+  "note": ".in()-bounded lookup — bounded by sessionIds (the paginated main sessions list)"
+ },
+ "scripts/stale-session-sweep.cjs:2214": {
+  "classification": "bounded-by-design",
+  "match": ".select();",
+  "note": "update-returning select, bounded by the mutation predicate (.eq sd_key bare-shell enrichment)"
+ },
+ "scripts/stale-session-sweep.cjs:2295": {
+  "classification": "bounded-by-design",
+  "match": "p_alive_ci_low, p_alive_ci_high, mc_samples",
+  "note": ".in()-bounded lookup — bounded by the dead-session id list (MC liveness gate)"
+ },
+ "scripts/stale-session-sweep.cjs:2558": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_key, status')",
+  "note": ".in()-bounded lookup — bounded by allDepKeys (dependency keys of candidate SDs)"
+ },
+ "scripts/stale-session-sweep.cjs:2853": {
+  "classification": "bounded-by-design",
+  "match": ".select();",
+  "note": "update-returning select, bounded by the mutation predicate (.eq sd_key CLAIM_FIX re-assert)"
+ },
+ "scripts/stale-session-sweep.cjs:2862": {
+  "classification": "bounded-by-design",
+  "match": ".select();",
+  "note": "update-returning select, bounded by the mutation predicate (.eq sd_key is_working_on fix)"
+ },
+ "scripts/stale-session-sweep.cjs:2935": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_key, status').in('sd_key', sdAssignTargets)",
+  "note": ".in()-bounded lookup — bounded by sdAssignTargets (open WORK_ASSIGNMENT targets)"
+ },
+ "scripts/stale-session-sweep.cjs:2939": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, status').in('id', qfAssignTargets)",
+  "note": ".in()-bounded lookup — bounded by qfAssignTargets (open WORK_ASSIGNMENT targets)"
  }
 }
