@@ -1,0 +1,149 @@
+{
+  "executive_summary": "Child D (last of 4) of the daily-review automation delivers the Gantt-chart IMAGE via MMS through the existing hardened owed-state SMS path. CORRECTION TO THE PARENT PRD (FR-3): the parent SD's own PRD names scripts/lib/visualization-provider.js as the Gantt-render reuse target and lib/eva/logo-image-generator.js / lib/eva/stage-handlers/s11.js as private-bucket+signed-URL precedent -- both are wrong. visualization-provider.js is a generative-AI (text-prompt) image tool with zero chart capability; the two 'precedent' files are actually PUBLIC-bucket examples (createBucket public:true + getPublicUrl), the opposite of this SD's hard, chairman-ratified confidentiality requirement. grep -rl createSignedUrl over lib/ and scripts/ returns zero real-implementation hits repo-wide -- there is no existing private+signed-URL precedent to reuse. This PRD therefore builds both pieces from first principles: a hand-rolled SVG Gantt generator rasterized via the already-installed `sharp` package (no new dependency), and a private-bucket+signed-URL upload helper. It also extends twilio-provider.js with an optional mediaUrl param and threads media_url through the STAGED sms_outbound_obligations schema, sms-bridge.js, and sms-outbound-worker.js. Both VALIDATION and Explore sub-agents independently spot-checked and confirmed all wrong-precedent claims before this PRD was written.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Gantt SVG + PNG renderer (built from scratch -- visualization-provider.js is not a valid reuse target)",
+      "description": "NEW lib/chairman/daily-review/gantt-renderer.js exporting: (a) buildGanttSvg(waves) -- a PURE function taking Child A's buildRoadmapStatusDoc() plan_of_record.waves shape ([{wave_id,title,status,progress_pct,calibrated_probability,item_counts}]) and returning a well-formed SVG string with one horizontal bar per wave (bar width proportional to progress_pct, plain text label = title, no external assets/fonts/network calls); (b) renderGanttPng(waves) -- calls buildGanttSvg then rasterizes via sharp(Buffer.from(svgString)).png().toBuffer(), returning a PNG Buffer. Uses the already-installed sharp@^0.35.3 -- no new dependency.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "buildGanttSvg(waves) returns a string containing each wave's title and starting with '<svg'",
+        "renderGanttPng(waves) returns a Buffer whose first 8 bytes match the PNG signature (0x89504E47...)",
+        "Both functions handle an empty waves array without throwing (render an empty/placeholder chart)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Private-bucket + signed-URL upload helper (built from scratch -- the cited precedent files are public-bucket, not private)",
+      "description": "NEW lib/storage/private-signed-upload.js exporting uploadPrivateAndSign(supabase, {bucket, path, buffer, contentType, expiresInSeconds}) -> Promise<{path, signedUrl}>. Ensures the target bucket exists with public:false (create-or-use: attempt createBucket(bucket,{public:false}), tolerate an already-exists error), uploads via supabase.storage.from(bucket).upload(path, buffer, {contentType, upsert:true}), then returns supabase.storage.from(bucket).createSignedUrl(path, expiresInSeconds). MUST NEVER call getPublicUrl() or create a bucket with public:true anywhere in this file -- a CI-enforced grep assertion checks this (TR-2).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "uploadPrivateAndSign creates the bucket with public:false (or reuses an existing one) and never calls getPublicUrl",
+        "the returned signedUrl comes from createSignedUrl(path, expiresInSeconds), with expiresInSeconds honored (short TTL, minutes not hours)",
+        "a second call with the same bucket does not fail when the bucket already exists (create-or-use)"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "twilio-provider.js MMS (mediaUrl) support",
+      "description": "EDIT lib/messaging/providers/twilio-provider.js's send({to, body}) (lines ~31-60) to send({to, body, mediaUrl}). When mediaUrl is present, set the Twilio MediaUrl form param before the POST -- mirrors the existing optional StatusCallback pattern in the same function. When mediaUrl is absent (all existing call sites), behavior is byte-identical to today.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "send({to,body,mediaUrl}) sets Twilio's MediaUrl form param when mediaUrl is provided",
+        "send({to,body}) (mediaUrl omitted) produces the exact same form body as before this change",
+        "all pre-existing twilio-provider.js/sms-outbound-reconcile test assertions still pass unmodified"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "STAGED migration media_url column + sms-bridge.js/sms-outbound-worker.js threading",
+      "description": "EDIT database/migrations/20260718_sms_outbound_obligations_STAGED.sql (NOT YET APPLIED): add a nullable media_url TEXT column immediately before the closing paren of the CREATE TABLE (after the existing last_error TEXT NULL column), plus a matching COMMENT ON COLUMN entry following the existing 4-comment pattern (lines ~74-81) -- inserted before the RLS block (lines ~83-93). Preserve the STAGED/chairman-apply-ceremony header (lines 1-37) verbatim; do NOT create a second migration file. EDIT lib/chairman/sms-bridge.js's enqueueChairmanSms(supabase, {recipientPhone, kind, body, decisionId=null, dedupeKey=null, notBefore=null, mediaUrl=null}) -- add the mediaUrl param and include media_url in the inserted row. EDIT lib/chairman/sms-outbound-worker.js's reconcileOutboundSms(): add media_url to BOTH the owed-rows select (~line 219) AND the claim-update-returning select (~line 238) -- the variable `c` used at the provider.send() call site (~line 250) is destructured from the line-238 claim-update result, not the line-219 owed-query result, so media_url must be present in both selects for c.media_url to actually reach the send call. Pass mediaUrl: c.media_url into the provider.send() call.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "The STAGED migration file gains exactly one nullable media_url TEXT column (verified: no new table, exactly one migration file touched)",
+        "enqueueChairmanSms accepts an optional mediaUrl param and includes it in the inserted obligations row",
+        "reconcileOutboundSms's provider.send() call includes a populated mediaUrl when the claimed row has a non-null media_url -- verified against BOTH select() column lists containing media_url, not just one",
+        "all existing sms-bridge.js/sms-outbound-worker.js tests pass unmodified when mediaUrl/media_url is absent (backward compatible)"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "No new dependencies", "description": "sharp@^0.35.3 is already installed and sufficient for SVG-to-PNG rasterization; no canvas/chart/d3/puppeteer dependency is added." },
+    { "id": "TR-2", "title": "Confidentiality CI gate", "description": "A static test (grep-based or string-search-based) asserts zero occurrences of getPublicUrl or public:true anywhere in lib/chairman/daily-review/gantt-renderer.js and lib/storage/private-signed-upload.js -- guards against an accidental copy-paste from the parent PRD's incorrectly-cited public-bucket precedent files." },
+    { "id": "TR-3", "title": "Single migration file, additive-only", "description": "Exactly one migration file is touched (the existing STAGED file); no second migration is created. All edits to twilio-provider.js/sms-bridge.js/sms-outbound-worker.js are additive/backward-compatible -- every call site omitting mediaUrl behaves identically to pre-change behavior." },
+    { "id": "TR-4", "title": "No live sends/applies in this SD", "description": "This SD does not apply the STAGED migration (chairman-gated ceremony) and does not perform a real Twilio send (requires live credentials) -- all tests use mocked Supabase Storage / Twilio clients." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "buildGanttSvg/renderGanttPng against seeded waves data", "type": "unit", "expected": "SVG string contains each wave's title; PNG Buffer starts with the PNG magic bytes; empty-array input does not throw" },
+    { "id": "TS-2", "scenario": "uploadPrivateAndSign against a mocked Supabase Storage client", "type": "unit", "expected": "createBucket called with public:false (or bucket-exists tolerated); createSignedUrl (not getPublicUrl) is the source of the returned URL" },
+    { "id": "TS-3", "scenario": "twilio-provider.js send() with and without mediaUrl", "type": "unit", "expected": "MediaUrl form param present only when mediaUrl is passed; existing To/Body/MessagingServiceSid/StatusCallback assertions unaffected" },
+    { "id": "TS-4", "scenario": "STAGED migration file diff", "type": "static", "expected": "Exactly one new nullable media_url TEXT column added; header/RLS/existing columns unchanged; only one migration file in the diff" },
+    { "id": "TS-5", "scenario": "enqueueChairmanSms with mediaUrl", "type": "unit", "expected": "inserted row includes media_url; omitting mediaUrl produces the same row shape as before this change" },
+    { "id": "TS-6", "scenario": "reconcileOutboundSms end-to-end with a claimed row carrying media_url", "type": "unit", "expected": "provider.send() is called with mediaUrl equal to the claimed row's media_url -- verifies BOTH select() column lists (owed-query and claim-update-returning) include media_url" },
+    { "id": "TS-7", "scenario": "confidentiality static gate", "type": "static", "expected": "Zero getPublicUrl/public:true occurrences in gantt-renderer.js and private-signed-upload.js" },
+    { "id": "TS-8", "scenario": "full-repo regression", "type": "integration", "expected": "Zero new failures attributable to touched modules (twilio-provider.js, sms-bridge.js, sms-outbound-worker.js, new gantt-renderer.js/private-signed-upload.js files)" }
+  ],
+  "acceptance_criteria": [
+    "renderGanttPng() produces a valid PNG from Child A's plan_of_record.waves data with no generative-AI/network call",
+    "uploadPrivateAndSign() never creates a public bucket and never returns a getPublicUrl-sourced URL -- signed URL only, short TTL",
+    "twilio-provider.js send() supports an optional mediaUrl param, fully backward-compatible when omitted",
+    "media_url flows end-to-end: STAGED migration column -> enqueueChairmanSms() -> sms_outbound_obligations row -> reconcileOutboundSms() (both select() calls) -> provider.send()",
+    "Zero new regressions attributable to touched modules",
+    "The parent PRD's FR-3 wrong-precedent claims (visualization-provider.js, logo-image-generator.js/s11.js) are not mirrored anywhere in this SD's code"
+  ],
+  "risks": [
+    {
+      "risk": "A hand-rolled SVG Gantt chart could be visually broken or hard to read since no charting library or design precedent exists in the repo",
+      "mitigation": "Keep the SVG generation simple and deterministic (fixed-width bars scaled by progress_pct, one row per wave, plain text labels); verify visually via the smoke_test_steps PNG-file-write step",
+      "severity": "medium"
+    },
+    {
+      "risk": "A future reader trusting the parent SD's PRD prose (which cites now-known-wrong precedent files) could accidentally copy the public-bucket pattern into new code",
+      "mitigation": "TR-2's CI-enforced grep assertion (zero getPublicUrl/public:true in the new files) turns an accidental copy-paste into a hard CI failure, not just a review miss",
+      "severity": "high"
+    },
+    {
+      "risk": "media_url added to only one of reconcileOutboundSms's two select() calls would silently leave c.media_url undefined at the send call, shipping code that appears correct but never actually sends the image",
+      "mitigation": "FR-4/TS-6 explicitly require verifying BOTH select() column lists and asserting the send() call receives a populated mediaUrl end-to-end, not just checking the column exists somewhere",
+      "severity": "medium"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "The 5:45 AM daily-review cron (sibling B's scope, SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-B) will eventually call renderGanttPng() on Child A's buildRoadmapStatusDoc() output, upload via uploadPrivateAndSign(), and enqueue an MMS obligation -- not built by this SD, which ships the individual pieces only",
+      "reconcileOutboundSms (existing owed-state worker) sends the enqueued MMS via the now-media-aware twilio-provider.js"
+    ],
+    "dependencies": [
+      "Child A's buildRoadmapStatusDoc() plan_of_record.waves shape (render input)",
+      "sharp@^0.35.3 (already installed)",
+      "The STAGED sms_outbound_obligations table being chairman-applied (external, not performed by this SD) before any real MMS can send",
+      "Supabase Storage (bucket create/upload/signed-URL) and Twilio credentials (external, not exercised live by this SD's tests)"
+    ],
+    "data_contracts": [
+      "renderGanttPng(waves) -> Promise<Buffer> (PNG bytes)",
+      "uploadPrivateAndSign(supabase, {bucket, path, buffer, contentType, expiresInSeconds}) -> Promise<{path, signedUrl}>",
+      "twilio-provider.js send({to, body, mediaUrl?}) -- mediaUrl optional, additive",
+      "sms_outbound_obligations gains one nullable media_url TEXT column; enqueueChairmanSms/reconcileOutboundSms thread it end-to-end"
+    ],
+    "runtime_config": [
+      "No new environment variables -- reuses existing SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY and Twilio credentials the caller already provides",
+      "New private bucket name (e.g. daily-review-gantt) is a code constant, not env-configurable in this SD's scope"
+    ],
+    "observability_rollout": [
+      "This SD ships all 4 pieces individually tested but NOT wired into a live cron -- the daily-review sweep (sibling B) is the actual runtime consumer and is out of this SD's scope",
+      "Real end-to-end MMS sends remain blocked until the chairman applies the STAGED sms_outbound_obligations migration -- a deliberate, already-documented dependency, not a gap in this SD",
+      "Unit tests (mocked Storage/Twilio clients) + the static confidentiality grep gate are the verification surface for this SD"
+    ]
+  },
+  "system_architecture": {
+    "summary": "Two new from-scratch modules (Gantt renderer, private-signed-upload helper) plus three additive edits (twilio-provider.js, STAGED migration, sms-bridge.js/sms-outbound-worker.js threading) that together give the owed-state SMS path MMS capability without touching its send/reconcile control flow.",
+    "components": [
+      { "name": "lib/chairman/daily-review/gantt-renderer.js", "change": "NEW -- buildGanttSvg(waves) + renderGanttPng(waves) via sharp" },
+      { "name": "lib/storage/private-signed-upload.js", "change": "NEW -- uploadPrivateAndSign(supabase, opts) -> {path, signedUrl}, public:false + createSignedUrl only" },
+      { "name": "lib/messaging/providers/twilio-provider.js", "change": "EDIT -- send() gains optional mediaUrl -> Twilio MediaUrl form param" },
+      { "name": "database/migrations/20260718_sms_outbound_obligations_STAGED.sql", "change": "EDIT -- add nullable media_url TEXT column + comment (STAGED, not applied)" },
+      { "name": "lib/chairman/sms-bridge.js", "change": "EDIT -- enqueueChairmanSms threads mediaUrl into the inserted row" },
+      { "name": "lib/chairman/sms-outbound-worker.js", "change": "EDIT -- reconcileOutboundSms selects media_url in both queries and passes it to provider.send()" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build the two missing pieces (renderer, private-upload helper) from scratch since the parent PRD's cited reuse targets are wrong; thread mediaUrl additively through the existing owed-state pipeline.",
+    "steps": [
+      "Write buildGanttSvg(waves) as a pure function; verify output against seeded wave fixtures",
+      "Write renderGanttPng(waves) using sharp to rasterize the SVG string; verify PNG magic bytes",
+      "Write uploadPrivateAndSign() against a mocked Supabase Storage client; add the TR-2 confidentiality grep test",
+      "Extend twilio-provider.js send() with optional mediaUrl (mirrors StatusCallback pattern); verify existing tests unaffected",
+      "Amend the STAGED migration file (media_url column + comment) preserving its header verbatim",
+      "Thread mediaUrl through enqueueChairmanSms and BOTH of reconcileOutboundSms's select() calls; write an end-to-end unit test asserting provider.send() receives the populated mediaUrl",
+      "Run the full-repo regression scan and confirm zero new failures attributable to touched modules"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Call renderGanttPng(waves) against a seeded/live waves array and write the resulting Buffer to a local PNG file.", "expected_outcome": "A valid, viewable PNG image showing per-wave bars/labels is produced -- no thrown error, no external network call." },
+    { "step_number": 2, "instruction": "Call uploadPrivateAndSign() against a test Supabase project/bucket with a small PNG buffer, then attempt to fetch the object directly (no signed token) and separately fetch the returned signedUrl.", "expected_outcome": "The direct/unsigned fetch is denied; the signedUrl fetch succeeds and returns the PNG bytes." },
+    { "step_number": 3, "instruction": "npx vitest run tests/unit/chairman/daily-review-gantt-renderer.test.js tests/unit/storage/private-signed-upload.test.js tests/unit/chairman/sms-bridge.test.js tests/unit/chairman/sms-outbound-reconcile.test.js", "expected_outcome": "All tests pass, including the new mediaUrl/media_url cases, with no regressions in pre-existing text-only-SMS test cases." }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-D"
+  }
+}
