@@ -77,6 +77,17 @@ describe.skipIf(!HAS_CREDS)(
       expect(nonVoid.length, 'every row classified void — degenerate backfill would also pass TS-1/TS-3/TS-6').toBeGreaterThan(0);
     });
 
+    // AC-5: known live baseline at ship time -- the true plan-of-record remainder (open,
+    // not-yet-satisfied, not-void work) was independently verified by every sub-agent and by
+    // a direct live query to be 6 items, down from the ~1495 dead-generation rows the old
+    // unscoped gauge conflated. This is a point-in-time snapshot, not a permanent invariant --
+    // update the expected count when the chairman promotes/resolves plan-of-record items.
+    it('AC-5: the true (open) remainder baseline matches the live-verified count at ship time', () => {
+      const OPEN_STATES = new Set(['promotable_now', 'gated_on_chairman', 'in_flight_or_sequence_blocked']);
+      const trueRemainder = viewRows.filter((r) => OPEN_STATES.has(r.remainder_state));
+      expect(trueRemainder.length, 'true remainder count drifted from the ship-time baseline of 6 — update if intentional (chairman promoted/resolved items)').toBe(6);
+    });
+
     it('TS-3/TS-11: two independent reads produce byte-identical remainder_state partitions (stamped, not inferred)', async () => {
       const partitionOf = (rows) => {
         const p = {};
