@@ -1,0 +1,58 @@
+name: "Chairman morning-review (5:45 ET cron)"
+
+# SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-B — durable 5:45 AM ET daily-review SMS.
+# The one-shot runner (scripts/cron/chairman-morning-review-sweep.mjs --once) builds a short
+# status + "what moved yesterday" body and enqueues a TEXT-only 'morning_review' obligation via
+# the hardened owed-state bridge (enqueueChairmanSms). Delivery-truth is reconciled by the
+# pre-existing sms-outbound-worker — this cron never sends via the provider directly.
+#
+# DST DESIGN: GitHub Actions cron is UTC and does NOT observe DST. 5:45 AM ET is 09:45 UTC under
+# EDT (summer) and 10:45 UTC under EST (winter), so BOTH entries are scheduled. The sweep gates
+# real work on an America/New_York wall-clock check (proceed only when the ET local hour is 5),
+# so in each season exactly one of the two fires maps to 05:45 ET and does work; the other sees
+# ET hour != 5 and exits inert. The per-ET-date dedupeKey is the idempotency backstop, so even if
+# both were to do work the chairman is texted at most once/day.
+#
+# Real sends begin only once the chairman APPLIES the STAGED sms_outbound_obligations migration;
+# until then enqueueChairmanSms is fail-soft and the sweep logs inert + exits 0.
+
+on:
+  schedule:
+    - cron: '45 9 * * *'   # 09:45 UTC = 05:45 EDT (summer)
+    - cron: '45 10 * * *'  # 10:45 UTC = 05:45 EST (winter)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  morning-review:
+    name: Enqueue the 5:45 ET chairman morning-review SMS
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CHAIRMAN_PHONE: ${{ secrets.CHAIRMAN_PHONE }}
+      TWILIO_STATUS_CALLBACK_URL: ${{ secrets.TWILIO_STATUS_CALLBACK_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Enqueue morning-review SMS (5:45 ET, DST-gated)
+        run: node scripts/cron/chairman-morning-review-sweep.mjs --once
