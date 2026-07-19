@@ -289,16 +289,6 @@
   "match": "id, subject, body, payload, target_session, sender_session, created_at",
   "note": "multi-part group lookup — .limit(50) DESC on the chain below the heuristic window (deliberate newest-first window, PR #6191)"
  },
- "lib/coordinator/adam-identity.cjs:171": {
-  "classification": "bounded-by-design",
-  "match": ".select('id');",
-  "note": "update-returning select — bounded by the retarget UPDATE result set"
- },
- "lib/coordinator/solomon-identity.cjs:171": {
-  "classification": "bounded-by-design",
-  "match": ".select('id');",
-  "note": "update-returning select — bounded by the retarget UPDATE result set"
- },
  "lib/coordinator/convergence-ledger.js:138": {
   "classification": "bounded-by-design",
   "match": "run_id, started_at",
@@ -513,5 +503,15 @@
   "classification": "tripwired",
   "match": "pattern_id, prevention_checklist",
   "note": "FR-6: exact-cap console.warn tripwire applied after the candidate read (never-throw contract; chain stubs expose no .order/.range)"
+ },
+ "lib/coordinator/adam-identity.cjs:183": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "update-returning select — bounded by the retarget UPDATE result set"
+ },
+ "lib/coordinator/solomon-identity.cjs:183": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "update-returning select — bounded by the retarget UPDATE result set"
  }
 }

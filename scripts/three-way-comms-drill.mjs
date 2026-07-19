@@ -94,7 +94,9 @@ export function makeMemoryDb(anchorSession = DRILL_SELF_SESSION) {
   function scQuery() {
     const filters = [];
     let op = 'select';
+    let ordered = false;
     const runFilter = () => sc.filter((r) => filters.every(([c, v]) => String(jget(r, c)) === String(v)));
+    const runSorted = () => runFilter().slice().sort((x, y) => String(x.created_at).localeCompare(String(y.created_at)));
     const api = {
       select() { return api; },
       insert(row) {
@@ -106,9 +108,13 @@ export function makeMemoryDb(anchorSession = DRILL_SELF_SESSION) {
       },
       delete() { op = 'delete'; return api; },
       eq(c, v) { filters.push([c, v]); return api; },
-      order() {
-        const out = runFilter().slice().sort((x, y) => String(x.created_at).localeCompare(String(y.created_at)));
-        return Promise.resolve({ data: out, error: null });
+      // FR-6 (count-truncation discipline): getThreadByTopicId now paginates via
+      // fetchAllPaginated (.order(created_at).order(id tiebreaker).range(from, to)), so
+      // order() is CHAINABLE (sort recorded, created_at primary) and the page resolves at
+      // range(); a bare await after order() still resolves sorted via then() below.
+      order() { ordered = true; return api; },
+      range(from, to) {
+        return Promise.resolve({ data: runSorted().slice(from, to + 1), error: null });
       },
       then(res, rej) {
         if (op === 'delete') {
@@ -116,7 +122,7 @@ export function makeMemoryDb(anchorSession = DRILL_SELF_SESSION) {
           for (const m of matched) { const i = sc.indexOf(m); if (i >= 0) sc.splice(i, 1); }
           return Promise.resolve({ data: matched, error: null }).then(res, rej);
         }
-        return Promise.resolve({ data: runFilter(), error: null }).then(res, rej);
+        return Promise.resolve({ data: ordered ? runSorted() : runFilter(), error: null }).then(res, rej);
       },
     };
     return api;

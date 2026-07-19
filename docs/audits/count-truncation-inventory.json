@@ -610,7 +610,7 @@
    "exemption_note": "selectUnactionedAdvisories — caller-bounded .limit(limit), default 20"
   },
   {
-   "site": "lib/coordinator/adam-identity.cjs:171",
+   "site": "lib/coordinator/adam-identity.cjs:183",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": "update-returning select — bounded by the retarget UPDATE result set"
@@ -706,7 +706,7 @@
    "exemption_note": "head-only estimated count — zero rows fetched (no truncation surface); estimate is the deliberate design for row-growth trending"
   },
   {
-   "site": "lib/coordinator/solomon-identity.cjs:171",
+   "site": "lib/coordinator/solomon-identity.cjs:183",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": "update-returning select — bounded by the retarget UPDATE result set"
@@ -9539,12 +9539,12 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/three-way-comms-drill.mjs:282",
+   "site": "scripts/three-way-comms-drill.mjs:288",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/three-way-comms-drill.mjs:293",
+   "site": "scripts/three-way-comms-drill.mjs:299",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
