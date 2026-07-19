@@ -523,10 +523,18 @@ async function recordAndCount(sessionId, sdKey, toolName, toolInput, opts = {}) 
       return { attempts: 0, signature, rcaResetApplied: false, progressStalled: undefined };
     }
 
-    // SD-FDBK-FIX-RCA-TIERED-ENFORCEMENT-001 + Control 4: a blind retry is, by definition,
-    // re-running a FAILED command. If the immediately-prior invocation of THIS SAME command
-    // exited 0 (now RELIABLY captured by post-tool-rca-outcome.cjs Control 4), this is a
-    // succeeding poll (a recurring monitor/scheduled cron), not a retry — do not accumulate.
+    // SD-FDBK-FIX-RCA-TIERED-ENFORCEMENT-001: a blind retry is, by definition, re-running a
+    // FAILED command. If the immediately-prior invocation of THIS SAME command exited 0,
+    // this is a succeeding poll (a recurring monitor/scheduled cron), not a retry — do not
+    // accumulate. PROVENANCE (SD-LEO-INFRA-SUCCEEDING-POLL-EXEMPTION-001): exit_code:0 now
+    // comes SOLELY from a genuine numeric exit code — it is NEVER inferred from absence-of-
+    // failure. The old post-tool-rca-outcome.cjs Control 4 fabricated exit_code:0 for every
+    // non-interrupted Bash call (which Claude's Bash tool never numerically reports), feeding
+    // this branch a lie and nullifying the guard on same-command failures; that inference was
+    // removed. This branch is therefore inert for Claude Bash today (no exit_code:0 is ever
+    // recorded) yet remains correct for any future tool that reports a real numeric 0.
+    // Idempotent ticks are covered independently of exit-code inference by the Control 1+2
+    // read-only classifier and the EXEMPT_PATTERNS allowlist below.
     // COMMAND-SCOPED: lastOutcome.command_sha must match the current command's hash, so an
     // interleaved success of a DIFFERENT command can never exempt a genuine failure loop.
     // STRICT: only exit_code 0/'0' exempts; non-zero codes still accumulate.
