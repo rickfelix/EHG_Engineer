@@ -1,0 +1,199 @@
+{
+  "executive_summary": "Part 2 of the adam-outbound wiring: builds the F3 decision-scheduler tick that invokes the already-shipped away-bridge (lib/comms/adam-outbound/away-bridge/index.js, SD-LEO-INFRA-SMS-CHANNEL-HARDENING-001-E, currently marked @wire-check-exempt because it has zero callers) to re-surface presence-gated OWED chairman decisions. Part 1 (F2: route Adam outbound through the chairman-sms-gate + rubric) shipped live in PR #6241. The away-bridge's owed-state source (child B, sms_outbound_obligations) is a STAGED, chairman-gated migration NOT YET APPLIED to the live DB -- this SD builds the tick fail-soft against that (mirrors the exact convention already used by sms-outbound-worker.js/sms-outbound-reconcile-sweep.mjs: reconcileOutboundSms returns a no-op summary while the table is absent, never throws), so the tick is inert-but-correct today and activates automatically once the chairman applies the STAGED migration -- no further code change needed at that point. LOW priority, resilience backstop only: Adam already surfaces owed decisions manually and reliably.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Decision-scheduler tick module wiring the away-bridge to real seams",
+      "description": "New module lib/comms/adam-outbound/decision-scheduler/index.js exporting runDecisionSchedulerTick(supabase, opts). Builds an owedStore adapter around sms_outbound_obligations reusing the EXISTING smsOutboundObligationsLive() liveness probe (lib/chairman/sms-bridge.js) for fail-soft table-absent handling -- getOwedDecisions() returns [] (not a throw) when the table is absent, matching the away-bridge's already-tested no-op-on-empty behavior. Resolves the presence context {now, lastInputAt} from the most recent claude_sessions.heartbeat_at across active sessions -- an empty/error session query maps to lastInputAt=null, which away-bridge's own isAway() already treats as 'unknown presence => treat as present' (never texts blindly, fail-safe by construction). Wires sender to the ALREADY-LIVE chairman-sms-gate + rubric send path (lib/comms/adam-outbound/chairman-sms-gate/index.js, shipped Part 1/F2) and escalateEmail to the existing chairman decision-email escalation pipeline (lib/chairman/record-pending-decision.mjs's escalateChairmanDecision, or an equivalent existing seam -- reused, not reinvented, per the away-bridge module's own K-reached email-escalation contract). Calls the UNMODIFIED processOwedDecisions(context, {owedStore, sender, escalateEmail}) from lib/comms/adam-outbound/away-bridge/index.js. [VALIDATION (2026-07-18) HONESTY CORRECTION]: fleet worker sessions heartbeat roughly every ~2s and are near-continuously active, so MAX(claude_sessions.heartbeat_at) will almost always be within seconds of 'now' -- isAway() will be near-ALWAYS false with this signal, meaning the tick will near-NEVER re-surface, not merely 'occasionally under-fire' as originally stated. This is documented here as an EXPLICIT, ACCEPTED limitation (not a silent gap): the tick is correctly wired and will activate the moment a better chairman-specific presence signal exists, but with today's only available fleet-wide signal it functions as a structurally-inert-but-harmless backstop, consistent with the SD's own LOW-priority/resilience-backstop framing. A real chairman-terminal-presence signal is explicitly OUT OF SCOPE for this SD (would require new instrumentation, not wiring) and is noted as a natural future enhancement, not a defect of this SD.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "runDecisionSchedulerTick calls processOwedDecisions with a correctly-shaped owedStore/sender/escalateEmail per the away-bridge module's own documented interface, with zero modification to away-bridge/index.js's exported functions",
+        "While sms_outbound_obligations is absent (current live state), the tick runs to completion and returns a no-op summary -- never throws, matching the sibling sms-outbound-worker.js fail-soft convention",
+        "An empty or errored presence-signal query resolves to lastInputAt=null, which away-bridge's own isAway() treats as present (safe default) -- verified by a test, not just asserted",
+        "Once sms_outbound_obligations is live (future chairman-apply), the SAME code path (no new code) reads real owed rows and re-surfaces per away-bridge's existing, already-tested policy",
+        "The near-inertness of the claude_sessions.heartbeat_at presence signal is documented in the module's own header comment, not just the PRD -- so a future reader does not mistake this for a fully-functional presence gate"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Durable cron runner (no session-local timers)",
+      "description": "New script scripts/cron/adam-decision-scheduler-tick.mjs --once, mirroring scripts/cron/chairman-decision-sla-sweep.mjs's shape (parseArgs, buildSupabase, main(argv, deps), gracefulExit, isMain guard, AND its ensureArmedRegistration/registerArmedMachinery call -- NOT the sms-outbound-reconcile-sweep.mjs template, which lacks ARMED registration) -- a plain async invocation with NO setTimeout/setInterval/cron of its own, so a fresh cold process can run it. Calls registerArmedMachinery(supabase, {sd_key:'SD-LEO-INFRA-ADAM-DECISION-SCHEDULER-001'}, {activationTrigger: 'sms_outbound_obligations STAGED migration applied by chairman ceremony', expectedIntervalSeconds, owner}) idempotently on each run (check-then-upsert, mirroring chairman-decision-sla-sweep.mjs's ensureArmedRegistration, never wiping a real last_fired_at) -- this SD's own machinery genuinely cannot demonstrate real events yet (the owed-decision producer table is unapplied), so ARMED registration is the correct Definition-of-Done shape (SD-LEO-INFRA-DEFINITION-DONE-ACTIVATION-001 G3), not an afterthought. [VALIDATION (2026-07-18) FIX]: a package.json scripts entry (e.g. 'adam:decision-scheduler:tick:cron': 'node scripts/cron/adam-decision-scheduler-tick.mjs --once', matching the existing <name>:cron naming convention seen at eva:scheduler:watch:cron/cascade:watch:cron) is REQUIRED -- the blocking LEAD-FINAL WIRE_CHECK_GATE discovers entry points ONLY from package.json scripts + a small hardcoded pipeline list (scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js discoverEntryPoints()); a GHA-cron-only script with no package.json entry has NO static reachability root and both new files (this script + decision-scheduler/index.js) would FAIL WIRE_CHECK at LEAD-FINAL without it. A new .github/workflows/adam-decision-scheduler-cron.yml registers the CADENCE (separate from WIRE_CHECK reachability, which the package.json entry alone satisfies), mirroring .github/workflows/chairman-decision-sla-cron.yml's shape (schedule + workflow_dispatch, concurrency group). [VALIDATION FIX]: use the chairman's actual SMS quiet window (22:00-06:00 America/New_York per feedback_chairman_sleep_window_sms_10pm_6am_et, DST-aware) for this cron's schedule math, NOT a direct copy of the SLA sweep's 23:00-05:00 email-window numbers -- they are different, purpose-specific windows and copying the wrong one would fire SMS-adjacent machinery during part of the real sleep window. [EXPLORE (2026-07-18) FINDING]: no existing SMS-specific 22:00-06:00 quiet-window function exists anywhere in the repo (confirmed by repo-wide search; the STAGED sms_outbound_obligations migration column comment describes intended semantics but implements nothing) -- this SD must inline a small, DST-aware Intl-based hour check mirroring isWithinChairmanQuietWindow (lib/notifications/resend-adapter.js) but with the 22/6 boundary, scoped to this cron only (not a new shared export unless a natural home emerges during EXEC).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "scripts/cron/adam-decision-scheduler-tick.mjs --once runs to completion with exit code 0 against the current (table-absent) live DB state",
+        "package.json gains a <name>:cron script entry invoking the new script, so WIRE_CHECK_GATE has a real static reachability root for both new files",
+        "The tick idempotently ensures an ARMED periodic_process_registry row exists (registerArmedMachinery, activationTrigger naming the STAGED-migration-apply event) without wiping a real last_fired_at on repeat runs",
+        "The cron YAML's schedule excludes the chairman's 22:00-06:00 America/New_York SMS sleep window (DST-aware), NOT a copy-pasted different window from an unrelated sweep",
+        "A static wiring test (mirroring tests/unit/cron/chairman-decision-sla-wiring.test.js) pins the script -> tick-module import path, so a rename/refactor breaks CI loudly instead of silently un-wiring the tick"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Remove the now-inaccurate WIRE_CHECK exemption comment on the away-bridge (hygiene, not a gate-blocking fix)",
+      "description": "Remove the `// @wire-check-exempt: away-bridge...` comment from lib/comms/adam-outbound/away-bridge/index.js now that FR-1's tick module genuinely imports and calls processOwedDecisions, so the comment stops being misleading. [VALIDATION (2026-07-18) CORRECTION]: the blocking LEAD-FINAL WIRE_CHECK_GATE only evaluates files NEWLY ADDED in this SD's diff (git diff --diff-filter=A origin/main...HEAD) -- away-bridge/index.js already exists on origin/main from a prior SD, so it is a MODIFIED file this gate does NOT re-check regardless of the marker's presence. Removing the marker is therefore documentation hygiene (the comment would otherwise be false -- it now HAS a caller), not something the gate enforces either way for this file. The REAL WIRE_CHECK exposure for this SD is FR-2's two genuinely-new files, which is why FR-2 requires a package.json entry point.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "lib/comms/adam-outbound/away-bridge/index.js no longer carries the @wire-check-exempt marker (now inaccurate since it has a real caller)",
+        "The LEAD-FINAL WIRE_CHECK_GATE passes for this SD's two genuinely-new files (FR-2's tick module and cron script) via the FR-2 package.json entry point -- verified at the LEAD-FINAL-APPROVAL handoff"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No mutation of the away-bridge or chairman-sms-gate contracts",
+      "description": "processOwedDecisions, isAway, and the chairman-sms-gate's send interface are consumed as-is; this SD is purely a caller/wirer."
+    },
+    {
+      "id": "TR-2",
+      "title": "Fail-soft on every missing dependency",
+      "description": "sms_outbound_obligations absent, a presence-query error, or a send-path error must each degrade to a safe no-op (skip / treat-as-present / log-and-continue) -- never throw uncaught, never crash the durable runner."
+    },
+    {
+      "id": "TR-3",
+      "title": "No new email-sending or SMS-sending code",
+      "description": "Re-surface sends route through the existing chairman-sms-gate; escalation emails route through the existing chairman decision-email pipeline. Zero new provider-calling code in this SD."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Tick runs to completion (no-op) while sms_outbound_obligations is absent",
+      "type": "unit",
+      "expected": "Returns a no-op summary, zero throws, zero sends"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Tick wires owedStore/sender/escalateEmail correctly into processOwedDecisions",
+      "type": "unit",
+      "expected": "processOwedDecisions is called with the documented interface shape; a mocked owed decision flows through resurfaced/dropped_answered/escalated_email per away-bridge's existing policy"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Presence resolution: empty/errored session query maps to lastInputAt=null (treated as present)",
+      "type": "unit",
+      "expected": "isAway() returns false, no re-surface fires"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Cron script --once exits 0 against current live DB (table absent)",
+      "type": "integration",
+      "expected": "Exit code 0, no-op summary logged, ARMED registration ensured idempotently"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "Static wiring test pins the cron script's tick-module import",
+      "type": "unit",
+      "expected": "A rename/refactor of the import path fails the test"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "package.json entry gives the two new files a real WIRE_CHECK reachability root",
+      "type": "integration",
+      "expected": "decision-scheduler/index.js and adam-decision-scheduler-tick.mjs are both statically reachable from the package.json script entry"
+    },
+    {
+      "id": "TS-7",
+      "scenario": "ARMED registration is idempotent across repeat runs",
+      "type": "unit",
+      "expected": "A second call to ensureArmedRegistration against an already-registered process_key does not wipe a real last_fired_at value"
+    }
+  ],
+  "acceptance_criteria": [
+    "(a) A live entry point (the cron script, package.json-wired for WIRE_CHECK reachability) invokes the away-bridge on a cadence, with an ARMED periodic_process_registry registration since the real producer (sms_outbound_obligations) is not yet live",
+    "(b) An owed decision left un-surfaced beyond a threshold is re-surfaced -- proven at the unit level against the away-bridge's own already-tested K-reached/idempotent policy, since the live table is not yet populated",
+    "(c) No double-surface of a decision Adam already raised manually -- inherited for free from away-bridge's own answered-check + resurfacedThisWindow idempotency, not reimplemented"
+  ],
+  "risks": [
+    {
+      "risk": "sms_outbound_obligations stays STAGED/unapplied indefinitely, so the tick never does real work",
+      "mitigation": "This is explicitly acceptable per the SD's own framing (LOW priority, resilience backstop, manual surfacing works today) -- the tick activates automatically once the chairman applies the migration, no follow-up SD needed; the ARMED registration makes this a tracked, monitored state rather than a silent no-op",
+      "severity": "low"
+    },
+    {
+      "risk": "The claude_sessions.heartbeat_at presence proxy makes the tick STRUCTURALLY NEAR-INERT (fleet sessions heartbeat ~every 2s, so isAway() is near-always false), not merely occasionally under-firing",
+      "mitigation": "VALIDATION-confirmed and explicitly documented in-code and in this PRD as an accepted limitation, not a silent gap -- away-bridge's own fail-safe default means this degrades toward UNDER-firing (safe direction), and the tick's wiring is otherwise complete and correct; a real chairman-presence signal is an explicit future enhancement, out of scope here",
+      "severity": "medium"
+    },
+    {
+      "risk": "A second, uncoordinated cron cadence duplicates the SLA sweep's own quiet-window logic and drifts out of sync over time",
+      "mitigation": "The new cron YAML uses the chairman's actual SMS-specific 22:00-06:00 America/New_York window (not a copy of the SLA sweep's different email-window numbers), with a comment cross-referencing the SLA sweep for future-edit awareness",
+      "severity": "low"
+    },
+    {
+      "risk": "Forgetting the package.json entry point silently fails WIRE_CHECK_GATE at LEAD-FINAL, forcing a 2nd PR",
+      "mitigation": "Explicitly called out as a required FR-2 acceptance criterion (VALIDATION-caught), not left implicit",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Chairman (re-surfaced owed decisions via the live SMS/console channel)"
+    ],
+    "dependencies": [
+      "SD-LEO-INFRA-SMS-CHANNEL-HARDENING-001-E (merged, away-bridge)",
+      "SD-LEO-INFRA-SMS-CHANNEL-HARDENING-001-B (merged code, STAGED migration -- sms_outbound_obligations not yet applied)",
+      "SD-LEO-INFRA-ADAM-OUTBOUND-WIRE-LIVE-001 Part 1 (merged, PR #6241 -- chairman-sms-gate + rubric live)"
+    ],
+    "data_contracts": [
+      "Reads sms_outbound_obligations (fail-soft if absent), reads claude_sessions.heartbeat_at (existing column)"
+    ],
+    "runtime_config": [
+      "Cron schedule via the new GHA workflow; no new env vars"
+    ],
+    "observability_rollout": [
+      "Structured log line per tick run (mirrors sms-outbound-sweep's log shape); inert (logs a clear no-op) until the chairman applies the STAGED migration"
+    ]
+  },
+  "system_architecture": {
+    "summary": "One new lib module (the tick, pure wiring) + one new cron script (durable runner) + one new GHA workflow (cadence) + removal of one exempt marker.",
+    "components": [
+      {
+        "name": "lib/comms/adam-outbound/decision-scheduler/index.js",
+        "change": "NEW"
+      },
+      {
+        "name": "scripts/cron/adam-decision-scheduler-tick.mjs",
+        "change": "NEW"
+      },
+      {
+        "name": ".github/workflows/adam-decision-scheduler-cron.yml",
+        "change": "NEW"
+      },
+      {
+        "name": "lib/comms/adam-outbound/away-bridge/index.js",
+        "change": "MODIFIED (remove @wire-check-exempt marker only, no logic change)"
+      }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build the tick module first (independently unit-testable against mocks), then the cron runner mirroring the sms-outbound sibling exactly, then the GHA workflow mirroring the SLA-sweep sibling, then remove the exempt marker last (once real reachability exists).",
+    "steps": [
+      "Write lib/comms/adam-outbound/decision-scheduler/index.js with an injectable-seams design (owedStore, sender, escalateEmail, sessionQuery), unit tests for all branches including fail-soft paths",
+      "Write scripts/cron/adam-decision-scheduler-tick.mjs mirroring sms-outbound-reconcile-sweep.mjs's structure",
+      "Write the static wiring test pinning the cron-script -> tick-module import",
+      "Write .github/workflows/adam-decision-scheduler-cron.yml mirroring chairman-decision-sla-cron.yml's schedule shape",
+      "Remove the @wire-check-exempt marker from away-bridge/index.js and verify WIRE_CHECK_GATE passes without it"
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "Run node scripts/cron/adam-decision-scheduler-tick.mjs --once against the live (table-absent) DB",
+      "expected_outcome": "Exits 0, logs a clear no-op summary, zero throws"
+    },
+    {
+      "step_number": 2,
+      "instruction": "Run the unit test suite for the new decision-scheduler module with a mocked populated owedStore",
+      "expected_outcome": "A mocked owed decision correctly flows through resurfaced/dropped/escalated per away-bridge's existing policy"
+    },
+    {
+      "step_number": 3,
+      "instruction": "Run the WIRE_CHECK_GATE reachability check against away-bridge/index.js post-marker-removal",
+      "expected_outcome": "Passes (file is statically reachable from the new cron entry point)"
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-ADAM-DECISION-SCHEDULER-001"
+  }
+}
