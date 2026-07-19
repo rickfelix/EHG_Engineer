@@ -85,26 +85,27 @@ describe('classifyMerges / detectUnwitnessedMerges (identity matching)', () => {
   });
 });
 
-describe('detectUnwitnessedMerges grace window (QF-20260704-403)', () => {
+describe('detectUnwitnessedMerges grace window (QF-20260704-403, widened by QF-20260719-986)', () => {
   const now = Date.parse('2026-07-04T12:00:00Z');
 
-  it('a merge inside the grace window (< 5 min old) is NOT counted as unwitnessed', () => {
-    const merges = [{ repo: 'rickfelix/ehg', prNumber: 1, mergedAt: '2026-07-04T11:57:00Z' }]; // 3 min ago
+  it('a merge inside the grace window (< 15 min old) is NOT counted as unwitnessed', () => {
+    // 10 min ago: false-tripped under the old 5-min window (2026-07-19 merge-wave evidence)
+    const merges = [{ repo: 'rickfelix/ehg', prNumber: 1, mergedAt: '2026-07-04T11:50:00Z' }];
     const result = detectUnwitnessedMerges(merges, [], { now });
     expect(result.count).toBe(0);
     expect(result.unwitnessed).toEqual([]);
   });
 
   it('a merge older than the grace window IS counted as unwitnessed', () => {
-    const merges = [{ repo: 'rickfelix/ehg', prNumber: 1, mergedAt: '2026-07-04T11:50:00Z' }]; // 10 min ago
+    const merges = [{ repo: 'rickfelix/ehg', prNumber: 1, mergedAt: '2026-07-04T11:40:00Z' }]; // 20 min ago
     const result = detectUnwitnessedMerges(merges, [], { now });
     expect(result.count).toBe(1);
   });
 
   it('total stays the full classified count regardless of the grace window', () => {
     const merges = [
-      { repo: 'rickfelix/ehg', prNumber: 1, mergedAt: '2026-07-04T11:57:00Z' }, // grace-window, excluded from count
-      { repo: 'rickfelix/ehg', prNumber: 2, mergedAt: '2026-07-04T11:50:00Z' }, // older, counted
+      { repo: 'rickfelix/ehg', prNumber: 1, mergedAt: '2026-07-04T11:50:00Z' }, // grace-window, excluded from count
+      { repo: 'rickfelix/ehg', prNumber: 2, mergedAt: '2026-07-04T11:40:00Z' }, // older, counted
     ];
     const result = detectUnwitnessedMerges(merges, [], { now });
     expect(result.total).toBe(2);
