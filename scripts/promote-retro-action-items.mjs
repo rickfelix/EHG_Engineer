@@ -62,16 +62,44 @@ if (error) {
   process.exit();
 }
 
+// QF-20260719-740: promoter never re-checked whether the target SD was already
+// terminal by promotion time -- an 11-instance class of moot QFs ("[Retro action
+// items] <sd_id>") all targeted SDs already status=completed/cancelled, because the
+// retro that spawned them predates the SD reaching a terminal state (e.g. LEAD-FINAL
+// accepted the same session). Batch-fetch statuses once so terminal SDs short-circuit
+// promotion instead of minting an already-moot QF.
+const TERMINAL_SD_STATUSES = new Set(['completed', 'cancelled']);
+const retroSdIds = [...new Set((retros || []).map(r => r.sd_id).filter(Boolean))];
+const sdStatusById = new Map();
+if (retroSdIds.length > 0) {
+  const { data: sds, error: sdErr } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, status')
+    .in('id', retroSdIds);
+  if (sdErr) {
+    console.error('ERROR (sd status lookup):', JSON.stringify(sdErr));
+  } else {
+    for (const sd of sds || []) sdStatusById.set(sd.id, sd.status);
+  }
+}
+
 let promoted = 0;
 let skippedAlreadyPromoted = 0;
 let skippedNoHighPriority = 0;
 let skippedNonActionable = 0;
+let skippedTerminalSd = 0;
 
 let skippedTestFixture = 0;
 
 for (const retro of retros || []) {
   if (retro.metadata?.action_items_promoted) {
     skippedAlreadyPromoted++;
+    continue;
+  }
+
+  if (retro.sd_id && TERMINAL_SD_STATUSES.has(sdStatusById.get(retro.sd_id))) {
+    console.log(`\n[SKIP_TERMINAL_SD] retro=${retro.id} sd=${retro.sd_id} status=${sdStatusById.get(retro.sd_id)} -- SD already terminal, action items moot.`);
+    skippedTerminalSd++;
     continue;
   }
 
@@ -152,4 +180,4 @@ for (const retro of retros || []) {
   }
 }
 
-console.log(`\nSummary: ${promoted} promoted, ${skippedAlreadyPromoted} already-promoted, ${skippedTestFixture} test-fixture, ${skippedNoHighPriority} with no high-priority items, ${skippedNonActionable} with only non-actionable items.`);
+console.log(`\nSummary: ${promoted} promoted, ${skippedAlreadyPromoted} already-promoted, ${skippedTerminalSd} terminal-SD, ${skippedTestFixture} test-fixture, ${skippedNoHighPriority} with no high-priority items, ${skippedNonActionable} with only non-actionable items.`);
