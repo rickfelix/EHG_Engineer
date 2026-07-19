@@ -26,6 +26,13 @@ function makeSb({ freshAdams = [], retargetRows = [], retargetError = null, veri
         filter() { return builder; },
         eq() { return builder; },
         is() { return builder; },
+        // FR-6 (count-truncation discipline): fetchFreshAdams paginates via fetchAllPaginated,
+        // whose pages end in .order(...).range(from, to) — slice so the short-page loop exits.
+        order() { return builder; },
+        range(from, to) {
+          const rows = table === 'claude_sessions' ? freshAdams : [];
+          return Promise.resolve({ data: rows.slice(from, to + 1), error: null });
+        },
         update(patch) { isUpdate = true; calls.updates.push({ table, patch }); return builder; },
         maybeSingle() { return Promise.resolve({ data: verifyRow, error: null }); },
         then(resolve, reject) {

@@ -119,29 +119,22 @@ describe('LOOP_IDS', () => {
 });
 
 describe('fetchLoopStageRows', () => {
+  // FR-6 (count-truncation discipline): fetchLoopStageRows now paginates via fetchAllPaginated,
+  // so the chain ends in .range(from, to) instead of .limit(n) — the mock slices accordingly.
   function makeSb(rows, capturedOrderCalls) {
     return {
       from(_table) {
-        return {
-          select() {
-            return {
-              eq() {
-                return {
-                  in() {
-                    return {
-                      order(col, opts) {
-                        if (capturedOrderCalls) capturedOrderCalls.push({ col, opts });
-                        return {
-                          limit: async () => ({ data: rows, error: null }),
-                        };
-                      },
-                    };
-                  },
-                };
-              },
-            };
+        const chain = {
+          select() { return chain; },
+          eq() { return chain; },
+          in() { return chain; },
+          order(col, opts) {
+            if (capturedOrderCalls) capturedOrderCalls.push({ col, opts });
+            return chain;
           },
+          range: async (from, to) => ({ data: rows.slice(from, to + 1), error: null }),
         };
+        return chain;
       },
     };
   }
@@ -149,7 +142,10 @@ describe('fetchLoopStageRows', () => {
   it('orders by entered_at DESCENDING so a truncated read keeps the most recent activity, not the oldest', async () => {
     const orderCalls = [];
     await fetchLoopStageRows(makeSb([], orderCalls), 'A_applied_rate', { limit: 10 });
-    expect(orderCalls).toEqual([{ col: 'entered_at', opts: { ascending: false } }]);
+    expect(orderCalls[0]).toEqual({ col: 'entered_at', opts: { ascending: false } });
+    // The pagination tiebreakers are secondary orders — the primary DESC recency order stays
+    // first; (cycle_id, stage) make the sort total for stable page boundaries.
+    expect(orderCalls.map((c) => c.col)).toEqual(['entered_at', 'cycle_id', 'stage']);
   });
 
   it('returns truncated:false when fewer rows than the limit are returned', async () => {
@@ -168,7 +164,11 @@ describe('fetchLoopStageRows', () => {
   });
 
   it('throws a descriptive error on a query failure (fail-loud, matches the sibling fetcher contract)', async () => {
-    const sb = { from: () => ({ select: () => ({ eq: () => ({ in: () => ({ order: () => ({ limit: async () => ({ data: null, error: { message: 'boom' } }) }) }) }) }) }) };
+    const failChain = {
+      select: () => failChain, eq: () => failChain, in: () => failChain, order: () => failChain,
+      range: async () => ({ data: null, error: { message: 'boom' } }),
+    };
+    const sb = { from: () => failChain };
     await expect(fetchLoopStageRows(sb, 'A_applied_rate')).rejects.toThrow(/A_applied_rate.*boom/);
   });
 });

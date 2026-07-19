@@ -35,9 +35,10 @@ const path = require('path');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { resolveStateReadPath } = require('./hooks/lib/session-state-resolver.cjs');
 // SD-LEO-INFRA-SOLOMON-CONSULT-001A (Solomon foundation) — faithful copy-rename of adam-register.cjs: single-Solomon guard + atomic write.
-// fetchAllSolomons (not fetchFreshSolomons) so the guard sees stale priors too and classifies fresh-vs-
-// stale itself (fresh => refuse; stale-only => retire).
-const { fetchAllSolomons, decideSingleSolomonGuard, isFresh } = require('../lib/coordinator/solomon-identity.cjs');
+// fetchAllSolomonsStrict (not fetchFreshSolomons) so the guard sees stale priors too and classifies
+// fresh-vs-stale itself (fresh => refuse; stale-only => retire). STRICT (FR-6, count-truncation
+// discipline review): a FAILED prior read must REFUSE registration, never read as "no priors".
+const { fetchAllSolomonsStrict, decideSingleSolomonGuard, isFresh } = require('../lib/coordinator/solomon-identity.cjs');
 // Phase E (not yet shipped): drainSolomonOutbound will live in scripts/solomon-advisory.cjs.
 // Loaded lazily at the call site so this module loads without solomon-advisory.cjs present.
 
@@ -104,7 +105,15 @@ async function registerSolomon(supabase, sessionId, opts = {}) {
   }
 
   const nowMs = (opts && Number.isFinite(opts.nowMs)) ? opts.nowMs : Date.now();
-  const priorSolomons = await fetchAllSolomons(supabase); // ALL solomons (incl. stale) so the guard classifies
+  // ALL solomons (incl. stale) so the guard classifies. STRICT read (FR-6): a failed read must
+  // REFUSE — treating it as "no priors" would let a 2nd Solomon register past a fresh prior on a
+  // transient DB fault (fail-closed, the safe direction for a singleton guard).
+  const priorRead = await fetchAllSolomonsStrict(supabase);
+  if (priorRead.error) {
+    return { ok: false, action: 'refused', session_id: sessionId, fresh_priors: [],
+      message: `Refused: prior-Solomon freshness read failed (${priorRead.error}) — cannot verify the singleton is free; not registering (fail-closed).` };
+  }
+  const priorSolomons = priorRead.rows;
   const decision = decideSingleSolomonGuard({ priorSolomons, selfSessionId: sessionId, nowMs });
   if (decision.action === 'refuse') {
     // A FRESH prior Solomon holds the singleton — do NOT register a 2nd and do NOT clear the prior
@@ -146,12 +155,19 @@ async function registerSolomon(supabase, sessionId, opts = {}) {
   const retired = [];
   if (decision.retire.length) {
     const nowMs2 = Date.now();
-    const current = await fetchAllSolomons(supabase);
-    const freshNow = new Set(current.filter((a) => isFresh(a.heartbeat_at, nowMs2)).map((a) => a.session_id));
-    for (const sid of decision.retire) {
-      if (freshNow.has(sid)) continue; // became fresh since the decision — do NOT clear a restarting Solomon
-      const r = await supabase.rpc('clear_solomon_flag', { p_session_id: sid }).then((x) => x, (e) => ({ error: e }));
-      if (!(r && r.error)) retired.push(sid); // best-effort: a failed stale-clear is swept later
+    // STRICT re-check (FR-6): if the freshness re-validation read fails, SKIP retiring — clearing
+    // a prior based on a failed read could kill a legitimately-restarting Solomon. Priors left
+    // tagged are swept later (same best-effort posture as a failed clear below).
+    const currentRead = await fetchAllSolomonsStrict(supabase);
+    if (currentRead.error) {
+      console.warn(`GUARD_UNAVAILABLE: stale-prior Solomon retire skipped — freshness re-check failed (${currentRead.error})`);
+    } else {
+      const freshNow = new Set(currentRead.rows.filter((a) => isFresh(a.heartbeat_at, nowMs2)).map((a) => a.session_id));
+      for (const sid of decision.retire) {
+        if (freshNow.has(sid)) continue; // became fresh since the decision — do NOT clear a restarting Solomon
+        const r = await supabase.rpc('clear_solomon_flag', { p_session_id: sid }).then((x) => x, (e) => ({ error: e }));
+        if (!(r && r.error)) retired.push(sid); // best-effort: a failed stale-clear is swept later
+      }
     }
   }
   if (retired.length) action = action === 'tagged_fallback' ? 'tagged_after_retire_fallback' : 'tagged_after_retire';

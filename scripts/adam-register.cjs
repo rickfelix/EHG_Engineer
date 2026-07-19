@@ -35,9 +35,10 @@ const path = require('path');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { resolveStateReadPath } = require('./hooks/lib/session-state-resolver.cjs');
 // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-C (FR-3): single-Adam guard + atomic write.
-// fetchAllAdams (not fetchFreshAdams) so the guard sees stale priors too and classifies fresh-vs-
-// stale itself (fresh => refuse; stale-only => retire).
-const { fetchAllAdams, decideSingleAdamGuard, isFresh } = require('../lib/coordinator/adam-identity.cjs');
+// fetchAllAdamsStrict (not fetchFreshAdams) so the guard sees stale priors too and classifies
+// fresh-vs-stale itself (fresh => refuse; stale-only => retire). STRICT (FR-6, count-truncation
+// discipline review): a FAILED prior read must REFUSE registration, never read as "no priors".
+const { fetchAllAdamsStrict, decideSingleAdamGuard, isFresh } = require('../lib/coordinator/adam-identity.cjs');
 // FR-4: re-target a retired prior Adam's unread inbound to the new session (comms survive a restart).
 const { drainAdamOutbound } = require('./adam-advisory.cjs');
 
@@ -104,7 +105,15 @@ async function registerAdam(supabase, sessionId, opts = {}) {
   }
 
   const nowMs = (opts && Number.isFinite(opts.nowMs)) ? opts.nowMs : Date.now();
-  const priorAdams = await fetchAllAdams(supabase); // ALL adams (incl. stale) so the guard classifies
+  // ALL adams (incl. stale) so the guard classifies. STRICT read (FR-6): a failed read must
+  // REFUSE — treating it as "no priors" would let a 2nd Adam register past a fresh prior on a
+  // transient DB fault (fail-closed, the safe direction for a singleton guard).
+  const priorRead = await fetchAllAdamsStrict(supabase);
+  if (priorRead.error) {
+    return { ok: false, action: 'refused', session_id: sessionId, fresh_priors: [],
+      message: `Refused: prior-Adam freshness read failed (${priorRead.error}) — cannot verify the singleton is free; not registering (fail-closed).` };
+  }
+  const priorAdams = priorRead.rows;
   const decision = decideSingleAdamGuard({ priorAdams, selfSessionId: sessionId, nowMs });
   if (decision.action === 'refuse') {
     // A FRESH prior Adam holds the singleton — do NOT register a 2nd and do NOT clear the prior
@@ -142,7 +151,15 @@ async function registerAdam(supabase, sessionId, opts = {}) {
   let retireBlocked = false;
   if (decision.retire.length) {
     const nowMs2 = Date.now();
-    const current = await fetchAllAdams(supabase);
+    // STRICT re-check (FR-6): if the freshness re-validation read fails, SKIP retiring — clearing
+    // a prior based on a failed read could kill a legitimately-restarting Adam. Priors left
+    // tagged are swept later (retireBlocked signals the skip, same as a failed clear).
+    const currentRead = await fetchAllAdamsStrict(supabase);
+    if (currentRead.error) {
+      console.warn(`GUARD_UNAVAILABLE: stale-prior Adam retire skipped — freshness re-check failed (${currentRead.error})`);
+      retireBlocked = true;
+    } else {
+    const current = currentRead.rows;
     const bySessionId = new Map(current.map((a) => [a.session_id, a]));
     const freshNow = new Set(current.filter((a) => isFresh(a.heartbeat_at, nowMs2)).map((a) => a.session_id));
     for (const sid of decision.retire) {
@@ -158,6 +175,7 @@ async function registerAdam(supabase, sessionId, opts = {}) {
       if (mergeErr) { retireBlocked = true; continue; }
       retired.push(sid);
       retireFallbackUsed.push(sid);
+    }
     }
   }
   if (retired.length) action = action === 'tagged_fallback' ? 'tagged_after_retire_fallback' : 'tagged_after_retire';

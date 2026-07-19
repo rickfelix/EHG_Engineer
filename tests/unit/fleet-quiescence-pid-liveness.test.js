@@ -39,7 +39,8 @@ function sbWithSessions(sessions) {
   return makeSb((ctx) => {
     if (ctx.table === 'v_active_sessions') return { data: sessions, error: null };
     if (ctx.table === 'sd_phase_handoffs') return { data: [], error: null };
-    if (ctx.table === 'strategic_directives_v2') return { data: [], error: null };
+    // count: 0 satisfies the FR-6 exact head-count in_progress gauge; data for the intersect query.
+    if (ctx.table === 'strategic_directives_v2') return { data: [], count: 0, error: null };
     throw new Error('unexpected table ' + ctx.table);
   });
 }

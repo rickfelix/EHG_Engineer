@@ -44,7 +44,11 @@ function stub({ row = null, updateErr = null, selectErr = null, rpcError = null,
   const chain = {
     select: () => chain,
     eq: () => chain,
-    filter: () => Promise.resolve({ data: priorAdams, error: null }), // fetchAllAdams
+    // fetchAllAdamsStrict — FR-6 (count-truncation discipline) paginates it, so the chain
+    // continues .order(...).range(from, to) after .filter().
+    filter: () => chain,
+    order: () => chain,
+    range: (from, to) => Promise.resolve({ data: priorAdams.slice(from, to + 1), error: null }),
     maybeSingle: () => Promise.resolve({ data: currentRow, error: selectErr }),
     update: (payload) => {
       calls.updated = payload;

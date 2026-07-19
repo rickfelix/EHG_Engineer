@@ -94,6 +94,13 @@ function reconcileClient({ sds, ventures }) {
         not() { return builder; },
         in() { return builder; },
         eq(col, val) { ctx.idEq = val; return builder; },
+        // FR-6 (count-truncation discipline): the SD read paginates via fetchAllPaginated, so
+        // its chain ends .order(...).range(from, to).
+        order() { return builder; },
+        range(from, to) {
+          const rows = ctx.table === 'strategic_directives_v2' ? sds : ventures;
+          return Promise.resolve({ data: rows.slice(from, to + 1), error: null });
+        },
         then(resolve) {
           if (ctx.op === 'update') { updates.push({ table: ctx.table, id: ctx.idEq, payload: ctx.payload }); return resolve({ error: null }); }
           return resolve({ data: ctx.table === 'strategic_directives_v2' ? sds : ventures, error: null });

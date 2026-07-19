@@ -61,7 +61,14 @@ function createFakeSupabase() {
           return chain;
         },
         order(col) {
-          chain._order = col;
+          // FR-6 (count-truncation discipline): getThreadByTopicId now adds a unique-key
+          // .order('id') tiebreaker after .order('created_at') — keep the PRIMARY sort key.
+          if (!chain._order) chain._order = col;
+          return chain;
+        },
+        // FR-6: getThreadByTopicId paginates via fetchAllPaginated, whose pages end in .range().
+        range(from, to) {
+          chain._range = [from, to];
           return chain;
         },
         then(resolve, reject) {
@@ -79,6 +86,9 @@ function createFakeSupabase() {
             }
             if (chain._order) {
               data.sort((a, b) => new Date(a[chain._order]) - new Date(b[chain._order]));
+            }
+            if (chain._range) {
+              data = data.slice(chain._range[0], chain._range[1] + 1);
             }
             result = { data, error: null };
           }

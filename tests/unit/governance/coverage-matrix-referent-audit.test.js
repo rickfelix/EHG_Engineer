@@ -41,14 +41,19 @@ function fakeSupabase({ priorRunThisMonth = null, lastRun = null, coverageMatrix
       if (table === 'coverage_matrix') {
         return {
           select: (cols) => {
-            // computeDelta selects is_active/first_seen_at (needs .gt or bare-await for cold start);
-            // the covered-rows fetch selects only surface_class/surface_key then .eq('status', 'covered').
+            // computeDelta selects is_active/first_seen_at (optionally .gt for warm start); the
+            // covered-rows fetch selects only surface_class/surface_key then .eq('status','covered').
+            // FR-6 (count-truncation discipline): both reads now paginate via fetchAllPaginated,
+            // so every chain ends .order(...).order(...).range(from, to).
             const isDeltaQuery = cols?.includes('is_active');
-            const data = isDeltaQuery ? coverageMatrixRows : coveredRows;
-            const thenableQuery = Promise.resolve({ data, error: null });
-            thenableQuery.gt = () => Promise.resolve({ data: coverageMatrixRows, error: null });
-            thenableQuery.eq = () => Promise.resolve({ data: coveredRows, error: null });
-            return thenableQuery;
+            let data = isDeltaQuery ? coverageMatrixRows : coveredRows;
+            const chain = {
+              gt: () => { data = coverageMatrixRows; return chain; },
+              eq: () => { data = coveredRows; return chain; },
+              order: () => chain,
+              range: (from, to) => Promise.resolve({ data: (data || []).slice(from, to + 1), error: null }),
+            };
+            return chain;
           },
         };
       }
