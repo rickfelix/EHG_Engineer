@@ -3286,6 +3286,7 @@ async function main() {
           .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
       } catch { stale = []; } // prior behavior: read error ignored
       let cleared = 0;
+      const sweepRetired = [];
       for (const s of stale || []) {
         const next = { ...(s.metadata || {}) };
         delete next.is_coordinator;
@@ -3295,9 +3296,35 @@ async function main() {
           .update({ metadata: next })
           .eq('session_id', s.session_id);
         cleared++;
+        sweepRetired.push(s.session_id);
         console.log('  COORDINATOR_FLAG_CLEARED: session=' + s.session_id + ' heartbeat=' + s.heartbeat_at);
       }
       if (cleared > 0) console.log('STALE COORDINATOR FLAGS CLEARED: ' + cleared);
+
+      // SD-LEO-INFRA-COORDINATOR-SUCCESSION-PROTOCOL-001 FR-2: STALE_CLEANUP was the
+      // primary dead-letter site — the sweep cleared is_coordinator and left the corpse's
+      // unread directed rows stranded forever. Now: close tenure (end_cause='stale_cleanup'),
+      // then drain to the live canonical successor if one resolves, else PARK the unread rows
+      // at the 'broadcast-coordinator' sentinel so the next registration's existing Step-1
+      // sentinel drain delivers them (target_session rewrite only — no new kinds). Fail-open;
+      // flag-gated inside the succession module.
+      if (sweepRetired.length) {
+        try {
+          const succession = require('../lib/coordinator/succession.cjs');
+          const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
+          await succession.closeTenure(supabase, { sessionIds: sweepRetired, endCause: 'stale_cleanup', endedBy: 'stale-session-sweep' });
+          const successor = await getActiveCoordinatorId(supabase);
+          const liveSuccessor = successor && !sweepRetired.includes(successor) ? successor : null;
+          const r = liveSuccessor
+            ? await succession.drainCoordinatorOutbound(supabase, { newSessionId: liveSuccessor, oldSessionIds: sweepRetired })
+            : await succession.parkAtBroadcast(supabase, { oldSessionIds: sweepRetired });
+          console.log('  COORDINATOR_SUCCESSION(sweep): ' + (liveSuccessor
+            ? `drained ${r.moved || 0} unread row(s) to live successor ${liveSuccessor}`
+            : `parked ${r.parked || 0} unread row(s) at broadcast-coordinator (no live successor)`) + (r.error ? ` (warn: ${r.error})` : ''));
+        } catch (succErr) {
+          console.log('  COORDINATOR_SUCCESSION(sweep) skipped: ' + (succErr && succErr.message ? succErr.message : 'unknown'));
+        }
+      }
     }
   } catch (coordErr) {
     console.log('COORDINATOR FLAG CLEANUP: ' + (coordErr && coordErr.message ? coordErr.message : 'unknown'));
