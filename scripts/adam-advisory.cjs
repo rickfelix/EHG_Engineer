@@ -46,6 +46,8 @@ const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { redact, capBody, awaitCoordinatorReply, buildSolomonConsultPayload } = require('./worker-signal.cjs');
 const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled } = require('../lib/coordinator/resolve.cjs');
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
+// QF-20260719-387: fail-closed sender-role guard + target-role assert at the send/request chokes.
+const { assertSenderRole, assertTargetRole } = require('../lib/coordinator/role-comms-guard.cjs');
 const { insertCoordinationRow, isSentinelTarget } = require('../lib/coordinator/dispatch.cjs');
 const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version.cjs');
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
@@ -887,6 +889,12 @@ async function main() {
     process.exit(3);
   }
 
+  // QF-20260719-387 (chairman-directed after live misroute d442d8ec): this is ADAM's outbound
+  // lane — a non-Adam session running it silently applies Adam's routing defaults (the mirror
+  // of Adam running solomon-advisory.cjs, the incident shape). Hard-error (fail-closed) unless
+  // the invoking session's registered role is adam; covers send + request (relay path included).
+  await assertSenderRole(supabase, { sessionId, requiredRole: 'adam', toolName: 'adam-advisory.cjs' });
+
   // FR-4 relay-class path: eva/ceo have no live session, so a relay-class --to enqueues a
   // tracked FR-1 relay_request via the coordinator queue instead of a direct insert — the
   // coordinator's relay-drain tick (FR-1/FR-2) performs the actual delivery + writes the
@@ -918,6 +926,10 @@ async function main() {
   // byte-identical to before.
   const target = isDirectTarget ? peerArg : defaultTarget;
   const via = isDirectTarget ? 'direct' : defaultVia;
+  // QF-20260719-387: read back the resolved target's registered role and hard-error on a
+  // recipient-class mismatch (--to solomon -> role=solomon; default -> the active coordinator).
+  // An R1 direct raw-session target has no recipient class (expectedRole null -> print-only).
+  await assertTargetRole(supabase, { target, expectedRole: isDirectTarget ? null : (toSolomon ? 'solomon' : 'coordinator') });
   const addressee = peerArg || 'coordinator';
   const senderCallsign = await snapshotSender(supabase, sessionId);
 
