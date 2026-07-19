@@ -50,6 +50,8 @@ const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.c
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 const { getActiveAdamId } = require('../lib/coordinator/adam-identity.cjs');
+// QF-20260719-387: fail-closed sender-role guard + target-role assert at the send/request chokes.
+const { assertSenderRole, assertTargetRole } = require('../lib/coordinator/role-comms-guard.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
 const { enqueueRelayRequest } = require('../lib/coordinator/relay-queue.cjs');
 // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class SSOT.
@@ -727,6 +729,12 @@ async function main() {
     process.exit(3);
   }
 
+  // QF-20260719-387 (chairman-directed after live misroute d442d8ec): this is SOLOMON's outbound
+  // lane — a non-Solomon session running it silently applies Solomon's routing defaults, so an
+  // Adam->Solomon proposal landed on the coordinator lane. Hard-error (fail-closed) unless the
+  // invoking session's registered role is solomon; covers send + request (relay path included).
+  await assertSenderRole(supabase, { sessionId, requiredRole: 'solomon', toolName: 'solomon-advisory.cjs' });
+
   // FR-4 relay-class path: eva/ceo have no live session, so a relay-class --to enqueues a
   // tracked FR-1 relay_request via the coordinator queue instead of a direct insert — the
   // coordinator's relay-drain tick (FR-1/FR-2) performs the actual delivery + writes the
@@ -753,6 +761,9 @@ async function main() {
   const toAdam = peerArg === 'adam';
   const adamId = toAdam && twoWayV1On ? await getActiveAdamId(supabase).catch(() => null) : null;
   const { target, via } = resolveSolomonAdvisoryTarget({ toAdam, flagOn: twoWayV1On, coordinatorId, adamId });
+  // QF-20260719-387: read back the resolved target's registered role and hard-error on a
+  // recipient-class mismatch (--to adam -> role=adam; default -> the active coordinator).
+  await assertTargetRole(supabase, { target, expectedRole: toAdam ? 'adam' : 'coordinator' });
   const senderCallsign = await snapshotSender(supabase, sessionId);
   const correlationId = crypto.randomUUID();
   const expectsReply = mode === 'request';
