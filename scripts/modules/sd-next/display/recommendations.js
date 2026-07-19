@@ -59,7 +59,11 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
         .select('id, sd_key, title, status, current_phase, claiming_session_id, priority')
         .eq('parent_sd_id', topSdId)
         .in('status', ['draft', 'active', 'in_progress'])
-        .order('id'));
+        // sd_key tiebreak (adversarial review, FR-6 batch 4): child keys are suffixed
+        // -A/-B/-C..., so sd_key lexicographic IS the intended child sequence — the
+        // 'first unclaimed child' pick is deterministic AND in-sequence (a bare id/UUID
+        // order would deterministically pick an arbitrary child).
+        .order('sd_key', { ascending: true }));
     } catch { /* prior policy: read failure => treated as non-orchestrator below */ }
 
     if (orchChildren && orchChildren.length > 0) {
@@ -138,7 +142,9 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
         .select('id, sd_key, claiming_session_id, status')
         .eq('parent_sd_id', sdId)
         .in('status', ['draft', 'active', 'in_progress'])
-        .order('id'));
+        // sd_key tiebreak (see orchChildren read above): -A/-B/-C... key suffixes make
+        // sd_key order the intended child sequence for the AUTO_PROCEED_ACTION target.
+        .order('sd_key', { ascending: true }));
     } catch { /* prior policy: read failure => fall through to plain start action */ }
 
     if (actionChildren && actionChildren.length > 0) {

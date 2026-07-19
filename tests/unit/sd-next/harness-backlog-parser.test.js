@@ -180,14 +180,23 @@ describe('loadHarnessBacklog — QF-20260509-818 (DB-canonical default)', () => 
     else process.env.LEGACY_HARNESS_BACKLOG_FALLBACK = savedFallback;
   });
 
-  function makeSupabaseStub(rows, error = null) {
-    return {
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: rows, error }),
-      }),
+  function makeSupabaseStub(rows, error = null, { exactCount, countError = null } = {}) {
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({ data: rows, error }),
+      // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 4: the badge count now
+      // comes from a SEPARATE exact head-count query that terminates at .eq() — make the
+      // chain thenable so awaiting it yields the count shape. The list fetch still
+      // resolves via .order() above; default exactCount mirrors rows.length.
+      then(resolve, reject) {
+        const count = exactCount !== undefined
+          ? exactCount
+          : (Array.isArray(rows) ? rows.length : null);
+        return Promise.resolve({ count, error: countError }).then(resolve, reject);
+      },
     };
+    return { from: vi.fn().mockReturnValue(chain) };
   }
 
   it('queries feedback table and maps rows into items shape', async () => {
@@ -213,6 +222,40 @@ describe('loadHarnessBacklog — QF-20260509-818 (DB-canonical default)', () => 
     const supabase = makeSupabaseStub([]);
     const result = await loadHarnessBacklog(supabase);
     expect(result).toEqual({ count: 0, oldestAgeDays: 0, items: [], fileMissing: false, error: null });
+  });
+
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 4 (adversarial review):
+  // the badge count is an exact head-count, never the cap-truncatable list fetch's
+  // rows.length — pins the fix for the live "1000 items" (capped) badge.
+  it('count comes from the exact head-count, not the (possibly capped) list rows.length', async () => {
+    const rows = [
+      { id: 'a', title: 'item a', created_at: '2026-05-01T10:00:00Z', metadata: null },
+      { id: 'b', title: 'item b', created_at: '2026-05-02T10:00:00Z', metadata: null },
+    ];
+    const supabase = makeSupabaseStub(rows, null, { exactCount: 3190 });
+    const result = await loadHarnessBacklog(supabase);
+    expect(result.count).toBe(3190);
+    expect(result.items).toHaveLength(2);
+    expect(result.error).toBe(null);
+  });
+
+  it('head-count measurement failure (count=null, no error) renders count as unavailable, never 0', async () => {
+    const rows = [{ id: 'a', title: 'item a', created_at: '2026-05-01T10:00:00Z', metadata: null }];
+    const supabase = makeSupabaseStub(rows, null, { exactCount: null });
+    const result = await loadHarnessBacklog(supabase);
+    expect(result.count).toBe('unavailable');
+    expect(result.items).toHaveLength(1);
+  });
+
+  it('head-count query error falls back to list rows.length (fail-open to old display)', async () => {
+    const rows = [
+      { id: 'a', title: 'item a', created_at: '2026-05-01T10:00:00Z', metadata: null },
+      { id: 'b', title: 'item b', created_at: '2026-05-02T10:00:00Z', metadata: null },
+    ];
+    const supabase = makeSupabaseStub(rows, null, { exactCount: null, countError: { message: 'head-count failed' } });
+    const result = await loadHarnessBacklog(supabase);
+    expect(result.count).toBe(2);
+    expect(result.error).toBe(null);
   });
 
   it('DB error returns error string and empty items (does not throw)', async () => {

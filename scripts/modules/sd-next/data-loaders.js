@@ -20,7 +20,7 @@ import { isFixtureSdKey, isFixtureQf } from '../../../lib/governance/fixture-exc
 // completion; sites whose hermetic test stubs terminate the builder chain before .range()
 // (fixture-exclusion / okr-canonical-vision-repoint / vision-portfolio-scorecard /
 // harness-backlog-parser suites) instead carry the display-policy tripwire below.
-import { fetchAllPaginated, POSTGREST_MAX_ROWS } from '../../../lib/db/fetch-all-paginated.mjs';
+import { fetchAllPaginated, POSTGREST_MAX_ROWS, renderCount } from '../../../lib/db/fetch-all-paginated.mjs';
 
 /**
  * Display-policy tripwire (mirrors scripts/fleet-dashboard.cjs warnIfCapTruncated):
@@ -367,7 +367,7 @@ export async function loadVisionScores(supabase) {
       logQueryFailure('loadVisionScores', error, { table: 'eva_vision_scores' });
       return result;
     }
-    warnIfCapTruncated(data, 'loadVisionScores eva_vision_scores');
+    warnIfCapTruncated(data, 'loadVisionScores eva_vision_scores (declared 5000-row sample stat, server-capped at 1000)');
     if (!data || data.length === 0) return result;
 
     const thirtyDaysAgo = new Date();
@@ -738,7 +738,9 @@ const _harnessBacklogCache = new Map();
  * @param {Object|null} [supabase]  Supabase client (preferred; enables DB path)
  * @param {Object} [opts]
  * @param {string} [opts.filePath]  Override markdown path (legacy/fallback only)
- * @returns {Promise<{ count:number, oldestAgeDays:number, items:Array, fileMissing:boolean, error:string|null }>}
+ * @returns {Promise<{ count:number|'unavailable', oldestAgeDays:number, items:Array, fileMissing:boolean, error:string|null }>}
+ *          `count` is an exact head-count on the DB path ('unavailable' when the
+ *          measurement fails with no error — FR-2 gauge discipline).
  */
 export async function loadHarnessBacklog(supabase, opts = {}) {
   const useFallback = process.env.LEGACY_HARNESS_BACKLOG_FALLBACK === '1' || !supabase;
@@ -787,7 +789,27 @@ async function _loadHarnessBacklogFromDB(supabase) {
       };
     });
     const oldestAgeDays = items.reduce((max, item) => Math.max(max, item.ageDays), 0);
-    return { count: items.length, oldestAgeDays, items, fileMissing: false, error: null };
+
+    // FR-2 gauge discipline (adversarial review, FR-6 batch 4): the badge count must
+    // come from an exact head-count, NEVER the cap-truncatable list fetch's rows.length
+    // (observed live rendering "1000 items" while the true backlog was larger). This is
+    // a SEPARATE query — the mocked list-fetch chain above is untouched. Fallback to
+    // items.length ONLY when the head-count query itself errors (fail-open to the old
+    // display); count=null with error=null means the MEASUREMENT failed — renderCount()
+    // yields 'unavailable', never a healthy-looking number.
+    let count;
+    try {
+      const { count: exactCount, error: countError } = await supabase
+        .from('feedback')
+        .select('id', { count: 'exact', head: true })
+        .eq('category', 'harness_backlog')
+        .eq('status', 'new');
+      count = countError ? items.length : renderCount(exactCount);
+    } catch {
+      count = items.length;
+    }
+
+    return { count, oldestAgeDays, items, fileMissing: false, error: null };
   } catch (err) {
     return {
       count: 0,

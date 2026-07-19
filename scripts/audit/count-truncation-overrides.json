@@ -219,10 +219,10 @@
   "match": "sd_key, id, status, is_active",
   "note": "countActionableBaselineItems — .or(sd_key.in/id.in) lookup with .limit(sdIds.length*2), bounded by the baseline-item id list"
  },
- "scripts/modules/sd-next/data-loaders.js:764": {
+ "scripts/modules/sd-next/data-loaders.js:766": {
   "classification": "tripwired",
   "match": "id, title, created_at, metadata",
-  "note": "NOT paginated: harness-backlog-parser.test.js stub resolves the chain at .order() (no .range()); warnIfCapTruncated applied after the error-check"
+  "note": "NOT paginated: harness-backlog-parser.test.js stub resolves the chain at .order() (no .range()); warnIfCapTruncated applied after the error-check. The BADGE COUNT no longer uses this fetch's rows.length — a separate exact head-count gauge (renderCount) supplies it (adversarial-review fix)"
  },
  "scripts/modules/sd-next/dependency-resolver.js:80": {
   "classification": "bounded-by-design",

@@ -1,11 +1,11 @@
 {
  "sd": "SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001",
  "generated_by": "scripts/audit/count-truncation-inventory.mjs",
- "total_sites": 9167,
+ "total_sites": 9168,
  "by_classification": {
   "bounded-by-design": 2950,
   "needs-review": 1908,
-  "already-exact": 172,
+  "already-exact": 173,
   "paginated": 72,
   "non-live-path": 4053,
   "tripwired": 12
@@ -8553,10 +8553,10 @@
    "exemption_note": "countActionableBaselineItems — .or(sd_key.in/id.in) lookup with .limit(sdIds.length*2), bounded by the baseline-item id list"
   },
   {
-   "site": "scripts/modules/sd-next/data-loaders.js:764",
+   "site": "scripts/modules/sd-next/data-loaders.js:766",
    "classification": "tripwired",
    "auto_classification": "needs-review",
-   "exemption_note": "NOT paginated: harness-backlog-parser.test.js stub resolves the chain at .order() (no .range()); warnIfCapTruncated applied after the error-check"
+   "exemption_note": "NOT paginated: harness-backlog-parser.test.js stub resolves the chain at .order() (no .range()); warnIfCapTruncated applied after the error-check. The BADGE COUNT no longer uses this fetch's rows.length — a separate exact head-count gauge (renderCount) supplies it (adversarial-review fix)"
   },
   {
    "site": "scripts/modules/sd-next/dependency-resolver.js:126",
