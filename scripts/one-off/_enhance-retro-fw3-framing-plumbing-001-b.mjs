@@ -110,6 +110,8 @@ const update = {
   tags: ['fw3', 'framing-class', 'spec-conflict-caught', 'harness-bug-explore-evidence', 'infra-plumbing']
 };
 
+const { data: sd } = await s.from('strategic_directives_v2').select('id').eq('sd_key', SD_KEY).single();
+
 const { data, error } = await s
   .from('retrospectives')
   .update(update)
@@ -119,6 +121,11 @@ const { data, error } = await s
 
 if (error) {
   console.error('ENHANCE ERROR:', error.message);
+  process.exit(1);
+}
+
+if (data.sd_id !== sd.id) {
+  console.error(`ENHANCE ERROR: RETRO_ID ${RETRO_ID} belongs to sd_id=${data.sd_id}, not ${SD_KEY} (${sd.id}) — refusing to report success on a mismatched retro.`);
   process.exit(1);
 }
 
