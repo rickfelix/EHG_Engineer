@@ -429,8 +429,11 @@ export function autoDetectGitInfo(testDir, options = {}) {
     actualLoc: options.actualLoc
   };
 
-  // Fast path: nothing to detect.
-  if (result.commitSha && result.branchName && result.actualLoc) {
+  // Fast path: nothing to detect. QF-20260719-163: presence checks, not truthiness —
+  // an explicit --actual-loc 0 (legit for analysis/triage QFs with no code diff) is
+  // falsy and used to fall through to the isInQFWorktree guard, throwing the
+  // misleading "Pass ... explicitly" error even when all three flags WERE passed.
+  if (result.commitSha != null && result.branchName != null && result.actualLoc != null) {
     return result;
   }
 
@@ -458,7 +461,7 @@ export function autoDetectGitInfo(testDir, options = {}) {
       console.log(`🔍 PR #${prNumber} → branch: ${result.branchName}`);
     }
 
-    if (!result.actualLoc) {
+    if (result.actualLoc == null) { // preserve an explicit 0 (QF-20260719-163)
       // gh additions+deletions overcounts vs git --shortstat for renames, but feeds the
       // QF hard-cap (see QF_HARD_LOC_CAP in verification.js) fail-safely (stricter,
       // never under-rejects).
@@ -538,7 +541,7 @@ export function autoDetectGitInfo(testDir, options = {}) {
       console.log(`🔍 Auto-detected branch: ${result.branchName}`);
     }
 
-    if (!result.actualLoc) {
+    if (result.actualLoc == null) { // preserve an explicit 0 (QF-20260719-163)
       try {
         const diffStats = execSync('git diff origin/main --shortstat', { encoding: 'utf-8', cwd: testDir, timeout: EXTERNAL_STEP_TIMEOUT_MS }).trim();
         const match = diffStats.match(/(\d+) insertion/);
