@@ -167,16 +167,34 @@ export const ADAM_LOOPS = [
     prompt: 'node scripts/adam-quiet-tick.mjs',
   },
   {
-    // QF-20260702-433 (Chairman directive 2026-07-02): a half-hourly reassurance email whose
-    // SUBJECT alone signals all-is-well ("All good - Adam heartbeat <time> ET"), so silence never
-    // reads as stuck. Was SESSION-ONLY (armed ad hoc, cadence 14,44 * * * *) — the exact
-    // session-fragility class the belt-countdown duty already fixed; registering here so it
-    // survives session restarts.
-    key: 'heartbeat-email',
-    label: 'Half-hourly all-good reassurance email (subject-only signal, never a false all-good)',
-    script: 'adam-heartbeat-email.mjs',
-    cron: '14,44 * * * *',
-    prompt: 'Adam heartbeat-email tick: compose ONE fresh, honest status line, then run node scripts/adam-heartbeat-email.mjs --body "<line>" — never send a false all-good; if something is actually wrong, send the decision/alert email instead (node scripts/adam-decision-email.mjs) rather than this heartbeat.',
+    // QF-20260719-343 (contract c3, leo_protocol_sections id=601, chairman-directed 2026-07-19,
+    // superseding QF-20260702-433's email cadence): the routine heartbeat is now a BRIEF HOURLY
+    // SMS, not a half-hourly email — "your hourly updates" (chairman verbal). Quiet hours
+    // (22:00-06:00 ET) and rate caps are enforced inside sendChairmanSMS's rubric gate, so a
+    // quiet-window tick fails closed (held, not sent) with no prompt-side time arithmetic needed.
+    // Was SESSION-ONLY (session c514430f hand-armed as interim) — registering here so it
+    // survives session restarts, mirroring the belt-countdown/doc-drift durability fix.
+    key: 'heartbeat-sms',
+    label: 'Hourly brief status SMS (quiet-hours-respecting, silence-by-default on truly-nothing ticks)',
+    script: 'adam-chairman-sms.mjs',
+    cron: '14 * * * *',
+    prompt: 'Adam heartbeat-sms tick: if there is truly nothing plan-relevant to report, stay SILENT (silence-by-default) — otherwise compose ONE short (1-2 sentence), professional-casual, plan-relevant status line and run node scripts/adam-chairman-sms.mjs --kind heartbeat_status --body "<line>" (quiet hours and rate caps are enforced by the send gate itself — do not skip the call to pre-empt them). Never send a false all-good; if something is actually wrong, send the decision/alert email instead (node scripts/adam-decision-email.mjs) rather than this heartbeat.',
+  },
+  {
+    // QF-20260719-343 (contract c4, leo_protocol_sections id=601, chairman-directed 2026-07-19):
+    // the daily 6:00 AM ET morning brief — "your 6:00 AM daily morning brief" (chairman verbal).
+    // Plan-first (roadmap position + overnight Slipped/Committing/Done condensed to phone scale),
+    // self-contained. RECONCILED via a per-ET-date dedupe key on sms_outbound_obligations
+    // (dedupe_key upsert ignoreDuplicates -- enqueueChairmanSms already enforces at-most-once/day),
+    // not fire-and-forget: the hourly heartbeat-sms tick above doubles as the late-delivery check
+    // (compose + send the brief late, same dedupe key, if the 6:00 fire was ever missed -- late >
+    // never, the 2026-07-18 missed-morning-review RCA). Distinct from the unchanged doc+Gantt-MMS
+    // daily-review surface (SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001), its fuller companion.
+    key: 'morning-brief-sms',
+    label: 'Daily 6:00 AM ET plan-first morning brief SMS (reconciled via per-date dedupe key)',
+    script: 'adam-chairman-sms.mjs',
+    cron: '0 6 * * *',
+    prompt: 'Adam morning-brief-sms tick: compose a self-contained, plan-first morning brief (roadmap position + overnight Slipped/Committing/Done condensed to phone scale, professional-casual), then run node scripts/adam-chairman-sms.mjs --kind morning_brief --dedupe-key "adam-morning-brief-<YYYY-MM-DD ET>" --body "<brief>". If a later tick finds today\'s dedupe key was never sent (the 6:00 fire was missed), compose and send it then instead -- late is better than never.',
   },
 ];
 
