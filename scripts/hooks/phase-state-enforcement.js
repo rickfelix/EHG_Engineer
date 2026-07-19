@@ -208,15 +208,19 @@ async function canTransitionPhase(supabase, sd, targetPhase, handoffType) {
   if (targetPhase === 'COMPLETED' || handoffType === 'LEAD-FINAL-APPROVAL') {
     // Completion requires UAT for types that need it
     if (uatRequirement === 'REQUIRED' || requirements.requiresUATExecution) {
+      // QF-20260719-890 (schema-reference-lint): uat_test_runs has no overall_result
+      // column — selecting it errored the whole query into data=null, so this UAT gate
+      // silently never saw any runs. pass/partial_pass maps to pass_rate >= 93 per the
+      // canonical GREEN/YELLOW thresholds in lib/uat/result-recorder.js.
       const { data: uatRecords } = await supabase
         .from('uat_test_runs')
-        .select('id, status, overall_result')
+        .select('id, status, pass_rate')
         .eq('sd_id', sd.id)
         .order('created_at', { ascending: false })
         .limit(1);
 
       const hasPassingUAT = uatRecords?.some(r =>
-        r.status === 'completed' && ['pass', 'partial_pass'].includes(r.overall_result)
+        r.status === 'completed' && Number(r.pass_rate) >= 93
       );
 
       if (!hasPassingUAT) {

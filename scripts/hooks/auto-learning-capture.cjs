@@ -178,17 +178,20 @@ async function checkSDWorkStatus() {
     }
 
     // Query 3: Check for active Quick Fix
+    // QF-20260719-890 (schema-reference-lint): quick_fixes has no qf_key column — the PK
+    // id IS the QF key (e.g. QF-20260719-890). Selecting the phantom column errored the
+    // whole query into data=null, so active-QF detection silently never fired.
     const { data: activeQF } = await supabase
       .from('quick_fixes')
-      .select('id, qf_key')
+      .select('id')
       .in('status', ['open', 'in_progress'])
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
     if (activeQF?.id) {
-      log('info', 'qf_work_detected', { source: 'active_qf', qf_id: activeQF.qf_key || activeQF.id });
-      return { isSDWork: true, source: 'active_qf', sdId: activeQF.qf_key || activeQF.id };
+      log('info', 'qf_work_detected', { source: 'active_qf', qf_id: activeQF.id });
+      return { isSDWork: true, source: 'active_qf', sdId: activeQF.id };
     }
 
     // Query 4: Check is_working_on flag
