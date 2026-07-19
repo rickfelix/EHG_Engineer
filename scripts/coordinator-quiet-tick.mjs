@@ -35,6 +35,10 @@ const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
 // QF-20260719-138: emit the cross-party ping row ourselves (mechanical, byte-identical) rather
 // than instructing the coordinator to hand-insert it every tick (that tripped the RCA 3x guard).
 const { emitCrossPartyPing } = require('../lib/coordinator/cross-party-ping.cjs');
+// QF-20260719-298: read-only count of unactioned adam_advisory rows (payload.kind, retired by
+// payload.actioned_at) — the inbox core counts only payload.signal_type rows, so this lane had
+// ZERO tick representation.
+const { selectUnactionedAdvisories } = require('../lib/coordinator/adam-advisory-store.cjs');
 const { DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
 // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2): surface which Claude account this fleet is
 // running under in the tick's status line.
@@ -255,6 +259,18 @@ async function main() {
   ]);
   const unactionedDirective = sessionDirective || chairmanDirective;
 
+  // QF-20260719-298 (LIVE INCIDENT 2026-07-19): 14 adam_advisory rows incl a chairman decision
+  // sat unactioned while every QUIET_TICK line read clean — the inbox core counts only
+  // payload.signal_type rows, so adam_advisory (payload.kind, retired ONLY by actioned_at) had
+  // zero tick representation. Surface the unactioned count so a pending advisory forces a
+  // non-NO-OP ping within one tick cycle. Fail-soft: the count never blocks the tick.
+  let unactionedAdamAdvisories = 0;
+  try {
+    const coordinatorIdForAdvisories = await getActiveCoordinatorId(sb);
+    const { rows } = await selectUnactionedAdvisories(sb, coordinatorIdForAdvisories, { limit: 200 });
+    unactionedAdamAdvisories = (rows || []).length;
+  } catch { /* fail-soft: advisory count never blocks the tick */ }
+
   // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2): fail-safe — null/unavailable prints 'unknown'
   // rather than crashing the tick.
   const currentIdentity = getAccountIdentity();
@@ -283,6 +299,7 @@ async function main() {
     skippedCount: tick.skippedCount,
     crossPartyPing: delta.changed,
     pingFields: delta.fields,
+    adamAdvisoriesPending: unactionedAdamAdvisories,
     nextWakeSeconds: delaySeconds,
   };
 
@@ -298,8 +315,15 @@ async function main() {
       `QUIET_TICK=coordinator mode=${result.mode} acct=${acctLabel} cores=[${tick.summary}] ` +
       `fail=${tick.failedCount} skip=${tick.skippedCount} ` +
       `ping=${delta.changed ? delta.fields.join(',') : 'suppressed'} ` +
+      `ADAM_ADVISORIES_PENDING=${unactionedAdamAdvisories} ` +
       `nextWakeSeconds=${delaySeconds} :: ${modeReason}`
     );
+    // QF-20260719-298: force a non-NO-OP turn when advisories are unactioned. QUIET_TICK_PING is
+    // in the coordinator startup-check's actionable-token allowlist, so this makes the tick act
+    // instead of silently NO-OPing past a pending chairman decision.
+    if (unactionedAdamAdvisories > 0) {
+      console.log(`QUIET_TICK_PING=adam-advisories-pending count=${unactionedAdamAdvisories} (unactioned adam_advisory rows targeting the coordinator — ACTION each now, then stamp payload.actioned_at; read_at is NOT the retirement stamp)`);
+    }
     if (delta.changed) {
       console.log(`QUIET_TICK_PING=coordinator->adam reason=${delta.fields.join(',')} sent=${pingSent} (cross_party_ping row emitted by the tick — record of sent, not an instruction)`);
     }
