@@ -156,7 +156,7 @@ describe('QF-20260525-211 (early-exit gap): QF claim clear runs before the early
   it('QF-20260711-176: terminal QFs are cleared unconditionally (no legitimate holder)', () => {
     const idx = src.indexOf('async function clearStaleQfClaims');
     const fn = src.slice(idx, idx + 3600);
-    expect(fn).toMatch(/\.in\(\s*['"]status['"]\s*,\s*\[\s*['"]completed['"]\s*,\s*['"]cancelled['"]\s*,\s*['"]escalated['"]\s*\]/);
+    expect(fn).toMatch(/\.in\(\s*['"]status['"]\s*,\s*\[\s*['"]completed['"]\s*,\s*['"]cancelled['"]\s*,\s*['"]escalated['"]\s*,\s*['"]closed['"]\s*\]/);
     expect(fn).toMatch(/TERMINAL/);
   });
 });
