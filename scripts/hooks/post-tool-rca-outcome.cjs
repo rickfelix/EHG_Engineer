@@ -204,26 +204,22 @@ async function run() {
           : '';
     const stdoutSha = digestStdoutTail(stdout);
 
-    // SD-LEO-INFRA-RCA-AUTOSIGNAL-FALSE-POSITIVE-001 (Control 4 — exit-code capture).
-    // Claude Code's Bash tool_response carries NO numeric exit_code, so a SUCCESSFUL
-    // command previously hit the `exitCode===null && !stderrSha` skip below and wrote no
-    // last-outcome file → the next PreToolUse signature collapsed to command-only (zero
-    // entropy) → identical read-only/idempotent ticks accumulated to the 3-strikes
-    // hard-block (43 false 'stuck' signals in 26h). FIX: infer success from ABSENCE OF
-    // FAILURE and record exit_code 0 so the succeeding-poll exemption in recordAndCount
-    // can fire. STRICT (R2/R3): never infer success when a numeric non-zero code is
-    // present, when stderr/error is non-empty, or when the call was interrupted/flagged —
-    // those keep accumulating (teeth preserved). When numericExit is a number it is used
-    // verbatim (0 = success, non-zero = failure).
-    const failureFlag =
-      resp.is_error === true ||
-      resp.isError === true ||
-      resp.interrupted === true ||
-      (resp.error != null && resp.error !== '');
-    let exitCode = numericExit;
-    if (exitCode === null && !stderrSha && !failureFlag) {
-      exitCode = 0; // no failure signal of any kind → record success
-    }
+    // SD-LEO-INFRA-SUCCEEDING-POLL-EXEMPTION-001 (removes SD-LEO-INFRA-RCA-AUTOSIGNAL-
+    // FALSE-POSITIVE-001 Control 4's absence-of-failure inference). exit_code is recorded
+    // ONLY from a GENUINE numeric exit code — never inferred from absence-of-failure.
+    // Claude Code's Bash tool_response carries NO numeric exit_code and routes error text
+    // to stdout (stderr empty), so the old `exitCode===null → 0` inference fabricated
+    // success for EVERY non-interrupted Bash call — success OR hard failure — which fed the
+    // succeeding-poll exemption in recordAndCount() a lie and silently nullified the
+    // 3-strikes guard on the dominant same-command blind-retry pattern (0,0,0 not 1,2,3).
+    // Genuine idempotent ticks are already covered without exit-code inference by the
+    // Control 1+2 read-only classifier (structural) and the EXEMPT_PATTERNS allowlist
+    // (explicit), so removing the fabrication does not regress the original 43-false-stuck
+    // read-only case. numericExit is still used verbatim (0 = success, non-zero = failure)
+    // for any future tool that reports a real code. With exit_code no longer fabricated,
+    // stdoutSha (above) is now the PRIMARY usable signal for the vast majority of real Bash
+    // calls on this harness — see the skip condition below, which now also checks stdoutSha.
+    const exitCode = numericExit;
 
     // Skip only when there is STILL no usable signal (e.g. a bare failure flag with no
     // detail) — accumulation/teeth for genuine failures are preserved by NOT exempting.

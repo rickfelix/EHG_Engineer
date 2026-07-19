@@ -83,12 +83,19 @@ describe('L4 — post-tool-rca-outcome.cjs', () => {
     expect(written.stdout_sha).toBe(digestStdoutTail('SD_TYPE_CHANGE_EXPLANATION_REQUIRED: provide a reason'));
   });
 
-  it('TS-5 (Control 4): a SUCCESS payload (no exit_code, no stderr) records exit_code 0', () => {
-    // Claude Code Bash tool_response carries NO exit_code; success was previously skipped.
+  it('TS-5 (SUCCEEDING-POLL-EXEMPTION-001, inverted contract): a SUCCESS payload with NO stdout/stderr content writes NO file and never records exit_code 0', () => {
+    // Claude Code Bash tool_response carries NO exit_code and routes error text to stdout,
+    // so the OLD Control-4 inference fabricated exit_code:0 for success AND hard failure
+    // alike. That fabrication is removed: absence-of-failure stays null and hits the
+    // `exitCode===null && !stderrSha && !stdoutSha` skip, so no last-outcome file is
+    // written and the succeeding-poll exemption can never fire on a fabricated success.
+    // NOTE: stdout is DELIBERATELY empty here too -- a non-empty stdout ('ok', below in
+    // the sibling stdout_sha test) IS captured, via stdoutSha, which is the correct and
+    // intended post-fix behavior, not a regression of this test's intent.
     const payload = JSON.stringify({
       tool_name: 'Bash',
       tool_input: { command: 'node scripts/my-idempotent-tick.js' },
-      tool_response: { stdout: 'ok', stderr: '' },
+      tool_response: { stdout: '', stderr: '' },
     });
     const result = spawnSync('node', [HOOK_PATH], {
       input: payload,
@@ -97,14 +104,10 @@ describe('L4 — post-tool-rca-outcome.cjs', () => {
     });
     expect(result.status).toBe(0);
     const outFile = path.join(tmpDir, `last-outcome-${SESSION_ID}.json`);
-    expect(fs.existsSync(outFile)).toBe(true);
-    const written = JSON.parse(fs.readFileSync(outFile, 'utf8'));
-    expect(written.exit_code).toBe(0);              // success inferred from absence of failure
-    expect(written.stderr_sha).toBe('');
-    expect(written.command_sha).toMatch(/^[0-9a-f]{16}$/); // captured so the poll exemption can scope
+    expect(fs.existsSync(outFile)).toBe(false); // no fabricated success signal
   });
 
-  it('TS-5b (Control 4 — strict/teeth): an interrupted call is NOT recorded as success', () => {
+  it('TS-5b (strict/teeth): an interrupted call is NOT recorded as success', () => {
     const payload = JSON.stringify({
       tool_name: 'Bash',
       tool_input: { command: 'node scripts/hangs.js' },
