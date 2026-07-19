@@ -94,6 +94,29 @@ const { checkQfMoot, cancelMootQf } = require('../lib/fleet/retro-qf-moot-check.
 const { runSteps } = require('../lib/checkin/pipeline.cjs');
 const CHECKIN_STEPS = require('../lib/checkin/steps/index.cjs');
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 3 — warn-only cap tripwire
+// (mirrors scripts/fleet-dashboard.cjs). A read returning EXACTLY the PostgREST cap
+// (1000; canonical constant POSTGREST_MAX_ROWS in lib/db/fetch-all-paginated.mjs — ESM,
+// not require()-able here) is presumed silently truncated. Every other .select in this
+// file is window-bounded by design (.limit(N<=100) with deterministic .order, a small
+// .in() key list, or an .eq-single-row mutation predicate) — see
+// scripts/audit/count-truncation-overrides.json for the per-site ledger. The one
+// genuinely-unbounded read (the fleet-identity used-set seed in
+// assignFleetIdentityAtCheckin) is NOT paginated: the chainable test stubs pinning that
+// helper (worker-checkin-fleet-identity / -callsign-collision-fix / -metadata-race
+// tests) have no .order()/.range() (the same constraint documented at
+// stale-session-sweep.cjs:1015), the live-5-min-heartbeat session set is operationally
+// tiny (~fleet size), and its worst truncation outcome (a duplicate callsign pick) is
+// healed by the 5-min dedupeAssignedCallsigns cron pass by design — so it warns loud
+// and proceeds fail-open instead.
+function warnIfCapTruncated(rows, site) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (list.length === 1000) {
+    console.warn(`⚠️  [count-discipline] ${site}: fetch returned exactly 1000 rows (PostgREST cap) — result may be silently truncated`);
+  }
+  return list;
+}
+
 const ROLL_CALL_TTL_MS = 60 * 60 * 1000;     // availability row lives 1h
 const ROLL_CALL_DEDUP_MS = 5 * 60 * 1000;    // don't re-register within 5m (idempotency)
 // SD-LEO-INFRA-LOOP-RESUME-DELAY-SHORTEN-001: shortened from 1200 (20m) to 600 (10m) so a
@@ -1305,8 +1328,11 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
       .select('session_id, metadata')
       .gte('heartbeat_at', fiveMinAgo)
       .neq('status', 'terminated');
+    // FR-6 batch 3: cap tripwire, not pagination — see warnIfCapTruncated's header for why
+    // (test-stub chain constraint + tiny live set + cron-healed collision worst case).
+    const liveRows = warnIfCapTruncated(live, 'claude_sessions (fleet-identity used-set seed)');
     const usedCallsigns = new Set(), usedColors = new Set();
-    for (const r of (live || [])) {
+    for (const r of liveRows) {
       if (!r || r.session_id === sessionId) continue;
       const id = r.metadata && r.metadata.fleet_identity;
       if (id && id.callsign) usedCallsigns.add(id.callsign);

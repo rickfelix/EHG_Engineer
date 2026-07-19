@@ -128,5 +128,60 @@
   "classification": "bounded-by-design",
   "match": ".select('id, status').in('id', qfAssignTargets)",
   "note": ".in()-bounded lookup — bounded by qfAssignTargets (open WORK_ASSIGNMENT targets)"
+ },
+ "scripts/worker-checkin.cjs:275": {
+  "classification": "bounded-by-design",
+  "match": "'key, value_json'",
+  "note": ".in()-bounded lookup — exactly two enumerated system_settings keys (FLEET_STAND_DOWN, HARD_HALT_STATUS)"
+ },
+ "scripts/worker-checkin.cjs:628": {
+  "classification": "bounded-by-design",
+  "match": "factory_lane, owner, release_condition",
+  "note": ".limit(QF_CANDIDATE_LIMIT=100) with deterministic .order(created_at) — a designed candidate window, not a silent cap (heuristic only sees literal .limit(N))"
+ },
+ "scripts/worker-checkin.cjs:729": {
+  "classification": "bounded-by-design",
+  "match": "'sd_key, priority, metadata'",
+  "note": ".in('sd_key', keys)-bounded — keys come from the merged self-claim candidate pool (~45 max across the 5 bounded windows)"
+ },
+ "scripts/worker-checkin.cjs:787": {
+  "classification": "bounded-by-design",
+  "match": "'sd_key, status, sd_type, priority, created_at, dependencies, metadata, target_application, parent_sd_id'",
+  "note": ".limit(DRAFT_CANDIDATE_LIMIT=10) with deterministic .order(created_at ASC) — the oldest-N draft window is bounded by design (fetchDraftCandidates)"
+ },
+ "scripts/worker-checkin.cjs:821": {
+  "classification": "bounded-by-design",
+  "match": "'sd_key, status, sd_type, priority, created_at, dependencies, metadata, target_application, parent_sd_id'",
+  "note": ".limit(DRAFT_CANDIDATE_LIMIT=10) with deterministic .order(created_at DESC) — the newest-N draft window is bounded by design (fetchNewestDraftCandidates)"
+ },
+ "scripts/worker-checkin.cjs:862": {
+  "classification": "bounded-by-design",
+  "match": "'sd_key, status, sd_type, priority, created_at, dependencies, metadata, target_application, parent_sd_id'",
+  "note": ".limit(DRAFT_CANDIDATE_LIMIT=10) with deterministic .order(priority, created_at) — the fleet_critical window is bounded by design (fetchFleetCriticalCandidates)"
+ },
+ "scripts/worker-checkin.cjs:898": {
+  "classification": "bounded-by-design",
+  "match": "'sd_key, status, sd_type, priority, created_at, dependencies, metadata, target_application, parent_sd_id'",
+  "note": ".limit(DRAFT_CANDIDATE_LIMIT=10) with deterministic .order(created_at) — the ranked-candidates window is bounded by design (fetchRankedCandidates)"
+ },
+ "scripts/worker-checkin.cjs:991": {
+  "classification": "bounded-by-design",
+  "match": "'sd_key, status, current_phase, updated_at'",
+  "note": ".limit(STRANDED_CANDIDATE_LIMIT=5) with deterministic .order(updated_at ASC) — oldest-stranded recovery window, bounded by design (recoverStrandedFinal)"
+ },
+ "scripts/worker-checkin.cjs:1112": {
+  "classification": "bounded-by-design",
+  "match": "'sd_key, sd_type, status, current_phase, metadata, updated_at, target_application, parent_sd_id'",
+  "note": ".limit(ORPHAN_CANDIDATE_LIMIT=5) with deterministic .order(updated_at ASC) — oldest-orphan adoption window, bounded by design (adoptOrphanInProgress)"
+ },
+ "scripts/worker-checkin.cjs:1249": {
+  "classification": "bounded-by-design",
+  "match": ".select('session_id');",
+  "note": "update-returning select, bounded by the mutation predicate (.eq session_id + CAS .is(sd_key,null) — at most one row; healOwnClaimPointer)"
+ },
+ "scripts/worker-checkin.cjs:1328": {
+  "classification": "tripwired",
+  "match": "'session_id, metadata'",
+  "note": "warnIfCapTruncated applied at the destructure site (fleet-identity used-set seed). NOT paginated (FR-6 batch 3): the chainable stubs in worker-checkin-fleet-identity/-callsign-collision-fix/-metadata-race tests have no .order()/.range() (same constraint as stale-session-sweep.cjs:1015); the live-5-min-heartbeat set is operationally tiny, and a truncated used-set's worst case (duplicate callsign pick) is healed by the 5-min dedupeAssignedCallsigns cron pass by design"
  }
 }
