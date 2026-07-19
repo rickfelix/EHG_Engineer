@@ -1,42 +1,52 @@
 {
  "scripts/fleet-dashboard.cjs:157": {
   "classification": "tripwired",
+  "match": "sd_title, heartbeat_age_seconds",
   "note": "warnIfCapTruncated applied at the destructure site (sessions) — display policy: warn, not crash"
  },
  "scripts/fleet-dashboard.cjs:164": {
   "classification": "tripwired",
+  "match": "computed_status, metadata, tty",
   "note": "warnIfCapTruncated applied at the destructure site (allSessions)"
  },
  "scripts/fleet-dashboard.cjs:188": {
-  "classification": "bounded-by-design",
-  "note": "pending+unexpired worker_spawn_requests — operationally tiny set with expiry window"
+  "classification": "tripwired",
+  "match": "is_virtual, parent_session_id, agent_slot",
+  "note": "warnIfCapTruncated applied at the destructure site (drainAgents)"
  },
  "scripts/fleet-dashboard.cjs:200": {
-  "classification": "tripwired",
-  "note": "warnIfCapTruncated applied at the destructure site (drainAgents)"
+  "classification": "bounded-by-design",
+  "match": "requested_callsign",
+  "note": "pending+unexpired worker_spawn_requests — operationally tiny set with expiry window"
  },
  "scripts/fleet-dashboard.cjs:272": {
   "classification": "bounded-by-design",
+  "match": "current_tool_expected_end_at",
   "note": ".in(ids) — bounded by the live session-id list length"
  },
  "scripts/fleet-dashboard.cjs:343": {
   "classification": "bounded-by-design",
+  "match": "progress_percentage, completion_date, current_ph",
   "note": ".in(missingKeys) — bounded by claimed-SD key list"
  },
  "scripts/fleet-dashboard.cjs:353": {
   "classification": "bounded-by-design",
+  "match": "title, description, scope",
   "note": ".in(pendingKeys) — bounded by pending-claim key list"
  },
  "scripts/fleet-dashboard.cjs:392": {
   "classification": "tripwired",
+  "match": "claiming_session_id, created_at, owner, release_cond",
   "note": "warnIfCapTruncated applied at the quickFixes filter site"
  },
  "scripts/fleet-dashboard.cjs:850": {
   "classification": "bounded-by-design",
+  "match": "process_key, display_name",
   "note": "periodic-process liveness registry — small enumerated registry table"
  },
- "scripts/fleet-dashboard.cjs:1509": {
+ "scripts/fleet-dashboard.cjs:1512": {
   "classification": "tripwired",
+  "match": "sd_key, title, status, metadata",
   "note": "warnIfCapTruncated applied before the empty-check (review-held SDs)"
  }
 }

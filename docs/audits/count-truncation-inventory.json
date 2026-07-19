@@ -3,10 +3,10 @@
  "generated_by": "scripts/audit/count-truncation-inventory.mjs",
  "total_sites": 9166,
  "by_classification": {
-  "bounded-by-design": 5773,
-  "needs-review": 3087,
-  "already-exact": 270,
-  "paginated": 31,
+  "bounded-by-design": 5764,
+  "needs-review": 3098,
+  "already-exact": 269,
+  "paginated": 30,
   "tripwired": 5
  },
  "ledger_sites": [
@@ -26,7 +26,17 @@
    "auto_classification": "needs-review"
   },
   {
+   "site": "lib/adam/briefings/harness.js:274",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
    "site": "lib/adam/briefings/platform.js:41",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "lib/adam/briefings/platform.js:47",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -37,6 +47,11 @@
   },
   {
    "site": "lib/adam/briefings/venture.js:71",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "lib/adam/briefings/venture.js:79",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -2351,6 +2366,11 @@
    "auto_classification": "needs-review"
   },
   {
+   "site": "lib/eva/stage-zero/profile-service.js:431",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
    "site": "lib/eva/stage-zero/strategy-loader.js:22",
    "classification": "needs-review",
    "auto_classification": "needs-review"
@@ -4216,6 +4236,11 @@
    "auto_classification": "needs-review"
   },
   {
+   "site": "lib/support/intake-pipeline.js:189",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
    "site": "lib/support/intake-pipeline.js:274",
    "classification": "needs-review",
    "auto_classification": "needs-review"
@@ -4577,6 +4602,11 @@
   },
   {
    "site": "scripts/_deprecated/unified-handoff-system.js:2251",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "scripts/_deprecated/unified-handoff-system.js:377",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -7701,6 +7731,11 @@
    "auto_classification": "needs-review"
   },
   {
+   "site": "scripts/archive/one-time/learning-maintenance.mjs:447",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
    "site": "scripts/archive/one-time/learning-maintenance.mjs:475",
    "classification": "needs-review",
    "auto_classification": "needs-review"
@@ -9736,6 +9771,11 @@
    "auto_classification": "needs-review"
   },
   {
+   "site": "scripts/backfill-null-phase-evidence.mjs:84",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
    "site": "scripts/backfill-pattern-subagents.js:55",
    "classification": "needs-review",
    "auto_classification": "needs-review"
@@ -10326,6 +10366,11 @@
    "auto_classification": "needs-review"
   },
   {
+   "site": "scripts/cron/chairman-morning-review-sweep.mjs:117",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
    "site": "scripts/cron/chairman-morning-review-sweep.mjs:129",
    "classification": "needs-review",
    "auto_classification": "needs-review"
@@ -10537,6 +10582,11 @@
   },
   {
    "site": "scripts/eva-intake-refine.js:129",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "scripts/eva/activate-rubric-v2.mjs:49",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -11091,7 +11141,7 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:1509",
+   "site": "scripts/fleet-dashboard.cjs:1512",
    "classification": "tripwired",
    "auto_classification": "needs-review",
    "exemption_note": "warnIfCapTruncated applied before the empty-check (review-held SDs)"
@@ -11110,15 +11160,15 @@
   },
   {
    "site": "scripts/fleet-dashboard.cjs:188",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": "pending+unexpired worker_spawn_requests — operationally tiny set with expiry window"
-  },
-  {
-   "site": "scripts/fleet-dashboard.cjs:200",
    "classification": "tripwired",
    "auto_classification": "needs-review",
    "exemption_note": "warnIfCapTruncated applied at the destructure site (drainAgents)"
+  },
+  {
+   "site": "scripts/fleet-dashboard.cjs:200",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "pending+unexpired worker_spawn_requests — operationally tiny set with expiry window"
   },
   {
    "site": "scripts/fleet-dashboard.cjs:272",
@@ -15012,6 +15062,11 @@
   },
   {
    "site": "scripts/sourcing-engine/proactive-populator.mjs:37",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "scripts/sourcing-engine/proactive-populator.mjs:47",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },

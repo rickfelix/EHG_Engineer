@@ -1080,7 +1080,8 @@ async function printForecast(d) {
       .from('strategic_directives_v2')
       .select('sd_key, title, status, priority, current_phase, progress_percentage, dependencies')
       .in('status', ['draft', 'in_progress', 'ready', 'planning', 'pending_approval'])
-      .order('priority', { ascending: true }));
+      .order('priority', { ascending: true })
+      .order('sd_key', { ascending: true })); // unique tiebreaker: stable page boundaries
   } catch { allPending = []; } // fail-open to the prior data-null behavior
 
   const pending = allPending || [];
@@ -1182,7 +1183,8 @@ async function printPredictions(d) {
       .from('strategic_directives_v2')
       .select('sd_key, title, dependencies, status')
       .in('status', ['draft', 'in_progress', 'ready', 'planning'])
-      .not('dependencies', 'is', null));
+      .not('dependencies', 'is', null)
+      .order('sd_key', { ascending: true })); // unique order: stable page boundaries
   } catch { allBlockedRaw = []; }
 
   const blocked = (allBlockedRaw || []).filter(sd => {
@@ -1344,7 +1346,8 @@ async function printInbox() {
       .eq('target_session', coordinatorId)
       .not('payload->>signal_type', 'is', null)
       .is('acknowledged_at', null)
-      .gte('created_at', signalSince));
+      .gte('created_at', signalSince)
+      .order('id', { ascending: true })); // unique order: stable page boundaries
   } catch (e) { countError = e; }
 
   // SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 (closure map class C6): a reply to a worker
@@ -1828,7 +1831,9 @@ async function printSolomonLedgerRollup() {
     // claiming a 5000-row sample. Paginate up to the declared 5000-row sampling cap.
     rows = await fapPaginate(() => supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
-      .select('decision, outcome, cost_tokens, created_at'), { maxRows: 5000 });
+      .select('decision, outcome, cost_tokens, created_at')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true }), { maxRows: 5000 }); // most-recent 5000, stable boundaries
   } catch (e) {
     console.log('  (ledger query failed: ' + (e && e.message ? e.message : e) + ')');
     console.log('');
