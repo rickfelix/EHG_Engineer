@@ -3,6 +3,10 @@
  * Part of SD-LEO-REFACTOR-SD-NEXT-001
  */
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 4: unbounded child reads
+// paginate to completion (a capped read would misroute the unblock recommendation).
+import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
+
 /**
  * Parse dependencies from various formats
  *
@@ -378,11 +382,15 @@ export async function resolveMetadataBlocker(supabase, blockerSdKey) {
   // QF-20260703-999 (drive-by): strategic_directives_v2 has no `track` column (schema-reference-lint
   // caught it live — this select would throw whenever a blocker actually had children); `track` was
   // never read from the result, so dropping it is a pure dead-column removal, no behavior change.
-  const { data: children } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, sequence_rank, sd_type, is_active, governance_metadata, metadata')
-    .eq('parent_sd_id', blockerSD.id)
-    .eq('is_active', true);
+  let children = null;
+  try {
+    children = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, sequence_rank, sd_type, is_active, governance_metadata, metadata')
+      .eq('parent_sd_id', blockerSD.id)
+      .eq('is_active', true)
+      .order('id'));
+  } catch { /* prior policy: read failure => children null => leaf-SD path below */ }
 
   if (!children || children.length === 0) {
     // Leaf SD — the blocker itself is the unblock target

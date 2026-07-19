@@ -9,6 +9,11 @@ import { checkDependenciesResolved, checkMetadataDependency, resolveMetadataBloc
 import { getEstimatedDuration, formatEstimateShort } from '../../../lib/duration-estimator.js';
 import { analyzeClaimRelationship, hasActiveWorkEvidence } from '../claim-analysis.js';
 import { formatClaimedWork } from './claim-formatters.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 4: orchestrator-children reads
+// drive which SD gets recommended for claiming — paginate so a capped read cannot hide
+// unclaimed children from the whole fleet. Prior error policy (null => not-an-orchestrator
+// path) preserved via try/catch.
+import { fetchAllPaginated } from '../../../../lib/db/fetch-all-paginated.mjs';
 
 /**
  * Display recommendations section and return structured action data.
@@ -47,11 +52,15 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
     // Check if the top SD is an orchestrator — if so, show its unclaimed children instead
     const topSD = readySDs[0];
     const topSdId = topSD.sd_key || topSD.id;
-    const { data: orchChildren } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, current_phase, claiming_session_id, priority')
-      .eq('parent_sd_id', topSdId)
-      .in('status', ['draft', 'active', 'in_progress']);
+    let orchChildren = null;
+    try {
+      orchChildren = await fetchAllPaginated(() => supabase
+        .from('strategic_directives_v2')
+        .select('id, sd_key, title, status, current_phase, claiming_session_id, priority')
+        .eq('parent_sd_id', topSdId)
+        .in('status', ['draft', 'active', 'in_progress'])
+        .order('id'));
+    } catch { /* prior policy: read failure => treated as non-orchestrator below */ }
 
     if (orchChildren && orchChildren.length > 0) {
       // This is an orchestrator — show unclaimed children as individual START candidates
@@ -122,11 +131,15 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
     const sdId = sd.sd_key || sd.id;
 
     // If top SD is an orchestrator, return first unclaimed child as the action target
-    const { data: actionChildren } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, sd_key, claiming_session_id, status')
-      .eq('parent_sd_id', sdId)
-      .in('status', ['draft', 'active', 'in_progress']);
+    let actionChildren = null;
+    try {
+      actionChildren = await fetchAllPaginated(() => supabase
+        .from('strategic_directives_v2')
+        .select('id, sd_key, claiming_session_id, status')
+        .eq('parent_sd_id', sdId)
+        .in('status', ['draft', 'active', 'in_progress'])
+        .order('id'));
+    } catch { /* prior policy: read failure => fall through to plain start action */ }
 
     if (actionChildren && actionChildren.length > 0) {
       const unclaimed = actionChildren.filter(c => !c.claiming_session_id);

@@ -131,6 +131,9 @@ describe('worker-facing loaders exclude fixtures (TS-3, TS-4)', () => {
       eq() { return chain; },
       order() { return chain; },
       limit() { return Promise.resolve({ data: rows, error: null }); },
+      // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 4: loadSDHierarchy now
+      // range-paginates (fetchAllPaginated); a short first page ends the loop.
+      range() { return Promise.resolve({ data: rows, error: null }); },
     };
     return { from() { return chain; } };
   }

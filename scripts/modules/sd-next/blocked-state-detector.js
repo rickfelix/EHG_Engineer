@@ -8,6 +8,12 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 4: blocked-state classification
+// processes every row it reads — a read silently capped at the PostgREST 1000-row max
+// would misclassify children as unblocked (missing handoff/gate evidence) or miss
+// children entirely. Unbounded reads paginate to completion; each site keeps its
+// pre-existing error policy via try/catch.
+import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -60,13 +66,15 @@ export async function detectAllBlockedState(orchestratorId, supabase = null) {
   }
 
   // Get all children of this orchestrator
-  const { data: children, error: childError } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, title, status, current_phase, metadata, dependencies')
-    .eq('parent_sd_id', orchestratorId)
-    .eq('is_active', true);
-
-  if (childError) {
+  let children;
+  try {
+    children = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('id, title, status, current_phase, metadata, dependencies')
+      .eq('parent_sd_id', orchestratorId)
+      .eq('is_active', true)
+      .order('id'));
+  } catch (childError) {
     return { ...result, error: `Failed to load children: ${childError.message}` };
   }
 
@@ -136,15 +144,21 @@ async function batchLoadBlockerData(supabase, childIds) {
 
   if (childIds.length === 0) return { handoffsByChild, gateFailuresByChild };
 
-  // Batch query: all blocked handoffs for these children
-  const { data: handoffs } = await supabase
-    .from('sd_phase_handoffs')
-    .select('sd_id, handoff_type, status, context')
-    .in('sd_id', childIds)
-    .eq('status', 'blocked')
-    .order('created_at', { ascending: false });
+  // Batch query: all blocked handoffs for these children. Paginated — the .in() bounds
+  // the child set, NOT the handoff-row count; a capped read could drop a child's only
+  // blocked-handoff evidence. Prior error policy (ignore, proceed without evidence) kept.
+  let handoffs = [];
+  try {
+    handoffs = await fetchAllPaginated(() => supabase
+      .from('sd_phase_handoffs')
+      .select('sd_id, handoff_type, status, context')
+      .in('sd_id', childIds)
+      .eq('status', 'blocked')
+      .order('created_at', { ascending: false })
+      .order('id'));
+  } catch { /* prior policy: missing evidence => child not marked handoff-blocked */ }
 
-  if (handoffs) {
+  {
     for (const h of handoffs) {
       if (!handoffsByChild.has(h.sd_id)) {
         handoffsByChild.set(h.sd_id, h); // Keep only the most recent per child
@@ -152,15 +166,19 @@ async function batchLoadBlockerData(supabase, childIds) {
     }
   }
 
-  // Batch query: all failed gates for these children
-  const { data: failures } = await supabase
-    .from('sd_gate_results')
-    .select('sd_id, gate_name, result, details')
-    .in('sd_id', childIds)
-    .eq('result', 'failed')
-    .order('created_at', { ascending: false });
+  // Batch query: all failed gates for these children (same pagination rationale).
+  let failures = [];
+  try {
+    failures = await fetchAllPaginated(() => supabase
+      .from('sd_gate_results')
+      .select('sd_id, gate_name, result, details')
+      .in('sd_id', childIds)
+      .eq('result', 'failed')
+      .order('created_at', { ascending: false })
+      .order('id'));
+  } catch { /* prior policy: missing evidence => child not marked gate-blocked */ }
 
-  if (failures) {
+  {
     for (const f of failures) {
       if (!gateFailuresByChild.has(f.sd_id)) {
         gateFailuresByChild.set(f.sd_id, []);

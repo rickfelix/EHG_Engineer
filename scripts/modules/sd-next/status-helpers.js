@@ -8,6 +8,12 @@
 
 import { colors } from './colors.js';
 import { computeGateState } from '../../../lib/cadence/pre-claim-gate.mjs';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 4: exact-cap tripwire. The
+// ghost-completed read is NOT paginated because the hermetic mock in
+// tests/unit/sd-next-ghost-badge.test.js terminates the builder chain at .eq() (no
+// .order()/.range()) and the error-code branches below are pinned by that suite; the
+// tripwire throw lands in the existing catch (warn once, badges disabled — fail-open).
+import { assertNotCapTruncated } from '../../../lib/db/fetch-all-paginated.mjs';
 
 // SD-FDBK-INFRA-ATOMIC-REVERT-HELPER-001: ghost-completed detection state.
 // Module-load-time guard so we warn at most once per process when the
@@ -63,6 +69,10 @@ export async function getInconsistentSDIds(supabase) {
       _inconsistentIdsCache = new Set();
       return _inconsistentIdsCache;
     }
+    // Count-discipline tripwire: exactly-cap result is presumed truncated — throws into
+    // the catch below (single console.warn, badges disabled) rather than silently
+    // rendering an incomplete STATUS_INCONSISTENT set.
+    assertNotCapTruncated(data, { site: 'status-helpers.getInconsistentSDIds v_sd_completion_integrity' });
     _inconsistentIdsCache = new Set((data || []).map(r => r.id));
     return _inconsistentIdsCache;
   } catch (e) {

@@ -183,5 +183,95 @@
   "classification": "tripwired",
   "match": "'session_id, metadata'",
   "note": "warnIfCapTruncated applied at the destructure site (fleet-identity used-set seed). NOT paginated (FR-6 batch 3): the chainable stubs in worker-checkin-fleet-identity/-callsign-collision-fix/-metadata-race tests have no .order()/.range() (same constraint as stale-session-sweep.cjs:1015); the live-5-min-heartbeat set is operationally tiny, and a truncated used-set's worst case (duplicate callsign pick) is healed by the 5-min dedupeAssignedCallsigns cron pass by design"
+ },
+ "scripts/claude-gen/data-fetchers.js:181": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "getHotPatterns — caller-bounded .limit(limit), default 5 (top-N hot patterns for generated docs)"
+ },
+ "scripts/claude-gen/data-fetchers.js:204": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "getRecentRetrospectives — caller-bounded .limit(limit), default 5 (top-N recent retros)"
+ },
+ "scripts/claude-gen/data-fetchers.js:259": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "getPendingProposals — caller-bounded .limit(limit), default 5 (top-N pending proposals)"
+ },
+ "scripts/modules/sd-next/data-loaders.js:311": {
+  "classification": "tripwired",
+  "match": ".select('*')",
+  "note": "NOT paginated: v_okr_scorecard has no unique id tiebreak column and the okr-canonical-vision-repoint mock ends the chain at .order(); warnIfCapTruncated applied at the destructure (cardinality = # objectives, tiny)"
+ },
+ "scripts/modules/sd-next/data-loaders.js:328": {
+  "classification": "tripwired",
+  "match": "current_value, target_value",
+  "note": "NOT paginated: per-objective key_results are tiny; same mock constraint as the scorecard read; warnIfCapTruncated applied at assignment"
+ },
+ "scripts/modules/sd-next/data-loaders.js:358": {
+  "classification": "tripwired",
+  "match": "sd_id, total_score, scored_at",
+  "note": "NOT paginated: vision-portfolio-scorecard.test.js mock resolves the chain at .order() (no .range()); declared .limit(5000) sample is server-clamped to 1000 — warnIfCapTruncated fires at that signature"
+ },
+ "scripts/modules/sd-next/data-loaders.js:661": {
+  "classification": "bounded-by-design",
+  "match": "sd_key, id, status, is_active",
+  "note": "countActionableBaselineItems — .or(sd_key.in/id.in) lookup with .limit(sdIds.length*2), bounded by the baseline-item id list"
+ },
+ "scripts/modules/sd-next/data-loaders.js:764": {
+  "classification": "tripwired",
+  "match": "id, title, created_at, metadata",
+  "note": "NOT paginated: harness-backlog-parser.test.js stub resolves the chain at .order() (no .range()); warnIfCapTruncated applied after the error-check"
+ },
+ "scripts/modules/sd-next/dependency-resolver.js:80": {
+  "classification": "bounded-by-design",
+  "match": "sd_key, id, status, completion_date",
+  "note": "checkDependenciesResolved — .or(sd_key.in/id.in) lookup with .limit(depKeys.length*2), bounded by the parsed dependency list"
+ },
+ "scripts/modules/sd-next/dependency-resolver.js:126": {
+  "classification": "bounded-by-design",
+  "match": "sd_key, id, status, title",
+  "note": "getUnresolvedDependencies — .or(sd_key.in/id.in) lookup with .limit(depKeys.length*2), bounded by the parsed dependency list"
+ },
+ "scripts/modules/sd-next/display/fallback-queue.js:76": {
+  "classification": "bounded-by-design",
+  "match": "key_results!inner(id, status)",
+  "note": ".in(sdUUIDs) where the parent SD read caps at .limit(15) — at most 15 SDs x a handful of KR alignments each"
+ },
+ "scripts/modules/sd-next/SDNextSelector.js:363": {
+  "classification": "bounded-by-design",
+  "match": "session_id, expected_silence_until",
+  "note": ".in(sessionIds) — one claude_sessions row per active-session id (list from getActiveSessions)"
+ },
+ "scripts/modules/sd-next/SDNextSelector.js:842": {
+  "classification": "bounded-by-design",
+  "match": "id, growth_strategy",
+  "note": ".in(ventureIds) — one ventures row per distinct venture_id on the filtered SD list"
+ },
+ "scripts/modules/sd-next/status-helpers.js:46": {
+  "classification": "tripwired",
+  "match": ".select('id')",
+  "note": "NOT paginated (FR-6 batch 4): sd-next-ghost-badge.test.js stubs the chain terminal at .eq() (no .range()) and pins the error-code branches; assertNotCapTruncated applied before Set build — throw lands in the existing warn-once catch (badges disabled, fail-open)"
+ },
+ "scripts/modules/claude-md-generator/db-queries.js:203": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "getHotPatterns — caller-bounded .limit(limit), default 5 (top-N hot patterns)"
+ },
+ "scripts/modules/claude-md-generator/db-queries.js:270": {
+  "classification": "bounded-by-design",
+  "match": "what_needs_improvement, action_items",
+  "note": "getRecentRetrospectives — caller-bounded .limit(limit), default 5"
+ },
+ "scripts/modules/claude-md-generator/db-queries.js:347": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "getPendingProposals — caller-bounded .limit(limit), default 5"
+ },
+ "scripts/modules/claude-md-generator/db-queries.js:399": {
+  "classification": "bounded-by-design",
+  "match": "pattern_id, issue_summary",
+  "note": "getVisionGapInsights — caller-bounded .limit(limit), default 3 (top-N VGAP patterns)"
  }
 }

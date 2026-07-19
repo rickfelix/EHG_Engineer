@@ -5,6 +5,12 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 4: these fetchers feed
+// CLAUDE.md generation — a read silently capped at the PostgREST 1000-row max would
+// TRUNCATE the generated protocol files with no error. Unbounded reads paginate to
+// completion (unique-key tiebreaker keeps page boundaries stable); each site keeps
+// its pre-existing fail-open policy (warn + empty) via try/catch.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -41,56 +47,83 @@ export async function getActiveProtocol() {
  * Get agents configuration
  */
 export async function getAgents() {
-  const { data, error } = await supabase.from('leo_agents').select('*').eq('is_active', true);
-  if (error) console.warn(`⚠️ Agents: ${error.message}`);
-  return data || [];
+  try {
+    return await fetchAllPaginated(() => supabase
+      .from('leo_agents')
+      .select('*')
+      .eq('is_active', true)
+      .order('id'));
+  } catch (error) {
+    console.warn(`⚠️ Agents: ${error.message}`);
+    return [];
+  }
 }
 
 /**
  * Get sub-agents with trigger keywords
  */
 export async function getSubAgents() {
-  const { data, error } = await supabase
-    .from('leo_sub_agents')
-    .select('*')
-    // QF-20260529-822: live column is `active` (not `is_active`); is_active silently
-    // warned + returned [], dropping every sub-agent from the generated CLAUDE.md.
-    .eq('active', true)
-    .order('code');
-
-  if (error) console.warn(`⚠️ Sub-agents: ${error.message}`);
-  return data || [];
+  try {
+    return await fetchAllPaginated(() => supabase
+      .from('leo_sub_agents')
+      .select('*')
+      // QF-20260529-822: live column is `active` (not `is_active`); the wrong column
+      // silently warned + returned [], dropping every sub-agent from generated CLAUDE.md.
+      .eq('active', true)
+      .order('code')
+      .order('id'));
+  } catch (error) {
+    console.warn(`⚠️ Sub-agents: ${error.message}`);
+    return [];
+  }
 }
 
 /**
  * Get handoff templates
  */
 export async function getHandoffTemplates() {
-  const { data, error } = await supabase.from('sd_phase_handoff_templates').select('*').order('created_at');
-  if (error) console.warn(`⚠️ Handoff templates: ${error.message}`);
-  return data || [];
+  try {
+    return await fetchAllPaginated(() => supabase
+      .from('sd_phase_handoff_templates')
+      .select('*')
+      .order('created_at')
+      .order('id'));
+  } catch (error) {
+    console.warn(`⚠️ Handoff templates: ${error.message}`);
+    return [];
+  }
 }
 
 /**
  * Get validation rules
  */
 export async function getValidationRules() {
-  const { data, error } = await supabase.from('leo_validation_rules').select('*').eq('active', true).order('gate');
-  if (error) console.warn(`⚠️ Validation rules: ${error.message}`);
-  return data || [];
+  try {
+    return await fetchAllPaginated(() => supabase
+      .from('leo_validation_rules')
+      .select('*')
+      .eq('active', true)
+      .order('gate')
+      .order('id'));
+  } catch (error) {
+    console.warn(`⚠️ Validation rules: ${error.message}`);
+    return [];
+  }
 }
 
 /**
  * Get schema constraints
  */
 export async function getSchemaConstraints() {
-  const { data: constraints, error } = await supabase
-    .from('schema_validation_rules')
-    .select('*')
-    .eq('is_active', true)
-    .order('table_name, column_name');
-
-  if (error) {
+  let constraints = [];
+  try {
+    constraints = await fetchAllPaginated(() => supabase
+      .from('schema_validation_rules')
+      .select('*')
+      .eq('is_active', true)
+      .order('table_name, column_name')
+      .order('id'));
+  } catch (error) {
     console.warn(`⚠️ Schema constraints: ${error.message}`);
     return [];
   }
@@ -112,13 +145,15 @@ export async function getSchemaConstraints() {
  * Get process scripts
  */
 export async function getProcessScripts() {
-  const { data: scripts, error } = await supabase
-    .from('leo_process_scripts')
-    .select('*')
-    .eq('is_active', true)
-    .order('category, script_name');
-
-  if (error) {
+  let scripts = [];
+  try {
+    scripts = await fetchAllPaginated(() => supabase
+      .from('leo_process_scripts')
+      .select('*')
+      .eq('is_active', true)
+      .order('category, script_name')
+      .order('id'));
+  } catch (error) {
     console.warn(`⚠️ Process scripts: ${error.message}`);
     return [];
   }
@@ -183,12 +218,11 @@ export async function getRecentRetrospectives(days = 30, limit = 5) {
  */
 export async function getGateHealth() {
   try {
-    const { data: handoffs, error } = await supabase
+    const handoffs = await fetchAllPaginated(() => supabase
       .from('sd_phase_handoffs')
       .select('handoff_type, status, quality_score, created_at')
-      .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
-
-    if (error) return null;
+      .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+      .order('id'));
 
     const gateMetrics = {};
     for (const h of handoffs || []) {
@@ -240,15 +274,13 @@ export async function getPendingProposals(limit = 5) {
  */
 export async function getAutonomousDirectives() {
   try {
-    const { data, error } = await supabase
+    return await fetchAllPaginated(() => supabase
       .from('leo_autonomous_directives')
       .select('*')
       .eq('is_active', true)
       .order('priority', { ascending: false })
-      .order('phase');
-
-    if (error) return [];
-    return data || [];
+      .order('phase')
+      .order('id'));
   } catch {
     return [];
   }
