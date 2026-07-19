@@ -9,6 +9,7 @@ import {
   defaultFetchMergedPlatformPRs,
   classifyMerges,
   detectUnwitnessedMerges,
+  fetchAllWitnessRows,
   computeAdoptionReadiness,
   isInvalidated,
 } from '../../../lib/ship/witness-adoption.mjs';
@@ -237,5 +238,40 @@ describe('computeAdoptionReadiness', () => {
     const readiness = computeAdoptionReadiness({ merges, telemetryRows, today: '2026-07-03', requiredConsecutiveDays: 7 });
     expect(readiness.ready).toBe(false);
     expect(readiness.consecutiveDays).toBeLessThan(7);
+  });
+});
+
+describe('fetchAllWitnessRows pagination (QF-20260719-201)', () => {
+  function mockSupabase(pages) {
+    const rangeCalls = [];
+    const chain = {
+      from: () => chain,
+      select: () => chain,
+      order: () => chain,
+      range: async (from, to) => {
+        rangeCalls.push([from, to]);
+        return { data: pages.shift() || [], error: null };
+      },
+    };
+    return { chain, rangeCalls };
+  }
+
+  it('walks past the 1000-row PostgREST default (the 2026-07-19 ~13:04Z blindness)', async () => {
+    const page1 = Array.from({ length: 1000 }, (_, i) => ({ repo: 'rickfelix/ehg_engineer', pr_number: i }));
+    const page2 = Array.from({ length: 11 }, (_, i) => ({ repo: 'rickfelix/ehg_engineer', pr_number: 6277 + i }));
+    const { chain, rangeCalls } = mockSupabase([page1, page2]);
+    const rows = await fetchAllWitnessRows(chain);
+    expect(rows.length).toBe(1011);
+    expect(rangeCalls).toEqual([[0, 999], [1000, 1999]]);
+    // The newest PRs — invisible to the old bare select — are now in the result set.
+    expect(rows.some((r) => r.pr_number === 6282)).toBe(true);
+  });
+
+  it('stops after a single short page and surfaces DB errors', async () => {
+    const { chain, rangeCalls } = mockSupabase([[{ repo: 'r/x', pr_number: 1 }]]);
+    expect((await fetchAllWitnessRows(chain)).length).toBe(1);
+    expect(rangeCalls.length).toBe(1);
+    const err = { from: () => err, select: () => err, order: () => err, range: async () => ({ data: null, error: { message: 'boom' } }) };
+    await expect(fetchAllWitnessRows(err)).rejects.toThrow(/boom/);
   });
 });

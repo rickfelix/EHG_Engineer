@@ -30,6 +30,7 @@ import {
   WITNESS_CUTOVER_ISO,
   defaultFetchMergedPlatformPRs,
   detectUnwitnessedMerges,
+  fetchAllWitnessRows,
 } from '../lib/ship/witness-adoption.mjs';
 import { reconcileUnwitnessedMerges } from './ship-witness-reconcile.mjs';
 import { spawnSync } from 'node:child_process';
@@ -211,8 +212,8 @@ function buildDetectorResolvers(supabase) {
         return { code: r.status ?? 1, stdout: r.stdout || '', stderr: r.stderr || '' };
       };
       const merges = PLATFORM_REPOS.flatMap((r) => defaultFetchMergedPlatformPRs(r.owner, r.name, WITNESS_CUTOVER_ISO, ghRunner));
-      const { data: telemetryRows, error } = await supabase.from('merge_witness_telemetry').select('repo, pr_number');
-      if (error) throw new Error('merge_witness_telemetry query failed: ' + error.message);
+      // QF-20260719-201: paginated read — the bare select truncated at PostgREST's 1000-row default.
+      const telemetryRows = await fetchAllWitnessRows(supabase);
       const result = detectUnwitnessedMerges(merges, telemetryRows);
       // SD-LEO-INFRA-SHIP-WITNESS-COVERAGE-001 FR-1: best-effort backfill each gap this pass
       // finds, reusing the SAME merges/telemetryRows fetch above (no duplicate gh/DB round-trip).

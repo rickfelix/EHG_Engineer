@@ -17,6 +17,7 @@ import {
   WITNESS_CUTOVER_ISO,
   defaultFetchMergedPlatformPRs,
   computeAdoptionReadiness,
+  fetchAllWitnessRows,
 } from '../lib/ship/witness-adoption.mjs';
 
 const JSON_MODE = process.argv.includes('--json');
@@ -38,8 +39,8 @@ function ghRunner(args) {
 export async function computeLiveReadiness(supabase, { fetchMerges } = {}) {
   const fetch = fetchMerges || ((owner, name) => defaultFetchMergedPlatformPRs(owner, name, WITNESS_CUTOVER_ISO, ghRunner));
   const merges = PLATFORM_REPOS.flatMap((r) => fetch(r.owner, r.name));
-  const { data: telemetryRows, error } = await supabase.from('merge_witness_telemetry').select('repo, pr_number');
-  if (error) throw new Error('merge_witness_telemetry query failed: ' + error.message);
+  // QF-20260719-201: paginated read — the bare select truncated at PostgREST's 1000-row default.
+  const telemetryRows = await fetchAllWitnessRows(supabase);
   return computeAdoptionReadiness({ merges, telemetryRows });
 }
 
