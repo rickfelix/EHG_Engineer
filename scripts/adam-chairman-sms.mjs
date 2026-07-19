@@ -1,12 +1,7 @@
-// adam-chairman-sms.mjs — QF-20260719-343
-//
-// Chairman-directed 2026-07-19 (contract c3/c4, leo_protocol_sections id=601): the routine
-// heartbeat and the daily 6:00 AM morning brief both go to the chairman by SMS via the sole
-// sanctioned chairman-SMS path (lib/comms/adam-outbound/chairman-sms-gate). Caller composes
-// the body; this script never fabricates content. Quiet hours (22:00-06:00 ET) and rate caps
-// are enforced INSIDE sendChairmanSMS's rubric gate — this script does not re-derive them.
-//
-// Fail-soft; --dry-run prints only.
+// adam-chairman-sms.mjs — QF-20260719-343 (contract c3/c4, leo_protocol_sections id=601):
+// sends the hourly heartbeat + daily 6AM morning brief to the chairman via the sole sanctioned
+// chairman-SMS path. Caller composes the body; quiet hours/rate caps are enforced inside
+// sendChairmanSMS's rubric gate. Fail-soft; --dry-run prints only.
 import 'dotenv/config';
 import { enforceCliSendGuard } from '../lib/notifications/cli-send-guard.mjs';
 import { sendChairmanSMS } from '../lib/comms/adam-outbound/chairman-sms-gate/index.js';
