@@ -13,7 +13,9 @@ import { computeLiveReadiness } from '../../../scripts/ship-witness-enforce-read
 describe('computeLiveReadiness (TS-10): no caching/memoization between invocations', () => {
   it('calls the merge-fetch function fresh on every invocation — no memoized result reused', async () => {
     const fetchMerges = vi.fn((owner, name) => [{ repo: `${owner}/${name}`.toLowerCase(), prNumber: 1, mergedAt: '2026-07-04T00:00:00Z' }]);
-    const supabase = { from: () => ({ select: async () => ({ data: [{ repo: 'rickfelix/ehg_engineer', pr_number: 1 }], error: null }) }) };
+    // QF-20260719-201: reads now go through fetchAllWitnessRows (.select().order().range()).
+    const page = async () => ({ data: [{ repo: 'rickfelix/ehg_engineer', pr_number: 1 }], error: null });
+    const supabase = { from: () => ({ select: () => ({ order: () => ({ range: page }) }) }) };
 
     await computeLiveReadiness(supabase, { fetchMerges });
     await computeLiveReadiness(supabase, { fetchMerges });
@@ -24,7 +26,8 @@ describe('computeLiveReadiness (TS-10): no caching/memoization between invocatio
   });
 
   it('calls the merge_witness_telemetry select fresh on every invocation', async () => {
-    const select = vi.fn(async () => ({ data: [], error: null }));
+    // QF-20260719-201: count paginated reads at the select choke (one page per invocation).
+    const select = vi.fn(() => ({ order: () => ({ range: async () => ({ data: [], error: null }) }) }));
     const supabase = { from: () => ({ select }) };
     const fetchMerges = () => [];
 
@@ -42,7 +45,7 @@ describe('computeLiveReadiness (TS-10): no caching/memoization between invocatio
       if (callCount > 2) return [{ repo: `${owner}/${name}`.toLowerCase(), prNumber: 99, mergedAt: '2026-07-04T12:00:00Z' }];
       return [];
     };
-    const supabase = { from: () => ({ select: async () => ({ data: [], error: null }) }) };
+    const supabase = { from: () => ({ select: () => ({ order: () => ({ range: async () => ({ data: [], error: null }) }) }) }) };
 
     const first = await computeLiveReadiness(supabase, { fetchMerges });
     const second = await computeLiveReadiness(supabase, { fetchMerges });
