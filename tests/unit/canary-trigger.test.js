@@ -28,6 +28,14 @@ function fakeSupabase({ selectResult = { data: [], error: null }, insertError = 
       filter() { return b; },
       is() { return b; },
       limit() { return b; },
+      // FR-6 (count-truncation discipline): findUnactionedCanaryRequests paginates via
+      // fetchAllPaginated, whose pages end in .order(...).range(from, to).
+      order() { return b; },
+      range(from, to) {
+        if (selectResult.error) return Promise.resolve(selectResult);
+        const rows = Array.isArray(selectResult.data) ? selectResult.data : [];
+        return Promise.resolve({ data: rows.slice(from, to + 1), error: null });
+      },
       insert(row) {
         inserts.push(row);
         if (throwOnInsert) throw new Error('boom-insert');

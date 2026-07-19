@@ -249,21 +249,23 @@ describe('getActiveSolomonId', () => {
 
   it('returns the canonical session_id from a fresh result set', async () => {
     const freshHb = new Date(Date.now() - 60_000).toISOString();
+    const rows = [
+      { session_id: 'sol-a', heartbeat_at: freshHb, metadata: { solomon_since: '2026-06-01T09:00:00Z' } },
+      { session_id: 'sol-b', heartbeat_at: freshHb, metadata: { solomon_since: '2026-06-01T10:00:00Z' } },
+    ];
+    // FR-6 (count-truncation discipline): fetchFreshSolomons paginates via fetchAllPaginated,
+    // whose chain ends in .order(...).range(from, to).
     const stubSupabase = {
-      from: () => ({
-        select: () => ({
-          gte: () => ({
-            filter: () =>
-              Promise.resolve({
-                data: [
-                  { session_id: 'sol-a', heartbeat_at: freshHb, metadata: { solomon_since: '2026-06-01T09:00:00Z' } },
-                  { session_id: 'sol-b', heartbeat_at: freshHb, metadata: { solomon_since: '2026-06-01T10:00:00Z' } },
-                ],
-                error: null,
-              }),
-          }),
-        }),
-      }),
+      from: () => {
+        const b = {
+          select: () => b,
+          gte: () => b,
+          filter: () => b,
+          order: () => b,
+          range: (from, to) => Promise.resolve({ data: rows.slice(from, to + 1), error: null }),
+        };
+        return b;
+      },
     };
     const result = await getActiveSolomonId(stubSupabase);
     expect(result).toBe('sol-b'); // later solomon_since wins

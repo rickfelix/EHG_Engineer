@@ -38,9 +38,14 @@ function fakeSessionsDb() {
     select() { return table; },
     eq(_col, val) { table._eqVal = val; return table; },
     gte() { return table; }, // freshness cutoff not modeled — every seeded row is "fresh" enough for this probe
-    filter(_col, _op, val) {
-      const out = [...rows.values()].filter((r) => r.metadata && r.metadata.role === val);
-      return Promise.resolve({ data: out, error: null });
+    // FR-6 (count-truncation discipline): the role scans paginate via fetchAllPaginated, so the
+    // chain continues .order(...).range(from, to) after .filter() — record the role filter and
+    // resolve the page at .range.
+    filter(_col, _op, val) { table._roleVal = val; return table; },
+    order() { return table; },
+    range(from, to) {
+      const out = [...rows.values()].filter((r) => r.metadata && r.metadata.role === table._roleVal);
+      return Promise.resolve({ data: out.slice(from, to + 1), error: null });
     },
     maybeSingle() {
       const row = rows.get(table._eqVal) || null;

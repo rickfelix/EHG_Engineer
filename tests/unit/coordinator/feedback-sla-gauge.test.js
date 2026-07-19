@@ -56,9 +56,10 @@ describe('slaKeyFor (pure)', () => {
   });
 });
 
-// planSlaBreaches's fetch ends on .in() (no .limit()) and relies on the chain being
-// awaitable directly (thenable); the reminder-existence check ends on .limit(). The two
-// paths are distinguished by whether .eq('category','feedback_sla_breach') was called.
+// planSlaBreaches's fetch now paginates via fetchAllPaginated (FR-6 count-truncation
+// discipline), so its chain ends in .order(...).range(from, to); the reminder-existence
+// check ends on .limit(). The two paths are distinguished by whether
+// .eq('category','feedback_sla_breach') was called.
 function fakeSupabase({ feedbackRows = [], existingReminderIds = [] } = {}) {
   const inserted = [];
   return {
@@ -69,6 +70,7 @@ function fakeSupabase({ feedbackRows = [], existingReminderIds = [] } = {}) {
       const chain = {
         select: () => chain,
         in: () => chain,
+        order: () => chain,
         eq(col, val) {
           if (col === 'category' && val === 'feedback_sla_breach') checkingReminder = true;
           return chain;
@@ -76,6 +78,7 @@ function fakeSupabase({ feedbackRows = [], existingReminderIds = [] } = {}) {
         limit: () => Promise.resolve(
           checkingReminder ? { data: existingReminderIds.map((id) => ({ id })) } : { data: feedbackRows, error: null }
         ),
+        range: (from, to) => Promise.resolve({ data: feedbackRows.slice(from, to + 1), error: null }),
         then: (resolve, reject) => Promise.resolve({ data: feedbackRows, error: null }).then(resolve, reject),
         insert: (row) => { inserted.push(row); return Promise.resolve({ error: null }); },
       };

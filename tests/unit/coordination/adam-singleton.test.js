@@ -35,14 +35,20 @@ describe('pickCanonicalAdam (deterministic election, mirror of coordinator)', ()
   });
 });
 
-// supabase stub: the election query is .from().select().gte().filter() resolving to {data}.
+// supabase stub: the election query is .from().select().gte().filter() — FR-6 (count-truncation
+// discipline) paginates it via fetchAllPaginated, so the chain now ends .order(...).range(from, to).
 function stub(rows, { error = null } = {}) {
   return {
     from() {
       const chain = {
         select() { return chain; },
         gte() { return chain; },
-        filter() { return Promise.resolve({ data: error ? null : rows, error }); },
+        filter() { return chain; },
+        order() { return chain; },
+        range(from, to) {
+          if (error) return Promise.resolve({ data: null, error });
+          return Promise.resolve({ data: (rows || []).slice(from, to + 1), error: null });
+        },
       };
       return chain;
     },
@@ -154,7 +160,9 @@ function regStub({ selfSessionId = 'self', selfMeta = null, rowExists = true, al
         select() { return chain; },
         eq() { return chain; },
         gte() { return chain; },
-        filter() { return Promise.resolve({ data: allAdams, error: null }); }, // fetchAllAdams
+        filter() { return chain; }, // fetchAllAdams — FR-6: now paginated, resolves via .range below
+        order() { return chain; },
+        range(from, to) { return Promise.resolve({ data: allAdams.slice(from, to + 1), error: null }); },
         maybeSingle() {
           return Promise.resolve({
             data: currentRowExists ? { session_id: selfSessionId, metadata: currentMeta } : null,

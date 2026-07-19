@@ -273,5 +273,270 @@
   "classification": "bounded-by-design",
   "match": "pattern_id, issue_summary",
   "note": "getVisionGapInsights — caller-bounded .limit(limit), default 3 (top-N VGAP patterns)"
+ },
+ "lib/coordinator/adam-action-ack.cjs:247": {
+  "classification": "bounded-by-design",
+  "match": "sender_session, target_session, payload, body, subject, read_at",
+  "note": "loadActionRequiredHandoffs — the awaited chain carries .order(created_at).limit(50) two lines below the statement window"
+ },
+ "lib/coordinator/adam-advisory-store.cjs:44": {
+  "classification": "bounded-by-design",
+  "match": "sender_session, sender_type, target_session, subject, body, payload, read_at",
+  "note": "selectUnactionedAdvisories — caller-bounded .limit(limit), default 20"
+ },
+ "lib/coordinator/adam-advisory-store.cjs:115": {
+  "classification": "bounded-by-design",
+  "match": "id, subject, body, payload, target_session, sender_session, created_at",
+  "note": "multi-part group lookup — .limit(50) DESC on the chain below the heuristic window (deliberate newest-first window, PR #6191)"
+ },
+ "lib/coordinator/adam-identity.cjs:171": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "update-returning select — bounded by the retarget UPDATE result set"
+ },
+ "lib/coordinator/solomon-identity.cjs:171": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "update-returning select — bounded by the retarget UPDATE result set"
+ },
+ "lib/coordinator/convergence-ledger.js:138": {
+  "classification": "bounded-by-design",
+  "match": "run_id, started_at",
+  "note": "getIssuesPerRunTrend — caller-bounded .limit(k), default 5 (last-K runs)"
+ },
+ "lib/coordinator/convergence-ledger.js:147": {
+  "classification": "bounded-by-design",
+  "match": "issues_found",
+  "note": "per-run stage rows — bounded by the fixed stage count of a single convergence run"
+ },
+ "lib/coordinator/coordination-events.cjs:120": {
+  "classification": "bounded-by-design",
+  "match": "loop_state, expected_silence_until",
+  "note": "ROWCAP-CANONICAL-001: deliberately newest-first ordered so the cap can only drop the STALEST sessions; all downstream derivations are fresh()-gated (documented at the site)"
+ },
+ "lib/coordinator/coordination-events.cjs:206": {
+  "classification": "bounded-by-design",
+  "match": "id, instance_id, last_poll_at, status",
+  "note": "eva_scheduler_heartbeat — one liveness row per scheduler instance (operationally 1)"
+ },
+ "lib/coordinator/coordination-events.cjs:378": {
+  "classification": "bounded-by-design",
+  "match": "requested_callsign, status, requested_at, fulfilled_at, expires_at",
+  "note": "pending+unfulfilled worker_spawn_requests — operationally tiny set with expiry window (mirrors fleet-dashboard.cjs:200)"
+ },
+ "lib/coordinator/dispatch.cjs:772": {
+  "classification": "bounded-by-design",
+  "match": "q = q.select(select);",
+  "note": "insert-returning select — bounded by the inserted row(s)"
+ },
+ "lib/coordinator/drain-gauge.cjs:39": {
+  "classification": "bounded-by-design",
+  "match": "from('feedback').select('created_at')",
+  "note": "oldest-row probe — .order(created_at asc).limit(1) applied on the wrapped chain"
+ },
+ "lib/coordinator/fleet-quiescence.cjs:120": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_id')",
+  "note": "sd_phase_handoffs within the RECENT_MIN window — small window-bounded transition set (documented at the site, SD-REFILL-00C7I5BY)"
+ },
+ "lib/coordinator/fleet-quiescence.cjs:127": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".in(recentSdIds)-bounded near-terminal intersect — bounded by the windowed handoff id list"
+ },
+ "lib/coordinator/pending-proposals-gauge.mjs:85": {
+  "classification": "bounded-by-design",
+  "match": ".in('sd_key', keys)",
+  "note": ".in(keys)-bounded existence probe — bounded by the parsed proposal-key list"
+ },
+ "lib/coordinator/presence-grounding-signals.cjs:76": {
+  "classification": "bounded-by-design",
+  "match": "process_alive_at, metadata",
+  "note": "getFleetPresence — caller-bounded .order(heartbeat_at desc).limit(limit), default 60 (newest-first so live sessions are never truncated out)"
+ },
+ "lib/coordinator/presence-grounding-signals.cjs:111": {
+  "classification": "bounded-by-design",
+  "match": "id, target_session, read_at, created_at, subject",
+  "note": "getReadReceipts — caller-bounded .limit(limit), default 50, newest-first"
+ },
+ "lib/coordinator/reconcile-clone-tree-exclusion.js:53": {
+  "classification": "bounded-by-design",
+  "match": "id, seeded_from_venture_id",
+  "note": ".in(ventureIds)-bounded ground-truth read — bounded by the venture-id list derived from the paginated SD read above"
+ },
+ "lib/coordinator/relay-queue.cjs:236": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "update-returning select — idempotency-claim UPDATE on a single row (eq id)"
+ },
+ "lib/coordinator/row-growth.cjs:128": {
+  "classification": "bounded-by-design",
+  "match": "count: 'estimated', head: true",
+  "note": "head-only estimated count — zero rows fetched (no truncation surface); estimate is the deliberate design for row-growth trending"
+ },
+ "lib/governance/aegis/adapters/ComplianceAdapter.js:528": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "getViolations — caller-bounded .limit(limit), default 100"
+ },
+ "lib/governance/aegis/adapters/DoctrineAdapter.js:327": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "getViolations — caller-bounded .limit(limit), default 100"
+ },
+ "lib/governance/aegis/AegisRuleLoader.js:111": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "active aegis_constitutions — small enumerated governance registry (cached loader)"
+ },
+ "lib/governance/aegis/AegisRuleLoader.js:166": {
+  "classification": "bounded-by-design",
+  "match": ".select(`",
+  "note": "active aegis_rules registry — governed enumerated rule set (cached loader)"
+ },
+ "lib/governance/aegis/AegisViolationRecorder.js:128": {
+  "classification": "tripwired",
+  "match": ".select(`",
+  "note": "FR-6: exact-cap console.warn tripwire applied after the await (caller-paged listing API with filters.limit/offset) — display policy: warn, not crash"
+ },
+ "lib/governance/aegis/AegisViolationRecorder.js:188": {
+  "classification": "bounded-by-design",
+  "match": "code, open_violations",
+  "note": "v_aegis_constitution_summary — one row per constitution (small enumerated registry)"
+ },
+ "lib/governance/aegis/AegisViolationRecorder.js:447": {
+  "classification": "bounded-by-design",
+  "match": "id, gate_name, severity, reason",
+  "note": "per-SD gate_bypass audit entries — small per-sd_key set"
+ },
+ "lib/governance/auto-block-consumer.js:94": {
+  "classification": "tripwired",
+  "match": "auto_block_on_match",
+  "note": "FR-6: exact-cap console.warn tripwire applied after the await (fail-open loader contract; unit-test chain stubs expose no .order/.range)"
+ },
+ "lib/governance/chairman-override-auditor.js:77": {
+  "classification": "bounded-by-design",
+  "match": "id, decision_type, status, context, created_at",
+  "note": "per-SD chairman override-request history — small per-sd_id set"
+ },
+ "lib/governance/coverage-matrix-referent-audit.js:22": {
+  "classification": "tripwired",
+  "match": "surface_class, surface_key, status, is_active, first_seen_at",
+  "note": "FR-6: assertNotCapTruncated applied at the rows destructure (fail-loud matches the throw policy; chain stubs expose no .order/.range)"
+ },
+ "lib/governance/coverage-matrix-referent-audit.js:111": {
+  "classification": "tripwired",
+  "match": "surface_class, surface_key",
+  "note": "FR-6: assertNotCapTruncated applied at the sampleCandidates site (fail-loud matches the throw policy)"
+ },
+ "lib/governance/coverage-matrix.js:145": {
+  "classification": "tripwired",
+  "match": "payload, created_at",
+  "note": "FR-6: assertNotCapTruncated applied after the await in enumerateMessageLanes (fail-loud matches the throw policy)"
+ },
+ "lib/governance/coverage-matrix.js:170": {
+  "classification": "bounded-by-design",
+  "match": "normalized_name",
+  "note": "applications registry (deleted_at IS NULL) — small enumerated set"
+ },
+ "lib/governance/coverage-matrix.js:277": {
+  "classification": "tripwired",
+  "match": ".select('surface_key')",
+  "note": "FR-6: assertNotCapTruncated applied after the fetch in regenerateCoverageMatrix (fail-loud matches the throw policy)"
+ },
+ "lib/governance/cross-venture-capability-graph.js:28": {
+  "classification": "tripwired",
+  "match": "capability_key:name",
+  "note": "FR-6: exact-cap console.warn tripwire applied after the empty-check (module never throws to callers; chain stubs expose no .order/.range)"
+ },
+ "lib/governance/cross-venture-capability-graph.js:116": {
+  "classification": "bounded-by-design",
+  "match": "target_capabilities, time_horizon",
+  "note": "active strategy_objectives — small governed objective set"
+ },
+ "lib/governance/cross-venture-capability-graph.js:139": {
+  "classification": "bounded-by-design",
+  "match": "venture_id:origin_venture_id, maturity_level",
+  "note": "per-capability venture rows — bounded by the (operationally tiny) venture count"
+ },
+ "lib/governance/emit-feedback.js:54": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_key')",
+  "note": "eq(session_id)-bounded v_active_sessions probe — at most a handful of rows for one session"
+ },
+ "lib/governance/emit-feedback.js:429": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "insert-returning select — bounded by the inserted batch"
+ },
+ "lib/governance/guardrail-intelligence-analyzer.js:378": {
+  "classification": "bounded-by-design",
+  "match": "id, agent_type, status, results, created_at",
+  "note": "getAnalysisHistory — caller-bounded .limit(filters.limit || 10) applied on the chain below"
+ },
+ "lib/governance/l1-work-outcome.js:76": {
+  "classification": "bounded-by-design",
+  "match": "eq('first_seen_sd_id', workKey)",
+  "note": "eq(first_seen_sd_id=workKey)-bounded pattern probe — small per-work-key set"
+ },
+ "lib/governance/l1-work-outcome.js:77": {
+  "classification": "bounded-by-design",
+  "match": "eq('last_seen_sd_id', workKey)",
+  "note": "eq(last_seen_sd_id=workKey)-bounded pattern probe — small per-work-key set"
+ },
+ "lib/governance/pattern-closure.js:64": {
+  "classification": "tripwired",
+  "match": "pattern_id, prevention_checklist",
+  "note": "FR-6: exact-cap console.warn tripwire applied after the candidate read (never-throw contract; chain stubs expose no .order/.range)"
+ },
+ "lib/governance/pattern-closure.js:121": {
+  "classification": "bounded-by-design",
+  "match": ".select('pattern_id');",
+  "note": "update-returning select — bounded by the atomic resolve UPDATE result set (.in(toResolve))"
+ },
+ "lib/governance/portfolio-calibrator.js:86": {
+  "classification": "bounded-by-design",
+  "match": ".select('*');",
+  "note": "vertical_complexity_multipliers — small enumerated lookup registry (cached)"
+ },
+ "lib/governance/portfolio-calibrator.js:193": {
+  "classification": "bounded-by-design",
+  "match": ".select(`",
+  "note": "active ventures — operationally tiny set (ventures table is dozens of rows)"
+ },
+ "lib/governance/probe-runner.mjs:28": {
+  "classification": "bounded-by-design",
+  "match": "probe_key, target_role, predicate_type",
+  "note": "governance_probe_registry — small governed probe registry (chairman-gated STAGED table with graceful degrade)"
+ },
+ "lib/governance/recursion-governor.js:112": {
+  "classification": "bounded-by-design",
+  "match": ".select('metadata')",
+  "note": "fetchRecentSnapshots — caller-bounded .limit(limit), default DEFAULT_REQUIRED_CONSECUTIVE=3"
+ },
+ "lib/governance/resolve-feedback.js:186": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "update-returning select — single-row UPDATE (eq id)"
+ },
+ "lib/governance/shadow-trial/proposal-writer.mjs:98": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "upsert-returning select — bounded by the single upserted row"
+ },
+ "lib/governance/situation-capture.js:101": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "update-returning select — CAS UPDATE on a single pattern row"
+ },
+ "lib/governance/venture-capability-populator.js:102": {
+  "classification": "bounded-by-design",
+  "match": "is_demo, is_scaffolding",
+  "note": "ventures table — operationally tiny set (dozens of rows)"
+ },
+ "lib/governance/venture-capability-populator.js:113": {
+  "classification": "bounded-by-design",
+  "match": "venture_id, delivers_capabilities, sd_key",
+  "note": ".in(venture_id)-bounded SD read — bounded by the real-venture id list"
  }
 }

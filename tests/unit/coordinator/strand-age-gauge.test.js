@@ -13,9 +13,13 @@ function makeSupabase({ candidates = [], handoffsBySdId = {} } = {}) {
   const calls = { updates: [], deletes: [] };
   const from = (table) => {
     if (table === 'strategic_directives_v2') {
+      // FR-6 (count-truncation discipline): planStrandAgeGauge now paginates via
+      // fetchAllPaginated, so the chain ends in .order(...).range(from, to).
       const builder = {
         select: () => builder,
         eq: () => builder,
+        order: () => builder,
+        range: (from, to) => Promise.resolve({ data: candidates.slice(from, to + 1), error: null }),
         update: (payload) => { calls.updates.push({ table, payload }); return builder; },
         delete: () => { calls.deletes.push({ table }); return builder; },
         then: (resolve) => resolve({ data: candidates, error: null }),

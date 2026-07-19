@@ -44,7 +44,8 @@ function baseResolver(ctx, overrides) {
   if (ctx.table === 'v_active_sessions') return { data: [], error: null };
   if (ctx.table === 'strategic_directives_v2') {
     const isInProgress = ctx.filters.some(function (f) { return f[0] === 'eq' && f[1] === 'status' && f[2] === 'in_progress'; });
-    if (isInProgress) return { data: [], error: null };
+    // FR-6 (count-truncation discipline): the in_progress gauge is now an exact head-count.
+    if (isInProgress) return { data: null, count: 0, error: null };
     // the near-terminal intersect query (select id, .in id, .in status)
     return overrides.nearTerminal || { data: [], error: null };
   }

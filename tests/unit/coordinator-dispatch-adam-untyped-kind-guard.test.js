@@ -24,6 +24,18 @@ function stubSupabase({ adamSessionId } = {}) {
         gte() { chain._mode = 'adam-lookup'; return chain; },
         filter() { return chain; },
         limit() { return chain; },
+        // FR-6 (count-truncation discipline): fetchFreshAdams paginates via fetchAllPaginated,
+        // whose pages end in .order(...).range(from, to) — resolve the same adam-lookup rows.
+        order() { return chain; },
+        range(from, to) {
+          if (table === 'claude_sessions' && chain._mode === 'adam-lookup') {
+            const rows = adamSessionId
+              ? [{ session_id: adamSessionId, heartbeat_at: new Date().toISOString(), metadata: { role: 'adam', adam_since: '2026-01-01T00:00:00Z' } }]
+              : [];
+            return Promise.resolve({ data: rows.slice(from, to + 1), error: null });
+          }
+          return Promise.resolve({ data: [], error: null });
+        },
         maybeSingle() {
           if (table === 'claude_sessions') {
             const known = new Set([ADAM_TARGET, OTHER_TARGET]);
