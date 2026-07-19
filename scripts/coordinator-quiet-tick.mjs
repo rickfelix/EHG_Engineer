@@ -32,6 +32,9 @@ const { createClient } = require('@supabase/supabase-js');
 const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs');
 const { decideCadence, detectSalientDelta, runCoresFailSoft } = require('../lib/coordinator/quiet-tick.cjs');
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
+// QF-20260719-138: emit the cross-party ping row ourselves (mechanical, byte-identical) rather
+// than instructing the coordinator to hand-insert it every tick (that tripped the RCA 3x guard).
+const { emitCrossPartyPing } = require('../lib/coordinator/cross-party-ping.cjs');
 const { DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
 // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2): surface which Claude account this fleet is
 // running under in the tick's status line.
@@ -283,6 +286,10 @@ async function main() {
     nextWakeSeconds: delaySeconds,
   };
 
+  // QF-20260719-138: a real salient delta emits the cross_party_ping row HERE (side-effect in
+  // both --json and human modes); the console line below is a record-of-sent, not an instruction.
+  const pingSent = delta.changed ? await emitCrossPartyPing(sb, { from: 'coordinator', fields: delta.fields }) : false;
+
   if (asJson) {
     console.log(JSON.stringify(result));
   } else {
@@ -294,7 +301,7 @@ async function main() {
       `nextWakeSeconds=${delaySeconds} :: ${modeReason}`
     );
     if (delta.changed) {
-      console.log(`QUIET_TICK_PING=coordinator->adam reason=${delta.fields.join(',')} (real delta — emit a prompt cross-party ping; stamp payload.kind='cross_party_ping' per SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-5 — mechanical, never authored)`);
+      console.log(`QUIET_TICK_PING=coordinator->adam reason=${delta.fields.join(',')} sent=${pingSent} (cross_party_ping row emitted by the tick — record of sent, not an instruction)`);
     }
   }
   return result;
