@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-07-19](#2026-07-19)
+  - [Infrastructure](#infrastructure)
 - [2026-07-18](#2026-07-18)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -99,6 +101,14 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-07-19
+
+### Infrastructure
+- **Adam decision-scheduler: wires the previously-unwired away-bridge to real production seams** - PR #6252 (SD-LEO-INFRA-ADAM-DECISION-SCHEDULER-001)
+  - **What shipped**: the away-bridge (`lib/comms/adam-outbound/away-bridge/index.js`, a presence-gated re-surfacer for owed-but-unanswered chairman decisions shipped by a prior SD) had zero real caller — armed logic, no dispatcher. `lib/comms/adam-outbound/decision-scheduler/index.js` wires it to real seams: an `owedStore` adapter over `sms_outbound_obligations` (fail-soft while that STAGED migration remains unapplied — returns `[]`, never throws), a presence signal derived from `claude_sessions.heartbeat_at`, a `sender` wrapping the already-live chairman-sms-gate, and an `escalateEmail` wrapping the existing chairman decision-email path. `scripts/cron/adam-decision-scheduler-tick.mjs` is the durable `--once` cron runner (mirrors `chairman-decision-sla-sweep.mjs`'s shape), registers ARMED machinery (`periodic_process_registry`) with a pinned activation-trigger literal naming the STAGED-migration-apply event, and inlines a newly-authored, authoritative runtime DST-aware quiet-window guard (22:00-06:00 America/New_York — a different window from the existing 23:00-05:00 chairman/email quiet window, since no shared helper for this exact boundary existed repo-wide). A new `.github/workflows/adam-decision-scheduler-cron.yml` plus a `package.json` cron-script entry give both new files a real `WIRE_CHECK_GATE` reachability root. The stale `@wire-check-exempt` marker on `away-bridge/index.js` was removed now that it has a genuine caller (hygiene only — `WIRE_CHECK` only re-checks newly-added files, never modified ones).
+  - **Two review rounds caught real PRD inaccuracies before/during EXEC, both fixed by amending the PRD directly**: LEAD-TO-PLAN VALIDATION corrected an assumption that removing the wire-check-exempt marker would make `WIRE_CHECK` re-evaluate `away-bridge/index.js` — it doesn't (modified files aren't re-checked); the real reachability gap was the two genuinely-new files, closed via the `package.json` entry point instead. PLAN-TO-EXEC TESTING corrected an inaccurate "zero-code activation" claim — the STAGED `sms_outbound_obligations` schema has no `answered`/`resurfaceCount`/`resurfacedThisWindow` columns, so real-column mapping needed explicit scoping (owedId←id, message←{body}, decision-only filter) with the unbacked fields' derivation/bookkeeping explicitly deferred to a documented chairman-apply follow-up rather than silently assumed free.
+  - **Verification**: 25 new tests across 2 files (TS-1 table-absent fail-soft, TS-8 real-column mapping pinned against the STAGED schema — not just a friendly mock, TS-2 full tick-wiring through the real unmodified `processOwedDecisions` policy, TS-5/TS-6/TS-7/TS-9 static + behavioral wiring pins, TS-10 DST-aware quiet-window boundary math across EST/EDT and spring/fall transition dates), zero regressions across 68 tests in the surrounding comms suite. EXEC-TO-PLAN TESTING and SECURITY both independently re-verified (TESTING ran the cron live against the current table-absent DB and confirmed the true no-op path; SECURITY confirmed no new secrets, minimal GHA permissions, parameterized queries only, and that the sender/escalateEmail wrappers never bypass the existing gate's fail-closed rubric). `/heal` scored 98/100. Handoffs LEAD-TO-PLAN 95, PLAN-TO-EXEC 97, EXEC-TO-PLAN 94, PLAN-TO-LEAD 97, LEAD-FINAL-APPROVAL 99.
 
 ## 2026-07-18
 
