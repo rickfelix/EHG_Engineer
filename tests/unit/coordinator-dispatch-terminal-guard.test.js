@@ -50,8 +50,8 @@ describe('pure terminal-status classifiers', () => {
     for (const s of ['completed', 'cancelled', 'deferred', 'COMPLETED']) expect(isTerminalSdStatus(s)).toBe(true);
     for (const s of ['draft', 'active', 'in_progress', 'pending_approval', '', null, undefined]) expect(isTerminalSdStatus(s)).toBe(false);
   });
-  it('QF terminal set = completed/cancelled/escalated', () => {
-    for (const s of ['completed', 'cancelled', 'escalated']) expect(isTerminalQfStatus(s)).toBe(true);
+  it('QF terminal set = completed/cancelled/escalated/closed', () => {
+    for (const s of ['completed', 'cancelled', 'escalated', 'closed']) expect(isTerminalQfStatus(s)).toBe(true);
     for (const s of ['open', 'in_progress', null]) expect(isTerminalQfStatus(s)).toBe(false);
   });
 });
