@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { needleScore, rungProgressByKey, buildSdRungMap } from '../../lib/vision/needle-priority.mjs';
+
+const REPO_ROOT = path.resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
 
 describe('needleScore (SD-LEO-INFRA-PROGRESS-ROLLUP-NEEDLE-PRIORITIZATION-001-C FR-1)', () => {
   const ctx = { activeRungKey: 'V1', rungProgressByKey: { V1: 50, V2: 80 } };
@@ -88,5 +93,24 @@ describe('buildSdRungMap (reuses mapWaveToRung)', () => {
   it('handles empty input', () => {
     expect(buildSdRungMap(null)).toEqual({});
     expect(buildSdRungMap([], {})).toEqual({});
+  });
+
+  it('SD-LEO-INFRA-PLAN-OF-RECORD-REMAINDER-VIEW-001 regression: stays non-empty for promoted items on non-approved-status waves (active/completed), proving the map is not scoped to approved waves only', () => {
+    const wavesByIdMixedStatus = {
+      w1: { id: 'w1', status: 'active', time_horizon: 'now' },
+      w2: { id: 'w2', status: 'completed', metadata: { rung_key: 'V2' } },
+    };
+    const items = [
+      { promoted_to_sd_key: 'SD-A', wave_id: 'w1' },
+      { promoted_to_sd_key: 'SD-B', wave_id: 'w2' },
+    ];
+    expect(buildSdRungMap(items, wavesByIdMixedStatus)).toEqual({ 'SD-A': 'V1', 'SD-B': 'V2' });
+  });
+
+  it('SD-LEO-INFRA-PLAN-OF-RECORD-REMAINDER-VIEW-001 regression: coordinator-backlog-rank.mjs still sources its rung-map input from unscoped roadmap_wave_items/roadmap_waves, not the approved-only v_plan_of_record_remainder view (FR-4 -- repointing this file would silently empty the map for non-approved-wave SDs)', () => {
+    const source = readFileSync(path.join(REPO_ROOT, 'scripts/coordinator-backlog-rank.mjs'), 'utf8');
+    expect(source).toContain("sb.from('roadmap_wave_items').select('promoted_to_sd_key, wave_id').not('promoted_to_sd_key', 'is', null)");
+    expect(source).toContain("sb.from('roadmap_waves').select('id, time_horizon, metadata')");
+    expect(source).not.toContain('v_plan_of_record_remainder');
   });
 });

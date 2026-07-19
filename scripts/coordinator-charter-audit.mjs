@@ -221,12 +221,18 @@ async function main() {
   // can be refilled. Best-effort / fail-open: any error leaves promotableCount=0 (no advisory).
   let promotableCount = 0;
   try {
-    const { data: staged, error: se } = await db.from('roadmap_wave_items')
-      // QF-20260622-620: select metadata so promotableCount reflects recovered descriptions
-      // (hasRecoveredSubstance reads item.metadata.description). 3rd/last blind site after PR #5030
-      // fixed refill-cron.mjs + refill-verify.mjs; without it this advisory under-counts the belt.
+    // SD-LEO-INFRA-PLAN-OF-RECORD-REMAINDER-VIEW-001: repointed from an unscoped
+    // roadmap_wave_items read (all wave generations, including dead proposed/archived
+    // ones) to v_plan_of_record_remainder (approved-wave-only, stamped remainder_state).
+    // "Promotable" candidates are remainder_state='promotable_now' -- items already
+    // classified void/satisfied_elsewhere/gated/blocked are excluded up front rather
+    // than relying on this advisory's own item_disposition/promoted_to_sd_key filter.
+    // QF-20260622-620: select metadata so promotableCount reflects recovered descriptions
+    // (hasRecoveredSubstance reads item.metadata.description). 3rd/last blind site after PR #5030
+    // fixed refill-cron.mjs + refill-verify.mjs; without it this advisory under-counts the belt.
+    const { data: staged, error: se } = await db.from('v_plan_of_record_remainder')
       .select('id, title, source_type, source_id, item_disposition, promoted_to_sd_key, lane, metadata')
-      .eq('item_disposition', 'pending').is('promoted_to_sd_key', null).limit(2000);
+      .eq('remainder_state', 'promotable_now').limit(2000);
     if (!se) promotableCount = verifyStagedCandidates(staged || []).validCount;
   } catch { /* fail-open → promotableCount stays 0, no advisory */ }
 
