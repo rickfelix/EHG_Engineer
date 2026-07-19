@@ -29,26 +29,46 @@ describe('pre-tool-enforce ENF-12 audit-await regression (QF-20260510-148)', () 
     expect(body).toMatch(/return\s+Promise\.resolve\(\)/);
   });
 
-  it('ENF-12 (NPM-INSTALL-RACE) block path awaits the audit before process.exit(2)', () => {
+  // QF-20260719-120: ENF-12/12c now route through auditAndExit (same bounded
+  // audit-await, PLUS drainUndiciPool before exit — raw exit(2) after the audit
+  // fetch raced its async handle and tripped libuv's UV_HANDLE_CLOSING assertion).
+  it('ENF-12 (NPM-INSTALL-RACE) block path awaits auditAndExit with a bounded timeout', () => {
     const ruleIdx = SRC.indexOf("'NPM-INSTALL-RACE'");
     expect(ruleIdx).toBeGreaterThan(-1);
-    const exitIdx = SRC.indexOf('process.exit(2)', ruleIdx);
-    expect(exitIdx).toBeGreaterThan(ruleIdx);
-    const window = SRC.slice(ruleIdx, exitIdx);
-
-    expect(window).toMatch(/\bawait\b/);
-    expect(window).toMatch(/Promise\.race\s*\(/);
-    expect(window).toMatch(/setTimeout\s*\(\s*resolve\s*,\s*\d+\s*\)/);
-  });
-
-  it('audit-await window in ENF-12 has a bounded timeout (never hangs hook longer than 5s)', () => {
-    const ruleIdx = SRC.indexOf("'NPM-INSTALL-RACE'");
-    const exitIdx = SRC.indexOf('process.exit(2)', ruleIdx);
-    const window = SRC.slice(ruleIdx, exitIdx);
-    const m = window.match(/setTimeout\s*\(\s*resolve\s*,\s*(\d+)\s*\)/);
+    const window = SRC.slice(ruleIdx, ruleIdx + 1500);
+    const m = window.match(/await\s+auditAndExit\s*\(\s*auditPromise\s*,\s*2\s*,\s*(\d+)\s*\)/);
     expect(m).toBeTruthy();
     const ms = parseInt(m[1], 10);
     expect(ms).toBeGreaterThan(0);
     expect(ms).toBeLessThanOrEqual(5000);
+  });
+
+  it('auditAndExit awaits the audit with a bounded race, drains undici, then exits', () => {
+    const fnStart = SRC.indexOf('async function auditAndExit(');
+    expect(fnStart).toBeGreaterThan(-1);
+    const body = SRC.slice(fnStart, SRC.indexOf('process.exit(code)', fnStart) + 20);
+    expect(body).toMatch(/Promise\.race\s*\(/);
+    expect(body).toMatch(/setTimeout\s*\(\s*resolve\s*,\s*ms\s*\)/);
+    expect(body).toMatch(/await\s+drainUndiciPool\s*\(\s*\)/);
+    // drain must come BEFORE the exit
+    expect(body.indexOf('drainUndiciPool')).toBeLessThan(body.indexOf('process.exit(code)'));
+  });
+
+  // QF-20260719-120: the last un-drained exit paths — the fail-open main().catch and
+  // the ALLOW-path exit — must drain the undici pool first. A crash here aborts the
+  // PreToolUse hook, which Claude Code treats as non-blocking: enforcement silently
+  // skipped.
+  it('fail-open main().catch drains the undici pool before exiting', () => {
+    const m = SRC.match(/main\(\)\.catch\(async \(\) => \{ await drainUndiciPool\(\); process\.exit\(0\); \}\)/);
+    expect(m).toBeTruthy();
+  });
+
+  it('ALLOW-path final exit drains the undici pool after the pass-through audit', () => {
+    const allowIdx = SRC.indexOf("'Tool call permitted by all enforcement rules'");
+    expect(allowIdx).toBeGreaterThan(-1);
+    // Match the statement sequence, not indexOf('process.exit(0)') — that string also
+    // appears in the QF-20260509-199 comment between the audit and the exit.
+    const window = SRC.slice(allowIdx, allowIdx + 1500);
+    expect(window).toMatch(/await drainUndiciPool\(\);\s*\n\s*process\.exit\(0\);/);
   });
 });

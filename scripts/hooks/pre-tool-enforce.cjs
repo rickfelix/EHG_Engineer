@@ -692,11 +692,10 @@ async function main() {
             `  Wait ~30-60s and retry, OR isolate via: npm run session:worktree -- --sd-key <key>\n` +
             `  If staging is stuck (no actual peer): rm -rf node_modules/.staging\n`
           );
-          await Promise.race([
-            Promise.resolve(auditPromise),
-            new Promise(resolve => setTimeout(resolve, 1000))
-          ]).catch(() => { /* audit never blocks enforcement */ });
-          process.exit(2);
+          // QF-20260719-120: auditAndExit (same 1s audit cap) so this post-fetch exit
+          // drains the undici pool — raw exit(2) here races the audit POST's async
+          // handle and trips the src\win\async.c:76 libuv assertion.
+          await auditAndExit(auditPromise, 2, 1000);
         }
       } catch { /* fail-open on any internal error */ }
     }
@@ -720,11 +719,9 @@ async function main() {
           `  Use the additive install instead:  npm install --ignore-scripts --no-audit --no-fund\n` +
           `  Override (single-session only):    LEO_NPM_INSTALL_GUARD=off\n`
         );
-        await Promise.race([
-          Promise.resolve(auditPromise),
-          new Promise(resolve => setTimeout(resolve, 1000))
-        ]).catch(() => { /* audit never blocks enforcement */ });
-        process.exit(2);
+        // QF-20260719-120: auditAndExit (same 1s audit cap) drains before exit — see
+        // NPM-INSTALL-RACE block above for the libuv assertion this prevents.
+        await auditAndExit(auditPromise, 2, 1000);
       }
     } catch { /* fail-open on any internal error */ }
   }
@@ -1537,7 +1534,14 @@ async function main() {
   // already use process.exit(2); the ALLOW path was the asymmetric outlier — caused
   // ~5s hangs in CI where Supabase fetches don't resolve. Documented contract for all
   // those async writes is "fire and forget — never block enforcement".
+  // QF-20260719-120: drain first — the ALLOW audit fetch just fired, and a raw exit
+  // races its async-handle setup (the same src\win\async.c:76 window as the block paths).
+  await drainUndiciPool();
   process.exit(0);
 }
 
-main().catch(() => process.exit(0)); // Fail-open: async errors never block
+// QF-20260719-120: the fail-open catch must ALSO drain — any throw after a
+// fire-and-forget fetch landed here and exited un-drained, which was the last
+// remaining path to the libuv UV_HANDLE_CLOSING assertion (crash = PreToolUse
+// aborted = enforcement silently skipped). drainUndiciPool never throws.
+main().catch(async () => { await drainUndiciPool(); process.exit(0); }); // Fail-open: async errors never block
