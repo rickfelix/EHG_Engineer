@@ -102,6 +102,53 @@ describe('decideCadence hasUnactionedDirective hard-wake override (SD-LEO-INFRA-
   });
 });
 
+describe('decideCadence hasUndeliveredChairmanEscalation hard-park precondition (SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-H FR-2, FW-3 §6d)', () => {
+  it('an undelivered chairman-escalation overrides the quiescent long park with the hard-wake band', () => {
+    const d = decideCadence({ quiescent: true, hasUndeliveredChairmanEscalation: true, desiredQuiescentParkS: MAX_QUIESCENT_PARK_S });
+    expect(d).toBeGreaterThanOrEqual(DIRECTIVE_WAKE_MIN_S);
+    expect(d).toBeLessThanOrEqual(DIRECTIVE_WAKE_MAX_S);
+  });
+
+  it('overrides the active band too — an undelivered escalation is always faster than plain active', () => {
+    const d = decideCadence({ quiescent: false, hasUndeliveredChairmanEscalation: true });
+    expect(d).toBeLessThan(180); // strictly below ACTIVE_MIN_S
+  });
+
+  it('BOTH flags true stays inside the hard-wake band across offsets — shared branch, no double-offset drift', () => {
+    for (const offset of [0, 10, 30, 100, 420, 999]) {
+      const d = decideCadence({ quiescent: true, hasUnactionedDirective: true, hasUndeliveredChairmanEscalation: true, partyOffsetS: offset });
+      expect(d).toBeGreaterThanOrEqual(DIRECTIVE_WAKE_MIN_S);
+      expect(d).toBeLessThanOrEqual(DIRECTIVE_WAKE_MAX_S);
+      expect(d).not.toBe(300);
+    }
+  });
+
+  it('escalation flag false/omitted is byte-identical to today across quiescent, active AND directive branches', () => {
+    for (const quiescent of [true, false]) {
+      for (const hasUnactionedDirective of [true, false]) {
+        for (const offset of [0, 100, 420]) {
+          const withFalse = decideCadence({ quiescent, partyOffsetS: offset, hasUnactionedDirective, hasUndeliveredChairmanEscalation: false });
+          const withOmitted = decideCadence({ quiescent, partyOffsetS: offset, hasUnactionedDirective });
+          expect(withFalse).toBe(withOmitted);
+        }
+      }
+    }
+  });
+
+  it("Adam's 420s party offset stays inside the hard-wake band under the escalation override", () => {
+    const d = decideCadence({ quiescent: true, hasUndeliveredChairmanEscalation: true, partyOffsetS: 420 });
+    expect(d).toBeGreaterThanOrEqual(DIRECTIVE_WAKE_MIN_S);
+    expect(d).toBeLessThanOrEqual(DIRECTIVE_WAKE_MAX_S);
+  });
+
+  it('never returns exactly 300s under the escalation override', () => {
+    for (let offset = 0; offset <= 100; offset += 3) {
+      const d = decideCadence({ quiescent: true, hasUndeliveredChairmanEscalation: true, partyOffsetS: offset });
+      expect(d).not.toBe(300);
+    }
+  });
+});
+
 describe('detectSalientDelta (FR-4)', () => {
   it('first tick is always a delta', () => {
     expect(detectSalientDelta(null, { beltZero: true, openSignalCount: 0 }).changed).toBe(true);

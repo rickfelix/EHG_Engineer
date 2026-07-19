@@ -36,6 +36,7 @@ const { decideCadence, detectSalientDelta, runCoresFailSoft } = require('../lib/
 // is running under, and detect a genuine account switch across ticks.
 const { getAccountIdentity, detectAccountSwitch } = require('../lib/fleet/account-identity.cjs');
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
+const { hasUndeliveredChairmanEscalation } = require('../lib/coordinator/undelivered-escalation.cjs');
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 // QF-20260719-138: emit the mechanical cross-party ping stub ourselves (mirror of
 // coordinator-quiet-tick.mjs) rather than instructing the agent to hand-insert it each tick.
@@ -447,12 +448,20 @@ async function main() {
     if (acctNotified && currentIdentity) saveLastAccountIdentity(currentIdentity);
   }
 
-  const delaySeconds = decideCadence({ quiescent, partyOffsetS: ADAM_PARTY_OFFSET_S });
+  // SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-H (FR-3): Adam is the delivery leg to the
+  // chairman, so an undelivered pick-class escalation must hold Adam's tick in the
+  // hard-wake band too (§6d hard-park precondition). Detector is internally fail-soft.
+  const undeliveredEscalation = await hasUndeliveredChairmanEscalation(sb);
+  const delaySeconds = decideCadence({
+    quiescent,
+    partyOffsetS: ADAM_PARTY_OFFSET_S,
+    hasUndeliveredChairmanEscalation: undeliveredEscalation,
+  });
 
   const result = {
     party: 'adam',
     mode: quiescent ? 'QUIESCENT' : 'ACTIVE',
-    modeReason,
+    modeReason: undeliveredEscalation ? `${modeReason} [ESCALATION_HARD_WAKE]` : modeReason,
     acct: acctLabel,
     cores: tick.summary,
     failedCount: tick.failedCount,
