@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com
 -- SD-LEO-INFRA-PLAN-OF-RECORD-REMAINDER-VIEW-001
 -- Data migration: backfill remainder_state for all existing roadmap_wave_items
 -- rows via the canonical stamp_plan_of_record_remainder_state() function
