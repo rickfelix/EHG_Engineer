@@ -153,6 +153,14 @@ const NON_ACTIONABLE_SAL_PATTERNS = [
   /execute e2e tests before approval.*mandatory/i,
   /e2e testing is not optional per protocol/i,
   /node scripts\/execute-subagent\.js --code testing/i,
+  // SD-LEARN-FIX-ADDRESS-SAL-VALIDATION-002: VALIDATION generic checklist boilerplate (SAL-VALIDATION-REC, 3x).
+  // These are the deterministic standard-checklist reminders the VALIDATION sub-agent always emits — normal
+  // process guidance, NOT specific problems to fix — so they must not keep minting noise /learn SDs.
+  /plan agent should create prd/i,
+  /link backlog items to define clear requirements/i,
+  /perform codebase search to identify existing infrastructure/i,
+  /complete gap analysis.*backlog requirements/i,
+  /execute qa engineering director before/i,
   // QF-20260210-539: Additional patterns from false positive analysis
   /test evidence is (?:fresh|recent|up.?to.?date)/i,
   /\d+ user stories? not fully (?:covered|tested|verified)/i,
