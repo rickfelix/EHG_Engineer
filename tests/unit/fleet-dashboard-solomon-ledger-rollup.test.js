@@ -69,12 +69,27 @@ describe('FR-5: computeSolomonLedgerRollup', () => {
     expect(r.costPerAccepted).toBeNull();
   });
 
-  it('treats a missing/non-finite cost_tokens as 0 rather than crashing', () => {
+  it('TR-4 (SD-...-ROLE-MEASUREMENT-INTEGRITY-001): excludes rows with no captured cost from the cost denominator (never distorts)', () => {
     const rows = [
-      { decision: 'accepted', outcome: 'shipped_clean' }, // no cost_tokens field
+      { decision: 'accepted', outcome: 'shipped_clean' }, // no cost_tokens — telemetry never captured
       { decision: 'accepted', outcome: 'shipped_clean', cost_tokens: 50 },
     ];
     const r = computeSolomonLedgerRollup(rows);
-    expect(r.costPerAccepted).toBe(25); // (0+50)/2
+    // The uncaptured row is dropped from BOTH numerator and denominator, so cost-per-accepted is the
+    // real captured cost (50), not a distorted 25. acceptedCount still reflects all accepted rows.
+    expect(r.acceptedCount).toBe(2);
+    expect(r.costCapturedCount).toBe(1);
+    expect(r.costPerAccepted).toBe(50);
+  });
+
+  it('TR-4: a durable cost_captured=false row is excluded from cost-per-accepted (fail-soft rows never inflate spend)', () => {
+    const rows = [
+      { decision: 'accepted', outcome: 'shipped_clean', cost_tokens: null, cost_captured: false }, // fail-soft write
+      { decision: 'accepted', outcome: 'shipped_clean', cost_tokens: 400, cost_captured: true },
+    ];
+    const r = computeSolomonLedgerRollup(rows);
+    expect(r.acceptedCount).toBe(2);
+    expect(r.costCapturedCount).toBe(1);
+    expect(r.costPerAccepted).toBe(400); // only the captured row counts
   });
 });
