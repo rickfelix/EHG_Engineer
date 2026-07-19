@@ -271,6 +271,39 @@ export async function surfaceInboxItems(sb) {
   }
 }
 
+// QF-20260719-848: contract CHAIRMAN SMS CHANNEL DUTY (INBOUND WATCH) — every tick must surface
+// undrained chairman replies (one sat undrained ~25min on 2026-07-19; the tick had ZERO sms
+// visibility). Anti-fragile: filter ONLY on drained_at IS NULL (NO time filter — the live miss
+// was a hand-anchored received_at>= on a misremembered send time) and NEVER drop on a phone
+// mismatch. The relay is chairman-dedicated: with CHAIRMAN_PHONE unset (it is not in the tick
+// env) every undrained row is a chairman-candidate hard interrupt; when set, an exact match is
+// labelled but non-matches still surface. Read-only surfacing (mirrors drainSmsRelayStaging's
+// all-undrained query in lib/chairman/sms-bridge.js); fail-soft — any error returns rows:[].
+const SMS_INBOUND_CAP = 50;
+export async function surfaceSmsInbound(sb) {
+  try {
+    const chairmanPhone = process.env.CHAIRMAN_PHONE || null;
+    const { data, error } = await sb
+      .from('sms_relay_staging')
+      .select('id, from_phone, body_raw, signature_valid, received_at')
+      .is('drained_at', null)
+      .order('received_at', { ascending: true })
+      .limit(SMS_INBOUND_CAP);
+    if (error) return { rows: [], count: 0, error: error.message };
+    const rows = (data || []).map((r) => ({
+      id: r.id,
+      fromPhone: r.from_phone,
+      isChairman: chairmanPhone ? r.from_phone === chairmanPhone : true,
+      signatureValid: r.signature_valid === true,
+      ageMin: Math.floor((Date.now() - new Date(r.received_at).getTime()) / 60_000),
+      body: String(r.body_raw || '').replace(/\s+/g, ' ').slice(0, 120),
+    }));
+    return { rows, count: rows.length };
+  } catch (e) {
+    return { rows: [], count: 0, error: e && e.message };
+  }
+}
+
 async function readSalientState(sb) {
   const state = { beltZero: true, openSignalCount: 0, venture1State: null };
   try {
@@ -369,6 +402,9 @@ async function main() {
   // as first-class tick output (the child drain above ran --background and consumed nothing).
   const inboxSurface = await surfaceInboxItems(sb);
 
+  // QF-20260719-848: contract INBOUND WATCH — surface undrained chairman SMS every tick.
+  const smsInbound = await surfaceSmsInbound(sb);
+
   // FR-4: belt-countdown + offer-help collapse to a salient-delta check — Adam only
   // reaches the coordinator on a real belt/venture delta, never a "still idle" status.
   const salient = await readSalientState(sb);
@@ -422,6 +458,7 @@ async function main() {
     ventureStallAlerted: ventureStall.alerted,
     inboxSurfaced: inboxSurface.items.length,
     inboxDirectives: inboxSurface.directives,
+    smsInbound: smsInbound.count,
     outboundSilence,
     crossPartyPing: delta.changed,
     pingFields: delta.fields,
@@ -440,6 +477,7 @@ async function main() {
       `stalls=${stall.alerted.length} ` +
       `ventureStalls=${ventureStall.alerted.length} ` +
       `inbox=${inboxSurface.items.length}(dir:${inboxSurface.directives}) ` +
+      `sms=${smsInbound.count} ` +
       `probes=${outboundSilence.probed.length} esc=${outboundSilence.escalated.length} ` +
       `ping=${delta.changed ? delta.fields.join(',') : 'suppressed'} ` +
       `nextWakeSeconds=${delaySeconds} :: ${modeReason}`
@@ -467,6 +505,11 @@ async function main() {
     }
     if (inboxSurface.capHit) {
       console.log('QUIET_TICK_INBOX_CAP=adam fetched=50 oldest-first — within-window overflow; ack surfaced rows to reach newer ones');
+    }
+    // QF-20260719-848: undrained chairman SMS as first-class hard-interrupt lines (mirrors
+    // QUIET_TICK_INBOX_DIRECTIVE) — the contract INBOUND WATCH duty. Act: drain + reply.
+    for (const s of smsInbound.rows) {
+      console.log(`QUIET_TICK_SMS_INBOUND=adam id=${s.id} from=${s.fromPhone} chairman=${s.isChairman} sig=${s.signatureValid} age=${s.ageMin}m body="${s.body}" — undrained chairman SMS; DRAIN+reply per CHAIRMAN SMS CHANNEL DUTY (node scripts/sms-relay-drain.cjs)`);
     }
     for (const p of outboundSilence.probed) {
       console.log(`QUIET_TICK_OUTBOUND_PROBE=adam target=${p.target} row=${p.rowId}`);
