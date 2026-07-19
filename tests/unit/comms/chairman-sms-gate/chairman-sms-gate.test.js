@@ -69,13 +69,46 @@ describe('chairman-sms-gate sendChairmanSMS()', () => {
   it('TS-6: default sender DELEGATES to the -B durable path and fails SOFT (no throw) — SD-LEO-INFRA-ADAM-OUTBOUND-WIRE-LIVE-001 FR-2', async () => {
     // FR-2 wired makeDefaultSender (the former throw-stub) to the -B durable send path
     // (enqueueChairmanSms) — NOT a second Twilio client. With no recipient/durable state it must fail
-    // SOFT (never throw) so the guaranteed chairman EMAIL escalation delivers. The RUBRIC fail-closed
-    // guarantee is UNCHANGED — a bad decision is still HELD before send (see the blocked/fail-closed
-    // cases above); only the TRANSPORT is now fail-soft.
+    // SOFT (never throw). The RUBRIC fail-closed guarantee is UNCHANGED — a bad decision is still HELD
+    // before send (see the blocked/fail-closed cases above); only the TRANSPORT is now fail-soft.
+    //
+    // QF-20260719-509 LIVE INCIDENT (2026-07-19): this test previously asserted sent:true on a
+    // soft-failed transport — the exact "false success" defect that dropped a real chairman SMS
+    // silently. A soft-failed transport must now report sent:false and fire the fallback.
     const prev = process.env.CHAIRMAN_PHONE;
     delete process.env.CHAIRMAN_PHONE; // force the no-recipient soft-fail branch (no durable I/O)
-    const res = await sendChairmanSMS(wellFormedDecision(), DAYTIME, { console: silentConsole });
-    expect(res.sent).toBe(true); // rubric admitted; transport soft-failed to the email fallback, no throw
+    const fallbackSend = vi.fn(async () => ({ fired: true }));
+    const res = await sendChairmanSMS(wellFormedDecision(), DAYTIME, { console: silentConsole, fallbackSend });
+    expect(res.sent).toBe(false); // rubric admitted; transport soft-failed -> honest sent:false
+    expect(res.transportFailed).toBe(true);
+    expect(res.reason).toBe('no_recipient_phone');
+    expect(res.fallbackFired).toBe(true);
+    expect(fallbackSend).toHaveBeenCalledTimes(1);
     if (prev !== undefined) process.env.CHAIRMAN_PHONE = prev;
+  });
+
+  it('TS-7 (QF-20260719-509): an injected sender reporting the live-incident softFailed shape returns sent:false and fires the fallback', async () => {
+    // Reproduces the exact live incident: sms_outbound_obligations table absent -> enqueueChairmanSms
+    // throws -> makeDefaultSender catches -> softFailed 'durable_path_error'. Injecting the sender
+    // directly (matching TS-1..TS-6's convention) so the assertion is on sendChairmanSMS's own
+    // honesty, independent of makeDefaultSender's internals.
+    const sender = { send: vi.fn(async () => ({ sid: null, softFailed: true, reason: 'durable_path_error: relation "sms_outbound_obligations" does not exist' })) };
+    const fallbackSend = vi.fn(async ({ message, reason }) => ({ fired: true, message, reason }));
+    const res = await sendChairmanSMS(wellFormedDecision(), DAYTIME, { sender, console: silentConsole, fallbackSend });
+    expect(res.sent).toBe(false);
+    expect(res.transportFailed).toBe(true);
+    expect(res.fallbackFired).toBe(true);
+    expect(res.reason).toContain('durable_path_error');
+    expect(fallbackSend).toHaveBeenCalledTimes(1);
+    expect(fallbackSend.mock.calls[0][0].reason).toContain('sms_outbound_obligations');
+  });
+
+  it('TS-8 (QF-20260719-509): a real (successful) send is unaffected — sent:true, fallback never invoked', async () => {
+    const sender = makeSender(); // resolves {sid:'SM-test'}, no softFailed field
+    const fallbackSend = vi.fn(async () => ({ fired: true }));
+    const res = await sendChairmanSMS(wellFormedDecision(), DAYTIME, { sender, console: silentConsole, fallbackSend });
+    expect(res.sent).toBe(true);
+    expect(res.transportFailed).toBeUndefined();
+    expect(fallbackSend).not.toHaveBeenCalled();
   });
 });
