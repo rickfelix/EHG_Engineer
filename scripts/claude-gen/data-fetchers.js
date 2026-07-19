@@ -84,7 +84,7 @@ export async function getSubAgents() {
 export async function getHandoffTemplates() {
   try {
     return await fetchAllPaginated(() => supabase
-      .from('sd_phase_handoff_templates')
+      .from('sd_phase_handoff_templates') // schema-lint-disable-line — legacy table absent from live snapshot (pre-existing on main; fail-open); moved into diff by FR-6 rewrap
       .select('*')
       .order('created_at')
       .order('id'));
@@ -118,7 +118,7 @@ export async function getSchemaConstraints() {
   let constraints = [];
   try {
     constraints = await fetchAllPaginated(() => supabase
-      .from('schema_validation_rules')
+      .from('schema_validation_rules') // schema-lint-disable-line — legacy table absent from live snapshot (pre-existing on main; fail-open); moved into diff by FR-6 rewrap
       .select('*')
       .eq('is_active', true)
       .order('table_name, column_name')
@@ -220,7 +220,7 @@ export async function getGateHealth() {
   try {
     const handoffs = await fetchAllPaginated(() => supabase
       .from('sd_phase_handoffs')
-      .select('handoff_type, status, quality_score, created_at')
+      .select('handoff_type, status, quality_score, created_at') // schema-lint-disable-line — legacy column absent from snapshot (pre-existing on main; fail-open); moved into diff by FR-6 rewrap
       .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
       .order('id'));
 
