@@ -38,8 +38,22 @@ function* walk(dir) {
 
 /** The statement window: the .select( line plus the rest of its chain (heuristic: until a line ending in ';' or blank). */
 function chainWindow(lines, idx) {
-  let win = lines[idx];
-  for (let j = idx + 1; j < Math.min(idx + 8, lines.length); j++) {
+  // BACKWARD context, scoped to the CURRENT statement: a paginated site wraps the builder
+  // in a callback (fetchAllPaginated(() => sb.from(...)) with .select( on a later line), so
+  // the pagination marker sits above the .select line. The walk stops at a statement
+  // boundary (line ending ';', blank, or comment) so a PRECEDING statement's markers can
+  // never falsely exempt this site (adversarial-review finding on FR-6 batch 1).
+  let start = idx;
+  for (let j = idx - 1; j >= Math.max(0, idx - 3); j--) {
+    const t = (lines[j] ?? '').trim();
+    if (t === '' || /;\s*$/.test(t) || /^\/\//.test(t)) break;
+    start = j;
+  }
+  let win = lines.slice(start, idx + 1).join('\n');
+  for (let j = idx + 1; j < Math.min(idx + 12, lines.length); j++) {
+    // Comment lines interleaved in a builder chain (common: per-filter rationale comments)
+    // do not terminate the statement — skip them so a .limit() below a comment is still seen.
+    if (/^\s*\/\//.test(lines[j])) continue;
     if (!/^\s*\./.test(lines[j]) && !/[,({[]$/.test(lines[j - 1]?.trim() ?? '')) break;
     win += '\n' + lines[j];
   }
@@ -50,7 +64,8 @@ export function classifyChain(win) {
   if (/count:\s*['"]exact['"]/.test(win)) return 'already-exact';
   if (/\.single\(\)|\.maybeSingle\(\)/.test(win)) return 'bounded-by-design';
   if (/\.limit\(\s*(\d+)\s*\)/.test(win) && Number(RegExp.$1) < 1000) return 'bounded-by-design';
-  if (/\.range\(|fetchAllPaginated/.test(win)) return 'paginated';
+  if (/\.range\(|fetchAllPaginated|fapPaginate/.test(win)) return 'paginated'; // fapPaginate: CJS call sites' local ESM-bridge wrapper
+  if (/assertNotCapTruncated|warnIfCapTruncated/.test(win)) return 'tripwired';
   return 'needs-review';
 }
 
@@ -73,8 +88,12 @@ export function buildInventory({ root = ROOT } = {}) {
         const auto = classifyChain(chainWindow(lines, i));
         // An override without a note is ignored (falls back to auto): a note-less override
         // could silently drop a needs-review site from the checked-in ledger with no trace.
+        // An override with a `match` content-anchor is ignored when the line no longer
+        // contains it — line-number keys drift as files are edited, and a drifted override
+        // must fail SAFE (back to auto-classification), never re-target a different site.
         const raw = overrides[key];
-        const ov = raw && raw.note ? raw : undefined;
+        const anchored = raw && (!raw.match || line.includes(raw.match));
+        const ov = raw && raw.note && anchored ? raw : undefined;
         sites.push({
           site: key,
           classification: ov?.classification || auto,

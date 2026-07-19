@@ -73,6 +73,14 @@ describe('TS-1 fetchAllPaginated full retrieval', () => {
     await expect(fetchAllPaginated(factory, { pageSize: -1 })).rejects.toThrow(/pageSize must be an integer/);
   });
 
+  it('maxRows is a clean sampling cap: stops paginating and returns exactly maxRows', async () => {
+    const rows = Array.from({ length: 3500 }, (_, i) => row(i));
+    const { factory, pageCalls } = makeRelation(rows);
+    const out = await fetchAllPaginated(factory, { pageSize: 1000, maxRows: 2500 });
+    expect(out).toHaveLength(2500);
+    expect(pageCalls()).toBe(3); // stopped after the page that crossed maxRows
+  });
+
   it('throws (not hangs) when the builder ignores .range() and serves identical full pages', async () => {
     const fullPage = Array.from({ length: 10 }, (_, i) => row(i));
     const factory = () => ({ range: () => Promise.resolve({ data: fullPage, error: null }) });

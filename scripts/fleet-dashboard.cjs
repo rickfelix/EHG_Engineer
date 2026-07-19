@@ -48,6 +48,24 @@ const { getAccountIdentity } = require('../lib/fleet/account-identity.cjs');
 
 const STALE_THRESHOLD = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS, 10) || 300;
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 — display policy: WARN, don't crash.
+// A dashboard read returning exactly the PostgREST cap (1000; canonical constant
+// POSTGREST_MAX_ROWS in lib/db/fetch-all-paginated.mjs — ESM, not require()-able here)
+// is presumed silently truncated. Genuinely-unbounded reads paginate via fapPaginate();
+// small-set reads keep their single fetch but pass through this tripwire.
+function warnIfCapTruncated(rows, site) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (list.length === 1000) {
+    console.warn(`⚠️  [count-discipline] ${site}: fetch returned exactly 1000 rows (PostgREST cap) — list/count below may be truncated`);
+  }
+  return list;
+}
+let _fapModule = null;
+async function fapPaginate(queryFactory, opts) {
+  _fapModule ||= await import('../lib/db/fetch-all-paginated.mjs');
+  return _fapModule.fetchAllPaginated(queryFactory, opts);
+}
+
 // ── Helpers ──
 
 function bar(pct, width = 20) {
@@ -209,10 +227,10 @@ async function loadData() {
     // degrade-safe: empty claimable list, dashboard still renders
   }
 
-  const sessions = sessRes.data || [];
-  const allSessions = allSessRes.data || [];
-  const drainAgents = drainRes.data || [];
-  const children = childRes.data || [];
+  const sessions = warnIfCapTruncated(sessRes.data, 'v_active_sessions (claimed)');
+  const allSessions = warnIfCapTruncated(allSessRes.data, 'v_active_sessions (all)');
+  const drainAgents = warnIfCapTruncated(drainRes.data, 'claude_sessions (drain agents)');
+  const children = warnIfCapTruncated(childRes.data, 'orchestrator children');
   // QF-20260704-051: orchestrator children are tracked separately (above) — exclude their
   // prefix here so a claimable child SD is never double-counted in both sections.
   const workable = claimableLeaves.filter(sd => !sd.sd_key.startsWith('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001'));
@@ -381,7 +399,7 @@ async function loadData() {
     // ALL open work behind the outer catch's empty section.
     let isFixtureQf = () => false;
     try { ({ isFixtureQf } = require('../lib/governance/fixture-exclusion.mjs')); } catch { /* unfiltered fallback */ }
-    quickFixes = (qfRows || []).filter((qf) => !isFixtureQf(qf));
+    quickFixes = warnIfCapTruncated(qfRows, 'quick_fixes (open/in_progress)').filter((qf) => !isFixtureQf(qf));
   } catch { /* degrade-safe: empty QF section */ }
 
   return {
@@ -1053,12 +1071,18 @@ async function printForecast(d) {
   }
 
   console.log('');
-  // Full Queue Forecast — all pending SDs across the entire queue
-  const { data: allPending } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key, title, status, priority, current_phase, progress_percentage, dependencies')
-    .in('status', ['draft', 'in_progress', 'ready', 'planning', 'pending_approval'])
-    .order('priority', { ascending: true });
+  // Full Queue Forecast — all pending SDs across the entire queue. Paginated (FR-6):
+  // the pending set can exceed the PostgREST cap, and a capped forecast silently
+  // under-forecasts the whole queue.
+  let allPending = [];
+  try {
+    allPending = await fapPaginate(() => supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, title, status, priority, current_phase, progress_percentage, dependencies')
+      .in('status', ['draft', 'in_progress', 'ready', 'planning', 'pending_approval'])
+      .order('priority', { ascending: true })
+      .order('sd_key', { ascending: true })); // unique tiebreaker: stable page boundaries
+  } catch { allPending = []; } // fail-open to the prior data-null behavior
 
   const pending = allPending || [];
   const activeWorkers = d.activeSessions.length;
@@ -1151,12 +1175,17 @@ async function printPredictions(d) {
   // 2. Dependency unlock forecast — what SDs will completing current work unblock?
   const completedKeys = new Set(d.children.filter(c => c.status === 'completed').map(c => c.sd_key));
   const claimedSdKeys = [...d.claimedSdIds];
-  // Get all blocked SDs with their dependencies
-  const { data: allBlockedRaw } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key, title, dependencies, status')
-    .in('status', ['draft', 'in_progress', 'ready', 'planning'])
-    .not('dependencies', 'is', null);
+  // Get all blocked SDs with their dependencies. Paginated (FR-6): a capped fetch
+  // would silently drop blocked SDs from the dependency view.
+  let allBlockedRaw = [];
+  try {
+    allBlockedRaw = await fapPaginate(() => supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, title, dependencies, status')
+      .in('status', ['draft', 'in_progress', 'ready', 'planning'])
+      .not('dependencies', 'is', null)
+      .order('sd_key', { ascending: true })); // unique order: stable page boundaries
+  } catch { allBlockedRaw = []; }
 
   const blocked = (allBlockedRaw || []).filter(sd => {
     const deps = parseDeps(sd.dependencies);
@@ -1305,13 +1334,21 @@ async function printInbox() {
   // more than 20 even when the true unacknowledged backlog is larger — the label read "20
   // unread signal(s)" indefinitely regardless of triage progress. Query the true set (same
   // filters, no limit) so the display reflects real unread rows, not the window cap.
-  const { data: allUnreadRows, error: countError } = await supabase
-    .from('session_coordination')
-    .select('id, payload')
-    .eq('target_session', coordinatorId)
-    .not('payload->>signal_type', 'is', null)
-    .is('acknowledged_at', null)
-    .gte('created_at', signalSince);
+  // FR-6 (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001): "the true set" above must actually be
+  // TRUE — the un-limited query was still bounded by the PostgREST 1000-row cap, recreating the
+  // same stuck-label bug at 1000 that QF-20260704-877 fixed at 20. Paginate to completion.
+  let allUnreadRows = null;
+  let countError = null;
+  try {
+    allUnreadRows = await fapPaginate(() => supabase
+      .from('session_coordination')
+      .select('id, payload')
+      .eq('target_session', coordinatorId)
+      .not('payload->>signal_type', 'is', null)
+      .is('acknowledged_at', null)
+      .gte('created_at', signalSince)
+      .order('id', { ascending: true })); // unique order: stable page boundaries
+  } catch (e) { countError = e; }
 
   // SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 (closure map class C6): a reply to a worker
   // signal is sent BY the coordinator (sender_session=coordinatorId), targeting the
@@ -1482,6 +1519,7 @@ async function printReviewHeldSds() {
     return;
   }
 
+  warnIfCapTruncated(held, 'review-held SDs');
   if (!held || held.length === 0) {
     console.log('  (no SDs held for coordinator review)');
     console.log('');
@@ -1788,16 +1826,14 @@ async function printSolomonLedgerRollup() {
 
   let rows = [];
   try {
-    const { data, error } = await supabase
+    // FR-6 (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001): .limit(5000) was silently clamped
+    // to the PostgREST 1000-row cap — stats were computed over at most 1000 rows while
+    // claiming a 5000-row sample. Paginate up to the declared 5000-row sampling cap.
+    rows = await fapPaginate(() => supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
       .select('decision, outcome, cost_tokens, created_at')
-      .limit(5000);
-    if (error) {
-      console.log('  (ledger query failed: ' + error.message + ')');
-      console.log('');
-      return;
-    }
-    rows = data || [];
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true }), { maxRows: 5000 }); // most-recent 5000, stable boundaries
   } catch (e) {
     console.log('  (ledger query failed: ' + (e && e.message ? e.message : e) + ')');
     console.log('');
