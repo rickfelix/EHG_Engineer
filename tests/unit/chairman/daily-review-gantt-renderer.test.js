@@ -13,7 +13,7 @@ const waves = [
 ];
 
 describe('buildGanttSvg (FR-1)', () => {
-  it('returns well-formed SVG containing each wave title', () => {
+  it('returns well-formed SVG containing each wave title (falls back to progress_pct when item_counts absent)', () => {
     const svg = buildGanttSvg(waves);
     expect(svg.startsWith('<svg')).toBe(true);
     expect(svg).toContain('Wave 1: Foundation');
@@ -32,6 +32,39 @@ describe('buildGanttSvg (FR-1)', () => {
     const svg = buildGanttSvg([{ title: 'A & B <script>', progress_pct: 50 }]);
     expect(svg).not.toContain('<script>');
     expect(svg).toContain('&amp;');
+  });
+
+  // QF-20260719-275: progress_pct is one shared V1 rung gauge repeated across every wave —
+  // bars must derive from per-wave item_counts instead, so distinct waves render distinct pcts.
+  it('derives bar pct from item_counts, not the shared progress_pct, when item_counts is present', () => {
+    const svg = buildGanttSvg([
+      { title: 'W0', progress_pct: 71, item_counts: { total: 10, promoted: 10 } },
+      { title: 'W2', progress_pct: 71, item_counts: { total: 10, promoted: 3 } },
+      { title: 'W5', progress_pct: 0, item_counts: { total: 213, promoted: 78 } },
+    ]);
+    expect(svg).toContain('100%');
+    expect(svg).toContain('30%');
+    expect(svg).toContain('37%'); // 78/213 rounds to 37%, not the stale shared 0%
+    expect(svg).not.toContain('>0%<');
+  });
+
+  it('treats item_counts.total === 0 as no signal and falls back to progress_pct', () => {
+    const svg = buildGanttSvg([{ title: 'Empty wave', progress_pct: 45, item_counts: { total: 0, promoted: 0 } }]);
+    expect(svg).toContain('45%');
+  });
+
+  // QF-20260719-275: long titles overflowed under the bar area into the right-edge pct labels.
+  it('truncates long titles with an ellipsis so they never collide with the pct label column', () => {
+    const longTitle = 'A very long wave title that would otherwise overflow the label column';
+    const svg = buildGanttSvg([{ title: longTitle, progress_pct: 50 }]);
+    expect(svg).not.toContain(longTitle);
+    expect(svg).toContain('…');
+  });
+
+  it('leaves short titles untouched', () => {
+    const svg = buildGanttSvg([{ title: 'Short', progress_pct: 50 }]);
+    expect(svg).toContain('>Short<');
+    expect(svg).not.toContain('…');
   });
 });
 
