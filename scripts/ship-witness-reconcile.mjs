@@ -29,6 +29,7 @@ import {
   WITNESS_CUTOVER_ISO,
   defaultFetchMergedPlatformPRs,
   detectUnwitnessedMerges,
+  fetchAllWitnessRows,
 } from '../lib/ship/witness-adoption.mjs';
 import { writeMergeWitnessTelemetry } from '../lib/ship/merge-witness-telemetry.mjs';
 import { deriveWorkKey } from '../lib/ship/work-key-derivation.mjs';
@@ -87,8 +88,10 @@ async function main() {
   const supabase = createClient(url, key);
 
   const merges = PLATFORM_REPOS.flatMap((r) => defaultFetchMergedPlatformPRs(r.owner, r.name, WITNESS_CUTOVER_ISO, defaultGhRunner));
-  const { data: telemetryRows, error } = await supabase.from('merge_witness_telemetry').select('repo, pr_number');
-  if (error) { console.error('[ship-witness-reconcile] merge_witness_telemetry query failed: ' + error.message); process.exit(1); }
+  // QF-20260719-201: paginated read — the bare select truncated at PostgREST's 1000-row default.
+  let telemetryRows;
+  try { telemetryRows = await fetchAllWitnessRows(supabase); }
+  catch (e) { console.error('[ship-witness-reconcile] ' + e.message); process.exit(1); }
 
   const { unwitnessed } = detectUnwitnessedMerges(merges, telemetryRows);
   const summary = await reconcileUnwitnessedMerges(unwitnessed, { supabase });
