@@ -21,6 +21,18 @@ Solomon is the deep-reasoning **oracle** — the session the fleet escalates its
 
 The answer deliberately carries **no** `signal_type` / `intent_action`, so neither the friction signal-router nor the deconfliction sweep scoops it (same invariant as the Adam lane).
 
+### `payload.framing_class` sub-discriminator (FW-3)
+
+An oracle answer (`adam_advisory` + `oracle:true`) may optionally carry
+`payload.framing_class` ∈ `{instrument, pick}` — a payload-shape sub-discriminator on this
+SAME leg, not a new kind (SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-B). `instrument` marks a
+tactical finding; `pick` marks a CMV/portfolio-altitude framing that should fail-closed to
+chairman-escalation rather than auto-sourcing. Stamped via `solomon-advisory.cjs send
+"<analysis>" --framing-class instrument|pick`; consumed in `adam-advisory.cjs`'s
+`drainInbox`, which tags the surfaced line (`framing:<class>`) and warns loudly on `pick`.
+This SD wires visibility only — the fail-closed pick-vs-instrument **routing** decision
+itself is a sibling FW-3 child SD's scope, not yet implemented.
+
 ## Who triggers a consult
 
 The consult is routed by the Phase-B/D triage SSOT (`lib/coordinator/solomon-triage.cjs` `evaluateSolomonTriage`): a worker/coordinator escalates after a counter-gated threshold (e.g. RCA recurrence ≥ 2, gate-fail ≥ 3) wires a `solomon_consult` row. Solomon does not poll for new problems — it drains what is routed to it.
