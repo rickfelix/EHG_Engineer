@@ -65,10 +65,13 @@ describe('QF-20260510-170: block-path audit await guard', () => {
     );
   });
 
-  it('NPM-INSTALL-RACE retains the QF-20260510-148 inline Promise.race pattern', () => {
-    // Functional parity site; documented predecessor of the auditAndExit helper.
+  it('NPM-INSTALL-RACE awaits auditAndExit (QF-20260719-120: inline race converged into the helper)', () => {
+    // QF-20260510-148 introduced the inline `await Promise.race` here; QF-20260719-120
+    // converged it into auditAndExit so the exit ALSO drains the undici pool (the raw
+    // exit(2) after the audit fetch raced libuv teardown → UV_HANDLE_CLOSING assertion).
+    // Same bounded audit-await guarantee, now with the drain.
     expect(HOOK_SRC).toMatch(
-      /'NPM-INSTALL-RACE'[\s\S]{0,2000}?await Promise\.race\(\[[\s\S]*?auditPromise[\s\S]*?setTimeout/
+      /'NPM-INSTALL-RACE'[\s\S]{0,2000}?await auditAndExit\(auditPromise,\s*2,\s*\d+\)/
     );
   });
 
@@ -80,7 +83,7 @@ describe('QF-20260510-170: block-path audit await guard', () => {
     const violations = [...HOOK_SRC.matchAll(regressionRe)];
     expect(
       violations,
-      `Found bare auditPermissionDecision(...'block'...) without 'const auditPromise = ' prefix:\n` +
+      'Found bare auditPermissionDecision(...\'block\'...) without \'const auditPromise = \' prefix:\n' +
       violations.map(m => '  ' + m[0]).join('\n')
     ).toEqual([]);
   });
