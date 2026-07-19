@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-07-18T19:22:44.213Z -->
-<!-- git_commit: 7d833b49 -->
+<!-- generated_at: 2026-07-19T13:09:09.312Z -->
+<!-- git_commit: a53d8fd0 -->
 <!-- db_snapshot_hash: 15274e313a3b8c43 -->
-<!-- file_content_hash: aef34c47b7572570 -->
+<!-- file_content_hash: 67006c9faa2a4956 -->
 
 # CLAUDE_ADAM_DIGEST.md - Adam Role (Enforcement)
 
