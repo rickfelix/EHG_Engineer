@@ -27,11 +27,14 @@ CREATE INDEX IF NOT EXISTS idx_forecast_ledger_status         ON public.forecast
 
 ALTER TABLE public.forecast_ledger ENABLE ROW LEVEL SECURITY;
 
--- Writes are service-role only; advisory evidence is broadly readable (SELECT) by authenticated.
+-- Reads AND writes are service-role only: this is an INTERNAL org-service ledger with no tenant
+-- column and no user-facing surface. A broad authenticated USING(true) SELECT would leak every
+-- org forecast to any signed-in caller (rls-anon-tenant-predicate-lint class — cf. companies /
+-- feedback prior incidents). All real consumers (gate-attach, truth-layer, CLI) use the
+-- service-role client; a future chairman-dashboard read would go through a scoped view/API,
+-- wired when the chairman applies this migration (operator-triple follow-up).
 CREATE POLICY forecast_ledger_service_all ON public.forecast_ledger
   FOR ALL TO service_role USING (true) WITH CHECK (true);
-CREATE POLICY forecast_ledger_read ON public.forecast_ledger
-  FOR SELECT TO authenticated USING (true);
 
 -- Sealed pre-registration: once a row exists its registered fields are immutable; only the
 -- resolution columns may change, and only on the open->resolved transition (no re-resolve).

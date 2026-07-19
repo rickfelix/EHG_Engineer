@@ -16,6 +16,7 @@
   "model_capability_reference",
   "chairman_constraints_proposals",
   "cost_governor_log",
+  "forecast_ledger",
   "sms_relay_staging",
   "sms_inbound_suspensions",
   "sms_decision_class_whitelist",
@@ -23,6 +24,7 @@
   "sms_outbound_obligations",
   "chairman_switchon_policy"
  ],
+ "_forecast_ledger_note": "chairman-gated, staged-not-applied table (SD-LEO-FEAT-FORECAST-LEDGER-001): migration database/migrations/20260719_forecast_ledger_STAGED.sql carries the @chairman-gated header (additive table WITH RLS+service-role policy — outside the additive-no-rls delegated-apply scope) and is deliberately not applied pre-chairman. The referencing code is FAIL-SOFT by construction: lib/forecasting/ledger.js + gate-attach.js use tableAbsent() (42P01/PGRST205 -> {inert:true} / empty attach) and lib/agents/venture-ceo/truth-layer.js computeCalibration() returns its empty-shape result when the table is absent — a missing table never crashes a live path. Remove from this allowlist and re-run npm run schema:snapshot:lint after a chairman applies the migration.",
  "_chairman_constraints_proposals_note": "chairman-gated, staged-not-applied table (SD-LEO-INFRA-STAGE-GROUNDING-INJECTOR-001 FR-3): migration database/migrations/20260716_chairman_constraints_proposals_governed_write_path.sql is deliberately not yet applied (requires-chairman-apply header). The referencing functions in lib/eva/stage-zero/synthesis/chairman-constraints.js (proposeConstraintFromOutcome / ratifyProposedConstraint) are the governed write-path API and are not yet wired into a live kill-gate/retro trigger, so the table's absence cannot crash a live path. Remove from this allowlist and re-run npm run schema:snapshot:lint after a chairman applies the migration.",
  "_door_routing_ledger_note": "apply-at-cutover table (SD-LEO-INFRA-TIERED-ORCHESTRATION-FABLE-001): migration 20260705_add_door_routing_ledger.sql applies at the Tuesday DOOR_ROUTING_ENABLED flip; the flag-gated fire-and-forget writer tolerates its absence pre-cutover. Remove from this allowlist after the migration applies.",
  "_venture_operating_burn_note": "chairman-gated, staged-not-applied table (SD-APEXNICHE-AI-LEO-ORCH-SPRINT-2026-001-E1): migration database/migrations/20260712_venture_operating_burn.sql is deliberately not yet applied to the live DB (per the @chairman-gated header). The fail-soft writer (scripts/operator/feed-venture-operating-burn.mjs) tolerates the table's absence -- every upsert call is wrapped in a per-step try/catch. Remove from this allowlist and re-run npm run schema:snapshot:lint after a chairman applies the migration.",
