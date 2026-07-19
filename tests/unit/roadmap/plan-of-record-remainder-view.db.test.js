@@ -10,6 +10,8 @@
 // Skips gracefully when SUPABASE creds are absent (CI lane without secrets).
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { OPEN_REMAINDER_STATES } from '../../../lib/roadmap/plan-check-status.js';
+import { buildRoadmapStatusDoc } from '../../../lib/chairman/daily-review/roadmap-status-doc.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
@@ -99,6 +101,22 @@ describe.skipIf(!HAS_CREDS)(
         .select('id, remainder_state');
       if (error) throw new Error(`second read failed: ${error.message}`);
       expect(partitionOf(secondRead)).toEqual(partitionOf(viewRows));
+    });
+
+    // TS-7: consumer parity. lib/chairman/daily-review/roadmap-status-doc.js derives its
+    // per-wave "remaining" count as (non-void total - satisfied_elsewhere), computed
+    // independently of lib/roadmap/plan-check-status.js's OPEN_REMAINDER_STATES set. Both are
+    // mathematically the same partition (every non-void row is either satisfied_elsewhere or
+    // one of the three OPEN_REMAINDER_STATES) -- this proves the two consumers never silently
+    // drift apart on what counts as "still remaining" plan-of-record work.
+    it('TS-7: roadmap-status-doc\'s (total - promoted) count matches plan-check-status\'s OPEN_REMAINDER_STATES count', async () => {
+      const doc = await buildRoadmapStatusDoc(sb);
+      const por = doc.sections.find((s) => s.id === 'plan_of_record');
+      expect(por.available).toBe(true);
+      const docOpenCount = por.data.waves.reduce((sum, w) => sum + (w.item_counts.total - w.item_counts.promoted), 0);
+
+      const rawOpenCount = viewRows.filter((r) => OPEN_REMAINDER_STATES.includes(r.remainder_state)).length;
+      expect(docOpenCount).toBe(rawOpenCount);
     });
 
     it('TS-6: an anon-role client sees 0 rows (RLS/REVOKE enforced) — paired with TS-10\'s positive existence proof', async () => {

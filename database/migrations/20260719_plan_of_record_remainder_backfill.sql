@@ -7,11 +7,15 @@
 -- (each call OVERWRITES remainder_state/_stamped_at/_stamped_by for that row,
 -- there is no append-only log to duplicate).
 --
--- This formalizes the 2 items already hand-corrected 2026-07-19 (pre-dating
--- this column) plus the 206 items whose promoted_to_sd_key points at a
--- cancelled SD (the W5 class of bug) into durable, stamped, provenanced data --
--- the backfill reconstructs the correct state for both classes uniformly via
--- the same function EXEC uses for future writes, no special-casing needed.
+-- This formalizes the incident's two known bad-data classes -- items already
+-- hand-corrected 2026-07-19 (pre-dating this column) and items whose
+-- promoted_to_sd_key points at a cancelled SD (the W5 class of bug, ~206
+-- items as scoped at PRD-drafting time; the shared roadmap keeps moving under
+-- concurrent fleet writes, so the exact live count drifts -- see the RAISE
+-- NOTICE partition breakdown below for the count as-applied) -- into durable,
+-- stamped, provenanced data. The backfill reconstructs the correct state for
+-- both classes uniformly via the same function EXEC uses for future writes,
+-- no special-casing needed.
 
 DO $$
 DECLARE
