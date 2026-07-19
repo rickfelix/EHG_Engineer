@@ -156,6 +156,8 @@ export async function checkVentureTraversalStalls(sb, priorSnapshot = {}) {
       .select('id, name, orchestrator_state, status, updated_at')
       .eq('status', 'active')
       .eq('orchestrator_state', 'blocked')
+      .eq('is_demo', false)
+      .is('deleted_at', null)
       .lt('updated_at', thresholdIso);
 
     for (const v of (stuck || [])) {

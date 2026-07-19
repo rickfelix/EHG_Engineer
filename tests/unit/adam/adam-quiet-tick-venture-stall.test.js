@@ -22,6 +22,7 @@ function ventureBuilder(rows) {
     select: () => b,
     eq: (col, val) => { filters.push((r) => r[col] === val); return b; },
     lt: (col, val) => { filters.push((r) => r[col] < val); return b; },
+    is: (col, val) => { filters.push((r) => r[col] == val); return b; }, // val is always null here (IS NULL)
     then: (resolve, reject) => Promise.resolve({ data: rows.filter((r) => filters.every((f) => f(r))), error: null }).then(resolve, reject),
   };
   return b;
@@ -55,7 +56,7 @@ function makeSupabase({ ventures = [], staleStageExecutions = new Set() } = {}) 
 describe('checkVentureTraversalStalls', () => {
   it('flags a status=active/orchestrator_state=blocked venture with no fresh stage_executions row, first-seen (not escalated)', async () => {
     const sb = makeSupabase({
-      ventures: [{ id: 'v1', name: 'North Star', status: 'active', orchestrator_state: 'blocked', updated_at: '2020-01-01' }],
+      ventures: [{ id: 'v1', name: 'North Star', status: 'active', orchestrator_state: 'blocked', updated_at: '2020-01-01', is_demo: false, deleted_at: null }],
       staleStageExecutions: new Set(['v1']),
     });
     const result = await checkVentureTraversalStalls(sb, {});
@@ -66,7 +67,7 @@ describe('checkVentureTraversalStalls', () => {
 
   it('escalates a venture already present in the prior snapshot', async () => {
     const sb = makeSupabase({
-      ventures: [{ id: 'v1', name: 'North Star', status: 'active', orchestrator_state: 'blocked', updated_at: '2020-01-01' }],
+      ventures: [{ id: 'v1', name: 'North Star', status: 'active', orchestrator_state: 'blocked', updated_at: '2020-01-01', is_demo: false, deleted_at: null }],
       staleStageExecutions: new Set(['v1']),
     });
     const result = await checkVentureTraversalStalls(sb, { v1: Date.now() - 60_000 });
@@ -75,7 +76,7 @@ describe('checkVentureTraversalStalls', () => {
 
   it('does NOT flag a venture with a fresh stage_executions row (actively executing, not stalled)', async () => {
     const sb = makeSupabase({
-      ventures: [{ id: 'v2', name: 'Active Venture', status: 'active', orchestrator_state: 'blocked', updated_at: '2020-01-01' }],
+      ventures: [{ id: 'v2', name: 'Active Venture', status: 'active', orchestrator_state: 'blocked', updated_at: '2020-01-01', is_demo: false, deleted_at: null }],
       staleStageExecutions: new Set(), // v2 has a fresh row
     });
     const result = await checkVentureTraversalStalls(sb, {});
@@ -84,8 +85,28 @@ describe('checkVentureTraversalStalls', () => {
 
   it('does NOT flag a status=cancelled venture even if orchestrator_state is stuck at blocked (dead/archived venture noise — QF-20260710-056 live-verified regression)', async () => {
     const sb = makeSupabase({
-      ventures: [{ id: 'v3', name: '__e2e_dead_fixture__', status: 'cancelled', orchestrator_state: 'blocked', updated_at: '2020-01-01' }],
+      ventures: [{ id: 'v3', name: '__e2e_dead_fixture__', status: 'cancelled', orchestrator_state: 'blocked', updated_at: '2020-01-01', is_demo: false, deleted_at: null }],
       staleStageExecutions: new Set(['v3']),
+    });
+    const result = await checkVentureTraversalStalls(sb, {});
+    expect(result.alerted).toHaveLength(0);
+  });
+
+  // QF-20260719-490: 5 of 7 live QUIET_TICK_VENTURE_STALL_ALERT lines were TEST-HARNESS-S20/__e2e__
+  // fixture ventures with is_demo=true, burying the 2 real blocked ventures (Alt-Text, ApexNiche).
+  it('does NOT flag an is_demo=true venture even if status/orchestrator_state/updated_at otherwise match (e2e fixture noise)', async () => {
+    const sb = makeSupabase({
+      ventures: [{ id: 'v4', name: 'TEST-HARNESS-S20-SD-A-e2e-idempotent-1783815086786', status: 'active', orchestrator_state: 'blocked', updated_at: '2020-01-01', is_demo: true, deleted_at: null }],
+      staleStageExecutions: new Set(['v4']),
+    });
+    const result = await checkVentureTraversalStalls(sb, {});
+    expect(result.alerted).toHaveLength(0);
+  });
+
+  it('does NOT flag a soft-deleted (deleted_at set) venture', async () => {
+    const sb = makeSupabase({
+      ventures: [{ id: 'v5', name: 'Deleted Venture', status: 'active', orchestrator_state: 'blocked', updated_at: '2020-01-01', is_demo: false, deleted_at: '2026-01-01T00:00:00Z' }],
+      staleStageExecutions: new Set(['v5']),
     });
     const result = await checkVentureTraversalStalls(sb, {});
     expect(result.alerted).toHaveLength(0);
