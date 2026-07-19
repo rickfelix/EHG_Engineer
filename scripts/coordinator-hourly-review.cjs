@@ -264,12 +264,17 @@ async function main() {
     const myId = process.env.CLAUDE_SESSION_ID;
     if (myId) {
       const { findUndelivered } = require('../lib/coordinator/receipts.cjs');
+      const { ADAM_EXCLUDED_KINDS } = require('../lib/fleet/worker-status.cjs');
       const sinceIso = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      // QF-20260719-828: EXCLUDED_KINDS stubs (cross_party_ping et al) are by-design
+      // never read — they'd both false-flag as undelivered AND eat the 100-row limit.
+      // Filter DB-side, null-safe (a bare NOT IN would silently drop kind-less rows).
       const { data: outbound } = await sb.from('session_coordination')
         .select('id, target_session, message_type, subject, payload, created_at, read_at')
         .eq('sender_session', myId)
         .is('read_at', null)
         .gte('created_at', sinceIso)
+        .or('payload->>kind.is.null,payload->>kind.not.in.(' + ADAM_EXCLUDED_KINDS.join(',') + ')')
         .limit(100);
       const { data: sessions } = await sb.from('claude_sessions')
         .select('session_id, heartbeat_at')
