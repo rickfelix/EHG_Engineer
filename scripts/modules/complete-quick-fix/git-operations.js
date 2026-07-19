@@ -71,7 +71,8 @@ export function resolveQFWorktreeFromCwd(qfId, cwd = process.cwd()) {
 export function parseGitStatusFiles(statusOutput) {
   if (!statusOutput) return [];
   const files = new Set();
-  for (const line of statusOutput.split('\n')) {
+  for (let line of statusOutput.split('\n')) {
+    line = line.replace(/\r$/, '');
     if (!line || line.length < 4) continue;
     let rest = line.slice(3);
     const arrowIdx = rest.indexOf(' -> ');
@@ -863,10 +864,15 @@ export async function commitAndPushChanges(testDir, qf, gitInfo, actualLoc, file
   try {
     const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8', cwd: testDir }).trim();
 
-    const gitStatus = execSync('git status --short', { encoding: 'utf-8', cwd: testDir }).trim();
+    // QF-20260719-760: parse the UNTRIMMED output — .trim() strips the leading
+    // space of the first line's XY status field (' M foo' → 'M foo'), so the
+    // first unstaged-modified file parsed as its name minus one char and was
+    // silently mis-scoped.
+    const gitStatusRaw = execSync('git status --short', { encoding: 'utf-8', cwd: testDir });
+    const gitStatus = gitStatusRaw.trim();
 
     if (gitStatus) {
-      const dirtyFiles = parseGitStatusFiles(gitStatus);
+      const dirtyFiles = parseGitStatusFiles(gitStatusRaw);
       const { scopedDirty, unrelatedDirty } = partitionDirtyByScope(dirtyFiles, filesChanged);
 
       if (scopedDirty.length === 0) {
@@ -878,6 +884,25 @@ export async function commitAndPushChanges(testDir, qf, gitInfo, actualLoc, file
           if (unrelatedDirty.length > 10) console.log(`        ... and ${unrelatedDirty.length - 10} more`);
         }
         console.log(`   Current commit: ${commitSha?.substring(0, 7) || 'Unknown'}\n`);
+        return commitSha;
+      }
+
+      // QF-20260719-760: shared-tree-contention guard. On a shared (non-isolated)
+      // working tree, filesChanged is the BRANCH's diff vs origin/main — not proof
+      // of QF authorship. A concurrent session's dirty files that overlap branch
+      // history (e.g. regenerated CLAUDE_*.md) classify as "scoped" and get swept
+      // into the QF commit (live incident: QF-20260719-038 committed 3 unrelated
+      // regen files). Out-of-scope dirty files alongside scoped ones are the
+      // contention signature — refuse the auto-commit outright instead of
+      // trusting the partition.
+      if (unrelatedDirty.length > 0 && !isInQFWorktree(testDir)) {
+        console.log(`   Current Branch: ${currentBranch}`);
+        console.log(`   🚫 Shared-tree contention: ${unrelatedDirty.length} dirty file(s) outside the QF scope and ${testDir} is not an isolated QF worktree.`);
+        unrelatedDirty.slice(0, 10).forEach(f => console.log(`        - ${f}`));
+        if (unrelatedDirty.length > 10) console.log(`        ... and ${unrelatedDirty.length - 10} more`);
+        console.log('   Refusing auto-commit: concurrent sessions may own files the scope partition would sweep in.');
+        console.log('   Re-run from the isolated QF worktree (.worktrees/qf/<QF-ID>), or commit the QF files manually.\n');
+        displayManualCommitInstructions(qf, currentBranch);
         return commitSha;
       }
 
