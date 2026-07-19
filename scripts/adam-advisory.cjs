@@ -53,7 +53,7 @@ const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
 const { enqueueRelayRequest } = require('../lib/coordinator/relay-queue.cjs');
-const { PAYLOAD_KINDS, DIRECTIVE_KINDS, ADAM_EXCLUDED_KINDS } = require('../lib/fleet/worker-status.cjs');
+const { PAYLOAD_KINDS, DIRECTIVE_KINDS, ADAM_EXCLUDED_KINDS, FRAMING_CLASSES } = require('../lib/fleet/worker-status.cjs');
 // SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-2: canonical body read (payload.body
 // primary, body-column fallback) — closes instance 4, the coordinator_request body-drop below.
 const { readCanonicalBody } = require('../lib/coordination/lane-contract.cjs');
@@ -626,7 +626,16 @@ async function drainInbox(supabase, sessionId, { quiet = false, background = fal
     // instead of silently misreading the row — surfaced, not consumed-differently (still drained).
     const skew = detectVersionSkew(r.payload);
     if (skew) console.warn(`  ⚠ PROTOCOL VERSION SKEW: sender v${skew.senderVersion}, receiver v${skew.receiverVersion} (id=${r.id})`);
-    console.log(`  • [${lane}/${kind}] id=${r.id} (${ageMin}m) ${text}`);
+    // SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-B: surface payload.framing_class on the
+    // adam_advisory+oracle:true leg — wire-plumbing only (this SD does not implement the
+    // fail-closed pick-vs-instrument ROUTING; that is a sibling FW-3 child SD's scope), so a
+    // pick-class framing is flagged loudly rather than silently auto-sourced without visibility.
+    const framingClass = r.payload && r.payload.framing_class;
+    const framingTag = framingClass ? ` framing:${framingClass}` : '';
+    if (framingClass === FRAMING_CLASSES.PICK) {
+      console.warn(`  ⚠ PICK-CLASS FRAMING (id=${r.id}): CMV/portfolio-altitude framing on the oracle leg — fail-closed chairman-escalation routing is not yet wired here (tracked by a sibling FW-3 child SD); do not auto-source.`);
+    }
+    console.log(`  • [${lane}/${kind}${framingTag}] id=${r.id} (${ageMin}m) ${text}`);
     ids.push(r.id);
   }
   // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-1): stamp routing by context —
