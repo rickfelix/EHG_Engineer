@@ -206,6 +206,16 @@ function buildDetectorResolvers(supabase) {
     // planted miss-direction fixture never trips the live gauge.
     'expired-premise-tags': async () => detectExpiredPremises(process.cwd(), { now: new Date() }),
     'stale-tree': async () => shapeStaleTreeResult(checkoutFreshness(process.cwd(), { role: 'fleet-gauge-runner' })),
+    // SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-D: fake-separation detector (design fw3 §3/§7.3).
+    // Env read at THIS boundary and injected into the pure core (DESIGN A2); zero-sample
+    // pre-Child-A worlds return count=0 cleanly with the sample visible.
+    'fw3-cmv-rejecter-fake-separation': async () => {
+      const { detectFakeSeparation } = await import('../lib/governance/fw3-cmv-rejecter.cjs');
+      return detectFakeSeparation(supabase, {
+        minSample: Number(process.env.FW3_REJECTER_MIN_SAMPLE) || 10,
+        epsilon: Number(process.env.FW3_REJECTER_EPSILON) || 0.05,
+      });
+    },
     'ship-witness-unwitnessed-merge': async () => {
       const ghRunner = (args) => {
         const r = spawnSync('gh', args, { encoding: 'utf8' });
