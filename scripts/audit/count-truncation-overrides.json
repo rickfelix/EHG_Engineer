@@ -1,1 +1,42 @@
-{}
+{
+ "scripts/fleet-dashboard.cjs:157": {
+  "classification": "tripwired",
+  "note": "warnIfCapTruncated applied at the destructure site (sessions) — display policy: warn, not crash"
+ },
+ "scripts/fleet-dashboard.cjs:164": {
+  "classification": "tripwired",
+  "note": "warnIfCapTruncated applied at the destructure site (allSessions)"
+ },
+ "scripts/fleet-dashboard.cjs:188": {
+  "classification": "bounded-by-design",
+  "note": "pending+unexpired worker_spawn_requests — operationally tiny set with expiry window"
+ },
+ "scripts/fleet-dashboard.cjs:200": {
+  "classification": "tripwired",
+  "note": "warnIfCapTruncated applied at the destructure site (drainAgents)"
+ },
+ "scripts/fleet-dashboard.cjs:272": {
+  "classification": "bounded-by-design",
+  "note": ".in(ids) — bounded by the live session-id list length"
+ },
+ "scripts/fleet-dashboard.cjs:343": {
+  "classification": "bounded-by-design",
+  "note": ".in(missingKeys) — bounded by claimed-SD key list"
+ },
+ "scripts/fleet-dashboard.cjs:353": {
+  "classification": "bounded-by-design",
+  "note": ".in(pendingKeys) — bounded by pending-claim key list"
+ },
+ "scripts/fleet-dashboard.cjs:392": {
+  "classification": "tripwired",
+  "note": "warnIfCapTruncated applied at the quickFixes filter site"
+ },
+ "scripts/fleet-dashboard.cjs:850": {
+  "classification": "bounded-by-design",
+  "note": "periodic-process liveness registry — small enumerated registry table"
+ },
+ "scripts/fleet-dashboard.cjs:1509": {
+  "classification": "tripwired",
+  "note": "warnIfCapTruncated applied before the empty-check (review-held SDs)"
+ }
+}
