@@ -1,0 +1,51 @@
+name: "Adam decision-scheduler tick (cron)"
+
+# SD-LEO-INFRA-ADAM-DECISION-SCHEDULER-001 — wires the previously-unwired away-bridge
+# (lib/comms/adam-outbound/away-bridge/index.js) to real seams via
+# lib/comms/adam-outbound/decision-scheduler/index.js. This workflow is the named
+# activation trigger the ARMED registration references. Static wiring pinned by
+# tests/unit/cron/adam-decision-scheduler-wiring.test.js — renaming this file, the tick
+# script, or its imports fails CI.
+
+on:
+  schedule:
+    # Hourly at :20, EXCLUDING 02:00-10:59 UTC — the chairman SMS sleep window is
+    # 22:00-06:00 America/New_York (02:00-10:00 UTC in EDT, 03:00-11:00 UTC in EST);
+    # skipping 02-10 UTC covers the union across both DST states year-round. The sender
+    # seam (chairman-sms-gate) ALSO guards its own quiet window in-process, so this
+    # schedule is belt-and-suspenders, not the only protection.
+    - cron: '20 0-1,11-23 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  tick:
+    name: Decision-scheduler tick
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run tick (--once)
+        run: node scripts/cron/adam-decision-scheduler-tick.mjs --once
