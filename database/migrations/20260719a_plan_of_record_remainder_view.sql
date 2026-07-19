@@ -103,14 +103,19 @@ CREATE TRIGGER roadmap_wave_items_stamp_remainder
 AFTER INSERT OR UPDATE OF item_disposition, lane, promoted_to_sd_key ON roadmap_wave_items
 FOR EACH ROW EXECUTE FUNCTION trg_stamp_plan_of_record_remainder_state();
 
--- 4. Cross-table trigger: when a promoted item's target SD later flips to
--- cancelled, re-stamp the affected items (this is the exact W5 incident --
--- without this, the same staleness bug this SD fixes would simply recur one
--- layer up).
+-- 4. Cross-table trigger: whenever a promoted item's target SD's status
+-- changes -- in EITHER direction -- re-stamp the affected items. Symmetric on
+-- purpose: re-stamping into cancelled is the exact W5 incident (without it,
+-- the same staleness bug this SD fixes would simply recur one layer up); the
+-- reverse (an SD un-cancelled/reactivated via scripts/reactivate-sd.js or a
+-- direct status UPDATE) needs the same treatment so a previously void item
+-- doesn't stay stuck void once its target SD is live again. The stamp
+-- function already re-derives void vs. satisfied_elsewhere from whatever the
+-- CURRENT linked-SD status is, so no special-casing by direction is needed.
 CREATE OR REPLACE FUNCTION trg_restamp_items_on_sd_cancel()
 RETURNS trigger AS $$
 BEGIN
-  IF NEW.status = 'cancelled' AND (OLD.status IS DISTINCT FROM 'cancelled') THEN
+  IF OLD.status IS DISTINCT FROM NEW.status THEN
     PERFORM stamp_plan_of_record_remainder_state(id)
     FROM roadmap_wave_items WHERE promoted_to_sd_key = NEW.sd_key;
   END IF;

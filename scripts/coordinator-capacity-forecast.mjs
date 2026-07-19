@@ -32,6 +32,7 @@ import { dirname, join } from 'path';
 // fixtures AND bare-shell stubs (neither can pass LEAD-TO-PLAN) never inflate belt depth —
 // counting them as claimable over-reports capacity and suppresses the deficit/Adam alert.
 import { isExcludedFromBelt } from '../lib/coordinator/sd-exclusion.mjs';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 // SD-LEO-INFRA-BACKLOG-RANK-CLAIMABLE-ELIGIBILITY-ALIGN-001: the forecaster builds its OWN claimable
 // belt (it does not read the ranker's dispatch_rank), so it must apply the SAME shared claim-eligibility
@@ -531,16 +532,18 @@ async function emitMaskedStallEscalation(f) {
 // gated_on_chairman | in_flight_or_sequence_blocked — excluding satisfied_elsewhere/void.
 // A column-select (not count/head) is used deliberately: PostgREST HEAD/count queries
 // return error=null even for a nonexistent view, which would have silently reported 0
-// instead of failing loud.
+// instead of failing loud. fetchAllPaginated range-pages the read so the count itself
+// never silently truncates at PostgREST's 1000-row cap either -- the exact live incident
+// this SD exists to fix (a gauge read "1000" while the true count was 1495).
 // Fail-soft: any error (view absent/unreadable) → null ("unknown"), never throws or blocks the forecast.
 async function countUnpromotedRoadmapItems(client) {
   try {
-    const { data, error } = await client
-      .from('v_plan_of_record_remainder')
-      .select('id, remainder_state')
-      .in('remainder_state', ['promotable_now', 'gated_on_chairman', 'in_flight_or_sequence_blocked']);
-    if (error) return null;
-    return Array.isArray(data) ? data.length : null;
+    const rows = await fetchAllPaginated(() =>
+      client
+        .from('v_plan_of_record_remainder')
+        .select('id, remainder_state')
+        .in('remainder_state', ['promotable_now', 'gated_on_chairman', 'in_flight_or_sequence_blocked']));
+    return rows.length;
   } catch {
     return null;
   }

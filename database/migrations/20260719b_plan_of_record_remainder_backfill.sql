@@ -2,7 +2,7 @@
 -- SD-LEO-INFRA-PLAN-OF-RECORD-REMAINDER-VIEW-001
 -- Data migration: backfill remainder_state for all existing roadmap_wave_items
 -- rows via the canonical stamp_plan_of_record_remainder_state() function
--- (20260719_plan_of_record_remainder_view.sql). Idempotent -- re-running
+-- (20260719a_plan_of_record_remainder_view.sql). Idempotent -- re-running
 -- re-stamps every row with the same deterministic result, never double-stamps
 -- (each call OVERWRITES remainder_state/_stamped_at/_stamped_by for that row,
 -- there is no append-only log to duplicate).

@@ -1,6 +1,6 @@
 -- @approved-by: codestreetlabs@gmail.com
 -- SD-LEO-INFRA-PLAN-OF-RECORD-REMAINDER-VIEW-001 (follow-up to
--- 20260719_plan_of_record_remainder_view.sql)
+-- 20260719a_plan_of_record_remainder_view.sql)
 --
 -- Adds rwi.metadata to v_plan_of_record_remainder. Follow-up migration rather
 -- than editing the prior file directly -- apply-migration.js's anti-tamper
@@ -34,5 +34,5 @@ COMMIT;
 
 -- ============================================================
 -- ROLLBACK PATH (manual paste): re-run the prior migration's view definition
--- (20260719_plan_of_record_remainder_view.sql section 5) to drop the metadata
+-- (20260719a_plan_of_record_remainder_view.sql section 5) to drop the metadata
 -- column back off, or simply leave it -- it is additive and harmless if kept.
