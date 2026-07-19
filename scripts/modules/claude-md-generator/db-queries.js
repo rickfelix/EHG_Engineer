@@ -3,6 +3,14 @@
  * Handles all Supabase queries for protocol data
  */
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 4: leo_protocol_sections is the
+// SSOT for every generated CLAUDE_*.md — a read silently capped at the PostgREST 1000-row
+// max would TRUNCATE the generated protocol files with no error. The sections read
+// paginates to completion AND cross-checks an exact head-count; on ANY failure the
+// generator ABORTS (throws) — never generate from a partial section set. The auxiliary
+// fetchers below paginate too but keep their pre-existing fail-open (warn + empty) policy.
+import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
+
 /**
  * Get active protocol from database
  * @param {Object} supabase - Supabase client
@@ -19,7 +27,10 @@ async function getActiveProtocol(supabase) {
     throw new Error('No active protocol found in database');
   }
 
-  const { data: sections } = await supabase
+  // COUNT-TRUNCATION DISCIPLINE (FR-6 batch 4): paginate to completion; a thrown page
+  // error propagates and ABORTS generation (rule-2 guard semantics — a partial section
+  // set must never silently render as the full protocol).
+  const sections = await fetchAllPaginated(() => supabase
     .from('leo_protocol_sections')
     .select('*')
     .eq('protocol_id', data.id)
@@ -29,10 +40,32 @@ async function getActiveProtocol(supabase) {
     // shuffle (table rewrite / VACUUM / plan change) with no DB content change — making the
     // generated docs non-deterministic AND invisible to the per-section drift digest. The
     // tiebreak pins a stable render order so the digest faithfully tracks rendered output.
+    // (The tiebreak also pins stable .range() page boundaries for the pagination above.)
     .order('order_index')
-    .order('id');
+    .order('id'));
 
-  data.sections = sections || [];
+  // Strongest generation guard: exact head-count vs fetched length. Catches any
+  // truncation mode pagination can't see (e.g. a proxy clamping pages). count===null
+  // with error===null means the MEASUREMENT failed — abort, never trust the fetch blind.
+  // A section inserted/deleted mid-generation also aborts (rerun is cheap and safe).
+  const { count, error: countError } = await supabase
+    .from('leo_protocol_sections')
+    .select('id', { count: 'exact', head: true })
+    .eq('protocol_id', data.id);
+  if (countError || typeof count !== 'number') {
+    throw new Error(
+      `leo_protocol_sections exact-count guard unavailable (${countError?.message || 'count=null'}) — `
+      + 'aborting generation rather than risk emitting a truncated protocol'
+    );
+  }
+  if (count !== sections.length) {
+    throw new Error(
+      `leo_protocol_sections count mismatch: exact count=${count} but fetched ${sections.length} — `
+      + 'aborting generation (partial section set would silently truncate CLAUDE_*.md)'
+    );
+  }
+
+  data.sections = sections;
   return data;
 }
 
@@ -42,12 +75,16 @@ async function getActiveProtocol(supabase) {
  * @returns {Promise<Array>} List of agents
  */
 async function getAgents(supabase) {
-  const { data } = await supabase
-    .from('leo_agents')
-    .select('*')
-    .order('agent_code');
-
-  return data || [];
+  try {
+    return await fetchAllPaginated(() => supabase
+      .from('leo_agents')
+      .select('*')
+      .order('agent_code')
+      .order('id'));
+  } catch (err) {
+    console.warn(`Could not load agents: ${err.message}`);
+    return [];
+  }
 }
 
 /**
@@ -56,16 +93,24 @@ async function getAgents(supabase) {
  * @returns {Promise<Array>} List of sub-agents with triggers
  */
 async function getSubAgents(supabase) {
-  const { data } = await supabase
-    .from('leo_sub_agents')
-    .select(`
+  try {
+    // No `id` tiebreak on purpose: the rendered sub-agent tables inherit this query's
+    // order, and the committed CLAUDE_*.md byte-order was produced by the un-tiebroken
+    // query (priority ties in physical order). The set is far below one page, so
+    // pagination never crosses a tie boundary; adding a tiebreak here would churn every
+    // generated doc for zero truncation benefit.
+    return await fetchAllPaginated(() => supabase
+      .from('leo_sub_agents')
+      .select(`
       *,
       triggers:leo_sub_agent_triggers(*)
     `)
-    .eq('active', true)
-    .order('priority', { ascending: false });
-
-  return data || [];
+      .eq('active', true)
+      .order('priority', { ascending: false }));
+  } catch (err) {
+    console.warn(`Could not load sub-agents: ${err.message}`);
+    return [];
+  }
 }
 
 /**
@@ -74,12 +119,18 @@ async function getSubAgents(supabase) {
  * @returns {Promise<Array>} List of handoff templates
  */
 async function getHandoffTemplates(supabase) {
-  const { data } = await supabase
-    .from('leo_handoff_templates')
-    .select('*')
-    .eq('active', true);
-
-  return data || [];
+  try {
+    // No .order() on purpose — rendered handoff sections inherit this order and the
+    // committed docs were generated without one (see getSubAgents note); tiny set,
+    // single page, so pagination soundness is unaffected.
+    return await fetchAllPaginated(() => supabase
+      .from('leo_handoff_templates')
+      .select('*')
+      .eq('active', true));
+  } catch (err) {
+    console.warn(`Could not load handoff templates: ${err.message}`);
+    return [];
+  }
 }
 
 /**
@@ -88,12 +139,17 @@ async function getHandoffTemplates(supabase) {
  * @returns {Promise<Array>} List of validation rules
  */
 async function getValidationRules(supabase) {
-  const { data } = await supabase
-    .from('leo_validation_rules')
-    .select('*')
-    .eq('active', true);
-
-  return data || [];
+  try {
+    // No .order() on purpose — rendered validation-rule sections inherit this order
+    // and the committed docs were generated without one (see getSubAgents note).
+    return await fetchAllPaginated(() => supabase
+      .from('leo_validation_rules')
+      .select('*')
+      .eq('active', true));
+  } catch (err) {
+    console.warn(`Could not load validation rules: ${err.message}`);
+    return [];
+  }
 }
 
 /**
@@ -102,17 +158,17 @@ async function getValidationRules(supabase) {
  * @returns {Promise<Array>} List of schema constraints
  */
 async function getSchemaConstraints(supabase) {
-  const { data, error } = await supabase
-    .from('leo_schema_constraints')
-    .select('*')
-    .order('table_name');
-
-  if (error) {
+  try {
+    // table_name ties keep physical order (no id tiebreak) — render-order
+    // compatibility, see getSubAgents note.
+    return await fetchAllPaginated(() => supabase
+      .from('leo_schema_constraints')
+      .select('*')
+      .order('table_name'));
+  } catch {
     console.warn('Could not load schema constraints (table may not exist yet)');
     return [];
   }
-
-  return data || [];
 }
 
 /**
@@ -121,18 +177,18 @@ async function getSchemaConstraints(supabase) {
  * @returns {Promise<Array>} List of process scripts
  */
 async function getProcessScripts(supabase) {
-  const { data, error } = await supabase
-    .from('leo_process_scripts')
-    .select('*')
-    .eq('active', true)
-    .order('category');
-
-  if (error) {
+  try {
+    // Category ties keep physical order (no id tiebreak) — render-order compatibility,
+    // see getSubAgents note.
+    return await fetchAllPaginated(() => supabase
+      .from('leo_process_scripts')
+      .select('*')
+      .eq('active', true)
+      .order('category'));
+  } catch {
     console.warn('Could not load process scripts (table may not exist yet)');
     return [];
   }
-
-  return data || [];
 }
 
 /**
@@ -240,12 +296,14 @@ async function getGateHealth(supabase) {
       .limit(5);
 
     if (error) {
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from('leo_gate_reviews')
-        .select('gate, score')
-        .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
-
-      if (fallbackError) {
+      let fallbackData;
+      try {
+        fallbackData = await fetchAllPaginated(() => supabase
+          .from('leo_gate_reviews')
+          .select('gate, score')
+          .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+          .order('id'));
+      } catch {
         console.warn('Could not load gate health (tables may not exist yet)');
         return [];
       }
@@ -311,18 +369,13 @@ async function getPendingProposals(supabase, limit = 5) {
  */
 async function getAutonomousDirectives(supabase) {
   try {
-    const { data, error } = await supabase
+    // display_order ties keep physical order (no id tiebreak) — render-order
+    // compatibility, see getSubAgents note.
+    return await fetchAllPaginated(() => supabase
       .from('leo_autonomous_directives')
       .select('*')
       .eq('active', true)
-      .order('display_order');
-
-    if (error) {
-      console.warn('Could not load autonomous directives (table may not exist yet)');
-      return [];
-    }
-
-    return data || [];
+      .order('display_order'));
   } catch (err) {
     console.warn('Could not load autonomous directives:', err.message);
     return [];

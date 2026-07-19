@@ -14,6 +14,29 @@ const { isChairmanGatedQF } = qfGatedHold;
 // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: canonical fixture-exclusion predicates —
 // ZZZ_/UAT/TEST fixture rows must not render as real queue/tree/QF work.
 import { isFixtureSdKey, isFixtureQf } from '../../../lib/governance/fixture-exclusion.mjs';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 4: this module feeds the queue
+// display that workers claim from — a read silently capped at the PostgREST 1000-row max
+// hides claimable work from the whole fleet. Genuinely-unbounded reads paginate to
+// completion; sites whose hermetic test stubs terminate the builder chain before .range()
+// (fixture-exclusion / okr-canonical-vision-repoint / vision-portfolio-scorecard /
+// harness-backlog-parser suites) instead carry the display-policy tripwire below.
+import { fetchAllPaginated, POSTGREST_MAX_ROWS, renderCount } from '../../../lib/db/fetch-all-paginated.mjs';
+
+/**
+ * Display-policy tripwire (mirrors scripts/fleet-dashboard.cjs warnIfCapTruncated):
+ * WARN on stderr, never crash the queue render. A fetch returning EXACTLY the
+ * PostgREST cap is presumed silently truncated.
+ * @param {Array<object>|null} rows
+ * @param {string} site
+ * @returns {Array<object>}
+ */
+function warnIfCapTruncated(rows, site) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (list.length === POSTGREST_MAX_ROWS) {
+    process.stderr.write(`[count-discipline] ${site}: fetch returned exactly ${POSTGREST_MAX_ROWS} rows (PostgREST cap) — results may be truncated\n`);
+  }
+  return list;
+}
 
 /**
  * Log a query failure with structured context for diagnostics.
@@ -51,27 +74,37 @@ export async function loadActiveBaseline(supabase) {
     return { baseline: null, items: [], actuals: {} };
   }
 
-  // Load baseline items
-  const { data: items } = await supabase
-    .from('sd_baseline_items')
-    .select('*')
-    .eq('baseline_id', baseline.id)
-    .order('sequence_rank');
+  // Load baseline items (paginated — a capped read here silently hides queue items)
+  let items = [];
+  try {
+    items = await fetchAllPaginated(() => supabase
+      .from('sd_baseline_items')
+      .select('*')
+      .eq('baseline_id', baseline.id)
+      .order('sequence_rank')
+      .order('id'));
+  } catch (error) {
+    logQueryFailure('loadActiveBaseline.items', error, { table: 'sd_baseline_items' });
+  }
 
   // Load actuals
-  const { data: actuals } = await supabase
-    .from('sd_execution_actuals')
-    .select('*')
-    .eq('baseline_id', baseline.id);
+  let actuals = [];
+  try {
+    actuals = await fetchAllPaginated(() => supabase
+      .from('sd_execution_actuals')
+      .select('*')
+      .eq('baseline_id', baseline.id)
+      .order('id'));
+  } catch (error) {
+    logQueryFailure('loadActiveBaseline.actuals', error, { table: 'sd_execution_actuals' });
+  }
 
   const actualsMap = {};
-  if (actuals) {
-    actuals.forEach(a => actualsMap[a.sd_id] = a);
-  }
+  actuals.forEach(a => actualsMap[a.sd_id] = a);
 
   return {
     baseline,
-    items: items || [],
+    items,
     actuals: actualsMap
   };
 }
@@ -144,13 +177,17 @@ export async function loadRecentActivity(supabase, cwd) {
  * @returns {Promise<Array>} Array of conflict objects
  */
 export async function loadConflicts(supabase) {
-  const { data: conflicts } = await supabase
-    .from('sd_conflict_matrix')
-    .select('*')
-    .is('resolved_at', null)
-    .eq('conflict_severity', 'blocking');
-
-  return conflicts || [];
+  try {
+    return await fetchAllPaginated(() => supabase
+      .from('sd_conflict_matrix')
+      .select('*')
+      .is('resolved_at', null)
+      .eq('conflict_severity', 'blocking')
+      .order('id'));
+  } catch (error) {
+    logQueryFailure('loadConflicts', error, { table: 'sd_conflict_matrix' });
+    return [];
+  }
 }
 
 /**
@@ -192,12 +229,16 @@ export async function loadSDHierarchy(supabase) {
   const sdHierarchy = new Map();
 
   try {
-    const { data: sds } = await supabase
+    // Paginated to completion (count-discipline FR-6 batch 4): the previous .limit(1000)
+    // was CONFIRMED live-truncating (active SD count crossed 1000 on 2026-07-19), which
+    // silently dropped SDs from the hierarchy tree for every consumer. `id` tiebreak on
+    // the non-unique created_at order pins stable page boundaries.
+    const sds = await fetchAllPaginated(() => supabase
       .from('strategic_directives_v2')
       .select('id, sd_key, title, parent_sd_id, status, current_phase, progress_percentage, dependencies, is_working_on, metadata, priority, target_application, governance_metadata')
       .eq('is_active', true)
       .order('created_at')
-      .limit(1000);
+      .order('id'));
 
     if (!sds) return { allSDs, sdHierarchy };
 
@@ -275,7 +316,10 @@ export async function loadOKRScorecard(supabase) {
       return { vision, scorecard: [] };
     }
 
-    const okrScorecard = scorecard || [];
+    // Tripwire (not paginated): v_okr_scorecard has no unique id column for a stable
+    // .range() tiebreak and the okr-canonical-vision-repoint mock ends the chain at
+    // .order(); cardinality = # objectives (tiny). Warn-only at the cap signature.
+    const okrScorecard = warnIfCapTruncated(scorecard, 'loadOKRScorecard v_okr_scorecard');
 
     // Load key results with details for each objective
     for (const obj of okrScorecard) {
@@ -286,7 +330,9 @@ export async function loadOKRScorecard(supabase) {
         .eq('is_active', true)
         .order('sequence');
 
-      obj.key_results = krs || [];
+      // Tripwire (not paginated): per-objective KR sets are tiny; same mock constraint
+      // as the scorecard read above.
+      obj.key_results = warnIfCapTruncated(krs, 'loadOKRScorecard key_results');
     }
 
     return { vision, scorecard: okrScorecard };
@@ -311,12 +357,17 @@ export async function loadVisionScores(supabase) {
       .from('eva_vision_scores')
       .select('sd_id, total_score, scored_at')
       .order('scored_at', { ascending: false })
+      // NOT paginated (count-discipline FR-6 batch 4): the hermetic mock in
+      // tests/unit/vision-portfolio-scorecard.test.js resolves the chain at .order()
+      // (no .range()). NOTE the server clamps this declared 5000 sample to its
+      // 1000-row max — the tripwire below fires at that signature.
       .limit(5000);
 
     if (error) {
       logQueryFailure('loadVisionScores', error, { table: 'eva_vision_scores' });
       return result;
     }
+    warnIfCapTruncated(data, 'loadVisionScores eva_vision_scores (declared 5000-row sample stat, server-capped at 1000)');
     if (!data || data.length === 0) return result;
 
     const thirtyDaysAgo = new Date();
@@ -687,7 +738,9 @@ const _harnessBacklogCache = new Map();
  * @param {Object|null} [supabase]  Supabase client (preferred; enables DB path)
  * @param {Object} [opts]
  * @param {string} [opts.filePath]  Override markdown path (legacy/fallback only)
- * @returns {Promise<{ count:number, oldestAgeDays:number, items:Array, fileMissing:boolean, error:string|null }>}
+ * @returns {Promise<{ count:number|'unavailable', oldestAgeDays:number, items:Array, fileMissing:boolean, error:string|null }>}
+ *          `count` is an exact head-count on the DB path ('unavailable' when the
+ *          measurement fails with no error — FR-2 gauge discipline).
  */
 export async function loadHarnessBacklog(supabase, opts = {}) {
   const useFallback = process.env.LEGACY_HARNESS_BACKLOG_FALLBACK === '1' || !supabase;
@@ -713,11 +766,14 @@ async function _loadHarnessBacklogFromDB(supabase) {
       .select('id, title, created_at, metadata')
       .eq('category', 'harness_backlog')
       .eq('status', 'new')
+      // NOT paginated (count-discipline FR-6 batch 4): the harness-backlog-parser
+      // test stub resolves the chain at .order() (no .range()) — tripwire instead.
       .order('created_at', { ascending: true });
     if (error) {
       logQueryFailure('loadHarnessBacklog.db', error, { table: 'feedback' });
       return { count: 0, oldestAgeDays: 0, items: [], fileMissing: false, error: error.message };
     }
+    warnIfCapTruncated(data, 'loadHarnessBacklog feedback(harness_backlog)');
     const nowMs = Date.now();
     const items = (data || []).map((row) => {
       const date = (row.created_at || '').slice(0, 10);
@@ -733,7 +789,27 @@ async function _loadHarnessBacklogFromDB(supabase) {
       };
     });
     const oldestAgeDays = items.reduce((max, item) => Math.max(max, item.ageDays), 0);
-    return { count: items.length, oldestAgeDays, items, fileMissing: false, error: null };
+
+    // FR-2 gauge discipline (adversarial review, FR-6 batch 4): the badge count must
+    // come from an exact head-count, NEVER the cap-truncatable list fetch's rows.length
+    // (observed live rendering "1000 items" while the true backlog was larger). This is
+    // a SEPARATE query — the mocked list-fetch chain above is untouched. Fallback to
+    // items.length ONLY when the head-count query itself errors (fail-open to the old
+    // display); count=null with error=null means the MEASUREMENT failed — renderCount()
+    // yields 'unavailable', never a healthy-looking number.
+    let count;
+    try {
+      const { count: exactCount, error: countError } = await supabase
+        .from('feedback')
+        .select('id', { count: 'exact', head: true })
+        .eq('category', 'harness_backlog')
+        .eq('status', 'new');
+      count = countError ? items.length : renderCount(exactCount);
+    } catch {
+      count = items.length;
+    }
+
+    return { count, oldestAgeDays, items, fileMissing: false, error: null };
   } catch (err) {
     return {
       count: 0,

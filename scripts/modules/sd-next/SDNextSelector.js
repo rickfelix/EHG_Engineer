@@ -14,6 +14,11 @@ import { checkUncommittedChanges, getAffectedRepos } from '../../../lib/multi-re
 import { checkDependencyStatus } from '../../child-sd-preflight.js';
 import { VentureContextManager } from '../../../lib/eva/venture-context-manager.js';
 import { normalizeVenturePrefix } from '../sd-key-generator.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 4: the queue display feeds
+// worker claiming — a read silently capped at the PostgREST 1000-row max hides claimable
+// SDs from the whole fleet. Unbounded reads paginate to completion; each site keeps its
+// pre-existing error policy (fetchAllPaginated throws into the site's existing catch).
+import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
 
 import { colors } from './colors.js';
 
@@ -499,11 +504,15 @@ export class SDNextSelector {
       const sdIds = beyondLead.map(item => item.id).filter(Boolean);
       if (sdIds.length === 0) return;
 
-      const { data: handoffs } = await this.supabase
+      // Paginated: .in() bounds the SD set, not the handoff-row count — a capped read
+      // would drop accepted-handoff evidence and falsely badge SDs as STUCK. A pagination
+      // failure throws into the enclosing catch (items display normally, no _stuck flags).
+      const handoffs = await fetchAllPaginated(() => this.supabase
         .from('sd_phase_handoffs')
         .select('sd_id, from_phase, to_phase, status')
         .in('sd_id', sdIds)
-        .eq('status', 'accepted');
+        .eq('status', 'accepted')
+        .order('id'));
 
       // Group handoffs by sd_id
       const handoffMap = new Map();
@@ -725,14 +734,18 @@ export class SDNextSelector {
 
     // SINGLE SOURCE OF TRUTH: Query all active SDs directly from strategic_directives_v2
     // This ensures SDs appear even if baseline sync trigger failed (SD-LEO-INFRA-QUEUE-SIMPLIFY-001)
-    const { data: allSDs, error: sdError } = await this.supabase
-      .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, dependencies, is_active, parent_sd_id, category, metadata, vision_score, vision_origin_score_id, venture_id, governance_metadata')
-      .eq('is_active', true)
-      .in('status', ['draft', 'active', 'in_progress', 'planning'])
-      .order('created_at', { ascending: true });
-
-    if (sdError || !allSDs) {
+    // Paginated to completion (count-discipline FR-6 batch 4): this IS the claimable queue —
+    // a capped read here hides SDs from every worker. `id` tiebreak pins page boundaries.
+    let allSDs;
+    try {
+      allSDs = await fetchAllPaginated(() => this.supabase
+        .from('strategic_directives_v2')
+        .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, dependencies, is_active, parent_sd_id, category, metadata, vision_score, vision_origin_score_id, venture_id, governance_metadata')
+        .eq('is_active', true)
+        .in('status', ['draft', 'active', 'in_progress', 'planning'])
+        .order('created_at', { ascending: true })
+        .order('id'));
+    } catch (sdError) {
       console.log(`${colors.red}Error loading SDs: ${sdError?.message}${colors.reset}`);
       return;
     }
@@ -769,10 +782,13 @@ export class SDNextSelector {
       }
 
       const sdUUIDs = filteredSDs.map(sd => sd.id);
-      const { data: krAlignments } = await this.supabase
+      // Paginated: .in() bounds the SD set, not the alignment-row count. A pagination
+      // failure throws into the enclosing catch (OKR scoring skipped — prior policy).
+      const krAlignments = await fetchAllPaginated(() => this.supabase
         .from('sd_key_result_alignment')
         .select('sd_id, key_result_id, contribution_type, contribution_weight, key_results!inner(id, status, code, title)') // schema-lint-disable-line — embedded key_results!inner columns mis-attributed to sd_key_result_alignment by the lint parser; pre-existing query, table+embed verified live (SD-FDBK-INFRA-CLAIM-VISIBILITY-ATOMIC-001)
-        .in('sd_id', sdUUIDs);
+        .in('sd_id', sdUUIDs)
+        .order('id'));
 
       if (krAlignments && krAlignments.length > 0) {
         // Group alignments by SD for batch scoring

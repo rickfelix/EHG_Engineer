@@ -1,14 +1,14 @@
 {
  "sd": "SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001",
  "generated_by": "scripts/audit/count-truncation-inventory.mjs",
- "total_sites": 9166,
+ "total_sites": 9168,
  "by_classification": {
-  "bounded-by-design": 2937,
-  "needs-review": 1956,
-  "already-exact": 171,
-  "paginated": 42,
+  "bounded-by-design": 2950,
+  "needs-review": 1908,
+  "already-exact": 173,
+  "paginated": 72,
   "non-live-path": 4053,
-  "tripwired": 7
+  "tripwired": 12
  },
  "ledger_sites": [
   {
@@ -5267,59 +5267,22 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/claude-gen/data-fetchers.js:117",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/claude-gen/data-fetchers.js:181",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getHotPatterns — caller-bounded .limit(limit), default 5 (top-N hot patterns for generated docs)"
   },
   {
-   "site": "scripts/claude-gen/data-fetchers.js:146",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/claude-gen/data-fetchers.js:204",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getRecentRetrospectives — caller-bounded .limit(limit), default 5 (top-N recent retros)"
   },
   {
-   "site": "scripts/claude-gen/data-fetchers.js:169",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/claude-gen/data-fetchers.js:188",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/claude-gen/data-fetchers.js:225",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/claude-gen/data-fetchers.js:245",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/claude-gen/data-fetchers.js:44",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/claude-gen/data-fetchers.js:55",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/claude-gen/data-fetchers.js:69",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/claude-gen/data-fetchers.js:78",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/claude-gen/data-fetchers.js:89",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/claude-gen/data-fetchers.js:259",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getPendingProposals — caller-bounded .limit(limit), default 5 (top-N pending proposals)"
   },
   {
    "site": "scripts/cleanup-pending-sweep.mjs:184",
@@ -7332,69 +7295,28 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/modules/claude-md-generator/db-queries.js:107",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/claude-md-generator/db-queries.js:203",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getHotPatterns — caller-bounded .limit(limit), default 5 (top-N hot patterns)"
   },
   {
-   "site": "scripts/modules/claude-md-generator/db-queries.js:126",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/claude-md-generator/db-queries.js:270",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getRecentRetrospectives — caller-bounded .limit(limit), default 5"
   },
   {
-   "site": "scripts/modules/claude-md-generator/db-queries.js:147",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/claude-md-generator/db-queries.js:347",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getPendingProposals — caller-bounded .limit(limit), default 5"
   },
   {
-   "site": "scripts/modules/claude-md-generator/db-queries.js:214",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/claude-md-generator/db-queries.js:24",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/claude-md-generator/db-queries.js:245",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/claude-md-generator/db-queries.js:289",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/claude-md-generator/db-queries.js:316",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/claude-md-generator/db-queries.js:346",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/claude-md-generator/db-queries.js:47",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/claude-md-generator/db-queries.js:61",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/claude-md-generator/db-queries.js:79",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/claude-md-generator/db-queries.js:93",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/claude-md-generator/db-queries.js:399",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getVisionGapInsights — caller-bounded .limit(limit), default 3 (top-N VGAP patterns)"
   },
   {
    "site": "scripts/modules/cross-sd-consistency-validation.js:246",
@@ -8607,124 +8529,70 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/modules/sd-next/blocked-state-detector.js:142",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/sd-next/data-loaders.js:311",
+   "classification": "tripwired",
+   "auto_classification": "needs-review",
+   "exemption_note": "NOT paginated: v_okr_scorecard has no unique id tiebreak column and the okr-canonical-vision-repoint mock ends the chain at .order(); warnIfCapTruncated applied at the destructure (cardinality = # objectives, tiny)"
   },
   {
-   "site": "scripts/modules/sd-next/blocked-state-detector.js:158",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/sd-next/data-loaders.js:328",
+   "classification": "tripwired",
+   "auto_classification": "needs-review",
+   "exemption_note": "NOT paginated: per-objective key_results are tiny; same mock constraint as the scorecard read; warnIfCapTruncated applied at assignment"
   },
   {
-   "site": "scripts/modules/sd-next/blocked-state-detector.js:65",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/sd-next/data-loaders.js:358",
+   "classification": "tripwired",
+   "auto_classification": "needs-review",
+   "exemption_note": "NOT paginated: vision-portfolio-scorecard.test.js mock resolves the chain at .order() (no .range()); declared .limit(5000) sample is server-clamped to 1000 — warnIfCapTruncated fires at that signature"
   },
   {
-   "site": "scripts/modules/sd-next/data-loaders.js:149",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/sd-next/data-loaders.js:661",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "countActionableBaselineItems — .or(sd_key.in/id.in) lookup with .limit(sdIds.length*2), bounded by the baseline-item id list"
   },
   {
-   "site": "scripts/modules/sd-next/data-loaders.js:197",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/sd-next/data-loaders.js:766",
+   "classification": "tripwired",
+   "auto_classification": "needs-review",
+   "exemption_note": "NOT paginated: harness-backlog-parser.test.js stub resolves the chain at .order() (no .range()); warnIfCapTruncated applied after the error-check. The BADGE COUNT no longer uses this fetch's rows.length — a separate exact head-count gauge (renderCount) supplies it (adversarial-review fix)"
   },
   {
-   "site": "scripts/modules/sd-next/data-loaders.js:270",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/sd-next/dependency-resolver.js:126",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getUnresolvedDependencies — .or(sd_key.in/id.in) lookup with .limit(depKeys.length*2), bounded by the parsed dependency list"
   },
   {
-   "site": "scripts/modules/sd-next/data-loaders.js:284",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/sd-next/data-loaders.js:312",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/sd-next/data-loaders.js:57",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/sd-next/data-loaders.js:610",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/sd-next/data-loaders.js:64",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/sd-next/data-loaders.js:713",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/sd-next/dependency-resolver.js:122",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/sd-next/dependency-resolver.js:383",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/sd-next/dependency-resolver.js:76",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/sd-next/dependency-resolver.js:80",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "checkDependenciesResolved — .or(sd_key.in/id.in) lookup with .limit(depKeys.length*2), bounded by the parsed dependency list"
   },
   {
    "site": "scripts/modules/sd-next/display/fallback-queue.js:76",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(sdUUIDs) where the parent SD read caps at .limit(15) — at most 15 SDs x a handful of KR alignments each"
   },
   {
-   "site": "scripts/modules/sd-next/display/recommendations.js:127",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/sd-next/SDNextSelector.js:363",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(sessionIds) — one claude_sessions row per active-session id (list from getActiveSessions)"
   },
   {
-   "site": "scripts/modules/sd-next/display/recommendations.js:52",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/sd-next/SDNextSelector.js:842",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(ventureIds) — one ventures row per distinct venture_id on the filtered SD list"
   },
   {
-   "site": "scripts/modules/sd-next/SDNextSelector.js:358",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/sd-next/SDNextSelector.js:504",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/sd-next/SDNextSelector.js:730",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/sd-next/SDNextSelector.js:774",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/sd-next/SDNextSelector.js:826",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/sd-next/status-helpers.js:40",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "scripts/modules/sd-next/status-helpers.js:46",
+   "classification": "tripwired",
+   "auto_classification": "needs-review",
+   "exemption_note": "NOT paginated (FR-6 batch 4): sd-next-ghost-badge.test.js stubs the chain terminal at .eq() (no .range()) and pins the error-code branches; assertNotCapTruncated applied before Set build — throw lands in the existing warn-once catch (badges disabled, fail-open)"
   },
   {
    "site": "scripts/modules/sd-type-checker.js:366",
