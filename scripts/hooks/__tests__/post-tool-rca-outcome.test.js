@@ -63,6 +63,26 @@ describe('L4 — post-tool-rca-outcome.cjs', () => {
     expect(written.stderr_sha).toBe(expectedSha);
   });
 
+  it('SD-LEO-INFRA-RCA-TIERED-SIGNATURE-FALSE-POSITIVE-001: stdout_sha is captured alongside stderr_sha when stderr is empty', () => {
+    const payload = JSON.stringify({
+      tool_name: 'Bash',
+      tool_input: { command: 'node scripts/handoff.js execute PLAN-TO-LEAD SD-X' },
+      tool_response: { stdout: 'SD_TYPE_CHANGE_EXPLANATION_REQUIRED: provide a reason', stderr: '', interrupted: false, isImage: false, noOutputExpected: false },
+    });
+    const result = spawnSync('node', [HOOK_PATH], {
+      input: payload,
+      env: { ...process.env, CLAUDE_TOOL_NAME: 'Bash', CLAUDE_SESSION_ID: SESSION_ID, LEO_RETRY_STATE_DIR: tmpDir },
+      encoding: 'utf8',
+    });
+    expect(result.status).toBe(0);
+    const outFile = path.join(tmpDir, `last-outcome-${SESSION_ID}.json`);
+    const written = JSON.parse(fs.readFileSync(outFile, 'utf8'));
+    expect(written.stderr_sha).toBe('');
+    expect(written.stdout_sha).toMatch(/^[0-9a-f]{16}$/);
+    const { digestStdoutTail } = require(HOOK_PATH);
+    expect(written.stdout_sha).toBe(digestStdoutTail('SD_TYPE_CHANGE_EXPLANATION_REQUIRED: provide a reason'));
+  });
+
   it('TS-5 (Control 4): a SUCCESS payload (no exit_code, no stderr) records exit_code 0', () => {
     // Claude Code Bash tool_response carries NO exit_code; success was previously skipped.
     const payload = JSON.stringify({
