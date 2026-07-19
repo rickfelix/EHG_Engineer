@@ -32,6 +32,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs');
 const { decideCadence, detectSalientDelta, runCoresFailSoft } = require('../lib/coordinator/quiet-tick.cjs');
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
+const { hasUndeliveredChairmanEscalation } = require('../lib/coordinator/undelivered-escalation.cjs');
 // QF-20260719-138: emit the cross-party ping row ourselves (mechanical, byte-identical) rather
 // than instructing the coordinator to hand-insert it every tick (that tripped the RCA 3x guard).
 const { emitCrossPartyPing } = require('../lib/coordinator/cross-party-ping.cjs');
@@ -246,7 +247,10 @@ async function main() {
   // suppress the chairman-directive check too, even though that check needs no
   // coordinatorId at all. Run the two checks independently so a resolve.cjs hiccup
   // never masks the flagship (broadcast, coordinator-identity-agnostic) case.
-  const [sessionDirective, chairmanDirective] = await Promise.all([
+  // SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-H (FR-3): the undelivered pick-class
+  // chairman-escalation check runs as its OWN independent leg (internally fail-soft),
+  // so a hiccup in either directive detector can never mask it and vice versa.
+  const [sessionDirective, chairmanDirective, undeliveredEscalation] = await Promise.all([
     (async () => {
       try {
         const coordinatorId = await getActiveCoordinatorId(sb);
@@ -256,6 +260,7 @@ async function main() {
       }
     })(),
     hasOutstandingChairmanDirective(sb), // already internally fail-soft
+    hasUndeliveredChairmanEscalation(sb), // already internally fail-soft
   ]);
   const unactionedDirective = sessionDirective || chairmanDirective;
 
@@ -282,6 +287,7 @@ async function main() {
     quiescent,
     partyOffsetS: COORD_PARTY_OFFSET_S,
     hasUnactionedDirective: unactionedDirective,
+    hasUndeliveredChairmanEscalation: undeliveredEscalation,
   });
 
   try {
@@ -292,7 +298,7 @@ async function main() {
 
   const result = {
     mode: quiescent ? 'QUIESCENT' : 'ACTIVE',
-    modeReason: unactionedDirective ? `${modeReason} [DIRECTIVE_HARD_WAKE]` : modeReason,
+    modeReason: `${modeReason}${unactionedDirective ? ' [DIRECTIVE_HARD_WAKE]' : ''}${undeliveredEscalation ? ' [ESCALATION_HARD_WAKE]' : ''}`,
     acct: acctLabel,
     cores: tick.summary,
     failedCount: tick.failedCount,
