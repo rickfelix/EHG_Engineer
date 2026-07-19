@@ -14,6 +14,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { drainAndExit } from '../../lib/hooks/drain-undici.cjs'; // QF-20260719-890: drain before post-fetch exits
 import { execSync } from 'child_process';
 import dotenv from 'dotenv';
 
@@ -207,15 +208,19 @@ async function canTransitionPhase(supabase, sd, targetPhase, handoffType) {
   if (targetPhase === 'COMPLETED' || handoffType === 'LEAD-FINAL-APPROVAL') {
     // Completion requires UAT for types that need it
     if (uatRequirement === 'REQUIRED' || requirements.requiresUATExecution) {
+      // QF-20260719-890 (schema-reference-lint): uat_test_runs has no overall_result
+      // column — selecting it errored the whole query into data=null, so this UAT gate
+      // silently never saw any runs. pass/partial_pass maps to pass_rate >= 93 per the
+      // canonical GREEN/YELLOW thresholds in lib/uat/result-recorder.js.
       const { data: uatRecords } = await supabase
         .from('uat_test_runs')
-        .select('id, status, overall_result')
+        .select('id, status, pass_rate')
         .eq('sd_id', sd.id)
         .order('created_at', { ascending: false })
         .limit(1);
 
       const hasPassingUAT = uatRecords?.some(r =>
-        r.status === 'completed' && ['pass', 'partial_pass'].includes(r.overall_result)
+        r.status === 'completed' && Number(r.pass_rate) >= 93
       );
 
       if (!hasPassingUAT) {
@@ -313,13 +318,13 @@ async function main() {
     .single();
 
   if (sdError || !sd) {
-    process.exit(0);
+    await drainAndExit(0);
   }
 
   // Determine target phase
   const targetPhase = getTargetPhaseForHandoff(transition.handoffType);
   if (!targetPhase) {
-    process.exit(0);
+    await drainAndExit(0);
   }
 
   // Validate transition
@@ -353,11 +358,11 @@ async function main() {
     console.log(`✅ Phase transition ${sd.current_phase} -> ${targetPhase} validated for ${sd.sd_key}`);
   }
 
-  process.exit(0);
+  await drainAndExit(0);
 }
 
 // Execute
 main().catch(err => {
   console.error(`[phase-state-enforcement] Error: ${err.message}`);
-  process.exit(0);
+  return drainAndExit(0);
 });

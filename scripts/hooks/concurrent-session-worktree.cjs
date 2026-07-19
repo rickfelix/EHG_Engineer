@@ -27,6 +27,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-20260719-890: drain before post-fetch exits
 const { createClient } = require('@supabase/supabase-js');
 const { detectCodebase } = require('./lib/detect-context.cjs');
 const { stampBranch } = require('../../lib/session-writer.cjs');
@@ -924,8 +925,8 @@ module.exports = { isWorktreeInUseBySession, getActiveDbClaims, cleanupStaleConc
 if (require.main === module) {
   // Run with timeout protection (hook has 5s timeout)
   const hookTimeout = setTimeout(() => {
-    // If we haven't finished in time, exit cleanly
-    process.exit(0);
+    // If we haven't finished in time, exit cleanly (drain first — may fire mid-fetch)
+    drainAndExit(0);
   }, 4500);
 
   main()

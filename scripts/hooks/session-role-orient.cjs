@@ -2,6 +2,7 @@
  * Emits 3-line [ROLE] block (SOLO | WORKER | COORDINATOR). */
 const fs = require('fs');
 const path = require('path');
+const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-20260719-890: drain before post-fetch exits
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const COORD_FILE = path.resolve(__dirname, '../../.claude/active-coordinator.json');
@@ -74,5 +75,5 @@ function main() {
     setTimeout(resolve, BUDGET_MS + 300);
   });
 }
-if (require.main === module) main().then(() => process.exit(0)).catch(() => process.exit(0));
+if (require.main === module) main().then(() => drainAndExit(0)).catch(() => drainAndExit(0));
 module.exports = { readCoordFile, fetchMeta, findActiveCoord, decide, SOLO, COORDINATOR, workerLines };

@@ -20,6 +20,7 @@
 const crypto = require('crypto');
 const path = require('path');
 const { detectProjectDir } = require('./lib/detect-context.cjs');
+const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-20260719-890: drain before post-fetch exits
 
 // Environment configuration (TR-3)
 const RECORDER_MODE = process.env.SUBAGENT_RECORDER_MODE || 'best-effort';
@@ -446,7 +447,7 @@ async function processHookInput(hookInput) {
 
     // TR-3: In strict mode, fail the hook
     if (RECORDER_MODE === 'strict') {
-      process.exit(1);
+      await drainAndExit(1);
     }
     // In best-effort mode, continue (non-blocking)
   }
@@ -478,10 +479,10 @@ function main() {
       });
 
       if (RECORDER_MODE === 'strict') {
-        process.exit(1);
+        await drainAndExit(1);
       }
     }
-    process.exit(0);
+    await drainAndExit(0);
   });
 
   // Handle case where stdin is closed immediately
@@ -499,7 +500,7 @@ function main() {
         // Silently fail in timeout
       }
     }
-    process.exit(0);
+    await drainAndExit(0);
   }, 5000);
 }
 

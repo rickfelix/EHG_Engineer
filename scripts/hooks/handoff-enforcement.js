@@ -15,6 +15,7 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
+const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-20260719-890: drain before post-fetch exits
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -271,7 +272,7 @@ async function main() {
   const validation = await validateHandoffs(sdKey);
 
   if (validation.valid) {
-    process.exit(0);
+    await drainAndExit(0);
   }
 
   // Handoffs not complete - BLOCK
@@ -324,12 +325,12 @@ async function main() {
   console.log(JSON.stringify(output));
 
   // Exit with code 2 to block the tool
-  process.exit(2);
+  await drainAndExit(2);
 }
 
 // Execute
 main().catch(err => {
   console.error(`[handoff-enforcement] BLOCKED: Unhandled error (fail-closed): ${err.message}`);
   // Fail-closed on errors - GOV-008
-  process.exit(2);
+  return drainAndExit(2);
 });

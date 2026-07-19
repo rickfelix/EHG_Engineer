@@ -19,6 +19,7 @@
 const fs = require('fs');
 const path = require('path');
 const { rankForModelEffort } = require('../../lib/fleet/tier-ladder.cjs');
+const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-20260719-890: drain before post-fetch exits
 const { execSync } = require('child_process');
 
 // SD-FDBK-ENH-SESSIONSTART-HOOK-CAPTURE-001 (FR-7): self-load .env so process.env.SUPABASE_*
@@ -658,5 +659,5 @@ function main() {
 module.exports = { selectAncestorFromChain, findClaudeCodePid, upsertSessionRow, buildSessionMetadata };
 
 if (require.main === module) {
-  main().then(() => process.exit(0)).catch(() => process.exit(0));
+  main().then(() => drainAndExit(0)).catch(() => drainAndExit(0));
 }

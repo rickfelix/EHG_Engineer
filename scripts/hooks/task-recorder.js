@@ -19,6 +19,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { drainAndExit } from '../../lib/hooks/drain-undici.cjs'; // QF-20260719-890: drain before post-fetch exits
 import { execSync } from 'child_process';
 import dotenv from 'dotenv';
 
@@ -120,12 +121,12 @@ async function main() {
     }
 
     // Success - exit cleanly
-    process.exit(0);
+    await drainAndExit(0);
 
   } catch (err) {
     // Any error - log but don't block
     console.error(`[task-recorder] Error: ${err.message}`);
-    process.exit(0);
+    await drainAndExit(0);
   }
 }
 

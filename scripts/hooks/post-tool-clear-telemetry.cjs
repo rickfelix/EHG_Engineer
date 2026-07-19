@@ -20,6 +20,7 @@
 const { execSync } = require('child_process');
 const path = require('path');
 const { resolveSessionId } = require('../../lib/hooks/session-id.cjs');
+const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-20260719-890: drain before post-fetch exits
 
 // Never throw — the entire hook is wrapped.
 (async function main() {
@@ -76,7 +77,7 @@ const { resolveSessionId } = require('../../lib/hooks/session-id.cjs');
       );
     }
   }
-})().then(() => process.exit(0)); // QF-20260509-199: process.exit(0) so fire-and-forget telemetry timers don't pin the event loop
+})().then(() => drainAndExit(0)); // QF-20260509-199 exit kept; QF-20260719-890: drain first (post-fetch exit)
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
