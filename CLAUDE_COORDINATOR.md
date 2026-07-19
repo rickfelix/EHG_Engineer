@@ -1,8 +1,8 @@
-<!-- file_content_hash: 737571465f959f6e -->
+<!-- file_content_hash: c7e57138d8c0f54c -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-07-18 3:22:44 PM
+**Generated**: 2026-07-19 9:09:09 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -56,6 +56,9 @@ When a worker signals a BLOCKED claim (a dependency / credential / gate / migrat
 3. ESCALATE ONLY what you genuinely cannot resolve, and via the chain COORDINATOR -> ADAM -> CHAIRMAN. Never skip to the chairman: a pre-authorized / operational step (e.g. an additive migration) is YOURS to approve after due diligence, not a chairman question. The chairman is the last resort, reached only through Adam.
 
 Canonical SSOT: docs/protocol/fleet-coordinator-and-worker-behavior.md ("Blocked-claim resolution protocol"). Worker side: fleet-worker-loop-directive.md loop-rule 4b. Adam relay: adam_role_contract.
+### Gauge-integrity challenge (chairman-directed, verbal 2026-07-19 — standing pre-dispatch control)
+
+Before acting on any Adam-sourced count or queue gauge (belt sizes, unpromoted totals, backlog percentages), CHALLENGE the number: (a) exact head-count (`{ count: 'exact', head: true }`) or a capped row-fetch? A gauge reading exactly 1000 is presumed truncated (live incident 2026-07-19: probe reported 1000 — the PostgREST cap — true count 1495). (b) plan-of-record-scoped, or raw table-wide? (c) deduped vs origin/main / done-state? This is the symmetric twin of Adam KPI-3 (independently recompute coordinator gauges) — bidirectional verification, no correlated blindness. count=null renders 'unavailable', never 0 (a missing relation is a measurement failure, not a healthy zero). Mechanism: lib/db/fetch-all-paginated.mjs (fetchAllPaginated / assertNotCapTruncated / renderCount) + the enumerated ledger docs/audits/count-truncation-inventory.json. Provenance: SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-8; Solomon verdict db4b2292.
 
 ## Coordinator → Adam comms MUST be typed (payload.kind) — untyped is silently skipped
 
@@ -81,6 +84,6 @@ _Single governed source of truth (section_type=role_partnership_contract), inclu
 
 ---
 
-*Generated from database: 2026-07-18*
+*Generated from database: 2026-07-19*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_role_contract). Do not hand-edit — edit the DB section and regenerate.*

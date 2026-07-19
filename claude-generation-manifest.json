@@ -1,123 +1,123 @@
 {
-  "generated_at": "2026-07-18T19:22:44.213Z",
-  "git_commit": "7d833b49",
+  "generated_at": "2026-07-19T13:09:09.312Z",
+  "git_commit": "a53d8fd0",
   "db_snapshot_hash": "15274e313a3b8c43",
   "files": {
     "CLAUDE.md": {
       "type": "full",
       "chars": 19564,
       "estimated_tokens": 4891,
-      "content_hash": "c90461fee18ebdab",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE.md"
+      "content_hash": "35c11e4aaa8c8731",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
       "chars": 92157,
       "estimated_tokens": 23040,
-      "content_hash": "247cc3e21d3ebd2d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_CORE.md"
+      "content_hash": "bbe0bbeea3618c74",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
       "chars": 65998,
       "estimated_tokens": 16500,
-      "content_hash": "9fcbd969289b94b6",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_LEAD.md"
+      "content_hash": "e4a6c6a53cc88dfe",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
       "chars": 91830,
       "estimated_tokens": 22958,
-      "content_hash": "517a88a14d676134",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_PLAN.md"
+      "content_hash": "9f55afc554c825b9",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
       "chars": 88941,
       "estimated_tokens": 22236,
-      "content_hash": "6258fd85a688f740",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_EXEC.md"
+      "content_hash": "d86613f4f557fef6",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 93022,
-      "estimated_tokens": 23256,
-      "content_hash": "b896fbad449de3dd",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_ADAM.md"
+      "chars": 96035,
+      "estimated_tokens": 24009,
+      "content_hash": "f786770ec61b10fe",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 22134,
-      "estimated_tokens": 5534,
-      "content_hash": "9a87d599c0e652e3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_COORDINATOR.md"
+      "chars": 23179,
+      "estimated_tokens": 5795,
+      "content_hash": "472957b8ca98bf57",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
       "chars": 54600,
       "estimated_tokens": 13650,
-      "content_hash": "5ee13864dc28b1a5",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_SOLOMON.md"
+      "content_hash": "fe77ed9eb23c17fb",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9611,
       "estimated_tokens": 2403,
-      "content_hash": "9051666433e55754",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_DIGEST.md"
+      "content_hash": "6af84fec31e63f4c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 11664,
       "estimated_tokens": 2916,
-      "content_hash": "e6c5ce7840974d11",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "ea0059fb3be3f4e5",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 5551,
       "estimated_tokens": 1388,
-      "content_hash": "ffc688a16e9f5dbf",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "7888750bb2d51fe1",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 8541,
       "estimated_tokens": 2136,
-      "content_hash": "95d34dd2ffb19b5e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "ff5d33dcba575775",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 10964,
       "estimated_tokens": 2741,
-      "content_hash": "a338a34170eade03",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "9980fa7b936f4233",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 18755,
       "estimated_tokens": 4689,
-      "content_hash": "ad78e37128ffb9d4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "8dd662f4c475db89",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 6076,
       "estimated_tokens": 1519,
-      "content_hash": "e2135734df23f153",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "bb717b17047a94fb",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
       "chars": 4705,
       "estimated_tokens": 1177,
-      "content_hash": "16826a32c7fd2e19",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\docs-switch-automation-001-c\\CLAUDE_SOLOMON_DIGEST.md"
+      "content_hash": "22b92d4c3b14e8da",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "9f000abd12104fd0",
+    "global": "be78a8ea1d8917b8",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -371,11 +371,11 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "020b0e0ff59285ff",
+      "601": "83688e41f7280f26",
       "602": "ad0aecae8cdc6cb3",
       "603": "ea1eddc2cef94c83",
       "604": "a35e66b64599f81d",
-      "605": "6c6ad347a458ae69",
+      "605": "d476661365bb204b",
       "606": "7303c149fceda758",
       "607": "82e04c0cc0ffb28f",
       "608": "7f99a4321502367e",

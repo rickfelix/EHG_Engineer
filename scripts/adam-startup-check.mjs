@@ -447,14 +447,25 @@ export async function fetchSourcingState({ supabase = null, env = process.env } 
   let wave = null;
   let backlog = null;
   try {
-    const items = await client.from('roadmap_wave_items').select('wave_id,promoted_to_sd_key').is('promoted_to_sd_key', null);
-    const waves = await client.from('roadmap_waves').select('id,title,sequence_rank');
-    if (!items.error && !waves.error) wave = summarizeUnpromotedByWave(items.data || [], waves.data || []);
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-5: this was the live incident site —
+    // an unpaginated fetch counted its own rows and reported exactly 1000 (the PostgREST cap)
+    // while the true unpromoted count was 1495. Bulk reads now paginate to completion.
+    const { fetchAllPaginated } = await import('../lib/db/fetch-all-paginated.mjs');
+    const items = await fetchAllPaginated(() =>
+      client.from('roadmap_wave_items').select('wave_id,promoted_to_sd_key').is('promoted_to_sd_key', null));
+    const waves = await fetchAllPaginated(() =>
+      client.from('roadmap_waves').select('id,title,sequence_rank'));
+    wave = summarizeUnpromotedByWave(items, waves);
   } catch { wave = null; }
   try {
     const tot = await client.from('sd_backlog_map').select('*', { count: 'exact', head: true });
     const disp = await client.from('sd_backlog_map').select('*', { count: 'exact', head: true }).not('disposition', 'is', null);
-    if (!tot.error && !disp.error) backlog = summarizeBacklogDisposition(tot.count, disp.count);
+    // FR-4 (A3 count-null fail-loud): head-count on a missing relation yields count=null with
+    // error=null; summarizeBacklogDisposition would coerce that to a healthy-looking 0/0. A null
+    // count means the MEASUREMENT failed — fall through to the existing 'unavailable' rendering.
+    if (!tot.error && !disp.error && typeof tot.count === 'number' && typeof disp.count === 'number') {
+      backlog = summarizeBacklogDisposition(tot.count, disp.count);
+    }
   } catch { backlog = null; }
   return { wave, backlog };
 }
