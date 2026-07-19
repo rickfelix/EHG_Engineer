@@ -6,8 +6,13 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { createRequire } from 'module';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 const require = createRequire(import.meta.url);
 const m = require('../../scripts/solomon-advisory.cjs');
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const SCRIPT_PATH = resolve(__dirname, '../../scripts/solomon-advisory.cjs');
 
 describe('FR-E1: buildAdvisoryPayload — oracle marker + reply echo', () => {
   it('emits kind=adam_advisory + oracle:true, never signal_type/intent_action', () => {
@@ -62,6 +67,44 @@ describe('buildAdvisoryPayload — reply_class', () => {
     const p = m.buildAdvisoryPayload({ body: 'please ack', replyClass: 'reply-needed' });
     expect(p.reply_class).toBe('reply-needed');
     expect(Date.parse(p.reply_expected_by)).toBeGreaterThan(Date.now());
+  });
+});
+
+// SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-B: payload.framing_class sub-discriminator on the SAME
+// adam_advisory+oracle:true leg (no new kind) — additive/optional, byte-identical when omitted.
+describe('SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-B: buildAdvisoryPayload — framing_class', () => {
+  it('is omitted entirely when not provided (byte-identical to pre-SD behavior)', () => {
+    const p = m.buildAdvisoryPayload({ body: 'no framing here' });
+    expect('framing_class' in p).toBe(false);
+  });
+  it('stamps payload.framing_class when provided, alongside the existing oracle marker', () => {
+    const pick = m.buildAdvisoryPayload({ body: 'thesis-reversal finding', framingClass: 'pick' });
+    expect(pick.framing_class).toBe('pick');
+    expect(pick.oracle).toBe(true);
+    expect(pick.kind).toBe('adam_advisory'); // still the same leg, no new kind
+    const instrument = m.buildAdvisoryPayload({ body: 'routine finding', framingClass: 'instrument' });
+    expect(instrument.framing_class).toBe('instrument');
+  });
+
+  // TS-4: the CLI-level --framing-class validation (solomon-advisory.cjs's `send` argv parsing,
+  // not buildAdvisoryPayload itself) rejects an unrecognized value before any row is written.
+  // CLAUDE_SESSION_ID is stamped explicitly (rather than inherited) so this passes hermetically
+  // in CI, where it is unset -- main()'s earlier CLAUDE_SESSION_ID guard (process.exit(1)) would
+  // otherwise fire before argv parsing ever reaches --framing-class, masking exit 2 with exit 1.
+  it('CLI: --framing-class with an unrecognized value exits 2 with a listing error (TS-4)', () => {
+    let error;
+    try {
+      execFileSync('node', [SCRIPT_PATH, 'send', 'test', '--framing-class', 'bogus'], {
+        encoding: 'utf-8',
+        stdio: 'pipe',
+        env: { ...process.env, CLAUDE_SESSION_ID: 'test-session-ts4' },
+      });
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeDefined();
+    expect(error.status).toBe(2);
+    expect(error.stderr).toMatch(/--framing-class must be one of instrument, pick/);
   });
 });
 

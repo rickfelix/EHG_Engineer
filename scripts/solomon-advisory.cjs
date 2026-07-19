@@ -47,7 +47,7 @@ const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled 
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version.cjs');
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
-const { PAYLOAD_KINDS, DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
+const { PAYLOAD_KINDS, DIRECTIVE_KINDS, FRAMING_CLASSES } = require('../lib/fleet/worker-status.cjs');
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 const { getActiveAdamId } = require('../lib/coordinator/adam-identity.cjs');
 // QF-20260719-387: fail-closed sender-role guard + target-role assert at the send/request chokes.
@@ -98,8 +98,12 @@ const KNOWN_SEND_KINDS = new Set([...Object.values(PAYLOAD_KINDS), ...DIRECTIVE_
  * FR-2 (SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001): an explicit, validated --kind overrides the
  * default; omitting --kind is BYTE-IDENTICAL to pre-SD behavior. An answer to a consult (replyTo
  * set) ignores kind and always reuses the advisory lane.
+ * SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-B: an optional framingClass ('instrument'|'pick', see
+ * FRAMING_CLASSES) is stamped as payload.framing_class alongside payload.oracle=true — a
+ * sub-discriminator on the SAME leg (no new kind), per FW-3 design doc §6c. Omitted entirely when
+ * not provided (byte-identical to pre-SD behavior for every existing sender).
  */
-function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, replyTo, via, replyClass, replyWindowMs, now, kind }) {
+function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, replyTo, via, replyClass, replyWindowMs, now, kind, framingClass }) {
   // An answer to a consult (replyTo set) is terminal -- always fire-and-forget. Otherwise: request
   // mode (expectsReply) is live-handshake; send mode defaults fire-and-forget unless the sender
   // opts into reply-needed via --reply-class (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
@@ -111,6 +115,7 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
     repo: repo || null,
     reply_class: resolvedReplyClass,
   };
+  if (framingClass) payload.framing_class = framingClass;
   if (body) payload.body = capBody(String(body));
   if (correlationId) payload.correlation_id = correlationId; // replyable (always)
   if (expectsReply) payload.expects_reply = true;            // sync await (request mode only)
@@ -618,7 +623,7 @@ async function main() {
   const argv = process.argv.slice(2);
   const mode = argv[0];
   if (mode !== 'send' && mode !== 'request' && mode !== 'inbox' && mode !== 'status' && mode !== 'ack') {
-    console.error('Usage: node scripts/solomon-advisory.cjs send "<body>" [--reply-to <id>] [--to adam] [--kind <recognized_kind>]  |  request "<q>" [--timeout <ms>] [--to adam] [--kind <recognized_kind>]  |  inbox [--quiet] [--background]  |  ack <row-id...>  |  status [--working "<body>" [--eta <ms>]]');
+    console.error('Usage: node scripts/solomon-advisory.cjs send "<body>" [--reply-to <id>] [--to adam] [--kind <recognized_kind>] [--framing-class instrument|pick]  |  request "<q>" [--timeout <ms>] [--to adam] [--kind <recognized_kind>]  |  inbox [--quiet] [--background]  |  ack <row-id...>  |  status [--working "<body>" [--eta <ms>]]');
     process.exit(2);
   }
   const sessionId = process.env.CLAUDE_SESSION_ID;
@@ -685,6 +690,16 @@ async function main() {
   const replyWindowMs = rwIdx >= 0 ? Number(argv[rwIdx + 1]) || undefined : undefined;
   if (replyClassArg && !isValidReplyClass(replyClassArg)) {
     console.error(`ERROR: --reply-class must be one of ${REPLY_CLASSES.join(', ')} (got "${replyClassArg}").`);
+    process.exit(2);
+  }
+  // SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-B: optional pick-vs-instrument sub-discriminator,
+  // stamped as payload.framing_class alongside payload.oracle=true (no new kind). Omitting it
+  // is byte-identical to pre-SD behavior.
+  const fcIdx = argv.indexOf('--framing-class');
+  const framingClassArg = fcIdx >= 0 ? argv[fcIdx + 1] || null : null;
+  const validFramingClasses = Object.values(FRAMING_CLASSES);
+  if (framingClassArg && !validFramingClasses.includes(framingClassArg)) {
+    console.error(`ERROR: --framing-class must be one of ${validFramingClasses.join(', ')} (got "${framingClassArg}").`);
     process.exit(2);
   }
   // SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001 / FR-2: --kind is OPTIONAL (omitting it is
@@ -778,7 +793,7 @@ async function main() {
   // worker-signal.cjs already uses -- never a silent clip, never a crash-shaped stack trace.
   let payload;
   try {
-    payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via, replyClass: replyClassArg, replyWindowMs, kind: kindArg });
+    payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via, replyClass: replyClassArg, replyWindowMs, kind: kindArg, framingClass: framingClassArg });
   } catch (e) {
     if (e && e.code === 'BODY_TOO_LONG') { console.error('ERROR:', e.message); process.exit(2); }
     throw e;
