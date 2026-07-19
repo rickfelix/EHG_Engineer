@@ -37,6 +37,9 @@ const { decideCadence, detectSalientDelta, runCoresFailSoft } = require('../lib/
 const { getAccountIdentity, detectAccountSwitch } = require('../lib/fleet/account-identity.cjs');
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
+// QF-20260719-138: emit the mechanical cross-party ping stub ourselves (mirror of
+// coordinator-quiet-tick.mjs) rather than instructing the agent to hand-insert it each tick.
+const { emitCrossPartyPing } = require('../lib/coordinator/cross-party-ping.cjs');
 
 const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -430,6 +433,10 @@ async function main() {
     nextWakeSeconds: delaySeconds,
   };
 
+  // QF-20260719-138: a real salient delta emits the mechanical cross_party_ping stub HERE
+  // (side-effect in both --json and human modes); the console line below is a record-of-sent.
+  const pingSent = delta.changed ? await emitCrossPartyPing(sb, { from: 'adam', fields: delta.fields }) : false;
+
   if (asJson) {
     console.log(JSON.stringify(result));
   } else {
@@ -445,7 +452,7 @@ async function main() {
       `nextWakeSeconds=${delaySeconds} :: ${modeReason}`
     );
     if (delta.changed) {
-      console.log(`QUIET_TICK_PING=adam->coordinator reason=${delta.fields.join(',')} (real delta — offer help / sourcing; if sending a subject-only stub ping, stamp payload.kind='cross_party_ping' per SD-LEO-INFRA-COORDINATION-LANE-DELIVERY-CONTRACT-001 FR-5 — mechanical, never authored)`);
+      console.log(`QUIET_TICK_PING=adam->coordinator reason=${delta.fields.join(',')} sent=${pingSent} (mechanical cross_party_ping stub emitted by the tick — record of sent, not an instruction; author substantive help/sourcing separately only if warranted)`);
     }
     if (acctSwitch.changed) {
       const noticeStatus = acctNotified
