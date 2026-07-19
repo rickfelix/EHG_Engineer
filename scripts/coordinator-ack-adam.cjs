@@ -18,6 +18,15 @@
  * Idempotent (ON CONFLICT correlation_id DO UPDATE — re-running never duplicates a row). Fail-open:
  * a ledger write failure is logged but never blocks the advisory ack/retire above.
  *
+ * MANDATORY OUTCOME LINKAGE (SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001, W2/FR-3): an
+ * `--disposition accepted|partial` MUST name its tracking artifact via `--outcome-ref <SD/QF/PR/issue/commit id>`
+ * OR carry `--no-artifact "<reason>"` (the explicit no-trackable-artifact marker). An accept with
+ * neither is REJECTED before any ledger write — an unfalsifiable accept (no linkage a later
+ * revert/red-merge/RCA can back-propagate a negative outcome onto) is exactly the disease this closes.
+ * decision_at is always the real current time (contemporaneous-only; there is no backfill path here).
+ *   node scripts/coordinator-ack-adam.cjs --advisory <id> --disposition accepted --outcome-ref SD-FOO-001
+ *   node scripts/coordinator-ack-adam.cjs --advisory <id> --disposition accepted --no-artifact "verbal chairman ack"
+ *
  * `--disposition deferred` REQUIRES `--defer-trigger "<named re-fire event>"` — a deferral without a
  * named trigger is rejected before any DB write (the DB's own CHECK constraint is a second line of
  * defense once database/migrations/20260705_solomon_ledger_tail_and_deferral.sql is chairman-applied).
@@ -45,17 +54,54 @@ const { resolveAdamReplyTarget, retargetStaleAdamInbound, verifyReplyDelivered }
 
 const VALID_DISPOSITIONS = Object.freeze(['accepted', 'rejected', 'partial', 'deferred']);
 
+// FR-3 (SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001, W2): an ADOPT-class decision (accepted/partial)
+// on the ledger must name its tracking artifact (outcome_ref) OR carry this explicit no-artifact
+// marker. A decision with neither is unfalsifiable — there is no linkage a later revert/red-merge/RCA
+// (FR-4) can back-propagate a NEGATIVE outcome onto. The marker is stored durably in outcome_ref; a
+// NO_ARTIFACT-prefixed ref is deliberately never matchable by the FR-4 back-prop (nothing to track).
+const NO_ARTIFACT_MARKER = 'NO_ARTIFACT';
+const LINKAGE_REQUIRED_DISPOSITIONS = Object.freeze(['accepted', 'partial']);
+
+/** True for the durable no-artifact sentinel (bare 'NO_ARTIFACT' or 'NO_ARTIFACT: <reason>'). */
+function isNoArtifactRef(ref) {
+  return typeof ref === 'string' && (ref === NO_ARTIFACT_MARKER || ref.startsWith(`${NO_ARTIFACT_MARKER}:`));
+}
+
+/**
+ * Pure: resolve the outcome_ref to store for a decision, enforcing FR-3 mandatory linkage.
+ * - accepted/partial: MUST supply a non-empty outcomeRef OR noArtifact — else { error }.
+ *   noArtifact may be `true` (bare --no-artifact) or a string reason (stored as 'NO_ARTIFACT: <reason>').
+ * - rejected/deferred: outcome_ref is optional (a stray outcomeRef is still recorded; none is fine).
+ * Returns { ref } (string|null) on success, or { error } when linkage is mandatory and missing.
+ * Exported for tests.
+ */
+function resolveOutcomeRef(disposition, { outcomeRef = null, noArtifact = null } = {}) {
+  const cleanRef = typeof outcomeRef === 'string' ? outcomeRef.trim() : (outcomeRef ? String(outcomeRef).trim() : '');
+  if (LINKAGE_REQUIRED_DISPOSITIONS.includes(disposition)) {
+    if (cleanRef) return { ref: cleanRef };
+    if (noArtifact) {
+      const reason = typeof noArtifact === 'string' && noArtifact.trim() ? noArtifact.trim() : '';
+      return { ref: reason ? `${NO_ARTIFACT_MARKER}: ${reason}` : NO_ARTIFACT_MARKER };
+    }
+    return { error: `disposition=${disposition} requires --outcome-ref <artifact-id> OR --no-artifact "<reason>" (mandatory outcome linkage, FR-3)` };
+  }
+  return { ref: cleanRef || null };
+}
+
 /**
  * Fail-open: stamp the identical decision onto any still-pending tail rows referencing
  * `correlationId` via parent_correlation_id. Never throws — returns the count inherited (0 on any
  * error, including "column does not exist yet" for a not-yet-chairman-applied migration).
  */
-async function inheritTailDecisions(supabase, { correlationId, disposition, decidedBy, decisionAt, deferTrigger }) {
+async function inheritTailDecisions(supabase, { correlationId, disposition, decidedBy, decisionAt, deferTrigger, outcomeRef }) {
   try {
     const patch = { decision: disposition, decision_by: decidedBy || null, decision_at: decisionAt };
     // A deferred primary's tails must carry the SAME defer_trigger, or the DB's
     // defer_trigger_required CHECK would reject the tail update once the migration is applied.
     if (disposition === 'deferred') patch.defer_trigger = deferTrigger;
+    // FR-3: tails of an adopt-class decision inherit the primary's outcome_ref too, so a later
+    // negative outcome back-propagates onto the whole advisory group (parent + sub-recommendations).
+    if (outcomeRef) patch.outcome_ref = outcomeRef;
     const { data, error } = await supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — chairman-apply-gated table, not yet in the live snapshot
       .update(patch)
@@ -74,12 +120,21 @@ async function inheritTailDecisions(supabase, { correlationId, disposition, deci
  * correlation_id (idempotent upsert), then inherit that same decision onto any pending tail rows
  * (FR-4). Never throws — returns { recorded, reason, tailsInherited }. Exported for tests.
  */
-async function recordLedgerDecision(supabase, { correlationId, disposition, decidedBy, deferTrigger }) {
+async function recordLedgerDecision(supabase, { correlationId, disposition, decidedBy, deferTrigger, outcomeRef = null, noArtifact = null }) {
   if (!correlationId) return { recorded: false, reason: 'no correlation_id' };
   if (!VALID_DISPOSITIONS.includes(disposition)) return { recorded: false, reason: `invalid disposition: ${disposition}` };
   if (disposition === 'deferred' && !deferTrigger) {
     return { recorded: false, reason: 'disposition=deferred requires --defer-trigger (a named re-fire event)' };
   }
+  // FR-3: mandatory outcome linkage at accept time. An accepted/partial decision with neither an
+  // outcome_ref nor an explicit no-artifact marker is REJECTED before any DB write (never a silent,
+  // unfalsifiable accept). Resolution is deterministic; the marker is stored durably in outcome_ref.
+  const refResult = resolveOutcomeRef(disposition, { outcomeRef, noArtifact });
+  if (refResult.error) return { recorded: false, reason: refResult.error };
+  const resolvedOutcomeRef = refResult.ref;
+  // FR-3 contemporaneous guarantee: decision_at is ALWAYS the real current time. This writer has no
+  // backfill path — a caller cannot inject a historical decision_at, so every new stamp is
+  // contemporaneous by construction (the exact opposite of the 2026-07-12 retro batch).
   const decisionAt = new Date().toISOString();
   try {
     const row = {
@@ -88,6 +143,7 @@ async function recordLedgerDecision(supabase, { correlationId, disposition, deci
       decision_by: decidedBy || null,
       decision_at: decisionAt,
     };
+    if (resolvedOutcomeRef) row.outcome_ref = resolvedOutcomeRef;
     if (disposition === 'deferred') row.defer_trigger = deferTrigger;
     const { error } = await supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
@@ -96,8 +152,8 @@ async function recordLedgerDecision(supabase, { correlationId, disposition, deci
   } catch (e) {
     return { recorded: false, reason: (e && e.message) || String(e) };
   }
-  const { inherited: tailsInherited } = await inheritTailDecisions(supabase, { correlationId, disposition, decidedBy, decisionAt, deferTrigger });
-  return { recorded: true, tailsInherited };
+  const { inherited: tailsInherited } = await inheritTailDecisions(supabase, { correlationId, disposition, decidedBy, decisionAt, deferTrigger, outcomeRef: resolvedOutcomeRef });
+  return { recorded: true, tailsInherited, outcomeRef: resolvedOutcomeRef };
 }
 
 function parseArgs(argv) {
@@ -167,14 +223,20 @@ async function main() {
       ? flags['correlation-id']
       : (adv.payload && adv.payload.correlation_id);
     const deferTrigger = typeof flags['defer-trigger'] === 'string' ? flags['defer-trigger'] : null;
-    const result = await recordLedgerDecision(supabase, { correlationId, disposition, decidedBy: coordinatorSession, deferTrigger });
+    // FR-3: --outcome-ref names the tracking artifact (SD/QF/PR/issue/commit id); --no-artifact is the
+    // explicit "no trackable artifact" marker (optional reason). One of the two is mandatory for an
+    // accepted/partial disposition.
+    const outcomeRef = typeof flags['outcome-ref'] === 'string' ? flags['outcome-ref'] : null;
+    const noArtifact = flags['no-artifact'] !== undefined ? flags['no-artifact'] : null; // true (bare) or a reason string
+    const result = await recordLedgerDecision(supabase, { correlationId, disposition, decidedBy: coordinatorSession, deferTrigger, outcomeRef, noArtifact });
     if (result.recorded) {
       console.log('✓ Ledger decision recorded');
       console.log('  correlation_id:', correlationId);
       console.log('  decision:', disposition);
+      if (result.outcomeRef) console.log('  outcome_ref:', result.outcomeRef);
       if (result.tailsInherited > 0) console.log('  tails inherited:', result.tailsInherited);
     } else {
-      console.warn(`⚠ Ledger decision NOT recorded (advisory still actioned): ${result.reason}`);
+      console.warn(`⚠ Ledger decision REJECTED (advisory still actioned): ${result.reason}`);
     }
   }
 
@@ -209,7 +271,7 @@ async function main() {
   }
 }
 
-module.exports = { parseArgs, recordLedgerDecision, inheritTailDecisions, VALID_DISPOSITIONS };
+module.exports = { parseArgs, recordLedgerDecision, inheritTailDecisions, VALID_DISPOSITIONS, resolveOutcomeRef, isNoArtifactRef, NO_ARTIFACT_MARKER, LINKAGE_REQUIRED_DISPOSITIONS };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });

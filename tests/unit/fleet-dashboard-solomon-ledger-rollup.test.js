@@ -93,3 +93,58 @@ describe('FR-5: computeSolomonLedgerRollup', () => {
     expect(r.costPerAccepted).toBe(400); // only the captured row counts
   });
 });
+
+describe('FR-5/TR-3 (W2, SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001): batch-stamp exclusion via durable marker', () => {
+  it('excludes batch_stamped=true rows from BOTH the accuracy numerator and denominator', () => {
+    const rows = [
+      // Trustworthy contemporaneous evidence: 1 accepted+shipped_clean of 2 decided -> 50%.
+      { decision: 'accepted', outcome: 'shipped_clean', created_at: '2026-07-18T00:00:00Z' },
+      { decision: 'rejected', outcome: 'unknown', created_at: '2026-07-18T00:00:00Z' },
+      // The 2026-07-12 retro batch — durably marked. Without exclusion these 3 unknown-outcome
+      // accepts would crater accuracy to 1/5 = 20%.
+      { decision: 'accepted', outcome: 'unknown', batch_stamped: true, created_at: '2026-07-12T15:00:00Z' },
+      { decision: 'accepted', outcome: 'unknown', batch_stamped: true, created_at: '2026-07-12T15:00:00Z' },
+      { decision: 'partial', outcome: 'unknown', batch_stamped: true, created_at: '2026-07-12T15:00:00Z' },
+    ];
+    const r = computeSolomonLedgerRollup(rows);
+    expect(r.decidedCount).toBe(2);        // batch rows excluded from the denominator
+    expect(r.acceptedShippedClean).toBe(1);
+    expect(r.accuracyPct).toBe(50);        // 1/2, NOT 1/5
+    expect(r.batchExcludedCount).toBe(3);  // surfaced for chairman/KPI readability
+  });
+
+  it('deterministic durable marker, not a timestamp heuristic: a 07-12 row WITHOUT the marker still counts', () => {
+    const rows = [
+      { decision: 'accepted', outcome: 'shipped_clean', created_at: '2026-07-12T15:00:00Z' }, // no batch_stamped → included
+      { decision: 'accepted', outcome: 'unknown', batch_stamped: true, created_at: '2026-07-12T15:00:00Z' },
+    ];
+    const r = computeSolomonLedgerRollup(rows);
+    expect(r.decidedCount).toBe(1);       // only the unmarked row
+    expect(r.accuracyPct).toBe(100);      // 1/1
+    expect(r.batchExcludedCount).toBe(1);
+  });
+
+  it('when EVERY decided row is batch-stamped, accuracy is null (no trustworthy evidence) not a misleading number', () => {
+    const rows = [
+      { decision: 'accepted', outcome: 'unknown', batch_stamped: true, created_at: '2026-07-12T15:00:00Z' },
+      { decision: 'pending', outcome: 'unknown', created_at: '2026-07-18T00:00:00Z' },
+    ];
+    const r = computeSolomonLedgerRollup(rows);
+    expect(r.decidedCount).toBe(0);
+    expect(r.accuracyPct).toBeNull();
+    expect(r.pendingCount).toBe(1);
+    expect(r.batchExcludedCount).toBe(1);
+  });
+
+  it('rows with batch_stamped=false or undefined are unaffected (W3 cost tests stay green)', () => {
+    const rows = [
+      { decision: 'accepted', outcome: 'shipped_clean', cost_tokens: 100, cost_captured: true, batch_stamped: false },
+      { decision: 'accepted', outcome: 'shipped_clean', cost_tokens: 300, cost_captured: true },
+    ];
+    const r = computeSolomonLedgerRollup(rows);
+    expect(r.decidedCount).toBe(2);
+    expect(r.acceptedCount).toBe(2);
+    expect(r.costPerAccepted).toBe(200);
+    expect(r.batchExcludedCount).toBe(0);
+  });
+});
