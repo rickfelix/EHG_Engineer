@@ -88,10 +88,17 @@ describe('SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-B: buildAdvisoryPayload — fram
 
   // TS-4: the CLI-level --framing-class validation (solomon-advisory.cjs's `send` argv parsing,
   // not buildAdvisoryPayload itself) rejects an unrecognized value before any row is written.
+  // CLAUDE_SESSION_ID is stamped explicitly (rather than inherited) so this passes hermetically
+  // in CI, where it is unset -- main()'s earlier CLAUDE_SESSION_ID guard (process.exit(1)) would
+  // otherwise fire before argv parsing ever reaches --framing-class, masking exit 2 with exit 1.
   it('CLI: --framing-class with an unrecognized value exits 2 with a listing error (TS-4)', () => {
     let error;
     try {
-      execFileSync('node', [SCRIPT_PATH, 'send', 'test', '--framing-class', 'bogus'], { encoding: 'utf-8', stdio: 'pipe' });
+      execFileSync('node', [SCRIPT_PATH, 'send', 'test', '--framing-class', 'bogus'], {
+        encoding: 'utf-8',
+        stdio: 'pipe',
+        env: { ...process.env, CLAUDE_SESSION_ID: 'test-session-ts4' },
+      });
     } catch (e) {
       error = e;
     }
