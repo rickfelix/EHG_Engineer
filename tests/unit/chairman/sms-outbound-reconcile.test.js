@@ -119,6 +119,18 @@ describe('enqueueChairmanSms (FR-1)', () => {
     expect(r.enqueued).toBe(false);
     expect(r.reason).toBe('table_absent_or_error');
   });
+
+  it('SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-D FR-4: threads mediaUrl into the inserted row as media_url', async () => {
+    const sb = makeFakeSupabase();
+    await enqueueChairmanSms(sb, { recipientPhone: '+15551234567', kind: 'morning_review', body: 'x', dedupeKey: 'k-media', mediaUrl: 'https://signed.example/gantt.png' });
+    expect(sb._tables.sms_outbound_obligations[0].media_url).toBe('https://signed.example/gantt.png');
+  });
+
+  it('SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-D FR-4: omitting mediaUrl produces the same row shape as before this change (media_url null)', async () => {
+    const sb = makeFakeSupabase();
+    await enqueueChairmanSms(sb, { recipientPhone: '+15551234567', kind: 'morning_review', body: 'x', dedupeKey: 'k-nomedia' });
+    expect(sb._tables.sms_outbound_obligations[0].media_url).toBeNull();
+  });
 });
 
 // =======================================================================================

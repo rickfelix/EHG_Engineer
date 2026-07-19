@@ -56,7 +56,8 @@ CREATE TABLE IF NOT EXISTS sms_outbound_obligations (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   sent_at TIMESTAMPTZ NULL,           -- set when the provider ACCEPTS (201) — NOT delivery
   delivered_at TIMESTAMPTZ NULL,      -- set ONLY on a signature-valid MessageStatus=delivered
-  last_error TEXT NULL
+  last_error TEXT NULL,
+  media_url TEXT NULL                 -- SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-D: signed URL for an MMS attachment (e.g. the Gantt PNG); NULL for text-only sends
 );
 
 -- Claimable-work index: the worker scans owed rows whose not_before has elapsed, oldest first.
@@ -79,6 +80,8 @@ COMMENT ON COLUMN sms_outbound_obligations.delivered_at IS
   'Stamped ONLY by a signature-valid MessageStatus=delivered status callback (FR-2). A 201-accept alone never sets this — the F1 fix.';
 COMMENT ON COLUMN sms_outbound_obligations.not_before IS
   'Sleep-window gate: a row enqueued inside 10PM-6AM ET carries not_before=next-6AM so the worker does not claim it until the morning batch.';
+COMMENT ON COLUMN sms_outbound_obligations.media_url IS
+  'Short-TTL signed URL (SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-D) for an MMS attachment (e.g. the daily-review Gantt PNG), sourced from a PRIVATE (public:false) Supabase Storage bucket — never a public URL. NULL for text-only sends. Passed to the Twilio provider as the MediaUrl form param.';
 
 -- RLS + policy in the SAME migration (RLS-at-create; SPINE-001-B recurrence guard),
 -- mirroring sms_inbound_suspensions_service_all in 20260717_sms_relay_staging.sql. Only the
