@@ -85,7 +85,10 @@ test('renderSourcingStateLines does NOT warn ALL OFF when a flag is on', () => {
 });
 
 // Injected-supabase fetch: proves the DB read shape without a live DB (FR-2 hermetic).
-function stubSupabase({ items = [], waves = [], total = 0, dispositioned = 0 } = {}) {
+// SD-LEO-INFRA-PLAN-OF-RECORD-REMAINDER-VIEW-001: fetchSourcingState now reads
+// v_plan_of_record_remainder (approved-wave-only, stamped remainder_state) instead of raw
+// roadmap_wave_items/roadmap_waves — stub the view's row shape directly.
+function stubSupabase({ remainderRows = [], total = 0, dispositioned = 0 } = {}) {
   return {
     from(table) {
       const chain = {
@@ -94,8 +97,7 @@ function stubSupabase({ items = [], waves = [], total = 0, dispositioned = 0 } =
         is() { return this; },
         not() { this._dispositioned = true; return this; },
         then(res, rej) {
-          if (this._table === 'roadmap_wave_items') return Promise.resolve({ data: items, error: null }).then(res, rej);
-          if (this._table === 'roadmap_waves') return Promise.resolve({ data: waves, error: null }).then(res, rej);
+          if (this._table === 'v_plan_of_record_remainder') return Promise.resolve({ data: remainderRows, error: null }).then(res, rej);
           if (this._table === 'sd_backlog_map') return Promise.resolve({ count: this._dispositioned ? dispositioned : total, error: null }).then(res, rej);
           return Promise.resolve({ data: [], error: null }).then(res, rej);
         },
@@ -107,8 +109,11 @@ function stubSupabase({ items = [], waves = [], total = 0, dispositioned = 0 } =
 
 test('fetchSourcingState wires the injected client into the pure summaries', async () => {
   const supabase = stubSupabase({
-    items: [{ wave_id: 'w1', promoted_to_sd_key: null }, { wave_id: 'w1', promoted_to_sd_key: null }],
-    waves: [{ id: 'w1', title: 'Wave One', sequence_rank: 0 }],
+    remainderRows: [
+      { wave_id: 'w1', title: 'Wave One', wave_sequence_rank: 0, remainder_state: 'promotable_now' },
+      { wave_id: 'w1', title: 'Wave One', wave_sequence_rank: 0, remainder_state: 'gated_on_chairman' },
+      { wave_id: 'w1', title: 'Wave One', wave_sequence_rank: 0, remainder_state: 'void' }, // excluded from "unpromoted"
+    ],
     total: 100, dispositioned: 25,
   });
   const { wave, backlog } = await fetchSourcingState({ supabase, env: {} });

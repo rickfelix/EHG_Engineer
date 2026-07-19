@@ -415,7 +415,7 @@ export function renderSourcingStateLines({ flags = [], wave = null, backlog = nu
   for (const f of flags) lines.push(`    ${f.on ? '🟢 on ' : '⚪ off'}  ${f.flag}`);
   // Roadmap-SSOT unpromoted items
   if (wave) {
-    lines.push(`  Roadmap-SSOT (roadmap_wave_items) unpromoted: ${wave.totalUnpromoted} — promote via leo-create-sd --from-roadmap-item (REGISTER-FIRST)`);
+    lines.push(`  Roadmap-SSOT (plan-of-record remainder) unpromoted: ${wave.totalUnpromoted} — promote via leo-create-sd --from-roadmap-item (REGISTER-FIRST)`);
     for (const w of wave.byWave.slice(0, 8)) lines.push(`    wave#${w.rank} ${String(w.count).padStart(4)} unpromoted  ${w.title}`);
     if (wave.byWave.length > 8) lines.push(`    … ${wave.byWave.length - 8} more wave(s)`);
   } else {
@@ -449,13 +449,31 @@ export async function fetchSourcingState({ supabase = null, env = process.env } 
   try {
     // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-5: this was the live incident site —
     // an unpaginated fetch counted its own rows and reported exactly 1000 (the PostgREST cap)
-    // while the true unpromoted count was 1495. Bulk reads now paginate to completion.
+    // while the true unpromoted count was 1495 (dead-generation rows, see next note). Bulk
+    // reads paginate to completion (kept even though the view below is small, as defense
+    // against future growth).
+    //
+    // SD-LEO-INFRA-PLAN-OF-RECORD-REMAINDER-VIEW-001: the 1495 figure was itself the OTHER
+    // half of the bug — it aggregated every roadmap generation (proposed/archived included),
+    // drowning the true remainder (6 items) in dead rows. Repointed to
+    // v_plan_of_record_remainder (approved-wave-only, stamped remainder_state) so this probe
+    // reports the ratified plan-of-record's actual remainder, not total roadmap noise.
     const { fetchAllPaginated } = await import('../lib/db/fetch-all-paginated.mjs');
-    const items = await fetchAllPaginated(() =>
-      client.from('roadmap_wave_items').select('wave_id,promoted_to_sd_key').is('promoted_to_sd_key', null));
-    const waves = await fetchAllPaginated(() =>
-      client.from('roadmap_waves').select('id,title,sequence_rank'));
-    wave = summarizeUnpromotedByWave(items, waves);
+    const remainderRows = await fetchAllPaginated(() =>
+      client.from('v_plan_of_record_remainder').select('wave_id,title,wave_sequence_rank,remainder_state'));
+    const TRUE_REMAINDER_STATES = new Set(['promotable_now', 'gated_on_chairman', 'in_flight_or_sequence_blocked']);
+    const items = remainderRows.map((r) => ({
+      wave_id: r.wave_id,
+      // summarizeUnpromotedByWave counts null promoted_to_sd_key as "unpromoted" — translate
+      // the view's stamped remainder_state into that same null/non-null shape so the existing,
+      // separately-tested pure summarizer is unchanged by this repoint.
+      promoted_to_sd_key: TRUE_REMAINDER_STATES.has(r.remainder_state) ? null : r.remainder_state,
+    }));
+    const wavesById = new Map();
+    for (const r of remainderRows) {
+      if (!wavesById.has(r.wave_id)) wavesById.set(r.wave_id, { id: r.wave_id, title: r.title, sequence_rank: r.wave_sequence_rank });
+    }
+    wave = summarizeUnpromotedByWave(items, [...wavesById.values()]);
   } catch { wave = null; }
   try {
     const tot = await client.from('sd_backlog_map').select('*', { count: 'exact', head: true });

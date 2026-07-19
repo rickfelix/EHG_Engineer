@@ -572,16 +572,24 @@ export async function triageQuickFixes(quickFixes, supabase) {
  */
 export async function loadUnscheduledRoadmapItems(supabase) {
   try {
+    // SD-LEO-INFRA-PLAN-OF-RECORD-REMAINDER-VIEW-001: repointed from an unscoped
+    // roadmap_wave_items read to v_plan_of_record_remainder (approved-wave-only,
+    // stamped remainder_state). Filtering on remainder_state IN (promotable_now,
+    // gated_on_chairman, in_flight_or_sequence_blocked) instead of the old
+    // promoted_to_sd_key IS NULL check is also a correctness fix: an explicitly
+    // dropped/declined item can have promoted_to_sd_key IS NULL too, but is
+    // void (not actually "unscheduled" work needing attention) -- the old filter
+    // wrongly surfaced those.
     const { data, error } = await supabase
-      .from('roadmap_wave_items')
+      .from('v_plan_of_record_remainder')
       .select('id, title, source_type, source_id, promoted_to_sd_key, metadata, created_at')
       .eq('source_type', 'architecture_phase')
-      .is('promoted_to_sd_key', null)
+      .in('remainder_state', ['promotable_now', 'gated_on_chairman', 'in_flight_or_sequence_blocked'])
       .order('created_at', { ascending: true })
       .limit(20);
 
     if (error) {
-      logQueryFailure('loadUnscheduledRoadmapItems', error, { table: 'roadmap_wave_items' });
+      logQueryFailure('loadUnscheduledRoadmapItems', error, { table: 'v_plan_of_record_remainder' });
       return [];
     }
 

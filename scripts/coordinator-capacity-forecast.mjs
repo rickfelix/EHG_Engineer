@@ -524,16 +524,23 @@ async function emitMaskedStallEscalation(f) {
 }
 
 // SD-LEO-INFRA-COORDINATOR-SOURCING-ENGINE-AWARENESS-001 (FR-2): unpromoted roadmap depth.
-// Unpromoted = roadmap_wave_items with promoted_to_sd_key IS NULL (mirrors scripts/roadmap-status.js).
-// Fail-soft: any error (table absent/unreadable) → null ("unknown"), never throws or blocks the forecast.
+// SD-LEO-INFRA-PLAN-OF-RECORD-REMAINDER-VIEW-001: repointed from an unscoped
+// roadmap_wave_items count (which aggregated ALL wave generations, including dead
+// proposed/archived ones) to v_plan_of_record_remainder (approved-wave-only, stamped
+// remainder_state). "Unpromoted" here now means the true remainder — promotable_now |
+// gated_on_chairman | in_flight_or_sequence_blocked — excluding satisfied_elsewhere/void.
+// A column-select (not count/head) is used deliberately: PostgREST HEAD/count queries
+// return error=null even for a nonexistent view, which would have silently reported 0
+// instead of failing loud.
+// Fail-soft: any error (view absent/unreadable) → null ("unknown"), never throws or blocks the forecast.
 async function countUnpromotedRoadmapItems(client) {
   try {
-    const { count, error } = await client
-      .from('roadmap_wave_items')
-      .select('id', { count: 'exact', head: true })
-      .is('promoted_to_sd_key', null);
+    const { data, error } = await client
+      .from('v_plan_of_record_remainder')
+      .select('id, remainder_state')
+      .in('remainder_state', ['promotable_now', 'gated_on_chairman', 'in_flight_or_sequence_blocked']);
     if (error) return null;
-    return typeof count === 'number' ? count : null;
+    return Array.isArray(data) ? data.length : null;
   } catch {
     return null;
   }

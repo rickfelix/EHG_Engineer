@@ -106,13 +106,13 @@ describe('buildRoadmapStatusDoc — plan_of_record section', () => {
     const supabase = makeFakeSupabase({
       strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
       roadmap_waves: [
-        { id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'active', progress_pct: 50, confidence_score: 0.8 },
+        { id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 50, confidence_score: 0.8 },
         { id: 'w2', roadmap_id: 'r1', title: 'Wave 2', sequence_rank: 2, status: 'approved', progress_pct: 0, confidence_score: 0.4 },
       ],
-      roadmap_wave_items: [
-        { id: 'i1', wave_id: 'w1', item_disposition: 'promoted', promoted_to_sd_key: 'SD-X-001' },
-        { id: 'i2', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null },
-        { id: 'i3', wave_id: 'w2', item_disposition: 'pending', promoted_to_sd_key: null },
+      v_plan_of_record_remainder: [
+        { id: 'i1', wave_id: 'w1', item_disposition: 'promoted', promoted_to_sd_key: 'SD-X-001', remainder_state: 'satisfied_elsewhere' },
+        { id: 'i2', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' },
+        { id: 'i3', wave_id: 'w2', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' },
       ],
       strategic_directives_v2: [],
     });
@@ -132,8 +132,8 @@ describe('buildRoadmapStatusDoc — plan_of_record section', () => {
   it('returns forecast confidence=insufficient_data when no recent completions exist', async () => {
     const supabase = makeFakeSupabase({
       strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
-      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'active', progress_pct: 0, confidence_score: 0.5 }],
-      roadmap_wave_items: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null }],
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
       strategic_directives_v2: [],
     });
     const result = await buildRoadmapStatusDoc(supabase);
@@ -145,10 +145,10 @@ describe('buildRoadmapStatusDoc — plan_of_record section', () => {
   it('produces an optimistic <= expected <= pessimistic forecast date range when velocity > 0', async () => {
     const supabase = makeFakeSupabase({
       strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
-      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'active', progress_pct: 0, confidence_score: 0.5 }],
-      roadmap_wave_items: [
-        { id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null },
-        { id: 'i2', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null },
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [
+        { id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' },
+        { id: 'i2', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' },
       ],
       strategic_directives_v2: [
         { sd_key: 'SD-A-001', status: 'completed', completion_date: daysAgo(1) },
@@ -166,10 +166,10 @@ describe('buildRoadmapStatusDoc — plan_of_record section', () => {
   it('returns forecast confidence=high at >=5 completions in the lookback window', async () => {
     const supabase = makeFakeSupabase({
       strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
-      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'active', progress_pct: 0, confidence_score: 0.5 }],
-      roadmap_wave_items: [
-        { id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null },
-        { id: 'i2', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null },
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [
+        { id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' },
+        { id: 'i2', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' },
       ],
       strategic_directives_v2: Array.from({ length: 5 }, (_, i) => ({
         sd_key: `SD-H-${i}`, status: 'completed', completion_date: daysAgo(i + 1),
@@ -182,10 +182,10 @@ describe('buildRoadmapStatusDoc — plan_of_record section', () => {
   it('returns forecast confidence=low at 1 completion in the lookback window', async () => {
     const supabase = makeFakeSupabase({
       strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
-      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'active', progress_pct: 0, confidence_score: 0.5 }],
-      roadmap_wave_items: [
-        { id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null },
-        { id: 'i2', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null },
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [
+        { id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' },
+        { id: 'i2', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' },
       ],
       strategic_directives_v2: [{ sd_key: 'SD-L-1', status: 'completed', completion_date: daysAgo(1) }],
     });

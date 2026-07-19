@@ -17,6 +17,38 @@ function likeToRegex(pattern) {
   return new RegExp(`^${escaped}$`, 'i');
 }
 
+// SD-LEO-INFRA-PLAN-OF-RECORD-REMAINDER-VIEW-001: computePlanCheckStatus now reads
+// v_plan_of_record_remainder instead of roadmap_wave_items directly. Rather than adding a
+// separate fixture table, synthesize the view's rows on the fly from the existing
+// roadmap_wave_items/roadmap_waves/strategic_directives_v2 fixtures -- mirrors the real
+// migration's stamp_plan_of_record_remainder_state() logic and view scoping (approved-wave
+// only), so every existing fixture keeps meaning what it already meant.
+function computeRemainderState(item, sdByKey) {
+  if (item.promoted_to_sd_key) {
+    const linked = sdByKey.get(item.promoted_to_sd_key);
+    return linked && linked.status === 'cancelled' ? 'void' : 'satisfied_elsewhere';
+  }
+  if (item.item_disposition === 'dropped' || ['dedup', 'decline'].includes(item.lane)) return 'void';
+  if (item.lane === 'chairman-gated') return 'gated_on_chairman';
+  if ((item.lane && item.lane.startsWith('blocked-on-')) || item.item_disposition === 'deferred') return 'in_flight_or_sequence_blocked';
+  return 'promotable_now';
+}
+
+function computeViewRows(tables) {
+  const waves = tables.roadmap_waves || [];
+  const items = tables.roadmap_wave_items || [];
+  const sdByKey = new Map((tables.strategic_directives_v2 || []).map((s) => [s.sd_key, s]));
+  const waveById = new Map(waves.map((w) => [w.id, w]));
+  return items
+    .filter((it) => waveById.get(it.wave_id)?.status === 'approved')
+    .map((it) => ({
+      ...it,
+      wave_status: waveById.get(it.wave_id).status,
+      wave_sequence_rank: waveById.get(it.wave_id).sequence_rank,
+      remainder_state: computeRemainderState(it, sdByKey),
+    }));
+}
+
 function makeFakeSupabase(tables) {
   function query(tableName) {
     const filters = [];
@@ -50,7 +82,7 @@ function makeFakeSupabase(tables) {
       limit(n) { limitN = n; return builder; },
       update(payload) { updatePayload = payload; return builder; },
       then(resolve) {
-        const table = tables[tableName] || [];
+        const table = tableName === 'v_plan_of_record_remainder' ? computeViewRows(tables) : (tables[tableName] || []);
         let matched = table.filter((r) => filters.every((f) => f(r)));
         if (updatePayload) {
           matched.forEach((r) => Object.assign(r, updatePayload));
@@ -129,7 +161,9 @@ describe('computePlanCheckStatus (FR-2)', () => {
   it('excludes a stamped-but-cancelled-SD item from done (stamped != done)', async () => {
     const tables = {
       strategic_roadmaps: CANONICAL_ROADMAP_FIXTURE,
-      roadmap_waves: [{ id: 'wave-1', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Wave 1', sequence_rank: 1, status: 'active', progress_pct: 50 }],
+      // SD-LEO-INFRA-PLAN-OF-RECORD-REMAINDER-VIEW-001: status='approved' (was 'active') --
+      // computePlanCheckStatus now scopes to approved-only waves.
+      roadmap_waves: [{ id: 'wave-1', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 50 }],
       roadmap_wave_items: [
         { id: 'i1', wave_id: 'wave-1', title: 'Cancelled work', promoted_to_sd_key: 'SD-CANCELLED-001', item_disposition: 'promoted', priority_rank: 1 },
         { id: 'i2', wave_id: 'wave-1', title: 'Completed work', promoted_to_sd_key: 'SD-DONE-001', item_disposition: 'promoted', priority_rank: 2 },
@@ -150,8 +184,8 @@ describe('computePlanCheckStatus (FR-2)', () => {
     const tables = {
       strategic_roadmaps: CANONICAL_ROADMAP_FIXTURE,
       roadmap_waves: [
-        { id: 'wave-2', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Wave 2', sequence_rank: 2, status: 'active', progress_pct: 0 },
-        { id: 'wave-1', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Wave 1', sequence_rank: 1, status: 'active', progress_pct: 0 },
+        { id: 'wave-2', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Wave 2', sequence_rank: 2, status: 'approved', progress_pct: 0 },
+        { id: 'wave-1', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0 },
       ],
       roadmap_wave_items: [
         { id: 'i1', wave_id: 'wave-2', title: 'Later item', promoted_to_sd_key: null, item_disposition: 'pending', priority_rank: 1 },
@@ -170,7 +204,7 @@ describe('computePlanCheckStatus (FR-2)', () => {
   it('surfaces the forward list from adam_task_ledger (ordered by created_at) into slipped', async () => {
     const tables = {
       strategic_roadmaps: CANONICAL_ROADMAP_FIXTURE,
-      roadmap_waves: [{ id: 'wave-1', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Wave 1', sequence_rank: 1, status: 'active', progress_pct: 0 }],
+      roadmap_waves: [{ id: 'wave-1', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0 }],
       roadmap_wave_items: [
         { id: 'i1', wave_id: 'wave-1', title: 'Not yet closed item', promoted_to_sd_key: null, item_disposition: 'pending', priority_rank: 1 },
       ],
@@ -218,7 +252,7 @@ describe('computePlanCheckStatus (FR-2)', () => {
     const tables = {
       strategic_roadmaps: [...CANONICAL_ROADMAP_FIXTURE, { id: 'parallel-roadmap', title: 'EVA Intake Roadmap', status: 'draft', current_baseline_version: 0 }],
       roadmap_waves: [
-        { id: 'wave-canonical', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Ratified wave', sequence_rank: 1, status: 'active', progress_pct: 0 },
+        { id: 'wave-canonical', roadmap_id: CANONICAL_ROADMAP_ID, title: 'Ratified wave', sequence_rank: 1, status: 'approved', progress_pct: 0 },
         { id: 'wave-parallel', roadmap_id: 'parallel-roadmap', title: 'Distill-forked wave', sequence_rank: 1, status: 'proposed', progress_pct: 0 },
       ],
       roadmap_wave_items: [
