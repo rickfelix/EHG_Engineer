@@ -132,7 +132,7 @@ SELECT
   rwi.id, rwi.wave_id, rwi.title, rwi.source_type, rwi.source_id,
   rwi.promoted_to_sd_key, rwi.item_disposition, rwi.lane, rwi.priority_rank,
   rwi.remainder_state, rwi.remainder_state_stamped_at, rwi.remainder_state_stamped_by,
-  rwi.created_at, rwi.updated_at,
+  rwi.created_at, rwi.updated_at, rwi.metadata,
   rw.status AS wave_status, rw.sequence_rank AS wave_sequence_rank
 FROM roadmap_wave_items rwi
 JOIN roadmap_waves rw ON rw.id = rwi.wave_id
