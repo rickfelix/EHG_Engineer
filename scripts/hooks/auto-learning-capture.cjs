@@ -27,6 +27,7 @@
 
 const path = require('path');
 const { spawn } = require('child_process');
+const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-20260719-890: drain before post-fetch exits
 
 // Configuration — detect current repo context (SD-LEO-INFRA-VENTURE-DEVWORKFLOW-AWARENESS-001-H)
 const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || detectProjectDir();
@@ -416,7 +417,7 @@ function main() {
     } catch (e) {
       log('error', 'hook_error', { error: e.message });
     }
-    process.exit(0);
+    await drainAndExit(0);
   });
 
   // Handle case where stdin is closed immediately
@@ -434,7 +435,7 @@ function main() {
         // Silently fail in timeout
       }
     }
-    process.exit(0);
+    await drainAndExit(0);
   }, 15000);
 }
 

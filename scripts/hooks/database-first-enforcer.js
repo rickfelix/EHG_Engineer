@@ -15,6 +15,7 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
+const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-20260719-890: drain before post-fetch exits
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -258,7 +259,7 @@ async function main() {
 
   if (prdCheck.exists) {
     // PRD exists or not required, allow operation
-    process.exit(0);
+    await drainAndExit(0);
   }
 
   // PRD required but missing - BLOCK
@@ -288,12 +289,12 @@ async function main() {
   console.log('');
 
   // Exit with code 2 to block the tool
-  process.exit(2);
+  await drainAndExit(2);
 }
 
 // Execute
 main().catch(err => {
   console.error(`[database-first] Error: ${err.message}`);
   // Fail-open on errors
-  process.exit(0);
+  return drainAndExit(0);
 });

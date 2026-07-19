@@ -15,6 +15,7 @@
 require('dotenv').config();
 const crypto = require('node:crypto');
 const { createClient } = require('@supabase/supabase-js');
+const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-20260719-890: drain before post-fetch exits
 
 function computeIntegrityHash(row) {
   const canonical = JSON.stringify({
@@ -56,17 +57,17 @@ async function main() {
   let rows;
   if (rowId) {
     const { data, error } = await supabase.from('security_audit_events').select('*').eq('id', rowId);
-    if (error) { console.error('Query error:', error.message); process.exit(1); }
+    if (error) { console.error('Query error:', error.message); await drainAndExit(1); }
     rows = data || [];
   } else {
     const { data, error } = await supabase.from('security_audit_events').select('*').limit(sample);
-    if (error) { console.error('Query error:', error.message); process.exit(1); }
+    if (error) { console.error('Query error:', error.message); await drainAndExit(1); }
     rows = data || [];
   }
 
   if (rows.length === 0) {
     console.log('No rows found');
-    process.exit(0);
+    await drainAndExit(0);
   }
 
   let mismatches = 0;
@@ -79,7 +80,7 @@ async function main() {
   }
 
   console.log(`Verified ${rows.length} row(s); ${mismatches} mismatch(es).`);
-  process.exit(mismatches > 0 ? 1 : 0);
+  await drainAndExit(mismatches > 0 ? 1 : 0);
 }
 
-main().catch(e => { console.error('FATAL:', e.message); process.exit(1); });
+main().catch(e => { console.error('FATAL:', e.message); return drainAndExit(1); });

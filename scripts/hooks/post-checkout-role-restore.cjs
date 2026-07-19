@@ -11,6 +11,7 @@
 'use strict';
 
 const path = require('path');
+const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-20260719-890: drain before post-fetch exits
 
 /**
  * Core restore logic — exported for tests.
@@ -87,7 +88,7 @@ async function main() {
   } catch {
     // Fail-open: hook must never abort a checkout.
   }
-  process.exit(0);
+  await drainAndExit(0);
 }
 
 if (require.main === module) {

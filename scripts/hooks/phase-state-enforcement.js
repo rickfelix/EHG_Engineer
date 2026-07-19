@@ -14,6 +14,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { drainAndExit } from '../../lib/hooks/drain-undici.cjs'; // QF-20260719-890: drain before post-fetch exits
 import { execSync } from 'child_process';
 import dotenv from 'dotenv';
 
@@ -313,13 +314,13 @@ async function main() {
     .single();
 
   if (sdError || !sd) {
-    process.exit(0);
+    await drainAndExit(0);
   }
 
   // Determine target phase
   const targetPhase = getTargetPhaseForHandoff(transition.handoffType);
   if (!targetPhase) {
-    process.exit(0);
+    await drainAndExit(0);
   }
 
   // Validate transition
@@ -353,11 +354,11 @@ async function main() {
     console.log(`✅ Phase transition ${sd.current_phase} -> ${targetPhase} validated for ${sd.sd_key}`);
   }
 
-  process.exit(0);
+  await drainAndExit(0);
 }
 
 // Execute
 main().catch(err => {
   console.error(`[phase-state-enforcement] Error: ${err.message}`);
-  process.exit(0);
+  return drainAndExit(0);
 });
