@@ -363,6 +363,7 @@
     "sd:unpark": "node scripts/sd-park.js unpark",
     "signal": "node scripts/worker-signal.cjs",
     "checkin": "node scripts/worker-checkin.cjs",
+    "forecast-ledger": "node scripts/forecast-ledger.js",
     "stamp:tier-rank": "node scripts/stamp-sd-tier-rank.mjs",
     "reconcile:gate-decisions": "node scripts/reconcile-gate-decisions.mjs",
     "backfill:gate-decisions": "node scripts/retro-backfill-gate-decisions.mjs",

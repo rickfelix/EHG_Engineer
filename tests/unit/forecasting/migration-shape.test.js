@@ -25,10 +25,12 @@ describe('forecast_ledger migration shape (FR-1)', () => {
     expect(sql).toMatch(/CHECK \(p >= 0 AND p <= 1\)/);
     expect(sql).toMatch(/status IN \('open','resolved'\)/);
   });
-  it('enables RLS at create with policies (service-role write, authenticated read)', () => {
+  it('enables RLS at create with a service-role-only policy (no broad authenticated read)', () => {
     expect(sql).toMatch(/ENABLE ROW LEVEL SECURITY/);
     expect(sql).toMatch(/CREATE POLICY forecast_ledger_service_all/);
-    expect(sql).toMatch(/CREATE POLICY forecast_ledger_read/);
+    // Least privilege: internal org-service ledger, no tenant column — a broad authenticated
+    // USING(true) SELECT would leak every forecast (rls-anon-tenant-predicate-lint class).
+    expect(sql).not.toMatch(/TO authenticated/);
   });
   it('installs a sealed-immutability UPDATE guard trigger (immutable registered fields + no re-resolve)', () => {
     expect(sql).toMatch(/CREATE OR REPLACE FUNCTION public\.forecast_ledger_seal_guard/);
