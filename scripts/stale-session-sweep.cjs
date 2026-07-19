@@ -1104,10 +1104,20 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
 
     if (claimedQfs && claimedQfs.length > 0) {
       const holderIds = [...new Set(claimedQfs.map(q => q.claiming_session_id))];
-      const { data: holderRows } = await supabase
-        .from('claude_sessions')
-        .select('session_id, heartbeat_at')
-        .in('session_id', holderIds);
+      // FR-6 batch 2 (guard-read): paginated + A3 fail-CLOSED. A failed liveness
+      // measurement must NEVER read as "all holders dead" — that would clear every
+      // open/in_progress QF claim. Skip this release pass on guard failure.
+      let holderRows;
+      try {
+        holderRows = await fapPaginate(() => supabase
+          .from('claude_sessions')
+          .select('session_id, heartbeat_at')
+          .in('session_id', holderIds)
+          .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
+      } catch (guardErr) {
+        warnings.push('GUARD_UNAVAILABLE: QF stale-claim clear skipped this tick — holder liveness read failed (' + (guardErr && guardErr.message ? guardErr.message : 'unknown') + ')');
+        return;
+      }
       const hbAgeBySession = new Map();
       for (const r of (holderRows || [])) {
         hbAgeBySession.set(r.session_id, r.heartbeat_at ? (now.getTime() - Date.parse(r.heartbeat_at)) / 1000 : Infinity);
@@ -1704,10 +1714,21 @@ async function reapPhantomSessionClaims(supabase, { actions, warnings }) {
   }
   const sdKeysForCrossCheck = phantomClaimCandidates.map((sd) => sd.sd_key);
 
-  const [{ data: liveSessionsById }, { data: liveSessionsByKey }] = await Promise.all([
-    supabase.from('claude_sessions').select('session_id').in('session_id', [...referencedIds]),
-    supabase.from('claude_sessions').select('sd_key').in('sd_key', sdKeysForCrossCheck),
-  ]);
+  // FR-6 batch 2 (guard-read): paginated + A3 fail-CLOSED. A failed liveness measurement
+  // must NEVER read as "no live sessions" — an empty live-set here classifies EVERY
+  // candidate as phantom and mass-releases real claims. Skip the whole reap pass instead.
+  let liveSessionsById, liveSessionsByKey;
+  try {
+    [liveSessionsById, liveSessionsByKey] = await Promise.all([
+      fapPaginate(() => supabase.from('claude_sessions').select('session_id').in('session_id', [...referencedIds])
+        .order('session_id', { ascending: true })), // unique tiebreaker (FR-6)
+      fapPaginate(() => supabase.from('claude_sessions').select('sd_key').in('sd_key', sdKeysForCrossCheck)
+        .order('session_id', { ascending: true })), // unique tiebreaker (FR-6): order by PK, not the non-unique selected sd_key
+    ]);
+  } catch (guardErr) {
+    warnings.push('GUARD_UNAVAILABLE: phantom-reap skipped this tick — liveness read failed (' + (guardErr && guardErr.message ? guardErr.message : 'unknown') + ')');
+    return;
+  }
   const liveIdSet = new Set((liveSessionsById || []).map((s) => s.session_id));
   const liveKeySet = new Set((liveSessionsByKey || []).map((s) => s.sd_key));
 
@@ -2950,17 +2971,27 @@ async function main() {
     } catch { stuckSignals = []; } // prior behavior: read error ignored
     const stuck = stuckSignals || [];
     let liveSenders = new Set();
+    // FR-6 batch 2 (guard-read): paginated + A3 fail-CLOSED. A failed liveness measurement
+    // must NEVER read as "all senders dead" — that would drain (acknowledge) stuck signals
+    // from live workers. Skip the drain this tick on guard failure.
+    let senderGuardFailed = false;
     const senderIds = [...new Set(stuck.map(s => s.sender_session).filter(Boolean))];
     if (senderIds.length > 0) {
-      const { data: liveRows } = await supabase
-        .from('claude_sessions')
-        .select('session_id')
-        .in('session_id', senderIds)
-        .neq('status', 'terminated')
-        .gte('heartbeat_at', liveCutoff);
-      liveSenders = new Set((liveRows || []).map(r => r.session_id));
+      try {
+        const liveRows = await fapPaginate(() => supabase
+          .from('claude_sessions')
+          .select('session_id')
+          .in('session_id', senderIds)
+          .neq('status', 'terminated')
+          .gte('heartbeat_at', liveCutoff)
+          .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
+        liveSenders = new Set((liveRows || []).map(r => r.session_id));
+      } catch (guardErr) {
+        senderGuardFailed = true;
+        warnings.push('GUARD_UNAVAILABLE: stuck-signal drain skipped this tick — sender liveness read failed (' + (guardErr && guardErr.message ? guardErr.message : 'unknown') + ')');
+      }
     }
-    const drainStuckIds = stuck
+    const drainStuckIds = senderGuardFailed ? [] : stuck
       .filter(s => s.created_at < stuckAgeCutoff || !s.sender_session || !liveSenders.has(s.sender_session))
       .map(s => s.id);
     for (let i = 0; i < drainStuckIds.length; i += 50) {

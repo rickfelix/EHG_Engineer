@@ -140,29 +140,38 @@ describe('TS-FR2: sweep INTENT collision reader', () => {
   it('loadRecentIntents filters on payload->>intent_action (NOT signal_type)', async () => {
     let capturedNotArgs = null;
     let capturedCutoff = null;
+    let capturedOrder = null;
+    let capturedRange = null;
+    // FR-6 batch 2: loadRecentIntents now reads through fetchAllPaginated
+    // (.not(...).order(...) then .range(...) per page), so the mock chain must support
+    // .order()/.range() and resolve rows — otherwise the call silently takes the
+    // catch-path and this test stops exercising the SUCCESS path.
+    const mockRows = [
+      { id: 'i1', sender_session: 's1', target_session: null, payload: { intent_action: 'cancel-tree' }, body: 'b', created_at: new Date().toISOString() }
+    ];
     const sb = {
       from: (table) => {
         expect(table).toBe('session_coordination');
-        return {
-          select: () => ({
-            gte: (_col, cutoff) => {
-              capturedCutoff = cutoff;
-              return {
-                not: (col, op, val) => {
-                  capturedNotArgs = { col, op, val };
-                  return Promise.resolve({ data: [], error: null });
-                }
-              };
-            }
-          })
+        const builder = {
+          select: () => builder,
+          gte: (_col, cutoff) => { capturedCutoff = cutoff; return builder; },
+          not: (col, op, val) => { capturedNotArgs = { col, op, val }; return builder; },
+          order: (col, opts) => { capturedOrder = { col, opts }; return builder; },
+          // one full-short page (1 row < pageSize) terminates pagination cleanly
+          range: (from, to) => { capturedRange = { from, to }; return Promise.resolve({ data: mockRows, error: null }); }
         };
+        return builder;
       }
     };
-    await loadRecentIntents(sb, 60);
+    const { rows, error } = await loadRecentIntents(sb, 60);
+    expect(error).toBeNull(); // SUCCESS path — not the fail-open catch
+    expect(rows).toEqual(mockRows); // rows returned through the paginated read
     expect(capturedNotArgs.col).toBe('payload->>intent_action');
     expect(capturedNotArgs.op).toBe('is');
     expect(capturedNotArgs.val).toBeNull();
     expect(typeof capturedCutoff).toBe('string'); // ISO cutoff applied
+    expect(capturedOrder.col).toBe('id'); // unique-key tiebreaker for stable page boundaries
+    expect(capturedRange).toEqual({ from: 0, to: 999 }); // fetchAllPaginated applied .range()
   });
 
   it('claim-TTL window default is 24h (NOT the 60-min signal-router window)', () => {

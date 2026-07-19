@@ -3,10 +3,10 @@
  "generated_by": "scripts/audit/count-truncation-inventory.mjs",
  "total_sites": 9166,
  "by_classification": {
-  "bounded-by-design": 5783,
+  "bounded-by-design": 5779,
   "needs-review": 3062,
   "already-exact": 269,
-  "paginated": 46,
+  "paginated": 50,
   "tripwired": 6
  },
  "ledger_sites": [
@@ -15122,118 +15122,94 @@
    "exemption_note": "NOT paginated (FR-6 batch 2): the chainable mock in stale-session-sweep-test-fixture-cancel.test.js has no .order()/.range(); leaked SD-TEST-% fixtures are an operationally tiny set — exact-cap tripwire warning applied at the destructure site instead"
   },
   {
-   "site": "scripts/stale-session-sweep.cjs:1109",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": ".in()-bounded lookup — bounded by holderIds (claiming sessions of the fetched QF page)"
-  },
-  {
-   "site": "scripts/stale-session-sweep.cjs:1213",
+   "site": "scripts/stale-session-sweep.cjs:1223",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": ".in()-bounded lookup — bounded by claimedSdKeys derived from the classified session list"
   },
   {
-   "site": "scripts/stale-session-sweep.cjs:1284",
+   "site": "scripts/stale-session-sweep.cjs:1294",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": ".in()-bounded lookup — bounded by qfClaimedKeys (QF-claiming sessions)"
   },
   {
-   "site": "scripts/stale-session-sweep.cjs:1290",
+   "site": "scripts/stale-session-sweep.cjs:1300",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": ".in()-bounded lookup — bounded by qfSessionIds (QF-claiming sessions)"
   },
   {
-   "site": "scripts/stale-session-sweep.cjs:1357",
+   "site": "scripts/stale-session-sweep.cjs:1367",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": ".in()-bounded lookup — bounded by stuckApprovalIds (id+sd_key pairs of stuck pending_approval SDs)"
   },
   {
-   "site": "scripts/stale-session-sweep.cjs:1382",
+   "site": "scripts/stale-session-sweep.cjs:1392",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": "update-returning select, bounded by the mutation predicate (.eq sd_key STUCK_100 completion)"
   },
   {
-   "site": "scripts/stale-session-sweep.cjs:1436",
+   "site": "scripts/stale-session-sweep.cjs:1446",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": "update-returning select, bounded by the mutation predicate (.eq sd_key terminal-claim clear)"
   },
   {
-   "site": "scripts/stale-session-sweep.cjs:1708",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": ".in()-bounded lookup — bounded by referencedIds (claiming/active session ids of phantom-claim candidates)"
-  },
-  {
-   "site": "scripts/stale-session-sweep.cjs:1709",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": ".in()-bounded lookup — bounded by sdKeysForCrossCheck (phantom-claim candidate keys)"
-  },
-  {
-   "site": "scripts/stale-session-sweep.cjs:1731",
+   "site": "scripts/stale-session-sweep.cjs:1752",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": "update-returning select, bounded by the mutation predicate (.eq sd_key + race-guarded claiming_session_id)"
   },
   {
-   "site": "scripts/stale-session-sweep.cjs:1886",
+   "site": "scripts/stale-session-sweep.cjs:1907",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": ".in()-bounded lookup — bounded by sessionIds (the paginated main sessions list)"
   },
   {
-   "site": "scripts/stale-session-sweep.cjs:2193",
+   "site": "scripts/stale-session-sweep.cjs:2214",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": "update-returning select, bounded by the mutation predicate (.eq sd_key bare-shell enrichment)"
   },
   {
-   "site": "scripts/stale-session-sweep.cjs:2274",
+   "site": "scripts/stale-session-sweep.cjs:2295",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": ".in()-bounded lookup — bounded by the dead-session id list (MC liveness gate)"
   },
   {
-   "site": "scripts/stale-session-sweep.cjs:2537",
+   "site": "scripts/stale-session-sweep.cjs:2558",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": ".in()-bounded lookup — bounded by allDepKeys (dependency keys of candidate SDs)"
   },
   {
-   "site": "scripts/stale-session-sweep.cjs:2832",
+   "site": "scripts/stale-session-sweep.cjs:2853",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": "update-returning select, bounded by the mutation predicate (.eq sd_key CLAIM_FIX re-assert)"
   },
   {
-   "site": "scripts/stale-session-sweep.cjs:2841",
+   "site": "scripts/stale-session-sweep.cjs:2862",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": "update-returning select, bounded by the mutation predicate (.eq sd_key is_working_on fix)"
   },
   {
-   "site": "scripts/stale-session-sweep.cjs:2914",
+   "site": "scripts/stale-session-sweep.cjs:2935",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": ".in()-bounded lookup — bounded by sdAssignTargets (open WORK_ASSIGNMENT targets)"
   },
   {
-   "site": "scripts/stale-session-sweep.cjs:2918",
+   "site": "scripts/stale-session-sweep.cjs:2939",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": ".in()-bounded lookup — bounded by qfAssignTargets (open WORK_ASSIGNMENT targets)"
-  },
-  {
-   "site": "scripts/stale-session-sweep.cjs:2957",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": ".in()-bounded lookup — bounded by senderIds (senders of unacknowledged STUCK signals)"
   },
   {
    "site": "scripts/stamp-sd-tier-rank.mjs:59",
