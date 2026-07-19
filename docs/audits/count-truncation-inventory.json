@@ -1,12 +1,12 @@
 {
  "sd": "SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001",
  "generated_by": "scripts/audit/count-truncation-inventory.mjs",
- "total_sites": 9172,
+ "total_sites": 9176,
  "by_classification": {
-  "bounded-by-design": 3153,
-  "needs-review": 1653,
+  "bounded-by-design": 3154,
+  "needs-review": 1603,
   "already-exact": 177,
-  "paginated": 121,
+  "paginated": 174,
   "tripwired": 15,
   "non-live-path": 4053
  },
@@ -951,17 +951,12 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/bridge/reap-orphaned-provisioning.js:34",
+   "site": "lib/eva/bridge/reap-orphaned-provisioning.js:54",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/bridge/reap-orphaned-provisioning.js:45",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/bridge/reap-orphaned-provisioning.js:62",
+   "site": "lib/eva/bridge/reap-orphaned-provisioning.js:71",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -976,12 +971,7 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/bridge/s19-reconciliation.js:24",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/bridge/s19-reconciliation.js:38",
+   "site": "lib/eva/bridge/s19-reconciliation.js:47",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -1021,46 +1011,6 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/build-sd-review-gate.js:195",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/capacity-assignment-engine.js:120",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/capacity-assignment-engine.js:43",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/capacity-governor.js:124",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/capacity-governor.js:63",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/chairman-decision-timeout.js:74",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/chairman-dfe-feedback-loop.js:59",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/chairman-governance-panels.js:35",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
    "site": "lib/eva/chairman-preference-store.js:225",
    "classification": "needs-review",
    "auto_classification": "needs-review"
@@ -1076,7 +1026,7 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/chairman-sla-enforcer.js:55",
+   "site": "lib/eva/chairman-sla-enforcer.js:61",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -1091,22 +1041,7 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/cli-authority-tracker.js:55",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/cli-write-gate.js:106",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
    "site": "lib/eva/constraint-drift-detector.js:203",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/consultant/confidence-engine.js:70",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -1141,52 +1076,47 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:103",
+   "site": "lib/eva/cross-venture-learning.js:104",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:210",
+   "site": "lib/eva/cross-venture-learning.js:211",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:230",
+   "site": "lib/eva/cross-venture-learning.js:231",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:288",
+   "site": "lib/eva/cross-venture-learning.js:384",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:383",
+   "site": "lib/eva/cross-venture-learning.js:44",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:43",
+   "site": "lib/eva/cross-venture-learning.js:54",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:53",
+   "site": "lib/eva/cross-venture-learning.js:627",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:626",
+   "site": "lib/eva/cross-venture-learning.js:73",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:72",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/cross-venture-learning.js:828",
+   "site": "lib/eva/cross-venture-learning.js:829",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -1196,22 +1126,17 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/dependency-manager.js:120",
+   "site": "lib/eva/dependency-manager.js:126",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/dependency-manager.js:28",
+   "site": "lib/eva/dependency-manager.js:29",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/dependency-manager.js:32",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/dependency-manager.js:74",
+   "site": "lib/eva/dependency-manager.js:33",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -1221,22 +1146,7 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/dfe-gate-escalation-router.js:164",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/dfe-gate-escalation-router.js:237",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/economic-lens-analysis.js:118",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/economic-lens-analysis.js:315",
+   "site": "lib/eva/economic-lens-analysis.js:119",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -1456,37 +1366,7 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/filter-calibration.js:49",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/friday-data-aggregator.js:41",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/gate-failure-predictor.js:158",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/gate-failure-predictor.js:49",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
    "site": "lib/eva/gate-failure-predictor.js:67",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/guardrail-enforcement-engine.js:187",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/guardrail-enforcement-engine.js:201",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -1496,17 +1376,12 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/intelligence-loader.js:171",
+   "site": "lib/eva/intelligence-loader.js:76",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/intelligence-loader.js:74",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/intelligence-loader.js:85",
+   "site": "lib/eva/intelligence-loader.js:87",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -1592,11 +1467,6 @@
   },
   {
    "site": "lib/eva/launch-workflow/index.js:96",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/learning-moat-gauge.js:50",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -1751,11 +1621,6 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/premise-liveness.js:72",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
    "site": "lib/eva/qa/stitch-vision-qa.js:181",
    "classification": "needs-review",
    "auto_classification": "needs-review"
@@ -1776,12 +1641,7 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/quality-findings/sd-generator.js:357",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/quality-findings/sd-generator.js:407",
+   "site": "lib/eva/quality-findings/sd-generator.js:417",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -1792,16 +1652,6 @@
   },
   {
    "site": "lib/eva/reality-gates.js:85",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/reconcile-gate-decisions.mjs:42",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/reconcile-gate-decisions.mjs:46",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -1877,11 +1727,6 @@
   },
   {
    "site": "lib/eva/services/eva-knowledge-view.js:29",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/services/finding-consolidator.js:74",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -1981,17 +1826,12 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/services/risk-forecaster.js:108",
+   "site": "lib/eva/services/risk-forecaster.js:26",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/services/risk-forecaster.js:25",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/services/risk-forecaster.js:95",
+   "site": "lib/eva/services/risk-forecaster.js:96",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -2071,52 +1911,27 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/stage-execution-worker.js:2184",
+   "site": "lib/eva/stage-execution-worker.js:2249",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/stage-execution-worker.js:2245",
+   "site": "lib/eva/stage-execution-worker.js:2770",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/stage-execution-worker.js:2444",
+   "site": "lib/eva/stage-execution-worker.js:3771",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/stage-execution-worker.js:2506",
+   "site": "lib/eva/stage-execution-worker.js:4187",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/stage-execution-worker.js:2574",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-execution-worker.js:2755",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-execution-worker.js:3756",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-execution-worker.js:4172",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-execution-worker.js:4278",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-execution-worker.js:510",
+   "site": "lib/eva/stage-execution-worker.js:4293",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -2276,22 +2091,17 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/stage-zero/portfolio-allocation.js:149",
+   "site": "lib/eva/stage-zero/portfolio-allocation.js:173",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/stage-zero/portfolio-allocation.js:168",
+   "site": "lib/eva/stage-zero/portfolio-allocation.js:33",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/stage-zero/portfolio-allocation.js:31",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-zero/portfolio-allocation.js:46",
+   "site": "lib/eva/stage-zero/portfolio-allocation.js:48",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -2317,16 +2127,6 @@
   },
   {
    "site": "lib/eva/stage-zero/traversability-gate.js:61",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-zero/venture-nursery.js:298",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-zero/venture-nursery.js:342",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -2391,27 +2191,17 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/venture-capture-forward.js:114",
+   "site": "lib/eva/venture-capture-forward.js:115",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/venture-capture-forward.js:145",
+   "site": "lib/eva/venture-capture-forward.js:146",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/venture-capture-forward.js:176",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/venture-context-manager.js:166",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/venture-context-manager.js:192",
+   "site": "lib/eva/venture-context-manager.js:193",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -2426,67 +2216,12 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/venture-monitor.js:343",
+   "site": "lib/eva/vision-governance-service.js:109",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/eva/venture-monitor.js:381",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/venture-monitor.js:431",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/venture-monitor.js:453",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/venture-monitor.js:480",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/vision-governance-service.js:107",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/vision-governance-service.js:123",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/vision-governance-service.js:143",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/vision-governance-service.js:61",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/workers/health-monitor-worker.js:29",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/workers/health-monitor-worker.js:52",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/workers/metrics-collector-worker.js:25",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/workers/stage-advance-worker.js:28",
+   "site": "lib/eva/vision-governance-service.js:146",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -2913,6 +2648,21 @@
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": "eq(session_id)-bounded v_active_sessions probe — at most a handful of rows for one session"
+  },
+  {
+   "site": "lib/governance/fw3-cmv-rejecter.cjs:111",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "lib/governance/fw3-cmv-rejecter.cjs:172",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "lib/governance/fw3-cmv-rejecter.cjs:61",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
    "site": "lib/governance/guardrail-intelligence-analyzer.js:378",
@@ -6412,17 +6162,17 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/gauge-runner.mjs:243",
+   "site": "scripts/gauge-runner.mjs:253",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/gauge-runner.mjs:295",
+   "site": "scripts/gauge-runner.mjs:305",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/gauge-runner.mjs:296",
+   "site": "scripts/gauge-runner.mjs:306",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
