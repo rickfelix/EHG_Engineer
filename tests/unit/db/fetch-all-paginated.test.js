@@ -65,6 +65,19 @@ describe('TS-1 fetchAllPaginated full retrieval', () => {
     expect(out).toHaveLength(POSTGREST_MAX_ROWS + 5);
     expect(pageCalls()).toBe(2);
   });
+
+  it('rejects pageSize above the server cap or non-positive (would silently re-truncate)', async () => {
+    const { factory } = makeRelation([]);
+    await expect(fetchAllPaginated(factory, { pageSize: 5000 })).rejects.toThrow(/pageSize must be an integer/);
+    await expect(fetchAllPaginated(factory, { pageSize: 0 })).rejects.toThrow(/pageSize must be an integer/);
+    await expect(fetchAllPaginated(factory, { pageSize: -1 })).rejects.toThrow(/pageSize must be an integer/);
+  });
+
+  it('throws (not hangs) when the builder ignores .range() and serves identical full pages', async () => {
+    const fullPage = Array.from({ length: 10 }, (_, i) => row(i));
+    const factory = () => ({ range: () => Promise.resolve({ data: fullPage, error: null }) });
+    await expect(fetchAllPaginated(factory, { pageSize: 10, maxPages: 5 })).rejects.toThrow(/exceeded 5 pages/);
+  });
 });
 
 describe('TS-2 cap-tripwire', () => {

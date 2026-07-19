@@ -71,7 +71,10 @@ export function buildInventory({ root = ROOT } = {}) {
         if (!/\.select\s*\(/.test(line) || /\/\/|\/\*|^\s*\*/.test(line.slice(0, line.indexOf('.select')))) return;
         const key = `${rel}:${i + 1}`;
         const auto = classifyChain(chainWindow(lines, i));
-        const ov = overrides[key];
+        // An override without a note is ignored (falls back to auto): a note-less override
+        // could silently drop a needs-review site from the checked-in ledger with no trace.
+        const raw = overrides[key];
+        const ov = raw && raw.note ? raw : undefined;
         sites.push({
           site: key,
           classification: ov?.classification || auto,
