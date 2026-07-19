@@ -1047,7 +1047,7 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
     const { data: terminalClaimed } = await supabase
       .from('quick_fixes')
       .select('id, status, claiming_session_id')
-      .in('status', ['completed', 'cancelled', 'escalated'])
+      .in('status', ['completed', 'cancelled', 'escalated', 'closed']) // QF-20260719-702
       .not('claiming_session_id', 'is', null);
     for (const qf of (terminalClaimed || [])) {
       const { error } = await supabase
@@ -2815,7 +2815,8 @@ async function main() {
   // preserves audit + the row's expires_at), NOT a hard-DELETE. Only drain rows older than one
   // sweep interval (assignment-age floor) so a transient terminal read can't drop a mid-transition
   // in-flight assignment. Terminal sets BRANCH by target shape: SD → {completed,cancelled,deferred};
-  // QF → {completed,cancelled,escalated} (escalated is QF-only; deferred is SD-only). Fail-open.
+  // QF → {completed,cancelled,escalated,closed} (escalated/closed are QF-only; deferred is SD-only;
+  // 'closed' added by QF-20260719-702). Fail-open.
   // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2 (Finding 3): the drain is a
   // WORK_ASSIGNMENT-table coordinator mutation — skip it when not the canonical coordinator.
   if (!_coordMutationAllowed) {
@@ -2840,7 +2841,7 @@ async function main() {
     }
     if (qfAssignTargets.length > 0) {
       const { data: qfRows2 } = await supabase.from('quick_fixes').select('id, status').in('id', qfAssignTargets);
-      (qfRows2 || []).forEach(r => { if (['completed', 'cancelled', 'escalated'].includes(r.status)) terminalTargetSet.add(r.id); });
+      (qfRows2 || []).forEach(r => { if (['completed', 'cancelled', 'escalated', 'closed'].includes(r.status)) terminalTargetSet.add(r.id); });
     }
     const drainIds = (openAssignments || []).filter(a => terminalTargetSet.has(a.target_sd)).map(a => a.id);
     for (let i = 0; i < drainIds.length; i += 50) {

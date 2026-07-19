@@ -33,7 +33,7 @@ describe('FR-1: terminal-target WORK_ASSIGNMENT drain', () => {
   });
   it('branches the terminal set by target shape (SD vs QF)', () => {
     expect(fr1).toMatch(/sdAssignTargets[\s\S]*\['completed', 'cancelled', 'deferred'\]/); // SD: deferred, not escalated
-    expect(fr1).toMatch(/qfAssignTargets[\s\S]*\['completed', 'cancelled', 'escalated'\]/); // QF: escalated, not deferred
+    expect(fr1).toMatch(/qfAssignTargets[\s\S]*\['completed', 'cancelled', 'escalated', 'closed'\]/); // QF: escalated+closed, not deferred
   });
   it('keys on the target_sd column and applies an assignment-age floor', () => {
     expect(fr1).toMatch(/message_type', 'WORK_ASSIGNMENT'/);
