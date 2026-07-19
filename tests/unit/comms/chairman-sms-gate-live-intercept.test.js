@@ -43,14 +43,19 @@ describe('makeDefaultSender delegation (FR-2) — durable path, fail-soft, no Tw
     expect(gateSrc).toMatch(/enqueueChairmanSms/);
     expect(gateSrc).not.toMatch(/new\s+twilio|require\(['"]twilio|from ['"]twilio/i);
   });
-  it('a rubric-PASS with no recipient phone fails SOFT (no throw), proving transport degradation', async () => {
+  it('a rubric-PASS with no recipient phone fails SOFT (no throw) and reports sent:false honestly', async () => {
     // No opts.sender -> makeDefaultSender is used; no recipient -> early soft-fail (no durable import).
+    // QF-20260719-509 LIVE INCIDENT (2026-07-19): this test previously asserted sent:true on a
+    // soft-failed transport, claiming "email is the guaranteed fallback" — proven false in
+    // production (no email ever fired). The gate must not throw AND must not lie about delivery.
     const prev = process.env.CHAIRMAN_PHONE;
     delete process.env.CHAIRMAN_PHONE;
-    const r = await sendChairmanSMS({ type: 'decision', body: 'ok' }, {}, { evaluate: passEval });
-    // The gate still reports sent (sender.send resolved without throwing) — the SOFT-fail is inside
-    // the durable delegate; the point is it did NOT throw (email is the guaranteed fallback).
-    expect(r.sent).toBe(true);
+    const fallbackSend = vi.fn(async () => ({ fired: true }));
+    const r = await sendChairmanSMS({ type: 'decision', body: 'ok' }, {}, { evaluate: passEval, fallbackSend });
+    expect(r.sent).toBe(false); // did not throw, but honestly reports the transport drop
+    expect(r.transportFailed).toBe(true);
+    expect(r.reason).toBe('no_recipient_phone');
+    expect(fallbackSend).toHaveBeenCalledOnce(); // the real fallback now fires instead of the phantom one
     if (prev !== undefined) process.env.CHAIRMAN_PHONE = prev;
   });
 });
