@@ -1,0 +1,92 @@
+{
+  "executive_summary": "SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001-C (Solomon checkpoint-3, F3) closes a real, verified 'recurred family' defect: today, when a PRD's acceptance criterion (AC) declares a live/never-mocked evidence tier (e.g. 'live proof required', 'never mocked') but the SD's actual gate evidence is unit-test-only, the LEAD-FINAL-APPROVAL pipeline passes SILENTLY -- nobody decided that tier downgrade was acceptable, nobody was even told it happened. This SD's own embedded LEAD-phase discovery hint proposed reusing scripts/modules/handoff/validation/validator-registry/gates/value-authenticity-spec-gate.js; a real Explore investigation this session DISPROVED that hint on two independent grounds (verified against live code, the DB validator-registry row, and git history): (1) that gate's isMockSatisfiable()/checkDeferredStubTrap() detect whether AC text selects a canonical VA-T#-slug library-ID token, not whether it declares a live/never-mocked tier -- an AC literally saying 'live proof required, never mocked' and one saying 'should look reasonable' are treated identically; (2) that gate runs at LEAD-TO-PLAN (PRD-authoring time), before any EXEC evidence exists to cross-reference against -- structurally the wrong phase. A follow-up validation-agent pass confirmed the schema has NO structured evidence-tier signal anywhere (no test_tier/evidence_tier/acceptance_tier column on sub_agent_execution_results, user_stories, or PRD functional_requirements[].acceptance_criteria), making a text-keyword heuristic on both sides (AC declares live-tier; evidence contains a live-tier signal) the only honest v1 mechanism -- not a shortcut, the actual available signal. The fix is a NEW LEAD-FINAL-APPROVAL gate, modeled directly on two real, already-wired sibling gates in the same directory (phantom-test-audit-gate.js's bypass-with-explicit-warning pattern; activation-invariant-gate.js's loadPRD/loadTestingEvidence data-access pattern), shipping OBSERVE-ONLY by default (mirrors this repo's own established rollout convention for new heuristic gates on safety-critical shared code, following value-authenticity-spec-gate.js's own precedent after its documented QF-20260704-121 false-positive incident) -- this fully satisfies Solomon's actual complaint (zero signal today becomes a permanent, non-silent warnings[] line naming the specific FR) with zero fleet-wide blocking risk on day one.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Detect AC text declaring a live/never-mocked acceptance tier",
+      "description": "New gate scripts/modules/handoff/executors/lead-final-approval/gates/acceptance-tier-downgrade-gate.js loads the SD's PRD (prdRepo.getBySdUuid(ctx.sd.id), mirroring activation-invariant-gate.js's loadPRD pattern) and scans every FR's acceptance_criteria[] string entries for a tight, high-precision LIVE_TIER_KEYWORDS list ('never mocked', 'never-mocked', 'live proof required', 'must run live', 'live-verified') -- deliberately excludes ambiguous short phrases ('no mocks', 'not mocked') that would false-positive on unrelated prose (e.g. 'the UI should not look mocked up'). This is new detection logic distinct from value-authenticity-spec-gate.js's VA-T#-slug library-ID check.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "An AC containing any LIVE_TIER_KEYWORDS phrase (case-insensitive) is flagged as live-tier-declared, recording the FR id and the matched phrase",
+        "An AC with no such phrase is never flagged (no keyword list drift toward over-matching)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Cross-reference flagged FRs against sub-agent evidence for a live-tier signal",
+      "description": "For each live-tier-declared FR (FR-1), query sub_agent_execution_results for this SD (sd_id=ctx.sd.id, sub_agent_code IN ('TESTING','SECURITY')) and stringify+scan the columns that ACTUALLY EXIST -- evidence, test_execution, detailed_analysis, summary, critical_issues, warnings, metadata (defensive stringify, since summary is TEXT in a later ALTER but JSONB in the base schema) -- for LIVE_EVIDENCE_KEYWORDS ('live proof', 'live run', 'e2e', 'production', 'live-verified', 'live one-tick', 'live test'). CORRECTNESS CONSTRAINT: sub_agent_execution_results has NO findings column -- do not select it (a bad column silently returns null in Supabase, which would make the scan silently miss all real evidence).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A flagged FR with at least one matching sub-agent evidence row is NOT reported as a downgrade",
+        "A flagged FR with zero matching sub-agent evidence rows across the whole SD IS reported as a potential downgrade, naming the FR id and its matched AC phrase"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Observe-only by default; findings always surfaced as warnings, never silent",
+      "description": "Ships gated behind env ACCEPTANCE_TIER_DOWNGRADE_GATE_BINDING (default unset/false = observe-only). Observe-only: passed:true, score:100, max_score:100 ALWAYS (pinned, so the gate can only pull ValidationOrchestrator's weighted-average normalizedScore up or flat, never trip a threshold -- verified in ValidationOrchestrator.js), but every detected potential downgrade is placed in warnings[] by name -- never silently absent from the gate's returned result. Binding mode (env=true): passed:false when any flagged FR has zero live-evidence signal.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Observe-only mode: gate result is always passed:true/score:100 regardless of findings, AND warnings[] contains one entry per detected potential downgrade naming the FR id",
+        "Binding mode: gate result is passed:false when at least one flagged FR has no live-evidence signal, passed:true otherwise",
+        "No bypass/waiver mechanism ships in this v1 -- deliberately cut (dead code while observe-only; add alongside a future BINDING flip per LEAD scope-cut Q5)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Wire the gate into the LEAD-FINAL-APPROVAL pipeline",
+      "description": "Add exactly one gates.push(createAcceptanceTierDowngradeGate(supabase, prdRepo)) call to getRequiredGates() in scripts/modules/handoff/executors/lead-final-approval/gates.js, adjacent to the other content-inspection gates (phantom-test-audit-gate, activation-invariant-gate). No DB migration required -- this executor's hardcoded gates run by default (no leo_validation_rules row needed), confirmed via the two model gates' own registration pattern.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "getRequiredGates() includes the new gate for every LEAD-FINAL-APPROVAL run",
+        "No leo_validation_rules migration is added or required"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "No schema changes", "description": "Reads only existing product_requirements_v2.functional_requirements and sub_agent_execution_results columns. No migration, no new table/column." },
+    { "id": "TR-2", "title": "Reuse, never re-derive PRD/evidence access patterns", "description": "PRD loading mirrors activation-invariant-gate.js's loadPRD (prdRepo.getBySdUuid, direct Supabase fallback); evidence loading mirrors its loadTestingEvidence query shape, extended to sub_agent_code IN ('TESTING','SECURITY')." },
+    { "id": "TR-3", "title": "Score-neutral in observe-only mode", "description": "Gate result is pinned at score:100/max_score:100 while observe-only so ValidationOrchestrator's weighted-average normalizedScore is never diluted -- verified against ValidationOrchestrator.js's scoring and blocking logic (passed===false && required!==false is the only block condition)." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "AC with a high-precision live-tier phrase is flagged", "type": "unit", "expected": "An FR whose acceptance_criteria includes 'never mocked' (or another LIVE_TIER_KEYWORDS phrase) is detected as live-tier-declared" },
+    { "id": "TS-2", "scenario": "AC without a live-tier phrase is never flagged", "type": "unit", "expected": "Ordinary AC prose (including phrases like 'should not look mocked up' if ambiguous short phrases were mistakenly included) produces zero false-positive flags given the tightened keyword list" },
+    { "id": "TS-3", "scenario": "Flagged FR with matching live-evidence sub-agent row is not reported as a downgrade", "type": "unit", "expected": "A TESTING evidence row whose summary/detailed_analysis mentions 'live proof' or 'e2e' clears the flagged FR" },
+    { "id": "TS-4", "scenario": "Flagged FR with zero matching evidence rows is reported", "type": "unit", "expected": "warnings[] contains an entry naming the FR id and matched AC phrase" },
+    { "id": "TS-5", "scenario": "Observe-only mode never blocks regardless of findings", "type": "unit", "expected": "passed:true, score:100 even with 1+ flagged-and-unevidenced FRs, when ACCEPTANCE_TIER_DOWNGRADE_GATE_BINDING is unset" },
+    { "id": "TS-6", "scenario": "Binding mode blocks on an unevidenced flagged FR", "type": "unit", "expected": "passed:false when ACCEPTANCE_TIER_DOWNGRADE_GATE_BINDING=true and at least one flagged FR has no live-evidence signal" },
+    { "id": "TS-7", "scenario": "No PRD / no FRs / no acceptance_criteria -> clean pass, no crash", "type": "unit", "expected": "Gate returns passed:true with an explanatory warning/message, never throws, for an SD with no PRD or an empty FR list" },
+    { "id": "TS-8", "scenario": "sub_agent_execution_results query never selects a nonexistent findings column", "type": "unit", "expected": "The gate's select() column list matches only real columns (evidence, test_execution, detailed_analysis, summary, critical_issues, warnings, metadata) -- static assertion against the query source" }
+  ],
+  "acceptance_criteria": [
+    "scripts/modules/handoff/executors/lead-final-approval/gates/acceptance-tier-downgrade-gate.js ships with full unit test coverage (TS-1..TS-8) passing",
+    "getRequiredGates() wires the new gate in, no DB migration",
+    "Observe-only by default -- zero fleet-wide blocking risk on ship",
+    "No bypass mechanism in v1 (deliberate scope cut)",
+    "sub_agent_execution_results query only selects real columns (no findings column reference)"
+  ],
+  "risks": [
+    { "risk": "Keyword heuristic false-positives on unrelated prose", "mitigation": "Tightened to high-precision multi-word phrases only (FR-1); observe-only mode means a false positive costs only a warning, never a block", "severity": "low" },
+    { "risk": "Keyword heuristic false-negatives (a live-tier AC phrased differently than the fixed keyword list) go undetected", "mitigation": "Accepted, documented limitation of a v1 text heuristic given no structured evidence-tier schema exists anywhere in this codebase today; the keyword list is centralized in one exported constant for easy future extension", "severity": "low" },
+    { "risk": "No bypass path if binding mode is ever turned on before a bypass mechanism is added", "mitigation": "Deliberate v1 scope cut (dead code while observe-only) -- flipping ACCEPTANCE_TIER_DOWNGRADE_GATE_BINDING=true is a separate, later, deliberate operator action that should ship together with a bypass mechanism, not bundled into this SD", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["LEAD-FINAL-APPROVAL handoff pipeline (every SD's completion run)"],
+    "dependencies": [
+      "product_requirements_v2.functional_requirements (existing, read-only)",
+      "sub_agent_execution_results (existing, read-only, TESTING+SECURITY rows for the SD)",
+      "activation-invariant-gate.js / phantom-test-audit-gate.js (design precedent, not a runtime dependency)"
+    ],
+    "data_contracts": ["No new data contracts -- reads existing PRD FR/AC text and existing sub-agent evidence columns only"],
+    "runtime_config": ["ACCEPTANCE_TIER_DOWNGRADE_GATE_BINDING (default unset=observe-only; true=blocking)"],
+    "observability_rollout": ["Every LEAD-FINAL-APPROVAL run's gate output includes an ACCEPTANCE_TIER_DOWNGRADE entry; warnings[] entries name the specific FR id + matched phrase for any detected potential downgrade, observable in the same place all other gate warnings already surface"]
+  },
+  "system_architecture": {
+    "summary": "One new LEAD-FINAL-APPROVAL gate file, modeled on two existing sibling gates in the same directory, wired via a single line in getRequiredGates(). No schema changes, no new infrastructure.",
+    "components": [
+      { "name": "scripts/modules/handoff/executors/lead-final-approval/gates/acceptance-tier-downgrade-gate.js", "change": "NEW -- AC-text live-tier detection + evidence cross-reference + observe-only/binding gate result" },
+      { "name": "scripts/modules/handoff/executors/lead-final-approval/gates.js", "change": "MODIFIED -- one gates.push() line added to getRequiredGates(); createAcceptanceTierDowngradeGate exported alongside the other gate factories" },
+      { "name": "tests/unit/handoff/lead-final-approval/acceptance-tier-downgrade-gate.test.js", "change": "NEW -- unit tests for TS-1..TS-8" }
+    ]
+  }
+}

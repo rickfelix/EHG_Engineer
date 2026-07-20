@@ -46,6 +46,10 @@ export { createInvocationPathGate };
 // Phantom Test Audit Gate — call-surface alignment check (SD-FDBK-ENH-PAT-PHANTOM-TABLE-001)
 import { createPhantomTestAuditGate } from './gates/phantom-test-audit-gate.js';
 export { createPhantomTestAuditGate };
+// Acceptance-Tier Downgrade Gate — surfaces a live/never-mocked AC satisfied by unit-only
+// evidence instead of a silent pass (SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001-C)
+import { createAcceptanceTierDowngradeGate } from './gates/acceptance-tier-downgrade-gate.js';
+export { createAcceptanceTierDowngradeGate };
 import { createLearningOrBypassResolvedGate } from './gates/learning-or-bypass-resolved-gate.js';
 export { createLearningOrBypassResolvedGate };
 // SD-LEO-INFRA-ADKAR-CHANGE-ADOPTION-FRAMEWORK-001-B: block completion of a
@@ -1243,6 +1247,11 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   gates.push(createInvocationPathGate(supabase));
   gates.push(createPhantomTestAuditGate(supabase));
 
+  // Acceptance-Tier Downgrade Gate (SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001-C)
+  // Observe-only by default (ACCEPTANCE_TIER_DOWNGRADE_GATE_BINDING=true to flip) — see the
+  // gate file's header for the full rationale.
+  gates.push(createAcceptanceTierDowngradeGate(supabase, prdRepo));
+
   // Learning-or-Bypass-Resolved Gate — completion safeguard
   // (SD-LEARN-FIX-ADDRESS-PAT-AGENT-001)
   // Blocks status=completed when --bypass-validation was used without corresponding
@@ -1295,6 +1304,7 @@ export default {
   createAutomatedUatGate,
   createWireCheckGate,
   createPhantomTestAuditGate,
+  createAcceptanceTierDowngradeGate,
   createLearningOrBypassResolvedGate,
   createAdkarAdoptionGate,
   createDeferredFollowupsGate,

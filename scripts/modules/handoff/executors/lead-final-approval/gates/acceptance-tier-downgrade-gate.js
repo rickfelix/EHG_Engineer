@@ -1,0 +1,230 @@
+/**
+ * Acceptance-Tier Downgrade Gate — LEAD-FINAL-APPROVAL handoff gate.
+ *
+ * SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001-C (Solomon checkpoint-3, F3).
+ *
+ * PROBLEM: when a PRD's acceptance criterion (AC) declares a live/never-mocked
+ * evidence tier (e.g. "live proof required", "never mocked") but the SD's actual
+ * gate evidence is unit-test-only, the pipeline passes SILENTLY today — no one
+ * decided that tier downgrade was acceptable, no one was even told it happened.
+ *
+ * NOT a reuse of scripts/modules/handoff/validation/validator-registry/gates/
+ * value-authenticity-spec-gate.js — that gate detects whether AC text selects a
+ * canonical VA-T#-slug library-ID token (a different, unrelated check) and runs
+ * at LEAD-TO-PLAN, before any EXEC evidence exists to cross-reference against.
+ * Verified via direct code read + its leo_validation_rules DB row + git history
+ * (LEAD-phase Explore investigation, this SD).
+ *
+ * DESIGN (modeled on the two real, already-wired sibling gates in this directory):
+ *   - PRD loading: activation-invariant-gate.js's loadPRD (prdRepo.getBySdUuid,
+ *     direct-Supabase fallback), extended to select functional_requirements.
+ *   - Evidence loading: activation-invariant-gate.js's loadTestingEvidence query
+ *     shape, widened to sub_agent_code IN ('TESTING','SECURITY').
+ *   - Observe-only-by-default shape: phantom-test-audit-gate.js's issues:[]/
+ *     warnings:[...] convention on a passing result.
+ *
+ * HEURISTIC, HONESTLY SCOPED: no column anywhere in this schema (sub_agent_execution_results,
+ * user_stories, product_requirements_v2.functional_requirements) distinguishes unit-vs-live/E2E
+ * test evidence at the FR/AC level (verified by schema search). A text-keyword match on both
+ * sides is the only available v1 signal, not a shortcut around a better option.
+ *
+ * OBSERVE-ONLY BY DEFAULT (ACCEPTANCE_TIER_DOWNGRADE_GATE_BINDING=true to flip): mirrors this
+ * repo's own established rollout convention for a new heuristic gate on safety-critical shared
+ * code (value-authenticity-spec-gate.js's own precedent, after its documented QF-20260704-121
+ * false-positive incident). Observe-only mode is pinned at score:100/max_score:100 so
+ * ValidationOrchestrator's weighted-average normalizedScore can only be pulled up or flat, never
+ * trip a threshold — but every detected potential downgrade is placed in warnings[] by name,
+ * never silently absent from the gate's returned result. This alone fully satisfies Solomon's
+ * complaint: zero signal today becomes a permanent, non-silent line naming the specific FR.
+ *
+ * No bypass mechanism ships in this v1 (dead code while observe-only — nothing to bypass; add
+ * alongside a future BINDING flip, not bundled here).
+ */
+
+const GATE_NAME = 'ACCEPTANCE_TIER_DOWNGRADE';
+
+// High-precision multi-word phrases only — deliberately excludes short/ambiguous fragments
+// ("no mocks", "not mocked", bare "live") that would false-positive on unrelated prose (e.g.
+// "the UI should not look mocked up", "delivered live to customers"). Centralized here for easy
+// future extension without touching the detection logic.
+export const LIVE_TIER_KEYWORDS = Object.freeze([
+  'never mocked',
+  'never-mocked',
+  'live proof required',
+  'live-verified',
+]);
+
+// Evidence-side signal: does a sub-agent evidence row for this SD mention any live/E2E proof?
+export const LIVE_EVIDENCE_KEYWORDS = Object.freeze([
+  'live proof',
+  'live run',
+  'e2e',
+  'production',
+  'live-verified',
+  'live one-tick',
+  'live test',
+]);
+
+/** Coerce one acceptance_criteria[] entry (string | {criteria|text|description|title} | other) into searchable text. */
+export function acEntryText(entry) {
+  if (entry == null) return '';
+  if (typeof entry === 'string') return entry;
+  if (typeof entry === 'object') {
+    const t = entry.criteria || entry.text || entry.description || entry.title;
+    if (typeof t === 'string') return t;
+  }
+  try { return JSON.stringify(entry); } catch { return String(entry); }
+}
+
+/**
+ * Coerce a PRD FR's acceptance_criteria field (array | JSON-string-encoded array | plain string)
+ * into a flat array of searchable strings. Never throws.
+ */
+export function normalizeAcceptanceCriteria(raw) {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw.map(acEntryText);
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed.map(acEntryText);
+      } catch { /* not valid JSON — fall through to plain-string handling */ }
+    }
+    return trimmed ? [trimmed] : [];
+  }
+  return [acEntryText(raw)];
+}
+
+/** True when `text` contains any keyword from `list` (case-insensitive substring match). */
+function matchesAny(text, list) {
+  const lower = (text || '').toLowerCase();
+  return list.find((kw) => lower.includes(kw));
+}
+
+/**
+ * FR-1: scan every FR's acceptance_criteria for a live/never-mocked tier declaration.
+ * @returns {Array<{frId:string, description:string, matchedPhrase:string}>}
+ */
+export function detectLiveTierFRs(functionalRequirements = []) {
+  const flagged = [];
+  const frs = Array.isArray(functionalRequirements) ? functionalRequirements : [];
+  for (let i = 0; i < frs.length; i++) {
+    const fr = frs[i];
+    const frId = (fr && (fr.id || fr.fr_id)) || `FR-${i + 1}`;
+    const acTexts = normalizeAcceptanceCriteria(fr && fr.acceptance_criteria);
+    for (const text of acTexts) {
+      const matched = matchesAny(text, LIVE_TIER_KEYWORDS);
+      if (matched) {
+        flagged.push({ frId, description: (fr && (fr.title || fr.description)) || '', matchedPhrase: matched });
+        break; // one flag per FR is enough
+      }
+    }
+  }
+  return flagged;
+}
+
+/** Defensive stringify of the evidence-bearing columns that ACTUALLY EXIST on sub_agent_execution_results. */
+function evidenceRowText(row) {
+  const parts = [];
+  for (const key of ['evidence', 'test_execution', 'detailed_analysis', 'summary', 'critical_issues', 'warnings', 'metadata']) {
+    const v = row && row[key];
+    if (v == null) continue;
+    parts.push(typeof v === 'string' ? v : (() => { try { return JSON.stringify(v); } catch { return ''; } })());
+  }
+  return parts.join(' ').toLowerCase();
+}
+
+/**
+ * FR-2: PER-FR evidence isolation — each flagged FR is checked against the evidence rows
+ * independently; a live signal for one FR never clears a different, unrelated FR.
+ * @returns {{frId, description, matchedPhrase, hasLiveEvidence:boolean}[]}
+ */
+export function crossReferenceEvidence(flaggedFRs, evidenceRows = []) {
+  const rowsText = (evidenceRows || []).map(evidenceRowText);
+  return flaggedFRs.map((fr) => {
+    const hasLiveEvidence = rowsText.some((t) => LIVE_EVIDENCE_KEYWORDS.some((kw) => t.includes(kw)));
+    return { ...fr, hasLiveEvidence };
+  });
+}
+
+/** Mirrors activation-invariant-gate.js's loadPRD — prdRepo first, direct-Supabase fallback. */
+async function loadPRD({ supabase, prdRepo, sdId }) {
+  if (prdRepo?.getBySdUuid) {
+    const prd = await prdRepo.getBySdUuid(sdId);
+    if (prd) return prd;
+  }
+  if (prdRepo?.getBySdId) {
+    const prd = await prdRepo.getBySdId(sdId);
+    if (prd) return prd;
+  }
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from('product_requirements_v2')
+    .select('id, sd_id, functional_requirements')
+    .eq('sd_id', sdId)
+    .limit(1)
+    .maybeSingle();
+  return data || null;
+}
+
+/** Mirrors activation-invariant-gate.js's loadTestingEvidence, widened to TESTING+SECURITY. */
+async function loadEvidenceRows({ supabase, sdId }) {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from('sub_agent_execution_results')
+    .select('id, sub_agent_code, evidence, test_execution, detailed_analysis, summary, critical_issues, warnings, metadata')
+    .eq('sd_id', sdId)
+    .in('sub_agent_code', ['TESTING', 'SECURITY']);
+  return data || [];
+}
+
+export function isBindingEnabled(env = process.env) {
+  return env.ACCEPTANCE_TIER_DOWNGRADE_GATE_BINDING === 'true';
+}
+
+export function createAcceptanceTierDowngradeGate(supabase, prdRepo) {
+  return {
+    name: GATE_NAME,
+    validator: async (ctx) => {
+      console.log('\n🎯 GATE: Acceptance-Tier Downgrade');
+      console.log('-'.repeat(50));
+
+      const sdId = ctx?.sd?.id;
+      const prd = await loadPRD({ supabase, prdRepo, sdId });
+      const frs = (prd && prd.functional_requirements) || [];
+
+      if (!prd || frs.length === 0) {
+        console.log('   ℹ️  No PRD / no functional requirements — gate not applicable');
+        return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['No PRD or no FRs — acceptance-tier-downgrade check skipped'], details: { flagged: 0 } };
+      }
+
+      const flagged = detectLiveTierFRs(frs);
+      if (flagged.length === 0) {
+        console.log('   No live/never-mocked-tier AC declarations found.');
+        return { passed: true, score: 100, max_score: 100, issues: [], warnings: [], details: { flagged: 0 } };
+      }
+
+      const evidenceRows = await loadEvidenceRows({ supabase, sdId });
+      const evaluated = crossReferenceEvidence(flagged, evidenceRows);
+      const downgraded = evaluated.filter((f) => !f.hasLiveEvidence);
+
+      if (downgraded.length === 0) {
+        console.log(`   ${flagged.length} live-tier FR(s) all have matching live-evidence signal.`);
+        return { passed: true, score: 100, max_score: 100, issues: [], warnings: [], details: { flagged: flagged.length, downgraded: 0 } };
+      }
+
+      const messages = downgraded.map((f) => `${GATE_NAME}: ${f.frId} declares a live/never-mocked tier ("${f.matchedPhrase}") but no sub-agent evidence for this SD shows a live/E2E signal — possible silent acceptance-tier downgrade.`);
+      const binding = isBindingEnabled();
+
+      if (!binding) {
+        console.log(`   ⚠️  ${downgraded.length} potential downgrade(s) found (observe-only — see warnings).`);
+        return { passed: true, score: 100, max_score: 100, issues: [], warnings: messages, details: { flagged: flagged.length, downgraded: downgraded.length, binding: false } };
+      }
+
+      console.log(`   ❌ ${downgraded.length} potential downgrade(s) found — BINDING mode.`);
+      return { passed: false, score: 0, max_score: 100, issues: messages, warnings: [], details: { flagged: flagged.length, downgraded: downgraded.length, binding: true } };
+    },
+    required: true,
+  };
+}
