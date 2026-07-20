@@ -2459,16 +2459,6 @@
   "match": "id, name",
   "note": ".in(id) — bounded by the caller-supplied id list"
  },
- "lib/eva/stage-zero/chairman-override-tracker.js:124": {
-  "classification": "bounded-by-design",
-  "match": "component, system_score, override_score, outcome",
-  "note": "chairman_overrides full-log insights — chairman-authored, human-rate bounded (single chairman)"
- },
- "lib/eva/stage-zero/chairman-override-tracker.js:86": {
-  "classification": "bounded-by-design",
-  "match": "id, venture_id, component, system_score, override_",
-  "note": "chairman_overrides .eq(component) — chairman-authored override log, human-rate bounded (single chairman)"
- },
  "lib/eva/stage-zero/chairman-review.js:58": {
   "classification": "bounded-by-design",
   "match": ".select('id');",

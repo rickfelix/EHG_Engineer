@@ -3,10 +3,10 @@
  "generated_by": "scripts/audit/count-truncation-inventory.mjs",
  "total_sites": 9176,
  "by_classification": {
-  "bounded-by-design": 3424,
+  "bounded-by-design": 3422,
   "needs-review": 1332,
   "already-exact": 177,
-  "paginated": 175,
+  "paginated": 177,
   "tripwired": 15,
   "non-live-path": 4053
  },
@@ -2261,18 +2261,6 @@
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": ".in(id) — bounded by the caller-supplied id list"
-  },
-  {
-   "site": "lib/eva/stage-zero/chairman-override-tracker.js:124",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": "chairman_overrides full-log insights — chairman-authored, human-rate bounded (single chairman)"
-  },
-  {
-   "site": "lib/eva/stage-zero/chairman-override-tracker.js:86",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": "chairman_overrides .eq(component) — chairman-authored override log, human-rate bounded (single chairman)"
   },
   {
    "site": "lib/eva/stage-zero/chairman-review.js:58",
