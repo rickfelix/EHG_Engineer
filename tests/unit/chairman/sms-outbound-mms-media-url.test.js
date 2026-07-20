@@ -91,15 +91,18 @@ describe('reconcileOutboundSms media_url end-to-end (FR-4, TS-6)', () => {
 });
 
 describe('static pin: media_url present in both reconcileOutboundSms select() calls (FR-4)', () => {
+  // QF-20260720-287: the owed-select and the claim-update RETURNING columns moved from inline
+  // select('...') literals to named consts (OWED_SELECT_COLUMNS / claimSelectColumns) so a
+  // missing prior_provider_message_ids column (chairman-gated STAGED, never applied live) can
+  // be retried without it at every touchpoint. Pin against the const definitions instead of an
+  // inline select() call — same guard, adapted structure.
   it('the owed-query select and the claim-update-returning select both include media_url', async () => {
     const { readFileSync } = await import('fs');
     const src = readFileSync('lib/chairman/sms-outbound-worker.js', 'utf8');
-    const owedSelectMatch = src.match(/select\('id, recipient_phone, body, attempts, decision_id, not_before[^']*'\)/);
-    const claimSelectMatch = src.match(/select\('id, recipient_phone, body, attempts[^']*'\)/g);
-    expect(owedSelectMatch?.[0]).toMatch(/media_url/);
-    // claimSelectMatch[0] is the owed-query variant (superset match); the LAST match is the
-    // claim-update-returning select, which is what `c` in provider.send() is sourced from.
-    expect(claimSelectMatch?.at(-1)).toMatch(/media_url/);
+    const owedColumnsMatch = src.match(/OWED_SELECT_COLUMNS = '([^']*)'/);
+    expect(owedColumnsMatch?.[1]).toMatch(/media_url/);
+    expect(src).toMatch(/\? 'id, recipient_phone, body, attempts, media_url, provider_message_id, prior_provider_message_ids'/);
+    expect(src).toMatch(/: 'id, recipient_phone, body, attempts, media_url, provider_message_id'/);
     expect(src).toMatch(/mediaUrl:\s*c\.media_url/);
   });
 });
