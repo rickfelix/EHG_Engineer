@@ -18,8 +18,16 @@ import {
   getCurrentBurnRate,
   getFleetRoster,
   computeVerdict,
+  resolveAccountLabel,
   CONSTANTS,
 } from '../../lib/eva/capacity-governor.js';
+import { getAccountIdentity } from '../../lib/fleet/account-identity.cjs';
+
+// QF-20260720-706: resolve the account label ONCE per CLI invocation, from the CURRENTLY
+// active identity -- never hand-typed, so project/verdict can never drift from record-event's
+// free-text scheme. null (identity unavailable) falls back to getCalibratedBudget's
+// pre-fix pooled-average behavior, byte-identical -- never a hard failure.
+const currentAccount = resolveAccountLabel(getAccountIdentity());
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -99,7 +107,7 @@ function parseFlag(args, name, fallback) {
 }
 
 async function project(args) {
-  const { budgetSessionHours, source, eventCount } = await getCalibratedBudget(supabase);
+  const { budgetSessionHours, source, eventCount } = await getCalibratedBudget(supabase, { account: currentAccount });
   const fleetSize = Number(parseFlag(args, 'fleet-size', 6));
   const burnMultiplier = Number(parseFlag(args, 'burn-multiplier', 1));
   const burnRate = CONSTANTS.REFERENCE_BURN_PER_SESSION_PER_HOUR * burnMultiplier;
@@ -123,7 +131,7 @@ async function project(args) {
 }
 
 async function verdict(args) {
-  const { budgetSessionHours, eventCount } = await getCalibratedBudget(supabase);
+  const { budgetSessionHours, eventCount } = await getCalibratedBudget(supabase, { account: currentAccount });
   const roster = await getFleetRoster(supabase);
   const fleetSize = roster.length || 1;
   const burnRate = await getCurrentBurnRate(supabase, { windowHours: 1, fleetSize });
