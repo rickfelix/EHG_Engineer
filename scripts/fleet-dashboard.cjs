@@ -45,6 +45,9 @@ const { isProcessRunning, getMarkerSessionIds, getAliveCcPids } = require('../li
 // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2): surface which Claude account this dashboard's
 // session is running under in the WORKERS header line.
 const { getAccountIdentity } = require('../lib/fleet/account-identity.cjs');
+// SD-LEO-INFRA-FLEET-VIEW-BADGES-001 (FR-1/FR-2): capacity chip + per-session badge rollup.
+const { loadStore } = require('../lib/fleet/account-capacity-gauge.cjs');
+const { formatCapacityChip, computeSessionBadge } = require('../lib/fleet/fleet-view-badges.cjs');
 
 const STALE_THRESHOLD = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS, 10) || 300;
 
@@ -491,9 +494,13 @@ function printWorkers(d) {
   // 'unknown' rather than crashing the dashboard render.
   const identity = getAccountIdentity();
   const acctLabel = (identity && identity.email) || 'unknown';
+  // SD-LEO-INFRA-FLEET-VIEW-BADGES-001 (FR-1): the fleet runs under ONE account at a time
+  // (see account-identity.cjs's host-level acct= label above) -- the cap chip reads that
+  // SAME account's headroom rather than inventing a per-session account mapping.
+  const capChip = formatCapacityChip(identity, loadStore());
 
   console.log('');
-  console.log('WORKERS [' + now.toLocaleTimeString() + ']' + headerSuffix + '  acct=' + acctLabel);
+  console.log('WORKERS [' + now.toLocaleTimeString() + ']' + headerSuffix + '  acct=' + acctLabel + '  ' + capChip);
   console.log('─'.repeat(hasCollision ? 100 : 88));
 
   if (d.activeSessions.length === 0) {
@@ -501,7 +508,7 @@ function printWorkers(d) {
   } else {
     const csidHeader = hasCollision ? pad('CSID', 12) : '';
     const mcHeader = mcOk ? pad('P(alive)', 16) : '';
-    console.log('  ' + pad('Terminal', 12) + csidHeader + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 8) + pad('Fails', 6) + pad('WIP', 5) + pad('LoopState', 14) + pad('Activity', 18) + pad('Silent until', 14) + mcHeader + 'Heartbeat');
+    console.log('  ' + pad('Terminal', 12) + csidHeader + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 8) + pad('Fails', 6) + pad('WIP', 5) + pad('LoopState', 14) + pad('Badge', 12) + pad('Activity', 18) + pad('Silent until', 14) + mcHeader + 'Heartbeat');
     // SD-LEO-INFRA-LOOP-STATE-SIGNAL-001: LoopState column (14 chars) added between WIP and Activity → 14-char wider separator.
     console.log('  ' + '─'.repeat(hasCollision ? (mcOk ? 150 : 134) : (mcOk ? 138 : 122)));
     for (const s of d.activeSessions) {
@@ -526,7 +533,15 @@ function printWorkers(d) {
       // SD-LEO-INFRA-LOOP-STATE-SIGNAL-001: render loop_state; NULL or `unknown` collapses to `--`.
       const loopRaw = s.loop_state;
       const loopCell = (!loopRaw || loopRaw === 'unknown') ? '--' : String(loopRaw);
-      console.log('  ' + pad(s.tty, 12) + csid + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 8) + pad(fails, 6) + pad(wip, 5) + pad(loopCell, 14) + pad(activity, 18) + pad(silent, 14) + mcCell + s.heartbeat_age_human + struggleTag);
+      // SD-LEO-INFRA-FLEET-VIEW-BADGES-001 (FR-2): rollup of already-rendered columns, NOT a
+      // new liveness classification (SD-LEO-INFRA-FLEET-WATCHDOG-001 owns that separately).
+      const badge = computeSessionBadge({
+        loopState: loopRaw,
+        pAlive: mcRow ? mcRow.p_alive : null,
+        isSilent: Boolean(silent),
+        failCount: s.handoff_fail_count,
+      });
+      console.log('  ' + pad(s.tty, 12) + csid + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 8) + pad(fails, 6) + pad(wip, 5) + pad(loopCell, 14) + pad(badge, 12) + pad(activity, 18) + pad(silent, 14) + mcCell + s.heartbeat_age_human + struggleTag);
     }
   }
 
@@ -1559,6 +1574,23 @@ async function printReviewHeldSds() {
   console.log('');
 }
 
+// ── Section: Attention strip (SD-LEO-INFRA-FLEET-VIEW-BADGES-001, FR-3) ──
+// DB-only: reads claude_sessions.metadata.attention, set via lib/fleet/attention-flag-writer.js's
+// atomic merge. Read-only here — never mutates the flag. Render nothing when no session is
+// flagged, matching printChairmanGatedQfs()'s "no empty-section noise" convention.
+async function printAttentionStrip() {
+  const { getAttentionFlaggedSessions } = await import('../lib/fleet/attention-flag-writer.js');
+  const flagged = await getAttentionFlaggedSessions({ supabase });
+  if (!flagged || flagged.length === 0) return;
+  console.log('ATTENTION');
+  console.log('─'.repeat(72));
+  for (const row of flagged) {
+    const ageMin = row.set_at ? Math.floor((Date.now() - Date.parse(row.set_at)) / 60_000) : null;
+    console.log('  ' + pad(row.session_id, 36) + pad(ageMin != null ? ageMin + 'm' : '-', 6) + (row.reason || ''));
+  }
+  console.log('');
+}
+
 // ── Section: Adam advisory inbox (SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B) ──
 // Surfaces Adam advisories (payload.kind=adam_advisory) in a SEPARATE section from
 // the worker-friction inbox (printInbox). Adam advisories deliberately omit
@@ -2299,7 +2331,7 @@ async function main() {
   const d = await loadData();
 
   const sections = {
-    workers:       () => printWorkers(d),
+    workers:       async () => { printWorkers(d); await printAttentionStrip(); },
     orchestrator:  () => printOrchestrator(d),
     available:     () => printAvailable(d),
     quickfixes:    async () => { printQuickFixes(d); await printChairmanGatedQfs(); }, // QF-20260525-836 + SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001
@@ -2354,6 +2386,7 @@ async function main() {
       // Team banner appears at top of /coordinator all when active teams exist (otherwise no-op)
       if (d.executeTeams && d.executeTeams.length > 0) printTeam(d);
       printWorkers(d);
+      await printAttentionStrip();
       printDrainAgents(d);
       printOrchestrator(d);
       printAvailable(d);
@@ -2424,7 +2457,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience };
+module.exports = { printFeedback, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.
