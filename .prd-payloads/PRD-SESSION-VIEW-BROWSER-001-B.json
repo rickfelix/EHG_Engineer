@@ -1,0 +1,100 @@
+{
+  "executive_summary": "SD-LEO-INFRA-SESSION-VIEW-BROWSER-001-B delivers the backend view-model for the fleet launcher session view's terminal detail pane (mockup #2, chairman-ratified). Two independent, verified findings shape this scope: (1) lib/fleet/spawn-control.js's attach() verb is already fully built and merged (PR #6360) -- there is no separate 'session card' UI layer to wire in this backend-only repo (EHG_Engineer has no apps/ui or src/components; sibling child -A already established the same backend-only-scope precedent), so 'wiring the attach action' means exposing a pure mapper from attach()'s {ok,reason,session_id} result to a display-ready degraded-state descriptor; (2) ctx%/last-tool/wakeup data does NOT live in SD-A's (SD-LEO-INFRA-FLEET-REGISTRY-MANIFEST-001) registry/manifest surface -- it lives directly on claude_sessions raw columns (current_tool, last_tool_at, last_activity_kind, expected_silence_until) plus a separate context_usage_log table for ctx%, which is live-confirmed STARVED in production (session_id join is currently dead) and must be sourced fail-soft/nullable, never via the mis-grained get_context_usage_summary RPC (fleet-wide aggregate only, no session_id param). A true multi-entry 'action history' scrollback has no existing data source anywhere in the fleet namespace and is explicitly cut from this SD's scope (single most-recent-action fields only), deferred to a future SD. Ships as one new pure module, lib/fleet/session-detail-view.js, patterned on session-watchdog.js's classifyWatchdogState() convention (data-in, structured-object-out, no DB/IO inside) -- consumed by a future fleet launcher UI backend route once a UI shell exists, exactly mirroring sibling -A's deferred-frontend framing.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Pure session detail view-model builder",
+      "description": "buildSessionDetailView(session, opts) is a pure function taking a claude_sessions-shaped row plus optional { ctxRow, attachResult } and returning a flat structured view-model: { ctxPercent, lastTool, lastToolAt, lastActivityKind, silentUntil, attachState }. No DB/IO/network calls inside the function itself -- a caller (future UI backend route or CLI script) performs the fetches and passes pre-fetched data in, mirroring lib/fleet/session-watchdog.js's classifyWatchdogState(session, opts) convention.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "buildSessionDetailView is exported and callable with only `session` (all optional fields default to null/not-attempted, never throws)",
+        "Every field on the returned object is present even when the corresponding input is absent (fail-soft, not fail-throw)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Attach-state degraded-state mapping",
+      "description": "mapAttachState(attachResult) maps lib/fleet/spawn-control.js's attach() return shape ({ok, reason, session_id}, reason in {not_resolved:<x>, no_captured_handle, stale_handle}) into a display-ready { ok, reason, degraded, message } descriptor. When attachResult is undefined (attach was never attempted for this view), the mapping returns { ok: null, reason: null, degraded: false, message: null } -- 'not yet attempted' is explicitly NOT the same state as 'degraded'.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "attach() ok:true maps to degraded:false",
+        "Each of attach()'s three failure reason families (not_resolved:*, no_captured_handle, stale_handle) maps to degraded:true with a distinct, human-readable message",
+        "No attachResult passed maps to ok:null/degraded:false (distinct from a genuine failure)"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "ctx% sourced fail-soft from context_usage_log, never the summary RPC",
+      "description": "ctxPercent is read from the context_usage_log TABLE's usage_percent column (by session_id), passed into buildSessionDetailView as ctxRow -- NOT from the get_context_usage_summary RPC (verified live: fleet-wide aggregate only, no session_id parameter, wrong grain for a per-session pane). When ctxRow is absent or has no usage_percent, ctxPercent resolves to null. This SD does not fix the underlying context_usage_log session_id-join starvation (live-verified: 12 rows, only 'unknown'/'' session_id values today) -- that is a separate, out-of-scope concern; the view-model must degrade cleanly rather than error.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "ctxPercent === ctxRow.usage_percent when ctxRow is present and has the field",
+        "ctxPercent === null when ctxRow is absent, null, or missing the field",
+        "No code path in this SD calls get_context_usage_summary"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Last-tool / wakeup fields from claude_sessions raw columns; no action-history scrollback",
+      "description": "lastTool <- session.current_tool, lastToolAt <- session.last_tool_at, lastActivityKind <- session.last_activity_kind, silentUntil <- session.expected_silence_until. Scoped explicitly to the single most-recent action -- no multi-entry action-history/scrollback is built (no existing data source: coordination_events is a general fleet-event log, not per-session tool-call history; a true scrollback needs a new append-only table + a writer wired into every session's tool loop, which is a separate, larger future SD).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "All four fields map 1:1 from the corresponding raw session column, defaulting to null when absent",
+        "No new table, migration, or history-tracking writer is introduced by this SD"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "No schema changes", "description": "Reads only existing claude_sessions columns and the existing context_usage_log table (by session_id). No migration, no new column, no new table." },
+    { "id": "TR-2", "title": "Pure core, IO injected by the caller", "description": "lib/fleet/session-detail-view.js's exported functions (buildSessionDetailView, mapAttachState) perform zero Supabase/network/filesystem calls. Fetching (claude_sessions row, context_usage_log row, calling spawn-control's attach()) is entirely the caller's responsibility -- mirrors classifyWatchdogState's data-in/verdict-out contract so the module is unit-testable with plain injected fixtures." },
+    { "id": "TR-3", "title": "No new dependency or framework", "description": "Reuses lib/fleet/spawn-control.js's attach() as-is (no re-implementation, no wrapper re-export -- attach() already returns the shape mapAttachState consumes directly)." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "ctxPercent resolves from ctxRow.usage_percent", "type": "unit", "expected": "buildSessionDetailView(session, {ctxRow:{usage_percent:42}}).ctxPercent === 42" },
+    { "id": "TS-2", "scenario": "ctxPercent null-safe when ctxRow absent", "type": "unit", "expected": "buildSessionDetailView(session).ctxPercent === null; buildSessionDetailView(session, {ctxRow:null}).ctxPercent === null" },
+    { "id": "TS-3", "scenario": "attachState maps a successful attach", "type": "unit", "expected": "mapAttachState({ok:true, reason:null, session_id:'x'}) -> {ok:true, degraded:false}" },
+    { "id": "TS-4", "scenario": "attachState maps each failure reason to degraded:true with distinct messages", "type": "unit", "expected": "mapAttachState for reason in {no_captured_handle, stale_handle, 'not_resolved:not_found'} each returns degraded:true with a reason-specific message string" },
+    { "id": "TS-5", "scenario": "attachState 'not yet attempted' is distinct from 'failed'", "type": "unit", "expected": "mapAttachState(undefined) -> {ok:null, reason:null, degraded:false, message:null}" },
+    { "id": "TS-6", "scenario": "lastTool/lastToolAt/lastActivityKind/silentUntil map 1:1 from raw session fields", "type": "unit", "expected": "buildSessionDetailView({current_tool:'Read', last_tool_at:'2026-07-20T00:00:00Z', last_activity_kind:'idle', expected_silence_until:'2026-07-20T01:00:00Z'}) produces matching lastTool/lastToolAt/lastActivityKind/silentUntil fields" },
+    { "id": "TS-7", "scenario": "Full view-model shape always present regardless of input completeness", "type": "unit", "expected": "buildSessionDetailView({}) returns an object with all six top-level keys (ctxPercent, lastTool, lastToolAt, lastActivityKind, silentUntil, attachState) present, never throws" }
+  ],
+  "acceptance_criteria": [
+    "lib/fleet/session-detail-view.js ships with buildSessionDetailView and mapAttachState exported, fully unit-tested (tests/unit/fleet/session-detail-view.test.js), all scenarios above passing",
+    "No schema changes; no new table/column/migration",
+    "ctx% is sourced from context_usage_log directly (never the summary RPC), documented as fail-soft/nullable given the live-confirmed starved feed",
+    "Action history is explicitly scoped to single most-recent-action fields; the gap vs a true scrollback is documented in the module's header comment, not silently dropped"
+  ],
+  "risks": [
+    { "risk": "context_usage_log's session_id join is starved in production (live-verified: 12 rows, only 'unknown'/'' session_id values) -- ctxPercent will read null for real sessions until a separate feed fix lands", "mitigation": "FR-3 requires fail-soft null handling by design; documented explicitly as a known, accepted, out-of-scope gap rather than papered over", "severity": "low" },
+    { "risk": "SD description's word 'history' could be read as implying a multi-entry scrollback that doesn't exist", "mitigation": "FR-4 explicitly scopes to single most-recent-action and documents the gap in the module header comment; a true scrollback is named as a separate future SD", "severity": "low" },
+    { "risk": "attachState granularity is limited by window-handle.js's focusWindow() collapsing multiple distinct OS-level failure modes into one boolean", "mitigation": "Out of this SD's scope (window-handle.js is sibling/foundation-owned); flagged as a future improvement, not required for FR-2's acceptance criteria which only need attach()'s existing three reason values mapped", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "A future fleet launcher UI shell backend route, once such a shell exists -- consumes buildSessionDetailView's exported view-model shape (mirrors sibling -A's identical deferred-frontend framing)",
+      "Any CLI/diagnostic script wanting a structured (not pre-formatted-string) session summary, as an alternative to scripts/fleet-dashboard.cjs's string-formatter functions"
+    ],
+    "dependencies": [
+      "lib/fleet/spawn-control.js attach() (existing, merged PR #6360 -- direction: this SD's mapAttachState consumes its return shape, never re-implements it)",
+      "claude_sessions table (existing -- direction: read-only; failure_mode: missing/absent fields default to null in the view-model, never thrown)",
+      "context_usage_log table (existing, live-confirmed starved -- direction: read-only, best-effort; failure_mode: absent/unjoined row yields ctxPercent:null, not an error)"
+    ],
+    "data_contracts": [
+      "buildSessionDetailView(session, opts) -> { ctxPercent: number|null, lastTool: string|null, lastToolAt: string|null, lastActivityKind: string|null, silentUntil: string|null, attachState: { ok: boolean|null, reason: string|null, degraded: boolean, message: string|null } }"
+    ],
+    "runtime_config": [
+      "No new env vars -- pure function, no runtime configuration surface"
+    ],
+    "observability_rollout": [
+      "No rollout surface (pure library, not yet wired to a live route/consumer) -- this SD ships the tested building block; wiring into an actual fleet launcher backend route is future work once that shell exists, matching sibling -A's precedent"
+    ]
+  },
+  "system_architecture": {
+    "summary": "A single new pure module, lib/fleet/session-detail-view.js, exporting buildSessionDetailView and mapAttachState, following lib/fleet/session-watchdog.js's classifyWatchdogState pure-function/injected-input convention. No IO inside the module; all DB reads and the attach() call are the caller's responsibility.",
+    "components": [
+      { "name": "lib/fleet/session-detail-view.js", "change": "NEW -- pure session detail view-model builder (buildSessionDetailView) + attach-state degraded-mapping helper (mapAttachState)" },
+      { "name": "lib/fleet/spawn-control.js", "change": "REUSED, no modification -- session-detail-view.js's mapAttachState consumes its attach() export's existing return shape" },
+      { "name": "tests/unit/fleet/session-detail-view.test.js", "change": "NEW -- unit tests for all scenarios above, injected-fixture only, no live DB/PowerShell" }
+    ]
+  }
+}
