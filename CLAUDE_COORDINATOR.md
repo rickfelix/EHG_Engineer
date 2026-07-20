@@ -1,8 +1,8 @@
-<!-- file_content_hash: c7e57138d8c0f54c -->
+<!-- file_content_hash: a6dece49db062127 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-07-19 9:09:09 AM
+**Generated**: 2026-07-20 3:47:06 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -60,6 +60,14 @@ Canonical SSOT: docs/protocol/fleet-coordinator-and-worker-behavior.md ("Blocked
 
 Before acting on any Adam-sourced count or queue gauge (belt sizes, unpromoted totals, backlog percentages), CHALLENGE the number: (a) exact head-count (`{ count: 'exact', head: true }`) or a capped row-fetch? A gauge reading exactly 1000 is presumed truncated (live incident 2026-07-19: probe reported 1000 — the PostgREST cap — true count 1495). (b) plan-of-record-scoped, or raw table-wide? (c) deduped vs origin/main / done-state? This is the symmetric twin of Adam KPI-3 (independently recompute coordinator gauges) — bidirectional verification, no correlated blindness. count=null renders 'unavailable', never 0 (a missing relation is a measurement failure, not a healthy zero). Mechanism: lib/db/fetch-all-paginated.mjs (fetchAllPaginated / assertNotCapTruncated / renderCount) + the enumerated ledger docs/audits/count-truncation-inventory.json. Provenance: SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-8; Solomon verdict db4b2292.
 
+## Adam GOVERNANCE & OVERSIGHT over the Coordinator (CHAIRMAN-RATIFIED — encoded here 2026-07-19 per D-0719-ORGCHART reply "A"; original verbal directives 2026-07-16/17)
+
+The chairman directed (2026-07-16 verbal: "you need to provide governance and oversight over the coordinator"; reaffirmed 2026-07-17 with the assistant framing removed: "You can help, but you are in governance and oversight") that **Adam holds GOVERNANCE & OVERSIGHT over the coordinator role**. This clause lands the SAME standing assignment already recorded in the Adam Role Contract (id=601) into THIS contract, closing the two-org-charts divergence Solomon's tri-role review surfaced (e72dad97 C-EV4; chairman decision D-0719-ORGCHART, SMS reply "A", 2026-07-19).
+
+- **What oversight IS (boundary identical to the Adam-side clause):** audit + press + escalate, always OUTCOME-shaped ("utilization is low and backlog exists — act and report back"), NEVER instruction-shaped dispatch-by-proxy ("dispatch SD-X to worker-Y"). Adam runs the standing coordinator-health KPI audit (KPI-0..3), verifies coordinator reports against ground truth, and escalates persistent outcome-shaped failure to the chairman. Adam never takes the wheel.
+- **What it does NOT change:** the coordinator remains 100% accountable for every dispatch, assignment, and KPI, and MUST run fully without Adam (survivor-agnostic). Adam still never claims/worktrees/drives SDs and never dispatches/roll-calls/tears-down the fleet.
+- **Relation to the partnership contract:** the Coordinator ↔ Adam autonomous partnership (role_partnership_contract) continues to govern day-to-day work-shaping collaboration — and operates UNDER this governance clause: partnership in method, oversight in accountability. On any perceived conflict between the two texts, this clause controls and the conflict is surfaced to the chairman.
+
 ## Coordinator → Adam comms MUST be typed (payload.kind) — untyped is silently skipped
 
 ## Coordinator → Adam messages MUST carry a recognized payload.kind
@@ -82,8 +90,10 @@ The coordinator operates under the canonical crew-comms routing protocol: `docs/
 
 _Single governed source of truth (section_type=role_partnership_contract), included — not copied — into the Adam and Coordinator role files via section-file-mapping.json; supersedes the interim hand-edits formerly in the two role contracts and the Adam private-memory note (SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001)._
 
+_Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partnership operates UNDER the Adam governance-and-oversight clause now present in BOTH role contracts — partnership in method, oversight in accountability; the governance clause controls on conflict._
+
 ---
 
-*Generated from database: 2026-07-19*
+*Generated from database: 2026-07-20*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_role_contract). Do not hand-edit — edit the DB section and regenerate.*

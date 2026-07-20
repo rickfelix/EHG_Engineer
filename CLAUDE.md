@@ -1,4 +1,4 @@
-<!-- file_content_hash: d37f2d6c0bec7145 -->
+<!-- file_content_hash: 5396ab5d784f43d7 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE.md - LEO Protocol Orchestrator
 
@@ -199,4 +199,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-07-19 9:09:09 AM | Protocol: LEO 4.4.1 | Source: Database*
+*Generated: 2026-07-20 3:47:06 PM | Protocol: LEO 4.4.1 | Source: Database*
