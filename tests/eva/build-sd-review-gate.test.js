@@ -21,14 +21,22 @@ import { sprintItemLayerRank } from '../../lib/eva/lifecycle-sd-bridge.js';
 // ── Test doubles ────────────────────────────────────────────────────────────
 const silentLogger = { warn() {}, log() {}, error() {} };
 
-/** Supabase double whose .from().select().neq().limit() resolves to {data,error}. */
+/**
+ * Supabase double for the paginated belt scan (FR-6 batch 7): production chains
+ * .select().neq().order() then fetchAllPaginated appends .range() and awaits the
+ * page. A short page (< pageSize) ends the loop; a page {error} makes
+ * fetchAllPaginated throw with the original error text embedded, which the gate
+ * re-wraps — /boom/-style assertions still match. `hang` makes .range() never
+ * resolve, exercising the timeout path.
+ */
 function mockSupabase({ rows = [], error = null, hang = false } = {}) {
   const builder = {
     select() { return builder; },
     neq() { return builder; },
-    limit() {
+    order() { return builder; },
+    range() {
       if (hang) return new Promise(() => {}); // never resolves -> exercises timeout
-      return Promise.resolve({ data: rows, error });
+      return Promise.resolve({ data: error ? null : rows, error });
     },
   };
   return { from() { return builder; } };
