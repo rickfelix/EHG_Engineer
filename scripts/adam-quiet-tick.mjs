@@ -29,6 +29,7 @@ import { TABLE as TASK_LEDGER_TABLE, syncParentRollupStatus } from '../lib/adam/
 import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const require = createRequire(import.meta.url);
+const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs');
 const { decideCadence, detectSalientDelta, runCoresFailSoft } = require('../lib/coordinator/quiet-tick.cjs');
@@ -469,13 +470,31 @@ async function main() {
     try {
       const coordinatorId = await getActiveCoordinatorId(sb);
       if (coordinatorId) {
+        const subject = '[ACCOUNT_SWITCH] Adam session Claude account changed';
+        const body = `Adam's Claude account switched from ${acctSwitch.event.from.email} (${acctSwitch.event.from.orgName}) ` +
+          `to ${acctSwitch.event.to.email} (${acctSwitch.event.to.orgName}).`;
+        // QF-20260719-208: mirror adam-advisory.cjs's L1 pre-send Solomon-consult gate at this
+        // tick's emit choke (previously bypassed it entirely). The tick is non-interactive (no
+        // live session to bounded-await a reply against), so a required consult fires a durable,
+        // non-blocking solomon_consult row alongside the send rather than adam-advisory's
+        // synchronous wait — Solomon still sees every consequential tick-originated send.
+        // Fail-open by construction: a gate/consult error never blocks the account-switch notice.
+        try {
+          const { evaluatePreSendConsult } = await import('../lib/adam/should-consult-solomon.js');
+          if (evaluatePreSendConsult({ title: subject, body, isChairmanTargeted: false }).action === 'consult-then-send') {
+            const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
+            const { buildSolomonConsultPayload } = require('./worker-signal.cjs');
+            const solomonId = await getActiveSolomonId(sb).catch(() => null);
+            const cp = buildSolomonConsultPayload({ correlationId: crypto.randomUUID(), body: `[PRE-SEND CONSULT] ${body}`, senderCallsign: 'adam-quiet-tick', repo: process.cwd(), severity: 'high' });
+            await insertCoordinationRow(sb, { sender_type: 'adam', target_session: solomonId || 'broadcast-solomon', message_type: 'INFO', subject: '[SOLOMON_CONSULT] pre-send', body: cp.body, payload: cp }, { targetRoleHint: 'solomon' });
+          }
+        } catch { /* fail-open — see comment above */ }
         await insertCoordinationRow(sb, {
           sender_type: 'adam',
           target_session: coordinatorId,
           message_type: 'INFO',
-          subject: '[ACCOUNT_SWITCH] Adam session Claude account changed',
-          body: `Adam's Claude account switched from ${acctSwitch.event.from.email} (${acctSwitch.event.from.orgName}) ` +
-            `to ${acctSwitch.event.to.email} (${acctSwitch.event.to.orgName}).`,
+          subject,
+          body,
           payload: { kind: 'account_switch_notice', ...acctSwitch.event, reply_class: 'fire-and-forget' },
         });
         acctNotified = true;
