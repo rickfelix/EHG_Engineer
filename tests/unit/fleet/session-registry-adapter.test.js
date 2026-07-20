@@ -8,6 +8,8 @@ import {
   resolveLiveSession,
   actualByRole,
   computeLiveManifestDrift,
+  loadLiveSlotIdentity,
+  computeLiveSlotDrift,
 } from '../../../lib/fleet/session-registry-adapter.js';
 
 function makeFakeSupabase(sessions, error = null) {
@@ -103,5 +105,36 @@ describe('actualByRole + computeLiveManifestDrift (TS-6)', () => {
   it('actualByRole ignores identities with no resolvable role', () => {
     const joined = [{ callsign: 'Alpha-5' }, { callsign: null }, { callsign: 'Unknown-9' }];
     expect(actualByRole(joined, roleOf)).toEqual({ worker: 1 });
+  });
+});
+
+// DESIRED-STATE SLOT DRIFT (SD-LEO-INFRA-LEO-COMPLETION-001-B, FR-1/FR-2) — the real call-site that
+// discharges the "new schema is actually called, not dead code" acceptance criterion (TS-3a).
+describe('loadLiveSlotIdentity + computeLiveSlotDrift (FR-1/FR-2)', () => {
+  it('loadLiveSlotIdentity reads name (callsign) + slot fields from claude_sessions.metadata', async () => {
+    const sb = makeFakeSupabase([
+      { session_id: 's1', metadata: { fleet_identity: { callsign: 'Alpha-5', color: 'blue' }, role: 'worker', account_profile: 'default', model: 'sonnet', effort: 'high', worktree: 'C:/wt/a5', resume_uuid: 'u1' } },
+      { session_id: 's2', metadata: {} },
+    ]);
+    const slots = await loadLiveSlotIdentity(sb);
+    expect(slots).toEqual([
+      { name: 'Alpha-5', color: 'blue', role: 'worker', account_profile: 'default', model: 'sonnet', effort: 'high', worktree: 'C:/wt/a5', resume_uuid: 'u1' },
+    ]);
+  });
+
+  it('computeLiveSlotDrift: MISSING slot surfaced when no live session matches the desired name', async () => {
+    const sb = makeFakeSupabase([]);
+    const verdict = await computeLiveSlotDrift(sb, { desiredSlots: [{ name: 'Alpha-5', account_profile: 'default' }] });
+    expect(verdict.drift).toBe(true);
+    expect(verdict.missing).toEqual([{ name: 'Alpha-5' }]);
+  });
+
+  it('computeLiveSlotDrift: satisfied + field mismatch surfaced when live data diverges from desired', async () => {
+    const sb = makeFakeSupabase([
+      { session_id: 's1', metadata: { fleet_identity: { callsign: 'Alpha-5' }, model: 'opus' } },
+    ]);
+    const verdict = await computeLiveSlotDrift(sb, { desiredSlots: [{ name: 'Alpha-5', model: 'sonnet' }] });
+    expect(verdict.drift).toBe(false);
+    expect(verdict.present).toEqual([{ name: 'Alpha-5', mismatches: ['model'] }]);
   });
 });
