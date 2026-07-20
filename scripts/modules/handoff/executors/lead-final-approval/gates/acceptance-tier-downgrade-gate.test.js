@@ -329,9 +329,27 @@ describe('TS-8 — evidence query only ever selects columns that really exist on
     expect(EVIDENCE_TEXT_COLUMNS).not.toContain('test_execution');
   });
 
-  it('the gate source never selects a `findings` column, and its sub_agent_execution_results select is built from EVIDENCE_TEXT_COLUMNS', () => {
+  it('the gate source never selects a `findings` column, and never builds the sub_agent_execution_results select via a dynamic template literal', () => {
+    // The select() column list is a STATIC literal on purpose (not built via
+    // EVIDENCE_TEXT_COLUMNS.join in a template literal) so CI's schema-reference-lint can
+    // statically verify every name against the live schema snapshot -- a dynamic select() is
+    // opaque to that static analysis and slipped past it once already in this SD's history.
     const src = readFileSync(new URL('./acceptance-tier-downgrade-gate.js', import.meta.url), 'utf8');
     expect(src).not.toMatch(/\.select\([^)]*\bfindings\b[^)]*\)/);
-    expect(src).toMatch(/EVIDENCE_TEXT_COLUMNS\.join/);
+    expect(src).not.toMatch(/\.select\(`[^`]*\$\{/);
+  });
+
+  it('the literal select() column list stays in sync with EVIDENCE_TEXT_COLUMNS', () => {
+    const src = readFileSync(new URL('./acceptance-tier-downgrade-gate.js', import.meta.url), 'utf8');
+    const match = src.match(/\.from\('sub_agent_execution_results'\)\s*\n\s*\.select\('([^']+)'\)/);
+    expect(match, 'expected a static .select(\'...\') call for sub_agent_execution_results').toBeTruthy();
+    const selectedColumns = match[1].split(',').map((c) => c.trim());
+    for (const col of EVIDENCE_TEXT_COLUMNS) {
+      expect(selectedColumns, `EVIDENCE_TEXT_COLUMNS entry "${col}" must appear in the literal select()`).toContain(col);
+    }
+    for (const col of selectedColumns) {
+      if (col === 'id' || col === 'sub_agent_code') continue;
+      expect(EVIDENCE_TEXT_COLUMNS, `selected column "${col}" must be a member of EVIDENCE_TEXT_COLUMNS`).toContain(col);
+    }
   });
 });

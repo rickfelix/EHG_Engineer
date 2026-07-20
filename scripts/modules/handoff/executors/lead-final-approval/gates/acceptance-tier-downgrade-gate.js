@@ -230,9 +230,13 @@ async function loadPRD({ supabase, prdRepo, sdId }) {
 /** Mirrors activation-invariant-gate.js's loadTestingEvidence, widened to TESTING+SECURITY. */
 async function loadEvidenceRows({ supabase, sdId }) {
   if (!supabase) return [];
+  // Column list kept as a static literal (not built from EVIDENCE_TEXT_COLUMNS.join) so
+  // CI's schema-reference-lint can statically verify every name against the live schema
+  // snapshot -- a template-literal-interpolated select() is opaque to that static analysis.
+  // TS-8 below asserts this literal stays in sync with EVIDENCE_TEXT_COLUMNS.
   const { data, error } = await supabase
     .from('sub_agent_execution_results')
-    .select(`id, sub_agent_code, ${EVIDENCE_TEXT_COLUMNS.join(', ')}`)
+    .select('id, sub_agent_code, detailed_analysis, summary, critical_issues, warnings, recommendations, metadata')
     .eq('sd_id', sdId)
     .in('sub_agent_code', ['TESTING', 'SECURITY']);
   // Same rationale as loadPRD above: a query-level error resolves as {data:null,error} here,
