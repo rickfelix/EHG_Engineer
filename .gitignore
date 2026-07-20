@@ -395,6 +395,9 @@ scripts/ops/LLM-COST-ALERT.txt
 /.coord-email-last.json
 /.coord-review-last.json
 /docmon-report.json
+# Per-account capacity gauge state (QF-20260720-406) — chairman-pasted usage readings
+# keyed by accountUuid8, rewritten in place by lib/fleet/account-capacity-gauge.cjs
+/.fleet-account-capacity.json
 
 # Monitor PID files (scoped — do NOT blanket-ignore *.pid; .leo-dashboard.pid is tracked).
 /.monitor-*.pid
