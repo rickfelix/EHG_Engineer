@@ -48,7 +48,7 @@ const recommendations = [
   'Proceed with PLAN-TO-LEAD handoff — retrospective published and gate evidence recorded.'
 ];
 
-const summary = `RETRO PASS for ${SD_KEY} PLAN_VERIFICATION phase. Retrospective already published (id=${RETRO_ID}, quality_score=${RETRO_QUALITY_SCORE}, status=PUBLISHED). This sub_agent_execution_results row records the RETRO sub-agent's evidence for the PLAN-TO-LEAD handoff gate, linking to the existing published retrospective per CLAUDE.md prologue rule 11 (canonical writer, no hand-rolled insert).`;
+const summary = `RETRO PASS for ${SD_KEY} PLAN_VERIFICATION phase. Retrospective already published (id=${RETRO_ID}, quality_score=${RETRO_QUALITY_SCORE}, status=PUBLISHED). This sub_agent_execution_results row records the RETRO sub-agent's evidence for the PLAN-TO-LEAD handoff gate, linking to the existing published retrospective per CLAUDE.md prologue rule 11 (canonical writer, not a hand-rolled DB write).`;
 
 async function main() {
   const supabase = await getSupabaseClient();
