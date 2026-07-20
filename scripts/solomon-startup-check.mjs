@@ -217,6 +217,21 @@ export const SOLOMON_LOOPS = [
     cron: '37 7 * * *',
     prompt: 'Solomon daily forecast-trigger check: compare live exact counts against the LAST-ISSUED forecast basis — (a) completion velocity delta >15%, (b) any gate-state change on the forecast-critical path, (c) scope delta >10% (belt adds/removals). SILENT unless a trigger fires; on fire, re-issue the per-wave forecast with the trigger named. Propose-only (CONST-002).',
   },
+  // QF-20260720-072 (Solomon spec 7cdf6b51 + Adam candid read a5116511 + chairman ratification
+  // 1b092e99 "Yes, I agree with the following plan."; final wording 06d11030 + v2 amendment
+  // b264d6eb): the L1 durability layer for the PLAN-ALIGNMENT REVIEW DUTY contract marker (id=611)
+  // — every /solomon re-arms this from the registry regardless of session continuity, and the
+  // covers[] slug below reconciles the contract<->tooling parity check (missingDurableDuties).
+  {
+    key: 'plan-alignment',
+    covers: [
+      'plan-alignment-review', // slugifyDuty("PLAN-ALIGNMENT REVIEW") — the id=611 contract marker
+    ],
+    label: 'Solomon plan-alignment review (48-72h baseline, off-cycle on divergence): plan-of-record vs fleet plate, MANDATORY fence-vs-neglected classification before ranking, forecast-assumption revisit feeding the daily Gantt',
+    script: null, // agent-judgment tick — plan-vs-plate comparison + forecast-assumption revisit is reasoning, not a script
+    cron: '0 8 */2 * *',
+    prompt: 'Solomon plan-alignment review tick (48-72h baseline; also fires off-cycle when the forecast-triggers tick detects a divergence): (1) FENCE-CLASSIFICATION PRECONDITION (mandatory, added after review #1\'s self-caught miss) — for every notable unclaimed item in the plan of record, dump ALL metadata (parent AND children) and classify FENCED (chairman/coordinator hold pending a GO — surface the pending condition, never press for dispatch) vs NEGLECTED (genuinely unclaimed, nothing blocking) BEFORE ranking. (2) Compare the PLAN OF RECORD (roadmap wave/gate states, plan-of-record remainder, PM/task state) against the FLEET\'S ACTUAL PLATE (current claims + reason-band stamps, open QF inventory, in-flight SDs); hand Adam a directed inbox row: top-3 what-should-be-claimed-next vs what IS claimed, NEGLECTED-classified divergences named with evidence, at most one systemic flag. (3) LEG-B: revisit prior forecast estimates + assumption priors (A1-A5 class) against observed state, adjust any that drifted, stamp adjustments to feedback category=solomon_forecast_basis. (4) LEG-C: feed adjusted assumptions into the daily Gantt/update so it stays accurate by assumption-maintenance rather than date-fiat. Silence-by-default ([SOLOMON_OK]) when no material divergence. Propose-only throughout (CONST-002); never sources/claims/executes.',
+  },
 ];
 
 // Parse the armed-cron keys the agent passes from its CronList output. --armed "a,b" arg, then env.
