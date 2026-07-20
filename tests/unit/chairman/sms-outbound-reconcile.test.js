@@ -12,6 +12,13 @@ import { handleTwilioStatusCallback } from '../../../api/webhooks/twilio-sms.js'
 
 const MIN = 60 * 1000;
 const ago = (ms) => new Date(Date.now() - ms).toISOString();
+// Wall-clock hardening (fleet-red 2026-07-19 22:00 ET): SD-...-SMS-DELIVERY-TRUTH-001-A made
+// every re-arm stamp not_before = smsQuietWindowReleaseIso(now). Tests that assert a
+// re-arm-then-resend IN THE SAME PASS must therefore run on a deterministic DAYTIME clock —
+// with the real clock they pass all day and fail 22:00-06:00 ET (rows re-armed inside the
+// quiet window are held to 6AM, so the same-pass send never fires). Noon ET, fixed date.
+const DAY_NOW = Date.parse('2026-07-15T16:00:00Z'); // 12:00 ET (EDT)
+const agoAt = (ms) => new Date(DAY_NOW - ms).toISOString();
 
 // ---------------------------------------------------------------------------------------
 // In-memory fake Supabase supporting the exact query shapes the owed-state code issues:
@@ -221,7 +228,7 @@ describe('reconcileOutboundSms (FR-3)', () => {
   it('bounded retry: an undelivered row under the cap is re-armed to owed then re-sent', async () => {
     const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'undelivered', attempts: 1 })] });
     const provider = okProvider();
-    const summary = await reconcileOutboundSms(sb, { provider, maxAttempts: 3 });
+    const summary = await reconcileOutboundSms(sb, { provider, maxAttempts: 3, now: DAY_NOW });
     expect(summary.retried).toBe(1);
     expect(provider.send).toHaveBeenCalledTimes(1); // re-armed to owed, then sent in the same pass
     expect(sb._tables.sms_outbound_obligations[0].status).toBe('sent');
@@ -253,10 +260,10 @@ describe('reconcileOutboundSms (FR-3)', () => {
 // =======================================================================================
 describe('sent-no-callback delivery-timeout (MEDIUM-2 / FR-2 provider-check)', () => {
   it('a sent row older than the timeout, PROVIDER-CONFIRMS undelivered, is reconciled (re-armed under cap)', async () => {
-    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 0, provider_message_id: 'SM-old', sent_at: ago(20 * MIN), delivered_at: null })] });
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 0, provider_message_id: 'SM-old', sent_at: agoAt(20 * MIN), delivered_at: null })] });
     const checkMessageStatus = vi.fn(async () => ({ status: 'undelivered' }));
     const provider = { ...okProvider(), checkMessageStatus };
-    const summary = await reconcileOutboundSms(sb, { provider, sentDeliveryTimeoutMs: 15 * MIN });
+    const summary = await reconcileOutboundSms(sb, { provider, sentDeliveryTimeoutMs: 15 * MIN, now: DAY_NOW });
     expect(checkMessageStatus).toHaveBeenCalledWith('SM-old'); // FR-2: never blind — always queries the provider first
     expect(summary.sentTimedOut).toBe(1);
     // re-armed to owed, then re-sent by the send pass in the same run (bounded retry)
@@ -329,9 +336,9 @@ describe('sent-no-callback delivery-timeout (MEDIUM-2 / FR-2 provider-check)', (
 // =======================================================================================
 describe('sending-crash reaper (MEDIUM-1)', () => {
   it('a stuck sending row past the claim-timeout with NO provider_message_id is reaped and re-sent', async () => {
-    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sending', attempts: 0, claimed_at: ago(10 * MIN), claimed_by: 'dead-worker', provider_message_id: null, sent_at: null })] });
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sending', attempts: 0, claimed_at: agoAt(10 * MIN), claimed_by: 'dead-worker', provider_message_id: null, sent_at: null })] });
     const provider = okProvider();
-    const summary = await reconcileOutboundSms(sb, { provider, claimTimeoutMs: 5 * MIN });
+    const summary = await reconcileOutboundSms(sb, { provider, claimTimeoutMs: 5 * MIN, now: DAY_NOW });
     expect(summary.reaped).toBe(1);
     expect(provider.send).toHaveBeenCalledTimes(1); // never sent before -> safe to re-send
     expect(sb._tables.sms_outbound_obligations[0].status).toBe('sent');
