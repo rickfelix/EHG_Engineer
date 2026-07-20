@@ -1,123 +1,123 @@
 {
-  "generated_at": "2026-07-19T13:09:09.312Z",
-  "git_commit": "a53d8fd0",
+  "generated_at": "2026-07-20T12:54:52.931Z",
+  "git_commit": "2c853b84",
   "db_snapshot_hash": "15274e313a3b8c43",
   "files": {
     "CLAUDE.md": {
       "type": "full",
       "chars": 19564,
       "estimated_tokens": 4891,
-      "content_hash": "35c11e4aaa8c8731",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE.md"
+      "content_hash": "725bee1c57d47d70",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
       "chars": 92157,
       "estimated_tokens": 23040,
-      "content_hash": "bbe0bbeea3618c74",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_CORE.md"
+      "content_hash": "f40f2ee6332b09c3",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
       "chars": 65998,
       "estimated_tokens": 16500,
-      "content_hash": "e4a6c6a53cc88dfe",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_LEAD.md"
+      "content_hash": "f222e9e69967acb8",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
       "chars": 91830,
       "estimated_tokens": 22958,
-      "content_hash": "9f55afc554c825b9",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_PLAN.md"
+      "content_hash": "3ea1b08504464230",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
       "chars": 88941,
       "estimated_tokens": 22236,
-      "content_hash": "d86613f4f557fef6",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_EXEC.md"
+      "content_hash": "921f4faf5b98227f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 96035,
-      "estimated_tokens": 24009,
-      "content_hash": "f786770ec61b10fe",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_ADAM.md"
+      "chars": 96700,
+      "estimated_tokens": 24175,
+      "content_hash": "85b7db417955ecbc",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 23179,
-      "estimated_tokens": 5795,
-      "content_hash": "472957b8ca98bf57",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_COORDINATOR.md"
+      "chars": 25316,
+      "estimated_tokens": 6329,
+      "content_hash": "c238e72c4b2b91b7",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 54600,
-      "estimated_tokens": 13650,
-      "content_hash": "fe77ed9eb23c17fb",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_SOLOMON.md"
+      "chars": 61340,
+      "estimated_tokens": 15335,
+      "content_hash": "38adfb48e014bc5a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9611,
       "estimated_tokens": 2403,
-      "content_hash": "6af84fec31e63f4c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_DIGEST.md"
+      "content_hash": "6922b8bc200d25b2",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 11664,
       "estimated_tokens": 2916,
-      "content_hash": "ea0059fb3be3f4e5",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "690b6a8f0df75ca2",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 5551,
       "estimated_tokens": 1388,
-      "content_hash": "7888750bb2d51fe1",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "605070aea8989ea0",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 8541,
       "estimated_tokens": 2136,
-      "content_hash": "ff5d33dcba575775",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "fd294813511c034f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 10964,
       "estimated_tokens": 2741,
-      "content_hash": "9980fa7b936f4233",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "3f19de4a58df2d5f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 18755,
       "estimated_tokens": 4689,
-      "content_hash": "8dd662f4c475db89",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "750bb41aa9f32930",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 6076,
       "estimated_tokens": 1519,
-      "content_hash": "bb717b17047a94fb",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "d2712360f499849d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
       "chars": 4705,
       "estimated_tokens": 1177,
-      "content_hash": "22b92d4c3b14e8da",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001\\CLAUDE_SOLOMON_DIGEST.md"
+      "content_hash": "77d878fd7994760f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "be78a8ea1d8917b8",
+    "global": "ded83cc5aed09f8d",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -371,17 +371,17 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "83688e41f7280f26",
+      "601": "c4caeb8b2fae7325",
       "602": "ad0aecae8cdc6cb3",
       "603": "ea1eddc2cef94c83",
       "604": "a35e66b64599f81d",
-      "605": "d476661365bb204b",
+      "605": "4a13b33776eb8b21",
       "606": "7303c149fceda758",
       "607": "82e04c0cc0ffb28f",
       "608": "7f99a4321502367e",
       "609": "9790a74a362ff0ca",
-      "610": "fb3813fc42f32f3a",
-      "611": "d8842540b8e0efc3",
+      "610": "34fedae699d8c9f3",
+      "611": "11fb186f6a810003",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
       "614": "a4d5064f0ffbe97c",

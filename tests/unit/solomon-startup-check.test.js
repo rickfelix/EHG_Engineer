@@ -293,3 +293,30 @@ describe('QF-20260719-072 — weekly-program + forecast-triggers durability entr
     expect(parseDurableDutyMarkers('not a marker **DUTY-less bold**')).toEqual([]);
   });
 });
+
+describe('QF-20260720-072 — plan-alignment review durability entry', () => {
+  it('registers the agent-judgment loop with the ratified ~48h-baseline cron', () => {
+    const pa = SOLOMON_LOOPS.find((l) => l.key === 'plan-alignment');
+    expect(pa).toBeTruthy();
+    expect(pa.cron).toBe('0 8 */2 * *');
+    expect(pa.script).toBeNull();
+    expect(pa.covers).toContain('plan-alignment-review');
+  });
+
+  it('pre-wires the plan-alignment-review duty slug so parity binds against the id=611 contract marker', () => {
+    expect(wiredDutySlugs().has('plan-alignment-review')).toBe(true);
+  });
+
+  it('matches the exact slug produced from the scribed contract marker (live-format regression guard)', () => {
+    const md = '**PLAN-ALIGNMENT REVIEW DUTY (durable; chairman-ratified 2026-07-20, "Yes, I agree with the following plan" — 1b092e99; spec 7cdf6b51, wording v1 06d11030, v2 amendment b264d6eb; heavy-now / light-later)**: Every 48–72h...';
+    expect(parseDurableDutyMarkers(md)).toEqual(['plan-alignment-review']);
+    expect(missingDurableDuties(md, SOLOMON_LOOPS)).toEqual([]);
+  });
+
+  it('removing the entry makes the parity check red once its marker exists (fails-loud witness)', () => {
+    const md = '**PLAN-ALIGNMENT REVIEW DUTY (durable)**';
+    const without = SOLOMON_LOOPS.filter((l) => l.key !== 'plan-alignment');
+    expect(missingDurableDuties(md, SOLOMON_LOOPS)).toEqual([]);
+    expect(missingDurableDuties(md, without)).toEqual(['plan-alignment-review']);
+  });
+});
