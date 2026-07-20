@@ -19,8 +19,13 @@ import * as coordinatorResolve from '../../../lib/coordinator/resolve.cjs';
 
 const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString();
 
-/** Minimal fake Supabase: select().eq()/.in()/.not()/.order()/.limit() over seeded tables; insert() logs rows. */
-function makeFakeSupabase(tables, { onInsert } = {}) {
+/**
+ * Minimal fake Supabase: select().eq()/.in()/.not()/.order()/.limit() over seeded tables; insert() logs rows.
+ * capAt: { tableName: n } simulates PostgREST's default page cap (QF-20260720-161 regression coverage) —
+ * applied post-filter/post-sort like the real server-side default, so an unordered query truncates to an
+ * arbitrary slice while an explicitly-ordered one keeps the correct (e.g. freshest) rows within the cap.
+ */
+function makeFakeSupabase(tables, { onInsert, capAt } = {}) {
   return {
     from(tableName) {
       const filters = [];
@@ -38,7 +43,8 @@ function makeFakeSupabase(tables, { onInsert } = {}) {
         then(resolve) {
           let rows = (tables[tableName] || []).filter((r) => filters.every((f) => f(r)));
           if (orderCol) rows = [...rows].sort((a, b) => (orderAsc ? 1 : -1) * (a[orderCol] > b[orderCol] ? 1 : -1));
-          if (limitN != null) rows = rows.slice(0, limitN);
+          const effectiveLimit = limitN != null ? limitN : capAt?.[tableName];
+          if (effectiveLimit != null) rows = rows.slice(0, effectiveLimit);
           resolve({ data: rows, error: null });
         },
         insert(row) {
@@ -109,6 +115,25 @@ describe('computeUtilization (TS-1, TS-2)', () => {
     });
     const result = await computeUtilization(supabase);
     expect(result.live_workers).toBe(0);
+  });
+
+  it('QF-20260720-161: keeps the freshest session inside a simulated PostgREST page cap via explicit heartbeat ordering', async () => {
+    const supabase = makeFakeSupabase(
+      {
+        claude_sessions: [
+          { session_id: 'stale1', sd_key: 'SD-OLD-1', status: 'active', heartbeat_at: '2025-12-01T00:00:00Z', metadata: {} },
+          { session_id: 'stale2', sd_key: 'SD-OLD-2', status: 'active', heartbeat_at: '2025-12-02T00:00:00Z', metadata: {} },
+          { session_id: 'fresh', sd_key: 'SD-NEW', status: 'active', heartbeat_at: minutesAgo(1), metadata: {} },
+        ],
+        strategic_directives_v2: [],
+      },
+      { capAt: { claude_sessions: 2 } },
+    );
+    // Without explicit ordering, an unordered query capped at 2 rows returns [stale1, stale2] in
+    // insertion order and silently drops 'fresh' — this would report live_workers=0.
+    const result = await computeUtilization(supabase);
+    expect(result.live_workers).toBe(1);
+    expect(result.claimed).toBe(1);
   });
 });
 
@@ -184,6 +209,34 @@ describe('computeFailLoudIntegrity (TS-3)', () => {
     const claimableLeavesFn = vi.fn().mockResolvedValue({ claimable: [{ sd_key: 'SD-A', status: 'draft' }] });
     const result = await computeFailLoudIntegrity(supabase, { claimableLeavesFn });
     expect(result.integrity_ok).toBe(true);
+  });
+
+  // QF-20260720-161
+  it('does NOT flag instrument_suspect when a wide self-reported/recomputed gap is explained by human-action holds (live-verified: 3 vs 20, 11 held)', async () => {
+    const rows = Array.from({ length: 20 }, (_, i) => ({ id: `${i}`, status: 'draft', claiming_session_id: null }));
+    const supabase = makeFakeSupabase({ strategic_directives_v2: rows });
+    const claimableLeavesFn = vi.fn().mockResolvedValue({
+      claimable: Array.from({ length: 3 }, (_, i) => ({ sd_key: `SD-${i}`, status: 'draft' })),
+      humanActionHolds: Array.from({ length: 11 }, (_, i) => ({ sd_key: `SD-HELD-${i}`, provenance: null })),
+    });
+    const result = await computeFailLoudIntegrity(supabase, { claimableLeavesFn });
+    expect(result.human_action_held).toBe(11);
+    expect(result.instrument_suspect).toBe(false);
+    expect(result.integrity_ok).toBe(true);
+  });
+
+  it('flags instrument_suspect when the gap is NOT substantially explained by known human-action holds', async () => {
+    const rows = Array.from({ length: 20 }, (_, i) => ({ id: `${i}`, status: 'draft', claiming_session_id: null }));
+    const supabase = makeFakeSupabase({ strategic_directives_v2: rows });
+    const claimableLeavesFn = vi.fn().mockResolvedValue({
+      claimable: [{ sd_key: 'SD-0', status: 'draft' }],
+      humanActionHolds: [{ sd_key: 'SD-HELD-0', provenance: null }],
+    });
+    const result = await computeFailLoudIntegrity(supabase, { claimableLeavesFn });
+    expect(result.human_action_held).toBe(1);
+    expect(result.instrument_suspect).toBe(true);
+    expect(result.integrity_ok).toBe(false);
+    expect(result.divergent_fields).toContain('dispatchable_count_unexplained_gap');
   });
 });
 
