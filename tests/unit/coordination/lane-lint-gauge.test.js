@@ -133,7 +133,7 @@ describe('runLaneLintGauge — tick entry point, fail-open, read-only', () => {
       order: () => ({ range: (a, b) => Promise.resolve({ data: rows.slice(a, b + 1), error: null }) }),
     });
     return {
-      from(table) {
+      from(_table) {
         return {
           select() {
             return {

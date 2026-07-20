@@ -27,7 +27,6 @@ function makeFakeSupabase({
   const fakeRows = [...rows];
   const supabase = {
     from(table) {
-      const ctx = { table, lastEqs: [] };
       const builder = {
         select(cols) {
           calls.selects.push({ table, cols });

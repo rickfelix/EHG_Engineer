@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { analyzeCapabilityGaps, analyzeObjectiveGaps } from '../../../lib/strategy/capability-gap-analyzer.js';
+import { analyzeCapabilityGaps } from '../../../lib/strategy/capability-gap-analyzer.js';
 
 function mockSupabase(objectives, capabilities) {
   return {

@@ -147,7 +147,7 @@ describe('runDifferentiationBoard (full pipeline, injected engine + mock client)
     competitive_intelligence: { key_features: ['CRM', 'email'] },
   };
 
-  function deps(verdictText, persistedCapture) {
+  function deps(verdictText) {
     const supabase = makeSupabase({
       competitor_intelligence: [
         { data: [record], error: null }, // getCompetitorIntelligence
