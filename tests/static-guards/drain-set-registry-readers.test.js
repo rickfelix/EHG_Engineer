@@ -94,8 +94,17 @@ function extractArrayLiterals(content) {
   return spans;
 }
 
+// Only counts a quoted token as a candidate ARRAY ELEMENT -- i.e. immediately
+// preceded (modulo whitespace/newlines) by `[` or `,` -- not any quoted substring
+// appearing anywhere in the span. Without this guard, a quoted kind name mentioned
+// twice in an evidence-writer script's explanatory PROSE (e.g. a `summary` string
+// inside a `findings: [...]` array, "...includes 'coordinator_reminder' and
+// 'coordinator_request'...") gets miscounted as if it were a bare array element,
+// producing a false positive against benign LEAD/VALIDATION evidence scripts that
+// legitimately cite real kind names as documentation (confirmed false-positive:
+// scripts/one-off/_lead-evidence-drain-set-registry-001-d.mjs).
 function countKnownKindHits(arrayLiteralText) {
-  const stringLiteralPattern = /'([a-zA-Z_][a-zA-Z0-9_]*)'|"([a-zA-Z_][a-zA-Z0-9_]*)"/g;
+  const stringLiteralPattern = /[[,]\s*\n?\s*'([a-zA-Z_][a-zA-Z0-9_]*)'|[[,]\s*\n?\s*"([a-zA-Z_][a-zA-Z0-9_]*)"/g;
   let hits = 0;
   let m;
   while ((m = stringLiteralPattern.exec(arrayLiteralText)) !== null) {
@@ -142,5 +151,21 @@ describe('drain-set-registry hand-rolled kind-list residual guard (FR-5, TS-6)',
       maxHits = Math.max(maxHits, countKnownKindHits(span));
     }
     expect(maxHits).toBeGreaterThanOrEqual(3);
+  });
+
+  it('countKnownKindHits ignores kind names quoted in explanatory PROSE inside an array span (regression: false positive against scripts/one-off/_lead-evidence-drain-set-registry-001-d.mjs)', () => {
+    // Shape of a real evidence-writer `findings: [ {..., summary: "..."}, ... ]` array
+    // where a `summary` string mentions two real kind names TWICE each as documentation,
+    // not as bare array elements. This must NOT be counted as a hand-rolled kind-list.
+    const proseSpan = `[
+      { id: 'F1', summary: "unrelated text" },
+      { id: 'F4', summary: "worker-status.cjs's DIRECTIVE_KINDS includes 'coordinator_reminder' and 'coordinator_request' -- Chosen REROUTE_TO_KIND='coordinator_reminder' for the reroute and 'coordinator_request' for the alarm." },
+    ]`;
+    expect(countKnownKindHits(proseSpan)).toBe(0);
+  });
+
+  it('countKnownKindHits still counts a genuine bare-array kind-list (true positive preserved)', () => {
+    const realList = '[\'coordinator_reminder\', \'coordinator_request\', \'coordinator_advisory\']';
+    expect(countKnownKindHits(realList)).toBeGreaterThanOrEqual(3);
   });
 });
