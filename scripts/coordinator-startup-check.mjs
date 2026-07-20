@@ -305,6 +305,14 @@ export const STANDARD_LOOPS = [
   { key: 'solomon-ledger-resurface', label: 'Solomon ledger-pending resurface (aged advice-outcome rows -> Adam inbox)', script: 'solomon-ledger-pending-resurface.cjs', cron: '13,43 * * * *',
     gha_backed: true,
     prompt: 'node scripts/solomon-ledger-pending-resurface.cjs' },
+  // QF-20260720-638 (Solomon-designed, Adam-sourced): encodes the coordinator's manual
+  // idle-QF claim-hint intervention as standing behavior. PROPOSE-ONLY (advisory hint row per
+  // idle worker, never claims/mutates quick_fixes); belt-and-suspenders chairman-gated
+  // exclusion — see the script's own header. Also composed into
+  // scripts/coordinator-quiet-tick.mjs's COMPOSED_CORES.
+  { key: 'idle-qf-hint', label: 'Idle-worker QF auto-hint (idle-capacity absorption into ranked open QFs)', script: 'coordinator-idle-qf-hint.mjs', cron: '5,15,25,35,45,55 * * * *',
+    gha_backed: true,
+    prompt: 'node scripts/coordinator-idle-qf-hint.mjs' },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.

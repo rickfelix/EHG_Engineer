@@ -10,10 +10,11 @@
  * validate ranking quality BEFORE the apply ceremony.
  *
  * --no-model (default in CI): use a deterministic reasoning-depth stub so the run needs no live
- * model. Without it, an injected Sonnet-floor client would be required (NEVER Fable).
+ * model. --live (QF-20260720-171): wire a genuine Sonnet-floor client (NEVER Fable) via constrained
+ * tool-use decoding (never a free-text parse + regex repair). Requires ANTHROPIC_API_KEY.
  *
  * Usage:
- *   node scripts/fable-suitability/dry-run.mjs [--dir lib/fable-suitability] [--duty harness-depth] [--no-model] [--max 10]
+ *   node scripts/fable-suitability/dry-run.mjs [--dir lib/fable-suitability] [--duty harness-depth] [--no-model|--live] [--max 10]
  * Exits 0 on a successful reachable run (even when every persist is CEREMONY_PENDING).
  */
 import 'dotenv/config';
@@ -25,6 +26,31 @@ import { createClient } from '@supabase/supabase-js';
 import { deriveRegion } from '../../lib/fable-suitability/region-cluster.mjs';
 import { upsertRegionScore } from '../../lib/fable-suitability/map-writer.mjs';
 import { runFanout } from '../../lib/fable-suitability/fanout.mjs';
+import { AnthropicAdapter } from '../../lib/sub-agents/vetting/provider-adapters.js';
+import { getClaudeModel } from '../../lib/config/model-config.js';
+
+/** Genuine Sonnet-floor client (NEVER Fable) via forced tool-use — constrained decoding,
+ * not free-text parse + repair. Requires ANTHROPIC_API_KEY. */
+export function createSonnetFloorClient() {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('--live requires ANTHROPIC_API_KEY to be set in this environment.');
+  }
+  const adapter = new AnthropicAdapter({ model: getClaudeModel('validation') });
+  return {
+    async scoreStructured({ prompt, schema }) {
+      const resp = await adapter.client.messages.create({
+        model: adapter.model,
+        max_tokens: 512,
+        tools: [{ name: 'submit_score', input_schema: schema }],
+        tool_choice: { type: 'tool', name: 'submit_score' },
+        messages: [{ role: 'user', content: prompt }],
+      });
+      const toolUse = resp.content.find((b) => b.type === 'tool_use');
+      if (!toolUse) throw new Error('live scoreStructured: no tool_use block in response');
+      return toolUse.input;
+    },
+  };
+}
 
 /** Deterministic reasoning-depth stub for --no-model runs (mid band, no live call). */
 export const deterministicClient = {
@@ -73,6 +99,7 @@ async function main() {
   const duty = argVal(args, '--duty') || 'harness-depth';
   const max = Number(argVal(args, '--max')) || 10;
   const noModel = args.includes('--no-model');
+  const live = args.includes('--live');
 
   const root = process.cwd();
   const files = collectFiles(root, join(root, dir), [], 200);
@@ -86,7 +113,7 @@ async function main() {
     process.env.SUPABASE_SERVICE_ROLE_KEY,
     { auth: { autoRefreshToken: false, persistSession: false } },
   );
-  const client = noModel ? deterministicClient : requireInjectedClient();
+  const client = noModel ? deterministicClient : live ? createSonnetFloorClient() : requireInjectedClient();
 
   const result = await runFanout({
     regions,
@@ -105,7 +132,7 @@ async function main() {
   writeFileSync(artifact, JSON.stringify({ duty, generated_from: dir, ranked, persistedSummary: { persisted: result.persisted, ceremonyPending: result.ceremonyPending, skipped: result.skipped.length } }, null, 2));
 
   console.log(`\n── Fable-suitability DRY-RUN (inert-but-reachable) ──`);
-  console.log(`   scanned ${files.length} file(s) in ${dir} -> ${regions.length} region(s), duty=${duty}${noModel ? ' (--no-model stub)' : ''}`);
+  console.log(`   scanned ${files.length} file(s) in ${dir} -> ${regions.length} region(s), duty=${duty}${noModel ? ' (--no-model stub)' : live ? ' (--live Sonnet-floor)' : ''}`);
   console.log(`   scored ${result.scored.length}; persisted ${result.persisted}; CEREMONY_PENDING ${result.ceremonyPending} (child A staged => inert)`);
   console.log(`   ranked artifact: ${artifact}`);
   for (const r of ranked.slice(0, 5)) console.log(`     ${r.composite_score}  ${r.region_key}  [${r.axes.join('x')}]`);

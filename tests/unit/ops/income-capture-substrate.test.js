@@ -13,7 +13,8 @@ function aggSb(charges, upserts) {
   return {
     from(table) {
       if (table === 'ops_payment_events') {
-        const b = { select() { return this; }, eq() { return this; }, in() { return this; }, then(res) { return res({ data: charges, error: null }); } };
+        // FR-6 batch 8: aggregateIncomeCapture now paginates via fetchAllPaginated (.order + .range)
+        const b = { select() { return this; }, eq() { return this; }, in() { return this; }, order() { return this; }, range(from, to) { return Promise.resolve({ data: (charges || []).slice(from, to + 1), error: null }); }, then(res) { return res({ data: charges, error: null }); } };
         return b;
       }
       // income_capture_monthly
@@ -101,7 +102,7 @@ describe('aggregateIncomeCapture (FR-2)', () => {
   });
 
   it('returns null and does not throw on a read error', async () => {
-    const sb = { from: () => ({ select() { return this; }, eq() { return this; }, in() { return this; }, then(res) { return res({ data: null, error: { message: 'boom' } }); } }) };
+    const sb = { from: () => ({ select() { return this; }, eq() { return this; }, in() { return this; }, order() { return this; }, range() { return Promise.resolve({ data: null, error: { message: 'boom' } }); }, then(res) { return res({ data: null, error: { message: 'boom' } }); } }) };
     expect(await aggregateIncomeCapture({ supabase: sb, livemode: true })).toBeNull();
   });
 });

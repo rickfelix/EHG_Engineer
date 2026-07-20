@@ -9,7 +9,10 @@
  * against the LAST-ISSUED FORECAST BASIS (convention defined here: one feedback row,
  * category='solomon_forecast_basis', metadata { velocity_per_day, open_scope_count } —
  * Solomon stamps one whenever he issues a forecast). --weekly mode emits the
- * Monday-budget-line reminder (per-ISO-week dedupe).
+ * weekly budget-line reminder (per-ISO-week dedupe), fired at the currently-active
+ * account's reset epoch (QF-20260720-111 — was hardcoded Monday, now Thursday to match
+ * Deep Soul Sessions' actual weekly reset; account-named in the reminder so a future
+ * account rotation surfaces as a visible mismatch rather than silent drift).
  *
  * On fire: ONE typed row (kind='solomon_duty_reminder', payload.duty discriminator —
  * registered in the solomon drain set + SOLOMON_INBOX_KINDS) via the canonical
@@ -26,6 +29,19 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
+const { getAccountIdentity } = require('../lib/fleet/account-identity.cjs');
+
+// QF-20260720-111: the weekly cron fires on the CURRENTLY-ACTIVE account's known reset day
+// (Thu = Deep Soul Sessions today) — but per-account rotation means that anchor drifts
+// silently if the active account changes. Naming the resolved account in the reminder
+// makes a stale anchor visible instead of silent. Keyed by email (the only reliably-known
+// identifier for all three rotation accounts — their accountUuid8 values are not all
+// independently verified here); codestreetlabs' reset day is not yet confirmed, so it is
+// deliberately absent from this map rather than guessed.
+export const KNOWN_RESET_DAYS = {
+  'deepsoulsessionslabel@gmail.com': 'Thursday (~3:59 AM ET)',
+  'rickfelix2000@gmail.com': 'Friday (~6:59 AM ET)',
+};
 
 const DAY = 24 * 60 * 60 * 1000;
 const OPEN_STATUSES = ['draft', 'in_progress', 'active', 'pending_approval'];
@@ -37,11 +53,11 @@ async function resolveTarget(sb) {
   return 'broadcast-solomon';
 }
 
-async function sendOnce(sb, target, { duty, stalenessKey, subject, body }) {
+async function sendOnce(sb, target, { duty, stalenessKey, subject, body }, sendRow = insertCoordinationRow) {
   const { data } = await sb.from('session_coordination').select('id')
     .eq('target_session', target).eq('payload->>staleness_key', stalenessKey).is('read_at', null).limit(1);
   if (Array.isArray(data) && data.length) return false; // unread reminder pending — no spam
-  await insertCoordinationRow(sb, {
+  await sendRow(sb, {
     sender_session: process.env.CLAUDE_SESSION_ID || 'solomon-duty-triggers-cron',
     target_session: target,
     message_type: 'INFO',
@@ -88,15 +104,24 @@ export async function runDailyTriggers(sb, { nowMs = Date.now() } = {}) {
   return { status: 'FIRED', fired, sent, target };
 }
 
-export async function runWeeklyReminder(sb, { nowMs = Date.now() } = {}) {
+export async function runWeeklyReminder(sb, { nowMs = Date.now(), resolveIdentity = getAccountIdentity, sendRow = insertCoordinationRow } = {}) {
   const week = (() => { const d = new Date(nowMs); const o = new Date(d.getFullYear(), 0, 1); return `${d.getFullYear()}-W${String(Math.ceil(((d - o) / DAY + o.getDay() + 1) / 7)).padStart(2, '0')}`; })();
   const target = await resolveTarget(sb);
+  // QF-20260720-111: name the account this epoch is anchored to, so a rotation away from
+  // the assumed account (this cron's Thursday firing day) surfaces as a visible mismatch
+  // rather than a silent day-of-week drift.
+  const identity = resolveIdentity();
+  const acctNote = identity
+    ? (KNOWN_RESET_DAYS[identity.email]
+        ? `active account ${identity.email} (reset ${KNOWN_RESET_DAYS[identity.email]})`
+        : `active account ${identity.email} (reset day NOT in KNOWN_RESET_DAYS — verify this firing day still matches)`)
+    : 'active account identity unresolved — verify this firing day still matches the active account\'s reset';
   const sent = await sendOnce(sb, target, {
     duty: 'weekly_budget_line',
     stalenessKey: `weekly-budget-line-${week}`,
-    subject: `Monday budget reset: weekly program duties due (${week})`,
-    body: `Monday reset reminder (${week}): send the P3 budget line to Adam, set the standing program, run the accuracy review + autonomy-report rollup, P4 Fable-terms re-check, and stamp a fresh forecast basis (feedback category=solomon_forecast_basis) if you re-issue. Owed-state row — if you are a successor Solomon reading this, the duty transferred with it. QF-20260719-148 L2.`,
-  });
+    subject: `Weekly budget reset: duties due (${week}, ${acctNote})`,
+    body: `Weekly reset reminder (${week}, ${acctNote}): send the P3 budget line to Adam, set the standing program, run the accuracy review + autonomy-report rollup, P4 Fable-terms re-check, and stamp a fresh forecast basis (feedback category=solomon_forecast_basis) if you re-issue. Owed-state row — if you are a successor Solomon reading this, the duty transferred with it. QF-20260719-148 L2 / QF-20260720-111 (account-aware epoch).`,
+  }, sendRow);
   return { status: sent ? 'SENT' : 'pending-reminder', week, target };
 }
 

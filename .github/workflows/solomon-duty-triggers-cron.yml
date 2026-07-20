@@ -11,7 +11,13 @@ name: "Solomon duty triggers (cron)"
 on:
   schedule:
     - cron: '37 11 * * *'   # daily forecast-trigger evaluation
-    - cron: '23 12 * * 1'   # Monday weekly budget-line reminder
+    # QF-20260720-111: realigned from Monday to Thursday 08:20 UTC (~4:20 AM ET) — the
+    # actual weekly reset epoch for the currently-active account (Deep Soul Sessions,
+    # resets Thu ~3:59 AM ET), not an arbitrary Monday. Per-account rotation means this
+    # drifts again if the active account changes (rickfelix2000 resets Fri ~6:59 AM ET,
+    # codestreetlabs' reset time is not yet confirmed) — the reminder body now names the
+    # account it fired against so a stale anchor is visible, not silent.
+    - cron: '20 8 * * 4'   # weekly budget-line reminder (Thursday epoch)
   workflow_dispatch:
     inputs:
       weekly:
@@ -51,7 +57,7 @@ jobs:
 
       - name: Run duty triggers (mode by schedule)
         run: |
-          if [ "${{ github.event.schedule }}" = "23 12 * * 1" ] || [ "${{ github.event.inputs.weekly }}" = "true" ]; then
+          if [ "${{ github.event.schedule }}" = "20 8 * * 4" ] || [ "${{ github.event.inputs.weekly }}" = "true" ]; then
             node scripts/solomon-forecast-trigger-check.mjs --weekly
           else
             node scripts/solomon-forecast-trigger-check.mjs

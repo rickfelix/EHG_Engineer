@@ -20,11 +20,14 @@ const DETAIL_BODY = JSON.stringify({
 /** Chainable fake Supabase client covering the select().eq().eq().eq().gte().lte() + insert() paths. */
 function buildSupabase({ rows = [] } = {}) {
   const insertedRows = [];
+  // FR-6 batch 8: computeSlopeAndPersist now paginates via fetchAllPaginated (.lte().order().range())
   const chain = {
     select: () => chain,
     eq: () => chain,
     gte: () => chain,
-    lte: async () => ({ data: rows, error: null }),
+    lte: () => chain,
+    order: () => chain,
+    range: (from, to) => Promise.resolve({ data: rows.slice(from, to + 1), error: null }),
   };
   return {
     insertedRows,

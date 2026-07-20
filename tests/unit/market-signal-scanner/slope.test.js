@@ -16,7 +16,12 @@ function makeSupabase({ priorRows = [] } = {}) {
           eq: () => ({
             eq: () => ({
               gte: () => ({
-                lte: async () => ({ data: priorRows, error: null }),
+                // FR-6 batch 8: computeSlopeAndPersist now paginates via fetchAllPaginated
+                // (.order('fetched_at').order('id') then .range())
+                lte: () => ({
+                  order() { return this; },
+                  range: (from, to) => Promise.resolve({ data: priorRows.slice(from, to + 1), error: null }),
+                }),
               }),
             }),
           }),

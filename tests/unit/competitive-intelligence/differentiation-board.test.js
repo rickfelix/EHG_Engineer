@@ -23,6 +23,7 @@ function makeQuery(result) {
     eq: () => q,
     order: () => q,
     limit: () => q,
+    range: () => q, // fetchAllPaginated's range page (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6)
     insert: () => q,
     update: () => q,
     single: () => Promise.resolve(result),
@@ -146,7 +147,7 @@ describe('runDifferentiationBoard (full pipeline, injected engine + mock client)
     competitive_intelligence: { key_features: ['CRM', 'email'] },
   };
 
-  function deps(verdictText, persistedCapture) {
+  function deps(verdictText) {
     const supabase = makeSupabase({
       competitor_intelligence: [
         { data: [record], error: null }, // getCompetitorIntelligence

@@ -11,7 +11,9 @@ const savedClientSecret = process.env.REDDIT_CLIENT_SECRET;
 
 function makeSupabaseMock({ priorRows = [] } = {}) {
   const insert = vi.fn().mockResolvedValue({ error: null });
-  const lte = vi.fn().mockResolvedValue({ data: priorRows, error: null });
+  // FR-6 batch 8: computeSlopeAndPersist now paginates via fetchAllPaginated (.lte().order().range())
+  const orderable = { order() { return orderable; }, range: (from, to) => Promise.resolve({ data: priorRows.slice(from, to + 1), error: null }) };
+  const lte = vi.fn(() => orderable);
   const gte = vi.fn(() => ({ lte }));
   const eq3 = vi.fn(() => ({ gte }));
   const eq2 = vi.fn(() => ({ eq: eq3 }));

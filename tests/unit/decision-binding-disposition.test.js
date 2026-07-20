@@ -52,9 +52,14 @@ function makeFakeSupabase() {
               });
               return builder;
             },
+            // FR-6 batch 8: listAwaitingDisposition now paginates via fetchAllPaginated
+            // (.order('created_at').order('id') then .range()) — order() is chainable, range() terminal.
             order() {
               filtered.sort((a, b) => a.created_at.localeCompare(b.created_at));
-              return Promise.resolve({ data: filtered, error: null });
+              return builder;
+            },
+            range(from, to) {
+              return Promise.resolve({ data: filtered.slice(from, to + 1), error: null });
             },
             maybeSingle() {
               return Promise.resolve({ data: filtered[0] ?? null, error: null });

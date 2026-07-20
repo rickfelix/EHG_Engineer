@@ -80,6 +80,11 @@ function makeFakeSupabase(tables) {
       },
       order(col, opts) { orderCol = col; orderAsc = opts?.ascending !== false; return builder; },
       limit(n) { limitN = n; return builder; },
+      // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 8: range() added (no-op —
+      // fixtures here are always far below the page size, so returning the full filtered/
+      // sorted set on the first "page" is correct) so fetchAllPaginated-converted call sites
+      // (computeAdmissionsByLinkage) can chain on this thenable builder like any other filter.
+      range() { return builder; },
       update(payload) { updatePayload = payload; return builder; },
       then(resolve) {
         const table = tableName === 'v_plan_of_record_remainder' ? computeViewRows(tables) : (tables[tableName] || []);
