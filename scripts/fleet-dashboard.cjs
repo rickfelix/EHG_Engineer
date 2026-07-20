@@ -48,6 +48,13 @@ const { getAccountIdentity } = require('../lib/fleet/account-identity.cjs');
 // SD-LEO-INFRA-FLEET-VIEW-BADGES-001 (FR-1/FR-2): capacity chip + per-session badge rollup.
 const { loadStore } = require('../lib/fleet/account-capacity-gauge.cjs');
 const { formatCapacityChip, computeSessionBadge } = require('../lib/fleet/fleet-view-badges.cjs');
+// SD-LEO-INFRA-LEO-COMPLETION-001-E (FR-2): per-session model/effort chip, sourced from
+// claude_sessions.metadata.model/.effort (already written by lib/checkin/steps/model-effort-merge.cjs).
+function formatModelEffortChip(s) {
+  const model = s.model || '-';
+  const effort = s.effort || '-';
+  return `${model}/${effort}`;
+}
 
 const STALE_THRESHOLD = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS, 10) || 300;
 
@@ -286,7 +293,7 @@ async function loadData() {
       // through this SAME already-working telemetry-merge seam instead of a new query.
       const { data: teleRows } = await supabase
         .from('claude_sessions')
-        .select('session_id,current_tool,current_tool_expected_end_at,expected_silence_until,process_alive_at,last_activity_kind,commits_since_claim,files_modified_since_claim,current_phase,handoff_fail_count,has_uncommitted_changes')
+        .select('session_id,current_tool,current_tool_expected_end_at,expected_silence_until,process_alive_at,last_activity_kind,commits_since_claim,files_modified_since_claim,current_phase,handoff_fail_count,has_uncommitted_changes,metadata')
         .in('session_id', ids);
       for (const row of teleRows || []) telemetryById.set(row.session_id, row);
     }
@@ -306,6 +313,9 @@ async function loadData() {
       current_phase: t.current_phase,
       handoff_fail_count: t.handoff_fail_count,
       has_uncommitted_changes: t.has_uncommitted_changes,
+      // SD-LEO-INFRA-LEO-COMPLETION-001-E (FR-2): model/effort chip source.
+      model: t.metadata && t.metadata.model,
+      effort: t.metadata && t.metadata.effort,
     });
   }
   const hasTickAlive = (s) => {
@@ -508,7 +518,7 @@ function printWorkers(d) {
   } else {
     const csidHeader = hasCollision ? pad('CSID', 12) : '';
     const mcHeader = mcOk ? pad('P(alive)', 16) : '';
-    console.log('  ' + pad('Terminal', 12) + csidHeader + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 8) + pad('Fails', 6) + pad('WIP', 5) + pad('LoopState', 14) + pad('Badge', 12) + pad('Activity', 18) + pad('Silent until', 14) + mcHeader + 'Heartbeat');
+    console.log('  ' + pad('Terminal', 12) + csidHeader + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 8) + pad('Fails', 6) + pad('WIP', 5) + pad('LoopState', 14) + pad('Badge', 12) + pad('Model/Effort', 16) + pad('Activity', 18) + pad('Silent until', 14) + mcHeader + 'Heartbeat');
     // SD-LEO-INFRA-LOOP-STATE-SIGNAL-001: LoopState column (14 chars) added between WIP and Activity → 14-char wider separator.
     console.log('  ' + '─'.repeat(hasCollision ? (mcOk ? 150 : 134) : (mcOk ? 138 : 122)));
     for (const s of d.activeSessions) {
@@ -541,7 +551,8 @@ function printWorkers(d) {
         isSilent: Boolean(silent),
         failCount: s.handoff_fail_count,
       });
-      console.log('  ' + pad(s.tty, 12) + csid + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 8) + pad(fails, 6) + pad(wip, 5) + pad(loopCell, 14) + pad(badge, 12) + pad(activity, 18) + pad(silent, 14) + mcCell + s.heartbeat_age_human + struggleTag);
+      const modelEffortChip = formatModelEffortChip(s);
+      console.log('  ' + pad(s.tty, 12) + csid + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 8) + pad(fails, 6) + pad(wip, 5) + pad(loopCell, 14) + pad(badge, 12) + pad(modelEffortChip, 16) + pad(activity, 18) + pad(silent, 14) + mcCell + s.heartbeat_age_human + struggleTag);
     }
   }
 
@@ -1591,6 +1602,79 @@ async function printAttentionStrip() {
   console.log('');
 }
 
+// ── Section: Operator cockpit session actions (SD-LEO-INFRA-LEO-COMPLETION-001-E, FR-1) ──
+// Wires lib/fleet/session-detail-view.js's buildSessionDetailView() and lib/fleet/browser-control.js's
+// requestBrowserSession()/signalTakeover() into REAL production callers (G3 no-unit-mock proof: these
+// were previously fully built, tested, and had ZERO callers anywhere in the repo). Each action does its
+// OWN targeted fetch (not the batch loadData()) per session-detail-view.js's own contract: "a caller
+// does the fetching, and passes the results in".
+async function resolveSessionRow(idOrCallsign) {
+  const { data } = await supabase
+    .from('claude_sessions')
+    .select('session_id,current_tool,last_tool_at,last_activity_kind,expected_silence_until,metadata,sd_key')
+    .or(`session_id.eq.${idOrCallsign},metadata->fleet_identity->>callsign.eq.${idOrCallsign}`)
+    .limit(2);
+  if (!data || data.length === 0) return { error: `no session found for '${idOrCallsign}'` };
+  if (data.length > 1) return { error: `ambiguous identifier '${idOrCallsign}' matched ${data.length} sessions` };
+  return { session: data[0] };
+}
+
+async function printSessionDetail(idOrCallsign) {
+  if (!idOrCallsign) { console.log('Usage: node scripts/fleet-dashboard.cjs detail <session-id-or-callsign>'); return; }
+  const { buildSessionDetailView } = await import('../lib/fleet/session-detail-view.js');
+  const { attach } = await import('../lib/fleet/spawn-control.js');
+  const { session, error } = await resolveSessionRow(idOrCallsign);
+  if (error) { console.log('  ' + error); return; }
+  const { data: ctxRows } = await supabase
+    .from('context_usage_log')
+    .select('usage_percent')
+    .eq('session_id', session.session_id)
+    .order('timestamp', { ascending: false })
+    .limit(1);
+  const ctxRow = ctxRows && ctxRows[0];
+  let attachResult = null;
+  try {
+    attachResult = await attach(idOrCallsign, { supabaseClient: supabase });
+  } catch (e) {
+    attachResult = { ok: false, reason: 'attach_threw' };
+  }
+  const view = buildSessionDetailView(session, { ctxRow, attachResult });
+  console.log('SESSION DETAIL — ' + session.session_id);
+  console.log('─'.repeat(72));
+  console.log('  Context used:   ' + (view.ctxPercent != null ? view.ctxPercent + '%' : 'unknown'));
+  console.log('  Last tool:      ' + (view.lastTool || '-') + (view.lastToolAt ? ' @ ' + view.lastToolAt : ''));
+  console.log('  Last activity:  ' + (view.lastActivityKind || '-'));
+  console.log('  Silent until:   ' + (view.silentUntil || '-'));
+  console.log('  Attach state:   ' + (view.attachState.message || (view.attachState.ok ? 'attached' : 'not attempted')));
+  console.log('');
+}
+
+async function printBrowserRequestAction(idOrCallsign) {
+  if (!idOrCallsign) { console.log('Usage: node scripts/fleet-dashboard.cjs browser-request <session-id-or-callsign>'); return; }
+  const { requestBrowserSession } = await import('../lib/fleet/browser-control.js');
+  const { session, error } = await resolveSessionRow(idOrCallsign);
+  if (error) { console.log('  ' + error); return; }
+  const result = requestBrowserSession(session);
+  if (!result.ok) { console.log('  browser session refused: ' + result.reason); return; }
+  console.log('BROWSER SESSION LAUNCH OPTIONS — ' + session.session_id);
+  console.log('─'.repeat(72));
+  console.log('  ' + JSON.stringify(result.launchOptions, null, 2).split('\n').join('\n  '));
+  console.log('');
+}
+
+async function printTakeoverAction(idOrCallsign) {
+  if (!idOrCallsign) { console.log('Usage: node scripts/fleet-dashboard.cjs takeover <session-id-or-callsign>'); return; }
+  const { signalTakeover } = await import('../lib/fleet/browser-control.js');
+  const { session, error } = await resolveSessionRow(idOrCallsign);
+  if (error) { console.log('  ' + error); return; }
+  try {
+    await signalTakeover(supabase, session.session_id, session.sd_key || null);
+    console.log('  Takeover signaled for ' + session.session_id + ' — agent-driven browser actions paused.');
+  } catch (e) {
+    console.log('  takeover failed: ' + e.message);
+  }
+}
+
 // ── Section: Adam advisory inbox (SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B) ──
 // Surfaces Adam advisories (payload.kind=adam_advisory) in a SEPARATE section from
 // the worker-friction inbox (printInbox). Adam advisories deliberately omit
@@ -2323,8 +2407,21 @@ async function printFeedback(d, deps = {}) {
 
 // ── Main ──
 
+// SD-LEO-INFRA-LEO-COMPLETION-001-E (FR-1): session-scoped actions take a 2nd positional arg
+// (session-id-or-callsign), so they are routed BEFORE the section-only dispatch below.
+const SESSION_SCOPED_ACTIONS = {
+  'detail': printSessionDetail,
+  'browser-request': printBrowserRequestAction,
+  'takeover': printTakeoverAction,
+};
+
 async function main() {
-  const section = (process.argv[2] || 'all').toLowerCase();
+  const command = (process.argv[2] || 'all').toLowerCase();
+  if (SESSION_SCOPED_ACTIONS[command]) {
+    await SESSION_SCOPED_ACTIONS[command](process.argv[3]);
+    return;
+  }
+  const section = command;
   const suppressEnabled = section === 'all' && process.env.FLEET_DASH_SUPPRESS !== 'false';
   const buf = []; const origLog = console.log;
   if (suppressEnabled) console.log = (...a) => buf.push(util.format(...a));
