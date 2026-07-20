@@ -39,7 +39,7 @@
  * @param {string|Date|null} ts
  * @returns {Date|null}
  */
-function parseAsUTC(ts) {
+export function parseAsUTC(ts) {
   if (!ts) return null;
   if (ts instanceof Date) return ts;
   const hasTZ = /Z$|[+-]\d{2}:?\d{2}$/.test(ts);
