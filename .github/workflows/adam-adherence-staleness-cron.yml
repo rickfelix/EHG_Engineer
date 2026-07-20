@@ -1,0 +1,48 @@
+name: "Adam adherence-staleness check (cron)"
+
+# QF-20260719-997 (chairman-directed 2026-07-19; companion to adam-coordinator-health-cron):
+# judgment-requiring Adam checks cannot run headless, but their STALENESS detection can —
+# and staleness is the failure mode (self-score lapsed 16 days undetected). Every 6h this
+# reads the three deliberate-check stamps and dispatches an idempotent adam_action_required
+# reminder to the live Adam (or queues at broadcast-adam) for each overdue one, forcing a
+# hard tick interrupt on the next quiet-tick. Not var-gated, not fail-softed: a failing
+# checker must be visible (the retention/canary cron reds are how real defects get caught).
+
+on:
+  schedule:
+    # Every 6 hours at :33 — off-minute to spread fleet cron load.
+    - cron: '33 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  adam-adherence-staleness:
+    name: Adam adherence-staleness check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run adherence-staleness check (dispatch idempotent reminders)
+        run: node scripts/adam-adherence-staleness-check.mjs
