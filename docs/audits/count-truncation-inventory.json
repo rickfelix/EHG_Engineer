@@ -1,14 +1,14 @@
 {
  "sd": "SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001",
  "generated_by": "scripts/audit/count-truncation-inventory.mjs",
- "total_sites": 9212,
+ "total_sites": 9235,
  "by_classification": {
-  "bounded-by-design": 3822,
-  "tripwired": 22,
-  "paginated": 288,
-  "already-exact": 181,
-  "non-live-path": 4069,
-  "needs-review": 830
+  "bounded-by-design": 3817,
+  "tripwired": 16,
+  "paginated": 290,
+  "already-exact": 183,
+  "non-live-path": 4070,
+  "needs-review": 859
  },
  "ledger_sites": [
   {
@@ -408,6 +408,12 @@
    "exemption_note": ".limit(limit) default 50 (env SMS_RELAY_DRAIN_LIMIT-overridable) — an explicit operator-controlled batch size, not a silent unranged read."
   },
   {
+   "site": "lib/chairman/sms-channel-health.js:143",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(batchLimit) defaulting to 25 — small escalation batch"
+  },
+  {
    "site": "lib/chairman/sms-outbound-worker.js:189",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
@@ -426,16 +432,22 @@
    "exemption_note": ".limit(batchLimit) default DEFAULT_BATCH_LIMIT=25 — a small worker batch size, well under the cap."
   },
   {
-   "site": "lib/chairman/sms-outbound-worker.js:288",
+   "site": "lib/chairman/sms-outbound-worker.js:299",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": ".limit(batchLimit) default DEFAULT_BATCH_LIMIT=25 — a small worker batch size, well under the cap."
+   "exemption_note": ".limit(batchLimit) defaulting to DEFAULT_BATCH_LIMIT=25 — small owed-obligations batch"
   },
   {
-   "site": "lib/chairman/sms-outbound-worker.js:307",
+   "site": "lib/chairman/sms-outbound-worker.js:308",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "mutation-returning atomic-claim .update({status:'sending',...}).eq('id', row.id).eq('status','owed').is('claimed_at', null).select(...) — rows bounded to the single claimed row."
+   "exemption_note": ".limit(batchLimit) defaulting to DEFAULT_BATCH_LIMIT=25 — fallback-column retry of the same bounded batch read"
+  },
+  {
+   "site": "lib/chairman/sms-outbound-worker.js:331",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .update(...).eq(id,row.id) — single-row optimistic claim, bounded by the update"
   },
   {
    "site": "lib/checkin/steps/critical-qf-jump.cjs:24",
@@ -666,10 +678,10 @@
    "exemption_note": "pending+unfulfilled worker_spawn_requests — operationally tiny set with expiry window (mirrors fleet-dashboard.cjs:200)"
   },
   {
-   "site": "lib/coordinator/dispatch.cjs:830",
+   "site": "lib/coordinator/dispatch.cjs:836",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "mutation-returning .select() on a single-row session_coordination INSERT — bounded by the insert payload (1 row)"
+   "exemption_note": "mutation-returning select on .insert(row) — bounded by the single-row insert payload"
   },
   {
    "site": "lib/coordinator/drain-gauge.cjs:39",
@@ -2724,6 +2736,12 @@
    "exemption_note": ".eq(session_id)+.ilike(reason, claim_cleared%sd_key=...) — one session's claim-clear lifecycle events for one SD (single digits)"
   },
   {
+   "site": "lib/fleet/drain-set-registry.js:44",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "role_drain_sets — curated registry/config table filtered by role+status+direction"
+  },
+  {
    "site": "lib/fleet/exec-email-ops-actuals.mjs:49",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
@@ -2766,16 +2784,10 @@
    "exemption_note": ".in(candidateKeys) — bounded by the caller-supplied retro candidate key list"
   },
   {
-   "site": "lib/fleet/worker-status.cjs:253",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": "heartbeat within 15m window (FLEET_ACTIVE_WINDOW_MS) — live-fleet set; read error throws (caller decides)"
-  },
-  {
-   "site": "lib/fleet/worker-status.cjs:275",
+   "site": "lib/fleet/worker-status.cjs:287",
    "classification": "tripwired",
    "auto_classification": "needs-review",
-   "exemption_note": "batch 8: CAP_TRUNCATION_SUSPECTED throw at the destructure site — consumers act on inbox rows; pagination blocked by 9+ hermetic suites stubbing this builder chain before .range()"
+   "exemption_note": "batch 8: CAP_TRUNCATION_SUSPECTED throw at the destructure site (line shifted by the FR-6 batch 9 fapPaginate bridge added above) — consumers act on inbox rows; pagination blocked by 9+ hermetic suites stubbing this builder chain before .range()"
   },
   {
    "site": "lib/flywheel/analytics.js:32",
@@ -3582,10 +3594,10 @@
    "exemption_note": "getPendingQuarantineItems .limit(limit) default 50 — a bounded pending-review queue view, no live caller overrides it"
   },
   {
-   "site": "lib/quality/snooze-manager.js:207",
+   "site": "lib/quality/snooze-manager.js:222",
    "classification": "paginated",
    "auto_classification": "needs-review",
-   "exemption_note": "getSnoozedItems paginated via fetchAllPaginated(buildQuery); the wrapper call sits ~14 lines below, referencing a named factory function — outside the classifier's forward window"
+   "exemption_note": "wrapped by fetchAllPaginated(buildQuery) 14 lines below — outside the classifier 12-line forward window"
   },
   {
    "site": "lib/quality/triage-engine.js:499",
@@ -3696,10 +3708,10 @@
    "exemption_note": ".eq(sd_id) — PRDs for ONE SD (1-2 rows)"
   },
   {
-   "site": "lib/sd/child-linkage.js:164",
+   "site": "lib/sd/child-linkage.js:212",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "per-parent child SDs (.eq parent_sd_id) — operationally small set (one parent's children)"
+   "exemption_note": ".eq('parent_sd_id', parentRef) — per-parent-SD children, operationally small set"
   },
   {
    "site": "lib/security/audit-events-reader.js:20",
@@ -4359,32 +4371,32 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-coordinator-health.mjs:123",
+   "site": "scripts/adam-coordinator-health.mjs:136",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-coordinator-health.mjs:253",
+   "site": "scripts/adam-coordinator-health.mjs:279",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-coordinator-health.mjs:268",
+   "site": "scripts/adam-coordinator-health.mjs:294",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-coordinator-health.mjs:44",
+   "site": "scripts/adam-coordinator-health.mjs:52",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-coordinator-health.mjs:56",
+   "site": "scripts/adam-coordinator-health.mjs:65",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-coordinator-health.mjs:87",
+   "site": "scripts/adam-coordinator-health.mjs:96",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -4434,22 +4446,22 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-quiet-tick.mjs:131",
+   "site": "scripts/adam-quiet-tick.mjs:132",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-quiet-tick.mjs:160",
+   "site": "scripts/adam-quiet-tick.mjs:161",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-quiet-tick.mjs:216",
+   "site": "scripts/adam-quiet-tick.mjs:217",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-quiet-tick.mjs:292",
+   "site": "scripts/adam-quiet-tick.mjs:329",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -5307,7 +5319,17 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/coordinator-quiet-tick.mjs:144",
+   "site": "scripts/coordinator-idle-qf-hint.mjs:115",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "scripts/coordinator-idle-qf-hint.mjs:125",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "scripts/coordinator-quiet-tick.mjs:151",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -5892,7 +5914,7 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/eva/overnight-capacity-governor.mjs:55",
+   "site": "scripts/eva/overnight-capacity-governor.mjs:63",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -6167,64 +6189,54 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:1512",
-   "classification": "tripwired",
-   "auto_classification": "needs-review",
-   "exemption_note": "warnIfCapTruncated applied before the empty-check (review-held SDs)"
+   "site": "scripts/fleet-dashboard.cjs:1526",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:157",
-   "classification": "tripwired",
-   "auto_classification": "needs-review",
-   "exemption_note": "warnIfCapTruncated applied at the destructure site (sessions) — display policy: warn, not crash"
+   "site": "scripts/fleet-dashboard.cjs:165",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:164",
-   "classification": "tripwired",
-   "auto_classification": "needs-review",
-   "exemption_note": "warnIfCapTruncated applied at the destructure site (allSessions)"
+   "site": "scripts/fleet-dashboard.cjs:177",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:188",
-   "classification": "tripwired",
-   "auto_classification": "needs-review",
-   "exemption_note": "warnIfCapTruncated applied at the destructure site (drainAgents)"
+   "site": "scripts/fleet-dashboard.cjs:202",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:200",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": "pending+unexpired worker_spawn_requests — operationally tiny set with expiry window"
+   "site": "scripts/fleet-dashboard.cjs:214",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:272",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": ".in(ids) — bounded by the live session-id list length"
+   "site": "scripts/fleet-dashboard.cjs:286",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:343",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": ".in(missingKeys) — bounded by claimed-SD key list"
+   "site": "scripts/fleet-dashboard.cjs:357",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:353",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": ".in(pendingKeys) — bounded by pending-claim key list"
+   "site": "scripts/fleet-dashboard.cjs:367",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:392",
-   "classification": "tripwired",
-   "auto_classification": "needs-review",
-   "exemption_note": "warnIfCapTruncated applied at the quickFixes filter site"
+   "site": "scripts/fleet-dashboard.cjs:406",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:850",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": "periodic-process liveness registry — small enumerated registry table"
+   "site": "scripts/fleet-dashboard.cjs:864",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
    "site": "scripts/fleet-down-alert.mjs:157",
@@ -8032,10 +8044,9 @@
    "exemption_note": ".eq(parent_sd_id)-scoped children read — bounded by one orchestrator's children (FR-6 batch 6 review)"
   },
   {
-   "site": "scripts/modules/handoff/pre-checks/prerequisite-preflight.js:534",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+   "site": "scripts/modules/handoff/pre-checks/prerequisite-preflight.js:560",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
    "site": "scripts/modules/handoff/recording/HandoffRecorder.js:237",
@@ -8044,34 +8055,29 @@
    "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
   },
   {
-   "site": "scripts/modules/handoff/recording/HandoffRecorder.js:430",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+   "site": "scripts/modules/handoff/recording/HandoffRecorder.js:434",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/modules/handoff/recording/HandoffRecorder.js:531",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+   "site": "scripts/modules/handoff/recording/HandoffRecorder.js:537",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/modules/handoff/recording/HandoffRecorder.js:627",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+   "site": "scripts/modules/handoff/recording/HandoffRecorder.js:633",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/modules/handoff/recording/HandoffRecorder.js:684",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": "insert/update-returning .select() — bounded by rows written in this statement (FR-6 batch 6 review)"
+   "site": "scripts/modules/handoff/recording/HandoffRecorder.js:690",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/modules/handoff/recording/HandoffRecorder.js:801",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": "sd-scoped .or() linkage read — bounded by rows referencing this SD (FR-6 batch 6 review)"
+   "site": "scripts/modules/handoff/recording/HandoffRecorder.js:807",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
    "site": "scripts/modules/handoff/validation/validator-registry/gates/additional-validators.js:133",
@@ -9663,22 +9669,24 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/worker-checkin.cjs:1112",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": ".limit(ORPHAN_CANDIDATE_LIMIT=5) with deterministic .order(updated_at ASC) — oldest-orphan adoption window, bounded by design (adoptOrphanInProgress)"
+   "site": "scripts/worker-checkin.cjs:1003",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/worker-checkin.cjs:1249",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": "update-returning select, bounded by the mutation predicate (.eq session_id + CAS .is(sd_key,null) — at most one row; healOwnClaimPointer)"
+   "site": "scripts/worker-checkin.cjs:1124",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/worker-checkin.cjs:1328",
-   "classification": "tripwired",
-   "auto_classification": "needs-review",
-   "exemption_note": "warnIfCapTruncated applied at the destructure site (fleet-identity used-set seed). NOT paginated (FR-6 batch 3): the chainable stubs in worker-checkin-fleet-identity/-callsign-collision-fix/-metadata-race tests have no .order()/.range() (same constraint as stale-session-sweep.cjs:1015); the live-5-min-heartbeat set is operationally tiny, and a truncated used-set's worst case (duplicate callsign pick) is healed by the 5-min dedupeAssignedCallsigns cron pass by design"
+   "site": "scripts/worker-checkin.cjs:1261",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "scripts/worker-checkin.cjs:1340",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
    "site": "scripts/worker-checkin.cjs:275",
@@ -9687,46 +9695,39 @@
    "exemption_note": ".in()-bounded lookup — exactly two enumerated system_settings keys (FLEET_STAND_DOWN, HARD_HALT_STATUS)"
   },
   {
-   "site": "scripts/worker-checkin.cjs:628",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": ".limit(QF_CANDIDATE_LIMIT=100) with deterministic .order(created_at) — a designed candidate window, not a silent cap (heuristic only sees literal .limit(N))"
+   "site": "scripts/worker-checkin.cjs:630",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/worker-checkin.cjs:729",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": ".in('sd_key', keys)-bounded — keys come from the merged self-claim candidate pool (~45 max across the 5 bounded windows)"
+   "site": "scripts/worker-checkin.cjs:639",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/worker-checkin.cjs:787",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": ".limit(DRAFT_CANDIDATE_LIMIT=10) with deterministic .order(created_at ASC) — the oldest-N draft window is bounded by design (fetchDraftCandidates)"
+   "site": "scripts/worker-checkin.cjs:741",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/worker-checkin.cjs:821",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": ".limit(DRAFT_CANDIDATE_LIMIT=10) with deterministic .order(created_at DESC) — the newest-N draft window is bounded by design (fetchNewestDraftCandidates)"
+   "site": "scripts/worker-checkin.cjs:799",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/worker-checkin.cjs:862",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": ".limit(DRAFT_CANDIDATE_LIMIT=10) with deterministic .order(priority, created_at) — the fleet_critical window is bounded by design (fetchFleetCriticalCandidates)"
+   "site": "scripts/worker-checkin.cjs:833",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/worker-checkin.cjs:898",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": ".limit(DRAFT_CANDIDATE_LIMIT=10) with deterministic .order(created_at) — the ranked-candidates window is bounded by design (fetchRankedCandidates)"
+   "site": "scripts/worker-checkin.cjs:874",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/worker-checkin.cjs:991",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": ".limit(STRANDED_CANDIDATE_LIMIT=5) with deterministic .order(updated_at ASC) — oldest-stranded recovery window, bounded by design (recoverStrandedFinal)"
+   "site": "scripts/worker-checkin.cjs:910",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
    "site": "scripts/worktree-reaper.mjs:1087",

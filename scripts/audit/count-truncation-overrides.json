@@ -329,6 +329,11 @@
   "match": "id, provider_message_id, from_phone",
   "note": ".limit(limit) default 50 (env SMS_RELAY_DRAIN_LIMIT-overridable) — an explicit operator-controlled batch size, not a silent unranged read."
  },
+ "lib/chairman/sms-channel-health.js:143": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, body, last_error, status')",
+  "note": ".limit(batchLimit) defaulting to 25 — small escalation batch"
+ },
  "lib/chairman/sms-outbound-worker.js:189": {
   "classification": "bounded-by-design",
   "match": "id, recipient_phone, attempts, last_error",
@@ -349,10 +354,25 @@
   "match": "recipient_phone, body, attempts, decision_id",
   "note": ".limit(batchLimit) default DEFAULT_BATCH_LIMIT=25 — a small worker batch size, well under the cap."
  },
+ "lib/chairman/sms-outbound-worker.js:299": {
+  "classification": "bounded-by-design",
+  "match": ".select(OWED_SELECT_COLUMNS)",
+  "note": ".limit(batchLimit) defaulting to DEFAULT_BATCH_LIMIT=25 — small owed-obligations batch"
+ },
  "lib/chairman/sms-outbound-worker.js:307": {
   "classification": "bounded-by-design",
   "match": "recipient_phone, body, attempts, media_url",
   "note": "mutation-returning atomic-claim .update({status:'sending',...}).eq('id', row.id).eq('status','owed').is('claimed_at', null).select(...) — rows bounded to the single claimed row."
+ },
+ "lib/chairman/sms-outbound-worker.js:308": {
+  "classification": "bounded-by-design",
+  "match": "OWED_SELECT_COLUMNS.replace(', prior",
+  "note": ".limit(batchLimit) defaulting to DEFAULT_BATCH_LIMIT=25 — fallback-column retry of the same bounded batch read"
+ },
+ "lib/chairman/sms-outbound-worker.js:331": {
+  "classification": "bounded-by-design",
+  "match": ".select(claimSelectColumns)",
+  "note": "mutation-returning .update(...).eq(id,row.id) — single-row optimistic claim, bounded by the update"
  },
  "lib/checkin/steps/critical-qf-jump.cjs:24": {
   "classification": "bounded-by-design",
@@ -553,6 +573,11 @@
   "classification": "bounded-by-design",
   "match": "q = q.select(select)",
   "note": "mutation-returning .select() on a single-row session_coordination INSERT — bounded by the insert payload (1 row)"
+ },
+ "lib/coordinator/dispatch.cjs:836": {
+  "classification": "bounded-by-design",
+  "match": "q = q.select(select)",
+  "note": "mutation-returning select on .insert(row) — bounded by the single-row insert payload"
  },
  "lib/coordinator/drain-gauge.cjs:39": {
   "classification": "bounded-by-design",
@@ -2264,6 +2289,11 @@
   "match": "reason, created_at",
   "note": ".eq(session_id)+.ilike(reason, claim_cleared%sd_key=...) — one session's claim-clear lifecycle events for one SD (single digits)"
  },
+ "lib/fleet/drain-set-registry.js:44": {
+  "classification": "bounded-by-design",
+  "match": ".select('kind')",
+  "note": "role_drain_sets — curated registry/config table filtered by role+status+direction"
+ },
  "lib/fleet/exec-email-ops-actuals.mjs:49": {
   "classification": "bounded-by-design",
   "match": "id, name, deployment_url",
@@ -2299,15 +2329,15 @@
   "match": "select('sd_key, status')",
   "note": ".in(candidateKeys) — bounded by the caller-supplied retro candidate key list"
  },
- "lib/fleet/worker-status.cjs:253": {
-  "classification": "bounded-by-design",
-  "match": "C.heartbeatAt, C.worktreePath",
-  "note": "heartbeat within 15m window (FLEET_ACTIVE_WINDOW_MS) — live-fleet set; read error throws (caller decides)"
- },
  "lib/fleet/worker-status.cjs:275": {
   "classification": "tripwired",
   "match": "C.expiresAt, C.readAt, C.acknowledgedAt",
   "note": "batch 8: CAP_TRUNCATION_SUSPECTED throw at the destructure site — consumers act on inbox rows; pagination blocked by 9+ hermetic suites stubbing this builder chain before .range()"
+ },
+ "lib/fleet/worker-status.cjs:287": {
+  "classification": "tripwired",
+  "match": "C.expiresAt, C.readAt, C.acknowledgedAt",
+  "note": "batch 8: CAP_TRUNCATION_SUSPECTED throw at the destructure site (line shifted by the FR-6 batch 9 fapPaginate bridge added above) — consumers act on inbox rows; pagination blocked by 9+ hermetic suites stubbing this builder chain before .range()"
  },
  "lib/flywheel/analytics.js:32": {
   "classification": "tripwired",
@@ -2984,6 +3014,11 @@
   "match": ".select('*')",
   "note": "getSnoozedItems paginated via fetchAllPaginated(buildQuery); the wrapper call sits ~14 lines below, referencing a named factory function — outside the classifier's forward window"
  },
+ "lib/quality/snooze-manager.js:222": {
+  "classification": "paginated",
+  "match": ".select('*')",
+  "note": "wrapped by fetchAllPaginated(buildQuery) 14 lines below — outside the classifier 12-line forward window"
+ },
  "lib/quality/triage-engine.js:499": {
   "classification": "bounded-by-design",
   "match": ".select('id')",
@@ -3078,6 +3113,11 @@
   "classification": "bounded-by-design",
   "match": "sd_key, title, scope, scope_slice",
   "note": "per-parent child SDs (.eq parent_sd_id) — operationally small set (one parent's children)"
+ },
+ "lib/sd/child-linkage.js:212": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_key, title, scope, scope_slice')",
+  "note": ".eq('parent_sd_id', parentRef) — per-parent-SD children, operationally small set"
  },
  "lib/security/audit-events-reader.js:20": {
   "classification": "bounded-by-design",
