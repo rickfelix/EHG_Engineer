@@ -28,7 +28,15 @@ function mockSupabase({ candidates = [], latestLookup = () => null, insertError 
     const builder = {
       select: vi.fn((cols) => {
         if (cols === '*') {
-          return { lt: vi.fn(async () => ({ data: candidates, error: null })) };
+          // FR-6 batch 8: the candidates read now paginates via fetchAllPaginated
+          // (.lt().order().range()); extend the chain to match.
+          return {
+            lt: vi.fn(() => ({
+              order: vi.fn(() => ({
+                range: vi.fn(async () => ({ data: candidates, error: null })),
+              })),
+            })),
+          };
         }
         return builder; // 'id, created_at' path — continues to .eq()/.order()/.limit()
       }),

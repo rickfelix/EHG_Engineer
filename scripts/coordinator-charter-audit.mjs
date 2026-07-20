@@ -27,7 +27,7 @@ import { countActiveWorktrees, MAX_WORKTREE_COUNT, countFilesystemWorktreeDirs }
 // SD-LEO-INFRA-FLEET-FRESHNESS-GUARD-001: advisory, fail-open checkout-freshness dimension.
 import { checkoutFreshness, freshnessBadge } from '../lib/governance/checkout-freshness.js';
 import {
-  classifyLiveness, detectIdleWithWork, detectDependencyHealth, detectWorktreePool,
+  classifyLiveness, detectIdleWithWork, detectDependencyHealth, detectWorktreePool, detectUnstampedModel,
   detectBacklogRankStaleness, detectQuietTickUnverified, foundationalQueryError, summarizeViolations,
   extractDepKey, resolveWorktreeCount, computeDispatchBelt, detectProgressStall, detectCrossRepoStarvation,
   // SD-LEO-INFRA-GOVERNANCE-ROLE-ADHERENCE-DBVALIDATION-001 (FR-3): coordinator mirror detectors.
@@ -252,6 +252,7 @@ async function main() {
   const D = {
     pool: detectWorktreePool({ count: wtCount, max: MAX_WORKTREE_COUNT }),
     idle: detectIdleWithWork({ liveSessions: liveWorkers, unclaimedCount: unclaimed.length, pendingAssignmentSessionIds, nowMs, isWithinArmedSilence: isWithinArmedSilenceWindow }),
+    modelStamp: detectUnstampedModel({ liveSessions: liveWorkers }), // QF-20260720-497: fail-loud on live participating workers with no worker_self_report model (not silent 'unknown')
     dep: detectDependencyHealth({ sds, statusByKey, terminalSet: TERMINAL, nowMs }),
     rank: detectBacklogRankStaleness({ claimableSds: claimable, nowMs, ttlMs: DISPATCH_RANK_TTL_MS }),
     // SD-FDBK-INFRA-FLEET-SELF-CLAIM-001: cross-repo SDs no live worker checkout can build (silent starvation).

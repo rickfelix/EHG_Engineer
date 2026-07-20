@@ -87,6 +87,9 @@ function makeSupabase({ ventures = [], seedInsertFails = false } = {}) {
       if (table === 'ventures') {
         return {
           select() { return this; }, not() { return this; }, neq() { return this; },
+          // FR-6 batch 8: ensureDeploymentRows now paginates via fetchAllPaginated (.order + .range)
+          order() { return this; },
+          range: (from, to) => Promise.resolve({ data: ventures.slice(from, to + 1), error: null }),
           then: (resolve) => resolve({ data: ventures, error: null }),
         };
       }

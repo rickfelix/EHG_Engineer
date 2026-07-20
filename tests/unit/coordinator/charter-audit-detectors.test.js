@@ -9,7 +9,7 @@ import {
   classifyLiveness, detectIdleWithWork, detectDependencyHealth, detectWorktreePool,
   detectBacklogRankStaleness, detectQuietTickUnverified, foundationalQueryError, summarizeViolations,
   extractDepKey, resolveWorktreeCount, computeDispatchBelt, detectCrossRepoStarvation,
-  detectAutoRefillBacklog, detectInProgressOrphans,
+  detectAutoRefillBacklog, detectInProgressOrphans, detectUnstampedModel,
 } from '../../../lib/coordinator/charter-audit-detectors.mjs';
 import { STANDARD_LOOPS } from '../../../scripts/coordinator-startup-check.mjs';
 
@@ -428,5 +428,31 @@ describe('detectInProgressOrphans — DUTY-3b in_progress+unclaimed orphan (SD-R
     expect(detectInProgressOrphans().violation).toBe(false);
     expect(detectInProgressOrphans({ sds: null, liveSessions: null }).violation).toBe(false);
     expect(detectInProgressOrphans({ sds: [orphanSd()], liveSessions: [] }).violation).toBe(true); // nowMs undefined → age guard skipped, still flags
+  });
+});
+
+describe('detectUnstampedModel (QF-20260720-497) — model-stamp gauge fail-loud', () => {
+  const participating = (over = {}) => ({ session_id: 's', claimed_at: ago(1000), metadata: {}, ...over });
+  it('flags a live participating worker with no worker_self_report model (not silent unknown)', () => {
+    const r = detectUnstampedModel({ liveSessions: [participating({ session_id: 'w1', metadata: { model: 'fable' /* no effort_source */ } })] });
+    expect(r.violation).toBe(true);
+    expect(r.unstampedCount).toBe(1);
+    expect(r.unstampedSessions).toContain('w1');
+    expect(r.remediation).toMatch(/worker-checkin/);
+  });
+  it('does NOT flag a worker that self-reports (effort_source=worker_self_report + model)', () => {
+    const r = detectUnstampedModel({ liveSessions: [participating({ metadata: { model: 'sonnet', effort_source: 'worker_self_report' } })] });
+    expect(r.violation).toBe(false);
+    expect(r.unstampedCount).toBe(0);
+    expect(r.participatingCount).toBe(1);
+  });
+  it('does NOT flag a fresh startup ghost that has not yet participated', () => {
+    const r = detectUnstampedModel({ liveSessions: [{ session_id: 'ghost', metadata: {} /* no claim/worktree/completed */ }] });
+    expect(r.violation).toBe(false);
+    expect(r.participatingCount).toBe(0);
+  });
+  it('empty / missing input → no violation (conservative)', () => {
+    expect(detectUnstampedModel().violation).toBe(false);
+    expect(detectUnstampedModel({ liveSessions: [] }).violation).toBe(false);
   });
 });

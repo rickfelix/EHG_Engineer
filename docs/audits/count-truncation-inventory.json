@@ -1,595 +1,615 @@
 {
  "sd": "SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001",
  "generated_by": "scripts/audit/count-truncation-inventory.mjs",
- "total_sites": 9176,
+ "total_sites": 9212,
  "by_classification": {
-  "bounded-by-design": 3422,
-  "needs-review": 1332,
-  "already-exact": 177,
-  "paginated": 177,
-  "tripwired": 15,
-  "non-live-path": 4053
+  "bounded-by-design": 3822,
+  "tripwired": 22,
+  "paginated": 288,
+  "already-exact": 181,
+  "non-live-path": 4069,
+  "needs-review": 830
  },
  "ledger_sites": [
   {
-   "site": "lib/adam/briefings/harness.js:246",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/adam/briefings/harness.js:247",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "objectives .in('code', codes) — codes = the 3 SIGNAL_CLASS_TO_OBJECTIVE values deduped via Set; bounded to <=3 O-GOV objective codes."
   },
   {
-   "site": "lib/adam/briefings/harness.js:252",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/adam/briefings/harness.js:253",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "key_results .in('objective_id', [...idToCode.keys()]) — idToCode is built from the <=3 objectives read above (site :247), so bounded to <=3 objective_ids."
   },
   {
-   "site": "lib/adam/briefings/harness.js:268",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/adam/briefings/harness.js:275",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "v_ai_quality_tuning_recommendations is an aggregated view GROUPed by (sd_type, content_type, pass_threshold) over the last 4 weeks — a small curated set (dozens of rows), not a raw growing table."
   },
   {
-   "site": "lib/adam/briefings/harness.js:274",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/adam/briefings/platform.js:41",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/adam/briefings/platform.js:47",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/adam/briefings/platform.js:42",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "venture_stages is the fixed 26-stage EHG SSOT reference table (file header: 'EHG 26-stage SSOT') — whole-table read is inherently small/bounded."
   },
   {
    "site": "lib/adam/briefings/venture.js:62",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-venture competitor rows — operationally small per-venture scope."
   },
   {
    "site": "lib/adam/briefings/venture.js:71",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-venture venture_stage_work rows (.eq venture_id, further .lte lifecycle_stage-bounded) — one venture's stage-work rows, operationally small."
   },
   {
    "site": "lib/adam/briefings/venture.js:79",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-venture L2 vision docs (.eq venture_id.eq level='L2') — at most a handful of rows per venture."
   },
   {
    "site": "lib/adam/scope-registry.js:28",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "applications is a small config/registry table (one row per app/repo across the whole portfolio)."
   },
   {
    "site": "lib/adam/scope-registry.js:36",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "active, non-demo ventures — the live venture roster (operationally small; the platform currently runs a handful of ventures)."
   },
   {
    "site": "lib/adam/task-ledger.js:124",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "adam_task_ledger tier='parent' rows filtered to open/in_progress/blocked — the live open Adam task board, an operationally small planning board (done/cancelled tasks excluded), not a growing event log."
   },
   {
    "site": "lib/adam/task-ledger.js:133",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('parent_id', parentIds) — bounded by the small open-parent set read above (site :124)."
   },
   {
    "site": "lib/adam/task-rehydrate.js:127",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "metadata->>sourced_by='adam' AND status IN (draft,in_progress) — the currently-open Adam-sourced SD backlog, operationally small (SDs leave this filter once completed), not the full growing strategic_directives_v2 table."
   },
   {
    "site": "lib/agent-experience-factory/adapters/issue-patterns-adapter.js:24",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) with limit defaulting to 5 — top-N issue-pattern retrieval adapter, bounded well below the 1000-row cap"
   },
   {
    "site": "lib/agent-experience-factory/adapters/retrospectives-adapter.js:19",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".order(created_at desc).limit(limit) default 5 applied in a separate terminal statement (beyond the classifier chain window) — top-N retrospective retrieval, bounded"
   },
   {
    "site": "lib/agents/cost-agent/alerts-generator.js:101",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "not a live query — this line is literal text inside a template-string `implementation` code sample (the 'after' example); never executed against the database."
   },
   {
    "site": "lib/agents/cost-agent/alerts-generator.js:74",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "not a live query — this line is literal text inside a template-string `implementation` code sample shown to the user as an optimization recommendation; never executed against the database."
   },
   {
    "site": "lib/agents/cost-agent/alerts-generator.js:98",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "not a live query — this line is literal text inside a template-string `implementation` code sample (the 'before' example); never executed against the database."
   },
   {
    "site": "lib/agents/cost-agent/database-analyzer.js:33",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "information_schema.tables is a database catalog view — bounded by the number of tables in the schema (dozens), not a growing app data table."
   },
   {
    "site": "lib/agents/eva-coo-integration.js:127",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-venture agent_registry crew rows (.eq venture_id.eq agent_type='crew') — a handful of crews per venture."
   },
   {
    "site": "lib/agents/eva-coo-integration.js:251",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "agent_registry .eq(agent_type='venture_ceo').eq(status='active') (optionally .in venture_id) — one row per active venture; the venture roster is operationally small (a portfolio of ventures), not a raw growing event table."
   },
   {
    "site": "lib/agents/eva-coo-integration.js:387",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-venture agent_registry hierarchy (.eq venture_id) — one venture's org chart, a handful to dozens of agents."
   },
   {
    "site": "lib/agents/ghost-ceo-gauge.js:36",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "agent_registry .eq(agent_type='venture_ceo') — one row per venture ever onboarded; the venture roster is operationally small (a portfolio of ventures), not a raw growing event table."
   },
   {
-   "site": "lib/agents/learning-system.js:280",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/agents/learning-system.js:281",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "chain continues to .eq('id', feedbackId).single() 8 lines below (line 289) — a single-row lookup; the template-string .select() with an embedded interaction_history relation query breaks the classifier's forward-chain continuation heuristic (the backtick-opening line doesn't match the continuation regex)."
   },
   {
-   "site": "lib/agents/learning-system.js:370",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/agents/learning-system.js:670",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/agents/modules/database-sub-agent/integrity-checker.js:52",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/agents/modules/database-sub-agent/integrity-checker.js:61",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/agents/modules/database-sub-agent/integrity-checker.js:68",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/agents/learning-system.js:371",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit*3) — limit is caller-supplied and observed <=10 (callers pass 3/10, default 5; lib/agents/response-integrator.js:262), so limit*3 stays well under 1000."
   },
   {
    "site": "lib/agents/modules/golden-nugget-validator/stage-config.js:50",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "venture_stages is the fixed 26-stage EHG SSOT reference table — whole-table read is inherently small/bounded."
   },
   {
    "site": "lib/agents/observability.cjs:204",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) default 30; all production callers (lib/agents/metrics-dashboard.cjs) pass limit:30 — top-N daily/weekly agent metrics."
   },
   {
    "site": "lib/agents/observability.cjs:248",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "7-day lookback (all callers pass limit:7) across agent_performance_metrics grouped one-row-per-agent-per-window; leo_sub_agents is a small fixed registry (dozens), so the window stays well under the cap."
   },
   {
    "site": "lib/agents/plan-verification-tool.js:357",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD user_stories (.eq sd_id) — operationally small set (one SD's stories)."
   },
   {
    "site": "lib/agents/registry.cjs:34",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "leo_sub_agents is a curated sub-agent registry/config table (whole-table, no filter) — operationally small set (dozens of registered agents)."
   },
   {
    "site": "lib/agents/uat-sub-agent.js:415",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "chain continues to .order().order().limit(1).single() beyond the classifier's forward window (the raw-SQL subquery lines inside .not() break the continuation heuristic) — single-row 'next test' lookup."
   },
   {
    "site": "lib/agents/venture-ceo-factory.js:453",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('role_key', roleKeys) where roleKeys = EHG_SHARED_OPERATORS.map(...) — a fixed small set (4 chairman-ratified shared operators)."
   },
   {
    "site": "lib/agents/venture-ceo/handlers.js:421",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('objective_id', objIds) — objIds derives from `objectives`, which is hardcoded to [] (comment: 'Phantom table okr_objectives removed') and the preceding objectives.length===0 branch always returns early; this query path is currently unreachable dead code (reported separately as a finding)."
   },
   {
    "site": "lib/agents/venture-ceo/handlers.js:522",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "agent_messages to ONE agent within a single calendar month (.eq to_agent_id, .gte created_at=month-start) — a per-agent monthly message volume, operationally small."
   },
   {
    "site": "lib/agents/venture-ceo/handlers.js:694",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-venture agent_registry executive (VP) rows (.eq venture_id.eq agent_type='executive') — a handful of VPs per venture."
   },
   {
    "site": "lib/agents/venture-ceo/helpers.js:212",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-venture agent_registry executive (VP) rows (.eq venture_id.eq agent_type='executive') — a handful of VPs per venture."
   },
   {
    "site": "lib/agents/venture-state-machine.js:131",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-venture pending_ceo_handoffs (.eq venture_id.eq status='pending') — the live pending-handoff set for one venture, operationally small."
   },
   {
    "site": "lib/agents/venture-state-machine.js:68",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-venture venture_stage_work rows (.eq venture_id) — one venture's stage-work rows, operationally small."
   },
   {
    "site": "lib/analysis/scope-complexity-scorer.js:165",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/apa/standing-assessment-round.mjs:68",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id) — per-parent orchestrator child SDs, operationally small set (a handful to dozens of children)"
   },
   {
    "site": "lib/apa/value-authenticity-criteria.mjs:45",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "value_authenticity_criteria_library is a frozen config/library table (contract_version 1) filtered to one T-tier (.eq t_form) — operationally small set"
   },
   {
    "site": "lib/auto-exec-checkout-sync.js:153",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "status='active' claude_sessions — sweep-maintained live-fleet set (operationally small); makeWorkersProbe returns ok:false on read error (fail-closed exclusion lock)"
   },
   {
    "site": "lib/auto-exec-checkout-sync.js:43",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "status='active' claude_sessions — sweep-maintained live-fleet set (operationally small); caller filters to fresh-heartbeat main-checkout workers and the probe fails CLOSED (ok:false) on read error"
   },
   {
    "site": "lib/auto-exec-policy.js:143",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "leo_auto_exec_forbidden policy registry — config-scale table (tens of rows)"
   },
   {
    "site": "lib/brainstorm/board-judiciary-bridge.js:202",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "debate_arguments .eq('debate_session_id', debateSessionId) — one debate session's arguments across both rounds + specialist testimony, operationally small (a handful to a couple dozen rows per debate)"
   },
   {
    "site": "lib/brainstorm/dissent-metrics.js:22",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "debate_arguments .eq('debate_session_id', debateSessionId) — one debate session's arguments, operationally small"
   },
   {
    "site": "lib/brainstorm/dissent-metrics.js:51",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(windowSize) default 10 — the only caller (outcome-tracker.js re-export, no override found repo-wide) uses the default; a 'last N debate sessions' window, bounded"
   },
   {
    "site": "lib/brainstorm/outcome-tracker.js:78",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "debate_arguments .eq('debate_session_id', debateId).eq('round_number', 1).eq('argument_type', 'initial_position') — one debate's round-1 initial positions, operationally small"
   },
   {
    "site": "lib/brainstorm/panel-selector.js:46",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "specialist_registry is the curated board-of-directors identity pool (panel selection candidates) — a small registry table, not a growing event log"
   },
   {
    "site": "lib/brainstorm/specialist-registry.js:249",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "specialist_registry curated identity pool (same registry as panel-selector.js), cached client-side (DB_CACHE_TTL_MS) — small set"
   },
   {
-   "site": "lib/capabilities/capability-seeder.js:48",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/capabilities/plane1-scoring.js:274",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sd_capabilities .eq('sd_id', sdId).eq('action', 'registered') — one SD's registered capability ledger rows, operationally small"
   },
   {
-   "site": "lib/capabilities/plane1-scoring.js:270",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/capabilities/scanner-context.js:181",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(MAX_CAPABILITIES=20) is a named constant, not a literal digit, so the auto-classifier's \\.limit\\(\\d+\\) regex never matches it — value is provably 20, far under the cap"
   },
   {
-   "site": "lib/capabilities/plane1-scoring.js:303",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/capabilities/scanner-context.js:73",
+   "classification": "tripwired",
+   "auto_classification": "needs-review",
+   "exemption_note": "computePortfolioMaturity's ventures read is a fail-soft maturity SIGNAL (saturates at VENTURE_SATURATION=20 non-fixture ventures), not a guard/action gate — warnIfCapTruncated flags growth past the (now-honest) POSTGREST_MAX_ROWS limit instead of full pagination, which would be disproportionate for a soft heuristic. Real bug fixed alongside: the prior .limit(2000) requested more rows than PostgREST's 1000-row server cap could ever return."
   },
   {
-   "site": "lib/capabilities/plane1-scoring.js:458",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/chairman/daily-review/roadmap-status-doc.js:109",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('wave_id', waveIds) — bounded by the small ratified-wave set fetched above (site :94)."
   },
   {
-   "site": "lib/capabilities/scanner-context.js:170",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/chairman/daily-review/roadmap-status-doc.js:186",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "24h completion window (.gte completion_date, DEFAULT_SINCE_HOURS=24) on strategic_directives_v2 — daily SD-completion velocity across the whole platform is operationally in the tens, not thousands, even under heavy parallel automation."
   },
   {
-   "site": "lib/capabilities/scanner-context.js:63",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/chairman/daily-review/roadmap-status-doc.js:192",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq('status','in_progress') — the live in-flight SD set, bounded by concurrent fleet worker capacity (dozens), not a historical/growing filter (SDs leave 'in_progress' once complete)."
   },
   {
-   "site": "lib/chairman/daily-review/roadmap-status-doc.js:101",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/chairman/daily-review/roadmap-status-doc.js:174",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/chairman/daily-review/roadmap-status-doc.js:180",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/chairman/daily-review/roadmap-status-doc.js:44",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/chairman/daily-review/roadmap-status-doc.js:88",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/chairman/daily-review/roadmap-status-doc.js:94",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-roadmap waves (.eq roadmap_id) filtered to ratified statuses — a curated small set of waves per roadmap."
   },
   {
    "site": "lib/chairman/record-pending-decision.mjs:130",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "1-hour rolling window count of decisions with escalation_email_sent_at set — self-bounded by this code's OWN rate cap (RATE_CAP_MAX_EMAILS=3/hr), inherently small."
   },
   {
    "site": "lib/chairman/record-pending-decision.mjs:131",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "1-hour rolling window count of decisions with digest_sent_at set — self-bounded by this code's OWN rate cap (RATE_CAP_MAX_EMAILS=3/hr), inherently small."
   },
   {
    "site": "lib/chairman/record-pending-decision.mjs:203",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning conditional CAS .update(...).eq('id', decisionId).is(...).select('id') — rows bounded to the single updated row."
   },
   {
    "site": "lib/chairman/record-pending-decision.mjs:295",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning single-row .insert(row).select('id') — rows bounded by the insert payload (one decision)."
   },
   {
    "site": "lib/chairman/sms-bridge.js:132",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .upsert(row, {onConflict:'dedupe_key'}).select('id') — rows bounded by the single-row upsert payload."
   },
   {
    "site": "lib/chairman/sms-bridge.js:361",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(CANDIDATE_NOTIFICATION_LOOKBACK=5) — a small most-recent-notifications candidate window."
   },
   {
    "site": "lib/chairman/sms-bridge.js:376",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('id', candidateIds) — candidateIds deduped from the limit(5) notification read above (site :361), so bounded to <=5 ids."
   },
   {
    "site": "lib/chairman/sms-bridge.js:408",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning conditional CAS .update({undone_at}).eq('id', target.id).is(...).select('id') — rows bounded to the single updated row."
   },
   {
    "site": "lib/chairman/sms-bridge.js:463",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning conditional CAS .update(updateVals).eq('id', decisionId).is(...).select('id') — rows bounded to the single updated row."
   },
   {
    "site": "lib/chairman/sms-bridge.js:545",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning atomic-claim .update({consumed_at}).eq('id', decisionId).is(...).is(...).select('id') — rows bounded to the single claimed row."
   },
   {
    "site": "lib/chairman/sms-bridge.js:582",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) default 50 (env SMS_RELAY_DRAIN_LIMIT-overridable) — an explicit operator-controlled batch size, not a silent unranged read."
   },
   {
-   "site": "lib/chairman/sms-outbound-worker.js:158",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/chairman/sms-outbound-worker.js:189",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(batchLimit) default DEFAULT_BATCH_LIMIT=25 — a small worker batch size, well under the cap."
   },
   {
-   "site": "lib/chairman/sms-outbound-worker.js:172",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/chairman/sms-outbound-worker.js:203",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(batchLimit) default DEFAULT_BATCH_LIMIT=25 — a small worker batch size, well under the cap."
   },
   {
-   "site": "lib/chairman/sms-outbound-worker.js:204",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/chairman/sms-outbound-worker.js:236",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(batchLimit) default DEFAULT_BATCH_LIMIT=25 — a small worker batch size, well under the cap."
   },
   {
-   "site": "lib/chairman/sms-outbound-worker.js:219",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/chairman/sms-outbound-worker.js:288",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(batchLimit) default DEFAULT_BATCH_LIMIT=25 — a small worker batch size, well under the cap."
   },
   {
-   "site": "lib/chairman/sms-outbound-worker.js:238",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/chairman/sms-outbound-worker.js:307",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning atomic-claim .update({status:'sending',...}).eq('id', row.id).eq('status','owed').is('claimed_at', null).select(...) — rows bounded to the single claimed row."
   },
   {
    "site": "lib/checkin/steps/critical-qf-jump.cjs:24",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/checkin/steps/drain-reservations.cjs:31",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(QF_CANDIDATE_LIMIT=100) [worker-checkin.cjs:159] with deterministic .order(created_at) — a designed open-critical-QF candidate window, not a silent cap (heuristic only sees the .limit variable, not its value)"
   },
   {
    "site": "lib/checkin/steps/merged-pool-self-claim.cjs:161",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('sd_key', allKeys) where allKeys = keys of the merged candidate pool — bounded by five upstream .limit-capped sources (v_sd_next_candidates .limit(5) + four .limit(DRAFT_CANDIDATE_LIMIT=10) draft fetches), so <=45 keys"
   },
   {
    "site": "lib/checkin/steps/merged-pool-self-claim.cjs:35",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(SELF_CLAIM_CANDIDATE_LIMIT=5) [worker-checkin.cjs:158] — a 5-row candidate window from v_sd_next_candidates, not a silent cap (heuristic only sees the .limit variable, not its value)"
   },
   {
    "site": "lib/checkin/steps/release-request.cjs:55",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .update({metadata}).eq('id', row.id).select('id') — rows bounded by the single-id UPDATE (one row max)"
   },
   {
    "site": "lib/claim-guard.mjs:350",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq('sd_key')+active/idle — claim holders for ONE SD; partial unique index bounds active to 1 (operationally 1-3 rows); read error THROWS (fail-closed)"
   },
   {
    "site": "lib/claim-guard.mjs:369",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(sessionIds) — bounded by the single-SD claim-holder list; batch 8 added fail-CLOSED GUARD_UNAVAILABLE throw on read error (a failed enrichment must not classify live holders as stale)"
   },
   {
-   "site": "lib/claim-guard.mjs:813",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/claim-guard.mjs:821",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq('sd_key')+active/idle — post-RPC ownership verify for ONE SD (1-3 rows); documented fail-open on query error, fail-closed on data inconsistency"
   },
   {
    "site": "lib/claim-lifecycle-release.mjs:114",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .select() on a CAS UPDATE pinned by .eq(id)+.eq(claiming_session_id) — at most 1 row; DB error throws (AC-4.2, no swallow)"
   },
   {
    "site": "lib/claim-lifecycle-release.mjs:71",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(1).single() applied at the awaited filter one line below — chain split across ternary branches puts it past the classifier window"
   },
   {
    "site": "lib/claim-lifecycle-release.mjs:72",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(1).single() applied at the awaited filter one line below — chain split across ternary branches puts it past the classifier window"
   },
   {
    "site": "lib/claim-validity-gate.js:567",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .select() on a CAS UPDATE pinned by unique sd_key + holder session — at most 1 row; CAS miss (0 rows) falls through to hard-fail"
   },
   {
    "site": "lib/claim/gates/dependency-gate.cjs:90",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/claim/ownership-detection.js:111",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".or(sd_key.in/id.in) over ONE SD's declared dependency list — bounded by the dep-list length"
   },
   {
    "site": "lib/claim/queue-resolver.cjs:106",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "active/idle sessions with a claim — live-fleet set (operationally small)"
   },
   {
    "site": "lib/claim/queue-resolver.cjs:41",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "active/idle sessions with a claim — live-fleet set bounded by the partial unique claim index and sweep hygiene"
   },
   {
    "site": "lib/claim/queue-resolver.cjs:74",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".or(parent_sd_id.eq) — children of ONE parent SD (orchestrator decomposition scale, tens max)"
   },
   {
    "site": "lib/claim/queue-resolver.cjs:88",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_sd_id) — children of ONE parent SD (orchestrator decomposition scale, tens max)"
   },
   {
    "site": "lib/claim/reacquire-self-live.mjs:269",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .select() on a CAS UPDATE pinned by unique sd_key — at most 1 row"
   },
   {
    "site": "lib/cleanup/archive.js:271",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "ventures pending permanent-delete cleanup: .not('deleted_at','is',null).lt('deleted_at', cutoff) scopes to the soft-delete backlog past the 72h cooling period, not the whole ventures table — a periodically-drained cleanup queue, operationally small under normal cron cadence"
   },
   {
    "site": "lib/cleanup/archive.js:86",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-venture snapshot export — .eq(fk, ventureId) scopes each of the ~12 RELATED_TABLES to one venture's rows, operationally small (a single venture's history)"
   },
   {
    "site": "lib/cleanup/credentials.js:40",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('venture_id', ventureIds) — the only real caller (lib/deleteVentureFully.js) passes a single-element array [ventureId]; even for a hypothetical multi-venture batch, managed_applications per venture is operationally small"
   },
   {
    "site": "lib/cleanup/credentials.js:51",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('application_id', appIds) — appIds bounded by the managed_applications read above (itself bounded to the venture(s) being deleted), operationally small"
   },
   {
    "site": "lib/cleanup/credentials.js:64",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('credential_id', credentials.map(c => c.id)) — bounded by the application_credentials read above, operationally small"
   },
   {
    "site": "lib/cleanup/vercel-provider.js:34",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "genesis_deployments .eq('venture_id', ventureId).eq('deleted', false) — one venture's active deployments, operationally small"
   },
   {
    "site": "lib/commands/claim-command.js:39",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "v_active_sessions is the live active-sessions set, operationally small (bounded by concurrent fleet sessions on one account)"
   },
   {
-   "site": "lib/comms/adam-outbound/decision-scheduler/index.js:56",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/competitive-intelligence/canonical-store.js:182",
+   "classification": "paginated",
+   "auto_classification": "needs-review",
+   "exemption_note": "listSnapshots no-limit branch paginates via fetchAllPaginated(buildQuery); the opts.limit branch stays bounded. Wrapper is below the select, outside the auto-detect window"
   },
   {
-   "site": "lib/competitive-intelligence/canonical-store.js:171",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/competitive-intelligence/canonical-store.js:59",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/competitive-intelligence/canonical-store.js:64",
+   "classification": "paginated",
+   "auto_classification": "needs-review",
+   "exemption_note": "fetchAllPaginated via a buildQuery factory (conditional .eq filters); the wrapper call sits in a separate statement below the select, outside the 3-line auto-detect window"
   },
   {
    "site": "lib/connection-router.js:58",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "v_active_connection_strategies for ONE service_name — per-service strategy rows (single digits)"
   },
   {
    "site": "lib/context/sub-agent-retrieval.js:65",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD sub_agent_execution_results rows (.eq sd_id) — operationally small set; optional sub_agent_code filter and limit narrow further"
   },
   {
    "site": "lib/context/sub-agent-retrieval.js:98",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/coordination/lane-lint-gauge.cjs:133",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/coordination/lane-lint-gauge.cjs:156",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD + per-verdict rows (.eq sd_id .eq verdict) — operationally small set"
   },
   {
    "site": "lib/coordinator/adam-action-ack.cjs:247",
@@ -646,9 +666,10 @@
    "exemption_note": "pending+unfulfilled worker_spawn_requests — operationally tiny set with expiry window (mirrors fleet-dashboard.cjs:200)"
   },
   {
-   "site": "lib/coordinator/dispatch.cjs:787",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/coordinator/dispatch.cjs:830",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .select() on a single-row session_coordination INSERT — bounded by the insert payload (1 row)"
   },
   {
    "site": "lib/coordinator/drain-gauge.cjs:39",
@@ -712,163 +733,171 @@
   },
   {
    "site": "lib/coordinator/succession.cjs:138",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .select('id') on tenure-close UPDATE .in(sessionIds).is(ended_at,null) — bounded by the retiring-session list"
   },
   {
    "site": "lib/coordinator/succession.cjs:200",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) — listOpenFollowOns opt param, default 50 (variable limit sits past the numeric-literal heuristic)"
   },
   {
    "site": "lib/coordinator/succession.cjs:71",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .select('id') — UPDATE applies fully server-side; returned rows only feed the moved-count over a DRAIN_WINDOW-cutoff unread set"
   },
   {
    "site": "lib/coordinator/succession.cjs:98",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/creative/theater-guard.js:58",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .select('id') — UPDATE applies fully server-side; returned rows only feed the parked-count over a DRAIN_WINDOW-cutoff unread set"
   },
   {
    "site": "lib/crm/meeting-surface-adapter.js:54",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "Per-venture pipeline cases: .eq('venture_id', ventureId).eq('case_type','pipeline') pins the read to one venture's pipeline (operationally-small per-venture scope, not a global growing set)."
   },
   {
    "site": "lib/crm/meeting-surface-adapter.js:61",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "crm_pipeline_stage_defs is a config/registry table of pipeline stage definitions (.eq('case_type','pipeline').eq('is_qualified',true)) — a handful of curated rows."
   },
   {
    "site": "lib/crm/meeting-surface-adapter.js:86",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/cross-sd-overlap.js:146",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('id', contactIds) — contactIds = cases.map(c=>c.contact_id) from the per-venture cases read above; bounded by that per-venture set, and .in on PK id returns at most one row per id."
   },
   {
    "site": "lib/data-plane/events.js:247",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "leo_events .eq('correlation_id', correlationId) — one pipeline trace's events across stages, operationally small (a single run, not the whole events table)"
   },
   {
    "site": "lib/data-plane/events.js:275",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "leo_events .eq('correlation_id', correlationId).in('event_name', [fromEventType, toEventType]) — one trace's events narrowed to 2 event types, operationally small"
   },
   {
    "site": "lib/data-plane/idempotent-worker.js:74",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/data-plane/pipeline.js:271",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "integration_config .eq('is_active', true) — a small config/registry table, cached client-side (configRefreshIntervalMs)"
   },
   {
    "site": "lib/data-plane/workers/execution.js:319",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) default 10, no repo caller overrides it — a worker-batch pull size (processPrioritizedProposals), bounded well under the cap"
   },
   {
    "site": "lib/data-plane/workers/feedback-to-proposal.js:264",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) default 10, no repo caller overrides it — a worker-batch pull size (processPendingFeedback), bounded well under the cap"
   },
   {
    "site": "lib/data-plane/workers/prioritization.js:300",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/decision-binding/disposition.js:271",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) default 10, no repo caller overrides it — a worker-batch pull size (processPendingProposals), bounded well under the cap"
   },
   {
    "site": "lib/discovery/competitive-baseline-service.js:61",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getByVentureId — .eq('venture_id', ventureId) — per-venture competitor baseline rows, operationally small set"
   },
   {
-   "site": "lib/discovery/opportunity-discovery-service.js:186",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/discovery/opportunity-discovery-service.js:191",
+   "classification": "paginated",
+   "auto_classification": "needs-review",
+   "exemption_note": "wrapped by fetchAllPaginated(buildQuery) at line 214 — outside the classifier 12-line forward window (buildQuery closure boundary)"
   },
   {
-   "site": "lib/discovery/opportunity-discovery-service.js:226",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/discovery/opportunity-discovery-service.js:233",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getRecentScans(limit=10) — .order('created_at' desc).limit(limit) explicit top-N clause defaulting to 10; no live callers found in-tree"
   },
   {
    "site": "lib/domain-intelligence/domain-knowledge-service.js:206",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) with limit defaulting to 10 — top-N cross-venture pattern search"
   },
   {
    "site": "lib/domain-intelligence/domain-knowledge-service.js:66",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) with limit defaulting to 50 — top-N domain knowledge for one industry"
   },
   {
    "site": "lib/drain-orchestrator.mjs:121",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(parentIds) — parents of the ≤20-row drain queue; failed read leaves completedParents empty which SKIPS children (safe direction)"
   },
   {
    "site": "lib/drain-orchestrator.mjs:92",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(20) applied on the awaited getActiveSDFilter(baseQuery) chain — top-of-queue drain read; builder split puts it past the classifier window"
   },
   {
    "site": "lib/eva-support/decision-log-store.js:159",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "recentEntries: .limit(limit) default 10 — a small 'recent entries' window over a 7-day default lookback, bounded"
   },
   {
    "site": "lib/eva-support/decision-log-store.js:181",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "entriesForTask: .eq('task_id', taskId) — one task's decision-log entries, operationally small"
   },
   {
    "site": "lib/eva-support/friday-outcome-bridge.js:53",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "surfacePending: .limit(limit) default 10 — a small 'unconsumed Friday outcomes' surfacing window, bounded"
   },
   {
    "site": "lib/eva-support/friday-outcome-bridge.js:72",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .update({consumed_at}).in('outcome_id', ids).select('outcome_id') — rows bounded by ids, itself bounded by the limit(10) read above"
   },
   {
    "site": "lib/eva-support/sd-blocker-surface.js:100",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('sd_key', sdKeys) — sdKeys traces to getActiveSDs({limit:100}), so at most 100 keys"
   },
   {
    "site": "lib/eva-support/sd-blocker-surface.js:111",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('sd_id', enrichedSDs.map(...)) — enrichedSDs bounded by the sdKeys read above (<=100), operationally small"
   },
   {
    "site": "lib/eva-support/sd-blocker-surface.js:137",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('id', parentIds) — parentIds is a deduped subset of the <=100 enrichedSDs' parent_sd_id values, operationally small"
   },
   {
    "site": "lib/eva-support/sd-reader.js:110",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) default 20 applied 9 lines below via a reassigned `query` builder (getActiveSDFilter + .order chains) — sits beyond the classifier's narrow forward window"
   },
   {
    "site": "lib/eva/adapters/real-data-adapter.js:93",
@@ -2486,343 +2515,363 @@
   },
   {
    "site": "lib/eval/eval-set-loader.mjs:72",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sealed eval-set corpus: feedback.eq('category', cls.category) — a curated, small golden-case set (mechanical fixture corpus), not a growing operational log"
   },
   {
    "site": "lib/eval/eval-set-loader.mjs:79",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sealed eval-set mirror fallback: system_events.eq('event_type', cls.eventType) — same curated sealed corpus, mirror store"
   },
   {
    "site": "lib/eval/golden-task-loader.js:50",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sealed Fable-5 baseline corpus, canonical read: system_events.eq('event_type', SEAL_EVENT_TYPE) — a curated golden-task set, not a growing log"
   },
   {
    "site": "lib/eval/golden-task-loader.js:59",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sealed Fable-5 baseline corpus, feedback mirror fallback: .eq('category', MIRROR_CATEGORY) — same curated sealed corpus"
   },
   {
    "site": "lib/eval/golden-task-loader.mjs:87",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sealed golden-task suite, primary read: feedback.eq('category', category) — curated redaction-suite corpus, not a growing log"
   },
   {
    "site": "lib/eval/golden-task-loader.mjs:93",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sealed golden-task suite, system_events mirror fallback: .eq('event_type', eventType) — same curated corpus"
   },
   {
    "site": "lib/eval/ground-truth-gate.mjs:226",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning bindTrustedForRouting: .update(...).in('task_id', reproduced_task_ids).select('id') — rows bounded by the reproduced_task_ids list (the sealed corpus's per-run reproduction set)"
   },
   {
    "site": "lib/eval/ground-truth-gate.mjs:243",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning clearStaleBinds: .update(...).eq('trusted_for_routing', true).select('id') — model_capability_reference is keyed (problem_shape, model, effort), a small fixed combinatorial reference table, not a growing log"
   },
   {
    "site": "lib/eval/ground-truth-gate.mjs:253",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "recomputeCostNorm reads the full model_capability_reference table — keyed (problem_shape, model, effort), a small fixed combinatorial reference table (not a growing log)"
   },
   {
    "site": "lib/eval/ground-truth-gate.mjs:258",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning per-row cost_norm update inside recomputeCostNorm's loop: .eq('id', r.id).select('id') — single-row update, bounded to one row max"
   },
   {
    "site": "lib/eval/ground-truth-gate.mjs:279",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bindingFromStored reads the full model_capability_reference table — keyed (problem_shape, model, effort), a small fixed combinatorial reference table (not a growing log)"
   },
   {
    "site": "lib/eval/ground-truth-gate.mjs:79",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sealed corpus canonical read: system_events.eq('event_type', SEAL_EVENT_TYPE) — curated golden-task corpus, not a growing log"
   },
   {
    "site": "lib/eval/ground-truth-gate.mjs:83",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sealed corpus feedback-mirror fallback: .eq('category', MIRROR_CATEGORY) — same curated golden-task corpus"
   },
   {
    "site": "lib/eval/routing-consumption.mjs:82",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-tuple routing lookup: .eq('problem_shape', shape).eq('model_id', model).eq('effort', effort).eq('trusted_for_routing', true) pins to one (shape, model, effort) tuple — 0 or a handful of rows"
   },
   {
    "site": "lib/exec-context-guard.mjs:256",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(sd_id)+accepted — accepted handoffs for ONE SD (tens max); FR-2 SQLSTATE split: schema errors fail CLOSED, transient fail open"
   },
   {
    "site": "lib/execute/team-banner.cjs:37",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('status',['active','stopping']) — the live running-teams set; finished teams leave these statuses, so this is operationally small (analogous to the active-claims set), not an unbounded growing table."
   },
   {
    "site": "lib/execute/team-banner.cjs:52",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('session_id', allSessionIds) — allSessionIds is the worker roster (worker_session_ids arrays) of the active/stopping teams from the read above; bounded by that small team set, and .in on session_id returns at most one row per id."
   },
   {
    "site": "lib/execute/team-banner.cjs:63",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('sd_key', sdKeys) — sdKeys is the unique sd_key set of the active-team sessions above (one sd_key per session); bounded by that roster, one row per sd_key."
   },
   {
    "site": "lib/fable-suitability/map-reader.mjs:27",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "v_fable_suitability_map_current is a current-ranking surface with exactly one row per (region_key, repo) — a small curated region/duty-cluster set, not a growing history table (optional .limit further caps)."
   },
   {
    "site": "lib/fable-suitability/map-reader.mjs:60",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "Per single (region_key, repo) version history: .eq('region_key').eq('repo') scopes to one region's score_versions, which grow only one-per chairman-gated apply ceremony — operationally small."
   },
   {
    "site": "lib/fable-suitability/mode-b-seam.mjs:54",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "v_fable_suitability_map_current one-row-per-(region_key,repo) ranking surface (small curated set); candidates are further .slice(0, limit=20) after sort."
   },
   {
-   "site": "lib/factory/daily-digest.js:24",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/feature-flags/evaluator.js:72",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/feature-flags/registry.js:169",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/feature-flags/registry.js:549",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/feature-flags/registry.js:176",
+   "classification": "paginated",
+   "auto_classification": "paginated",
+   "exemption_note": "listFlags paginated via fetchAllPaginated; the .select( sits 3 lines below the wrapper (const query intermediary line) so the marker may fall outside the auditor's 2-line window"
   },
   {
    "site": "lib/feedback/preclaim-feedback-rows.js:113",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .update({...}).eq('id', row.id).is('quick_fix_id', null).select('id') — rows bounded to the single updated row"
   },
   {
    "site": "lib/feedback/preclaim-feedback-rows.js:124",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "conflictIds = feedbackIds.filter(...) — bounded by the same CLI-arg-driven feedbackIds set as line 98"
   },
   {
    "site": "lib/feedback/preclaim-feedback-rows.js:132",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sessIds derived from the conflictRows read above (line 124) — bounded by the same small conflictIds set"
   },
   {
    "site": "lib/feedback/preclaim-feedback-rows.js:197",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "uuids = extractFeedbackUuids(text, cap=5) — capped at 5 distinct UUIDs by construction"
   },
   {
    "site": "lib/feedback/preclaim-feedback-rows.js:205",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "linkedQfIds derived from the line-197 read, itself capped by extractFeedbackUuids' cap=5"
   },
   {
    "site": "lib/feedback/preclaim-feedback-rows.js:98",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "feedbackIds resolved from the --feedback-id CLI arg (resolveFeedbackIds, human-typed comma-separated list) — operationally small, not a table scan"
   },
   {
    "site": "lib/feedback/release-preclaim.js:33",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-QF pre-claimed feedback rows (.eq('quick_fix_id', quickFixId)) — bounded to the handful of rows one QF's --feedback-id CLI claim touched"
   },
   {
    "site": "lib/feedback/release-preclaim.js:47",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .update({...}).eq('id', row.id).eq('quick_fix_id', quickFixId).select('id') — rows bounded to the single updated row"
   },
   {
    "site": "lib/fleet-lock-hash.mjs:137",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "released_at IS NULL + heartbeat within PEER_HEARTBEAT_WINDOW — live-fleet peer snapshot (documented deliberate fail-open: install is never blocked on a snapshot error)"
   },
   {
    "site": "lib/fleet/claim-eligibility.cjs:451",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".or(sd_key.in/id.in) over ONE SD's declared dependency key list — bounded by dep-list length"
   },
   {
    "site": "lib/fleet/claim-stamp.cjs:131",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".maybeSingle() applied at the awaited bySdRef wrapper two lines below — helper indirection puts it past the classifier window"
   },
   {
    "site": "lib/fleet/claim-stamp.cjs:31",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".maybeSingle() applied at the awaited bySdRef wrapper two lines below — helper indirection puts it past the classifier window"
   },
   {
    "site": "lib/fleet/collision-check.cjs:29",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(session_id)+.ilike(reason, claim_cleared%sd_key=...) — one session's claim-clear lifecycle events for one SD (single digits)"
   },
   {
-   "site": "lib/fleet/exec-email-alignment.mjs:64",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/fleet/exec-email-ops-actuals.mjs:43",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/fleet/exec-email-ops-actuals.mjs:58",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/fleet/exec-email-ops-actuals.mjs:49",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "ventures with a deployment_url — deployed-venture registry scale (tens); fail-soft [] on error"
   },
   {
    "site": "lib/fleet/live-fleet-sessions.cjs:102",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) — LIVE_FLEET_DEFAULTS.limit=200 opt param; deliberate freshest-first bound (cap drops only the STALEST rows, documented in the function header)"
   },
   {
    "site": "lib/fleet/live-fleet-sessions.cjs:65",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) — LIVE_FLEET_DEFAULTS.limit=200 opt param (variable limit sits past the numeric-literal heuristic); deliberate freshest-first server-side bound"
   },
   {
    "site": "lib/fleet/pick-reserve-target.cjs:90",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "expires_at > now — active roll_call rows under a ~1h TTL (live-fleet scale); fail-open null never blocks sourcing"
   },
   {
    "site": "lib/fleet/qf-repo-fitness.js:28",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "applications registry, status=active — config-scale table (tens of rows)"
   },
   {
    "site": "lib/fleet/qf-target-application.js:7",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "applications registry, status=active — config-scale table (tens of rows)"
   },
   {
    "site": "lib/fleet/retro-qf-moot-check.cjs:117",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(candidateKeys) — bounded by the caller-supplied retro candidate key list"
   },
   {
-   "site": "lib/fleet/worker-status.cjs:241",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/fleet/worker-status.cjs:253",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "heartbeat within 15m window (FLEET_ACTIVE_WINDOW_MS) — live-fleet set; read error throws (caller decides)"
   },
   {
-   "site": "lib/fleet/worker-status.cjs:263",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/fleet/worker-status.cjs:275",
+   "classification": "tripwired",
+   "auto_classification": "needs-review",
+   "exemption_note": "batch 8: CAP_TRUNCATION_SUSPECTED throw at the destructure site — consumers act on inbox rows; pagination blocked by 9+ hermetic suites stubbing this builder chain before .range()"
   },
   {
-   "site": "lib/flywheel/analytics.js:26",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/flywheel/analytics.js:32",
+   "classification": "tripwired",
+   "auto_classification": "needs-review",
+   "exemption_note": "warnIfCapTruncated(data, '...getFlywheelVelocity') wraps the return ~18 lines below (separate statement) — outside the classifier's forward window; view has no unique key for stable range-pagination"
   },
   {
-   "site": "lib/flywheel/analytics.js:62",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/flywheel/analytics.js:68",
+   "classification": "tripwired",
+   "auto_classification": "needs-review",
+   "exemption_note": "warnIfCapTruncated(data, '...getCrossVenturePatterns') wraps the return ~12 lines below (separate statement) — outside the classifier's forward window; view has no unique key for stable range-pagination"
   },
   {
-   "site": "lib/flywheel/analytics.js:92",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/flywheel/analytics.js:98",
+   "classification": "tripwired",
+   "auto_classification": "needs-review",
+   "exemption_note": "warnIfCapTruncated(data, '...getEvaAccuracy') wraps the return ~13 lines below (separate statement) — outside the classifier's forward window; view has no unique key for stable range-pagination"
   },
   {
    "site": "lib/gap-detection/classifiers/root-cause-classifier.js:46",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD handoff history (.eq sd_id) — an SD accumulates only a handful of handoffs plus retries, operationally small set"
   },
   {
    "site": "lib/gap-detection/creators/corrective-sd-creator.js:87",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .insert(...).select('sd_key') — single-row insert, rows bounded by the mutation payload"
   },
   {
    "site": "lib/gates/operator-contract/harness-adapter.js:89",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "periodic_process_registry is a curated operational registry of periodic processes (whole-table, no filter) — operationally small set"
   },
   {
-   "site": "lib/genesis/branch-lifecycle.js:196",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/genesis/branch-lifecycle.js:201",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "genesis_tier_config — a small config/registry table of simulation tiers (A/B), not a growing event table"
   },
   {
-   "site": "lib/genesis/branch-lifecycle.js:260",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/genesis/branch-lifecycle.js:266",
+   "classification": "paginated",
+   "auto_classification": "needs-review",
+   "exemption_note": "listSimulationBranches paginated via fetchAllPaginated(buildQuery); the wrapper call sits ~18 lines below, referencing a named factory function — outside the classifier's forward window"
   },
   {
-   "site": "lib/genesis/branch-lifecycle.js:557",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/genesis/branch-lifecycle.js:568",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "checkExpiredSimulations reads the ACTIVE (epistemic_status='simulation', archived_at IS NULL) simulation set — continually pruned by this same TTL-cleanup workflow, operationally small"
   },
   {
    "site": "lib/genesis/pattern-library.js:111",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "scaffold_patterns curated registry, keyword search — same small curated set as line 40"
   },
   {
    "site": "lib/genesis/pattern-library.js:127",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "scaffold_patterns curated registry — allPatterns.length used only for stats over this small curated set, not a growing table"
   },
   {
    "site": "lib/genesis/pattern-library.js:40",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "scaffold_patterns is a curated code-scaffolding template registry (component/hook/service/page/... types), not user-generated content"
   },
   {
    "site": "lib/genesis/pattern-library.js:63",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "scaffold_patterns curated registry filtered to one pattern_type — same small curated set as line 40"
   },
   {
-   "site": "lib/genesis/ttl-cleanup.js:102",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/genesis/ttl-cleanup.js:179",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getCleanupHistory .limit(limit) default 10 (only internal caller passes 5) — a small audit-log page, not the full genesis_cleanup_logs table"
   },
   {
-   "site": "lib/genesis/ttl-cleanup.js:165",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/genesis/ttl-cleanup.js:231",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/genesis/ttl-cleanup.js:254",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/genesis/ttl-cleanup.js:37",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/genesis/ttl-cleanup.js:245",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getExpiringDeployments — time-windowed (expires_at between now and now+withinDays, default 1 day) imminent-expiry slice, operationally small"
   },
   {
    "site": "lib/genesis/vercel-deploy.js:250",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "listDeployments reads the ACTIVE (expires_at > now) genesis deployment set, continually pruned by lib/genesis/ttl-cleanup.js — operationally small"
   },
   {
    "site": "lib/governance/aegis/adapters/ComplianceAdapter.js:528",
@@ -2909,19 +2958,10 @@
    "exemption_note": "eq(session_id)-bounded v_active_sessions probe — at most a handful of rows for one session"
   },
   {
-   "site": "lib/governance/fw3-cmv-rejecter.cjs:111",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/governance/fw3-cmv-rejecter.cjs:172",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/governance/fw3-cmv-rejecter.cjs:61",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/governance/fw3-cmv-rejecter.cjs:122",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning first-verdict-wins guard: .update().eq('id', rowId).filter('payload->cmv_rejecter','is',null).select('id') — rows bounded to the single updated row"
   },
   {
    "site": "lib/governance/guardrail-intelligence-analyzer.js:378",
@@ -3009,1471 +3049,1312 @@
   },
   {
    "site": "lib/gvos/rule-classifier.js:30",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/inbox/unified-inbox-builder.js:190",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/inbox/unified-inbox-builder.js:198",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/inbox/unified-inbox-builder.js:207",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/inbox/unified-inbox-builder.js:227",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/inbox/unified-inbox-builder.js:228",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/inbox/unified-inbox-builder.js:247",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/inbox/unified-inbox-builder.js:260",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/income/income-capture-aggregator.js:48",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "gvos_archetypes is a curated archetype registry/config table (whole-table, no filter) — operationally small set"
   },
   {
    "site": "lib/income/replacement-net-source.js:63",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(1).maybeSingle() terminal on the next statement (line 65, beyond the classifier chain window) — single-row read"
   },
   {
    "site": "lib/intake/conversion-ledger.js:69",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .upsert(...).select('*') — single-row idempotent upsert, rows bounded by the mutation payload"
   },
   {
    "site": "lib/integrations/baseline-manager.js:104",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "roadmap_baseline_snapshots .eq('roadmap_id', roadmapId) — one roadmap's baseline-snapshot history; versions increment one at a time via createBaseline, operationally small"
   },
   {
    "site": "lib/integrations/baseline-manager.js:34",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "roadmap_waves .eq('roadmap_id', roadmapId) — one roadmap's waves, a curated small set"
   },
   {
    "site": "lib/integrations/baseline-manager.js:49",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "roadmap_wave_items .eq('wave_id', wave.id) — one wave's items, operationally small"
   },
   {
-   "site": "lib/integrations/brainstorm-retrospective.js:127",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/integrations/brainstorm-retrospective.js:241",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "brainstorm_question_effectiveness is unique per (domain, question_id) via upsert onConflict — one row per question in the brainstorm question bank for a domain, a small curated set, not a growing table"
   },
   {
-   "site": "lib/integrations/brainstorm-retrospective.js:162",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/integrations/brainstorm-retrospective.js:275",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit * 3) with limit defaulting to 5 (=15 rows); no caller passes a larger limit — bounded top-N candidate window for keyword matching (findRelatedSessions)"
   },
   {
-   "site": "lib/integrations/brainstorm-retrospective.js:171",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/integrations/brainstorm-retrospective.js:367",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) default 10 on retrospective_status='pending' — self-draining queue: completeRetrospective flips processed sessions to 'completed', so only genuinely-pending sessions remain, plus the limit caps it further"
   },
   {
-   "site": "lib/integrations/brainstorm-retrospective.js:228",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/integrations/brainstorm-retrospective.js:262",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/integrations/brainstorm-retrospective.js:354",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/integrations/claude-code/approval-handler.js:128",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/integrations/claude-code/approval-handler.js:169",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/integrations/claude-code/approval-handler.js:78",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/integrations/claude-code/approval-handler.js:182",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "chairman_approval_requests .eq('request_type').eq('status','pending').lt('created_at',cutoff) — self-draining: expireTimedOutRequests immediately transitions matched rows to status='deferred' in the same run, so the overdue-pending backlog does not accumulate (unlike the sibling approved/rejected reads in this file, which paginate instead — batch 8)"
   },
   {
    "site": "lib/integrations/claude-code/release-analyzer.js:167",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "eva_claude_code_intake .eq('status','pending') — self-draining backlog: analyzePendingReleases transitions each processed row to skipped/evaluating within the same pass, so only new releases since the last run remain pending; no caller passes a limit"
   },
   {
-   "site": "lib/integrations/claude-code/release-monitor.js:72",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/integrations/dedup-checker.js:101",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq('youtube_video_id', options.youtubeVideoId) — pinned to one specific video ID, at most a handful of resubmissions of the same video"
   },
   {
-   "site": "lib/integrations/dedup-checker.js:100",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/integrations/dedup-checker.js:113",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/integrations/dedup-checker.js:127",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/integrations/dedup-checker.js:150",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/integrations/dedup-checker.js:167",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/integrations/dedup-checker.js:183",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/integrations/dedup-checker.js:114",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq('extracted_youtube_id', options.youtubeVideoId) — pinned to one specific video ID, at most a handful of resubmissions"
   },
   {
    "site": "lib/integrations/eva-chat-service.js:193",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "eva_chat_messages .eq('conversation_id', conversationId) — one conversation's message history, operationally small (a chat reaching 1000+ messages is implausible; LLM context limits bound it long before row-count would)"
   },
   {
    "site": "lib/integrations/eva-chat-service.js:304",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "eva_chat_messages .eq('conversation_id', conversationId) — one conversation's message history (streamMessage), operationally small"
   },
   {
    "site": "lib/integrations/evaluation-bridge.js:393",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "eva_todoist_intake .eq('status','pending') — self-draining: evaluatePendingItems marks each item 'evaluating' at the start of processing (within the same run), transitioning it away from pending"
   },
   {
    "site": "lib/integrations/evaluation-bridge.js:409",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "eva_youtube_intake .eq('status','pending') — self-draining: evaluatePendingItems marks each item 'evaluating' at the start of processing (within the same run), transitioning it away from pending"
   },
   {
    "site": "lib/integrations/evaluation-bridge.js:456",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "eva_todoist_intake .eq('status','pending') — self-draining: evaluateItemsInteractive gathers pending items which are then evaluated (transitioning away from pending) in the same run"
   },
   {
    "site": "lib/integrations/evaluation-bridge.js:465",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "eva_youtube_intake .eq('status','pending') — self-draining: evaluateItemsInteractive gathers pending items which are then evaluated (transitioning away from pending) in the same run"
   },
   {
    "site": "lib/integrations/idea-classifier.js:22",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "eva_idea_categories .eq('is_active', true) — a small curated category-definition config/registry table"
   },
   {
    "site": "lib/integrations/intake-classifier.js:376",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) default 50 (getUnclassifiedItems; CLI --limit flag in scripts/eva-intake-classify.js defaults to 50); no caller passes a larger value"
   },
   {
    "site": "lib/integrations/intake-classifier.js:388",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) default 50 (getUnclassifiedItems; CLI --limit flag defaults to 50); no caller passes a larger value"
   },
   {
    "site": "lib/integrations/okr-wave-linker.js:104",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "roadmap_waves .eq('roadmap_id', roadmapId) — one roadmap's waves, a curated small set"
   },
   {
    "site": "lib/integrations/okr-wave-linker.js:117",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "roadmap_wave_items .eq('wave_id', wave.id) — one wave's items, operationally small"
   },
   {
    "site": "lib/integrations/post-processor.js:102",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "eva_todoist_intake .eq('status','pending').not('classified_at','is',null).is('processed_at', null) — self-draining: this run stamps processed_at on every item it archives, excluding it from future reads"
   },
   {
    "site": "lib/integrations/post-processor.js:109",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "eva_todoist_intake .eq('status','processed').is('processed_at', null) — self-draining backlog, drained by the same processed_at stamp applied when archived"
   },
   {
    "site": "lib/integrations/post-processor.js:116",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "eva_todoist_intake orphan-recovery .eq('status','pending').not('chairman_reviewed_at','is',null).is('processed_at', null) — self-draining via the same processed_at stamp"
   },
   {
    "site": "lib/integrations/post-processor.js:222",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "eva_youtube_intake .in('status', [...]).is('processed_at', null) — self-draining, processed_at stamped on archival within the same run"
   },
   {
    "site": "lib/integrations/post-processor.js:228",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "eva_youtube_intake .eq('status','pending').not('classified_at','is',null).is('processed_at', null) — self-draining via the processed_at stamp"
   },
   {
    "site": "lib/integrations/post-processor.js:238",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "eva_youtube_intake .eq('status','processed').is('processed_at', null) — self-draining backlog"
   },
   {
    "site": "lib/integrations/post-processor.js:245",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "eva_youtube_intake orphan-recovery .eq('status','pending').not('chairman_reviewed_at','is',null).is('processed_at', null) — self-draining via the processed_at stamp"
   },
   {
    "site": "lib/integrations/post-processor.js:96",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "eva_todoist_intake .in('status', [...]).is('processed_at', null) — self-draining, processed_at stamped when archived within the same run"
   },
   {
    "site": "lib/integrations/roadmap-manager.js:115",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "roadmap_baseline_snapshots .eq('roadmap_id', roadmapId) — one roadmap's baseline history, operationally small"
   },
   {
    "site": "lib/integrations/roadmap-manager.js:145",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "roadmap_waves .eq('roadmap_id', roadmapId) — one roadmap's waves, curated small set"
   },
   {
    "site": "lib/integrations/roadmap-manager.js:156",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "roadmap_wave_items .eq('wave_id', wave.id) — one wave's items, operationally small"
   },
   {
    "site": "lib/integrations/roadmap-manager.js:253",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .update({status:'archived',...}).eq('id', waveId).eq('status','proposed').select('id') — rows bounded by the single-row compare-and-swap update"
   },
   {
    "site": "lib/integrations/roadmap-manager.js:343",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "roadmap_wave_items .eq('wave_id', waveId) — one wave's items, operationally small"
   },
   {
    "site": "lib/integrations/roadmap-manager.js:525",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "roadmap_waves .eq('roadmap_id', roadmapId) — one roadmap's waves, curated small set"
   },
   {
    "site": "lib/integrations/roadmap-manager.js:78",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "roadmap_waves .eq('roadmap_id', roadmapId) — one roadmap's waves, curated small set"
   },
   {
    "site": "lib/integrations/roadmap-manager.js:90",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('wave_id', waveIds) — waveIds is the same roadmap's wave-id list fetched immediately above, so bounded by that roadmap's small wave count"
   },
   {
-   "site": "lib/integrations/todoist/todoist-sync.js:108",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/integrations/wave-clusterer.js:44",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) default 500 (documented in the JSDoc as the intentional default) — a declared sampling cap below the 1000-row PostgREST ceiling, not a silent truncation"
   },
   {
-   "site": "lib/integrations/wave-clusterer.js:43",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/integrations/wave-clusterer.js:63",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) default 500 (documented default) — declared sampling cap below the 1000-row PostgREST ceiling"
   },
   {
-   "site": "lib/integrations/wave-clusterer.js:62",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/learning/issue-knowledge-base.js:374",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getPreventionChecklist: .eq('category', category).eq('status', 'active') — one category's active patterns, a small curated slice of the issue_patterns registry"
   },
   {
-   "site": "lib/integrations/wave-clusterer.js:94",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/learning/outcome-tracker.js:156",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "recordSdCompleted: .eq('sd_id', sdId) — feedback linked to one SD, operationally small set"
   },
   {
-   "site": "lib/integrations/youtube/playlist-sync.js:155",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/learning/outcome-tracker.js:183",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning: .update({...}).in('id', unresolvedIds).select('id') — unresolvedIds derives from the per-SD feedback read above, an operationally small set"
   },
   {
-   "site": "lib/learning/feedback-clusterer.js:114",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/learning/outcome-tracker.js:197",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning: .update({...}).in('id', backfillIds).select('id') — backfillIds derives from the same per-SD feedback read, an operationally small set"
   },
   {
-   "site": "lib/learning/feedback-clusterer.js:50",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/learning/outcome-tracker.js:260",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "recordQfCompleted: .eq('quick_fix_id', qfId) — feedback linked to one quick-fix, operationally small set"
   },
   {
-   "site": "lib/learning/issue-knowledge-base.js:378",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/learning/pattern-detection-engine.js:145",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "extractIssuesFromSD: .or(sd_id/sd_key match).eq('verdict', 'FAIL') — one SD's failed sub-agent executions, operationally small set"
   },
   {
-   "site": "lib/learning/issue-knowledge-base.js:39",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/learning/issue-knowledge-base.js:401",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/learning/issue-knowledge-base.js:425",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/learning/issue-knowledge-base.js:429",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/learning/outcome-tracker.js:152",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/learning/outcome-tracker.js:179",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/learning/outcome-tracker.js:193",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/learning/outcome-tracker.js:256",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/learning/outcome-tracker.js:383",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/learning/outcome-tracker.js:400",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/learning/pattern-detection-engine.js:141",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/learning/pattern-detection-engine.js:186",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/learning/pattern-detection-engine.js:225",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/learning/pattern-detection-engine.js:441",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/learning/pattern-to-subagent-mapper.js:262",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/learning/pattern-to-subagent-mapper.js:92",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/learning/pattern-to-subagent-mapper.js:268",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "updatePatternFromOutcome: .eq('sd_id', sdId) — pattern_influence_log rows for one SD, operationally small set"
   },
   {
    "site": "lib/lifecycle/worktree-state-writer.mjs:121",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .update(...).eq(session_id).select() (clearWorktreeState) — bounded to the single updated claude_sessions row"
   },
   {
    "site": "lib/lifecycle/worktree-state-writer.mjs:64",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/llm/canary-router.js:498",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .update(...).eq(session_id).select() — bounded to the single updated claude_sessions row"
   },
   {
    "site": "lib/llm/client-factory.js:128",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "v_llm_model_registry is a curated active-model registry view (whole-view, no filter) — operationally small set (dozens of models)"
   },
   {
    "site": "lib/loop-governance/verifier.js:56",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "loop_registry is a curated loop registry/config table (whole-table, no filter) — operationally small set"
   },
   {
    "site": "lib/market-signal-scanner/budget-guard.js:124",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/market-signal-scanner/slope.js:103",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "monthly budget-utilization rows (one per month_key) — operationally small set (grows ~12 rows/year)"
   },
   {
    "site": "lib/marketing/ai/email-campaigns.js:182",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .update({status:UNSUBSCRIBED}).eq('lead_email',email).eq('status','active').select('id') — rows bounded by one email address's active enrollments"
   },
   {
    "site": "lib/marketing/autonomy-gate.js:216",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq('venture_id').eq('channel_type') then .limit(requiredStreak) default 5 (DEFAULT_GRADUATION_STREAK) — bounded recent-streak evaluation window"
   },
   {
    "site": "lib/marketing/budget-governor.js:138",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "channel_budgets .eq('venture_id', ventureId) — one venture's budget rows, one row per platform, a handful"
   },
   {
    "site": "lib/marketing/content-generator.js:74",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .insert(variantRecords).select(...) — rows bounded by the LLM-generated variant batch size"
   },
   {
    "site": "lib/marketing/content-pipeline.js:207",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) default 10 — top-N pipeline run history for a venture (getPipelineHistory)"
   },
   {
    "site": "lib/marketing/dashboard.js:100",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "marketing_pipeline_runs per-venture + max 90-day window (getPeriodStart caps the 'period' param at '90d', unrecognized values fall back to '7d') — bounded dashboard read"
   },
   {
    "site": "lib/marketing/dashboard.js:121",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "marketing_channel_metrics per-venture + max 90-day window (getPeriodStart caps at '90d') — bounded dashboard read. NOTE: marketing_channel_metrics is absent from database/schema-reference-snapshot.json (appears to be a phantom/undeployed table) — flagged separately, not fixed here (out of count/truncation scope)"
   },
   {
    "site": "lib/marketing/dashboard.js:132",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "marketing_feedback_cycles per-venture + max 90-day window (getPeriodStart caps at '90d') — bounded dashboard read"
   },
   {
    "site": "lib/marketing/dashboard.js:146",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "marketing_campaigns per-venture + max 90-day window (getPeriodStart caps at '90d') — bounded dashboard read"
   },
   {
    "site": "lib/marketing/feedback-loop.js:109",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) default 10 — top-N feedback-cycle history for a venture (getFeedbackHistory)"
   },
   {
    "site": "lib/marketing/feedback-loop.js:172",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "marketing_channel_metrics .eq('venture_id') with no limit, but gatherChannelMetrics only keeps the FIRST (=newest, via .order('measured_at', desc)) row per channel_id in a client-side dedup — truncation at the cap would only drop older superseded readings, never the current per-channel snapshot. Also absent from database/schema-reference-snapshot.json (phantom table, same as dashboard.js:121)"
   },
   {
    "site": "lib/marketing/owned-audience-content-loop.js:212",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/notifications/orchestrator.js:388",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/notifications/orchestrator.js:402",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "distribution_history .eq('venture_id').gte(weekStart).lt(weekEnd) — one venture's ONE-WEEK window for the weekly rollup, operationally small"
   },
   {
    "site": "lib/notifications/scheduler.js:24",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "chairman_preferences filtered to preference_key='daily_digest' + value_type='json' — one row per chairman holding the digest preference, an operationally small per-recipient config set"
   },
   {
    "site": "lib/notifications/scheduler.js:79",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "chairman_preferences filtered to preference_key='weekly_summary' + value_type='json' — one row per chairman holding the summary preference, an operationally small per-recipient config set"
   },
   {
-   "site": "lib/npm-install-lock.cjs:125",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/ops/venture-uptime-probe.js:99",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/npm-install-lock.cjs:138",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "batch 8: server-side payload->>lock_type + payload->>holder_session filters bound the read to THIS session's lock rows (~1); was unbounded unread-INFO scan"
   },
   {
    "site": "lib/org/evidence-fabric.mjs:82",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "readEvidence carries an explicit .limit(limit) window (default 100) at the chain tail (line 89) — a declared, caller-supplied bound, not an un-ranged read; sits beyond the classifier's narrow window."
   },
   {
    "site": "lib/org/objective-guard-registry.mjs:100",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "loadGuards reads org_guard_registry .eq('objective_key', objectiveKey).eq('status','active') — the active guards watching ONE objective in a small service-role governance registry (a handful of guards per objective)."
   },
   {
    "site": "lib/org/objective-guard-registry.mjs:159",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "listObjectives reads org_objective_registry active objectives — a small service-role governance registry (chairman/coordinator/calibration-seeded objective functions), not a growing event table."
   },
   {
    "site": "lib/oversight/coordinator-health-recompute.mjs:118",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning insert().select('id') — returns exactly the single inserted loop_registry row."
   },
   {
-   "site": "lib/oversight/coordinator-health-sharpenings.mjs:110",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/oversight/coordinator-health-sharpenings.mjs:125",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/payments/attribution-resolver.js:186",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/payments/attribution-resolver.js:197",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/payments/attribution-resolver.js:192",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".order(created_at).limit(limit) with limit defaulting to 500 — bounded batch of unattributed events (line drifted 186->192 after the import addition above)"
   },
   {
    "site": "lib/pending-enablement-registry.js:103",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "leo_feature_flags pending-enablement subset — config-scale registry (tens of rows)"
   },
   {
    "site": "lib/periodic-liveness/stamp-last-fired.js:34",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .update(...).eq(process_key).eq(liveness_source).select('process_key') — bounded to the single updated registry row"
   },
   {
    "site": "lib/periodic-liveness/stamp-last-fired.js:79",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .update(...).eq(process_key).eq(liveness_source='github_actions_api').select('process_key') — bounded to the single updated registry row"
   },
   {
    "site": "lib/persona-config-provider.js:116",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "persona_config is_active rows — config-scale table (single digits)"
   },
   {
    "site": "lib/plugins/plugin-adapter.js:89",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "anthropic_plugin_registry filtered to discovered/evaluating plugins (.in status) — a small curated plugin catalog, operationally small set"
   },
   {
    "site": "lib/programmatic/tools/supabase-tool.js:146",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .upsert(data).select() — rows bounded by the single-row upsert payload"
   },
   {
    "site": "lib/programmatic/tools/supabase-tool.js:76",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) default 50 applied before the terminal await (line 98, beyond the classifier chain window) — generic query tool, bounded"
   },
   {
    "site": "lib/proving-companion/artifact-integrity-checker.js:35",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-venture .eq('venture_id') + .in('artifact_type', <static stage-config requiredArtifacts list>) — one venture's artifacts across a stage range, operationally small."
   },
   {
    "site": "lib/proving-companion/gate-discipline-checker.js:31",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-venture .eq('venture_id') + .in('stage_number', <static gate-stage list>); stage_proving_journal is upsert-unique per (venture_id, stage_number) — a few gate rows per venture."
   },
   {
    "site": "lib/proving-companion/journal-capture.js:52",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getJournalEntries reads one venture's stage_proving_journal (.eq('venture_id')); upsert-unique per (venture_id, stage_number) means at most one row per lifecycle stage (~40), operationally small."
   },
   {
    "site": "lib/proving-companion/pipeline-status-checker.js:49",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-venture .eq('venture_id') venture_stage_work — one venture's per-lifecycle-stage work rows (~40 stages), operationally small."
   },
   {
    "site": "lib/proving-companion/transition-correctness-checker.js:30",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/quality/assist-engine.js:201",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/quality/assist-engine.js:227",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/quality/burst-detector.js:82",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-venture .eq('venture_id') venture_stage_transitions — one venture's sequential stage transitions (~40 stages), operationally small."
   },
   {
    "site": "lib/quality/context-analyzer.js:70",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/quality/feedback-quality-processor.js:298",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getRecentSDContext .limit(limit) default 10; sole caller (buildAssistContext, invoked with no options) always uses the default — no live caller passes a larger value"
   },
   {
    "site": "lib/quality/focus-filter.js:52",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getMyFocusContext .limit(config.limit) default 20 — a curated 'My Focus' top-N view; no caller overrides beyond the safe range"
   },
   {
-   "site": "lib/quality/priority-calculator.js:247",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/quality/quarantine-engine.js:228",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getPendingQuarantineItems .limit(limit) default 50 — a bounded pending-review queue view, no live caller overrides it"
   },
   {
-   "site": "lib/quality/quarantine-engine.js:223",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/quality/quarantine-engine.js:241",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/quality/snooze-manager.js:156",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/quality/snooze-manager.js:199",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/quality/snooze-manager.js:207",
+   "classification": "paginated",
+   "auto_classification": "needs-review",
+   "exemption_note": "getSnoozedItems paginated via fetchAllPaginated(buildQuery); the wrapper call sits ~14 lines below, referencing a named factory function — outside the classifier's forward window"
   },
   {
    "site": "lib/quality/triage-engine.js:499",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "triageUntriaged .limit(limit) default 50 — a deliberate batch-processing window, no live caller overrides it"
   },
   {
    "site": "lib/rca-runtime-triggers.js:283",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(sd_id)+.eq(handoff_type)+rejected — rejection history for ONE SD/one handoff type (single digits)"
   },
   {
    "site": "lib/repo-paths.js:166",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "applications registry, status=active — config-scale table (tens of rows)"
   },
   {
    "site": "lib/repo-paths.js:213",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "applications registry, status=active — config-scale table (tens of rows)"
   },
   {
    "site": "lib/reporters/leo-playwright-reporter.js:355",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .insert(testResultRecords).select() — rows bounded by the insert payload (one Playwright run's test results)"
   },
   {
    "site": "lib/reporters/leo-playwright-reporter.js:387",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(storyKeys) bounded by the story keys extracted from a single test's annotations — small set"
   },
   {
    "site": "lib/research/deep-research-budget.js:135",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-day budget rows (.eq date today), one row per provider — operationally small set (a handful of providers)"
   },
   {
    "site": "lib/resolve-own-session.js:176",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(terminal_id)+active/idle — sessions on ONE terminal (1-2 rows)"
   },
   {
-   "site": "lib/retention/session-coordination-ack-convergence.js:24",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/retention/system-events-retention.js:40",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/retention/system-events-retention.js:70",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/retention/system-events-retention.js:46",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "findLatestIdForGroup chain ends .order(created_at desc).limit(1).maybeSingle() — single-row lookup; the .limit(1).maybeSingle() sits on a separate statement beyond the classifier's forward window."
   },
   {
    "site": "lib/retrospective-signals/storage.js:194",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD learning signals (.eq sd_id) — operationally small set captured during one SD's lifecycle"
   },
   {
    "site": "lib/roadmap/canonical-roadmap.js:23",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "single-writer roadmap invariant (module docstring) — exactly one status='active' strategic_roadmaps row exists at any time; >1 throws loud rather than silently guessing"
   },
   {
-   "site": "lib/roadmap/plan-check-status.js:132",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/roadmap/plan-check-status.js:154",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "waveIds bounded by the approved-only waves of the single canonical roadmap (RATIFIED_WAVE_STATUSES=['approved']) — a small curated wave set, not a raw table scan"
   },
   {
-   "site": "lib/roadmap/plan-check-status.js:145",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/roadmap/plan-check-status.js:56",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/roadmap/plan-check-status.js:167",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "linkedSdKeys bounded by the small canonical-roadmap plan-of-record item set resolved at line 144 above"
   },
   {
    "site": "lib/roadmap/roadmap-completion-stamp.js:32",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .update({item_disposition:'promoted'}).eq('promoted_to_sd_key', sdKey)...select('id') — docstring: 'up to ~4 wave items can map to one SD', bounded by the mutation"
   },
   {
    "site": "lib/roadmap/wave-disposition.js:87",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/roadmap/wave-linkage-coverage.js:39",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/roadmap/wave-linkage-coverage.js:45",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "same single-writer roadmap invariant as canonical-roadmap.js — exactly one status='active' strategic_roadmaps row"
   },
   {
    "site": "lib/sd-baseline/build-item.js:167",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-baseline items (.eq baseline_id) — operationally small set (one baseline's SD list)"
   },
   {
    "site": "lib/sd-creation/source-adapters/child.js:61",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-parent child SDs (.eq parent_sd_id) — operationally small set (a handful to dozens of children)"
   },
   {
    "site": "lib/sd-helpers.js:214",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(sd_id) — PRDs for ONE SD (1-2 rows)"
   },
   {
    "site": "lib/sd/child-linkage.js:164",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-parent child SDs (.eq parent_sd_id) — operationally small set (one parent's children)"
   },
   {
    "site": "lib/security/audit-events-reader.js:20",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) with limit defaulting to 100; the only callers (integration tests) pass 50/10 and no production caller passes >=1000 — result bounded by the limit arg."
   },
   {
    "site": "lib/security/audit-events-reader.js:35",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) with limit defaulting to 100; the only callers (integration tests) pass 50/10 and no production caller passes >=1000 — result bounded by the limit arg."
   },
   {
    "site": "lib/security/audit-events-reader.js:52",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) with limit defaulting to 100; the only callers (integration tests) pass 50/10 and no production caller passes >=1000 — result bounded by the limit arg."
   },
   {
    "site": "lib/self-audit/routines/orphanRules.js:130",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/self-audit/routines/specDrift.js:62",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "leo_validation_rules is a curated rules registry/config table (.eq is_active) — operationally small set"
   },
   {
    "site": "lib/semantic-search-client.js:92",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "codebase_semantic_stats view — per application×entity_type aggregate rows (tens)"
   },
   {
    "site": "lib/services/dfe-escalation-service.js:113",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD vision dimension gaps (.eq sd_id) — a fixed small set of vision dimensions"
   },
   {
    "site": "lib/services/telemetry.js:119",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".order(created_at desc).limit(limit) with limit defaulting to 50 — top-N venture service telemetry"
   },
   {
    "site": "lib/session-conflict-checker.mjs:113",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "computed_status='active' view rows with claims — fresh-heartbeat live fleet (operationally small)"
   },
   {
    "site": "lib/session-conflict-checker.mjs:161",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "one track's computed_status='active' claimed sessions — live-fleet subset; error returns occupied:null queryFailed:true (not acted on)"
   },
   {
    "site": "lib/session-conflict-checker.mjs:42",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(sd_id)+computed_status=active — live claimants of ONE SD (1-3 rows); error returns queryFailed:true, claimed:null (GUARD_UNAVAILABLE shape, not acted on)"
   },
   {
    "site": "lib/session-conflict-checker.mjs:89",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "sd_conflict_matrix unresolved rows touching ONE SD — per-SD conflict scale (single digits)"
   },
   {
-   "site": "lib/session-manager.mjs:644",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/session-manager.mjs:647",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "v_active_sessions computed_status IN (active,idle) — fresh-heartbeat live fleet (view ages stale sessions out of these statuses)"
   },
   {
-   "site": "lib/session-manager.mjs:661",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/session-manager.mjs:664",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "computed_status='active' with sd_key — live claimed sessions (operationally small)"
   },
   {
-   "site": "lib/session-manager.mjs:739",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/session-manager.mjs:747",
+   "classification": "tripwired",
+   "auto_classification": "needs-review",
+   "exemption_note": "batch 8: read gates status-file DELETION — GUARD_UNAVAILABLE throw on error + assertNotCapTruncated at the destructure site (both land in results.errors, cleanup skipped)"
   },
   {
-   "site": "lib/session-manager.mjs:774",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/session-manager.mjs:786",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "v_parallel_track_status — per-track aggregate view (3 tracks); NOTE view is absent from the schema snapshot (phantom) — read fail-opens to [] today"
   },
   {
-   "site": "lib/session-manager.mjs:790",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/session-manager.mjs:802",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "v_sd_parallel_opportunities available rows — NOTE view is absent from the schema snapshot (phantom) — read fail-opens to [] today; revisit if the view is restored"
   },
   {
-   "site": "lib/ship/auto-merge.mjs:77",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/ship/review-findings-logger.js:91",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/ship/venture-trust-gate.mjs:117",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/ship/venture-trust-gate.mjs:40",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/ship/venture-trust-gate.mjs:129",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-PR branch-fallback lookup (.eq pr_number + .eq branch) terminating in .order(created_at desc).limit(1).maybeSingle() — single row; the .limit(1) sits beyond the classifier's forward window."
   },
   {
    "site": "lib/simplifier/simplification-engine.js:67",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "leo_simplification_rules is a curated rules registry/config table (filtered by enabled/rule_type/language/confidence) — operationally small set"
   },
   {
    "site": "lib/skunkworks/signal-readers/calibration.js:21",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq('active', true) on eva_score_dimensions — a small config/registry table (one row per active scoring dimension), operationally well under the cap."
   },
   {
    "site": "lib/skunkworks/signal-readers/codebase-health.js:44",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/skunkworks/signal-readers/venture-portfolio.js:24",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq('enabled', true) on codebase_health_config — a config/registry table with one row per health dimension (a small fixed set)."
   },
   {
    "site": "lib/skunkworks/signals/codebase-health-reader.js:49",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "codebase_health_config config/registry table read (one row per health dimension, a small fixed set); no growing-table filter."
   },
   {
-   "site": "lib/sourcing-engine/adam-direct-registry.js:85",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/sourcing-engine/dedup-autostamp.js:170",
+   "classification": "paginated",
+   "auto_classification": "needs-review",
+   "exemption_note": "autostampLedgerCandidates paginated via fetchAllPaginated(buildCandidatesQuery); the wrapper sits ~6 lines below, referencing a named factory function — outside the classifier's forward window"
   },
   {
-   "site": "lib/sourcing-engine/adam-direct-registry.js:92",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/sourcing-engine/dedup-autostamp.js:132",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/sourcing-engine/dedup-autostamp.js:158",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/sourcing-engine/dedup-autostamp.js:159",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/sourcing-engine/dedup-autostamp.js:171",
+   "classification": "paginated",
+   "auto_classification": "needs-review",
+   "exemption_note": "same fetchAllPaginated(buildCandidatesQuery) wrapper as line 170 above (the lane-dormant branch of the same ternary)"
   },
   {
    "site": "lib/sourcing-engine/escalator.js:106",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .upsert(row, {onConflict:'source_id,gate_type', ignoreDuplicates:true}).select('id') — rows bounded by the single-row upsert payload"
   },
   {
-   "site": "lib/sourcing-engine/gauge-gap-miner.js:225",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/sourcing-engine/gauge-gap-miner.js:256",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "roadmap_wave_items filtered to source_type='vdr_gauge' — bounded by the curated VDR capability taxonomy (vision-ladder capabilities), not a raw table scan"
   },
   {
-   "site": "lib/sourcing-engine/gauge-gap-miner.js:247",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/strategy/capability-gap-analyzer.js:134",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('name', targets) — bounded by the single objective's target_capabilities array length (a handful of capability keys)."
   },
   {
-   "site": "lib/strategy/capability-gap-analyzer.js:128",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/strategy/capability-gap-analyzer.js:33",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "strategy_objectives .eq('status','active') — curated strategic-planning registry (now/next/later/eventually horizons), operationally small (dozens); iterated per-objective."
   },
   {
-   "site": "lib/strategy/capability-gap-analyzer.js:29",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/strategy/capability-gap-analyzer.js:43",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/strategy/sd-proposal-generator.js:142",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/strategy/sd-proposal-generator.js:261",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/strategy/sd-proposal-generator.js:146",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning insert().select() — rows bounded by insertRows, itself capped at maxProposals (MAX_PROPOSALS_PER_CYCLE=5)."
   },
   {
    "site": "lib/strategy/strategy-manager.js:62",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "strategy_objectives list — curated strategic-planning registry (horizon-planned objectives), operationally small even unfiltered."
   },
   {
    "site": "lib/sub-agent-executor/history.js:122",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "leo_sub_agents is the fixed sub-agent roster — a small config/registry table (a few dozen sub-agent types), no filter needed"
   },
   {
    "site": "lib/sub-agent-executor/history.js:23",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) with limit defaulting to 10; the only live caller path never overrides it — result bounded by the limit arg (subagent_validation_results)"
   },
   {
    "site": "lib/sub-agent-executor/history.js:54",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) with limit defaulting to 10; the only live caller path never overrides it — result bounded by the limit arg (sub_agent_execution_results)"
   },
   {
    "site": "lib/sub-agent-executor/history.js:82",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getAllSubAgentResultsForSD: .eq('sd_id', sdId) — per-SD sub_agent_execution_results rows, operationally small set (mirrors lib/context/sub-agent-retrieval.js precedent)"
   },
   {
    "site": "lib/sub-agent-executor/results-storage.js:442",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "dedup lookup chain ends .order('created_at', {descending}).limit(1) two lines below — single-row lookup, the .limit(1) sits beyond the classifier's forward window"
   },
   {
    "site": "lib/sub-agents/design/index.js:120",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "fetchOrderedUserStories: .eq('sd_id', sdId) — per-SD user_stories, operationally small set"
   },
   {
    "site": "lib/sub-agents/judge/index.js:541",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "checkRunLimit circuit-breaker: .eq('sd_id', sdId).gte('created_at', 24h-ago) — per-SD debates in the last day, compared against a small maxDebatesPerRun ceiling"
   },
   {
    "site": "lib/sub-agents/judge/index.js:759",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-debate-session arguments: .eq('debate_session_id', debateSession.id) — one debate's rounds x agents, operationally small"
   },
   {
    "site": "lib/sub-agents/marketing.js:177",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-venture .eq('venture_id', ventureId).in('stage_id', [7, 8, 10]) — bounded to at most 3 rows (one per named stage)"
   },
   {
    "site": "lib/sub-agents/modules/stories/execute.js:94",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD .eq('sd_id', resolvedSdId) — user_stories for one SD, operationally small set"
   },
   {
    "site": "lib/sub-agents/retro/db-operations.js:393",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "dedup check: .eq('sd_id', sdId).eq('source_type', 'retrospective').in('title', titles) — per-SD scope and titles bounded by the enhancements array from one retro (a handful of items)"
   },
   {
    "site": "lib/sub-agents/retro/db-operations.js:48",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "checkExistingRetrospective: .eq('sd_id', sdUuid) — per-SD retrospectives, operationally small set"
   },
   {
    "site": "lib/sub-agents/retro/db-operations.js:491",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "resolveFeedbackForCompletedSD: .eq('sd_id', sdId).eq('source_type', 'retrospective').in('status', [...]) — per-SD retrospective-sourced feedback, operationally small set"
   },
   {
    "site": "lib/sub-agents/risk.js:91",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD .eq('strategic_directive_id', sdId) — user_stories for one SD, operationally small set"
   },
   {
    "site": "lib/sub-agents/risk.js:97",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD .eq('sd_id', sdId) — sd_backlog_map items for one SD, operationally small set"
   },
   {
    "site": "lib/sub-agents/testing/index.js:263",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "fetchSemanticPatterns: .or('sd_id.eq.X,sd_id.ilike.%X%') scopes to one SD's family (parent + child decompositions), operationally small set of user_stories rows"
   },
   {
    "site": "lib/sub-agents/testing/phases/phase2-generation.js:22",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "generateTestCases: .eq('sd_id', sdId) — user_stories for one SD, operationally small set"
   },
   {
    "site": "lib/sub-agents/testing/phases/phase4-evidence.js:60",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "verifyUserStories: .eq('sd_id', sdId) — user_stories for one SD, operationally small set"
   },
   {
    "site": "lib/sub-agents/uat.js:317",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "loadUserStories: .eq('sd_id', sdId) — user_stories for one SD, operationally small set"
   },
   {
    "site": "lib/sub-agents/uat.js:373",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "loadDebtItems: .eq('sd_id', sdId).eq('status', 'pending') — one SD's pending uat_debt_registry rows, operationally small even though the table grows overall"
   },
   {
    "site": "lib/sub-agents/validation.js:391",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "queryBacklogItems: .eq('sd_id', sdId) — sd_backlog_map items for one SD, operationally small set"
   },
   {
    "site": "lib/sub-agents/vetting/debate-orchestrator.js:426",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "calculateFinalVerdict: .eq('debate_id', debateId) — one debate's rounds, bounded by max_rounds (a small ceiling)"
   },
   {
    "site": "lib/sub-agents/vetting/debate-orchestrator.js:598",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getDebate: chain ends .eq('id', debateId).single() 4 lines below the multi-line template-string select — single-row lookup by PK, beyond the classifier's forward window"
   },
   {
    "site": "lib/sub-agents/vetting/debate-orchestrator.js:618",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getLatestDebate: chain ends .eq('proposal_id', proposalId).order(...).limit(1).single() a few lines below the multi-line template-string select — single-row lookup, beyond the classifier's forward window"
   },
   {
    "site": "lib/support/intake-pipeline.js:189",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".maybeSingle() terminal on the next statement (line 191, beyond the classifier chain window) — single existing-ticket lookup by ticket_id"
   },
   {
    "site": "lib/support/intake-pipeline.js:274",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/sweep/legacy-fallback.cjs:65",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/sweep/passes/dead-letter-planning.cjs:28",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".order(created_at desc).limit(limit) with limit defaulting to 50 — top-N escalation queue"
   },
   {
    "site": "lib/switch-automation/prechecks/blast-radius.js:50",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "loop_registry filtered to op-co-prefixed loops (.like OPCO_LOOP_KEY_PREFIX%) — a curated registry subset, operationally small set; error path is already fail-closed (passed:false)"
   },
   {
    "site": "lib/switch-automation/prechecks/rate-soak.js:43",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-component switch-on actions within a 24h window; used only to compare rows.length against maxPerWindow (default 3) and read the most-recent (ordered) row — truncation cannot change the >=cap verdict. Fail-closed on error"
   },
   {
    "site": "lib/tasks/correction-manager.js:266",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD active corrections (.eq('sd_id', sdUuid).eq('status','in_progress')) — operationally small set"
   },
   {
    "site": "lib/tasks/correction-manager.js:302",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD correction history (.eq('sd_id', sdUuid)) — operationally small set"
   },
   {
    "site": "lib/tasks/correction-manager.js:426",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD, per-wall-name-prefix rows, used only for (data?.length||0)+1 — an inherently tiny set (an SD re-validating the same wall a handful of times)"
   },
   {
    "site": "lib/tasks/kickback-manager.js:414",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD pending/in_progress kickbacks (.eq('sd_id', sdUuid).in('resolution_status', [...])) — operationally small set"
   },
   {
    "site": "lib/tasks/subagent-orchestrator.js:193",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD, per-phase sub_agent_execution_results rows (.eq sd_id .eq phase) — operationally small set"
   },
   {
    "site": "lib/tasks/subagent-orchestrator.js:398",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD sub_agent_execution_results execution history (.eq sd_id) — operationally small set"
   },
   {
    "site": "lib/tasks/subagent-orchestrator.js:447",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD, per-phase, completed sub_agent_execution_results rows — operationally small set"
   },
   {
    "site": "lib/tasks/wall-manager.js:317",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD sd_wall_states rows (.eq sd_id) — a fixed small set of protocol walls per SD"
   },
   {
    "site": "lib/tasks/wall-manager.js:456",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD sd_gate_results rows further filtered to a specific small gateIds list (.in gate_id) — doubly bounded"
   },
   {
    "site": "lib/team/team-spawner.js:147",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "team_templates is a curated config table (.eq active) — operationally small set"
   },
   {
    "site": "lib/team/team-spawner.js:49",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('code', agentCodes) bounded by the team template's role list — operationally small set"
   },
   {
-   "site": "lib/telemetry/bottleneck-analyzer.js:138",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/telemetry/bottleneck-analyzer.js:252",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/telemetry/bottleneck-analyzer.js:32",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/telemetry/funnel-gauge.mjs:113",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/telemetry/bottleneck-analyzer.js:36",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "telemetry_thresholds — small config/registry table (per-dimension threshold cascade rows), loaded into a lookup map."
   },
   {
    "site": "lib/test-coverage-policy.js:125",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "test_coverage_policies — config-scale policy table (LOC tiers, single digits)"
   },
   {
    "site": "lib/test-evidence-ingest.js:276",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .select() on INSERT — bounded by the ingested test-result payload"
   },
   {
    "site": "lib/test-evidence-ingest.js:298",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(storyKeys) — bounded by the story keys present in the ingested evidence payload"
   },
   {
    "site": "lib/test-evidence-ingest.js:369",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(sd_id) — story coverage view rows for ONE SD (per-SD story scale)"
   },
   {
    "site": "lib/testing/prd-ui-validator.js:54",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-PRD UI mappings (.eq prd_id) — operationally small set (one PRD's UI element mappings)"
   },
   {
    "site": "lib/testing/test-goal-extractor.js:78",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/uat/issue-pattern-matcher.js:141",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/uat/issue-pattern-matcher.js:385",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-SD user stories (.eq sd_id) — operationally small set (one SD's stories)"
   },
   {
    "site": "lib/uat/risk-router.js:348",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "getOpenDefects: .limit(limit) default 50, no repo caller overrides it — bounded well under the cap"
   },
   {
    "site": "lib/uat/route-context-resolver.js:108",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "fetchNavPreferences chain terminates in .maybeSingle() on a separate statement 6 lines below (line 114) — single-row read, sits beyond the classifier's forward window"
   },
   {
    "site": "lib/uat/route-context-resolver.js:53",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "nav_routes is the app's navigation registry (one row per route/page) — a small curated config table, not a growing event table"
   },
   {
    "site": "lib/uat/scenario-generator.js:39",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "user_stories .eq('sd_id', sdId) — one SD's stories, operationally small"
   },
   {
-   "site": "lib/utils/batch-db-operations.js:213",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/utils/batch-db-operations.js:225",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "batchInsert: mutation-returning .insert(insert.data).select() — rows bounded by the insert payload"
   },
   {
-   "site": "lib/utils/batch-db-operations.js:290",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/utils/batch-db-operations.js:302",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "batchUpdate: mutation-returning .update(update.data).select() — rows bounded by the mutation (matched-row set for the caller-supplied filters, all current callers filter by id/sd_id)"
   },
   {
-   "site": "lib/utils/batch-db-operations.js:65",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/utils/batch-db-operations.js:71",
+   "classification": "tripwired",
+   "auto_classification": "needs-review",
+   "exemption_note": "batchQuery is a generic caller-supplied-table executor with no default limit; today's 2 real callers (lib/sub-agents/retro/index.js, lib/utils/batch-db-operations.js helpers) are all per-SD scoped, but the abstraction itself has no bound — warnIfCapTruncated tripwires multi-row reads (single/maybeSingle reads are exempt) against a future broad/unfiltered caller"
   },
   {
    "site": "lib/utils/bypass-evaluation.js:113",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "agent_performance_metrics .gte('measurement_date', thirtyDaysAgo) — a per-agent DAILY ROLLUP table (bounded by agent-roster-size x 30 days), not a raw per-execution event log"
   },
   {
    "site": "lib/utils/dependency-chain-validator.js:74",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('sd_key', depKeys) — depKeys is one SD's own declared dependency list (dependencies JSONB + dependency_chain), operationally tiny"
   },
   {
    "site": "lib/utils/on-demand-loader.js:126",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "leo_sub_agent_triggers .eq('sub_agent_id', subAgent.id).eq('active', true) — one sub-agent's trigger phrases, operationally small"
   },
   {
    "site": "lib/utils/on-demand-loader.js:66",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "leo_sub_agents is the LEO sub-agent registry (a fixed catalog, dozens of entries) — small config/registry table, cached client-side"
   },
   {
    "site": "lib/utils/orchestrator-child-completion.js:180",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "strategic_directives_v2 .eq('parent_sd_id', parentSdId) — one orchestrator's sibling children, operationally small (a handful to dozens)"
   },
   {
    "site": "lib/utils/orchestrator-child-completion.js:281",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "isOrchestratorChild: .eq('sd_key', sdKey).single() — single-row parent lookup; .single() sits beyond the classifier's forward window (multi-line template-literal select). Column-list whitespace reflowed onto the .select( line only so the audit tool's line-anchor requirement is satisfiable — no query-semantics change (PostgREST select-list parsing is whitespace-insensitive)."
   },
   {
    "site": "lib/utils/quickfix-rca-integration.js:98",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(50) applied 3 lines below via an intermediary `qfQuery` reassignment (conditional .neq(id) exclusion) — sits beyond the classifier's narrow backward window; value is provably 50"
   },
   {
-   "site": "lib/utils/sd-type-guard.js:181",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/utils/sd-type-guard.js:218",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/utils/sd-type-guard.js:185",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .update(updateData).eq('sd_key', sdId).select() — bounded to the single updated SD row (sd_key is the unique business key)"
   },
   {
    "site": "lib/utils/sql-execution-intent-classifier.js:107",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(maxTriggers) default 200 — named parameter, not a literal digit, so the auto-classifier's regex never matches; value is provably 200, well under the cap"
   },
   {
    "site": "lib/utils/sql-execution-intent-classifier.js:74",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "db_agent_config is a small key-value config table (whole-table read, no filter needed — a handful of tuning keys)"
   },
   {
    "site": "lib/utils/work-item-router.js:254",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/validation/hallucination/table-loader.js:31",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "work_item_thresholds .eq('is_active', true) — a small config/registry table (one or a few active threshold rows), cached client-side"
   },
   {
    "site": "lib/validation/ui-validator-playwright.js:136",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "prd_ui_mappings .eq('prd_id', prdId) — per-PRD UI requirement mappings, operationally small per PRD."
   },
   {
    "site": "lib/validation/validation-gate-enforcer.js:146",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "prd_ui_mappings .eq('prd_id', prdId) — per-PRD UI requirement mappings (length + is_implemented/is_validated filters), operationally small per PRD."
   },
   {
    "site": "lib/venture-deploy/spend-guardrails.js:205",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-venture guardrail rows (.eq venture_id) — a fixed small set of named guardrails (GUARDRAIL_NAMES); fail-closed on error"
   },
   {
    "site": "lib/venture-deploy/spend-guardrails.js:233",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "per-venture guardrail rows filtered to 2 named guardrails (.in [human-gate, d1-write-ceiling]) — at most 2 rows; fail-closed on error"
   },
   {
    "site": "lib/venture-email/provision-venture-email.js:86",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .update(...).eq(domain).eq(lock_version).select('*') — optimistic-CAS single-row update, bounded by the mutation"
   },
   {
    "site": "lib/venture-resolver.js:183",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(normalized_name) — registry lookup by unique-ish name (≤ a few rows)"
   },
   {
    "site": "lib/venture-resources.js:64",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .select() on UPDATE .eq(venture_id)+.eq(status,active) — bounded by one venture's active resource rows"
   },
   {
    "site": "lib/venture-resources.js:89",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(venture_id) — one venture's provisioned resources (email/domain/etc., single digits)"
   },
   {
    "site": "lib/virtual-session-factory.mjs:147",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(parent_session_id)+is_virtual+active/idle — one drainer's virtual children (bounded by agent-slot count)"
   },
   {
    "site": "lib/virtual-session-factory.mjs:171",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/vision/rung-health-convergence.mjs:122",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .select() on release UPDATE — bounded by one parent's virtual-child slots"
   },
   {
    "site": "lib/vision/rung-progress-rollup.mjs:137",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "key_results — the OKR key-result registry, curated and operationally small; grouped per-objective into aggregates."
   },
   {
    "site": "lib/vision/rung-progress-rollup.mjs:148",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "roadmap_waves — the strategic roadmap-wave registry (waves-as-gates), a bounded curated set."
   },
   {
    "site": "lib/vision/vdr-registry.js:286",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "vision_ladder_criteria .eq('rung_id', rung.id) — per-rung criteria set (a rung has a small fixed capability-criteria list)."
   },
   {
    "site": "lib/worktree-reaper/live-claim-guard.js:114",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(1) terminal on the next statement (line 118, beyond the classifier chain window) — single-row guard lookup; fail-closed (blocked:true) on error"
+  },
+  {
+   "site": "scripts/adam-advisory.cjs:1194",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "lib/worktree-reaper/residency-guard.js:101",
+   "site": "scripts/adam-advisory.cjs:396",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-advisory.cjs:1129",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/adam-advisory.cjs:393",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/adam-advisory.cjs:672",
+   "site": "scripts/adam-advisory.cjs:737",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -4553,52 +4434,72 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-quiet-tick.mjs:130",
+   "site": "scripts/adam-quiet-tick.mjs:131",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-quiet-tick.mjs:159",
+   "site": "scripts/adam-quiet-tick.mjs:160",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-quiet-tick.mjs:215",
+   "site": "scripts/adam-quiet-tick.mjs:216",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-quiet-tick.mjs:291",
+   "site": "scripts/adam-quiet-tick.mjs:292",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-self-adherence-review.mjs:113",
+   "site": "scripts/adam-self-adherence-review.mjs:120",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-self-adherence-review.mjs:179",
+   "site": "scripts/adam-self-adherence-review.mjs:185",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-self-adherence-review.mjs:201",
+   "site": "scripts/adam-self-adherence-review.mjs:219",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-self-adherence-review.mjs:225",
+   "site": "scripts/adam-self-adherence-review.mjs:243",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-self-adherence-review.mjs:246",
+   "site": "scripts/adam-self-adherence-review.mjs:264",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/adam-self-adherence-review.mjs:80",
+   "site": "scripts/adam-self-adherence-review.mjs:301",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "scripts/adam-self-adherence-review.mjs:304",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "scripts/adam-self-adherence-review.mjs:317",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "scripts/adam-self-adherence-review.mjs:339",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "scripts/adam-self-adherence-review.mjs:87",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -5261,7 +5162,7 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/coordinator-ack-adam.cjs:64",
+   "site": "scripts/coordinator-ack-adam.cjs:110",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -5291,57 +5192,57 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/coordinator-backlog-rank.mjs:196",
+   "site": "scripts/coordinator-backlog-rank.mjs:216",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/coordinator-backlog-rank.mjs:206",
+   "site": "scripts/coordinator-backlog-rank.mjs:226",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/coordinator-backlog-rank.mjs:380",
+   "site": "scripts/coordinator-backlog-rank.mjs:400",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/coordinator-backlog-rank.mjs:381",
+   "site": "scripts/coordinator-backlog-rank.mjs:401",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/coordinator-backlog-rank.mjs:549",
+   "site": "scripts/coordinator-backlog-rank.mjs:569",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/coordinator-capacity-forecast.mjs:164",
+   "site": "scripts/coordinator-capacity-forecast.mjs:165",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/coordinator-capacity-forecast.mjs:178",
+   "site": "scripts/coordinator-capacity-forecast.mjs:179",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/coordinator-capacity-forecast.mjs:223",
+   "site": "scripts/coordinator-capacity-forecast.mjs:224",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/coordinator-capacity-forecast.mjs:230",
+   "site": "scripts/coordinator-capacity-forecast.mjs:231",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/coordinator-capacity-forecast.mjs:234",
+   "site": "scripts/coordinator-capacity-forecast.mjs:235",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/coordinator-capacity-forecast.mjs:245",
+   "site": "scripts/coordinator-capacity-forecast.mjs:246",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -5371,7 +5272,7 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/coordinator-charter-audit.mjs:228",
+   "site": "scripts/coordinator-charter-audit.mjs:234",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -5406,7 +5307,7 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/coordinator-quiet-tick.mjs:143",
+   "site": "scripts/coordinator-quiet-tick.mjs:144",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -5486,27 +5387,27 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/cron/chairman-morning-review-sweep.mjs:103",
+   "site": "scripts/cron/chairman-morning-review-sweep.mjs:104",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/cron/chairman-morning-review-sweep.mjs:117",
+   "site": "scripts/cron/chairman-morning-review-sweep.mjs:108",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/cron/chairman-morning-review-sweep.mjs:129",
+   "site": "scripts/cron/chairman-morning-review-sweep.mjs:74",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/cron/chairman-morning-review-sweep.mjs:133",
+   "site": "scripts/cron/chairman-morning-review-sweep.mjs:78",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/cron/chairman-morning-review-sweep.mjs:99",
+   "site": "scripts/cron/chairman-morning-review-sweep.mjs:92",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -6326,7 +6227,7 @@
    "exemption_note": "periodic-process liveness registry — small enumerated registry table"
   },
   {
-   "site": "scripts/fleet-down-alert.mjs:101",
+   "site": "scripts/fleet-down-alert.mjs:157",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -8282,42 +8183,37 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/modules/learning/context-builder.js:298",
+   "site": "scripts/modules/learning/context-builder.js:306",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/modules/learning/context-builder.js:330",
+   "site": "scripts/modules/learning/context-builder.js:338",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/modules/learning/context-builder.js:396",
+   "site": "scripts/modules/learning/context-builder.js:404",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/modules/learning/context-builder.js:407",
+   "site": "scripts/modules/learning/context-builder.js:415",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/modules/learning/context-builder.js:611",
+   "site": "scripts/modules/learning/context-builder.js:619",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/modules/learning/context-builder.js:672",
+   "site": "scripts/modules/learning/context-builder.js:680",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/modules/learning/context-builder.js:735",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "scripts/modules/learning/context-builder.js:748",
+   "site": "scripts/modules/learning/context-builder.js:743",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -8327,7 +8223,12 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/modules/learning/context-builder.js:814",
+   "site": "scripts/modules/learning/context-builder.js:764",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "scripts/modules/learning/context-builder.js:822",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -8515,16 +8416,14 @@
    "exemption_note": "NOT paginated: vision-portfolio-scorecard.test.js mock resolves the chain at .order() (no .range()); declared .limit(5000) sample is server-clamped to 1000 — warnIfCapTruncated fires at that signature"
   },
   {
-   "site": "scripts/modules/sd-next/data-loaders.js:661",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": "countActionableBaselineItems — .or(sd_key.in/id.in) lookup with .limit(sdIds.length*2), bounded by the baseline-item id list"
+   "site": "scripts/modules/sd-next/data-loaders.js:670",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/modules/sd-next/data-loaders.js:766",
-   "classification": "tripwired",
-   "auto_classification": "needs-review",
-   "exemption_note": "NOT paginated: harness-backlog-parser.test.js stub resolves the chain at .order() (no .range()); warnIfCapTruncated applied after the error-check. The BADGE COUNT no longer uses this fetch's rows.length — a separate exact head-count gauge (renderCount) supplies it (adversarial-review fix)"
+   "site": "scripts/modules/sd-next/data-loaders.js:775",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
    "site": "scripts/modules/sd-next/dependency-resolver.js:126",
@@ -9063,7 +8962,7 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/retention-enforce.js:109",
+   "site": "scripts/retention-enforce.js:115",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
@@ -9368,17 +9267,32 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/solomon-advisory.cjs:226",
+   "site": "scripts/solomon-advisory.cjs:234",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/solomon-advisory.cjs:373",
+   "site": "scripts/solomon-advisory.cjs:381",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/solomon-advisory.cjs:568",
+   "site": "scripts/solomon-advisory.cjs:594",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "scripts/solomon-ledger-reconcile.cjs:128",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "scripts/solomon-ledger-reconcile.cjs:136",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "scripts/solomon-ledger-reconcile.cjs:158",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },

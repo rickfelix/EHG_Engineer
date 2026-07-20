@@ -85,9 +85,10 @@
       "id": "CRIT-007",
       "name": "service_role_exposure",
       "description": "Service role key used in client-accessible code",
+      "_note": "QF-20260720-296: 'NEXT_PUBLIC.*SERVICE_ROLE' / 'VITE.*SERVICE_ROLE' used .* which matches ACROSS two separate, unrelated env var names on the same line -- e.g. the pervasive createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY) boilerplate used in 10+ merged files. Tightened to require NEXT_PUBLIC_/VITE_ as an immediate token prefix of SERVICE_ROLE (\\\\w* keeps matching within one identifier, but stops at the spaces/pipes/dots separating two distinct env var references) -- same same-token-boundary fix shape as CRIT-002's own _note. Still matches a genuine NEXT_PUBLIC_SERVICE_ROLE_KEY-style variable name.",
       "patterns": [
-        "NEXT_PUBLIC.*SERVICE_ROLE",
-        "VITE.*SERVICE_ROLE",
+        "NEXT_PUBLIC_\\w*SERVICE_ROLE",
+        "VITE_\\w*SERVICE_ROLE",
         "window\\..*service.?role"
       ],
       "severity": "critical",

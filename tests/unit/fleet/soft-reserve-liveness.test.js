@@ -16,6 +16,8 @@ const helpers = { ws: require('../../../lib/fleet/worker-status.cjs') };
 
 // Chainable stub matching drain-reservations' session_coordination query:
 //   .select().eq('message_type','INFO').is('target_session',null).not('target_sd','is',null)
+//   .order('id',...) — paginated via fetchAllPaginated (SD-LEO-INFRA-COUNT-TRUNCATION-
+//   DISCIPLINE-001 FR-6 batch 8); a single short .range() page returns all `rows`.
 function makeSb(rows) {
   return {
     from(table) {
@@ -23,7 +25,13 @@ function makeSb(rows) {
       return {
         select: () => ({
           eq: () => ({
-            is: () => ({ not: async () => ({ data: rows, error: null }) }),
+            is: () => ({
+              not: () => ({
+                order: () => ({
+                  range: async () => ({ data: rows, error: null }),
+                }),
+              }),
+            }),
           }),
         }),
       };

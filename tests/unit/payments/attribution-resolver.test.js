@@ -205,7 +205,12 @@ describe('attribution-resolver (SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002)', () 
                   })),
                 })),
               })),
-              not: vi.fn(() => Promise.resolve({ data: candidates, error: null })),
+              // FR-6 batch 8: candidate fetch now paginates via fetchAllPaginated → .not().order().range()
+              not: vi.fn(() => ({
+                order: vi.fn(() => ({
+                  range: vi.fn(() => Promise.resolve({ data: candidates, error: null })),
+                })),
+              })),
             })),
             update: vi.fn((patch) => {
               updateSpy(patch);

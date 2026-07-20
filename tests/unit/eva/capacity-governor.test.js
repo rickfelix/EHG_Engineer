@@ -9,6 +9,7 @@ import {
   getCalibratedBudget,
   computeVerdict,
   resolveModelWeight,
+  resolveAccountLabel,
   CONSTANTS,
 } from '../../../lib/eva/capacity-governor.js';
 
@@ -104,6 +105,67 @@ describe('getCalibratedBudget()', () => {
     };
     const result = await getCalibratedBudget(supabase);
     expect(result.budgetSessionHours).toBeCloseTo(22.4, 5);
+  });
+
+  // QF-20260720-706: getCalibratedBudget pooled session_hours_burned across ALL accounts,
+  // corrupting the overnight park/core-size verdict when accounts have different quota states.
+  function accountFilterableBuilder(rows) {
+    const b = {
+      eq: (col, val) => accountFilterableBuilder(rows.filter((r) => r[col] === val)),
+      order: () => b,
+      range: () => Promise.resolve({ data: rows, error: null }),
+    };
+    return b;
+  }
+  function makeAccountAwareSupabase(rows) {
+    return {
+      from: () => ({
+        select: () => ({
+          eq: () => ({ // event_type filter — pass-through, this mock's rows are all pre-filtered
+            not: () => accountFilterableBuilder(rows),
+          }),
+        }),
+      }),
+    };
+  }
+
+  it('filters by account when provided, never mixing accounts (QF-20260720-706)', async () => {
+    const supabase = makeAccountAwareSupabase([
+      { session_hours_burned: 10, account: 'accountA' },
+      { session_hours_burned: 30, account: 'accountB' },
+    ]);
+    const resultA = await getCalibratedBudget(supabase, { account: 'accountA' });
+    expect(resultA.budgetSessionHours).toBe(10);
+    expect(resultA.eventCount).toBe(1);
+    expect(resultA.source).toBe('ledger_average_per_account');
+
+    const resultB = await getCalibratedBudget(supabase, { account: 'accountB' });
+    expect(resultB.budgetSessionHours).toBe(30);
+
+    // No account param -> pooled behavior is unchanged (byte-identical to pre-fix).
+    const pooled = await getCalibratedBudget(supabase);
+    expect(pooled.budgetSessionHours).toBe(20);
+    expect(pooled.source).toBe('ledger_average');
+  });
+
+  it('falls back to the default (never the pooled cross-account average) when the account has zero calibration events', async () => {
+    const supabase = makeAccountAwareSupabase([{ session_hours_burned: 10, account: 'accountA' }]);
+    const result = await getCalibratedBudget(supabase, { account: 'freshAccount' });
+    expect(result.budgetSessionHours).toBeCloseTo(22.4, 5);
+    expect(result.source).toBe('default');
+    expect(result.eventCount).toBe(0);
+  });
+});
+
+describe('resolveAccountLabel() (QF-20260720-706)', () => {
+  it('derives the free-text account label from the email local-part (live-verified: rickfelix2000@gmail.com -> rickfelix2000, matching the ledger seed data)', () => {
+    expect(resolveAccountLabel({ email: 'rickfelix2000@gmail.com', orgName: 'x', accountUuid8: 'y' })).toBe('rickfelix2000');
+  });
+
+  it('returns null for a missing or malformed identity, never throws', () => {
+    expect(resolveAccountLabel(null)).toBeNull();
+    expect(resolveAccountLabel({})).toBeNull();
+    expect(resolveAccountLabel({ email: 123 })).toBeNull();
   });
 });
 

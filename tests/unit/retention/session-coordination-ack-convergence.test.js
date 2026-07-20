@@ -9,7 +9,13 @@ function mockSupabase({ candidates = [], updateError = null } = {}) {
   const from = vi.fn(() => ({
     select: vi.fn(() => ({
       is: vi.fn(() => ({
-        lte: vi.fn(async () => ({ data: candidates, error: null })),
+        // FR-6 batch 8: convergeAckTTL now paginates the candidate read via
+        // fetchAllPaginated (.order().range()); extend the chain to match.
+        lte: vi.fn(() => ({
+          order: vi.fn(() => ({
+            range: vi.fn(async () => ({ data: candidates, error: null })),
+          })),
+        })),
       })),
     })),
     update: vi.fn((patch) => {

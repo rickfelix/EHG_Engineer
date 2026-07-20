@@ -151,17 +151,31 @@ function formatEtaTime(iso) {
 // ── Data Loading ──
 
 async function loadData() {
-  const [sessRes, allSessRes, childRes, coordRes, rawSessRes, drainRes] = await Promise.all([
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 (QF-20260720-230): this read has NO filter
+  // (feeds allSessions -> isDispatchableFleetMember idle/liveness detection) and was silently
+  // capped at the PostgREST 1000-row max — v_active_sessions has 5,921+ rows live, so this was
+  // missing ~83% of sessions. Paginate to completion; fail-soft to [] (dashboard render must
+  // never crash on this display-only read).
+  const allSessionsPromise = (async () => {
+    try {
+      return await fapPaginate(() => supabase
+        .from('v_active_sessions')
+        // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: + metadata so the idle filter can apply
+        // isDispatchableFleetMember (excludes coordinator/adam/non_fleet/fixture).
+        .select('session_id, sd_key, computed_status, metadata, tty, heartbeat_age_seconds, heartbeat_age_human')
+        .order('heartbeat_age_seconds', { ascending: true })
+        .order('session_id', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
+    } catch (e) {
+      console.warn(`⚠️  [count-discipline] v_active_sessions (all): pagination failed (${e.message}) — degrading to empty`);
+      return [];
+    }
+  })();
+
+  const [sessRes, childRes, coordRes, rawSessRes, drainRes] = await Promise.all([
     supabase
       .from('v_active_sessions')
       .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, terminal_id, loop_state')
       .not('sd_key', 'is', null)
-      .order('heartbeat_age_seconds', { ascending: true }),
-    supabase
-      .from('v_active_sessions')
-      // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: + metadata so the idle filter can apply
-      // isDispatchableFleetMember (excludes coordinator/adam/non_fleet/fixture).
-      .select('session_id, sd_key, computed_status, metadata, tty, heartbeat_age_seconds, heartbeat_age_human')
       .order('heartbeat_age_seconds', { ascending: true }),
     supabase
       .from('strategic_directives_v2')
@@ -228,7 +242,7 @@ async function loadData() {
   }
 
   const sessions = warnIfCapTruncated(sessRes.data, 'v_active_sessions (claimed)');
-  const allSessions = warnIfCapTruncated(allSessRes.data, 'v_active_sessions (all)');
+  const allSessions = await allSessionsPromise;
   const drainAgents = warnIfCapTruncated(drainRes.data, 'claude_sessions (drain agents)');
   const children = warnIfCapTruncated(childRes.data, 'orchestrator children');
   // QF-20260704-051: orchestrator children are tracked separately (above) — exclude their

@@ -35,6 +35,11 @@ function makeQuery(result) {
     insert: () => q,
     update: () => q,
     single: () => Promise.resolve(result),
+    // FR-6 batch 8: getCompetitorIntelligence/listSnapshots now paginate via fetchAllPaginated (.range)
+    range: (from, to) => Promise.resolve({
+      data: Array.isArray(result.data) ? result.data.slice(from, to + 1) : result.data,
+      error: result.error,
+    }),
     then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
   };
   return q;

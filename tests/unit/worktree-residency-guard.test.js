@@ -26,7 +26,17 @@ import { removeWorktreeViaGit } from '../../lib/worktree-manager.js';
 const noop = () => {};
 
 function sbReturning(result) {
-  const chain = { select: () => chain, not: () => Promise.resolve(result) };
+  // FR-6 batch 8: heartbeatResidencyBlocksRemoval now paginates via fetchAllPaginated
+  // (.not().order().range()) — not()/order() are chainable, range() is the terminal.
+  const chain = {
+    select: () => chain,
+    not: () => chain,
+    order: () => chain,
+    range: (from, to) => Promise.resolve({
+      data: Array.isArray(result.data) ? result.data.slice(from, to + 1) : result.data,
+      error: result.error,
+    }),
+  };
   return { from: () => chain };
 }
 

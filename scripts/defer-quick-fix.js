@@ -83,7 +83,9 @@ Options:
                       once enforce mode is armed.
   --owner <text>      Hold-state contract stamp: who reviews/releases this defer.
   --release-condition <text>  Hold-state contract stamp: the condition under
-                      which this defer should be released.
+                      which this defer should be released. REQUIRED whenever
+                      --not-before is more than 30 days out (QF-20260720-137) --
+                      a far-future park always needs a release trigger.
 
 Example:
   node scripts/defer-quick-fix.js QF-20260704-348 --not-before 2026-07-05T21:00:00Z --reopen \\
@@ -91,10 +93,25 @@ Example:
 `);
 }
 
+// QF-20260720-137: a not_before park beyond this horizon has no natural review
+// trigger (the 2027-sentinel class -- 6 retro-promoted QFs parked indefinitely
+// with reason=NULL, no owner, no release_condition, never resurfacing). Applies
+// to ANY caller of this shared write path, not just retro-sourced QFs, and is
+// enforced unconditionally -- independent of HOLD_STATE_CONTRACT_MODE, which
+// only governs the reason/owner/release_condition stamp as a whole.
+const FAR_FUTURE_PARK_DAYS = 30;
+
 export async function deferQuickFix(qfId, notBefore, { reopen = false, reason, owner, releaseCondition, writingSessionId, supabaseClient = null } = {}) {
   const validation = validateNotBefore(notBefore);
   if (!validation.valid) {
     throw new Error(validation.error);
+  }
+
+  const daysOut = (Date.parse(validation.iso) - Date.now()) / (24 * 60 * 60 * 1000);
+  if (daysOut > FAR_FUTURE_PARK_DAYS && !(releaseCondition && String(releaseCondition).trim())) {
+    const err = new Error(`--not-before is ${Math.round(daysOut)} days out (>${FAR_FUTURE_PARK_DAYS}) and requires --release-condition -- a far-future park with no release trigger never resurfaces (QF-20260720-137)`);
+    err.code = 'FAR_FUTURE_PARK_REQUIRES_RELEASE_CONDITION';
+    throw err;
   }
 
   const supabase = supabaseClient || createClient(

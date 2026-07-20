@@ -27,7 +27,6 @@ function makeFakeSupabase({
   const fakeRows = [...rows];
   const supabase = {
     from(table) {
-      const ctx = { table, lastEqs: [] };
       const builder = {
         select(cols) {
           calls.selects.push({ table, cols });
@@ -46,6 +45,13 @@ function makeFakeSupabase({
                       if (table === 'claude_sessions') {
                         return Promise.resolve({ data: fakeRows.slice(0, n), error: selectError });
                       }
+                      return Promise.resolve({ data: [], error: null });
+                    },
+                    // residency-guard.js's heartbeatResidencyBlocksRemoval paginates via
+                    // fetchAllPaginated (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6
+                    // batch 8) — no session rows registered here, so an empty page ends the
+                    // scan immediately (mirrors this mock's pre-conversion empty-data behavior).
+                    range() {
                       return Promise.resolve({ data: [], error: null });
                     },
                   };

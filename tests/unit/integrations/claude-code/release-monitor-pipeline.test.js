@@ -318,7 +318,12 @@ describe('release-monitor (mock-based)', () => {
       if (table === 'eva_claude_code_intake') {
         return {
           ...chainable,
-          select: vi.fn().mockResolvedValue({ data: [], error: null }),
+          // loadKnownReleases now paginates via fetchAllPaginated: select().order().range()
+          select: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              range: vi.fn().mockResolvedValue({ data: [], error: null }),
+            }),
+          }),
           insert: vi.fn().mockResolvedValue({ error: null }),
         };
       }
@@ -350,8 +355,13 @@ describe('approval-handler (mock-based)', () => {
   it('processApprovals returns expected shape', async () => {
     // Build a deep mock that supports the full chain: from().select().eq().eq().lt()
     const mockLtFn = vi.fn().mockResolvedValue({ data: [], error: null });
+    const mockRangeFn = vi.fn().mockResolvedValue({ data: [], error: null });
+    const mockOrderFn = vi.fn().mockReturnValue({ range: mockRangeFn });
     const mockEq2 = vi.fn().mockImplementation(() => ({
       lt: mockLtFn,
+      // processApprovedRequests/processRejectedRequests now paginate via
+      // fetchAllPaginated: .eq().eq().order('id',...).range(...)
+      order: mockOrderFn,
       // Also resolve directly for .eq().eq() chains that terminate
       then: (resolve) => resolve({ data: [], error: null }),
     }));

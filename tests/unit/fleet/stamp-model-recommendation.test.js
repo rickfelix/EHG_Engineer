@@ -111,40 +111,54 @@ describe('stampModelRecommendation (FR-3) — evidence-first enforcement', () =>
 });
 
 describe('stampModelRecommendation (FR-4) — tier-decision audit trail', () => {
+  // QF-20260720-597: the audit-trail write now goes through mergeMetadataKeys (atomic JSONB
+  // partial-merge, lib/coordinator/safe-metadata-merge.mjs) instead of a read-spread-write
+  // supabase .update({metadata}) — injected as the 4th param so these tests never touch a
+  // live DB connection.
   it('AC-4-1: a fable/R1 decision appends one entry to metadata.model_tier_decisions', async () => {
-    const updateSpy = vi.fn();
+    const mergeSpy = vi.fn(async () => ({ merged: true }));
     const row = { id: 'row-abc', message_type: 'WORK_ASSIGNMENT', payload: { sd_key: 'SD-X-009' } };
-    await stampModelRecommendation(fakeSb({ sdRow: { description: 'architecture decision', metadata: {} }, evidenceRows: [{ id: 'e1' }], updateSpy }), row);
-    expect(updateSpy).toHaveBeenCalledTimes(1);
-    const [{ metadata }] = updateSpy.mock.calls[0];
-    expect(metadata.model_tier_decisions).toHaveLength(1);
-    expect(metadata.model_tier_decisions[0]).toMatchObject({ criterion: 'R1', tier: 'fable', dispatch_row_id: 'row-abc' });
-    expect(typeof metadata.model_tier_decisions[0].at).toBe('string');
+    await stampModelRecommendation(fakeSb({ sdRow: { description: 'architecture decision', metadata: {} }, evidenceRows: [{ id: 'e1' }] }), row, console, mergeSpy);
+    expect(mergeSpy).toHaveBeenCalledTimes(1);
+    const [sdKey, patch] = mergeSpy.mock.calls[0];
+    expect(sdKey).toBe('SD-X-009');
+    expect(patch.model_tier_decisions).toHaveLength(1);
+    expect(patch.model_tier_decisions[0]).toMatchObject({ criterion: 'R1', tier: 'fable', dispatch_row_id: 'row-abc' });
+    expect(typeof patch.model_tier_decisions[0].at).toBe('string');
   });
 
   it('AC-4-2 / TS-6: metadata.model_tier_decisions is FIFO-capped at 20 entries', async () => {
-    const updateSpy = vi.fn();
+    const mergeSpy = vi.fn(async () => ({ merged: true }));
     const existing = Array.from({ length: 20 }, (_, i) => ({ at: `t${i}`, criterion: 'R1', tier: 'fable', reason: 'x', dispatch_row_id: `old-${i}` }));
     const row = { id: 'row-new', message_type: 'WORK_ASSIGNMENT', payload: { sd_key: 'SD-X-010' } };
-    await stampModelRecommendation(fakeSb({ sdRow: { description: 'architecture decision', metadata: { model_tier_decisions: existing } }, evidenceRows: [{ id: 'e1' }], updateSpy }), row);
-    const [{ metadata }] = updateSpy.mock.calls[0];
-    expect(metadata.model_tier_decisions).toHaveLength(20);
-    expect(metadata.model_tier_decisions[0].dispatch_row_id).toBe('old-1'); // oldest (old-0) dropped
-    expect(metadata.model_tier_decisions[19].dispatch_row_id).toBe('row-new');
+    await stampModelRecommendation(fakeSb({ sdRow: { description: 'architecture decision', metadata: { model_tier_decisions: existing } }, evidenceRows: [{ id: 'e1' }] }), row, console, mergeSpy);
+    const [, patch] = mergeSpy.mock.calls[0];
+    expect(patch.model_tier_decisions).toHaveLength(20);
+    expect(patch.model_tier_decisions[0].dispatch_row_id).toBe('old-1'); // oldest (old-0) dropped
+    expect(patch.model_tier_decisions[19].dispatch_row_id).toBe('row-new');
   });
 
   it('AC-4-3: a metadata write failure is swallowed and never propagates', async () => {
+    const mergeSpy = vi.fn(async () => { throw new Error('write failed'); });
     const sb = fakeSb({ sdRow: { description: 'architecture decision', metadata: {} }, evidenceRows: [{ id: 'e1' }] });
-    sb.from = ((orig) => (table) => {
-      const base = orig(table);
-      if (table === 'strategic_directives_v2') {
-        return { ...base, update: () => ({ eq: () => Promise.reject(new Error('write failed')) }) };
-      }
-      return base;
-    })(sb.from.bind(sb));
     const row = { message_type: 'WORK_ASSIGNMENT', payload: { sd_key: 'SD-X-011' } };
-    await expect(stampModelRecommendation(sb, row)).resolves.toBeUndefined();
+    await expect(stampModelRecommendation(sb, row, console, mergeSpy)).resolves.toBeUndefined();
     // The dispatch-relevant fields still landed even though the audit-trail write failed.
     expect(row.payload.model_recommendation).toBe('fable');
+  });
+
+  it('QF-20260720-597: the write is a targeted key-merge, never a full-metadata-blob spread (the resurrection vector)', async () => {
+    const mergeSpy = vi.fn(async () => ({ merged: true }));
+    // The read snapshot carries a hold flag a concurrent coordinator clear may have already
+    // flipped false in the DB — the merge call must NEVER re-send it.
+    const row = { id: 'row-xyz', message_type: 'WORK_ASSIGNMENT', payload: { sd_key: 'SD-X-012' } };
+    await stampModelRecommendation(
+      fakeSb({ sdRow: { description: 'architecture decision', metadata: { needs_coordinator_review: true, requires_human_action: true } }, evidenceRows: [{ id: 'e1' }] }),
+      row, console, mergeSpy
+    );
+    const [, patch] = mergeSpy.mock.calls[0];
+    expect(Object.keys(patch)).toEqual(['model_tier_decisions']);
+    expect(patch.needs_coordinator_review).toBeUndefined();
+    expect(patch.requires_human_action).toBeUndefined();
   });
 });

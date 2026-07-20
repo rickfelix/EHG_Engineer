@@ -36,6 +36,9 @@ function makeFakeSupabase({ absent = false } = {}) {
       select() { if (!op) op = 'select'; return b; },
       eq(c, v) { filters.push([c, v]); return b; },
       single() { wantSingle = true; return b; },
+      // FR-6 batch 8: calibration() now paginates via fetchAllPaginated (.order + .range)
+      order() { return b; },
+      range(from, to) { return exec().then((r) => ({ data: Array.isArray(r.data) ? r.data.slice(from, to + 1) : r.data, error: r.error })); },
       then(res, rej) { return exec().then(res, rej); },
     };
     return b;

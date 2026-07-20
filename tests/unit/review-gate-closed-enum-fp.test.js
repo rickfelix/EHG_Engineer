@@ -123,4 +123,32 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
     ].join('\n');
     expect(names(spoof)).toContain('auth_bypass');
   });
+
+  // CRIT-007 service_role_exposure — QF-20260720-296. `NEXT_PUBLIC.*SERVICE_ROLE` used
+  // .* which matched ACROSS two separate, unrelated env var references on the same line,
+  // not a single NEXT_PUBLIC_-prefixed service-role variable.
+  it('does NOT flag the pervasive createClient(SUPABASE_URL||NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) boilerplate', () => {
+    expect(names(
+      '+const sb = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);'
+    )).not.toContain('service_role_exposure');
+  });
+  it('does NOT flag NEXT_PUBLIC_SUPABASE_ANON_KEY co-occurring with an unrelated SERVICE_ROLE reference', () => {
+    expect(names(
+      '+ const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY; const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;'
+    )).not.toContain('service_role_exposure');
+  });
+  it('STILL flags a genuine NEXT_PUBLIC_-prefixed service-role variable name', () => {
+    expect(names('+ const key = process.env.NEXT_PUBLIC_SERVICE_ROLE_KEY;')).toContain('service_role_exposure');
+  });
+  it('STILL flags a genuine NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY-style variable name', () => {
+    expect(names('+ const key = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;')).toContain('service_role_exposure');
+  });
+  it('STILL flags a genuine VITE_-prefixed service-role variable name', () => {
+    expect(names('+ const key = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;')).toContain('service_role_exposure');
+  });
+  it('does NOT flag co-occurring VITE_SUPABASE_URL and an unrelated SERVICE_ROLE reference', () => {
+    expect(names(
+      '+ const sb = createClient(import.meta.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);'
+    )).not.toContain('service_role_exposure');
+  });
 });

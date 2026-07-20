@@ -107,8 +107,39 @@ field orthogonal to the `(role, kind)` pair this table tracks.
 ## Consumers
 
 - **Live today**: `lib/coordinator/dispatch.cjs`'s `insertCoordinationRow`
-  (send-time WARN check).
+  (send-time WARN check); `lib/fleet/orphan-reroute-sweep.js`'s
+  `sweepOrphanRows` (Child C, below).
 - **Planned (sibling children)**: Child B (`SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C`)
   repoints inbox readers (Adam advisory inbox, Solomon drain, coordinator tick
-  lanes) onto this same reader lib. Child C (`-001-D`) and Child D (`-001-E`)
-  build the orphan-sweep and warn→enforce graduation on top of this substrate.
+  lanes) onto this same reader lib. Child D (`-001-E`) builds warn→enforce
+  graduation on top of this substrate.
+
+## Orphan re-route sweep (Child C, `SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-D`)
+
+`lib/fleet/orphan-reroute-sweep.js`'s `sweepOrphanRows` is the periodic
+consumer of `resolveRecognizedKinds`: it finds unread `session_coordination`
+rows whose target resolves to a singleton role (`solomon`/`adam`/`coordinator`,
+via the same `resolveTargetRole` identity resolution the send-time WARN
+check uses) but whose `payload.kind` is **not** in that role's recognized set
+— i.e. a row that validly sent but structurally nobody will ever drain (the
+original 61.9%-orphan-traffic finding this SD family exists to close).
+
+- **Action**: re-type the row to `coordinator_reminder` (a `DIRECTIVE_KIND`
+  the coordinator always drains) and re-target it to the live coordinator,
+  stamping a durable `payload.reroute = {from_kind, to_kind, from_target,
+  to_target, from_role, at, by_sweep}` audit trail. Idempotent by
+  construction (mirrors `lib/coordinator/succession.cjs`'s
+  `drainCoordinatorOutbound`/`parkAtBroadcast` idiom): once rerouted, a
+  row's kind is coordinator-recognized, so it never matches the orphan
+  check again.
+- **Repeat-offender alarm**: once a `(role, kind)` pair has been rerouted
+  `REPEAT_OFFENDER_THRESHOLD` (2) times within the 14-day window, a single
+  `coordinator_request` alarm fires — exactly once, deduped via a stable
+  `payload.alarm_key` durable check, not on every subsequent occurrence.
+- **Runs headless**: `scripts/orphan-reroute-sweep.mjs` via
+  `.github/workflows/orphan-reroute-sweep-cron.yml`, every 15 minutes, not
+  var-gated (a failing sweep must be visible).
+- **Live-proven**: a production run rerouted 3 real orphan rows addressed to
+  the live coordinator (`review_supply`, `row_growth_anomaly`,
+  `account_switch_notice`) with full audit stamps; a re-run confirmed
+  idempotency (0 rerouted).
