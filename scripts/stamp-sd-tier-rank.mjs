@@ -11,6 +11,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import { computeMinTierRank } from '../lib/fleet/sd-tier-rank.mjs';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 // SD-LEO-INFRA-TIER-RANK-STARVATION-DURABLE-FIX-001 (FR-1): the SELECT columns for the stamper.
 // estimated_loc is NOT a column on strategic_directives_v2 — selecting it errored on EVERY SD (PostgREST
@@ -54,12 +55,19 @@ async function main() {
   const cols = STAMP_SELECT_COLS;
 
   if (all) {
-    const { data, error } = await sb
-      .from('strategic_directives_v2')
-      .select(cols)
-      .not('status', 'in', '(completed,cancelled,deferred)');
-    if (error) throw new Error(error.message);
-    const todo = (data || []).filter((sd) => !(sd.metadata && Number.isFinite(Number(sd.metadata.min_tier_rank))));
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 grows
+    // unbounded; small today, but not provably <1000 long-term. Paginate.
+    let data;
+    try {
+      data = await fetchAllPaginated(() => sb
+        .from('strategic_directives_v2')
+        .select(cols)
+        .not('status', 'in', '(completed,cancelled,deferred)')
+        .order('sd_key', { ascending: true }));
+    } catch (e) {
+      throw new Error(e.message);
+    }
+    const todo = data.filter((sd) => !(sd.metadata && Number.isFinite(Number(sd.metadata.min_tier_rank))));
     console.log(`Stamping ${todo.length} unstamped active SD(s)...`);
     for (const sd of todo) await stampOne(sb, sd, dry);
     return;

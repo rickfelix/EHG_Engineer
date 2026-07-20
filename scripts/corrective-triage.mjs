@@ -20,6 +20,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { publishVisionEvent, VISION_EVENTS } from '../lib/eva/event-bus/vision-events.js';
 import { createSD } from './leo-create-sd.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../.env') });
@@ -45,19 +46,24 @@ function parseFlags(argv) {
 }
 
 export async function listFindings(supabase, { class: cls, status = 'new', ageGt = null } = {}) {
-  let q = supabase.from('feedback')
-    .select('id, title, status, severity, corrective_class, source_gate, gate_run_id, promoted_to_sd_id, created_at, metadata')
-    .eq('category', 'corrective_finding')
-    .eq('status', status)
-    .order('created_at', { ascending: false });
-  if (cls) q = q.eq('corrective_class', cls);
-  if (ageGt) {
-    const cutoff = new Date(Date.now() - Number(ageGt) * 86400000).toISOString();
-    q = q.lt('created_at', cutoff);
+  const cutoff = ageGt ? new Date(Date.now() - Number(ageGt) * 86400000).toISOString() : null;
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: feedback is an unbounded growing
+  // table and bulkDismiss (below) ACTS on every row this returns — paginate to completion. Error
+  // policy preserved: throw with the same "list failed: ..." message the original produced.
+  const buildQuery = () => {
+    let q = supabase.from('feedback')
+      .select('id, title, status, severity, corrective_class, source_gate, gate_run_id, promoted_to_sd_id, created_at, metadata')
+      .eq('category', 'corrective_finding')
+      .eq('status', status);
+    if (cls) q = q.eq('corrective_class', cls);
+    if (cutoff) q = q.lt('created_at', cutoff);
+    return q.order('created_at', { ascending: false }).order('id', { ascending: true }); // unique tiebreaker (FR-6)
+  };
+  try {
+    return await fetchAllPaginated(buildQuery);
+  } catch (e) {
+    throw new Error(`list failed: ${e.message}`);
   }
-  const { data, error } = await q;
-  if (error) throw new Error(`list failed: ${error.message}`);
-  return data || [];
 }
 
 export async function promoteFinding(supabase, feedbackId, { promotedBy = 'corrective-triage-cli' } = {}) {

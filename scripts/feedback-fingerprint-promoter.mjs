@@ -28,6 +28,7 @@ import 'dotenv/config';
 import { execFileSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 import { groupByFingerprint, shouldPromote } from '../lib/shared/content-fingerprint.cjs';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const apply = process.argv.includes('--apply');
 const WINDOW_DAYS = 14;
@@ -41,15 +42,20 @@ const supabase = createClient(
 
 const cutoff = new Date(Date.now() - WINDOW_DAYS * 24 * 3600 * 1000).toISOString();
 
-const { data: rows, error } = await supabase
-  .from('feedback')
-  .select('id, title, description, severity, created_at, metadata')
-  .eq('category', 'harness_backlog')
-  .is('archived_at', null)
-  .gte('created_at', cutoff);
-
-if (error) {
-  console.error('ERROR (select):', JSON.stringify(error));
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: feedback is an unbounded growing
+// table; a heavy campaign week can file well over 1000 harness_backlog rows in the 14-day
+// window, and every row here is grouped/promoted below — paginate to completion.
+let rows;
+try {
+  rows = await fetchAllPaginated(() => supabase
+    .from('feedback')
+    .select('id, title, description, severity, created_at, metadata')
+    .eq('category', 'harness_backlog')
+    .is('archived_at', null)
+    .gte('created_at', cutoff)
+    .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+} catch (e) {
+  console.error('ERROR (select):', JSON.stringify({ message: e.message }));
   process.exitCode = 1;
   process.exit();
 }

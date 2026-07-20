@@ -28,6 +28,15 @@ const LEDGER_PATH = path.join(REPO_ROOT, '.adam-scan-ledger.json');
 const ADVISORY_CLI = path.join(__dirname, 'adam-advisory.cjs');
 const LEDGER_MAX_ENTRIES = 500;
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — strategic_directives_v2 (open-SD
+// dedup check) and chairman_decisions (preference prior) are both unbounded/growing reads below;
+// paginate rather than trust the implicit PostgREST 1000-row cap.
+let _fapModule = null;
+async function fapPaginate(queryFactory, opts) {
+  _fapModule ||= await import('../lib/db/fetch-all-paginated.mjs');
+  return _fapModule.fetchAllPaginated(queryFactory, opts);
+}
+
 /** Feature-flag helper: on|1|true => enabled; everything else (incl. undefined) => OFF. */
 function isFlagEnabled(env = process.env) {
   const v = String(env.ADAM_GOVERNANCE_HEARTBEAT_V1 || 'off').toLowerCase();
@@ -129,12 +138,17 @@ function buildLedgerEntry({ scope, verdict, cleared = 0, flagEnabled, detail = n
 /** Fetch open SD dedup keys (read-only). Defensive: returns an empty Set on any error. */
 async function fetchOpenSdKeys(supabase) {
   try {
-    const { data } = await supabase
+    const data = await fapPaginate(() => supabase
       .from('strategic_directives_v2')
       .select('sd_key')
-      .in('status', ['draft', 'active', 'in_progress', 'pending_approval']);
-    return new Set((data || []).map((r) => r.sd_key).filter(Boolean));
-  } catch {
+      .in('status', ['draft', 'active', 'in_progress', 'pending_approval'])
+      .order('sd_key', { ascending: true })); // unique tiebreaker (FR-6)
+    return new Set(data.map((r) => r.sd_key).filter(Boolean));
+  } catch (e) {
+    // GUARD_UNAVAILABLE: dedup check skipped this tick — the openSdKeys read failed, so a
+    // candidate that duplicates an existing open SD will not be flagged as a duplicate this
+    // tick (fail-open by original design; loud instead of silent per count-discipline policy).
+    process.stderr.write(`GUARD_UNAVAILABLE: open-SD dedup check skipped this tick — sd_key read failed (${e && e.message ? e.message : e})\n`);
     return new Set();
   }
 }
@@ -220,8 +234,10 @@ async function main() {
         // chairman_decisions: weak soft prior (read-only, fail-soft to []).
         let decisions = [];
         try {
-          const { data } = await supabase.from('chairman_decisions').select('id, decision, status');
-          decisions = data || [];
+          decisions = await fapPaginate(() => supabase
+            .from('chairman_decisions')
+            .select('id, decision, status')
+            .order('id', { ascending: true })); // unique tiebreaker (FR-6)
         } catch { decisions = []; }
         const pref = await computePreferenceWeights({ supabase, decisions });
         selectOpts.prefWeights = pref.weights;

@@ -14,6 +14,10 @@
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import 'dotenv/config';
 import { checkEvolutionThreshold } from '../../lib/eva/stage-zero/strategy-loader.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: ventures and
+// evaluation_profile_outcomes grow with the portfolio -- un-paginated reads here would
+// silently skew per-strategy pass rates past the PostgREST 1000-row cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const supabase = createSupabaseServiceClient();
 
@@ -24,13 +28,15 @@ const JSON_MODE = process.argv.includes('--json');
  */
 async function analyzeStrategyPatterns() {
   // Get ventures with discovery strategy metadata
-  const { data: ventures, error: vErr } = await supabase
-    .from('ventures')
-    .select('id, name, status, metadata')
-    .not('metadata->stage_zero->origin_metadata->discovery_strategy', 'is', null)
-    .neq('status', 'deleted');
-
-  if (vErr) {
+  let ventures;
+  try {
+    ventures = await fetchAllPaginated(() => supabase
+      .from('ventures')
+      .select('id, name, status, metadata')
+      .not('metadata->stage_zero->origin_metadata->discovery_strategy', 'is', null)
+      .neq('status', 'deleted')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (vErr) {
     console.error('Error fetching ventures:', vErr.message);
     process.exit(1);
   }
@@ -56,12 +62,14 @@ async function analyzeStrategyPatterns() {
 
   // Get gate outcomes for these ventures
   const ventureIds = ventures.map(v => v.id);
-  const { data: outcomes, error: oErr } = await supabase
-    .from('evaluation_profile_outcomes')
-    .select('venture_id, signal_type, outcome')
-    .in('venture_id', ventureIds);
-
-  if (oErr) {
+  let outcomes;
+  try {
+    outcomes = await fetchAllPaginated(() => supabase
+      .from('evaluation_profile_outcomes')
+      .select('venture_id, signal_type, outcome')
+      .in('venture_id', ventureIds)
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (oErr) {
     console.error('Error fetching outcomes:', oErr.message);
     process.exit(1);
   }
@@ -175,7 +183,7 @@ function printReport(result) {
 
   for (const s of result.strategies) {
     console.log(`  Strategy: ${s.strategy}`);
-    console.log(`  ─────────────────────────────────────────`);
+    console.log('  ─────────────────────────────────────────');
     console.log(`    Ventures:    ${s.ventureCount}`);
     console.log(`    Outcomes:    ${s.totalOutcomes}`);
     console.log(`    Pass rate:   ${s.passRate != null ? (s.passRate * 100).toFixed(1) + '%' : 'N/A'}`);

@@ -48,6 +48,11 @@ import { parentLeadPending, classifyDispatchIneligibility, resolveHoldProvenance
 // that dependency-resolver + worker-checkin enforce, so the dispatch ranker does not keep a
 // metadata-blocked SD on the claimable belt (the convention was inconsistently enforced fleet-wide).
 import { checkMetadataDependency } from './modules/sd-next/dependency-resolver.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — computeClaimableLeaves is the SSOT
+// claimable-SD computation that worker-checkin's dispatch_rank consumer relies on; a capped read
+// here would silently make some non-terminal SDs unrankable/unclaimable. strategic_directives_v2
+// is the flagship growing table.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 // Collect every blocker sd_key for an SD: the `dependencies` column PLUS the canonical
 // metadata.blocked_by_sd_key. ONE predicate, shared by depKeys collection and the unmet check.
@@ -208,14 +213,20 @@ const sb = createClient(
  */
 export async function computeClaimableLeaves(sb, opts = {}) {
   const log = opts.quiet ? () => {} : console.log;
-  const { data: sds, error } = await sb.from('strategic_directives_v2')
-    // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + title, description to classify bare-shell stubs.
-    // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: + current_phase for the in-flight (started) guard.
-    // SD-REFILL-00MFWEGZ: + parent_sd_id so parentLeadPending can exclude an orchestrator child
-    // whose parent has not yet passed LEAD (else the field is undefined → the gate silently no-ops).
-    .select('sd_key, title, description, status, sd_type, priority, created_at, current_phase, claiming_session_id, dependencies, metadata, parent_sd_id')
-    .not('status', 'in', '("completed","cancelled","deferred")');
-  if (error) { console.error('[BACKLOG-RANK] load failed:', error.message); return { error, sds: [], byKey: new Map(), depStatus: {}, claimable: [], humanActionHolds: [] }; }
+  let sds;
+  try {
+    sds = await fetchAllPaginated(() => sb.from('strategic_directives_v2')
+      // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + title, description to classify bare-shell stubs.
+      // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: + current_phase for the in-flight (started) guard.
+      // SD-REFILL-00MFWEGZ: + parent_sd_id so parentLeadPending can exclude an orchestrator child
+      // whose parent has not yet passed LEAD (else the field is undefined → the gate silently no-ops).
+      .select('sd_key, title, description, status, sd_type, priority, created_at, current_phase, claiming_session_id, dependencies, metadata, parent_sd_id')
+      .not('status', 'in', '("completed","cancelled","deferred")')
+      .order('sd_key', { ascending: true }));
+  } catch (error) {
+    console.error('[BACKLOG-RANK] load failed:', error.message);
+    return { error, sds: [], byKey: new Map(), depStatus: {}, claimable: [], humanActionHolds: [] };
+  }
 
   // ── dependency graph: edges dep -> dependents (over non-terminal set + completed deps resolved) ──
   const byKey = new Map((sds || []).map(d => [d.sd_key, d]));
@@ -565,11 +576,15 @@ async function main() {
     // REMEDIATION-UNIT-TEST-003/-004 stuck at dispatch_rank=2). Sweep terminal SDs that still carry a
     // rank and clear them. Fail-soft per row; a query error skips the sweep entirely.
     try {
-      const { data: terminalRanked } = await sb.from('strategic_directives_v2')
+      // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — terminal SDs accumulate
+      // without bound; a capped read here would silently leave stale dispatch_rank fields set
+      // on terminal SDs past the PostgREST 1000-row boundary.
+      const terminalRanked = await fetchAllPaginated(() => sb.from('strategic_directives_v2')
         .select('sd_key, metadata')
         .in('status', ['completed', 'cancelled', 'deferred'])
-        .not('metadata->>dispatch_rank', 'is', null);
-      for (const d of (terminalRanked || [])) {
+        .not('metadata->>dispatch_rank', 'is', null)
+        .order('sd_key', { ascending: true }));
+      for (const d of terminalRanked) {
         const { changed } = stripDispatchRank(d.metadata);
         if (!changed) continue;
         if (!pgClient) { console.error(`  ! skipped clear ${d.sd_key}: no atomic-merge DB client available`); continue; }

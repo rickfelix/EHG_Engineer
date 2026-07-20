@@ -17,6 +17,7 @@ import { resolve } from 'path';
 import { readFileSync, writeFileSync } from 'fs';
 import { liveFleetWorkers, isFleetWorker } from '../lib/fleet/genuine-worker.mjs';
 import { enforceCliSendGuard } from '../lib/notifications/cli-send-guard.mjs';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 enforceCliSendGuard({ scriptName: 'scripts/coordinator-email-summary.mjs', flags: [] });
 
@@ -40,12 +41,20 @@ const termList = '(' + TERMINAL.join(',') + ')';
 // resolution mirrors coordinator-audit.mjs, so email and audit cannot drift.
 const claimMod = await import(pathToFileURL(resolve('lib/coordinator/claimable-work.cjs')).href);
 const { isClaimableSd, dependencyKeys } = claimMod.default ?? claimMod;
-const { data: workRows } = await db.from('strategic_directives_v2')
-  .select('sd_key,sd_type,dependencies').not('status', 'in', termList);
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 is unbounded
+// and every row here is filtered through isClaimableSd below (JS-side dependency logic, not
+// expressible as a head-count) — paginate to completion; fail-open to [] mirrors the prior
+// destructured-undefined-on-error behavior.
+const workRows = await fetchAllPaginated(() => db.from('strategic_directives_v2')
+  .select('sd_key,sd_type,dependencies').not('status', 'in', termList)
+  .order('sd_key', { ascending: true })) // unique tiebreaker (FR-6)
+  .catch(() => []);
 // resolve the status of every referenced dependency in one query (mirrors coordinator-audit.mjs).
 const depKeys = dependencyKeys(workRows || []);
 const depStatus = {};
 if (depKeys.length) {
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: bounded by design — depKeys is
+  // the distinct set of /^SD-/ dependency references parsed from the workable-SD set above.
   const { data: depRows } = await db.from('strategic_directives_v2').select('sd_key,status').in('sd_key', depKeys);
   for (const r of (depRows || [])) depStatus[r.sd_key] = r.status;
 }

@@ -24,6 +24,10 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { scanSubscriptions } from '../../lib/integrations/youtube/subscription-scanner.js';
 import { scoreVideoBatch } from '../../lib/eva/youtube-relevance-scorer.js';
 import { createDigestTasks } from '../../lib/integrations/todoist/digest-task-creator.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: ventures grows with the
+// portfolio -- an un-paginated read here would silently drop ventures past the PostgREST
+// 1000-row cap from the interest-keyword fallback.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const supabase = createSupabaseServiceClient();
 
@@ -72,12 +76,16 @@ async function getChannels() {
 
 async function getVentureInterests() {
   // Fallback: load from ventures table if no interest profiles in config
-  const { data } = await supabase
-    .from('ventures')
-    .select('name, metadata')
-    .eq('status', 'active');
+  let data;
+  try {
+    data = await fetchAllPaginated(() => supabase
+      .from('ventures')
+      .select('name, metadata')
+      .eq('status', 'active')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { data = []; } // prior behavior: read error ignored
 
-  return (data || []).map(v => ({
+  return data.map(v => ({
     name: v.name,
     keywords: v.metadata?.keywords || [v.name.toLowerCase()]
   }));

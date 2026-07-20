@@ -115,19 +115,38 @@ describe('FR-4 (W2, SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001): negative-outco
       { id: 'row-unrelated', outcome: 'unknown', outcome_ref: 'SD-CLEAN-002' },
     ];
     const updates = [];
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: collectNegativeRefs /
+    // backPropagateNegativeOutcomes now paginate via fapPaginate, which chains .order() then
+    // a terminal .range() instead of the old terminal .limit().
     const sb = {
       from: (table) => {
         if (table === 'audit_log') {
-          return { select: () => ({ in: () => ({ limit: async () => ({ data: [{ event: 'SD_REVERTED', metadata: { sd_key: 'SD-SEEDED-REVERT-001' } }], error: null }) }) }) };
+          const chain = {
+            select: () => chain,
+            in: () => chain,
+            order: () => chain,
+            range: async () => ({ data: [{ event: 'SD_REVERTED', metadata: { sd_key: 'SD-SEEDED-REVERT-001' } }], error: null }),
+          };
+          return chain;
         }
         if (table === 'strategic_directives_v2') {
-          return { select: () => ({ not: () => ({ limit: async () => ({ data: [], error: null }) }) }) };
+          const chain = {
+            select: () => chain,
+            not: () => chain,
+            order: () => chain,
+            range: async () => ({ data: [], error: null }),
+          };
+          return chain;
         }
         // solomon_advice_outcome_ledger
-        return {
-          select: () => ({ not: () => ({ limit: async () => ({ data: ledger, error: null }) }) }),
+        const chain = {
+          select: () => chain,
+          not: () => chain,
+          order: () => chain,
+          range: async () => ({ data: ledger, error: null }),
           update: (patch) => ({ eq: (col, val) => { updates.push({ patch, col, val }); return Promise.resolve({ error: null }); } }),
         };
+        return chain;
       },
     };
     const negRefs = await collectNegativeRefs(sb, {});
@@ -144,10 +163,16 @@ describe('FR-4 (W2, SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001): negative-outco
   it('dryRun reports matches without writing', async () => {
     const ledger = [{ id: 'r1', outcome: 'unknown', outcome_ref: 'SD-R' }];
     let updateCalled = false;
-    const sb = { from: () => ({
-      select: () => ({ not: () => ({ limit: async () => ({ data: ledger, error: null }) }) }),
-      update: () => { updateCalled = true; return { eq: () => Promise.resolve({ error: null }) }; },
-    }) };
+    const sb = { from: () => {
+      const chain = {
+        select: () => chain,
+        not: () => chain,
+        order: () => chain,
+        range: async () => ({ data: ledger, error: null }),
+        update: () => { updateCalled = true; return { eq: () => Promise.resolve({ error: null }) }; },
+      };
+      return chain;
+    } };
     const res = await backPropagateNegativeOutcomes(sb, { negativeRefs: new Set(['SD-R']), dryRun: true });
     expect(res.matched.map((m) => m.id)).toEqual(['r1']);
     expect(res.updated).toEqual([]);

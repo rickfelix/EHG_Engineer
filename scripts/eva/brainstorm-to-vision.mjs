@@ -28,6 +28,10 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 // to it via a raw .update() with no ratification check at all, reproducing the exact
 // bug class this SD closed for the CLI's addendum path. Excluded at the query below.
 import { GOVERNED_VISION_KEYS, selectFirstNonGoverned } from '../../lib/eva/vision-upsert.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: brainstorm_sessions and
+// eva_vision_documents grow indefinitely -- an un-paginated read here silently drops
+// vision-relevant sessions (or link-check rows) past the PostgREST 1000-row cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const VISION_RELEVANT_OUTCOMES = ['sd_created', 'significant_departure'];
 const MAX_LLM_CONTENT_CHARS = 15000;
@@ -95,25 +99,32 @@ async function main() {
   const supabase = createSupabaseServiceClient();
 
   // Find unlinked brainstorm sessions with vision-relevant outcomes
-  let query = supabase
-    .from('brainstorm_sessions')
-    .select('id, topic, outcome_type, metadata, content, document_path, new_capability_candidates, created_at')
-    .in('outcome_type', VISION_RELEVANT_OUTCOMES)
-    .order('created_at', { ascending: true });
+  const buildSessionsQuery = () => {
+    let q = supabase
+      .from('brainstorm_sessions')
+      .select('id, topic, outcome_type, metadata, content, document_path, new_capability_candidates, created_at')
+      .in('outcome_type', VISION_RELEVANT_OUTCOMES)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true }); // unique tiebreaker (FR-6)
+    if (opts.id) q = q.eq('id', opts.id);
+    return q;
+  };
 
-  if (opts.id) {
-    query = query.eq('id', opts.id);
-  }
-
-  const { data: sessions, error: sessErr } = await query;
-  if (sessErr) { console.error('❌ Query failed:', sessErr.message); process.exit(1); }
+  let sessions;
+  try {
+    sessions = await fetchAllPaginated(buildSessionsQuery);
+  } catch (sessErr) { console.error('❌ Query failed:', sessErr.message); process.exit(1); }
   if (!sessions?.length) { console.log('✅ No unlinked brainstorm sessions found.'); return; }
 
   // Find which sessions already have linked vision docs
-  const { data: linked } = await supabase
-    .from('eva_vision_documents')
-    .select('source_brainstorm_id')
-    .in('source_brainstorm_id', sessions.map(s => s.id));
+  let linked;
+  try {
+    linked = await fetchAllPaginated(() => supabase
+      .from('eva_vision_documents')
+      .select('source_brainstorm_id')
+      .in('source_brainstorm_id', sessions.map(s => s.id))
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { linked = []; } // prior behavior: read error ignored
 
   const linkedIds = new Set((linked || []).map(d => d.source_brainstorm_id));
   const unlinked = sessions.filter(s => !linkedIds.has(s.id));

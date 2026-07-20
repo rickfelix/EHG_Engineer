@@ -27,6 +27,10 @@ function makeSupabaseMock({ laneColumnExists, completedSds = [], blockedRows = [
       eq() { return b; },
       like(col, pat) { state._like = [col, pat]; return b; },
       limit() { return b; },
+      // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the sweep now paginates via
+      // fetchAllPaginated, which appends .order()/.range() to the builder before awaiting it.
+      order() { return b; },
+      range() { return b; },
       update(patch) { state._update = patch; return b; },
       then(resolve, reject) { return Promise.resolve(resolveResult(state)).then(resolve, reject); },
     };

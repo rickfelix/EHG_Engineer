@@ -9,6 +9,7 @@ import { program } from 'commander';
 import dotenv from 'dotenv';
 import chalk from 'chalk';
 import { validatePRDContent } from './prd-format-validator.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -230,11 +231,13 @@ async function checkTablesExist() {
  * Check PRD format compliance
  */
 async function checkFormatCompliance() {
-  const { data: prds, error } = await supabase
+  // Paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: every PRD is
+  // validated below; product_requirements_v2 is unbounded-growth, and a capped read here
+  // would silently under-report the total (the exact false-health-signal bug this SD closes).
+  const prds = await fetchAllPaginated(() => supabase
     .from('product_requirements_v2')
-    .select('id, directive_id, content');
-
-  if (error) throw error;
+    .select('id, directive_id, content')
+    .order('id', { ascending: true }));
 
   let validCount = 0;
   let _invalidCount = 0;
@@ -264,20 +267,19 @@ async function checkFormatCompliance() {
  * Check SD-PRD mapping completeness
  */
 async function checkSDPRDMapping() {
-  // Get active SDs
-  const { data: sds, error: sdError } = await supabase
+  // Get active SDs (paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9:
+  // strategic_directives_v2 is unbounded-growth and a status filter does not bound it)
+  const sds = await fetchAllPaginated(() => supabase
     .from('strategic_directives_v2')
     .select('id, title, status')
-    .in('status', ['active', 'in_progress']);
+    .in('status', ['active', 'in_progress'])
+    .order('id', { ascending: true }));
 
-  if (sdError) throw sdError;
-
-  // Get PRDs
-  const { data: prds, error: prdError } = await supabase
+  // Get PRDs (paginated — every row feeds the missing-PRD set-difference below)
+  const prds = await fetchAllPaginated(() => supabase
     .from('product_requirements_v2')
-    .select('directive_id');
-
-  if (prdError) throw prdError;
+    .select('directive_id')
+    .order('id', { ascending: true }));
 
   const prdSDs = new Set(prds.map(p => p.directive_id));
   const missingSDs = sds.filter(sd => !prdSDs.has(sd.id));
@@ -294,18 +296,17 @@ async function checkSDPRDMapping() {
  * Check for orphaned records
  */
 async function checkOrphanedRecords() {
-  // PRDs without SDs
-  const { data: prds, error: prdError } = await supabase
+  // PRDs without SDs (paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9:
+  // both tables are unbounded-growth and every row feeds the orphan set-difference below)
+  const prds = await fetchAllPaginated(() => supabase
     .from('product_requirements_v2')
-    .select('id, directive_id');
+    .select('id, directive_id')
+    .order('id', { ascending: true }));
 
-  if (prdError) throw prdError;
-
-  const { data: sds, error: sdError } = await supabase
+  const sds = await fetchAllPaginated(() => supabase
     .from('strategic_directives_v2')
-    .select('id');
-
-  if (sdError) throw sdError;
+    .select('id')
+    .order('id', { ascending: true }));
 
   const validSDIds = new Set(sds.map(sd => sd.id));
   const orphanedPRDs = prds.filter(prd => !validSDIds.has(prd.directive_id));
@@ -325,11 +326,12 @@ async function checkOrphanedRecords() {
  * Check content quality
  */
 async function checkContentQuality() {
-  const { data: prds, error } = await supabase
+  // Paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: every PRD's
+  // content is inspected below; product_requirements_v2 is unbounded-growth.
+  const prds = await fetchAllPaginated(() => supabase
     .from('product_requirements_v2')
-    .select('id, content');
-
-  if (error) throw error;
+    .select('id, content')
+    .order('id', { ascending: true }));
 
   let qualityIssues = 0;
   let emptyContent = 0;
@@ -379,11 +381,15 @@ async function generateFormatReport() {
   console.log(chalk.blue('📋 PRD Format Compliance Report'));
   console.log(chalk.gray('=' .repeat(50)));
 
-  const { data: prds, error } = await supabase
-    .from('product_requirements_v2')
-    .select('id, directive_id, title, content, created_at');
-
-  if (error) {
+  // Paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: every PRD is
+  // categorized below; product_requirements_v2 is unbounded-growth.
+  let prds;
+  try {
+    prds = await fetchAllPaginated(() => supabase
+      .from('product_requirements_v2')
+      .select('id, directive_id, title, content, created_at')
+      .order('id', { ascending: true }));
+  } catch (error) {
     console.error(chalk.red('Error fetching PRDs:'), error);
     return;
   }

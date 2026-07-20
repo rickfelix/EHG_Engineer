@@ -19,7 +19,9 @@ function fakeSb({ sds = [], activationRows = [], armedRows = [] } = {}) {
           select() {
             const chain = {
               eq: () => chain,
-              gte: () => Promise.resolve({ data: sds, error: null }),
+              gte: () => chain,
+              order: () => chain,
+              range: () => Promise.resolve({ data: sds, error: null }),
             };
             return chain;
           },

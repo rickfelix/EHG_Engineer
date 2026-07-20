@@ -24,6 +24,12 @@
  * @module sd-id-normalizer
  */
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — normalizeSDIdBatch below
+// builds a full id/sd_key lookup map from the ENTIRE strategic_directives_v2 table with
+// no filter; a silently-capped read means SDs past row ~1000 fail to normalize with no
+// error (the exact "healthy-looking wrong" incident this SD hardens against).
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
+
 /**
  * UUID regex pattern for format detection
  * Matches standard UUID v4 format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -338,11 +344,13 @@ export async function normalizeSDIdBatch(supabase, sdIds) {
   const uniqueIds = [...new Set(sdIds.filter(id => id && typeof id === 'string'))];
 
   // Query all at once for efficiency
-  const { data: sds, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key');
-
-  if (error || !sds) {
+  let sds;
+  try {
+    sds = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key')
+      .order('id', { ascending: true }));
+  } catch (error) {
     console.error('[SD-ID-NORMALIZER] Batch query failed:', error?.message);
     return results;
   }

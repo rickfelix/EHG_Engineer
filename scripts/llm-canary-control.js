@@ -20,6 +20,7 @@
 
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -105,12 +106,20 @@ async function showStatus() {
   console.log(`│  Changed By:              ${(state.changed_by || 'system').padEnd(35)} │`);
   console.log('└──────────────────────────────────────────────────────────────┘');
 
-  // Get recent metrics summary
+  // Get recent metrics summary (paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001
+  // FR-6 batch 9: llm_canary_metrics is a fleet-wide telemetry table; a 5-minute window
+  // can plausibly exceed the PostgREST cap under high LLM call volume)
   const windowStart = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-  const { data: metrics } = await supabase
-    .from('llm_canary_metrics')
-    .select('success, routed_to')
-    .gte('created_at', windowStart);
+  let metrics;
+  try {
+    metrics = await fetchAllPaginated(() => supabase
+      .from('llm_canary_metrics')
+      .select('success, routed_to')
+      .gte('created_at', windowStart)
+      .order('id', { ascending: true }));
+  } catch {
+    metrics = null;
+  }
 
   if (metrics && metrics.length > 0) {
     const localMetrics = metrics.filter(m => m.routed_to === 'local');
@@ -238,15 +247,19 @@ async function checkQuality() {
   // Get current state
   const { data: state } = await supabase.rpc('get_canary_state');
 
-  // Get recent metrics
+  // Get recent metrics (paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6
+  // batch 9: llm_canary_metrics is a fleet-wide telemetry table; a 5-minute window can
+  // plausibly exceed the PostgREST cap under high LLM call volume)
   const windowStart = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-  const { data: metrics, error } = await supabase
-    .from('llm_canary_metrics')
-    .select('*')
-    .eq('routed_to', 'local')
-    .gte('created_at', windowStart);
-
-  if (error) {
+  let metrics;
+  try {
+    metrics = await fetchAllPaginated(() => supabase
+      .from('llm_canary_metrics')
+      .select('*')
+      .eq('routed_to', 'local')
+      .gte('created_at', windowStart)
+      .order('id', { ascending: true }));
+  } catch (error) {
     console.error('❌ Failed to fetch metrics:', error.message);
     return;
   }

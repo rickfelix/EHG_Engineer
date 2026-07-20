@@ -23,8 +23,20 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the ventures scan below is
+// UNBOUNDED-PROCESSED (ventures grows with portfolio size; the playbook explicitly warns not
+// to assume "small now"); paginate to completion, and chunk the resulting bulk upsert so
+// removing the read's implicit ~1000-row ceiling doesn't push an unchunked write past a
+// request-URI-too-long failure.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const APPLY = process.argv.includes('--apply');
+const UPSERT_CHUNK = 200;
+function chunk(arr, n) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
+}
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -93,11 +105,11 @@ async function main() {
     .filter(([, c]) => c.decisionType !== null)
     .map(([n]) => n);
 
-  const { data: ventures, error: e2 } = await supabase
+  const ventures = await fetchAllPaginated(() => supabase
     .from('ventures')
     .select('id,current_lifecycle_stage,status,killed_at')
-    .in('current_lifecycle_stage', decisionStages);
-  if (e2) throw e2;
+    .in('current_lifecycle_stage', decisionStages)
+    .order('id', { ascending: true }));
 
   const live = ventures.filter(v => v.status !== 'archived' && v.status !== 'killed' && !v.killed_at);
 
@@ -156,15 +168,22 @@ async function main() {
     summary: `Backfill via SD-LEO-REFAC-CANONICALIZE-STAGE-CONFIG-001 FR-1 for stage ${c.lifecycle_stage} (work_type=${c.work_type})`,
   }));
 
-  const { data: inserted, error: e3 } = await supabase
-    .from('chairman_decisions')
-    // SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001: uq_chairman_decision_attempt was widened to
-    // (venture_id, lifecycle_stage, decision_type, attempt_number) -- the old 3-column onConflict
-    // target no longer matches any unique index/constraint and would 42P10.
-    .upsert(rows, { onConflict: 'venture_id,lifecycle_stage,decision_type,attempt_number', ignoreDuplicates: true })
-    .select('id,venture_id,lifecycle_stage');
-  if (e3) throw e3;
-  console.error(`\n[APPLY] Inserted ${inserted?.length || 0} chairman_decisions rows.`);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: chunked because `rows` is built
+  // from the now-unbounded `ventures` scan above — an unchunked upsert could carry an
+  // arbitrarily large payload.
+  let inserted = [];
+  for (const rowChunk of chunk(rows, UPSERT_CHUNK)) {
+    const { data: chunkInserted, error: e3 } = await supabase
+      .from('chairman_decisions')
+      // SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001: uq_chairman_decision_attempt was widened to
+      // (venture_id, lifecycle_stage, decision_type, attempt_number) -- the old 3-column onConflict
+      // target no longer matches any unique index/constraint and would 42P10.
+      .upsert(rowChunk, { onConflict: 'venture_id,lifecycle_stage,decision_type,attempt_number', ignoreDuplicates: true })
+      .select('id,venture_id,lifecycle_stage');
+    if (e3) throw e3;
+    inserted = inserted.concat(chunkInserted || []);
+  }
+  console.error(`\n[APPLY] Inserted ${inserted.length} chairman_decisions rows.`);
 }
 
 // Only run main() when invoked directly — allows tests to import deriveDecisionType

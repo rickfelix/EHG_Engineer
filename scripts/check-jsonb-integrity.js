@@ -14,6 +14,10 @@
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import 'dotenv/config';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — this scans + (in --fix mode) writes
+// EVERY active SD; strategic_directives_v2 is a growing table, so a capped read would silently
+// skip integrity checks/fixes past the PostgREST 1000-row boundary.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const supabase = createSupabaseServiceClient();
 
@@ -55,13 +59,15 @@ async function checkIntegrity() {
   console.log('');
 
   // Fetch all active SDs
-  const { data: sds, error } = await supabase
-    .from('strategic_directives_v2')
-    .select(`id, title, status, ${JSONB_FIELDS.join(', ')}`)
-    .eq('is_active', true);
-
-  if (error) {
-    console.error('Error fetching SDs:', error.message);
+  let sds;
+  try {
+    sds = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select(`id, title, status, ${JSONB_FIELDS.join(', ')}`) // schema-lint-disable-line: dynamic column-list template, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
+      .eq('is_active', true)
+      .order('id', { ascending: true }));
+  } catch (e) {
+    console.error('Error fetching SDs:', e.message);
     process.exit(1);
   }
 

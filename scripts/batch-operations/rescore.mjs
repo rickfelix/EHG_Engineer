@@ -2,6 +2,10 @@
  * Rescore Operation Adapter
  * Wraps batch-rescore-*.js scripts for the /batch dispatcher.
  */
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — round-based rescoring iterates
+// every matched SD; strategic_directives_v2 is a growing table and an ILIKE title match is not
+// a strict bound, so a capped read would silently under-rescore with no error.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 export default {
   key: 'rescore',
@@ -93,19 +97,21 @@ async function rescoreByRound(supabase, round, dryRun) {
   // Query SDs that are children of round-specific orchestrators
   const roundFilter = round === 'round1' ? 'Round 1' : 'Round 2';
 
-  const { data: children, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key, title, status')
-    .ilike('title', `%${roundFilter}%`)
-    .eq('status', 'completed');
-
-  if (error) {
+  let children;
+  try {
+    children = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, status')
+      .ilike('title', `%${roundFilter}%`)
+      .eq('status', 'completed')
+      .order('id', { ascending: true }));
+  } catch (error) {
     result.details.push({ error: `Query failed: ${error.message}` });
     result.failed = 1;
     return result;
   }
 
-  result.total = children?.length || 0;
+  result.total = children.length;
 
   if (result.total === 0) {
     result.details.push({ status: `no_${round}_children_found` });

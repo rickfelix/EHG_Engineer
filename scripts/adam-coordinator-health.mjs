@@ -20,6 +20,10 @@ import { computeWaveLinkageCoverage } from '../lib/roadmap/wave-linkage-coverage
 import { computeClaimableLeaves } from './coordinator-backlog-rank.mjs';
 import { getActiveCoordinatorId } from '../lib/coordinator/resolve.cjs';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: exact head-counts for the
+// gauge sites below (never rows.length on a capped read) + pagination for the sharpenings
+// SD-window read (strategic_directives_v2 is unbounded and iterated, not just counted).
+import { fetchAllPaginated, renderCount, POSTGREST_MAX_ROWS } from '../lib/db/fetch-all-paginated.mjs';
 // SD-LEO-INFRA-COORDINATOR-HEALTH-KPI-001: the 5-sharpening delta (Solomon cold-review).
 // KPI-0 outcome/flow is the PRIMARY axis; the base 3 KPIs stay untouched below.
 import { execSync } from 'child_process';
@@ -47,10 +51,13 @@ export async function computeUtilization(supabase, { nowMs = Date.now() } = {}) 
   // rows, so every live session was excluded and this KPI reported live_workers=0 with
   // full confidence. Ordering by heartbeat_at descending guarantees the freshest rows —
   // the only ones liveFleetWorkers' window filter can ever keep — land inside the cap.
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: explicit .limit(POSTGREST_MAX_ROWS)
+  // makes the reliance on the cap self-documenting rather than implicit on the server default.
   const { data: sessions, error } = await supabase
     .from('claude_sessions')
     .select('*')
-    .order('heartbeat_at', { ascending: false });
+    .order('heartbeat_at', { ascending: false })
+    .limit(POSTGREST_MAX_ROWS);
   if (error) throw new Error(`utilization: claude_sessions query failed: ${error.message}`);
   const rows = sessions || [];
   const coordinatorId =
@@ -60,19 +67,23 @@ export async function computeUtilization(supabase, { nowMs = Date.now() } = {}) 
   const claimed = live.filter((s) => !!s.sd_key);
   const idle = live.filter((s) => !s.sd_key);
 
-  const { data: backlog, error: bErr } = await supabase
+  // FR-6 batch 9: this is a GAUGE (only the count is used below) — exact head-count instead
+  // of a rows.length on a .limit(1000) read, which is exactly the live-incident cap-masking
+  // shape (read silently truncated at 1000 while the true backlog was larger).
+  const { count: backlogCount, error: bErr } = await supabase
     .from('strategic_directives_v2')
-    .select('id')
+    .select('id', { count: 'exact', head: true })
     .eq('status', 'draft')
-    .is('claiming_session_id', null)
-    .limit(1000);
+    .is('claiming_session_id', null);
   if (bErr) throw new Error(`utilization: backlog query failed: ${bErr.message}`);
+  const backlogSize = renderCount(backlogCount);
+  if (backlogSize === 'unavailable') throw new Error('utilization: backlog count measurement unavailable');
 
   return {
     live_workers: live.length,
     claimed: claimed.length,
     idle: idle.length,
-    dispatchable_backlog_size: (backlog || []).length,
+    dispatchable_backlog_size: backlogSize,
   };
 }
 
@@ -131,15 +142,25 @@ export async function computePlanAdherence(supabase) {
  * NOT substantially explained by that known hold count — see the inline comment below.
  */
 export async function computeFailLoudIntegrity(supabase, { selfReportedCounts, claimableLeavesFn = computeClaimableLeaves } = {}) {
-  const { data, error } = await supabase
+  // FR-6 batch 9: GAUGE — exact head-count, never rows.length on an unbounded read (this
+  // query previously had no .limit() at all, so it silently truncated at the PostgREST
+  // 1000-row cap on a growing table; a truncated "recomputed" count here would corrupt the
+  // exact invariant this KPI is built on). count===null (measurement failure, possibly with
+  // error===null on a missing-relation edge case) is surfaced as integrity_ok=false too, per
+  // this function's own "MUST NEVER be null-coalesced into a silent 0" contract above.
+  const { count, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id')
+    .select('id', { count: 'exact', head: true })
     .eq('status', 'draft')
     .is('claiming_session_id', null);
   if (error) {
     return { integrity_ok: false, error: error.message, divergent_fields: ['dispatchable_count'] };
   }
-  const recomputed = { dispatchable_count: (data || []).length };
+  const dispatchableCount = renderCount(count);
+  if (dispatchableCount === 'unavailable') {
+    return { integrity_ok: false, error: 'dispatchable_count measurement unavailable', divergent_fields: ['dispatchable_count'] };
+  }
+  const recomputed = { dispatchable_count: dispatchableCount };
 
   let selfReported = selfReportedCounts;
   let humanActionHeld = null;
@@ -274,13 +295,16 @@ export async function computeSharpenings(supabase, { utilization, integrity, now
     const sinceIso = new Date(nowMs - (OUTCOME_WINDOW_DAYS + 21) * 24 * 60 * 60 * 1000).toISOString();
     // NOTE: provenance_source is a feedback-table column, NOT an SD column — selecting
     // it here 400s the whole query (live-verified; the fail-soft catch masked it).
-    const { data, error } = await supabase
+    // FR-6 batch 9: strategic_directives_v2 grows past the PostgREST 1000-row cap; the dead
+    // .limit(2000) never bounded it (server clamps to 1000) — same class as coordinator-
+    // health-sharpenings.mjs's computeOutcomeFlow (fixed FR-6 batch 8). Paginate; the
+    // enclosing try/catch already mirrors the prior fail-open policy (band_ok:true on error).
+    const data = await fetchAllPaginated(() => supabase
       .from('strategic_directives_v2')
       .select('sd_key, metadata, created_at')
       .gte('created_at', sinceIso)
-      .limit(2000);
-    if (error) throw new Error(error.message);
-    dispatchReasons = deriveDispatchReasons(selectCohort(data || [], nowMs));
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    dispatchReasons = deriveDispatchReasons(selectCohort(data, nowMs));
     bandVerdict = evaluateReasonBand(dispatchReasons);
   } catch (e) { bandVerdict = { band_ok: true, error: e.message }; }
   try { stuckRows = await fetchStuckWithoutHold(supabase, { nowMs }); } catch { stuckRows = []; }

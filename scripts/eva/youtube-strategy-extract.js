@@ -38,6 +38,10 @@ import {
 } from '../../lib/integrations/youtube/strategy-extract-core.js';
 import { emitFeedback } from '../../lib/governance/emit-feedback.js';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: fetchCandidates has no cap
+// when --limit is omitted, and fetchSDList's .limit(3000) exceeds the PostgREST 1000-row
+// cap and was silently truncating the SD dedup list to 1000 (real bug: fixed via maxRows).
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const SD_KEY = 'SD-LEO-INFRA-YOUTUBE-STRATEGY-EXTRACTION-001';
 const LEDGER_PATH = path.resolve(process.cwd(), 'memory', 'youtube-strategy-ledger.json');
@@ -88,22 +92,36 @@ async function fetchCandidates(supabase, limit) {
   // need the transcript fallback, which is environmentally limited — see
   // transcript-fallback.js header. Ordering longest-first would front-load those
   // failures and waste a --limit sample on them.)
-  let q = supabase
-    .from('eva_youtube_intake')
-    .select('id, youtube_video_id, youtube_playlist_item_id, title, channel_name, duration_seconds, chairman_intent, chairman_notes, target_application, business_function, status, processed_at')
-    .eq('status', 'pending')
-    .is('processed_at', null)
-    .order('created_at', { ascending: true });
-  if (limit) q = q.limit(limit);
-  const { data, error } = await q;
-  if (error) throw new Error(`fetch candidates: ${error.message}`);
-  return (data || []).filter((r) => r.youtube_video_id);
+  let data;
+  try {
+    data = await fetchAllPaginated(() => supabase
+      .from('eva_youtube_intake')
+      .select('id, youtube_video_id, youtube_playlist_item_id, title, channel_name, duration_seconds, chairman_intent, chairman_notes, target_application, business_function, status, processed_at')
+      .eq('status', 'pending')
+      .is('processed_at', null)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true }), // unique tiebreaker (FR-6)
+      { maxRows: limit || Infinity }); // preserves the original --limit sampling cap
+  } catch (error) {
+    throw new Error(`fetch candidates: ${error.message}`);
+  }
+  return data.filter((r) => r.youtube_video_id);
 }
 
 async function fetchSDList(supabase) {
-  const { data, error } = await supabase.from('strategic_directives_v2').select('sd_key, title').limit(3000);
-  if (error) { console.warn(`  (dedup degraded: could not load SD list: ${error.message})`); return []; }
-  return data || [];
+  // BUG FIX (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9): .limit(3000)
+  // exceeds the PostgREST 1000-row cap -- the server silently clamped the response to
+  // 1000 rows regardless of the requested 3000, degrading dedup coverage. maxRows
+  // preserves the original 3000-row sampling intent via real pagination.
+  try {
+    return await fetchAllPaginated(
+      () => supabase.from('strategic_directives_v2').select('sd_key, title').order('id', { ascending: true }),
+      { maxRows: 3000 }
+    );
+  } catch (error) {
+    console.warn(`  (dedup degraded: could not load SD list: ${error.message})`);
+    return [];
+  }
 }
 
 function appendReferenceLibrary(entries) {

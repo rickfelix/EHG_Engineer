@@ -22,6 +22,11 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { readFileSync } from 'node:fs';
 dotenv.config();
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — this is a weekly CI drift
+// sentinel whose whole purpose is comprehensive coverage (--strict gates CI on drift.total,
+// derived from autoSds below); a PostgREST-capped read would silently under-report drift.
+// Both ventures and strategic_directives_v2 are growing tables — paginate to completion.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const args = process.argv.slice(2);
 const JSON_MODE = args.includes('--json');
@@ -49,11 +54,15 @@ const report = {
 };
 
 // 1. At-risk ventures (pipeline_mode='building' AND repo_url IS NULL)
-const { data: atRisk } = await sb
-  .from('ventures')
-  .select('id, name, current_lifecycle_stage, pipeline_mode, repo_url, deployment_url, archetype, status')
-  .is('repo_url', null)
-  .eq('pipeline_mode', 'building');
+let atRisk;
+try {
+  atRisk = await fetchAllPaginated(() => sb
+    .from('ventures')
+    .select('id, name, current_lifecycle_stage, pipeline_mode, repo_url, deployment_url, archetype, status')
+    .is('repo_url', null)
+    .eq('pipeline_mode', 'building')
+    .order('id', { ascending: true }));
+} catch (e) { log('at-risk ventures query failed: ' + e.message); atRisk = []; }
 report.at_risk_ventures = (atRisk || []).map((v) => ({
   id: v.id,
   name: v.name,
@@ -68,11 +77,15 @@ for (const v of atRisk || []) {
 
 // 2. SDs from auto-pipeline-stage-17 with target_application=EHG
 log('\n=== SDs with auto-pipeline-stage-17 generation_source AND target_application=EHG ===');
-const { data: autoSds } = await sb
-  .from('strategic_directives_v2')
-  .select('sd_key, title, status, target_application, metadata, parent_sd_id')
-  .eq('target_application', 'EHG')
-  .filter('metadata->>generation_source', 'eq', 'auto-pipeline-stage-17-doc-gen');
+let autoSds;
+try {
+  autoSds = await fetchAllPaginated(() => sb
+    .from('strategic_directives_v2')
+    .select('sd_key, title, status, target_application, metadata, parent_sd_id')
+    .eq('target_application', 'EHG')
+    .filter('metadata->>generation_source', 'eq', 'auto-pipeline-stage-17-doc-gen')
+    .order('id', { ascending: true }));
+} catch (e) { log('auto-pipeline SD query failed: ' + e.message); autoSds = []; }
 report.auto_sds_total = autoSds?.length || 0;
 log(`Total: ${report.auto_sds_total}`);
 

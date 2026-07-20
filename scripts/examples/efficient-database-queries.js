@@ -9,6 +9,12 @@
 
 import { createSupabaseClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — Example 4 below deliberately
+// demonstrates the fetch-then-count ANTI-PATTERN this SD's discipline exists to close (the
+// very next block shows the count:'exact' fix); converting the "BAD" branch to paginate would
+// defeat the pedagogy. Tripwire it instead so the demo also surfaces the live incident
+// signature (rows.length === cap) if the retrospectives table ever grows past it.
+import { warnIfCapTruncated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -167,9 +173,10 @@ async function example4_count() {
   console.log('❌ BAD: Fetch to count');
   console.log('─'.repeat(40));
 
-  const { data: retrospectives } = await supabase
+  const { data: retrospectivesRaw } = await supabase
     .from('retrospectives')
     .select('*');
+  const retrospectives = warnIfCapTruncated(retrospectivesRaw, 'scripts/examples/efficient-database-queries.js:178');
 
   const badOutput = `Total retrospectives: ${retrospectives.length}`;
   console.log(badOutput);

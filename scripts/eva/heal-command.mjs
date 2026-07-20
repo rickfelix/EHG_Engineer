@@ -25,6 +25,10 @@ import { dirname, join } from 'path';
 import { execFileSync } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
 import { ensureFresh, getGitMeta, warnIfWorktree } from './git-freshness.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 is a
+// growing table -- the --today/--since/--sd-id heal-scoring queries have no small .limit(),
+// so an un-paginated read here would silently drop SDs past the PostgREST 1000-row cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../../.env') });
@@ -141,43 +145,51 @@ async function cmdSDQuery(opts) {
 
   const supabase = getSupabase();
 
-  let query = supabase
-    .from('strategic_directives_v2')
-    .select('sd_key, title, key_changes, success_criteria, success_metrics, strategic_objectives, smoke_test_steps, delivers_capabilities, completion_date, status, metadata');
-
   // SD-LEO-INFRA-ALIGN-HEAL-GATE-001 (FR-4): --in-progress includes non-completed SDs
   if (opts.inProgress) {
-    query = query.in('status', ['completed', 'in_progress', 'active']);
     console.log('   📋 --in-progress: including in_progress/active SDs (pre-completion scoring)');
-  } else {
-    query = query.eq('status', 'completed');
   }
-  query = query.order('completion_date', { ascending: false });
 
-  if (opts.sdId) {
-    query = query.eq('sd_key', opts.sdId);
-  } else if (opts.today) {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    query = query.gte('completion_date', todayStart.toISOString());
-  } else if (opts.since) {
-    const sinceDate = new Date(opts.since);
-    sinceDate.setHours(0, 0, 0, 0);
-    query = query.gte('completion_date', sinceDate.toISOString());
-    if (opts.until) {
-      const untilDate = new Date(opts.until);
-      untilDate.setHours(23, 59, 59, 999);
-      query = query.lte('completion_date', untilDate.toISOString());
+  const buildQuery = () => {
+    let q = supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, title, key_changes, success_criteria, success_metrics, strategic_objectives, smoke_test_steps, delivers_capabilities, completion_date, status, metadata');
+
+    q = opts.inProgress ? q.in('status', ['completed', 'in_progress', 'active']) : q.eq('status', 'completed');
+    q = q.order('completion_date', { ascending: false }).order('sd_key', { ascending: true }); // unique tiebreaker (FR-6)
+
+    if (opts.sdId) {
+      q = q.eq('sd_key', opts.sdId);
+    } else if (opts.today) {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      q = q.gte('completion_date', todayStart.toISOString());
+    } else if (opts.since) {
+      const sinceDate = new Date(opts.since);
+      sinceDate.setHours(0, 0, 0, 0);
+      q = q.gte('completion_date', sinceDate.toISOString());
+      if (opts.until) {
+        const untilDate = new Date(opts.until);
+        untilDate.setHours(23, 59, 59, 999);
+        q = q.lte('completion_date', untilDate.toISOString());
+      }
     }
+    return q;
+  };
+
+  let sds;
+  if (!opts.sdId && !opts.today && !opts.since) {
+    // No date/id filter — bounded by --last N (small, default 5); no pagination needed.
+    const { data, error } = await buildQuery().limit(opts.last);
+    if (error) { console.error(`Error querying SDs: ${error.message}`); process.exit(1); }
+    sds = data || [];
   } else {
-    query = query.limit(opts.last);
-  }
-
-  const { data: sds, error } = await query;
-
-  if (error) {
-    console.error(`Error querying SDs: ${error.message}`);
-    process.exit(1);
+    try {
+      sds = await fetchAllPaginated(buildQuery);
+    } catch (error) {
+      console.error(`Error querying SDs: ${error.message}`);
+      process.exit(1);
+    }
   }
 
   if (!sds || sds.length === 0) {

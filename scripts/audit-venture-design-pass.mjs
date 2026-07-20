@@ -21,6 +21,10 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: this audit's whole purpose is
+// complete portfolio coverage ("scoping the true blast radius") — a silently-capped ventures
+// read would undermine exactly that. Paginate.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 export const CLASSIFIER_VERSION = '1.0.0';
 
@@ -166,11 +170,16 @@ async function classifyRemediationStatus(supabase, ventureId, buildAnchorMs) {
 }
 
 export async function runAudit({ supabase, dryRun = false } = {}) {
-  const { data: ventures, error } = await supabase
-    .from('ventures')
-    .select('id, name, status, build_model')
-    .eq('build_model', 'leo_bridge');
-  if (error) throw new Error(`ventures query failed: ${error.message}`);
+  let ventures;
+  try {
+    ventures = await fetchAllPaginated(() => supabase
+      .from('ventures')
+      .select('id, name, status, build_model')
+      .eq('build_model', 'leo_bridge')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (e) {
+    throw new Error(`ventures query failed: ${e.message}`);
+  }
 
   const { data: apps } = await supabase.from('applications').select('venture_id, local_path');
   const localPathByVenture = new Map((apps || []).map((a) => [a.venture_id, a.local_path]));

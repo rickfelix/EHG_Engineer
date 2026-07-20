@@ -18,6 +18,9 @@ import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { validateCascade } from './cascade-validator.js';
 import { getStaleDocuments, getCascadeSummary } from './cascade-invalidation-engine.js';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: scans and validates every
+// active SD — a capped read would silently skip SDs from the health check.
+import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -27,15 +30,15 @@ async function runHealthCheck(options = {}) {
   const { ventureId, jsonOutput } = options;
   const silentLogger = { log: () => {}, warn: () => {}, error: () => {} };
 
-  // Load active SDs
-  let query = supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, title, status, current_phase, strategic_objectives, metadata')
-    .in('status', ['draft', 'in_progress', 'planning', 'ready']);
-
-  const { data: sds, error } = await query;
-
-  if (error) {
+  // Load active SDs (paginated — a capped read here would silently drop SDs from the health check)
+  let sds;
+  try {
+    sds = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, status, current_phase, strategic_objectives, metadata')
+      .in('status', ['draft', 'in_progress', 'planning', 'ready'])
+      .order('id', { ascending: true }));
+  } catch (error) {
     console.error('Failed to load SDs:', error.message);
     process.exit(1);
   }

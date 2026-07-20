@@ -26,6 +26,7 @@ import { dirname, resolve, join } from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
 import 'dotenv/config';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
+import { renderCount } from '../lib/db/fetch-all-paginated.mjs';
 
 const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
@@ -146,12 +147,16 @@ function scriptCore(key, args, { skip = false } = {}) {
 export async function readSalientState(sb) {
   const state = { beltZero: true, openSignalCount: 0, venture1State: null };
   try {
-    const { data: claimable } = await sb
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 (bug fix): head:true always
+    // returns `data: null` — the prior `data: claimable` destructure meant `claimable &&
+    // claimable.length > 0` was always false, so beltZero was ALWAYS true regardless of the
+    // real draft count. Destructure `count` (the actual exact-count field) instead.
+    const { count } = await sb
       .from('strategic_directives_v2')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'draft');
-    // head+count returns count on the response; fall back to length if absent.
-    state.beltZero = !(claimable && claimable.length > 0);
+    const rendered = renderCount(count);
+    state.beltZero = typeof rendered !== 'number' || rendered === 0;
   } catch { /* fail-soft: leave default */ }
   try {
     const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
@@ -178,13 +183,17 @@ export async function readSalientState(sb) {
     const orFilter = resolvedCoordinatorKinds.length > 0
       ? `payload->>signal_type.not.is.null,payload->>kind.in.(${resolvedCoordinatorKinds.join(',')})`
       : 'payload->>signal_type.not.is.null';
-    const { data: sigs } = await sb
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: GAUGE (only the count is used
+    // below) — exact head-count avoids both the PostgREST 1000-row cap misreading openSignalCount
+    // and an unbounded session_coordination row fetch (a named growing table).
+    const { count: sigCount } = await sb
       .from('session_coordination')
-      .select('id')
+      .select('id', { count: 'exact', head: true })
       .or(orFilter)
       .is('acknowledged_at', null)
       .gte('created_at', since);
-    state.openSignalCount = (sigs || []).length;
+    const renderedSig = renderCount(sigCount);
+    state.openSignalCount = typeof renderedSig === 'number' ? renderedSig : 0;
   } catch { /* fail-soft */ }
   return state;
 }

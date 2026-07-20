@@ -16,6 +16,10 @@
 
 import { createSupabaseServiceClient } from './lib/supabase-connection.js';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — `list` renders full row detail
+// (not just a count) for a human-review CLI; a throw would break the command, so this is a
+// display-policy tripwire rather than a hard fail.
+import { warnIfCapTruncated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -74,7 +78,7 @@ class BaselineManager {
   async listIssues() {
     console.log(`\n${colors.cyan}${colors.bold}BASELINE ISSUES - OPEN${colors.reset}\n`);
 
-    const { data: issues, error } = await this.supabase
+    const { data, error } = await this.supabase
       .from('sd_baseline_issues')
       .select('*')
       .in('status', ['open', 'acknowledged', 'in_progress'])
@@ -85,7 +89,8 @@ class BaselineManager {
       throw new Error(`Failed to fetch issues: ${error.message}`);
     }
 
-    if (!issues || issues.length === 0) {
+    const issues = warnIfCapTruncated(data, 'scripts/baseline.js:listIssues');
+    if (issues.length === 0) {
       console.log(`${colors.green}No open baseline issues found!${colors.reset}\n`);
       return;
     }

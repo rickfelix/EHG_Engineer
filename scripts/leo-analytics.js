@@ -17,6 +17,7 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const args = process.argv.slice(2);
 const verbose = args.includes('--verbose') || args.includes('-v');
@@ -33,18 +34,23 @@ async function main() {
 
   const supabase = createClient(url, key);
 
-  // Query all metrics sources in parallel
-  const [feedbackResult, proposalsResult, patternsResult, vettingResult] = await Promise.all([
-    supabase.from('feedback').select('id, status, created_at, updated_at, category, priority'),
-    supabase.from('enhancement_proposals').select('id, status, created_at, vetted_at, approved_at, applied_at, source_type'),
-    supabase.from('issue_patterns').select('id, status, severity, occurrence_count, created_at, resolution_date, category, trend'),
-    supabase.from('leo_vetting_outcomes').select('id, rubric_score, outcome, processed_by, created_at, proposal_id')
+  // Query all metrics sources in parallel (paginated — SD-LEO-INFRA-COUNT-TRUNCATION-
+  // DISCIPLINE-001 FR-6 batch 9: byCategory/rate breakdowns below need every row, not
+  // just a count, and feedback/issue_patterns are unbounded-growth tables). Original
+  // policy silently fell back to [] on query failure — preserved via catch.
+  const fetchTable = async (queryFactory) => {
+    try {
+      return await fetchAllPaginated(queryFactory);
+    } catch {
+      return [];
+    }
+  };
+  const [feedback, proposals, patterns, vetting] = await Promise.all([
+    fetchTable(() => supabase.from('feedback').select('id, status, created_at, updated_at, category, priority').order('id', { ascending: true })),
+    fetchTable(() => supabase.from('enhancement_proposals').select('id, status, created_at, vetted_at, approved_at, applied_at, source_type').order('id', { ascending: true })),
+    fetchTable(() => supabase.from('issue_patterns').select('id, status, severity, occurrence_count, created_at, resolution_date, category, trend').order('id', { ascending: true })),
+    fetchTable(() => supabase.from('leo_vetting_outcomes').select('id, rubric_score, outcome, processed_by, created_at, proposal_id').order('id', { ascending: true }))
   ]);
-
-  const feedback = feedbackResult.data || [];
-  const proposals = proposalsResult.data || [];
-  const patterns = patternsResult.data || [];
-  const vetting = vettingResult.data || [];
 
   const metrics = buildMetrics(feedback, proposals, patterns, vetting);
 

@@ -72,6 +72,10 @@ import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { checkGhostCeos } from '../lib/agents/ghost-ceo-gauge.js';
 import { findOverdueHolds } from '../lib/governance/hold-state-sweep.js';
 import { readHoldStateMode } from '../lib/governance/hold-state-contract.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the hold-state-overdue detector's
+// .limit(5000) still silently re-clamps to the PostgREST 1000-row cap on a table with 5000+ live
+// SDs -- exactly the false-negative risk this detector's own comment already flags. Paginate.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const RECURSION_GOVERNOR_DIMENSION = 'recursion-governor-ratio';
 const PLAN_DRIFT_MIX_DIMENSION = 'plan-drift-mix';
@@ -176,12 +180,20 @@ function buildDetectorResolvers(supabase) {
     // the result surfaces the currently-active HOLD_STATE_CONTRACT_MODE on every sweep line, so
     // observe-mode is never mistaken for enforce-mode by a reader of the gauge output.
     'hold-state-overdue': async () => {
-      const { data, error } = await supabase
-        .from('strategic_directives_v2')
-        .select('sd_key, status, metadata')
-        .or('metadata->>park_review_at.not.is.null,metadata->>exec_boundary_hold_review_at.not.is.null,metadata->>min_tier_rank_review_at.not.is.null')
-        .limit(5000);
-      if (error) throw new Error('hold-state-overdue query failed: ' + error.message);
+      // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: paginate to completion --
+      // the prior .limit(5000) still silently re-clamped to PostgREST's 1000-row cap, which
+      // would have produced exactly the false-negative this detector's server-side filter was
+      // written to avoid (a real overdue hold missing from the page PostgREST happened to return).
+      let data;
+      try {
+        data = await fetchAllPaginated(() => supabase
+          .from('strategic_directives_v2')
+          .select('sd_key, status, metadata')
+          .or('metadata->>park_review_at.not.is.null,metadata->>exec_boundary_hold_review_at.not.is.null,metadata->>min_tier_rank_review_at.not.is.null')
+          .order('sd_key', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
+      } catch (error) {
+        throw new Error('hold-state-overdue query failed: ' + error.message);
+      }
 
       // Real CONSUMER of hold_state_contract_violations (OPERATOR_CONTRACT gate, FR-8): the
       // migration's own comment names this table "the calibration signal reviewed before

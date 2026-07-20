@@ -14,6 +14,10 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import collisionCheck from '../lib/fleet/collision-check.cjs';
 const { checkClaimCollision } = collisionCheck;
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: both reads below are unbounded
+// (no time/id filter) over growing tables (strategic_directives_v2, claude_sessions —
+// claude_sessions alone is 12,973+ rows, live-verified elsewhere in this codebase) — paginate.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const SELF_SD_KEY = 'SD-LEO-INFRA-CLAIM-IDENTITY-INTEGRITY-001';
 const dayArgIdx = process.argv.indexOf('--day');
@@ -25,16 +29,22 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const { data: sds, error } = await supabase
-  .from('strategic_directives_v2')
-  .select('sd_key, metadata')
-  .not('metadata->claim_history', 'is', null);
-if (error) { console.error(`audit: SD query failed: ${error.message}`); process.exit(1); }
+let sds;
+try {
+  sds = await fetchAllPaginated(() => supabase
+    .from('strategic_directives_v2')
+    .select('sd_key, metadata')
+    .not('metadata->claim_history', 'is', null)
+    .order('sd_key', { ascending: true })); // unique tiebreaker (FR-6)
+} catch (e) { console.error(`audit: SD query failed: ${e.message}`); process.exit(1); }
 
-const { data: sessions, error: sErr } = await supabase
-  .from('claude_sessions')
-  .select('session_id, terminal_id, status, heartbeat_at, released_reason');
-if (sErr) { console.error(`audit: sessions query failed: ${sErr.message}`); process.exit(1); }
+let sessions;
+try {
+  sessions = await fetchAllPaginated(() => supabase
+    .from('claude_sessions')
+    .select('session_id, terminal_id, status, heartbeat_at, released_reason')
+    .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
+} catch (e) { console.error(`audit: sessions query failed: ${e.message}`); process.exit(1); }
 const sessionById = new Map((sessions ?? []).map((s) => [s.session_id, s]));
 
 const findings = [];

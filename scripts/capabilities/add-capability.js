@@ -9,6 +9,10 @@ import { parseArgs } from 'node:util';
 import { CAPABILITY_TYPES, isValidCapabilityType } from '../../lib/capabilities/capability-taxonomy.js';
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { resolveActiveVentureByName } from '../../lib/venture-name-resolver.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the "available ventures"
+// helper listing below iterates every row (console.error per venture); ventures is a
+// growing portfolio table, so a capped read would silently truncate the printed list.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const supabase = createSupabaseServiceClient();
 
@@ -98,7 +102,10 @@ async function main() {
 
   if (!resolvedVenture) {
     console.error(`\n  Error: Venture "${venture}" not found\n`);
-    const { data: all } = await supabase.from('ventures').select('name');
+    let all = null;
+    try {
+      all = await fetchAllPaginated(() => supabase.from('ventures').select('name').order('id', { ascending: true }));
+    } catch { all = null; }
     if (all) {
       console.error('  Available ventures:');
       all.forEach(v => console.error('    ' + v.name));

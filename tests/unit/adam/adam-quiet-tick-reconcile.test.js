@@ -94,7 +94,11 @@ describe('reconcileBoard', () => {
  */
 describe('readCriticalPathParents', () => {
   function ledgerSelect(rows) {
-    const b = { select: () => b, eq: () => b, in: () => b, then: (resolve, reject) => Promise.resolve({ data: rows, error: null }).then(resolve, reject) };
+    const b = {
+      select: () => b, eq: () => b, in: () => b, order: () => b, // FR-6 batch 9: fetchAllPaginated tiebreaker
+      range: () => Promise.resolve({ data: rows, error: null }), // FR-6 batch 9: fetchAllPaginated pages via .range()
+      then: (resolve, reject) => Promise.resolve({ data: rows, error: null }).then(resolve, reject),
+    };
     return b;
   }
 
@@ -128,6 +132,8 @@ describe('readCriticalPathParents', () => {
         select: () => b,
         eq(col, val) { filters.push((r) => r[col] === val); return b; },
         in(col, vals) { filters.push((r) => vals.includes(r[col])); return b; },
+        order: () => b, // FR-6 batch 9: fetchAllPaginated tiebreaker
+        range: () => Promise.resolve({ data: ledger.filter((r) => filters.every((f) => f(r))), error: null }), // FR-6 batch 9
         then: (resolve, reject) => Promise.resolve({ data: ledger.filter((r) => filters.every((f) => f(r))), error: null }).then(resolve, reject),
       };
       return b;

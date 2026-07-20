@@ -26,6 +26,10 @@ import { fileURLToPath } from 'url';
 import { AGENT_CODE_MAP } from '../lib/constants/agent-mappings.js';
 import { filterToolsByProfile, isValidProfile } from '../lib/tool-policy.js';
 import { loadSkillsFromDirectory, selectSkills, formatSkillsForInjection } from '../lib/skills/index.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: issue_patterns is a growing table;
+// per-agent selection below orders by GLOBAL occurrence_count then filters by category, so a
+// truncated read can silently drop an entire low-occurrence category from every compiled agent.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -131,13 +135,20 @@ async function fetchLiveData(supabase) {
   }
 
   // Fetch active issue patterns
-  const { data: patterns, error: patErr } = await supabase
-    .from('issue_patterns')
-    .select('pattern_id, category, issue_summary, proven_solutions, occurrence_count')
-    .eq('status', 'active')
-    .order('occurrence_count', { ascending: false });
-
-  if (patErr) throw new Error(`Failed to fetch patterns: ${patErr.message}`);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: paginate to completion --
+  // a bare fetch here would silently truncate at the PostgREST cap, ordered by GLOBAL
+  // occurrence_count, which can drop whole categories out of every agent's compiled knowledge.
+  let patterns;
+  try {
+    patterns = await fetchAllPaginated(() => supabase
+      .from('issue_patterns')
+      .select('pattern_id, category, issue_summary, proven_solutions, occurrence_count')
+      .eq('status', 'active')
+      .order('occurrence_count', { ascending: false })
+      .order('id', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
+  } catch (patErr) {
+    throw new Error(`Failed to fetch patterns: ${patErr.message}`);
+  }
 
   return { agentByCode, triggersByCode, patterns };
 }

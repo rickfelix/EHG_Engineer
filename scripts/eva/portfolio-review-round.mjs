@@ -22,6 +22,10 @@ import dotenv from 'dotenv';
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { loadPortfolioStrategy } from '../../lib/eva/stage-zero/strategic-context-loader.js';
 import { recordPendingDecision } from '../../lib/chairman/record-pending-decision.mjs';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: ventures grows with the
+// portfolio -- an un-paginated read here would silently drop ventures past the PostgREST
+// 1000-row cap from the board packet.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -106,12 +110,17 @@ export async function portfolioReviewHandler({ dryRun = false, supabase = null, 
 
   const strategy = await loadStrategy(db, console);
 
-  const { data: allVentures, error: ventureErr } = await db
-    .from('ventures')
-    .select('id, name, status, is_demo, current_lifecycle_stage')
-    .eq('status', 'active');
-  if (ventureErr) throw new Error(`ventures read failed: ${ventureErr.message}`);
-  const ventures = (allVentures || []).filter(isRealVenture);
+  let allVentures;
+  try {
+    allVentures = await fetchAllPaginated(() => db
+      .from('ventures')
+      .select('id, name, status, is_demo, current_lifecycle_stage')
+      .eq('status', 'active')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (ventureErr) {
+    throw new Error(`ventures read failed: ${ventureErr.message}`);
+  }
+  const ventures = allVentures.filter(isRealVenture);
 
   const packet = composeReviewPacket({ strategy, ventures, reviewDate });
 

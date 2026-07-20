@@ -19,6 +19,7 @@
 import { reEvaluateBlockedCandidate, isWatcherFlagEnabled } from '../lib/sourcing-engine/deferred-watcher.js';
 import { ledgerLaneColumnExists } from '../lib/sourcing-engine/dedup-autostamp.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 /**
  * Run the sweep. Pure-DI (supabase + env injected) so it unit-tests without a live DB.
@@ -48,23 +49,38 @@ export async function runDeferredWatcherSweep({ supabase, env = process.env, dry
   }
 
   // Completed SD-keys = the cleared-blocker universe for SD blockers.
-  const { data: sds, error: sdErr } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key, status')
-    .eq('status', 'completed');
-  if (sdErr) throw new Error(`load completed SDs failed: ${sdErr.message}`);
-  const completedSdKeys = new Set((sds || []).map((s) => s.sd_key));
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 status=
+  // 'completed' accumulates forever (never shrinks) and is already >1000 live — a capped read
+  // here silently misses newer completions, causing false-negative "blocker not cleared" verdicts.
+  let sds;
+  try {
+    sds = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, status')
+      .eq('status', 'completed')
+      .order('sd_key', { ascending: true }));
+  } catch (e) {
+    throw new Error(`load completed SDs failed: ${e.message}`);
+  }
+  const completedSdKeys = new Set(sds.map((s) => s.sd_key));
 
   // Blocked-on registry rows. NOTE: conversion_ledger has `target_rung`, NOT `rung` (selecting a
   // non-existent column 42703-throws); and routeCandidate only passes rung THROUGH (never routes on
   // it), so we omit it entirely — the re-lane decision is identical without it.
-  const { data: rows, error: rErr } = await supabase
-    .from('conversion_ledger')
-    .select('id, source_id, title, disposition, lane')
-    .like('lane', 'blocked-on-%');
-  if (rErr) throw new Error(`load blocked rows failed: ${rErr.message}`);
+  // Paginated too (FR-6 batch 9): the blocked-on-% lane is currently small but self-clearing is
+  // watcher-dependent (default-OFF flag) — an unbounded accumulation path if the watcher is off.
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => supabase
+      .from('conversion_ledger')
+      .select('id, source_id, title, disposition, lane')
+      .like('lane', 'blocked-on-%')
+      .order('id', { ascending: true }));
+  } catch (e) {
+    throw new Error(`load blocked rows failed: ${e.message}`);
+  }
 
-  for (const row of rows || []) {
+  for (const row of rows) {
     result.scanned++;
     try {
       const decision = reEvaluateBlockedCandidate(

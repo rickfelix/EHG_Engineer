@@ -7,6 +7,10 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — this lists + counts EVERY pending
+// SD across 4 non-terminal statuses; strategic_directives_v2 is a growing table, so a capped read
+// would silently under-report the pending directive count and listing.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 dotenv.config();
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -31,20 +35,21 @@ async function queryPendingDirectives() {
     // Query directives with pending statuses
     const validPendingStatuses = ['draft', 'active', 'in_review', 'conditional_approval'];
     
-    const { data: directives, error } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, title, status, sequence_rank, priority, category')
-      .in('status', validPendingStatuses)
-      .order('sequence_rank', { ascending: true });
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        console.log('⚠️  Table strategic_directives_v2 does not exist yet');
-        console.log('📋 Please run "npm run setup-db" first');
-        console.log('   Then manually execute SQL in Supabase dashboard if needed');
-        process.exit(1);
-      }
-      console.error('Query error:', error);
+    // NOTE (FR-6 batch 9): the prior PGRST116 ("relation does not exist") special-case branch
+    // relied on Supabase's structured `error.code`, which fetchAllPaginated's thrown Error does
+    // not carry (page errors are folded into a single message string). That branch was a
+    // first-run/bootstrap nicety for a table that is now central everywhere in this repo; a
+    // generic query-error exit still surfaces the underlying message.
+    let directives;
+    try {
+      directives = await fetchAllPaginated(() => supabase
+        .from('strategic_directives_v2')
+        .select('id, title, status, sequence_rank, priority, category')
+        .in('status', validPendingStatuses)
+        .order('sequence_rank', { ascending: true })
+        .order('id', { ascending: true }));
+    } catch (error) {
+      console.error('Query error:', error.message);
       process.exit(1);
     }
 

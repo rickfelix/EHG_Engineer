@@ -26,6 +26,12 @@ import { detectLoopExpiry, detectStalledLoop, detectEvaSchedulerStale } from '..
 import { parseSdDependencies } from '../lib/utils/parse-sd-dependencies.cjs';
 import { isDependentBlocked } from '../lib/coordinator/dep-readiness.mjs';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the harness-backlog and SD-queue
+// scans below directly drive the SOURCE-BACKLOG sourcing decision and the SRE flow/dependency
+// gauges; feedback and strategic_directives_v2 are both growing tables, so a capped read would
+// silently misinform those decisions. The inbox count is a pure gauge (only .length is used) —
+// converted to an exact head-count.
+import { fetchAllPaginated, renderCount } from '../lib/db/fetch-all-paginated.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -48,8 +54,11 @@ const POOL_THRESHOLD = (() => {
 })();
 
 // (1) harness backlog
-const { data: hb } = await db.from('feedback').select('id,title,status,severity,created_at,metadata').eq('category', 'harness_backlog').in('status', OPEN).order('created_at', { ascending: false });
-const backlog = hb || [];
+let hb;
+try {
+  hb = await fetchAllPaginated(() => db.from('feedback').select('id,title,status,severity,created_at,metadata').eq('category', 'harness_backlog').in('status', OPEN).order('created_at', { ascending: false }).order('id', { ascending: true }));
+} catch { hb = []; }
+const backlog = hb;
 // SD-FDBK-FIX-COORDINATOR-AUDIT-MJS-002: the SOURCE BACKLOG verdict was a false-positive — the
 // harness_backlog feed is dominated by completion-flag / fleet-retro AUTO-CAPTURES (closure
 // witnesses filed at SD completion, metadata.flag_class set, titled "Completion flag (...) — SD-").
@@ -58,8 +67,11 @@ const sourceable = sourceableBacklog(backlog);
 const high = sourceable.filter(r => ['high', 'critical'].includes((r.severity || '').toLowerCase()));
 
 // (2) SD queue
-const { data: sd } = await db.from('strategic_directives_v2').select('sd_key,status,current_phase,claiming_session_id,updated_at,dependencies').not('status', 'in', termList);
-const sds = sd || [];
+let sd;
+try {
+  sd = await fetchAllPaginated(() => db.from('strategic_directives_v2').select('sd_key,status,current_phase,claiming_session_id,updated_at,dependencies').not('status', 'in', termList).order('sd_key', { ascending: true }));
+} catch { sd = []; }
+const sds = sd;
 const unclaimed = sds.filter(s => !s.claiming_session_id);
 const claimed = sds.length - unclaimed.length;
 const stuck = unclaimed.filter(s => s.status === 'in_progress');
@@ -76,9 +88,10 @@ const live = liveFleetWorkers(sessRaw, me, t);
 const builders = live.filter(s => s.sd_key).length;
 const liveIdle = live.filter(s => !s.sd_key).length;
 
-// (3) inbox
-const { data: sig } = await db.from('session_coordination').select('id').eq('target_session', me).is('read_at', null).not('payload->>signal_type', 'is', null);
-const unread = (sig || []).length;
+// (3) inbox — pure gauge (only the count is used); exact head-count, never a
+// healthy-looking 0 on a failed measurement.
+const { count: unreadCount } = await db.from('session_coordination').select('id', { count: 'exact', head: true }).eq('target_session', me).is('read_at', null).not('payload->>signal_type', 'is', null);
+const unread = renderCount(unreadCount);
 
 // (4) worktree pool utilization — silent 20/20 cap stalls the whole fleet.
 // countActiveWorktrees never throws (returns [] on git failure → 0).

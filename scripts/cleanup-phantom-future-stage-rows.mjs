@@ -17,21 +17,38 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — both reads below are unfiltered
+// scans (ventures grows with portfolio size; venture_stage_work is a per-venture-per-stage fanout
+// table, likely larger still) whose results are cross-referenced to build the phantom-row delete
+// list; a capped read would silently under-delete. The delete itself is chunked because it's
+// built from this now-unbounded read.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const APPLY = process.argv.includes('--apply');
+const DELETE_CHUNK = 200;
+function chunk(arr, n) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
+}
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 async function main() {
-  const { data: ventures, error: vErr } = await supabase
-    .from('ventures')
-    .select('id, name, current_lifecycle_stage');
-  if (vErr) throw new Error(`ventures read failed: ${vErr.message}`);
+  let ventures, rows;
+  try {
+    ventures = await fetchAllPaginated(() => supabase
+      .from('ventures')
+      .select('id, name, current_lifecycle_stage')
+      .order('id', { ascending: true }));
+  } catch (e) { throw new Error(`ventures read failed: ${e.message}`); }
   const currentByVenture = new Map(ventures.map((v) => [v.id, v.current_lifecycle_stage ?? 0]));
 
-  const { data: rows, error: wErr } = await supabase
-    .from('venture_stage_work')
-    .select('id, venture_id, lifecycle_stage');
-  if (wErr) throw new Error(`venture_stage_work read failed: ${wErr.message}`);
+  try {
+    rows = await fetchAllPaginated(() => supabase
+      .from('venture_stage_work')
+      .select('id, venture_id, lifecycle_stage')
+      .order('id', { ascending: true }));
+  } catch (e) { throw new Error(`venture_stage_work read failed: ${e.message}`); }
 
   const phantom = rows.filter((r) => {
     const cur = currentByVenture.get(r.venture_id);
@@ -55,12 +72,16 @@ async function main() {
   }
 
   const ids = phantom.map((p) => p.id);
-  const { error: dErr, count } = await supabase
-    .from('venture_stage_work')
-    .delete({ count: 'exact' })
-    .in('id', ids);
-  if (dErr) throw new Error(`delete failed: ${dErr.message}`);
-  console.log(`[cleanup] DELETED ${count ?? ids.length} phantom future-stage row(s).`);
+  let deleted = 0;
+  for (const idChunk of chunk(ids, DELETE_CHUNK)) {
+    const { error: dErr, count } = await supabase
+      .from('venture_stage_work')
+      .delete({ count: 'exact' })
+      .in('id', idChunk);
+    if (dErr) throw new Error(`delete failed: ${dErr.message}`);
+    deleted += count ?? idChunk.length;
+  }
+  console.log(`[cleanup] DELETED ${deleted} phantom future-stage row(s).`);
 }
 
 main().catch((e) => { console.error(e.message); process.exit(1); });

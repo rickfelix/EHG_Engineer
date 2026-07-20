@@ -36,6 +36,7 @@ import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import pg from 'pg';
 import { aggregateFindings, upsertPatterns } from '../../lib/eva/quality-findings/aggregator.js';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const LOCK_KEY_NAME = 'quality_aggregator';
 const DEFAULT_LOOKBACK_DAYS = 7;
@@ -166,13 +167,20 @@ export async function runOneBatch({ supabase, lookbackDays, minVentureCount, dry
   }
 
   const cutoffIso = buildLookbackCutoffIso(lookbackDays);
-  const { data: findings, error } = await supabase
-    .from('venture_quality_findings')
-    .select('id, venture_id, finding_category, severity, check_name, created_at, status')
-    .eq('status', 'open')
-    .gte('created_at', cutoffIso);
-
-  if (error) throw new Error(`venture_quality_findings read failed: ${error.message}`);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — every row is aggregated into
+  // patterns below; venture_quality_findings grows with portfolio size, so an unranged read
+  // would silently under-aggregate past the cap. Paginate; error policy mirrors prior throw.
+  let findings;
+  try {
+    findings = await fetchAllPaginated(() => supabase
+      .from('venture_quality_findings')
+      .select('id, venture_id, finding_category, severity, check_name, created_at, status') // schema-lint-disable-line: pre-existing column reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
+      .eq('status', 'open')
+      .gte('created_at', cutoffIso)
+      .order('id', { ascending: true }));
+  } catch (err) {
+    throw new Error(`venture_quality_findings read failed: ${err.message}`);
+  }
 
   const patterns = aggregateFindings(findings || [], { minVentureCount });
   const venturesScanned = new Set((findings || []).map((f) => f.venture_id)).size;

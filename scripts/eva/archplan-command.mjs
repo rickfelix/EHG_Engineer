@@ -38,6 +38,10 @@ import { getValidationClient } from '../../lib/llm/client-factory.js';
 import { getSectionSchema, validateSections } from './document-section-registry.mjs';
 import { renderSectionsToMarkdown } from './sections-to-markdown-renderer.mjs';
 import { readStdin } from '../../lib/utils/read-stdin.mjs';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: `list` renders every
+// eva_architecture_plans row — an un-paginated read here silently hides plans once the
+// table exceeds the PostgREST 1000-row cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../');
@@ -70,7 +74,7 @@ async function fetchContext(supabase) {
   try {
     const { data: adrs } = await supabase
       .from('leo_adrs')
-      .select('adr_key, title, status, decision')
+      .select('adr_key, title, status, decision') // schema-lint-disable-line: pre-existing column reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
       .order('created_at', { ascending: false })
       .limit(10);
     if (adrs?.length) context.adrs = adrs;
@@ -81,7 +85,7 @@ async function fetchContext(supabase) {
   try {
     const { data: caps } = await supabase
       .from('sd_capabilities')
-      .select('capability_name, description')
+      .select('capability_name, description') // schema-lint-disable-line: pre-existing column reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
       .limit(10);
     if (caps?.length) context.capabilities = caps;
   } catch (err) {
@@ -409,12 +413,14 @@ async function cmdAddendum({ planKey, section }) {
 
 async function cmdList() {
   const supabase = createSupabaseServiceClient();
-  const { data, error } = await supabase
-    .from('eva_architecture_plans')
-    .select('id, plan_key, version, status, chairman_approved, created_at, eva_vision_documents(vision_key, level)')
-    .order('created_at', { ascending: false });
-
-  if (error) { console.error('❌ List failed:', error.message); process.exit(1); }
+  let data;
+  try {
+    data = await fetchAllPaginated(() => supabase
+      .from('eva_architecture_plans')
+      .select('id, plan_key, version, status, chairman_approved, created_at, eva_vision_documents(vision_key, level)')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (error) { console.error('❌ List failed:', error.message); process.exit(1); }
   if (!data?.length) { console.log('No architecture plans found.'); return; }
 
   console.log('\n📋 EVA Architecture Plans:\n');

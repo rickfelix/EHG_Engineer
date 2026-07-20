@@ -57,10 +57,11 @@ import {
 export const SWEPT_BY_SD = 'SD-LEO-INFRA-ADVERSARIAL-VERIFICATION-SWEEP-001';
 const WINDOW_DAYS = 30;
 const LEDGER_CATEGORY = 'verification_ledger';
-// Explicit high bound so the denominator is never SILENTLY truncated at PostgREST's default page
-// cap (~1000). If a query returns exactly this many rows the denominator is suspect — assemble
-// flags it loudly rather than under-reporting the auditable total.
-const PAGE_LIMIT = 5000;
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: a single-page `.limit(5000)` bound
+// USED TO live here (PAGE_LIMIT), but PostgREST's server-side db-max-rows cap silently clamps any
+// unranged read at 1000 regardless of a higher client .limit() — so the truncation check built on
+// it could never fire. All SD/QF/telemetry denominator reads now go through fetchAllRows() below
+// (paginated to true completion), so no single-page bound is needed anymore.
 
 /**
  * Fetch EVERY row of a query by paginating in PAGE_SIZE chunks — complete by construction,
@@ -266,27 +267,28 @@ async function assemble(outPath) {
   // Source (b): machinery-class completions from SDs and QFs in the last WINDOW_DAYS.
   const since = cutoffIso(WINDOW_DAYS);
 
-  const { data: sdRows, error: sdErr } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, title, description, status, updated_at, sd_type, metadata')
-    .eq('status', 'completed')
-    .gte('updated_at', since)
-    .limit(PAGE_LIMIT);
-  if (sdErr) throw new Error('strategic_directives_v2 query failed: ' + sdErr.message);
-
-  const { data: qfRows, error: qfErr } = await supabase
-    .from('quick_fixes')
-    .select('id, title, description, status, completed_at')
-    .eq('status', 'completed')
-    .gte('completed_at', since)
-    .limit(PAGE_LIMIT);
-  if (qfErr) throw new Error('quick_fixes query failed: ' + qfErr.message);
-
-  if ((sdRows || []).length === PAGE_LIMIT || (qfRows || []).length === PAGE_LIMIT) {
-    console.error(
-      `[adversarial-sweep] WARNING: a source query returned exactly PAGE_LIMIT (${PAGE_LIMIT}) rows — ` +
-        'the denominator may be TRUNCATED. Paginate before trusting these counts.',
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 (real bug): PAGE_LIMIT=5000 never
+  // bounded these two reads — PostgREST's server-side db-max-rows cap silently clamps ANY
+  // unranged read at 1000 regardless of a higher client .limit(), so the truncation check below
+  // (`.length === PAGE_LIMIT`) could never fire; a truncated 1000-row page read as "complete" up
+  // to 5000. Same class this file's own fetchAllRows() already exists to close (used a few lines
+  // above for merge_witness_telemetry) — route these two reads through it instead.
+  let sdRows, qfRows;
+  try {
+    sdRows = await fetchAllRows(
+      supabase, 'strategic_directives_v2', 'id, sd_key, title, description, status, updated_at, sd_type, metadata',
+      (q) => q.eq('status', 'completed').gte('updated_at', since),
     );
+  } catch (e) {
+    throw new Error('strategic_directives_v2 query failed: ' + e.message);
+  }
+  try {
+    qfRows = await fetchAllRows(
+      supabase, 'quick_fixes', 'id, title, description, status, completed_at',
+      (q) => q.eq('status', 'completed').gte('completed_at', since),
+    );
+  } catch (e) {
+    throw new Error('quick_fixes query failed: ' + e.message);
   }
 
   // Two-stage filter: RECALL (broad regex over title+description) narrows to candidates;
@@ -363,9 +365,10 @@ async function assemble(outPath) {
       qf_rejected_recall: qfRejectedRecall,
       qf_rejected_precision: qfRejectedPrecision,
       total_rejected: sdRejected + qfRejected,
-      possibly_truncated:
-        (sdRows || []).length === PAGE_LIMIT || (qfRows || []).length === PAGE_LIMIT,
-      page_limit: PAGE_LIMIT,
+      // FR-6 batch 9: sdRows/qfRows are now fetched via fetchAllRows() (paginated to true
+      // completion, not a single .limit() page), so truncation is structurally impossible here.
+      possibly_truncated: false,
+      page_size: PAGE_SIZE,
     },
     total_backlog: backlog.length,
     backlog,

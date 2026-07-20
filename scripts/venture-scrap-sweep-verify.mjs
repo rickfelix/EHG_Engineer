@@ -13,6 +13,7 @@
 // Exit codes: 0 = assertion holds; 1 = unexpected active ventures remain (listed on stdout);
 //             2 = query error (verification could not run — treat as NOT verified).
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const args = process.argv.slice(2);
 const allowIdx = args.indexOf('--allow');
@@ -22,13 +23,21 @@ const allowed = new Set(allowIdx !== -1 && args[allowIdx + 1] ? args[allowIdx + 
 // verifier runs correctly from a manual `git worktree add` checkout too.
 const supabase = createSupabaseServiceClient();
 
-const { data, error } = await supabase.from('ventures').select('id, name, status, updated_at').eq('status', 'active');
-if (error) {
-  console.error(`SCRAP-SWEEP-VERIFY: query error — sweep NOT verified: ${error.message}`);
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: this is an assert-ZERO guard —
+// a capped read would silently under-list still-active ventures beyond row 1000. Paginate.
+let data;
+try {
+  data = await fetchAllPaginated(() => supabase
+    .from('ventures')
+    .select('id, name, status, updated_at')
+    .eq('status', 'active')
+    .order('id', { ascending: true }));
+} catch (e) {
+  console.error(`SCRAP-SWEEP-VERIFY: query error — sweep NOT verified: ${e.message}`);
   process.exit(2);
 }
 
-const unexpected = (data || []).filter((v) => !allowed.has(v.id));
+const unexpected = data.filter((v) => !allowed.has(v.id));
 if (unexpected.length === 0) {
   console.log(`SCRAP-SWEEP-VERIFY: PASS — 0 unexpected active ventures${allowed.size ? ` (${allowed.size} allowed exception(s))` : ''}.`);
   process.exit(0);

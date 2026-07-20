@@ -35,6 +35,15 @@ function getClient() {
   return supabase;
 }
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — this loop reads then ACTS on
+// active-worker sessions (dispatches coaching messages), so a read silently capped at the
+// PostgREST 1000-row max would silently under-coach part of the fleet with no error.
+let _fapModule = null;
+async function fapPaginate(queryFactory, opts) {
+  _fapModule ||= await import('../lib/db/fetch-all-paginated.mjs');
+  return _fapModule.fetchAllPaginated(queryFactory, opts);
+}
+
 // Worker median lifespan is ~9 minutes. Cooldowns must be shorter than that
 // to have any chance of a second message reaching the same worker.
 const COOLDOWN_MINUTES = 12;         // Conditional reminders — slightly above median lifespan
@@ -404,16 +413,20 @@ async function main() {
   const skipped = [];
 
   // 1. Load active sessions with SD claims
-  // v_active_sessions lacks handoff_fail_count/has_uncommitted_changes — query base table
-  const { data: sessions, error: sessErr } = await supabase
-    .from('claude_sessions')
-    .select('session_id, sd_key, tty, current_branch, claimed_at, handoff_fail_count, has_uncommitted_changes, current_phase, heartbeat_at')
-    .not('sd_key', 'is', null)
-    .in('status', ['active', 'idle'])
-    .order('heartbeat_at', { ascending: false });
-
-  if (sessErr) {
-    console.log('ERROR: Failed to query sessions — ' + sessErr.message);
+  // v_active_sessions lacks handoff_fail_count/has_uncommitted_changes — query base table.
+  // claude_sessions is unbounded (status active/idle rows accumulate if a release-sweep pass
+  // is missed) and every row is coached below — paginate to completion.
+  let sessions;
+  try {
+    sessions = await fapPaginate(() => supabase
+      .from('claude_sessions')
+      .select('session_id, sd_key, tty, current_branch, claimed_at, handoff_fail_count, has_uncommitted_changes, current_phase, heartbeat_at')
+      .not('sd_key', 'is', null)
+      .in('status', ['active', 'idle'])
+      .order('heartbeat_at', { ascending: false })
+      .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (e) {
+    console.log('ERROR: Failed to query sessions — ' + e.message);
     process.exit(1);
   }
 

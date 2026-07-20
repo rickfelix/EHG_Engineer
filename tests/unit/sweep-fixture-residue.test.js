@@ -47,7 +47,11 @@ describe('sweep: assert and fix modes', () => {
       from: vi.fn(() => ({
         select: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({ data: rows, error: null }),
+        in: vi.fn().mockReturnThis(),
+        // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: sweepFixtureResidue now
+        // paginates via fetchAllPaginated, which appends .order()/.range() to the builder.
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockResolvedValue({ data: rows, error: null }),
         update: vi.fn((payload) => ({
           eq: vi.fn((col, id) => {
             updates.push({ id, payload });

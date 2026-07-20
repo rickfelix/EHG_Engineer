@@ -21,6 +21,10 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: aegis_violations is a
+// governance-log-shaped growing table; `governance:stats` computes exact by-severity/by-status
+// counts from the full period window, so a truncated read silently under-reports the stats.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 // Load environment
 dotenv.config();
@@ -297,12 +301,14 @@ async function showStats(options) {
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - periodDays);
 
-  const { data: violations, error: violError } = await supabase
-    .from('aegis_violations')
-    .select('severity, status')
-    .gte('created_at', startDate.toISOString());
-
-  if (violError) {
+  let violations;
+  try {
+    violations = await fetchAllPaginated(() => supabase
+      .from('aegis_violations')
+      .select('severity, status')
+      .gte('created_at', startDate.toISOString())
+      .order('id', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
+  } catch (violError) {
     console.error('Error fetching violations:', violError.message);
     return;
   }

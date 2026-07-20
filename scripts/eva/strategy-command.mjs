@@ -26,6 +26,10 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: an unfiltered `derive` scan of
+// eva_vision_documents -- an un-paginated read here would silently skip vision documents
+// past the PostgREST 1000-row cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -181,16 +185,20 @@ async function cmdDerive(supabase, opts) {
   const visionKeyFilter = opts.visionKey;
 
   // Fetch active vision documents
-  let query = supabase
-    .from('eva_vision_documents')
-    .select('vision_key, level, content, extracted_dimensions, status')
-    .eq('status', 'active');
+  const buildQuery = () => {
+    let q = supabase
+      .from('eva_vision_documents')
+      .select('vision_key, level, content, extracted_dimensions, status')
+      .eq('status', 'active')
+      .order('id', { ascending: true }); // unique tiebreaker (FR-6)
+    if (visionKeyFilter) q = q.eq('vision_key', visionKeyFilter.toUpperCase());
+    return q;
+  };
 
-  if (visionKeyFilter) {
-    query = query.eq('vision_key', visionKeyFilter.toUpperCase());
-  }
-
-  const { data: visionDocs, error: fetchErr } = await query;
+  let visionDocs, fetchErr;
+  try {
+    visionDocs = await fetchAllPaginated(buildQuery);
+  } catch (e) { fetchErr = e; }
 
   if (fetchErr || !visionDocs || visionDocs.length === 0) {
     console.log('\n  No active vision documents found.\n');

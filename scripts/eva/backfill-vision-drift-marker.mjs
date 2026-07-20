@@ -21,6 +21,9 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: venture_stage_work grows with
+// the portfolio -- a capped read here would silently skip S19 candidates past row 1000.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 export const S19 = 19;
 export const MARKER_KEY = 'vision_drift_check_required';
@@ -34,16 +37,21 @@ export const VERDICT_KEY = 'vision_drift_verdict';
  * @returns {Promise<{scanned:number, marked:number, skipped:number, candidates:string[]}>}
  */
 export async function backfillDriftCheckMarker({ supabase, apply = false, nowIso, logger = console }) {
-  const { data: rows, error } = await supabase
-    .from('venture_stage_work')
-    .select('id, venture_id, advisory_data')
-    .eq('lifecycle_stage', S19);
-  if (error) throw new Error(`backfill: read venture_stage_work failed: ${error.message}`);
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => supabase
+      .from('venture_stage_work')
+      .select('id, venture_id, advisory_data')
+      .eq('lifecycle_stage', S19)
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (error) {
+    throw new Error(`backfill: read venture_stage_work failed: ${error.message}`);
+  }
 
-  const result = { scanned: (rows || []).length, marked: 0, skipped: 0, candidates: [] };
+  const result = { scanned: rows.length, marked: 0, skipped: 0, candidates: [] };
   const stamp = nowIso || new Date().toISOString();
 
-  for (const row of (rows || [])) {
+  for (const row of rows) {
     const adv = row.advisory_data || {};
     // SET-ONCE predicate: skip if already evaluated OR already marked.
     if (adv[VERDICT_KEY] != null || adv[MARKER_KEY] != null) { result.skipped++; continue; }

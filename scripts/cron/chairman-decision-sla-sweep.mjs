@@ -46,6 +46,7 @@ import { escalateChairmanDecision } from '../../lib/chairman/record-pending-deci
 import { isEscalationActionable, isFixtureVenture } from '../../lib/chairman/chairman-actionable.mjs';
 import { registerArmedMachinery, armedProcessKey } from '../../lib/machinery-class/armed-registration.js';
 import { stampLastFired } from '../../lib/periodic-liveness/stamp-last-fired.js';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 export const SD_KEY = 'SD-LEO-INFRA-CHAIRMAN-DECISION-SURFACING-001';
 export const ACTIVATION_TRIGGER = '.github/workflows/chairman-decision-sla-cron.yml';
@@ -177,15 +178,19 @@ export async function main(argv = process.argv, deps = {}) {
   }
 
   // One shared read of the pending set powers both the enforcer filter and the blocking pass.
-  const { data: pending, error: readError } = await supabase
-    .from('chairman_decisions')
-    .select('id, decision_type, status, blocking, created_at, venture_id, brief_data')
-    .eq('status', 'pending');
-  if (readError) {
-    logger.error?.(`[sla-sweep] pending read failed: ${readError.message}`);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — a growing table filtered on
+  // status='pending' is NOT bounded; every row here gates escalation. Paginate to completion.
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => supabase
+      .from('chairman_decisions')
+      .select('id, decision_type, status, blocking, created_at, venture_id, brief_data')
+      .eq('status', 'pending')
+      .order('id', { ascending: true }));
+  } catch (err) {
+    logger.error?.(`[sla-sweep] pending read failed: ${err.message}`);
     return { exitCode: 1, action: 'db_error' };
   }
-  const rows = pending || [];
   const fixtureVentureIds = await fetchFixtureVentureIds(supabase, rows.map((r) => r.venture_id), logger);
   const cutoffMs = Date.parse(cutoffIso);
   const actionableIds = new Set(

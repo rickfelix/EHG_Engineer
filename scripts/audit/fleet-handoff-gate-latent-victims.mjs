@@ -25,6 +25,12 @@ import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 import { PHASE_RANK } from '../../lib/exec-context-guard.mjs';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — both reads below are
+// full-table scans iterated against every SD/handoff (strategic_directives_v2 and
+// sd_phase_handoffs both grow unbounded); a PostgREST-capped read would silently
+// under-report latent victims. Paginate to completion; original fail-closed
+// (console.error + exit 1) error policy preserved.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -36,23 +42,27 @@ const saveIdx = args.indexOf('--save');
 const savePath = saveIdx >= 0 ? args[saveIdx + 1] : null;
 
 async function main() {
-  const { data: sds, error: sdErr } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, current_phase, status')
-    .not('current_phase', 'is', null);
-
-  if (sdErr) {
-    console.error('SD_LOAD_ERR:', sdErr.message);
+  let sds;
+  try {
+    sds = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, current_phase, status')
+      .not('current_phase', 'is', null)
+      .order('id', { ascending: true }));
+  } catch (e) {
+    console.error('SD_LOAD_ERR:', e.message);
     process.exit(1);
   }
 
-  const { data: handoffs, error: hErr } = await supabase
-    .from('sd_phase_handoffs')
-    .select('sd_id, to_phase, created_at, status, handoff_type')
-    .eq('status', 'accepted');
-
-  if (hErr) {
-    console.error('HANDOFF_LOAD_ERR:', hErr.message);
+  let handoffs;
+  try {
+    handoffs = await fetchAllPaginated(() => supabase
+      .from('sd_phase_handoffs')
+      .select('sd_id, to_phase, created_at, status, handoff_type')
+      .eq('status', 'accepted')
+      .order('id', { ascending: true }));
+  } catch (e) {
+    console.error('HANDOFF_LOAD_ERR:', e.message);
     process.exit(1);
   }
 

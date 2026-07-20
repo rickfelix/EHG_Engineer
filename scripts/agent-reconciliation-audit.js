@@ -21,6 +21,9 @@ import fs from 'fs';
 import { createClient } from '@supabase/supabase-js';
 import { fileURLToPath } from 'url';
 import { AGENT_CODE_MAP } from './generate-agent-md-from-db.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: issue_patterns is a growing table
+// with no filter/bound below (all active patterns, grouped into per-category counts) — paginate.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -59,12 +62,16 @@ async function fetchAuditData(supabase) {
   }
 
   // Count patterns per category
-  const { data: patterns, error: patErr } = await supabase
-    .from('issue_patterns')
-    .select('category')
-    .eq('status', 'active');
-
-  if (patErr) throw new Error(`Failed to fetch patterns: ${patErr.message}`);
+  let patterns;
+  try {
+    patterns = await fetchAllPaginated(() => supabase
+      .from('issue_patterns')
+      .select('category, id')
+      .eq('status', 'active')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (e) {
+    throw new Error(`Failed to fetch patterns: ${e.message}`);
+  }
 
   const patCountMap = {};
   for (const p of patterns) {

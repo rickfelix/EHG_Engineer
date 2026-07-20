@@ -11,6 +11,12 @@
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — getPendingDecisions is the
+// chairman's actionable decision queue (rendered per-row, including in --json mode), so a capped
+// read would silently hide real pending work; paginate to completion. getDecisionStats is a
+// multi-metric gauge over the whole table — converted to exact head-counts (renderCount, never a
+// healthy-looking 0 on measurement failure).
+import { fetchAllPaginated, renderCount } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -23,20 +29,23 @@ function log(msg = '') {
 }
 
 async function getPendingDecisions() {
-  const { data, error } = await supabase
-    .from('chairman_decisions')
-    .select('id, venture_id, lifecycle_stage, status, summary, created_at, decision_type, blocking')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: true });
-
-  if (error) return { data: [], error: error.message };
-  return { data: data || [], error: null };
+  try {
+    const data = await fetchAllPaginated(() => supabase
+      .from('chairman_decisions')
+      .select('id, venture_id, lifecycle_stage, status, summary, created_at, decision_type, blocking')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true }));
+    return { data, error: null };
+  } catch (e) {
+    return { data: [], error: e.message };
+  }
 }
 
 async function getRecentDecisions(limit = 10) {
   const { data, error } = await supabase
     .from('chairman_decisions')
-    .select('id, venture_id, lifecycle_stage, status, decision, summary, rationale, created_at, resolved_at')
+    .select('id, venture_id, lifecycle_stage, status, decision, summary, rationale, created_at, resolved_at') // schema-lint-disable-line: pre-existing column reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
     .neq('status', 'pending')
     .order('resolved_at', { ascending: false })
     .limit(limit);
@@ -68,19 +77,23 @@ async function getPreferenceSummary() {
 }
 
 async function getDecisionStats() {
-  const { data: all } = await supabase
-    .from('chairman_decisions')
-    .select('status, decision_type, blocking');
-
-  if (!all) return { total: 0, pending: 0, approved: 0, rejected: 0, advisory: 0, blocking: 0 };
+  const base = () => supabase.from('chairman_decisions').select('id', { count: 'exact', head: true });
+  const [totalRes, pendingRes, approvedRes, rejectedRes, advisoryRes, blockingRes] = await Promise.all([
+    base(),
+    base().eq('status', 'pending'),
+    base().eq('status', 'approved'),
+    base().eq('status', 'rejected'),
+    base().or('decision_type.eq.advisory,status.eq.info'),
+    base().eq('blocking', true).eq('status', 'pending'),
+  ]);
 
   return {
-    total: all.length,
-    pending: all.filter(d => d.status === 'pending').length,
-    approved: all.filter(d => d.status === 'approved').length,
-    rejected: all.filter(d => d.status === 'rejected').length,
-    advisory: all.filter(d => d.decision_type === 'advisory' || d.status === 'info').length,
-    blocking: all.filter(d => d.blocking === true && d.status === 'pending').length,
+    total: renderCount(totalRes.count),
+    pending: renderCount(pendingRes.count),
+    approved: renderCount(approvedRes.count),
+    rejected: renderCount(rejectedRes.count),
+    advisory: renderCount(advisoryRes.count),
+    blocking: renderCount(blockingRes.count),
   };
 }
 

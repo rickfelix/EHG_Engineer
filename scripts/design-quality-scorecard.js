@@ -20,6 +20,7 @@
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 dotenv.config();
 
 
@@ -37,7 +38,7 @@ const WEIGHTS = {
  * Extract accessibility dimension score from findings.
  * Based on: accessibility_check issues, contrast issues, touch target issues.
  */
-function scoreAccessibility(findings, confidence) {
+function scoreAccessibility(findings, _confidence) {
   const a11y = findings?.accessibility_check;
   if (!a11y || a11y.skipped) return null;
   if (a11y.error && !a11y.checked) return null;
@@ -57,7 +58,7 @@ function scoreAccessibility(findings, confidence) {
  * Extract token/design-system compliance score from findings.
  * Based on: design_system_check violations, inline style usage.
  */
-function scoreTokenCompliance(findings, confidence) {
+function scoreTokenCompliance(findings, _confidence) {
   const ds = findings?.design_system_check;
   if (!ds || ds.skipped) return null;
   if (ds.error && !ds.checked) return null;
@@ -73,7 +74,7 @@ function scoreTokenCompliance(findings, confidence) {
  * Extract component reuse score from findings.
  * Based on: component_analysis (large components, total), consistency_check.
  */
-function scoreComponentReuse(findings, confidence) {
+function scoreComponentReuse(findings, _confidence) {
   const comp = findings?.component_analysis;
   const consistency = findings?.consistency_check;
 
@@ -99,7 +100,7 @@ function scoreComponentReuse(findings, confidence) {
  * Extract visual polish score from findings.
  * Based on: responsive_check, ux_contract_compliance, CVA patterns.
  */
-function scoreVisualPolish(findings, confidence) {
+function scoreVisualPolish(findings, _confidence) {
   const responsive = findings?.responsive_check;
   const ux = findings?.ux_contract_compliance;
 
@@ -262,25 +263,32 @@ async function batchScore(days = 60) {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
 
-  // Get all DESIGN results within timeframe
-  const { data: designResults, error: drErr } = await supabase
-    .from('sub_agent_execution_results')
-    .select('id, sd_id, confidence, metadata, created_at')
-    .eq('sub_agent_code', 'DESIGN')
-    .gte('created_at', cutoff.toISOString())
-    .order('created_at', { ascending: false });
-
-  if (drErr) {
-    console.error('Error fetching DESIGN results:', drErr.message);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: sub_agent_execution_results is an
+  // unbounded growing table and every row here is deduped + scored below — paginate to
+  // completion. Error policy preserved: catch and report the same message, then return.
+  let designResults;
+  try {
+    designResults = await fetchAllPaginated(() => supabase
+      .from('sub_agent_execution_results')
+      .select('id, sd_id, confidence, metadata, created_at')
+      .eq('sub_agent_code', 'DESIGN')
+      .gte('created_at', cutoff.toISOString())
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (e) {
+    console.error('Error fetching DESIGN results:', e.message);
     return;
   }
 
   console.log(`Found ${designResults.length} DESIGN result(s) in timeframe`);
 
-  // Get existing scores to skip already-scored SDs
-  const { data: existingScores } = await supabase
+  // Get existing scores to skip already-scored SDs. design_quality_scores grows 1:1 with every
+  // SD ever scored (unbounded over the project's life) — paginate to completion.
+  const existingScores = await fetchAllPaginated(() => supabase
     .from('design_quality_scores')
-    .select('sd_id');
+    .select('sd_id')
+    .order('sd_id', { ascending: true })) // unique tiebreaker (FR-6)
+    .catch(() => []);
 
   const scoredSdIds = new Set((existingScores || []).map(s => s.sd_id));
 

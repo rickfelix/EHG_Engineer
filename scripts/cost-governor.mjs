@@ -34,6 +34,7 @@ import {
   DEFAULT_THRESHOLDS, evaluateRegen, decideTier, classifyAnomaly, tuneThresholds,
 } from '../lib/cost/governor.js';
 import { writeGovernorDecision } from '../lib/cost/governor-log.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 function parseArgs(argv) {
   const a = {
@@ -102,14 +103,22 @@ async function loadEvalDecisionRule() {
 }
 
 async function pullUsageRows(supabase, sinceISO) {
-  const { data, error } = await supabase
-    .from('model_usage_log')
-    .select('reported_model_name,subagent_type,phase,sd_id,metadata,captured_at')
-    .gte('captured_at', sinceISO)
-    .order('captured_at', { ascending: true })
-    .limit(50000);
-  if (error) throw new Error(error.message);
-  return data || [];
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 (bug fix): .limit(50000) does NOT
+  // override the PostgREST server-side max-rows cap (1000) — a requested limit above the cap is
+  // still clamped, so cost/anomaly evaluation was silently working off at most 1000 rows of usage
+  // history regardless of the intended window. Paginate to completion, keeping 50000 as the same
+  // DECLARED sampling cap (fetchAllPaginated's maxRows) the original .limit(50000) intended.
+  try {
+    return await fetchAllPaginated(() => supabase
+      .from('model_usage_log')
+      .select('reported_model_name,subagent_type,phase,sd_id,metadata,captured_at')
+      .gte('captured_at', sinceISO)
+      .order('captured_at', { ascending: true })
+      .order('id', { ascending: true }), // unique tiebreaker (FR-6)
+      { maxRows: 50000 });
+  } catch (e) {
+    throw new Error(e.message);
+  }
 }
 
 function out(json, obj, humanLines) {

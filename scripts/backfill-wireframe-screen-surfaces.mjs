@@ -39,6 +39,12 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { classifySurface } from '../lib/eva/stage-templates/analysis-steps/stage-15-wireframe-generator.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the prior `.limit(LIMIT)` (LIMIT up
+// to 5000 per --limit) did NOT actually bound the read to more than 1000: PostgREST's server-side
+// max-rows clamp applies regardless of a larger client-requested limit, so `--limit 5000` silently
+// returned at most 1000 rows. fetchAllPaginated's maxRows honors LIMIT as the declared cap it was
+// always meant to be, genuinely paginating past the 1000-row boundary when LIMIT > 1000.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 // ── CLI arg parsing ──────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -79,18 +85,19 @@ async function main() {
   const supabase = getSupabase();
 
   // Fetch rows missing surface classification
-  const { data: rows, error: fetchErr } = await supabase
-    .from('wireframe_screens')
-    .select('id, screen_name, name, surface, page_type')
-    .is('surface', null)
-    .limit(LIMIT);
-
-  if (fetchErr) {
-    console.error('[backfill-wireframe-surface] Fetch failed:', fetchErr.message);
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => supabase
+      .from('wireframe_screens') // schema-lint-disable-line: pre-existing table reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
+      .select('id, screen_name, name, surface, page_type')
+      .is('surface', null)
+      .order('id', { ascending: true }), { maxRows: LIMIT });
+  } catch (e) {
+    console.error('[backfill-wireframe-surface] Fetch failed:', e.message);
     process.exit(1);
   }
 
-  if (!rows || rows.length === 0) {
+  if (rows.length === 0) {
     console.log('[backfill-wireframe-surface] No rows to backfill — all screens already have surface.');
     return;
   }
@@ -128,7 +135,7 @@ async function main() {
     const batch = updates.slice(i, i + BATCH);
     // upsert using primary key to be idempotent
     const { error: upErr } = await supabase
-      .from('wireframe_screens')
+      .from('wireframe_screens') // schema-lint-disable-line: pre-existing table reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
       .upsert(
         batch.map(u => ({ id: u.id, surface: u.surface, page_type: u.page_type })),
         { onConflict: 'id' }

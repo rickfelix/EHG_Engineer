@@ -21,6 +21,10 @@
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — every existing ADR title feeds
+// the Jaccard dedupe check; a capped read past row 1000 would silently let a duplicate ADR
+// through with no error.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -95,8 +99,14 @@ function computeConfidence(pivot) {
 }
 
 async function existingAdrTitles() {
-  const { data } = await supabase.from('pocock_adrs').select('title');
-  return (data || []).map(r => r.title);
+  let rows = [];
+  try {
+    rows = await fetchAllPaginated(() => supabase
+      .from('pocock_adrs')
+      .select('id, title')
+      .order('id', { ascending: true }));
+  } catch { /* fail-open: empty list (matches prior data||[] fallback on error) */ }
+  return rows.map(r => r.title);
 }
 
 async function nextAdrNumber() {

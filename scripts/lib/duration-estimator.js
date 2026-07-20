@@ -12,6 +12,8 @@
  * 8. SD key pattern sub-bucketing
  */
 
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
+
 // Configurable: gaps longer than this between handoffs are considered idle time
 const IDLE_GAP_THRESHOLD_MINUTES = 30;
 
@@ -138,21 +140,30 @@ function computeActiveTime(timestamps) {
  * @returns {Promise<Array>} Array of { sdId, sdKey, sdType, category, priority, durationMinutes, wallClockMinutes, completedAt, sdKeyPrefix }
  */
 export async function getHistoricalDurations(supabase, sdType = null, category = null) {
-  // Get completed SDs
-  let query = supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, sd_type, category, priority, completion_date')
-    .eq('status', 'completed');
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — completed SDs feed duration
+  // stats across the whole table; strategic_directives_v2 grows, so a capped read silently
+  // biases the estimate. Paginate to completion; empty-on-error mirrors the prior fail-open.
+  const queryFactory = () => {
+    let q = supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, sd_type, category, priority, completion_date')
+      .eq('status', 'completed');
+    if (sdType) {
+      q = q.eq('sd_type', sdType);
+    }
+    if (category) {
+      q = q.eq('category', category);
+    }
+    return q;
+  };
 
-  if (sdType) {
-    query = query.eq('sd_type', sdType);
+  let sds;
+  try {
+    sds = await fetchAllPaginated(() => queryFactory().order('id', { ascending: true }));
+  } catch {
+    return [];
   }
-  if (category) {
-    query = query.eq('category', category);
-  }
-
-  const { data: sds, error } = await query;
-  if (error || !sds || sds.length === 0) return [];
+  if (sds.length === 0) return [];
 
   // Build SD lookup map
   const sdMap = new Map();

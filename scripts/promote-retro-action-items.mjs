@@ -25,6 +25,7 @@ import 'dotenv/config';
 import { execFileSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 import { actionText, actionOwner, isActionable } from './lib/retro-action-item-filter.mjs';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const apply = process.argv.includes('--apply');
 const LOOKBACK_DAYS = 7;
@@ -50,14 +51,19 @@ const cutoff = new Date(Date.now() - LOOKBACK_DAYS * 24 * 3600 * 1000).toISOStri
 // text/owner for whichever shape isn't checked -- if a fifth shape appears,
 // add it here too, not a one-off patch on the promoted QF.
 
-const { data: retros, error } = await supabase
-  .from('retrospectives')
-  .select('id, sd_id, title, action_items, target_application, metadata, created_at')
-  .gte('created_at', cutoff)
-  .not('action_items', 'is', null);
-
-if (error) {
-  console.error('ERROR (select):', JSON.stringify(error));
+// Paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: retrospectives is
+// unbounded-growth and a 7-day window does not provably bound it under heavy fleet activity;
+// every row below is iterated for promotion.
+let retros;
+try {
+  retros = await fetchAllPaginated(() => supabase
+    .from('retrospectives')
+    .select('id, sd_id, title, action_items, target_application, metadata, created_at')
+    .gte('created_at', cutoff)
+    .not('action_items', 'is', null)
+    .order('id', { ascending: true }));
+} catch (error) {
+  console.error('ERROR (select):', error.message);
   process.exitCode = 1;
   process.exit();
 }
@@ -71,15 +77,24 @@ if (error) {
 const TERMINAL_SD_STATUSES = new Set(['completed', 'cancelled']);
 const retroSdIds = [...new Set((retros || []).map(r => r.sd_id).filter(Boolean))];
 const sdStatusById = new Map();
+// GUARD READ (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9): this read
+// gates the terminal-SD skip below. A failed lookup must NOT be silently treated as
+// "no SD is terminal" (that would let promotion proceed and re-mint moot QFs — the
+// exact QF-20260719-740 failure class) — fail-closed and skip those retros instead.
+let sdStatusLookupFailed = false;
 if (retroSdIds.length > 0) {
-  const { data: sds, error: sdErr } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, status')
-    .in('id', retroSdIds);
-  if (sdErr) {
-    console.error('ERROR (sd status lookup):', JSON.stringify(sdErr));
-  } else {
-    for (const sd of sds || []) sdStatusById.set(sd.id, sd.status);
+  // Paginated — retroSdIds is derived from the (now-paginated) retros read above and is
+  // not provably <1000, so this .in() response is still subject to the PostgREST cap.
+  try {
+    const sds = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('id, status')
+      .in('id', retroSdIds)
+      .order('id', { ascending: true }));
+    for (const sd of sds) sdStatusById.set(sd.id, sd.status);
+  } catch (sdErr) {
+    sdStatusLookupFailed = true;
+    console.error('ERROR (sd status lookup):', sdErr.message);
   }
 }
 
@@ -88,12 +103,19 @@ let skippedAlreadyPromoted = 0;
 let skippedNoHighPriority = 0;
 let skippedNonActionable = 0;
 let skippedTerminalSd = 0;
+let skippedStatusUnavailable = 0;
 
 let skippedTestFixture = 0;
 
 for (const retro of retros || []) {
   if (retro.metadata?.action_items_promoted) {
     skippedAlreadyPromoted++;
+    continue;
+  }
+
+  if (retro.sd_id && sdStatusLookupFailed) {
+    console.warn(`GUARD_UNAVAILABLE: retro=${retro.id} sd=${retro.sd_id} -- SD status lookup failed this cycle; cannot verify terminal state, skipping promotion (fail-closed).`);
+    skippedStatusUnavailable++;
     continue;
   }
 
@@ -180,4 +202,4 @@ for (const retro of retros || []) {
   }
 }
 
-console.log(`\nSummary: ${promoted} promoted, ${skippedAlreadyPromoted} already-promoted, ${skippedTerminalSd} terminal-SD, ${skippedTestFixture} test-fixture, ${skippedNoHighPriority} with no high-priority items, ${skippedNonActionable} with only non-actionable items.`);
+console.log(`\nSummary: ${promoted} promoted, ${skippedAlreadyPromoted} already-promoted, ${skippedTerminalSd} terminal-SD, ${skippedStatusUnavailable} status-unavailable, ${skippedTestFixture} test-fixture, ${skippedNoHighPriority} with no high-priority items, ${skippedNonActionable} with only non-actionable items.`);

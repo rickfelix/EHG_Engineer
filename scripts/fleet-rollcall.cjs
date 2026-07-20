@@ -24,6 +24,15 @@ const { isSessionAlive } = require('../lib/fleet/session-liveness.cjs');
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
 const { getMarkerSessionIds } = require('../lib/fleet/cc-pid-liveness.cjs');
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — claude_sessions (72h window) and
+// session_coordination (per-sender history) are both growing tables; a busy 72h fleet window or a
+// prolific sender (coordinator/adam) can plausibly exceed the PostgREST 1000-row cap. Paginate both.
+let _fapModule = null;
+async function fapPaginate(queryFactory, opts) {
+  _fapModule ||= await import('../lib/db/fetch-all-paginated.mjs');
+  return _fapModule.fetchAllPaginated(queryFactory, opts);
+}
+
 const RECENT_SEND_MS = 5 * 60 * 1000; // an outbound message this fresh proves liveness
 const STALE_WINDOW_MS = 30 * 60 * 1000; // updated recently but no live signal -> STALE, not DEAD
 
@@ -69,19 +78,28 @@ async function main() {
 
   // OR across BOTH timestamp columns: Specimen 2 is exactly a session whose updated_at
   // was stale despite being alive — bounding on updated_at alone would repeat that bug.
-  const { data: sessions, error } = await supabase
+  const sessions = await fapPaginate(() => supabase
     .from('claude_sessions')
     .select('session_id, sd_key, updated_at, heartbeat_at, is_alive, terminal_id, process_alive_at, expected_silence_until, metadata')
     .neq('status', 'terminated')
-    .or(`updated_at.gte.${cutoff},heartbeat_at.gte.${cutoff}`);
-  if (error) { console.error('ERROR:', error.message); process.exit(1); }
+    .or(`updated_at.gte.${cutoff},heartbeat_at.gte.${cutoff}`)
+    .order('session_id', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
+  // (fail-closed: pagination errors propagate to main()'s own top-level .catch, mirroring the
+  // prior `if (error) { ...; process.exit(1); }` fail-closed policy.)
 
-  const ids = (sessions || []).map(s => s.session_id);
-  const { data: msgs, error: msgsError } = await supabase
-    .from('session_coordination')
-    .select('sender_session, created_at')
-    .in('sender_session', ids)
-    .order('created_at', { ascending: false });
+  const ids = sessions.map(s => s.session_id);
+  let msgs = [];
+  let msgsError = null;
+  try {
+    msgs = await fapPaginate(() => supabase
+      .from('session_coordination')
+      .select('sender_session, created_at')
+      .in('sender_session', ids)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })); // unique tiebreaker: stable page boundaries (FR-6)
+  } catch (e) {
+    msgsError = e;
+  }
   // Fail-open (don't abort the whole roll-call over the coordination-signal query alone) but
   // VISIBLE: silently swallowing this would degrade every verdict back to updated_at/heartbeat_at
   // only — reintroducing the exact Specimen-2 blind spot this signal exists to close.

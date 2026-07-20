@@ -18,6 +18,10 @@ import path from 'path';
 import dotenv from 'dotenv';
 dotenv.config();
 import { toReferenceRow } from '../../lib/eval/capability-scorer.mjs';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the "table total" line is a
+// display gauge over an accumulating eval table; rows.length would silently under-report
+// once the table exceeds the PostgREST cap.
+import { renderCount } from '../../lib/db/fetch-all-paginated.mjs';
 
 /** Pure: sealed_run feedback row -> results-only reference row (ungraded). */
 export function sealedRunToRow(feedbackRow) {
@@ -73,8 +77,8 @@ async function main() {
     .upsert(rows, { onConflict: 'task_id,model_id,effort,content_hash', ignoreDuplicates: true })
     .select('id');
   if (up.error) { console.error('upsert failed:', up.error.message); process.exitCode = 1; return; }
-  const total = await supabase.from('model_capability_reference').select('id');
-  console.log(`migrated (new this run): ${up.data ? up.data.length : 0}; table total: ${total.data ? total.data.length : '?'}`);
+  const total = await supabase.from('model_capability_reference').select('id', { count: 'exact', head: true });
+  console.log(`migrated (new this run): ${up.data ? up.data.length : 0}; table total: ${renderCount(total.count)}`);
 }
 
 const isMain = process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]));

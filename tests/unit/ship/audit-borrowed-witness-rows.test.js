@@ -15,7 +15,11 @@ function makeSupabase({ applications, findings }) {
         return { select: () => ({ eq: () => ({ not: () => Promise.resolve({ data: applications, error: null }) }) }) };
       }
       if (table === 'ship_review_findings') {
-        return { select: () => Promise.resolve({ data: findings, error: null }) };
+        // FR-6 batch 9 (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001): the read now paginates via
+        // fetchAllPaginated, which calls .order() (chainable) then .range() (terminal) instead of
+        // awaiting .select() directly — extend the chain, same resolved { data, error } shape.
+        const chain = { order: () => chain, range: () => Promise.resolve({ data: findings, error: null }) };
+        return { select: () => chain };
       }
       throw new Error(`unexpected table ${table}`);
     },

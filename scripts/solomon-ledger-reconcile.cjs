@@ -32,6 +32,16 @@
 require('dotenv').config();
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — negative-refs collection and
+// back-propagation matching scan audit_log / strategic_directives_v2 / the outcome ledger with
+// .limit(2000)/.limit(5000), all above the PostgREST 1000-row cap: the server silently clamps to
+// 1000 regardless, so a real negative signal past row 1000 would never back-propagate. Paginate.
+let _fapModule = null;
+async function fapPaginate(queryFactory, opts) {
+  _fapModule ||= await import('../lib/db/fetch-all-paginated.mjs');
+  return _fapModule.fetchAllPaginated(queryFactory, opts);
+}
+
 const CLOSER_OF_RECORD = 'solomon-ledger-reconcile.cjs';
 
 /**
@@ -125,20 +135,22 @@ function selectNegativeBackprop(ledgerRows, negativeRefs) {
 async function collectNegativeRefs(supabase, { sinceMs = null } = {}) {
   const refs = new Set();
   try {
-    let q = supabase.from('audit_log').select('event, metadata, created_at').in('event', NEGATIVE_AUDIT_EVENTS);
-    if (sinceMs) q = q.gte('created_at', new Date(sinceMs).toISOString());
-    const { data, error } = await q.limit(2000);
-    if (!error && Array.isArray(data)) for (const row of data) addRefsFromMetadata(refs, row.metadata);
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: was .limit(2000), above the
+    // PostgREST 1000-row cap (silently clamped anyway) — paginate to actually see every row.
+    const data = await fapPaginate(() => {
+      let q = supabase.from('audit_log').select('event, metadata, created_at').in('event', NEGATIVE_AUDIT_EVENTS);
+      if (sinceMs) q = q.gte('created_at', new Date(sinceMs).toISOString());
+      return q.order('created_at', { ascending: true }).order('id', { ascending: true });
+    });
+    for (const row of data) addRefsFromMetadata(refs, row.metadata);
   } catch { /* fail-open */ }
   try {
-    const { data, error } = await supabase
+    const data = await fapPaginate(() => supabase
       .from('strategic_directives_v2')
       .select('id, sd_key, metadata')
       .not('metadata->>reverted_at', 'is', null)
-      .limit(2000);
-    if (!error && Array.isArray(data)) {
-      for (const sd of data) { if (sd.sd_key) refs.add(String(sd.sd_key)); if (sd.id) refs.add(String(sd.id)); }
-    }
+      .order('id', { ascending: true }));
+    for (const sd of data) { if (sd.sd_key) refs.add(String(sd.sd_key)); if (sd.id) refs.add(String(sd.id)); }
   } catch { /* fail-open */ }
   return refs;
 }
@@ -153,13 +165,13 @@ async function backPropagateNegativeOutcomes(supabase, { negativeRefs, source = 
   if (refSet.size === 0) return { matched: [], updated: [] };
   let rows = [];
   try {
-    const { data, error } = await supabase
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: was .limit(5000), above the
+    // PostgREST 1000-row cap (silently clamped anyway) — paginate to actually see every row.
+    rows = await fapPaginate(() => supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — chairman-apply-gated table, not yet in the live snapshot
       .select('id, outcome, outcome_ref')
       .not('outcome_ref', 'is', null)
-      .limit(5000);
-    if (error) return { matched: [], updated: [], reason: error.message };
-    rows = data || [];
+      .order('id', { ascending: true }));
   } catch (e) {
     return { matched: [], updated: [], reason: (e && e.message) || String(e) };
   }

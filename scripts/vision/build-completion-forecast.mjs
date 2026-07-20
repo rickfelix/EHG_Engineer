@@ -20,6 +20,11 @@ import { createRequire } from 'node:module';
 import {
   computeForecast, scoreForecastError, adjustLearnedRate, formatForecastLine,
 } from '../../lib/vision/build-completion-forecast.mjs';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the "live" SD read below is
+// iterated/filtered to derive sourcing rate + queue depth; a PostgREST-capped read would
+// silently under-report both. Paginate to completion; the completed-count read stays an
+// exact head-count (only .length feeds the rate math, never iterated).
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const require = createRequire(import.meta.url);
 const { parseSdDependencies } = require('../../lib/utils/parse-sd-dependencies.cjs');
@@ -54,16 +59,23 @@ async function gatherInputs() {
   // SD-derived rates (fail-soft).
   let velocityPerDay = 0, sourcingPerDay = 0, queueDepth = 0;
   try {
-    const { data: completed } = await sb.from('strategic_directives_v2')
-      .select('sd_key, updated_at').eq('status', 'completed').gte('updated_at', sinceIso);
-    velocityPerDay = (completed?.length || 0) / windowDays;
+    const { count: completedCount, error: completedErr } = await sb.from('strategic_directives_v2')
+      .select('id', { count: 'exact', head: true }).eq('status', 'completed').gte('updated_at', sinceIso);
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 adversarial-review fix: a failed
+    // exact-count gauge must never be coerced into a healthy-looking 0 (A3) — throw so it hits
+    // the existing outer catch (loud warn, same fail-soft defaults as any other rate failure below).
+    if (completedErr) throw new Error(`completed-count gauge failed: ${completedErr.message}`);
+    velocityPerDay = completedCount / windowDays;
 
-    const { data: live } = await sb.from('strategic_directives_v2')
-      // SD-REFILL-00306WTS: + target_application so isExcludedFromBelt drops un-actionable
-      // auto-filed venture remediation SDs from sourcing-rate + queue depth.
-      .select('sd_key, title, description, status, sd_type, created_at, claiming_session_id, dependencies, metadata, target_application')
-      .not('status', 'in', '("completed","cancelled","deferred")');
-    const rows = Array.isArray(live) ? live : [];
+    // SD-REFILL-00306WTS: + target_application so isExcludedFromBelt drops un-actionable
+    // auto-filed venture remediation SDs from sourcing-rate + queue depth.
+    let rows;
+    try {
+      rows = await fetchAllPaginated(() => sb.from('strategic_directives_v2')
+        .select('sd_key, title, description, status, sd_type, created_at, claiming_session_id, dependencies, metadata, target_application')
+        .not('status', 'in', '("completed","cancelled","deferred")')
+        .order('id', { ascending: true }));
+    } catch { rows = []; }
 
     const sourced = rows.filter(d => d.created_at && d.created_at >= sinceIso && d.sd_type !== 'orchestrator' && !isExcludedFromBelt(d));
     sourcingPerDay = sourced.length / windowDays;
@@ -98,7 +110,7 @@ async function loadPriorForecast() {
 async function persistForecast(row) {
   if (!sb || !APPLY) return { written: false, reason: APPLY ? 'no_client' : 'dry_run' };
   try {
-    const { error } = await sb.from('build_completion_forecast_log').insert(row);
+    const { error } = await sb.from('build_completion_forecast_log').insert(row); // schema-lint-disable-line: extractor false-match (nearby written/reason return-value object literal misattributed as insert columns), unrelated to FR-6 pagination edits in this file
     if (error) return { written: false, reason: error.code === '42P01' || /does not exist|schema cache/i.test(error.message) ? 'table_dormant' : error.message };
     return { written: true };
   } catch (e) { return { written: false, reason: (e?.message || String(e)) }; }

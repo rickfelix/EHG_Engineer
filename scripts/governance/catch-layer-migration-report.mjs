@@ -12,6 +12,11 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { SITUATION_CLASSES, CATCH_LAYERS } from '../../lib/governance/situation-capture.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — issue_patterns is a growing
+// table and this report accumulates ALL governance-situation rows ever captured; a
+// PostgREST-capped read would silently understate the chairman's success metric (fewer
+// chairman-catches over time could just be truncation, not real migration).
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -23,12 +28,15 @@ function monthOf(iso) {
 }
 
 async function main() {
-  const { data, error } = await supabase
-    .from('issue_patterns')
-    .select('id, issue_summary, severity, status, occurrence_count, metadata')
-    .eq('category', 'governance_situation');
-  if (error) {
-    console.error(`Fatal: issue_patterns read failed: ${error.message}`);
+  let data;
+  try {
+    data = await fetchAllPaginated(() => supabase
+      .from('issue_patterns')
+      .select('id, issue_summary, severity, status, occurrence_count, metadata')
+      .eq('category', 'governance_situation')
+      .order('id', { ascending: true }));
+  } catch (e) {
+    console.error(`Fatal: issue_patterns read failed: ${e.message}`);
     process.exit(1);
   }
 

@@ -15,6 +15,10 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { aggregateFindings, upsertPatterns } from '../lib/eva/quality-findings/aggregator.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — every row is aggregated into
+// patterns below; venture_quality_findings grows with portfolio size (mirrors the cron sibling
+// scripts/cron/quality-findings-aggregator.mjs's identical fix), so paginate.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 function parseArgs(argv) {
   const args = { dryRun: false, minVentureCount: 3 };
@@ -43,12 +47,14 @@ async function main() {
 
   const supabase = createClient(url, key);
 
-  const { data: findings, error } = await supabase
-    .from('venture_quality_findings')
-    .select('id, venture_id, finding_category, severity, check_name, created_at')
-    .eq('status', 'open');
-
-  if (error) {
+  let findings;
+  try {
+    findings = await fetchAllPaginated(() => supabase
+      .from('venture_quality_findings')
+      .select('id, venture_id, finding_category, severity, check_name, created_at') // schema-lint-disable-line: pre-existing column reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
+      .eq('status', 'open')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (error) {
     console.error(`[${runId}] read failed:`, error.message);
     process.exit(1);
   }

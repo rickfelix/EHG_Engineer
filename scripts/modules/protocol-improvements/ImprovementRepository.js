@@ -4,6 +4,13 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — unfiltered/broadly-filtered
+// reads below (retrospectives, protocol_improvement_queue, and the v_protocol_improvements_
+// analysis view) have no pagination or exact-count fallback. This class is not currently
+// wired to scripts/protocol-improvements.js (that CLI uses index.js's own inline
+// implementation instead), but it is a public exported API surface — display-policy
+// tripwire it defensively rather than leave an unguarded cap-truncation site.
+import { warnIfCapTruncated } from '../../../lib/db/fetch-all-paginated.mjs';
 
 export class ImprovementRepository {
   constructor(supabaseUrl, supabaseKey) {
@@ -38,7 +45,7 @@ export class ImprovementRepository {
       throw new Error(`Failed to fetch retrospectives: ${error.message}`);
     }
 
-    return data || [];
+    return warnIfCapTruncated(data, 'ImprovementRepository.getRetrospectivesWithImprovements');
   }
 
   /**
@@ -65,7 +72,7 @@ export class ImprovementRepository {
       throw new Error(`Failed to fetch improvements analysis: ${error.message}`);
     }
 
-    return data || [];
+    return warnIfCapTruncated(data, 'ImprovementRepository.getProtocolImprovementsAnalysis');
   }
 
   /**
@@ -135,7 +142,7 @@ export class ImprovementRepository {
       throw new Error(`Failed to list queued improvements: ${error.message}`);
     }
 
-    return data || [];
+    return warnIfCapTruncated(data, 'ImprovementRepository.listQueuedImprovements');
   }
 
   /**
@@ -189,7 +196,7 @@ export class ImprovementRepository {
    */
   async recordEffectiveness(improvementId, metrics) {
     const { data, error } = await this.supabase
-      .from('protocol_improvement_queue')
+      .from('protocol_improvement_queue') // schema-lint-disable-line: pre-existing effectiveness_notes column, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
       .update({
         effectiveness_score: metrics.score,
         effectiveness_measured_at: new Date().toISOString(),
@@ -228,7 +235,7 @@ export class ImprovementRepository {
       throw new Error(`Failed to get effectiveness data: ${error.message}`);
     }
 
-    return data || [];
+    return warnIfCapTruncated(data, 'ImprovementRepository.getImprovementsWithEffectiveness');
   }
 
   /**

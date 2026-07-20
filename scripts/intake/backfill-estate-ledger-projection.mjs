@@ -26,6 +26,10 @@ import dotenv from 'dotenv';
 dotenv.config({ path: 'C:/Users/rickf/Projects/_EHG/EHG_Engineer/.env', override: true });
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { recordVerdict } from '../../lib/intake/conversion-ledger.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the estate source tables are
+// ongoing intake pools (drain-intake.mjs keeps draining into them), not a frozen historical
+// corpus; a capped read here would silently leave rows past 1000 unprojected with no error.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const APPLY = process.argv.includes('--apply');
 const DRY_RUN = !APPLY;
@@ -43,9 +47,13 @@ export function extractProjection(row) {
 }
 
 async function loadProjectable(sb, table) {
-  const { data, error } = await sb.from(table).select('id, raw_data');
-  if (error) throw new Error(`load ${table}: ${error.message}`);
-  return (data || []).map((r) => extractProjection(r)).filter(Boolean).map((p) => ({ ...p, table }));
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => sb.from(table).select('id, raw_data').order('id', { ascending: true }));
+  } catch (e) {
+    throw new Error(`load ${table}: ${e.message}`);
+  }
+  return rows.map((r) => extractProjection(r)).filter(Boolean).map((p) => ({ ...p, table }));
 }
 
 async function main() {

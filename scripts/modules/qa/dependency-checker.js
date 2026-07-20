@@ -14,6 +14,10 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
 import { resolveRepoPath } from '../../../lib/repo-paths.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — this scans ALL in-progress
+// SDs for cross-SD import conflicts; a silently-capped read (strategic_directives_v2 is a
+// growing table) would hide real conflicts. Paginate to completion.
+import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
 dotenv.config();
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
@@ -34,13 +38,15 @@ export async function checkCrossSDDependencies(sd_id, targetApp = 'ehg') {
   const supabase = createSupabaseClient();
 
   // Get other in-progress SDs
-  const { data: inProgressSDs, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, title, progress, status, metadata')
-    .in('status', ['in_progress', 'active', 'pending_approval'])
-    .neq('id', sd_id);
-
-  if (error) {
+  let inProgressSDs;
+  try {
+    inProgressSDs = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('id, title, progress, status, metadata')
+      .in('status', ['in_progress', 'active', 'pending_approval'])
+      .neq('id', sd_id)
+      .order('id', { ascending: true }));
+  } catch (error) {
     console.error('   ⚠️  Could not query in-progress SDs:', error.message);
     return {
       verdict: 'SKIP',

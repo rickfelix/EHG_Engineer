@@ -20,6 +20,10 @@ import { processFindings } from '../../lib/eva/consultant/confidence-engine.js';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { fingerprint as sharedFingerprint } from '../../lib/shared/content-fingerprint.cjs';
 import { resolveActiveVentureByName } from '../../lib/venture-name-resolver.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: ventures and
+// sd_key_result_alignment grow with the portfolio -- un-paginated reads here would
+// silently skew this weekly auditor's findings past the PostgREST 1000-row cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -271,10 +275,14 @@ async function analyzeCapabilityDelivery() {
 async function analyzeVentureReadiness() {
   // Live column is current_lifecycle_stage — ventures has NO current_stage
   // (SD-LEO-FIX-FIX-PHANTOM-COLUMN-002).
-  const { data: ventures } = await supabase
-    .from('ventures')
-    .select('id, name, status, current_lifecycle_stage, updated_at')
-    .eq('status', 'active');
+  let ventures;
+  try {
+    ventures = await fetchAllPaginated(() => supabase
+      .from('ventures')
+      .select('id, name, status, current_lifecycle_stage, updated_at')
+      .eq('status', 'active')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { ventures = []; } // prior behavior: read error ignored
 
   if (!ventures || ventures.length === 0) return [];
 
@@ -478,10 +486,14 @@ export async function analyzeOKRDrift(client = supabase) {
   // the seam Adam should flag (drift with no work in flight). Advisory only (CONST-002: Adam
   // proposes, it never accepts a rec or auto-generates an SD).
   if (behind.length > 0) {
-    const { data: alignments } = await client
-      .from('sd_key_result_alignment')
-      .select('key_result_id');
-    const alignedKrIds = new Set((alignments || []).map(a => a.key_result_id));
+    let alignments;
+    try {
+      alignments = await fetchAllPaginated(() => client
+        .from('sd_key_result_alignment')
+        .select('key_result_id')
+        .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    } catch { alignments = []; } // prior behavior: read error ignored
+    const alignedKrIds = new Set(alignments.map(a => a.key_result_id));
     const uncovered = behind.filter(kr => !alignedKrIds.has(kr.id));
     if (uncovered.length >= 1) {
       findings.push({

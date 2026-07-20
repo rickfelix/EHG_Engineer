@@ -21,6 +21,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'node:url';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 // Mirrors auto_validate_vision_quality's v_standard_keys array
 // (database/migrations/20260314_quality_validation_vision_docs.sql) exactly — keep in lockstep.
@@ -70,23 +71,25 @@ export function computeS19CoverageGauge(rows) {
 }
 
 async function fetchS19VisionRows(supabase) {
-  const { data: stageRows, error: stageError } = await supabase
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: venture_stage_work grows with
+  // portfolio size — a stage-19 snapshot is not provably <1000 long-term; paginate both reads.
+  const stageRows = await fetchAllPaginated(() => supabase
     .from('venture_stage_work')
     .select('venture_id')
-    .eq('lifecycle_stage', 19);
-  if (stageError) throw stageError;
+    .eq('lifecycle_stage', 19)
+    .order('id', { ascending: true }));
 
-  const ventureIds = [...new Set((stageRows || []).map((r) => r.venture_id).filter(Boolean))];
+  const ventureIds = [...new Set(stageRows.map((r) => r.venture_id).filter(Boolean))];
   if (ventureIds.length === 0) return [];
 
-  const { data: visionRows, error: visionError } = await supabase
+  const visionRows = await fetchAllPaginated(() => supabase
     .from('eva_vision_documents')
     .select('venture_id, vision_key, sections')
     .eq('level', 'L2')
-    .in('venture_id', ventureIds);
-  if (visionError) throw visionError;
+    .in('venture_id', ventureIds)
+    .order('id', { ascending: true }));
 
-  return visionRows || [];
+  return visionRows;
 }
 
 export function buildSnapshotRow(gauge, error) {

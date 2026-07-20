@@ -11,6 +11,7 @@
  */
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { warnIfCapTruncated } from '../lib/db/fetch-all-paginated.mjs';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -130,12 +131,17 @@ async function main() {
   const limit = parseInt(args.limit) || 20;
   query = query.limit(limit);
 
-  const { data, error } = await query;
+  const { data: rawData, error } = await query;
 
   if (error) {
     console.error('Query error:', error.message);
     process.exit(1);
   }
+
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: --limit is user-supplied and
+  // can exceed the PostgREST cap; warn (don't silently misreport) when the result is exactly
+  // capped, since converting to full pagination would defeat the CLI's declared --limit intent.
+  const data = warnIfCapTruncated(rawData, 'scripts/sd-query.js:133');
 
   if (args.json) {
     console.log(JSON.stringify(data, null, 2));

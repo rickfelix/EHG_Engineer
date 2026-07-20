@@ -30,6 +30,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { getRepoPaths } from '../lib/repo-paths.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the SD cache below is built from
+// nearly every SD status (5 of the possible statuses), so it's effectively an unfiltered scan of
+// strategic_directives_v2 (a growing table) used to drive branch-deletion safety decisions; a
+// capped read would silently miscache SDs past the boundary and could misjudge a branch as safe
+// to delete.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 dotenv.config();
 
 const execAsync = promisify(exec);
@@ -105,18 +111,14 @@ class IntelligentBranchCleanup {
     console.log('\n📊 Loading SD data from database...');
 
     try {
-      const { data: sds, error } = await this.supabase
+      const sds = await fetchAllPaginated(() => this.supabase
         .from('strategic_directives_v2')
         .select('id, sd_key, status, title, metadata')
-        .in('status', ['completed', 'cancelled', 'draft', 'pending_approval', 'in_progress']);
-
-      if (error) {
-        console.log(`   ⚠️  Could not load SD data: ${error.message}`);
-        return;
-      }
+        .in('status', ['completed', 'cancelled', 'draft', 'pending_approval', 'in_progress'])
+        .order('id', { ascending: true }));
 
       // Index by various keys for fast lookup
-      for (const sd of sds || []) {
+      for (const sd of sds) {
         // Index by legacy_id (e.g., SD-EHG-WEBSITE-001)
         if (sd.sd_key) {
           this.sdCache.set(sd.sd_key.toLowerCase(), sd);

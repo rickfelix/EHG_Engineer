@@ -13,6 +13,10 @@
  */
 import { createSupabaseServiceClient } from '../lib/supabase-connection.js';
 import { verifyStagedCandidates, formatVerifierReport } from '../../lib/sourcing-engine/refill-dry-run-verifier.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — this is the operator preview of
+// what refill-cron.mjs will act on; the default --limit=1000 matched the PostgREST cap exactly,
+// so a >1000 staged corpus silently under-reported vs what the cron actually promotes from.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -23,19 +27,20 @@ async function main() {
   const supabase = await createSupabaseServiceClient('engineer', { verbose: false });
 
   // Staged = item_disposition='pending' AND not yet promoted. Read-only.
-  const { data: rows, error } = await supabase
-    .from('roadmap_wave_items')
-    .select('id, title, source_type, source_id, item_disposition, promoted_to_sd_key, lane, metadata')
-    .eq('item_disposition', 'pending')
-    .is('promoted_to_sd_key', null)
-    .limit(limit);
-
-  if (error) {
-    console.error('refill-verify: query failed:', error.message);
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => supabase
+      .from('roadmap_wave_items')
+      .select('id, title, source_type, source_id, item_disposition, promoted_to_sd_key, lane, metadata')
+      .eq('item_disposition', 'pending')
+      .is('promoted_to_sd_key', null)
+      .order('id', { ascending: true }), { maxRows: limit }); // declared sampling cap, preserved from prior .limit(limit)
+  } catch (e) {
+    console.error('refill-verify: query failed:', e.message);
     process.exit(2);
   }
 
-  const report = verifyStagedCandidates(rows || []);
+  const report = verifyStagedCandidates(rows);
 
   if (json) {
     console.log(JSON.stringify({

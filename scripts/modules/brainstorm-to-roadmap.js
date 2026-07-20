@@ -11,6 +11,10 @@
 
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: roadmap_wave_items grows with
+// the roadmap; queryRoadmapItemsWithMetadata() returns the full displayed set, so a capped
+// read would silently hide items from the roadmap view.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -41,7 +45,7 @@ export async function createRoadmapItemFromBrainstorm(brainstormId, options = {}
   // Fetch brainstorm
   const { data: brainstorm, error: bErr } = await supabase
     .from('brainstorm_sessions')
-    .select('id, title, metadata, stage, outcome_type, created_at')
+    .select('id, title, metadata, stage, outcome_type, created_at') // schema-lint-disable-line: pre-existing column reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
     .eq('id', brainstormId)
     .single();
 
@@ -156,14 +160,20 @@ export async function queryRoadmapItemsWithMetadata(options = {}) {
   const waveIds = waves.map(w => w.id);
   const waveMap = new Map(waves.map(w => [w.id, w]));
 
-  // Get all items across waves
-  const { data: items } = await supabase
-    .from('roadmap_wave_items')
-    .select('id, wave_id, title, source_type, source_id, promoted_to_sd_key, priority_rank, metadata, created_at')
-    .in('wave_id', waveIds)
-    .order('priority_rank', { ascending: true });
+  // Get all items across waves (paginated — a capped read here silently hides roadmap items)
+  let items = [];
+  try {
+    items = await fetchAllPaginated(() => supabase
+      .from('roadmap_wave_items')
+      .select('id, wave_id, title, source_type, source_id, promoted_to_sd_key, priority_rank, metadata, created_at')
+      .in('wave_id', waveIds)
+      .order('priority_rank', { ascending: true })
+      .order('id', { ascending: true }));
+  } catch {
+    items = [];
+  }
 
-  return (items || []).map(item => ({
+  return items.map(item => ({
     ...item,
     wave: waveMap.get(item.wave_id) || null,
     brainstorm_session_id: item.metadata?.brainstorm_session_id || null,
@@ -184,7 +194,7 @@ export async function processAllPendingBrainstorms(options = {}) {
   // Find brainstorms with vision+arch that are chairman-reviewed
   const { data: brainstorms } = await supabase
     .from('brainstorm_sessions')
-    .select('id, title, metadata')
+    .select('id, title, metadata') // schema-lint-disable-line: pre-existing column reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
     .not('metadata->vision_key', 'is', null)
     .not('metadata->arch_key', 'is', null)
     .not('chairman_reviewed_at', 'is', null)

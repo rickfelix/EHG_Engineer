@@ -2,7 +2,7 @@
  * Vitest cases for scripts/audit-completed-sd-db-content-parity.js (FR-6 audit half).
  * SD: SD-LEO-INFRA-CODE-CONTENT-PARITY-001
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { runAudit } from '../../../scripts/audit-completed-sd-db-content-parity.js';
 
 function makeAuditClient({ sds, rowsByTable = {} }) {
@@ -23,6 +23,16 @@ function makeAuditClient({ sds, rowsByTable = {} }) {
           return queryObj;
         },
         maybeSingle: async () => ({ data: sds.find((s) => s.sd_key === queryObj._filters.sd_key) || null, error: null }),
+        // FR-6 batch 9 (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001): the read now paginates
+        // via fetchAllPaginated, which calls .order() (chainable) then .range() (terminal)
+        // instead of awaiting the query directly — extend the chain, same filtering logic.
+        order: () => queryObj,
+        range: async () => {
+          const filtered = sds
+            .filter((sd) => Object.entries(queryObj._filters).every(([k, v]) => sd[k] === v))
+            .filter((sd) => !queryObj._gte || sd[queryObj._gte.col] >= queryObj._gte.val);
+          return { data: filtered, error: null };
+        },
         then(onFulfilled) {
           const filtered = sds
             .filter((sd) => Object.entries(queryObj._filters).every(([k, v]) => sd[k] === v))
@@ -36,7 +46,7 @@ function makeAuditClient({ sds, rowsByTable = {} }) {
       // SD-FDBK-INFRA-MIGRATE-EMIT-FEEDBACK-001 FR-5: emitFeedback dedup-check
       // chain support — `.select('id').eq('category', x).eq('metadata->>dedup_hash', h).maybeSingle()`.
       // Returns {data: null} so the INSERT branch proceeds.
-      const insertChain = (row) => {
+      const insertChain = () => {
         const single = async () => ({ data: { id: `fb-${calls.feedbackInserts.length + 1}` }, error: null });
         return { select: () => ({ single }), then: (cb) => cb({ data: { id: 'inserted' }, error: null }) };
       };

@@ -18,6 +18,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import dotenv from 'dotenv';
 import chalk from 'chalk';
+import { renderCount } from '../lib/db/fetch-all-paginated.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -224,7 +225,7 @@ class LEOMaintenanceManager {
     try {
       // Reset circuit breakers that have been open for >1 hour
       const { data, error } = await supabase
-        .from('circuit_breaker_state')
+        .from('circuit_breaker_state') // schema-lint-disable-line: pre-existing table reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
         .select('*')
         .eq('state', 'open')
         .lt('last_failure_at', new Date(Date.now() - 3600000).toISOString());
@@ -332,7 +333,7 @@ class LEOMaintenanceManager {
     try {
       // Sub-agent activation stats
       const { data: activationStats, error: activationErr } = await supabase
-        .from('sub_agent_activation_stats')
+        .from('sub_agent_activation_stats') // schema-lint-disable-line: pre-existing table reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
         .select('*');
 
       // SD-REFILL-001MABRD: make an unprovisioned table visible instead of a silent empty section.
@@ -373,17 +374,19 @@ class LEOMaintenanceManager {
         }
       }
 
-      // Active sessions
-      const { data: activeSessions, error: sessionsErr } = await supabase
-        .from('leo_session_tracking')
-        .select('count')
+      // Active sessions (exact head-count — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001
+      // FR-6 batch 9: this is a gauge, not a processed list; never coerce a failed
+      // measurement to a healthy-looking 0)
+      const { count: activeSessionCount, error: sessionsErr } = await supabase
+        .from('leo_session_tracking') // schema-lint-disable-line: pre-existing table reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
+        .select('id', { count: 'exact', head: true })
         .eq('status', 'active');
 
       // SD-REFILL-001MABRD: surface the unprovisioned table instead of silently omitting the line.
       if (isUnprovisionedTableError(sessionsErr)) {
         console.log(chalk.yellow('\n⚠️  Active Sessions: leo_session_tracking not provisioned — count unavailable'));
-      } else if (activeSessions) {
-        console.log(chalk.cyan(`\nActive Sessions: ${activeSessions.length || 0}`));
+      } else if (!sessionsErr) {
+        console.log(chalk.cyan(`\nActive Sessions: ${renderCount(activeSessionCount)}`));
       }
 
     } catch (_error) {

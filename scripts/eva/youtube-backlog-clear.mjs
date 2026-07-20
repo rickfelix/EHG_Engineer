@@ -21,6 +21,10 @@ import dotenv from 'dotenv';
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { planBacklogClear } from '../../lib/eva/youtube-backlog-clear.js';
 import { postProcessAll } from '../../lib/integrations/post-processor.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the classified+unreviewed
+// backlog grows indefinitely -- an un-paginated read here would silently leave part of
+// the backlog un-routed past the PostgREST 1000-row cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -28,14 +32,15 @@ const apply = process.argv.includes('--apply');
 
 /** Load the classified+unreviewed eva_youtube_intake rows (the backlog). Read-only. */
 async function loadBacklog(supabase) {
-  const { data, error } = await supabase
-    .from('eva_youtube_intake')
-    .select('id, youtube_video_id, youtube_playlist_item_id, title, chairman_intent, target_application, classification_confidence, status, classified_at, chairman_reviewed_at, processed_at, destination_playlist_id')
-    .not('classified_at', 'is', null)
-    .is('chairman_reviewed_at', null)
-    .order('created_at', { ascending: true });
-  if (error) { console.error('Error loading backlog:', error.message); return []; }
-  return data || [];
+  try {
+    return await fetchAllPaginated(() => supabase
+      .from('eva_youtube_intake')
+      .select('id, youtube_video_id, youtube_playlist_item_id, title, chairman_intent, target_application, classification_confidence, status, classified_at, chairman_reviewed_at, processed_at, destination_playlist_id')
+      .not('classified_at', 'is', null)
+      .is('chairman_reviewed_at', null)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (error) { console.error('Error loading backlog:', error.message); return []; }
 }
 
 function printPlan(plan) {

@@ -59,6 +59,18 @@ const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 // Restore stdout for JSON output once dotenv init is done.
 process.stdout.write = _origStdoutWrite;
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — safeSelect() below samples
+// historical rows from growing tables (sd_phase_handoffs, sub_agent_execution_results,
+// strategic_directives_v2) for MC prior-building; its old raw `.limit(opts.limit || 5000)`
+// silently got re-capped to the PostgREST 1000-row max with no ordering, so callers asking
+// for "up to 5000" priors got an arbitrary <=1000-row slice. fapPaginate honors the declared
+// sampling cap (maxRows) via clean multi-page reads instead.
+let _fapModule = null;
+async function fapPaginate(queryFactory, opts) {
+  _fapModule ||= await import('../lib/db/fetch-all-paginated.mjs');
+  return _fapModule.fetchAllPaginated(queryFactory, opts);
+}
+
 // ── Constants ─────────────────────────────────────────────────────────────
 const DEFAULT_DRAWS = parseInt(process.env.FLEET_MC_DRAWS, 10) || 1000;
 const PORT_PROBE_TIMEOUT_MS = 50;
@@ -979,20 +991,28 @@ function clamp01(x) { return Math.max(0, Math.min(1, x)); }
 function round4(x) { return Math.round(x * 10000) / 10000; }
 
 async function safeSelect(supabase, table, cols, opts = {}) {
-  let q = supabase.from(table).select(cols);
-  if (opts.since && opts.column) q = q.gte(opts.column, opts.since);
-  if (opts.keys && opts.keys.length > 0) {
-    // Try matching either sd_key or id (common for v2 tables).
-    const ors = opts.keys.slice(0, 200).map(k => `sd_key.eq.${k},id.eq.${k}`).join(',');
-    q = q.or(ors);
-  }
-  q = q.limit(opts.limit || 5000);
-  const { data, error } = await q;
-  if (error) {
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: opts.limit (default 5000) is a
+  // DECLARED sampling cap for MC prior-building, not a request PostgREST will honor directly —
+  // the server clamps any single response at 1000 rows regardless of .limit(). fapPaginate's
+  // maxRows walks pages until the declared cap or a short page, whichever comes first.
+  try {
+    return await fapPaginate(() => {
+      let q = supabase.from(table).select(cols);
+      if (opts.since && opts.column) q = q.gte(opts.column, opts.since);
+      if (opts.keys && opts.keys.length > 0) {
+        // Try matching either sd_key or id (common for v2 tables).
+        const ors = opts.keys.slice(0, 200).map(k => `sd_key.eq.${k},id.eq.${k}`).join(',');
+        q = q.or(ors);
+      }
+      // unique tiebreaker: stable page boundaries (FR-6). opts.column (created_at) is not
+      // unique across rows, so 'id' is always appended as the tiebreak.
+      return opts.column ? q.order(opts.column, { ascending: true }).order('id', { ascending: true })
+        : q.order('id', { ascending: true });
+    }, { maxRows: opts.limit || 5000 });
+  } catch (error) {
     process.stderr.write(`[fleet-mc] ${table} query failed: ${error.message}\n`);
     return [];
   }
-  return data || [];
 }
 
 // ── CLI ───────────────────────────────────────────────────────────────────

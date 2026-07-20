@@ -4,6 +4,10 @@
  *
  * SD: SD-LEO-SIMPLIFY-ENFORCEMENT-AND-ORCH-001-C (FR-002)
  */
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — every matched SD is verified;
+// strategic_directives_v2 is a growing table (~4000 rows and counting) and the status filter
+// alone does not bound the result, so a capped read would silently skip SDs past row 1000.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 export default {
   key: 'test-sds',
@@ -18,21 +22,23 @@ export default {
     const result = { total: 0, processed: 0, skipped: 0, failed: 0, details: [] };
 
     // Query SDs that have smoke_test_steps
-    const { data: sds, error } = await supabase
-      .from('strategic_directives_v2')
-      .select('sd_key, title, status, smoke_test_steps')
-      .eq('status', statusFilter)
-      .not('smoke_test_steps', 'is', null)
-      .order('updated_at', { ascending: false });
-
-    if (error) {
+    let sds;
+    try {
+      sds = await fetchAllPaginated(() => supabase
+        .from('strategic_directives_v2')
+        .select('id, sd_key, title, status, smoke_test_steps')
+        .eq('status', statusFilter)
+        .not('smoke_test_steps', 'is', null)
+        .order('updated_at', { ascending: false })
+        .order('id', { ascending: true }));
+    } catch (error) {
       result.details.push({ error: `Query failed: ${error.message}` });
       result.failed = 1;
       return result;
     }
 
     // Filter out SDs with empty smoke_test_steps arrays
-    const sdsWithTests = (sds || []).filter(sd => {
+    const sdsWithTests = sds.filter(sd => {
       if (Array.isArray(sd.smoke_test_steps)) return sd.smoke_test_steps.length > 0;
       if (typeof sd.smoke_test_steps === 'string') return sd.smoke_test_steps.trim().length > 0;
       return false;

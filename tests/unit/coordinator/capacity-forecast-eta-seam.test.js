@@ -49,13 +49,33 @@ describe('etaMinForClaim — a provided actuals override drives the ETA', () => 
   });
 });
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: computePhaseMinsFromActuals now
+// routes its read through fetchAllPaginated, which chains TWO .order(...) calls then a terminal
+// .range(...) (resolving { data, error }) instead of a single .order().limit(). The fake builder
+// below is chainable on .order() (any number of calls) and terminates on .range().
+function fakeActualsSb({ data, error = null }) {
+  return {
+    from: () => ({
+      select: () => {
+        const builder = {
+          gte: () => builder,
+          not: () => builder,
+          order: () => builder,
+          range: () => Promise.resolve({ data, error }),
+        };
+        return builder;
+      },
+    }),
+  };
+}
+
 describe('computePhaseMinsFromActuals — fail-open to null', () => {
   it('returns null on a query error (caller falls back to static)', async () => {
-    const sb = { from: () => ({ select: () => ({ gte: () => ({ not: () => ({ order: () => ({ limit: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }) }) }) }) }) };
+    const sb = fakeActualsSb({ data: null, error: { message: 'boom' } });
     expect(await computePhaseMinsFromActuals(sb)).toBeNull();
   });
   it('returns null when there are no rows in the window', async () => {
-    const sb = { from: () => ({ select: () => ({ gte: () => ({ not: () => ({ order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }) }) }) }) }) };
+    const sb = fakeActualsSb({ data: [] });
     expect(await computePhaseMinsFromActuals(sb)).toBeNull();
   });
   it('returns null when a phase has insufficient samples (below the min-samples threshold)', async () => {
@@ -66,7 +86,7 @@ describe('computePhaseMinsFromActuals — fail-open to null', () => {
     ];
     const sb = {
       from: (t) => t === 'sub_agent_execution_results'
-        ? ({ select: () => ({ gte: () => ({ not: () => ({ order: () => ({ limit: () => Promise.resolve({ data: rows, error: null }) }) }) }) }) })
+        ? fakeActualsSb({ data: rows }).from()
         : ({ select: () => ({ in: () => Promise.resolve({ data: [{ id: 'a', sd_type: 'infrastructure' }, { id: 'b', sd_type: 'infrastructure' }], error: null }) }) }),
     };
     expect(await computePhaseMinsFromActuals(sb)).toBeNull();

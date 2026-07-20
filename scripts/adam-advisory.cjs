@@ -701,7 +701,12 @@ function parseSweepWindowMs(argv) {
  * shown, plus an unacked-count so accumulation is visible (D6 close-loops signal). Read-only —
  * never consumes rows (`--sweep` is a visibility tool, not a drain lane).
  */
-const SWEEP_ROW_LIMIT = 2000;
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 (real bug, adjacent to this
+// site): was 2000. PostgREST's server-side db-max-rows cap silently clamps ANY unranged
+// read at 1000 regardless of a higher client .limit() — so the truncation check below
+// (`descRows.length === SWEEP_ROW_LIMIT`) could never fire; a truncated 1000-row page read
+// as "complete" up to 2000. Corrected to the real cap so the tripwire actually trips.
+const SWEEP_ROW_LIMIT = 1000;
 
 async function windowSweep(supabase, sessionId, { windowMs = DEFAULT_SWEEP_WINDOW_MS, quiet = false } = {}) {
   const cutoffIso = new Date(Date.now() - windowMs).toISOString();

@@ -23,7 +23,19 @@ function makeFakeSupabase() {
     inserts,
     from(table) {
       if (table === 'roadmap_wave_items') {
-        return { select() { return { not() { return Promise.resolve({ data: WAVE_ROWS, error: null }); } }; } };
+        // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: loadTopWaveItems now routes
+        // through fetchAllPaginated, whose terminal call is .range() (not the implicit await
+        // formerly used via .not()) — chain order()/range() to resolve the same fixture rows.
+        return {
+          select() {
+            const chain = {
+              not() { return chain; },
+              order() { return chain; },
+              range: () => Promise.resolve({ data: WAVE_ROWS, error: null }),
+            };
+            return chain;
+          },
+        };
       }
       if (table === 'eva_todoist_intake' || table === 'eva_youtube_intake') {
         return {

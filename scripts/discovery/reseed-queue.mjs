@@ -18,6 +18,10 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — this script's own docstring
+// promises to archive ALL active rows; a PostgREST-capped read would silently leave rows
+// beyond the cap un-archived while reporting "reseed-ready". Paginate to completion.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const APPLY = process.argv.includes('--apply');
 const SD_KEY = 'SD-MAN-INFRA-STAGE-REVIVAL-PLUMBING-001';
@@ -35,11 +39,14 @@ async function main() {
   if (!url || !key) { console.error('Missing Supabase credentials'); process.exit(1); }
   const db = createClient(url, key);
 
-  const { data: rows, error } = await db
-    .from('opportunity_blueprints')
-    .select('id, title, source_type, is_active, metadata')
-    .eq('is_active', true);
-  if (error) { console.error('read failed:', error.message); process.exit(1); }
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => db
+      .from('opportunity_blueprints')
+      .select('id, title, source_type, is_active, metadata')
+      .eq('is_active', true)
+      .order('id', { ascending: true }));
+  } catch (e) { console.error('read failed:', e.message); process.exit(1); }
 
   if (!rows?.length) {
     console.log('Active queue already empty — nothing to archive (reseed-ready).');

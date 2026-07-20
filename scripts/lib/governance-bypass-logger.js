@@ -23,6 +23,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -197,24 +198,33 @@ export async function queryBypassPatterns({ category = null, changedBy = null, d
   const supabase = createClient(supabaseUrl, supabaseKey);
   const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-  let query = supabase
-    .from('governance_audit_log')
-    .select('*')
-    .eq('table_name', 'governance_bypass')
-    .gte('changed_at', cutoffDate)
-    .order('changed_at', { ascending: false });
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — governance_audit_log is a
+  // *_log growing table; generateBypassAnalytics() aggregates counts over every row this
+  // returns, so a capped read would silently under-count the retrospective. Paginate to
+  // completion; error policy mirrors the prior throw.
+  const queryFactory = () => {
+    let q = supabase
+      .from('governance_audit_log')
+      .select('*')
+      .eq('table_name', 'governance_bypass')
+      .gte('changed_at', cutoffDate)
+      .order('changed_at', { ascending: false });
 
-  if (category) {
-    query = query.eq('new_values->>category', category);
-  }
+    if (category) {
+      q = q.eq('new_values->>category', category);
+    }
 
-  if (changedBy) {
-    query = query.eq('changed_by', changedBy);
-  }
+    if (changedBy) {
+      q = q.eq('changed_by', changedBy);
+    }
 
-  const { data, error } = await query;
+    return q;
+  };
 
-  if (error) {
+  let data;
+  try {
+    data = await fetchAllPaginated(() => queryFactory().order('id', { ascending: true }));
+  } catch (error) {
     throw new Error(`Failed to query bypass patterns: ${error.message}`);
   }
 

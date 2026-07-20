@@ -11,8 +11,28 @@ const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 
 const sb = createSupabaseServiceClient();
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — sd_phase_handoffs and
+// strategic_directives_v2 are both growing tables; a hard-coded .limit(1000)/bare .in()/status
+// filter silently truncates the ETA stats and pending-SD list once either table crosses the cap.
+let _fapModule = null;
+async function fapPaginate(queryFactory, opts) {
+  _fapModule ||= await import('../lib/db/fetch-all-paginated.mjs');
+  return _fapModule.fetchAllPaginated(queryFactory, opts);
+}
+
 // Idle gap threshold: gaps longer than this between handoffs are excluded from active-time
 const IDLE_GAP_THRESHOLD_MINUTES = 30;
+
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 adversarial-review fix: sdIds
+// (distinct sd_id values across ALL paginated handoffs, now unbounded) is fed into a bare
+// .in('id', sdIds) — an unchunked filter list this large blows past the URL-length limit
+// (414 Request-URI Too Large). Chunk the id list the same way this SD's bulk writes are chunked.
+const ID_IN_CHUNK = 200;
+function chunk(arr, n) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
+}
 
 // SD key prefix patterns for sub-bucketing
 const KEY_PREFIXES = [
@@ -62,20 +82,39 @@ function computeActiveMinutes(timestamps) {
 
 (async () => {
   // 1. Get all handoffs
-  const { data: handoffs, error: e1 } = await sb.from('sd_phase_handoffs')
-    .select('sd_id, from_phase, to_phase, created_at, status')
-    .order('created_at', { ascending: true })
-    .limit(1000);
-
-  if (e1) { console.error('Handoff query error:', e1.message); process.exit(1); }
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the prior .limit(1000) was
+  // exactly the PostgREST cap, not a deliberate sample — this is the incident pattern the
+  // SD exists to close. Paginate to completion.
+  let handoffs;
+  try {
+    handoffs = await fapPaginate(() => sb.from('sd_phase_handoffs')
+      .select('sd_id, from_phase, to_phase, created_at, status')
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
+  } catch (e1) {
+    console.error('Handoff query error:', e1.message); process.exit(1);
+  }
 
   // 2. Get SD metadata
   const sdIds = [...new Set(handoffs.map(h => h.sd_id))];
-  const { data: sdMeta, error: e2 } = await sb.from('strategic_directives_v2')
-    .select('id, sd_key, parent_sd_id, sd_type, status, current_phase')
-    .in('id', sdIds);
-
-  if (e2) { console.error('SD query error:', e2.message); process.exit(1); }
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: distinct sd_id count grows with
+  // the SD backlog and can exceed the PostgREST cap even though the filter is a bare .in() —
+  // AND the id list itself is chunked (ID_IN_CHUNK) since an unchunked .in() with thousands of
+  // UUIDs exceeds the URL-length limit regardless of row-count pagination.
+  let sdMeta;
+  try {
+    const chunks = chunk(sdIds, ID_IN_CHUNK);
+    sdMeta = [];
+    for (const idChunk of chunks) {
+      const page = await fapPaginate(() => sb.from('strategic_directives_v2')
+        .select('id, sd_key, parent_sd_id, sd_type, status, current_phase')
+        .in('id', idChunk)
+        .order('id', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
+      sdMeta.push(...page);
+    }
+  } catch (e2) {
+    console.error('SD query error:', e2.message); process.exit(1);
+  }
 
   const sdMap = {};
   for (const s of (sdMeta || [])) sdMap[s.id] = s;
@@ -175,11 +214,20 @@ function computeActiveMinutes(timestamps) {
 
   // 6. Show pending SDs for matching
   console.log('\nPENDING SDs:');
-  const { data: pending } = await sb.from('strategic_directives_v2')
-    .select('sd_key, title, sd_type, parent_sd_id, status, current_phase, progress_percentage')
-    .in('status', ['draft', 'in_progress', 'ready', 'planning']);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 is a
+  // growing table; a bare non-terminal-status filter can exceed the PostgREST cap and would
+  // silently under-report the pending-SD list. Fail-soft (mirrors the original: no error check).
+  let pending = [];
+  try {
+    pending = await fapPaginate(() => sb.from('strategic_directives_v2')
+      .select('sd_key, title, sd_type, parent_sd_id, status, current_phase, progress_percentage')
+      .in('status', ['draft', 'in_progress', 'ready', 'planning'])
+      .order('sd_key', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
+  } catch (e) {
+    console.error('Pending SD query error:', e.message);
+  }
 
-  for (const sd of (pending || [])) {
+  for (const sd of pending) {
     const bucket = `${sd.parent_sd_id ? 'child' : 'standalone'}/${sd.sd_type || '?'}`;
     const ref = groups[bucket];
     const refStats = ref ? stats(ref.map(i => i.activeMin)) : null;

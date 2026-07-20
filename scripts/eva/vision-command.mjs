@@ -53,6 +53,10 @@ import { readStdin } from '../../lib/utils/read-stdin.mjs';
 // adversarial review (PR #6138) found the addendum path bypassed ratification entirely,
 // letting an already-active governed document's content change with no re-ratification.
 import { buildAddendumUpdatePayload, rejectStringFlagValue } from '../../lib/eva/vision-upsert.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: `list` renders every
+// eva_vision_documents row -- an un-paginated read here silently hides documents once the
+// table exceeds the PostgREST 1000-row cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../');
@@ -372,12 +376,14 @@ async function cmdAddendum({ visionKey, section, brainstormId }) {
 
 async function cmdList() {
   const supabase = createSupabaseServiceClient();
-  const { data, error } = await supabase
-    .from('eva_vision_documents')
-    .select('id, vision_key, level, version, status, chairman_approved, sections, created_at')
-    .order('created_at', { ascending: false });
-
-  if (error) { console.error('❌ List failed:', error.message); process.exit(1); }
+  let data;
+  try {
+    data = await fetchAllPaginated(() => supabase
+      .from('eva_vision_documents')
+      .select('id, vision_key, level, version, status, chairman_approved, sections, created_at')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (error) { console.error('❌ List failed:', error.message); process.exit(1); }
   if (!data?.length) { console.log('No vision documents found.'); return; }
 
   console.log('\n📋 EVA Vision Documents:\n');

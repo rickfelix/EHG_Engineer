@@ -7,6 +7,11 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { execSync } from 'child_process';
 import dotenv from 'dotenv';
 import { checkUncommittedChanges, getAffectedRepos } from '../../lib/multi-repo/index.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: baseline items feed
+// countActionableBaselineItems (iterates every item) and the SD-hierarchy tree walks
+// ALL active SDs (a growing table) — a read silently capped at the PostgREST 1000-row
+// max would undercount actionable work / hide branches with no error.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -28,23 +33,33 @@ export async function loadActiveBaseline() {
     return { baseline: null, items: [], actuals: {} };
   }
 
-  const { data: items } = await supabase
-    .from('sd_baseline_items')
-    .select('*')
-    .eq('baseline_id', baseline.id)
-    .order('sequence_rank');
-
-  const { data: actuals } = await supabase
-    .from('sd_execution_actuals')
-    .select('*')
-    .eq('baseline_id', baseline.id);
-
-  const actualsMap = {};
-  if (actuals) {
-    actuals.forEach(a => actualsMap[a.sd_id] = a);
+  let items = [];
+  try {
+    items = await fetchAllPaginated(() => supabase
+      .from('sd_baseline_items')
+      .select('*')
+      .eq('baseline_id', baseline.id)
+      .order('sequence_rank')
+      .order('id', { ascending: true }));
+  } catch {
+    // preserve original fail-open behavior (prior code silently dropped the error)
   }
 
-  return { baseline, items: items || [], actuals: actualsMap };
+  let actuals = [];
+  try {
+    actuals = await fetchAllPaginated(() => supabase
+      .from('sd_execution_actuals')
+      .select('*')
+      .eq('baseline_id', baseline.id)
+      .order('id', { ascending: true }));
+  } catch {
+    // preserve original fail-open behavior
+  }
+
+  const actualsMap = {};
+  actuals.forEach(a => actualsMap[a.sd_id] = a);
+
+  return { baseline, items, actuals: actualsMap };
 }
 
 /**
@@ -188,13 +203,14 @@ export async function loadSDHierarchy() {
   const allSDs = new Map();
 
   try {
-    const { data: sds } = await supabase
+    const sds = await fetchAllPaginated(() => supabase
       .from('strategic_directives_v2')
       .select('id, sd_key, title, parent_sd_id, status, current_phase, progress_percentage, dependencies, is_working_on, metadata, priority')
       .eq('is_active', true)
-      .order('created_at');
+      .order('created_at')
+      .order('id', { ascending: true }));
 
-    if (!sds) return { hierarchy, allSDs };
+    if (!sds.length) return { hierarchy, allSDs };
 
     for (const sd of sds) {
       const sdId = sd.sd_key || sd.id;

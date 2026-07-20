@@ -16,6 +16,9 @@
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: runAudit() loads and evaluates
+// every matching SD (growing table) — a capped read would silently skip SDs from the audit.
+import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -380,27 +383,32 @@ export async function runAudit(options = {}) {
   console.log('========================================');
 
   // Load SDs to audit
-  let query = supabase
-    .from('strategic_directives_v2')
-    .select('*')
-    .eq('is_active', true);
+  const buildSdQuery = () => {
+    let query = supabase
+      .from('strategic_directives_v2')
+      .select('*')
+      .eq('is_active', true);
 
-  if (sdIdFilter) {
-    query = query.eq('id', sdIdFilter);
-  }
+    if (sdIdFilter) {
+      query = query.eq('id', sdIdFilter);
+    }
 
-  if (scope === 'active') {
-    query = query.in('status', ['lead_review', 'plan_active', 'exec_active']);
-  } else if (scope === 'stale') {
-    // Filter for SDs that might be stale
-    const staleDate = new Date();
-    staleDate.setDate(staleDate.getDate() - config.warn_after_days);
-    query = query.lt('updated_at', staleDate.toISOString());
-  }
+    if (scope === 'active') {
+      query = query.in('status', ['lead_review', 'plan_active', 'exec_active']);
+    } else if (scope === 'stale') {
+      // Filter for SDs that might be stale
+      const staleDate = new Date();
+      staleDate.setDate(staleDate.getDate() - config.warn_after_days);
+      query = query.lt('updated_at', staleDate.toISOString());
+    }
 
-  const { data: sds, error } = await query;
+    return query.order('id', { ascending: true });
+  };
 
-  if (error) {
+  let sds;
+  try {
+    sds = await fetchAllPaginated(buildSdQuery);
+  } catch (error) {
     console.error('Failed to load SDs:', error.message);
     return {
       run_id: runId,

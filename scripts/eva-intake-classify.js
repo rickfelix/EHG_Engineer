@@ -26,9 +26,9 @@ import {
   saveClassification,
   getAIRecommendation,
   askUserQuestions,
-  mapSelectionToValue,
 } from '../lib/integrations/intake-classifier.js';
 import { validateClassification } from '../lib/integrations/intake-taxonomy.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -57,15 +57,22 @@ async function showStats() {
   const classified = (todoistClassified || 0) + (youtubeClassified || 0);
   const unclassified = total - classified;
 
-  const { data: byAppTodoist } = await supabase
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: eva_todoist_intake/eva_youtube_intake
+  // are unbounded and every row is tallied into the by-application histogram below — paginate to
+  // completion. Fail-open to [] mirrors the prior undefined-on-error `byApp* || []`.
+  const byAppTodoist = await fetchAllPaginated(() => supabase
     .from('eva_todoist_intake')
     .select('target_application')
-    .not('classified_at', 'is', null);
+    .not('classified_at', 'is', null)
+    .order('id', { ascending: true })) // unique tiebreaker (FR-6)
+    .catch(() => []);
 
-  const { data: byAppYoutube } = await supabase
+  const byAppYoutube = await fetchAllPaginated(() => supabase
     .from('eva_youtube_intake')
     .select('target_application')
-    .not('classified_at', 'is', null);
+    .not('classified_at', 'is', null)
+    .order('id', { ascending: true })) // unique tiebreaker (FR-6)
+    .catch(() => []);
 
   const appCounts = {};
   for (const row of [...(byAppTodoist || []), ...(byAppYoutube || [])]) {
@@ -142,7 +149,7 @@ async function classifySingleItem(itemId) {
   const aiRec = await getAIRecommendation(item.title, item.description || '');
 
   if (aiRec) {
-    console.log(`\nAI Recommendation:`);
+    console.log('\nAI Recommendation:');
     console.log(`  Application: ${aiRec.target_application}`);
     console.log(`  Aspects:     [${aiRec.target_aspects.join(', ')}]`);
     console.log(`  Intent:      ${aiRec.chairman_intent}`);
@@ -175,7 +182,7 @@ async function interactiveMode(options = {}) {
     return;
   }
 
-  console.log(`INTERACTIVE_STATUS=ready`);
+  console.log('INTERACTIVE_STATUS=ready');
   console.log(`INTERACTIVE_TOTAL=${items.length}`);
   console.log('INTERACTIVE_ITEMS=' + JSON.stringify(items.map(i => ({
     id: i.id,
@@ -267,13 +274,13 @@ async function saveItemClassification(itemId, classificationJson, source) {
 
   const result = await saveClassification(supabase, itemId, classification, source);
   if (result.success) {
-    console.log(`SAVE_STATUS=success`);
+    console.log('SAVE_STATUS=success');
     console.log(`SAVE_ITEM_ID=${itemId}`);
     console.log(`SAVE_APP=${classification.target_application}`);
     console.log(`SAVE_ASPECTS=[${classification.target_aspects.join(', ')}]`);
     console.log(`SAVE_INTENT=${classification.chairman_intent}`);
   } else {
-    console.error(`SAVE_STATUS=error`);
+    console.error('SAVE_STATUS=error');
     console.error(`SAVE_ERROR=${result.error}`);
     process.exit(1);
   }

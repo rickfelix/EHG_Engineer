@@ -14,6 +14,10 @@
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import 'dotenv/config';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 is a
+// growing table; a bare is_active filter can exceed the PostgREST cap, silently leaving some
+// active SDs' empty success_metrics un-healed (both --fix and check-only modes need the full set).
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const supabase = createSupabaseServiceClient();
 
@@ -76,12 +80,14 @@ async function healEmptyMetrics() {
   console.log('');
 
   // Fetch SDs with empty success_metrics
-  const { data: sds, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, title, sd_type, status, success_metrics')
-    .eq('is_active', true);
-
-  if (error) {
+  let sds;
+  try {
+    sds = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('id, title, sd_type, status, success_metrics')
+      .eq('is_active', true)
+      .order('id', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
+  } catch (error) {
     console.error('Error fetching SDs:', error.message);
     process.exit(1);
   }

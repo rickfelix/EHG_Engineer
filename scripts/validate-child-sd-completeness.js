@@ -16,6 +16,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 dotenv.config();
 
 class ChildSDValidator {
@@ -280,18 +281,22 @@ class ChildSDValidator {
   async validateAllChildren() {
     console.log('\n=== Validating ALL Child SDs ===\n');
 
-    const { data: children, error } = await this.supabase
-      .from('strategic_directives_v2')
-      .select('*')
-      .eq('relationship_type', 'child')
-      .order('parent_sd_id');
-
-    if (error) {
-      console.error('Error fetching children:', error.message);
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 grows
+    // unbounded; already 629 child SDs live and climbing. Paginate.
+    let children;
+    try {
+      children = await fetchAllPaginated(() => this.supabase
+        .from('strategic_directives_v2')
+        .select('*')
+        .eq('relationship_type', 'child')
+        .order('parent_sd_id', { ascending: true })
+        .order('id', { ascending: true }));
+    } catch (e) {
+      console.error('Error fetching children:', e.message);
       return null;
     }
 
-    if (!children || children.length === 0) {
+    if (children.length === 0) {
       console.log('No child SDs found in the system.');
       return { children: [], allValid: true };
     }

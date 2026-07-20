@@ -18,6 +18,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const STALE_HEARTBEAT_THRESHOLD_SEC = 300;
 
@@ -38,11 +39,22 @@ export async function gatherStatus(supabase, { now = new Date() } = {}) {
     .limit(1)
     .maybeSingle();
 
-  const { data: errors } = await supabase
-    .from('eva_cascade_errors')
-    .select('vision_id, stage, error_code, error_message, remediation_command, created_at, updated_at')
-    .is('resolved_at', null)
-    .order('updated_at', { ascending: false });
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the unresolved-refusal count
+  // and per-stage breakdown below are computed over every row this returns; an unranged read
+  // would silently under-report exactly when an incident spikes unresolved errors past the
+  // cap. Paginate to completion; empty-on-error mirrors the prior fail-open (destructured
+  // data with no explicit error check).
+  let errors;
+  try {
+    errors = await fetchAllPaginated(() => supabase
+      .from('eva_cascade_errors')
+      .select('id, vision_id, stage, error_code, error_message, remediation_command, created_at, updated_at')
+      .is('resolved_at', null)
+      .order('updated_at', { ascending: false })
+      .order('id', { ascending: true }));
+  } catch {
+    errors = [];
+  }
 
   const { count: success24h } = await supabase
     .from('cascade_watcher_heartbeats')

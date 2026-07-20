@@ -13,6 +13,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -55,13 +56,18 @@ async function analyzePatterns() {
   console.log(`Decreasing threshold: ${CONFIG.DECREASING_THRESHOLD_DAYS} days`);
   console.log(`Obsolete threshold: ${CONFIG.OBSOLETE_THRESHOLD_DAYS} days`);
 
-  const { data: patterns, error } = await supabase
-    .from('issue_patterns')
-    .select('*')
-    .order('updated_at', { ascending: true });
-
-  if (error) {
-    console.error('❌ Error fetching patterns:', error.message);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: issue_patterns is an unbounded
+  // growing table and every row is iterated + potentially acted on below — paginate to
+  // completion. Error policy preserved: catch, report, and return.
+  let patterns;
+  try {
+    patterns = await fetchAllPaginated(() => supabase
+      .from('issue_patterns')
+      .select('*')
+      .order('updated_at', { ascending: true })
+      .order('pattern_id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (e) {
+    console.error('❌ Error fetching patterns:', e.message);
     return;
   }
 

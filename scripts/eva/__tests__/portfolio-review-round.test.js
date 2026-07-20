@@ -53,8 +53,13 @@ function makeDb({ ventures = [REAL_VENTURE], windows = [[]], slot = null } = {})
         }),
       };
       if (table === 'ventures') {
-        // .eq('status','active') terminates the ventures read
-        chain.eq = vi.fn(async () => ({ data: ventures, error: null }));
+        // .eq('status','active') is paginated via fetchAllPaginated (SD-LEO-INFRA-COUNT-
+        // TRUNCATION-DISCIPLINE-001 FR-6 batch 9): chainable .order(), single .range() page.
+        chain.eq = vi.fn(() => ({
+          order: vi.fn(() => ({
+            range: vi.fn(async () => ({ data: ventures, error: null })),
+          })),
+        }));
       }
       return chain;
     },

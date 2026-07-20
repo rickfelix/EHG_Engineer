@@ -29,6 +29,7 @@ import dotenv from 'dotenv';
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { resolveFeedback, parseFeedbackFooters } from '../lib/governance/resolve-feedback.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -167,11 +168,19 @@ export function parseArgs(argv) {
 }
 
 async function loadOpenFeedback(supabase, category) {
-  let q = supabase.from('feedback').select('id, status, category, created_at').not('status', 'in', `(${TERMINAL_STATUSES.join(',')})`);
-  if (category && category !== 'all') q = q.eq('category', category);
-  const { data, error } = await q;
-  if (error) throw new Error(`feedback read failed: ${error.message}`);
-  return data || [];
+  // Paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: feedback is
+  // unbounded-growth and "not terminal" does not bound it; every open row is scanned
+  // against commit history below.
+  const buildQuery = () => {
+    let q = supabase.from('feedback').select('id, status, category, created_at').not('status', 'in', `(${TERMINAL_STATUSES.join(',')})`);
+    if (category && category !== 'all') q = q.eq('category', category);
+    return q.order('id', { ascending: true });
+  };
+  try {
+    return await fetchAllPaginated(buildQuery);
+  } catch (error) {
+    throw new Error(`feedback read failed: ${error.message}`);
+  }
 }
 
 async function main() {

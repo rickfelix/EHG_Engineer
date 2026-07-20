@@ -153,10 +153,15 @@ describe('runOneBatch', () => {
     ];
     const select = vi.fn().mockReturnThis();
     const eq = vi.fn().mockReturnThis();
-    const gte = vi.fn().mockResolvedValue({ data: findings, error: null });
+    const gte = vi.fn().mockReturnThis();
+    const order = vi.fn().mockReturnThis();
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: production now paginates via
+    // fetchAllPaginated, which appends .range() after the filter chain — extend the mock with
+    // a chainable .order() and a .range() that resolves the page (short page ends the loop).
+    const range = vi.fn().mockResolvedValue({ data: findings, error: null });
     const supabase = {
       from: vi.fn((table) => {
-        if (table === 'venture_quality_findings') return { select, eq, gte };
+        if (table === 'venture_quality_findings') return { select, eq, gte, order, range };
         if (table === 'quality_finding_patterns') return {
           select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null }) }) }),
           upsert: vi.fn().mockResolvedValue({ error: null }),
@@ -178,8 +183,10 @@ describe('runOneBatch', () => {
   it('throws when supabase read fails', async () => {
     const select = vi.fn().mockReturnThis();
     const eq = vi.fn().mockReturnThis();
-    const gte = vi.fn().mockResolvedValue({ data: null, error: { message: 'rls' } });
-    const supabase = { from: vi.fn(() => ({ select, eq, gte })) };
+    const gte = vi.fn().mockReturnThis();
+    const order = vi.fn().mockReturnThis();
+    const range = vi.fn().mockResolvedValue({ data: null, error: { message: 'rls' } });
+    const supabase = { from: vi.fn(() => ({ select, eq, gte, order, range })) };
     await expect(runOneBatch({ supabase, lookbackDays: 7, minVentureCount: 3, dryRun: false, runId: 'x' }))
       .rejects.toThrow(/venture_quality_findings read failed/);
   });
@@ -222,12 +229,10 @@ describe('runOnce', () => {
     const pgClient = buildPgClient(true);
     const supabase = buildSupabase();
     // Make from('venture_quality_findings') throw via gte rejection
-    let calls = 0;
     supabase.from = vi.fn((table) => {
-      calls++;
       if (table === 'venture_quality_findings') {
         return {
-          select: () => ({ eq: () => ({ gte: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }) }),
+          select: () => ({ eq: () => ({ gte: () => ({ order: () => ({ range: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }) }) }) }),
         };
       }
       return { insert: supabase.__insert };

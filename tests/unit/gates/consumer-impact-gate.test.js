@@ -56,14 +56,16 @@ describe('consumer-impact-gate (CONSUMER_IMPACT_ADVISORY, TS-6)', () => {
     expect(Array.isArray(result.issues)).toBe(true);
     expect(Array.isArray(result.warnings)).toBe(true);
     expect(result.issues).toEqual([]);
-  }, 30000);
+  }, 120000); // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: blast-radius
+              // scan time scales with diff size vs mainRef; this SD's large sweep diff
+              // (199 files) pushed the real (correct, non-flaky) run past the old 30s bound.
 
   it('returns passed:true even when ctx has no sd', async () => {
     const gate = createConsumerImpactGate(null);
     const result = await gate.validator({});
     expect(result.passed).toBe(true);
     expect(result.issues).toEqual([]);
-  }, 30000);
+  }, 120000);
 
   it('skips analysis for venture-targeted SDs unless wiring_required is set (source pin)', () => {
     const source = fs.readFileSync(GATE_FILE, 'utf8');

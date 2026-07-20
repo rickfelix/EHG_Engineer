@@ -23,6 +23,10 @@ function ventureBuilder(rows) {
     eq: (col, val) => { filters.push((r) => r[col] === val); return b; },
     lt: (col, val) => { filters.push((r) => r[col] < val); return b; },
     is: (col, val) => { filters.push((r) => r[col] == val); return b; }, // val is always null here (IS NULL)
+    order: () => b, // FR-6 batch 9: fetchAllPaginated's stable-order tiebreaker
+    // FR-6 batch 9: fetchAllPaginated calls .range() (not a bare await) to page — resolve the
+    // same filtered { data, error } the prior direct-await produced, single (short) page.
+    range: () => Promise.resolve({ data: rows.filter((r) => filters.every((f) => f(r))), error: null }),
     then: (resolve, reject) => Promise.resolve({ data: rows.filter((r) => filters.every((f) => f(r))), error: null }).then(resolve, reject),
   };
   return b;

@@ -28,6 +28,7 @@ import { preclaimFeedbackRows, resolveFeedbackIds, findFeedbackRefConflicts } fr
 import { releasePreclaim } from '../lib/feedback/release-preclaim.js';
 import { armCliTeardown } from '../lib/cli-graceful-exit.js';
 import { checkFeedbackPremiseLiveness, logForceLivenessOverride } from '../lib/eva/feedback-premise-adapter.js';
+import { renderCount } from '../lib/db/fetch-all-paginated.mjs';
 import { loadActiveApplications, validateTargetApplication, detectMisdesignation } from '../lib/fleet/qf-target-application.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
@@ -387,9 +388,13 @@ async function createQuickFix(options = {}) {
         // columns — query the canonical shape (event_type/created_by). G6: this auth-class
         // quota check FAILS-CLOSED on a query error so it can never silently revert to the
         // unbounded behavior it had while the columns were wrong.
-        const { data: bypassRows, error: quotaErr } = await supabase
+        // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: this is a quota GAUGE (only
+        // the count matters) — exact head-count avoids rows.length misreading the cap. An
+        // 'unavailable' measurement fails CLOSED below (never coerced to 0), matching this
+        // check's existing fail-closed policy on a query error.
+        const { count: usedCount, error: quotaErr } = await supabase
           .from('audit_log')
-          .select('id')
+          .select('id', { count: 'exact', head: true })
           .eq('event_type', 'force_claim_override')
           .eq('created_by', creatorSessionId)
           .gte('created_at', since);
@@ -399,7 +404,8 @@ async function createQuickFix(options = {}) {
           await supabase.from('quick_fixes').delete().eq('id', qfId);
           process.exit(1);
         }
-        const used = (bypassRows || []).length;
+        const usedRendered = renderCount(usedCount);
+        const used = typeof usedRendered === 'number' ? usedRendered : QUOTA; // fail-closed: unavailable measurement == quota exhausted
         if (used >= QUOTA) {
           console.error(`\n❌ [FORCE_CLAIM_QUOTA_EXHAUSTED] ${used}/${QUOTA} used in last 24h for session ${(creatorSessionId||'?').slice(0,8)}`);
           if (claimed.length > 0) await releasePreclaim({ supabase, quickFixId: qfId });

@@ -23,6 +23,12 @@ import 'dotenv/config';
 import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { runAdherenceProbes, hasDrift, parseFingerprintsTail, parseSnapshotTail } from '../lib/adam/adherence-probes.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: several facts below filter/process
+// rows (not a plain exact-count) over growing tables (quick_fixes, issue_patterns,
+// session_coordination, chairman_decisions, adam_adherence_ledger, strategic_directives_v2,
+// feedback) with no bound — paginate so a filtered count/set is never silently truncated at
+// the PostgREST cap (the exact live-incident shape this SD exists to close).
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const WINDOW_DAYS = 1;
 const REMEDIATION_CATEGORY = 'adam_adherence_drift';
@@ -79,21 +85,23 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
   // only QFs. HONEST: a real 0 across both lanes stays 0 (probe FAIL); a thrown error on EITHER
   // query leaves the combined fact null -> unknown (never silently under-counts via the other lane).
   try {
-    const [sdResult, qfResult] = await Promise.all([
+    // FR-6 batch 9: the QF lane was .limit(1000) — dead weight at the exact live-incident cap
+    // value AND a truncation risk (a >1000-QF window would silently undercount past-cap
+    // fixture-filtered QFs). Paginate; keep the SD lane as an exact head-count (unfiltered).
+    const [sdResult, qfRows] = await Promise.all([
       supabase.from('strategic_directives_v2').select('id', { count: 'exact', head: true })
         .gte('created_at', since).eq('metadata->>sourced_by', 'adam'),
       // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: fetch id+title (not a head-count) so
       // fixture-titled test QFs don't inflate the sourcing gauge.
-      supabase.from('quick_fixes').select('id, title').gte('created_at', since).limit(1000),
+      fetchAllPaginated(() => supabase.from('quick_fixes')
+        .select('id, title')
+        .gte('created_at', since)
+        .order('id', { ascending: true })), // unique tiebreaker (FR-6)
     ]);
     if (sdResult.error) throw sdResult.error;
-    if (qfResult.error) throw qfResult.error;
     const { isFixtureQf } = await import('../lib/governance/fixture-exclusion.mjs');
-    // Adversarial-review fix (PR #6186): preserve the original HONEST-unknown contract —
-    // a null data payload (the data:null-without-error Supabase trap) must leave the fact
-    // null/unknown, never a confidently-fabricated low count.
-    if (Number.isFinite(sdResult.count) && Array.isArray(qfResult.data)) {
-      const qfCount = qfResult.data.filter((qf) => !isFixtureQf(qf)).length;
+    if (Number.isFinite(sdResult.count)) {
+      const qfCount = qfRows.filter((qf) => !isFixtureQf(qf)).length;
       facts.sourcedInWindow = sdResult.count + qfCount;
     }
   } catch { /* leave null -> unknown */ }
@@ -115,16 +123,16 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
   // 0 (probe PASS — nothing to signal); ONLY a query error leaves the fact null -> unknown.
   const LIVE_RECURRING_TRENDS = new Set(['stable', 'increasing', 'persistent', 'recurring', 'new']);
   try {
-    const { data, error } = await supabase
+    // FR-6 batch 9: issue_patterns is a growing table and this filters by trend content (not a
+    // plain exact-count), so paginate rather than risk a silently-capped 1000-row page.
+    const data = await fetchAllPaginated(() => supabase
       .from('issue_patterns')
-      .select('trend')
-      .gte('updated_at', since);
-    if (error) throw error; // a query error must NOT masquerade as a real "0 recurrences"
-    if (Array.isArray(data)) {
-      facts.recurrencesInWindow = data.filter(
-        (r) => r && typeof r.trend === 'string' && LIVE_RECURRING_TRENDS.has(r.trend.trim().toLowerCase()),
-      ).length;
-    }
+      .select('trend, id')
+      .gte('updated_at', since)
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    facts.recurrencesInWindow = data.filter(
+      (r) => r && typeof r.trend === 'string' && LIVE_RECURRING_TRENDS.has(r.trend.trim().toLowerCase()),
+    ).length;
   } catch { /* leave null -> unknown */ }
 
   // FR-1 (propose_only, CONST-002) — COUNTERFACTUAL-PRESENCE signal. Adam is propose-only: it NEVER
@@ -180,19 +188,18 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
   // thrown query error leaves the fact null -> 'unknown'. We read payload.body (the canonical Adam
   // message field) for each row.
   try {
-    const { data, error } = await supabase
+    // FR-6 batch 9: session_coordination is a growing table with no cap here; paginate.
+    const data = await fetchAllPaginated(() => supabase
       .from('session_coordination')
-      .select('payload, created_at')
+      .select('id, payload, created_at')
       .gte('created_at', since)
       .eq('sender_type', 'adam')
-      .eq('payload->>kind', 'adam_advisory');
-    if (error) throw error; // a query error must NOT masquerade as a real "0 questions"
-    if (Array.isArray(data)) {
-      facts.adamChairmanDecisionQuestionsInWindow = data.map((r) => ({
-        body: r && r.payload ? (r.payload.body ?? r.payload.message ?? r.payload.subject ?? '') : '',
-        created_at: r ? r.created_at : null,
-      }));
-    }
+      .eq('payload->>kind', 'adam_advisory')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    facts.adamChairmanDecisionQuestionsInWindow = data.map((r) => ({
+      body: r && r.payload ? (r.payload.body ?? r.payload.message ?? r.payload.subject ?? '') : '',
+      created_at: r ? r.created_at : null,
+    }));
   } catch { /* leave null -> unknown */ }
 
   // FR-1 (dispatch_boundary, D2) — resolve the advisory corpus body from the SAME in-window Adam
@@ -214,18 +221,17 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
   // over-ask signal (Adam auto-escalated something that resolved as noise). HONEST: only a thrown
   // query error leaves this null -> unknown; a real 0 is a real 0.
   try {
-    const { data, error } = await supabase
+    // FR-6 batch 9: paginate — no bound on this chairman_decisions read.
+    const data = await fetchAllPaginated(() => supabase
       .from('chairman_decisions')
       .select('id, summary, created_at')
       .gte('created_at', since)
       .eq('status', 'cancelled')
-      .or('brief_data->>raised_by.eq.adam,brief_data->>recorded_via.eq.record-pending-decision');
-    if (error) throw error;
-    if (Array.isArray(data)) {
-      facts.adamMachineRaisedNoiseInWindow = data.map((r) => ({
-        id: r.id, summary: r.summary, created_at: r.created_at,
-      }));
-    }
+      .or('brief_data->>raised_by.eq.adam,brief_data->>recorded_via.eq.record-pending-decision')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    facts.adamMachineRaisedNoiseInWindow = data.map((r) => ({
+      id: r.id, summary: r.summary, created_at: r.created_at,
+    }));
   } catch { /* leave null -> unknown */ }
 
   // SD-LEO-INFRA-ADAM-DECISION-RUBRIC-PROBE-HYGIENE-001 (b): RESOLVED-EXCLUSION. Load the over-ask
@@ -238,14 +244,17 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
   facts.decisionRubricWindowBasis = `${windowDays}-day rolling window (cross-session)`;
   try {
     const ledgerLookback = windowStart(Math.max(windowDays, 30), nowMs);
-    const { data: resolvedRows } = await supabase
+    // FR-6 batch 9: adam_adherence_ledger accumulates every probe run with no pruning observed;
+    // a >=30-day lookback with no cap is a truncation risk over time — paginate.
+    const resolvedRows = await fetchAllPaginated(() => supabase
       .from('adam_adherence_ledger')
-      .select('detail, remediation_ref, created_at')
+      .select('id, detail, remediation_ref, created_at')
       .eq('probe', 'decision_rubric')
       .not('remediation_ref', 'is', null)
-      .gte('created_at', ledgerLookback);
+      .gte('created_at', ledgerLookback)
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
     const resolvedFps = new Set();
-    for (const row of (resolvedRows || [])) {
+    for (const row of resolvedRows) {
       for (const fp of parseFingerprintsTail(row && row.detail)) resolvedFps.add(fp);
     }
     facts.resolvedOverAskFingerprints = [...resolvedFps];
@@ -296,18 +305,22 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     const mod = await import('../lib/coordinator/claimable-work.cjs');
     const { isClaimableSd, dependencyKeys } = mod.default || mod;
     const liveCutoff = new Date(nowMs - 15 * 60 * 1000).toISOString();
-    const [{ data: sdRows, error: sdErr }, { data: sessRows, error: sErr }] = await Promise.all([
-      supabase.from('strategic_directives_v2')
+    // FR-6 batch 9: the SD lane excludes only 4 terminal statuses on strategic_directives_v2 (a
+    // growing table) — the classic "not bounded" shape — so paginate it. The session lane stays
+    // as-is: a recent-heartbeat + active/idle filter pins it to the currently-live fleet, an
+    // operationally small set regardless of claude_sessions' total historical size.
+    const [sdRows, { data: sessRows, error: sErr }] = await Promise.all([
+      fetchAllPaginated(() => supabase.from('strategic_directives_v2')
         .select('sd_key, sd_type, status, dependencies, claiming_session_id')
-        .not('status', 'in', '(completed,cancelled,archived,deferred)'),
+        .not('status', 'in', '(completed,cancelled,archived,deferred)')
+        .order('sd_key', { ascending: true })), // unique tiebreaker (FR-6)
       supabase.from('claude_sessions')
         .select('session_id, metadata, sd_key, status, heartbeat_at')
         .in('status', ['active', 'idle'])
         .gte('heartbeat_at', liveCutoff),
     ]);
-    if (sdErr) throw sdErr;
     if (sErr) throw sErr;
-    const rows = Array.isArray(sdRows) ? sdRows : [];
+    const rows = sdRows;
     // Resolve dependency-blocker statuses so isClaimableSd can judge each SD (unknown keys => UNMET,
     // conservative). ONE .in() lookup over the distinct blocker keys (mirrors coordinator-audit).
     const depKeys = dependencyKeys(rows);
@@ -334,13 +347,14 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
   // the fact null -> belt probe 'unknown'.
   try {
     const { sourceableBacklog } = await import('./lib/sourceable-backlog.mjs');
-    const { data: blRows, error: blErr } = await supabase
+    // FR-6 batch 9: feedback is a growing table; paginate rather than trust an implicit cap.
+    const blRows = await fetchAllPaginated(() => supabase
       .from('feedback')
       .select('id, status, title, metadata')
       .eq('category', 'harness_backlog')
-      .in('status', ['open', 'new', 'backlog']);
-    if (blErr) throw blErr;
-    if (Array.isArray(blRows)) facts.sourceableBacklogCount = sourceableBacklog(blRows).length;
+      .in('status', ['open', 'new', 'backlog'])
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    facts.sourceableBacklogCount = sourceableBacklog(blRows).length;
   } catch { /* leave sourceableBacklogCount null -> belt probe unknown */ }
 
   return facts;

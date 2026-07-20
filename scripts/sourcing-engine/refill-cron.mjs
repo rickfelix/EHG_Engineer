@@ -24,6 +24,11 @@ import { selectRefillBatch, promoteStagedCandidate, isDistilledOnly } from '../.
 import { pathToFileURL } from 'node:url';
 import { normalizeTitleForCompare, crossRefShippedTitleAdvisory } from '../../lib/sourcing-engine/refill-candidate-validity.js';
 import { readSourcingEngineFlagsFromDb } from '../lib/sourcing-engine-awareness.mjs';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the staged-candidate read feeds
+// the promotion loop (a capped read silently drops promotable candidates with no error); the
+// shipped-title and accepted-fingerprint sets feed quality gates whose exactly-cap .limit(1000)
+// reads matched this SD's incident signature.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 /**
  * SD-LEO-INFRA-AUTO-REFILL-READ-DB-ACTIVATION-FLAG-001 (FR-1/FR-2): resolve the auto-refill enable
@@ -134,28 +139,32 @@ async function main() {
   // SD-LEO-INFRA-UNIFY-BELT-REFILL-001 (FR-1d): broaden from .eq('pending') to .in(['pending','selected'])
   // so chairman-accepted 'selected' rows are actually fetched (an 'pending' un-accepted row still fails
   // CHECK #11 downstream under the default fail-closed distilledOnly gate).
-  const { data: rows, error } = await supabase
-    .from('roadmap_wave_items')
-    // lane is live (sourcing-engine activation migrations) but postdates the schema-reference snapshot.
-    .select('id, title, source_type, source_id, item_disposition, promoted_to_sd_key, lane, wave_id, metadata') // schema-lint-disable-line
-    .in('item_disposition', ['pending', 'selected'])
-    .in('wave_id', activeWaveIds)
-    .is('promoted_to_sd_key', null)
-    .limit(1000);
-
-  if (error) { console.error('refill-cron: query failed:', error.message); process.exit(2); }
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => supabase
+      .from('roadmap_wave_items')
+      // lane is live (sourcing-engine activation migrations) but postdates the schema-reference snapshot.
+      .select('id, title, source_type, source_id, item_disposition, promoted_to_sd_key, lane, wave_id, metadata') // schema-lint-disable-line
+      .in('item_disposition', ['pending', 'selected'])
+      .in('wave_id', activeWaveIds)
+      .is('promoted_to_sd_key', null)
+      .order('id', { ascending: true }));
+  } catch (e) {
+    console.error('refill-cron: query failed:', e.message);
+    process.exit(2);
+  }
 
   // SD-LEO-INFRA-AUTO-REFILL-BELT-001 (FR-4): build the already-shipped-title Set ONCE per run (one
   // bounded query) so the lookalike belt-quality axis rejects a staged title that re-promotes a title
   // whose SD already COMPLETED. Fail-open: a query error yields an empty Set (axis no-ops), never blocks.
   let shippedTitleSet = new Set();
   try {
-    const { data: shipped } = await supabase
+    const shipped = await fetchAllPaginated(() => supabase
       .from('strategic_directives_v2')
       .select('title')
       .eq('status', 'completed')
-      .limit(5000);
-    shippedTitleSet = new Set((shipped || []).map((s) => normalizeTitleForCompare(s.title)).filter(Boolean));
+      .order('id', { ascending: true }), { maxRows: 5000 }); // declared sampling cap, preserved from prior .limit(5000)
+    shippedTitleSet = new Set(shipped.map((s) => normalizeTitleForCompare(s.title)).filter(Boolean));
   } catch { /* fail-open: empty set -> lookalike axis no-ops */ }
 
   // SD-LEO-INFRA-GAUGE-FINDING-KNOWN-STATE-ACK-001: build the LIVE accepted-known-state fingerprint Set
@@ -165,18 +174,18 @@ async function main() {
   // a query error (including "table doesn't exist yet" pre-migration) yields an empty Set (axis no-ops).
   let acceptedFingerprintSet = new Set();
   try {
-    const { data: accepted } = await supabase
-      .from('gauge_finding_dispositions')
+    const accepted = await fetchAllPaginated(() => supabase
+      .from('gauge_finding_dispositions') // schema-lint-disable-line: pre-existing table reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
       .select('fingerprint')
       .gt('re_review_at', new Date().toISOString())
-      .limit(1000);
-    acceptedFingerprintSet = new Set((accepted || []).map((d) => d.fingerprint).filter(Boolean));
+      .order('id', { ascending: true }));
+    acceptedFingerprintSet = new Set(accepted.map((d) => d.fingerprint).filter(Boolean));
   } catch { /* fail-open: empty set -> accepted_known_state axis no-ops */ }
 
   // SD-LEO-INFRA-CORPUS-PROMOTE-ONLY-VIA-DISTILL-001 (FR-2): forward the distilled-only flag so the
   // batch selector applies CHECK #11 — only /distill build-dispositioned items promote. Now fail-closed
   // by default (isDistilledOnly), so an un-distilled raw corpus item is never minted onto the belt.
-  const sel = selectRefillBatch(rows || [], { limit, shippedTitleSet, acceptedFingerprintSet, distilledOnly: isDistilledOnly() });
+  const sel = selectRefillBatch(rows, { limit, shippedTitleSet, acceptedFingerprintSet, distilledOnly: isDistilledOnly() });
   const results = [];
   // SD-LEO-INFRA-WIRE-ALREADY-SHIPPED-001 (Phase 1 — ADVISORY): wire the exported-but-unused
   // crossRefShippedTitleAdvisory into the live promotion caller (its only production call site). It

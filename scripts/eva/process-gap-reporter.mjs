@@ -23,6 +23,10 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import { publishVisionEvent, subscribeVisionEvent, VISION_EVENTS, registerVisionProcessGapDetectedHandlers } from '../../lib/eva/event-bus/index.js';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: eva_vision_scores grows
+// indefinitely -- an un-paginated read here would silently skew the process-gap
+// aggregation past the PostgREST 1000-row cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -158,13 +162,15 @@ export async function reportProcessGaps(supabase, options = {}) {
   const since = new Date();
   since.setDate(since.getDate() - lookbackDays);
 
-  const { data: scores, error } = await supabase
-    .from('eva_vision_scores')
-    .select('sd_id, dimension_scores, scored_at')
-    .gte('scored_at', since.toISOString())
-    .not('dimension_scores', 'is', null);
-
-  if (error) {
+  let scores;
+  try {
+    scores = await fetchAllPaginated(() => supabase
+      .from('eva_vision_scores')
+      .select('sd_id, dimension_scores, scored_at')
+      .gte('scored_at', since.toISOString())
+      .not('dimension_scores', 'is', null)
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (error) {
     console.error(`[ProcessGapReporter] Failed to load scores: ${error.message}`);
     return { gapsFound: 0, eventsPublished: 0 };
   }

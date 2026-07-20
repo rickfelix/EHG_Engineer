@@ -32,19 +32,27 @@ import 'dotenv/config';
 import { createSupabaseServiceClient } from './lib/supabase-connection.js';
 import { recordDisposition, getDispositionBySubject } from '../lib/decision-binding/disposition.js';
 import { DISPATCH_AUTH_AUTHORITY_ALLOWLIST } from '../lib/claim/gates/dispatch-authorization.cjs';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the claimable-status enumeration
+// below drives a pre-enforce-flip verification, so a capped read would silently under-count the
+// claimable belt surface and could pass the "must be 0 un-granted" check while un-enumerated
+// SDs remain un-granted. strategic_directives_v2 is a growing table.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 /** The worker-checkin claimable status surface (terminal statuses excluded). */
 export const CLAIMABLE_STATUSES = ['draft', 'active', 'planning', 'ready', 'in_progress', 'pending_approval'];
 const BACKFILL_AUTHORITY = 'backfill-cutover';
 
 export async function enumerateClaimables(supabase) {
-  const { data, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key, status')
-    .in('status', CLAIMABLE_STATUSES)
-    .not('sd_key', 'is', null);
-  if (error) throw new Error(`claimable enumeration failed: ${error.message}`);
-  return data || [];
+  try {
+    return await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, status')
+      .in('status', CLAIMABLE_STATUSES)
+      .not('sd_key', 'is', null)
+      .order('id', { ascending: true }));
+  } catch (e) {
+    throw new Error(`claimable enumeration failed: ${e.message}`);
+  }
 }
 
 /** Partition claimables into granted / unGranted by live disposition reads. */

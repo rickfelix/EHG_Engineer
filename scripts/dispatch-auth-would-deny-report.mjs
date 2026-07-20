@@ -18,19 +18,26 @@
 import 'dotenv/config';
 import { createSupabaseServiceClient } from './lib/supabase-connection.js';
 import { WOULD_DENY_EVENT_TYPE } from '../lib/claim/gates/dispatch-authorization.cjs';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 /**
  * @param {object} supabase
  * @returns {Promise<{total: number, byMintPath: Record<string, number>, byLane: Record<string, number>}>}
  */
 export async function buildWouldDenyProfile(supabase) {
-  const { data, error } = await supabase
-    .from('system_events')
-    .select('payload')
-    .eq('event_type', WOULD_DENY_EVENT_TYPE);
-  if (error) throw new Error(`would_deny evidence read failed: ${error.message}`);
-
-  const rows = data || [];
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: system_events is an unbounded
+  // growing (*_events) table and every row is iterated into the histogram below — paginate to
+  // completion. Error policy preserved: same thrown message.
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => supabase
+      .from('system_events')
+      .select('payload')
+      .eq('event_type', WOULD_DENY_EVENT_TYPE)
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (e) {
+    throw new Error(`would_deny evidence read failed: ${e.message}`);
+  }
   const byMintPath = {};
   const byLane = {};
   for (const row of rows) {

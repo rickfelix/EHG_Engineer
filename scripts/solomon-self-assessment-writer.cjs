@@ -26,6 +26,15 @@ const fs = require('fs');
 const core = require('../lib/governance/role-self-score.cjs');
 const { SOLOMON_CONFIG } = require('../lib/solomon/self-score-config.cjs');
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — claude_sessions grows unbounded
+// (every session ever run); the D1 solomon-claim-violation count would silently undercount past
+// row 1000 without pagination.
+let _fapModule = null;
+async function fapPaginate(queryFactory, opts) {
+  _fapModule ||= await import('../lib/db/fetch-all-paginated.mjs');
+  return _fapModule.fetchAllPaginated(queryFactory, opts);
+}
+
 const REPO_ROOT = path.join(__dirname, '..');
 const STATE_PATH = path.join(REPO_ROOT, '.solomon-self-assessment-state.json');
 
@@ -62,11 +71,11 @@ async function gatherSignals(sb) {
   // directly against the live schema; do not add a `callsign` select (42703 undefined_column).
   signals.solomon_claim_count = await (async () => {
     try {
-      const { data, error } = await sb
+      const data = await fapPaginate(() => sb
         .from('claude_sessions')
         .select('id, sd_key, metadata')
-        .not('sd_key', 'is', null);
-      if (error || !Array.isArray(data)) return null;
+        .not('sd_key', 'is', null)
+        .order('id', { ascending: true }));
       return data.filter((r) => String((r.metadata && r.metadata.role) || '').toLowerCase() === 'solomon').length;
     } catch {
       return null;

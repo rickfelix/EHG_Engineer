@@ -17,6 +17,12 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { isNoiseMessage } from '../lib/rca/noise-classifier.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the prior `.limit(5000)` below
+// does NOT bound the read: PostgREST's server-side max-rows clamp (1000) applies regardless of
+// a larger client-requested limit, so this backfill was silently scanning at most 1000 of
+// possibly-more auto_rca issue_patterns rows every run. issue_patterns is a growing table (RCA
+// pattern history); paginate to completion so every eligible row is actually scanned.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
@@ -30,23 +36,25 @@ async function main() {
   const sb = createClient(url, key);
 
   // Only auto_rca-sourced patterns are eligible; the classifier decides which.
-  const { data: rows, error } = await sb
-    .from('issue_patterns')
-    .select('pattern_id, issue_summary, data_quality_status, occurrence_count, source')
-    .eq('source', 'auto_rca')
-    .limit(5000);
-  if (error) {
-    console.error('Query failed:', error.message);
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => sb
+      .from('issue_patterns')
+      .select('pattern_id, issue_summary, data_quality_status, occurrence_count, source')
+      .eq('source', 'auto_rca')
+      .order('id', { ascending: true }));
+  } catch (e) {
+    console.error('Query failed:', e.message);
     process.exit(1);
   }
 
-  const candidates = (rows || []).filter(
+  const candidates = rows.filter(
     (r) => isNoiseMessage(r.issue_summary) && r.data_quality_status !== 'noise'
   );
-  const alreadyFlagged = (rows || []).filter((r) => r.data_quality_status === 'noise').length;
+  const alreadyFlagged = rows.filter((r) => r.data_quality_status === 'noise').length;
   const noiseOcc = candidates.reduce((sum, r) => sum + (r.occurrence_count || 0), 0);
 
-  console.log(`auto_rca patterns scanned: ${(rows || []).length}`);
+  console.log(`auto_rca patterns scanned: ${rows.length}`);
   console.log(`already flagged noise:      ${alreadyFlagged}`);
   console.log(`to flag this run:           ${candidates.length} (${noiseOcc} occurrences)`);
 

@@ -30,7 +30,9 @@ function makeMockSupabase({ scores = [], feedbackInsertFails = false, queueInser
   const scoresQuery = {
     select: () => scoresQuery,
     gte: () => scoresQuery,
-    not: () => Promise.resolve({ data: scores, error: null }),
+    not: () => scoresQuery,
+    order: () => scoresQuery, // FR-6 batch 9: fetchAllPaginated appends .order() before .range()
+    range: () => Promise.resolve({ data: scores, error: null }),
   };
 
   const supabase = {
@@ -89,10 +91,8 @@ describe('classifyGap', () => {
 // ─── reportProcessGaps ────────────────────────────────────────────────────────
 
 describe('reportProcessGaps', () => {
-  let consoleSpy;
-
   beforeEach(() => {
-    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 

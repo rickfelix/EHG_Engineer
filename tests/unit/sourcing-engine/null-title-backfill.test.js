@@ -4,7 +4,7 @@
  * and the auto-refill cron promoted 0. This pins the resolver, the backfill branches, the populator
  * fail-loud guard, and the refill-recovers assertion.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { resolveSourceTitle, isUsableTitle } from '../../../lib/sourcing-engine/resolve-source-title.js';
 import { runBackfill } from '../../../scripts/sourcing-engine/backfill-414-null-titles.mjs';
 import { evaluateRefillCandidate } from '../../../lib/sourcing-engine/refill-candidate-validity.js';
@@ -32,6 +32,8 @@ function makeSupabase({ intake = {}, rows = [] } = {}) {
         eq() { return api; },
         is() { return api; },
         in() { return api; },
+        order() { return api; },                                    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: fetchAllPaginated chains .order() before .range()
+        range() { return Promise.resolve({ data: rows, error: null }); }, // single-page: fewer rows than pageSize ends the paginate loop
         then(resolve) { resolve({ data: rows, error: null }); },     // select(...).is().eq().in() awaited
         catch() { return api; },
       };

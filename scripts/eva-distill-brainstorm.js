@@ -27,6 +27,7 @@ import { join } from 'path';
 import { pathToFileURL } from 'url';
 import { distillItem, toQueueCandidate } from '../lib/integrations/distill-brainstorm.js';
 import { enqueueDistilledCandidate } from '../lib/eva/consultant/distillation-queue-writer.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -51,11 +52,18 @@ export function clampBatch(topN) {
  */
 export async function loadTopWaveItems(supabase, topN = 20) {
   const n = clampBatch(topN);
-  const { data, error } = await supabase
-    .from('roadmap_wave_items')
-    .select('id, wave_id, source_type, source_id, title, metadata, item_disposition')
-    .not('metadata->refine_composite_score', 'is', null);
-  if (error) throw new Error(`loadTopWaveItems: ${error.message}`);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: roadmap_wave_items is unbounded
+  // and the whole scored set must be collected before the client-side sort below (PostgREST
+  // JSONB ordering is unreliable, per the doc comment above) — paginate to completion so the
+  // top-N selection is computed over the FULL scored set, not a possibly-truncated page.
+  let data;
+  try {
+    data = await fetchAllPaginated(() => supabase
+      .from('roadmap_wave_items')
+      .select('id, wave_id, source_type, source_id, title, metadata, item_disposition')
+      .not('metadata->refine_composite_score', 'is', null)
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (e) { throw new Error(`loadTopWaveItems: ${e.message}`); }
   const scored = (data || []).map((r) => ({
     ...r,
     refine_composite_score:

@@ -70,10 +70,15 @@ const SEED_CAPABILITIES = [
 ];
 
 async function main() {
-  // Resolve venture names to IDs
+  // Resolve venture names to IDs. SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6
+  // batch 9: scope to the seed list's own venture names instead of an unfiltered
+  // full-table read — ventures is a growing portfolio table, so the old unfiltered
+  // read risked silently missing a target venture past the PostgREST 1000-row cap.
+  const seedVentureNames = [...new Set(SEED_CAPABILITIES.map(s => s.venture_name))];
   const { data: ventures, error: vError } = await supabase
     .from('ventures')
-    .select('id, name');
+    .select('id, name')
+    .in('name', seedVentureNames);
 
   if (vError) {
     console.error('Error querying ventures:', vError.message);

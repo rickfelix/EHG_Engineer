@@ -19,6 +19,11 @@
  */
 import dotenv from 'dotenv';
 dotenv.config();
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — both reads below carry a
+// client-side .limit() ABOVE the PostgREST 1000-row server cap (2000, 10000), which the
+// server silently clamps to 1000 — the exact incident this SD exists to close. Paginate
+// with maxRows preserving each site's originally-declared sampling cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 export const MIN_N = 30;
 export const DELTA_PP = 5;
@@ -100,23 +105,28 @@ async function main() {
     process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
-  const { data: sds, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, status, created_at, completion_date, metadata')
-    .eq('status', 'completed')
-    .gte('completion_date', since)
-    .not('metadata->execution_context', 'is', null)
-    .limit(2000);
-  if (error) { console.error(error.message); process.exit(1); }
+  let sds;
+  try {
+    sds = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, status, created_at, completion_date, metadata')
+      .eq('status', 'completed')
+      .gte('completion_date', since)
+      .not('metadata->execution_context', 'is', null)
+      .order('id', { ascending: true }), { maxRows: 2000 });
+  } catch (e) { console.error(e.message); process.exit(1); }
 
   const ids = (sds || []).map(s => s.id);
   const handoffsBySd = {};
   if (ids.length) {
-    const { data: hs } = await supabase
-      .from('sd_phase_handoffs')
-      .select('sd_id, status, handoff_type')
-      .in('sd_id', ids)
-      .limit(10000);
+    let hs;
+    try {
+      hs = await fetchAllPaginated(() => supabase
+        .from('sd_phase_handoffs')
+        .select('sd_id, status, handoff_type')
+        .in('sd_id', ids)
+        .order('id', { ascending: true }), { maxRows: 10000 });
+    } catch { hs = []; }
     for (const h of hs || []) (handoffsBySd[h.sd_id] ||= []).push(h);
   }
 

@@ -25,6 +25,10 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: constitutional_amendments is
+// an append-only audit trail -- an un-paginated read here silently drops history entries
+// past the PostgREST 1000-row cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -236,16 +240,20 @@ async function cmdAmend(supabase, opts) {
 // ============================================================================
 
 async function cmdHistory(supabase, opts) {
-  let query = supabase
-    .from('constitutional_amendments')
-    .select('id, rule_code, original_text, proposed_text, rationale, version, status, proposed_by, approved_by, created_at')
-    .order('created_at', { ascending: false });
+  const buildQuery = () => {
+    let q = supabase
+      .from('constitutional_amendments')
+      .select('id, rule_code, original_text, proposed_text, rationale, version, status, proposed_by, approved_by, created_at')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true }); // unique tiebreaker (FR-6)
+    if (opts.code) q = q.eq('rule_code', opts.code.toUpperCase());
+    return q;
+  };
 
-  if (opts.code) {
-    query = query.eq('rule_code', opts.code.toUpperCase());
-  }
-
-  const { data, error } = await query;
+  let data, error;
+  try {
+    data = await fetchAllPaginated(buildQuery);
+  } catch (e) { error = e; }
 
   if (error || !data || data.length === 0) {
     const filter = opts.code ? ` for ${opts.code.toUpperCase()}` : '';

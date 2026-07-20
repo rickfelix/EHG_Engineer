@@ -35,6 +35,10 @@ import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import { existsSync } from 'fs';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the optional, read-only SD
+// best-match lookup below is a one-off historical ingestion tool (not a live pipeline gate) —
+// flag possible truncation rather than rewriting it to paginate.
+import { warnIfCapTruncated } from '../lib/db/fetch-all-paginated.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -392,7 +396,7 @@ async function loadStrategicDirectives(envFileOverride = null) {
       lastErr = error;
       continue;
     }
-    const sds = data || [];
+    const sds = warnIfCapTruncated(data, 'strategic_directives_v2 (idea-ingestion best-match candidates)');
     if (sds.length > 0 || envFileOverride) {
       return { enabled: true, reason: null, sds, envUsed: p };
     }

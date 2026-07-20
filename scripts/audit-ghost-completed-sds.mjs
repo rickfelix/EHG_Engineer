@@ -40,6 +40,10 @@ import readline from 'node:readline/promises';
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { CANONICAL_SD_TYPES } from '../lib/sd-type-enum.js';
 import { revertSD } from '../lib/sd/revert.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 (real bug, already live): this
+// audit's own docstring documents ~2027 ghost SDs — already past the PostgREST 1000-row cap —
+// so the prior unranged read here was silently truncating the ghost-SD denominator. Paginate.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 /**
  * Drain undici's keep-alive HTTP socket pool before process.exit. Without this,
@@ -94,18 +98,21 @@ function pad(str, n) {
 }
 
 async function fetchGhosts(supabase, filter) {
-  let q = supabase
-    .from('v_sd_completion_integrity')
-    .select('id, sd_key, sd_type, status, updated_at, created_at, lfa_rejected_count, lfa_last_attempted_at')
-    .eq('is_ghost_completed', true);
-  if (filter) q = q.eq('sd_type', filter);
-  const { data, error } = await q;
-  if (error) {
-    const err = new Error(`[v_sd_completion_integrity] query failed: ${error.message}`);
-    err.cause = error;
+  const buildQuery = () => {
+    let q = supabase
+      .from('v_sd_completion_integrity')
+      .select('id, sd_key, sd_type, status, updated_at, created_at, lfa_rejected_count, lfa_last_attempted_at')
+      .eq('is_ghost_completed', true);
+    if (filter) q = q.eq('sd_type', filter);
+    return q.order('id', { ascending: true }); // unique tiebreaker (FR-6)
+  };
+  try {
+    return await fetchAllPaginated(buildQuery);
+  } catch (e) {
+    const err = new Error(`[v_sd_completion_integrity] query failed: ${e.message}`);
+    err.cause = e;
     throw err;
   }
-  return data || [];
 }
 
 function printJson(rows) {
