@@ -17,7 +17,7 @@ import {
   extractRetroKnownIssues,
   isFallbackKnownIssues,
 } from './modules/handoff/executors/lead-final-approval/retro-known-issues.js';
-import { getFilteredRetrospective } from './modules/handoff/retro-filters.js';
+import { getFilteredRetrospective, parseAsUTC } from './modules/handoff/retro-filters.js';
 
 export const TARGET_SDS = [
   { sd_key: 'SD-LEO-INFRA-FLEET-REGISTRY-MANIFEST-001', sd_id: '4aabbb45-65ba-4171-b0be-acf75a07eccf' },
@@ -76,8 +76,14 @@ export async function replayOne(target, supabase) {
       supabase,
       sd_key
     );
+    // lfa.accepted_at is a `timestamp without time zone` column (same hazard
+    // retro-filters.js documents for sd_phase_handoffs.accepted_at) -- PostgREST
+    // returns it as a naive string that bare `new Date()` parses as LOCAL time, not
+    // UTC. retrospective.created_at already carries an explicit offset. Normalize
+    // both through parseAsUTC (adversarial review finding) so the comparison is
+    // timezone-independent, matching retro-filters.js's own freshness comparison.
     approvalTimeValid = Boolean(
-      retrospective && new Date(retrospective.created_at) < new Date(lfa.accepted_at)
+      retrospective && parseAsUTC(retrospective.created_at) < parseAsUTC(lfa.accepted_at)
     );
   }
 
@@ -94,9 +100,10 @@ export async function replayOne(target, supabase) {
 /** actualKnownIssues comes from the DB as plain JSON, not the frozen NO_ISSUES_FALLBACK
  * reference -- compare by shape, not identity (isFallbackKnownIssues is reference-only
  * by design for the live write path; this replay reads historical DB content instead).
- * The JSONB column is observed to sometimes come back PostgREST-serialized as a JSON
- * STRING rather than an already-parsed array (depends on the row/driver path), so parse
- * defensively before checking shape. */
+ * sd_phase_handoffs.known_issues is a TEXT column (create-sd-phase-handoffs-table.sql),
+ * so PostgREST always returns the raw JSON-encoded string here, never a pre-parsed
+ * array -- parse defensively (the array branch below is a cheap safety net, not the
+ * expected production shape). */
 function isFallbackKnownIssuesShape(knownIssues) {
   let parsed = knownIssues;
   if (typeof parsed === 'string') {
