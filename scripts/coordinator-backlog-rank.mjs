@@ -127,8 +127,28 @@ export function productPivotCompare(a, b) {
 }
 // SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: pure helpers for the atomic JSONB merge
 // write path. Extracted so the query shape is unit-testable without a live pg connection.
-export function buildRankPatch(rank, nowIso, sessionId) {
-  return { dispatch_rank: rank, dispatch_rank_at: nowIso, dispatch_rank_by: sessionId };
+export function buildRankPatch(rank, nowIso, sessionId, reasonBand = null) {
+  const patch = { dispatch_rank: rank, dispatch_rank_at: nowIso, dispatch_rank_by: sessionId };
+  // QF-20260719-365: stamp the dispatch reason-band AT RANK TIME so worker SELF-claims
+  // inherit it (KPI-2 plan-adherence read 3.4% dishonestly because ~95% of claims are
+  // self-claims where the coordinator's dispatch decision IS the rank — there was no
+  // per-claim dispatch row to carry a band). Deliberately NOT removed by
+  // buildRankClearQuery: the band records why the SD was put on the belt and must
+  // SURVIVE the claim (rank fields clear on claim; the band persists for the probe).
+  if (reasonBand) patch.dispatch_reason_band = reasonBand;
+  return patch;
+}
+// QF-20260719-365: derive the dispatch reason-band from SD provenance. Pure; the vocabulary
+// is the KPI-2 contract set: chairman-directed | feedback | incident | now-wave-remainder.
+export function deriveReasonBand(d) {
+  const m = (d && d.metadata) || {};
+  const prov = [m.provenance, m.source, m.sourced_by, m.created_via, m.gold_origin, m.proposal_provenance]
+    .filter(Boolean).join(' ').toLowerCase();
+  if (prov.includes('chairman')) return 'chairman-directed';
+  if (/^SD-FDBK-/.test((d && d.sd_key) || '') || m.source === 'feedback'
+    || /\bfeedback\b|from-feedback|from-qf|qf-promoted|quick.?fix/.test(prov)) return 'feedback';
+  if (/incident|\brca\b|corrective|postmortem/.test(prov)) return 'incident';
+  return 'now-wave-remainder';
 }
 export function buildRankMergeQuery(rankPatch, sdKey) {
   // Adversarial review (ship gate): NULL::jsonb || '{...}'::jsonb evaluates to NULL in Postgres —
@@ -505,7 +525,7 @@ async function main() {
     const rank = i + 1;
     console.log(`  #${String(rank).padStart(2)}  unlocks=${String(unlockScore(d.sd_key)).padStart(2)}  ${String(d.priority || '-').padEnd(8)} ${d.sd_key}`);
     if (DRY) continue;
-    const rankPatch = buildRankPatch(rank, now, process.env.CLAUDE_SESSION_ID || 'coordinator');
+    const rankPatch = buildRankPatch(rank, now, process.env.CLAUDE_SESSION_ID || 'coordinator', deriveReasonBand(d));
     try {
       if (pgClient) {
         const { sql, params } = buildRankMergeQuery(rankPatch, d.sd_key);
