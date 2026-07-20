@@ -41,7 +41,16 @@ export const IN_FLIGHT_STATUSES = ['in_progress', 'active', 'pending_approval'];
  * still has sd_key set, so it is correctly counted as claimed, never idle.
  */
 export async function computeUtilization(supabase, { nowMs = Date.now() } = {}) {
-  const { data: sessions, error } = await supabase.from('claude_sessions').select('*');
+  // QF-20260720-161: claude_sessions accumulates historical rows (12,973 live-verified,
+  // well past PostgREST's 1000-row default page cap). An unordered select('*') silently
+  // returned an arbitrary/oldest-leaning 1000-row slice containing ZERO status='active'
+  // rows, so every live session was excluded and this KPI reported live_workers=0 with
+  // full confidence. Ordering by heartbeat_at descending guarantees the freshest rows —
+  // the only ones liveFleetWorkers' window filter can ever keep — land inside the cap.
+  const { data: sessions, error } = await supabase
+    .from('claude_sessions')
+    .select('*')
+    .order('heartbeat_at', { ascending: false });
   if (error) throw new Error(`utilization: claude_sessions query failed: ${error.message}`);
   const rows = sessions || [];
   const coordinatorId =
@@ -116,6 +125,10 @@ export async function computePlanAdherence(supabase) {
  * failure in EITHER path is surfaced as integrity_ok=false with the error attached — it MUST NEVER
  * be null-coalesced into a silent 0/"no work" result. selfReportedCounts (test seam) overrides the
  * real computeClaimableLeaves call so unit tests can inject a divergence without a live DB.
+ *
+ * QF-20260720-161: additionally surfaces human_action_held (from the same computeClaimableLeaves
+ * call, no extra query) and flags instrument_suspect when the recomputed-vs-self_reported gap is
+ * NOT substantially explained by that known hold count — see the inline comment below.
  */
 export async function computeFailLoudIntegrity(supabase, { selfReportedCounts, claimableLeavesFn = computeClaimableLeaves } = {}) {
   const { data, error } = await supabase
@@ -129,20 +142,33 @@ export async function computeFailLoudIntegrity(supabase, { selfReportedCounts, c
   const recomputed = { dispatchable_count: (data || []).length };
 
   let selfReported = selfReportedCounts;
+  let humanActionHeld = null;
   if (!selfReported) {
     const leaves = await claimableLeavesFn(supabase, { quiet: true });
     if (leaves?.error) {
       return { integrity_ok: false, error: leaves.error.message || String(leaves.error), divergent_fields: ['dispatchable_count'] };
     }
     selfReported = { dispatchable_count: (leaves?.claimable || []).filter((sd) => sd.status === 'draft').length };
+    humanActionHeld = (leaves?.humanActionHolds || []).length;
   }
 
   const divergentFields = Object.keys(recomputed).filter((k) => (selfReported[k] ?? 0) > recomputed[k]);
+  // QF-20260720-161: self_reported <= recomputed is the healthy narrowing invariant (deps/
+  // holds/fixtures only ever REMOVE candidates), so a wide gap alone is not evidence of a
+  // stale read — 3 vs 20 with 11 held for human-action is real, verified fleet state. But a
+  // gap NOT explained by known holds is exactly the "confident but wrong" shape that hid
+  // live_workers=0 — flag the instrument as suspect instead of printing two opaque numbers.
+  const dc = recomputed.dispatchable_count;
+  const unexplained = humanActionHeld === null ? null : dc - selfReported.dispatchable_count - humanActionHeld;
+  const instrumentSuspect = unexplained !== null && dc > 0 && unexplained / dc > 0.5;
+  if (instrumentSuspect) divergentFields.push('dispatchable_count_unexplained_gap');
+
   return {
     integrity_ok: divergentFields.length === 0,
     recomputed,
     self_reported: selfReported,
     divergent_fields: divergentFields,
+    ...(humanActionHeld !== null ? { human_action_held: humanActionHeld, instrument_suspect: instrumentSuspect } : {}),
   };
 }
 
