@@ -1,7 +1,7 @@
 ---
 category: reference
 status: draft
-version: 1.0.0
+version: 1.1.0
 author: Claude Sonnet 5
 last_updated: 2026-07-20
 tags: [reference, fleet, coordination, registry]
@@ -11,8 +11,8 @@ tags: [reference, fleet, coordination, registry]
 ## Metadata
 - **Category**: Reference
 - **Status**: Draft
-- **Version**: 1.0.0
-- **Author**: Claude Sonnet 5 (SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-B)
+- **Version**: 1.1.0
+- **Author**: Claude Sonnet 5 (SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-B, -001-C)
 - **Last Updated**: 2026-07-20
 - **Tags**: fleet, coordination, drain-set, registry
 
@@ -108,11 +108,77 @@ field orthogonal to the `(role, kind)` pair this table tracks.
 
 - **Live today**: `lib/coordinator/dispatch.cjs`'s `insertCoordinationRow`
   (send-time WARN check); `lib/fleet/orphan-reroute-sweep.js`'s
-  `sweepOrphanRows` (Child C, below).
-- **Planned (sibling children)**: Child B (`SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C`)
-  repoints inbox readers (Adam advisory inbox, Solomon drain, coordinator tick
-  lanes) onto this same reader lib. Child D (`-001-E`) builds warn→enforce
-  graduation on top of this substrate.
+  `sweepOrphanRows` (Child C, below); and, as of Child B
+  (`SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C`), all three remaining fleet inbox
+  readers — `scripts/adam-advisory.cjs`'s `drainInbox`, `scripts/solomon-advisory.cjs`'s
+  `drainInbox`, and `scripts/coordinator-quiet-tick.mjs`'s `readSalientState`
+  (see "Repointed inbox readers" below).
+- **Planned**: Child D (`-001-E`) builds warn→enforce graduation on top of
+  this substrate.
+
+## Repointed inbox readers (Child B, `SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C`)
+
+Child B reconciled and repointed the three inbox readers that still carried
+hand-authored per-role kind-list constants onto `resolveRecognizedKinds`.
+
+**Reconciliation first.** `scripts/adam-advisory.cjs`'s pre-existing
+`ADAM_INBOX_KINDS` constant had drifted 8 kinds ahead of `DRAIN_SETS.adam`
+(`chairman_heads_up`, `chairman_handoff`, `coordinator_advisory`,
+`coordinator_adam_feedback`, `assist_request`, `reconcile_consult`,
+`coordinator_source_request`, `coordinator_review`). These were added to
+`PAYLOAD_KINDS`/`DRAIN_SETS.adam` in `lib/fleet/worker-status.cjs` (and
+seeded into the migration) **before** the repoint, so `resolveRecognizedKinds`
+never returns a narrower set than the reader previously recognized.
+
+**Exclusion-subtraction is load-bearing.** `DRAIN_SETS[role]` is a strict
+superset — it also covers kinds a role recognizes via a *dedicated handler*
+or *mechanical* path, not its generic inbox. Feeding the raw registry result
+straight into a generic-inbox predicate would let the generic drain
+mis-consume rows a dedicated handler exists specifically to own. Both
+repointed readers subtract before filtering:
+
+- **Adam** (`scripts/adam-advisory.cjs`) subtracts `ADAM_EXCLUDED_KINDS`
+  (`canary_request`, `comms_check`, `cross_party_ping`) from the resolved set.
+- **Solomon** (`scripts/solomon-advisory.cjs`) subtracts only `comms_check`
+  — handled by its own dedicated first-class branch evaluated before the
+  generic filter.
+
+Any future repoint of a per-role inbox reader onto this registry **must**
+identify and subtract its own handler-owned/mechanical kinds the same way —
+copying the raw resolved array into a generic predicate is the exact defect
+class this reconciliation closed.
+
+**Coordinator tick salience, not retirement.** `scripts/coordinator-quiet-tick.mjs`'s
+`readSalientState` generalizes only the `openSignalCount` *salience* check
+(OR-ing in `payload.kind IN (coordinator-recognized, minus the mechanical
+`cross_party_ping` kind)` alongside the existing `signal_type IS NOT NULL`
+term) — this closes the class of bug behind the 2026-07-19 lane-blindness
+incident (commit `bb661ec627e` / `QF-20260719-298`), where the tick was
+structurally blind to `payload.kind`-only rows. `lib/coordinator/adam-advisory-store.cjs`'s
+`selectUnactionedAdvisories` — which couples its kind filter to an
+`actioned_at`-null *retirement* predicate specific to `adam_advisory` — is
+**deliberately untouched**. Generalizing a kind filter without also
+generalizing its retirement semantics per-kind would create a permanent
+phantom count for any kind retired via a different field (`read_at`,
+`acknowledged_at`) or never retired at all. Generalizing that function's
+retirement logic correctly is a larger, separate piece of work, not yet
+scheduled.
+
+**Injection hardening.** Since a resolved kind now flows into a raw
+PostgREST `.or()` filter string, both a DB-side `CHECK` constraint on
+`role_drain_sets.kind` (`^[A-Za-z][A-Za-z0-9_]*$`) and a matching JS-side
+`SAFE_KIND_TOKEN` filter guard the interpolation — a kind value containing
+`,`/`)`/`.` is excluded before it ever reaches the filter string, not
+escaped after the fact.
+
+**Residual-drift guard.** `tests/static-guards/drain-set-registry-readers.test.js`
+asserts no file outside a small allowlist contains an array literal with 3+
+known `payload.kind` vocabulary tokens as *bare array elements* — detecting
+by content-shape, not identifier name, so a renamed hand-rolled kind-list
+constant can't silently reappear. (The guard's token-counting deliberately
+ignores kind names quoted in prose — e.g. an evidence-writer script citing
+a real kind name in its `summary` text — counting only genuine array
+elements, to avoid false-positiving on documentation.)
 
 ## Orphan re-route sweep (Child C, `SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-D`)
 
