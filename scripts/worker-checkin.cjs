@@ -613,24 +613,36 @@ function isAutoStartableQF(qf, nowMs) {
 async function selfClaimQuickFix(sb, sessionId, base, sessionModel) {
   try {
     // factory_lane is a staged, not-yet-applied column
-    // (database/migrations/20260713_quick_fixes_factory_lane.sql) -- until a human/coordinator
-    // applies it, this SELECT fails soft (data undefined -> sortQfCandidatesBySeverity's (qfs||[])
-    // -> no QF self-claimed this tick), the same documented fail-open contract this function
-    // already has, never a throw/crash. SD self-claim (a separate, higher-priority tier) is
-    // unaffected either way. The pragma below MUST stay on the same physical line as .select( --
-    // schema-reference-extract.mjs's pragmaAt() only checks the line containing the .select( match
-    // itself (RCA'd during this SD's own round-2 adversarial review: this line's original
-    // pragma-on-its-own-line form only escaped detection by accident -- the long comment block
-    // pushed .select( past the extractor's 600-char lookahead, silently skipping the whole column
-    // list rather than being intentionally suppressed).
-    const { data: qfs } = await sb
+    // (database/migrations/20260713_quick_fixes_factory_lane.sql). The comment here previously
+    // assumed a missing column fails this SELECT soft per-row; it actually fails the WHOLE
+    // multi-column select (error 42703, data:null), which the caller never checked -- a total
+    // self-claim outage fleet-wide, not graceful degradation (QF-20260720-763, live-verified:
+    // every checkin returned action:idle with claimable QFs sitting open). Retry once without
+    // factory_lane specifically on that error code -- qf.factory_lane then comes back undefined,
+    // which isAutoStartableQF's `if (qf.factory_lane)` truthy-check already treats identically to
+    // the column's own DEFAULT false, so behavior is unchanged once the column eventually lands
+    // (self-heals with no follow-up code change). The pragma below MUST stay on the same physical
+    // line as .select( -- schema-reference-extract.mjs's pragmaAt() only checks the line
+    // containing the .select( match itself.
+    const QF_CANDIDATE_COLUMNS = 'id, status, pr_url, commit_sha, created_at, routing_tier, title, description, severity, not_before, factory_lane, owner, release_condition'; // schema-lint-disable-line: factory_lane staged, see comment above
+    let { data: qfs, error: qfErr } = await sb
       .from('quick_fixes')
-      .select('id, status, pr_url, commit_sha, created_at, routing_tier, title, description, severity, not_before, factory_lane, owner, release_condition') // schema-lint-disable-line: factory_lane staged, see comment above
+      .select(QF_CANDIDATE_COLUMNS)
       .eq('status', 'open')
       .is('pr_url', null)
       .is('commit_sha', null)
       .order('created_at', { ascending: true })
       .limit(QF_CANDIDATE_LIMIT);
+    if (qfErr && qfErr.code === '42703') {
+      ({ data: qfs } = await sb
+        .from('quick_fixes')
+        .select(QF_CANDIDATE_COLUMNS.replace(', factory_lane', ''))
+        .eq('status', 'open')
+        .is('pr_url', null)
+        .is('commit_sha', null)
+        .order('created_at', { ascending: true })
+        .limit(QF_CANDIDATE_LIMIT));
+    }
     const nowMs = Date.now();
     // SD-LEO-INFRA-WORK-CLASS-CLAIM-001 (C-QF-SEAM): the QF path was the model-blind gap —
     // isAutoStartableQF has no capability check, so a Fable seat could always fall through to
