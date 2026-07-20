@@ -116,3 +116,17 @@ Per the parent program's Solomon acceptance pins: this document is a **specifica
 proof. Its own acceptance criterion (see PRD FR-4) is that it exists, cites the exact observable by
 file:line, and defines a falsifiable failing case — it does **not** itself constitute the S2 live-drill
 U4 spot-check, which remains Child E's live-proof responsibility, re-run by Solomon.
+
+## 7. Status (SD-LEO-INFRA-LEO-COMPLETION-001-E)
+
+`lib/fleet/u4-drill-runner.js` implements all four PASS/FAIL observable checks from sections 3-4
+above, fixture-tested against both the PASS case and each named FAIL case. It is **mechanism-ready,
+not live-executed**: no canary account/profile is provisioned in this environment (confirmed via a
+LEAD-phase Explore pass, independently re-verified against the live DB/`.env`), so `runU4Drill()`
+has never run against a real `relaunchUnderProfile()` call. Once the chairman provisions a canary
+`CLAUDE_CONFIG_DIR` profile (Solomon: reusable against an existing chairman account, no new
+Anthropic account required — see `session_coordination` correlation `be988d3e`) and the three env
+flags (`FLEET_ACCOUNT_PROFILES_DIR`, `FLEET_SPAWN_CONTROL_LIVE`, `FLEET_CANARY_KILL_ENABLED`) are
+set and host-validated, running the live drill is a single `runU4Drill()` call — zero code changes
+(Solomon guard G3). Do not treat this section, or the runner's existence, as evidence the live
+S2 spot-check has occurred.
