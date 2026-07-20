@@ -162,7 +162,7 @@ function isReplyRow(r) {
 // DIRECTIVE_KIND (spread below) — Solomon drains it via the shared allowlist (no re-list). Its FIRST-CLASS
 // render partition (renderChairmanDirectives, wired into the inbox mode) surfaces it above consults so a
 // chairman baseline directive can never silently die at Solomon's last hop (the 2h-non-compliant incident).
-const SOLOMON_INBOX_KINDS = Object.freeze([...DIRECTIVE_KINDS, SOLOMON_CONSULT_KIND]);
+const SOLOMON_INBOX_KINDS = Object.freeze([...DIRECTIVE_KINDS, SOLOMON_CONSULT_KIND, 'solomon_duty_reminder' /* QF-20260719-148: cron-written duty triggers */]);
 function isSolomonInboxRow(r) {
   const k = r && r.payload && r.payload.kind;
   return k != null && SOLOMON_INBOX_KINDS.includes(k);

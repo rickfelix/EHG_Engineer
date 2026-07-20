@@ -1,0 +1,58 @@
+name: "Solomon duty triggers (cron)"
+
+# QF-20260719-148 (Solomon L2, advisory 94204a87; chairman-directed session-survival
+# requirement): the judgment halves of Solomon's forecast/weekly duties stay with a live
+# Solomon; the TRIGGERS never sleep. Daily 11:37 UTC (7:37 AM ET DST): exact-count
+# forecast re-issue triggers vs the stamped basis. Monday 12:23 UTC (8:23 AM ET DST):
+# weekly budget-line reminder. Reminders are owed-state rows — a dead Solomon session
+# means they queue at broadcast-solomon for whichever successor registers next.
+# Not var-gated, not fail-softed: a failing trigger checker must be visible.
+
+on:
+  schedule:
+    - cron: '37 11 * * *'   # daily forecast-trigger evaluation
+    - cron: '23 12 * * 1'   # Monday weekly budget-line reminder
+  workflow_dispatch:
+    inputs:
+      weekly:
+        description: "Run the weekly reminder instead of the daily triggers"
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  solomon-duty-triggers:
+    name: Solomon duty triggers
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run duty triggers (mode by schedule)
+        run: |
+          if [ "${{ github.event.schedule }}" = "23 12 * * 1" ] || [ "${{ github.event.inputs.weekly }}" = "true" ]; then
+            node scripts/solomon-forecast-trigger-check.mjs --weekly
+          else
+            node scripts/solomon-forecast-trigger-check.mjs
+          fi
