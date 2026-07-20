@@ -9,12 +9,14 @@ function fakeSupabase({ handoffRows = [], completedSds = [] }) {
   return {
     from(table) {
       if (table === 'sd_phase_handoffs') {
+        // recentRecount paginates (FR-6): .order() then awaited .range() terminal.
         return {
           select: () => ({
             eq: () => ({
-              gte: () => ({
-                limit: async () => ({ data: handoffRows, error: null }),
-              }),
+              gte: () => {
+                const b = { order: () => b, range: async () => ({ data: handoffRows, error: null }) };
+                return b;
+              },
             }),
           }),
         };

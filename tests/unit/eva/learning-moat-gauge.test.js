@@ -9,6 +9,8 @@ function stubSupabase(rows) {
   const builder = {
     eq: (...args) => { calls.eqArgs.push(args); return builder; },
     gte: () => builder,
+    order: () => builder,
+    range: () => builder,
     then: (resolve) => resolve({ data: rows, error: null }),
   };
   return {
@@ -53,7 +55,7 @@ describe('learning-moat-gauge (FR-1)', () => {
   });
 
   it('propagates a query error rather than silently returning an empty gauge', async () => {
-    const supabase = { from: () => ({ select: () => ({ eq: function () { return this; }, gte: function () { return this; }, then: (resolve) => resolve({ data: null, error: { message: 'db down' } }) }) }) };
+    const supabase = { from: () => ({ select: () => ({ eq: function () { return this; }, gte: function () { return this; }, order: function () { return this; }, range: function () { return this; }, then: (resolve) => resolve({ data: null, error: { message: 'db down' } }) }) }) };
     await expect(computeLearningMoatGauge(supabase)).rejects.toThrow(/db down/);
   });
 });

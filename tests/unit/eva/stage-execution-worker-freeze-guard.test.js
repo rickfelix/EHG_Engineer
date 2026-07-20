@@ -49,12 +49,14 @@ describe('_pollForWork freeze guard', () => {
       { id: 'v-normal', name: 'fresh', current_lifecycle_stage: 3, metadata: {} },
       { id: 'v-nullmeta', name: 'nullmeta', current_lifecycle_stage: 5, metadata: null },
     ];
-    // chain ends in .order() returning {data,error}
+    // fetch-all-paginated (FR-6) appends .order()+.range() and awaits .range();
+    // chain is fully chainable with .range() as the resolving terminal.
     const chain = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       lt: vi.fn().mockReturnThis(),
-      order: vi.fn().mockResolvedValue({ data: rows, error: null }),
+      order: vi.fn().mockReturnThis(),
+      range: vi.fn().mockResolvedValue({ data: rows, error: null }),
     };
     const supabase = { from: vi.fn().mockReturnValue(chain) };
     const worker = new StageExecutionWorker({ supabase, logger: silentLogger });
@@ -92,8 +94,11 @@ describe('_checkResolvedBlocks freeze guard', () => {
             }
             return builder;
           });
-          // Make the select chain awaitable (no .single) -> resolve blocked list
+          // Make the select chain awaitable (no .single) -> resolve blocked list.
+          // fetch-all-paginated (FR-6) appends .order() then awaits .range().
           builder.then = (resolve) => resolve({ data: blockedRows, error: null });
+          builder.order = vi.fn(() => builder);
+          builder.range = vi.fn(() => Promise.resolve({ data: blockedRows, error: null }));
           return builder;
         }
         if (table === 'venture_stage_work') {

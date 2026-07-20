@@ -183,11 +183,14 @@ describe('Stage Execution Records (SD-VW-BACKEND-EXEC-RECORDS-001)', () => {
         heartbeat_at: new Date(Date.now() - 600_000).toISOString(), // 10 min ago
       };
 
-      // Override to return stale executions on select
+      // Override to return stale executions on select. fetch-all-paginated (FR-6)
+      // appends .order() and awaits .range() as the resolving terminal.
       const chain = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        lt: vi.fn().mockResolvedValue({ data: [staleExec], error: null }),
+        lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockResolvedValue({ data: [staleExec], error: null }),
         update: vi.fn().mockReturnThis(),
       };
       supabase.from = vi.fn((table) => {
@@ -212,7 +215,9 @@ describe('Stage Execution Records (SD-VW-BACKEND-EXEC-RECORDS-001)', () => {
       const chain = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        lt: vi.fn().mockResolvedValue({ data: [], error: null }),
+        lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockResolvedValue({ data: [], error: null }),
         update: vi.fn().mockReturnThis(),
       };
       supabase.from = vi.fn(() => chain);

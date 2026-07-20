@@ -1298,5 +1298,1360 @@
   "classification": "bounded-by-design",
   "match": ".select('id, story_key, title, status, user_role, user_want, user_benefit, accep",
   "note": "single-SD/PRD-scoped evidence read (.eq scope) — bounded by one SD's rows (FR-6 batch 6 review)"
+ },
+ "lib/eva/adapters/real-data-adapter.js:93": {
+  "classification": "bounded-by-design",
+  "match": "sd_key, title, status, sd_type, progress, completi",
+  "note": "bounded: one parent SD's children (.eq on parent_sd_id)"
+ },
+ "lib/eva/adherence-scorer.js:101": {
+  "classification": "bounded-by-design",
+  "match": "id, artifact_type, claim_ref, disposition, deviati",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/adherence-scorer.js:237": {
+  "classification": "bounded-by-design",
+  "match": "id, claim_ref, disposition",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/adr-extractor.js:134": {
+  "classification": "bounded-by-design",
+  "match": "id, adr_number, decision",
+  "note": "bounded: key-scoped read (.eq on architecture_plan_id) — per-key row set, not table-wide"
+ },
+ "lib/eva/analysis-history.js:93": {
+  "classification": "bounded-by-design",
+  "match": "id, metadata, created_at",
+  "note": "bounded: one venture's rows (.eq on venture_id,event_type)"
+ },
+ "lib/eva/artifact-enrichment-pipeline.js:47": {
+  "classification": "bounded-by-design",
+  "match": "artifact_id, artifact_type, summary_text, tags, so",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/artifact-mapping-resolver.js:79": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "venture_sd_artifact_mapping .eq(venture_type) — per-archetype mapping config"
+ },
+ "lib/eva/artifact-persistence-service.js:174": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": "bounded: one venture's rows (.eq on venture_id,lifecycle_stage,artifact_type,is_current)"
+ },
+ "lib/eva/artifact-persistence-service.js:537": {
+  "classification": "bounded-by-design",
+  "match": "gate_type, passed, overall_score, notes",
+  "note": "bounded: one venture's rows (.eq on venture_id,stage_number)"
+ },
+ "lib/eva/artifact-persistence-service.js:85": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": "bounded: one venture's rows (.eq on venture_id,lifecycle_stage,artifact_type,is_current)"
+ },
+ "lib/eva/artifact-persistence-service.js:857": {
+  "classification": "bounded-by-design",
+  "match": "lifecycle_stage, artifact_type, content, quality_s",
+  "note": "bounded: key-scoped read (.eq on supports_vision_key,is_current) — per-key row set, not table-wide"
+ },
+ "lib/eva/artifact-persistence-service.js:963": {
+  "classification": "bounded-by-design",
+  "match": "lifecycle_stage, artifact_type, content, quality_s",
+  "note": "bounded: key-scoped read (.eq on supports_plan_key,is_current) — per-key row set, not table-wide"
+ },
+ "lib/eva/artifact-versioning.js:168": {
+  "classification": "bounded-by-design",
+  "match": "id, venture_id, artifact_type, stage_id, content, ",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/blueprint-scoring/persistence.js:166": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/bridge/design-reference-sampler.js:139": {
+  "classification": "bounded-by-design",
+  "match": "site_name, archetype_category, design_tokens",
+  "note": "curated Awwwards design-reference library (~137 rows, manual curation only) — full-catalog read is by design"
+ },
+ "lib/eva/bridge/leaf-gate-live.js:161": {
+  "classification": "bounded-by-design",
+  "match": "sub_agent_code, created_at, updated_at, verdict",
+  "note": "bounded: one SD's rows (.eq on sd_id)"
+ },
+ "lib/eva/bridge/reap-orphaned-provisioning.js:54": {
+  "classification": "bounded-by-design",
+  "match": "venture_id, venture_name",
+  "note": ".in(venture_id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/bridge/reap-orphaned-provisioning.js:71": {
+  "classification": "bounded-by-design",
+  "match": "id, sd_key, status",
+  "note": ".eq(metadata->>venture_id) — non-terminal SDs of ONE venture (per-venture SD tree)"
+ },
+ "lib/eva/bridge/replit-repo-seeder.js:1011": {
+  "classification": "bounded-by-design",
+  "match": "artifact_data, metadata, title",
+  "note": "bounded: one venture's rows (.eq on venture_id,artifact_type,is_current)"
+ },
+ "lib/eva/bridge/replit-repo-seeder.js:1177": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, artifact_data",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/bridge/s19-reconciliation.js:47": {
+  "classification": "bounded-by-design",
+  "match": "status",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/bridge/trust-elevation.js:133": {
+  "classification": "bounded-by-design",
+  "match": "id, name, trust_tier, metadata",
+  "note": "applications registry .eq(status,active) — small registered-apps set"
+ },
+ "lib/eva/bridge/venture-build-consumer.js:169": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, lifecycle_stage, content, artifact_",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/bridge/venture-build-consumer.js:218": {
+  "classification": "bounded-by-design",
+  "match": "id, sd_key, status, sd_type, parent_sd_id, sequenc",
+  "note": ".in(parent_sd_id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/bridge/venture-build-consumer.js:379": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "mutation-returning select (update) — .select() returns only the written rows"
+ },
+ "lib/eva/bridge/venture-drift-prober.js:105": {
+  "classification": "bounded-by-design",
+  "match": "id, artifact_type, lifecycle_stage, title, content",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/bridge/venture-provisioner.js:311": {
+  "classification": "bounded-by-design",
+  "match": "id, name",
+  "note": "applications registry .eq(status,active) — small registered-apps set"
+ },
+ "lib/eva/bridge/venture-session-routing.js:113": {
+  "classification": "bounded-by-design",
+  "match": "status",
+  "note": "bounded: one parent SD's children (.eq on parent_sd_id)"
+ },
+ "lib/eva/chairman-preference-store.js:225": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: key-scoped read (.eq on chairman_id,venture_id) — per-key row set, not table-wide"
+ },
+ "lib/eva/chairman-preference-store.js:242": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: key-scoped read (.eq on chairman_id) — per-key row set, not table-wide"
+ },
+ "lib/eva/chairman-product-review.js:189": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, title, content, file_url",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/chairman-sla-enforcer.js:61": {
+  "classification": "paginated",
+  "match": "id, decision_type, created_at, blocking, venture_i",
+  "note": "already wrapped in fetchAllPaginated (FR-6 batch 7) — anchor sits above the narrow chain window behind an interleaved comment"
+ },
+ "lib/eva/clean-clone/launch.js:51": {
+  "classification": "bounded-by-design",
+  "match": "id, name, status, seeded_from_venture_id, metadata",
+  "note": ".or(seeded_from_venture_id.eq...) — clones seeded from one source venture"
+ },
+ "lib/eva/clean-clone/prereq-verifier.js:42": {
+  "classification": "bounded-by-design",
+  "match": "sd_key, status",
+  "note": ".in(sd_key) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/constraint-drift-detector.js:203": {
+  "classification": "bounded-by-design",
+  "match": "id, artifact_type, content, created_at",
+  "note": "bounded: one venture's rows (.eq on venture_id,stage)"
+ },
+ "lib/eva/consultant/feedback-recorder.js:155": {
+  "classification": "bounded-by-design",
+  "match": "id, trend_id",
+  "note": "pending recommendations for one application_domain — transient pending set, drains on disposition"
+ },
+ "lib/eva/consultant/stamp-accepted-wave-item.js:52": {
+  "classification": "bounded-by-design",
+  "match": "id, item_disposition",
+  "note": "mutation-returning select (update) — .select() returns only the written rows"
+ },
+ "lib/eva/contract-validator.js:164": {
+  "classification": "bounded-by-design",
+  "match": "lifecycle_stage, artifact_type, is_current, create",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/contracts/describe-artifact-gap.js:133": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, lifecycle_stage",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/contracts/stage-contracts.js:647": {
+  "classification": "bounded-by-design",
+  "match": "lifecycle_stage",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/contracts/stage-contracts.js:679": {
+  "classification": "bounded-by-design",
+  "match": "lifecycle_stage, content, metadata",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/cross-venture-learning.js:104": {
+  "classification": "bounded-by-design",
+  "match": "venture_id, market_assumptions, competitor_assumpt",
+  "note": ".in(venture_id,status) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/cross-venture-learning.js:211": {
+  "classification": "bounded-by-design",
+  "match": "venture_id, artifact_type, quality_score",
+  "note": ".in(venture_id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/cross-venture-learning.js:231": {
+  "classification": "bounded-by-design",
+  "match": "venture_id, lifecycle_stage, decision, health_scor",
+  "note": ".in(venture_id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/cross-venture-learning.js:384": {
+  "classification": "bounded-by-design",
+  "match": "venture_id, lifecycle_stage, artifact_data",
+  "note": ".in(venture_id,lifecycle_stage) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/cross-venture-learning.js:44": {
+  "classification": "bounded-by-design",
+  "match": "venture_id, lifecycle_stage",
+  "note": ".in(venture_id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/cross-venture-learning.js:54": {
+  "classification": "bounded-by-design",
+  "match": "venture_id, lifecycle_stage",
+  "note": ".in(venture_id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/cross-venture-learning.js:627": {
+  "classification": "bounded-by-design",
+  "match": "venture_id, calibration_report, status",
+  "note": ".limit(limit) declared sampling cap (callers default 50 ventures analyzed)"
+ },
+ "lib/eva/cross-venture-learning.js:73": {
+  "classification": "bounded-by-design",
+  "match": "stage_number, stage_name",
+  "note": ".in(stage_number) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/cross-venture-learning.js:829": {
+  "classification": "bounded-by-design",
+  "match": "eva_venture_id, action_data, created_at",
+  "note": ".in(eva_venture_id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/decision-filter-engine.js:510": {
+  "classification": "bounded-by-design",
+  "match": "let prefQuery = supabase.from('chairman_preferences').select",
+  "note": "chain terminates .limit(1).single() at the await site — single-row preference read"
+ },
+ "lib/eva/dependency-manager.js:126": {
+  "classification": "bounded-by-design",
+  "match": "id, provider_venture_id, required_stage, dependenc",
+  "note": "bounded: one venture's rows (.eq on dependent_venture_id)"
+ },
+ "lib/eva/dependency-manager.js:29": {
+  "classification": "bounded-by-design",
+  "match": "id, provider_venture_id, required_stage, dependenc",
+  "note": "bounded: one venture's rows (.eq on dependent_venture_id,provider_venture_id)"
+ },
+ "lib/eva/dependency-manager.js:33": {
+  "classification": "bounded-by-design",
+  "match": "id, dependent_venture_id, required_stage, dependen",
+  "note": "bounded: one venture's rows (.eq on dependent_venture_id,provider_venture_id)"
+ },
+ "lib/eva/deviation-ledger.js:125": {
+  "classification": "bounded-by-design",
+  "match": "id, created_at, artifact_data",
+  "note": "bounded: one venture's rows (.eq on venture_id,artifact_type)"
+ },
+ "lib/eva/economic-lens-analysis.js:119": {
+  "classification": "bounded-by-design",
+  "match": "lifecycle_stage, artifact_type, content, metadata,",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/escalation-event-persister.js:63": {
+  "classification": "bounded-by-design",
+  "match": "dimension_key, dimension_name, dimension_score, se",
+  "note": "bounded: one SD's rows (.eq on sd_id)"
+ },
+ "lib/eva/eva-master-scheduler.js:1176": {
+  "classification": "bounded-by-design",
+  "match": ".select(`",
+  "note": ".limit(this.dispatchBatchSize) (default 20) — declared dispatch batch cap"
+ },
+ "lib/eva/eva-master-scheduler.js:1479": {
+  "classification": "bounded-by-design",
+  "match": ".select(`",
+  "note": ".limit(topN) (default DEFAULT_STATUS_TOP_N=10) — status display cap"
+ },
+ "lib/eva/eva-master-scheduler.js:631": {
+  "classification": "bounded-by-design",
+  "match": "id, title, description, type, priority, strategic_",
+  "note": ".in(metadata->>sensemaking_correlation_id, correlationIds) — bounded by caller correlation-id list"
+ },
+ "lib/eva/eva-master-scheduler.js:930": {
+  "classification": "bounded-by-design",
+  "match": "sd_key, title",
+  "note": ".limit(VISION_SCORING_BATCH_SIZE=5) — declared scoring batch cap"
+ },
+ "lib/eva/eva-orchestrator-helpers.js:312": {
+  "classification": "bounded-by-design",
+  "match": "id, artifact_type, artifact_data, lifecycle_stage,",
+  "note": "bounded: one venture's rows (.eq on venture_id,idempotency_key)"
+ },
+ "lib/eva/eva-orchestrator-helpers.js:358": {
+  "classification": "bounded-by-design",
+  "match": "lifecycle_stage, artifact_type, artifact_data",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/eva-orchestrator.js:291": {
+  "classification": "bounded-by-design",
+  "match": "required_artifacts",
+  "note": "bounded: key-scoped read (.eq on stage_number) — per-key row set, not table-wide"
+ },
+ "lib/eva/eva-orchestrator.js:434": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, artifact_data, created_at",
+  "note": "bounded: one venture's rows (.eq on venture_id,lifecycle_stage,is_current)"
+ },
+ "lib/eva/eva-orchestrator.js:624": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type",
+  "note": "bounded: one venture's rows (.eq on venture_id,lifecycle_stage)"
+ },
+ "lib/eva/event-bus/event-router.js:795": {
+  "classification": "bounded-by-design",
+  "match": "id, event_type, event_data, eva_venture_id, create",
+  "note": "replay read carries .limit(limit) (default 100) applied after conditional filters — declared replay cap"
+ },
+ "lib/eva/event-bus/event-schema-registry.js:292": {
+  "classification": "bounded-by-design",
+  "match": "event_type, version, schema_definition, registered",
+  "note": "eva_event_schemas registry — small enumerated schema set"
+ },
+ "lib/eva/event-bus/handlers/gate-evaluated.js:141": {
+  "classification": "bounded-by-design",
+  "match": "id, stage_number, name",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/event-bus/handlers/gate-evaluated.js:156": {
+  "classification": "bounded-by-design",
+  "match": "stage_id, sequence_order, stage_name",
+  "note": "bounded: key-scoped read (.eq on pipeline_id) — per-key row set, not table-wide"
+ },
+ "lib/eva/event-bus/handlers/sd-completed.js:92": {
+  "classification": "bounded-by-design",
+  "match": "sd_key, title, status, sd_type, progress",
+  "note": "bounded: one parent SD's children (.eq on parent_sd_id)"
+ },
+ "lib/eva/event-bus/handlers/stage-completed.js:110": {
+  "classification": "bounded-by-design",
+  "match": "id, stage_number, name, status",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/event-bus/handlers/stage-completed.js:97": {
+  "classification": "bounded-by-design",
+  "match": "stage_id, sequence_order, stage_name",
+  "note": "bounded: key-scoped read (.eq on pipeline_id) — per-key row set, not table-wide"
+ },
+ "lib/eva/event-bus/handlers/vision-rescore-completed.js:50": {
+  "classification": "bounded-by-design",
+  "match": "id, dimension_key, dimension_score",
+  "note": "bounded: one SD's rows (.eq on sd_id)"
+ },
+ "lib/eva/event-bus/handlers/vision-rescore-completed.js:91": {
+  "classification": "bounded-by-design",
+  "match": "id, vision_dimension_code, current_value",
+  "note": ".in(vision_dimension_code) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/exit/data-room-generator.js:110": {
+  "classification": "bounded-by-design",
+  "match": "id, asset_name, asset_type, estimated_value, descr",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/exit/data-room-generator.js:29": {
+  "classification": "bounded-by-design",
+  "match": "estimated_value, asset_type",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/exit/data-room-generator.js:49": {
+  "classification": "bounded-by-design",
+  "match": "asset_name, asset_type, description",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/exit/data-room-generator.js:74": {
+  "classification": "bounded-by-design",
+  "match": "asset_name, description",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/exit/data-room-generator.js:96": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/exit/data-room-templates.js:163": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, is_current, updated_at",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/exit/data-room-templates.js:183": {
+  "classification": "bounded-by-design",
+  "match": "id, asset_type",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/exit/separability-scorer.js:33": {
+  "classification": "bounded-by-design",
+  "match": "asset_type",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/exit/separability-scorer.js:44": {
+  "classification": "bounded-by-design",
+  "match": "asset_type",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/exit/separability-scorer.js:55": {
+  "classification": "bounded-by-design",
+  "match": "asset_type",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/exit/separability-scorer.js:73": {
+  "classification": "bounded-by-design",
+  "match": "asset_type",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/exit/separability-scorer.js:93": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/exit/separation-rehearsal.js:63": {
+  "classification": "bounded-by-design",
+  "match": "id, asset_name, asset_type, estimated_value, descr",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/experiments/baseline-accuracy.js:51": {
+  "classification": "bounded-by-design",
+  "match": ".select(`",
+  "note": ".limit(limit) (default 500) — declared sampling cap for accuracy baseline"
+ },
+ "lib/eva/experiments/baseline-accuracy.js:70": {
+  "classification": "bounded-by-design",
+  "match": "assignment_id, scores",
+  "note": ".in(assignment_id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/experiments/dual-evaluator.js:187": {
+  "classification": "bounded-by-design",
+  "match": ".select(/* schema-lint-disable-line — pre-existing, not fixe",
+  "note": "bounded: key-scoped read (.eq on assignment.experiment_id) — per-key row set, not table-wide"
+ },
+ "lib/eva/experiments/experiment-assignment.js:80": {
+  "classification": "bounded-by-design",
+  "match": ".select()",
+  "note": "bounded: key-scoped read (.eq on experiment_id) — per-key row set, not table-wide"
+ },
+ "lib/eva/experiments/experiment-lifecycle.js:69": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: key-scoped read (.eq on experiment_id,outcome_type) — per-key row set, not table-wide"
+ },
+ "lib/eva/experiments/experiment-manager.js:76": {
+  "classification": "bounded-by-design",
+  "match": "let query = supabase.from('experiments').select().order('cre",
+  "note": "experiments registry listing — operationally small, human/venture-created set"
+ },
+ "lib/eva/experiments/gate-outcome-bridge.js:167": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: key-scoped read (.eq on experiment_id,outcome_type) — per-key row set, not table-wide"
+ },
+ "lib/eva/experiments/multi-dimensional.js:141": {
+  "classification": "bounded-by-design",
+  "match": ".select()",
+  "note": "experiments .eq(status,running) — operationally small running-experiment set"
+ },
+ "lib/eva/experiments/multi-dimensional.js:169": {
+  "classification": "bounded-by-design",
+  "match": "experiment_id",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/experiments/multi-dimensional.js:180": {
+  "classification": "bounded-by-design",
+  "match": "id, config, status",
+  "note": ".in(id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/feedback-dimension-aggregator.js:33": {
+  "classification": "bounded-by-design",
+  "match": "id, rubric_score, metadata, created_at",
+  "note": ".limit(MAX_FEEDBACK_ITEMS=500) declared sampling cap on the aggregation window"
+ },
+ "lib/eva/gate-failure-predictor.js:67": {
+  "classification": "bounded-by-design",
+  "match": "id, sd_type",
+  "note": ".in(id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/historical-pattern-matcher.js:83": {
+  "classification": "bounded-by-design",
+  "match": "id, pattern_id, issue_summary, category, occurrenc",
+  "note": ".limit(MAX_RESULTS*2=10) declared cap for dedup+relevance sort"
+ },
+ "lib/eva/intelligence-loader.js:76": {
+  "classification": "bounded-by-design",
+  "match": "id, key_result_id, contribution_type, impact_weigh",
+  "note": "bounded: one SD's rows (.eq on sd_id)"
+ },
+ "lib/eva/intelligence-loader.js:87": {
+  "classification": "bounded-by-design",
+  "match": "id, status, current_value, target_value",
+  "note": ".in(id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/jobs/okr-accept-generation.js:122": {
+  "classification": "bounded-by-design",
+  "match": "id, period, generation_date, total_krs_generated",
+  "note": "okr_generation_log pending_chairman_acceptance — transient pending set (monthly generation cadence)"
+ },
+ "lib/eva/jobs/okr-accept-generation.js:62": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": "bounded: key-scoped read (.eq on generation_id) — per-key row set, not table-wide"
+ },
+ "lib/eva/jobs/okr-accept-generation.js:75": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "mutation-returning select (update) — .select() returns only the written rows"
+ },
+ "lib/eva/jobs/okr-accept-generation.js:88": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "mutation-returning select (update) — .select() returns only the written rows"
+ },
+ "lib/eva/jobs/okr-archive-stale.js:28": {
+  "classification": "bounded-by-design",
+  "match": "id, code, title, period",
+  "note": "active objectives — small OKR governance set"
+ },
+ "lib/eva/jobs/okr-archive-stale.js:72": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "mutation-returning select (update) — .select() returns only the written rows"
+ },
+ "lib/eva/jobs/okr-mid-month-review.js:26": {
+  "classification": "bounded-by-design",
+  "match": "id, code, title, objective_id, baseline_value, cur",
+  "note": "active key_results — small OKR governance set"
+ },
+ "lib/eva/jobs/okr-monthly-handler.js:27": {
+  "classification": "bounded-by-design",
+  "match": "id, objective_id, current_value, target_value, bas",
+  "note": "active key_results — small OKR governance set"
+ },
+ "lib/eva/jobs/okr-stale-kr-sd-creator.js:123": {
+  "classification": "bounded-by-design",
+  "match": "key_result_id, sd_id, strategic_directives_v2!inne",
+  "note": ".in(key_result_id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/jobs/okr-stale-kr-sd-creator.js:98": {
+  "classification": "bounded-by-design",
+  "match": ".select(`",
+  "note": "active key_results joined to active objectives — small OKR governance set"
+ },
+ "lib/eva/kr-reality-checker.js:148": {
+  "classification": "bounded-by-design",
+  "match": "key_result_id, key_results!inner(id, code, title, ",
+  "note": "bounded: one SD's rows (.eq on sd_id)"
+ },
+ "lib/eva/kr-reality-checker.js:155": {
+  "classification": "bounded-by-design",
+  "match": "id, code, title, current_value, target_value, base",
+  "note": "active key_results — small OKR governance set"
+ },
+ "lib/eva/kr-reality-checker.js:52": {
+  "classification": "bounded-by-design",
+  "match": "sd_id, strategic_directives_v2!inner(sd_key, statu",
+  "note": "bounded: key-scoped read (.eq on key_result_id) — per-key row set, not table-wide"
+ },
+ "lib/eva/launch-mode.js:231": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "mutation-returning select (update) — .select() returns only the written rows"
+ },
+ "lib/eva/launch-workflow/index.js:136": {
+  "classification": "bounded-by-design",
+  "match": "stage_number, passed, gate_type, score, created_at",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/launch-workflow/index.js:44": {
+  "classification": "bounded-by-design",
+  "match": "stage_number, passed, gate_type, reasoning, create",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/launch-workflow/index.js:96": {
+  "classification": "bounded-by-design",
+  "match": "stage_number, passed, gate_type, reasoning, score,",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/legal-doc-producer.js:135": {
+  "classification": "bounded-by-design",
+  "match": "id, template_type, content",
+  "note": ".in(template_type) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/lifecycle-sd-bridge.js:1442": {
+  "classification": "bounded-by-design",
+  "match": "id, sd_key",
+  "note": "builder factory consumed with .eq(sprint_signature/sprint_name)+.limit(1) at both call sites — single-row dedup lookup"
+ },
+ "lib/eva/lifecycle-sd-bridge.js:1460": {
+  "classification": "bounded-by-design",
+  "match": "sd_key",
+  "note": "bounded: one parent SD's children (.eq on parent_sd_id)"
+ },
+ "lib/eva/lifecycle-sd-bridge.js:1554": {
+  "classification": "bounded-by-design",
+  "match": "id, artifact_type, lifecycle_stage, title, content",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/lifecycle-sd-bridge.js:1643": {
+  "classification": "bounded-by-design",
+  "match": "id, artifact_type, lifecycle_stage, title, content",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/lifecycle-sd-bridge.js:1661": {
+  "classification": "bounded-by-design",
+  "match": "id, sd_key, title, description, metadata, sd_type",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/lifecycle-sd-bridge.js:867": {
+  "classification": "bounded-by-design",
+  "match": "sd_key, venture_id, metadata",
+  "note": ".in(sd_key) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/lifecycle-sd-bridge.js:872": {
+  "classification": "bounded-by-design",
+  "match": "id, artifact_type, lifecycle_stage",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/lifecycle/exit-gate-verifiers.js:296": {
+  "classification": "bounded-by-design",
+  "match": "guardrail, decision, killswitch_open",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/mental-models/model-selector.js:107": {
+  "classification": "bounded-by-design",
+  "match": "model_id, affinity_score",
+  "note": ".in(model_id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/mental-models/model-selector.js:42": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "mental_models registry .eq(is_active) — curated model set"
+ },
+ "lib/eva/mental-models/model-selector.js:85": {
+  "classification": "bounded-by-design",
+  "match": "model_id, composite_effectiveness_score",
+  "note": "bounded: key-scoped read (.eq on stage_number) — per-key row set, not table-wide"
+ },
+ "lib/eva/okr-cascade-resolver.js:30": {
+  "classification": "bounded-by-design",
+  "match": "id, title, description, cadence, status, vision_id",
+  "note": "objectives table — small OKR governance set (optionally vision-scoped)"
+ },
+ "lib/eva/okr-cascade-resolver.js:47": {
+  "classification": "bounded-by-design",
+  "match": "id, objective_id, title, metric_name, baseline_val",
+  "note": ".in(objective_id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/okr-cascade-resolver.js:62": {
+  "classification": "bounded-by-design",
+  "match": "id, sd_id, key_result_id, contribution_type, align",
+  "note": ".in(key_result_id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/okr-priority-integrator.js:48": {
+  "classification": "bounded-by-design",
+  "match": "id, key_result_id, contribution_type, alignment_we",
+  "note": "bounded: one SD's rows (.eq on sd_id)"
+ },
+ "lib/eva/okr-priority-integrator.js:64": {
+  "classification": "bounded-by-design",
+  "match": "id, status, title",
+  "note": ".in(id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/orchestrator-audit-trail.js:114": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": ".limit(filters.limit || 50) — declared audit-trail read cap"
+ },
+ "lib/eva/pipeline-data/index.js:147": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, content, quality_score, created_at",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/pipeline-data/index.js:205": {
+  "classification": "bounded-by-design",
+  "match": "lifecycle_stage, stage_status, health_score, updat",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/pipeline-data/index.js:28": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, content, quality_score, created_at",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/pipeline-data/index.js:93": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, content, quality_score, created_at",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/pipeline-runner/demand-estimator.js:159": {
+  "classification": "bounded-by-design",
+  "match": "id, name, status",
+  "note": "experiments .eq(status,active) — operationally small active-experiment set"
+ },
+ "lib/eva/portfolio-optimizer.js:392": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": ".in(id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/post-build-verdict-engine.js:42": {
+  "classification": "bounded-by-design",
+  "match": "stage_number, required_artifacts",
+  "note": "venture_stages registry .lte(stage_number) — fixed lifecycle stage registry"
+ },
+ "lib/eva/post-completion-verifier.js:241": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: one SD's rows (.eq on sd_id)"
+ },
+ "lib/eva/post-completion-verifier.js:259": {
+  "classification": "bounded-by-design",
+  "match": "id, sd_key, sd_type",
+  "note": ".limit(limit) (default 50) — declared batch-verification cap"
+ },
+ "lib/eva/post-completion-verifier.js:37": {
+  "classification": "bounded-by-design",
+  "match": "handoff_type, status, validation_score",
+  "note": "bounded: one SD's rows (.eq on sd_id,status)"
+ },
+ "lib/eva/post-completion-verifier.js:55": {
+  "classification": "bounded-by-design",
+  "match": "decision_type, decision, executed_at",
+  "note": ".in(decision_type) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/post-completion-verifier.js:72": {
+  "classification": "bounded-by-design",
+  "match": "id, status, acceptance_criteria",
+  "note": "bounded: one SD's rows (.eq on sd_id)"
+ },
+ "lib/eva/qa/stitch-vision-qa.js:181": {
+  "classification": "bounded-by-design",
+  "match": "metadata",
+  "note": "stitch_qa_report artifacts created today (gte todayStart) — small daily QA set"
+ },
+ "lib/eva/quality-findings/db-sourced-findings.js:184": {
+  "classification": "bounded-by-design",
+  "match": "id, title, description, severity, sd_id, strategic",
+  "note": ".limit(MAX_PER_SOURCE+1=26) — declared per-source cap with overflow sentinel"
+ },
+ "lib/eva/quality-findings/db-sourced-findings.js:58": {
+  "classification": "bounded-by-design",
+  "match": "id, sd_key",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/quality-findings/db-sourced-findings.js:82": {
+  "classification": "bounded-by-design",
+  "match": "run_id, sd_id, status, failed_tests, pass_rate, to",
+  "note": ".in(sd_id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/quality-findings/sd-generator.js:417": {
+  "classification": "bounded-by-design",
+  "match": "id, sd_key, metadata, status",
+  "note": ".in(status) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/reality-gates.js:306": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, quality_score, file_url, is_current",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/reality-gates.js:85": {
+  "classification": "bounded-by-design",
+  "match": "from_stage, to_stage, required_artifacts, quality_",
+  "note": "gate_boundary_config registry — small enumerated gate config"
+ },
+ "lib/eva/routing-state-machine.js:196": {
+  "classification": "bounded-by-design",
+  "match": "id, venture_id, event_type, metadata, created_at",
+  "note": "bounded: one venture's rows (.eq on venture_id,event_type)"
+ },
+ "lib/eva/rpc/get-s20-sd-progress.js:43": {
+  "classification": "bounded-by-design",
+  "match": "id, sd_key, title, status, current_phase, progress",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/s20-pause-controller.js:223": {
+  "classification": "bounded-by-design",
+  "match": "id, sd_key, title, status, current_phase, progress",
+  "note": "bounded: one parent SD's children (.eq on parent_sd_id)"
+ },
+ "lib/eva/s20-pause-controller.js:263": {
+  "classification": "bounded-by-design",
+  "match": "venture_id, advisory_data",
+  "note": "bounded: key-scoped read (.eq on lifecycle_stage,stage_status) — per-key row set, not table-wide"
+ },
+ "lib/eva/s20-pause-controller.js:343": {
+  "classification": "bounded-by-design",
+  "match": "id, sd_key, title, status, current_phase, progress",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/services/brand-genome.js:25": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/services/brand-genome.js:261": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: one venture's rows (.eq on venture_id,submission_status)"
+ },
+ "lib/eva/services/brand-genome.js:44": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "brand_genome_submissions (non-archived, optionally venture-scoped) — human-authored submissions, small set"
+ },
+ "lib/eva/services/brand-genome.js:88": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "v_active_brand_genomes view (optionally venture-scoped) — one active genome per venture"
+ },
+ "lib/eva/services/competitive-intelligence.js:158": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: key-scoped read (.eq on idea_id) — per-key row set, not table-wide"
+ },
+ "lib/eva/services/competitive-intelligence.js:169": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": ".in(competitor_id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/services/design-reference-library.js:108": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": ".limit(limit) (default 5) — top-N archetype references"
+ },
+ "lib/eva/services/design-reference-library.js:125": {
+  "classification": "bounded-by-design",
+  "match": "archetype_category",
+  "note": "curated design-reference library (~137 rows) — category enumeration over full catalog"
+ },
+ "lib/eva/services/design-reference-library.js:92": {
+  "classification": "bounded-by-design",
+  "match": ".select();",
+  "note": "mutation-returning select (upsert) — .select() returns only the written rows"
+ },
+ "lib/eva/services/eva-knowledge-view.js:29": {
+  "classification": "bounded-by-design",
+  "match": "source_type, item_key, title, status, created_at, ",
+  "note": ".limit(limit) (default DEFAULT_LIMIT=50) applied after conditional filters — declared summary cap"
+ },
+ "lib/eva/services/friday-scorecard.js:157": {
+  "classification": "bounded-by-design",
+  "match": ".select();",
+  "note": "mutation-returning select (upsert) — .select() returns only the written rows"
+ },
+ "lib/eva/services/friday-scorecard.js:176": {
+  "classification": "bounded-by-design",
+  "match": "id, venture_id, layer, metric_type, severity, actu",
+  "note": ".in(status,severity) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/services/friday-scorecard.js:199": {
+  "classification": "bounded-by-design",
+  "match": "id, venture_id, assessment_type, quarter, schedule",
+  "note": "scheduled quarterly assessments due — small transient scheduled set"
+ },
+ "lib/eva/services/friday-scorecard.js:65": {
+  "classification": "bounded-by-design",
+  "match": "layer, severity",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/services/friday-scorecard.js:71": {
+  "classification": "bounded-by-design",
+  "match": "severity",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/services/ops-customer-health.js:105": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/services/ops-customer-health.js:126": {
+  "classification": "bounded-by-design",
+  "match": "overall_score, dimension_scores, computed_at",
+  "note": "bounded: one venture's rows (.eq on venture_id,customer_id)"
+ },
+ "lib/eva/services/ops-customer-health.js:146": {
+  "classification": "bounded-by-design",
+  "match": "customer_id, overall_score, dimension_scores, comp",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/services/ops-customer-health.js:226": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/services/ops-health-monitor.js:137": {
+  "classification": "bounded-by-design",
+  "match": "tool_id, daily_limit, monthly_limit, cost_limit_us",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/services/ops-health-monitor.js:143": {
+  "classification": "bounded-by-design",
+  "match": "budget_allocated, budget_remaining",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/services/ops-health-monitor.js:194": {
+  "classification": "bounded-by-design",
+  "match": ".select();",
+  "note": "mutation-returning select (upsert) — .select() returns only the written rows"
+ },
+ "lib/eva/services/ops-health-monitor.js:256": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: one venture's rows (.eq on venture_id,metric_date)"
+ },
+ "lib/eva/services/ops-health-monitor.js:337": {
+  "classification": "bounded-by-design",
+  "match": "venture_id, layer, severity",
+  "note": ".in(status) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/services/ops-health-monitor.js:47": {
+  "classification": "bounded-by-design",
+  "match": "outcome, processing_time_ms",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/services/ops-revenue-alerts.js:155": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/services/ops-revenue-collector.js:170": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/services/ops-revenue-collector.js:44": {
+  "classification": "bounded-by-design",
+  "match": "amount, transaction_type, status, created_at",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/services/product-hunt-client.js:175": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "mutation-returning select (delete) — .select() returns only the written rows"
+ },
+ "lib/eva/services/risk-forecaster.js:26": {
+  "classification": "bounded-by-design",
+  "match": "id, gate_number, assessment_date, market_risk_curr",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/services/risk-forecaster.js:96": {
+  "classification": "bounded-by-design",
+  "match": ".select();",
+  "note": "mutation-returning select (insert) — .select() returns only the written rows"
+ },
+ "lib/eva/services/srip-artifact-synthesizer.js:52": {
+  "classification": "bounded-by-design",
+  "match": "lifecycle_stage, artifact_data, content",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/services/srip-brand-interview.js:87": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/services/srip-quality-check.js:99": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/services/srip-site-dna.js:90": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/services/srip-synthesis.js:92": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/stage-17/qa-rubric.js:62": {
+  "classification": "bounded-by-design",
+  "match": "id, artifact_type, content, metadata, title",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current,artifact_type)"
+ },
+ "lib/eva/stage-17/screenshot-generator.js:35": {
+  "classification": "bounded-by-design",
+  "match": "id, content, metadata, artifact_data, title",
+  "note": "bounded: one venture's rows (.eq on venture_id,artifact_type,is_current)"
+ },
+ "lib/eva/stage-17/selection-flow.js:186": {
+  "classification": "bounded-by-design",
+  "match": "id, metadata",
+  "note": "bounded: one venture's rows (.eq on venture_id,artifact_type,is_current)"
+ },
+ "lib/eva/stage-17/strategy-recommender.js:82": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, artifact_data",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/stage-17/strategy-stats.js:29": {
+  "classification": "bounded-by-design",
+  "match": "metadata",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/stage-artifact-precondition.js:60": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type",
+  "note": "bounded: key-scoped read (.eq on stage_number,is_blocking) — per-key row set, not table-wide"
+ },
+ "lib/eva/stage-artifact-precondition.js:87": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/stage-dependency-resolver.js:62": {
+  "classification": "bounded-by-design",
+  "match": "id, lifecycle_stage, metadata",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/stage-execution-engine.js:257": {
+  "classification": "bounded-by-design",
+  "match": "lifecycle_stage, artifact_type, content, metadata,",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/stage-execution-worker.js:1116": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, content",
+  "note": "bounded: one venture's rows (.eq on venture_id,lifecycle_stage,is_current)"
+ },
+ "lib/eva/stage-execution-worker.js:2249": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "mutation-returning select (update) — .select() returns only the written rows"
+ },
+ "lib/eva/stage-execution-worker.js:2770": {
+  "classification": "bounded-by-design",
+  "match": ".from('strategic_directives_v2').select('id').eq('venture_id",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/stage-execution-worker.js:3771": {
+  "classification": "bounded-by-design",
+  "match": "status, metadata",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/stage-execution-worker.js:4187": {
+  "classification": "bounded-by-design",
+  "match": "sd_key, status",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/stage-execution-worker.js:4293": {
+  "classification": "bounded-by-design",
+  "match": "sd_key, status",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/stage-governance.js:57": {
+  "classification": "bounded-by-design",
+  "match": "stage_number, stage_name, stage_key, gate_type, re",
+  "note": "venture_stages registry — fixed lifecycle stage set"
+ },
+ "lib/eva/stage-handlers/s17.js:70": {
+  "classification": "bounded-by-design",
+  "match": "name, category, version_major, version_minor, vers",
+  "note": ".in(name) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/stage-registry.js:171": {
+  "classification": "bounded-by-design",
+  "match": "stage_number, stage_name, phase_name, metadata, de",
+  "note": "venture_stages registry — fixed lifecycle stage set"
+ },
+ "lib/eva/stage-registry/index.js:37": {
+  "classification": "bounded-by-design",
+  "match": "stage_number, stage_name, description, phase_numbe",
+  "note": "venture_stages registry — fixed lifecycle stage set"
+ },
+ "lib/eva/stage-templates/analysis-steps/stage-10-customer-brand.js:491": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "mutation-returning .select(id) on upsert({onConflict: venture_id,persona_id}) — returns only written rows"
+ },
+ "lib/eva/stage-templates/analysis-steps/stage-17-blueprint-review.js:145": {
+  "classification": "bounded-by-design",
+  "match": "id, lifecycle_stage, artifact_type, is_current, me",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/stage-templates/analysis-steps/stage-17-doc-generation.js:145": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, artifact_data, content, lifecycle_s",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/stage-templates/analysis-steps/stage-17-doc-generation.js:168": {
+  "classification": "bounded-by-design",
+  "match": "vision_key",
+  "note": ".like(vision_key, VISION-<ventureSlug>-L2-DRAFT-SEED-%) — one venture archetype of draft-seed keys"
+ },
+ "lib/eva/stage-templates/analysis-steps/stage-17-doc-generation.js:231": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, artifact_data, content, lifecycle_s",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/stage-templates/analysis-steps/stage-17-doc-generation.js:256": {
+  "classification": "bounded-by-design",
+  "match": "vision_key",
+  "note": ".like(vision_key, VISION-<ventureSlug>-L2-%) — one venture archetype of vision keys"
+ },
+ "lib/eva/stage-templates/analysis-steps/stage-20-build-execution.js:372": {
+  "classification": "bounded-by-design",
+  "match": "id, sd_key",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/stage-templates/analysis-steps/stage-20-build-execution.js:382": {
+  "classification": "bounded-by-design",
+  "match": ".select('id')",
+  "note": ".in(sd_id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js:102": {
+  "classification": "bounded-by-design",
+  "match": "lifecycle_stage, artifact_type, is_current",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js:127": {
+  "classification": "bounded-by-design",
+  "match": "template_id, generated_at, legal_templates!inner(t",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_active)"
+ },
+ "lib/eva/stage-templates/analysis-steps/stage-24-go-live.js:150": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, artifact_data",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/stage-templates/analysis-steps/stage-25-acquirability-review.js:196": {
+  "classification": "bounded-by-design",
+  "match": "lifecycle_stage, health_score, advisory_data",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/stage-templates/analysis-steps/stage-26-growth-playbook.js:157": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, is_current, artifact_data",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/stage-zero/archetype-profile-matrix.js:102": {
+  "classification": "bounded-by-design",
+  "match": "profile_id, compatibility_score, execution_guidanc",
+  "note": "bounded: key-scoped read (.eq on archetype_key) — per-key row set, not table-wide"
+ },
+ "lib/eva/stage-zero/archetype-profile-matrix.js:113": {
+  "classification": "bounded-by-design",
+  "match": "id, name",
+  "note": ".in(id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/stage-zero/chairman-override-tracker.js:124": {
+  "classification": "bounded-by-design",
+  "match": "component, system_score, override_score, outcome",
+  "note": "chairman_overrides full-log insights — chairman-authored, human-rate bounded (single chairman)"
+ },
+ "lib/eva/stage-zero/chairman-override-tracker.js:86": {
+  "classification": "bounded-by-design",
+  "match": "id, venture_id, component, system_score, override_",
+  "note": "chairman_overrides .eq(component) — chairman-authored override log, human-rate bounded (single chairman)"
+ },
+ "lib/eva/stage-zero/chairman-review.js:58": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "mutation-returning select (update) — .select() returns only the written rows"
+ },
+ "lib/eva/stage-zero/data-feed.js:78": {
+  "classification": "bounded-by-design",
+  "match": ".select(SELECT_COLUMNS)",
+  "note": ".in(entry_type) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/stage-zero/decision-activation.js:100": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": ".limit(MAX_PER_PASS=200) — declared per-pass activation cap"
+ },
+ "lib/eva/stage-zero/decision-activation.js:117": {
+  "classification": "bounded-by-design",
+  "match": "id, venture_id, status, rationale",
+  "note": "bounded: key-scoped read (.eq on lifecycle_stage,decision_type) — per-key row set, not table-wide"
+ },
+ "lib/eva/stage-zero/gate-signal-service.js:105": {
+  "classification": "bounded-by-design",
+  "match": "id, profile_id, profile_version, venture_id, gate_",
+  "note": "bounded: key-scoped read (.eq on profile_id) — per-key row set, not table-wide"
+ },
+ "lib/eva/stage-zero/gate-signal-service.js:126": {
+  "classification": "bounded-by-design",
+  "match": "signal_type",
+  "note": "bounded: key-scoped read (.eq on profile_id) — per-key row set, not table-wide"
+ },
+ "lib/eva/stage-zero/modeling.js:103": {
+  "classification": "bounded-by-design",
+  "match": ".select('*')",
+  "note": ".in(entry_type) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/stage-zero/paths/blueprint-browse.js:148": {
+  "classification": "bounded-by-design",
+  "match": "id, title, category, summary, problem_statement, s",
+  "note": "opportunity_blueprints .eq(is_active) — curated blueprint catalog"
+ },
+ "lib/eva/stage-zero/paths/discovery-mode.js:647": {
+  "classification": "bounded-by-design",
+  "match": "id, name, description, maturity_level, current_sco",
+  "note": ".limit(candidateCount*2) (default 10) — declared nursery-reeval sampling cap"
+ },
+ "lib/eva/stage-zero/paths/discovery-mode.js:979": {
+  "classification": "bounded-by-design",
+  "match": "strategy_key, name, description, is_active",
+  "note": "discovery_strategies registry .eq(is_active) — small enumerated strategy set"
+ },
+ "lib/eva/stage-zero/portfolio-allocation.js:173": {
+  "classification": "bounded-by-design",
+  "match": "id, profile_id",
+  "note": "portfolio_profile_allocations — per-profile allocation config, handful of rows"
+ },
+ "lib/eva/stage-zero/portfolio-allocation.js:33": {
+  "classification": "bounded-by-design",
+  "match": "id, profile_id, target_pct, current_pct, descripti",
+  "note": "portfolio_profile_allocations — per-profile allocation config, handful of rows"
+ },
+ "lib/eva/stage-zero/portfolio-allocation.js:48": {
+  "classification": "bounded-by-design",
+  "match": "id, name",
+  "note": ".in(id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/stage-zero/profile-service.js:185": {
+  "classification": "bounded-by-design",
+  "match": "id, name, version, description, weights, is_active",
+  "note": "evaluation_profiles registry — small versioned profile set"
+ },
+ "lib/eva/stage-zero/profile-service.js:431": {
+  "classification": "bounded-by-design",
+  "match": "id, phase_key, version, display_name, criteria, st",
+  "note": "selection_postures .eq(status,active) — small governance registry"
+ },
+ "lib/eva/stage-zero/strategy-loader.js:22": {
+  "classification": "bounded-by-design",
+  "match": "strategy_key",
+  "note": "discovery_strategies registry .eq(is_active) — small enumerated strategy set"
+ },
+ "lib/eva/stage-zero/synthesis/chairman-constraints.js:98": {
+  "classification": "bounded-by-design",
+  "match": "constraint_key, name, weight, is_active",
+  "note": "chairman_constraints .eq(is_active) — small governance registry"
+ },
+ "lib/eva/stage-zero/traversability-gate.js:61": {
+  "classification": "bounded-by-design",
+  "match": "name, capability_type, maturity_level, scope",
+  "note": ".in(maturity_level) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/taste-confidence-tracker.js:37": {
+  "classification": "bounded-by-design",
+  "match": "decision, dimension_scores, confidence_at_decision",
+  "note": ".limit(window) (default DEFAULT_WINDOW=20) — declared decision window"
+ },
+ "lib/eva/template-applier.js:153": {
+  "classification": "bounded-by-design",
+  "match": "id, name",
+  "note": ".in(id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/template-applier.js:73": {
+  "classification": "bounded-by-design",
+  "match": "id, template_name, template_version, domain_tags, ",
+  "note": "venture_templates .eq(is_current) — curated template library"
+ },
+ "lib/eva/template-extractor.js:163": {
+  "classification": "bounded-by-design",
+  "match": "lifecycle_stage, decision, health_score",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/template-extractor.js:205": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, quality_score, lifecycle_stage, con",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/template-extractor.js:245": {
+  "classification": "bounded-by-design",
+  "match": "status, confidence_scores, calibration_report",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/template-extractor.js:312": {
+  "classification": "bounded-by-design",
+  "match": "content, quality_score, lifecycle_stage",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/traversal-reflection-emitter.js:40": {
+  "classification": "bounded-by-design",
+  "match": "issue_summary",
+  "note": "venture-scoped .eq(metadata->>venture_id) + .limit(RECENT_LESSON_LOOKBACK=5)"
+ },
+ "lib/eva/unified-escalation-router.js:244": {
+  "classification": "bounded-by-design",
+  "match": "id, venture_id, event_type, severity, metadata, cr",
+  "note": "bounded: one venture's rows (.eq on venture_id,event_type)"
+ },
+ "lib/eva/utils/assumption-reality-tracker.js:134": {
+  "classification": "bounded-by-design",
+  "match": "id, market_assumptions, competitor_assumptions, pr",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/utils/assumption-reality-tracker.js:150": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, artifact_data, lifecycle_stage",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/utils/assumption-reality-tracker.js:51": {
+  "classification": "bounded-by-design",
+  "match": "artifact_type, artifact_data, lifecycle_stage",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
+ },
+ "lib/eva/venture-capture-forward.js:115": {
+  "classification": "bounded-by-design",
+  "match": "lifecycle_stage",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/venture-capture-forward.js:146": {
+  "classification": "bounded-by-design",
+  "match": "lifecycle_stage",
+  "note": "bounded: one venture's rows (.eq on venture_id)"
+ },
+ "lib/eva/venture-context-manager.js:193": {
+  "classification": "bounded-by-design",
+  "match": "sd_key, title, status, sd_type, priority, current_",
+  "note": ".or(venture_id/venture_name match) — one venture of SDs"
+ },
+ "lib/eva/venture-intake-gates.js:230": {
+  "classification": "bounded-by-design",
+  "match": "venture_id",
+  "note": "bounded: key-scoped read (.eq on lifecycle_stage,stage_status) — per-key row set, not table-wide"
+ },
+ "lib/eva/venture-intake-gates.js:238": {
+  "classification": "bounded-by-design",
+  "match": "id, metadata",
+  "note": ".in(id) — bounded by the caller-supplied id list"
+ },
+ "lib/eva/vision-governance-service.js:109": {
+  "classification": "bounded-by-design",
+  "match": "id, total_score, dimension_scores, threshold_actio",
+  "note": ".limit(limit) (default 10) — declared score-history window"
+ },
+ "lib/eva/vision-governance-service.js:146": {
+  "classification": "bounded-by-design",
+  "match": "lifecycle_stage",
+  "note": "bounded: one venture's rows (.eq on venture_id,is_current)"
  }
 }
