@@ -43,7 +43,7 @@ import { attemptCasCompletion, cleanupLosingPreInsert } from './cas-completion.j
 
 // SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001-A (F1): surface the SD's genuine retro
 // known-issues instead of a hardcoded placeholder. Non-throwing by construction (see module doc).
-import { extractRetroKnownIssues, combineKnownIssuesWithProvenance } from './retro-known-issues.js';
+import { extractRetroKnownIssues, combineKnownIssuesWithProvenance, isFallbackKnownIssues } from './retro-known-issues.js';
 // QF-20260720-369 (chairman-directed cfeb9179): require (not just surface) why-missed +
 // systemic-prevention output on caught-gap remediations. Non-throwing by construction.
 import { checkCaughtGapRemediationGap } from './caught-gap-remediation-gate.js';
@@ -465,9 +465,14 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         // extractRetroKnownIssues never throws (fail-open) -- see retro-known-issues.js.
         let knownIssues = await extractRetroKnownIssues(sd, this.supabase);
         // QF-20260720-369: guarantee a why-missed/systemic-prevention line item on caught-gap
-        // remediations. checkCaughtGapRemediationGap never throws (fail-open).
+        // remediations. checkCaughtGapRemediationGap never throws (fail-open). Drop the
+        // "None at approval time" placeholder first (adversarial review) so it never
+        // co-occurs with a real caught-gap issue in the same known_issues array.
         const caughtGapIssue = await checkCaughtGapRemediationGap(sd, this.supabase);
-        if (caughtGapIssue) knownIssues = [...knownIssues, caughtGapIssue];
+        if (caughtGapIssue) {
+          if (isFallbackKnownIssues(knownIssues)) knownIssues = [];
+          knownIssues = [...knownIssues, caughtGapIssue];
+        }
         const { error: canonErr } = await this.supabase
           .from('sd_phase_handoffs')
           .insert({

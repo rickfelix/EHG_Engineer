@@ -62,4 +62,10 @@ describe('checkCaughtGapRemediationGap', () => {
     getFilteredRetrospective.mockRejectedValue(new Error('db down'));
     expect(await checkCaughtGapRemediationGap({ id: 'x' }, {})).toBeNull();
   });
+
+  it('adversarial-review regression: fails open on the non-throwing {retrospective:null,error} shape (real getFilteredRetrospective failure return, not just a thrown exception)', async () => {
+    const { getFilteredRetrospective } = await import('../../retro-filters.js');
+    getFilteredRetrospective.mockResolvedValue({ retrospective: null, error: { message: 'query failed' } });
+    expect(await checkCaughtGapRemediationGap({ id: 'x' }, {})).toBeNull();
+  });
 });
