@@ -1,0 +1,173 @@
+{
+  "executive_summary": "SD-LEO-INFRA-SESSION-VIEW-BROWSER-001-A delivers the backend control plane for the fleet launcher's agent-driven browser pane (mockup #2, chairman-ratified). An agent session that needs to browse the web does so through a DEDICATED per-session sandboxed Chromium profile -- never the chairman's own logged-in profile, since his cookies reaching an agent-driven browser would be a credential exposure. The CDP endpoint is bound localhost-only, every browser action is logged to the existing fleet event feed (lib/coordinator/coordination-events.cjs), access is gated by a per-session manifest field that defaults OFF, and a human-takeover signal lets an operator pause agent-driven browsing and hand control back explicitly. This SD targets EHG_Engineer (backend/control-plane only, consistent with the repo's backend-API-tests-only testing tier); the eventual React rendering pane in the EHG frontend consumes this control plane's API surface as separate, later work once a fleet launcher UI shell exists.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Per-session sandboxed Chromium profile provisioning",
+      "description": "When a session's browser-MCP access is enabled, provision a DEDICATED Chromium user-data directory for that session (via puppeteer or playwright's launch({userDataDir}) / connectOverCDP with a persistent context) -- never the chairman's own browser profile. Each session's profile is isolated from every other session's and from any operator-logged-in browser profile on the host.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A cookie set in the chairman's real browser profile is NOT present in any agent-session's Chromium profile (automated isolation test)",
+        "Two concurrent agent sessions do not share cookies/local-storage with each other"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "CDP localhost-only binding enforcement",
+      "description": "The Chrome DevTools Protocol endpoint used to control the sandboxed browser binds to 127.0.0.1 only. Any attempt to bind or connect via a non-localhost address is rejected before a browser session is launched.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Automated test asserts the CDP listen address is 127.0.0.1 (or ::1) and never 0.0.0.0 / a routable IP",
+        "A non-localhost connection attempt is refused, not silently accepted"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Browser action audit logging to the fleet event feed",
+      "description": "Every agent browser action (navigate, click, type, takeover-yield, takeover-resume) is logged via lib/coordinator/coordination-events.cjs logCoordinationEvent(), mirroring the existing {event_type, severity, session_id, sd_key, payload} shape used at coordination-events.cjs:290-297. No new/parallel audit table is introduced.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A scripted browse sequence of N actions produces exactly N corresponding coordination_events rows (event_type prefixed browser_)",
+        "Log write happens before/atomically-with the action completing, not after a delay that could be lost on crash"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Manifest-gated browser-MCP access, default OFF",
+      "description": "A session's browser-MCP access is controlled by a per-session field on claude_sessions.metadata (mirroring the session-predicates.mjs idiom already used for metadata.non_fleet / metadata.quarantined_at / metadata.parked_until -- field ABSENT/false = OFF). Access is default OFF for every session; enabling it requires an explicit opt-in write to that field. This is a per-session runtime toggle, distinct from lib/fleet/session-manifest.js's fleet desired-state manifest -- the two must not be conflated.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A session with the field absent (default) cannot open a sandboxed browser session -- the control-plane call is refused with a clear reason",
+        "A session with the field explicitly set to true CAN open a sandboxed browser session",
+        "Toggling the field off for a session with an active browser session terminates that session's browser access"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Human takeover on demand: agent yields, resumes only on explicit hand-back",
+      "description": "A programmatic takeover signal (the control-plane hook a future UI click-handler will call) immediately pauses an agent's in-progress browser actions for that session and logs a takeover event via FR-3's logging path. The agent's browser automation resumes ONLY when an explicit hand-back signal is issued for that session -- never on a timeout or automatically.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Invoking the takeover signal mid-action halts further agent-driven browser actions for that session before they execute",
+        "The takeover event is present in the fleet event feed",
+        "Agent-driven actions remain paused until the explicit hand-back signal is invoked; no automatic resume path exists"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Reuse existing browser-automation deps -- no new framework",
+      "description": "Adopt puppeteer (^24.23.0, already a dependency) or playwright (^1.58.2, already a devDependency) connectOverCDP()/persistent-context + per-session userDataDir. Do not introduce a new browser-automation library or hand-roll CDP wire-protocol handling."
+    },
+    {
+      "id": "TR-2",
+      "title": "No schema migration required",
+      "description": "The per-session browser-MCP-access toggle and the captured profile-path metadata live on the existing claude_sessions.metadata JSONB column, following the session-predicates.mjs field-presence idiom. No new table or column is added."
+    },
+    {
+      "id": "TR-3",
+      "title": "Single existing event-logging path",
+      "description": "All audit logging goes through lib/coordinator/coordination-events.cjs logCoordinationEvent() -- no second/parallel logging mechanism is introduced."
+    },
+    {
+      "id": "TR-4",
+      "title": "Backend/control-plane scope only (target_application=EHG_Engineer)",
+      "description": "This SD ships the control-plane API surface (profile provisioning, CDP binding enforcement, audit logging, manifest gate, takeover signal) with unit + API-level tests. It does NOT ship a React rendering pane -- that is EHG (frontend) scope, to be picked up once a fleet launcher UI shell exists, and consumes this control plane's exported functions."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Cookie isolation between chairman profile and an agent session",
+      "type": "unit",
+      "expected": "A cookie present in a simulated chairman profile fixture is absent from the agent session's Chromium profile"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "CDP refuses non-localhost binding",
+      "type": "unit",
+      "expected": "buildCdpLaunchOptions()-style helper always resolves to 127.0.0.1; a forced non-localhost override is rejected with a thrown/returned error, not silently accepted"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Manifest default OFF blocks browser session launch",
+      "type": "unit",
+      "expected": "requestBrowserSession(sessionWithoutField) returns a refusal; requestBrowserSession(sessionWithFieldTrue) proceeds"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Action logging completeness for a scripted browse",
+      "type": "integration",
+      "expected": "N simulated browser actions produce N logCoordinationEvent() calls with browser_-prefixed event_type and the correct session_id"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "Human takeover pauses agent driving until explicit hand-back",
+      "type": "unit",
+      "expected": "signalTakeover(sessionId) sets a paused state that blocks further driveAction() calls; only signalHandBack(sessionId) clears it; no timer clears it automatically"
+    }
+  ],
+  "acceptance_criteria": [
+    "Cookie-isolation test passes: zero chairman-profile cookies visible to any agent-driven browser session",
+    "CDP binding is provably localhost-only; a non-localhost attempt is refused",
+    "A browser-disabled session (manifest field absent/false) cannot reach the browser control plane; enabling the field is the only path to access",
+    "100% of simulated browser actions in a scripted test browse are logged to the fleet event feed",
+    "Takeover signal halts agent-driven actions immediately and only resumes on explicit hand-back; the takeover event is logged"
+  ],
+  "risks": [
+    { "risk": "Profile isolation fails silently, leaking chairman cookies into an agent-driven browser", "mitigation": "TS-1 cookie-isolation test gates PR merge -- not a manual spot-check", "severity": "high" },
+    { "risk": "CDP endpoint reachable beyond localhost", "mitigation": "TS-2 bind-address assertion test in CI; reject at connection time, not just at config", "severity": "high" },
+    { "risk": "Agent browser action taken without a corresponding audit-log entry (log-after-action race)", "mitigation": "Log-write-before-action-completes pattern (TS-4), verified by test", "severity": "medium" },
+    { "risk": "Manifest-field naming collides conceptually with lib/fleet/session-manifest.js's desired-state manifest, causing a future maintainer to wire the wrong mechanism", "mitigation": "TR-2 explicitly documents the distinction; field lives on claude_sessions.metadata per-session, not on the fleet desired-state manifest", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "A future EHG (frontend) fleet launcher session-view React pane, once a fleet launcher UI shell exists -- consumes this control plane's exported functions (requestBrowserSession, signalTakeover, signalHandBack)",
+      "Fleet worker sessions themselves, when their manifest field is enabled and they need agent-driven web access"
+    ],
+    "dependencies": [
+      "lib/coordinator/coordination-events.cjs logCoordinationEvent() (existing fleet event feed -- direction: this SD writes to it)",
+      "puppeteer ^24.23.0 or playwright ^1.58.2 (existing deps -- direction: this SD calls into them; failure_mode: browser launch failure surfaces as a refused/errored requestBrowserSession() call, never a silent no-op)",
+      "claude_sessions.metadata (existing table/column -- direction: this SD reads the per-session toggle and writes the captured profile path; failure_mode: missing/malformed metadata defaults to OFF, per FR-4's fail-closed acceptance criteria)"
+    ],
+    "data_contracts": [
+      "claude_sessions.metadata gains (does not require migration -- JSONB) two new keys: metadata.browser_mcp_enabled (boolean, default absent=false) and metadata.browser_profile_dir (string, set once a profile is provisioned)",
+      "coordination_events rows with event_type values browser_navigate / browser_click / browser_takeover / browser_handback, payload shaped {reason, evidence} matching the existing runAndLogDetectors call shape"
+    ],
+    "runtime_config": [
+      "No new env vars required for v1 -- CDP port/profile base dir can default to safe local values; document any chosen default in the implementation"
+    ],
+    "observability_rollout": [
+      "Rollout is observed via coordination_events rows tagged browser_* -- a query filtering event_type LIKE 'browser_%' shows adoption and action volume",
+      "Rollback: the manifest field defaults OFF, so disabling browser-MCP for all sessions (leaving the field unset) fully reverts to pre-SD behavior with zero code rollback needed"
+    ]
+  },
+  "system_architecture": {
+    "summary": "A new lib/fleet/browser-control.js (or similar) module exposes requestBrowserSession/signalTakeover/signalHandBack, gated by the per-session manifest field, enforcing localhost-only CDP and per-session profile isolation, and logging every action via the existing coordination-events.cjs feed.",
+    "components": [
+      { "name": "lib/fleet/browser-control.js", "change": "NEW -- per-session sandboxed browser control plane (profile provisioning, CDP binding enforcement, manifest gate, takeover/handback signal)" },
+      { "name": "lib/coordinator/coordination-events.cjs", "change": "REUSED, no modification -- browser-control.js calls its existing logCoordinationEvent() export" },
+      { "name": "lib/fleet/session-predicates.mjs", "change": "REFERENCED as the pattern to mirror for the per-session metadata-field gate -- not modified" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build the control-plane module bottom-up: profile/CDP primitives first (FR-1/FR-2), then the manifest gate (FR-4), then audit logging (FR-3) wired through every action path, then the takeover/handback signal (FR-5).",
+    "steps": [
+      "Implement per-session Chromium profile provisioning (FR-1) using puppeteer/playwright with userDataDir keyed by session_id",
+      "Implement CDP launch-options builder that always resolves to a localhost-only bind, with a rejecting guard for any override attempt (FR-2)",
+      "Implement the manifest-gate check (metadata.browser_mcp_enabled) as the entry guard on requestBrowserSession() (FR-4)",
+      "Wire every browser action call site through logCoordinationEvent() with the browser_* event_type convention (FR-3)",
+      "Implement signalTakeover()/signalHandBack() session-scoped pause state, with no automatic timeout-based resume (FR-5)",
+      "Write TS-1 through TS-5 as unit/integration tests before declaring EXEC complete"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run a demo script that sets metadata.browser_mcp_enabled=true for a test session, calls requestBrowserSession(), and navigates to a test page", "expected_outcome": "A dedicated Chromium userDataDir is created for that session; coordination_events shows a browser_navigate row for that session_id" },
+    { "step_number": 2, "instruction": "Run the same demo against a session with metadata.browser_mcp_enabled left unset (default)", "expected_outcome": "requestBrowserSession() is refused with a clear reason; no browser process is launched" },
+    { "step_number": 3, "instruction": "While the FR-1 demo session is mid-navigation, invoke signalTakeover(sessionId), then attempt another driveAction() call, then invoke signalHandBack(sessionId) and retry", "expected_outcome": "The driveAction() call between takeover and hand-back is blocked/no-ops; after hand-back it succeeds; both the takeover and (if logged) resume events appear in coordination_events" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-SESSION-VIEW-BROWSER-001-A"
+  }
+}
