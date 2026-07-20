@@ -8,7 +8,7 @@
  * AND a child is NEVER an 'orchestrator'. No DB/IO — every assertion is over the pure fn.
  */
 import { describe, it, expect } from 'vitest';
-import { computeChildLinkage, deriveChildLetter } from '../../lib/sd/child-linkage.js';
+import { computeChildLinkage, computeInheritedSourcedBy, deriveChildLetter } from '../../lib/sd/child-linkage.js';
 
 const AUTONOMY_PARENT = {
   id: 'SD-LEO-INFRA-ADAM-AUTONOMY-HARDENING-001',
@@ -105,5 +105,28 @@ describe('computeChildLinkage — invariants', () => {
     expect(deriveChildLetter('SD-X-001-F')).toBe('F');
     expect(deriveChildLetter('SD-X-001')).toBeNull();
     expect(deriveChildLetter('')).toBeNull();
+  });
+});
+
+describe('computeInheritedSourcedBy — provenance inheritance (QF-20260720-054)', () => {
+  it('returns the parent stamp when the child has none', () => {
+    expect(computeInheritedSourcedBy({ sourced_by: 'solomon' }, {})).toBe('solomon');
+    expect(computeInheritedSourcedBy({ sourced_by: 'adam' }, { source: 'leo' })).toBe('adam');
+  });
+
+  it('never overwrites an existing child stamp', () => {
+    expect(computeInheritedSourcedBy({ sourced_by: 'solomon' }, { sourced_by: 'chairman' })).toBeNull();
+  });
+
+  it('returns null when the parent has nothing to inherit', () => {
+    expect(computeInheritedSourcedBy({}, {})).toBeNull();
+    expect(computeInheritedSourcedBy({ sourced_by: '' }, {})).toBeNull();
+    expect(computeInheritedSourcedBy(null, {})).toBeNull();
+  });
+
+  it('tolerates null / array metadata without throwing', () => {
+    expect(computeInheritedSourcedBy(undefined, undefined)).toBeNull();
+    expect(computeInheritedSourcedBy([{ sourced_by: 'x' }], {})).toBeNull();          // array parent → no stamp
+    expect(computeInheritedSourcedBy({ sourced_by: 'solomon' }, ['x'])).toBe('solomon'); // array child → no existing stamp
   });
 });
