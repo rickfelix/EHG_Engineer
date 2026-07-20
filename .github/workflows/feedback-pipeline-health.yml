@@ -49,6 +49,15 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Ensure breach label exists
+        if: steps.health.outputs.exit_code == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create "feedback-pipeline-slo-breach" \
+            --description "Weekly feedback-pipeline SLO health check breach (auto-filed)" \
+            --color "d73a4a" 2>/dev/null || true
+
       - name: Open GitHub issue on breach
         if: steps.health.outputs.exit_code == '1'
         env:
@@ -59,4 +68,7 @@ jobs:
           gh issue create \
             --title "$TITLE" \
             --body "$BODY" \
-            --label "feedback-pipeline-slo-breach"
+            --label "feedback-pipeline-slo-breach" || \
+          gh issue create \
+            --title "$TITLE" \
+            --body "$BODY"
