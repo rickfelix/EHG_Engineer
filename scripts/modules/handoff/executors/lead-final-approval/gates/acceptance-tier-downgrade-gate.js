@@ -57,6 +57,27 @@
  * (a passing result with a warning) rather than escaping to the orchestrator, which would
  * turn into passed:false/score:0 on this required gate — a DB blip is not an acceptance-tier
  * downgrade and must never masquerade as one.
+ *
+ * SECOND ADVERSARIAL-REVIEW PASS (a fresh, independent agent, against the fixed diff above)
+ * found one more real gap: supabase-js resolves query-level failures (bad column, RLS denial,
+ * PostgREST 4xx) as {data:null,error} — it does NOT throw for those. The original try/catch
+ * only caught thrown exceptions, so a real query error would have silently fallen through as
+ * "no PRD" / "no evidence rows" instead of the intended fail-open "skipped, could not
+ * evaluate" warning. Fixed: both loaders now explicitly check `error` and throw, so the
+ * existing try/catch handles both failure shapes uniformly.
+ *
+ * KNOWN, ACCEPTED v1 PRECISION LIMITS (raised by the same review pass, deliberately NOT
+ * "fixed" — see rationale): (1) crossReferenceEvidence checks for ANY live-evidence signal
+ * across ALL of the SD's TESTING+SECURITY rows, not per-FR — a genuinely live-verified FR-1
+ * provides blanket cover for a silently-downgraded FR-5 in the same SD. (2) scanning the
+ * `metadata` JSONB column for keywords like "e2e"/"production" can false-clear on an
+ * incidental path/config mention (e.g. a worktree path containing "e2e") rather than a
+ * genuine live-run narrative. Both are inherent to a purely lexical v1 heuristic with no
+ * per-FR evidence-tracking column anywhere in this schema (the same "HEURISTIC, HONESTLY
+ * SCOPED" constraint documented above) — a true fix requires new evidence-schema work, out
+ * of scope for this SD per the LEAD-phase scope cut. Both failure modes are FALSE NEGATIVES
+ * (a real downgrade goes unreported), never false positives that would trip BINDING mode
+ * incorrectly — so the gate's core safety property (never wrongly blocks) still holds.
  */
 
 const GATE_NAME = 'ACCEPTANCE_TIER_DOWNGRADE';
@@ -192,23 +213,32 @@ async function loadPRD({ supabase, prdRepo, sdId }) {
     if (prd) return prd;
   }
   if (!supabase) return null;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('product_requirements_v2')
     .select('id, sd_id, functional_requirements')
     .eq('sd_id', sdId)
     .limit(1)
     .maybeSingle();
+  // supabase-js resolves query-level failures (bad column, RLS denial, PostgREST 4xx) as
+  // {data:null,error} rather than throwing -- must surface it explicitly so the caller's
+  // try/catch (the fail-open path) actually sees it, instead of silently treating a real
+  // query error the same as "no PRD found".
+  if (error) throw new Error(`product_requirements_v2 query failed: ${error.message}`);
   return data || null;
 }
 
 /** Mirrors activation-invariant-gate.js's loadTestingEvidence, widened to TESTING+SECURITY. */
 async function loadEvidenceRows({ supabase, sdId }) {
   if (!supabase) return [];
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('sub_agent_execution_results')
     .select(`id, sub_agent_code, ${EVIDENCE_TEXT_COLUMNS.join(', ')}`)
     .eq('sd_id', sdId)
     .in('sub_agent_code', ['TESTING', 'SECURITY']);
+  // Same rationale as loadPRD above: a query-level error resolves as {data:null,error} here,
+  // not a throw. Surfacing it is critical for THIS query specifically -- silently treating it
+  // as "no evidence rows" would mark every flagged FR downgraded on a mere query hiccup.
+  if (error) throw new Error(`sub_agent_execution_results query failed: ${error.message}`);
   return data || [];
 }
 

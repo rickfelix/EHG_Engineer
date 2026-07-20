@@ -26,7 +26,7 @@ const REAL_SUB_AGENT_EXECUTION_RESULTS_COLUMNS = [
   'invocation_id', 'summary', 'raw_output', 'source', 'required_sub_agents', 'phase', 'executed_from_cwd',
 ];
 
-function mockSupabase({ prd = null, evidenceRows = [], prdThrows = null, evidenceThrows = null } = {}) {
+function mockSupabase({ prd = null, evidenceRows = [], prdThrows = null, evidenceThrows = null, prdQueryError = null, evidenceQueryError = null } = {}) {
   return {
     from(table) {
       if (table === 'product_requirements_v2') {
@@ -36,6 +36,7 @@ function mockSupabase({ prd = null, evidenceRows = [], prdThrows = null, evidenc
           limit() { return this; },
           maybeSingle: async () => {
             if (prdThrows) throw prdThrows;
+            if (prdQueryError) return { data: null, error: prdQueryError };
             return { data: prd };
           },
         };
@@ -46,6 +47,7 @@ function mockSupabase({ prd = null, evidenceRows = [], prdThrows = null, evidenc
           eq() { return this; },
           in: async () => {
             if (evidenceThrows) throw evidenceThrows;
+            if (evidenceQueryError) return { data: null, error: evidenceQueryError };
             return { data: evidenceRows };
           },
         };
@@ -280,6 +282,25 @@ describe('ADD-8/ADD-9 (adversarial-review regression) — DB/IO errors fail OPEN
     expect(result.passed).toBe(true);
     expect(result.score).toBe(100);
     expect(result.warnings.join(' ')).toContain('timeout');
+  });
+
+  it('ADD-11 (2nd adversarial-review regression): a PRD query that resolves {data:null,error} WITHOUT throwing still fails open (not silently treated as "no PRD")', async () => {
+    const gate = createAcceptanceTierDowngradeGate(mockSupabase({ prdQueryError: { message: 'column "functional_requirements" does not exist' } }), null);
+    const result = await gate.validator({ sd });
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(100);
+    expect(result.warnings.join(' ')).toContain('functional_requirements');
+    expect(result.details.error).toBe('prd_lookup_failed');
+  });
+
+  it('ADD-12 (2nd adversarial-review regression): an evidence query that resolves {data:null,error} WITHOUT throwing still fails open (not silently treated as "no evidence" -> all-downgraded)', async () => {
+    const prd = { functional_requirements: [{ id: 'FR-1', acceptance_criteria: ['never mocked'] }] };
+    const gate = createAcceptanceTierDowngradeGate(mockSupabase({ prd, evidenceQueryError: { message: 'permission denied for table sub_agent_execution_results' } }), null);
+    const result = await gate.validator({ sd });
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(100);
+    expect(result.warnings.join(' ')).toContain('permission denied');
+    expect(result.details.error).toBe('evidence_lookup_failed');
   });
 });
 
