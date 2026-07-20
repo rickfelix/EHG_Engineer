@@ -41,6 +41,10 @@ import { getWorkflowForType } from '../../cli/workflow-definitions.js';
 // UPDATE + loser-side pre-insert cleanup (post-merge automation vs worker race).
 import { attemptCasCompletion, cleanupLosingPreInsert } from './cas-completion.js';
 
+// SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001-A (F1): surface the SD's genuine retro
+// known-issues instead of a hardcoded placeholder. Non-throwing by construction (see module doc).
+import { extractRetroKnownIssues, combineKnownIssuesWithProvenance } from './retro-known-issues.js';
+
 /**
  * Auto-rescore the original SD after a corrective SD completes.
  * SD-MAN-INFRA-VISION-RESCORE-ON-COMPLETION-001
@@ -454,6 +458,9 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         .limit(1)
         .maybeSingle();
       if (!existingLfa) {
+        // F1: surface genuine retro known-issues instead of the hardcoded placeholder.
+        // extractRetroKnownIssues never throws (fail-open) -- see retro-known-issues.js.
+        const knownIssues = await extractRetroKnownIssues(sd, this.supabase);
         const { error: canonErr } = await this.supabase
           .from('sd_phase_handoffs')
           .insert({
@@ -465,7 +472,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
             executive_summary: `LEAD-FINAL-APPROVAL accepted for ${sd.sd_key || sd.id} (score ${normalizedScore}). Canonical row written pre-completion while the session claim is live (SD-FDBK-FIX-LFA-ACCEPT-ORDERING-001); full validation detail on the leo_handoff_executions row.`,
             deliverables_manifest: { items: [{ name: 'final approval accepted', status: 'completed' }] },
             key_decisions: [{ decision: `Final approval granted (validation score ${normalizedScore})` }],
-            known_issues: [{ issue: 'None at approval time' }],
+            known_issues: knownIssues,
             resource_utilization: { execution_table: 'leo_handoff_executions' },
             action_items: [{ item: 'None — SD lifecycle complete; post-completion tail follows' }],
             completeness_report: { validation_score: normalizedScore },
@@ -968,6 +975,13 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         ? lheRows[0].validation_score
         : (gateResults && gateResults.actualScore != null ? gateResults.actualScore : 100);
 
+      // F1/FR-3: surface genuine retro known-issues on the resume/reconcile path too, combined
+      // with (never replacing) the existing honest provenance note. combineKnownIssuesWithProvenance
+      // drops the placeholder when the retro is clean, so a clean SD's known_issues is unchanged.
+      const retroKnownIssues = await extractRetroKnownIssues(sd, this.supabase);
+      const provenanceIssue = { issue: 'Row synthesized at verify-time; original completion-time gate context lives on the leo_handoff_executions execution row' };
+      const known_issues = combineKnownIssuesWithProvenance(retroKnownIssues, provenanceIssue);
+
       const { error: insErr } = await this.supabase
         .from('sd_phase_handoffs')
         .insert({
@@ -979,7 +993,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
           executive_summary: `Canonical LFA row reconciled for already-completed SD ${sd.sd_key || sd.id} (score ${srcScore}). Completion took the already-completed / resume-from-checkpoint path which skipped the pre-completion canonical writer; this idempotent reconcile clears the v_sd_completion_integrity ghost (SD-REFILL-0038AO42).`,
           deliverables_manifest: { items: [{ name: 'canonical LFA row reconciled (resume/already-completed path)', status: 'completed' }] },
           key_decisions: [{ decision: `Canonical row reconciled from accepted leo_handoff_executions${srcId ? ` ${srcId}` : ''} (score ${srcScore})` }],
-          known_issues: [{ issue: 'Row synthesized at verify-time; original completion-time gate context lives on the leo_handoff_executions execution row' }],
+          known_issues,
           resource_utilization: { execution_table: 'leo_handoff_executions', source_execution_id: srcId },
           action_items: [{ item: 'None — historical reconciliation; the already-completed path now self-heals via this branch' }],
           completeness_report: { validation_score: srcScore, source: 'leo_handoff_executions' },
