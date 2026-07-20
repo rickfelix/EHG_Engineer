@@ -9,6 +9,15 @@ vi.mock('../../../lib/coordinator/coordination-events.cjs', () => ({
 vi.mock('../../../lib/coordinator/singleton-refresh-sequencer.cjs', () => ({
   sequenceSingletonRefresh: vi.fn(),
 }));
+// SD-LEO-INFRA-LEO-COMPLETION-001-C (G1a de-mask): spy on the REAL node:child_process.spawn so the
+// default spawner closure in spawn-control.js:146-150 actually runs and its {detached:true,
+// stdio:'ignore'} options can be asserted. The prior "live path" test injected opts.spawnFn, which
+// short-circuited that closure -- its expect.any(Object) matched invocation.env, never the spawn
+// options, so detached:true was never exercised (the test-masking G1a closes).
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, spawn: vi.fn() };
+});
 
 const {
   roleOf, isSingletonRole, resolveProfileDir, isLiveEnabled, buildLiveSpawnInvocation,
@@ -16,6 +25,7 @@ const {
 } = await import('../../../lib/fleet/spawn-control.js');
 const { logCoordinationEvent } = await import('../../../lib/coordinator/coordination-events.cjs');
 const { sequenceSingletonRefresh } = await import('../../../lib/coordinator/singleton-refresh-sequencer.cjs');
+const { spawn: childProcessSpawnSpy } = await import('node:child_process');
 
 /** Minimal in-memory fake covering exactly the claude_sessions/session_coordination shapes spawn-control.js touches. */
 function makeFakeSupabase({ sessions = [] } = {}) {
@@ -145,13 +155,20 @@ describe('spawn (FR-1)', () => {
     expect(spawnFn).not.toHaveBeenCalled();
   });
 
-  it('live path spawns detached and captures the window handle', async () => {
-    const child = { pid: 4242 };
-    const spawnFn = vi.fn().mockReturnValue(child);
+  it('live path exercises the REAL detached spawn: detached:true + stdio:ignore reach child_process.spawn and the child is unref\'d (G1a de-mask)', async () => {
+    // DE-MASK: do NOT inject opts.spawnFn -- let the default spawner closure (spawn-control.js:146-150)
+    // run so the real detached:true/stdio:'ignore' options reach node:child_process.spawn.
+    const fakeChild = { pid: 4242, unref: vi.fn() };
+    childProcessSpawnSpy.mockReset();
+    childProcessSpawnSpy.mockReturnValue(fakeChild);
     const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
     const supabaseClient = makeFakeSupabase({ sessions: [] });
-    const result = await spawn({ role: 'worker', callsign: 'Alpha-5' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient });
-    expect(spawnFn).toHaveBeenCalledWith('wt.exe', expect.any(Array), expect.any(Object));
+    const result = await spawn({ role: 'worker', callsign: 'Alpha-5' }, { live: true, execFn, sleepFn: vi.fn(), supabaseClient });
+    // LOAD-BEARING: kill-survival depends on detached:true (OS re-parents the child when the
+    // supervisor dies) + stdio:'ignore' (no inherited pipes tie it to the parent). Deleting
+    // detached:true from spawn-control.js:147 makes THIS assertion fail (mutation-verified).
+    expect(childProcessSpawnSpy).toHaveBeenCalledWith('wt.exe', expect.any(Array), expect.objectContaining({ detached: true, stdio: 'ignore' }));
+    expect(fakeChild.unref).toHaveBeenCalled(); // unref'd so it outlives the parent
     expect(result.live).toBe(true);
     expect(result.handle).toBe(131074);
     expect(result.handleCaptureFailed).toBe(false);
