@@ -7,7 +7,14 @@ function fakeSupabase(rows = []) {
   function builder() {
     const filters = [];
     const exec = () => Promise.resolve({ data: rows.filter((r) => filters.every(([c, v]) => r[c] === v)), error: null });
-    const b = { select: () => b, eq: (c, v) => { filters.push([c, v]); return b; }, then: (res, rej) => exec().then(res, rej) };
+    // FR-6 batch 8: attachForecasts now paginates via fetchAllPaginated (.order + .range)
+    const b = {
+      select: () => b,
+      eq: (c, v) => { filters.push([c, v]); return b; },
+      order: () => b,
+      range: (from, to) => exec().then((r) => ({ data: (r.data || []).slice(from, to + 1), error: r.error })),
+      then: (res, rej) => exec().then(res, rej),
+    };
     return b;
   }
   return { from: () => builder() };
@@ -38,7 +45,7 @@ describe('attachForecasts — FR-5 positive attach', () => {
   });
 
   it('fail-soft: table absent -> {inert:true, lines:[]} (TS-6), never throws', async () => {
-    const absent = { from: () => ({ select() { return this; }, eq() { return this; }, then(res) { return res({ data: null, error: { code: '42P01', message: 'relation "forecast_ledger" does not exist' } }); } }) };
+    const absent = { from: () => ({ select() { return this; }, eq() { return this; }, order() { return this; }, range() { return Promise.resolve({ data: null, error: { code: '42P01', message: 'relation "forecast_ledger" does not exist' } }); }, then(res) { return res({ data: null, error: { code: '42P01', message: 'relation "forecast_ledger" does not exist' } }); } }) };
     const res = await attachForecasts({ supabase: absent }, { stage: 5 });
     expect(res.inert).toBe(true);
     expect(res.lines).toEqual([]);

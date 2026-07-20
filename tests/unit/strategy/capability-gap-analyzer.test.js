@@ -11,9 +11,14 @@ function mockSupabase(objectives, capabilities) {
         return chain;
       }
       if (table === 'venture_capabilities') {
+        // FR-6 batch 8: analyzeCapabilityGaps now paginates via fetchAllPaginated (appends .order(),
+        // awaits .range()); the thenable keeps the un-paginated analyzeObjectiveGaps .in().in() path working.
         const chain = {};
         chain.select = vi.fn().mockReturnValue(chain);
-        chain.in = vi.fn().mockResolvedValue({ data: capabilities, error: null });
+        chain.in = vi.fn().mockReturnValue(chain);
+        chain.order = vi.fn().mockReturnValue(chain);
+        chain.range = vi.fn().mockResolvedValue({ data: capabilities, error: null });
+        chain.then = (resolve) => resolve({ data: capabilities, error: null });
         return chain;
       }
       const chain = {};

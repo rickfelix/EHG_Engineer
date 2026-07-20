@@ -32,11 +32,18 @@ function makeSb(rows, opts = {}) {
                   expect(col2).toBe('target_session');
                   expect(val2).toBeNull();
                   return {
-                    not: async () => {
-                      if (opts.throwOnRead) throw new Error('read boom');
-                      if (opts.errorOnRead) return { data: null, error: { message: 'read boom' } };
-                      return { data: rows, error: null };
-                    },
+                    // Paginated via fetchAllPaginated (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001
+                    // FR-6 batch 8): chainable .order(), single .range() page carries the throw/error
+                    // behavior so it's properly awaited (not an orphaned rejected promise).
+                    not: () => ({
+                      order: () => ({
+                        range: async () => {
+                          if (opts.throwOnRead) throw new Error('read boom');
+                          if (opts.errorOnRead) return { data: null, error: { message: 'read boom' } };
+                          return { data: rows, error: null };
+                        },
+                      }),
+                    }),
                   };
                 },
               };

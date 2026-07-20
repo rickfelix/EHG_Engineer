@@ -149,9 +149,15 @@ describe('orchestrator', () => {
    * Helper: create a chain for ventures by stage query
    */
   function selectVenturesChain({ data = [], error = null } = {}) {
+    // FR-6 batch 8: gatherWeeklyMetrics now paginates ventures via fetchAllPaginated —
+    // the chain is select().eq().order().range(), so terminate at .range().
     return {
       select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ data, error })
+        eq: vi.fn().mockReturnValue({
+          order: vi.fn().mockReturnValue({
+            range: vi.fn().mockResolvedValue({ data, error })
+          })
+        })
       })
     };
   }
@@ -160,10 +166,16 @@ describe('orchestrator', () => {
    * Helper: create a chain for decisions query
    */
   function selectDecisionsChain({ data = [], error = null } = {}) {
+    // FR-6 batch 8: gatherWeeklyMetrics now paginates chairman_decisions via
+    // fetchAllPaginated — the chain is select().gte().lte().order().range().
     return {
       select: vi.fn().mockReturnValue({
         gte: vi.fn().mockReturnValue({
-          lte: vi.fn().mockResolvedValue({ data, error })
+          lte: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              range: vi.fn().mockResolvedValue({ data, error })
+            })
+          })
         })
       })
     };

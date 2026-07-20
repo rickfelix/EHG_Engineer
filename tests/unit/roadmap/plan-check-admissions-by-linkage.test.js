@@ -10,11 +10,20 @@ const cutoffMs = NOW - 48 * 3_600_000;
 const inWindow = new Date(NOW - 1 * 3_600_000).toISOString();
 const beforeWindow = new Date(cutoffMs - 10 * 3_600_000).toISOString();
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 8: computeAdmissionsByLinkage
+// now paginates via fetchAllPaginated, so .or(...) must return a chainable builder
+// (.order() returns itself, .range() resolves the page) rather than a bare Promise.
 function fakeSupabase(rows) {
   return {
     from: vi.fn(() => ({
       select: vi.fn(() => ({
-        or: vi.fn(async () => ({ data: rows, error: null })),
+        or: vi.fn(() => {
+          const builder = {
+            order: vi.fn(() => builder),
+            range: vi.fn(async () => ({ data: rows, error: null })),
+          };
+          return builder;
+        }),
       })),
     })),
   };

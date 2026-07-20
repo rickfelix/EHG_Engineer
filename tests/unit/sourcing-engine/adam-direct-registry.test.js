@@ -27,7 +27,10 @@ function makeDb(cfg = {}) {
   };
   const builder = (table) => {
     const b = { _op: 'select', _row: null };
-    b.select = () => b; b.eq = () => b; b.in = () => b; b.limit = () => b; b.order = () => b; b.not = () => b; b.is = () => b;
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 8: .range() added so
+    // fetchAllPaginated-converted call sites (findAdamGhostSds) can chain on this
+    // thenable builder like any other filter method.
+    b.select = () => b; b.eq = () => b; b.in = () => b; b.limit = () => b; b.order = () => b; b.not = () => b; b.is = () => b; b.range = () => b;
     b.insert = (row) => { b._op = 'insert'; b._row = row; return b; };
     b.then = (res, rej) => Promise.resolve(resolve(table, b._op, b._row)).then(res, rej);
     b.catch = (rej) => b.then(undefined, rej);

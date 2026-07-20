@@ -23,6 +23,7 @@ function makeQuery(result) {
     eq: () => q,
     order: () => q,
     limit: () => q,
+    range: () => q, // fetchAllPaginated's range page (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6)
     insert: () => q,
     update: () => q,
     single: () => Promise.resolve(result),

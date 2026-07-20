@@ -126,6 +126,12 @@ describe('computeResurfaceDedupDrift — instance 9', () => {
 
 describe('runLaneLintGauge — tick entry point, fail-open, read-only', () => {
   function makeSupabase({ windowRows = [], resurfaceRows = [] } = {}) {
+    // FR-6 batch 8 (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001): the loaders now paginate
+    // via fetchAllPaginated (.order() then .range()) instead of a single .limit(2000) fetch —
+    // extend the builder stub with slice-based .range() so a short page terminates the loop.
+    const page = (rows) => ({
+      order: () => ({ range: (a, b) => Promise.resolve({ data: rows.slice(a, b + 1), error: null }) }),
+    });
     return {
       from(table) {
         return {
@@ -133,14 +139,12 @@ describe('runLaneLintGauge — tick entry point, fail-open, read-only', () => {
             return {
               gte() {
                 return {
-                  limit: () => Promise.resolve({ data: windowRows, error: null }),
-                  eq: () => ({
-                    gte: () => ({ limit: () => Promise.resolve({ data: resurfaceRows, error: null }) }),
-                  }),
+                  ...page(windowRows),
+                  eq: () => ({ gte: () => page(resurfaceRows) }),
                 };
               },
               eq() {
-                return { gte: () => ({ limit: () => Promise.resolve({ data: resurfaceRows, error: null }) }) };
+                return { gte: () => page(resurfaceRows) };
               },
             };
           },

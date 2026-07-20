@@ -25,6 +25,9 @@ const mockIn = vi.fn();
 const mockOrder = vi.fn();
 const mockLimit = vi.fn();
 const mockSingle = vi.fn();
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 8: updateQuestionEffectiveness
+// now paginates via fetchAllPaginated, which calls .range() on the query builder.
+const mockRange = vi.fn();
 
 const chainable = {
   insert: mockInsert,
@@ -36,6 +39,7 @@ const chainable = {
   order: mockOrder,
   limit: mockLimit,
   single: mockSingle,
+  range: mockRange,
 };
 
 // Each method returns the chainable object for chaining

@@ -41,6 +41,20 @@ function makeFakeSupabase({ tables = {}, absentTables = [] } = {}) {
       not(col) { ctx.filters.push([col, 'not_is_null', null]); return api; },
       order(col, { ascending } = {}) { ctx.order = { col, ascending: !!ascending }; return api; },
       limit(n) { ctx.limitN = n; return api; },
+      // FR-6 batch 8: getOwedDecisions now paginates via fetchAllPaginated, which applies .range()
+      range(from, to) {
+        if (absent.has(table)) {
+          return Promise.resolve({ data: null, error: { message: `relation "${table}" does not exist` } });
+        }
+        let rows = applyFilters(tables[table] || [], ctx.filters);
+        if (ctx.order) {
+          rows = [...rows].sort((a, b) => {
+            const cmp = a[ctx.order.col] < b[ctx.order.col] ? -1 : a[ctx.order.col] > b[ctx.order.col] ? 1 : 0;
+            return ctx.order.ascending ? cmp : -cmp;
+          });
+        }
+        return Promise.resolve({ data: rows.slice(from, to + 1), error: null });
+      },
       then(resolve) {
         if (absent.has(table)) {
           resolve({ data: null, error: { message: `relation "${table}" does not exist` } });
