@@ -89,6 +89,16 @@ function advisoryExpiresAt(nowMs) {
   return new Date(base + ADVISORY_TTL_MS).toISOString();
 }
 
+// QF-20260720-729: build the pre-send Solomon-consult body through the loss-proof capBody
+// primitive (fail-loud on the 4096-char hard cap — the caller must split, never silently clip)
+// instead of a .slice(0, 300) that let Solomon validate only the first 300 chars of the outbound
+// body ('your packet ends mid-sentence at Two; the findings this consult exists FOR are invisible
+// to me' — Solomon advisory 97cf4e3e, recurred ~9x). The prefix is inside the cap so the tail the
+// consult exists to check is never dropped. PURE + exported for tests.
+function buildPreSendConsultBody(body) {
+  return capBody(`[PRE-SEND CONSULT] ${body ?? ''}`);
+}
+
 // SD-REFILL-00XK256L: the 2-hypothesis-bar guard for Adam urgent operational broadcasts. Adam's web-
 // research sweep has TWICE (2026-06-11 stall misdiagnosis; 2026-06-13 advisory 4f6082eb) produced a
 // HALLUCINATED fleet-wide operational alarm — a fabricated "model cutoff" naming a NON-EXISTENT model
@@ -1075,7 +1085,7 @@ async function main() {
             let solomonId = null;
             try { solomonId = await getActiveSolomonId(supabase); } catch { solomonId = null; }
             const correlationId = crypto.randomUUID();
-            const cp = buildSolomonConsultPayload({ correlationId, body: `[PRE-SEND CONSULT] ${payload.body.slice(0, 300)}`, senderCallsign, repo: process.cwd(), severity: 'high', isAwait: true });
+            const cp = buildSolomonConsultPayload({ correlationId, body: buildPreSendConsultBody(payload.body), senderCallsign, repo: process.cwd(), severity: 'high', isAwait: true });
             await insertCoordinationRow(supabase, { sender_session: sessionId, sender_type: 'adam', target_session: solomonId || 'broadcast-solomon', message_type: 'INFO', subject: `[SOLOMON_CONSULT] pre-send`, body: cp.body, payload: cp, expires_at: expiresAt }, { targetRoleHint: 'solomon' });
             const reply = await awaitCoordinatorReply(supabase, { sessionId, correlationId, timeoutMs: consultTimeoutMs });
             return reply.timedOut ? null : ((reply.reply && (readCanonicalBody(reply.reply) || reply.reply.body)) || { received: true });
@@ -1179,7 +1189,7 @@ async function drainAdamOutbound(supabase, { newSessionId, oldSessionIds } = {})
   }
 }
 
-module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS, resolveAdamAdvisoryTarget, classifyDirectTarget, extractEmbeddedPeerDirective, windowSweep, parseSweepWindowMs, DEFAULT_SWEEP_WINDOW_MS, stampSurfaced, ackRows, DEFAULT_DRAIN_WINDOW_MS, KNOWN_SEND_KINDS };
+module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, buildPreSendConsultBody, sanityCheckUrgentAdvisory, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound, isOrphanedAdamRow, EXCLUDED_KINDS, resolveAdamAdvisoryTarget, classifyDirectTarget, extractEmbeddedPeerDirective, windowSweep, parseSweepWindowMs, DEFAULT_SWEEP_WINDOW_MS, stampSurfaced, ackRows, DEFAULT_DRAIN_WINDOW_MS, KNOWN_SEND_KINDS };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });
