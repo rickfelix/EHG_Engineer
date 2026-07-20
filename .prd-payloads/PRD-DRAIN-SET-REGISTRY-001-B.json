@@ -1,0 +1,113 @@
+{
+  "executive_summary": "Builds the substrate for the drain-set registry SSOT: a STAGED (chairman-gated, never self-applied) role_drain_sets table encoding which payload.kind values each fleet role (solomon/adam/coordinator/worker) actually drains, seeded from the live hard-coded DRAIN_SETS constant in lib/fleet/worker-status.cjs plus two known-defect reconciliations (adam_advisory missing from solomon's set despite his own oracle replies riding it; solomon_systemic_finding pre-registered per Solomon's explicit pin even though no sender emits it yet). A fail-open registry-reader lib resolves recognized kinds from the table with a loud stderr canary while unapplied, falling back to the identical hard-coded list -- zero behavior change until a chairman applies the migration. The send-time WARN validator in lib/coordinator/dispatch.cjs is repointed to consume the registry-reader instead of importing the hard-coded constant directly; WARN-only behavior is unchanged (enforce-graduation is sibling Child D's job, gated on this WARN mode soaking one full coordinator+adam tick cycle at zero false positives).",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "STAGED migration: role_drain_sets table + seed data (chairman-gated, never self-applied)",
+      "description": "Create database/migrations/<date>_role_drain_sets_STAGED.sql (+ _DOWN companion) following the exact convention of database/migrations/20260719_coordinator_succession_STAGED.sql: BEGIN; CREATE TABLE IF NOT EXISTS role_drain_sets (id uuid PK default gen_random_uuid(), role text NOT NULL, kind text NOT NULL, direction text NOT NULL CHECK (direction IN ('inbound','outbound')) DEFAULT 'inbound', status text NOT NULL CHECK (status IN ('active','deprecated')) DEFAULT 'active', provenance text, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(role, kind, direction)); ENABLE ROW LEVEL SECURITY; CREATE POLICY role_drain_sets_service_role_all ON role_drain_sets FOR ALL TO service_role USING (true) WITH CHECK (true); [seed INSERTs, see below]; DO $verify$ ... ASSERT ... END $verify$ self-verify block (table exists, RLS enabled, exactly 1 policy, seed row count matches expected) -- placed BEFORE COMMIT, inside the same transaction, matching the coordinator_succession_STAGED precedent exactly, so an ASSERT failure rolls the whole migration back atomically instead of leaving a committed-but-unverified table; COMMIT. Service-role-only RLS posture (no anon/authenticated policy) is outside rls-anon-tenant-predicate-lint's scoped roles by construction. This migration is CHAIRMAN-GATED and MUST NOT be applied by this SD (no scripts/apply-migration.js --prod-deploy invocation as part of EXEC) -- it ships merged-but-unapplied; the fail-open reader (FR-2) and repointed validator (FR-3) must both function correctly with the table absent. Seed data: port every (role, kind) pair from lib/fleet/worker-status.cjs's DRAIN_SETS constant verbatim (direction='inbound', status='active', provenance='lib/fleet/worker-status.cjs DRAIN_SETS'): solomon={coordinator_request, work_assignment, adam_action_required, coordinator_reminder, coordinator_to_adam, coordinator_directive, chairman_directive, fence_notice, review_request, solomon_consult, comms_check}; adam={the 9 DIRECTIVE_KINDS, adam_advisory, coordinator_reply, canary_request, comms_check, cross_party_ping}; coordinator={the 9 DIRECTIVE_KINDS, roll_call, coordinator_reply, adam_advisory, relay_request, relay_confirm, cross_party_ping, solomon_consult}; worker={the 9 DIRECTIVE_KINDS, coordinator_reply, coordinator_reservation, seat_busy_reservation, comms_check, completion_nudge, CLAIM_RELEASED, SET_IDENTITY, claim_released}. PLUS the R2 reconciliation fixes (provenance='SD-LEO-INFRA-DRAIN-SET-REGISTRY-001 R2 vocab reconciliation'): (a) add (solomon, adam_advisory, inbound, active) -- Solomon's own oracle-answer replies are sent under kind=adam_advisory+payload.oracle=true (scripts/solomon-advisory.cjs), so his drain set must recognize it, closing the 'founding defect' asymmetry; (b) add (solomon, solomon_systemic_finding, inbound, active) -- pre-registered per Solomon's explicit pin even though zero code currently emits this kind, so a future sender is recognized on day one with no registry update needed. Do NOT add a framing_class column or seed rows for it -- framing_class is a payload-level sub-discriminator on messages of kind adam_advisory (stamped in payload.framing_class alongside payload.oracle=true), orthogonal to the (role,kind) drain-set concept this table tracks.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Migration file follows the STAGED naming/structure convention exactly (BEGIN/COMMIT transaction, RLS-at-create in the same file, DO-block self-verify, _DOWN companion)",
+        "UNIQUE(role, kind, direction) constraint present so re-running seed INSERTs can never duplicate a row",
+        "Seed data reconciles ALL kinds from every DRAIN_SETS array in lib/fleet/worker-status.cjs, verified 1:1 against the live constant",
+        "Both reconciliation fixes (adam_advisory + solomon_systemic_finding for solomon) present with status='active'",
+        "Migration is committed to git but NEVER applied via scripts/apply-migration.js --prod-deploy during this SD's EXEC phase",
+        "DO-block self-verify ASSERTs table existence, RLS enabled, policy count=1, and seed row count matches the reconciled vocabulary count"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Fail-open registry-reader lib",
+      "description": "Create lib/fleet/drain-set-registry.js, modeled structurally on lib/eval/routing-consumption.mjs's fail-open pattern (injected supabase client, pure filtering, never throws) but with an ADDED loud stderr canary (routing-consumption.mjs fails open silently; this SD's own smoke_test_steps require an observable canary line, per the 'STAGED absence visible, never silent' design principle). Exports: (1) resolveRecognizedKinds({ supabase, role }) -- queries role_drain_sets WHERE role=$1 AND status='active' AND direction='inbound'; on any query error (including PGRST205 'table does not exist') OR supabase=null, logs ONE canary line to stderr (e.g. '[drain-set-registry] role_drain_sets UNAPPLIED -- failing open to hard-coded DRAIN_SETS') and returns the CURRENT hard-coded DRAIN_SETS[role] array from worker-status.cjs (imported, never re-derived) -- never throws; (2) assertRegistryTablesExist(supabase) -- a canary probe returning a structured { applied: boolean, table: 'role_drain_sets' } result, never throwing, so callers/monitors can observe the unapplied state explicitly.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "resolveRecognizedKinds returns byte-identical results to the current hard-coded DRAIN_SETS[role] when the table is unapplied, for all 4 known roles",
+        "Exactly ONE canary line is logged per call when unapplied",
+        "assertRegistryTablesExist never throws and returns applied:false today with the exact shape {applied, table}",
+        "No behavior change to any consumer while the table remains unapplied"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Repoint dispatch.cjs's send-time WARN validator to the registry-reader",
+      "description": "In lib/coordinator/dispatch.cjs's insertCoordinationRow (lines ~770-784), replace the direct warnIfUndrainedKind import/call (which reads worker-status.cjs's hard-coded DRAIN_SETS in-process) with a call through the new registry-reader (FR-2): resolve the target role's recognized kinds via resolveRecognizedKinds({ supabase, role: targetRole }), then apply the SAME warn-and-never-block logic warnIfUndrainedKind already implements (terminal-reply-kind exemption, WARN-only log line, never throws/blocks). WARN mode behavior is UNCHANGED end-to-end. Enforce-graduation is explicitly OUT OF SCOPE for this child SD (sibling Child D / SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-E owns that, gated on this WARN mode soaking at least one full coordinator+adam tick cycle at zero false positives after this child ships).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "dispatch.cjs no longer reads the hard-coded DRAIN_SETS constant directly for this check -- it goes through the registry-reader",
+        "Existing unit test tests/unit/fleet/drain-sets-send-warn.test.js still passes (mechanical updates allowed) -- it pins warnIfUndrainedKind/resolveTargetRole in isolation and does NOT exercise insertCoordinationRow's call path, so it alone cannot prove the repoint; see TS-5 for the new test that closes this",
+        "A NEW test drives insertCoordinationRow (or its registry-backed warn wrapper) directly with a mocked supabase client, asserting the WARN still fires for an undrained (role,kind) and the send proceeds, both when the mock returns real rows and when it returns a PGRST205-style (table-not-found) error",
+        "A message whose kind is absent from the target role's recognized set still WARNs (not blocked) with the target role/kind named in the log line",
+        "No new send-time rejection/blocking is introduced anywhere in this repoint"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Registry contract doc (Solomon pin 2 ACK semantics)",
+      "description": "Create docs/reference/drain-set-registry.md documenting: the role_drain_sets schema (columns, UNIQUE constraint, RLS posture), the STAGED/chairman-gated apply lifecycle, the fail-open reader contract (FR-2), the dispatch.cjs repoint (FR-3), and -- per Solomon's explicit pin 2 -- the registry's ACK semantics: acknowledging a drain-set-registered kind is a two-stage FIELD-STAMP on the existing session_coordination row (read_at, then acknowledged_at), never a new correlated/child row. This doc is the durable reference for sibling children (Child B/-001-C repoints inbox readers onto this same contract; Child D/-001-E's enforce-graduation and Child C/-001-D's orphan-sweep both depend on the table/reader contract being written down once, here).",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "docs/reference/drain-set-registry.md exists, follows repo doc-location conventions (docs/reference/, kebab-case, standard metadata header)",
+        "ACK semantics (two-stage read_at/acknowledged_at field-stamp, never a correlated row) explicitly documented as Solomon pin 2",
+        "Doc explicitly states the migration is chairman-gated and describes the fail-open behavior while unapplied"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {"id": "TR-1", "title": "Additive-only migration", "description": "CREATE TABLE IF NOT EXISTS + ADD-only; no ALTER of any existing table, no destructive DDL."},
+    {"id": "TR-2", "title": "Chairman-gated apply", "description": "Migration ships merged-but-unapplied. EXEC must not invoke scripts/apply-migration.js --prod-deploy for this file."},
+    {"id": "TR-3", "title": "Fail-open, never throw", "description": "The registry-reader lib must never throw regardless of table/DB state; every path returns a value."}
+  ],
+  "test_scenarios": [
+    {"id": "TS-1", "scenario": "Migration self-verify DO-block correctness (reviewed, not applied to prod)", "type": "manual-review", "expected": "The DO-block ASSERTs (table exists, RLS enabled, 1 policy, seed count) are logically correct AND placed BEFORE COMMIT inside the same transaction (matching coordinator_succession_STAGED exactly, not after), reviewed line-by-line against that precedent. No sandbox/ephemeral-Postgres harness exists in this repo (no pg-mem/pglite/testcontainers) and the shared single-account Supabase makes a live rolled-back apply risky, so this is a directed reviewer checklist, backstopped by TS-2's automatable seed-parity check -- not free-form review."},
+    {"id": "TS-2", "scenario": "Seed data 1:1 parity with live DRAIN_SETS", "type": "unit", "expected": "A test enumerates every (role, kind) pair from lib/fleet/worker-status.cjs's DRAIN_SETS and asserts each has a corresponding seed INSERT in the migration file text, catching drift."},
+    {"id": "TS-3", "scenario": "Fail-open reader byte-identical to hard-coded fallback", "type": "unit", "expected": "resolveRecognizedKinds({supabase:null, role}) for all 4 roles returns the same array contents as DRAIN_SETS[role], with exactly one canary line logged per call."},
+    {"id": "TS-4", "scenario": "assertRegistryTablesExist canary shape", "type": "unit", "expected": "With a mocked PGRST205-style error, returns exactly {applied:false, table:'role_drain_sets'}, never throws."},
+    {"id": "TS-5", "scenario": "dispatch.cjs repoint proven at the actual call path (NOT just the pre-existing isolated-helper test)", "type": "unit", "expected": "tests/unit/fleet/drain-sets-send-warn.test.js (pins warnIfUndrainedKind/resolveTargetRole in isolation) still passes with mechanical updates. SEPARATELY, a NEW test drives insertCoordinationRow directly with a mocked supabase client (both a real-rows response and a PGRST205-style error response) and asserts the WARN still fires for an undrained (role,kind) and the send proceeds in both cases -- this is the test that actually proves the repoint, since the existing test never calls insertCoordinationRow."},
+    {"id": "TS-6", "scenario": "Migration NOT applied post-EXEC (live check, non-durable) + static durable guard", "type": "live-db+static", "expected": "At EXEC-TO-PLAN handoff time, a live query confirms role_drain_sets does NOT exist in production (this check is a one-time gate condition, not a repeatable CI assertion -- it will correctly start failing once a chairman applies the migration later). Complemented by a durable static check: grep the EXEC diff for any scripts/apply-migration.js invocation targeting this migration file, asserting none exists."},
+    {"id": "TS-7", "scenario": "FR-4 registry contract doc exists", "type": "static", "expected": "docs/reference/drain-set-registry.md exists and contains the Solomon-pin-2 ACK-semantics section (lightweight existence/content-grep check, not a full doc-quality gate)."}
+  ],
+  "acceptance_criteria": [
+    "role_drain_sets STAGED migration (+_DOWN) merged to git, never applied during this SD",
+    "Seed data reconciles 100% of the live DRAIN_SETS vocabulary plus both R2 reconciliation fixes",
+    "Fail-open registry-reader lib exists, is byte-identical to current behavior while unapplied, and never throws",
+    "dispatch.cjs repointed to consume the registry-reader with WARN behavior provably unchanged",
+    "Registry contract doc published documenting schema, lifecycle, and Solomon pin 2 ACK semantics"
+  ],
+  "risks": [
+    {"risk": "A future edit to DRAIN_SETS in worker-status.cjs silently drifts from the seed data before a chairman applies the migration.", "mitigation": "TS-2 catches drift at CI time for as long as the migration remains unapplied; once applied, the registry becomes the SSOT and this drift class closes permanently.", "severity": "low"},
+    {"risk": "Someone accidentally applies the migration during this SD's EXEC phase, violating the chairman-gate.", "mitigation": "TS-6 explicitly verifies non-application at handoff time.", "severity": "medium"},
+    {"risk": "Reader lib's canary line spams logs before the chairman applies the migration.", "mitigation": "dispatch.cjs's send-time check fires once per coordination-row insert, not a tight loop; log volume is consistent with existing WARN-mode density.", "severity": "low"}
+  ],
+  "integration_operationalization": {
+    "consumers": ["lib/coordinator/dispatch.cjs (send-time WARN validator, FR-3)", "Sibling Child B/-001-C (inbox readers, future consumer of the same registry-reader lib)"],
+    "dependencies": ["lib/fleet/worker-status.cjs DRAIN_SETS constant (fallback source of truth pre-apply)", "lib/eval/routing-consumption.mjs (structural fail-open template)"],
+    "data_contracts": ["New table role_drain_sets (role, kind, direction, status, provenance, timestamps) -- additive only, chairman-gated apply"],
+    "runtime_config": ["none"],
+    "observability_rollout": ["Loud stderr canary line from the registry-reader while unapplied; assertRegistryTablesExist({applied,table}) probe for monitors; WARN log line unchanged in dispatch.cjs"]
+  },
+  "system_architecture": {
+    "summary": "New STAGED table + fail-open reader lib sit between the existing hard-coded DRAIN_SETS constant and the existing send-time WARN check, with zero behavior change until a chairman applies the migration.",
+    "components": [
+      {"name": "database/migrations/<date>_role_drain_sets_STAGED.sql", "change": "NEW -- STAGED, chairman-gated, never self-applied"},
+      {"name": "lib/fleet/drain-set-registry.js", "change": "NEW -- fail-open registry-reader lib"},
+      {"name": "lib/coordinator/dispatch.cjs", "change": "Repoint insertCoordinationRow's WARN check to the registry-reader"},
+      {"name": "docs/reference/drain-set-registry.md", "change": "NEW -- registry contract doc"}
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Migration + seed first, then the fail-open reader lib (tested against the unapplied state), then the dispatch.cjs repoint (tested for behavior parity), then the contract doc.",
+    "steps": [
+      "Write and self-verify the STAGED migration + _DOWN companion (do not apply)",
+      "Build lib/fleet/drain-set-registry.js with resolveRecognizedKinds + assertRegistryTablesExist",
+      "Repoint lib/coordinator/dispatch.cjs's WARN check through the registry-reader",
+      "Write/update unit tests (TS-2 through TS-5) and verify live non-application (TS-6)",
+      "Write docs/reference/drain-set-registry.md"
+    ]
+  },
+  "smoke_test_steps": [
+    {"step_number": 1, "instruction": "With role_drain_sets NOT applied (STAGED), call the registry-reader to resolve recognized kinds for role 'solomon': node -e \"import('./lib/fleet/drain-set-registry.js').then(m=>m.resolveRecognizedKinds({supabase:null,role:'solomon'}).then(r=>console.log(r)))\"", "expected_outcome": "Emits ONE loud canary line to stderr and returns solomon's CURRENT hard-coded recognized kinds without throwing."},
+    {"step_number": 2, "instruction": "Run the registry canary: node -e \"import('./lib/fleet/drain-set-registry.js').then(m=>m.assertRegistryTablesExist(supabaseClient).then(console.log))\" against the live DB.", "expected_outcome": "Reports role_drain_sets as NOT-applied explicitly -- {applied:false, table:'role_drain_sets'}, no throw."},
+    {"step_number": 3, "instruction": "Exercise the send-time validator (WARN mode) on a message whose kind is not in the target role's recognized set -- confirm it now sources kinds from the registry-reader.", "expected_outcome": "A WARN line is logged naming the unrecognized (role,kind) pair AND the send is NOT blocked; kinds came from the registry-reader, not the old local constant."}
+  ],
+  "metadata": {"sd_key": "SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-B"}
+}
