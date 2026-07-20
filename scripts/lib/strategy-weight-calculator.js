@@ -34,7 +34,7 @@ import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
  * @param {Array} params.strategyObjectives - All active strategy objectives
  * @returns {Object} { weight, breakdown }
  */
-export function calculateStrategyWeight({ sdKey, okrAlignments = [], keyResults = {}, strategyObjectives = [] }) {
+export function calculateStrategyWeight({ sdKey: _sdKey, okrAlignments = [], keyResults = {}, strategyObjectives = [] }) {
   const breakdown = {
     okrImpact: 0,
     strategyMultiplier: 1.0,

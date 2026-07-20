@@ -229,9 +229,7 @@ describe('runOnce', () => {
     const pgClient = buildPgClient(true);
     const supabase = buildSupabase();
     // Make from('venture_quality_findings') throw via gte rejection
-    let calls = 0;
     supabase.from = vi.fn((table) => {
-      calls++;
       if (table === 'venture_quality_findings') {
         return {
           select: () => ({ eq: () => ({ gte: () => ({ order: () => ({ range: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }) }) }) }),

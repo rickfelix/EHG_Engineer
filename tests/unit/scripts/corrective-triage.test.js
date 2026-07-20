@@ -51,7 +51,7 @@ function makeBuilder({ single, rows = [], error = null }) {
 
 function mockSupabase({ rows = [], single, lookupErr = null, updateOk = true } = {}) {
   return {
-    from(table) {
+    from(_table) {
       return {
         select: () => makeBuilder({ single, rows, error: lookupErr }),
         update() {

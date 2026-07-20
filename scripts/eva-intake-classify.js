@@ -26,7 +26,6 @@ import {
   saveClassification,
   getAIRecommendation,
   askUserQuestions,
-  mapSelectionToValue,
 } from '../lib/integrations/intake-classifier.js';
 import { validateClassification } from '../lib/integrations/intake-taxonomy.js';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';

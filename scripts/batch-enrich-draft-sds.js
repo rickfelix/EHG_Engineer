@@ -231,7 +231,7 @@ function inferScopeFromTitle(title, sdType) {
   return `${sdType} scope — see description for details`;
 }
 
-function generateSuccessCriteria(sd, files) {
+function generateSuccessCriteria(sd, _files) {
   const criteria = [];
   const title = (sd.title || '').toLowerCase();
 

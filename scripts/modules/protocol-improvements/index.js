@@ -61,7 +61,6 @@ export function createProtocolImprovementSystem() {
 
     // Get a single improvement by ID
     async getImprovement(id) {
-      const { createClient } = await import('@supabase/supabase-js');
       const supabase = createSupabaseServiceClient();
 
       const { data, error } = await supabase
@@ -76,7 +75,6 @@ export function createProtocolImprovementSystem() {
 
     // Approve an improvement
     async approveImprovement(id, reviewedBy = 'system') {
-      const { createClient } = await import('@supabase/supabase-js');
       const supabase = createSupabaseServiceClient();
 
       const { data, error } = await supabase
@@ -97,7 +95,6 @@ export function createProtocolImprovementSystem() {
 
     // Reject an improvement
     async rejectImprovement(id, reason, reviewedBy = 'system') {
-      const { createClient } = await import('@supabase/supabase-js');
       const supabase = createSupabaseServiceClient();
 
       const { data, error } = await supabase
@@ -118,7 +115,6 @@ export function createProtocolImprovementSystem() {
 
     // Apply a single improvement
     async applyImprovement(id, dryRun = false) {
-      const { createClient } = await import('@supabase/supabase-js');
       const supabase = createSupabaseServiceClient();
 
       // Get the improvement

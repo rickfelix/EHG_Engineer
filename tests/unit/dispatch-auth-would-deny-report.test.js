@@ -11,7 +11,7 @@ import { WOULD_DENY_EVENT_TYPE } from '../../lib/claim/gates/dispatch-authorizat
 // used) — chain eq()/order() and resolve {data, error} from .range(), a single short page.
 function fakeSupabase(rows) {
   return {
-    from(table) {
+    from(_table) {
       let matched = rows;
       const chain = {
         select() { return chain; },

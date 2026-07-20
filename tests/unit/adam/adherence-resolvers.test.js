@@ -12,7 +12,6 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   resolveFacts,
   runSelfAdherenceReview,
-  sourceRemediation,
   recordVisionGaugeRead,
 } from '../../../scripts/adam-self-adherence-review.mjs';
 import { runAdherenceProbes, hasDrift } from '../../../lib/adam/adherence-probes.js';

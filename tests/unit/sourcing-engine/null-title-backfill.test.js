@@ -4,7 +4,7 @@
  * and the auto-refill cron promoted 0. This pins the resolver, the backfill branches, the populator
  * fail-loud guard, and the refill-recovers assertion.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { resolveSourceTitle, isUsableTitle } from '../../../lib/sourcing-engine/resolve-source-title.js';
 import { runBackfill } from '../../../scripts/sourcing-engine/backfill-414-null-titles.mjs';
 import { evaluateRefillCandidate } from '../../../lib/sourcing-engine/refill-candidate-validity.js';

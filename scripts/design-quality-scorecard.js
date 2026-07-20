@@ -38,7 +38,7 @@ const WEIGHTS = {
  * Extract accessibility dimension score from findings.
  * Based on: accessibility_check issues, contrast issues, touch target issues.
  */
-function scoreAccessibility(findings, confidence) {
+function scoreAccessibility(findings, _confidence) {
   const a11y = findings?.accessibility_check;
   if (!a11y || a11y.skipped) return null;
   if (a11y.error && !a11y.checked) return null;
@@ -58,7 +58,7 @@ function scoreAccessibility(findings, confidence) {
  * Extract token/design-system compliance score from findings.
  * Based on: design_system_check violations, inline style usage.
  */
-function scoreTokenCompliance(findings, confidence) {
+function scoreTokenCompliance(findings, _confidence) {
   const ds = findings?.design_system_check;
   if (!ds || ds.skipped) return null;
   if (ds.error && !ds.checked) return null;
@@ -74,7 +74,7 @@ function scoreTokenCompliance(findings, confidence) {
  * Extract component reuse score from findings.
  * Based on: component_analysis (large components, total), consistency_check.
  */
-function scoreComponentReuse(findings, confidence) {
+function scoreComponentReuse(findings, _confidence) {
   const comp = findings?.component_analysis;
   const consistency = findings?.consistency_check;
 
@@ -100,7 +100,7 @@ function scoreComponentReuse(findings, confidence) {
  * Extract visual polish score from findings.
  * Based on: responsive_check, ux_contract_compliance, CVA patterns.
  */
-function scoreVisualPolish(findings, confidence) {
+function scoreVisualPolish(findings, _confidence) {
   const responsive = findings?.responsive_check;
   const ux = findings?.ux_contract_compliance;
 

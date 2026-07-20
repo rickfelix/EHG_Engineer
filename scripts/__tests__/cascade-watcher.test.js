@@ -6,7 +6,7 @@
  * Covers TS-1 + TS-3 + TS-4 + TS-5 + TS-14 from PRD test_scenarios.
  * Mock pattern follows quality-findings-aggregator.test.js + archplan-upsert.test.js.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { parseArgs, main } from '../cron/cascade-watcher.mjs';
 
 const VISION_WITH_ARCH_SECTION = '# Vision\n\n## Problem\n...\n\n## Architectural Plan\n\nPhase 1 plan body of substantial length here to clear the body minimum threshold.\n\n## Phase 1: Backend setup\nWith schema migration logic.\n\n## Phase 2: Frontend dashboard\nWith UI components.\n\n## Phase 3: Integration tests\nTest harness.\n';

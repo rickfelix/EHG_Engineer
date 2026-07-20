@@ -25,7 +25,7 @@ function mockSupabase(waveItemCount) {
     title: `item ${i}`, metadata: { refine_composite_score: 1 - i / 1000 }, item_disposition: 'pending',
   }));
   return {
-    from(table) {
+    from(_table) {
       return {
         select() {
           const chain = {

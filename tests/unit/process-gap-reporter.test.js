@@ -91,10 +91,8 @@ describe('classifyGap', () => {
 // ─── reportProcessGaps ────────────────────────────────────────────────────────
 
 describe('reportProcessGaps', () => {
-  let consoleSpy;
-
   beforeEach(() => {
-    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
