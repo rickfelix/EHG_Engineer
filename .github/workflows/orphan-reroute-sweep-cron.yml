@@ -1,0 +1,45 @@
+name: "Orphan message reroute sweep (cron)"
+
+# SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-D (Child C): periodically re-types/re-targets
+# unread session_coordination rows whose kind is not in their target role's recognized
+# drain set (lib/fleet/drain-set-registry.js) — the 61.9%-orphan-traffic finding this SD
+# family exists to close. Mechanical, no judgment calls; must survive session death, so
+# it runs headless on its own schedule rather than depending on any live role session.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  orphan-reroute-sweep:
+    name: Orphan reroute sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Sweep orphan rows
+        run: node scripts/orphan-reroute-sweep.mjs
