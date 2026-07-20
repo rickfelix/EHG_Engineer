@@ -186,6 +186,37 @@ export const SOLOMON_LOOPS = [
     // fail-safes to the legacy pin-derivation when the policy is unset or the DB read fails.
     prompt: 'Solomon deep-sweep tick: (1) FIRST enforce the per-sweep task_budget at ENTRY (node -e require("./scripts/solomon-advisory.cjs").enforceSweepBudget — count/wall-clock/token) BEFORE any Read/Grep; if over budget, STOP. (2) Resolve the sweep MODE at TICK TIME from the DESIGN-OF-RECORD policy (fail-safe to the live pin) and log it: node -e "import(\'./scripts/solomon-startup-check.mjs\').then(m=>m.resolveSolomonSweepMode()).then(x=>process.stdout.write(x))". (3a) If mode===proactive (always-sweep policy of record, or a Fable pin fallback): pull ONE §4 backlog item, investigate the LIVE codebase with deep analysis, and surface EXACTLY ONE propose-only finding via node scripts/solomon-advisory.cjs send "<finding>" (dedup + quota + silence-by-default enforced). (3b) Else (consult mode, default): drain the consult inbox and answer the highest-value open solomon_consult with deep analysis via node scripts/solomon-advisory.cjs send "<answer>" --reply-to <consult-correlation> (dedup + quota enforced). Propose, NEVER execute/build in either mode (CONST-002).',
   },
+  // QF-20260719-072 (Solomon advisory 39b7e635 + chairman-directed durability amendment 94204a87):
+  // today's ratifications created scheduled obligations backed only by session memory. These two
+  // entries are the L1 durability layer — every /solomon re-arms from this registry, and the
+  // contract-parity check binds them once the posture duties carry durable markers. covers[]
+  // pre-wires the expected marker slugs so the day they land in CLAUDE_SOLOMON.md the parity
+  // check reconciles instead of gapping (the duty-parity-theater instance this QF closes).
+  {
+    key: 'weekly-program',
+    covers: [
+      'p1-work-posture',      // P1 standing-program set weekly at budget reset
+      'p3-budget-mechanics',  // P3 weekly budget line to Adam (pre-metering self-report)
+      'p4-portability-guard', // P4 Fable-terms re-check w/ auto-reversion
+      'accuracy-review',      // §11 ACCURACY REVIEW DUTY (durable) — periodic hit-rate by duty cluster
+      'autonomy-report',      // the weekly autonomy-report cadence rollup (the graded report itself
+                              // rides the deep-sweep 'adam-autonomy-oversight-reporting' duty)
+    ],
+    label: 'Solomon weekly program (Mon budget reset): P3 budget line, standing-program set, accuracy review, autonomy-report cadence, P4 Fable-terms re-check, seed-run ping if fable_suitability_map still empty',
+    script: null, // agent-judgment tick — posture/program setting is reasoning, not a script
+    cron: '23 8 * * 1',
+    prompt: 'Solomon weekly-program tick (Monday budget reset): (1) send the P3 budget line to Adam (estimated spend self-report until cost_tokens metering lands); (2) set the standing program for the week per the P1 preemption ladder; (3) run the §11 accuracy review (hit-rate by duty cluster; low-accuracy cluster -> propose-only calibration feedback flag); (4) roll up the autonomy-report cadence; (5) P4 portability re-check: verify live Fable budget terms, AUTO-REVERT to the episodic fallback posture if the budget shrank/vanished; (6) if fable_suitability_map is still EMPTY, send a seed-run ping (ping-on-silence). Propose-only throughout (CONST-002).',
+  },
+  {
+    key: 'forecast-triggers',
+    covers: [
+      'forecast-cadence', // the per-wave forecast re-issue commitment (f8d8b0a1 method)
+    ],
+    label: 'Solomon daily forecast-trigger check: >15% velocity delta / gate-state change / >10% scope delta vs last-issued forecast basis — silent unless a trigger fires',
+    script: null, // agent-judgment tick — cheap exact-counts, then re-issue judgment on fire
+    cron: '37 7 * * *',
+    prompt: 'Solomon daily forecast-trigger check: compare live exact counts against the LAST-ISSUED forecast basis — (a) completion velocity delta >15%, (b) any gate-state change on the forecast-critical path, (c) scope delta >10% (belt adds/removals). SILENT unless a trigger fires; on fire, re-issue the per-wave forecast with the trigger named. Propose-only (CONST-002).',
+  },
 ];
 
 // Parse the armed-cron keys the agent passes from its CronList output. --armed "a,b" arg, then env.
@@ -221,7 +252,11 @@ export function slugifyDuty(name) {
 // The captured NAME is slugified via slugifyDuty. Pure; no I/O.
 export function parseDurableDutyMarkers(markdown) {
   const slugs = new Set();
-  const re = /\*\*\s*([^*]+?)\s+DUTY\s*\(\s*durable\b[^)]*\)\s*\*\*/gi;
+  // QF-20260719-072: tolerate trailing punctuation INSIDE the bold ("(durable).**") — the live
+  // contract's ACCURACY REVIEW DUTY marker ends "(durable).**", which the strict ")**" tail
+  // silently dropped: a scribed durable duty invisible to parity (the exact false-negative this
+  // parser's header says cannot be allowed).
+  const re = /\*\*\s*([^*]+?)\s+DUTY\s*\(\s*durable\b[^)]*\)\s*[.:;,]?\s*\*\*/gi;
   let m;
   while ((m = re.exec(String(markdown || ''))) !== null) {
     const slug = slugifyDuty(m[1]);

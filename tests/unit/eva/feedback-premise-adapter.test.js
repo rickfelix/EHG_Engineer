@@ -15,7 +15,11 @@ function mockSb({ handoffs = [], completed = [] } = {}) {
   return {
     from(table) {
       if (table === 'sd_phase_handoffs') {
-        return { select: () => ({ eq: () => ({ gte: () => ({ limit: () => Promise.resolve({ data: handoffs, error: null }) }) }) }) };
+        // recentRecount paginates (FR-6): .order() then awaited .range() terminal.
+        return { select: () => ({ eq: () => ({ gte: () => {
+          const b = { order: () => b, range: () => Promise.resolve({ data: handoffs, error: null }) };
+          return b;
+        } }) }) };
       }
       if (table === 'strategic_directives_v2') {
         return { select: () => ({ eq: () => ({ gte: () => ({ or: () => ({ limit: () => Promise.resolve({ data: completed, error: null }) }) }) }) }) };

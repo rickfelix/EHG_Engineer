@@ -9,13 +9,19 @@ import { ingestProposalObject } from '../../scripts/leo-create-sd.js';
 const NOW = Date.parse('2026-06-23T00:00:00Z');
 
 // Configurable supabase double supporting both query chains the checker uses:
-//   sd_phase_handoffs: select → eq → gte → limit
+//   sd_phase_handoffs: select → eq → gte → order → range (paginated, FR-6 batch 7)
 //   strategic_directives_v2: select → eq → gte → or → limit
 function mockSb({ handoffs = [], handoffsError = null, completed = [] } = {}) {
   return {
     from(table) {
       if (table === 'sd_phase_handoffs') {
-        return { select: () => ({ eq: () => ({ gte: () => ({ limit: () => Promise.resolve({ data: handoffs, error: handoffsError }) }) }) }) };
+        // Chainable + thenable builder: fetchAllPaginated awaits builder.range(...)
+        // and stops on the short page; an error result makes it throw, which the
+        // checker's catch converts to { count: null } (fail-open policy under test).
+        const b = {};
+        for (const m of ['select', 'eq', 'gte', 'order', 'range', 'limit']) b[m] = () => b;
+        b.then = (resolve, reject) => Promise.resolve({ data: handoffs, error: handoffsError }).then(resolve, reject);
+        return b;
       }
       if (table === 'strategic_directives_v2') {
         return { select: () => ({ eq: () => ({ gte: () => ({ or: () => ({ limit: () => Promise.resolve({ data: completed, error: null }) }) }) }) }) };

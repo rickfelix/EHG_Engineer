@@ -67,6 +67,21 @@ export async function main(argv = process.argv, deps = {}) {
   const reconcile = deps.reconcile || reconcileOutboundSms;
   const summary = await reconcile(supabase, {});
   logger.log?.(`[sms-outbound-sweep] ${JSON.stringify({ ts: new Date().toISOString(), ...summary })}`);
+
+  // SD-LEO-INFRA-SMS-DELIVERY-TRUTH-001-B: run-side operator layer, all fail-soft —
+  // FR-1 governed cadence (register + witness the fire), FR-2 degradation alarm,
+  // FR-3 carrier-filter email-fallback escalation. deps.channelHealth is the test seam.
+  try {
+    const health = deps.channelHealth || await import('../../lib/chairman/sms-channel-health.js');
+    await health.ensureSweepSchedule(supabase, { logger });
+    await health.witnessSweepFired(supabase, { logger });
+    const degradation = await health.detectChannelDegradation(supabase, { logger });
+    const escalation = await health.escalateCarrierFiltered(supabase, { logger });
+    logger.log?.(`[sms-outbound-sweep] channel-health ${JSON.stringify({ degradation, escalation })}`);
+  } catch (err) {
+    logger.warn?.(`[sms-outbound-sweep] channel-health layer failed soft: ${err?.message || err}`);
+  }
+
   return { exitCode: 0, action: summary.ran ? 'reconciled' : 'inert', summary };
 }
 

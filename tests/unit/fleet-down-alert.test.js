@@ -1,8 +1,8 @@
 // SD-LEO-INFRA-FLEET-DOWN-EMAIL-ALERT-001 — pure decision logic for the fleet-down operator alert.
 // Oscillation-robust (sustained window, not point-in-time), claimable-gated, and edge-trigger-deduped
 // so a long outage emails once rather than every 15-min run.
-import { describe, it, expect } from 'vitest';
-import { evaluateFleetDownAlert, evaluateDeadCoordinatorAlert } from '../../scripts/fleet-down-alert.mjs';
+import { describe, it, expect, vi } from 'vitest';
+import { evaluateFleetDownAlert, evaluateDeadCoordinatorAlert, buildDeadCoordinatorMessage, checkDeadCoordinator } from '../../scripts/fleet-down-alert.mjs';
 
 // Helper: build a newest-first pulse list from active_count values.
 const pulses = (...active) => active.map((a) => ({ active_count: a }));
@@ -123,5 +123,55 @@ describe('evaluateDeadCoordinatorAlert (SD-LEO-INFRA-DURABLE-COORDINATOR-LOOPS-0
     expect(coordVerdict.alert).toBe(true);
     expect(fleetVerdict.reason).toMatch(/FLEET DOWN/);
     expect(coordVerdict.reason).toMatch(/DEAD COORDINATOR/);
+  });
+
+  it('TS-7: buildDeadCoordinatorMessage names the dead-coordinator condition, not the worker-fleet-down one', () => {
+    const verdict = evaluateDeadCoordinatorAlert({ lastCoordinatorHeartbeatAt: minutesAgo(16), now: NOW, staleMin: 15, cronIntervalMin: 15 });
+    const msg = buildDeadCoordinatorMessage(verdict, NOW);
+    expect(msg.body).toMatch(/DEAD COORDINATOR/);
+    expect(msg.body).not.toMatch(/FLEET DOWN/);
+    expect(msg.kind).toBe('dead_coordinator_alert');
+    expect(msg.dedupeKey).toBe(`dead-coordinator-${NOW.toISOString().slice(0, 13)}`);
+  });
+
+  it('TS-7: checkDeadCoordinator() calls the injected sendChairmanSMS exactly once on a genuine trip, with the dead-coordinator message', async () => {
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    const db = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            order: () => ({
+              limit: async () => ({ data: [{ heartbeat_at: minutesAgo(16) }], error: null }),
+            }),
+          }),
+        }),
+      }),
+    };
+    // getActiveCoordinatorId reads from the pointer file / DB internally; in this unit test we
+    // only care that checkDeadCoordinator's OWN heartbeat-driven trip logic calls the sender —
+    // stub the module's db-facing query surface above and let getActiveCoordinatorId resolve
+    // however it naturally does in this env (it degrades gracefully with no supabase writes).
+    await checkDeadCoordinator(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1);
+    const [message] = sendChairmanSMSFn.mock.calls[0];
+    expect(message.body).toMatch(/DEAD COORDINATOR/);
+    expect(message.kind).toBe('dead_coordinator_alert');
+  });
+
+  it('TS-7: checkDeadCoordinator() does NOT call sendChairmanSMS when the coordinator heartbeat is fresh', async () => {
+    const sendChairmanSMSFn = vi.fn();
+    const db = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            order: () => ({
+              limit: async () => ({ data: [{ heartbeat_at: minutesAgo(5) }], error: null }),
+            }),
+          }),
+        }),
+      }),
+    };
+    await checkDeadCoordinator(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).not.toHaveBeenCalled();
   });
 });

@@ -66,6 +66,8 @@ function captureSb({ selectData = [], singleData = undefined, insertResult = und
       is: (col, v) => { state.filters.push(['is', col, v]); return c; },
       order: () => c,
       limit: () => c,
+      // fetch-all-paginated (FR-6) awaits .range() as the paginated terminal.
+      range: () => Promise.resolve({ data: selectData, error: null }),
       single: async () => ({
         data: singleData !== undefined ? singleData
           : insertResult !== undefined ? insertResult
@@ -347,7 +349,8 @@ describe('getNurseryHealth (FR-2: status derived, maturity_level read)', () => {
   });
 
   test('returns zero counts when no items', async () => {
-    const supabase = { from: () => ({ select: async () => ({ data: null, error: null }) }) };
+    // fetch-all-paginated (FR-6) chains .select().order() and awaits .range().
+    const supabase = { from: () => { const q = { select: () => q, order: () => q, range: () => Promise.resolve({ data: null, error: null }) }; return q; } };
     const result = await getNurseryHealth({ supabase });
     expect(result).toEqual({ total: 0, parked: 0, reactivated: 0, stale: 0, items: [] });
   });
@@ -362,7 +365,7 @@ describe('getNurseryHealth (FR-2: status derived, maturity_level read)', () => {
       { id: '3', name: 'C', maturity_level: 'seed', trigger_conditions: ['x'], source_ref: {}, promoted_to_venture_id: null, created_at: old },
       { id: '4', name: 'D', maturity_level: 'ready', trigger_conditions: [], source_ref: {}, promoted_to_venture_id: 'v-9', created_at: recent },
     ];
-    const supabase = { from: () => ({ select: async () => ({ data: rows, error: null }) }) };
+    const supabase = { from: () => { const q = { select: () => q, order: () => q, range: () => Promise.resolve({ data: rows, error: null }) }; return q; } };
     const result = await getNurseryHealth({ supabase });
     expect(result).toMatchObject({ total: 4, parked: 2, reactivated: 1, stale: 1 });
     expect(result.items.find((i) => i.id === '3')).toMatchObject({ status: 'parked', maturity: 'seed', has_triggers: true });

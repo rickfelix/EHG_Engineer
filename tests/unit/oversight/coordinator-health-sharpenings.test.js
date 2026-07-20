@@ -130,3 +130,30 @@ describe('S2 FALSE_COMPLETION sampler', () => {
     expect(r.samples[0].unverifiable).toBe(true);
   });
 });
+
+describe('QF-20260719-365 — rank-time reason-band stamp is authoritative', () => {
+  it('classifyDispatchReason prefers the stamp over heuristics', () => {
+    expect(classifyDispatchReason({ sd_key: 'SD-FDBK-X-001', metadata: { dispatch_reason_band: 'incident' } })).toBe('incident');
+    expect(classifyDispatchReason({ sd_key: 'SD-PLAIN-001', metadata: { dispatch_reason_band: 'now-wave-remainder' } })).toBe('now_wave_remainder');
+    expect(classifyDispatchReason({ sd_key: 'SD-PLAIN-001', metadata: { dispatch_reason_band: 'chairman-directed' } })).toBe('chairman_directed');
+  });
+
+  it('falls back to heuristics when unstamped or the stamp is unknown vocabulary', () => {
+    expect(classifyDispatchReason({ sd_key: 'SD-FDBK-X-001', metadata: {} })).toBe('feedback');
+    expect(classifyDispatchReason({ sd_key: 'SD-PLAIN-001', metadata: { dispatch_reason_band: 'bogus' } })).toBe('other');
+  });
+
+  it('deriveDispatchReasons reports stamped coverage + direct-dispatch/self-claim partition', () => {
+    const rows = [
+      { sd_key: 'SD-A-001', metadata: { dispatch_reason_band: 'feedback' } },                              // self-claim
+      { sd_key: 'SD-B-001', metadata: { dispatch_reason_band: 'chairman-directed', directed_assignment: true } }, // direct
+      { sd_key: 'SD-C-001', metadata: {} },                                                                // unstamped
+    ];
+    const r = deriveDispatchReasons(rows);
+    expect(r.stamped).toBe(2);
+    expect(r.stamped_coverage).toBeCloseTo(2 / 3);
+    expect(r.partition).toEqual({ direct_dispatch: 1, self_claim: 1 });
+    expect(r.counts.feedback).toBe(1);
+    expect(r.counts.chairman_directed).toBe(1);
+  });
+});

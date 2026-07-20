@@ -34,27 +34,34 @@ function mockSupabase(overrides = {}) {
           }),
         }),
       }),
-      select: () => ({
-        eq: (col, val) => ({
-          order: () => Promise.resolve({
-            data: overrides.componentData ?? [
-              { id: 'o1', venture_id: 'v1', component: val, system_score: '60', override_score: '85', reason: 'Network effects', outcome: 'positive', outcome_notes: null, created_at: '2026-01-01' },
-              { id: 'o2', venture_id: 'v2', component: val, system_score: '70', override_score: '90', reason: 'Market timing', outcome: 'negative', outcome_notes: null, created_at: '2026-01-02' },
-            ],
-            error: overrides.queryError ?? null,
-          }),
-        }),
-        order: () => Promise.resolve({
-          data: overrides.allData ?? [
+      // fetch-all-paginated (FR-6 batch 7 follow-up) chains .order().order() then
+      // appends .range() and awaits each page; a short page (< pageSize) ends the
+      // loop after one page. Chainable builder with .range() as the resolving
+      // terminal; a configured queryError resolves as a page error, which
+      // fetchAllPaginated throws — exercising the preserved warn-and-return policy.
+      select: () => {
+        const pageOf = (rows) => Promise.resolve({
+          data: overrides.queryError ? null : rows,
+          error: overrides.queryError ?? null,
+        });
+        const builderOf = (rows) => {
+          const b = { order: () => b, range: () => pageOf(rows) };
+          return b;
+        };
+        return {
+          eq: (col, val) => builderOf(overrides.componentData ?? [
+            { id: 'o1', venture_id: 'v1', component: val, system_score: '60', override_score: '85', reason: 'Network effects', outcome: 'positive', outcome_notes: null, created_at: '2026-01-01' },
+            { id: 'o2', venture_id: 'v2', component: val, system_score: '70', override_score: '90', reason: 'Market timing', outcome: 'negative', outcome_notes: null, created_at: '2026-01-02' },
+          ]),
+          order: () => builderOf(overrides.allData ?? [
             { component: 'moat_architecture', system_score: '60', override_score: '85', outcome: 'positive' },
             { component: 'moat_architecture', system_score: '55', override_score: '80', outcome: 'positive' },
             { component: 'moat_architecture', system_score: '70', override_score: '90', outcome: 'positive' },
             { component: 'moat_architecture', system_score: '65', override_score: '75', outcome: 'negative' },
             { component: 'virality', system_score: '40', override_score: '30', outcome: 'positive' },
-          ],
-          error: overrides.queryError ?? null,
-        }),
-      }),
+          ]),
+        };
+      },
     }),
   };
 }

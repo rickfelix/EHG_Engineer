@@ -65,7 +65,7 @@ export const ADAM_LOOPS = [
     // class this comment already warns about, just for two different tokens.
     // QF-20260719-848: QUIET_TICK_SMS_INBOUND (undrained chairman SMS, contract INBOUND WATCH
     // duty) is the newest such token — kept in parity here so a cold-start tick surfaces + acts on it.
-    prompt: 'Run `node scripts/adam-quiet-tick.mjs`. It prints ONE QUIET_TICK summary line and self-paces. If the output contains NO QUIET_TICK_PING / QUIET_TICK_STALL_ALERT / QUIET_TICK_VENTURE_STALL_ALERT / QUIET_TICK_OUTBOUND_PROBE / QUIET_TICK_INBOX_DIRECTIVE / QUIET_TICK_INBOX_ITEM / QUIET_TICK_INBOX_CAP / QUIET_TICK_SMS_INBOUND / QUIET_TICK_ERROR lines, this turn is a NO-OP: arm ScheduleWakeup(nextWakeSeconds from the output) and emit nothing else. Otherwise act on the flagged lines (QUIET_TICK_INBOX_DIRECTIVE lines are HARD interrupts — process the directed row, then `node scripts/adam-advisory.cjs ack <id>`; QUIET_TICK_INBOX_ITEM lines are directed inbox rows to action or deliberately leave pending; QUIET_TICK_VENTURE_STALL_ALERT flags a stalled venture to investigate/escalate, mirroring QUIET_TICK_STALL_ALERT; QUIET_TICK_INBOX_CAP means the inbox fetch hit its cap — more rows may remain beyond this tick, re-run the drain; QUIET_TICK_SMS_INBOUND flags an undrained chairman SMS reply — a HARD interrupt: drain + reply per the CHAIRMAN SMS CHANNEL DUTY, `node scripts/sms-relay-drain.cjs`), then arm the wakeup.',
+    prompt: 'Run `node scripts/adam-quiet-tick.mjs`. It prints ONE QUIET_TICK summary line and self-paces. If the output contains NO QUIET_TICK_PING / QUIET_TICK_STALL_ALERT / QUIET_TICK_VENTURE_STALL_ALERT / QUIET_TICK_OUTBOUND_PROBE / QUIET_TICK_INBOX_DIRECTIVE / QUIET_TICK_INBOX_ITEM / QUIET_TICK_INBOX_CAP / QUIET_TICK_SMS_INBOUND / QUIET_TICK_OVERSIGHT_OVERDUE / QUIET_TICK_SELFSCORE_OVERDUE / QUIET_TICK_ERROR lines, this turn is a NO-OP: arm ScheduleWakeup(nextWakeSeconds from the output) and emit nothing else. Otherwise act on the flagged lines (QUIET_TICK_INBOX_DIRECTIVE lines are HARD interrupts — process the directed row, then `node scripts/adam-advisory.cjs ack <id>`; QUIET_TICK_INBOX_ITEM lines are directed inbox rows to action or deliberately leave pending; QUIET_TICK_VENTURE_STALL_ALERT flags a stalled venture to investigate/escalate, mirroring QUIET_TICK_STALL_ALERT; QUIET_TICK_INBOX_CAP means the inbox fetch hit its cap — more rows may remain beyond this tick, re-run the drain; QUIET_TICK_SMS_INBOUND flags an undrained chairman SMS reply — a HARD interrupt: drain + reply per the CHAIRMAN SMS CHANNEL DUTY, `node scripts/sms-relay-drain.cjs`; QUIET_TICK_OVERSIGHT_OVERDUE / QUIET_TICK_SELFSCORE_OVERDUE flag a lost/failing deliberate-check cron — run the named check NOW per the line, QF-20260719-825), then arm the wakeup.',
   },
   {
     key: 'governance-scan',
@@ -167,6 +167,28 @@ export const ADAM_LOOPS = [
     script: 'adam-quiet-tick.mjs',
     cron: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *',
     prompt: 'node scripts/adam-quiet-tick.mjs',
+  },
+  {
+    // QF-20260719-825 (chairman-directed 2026-07-19: deliberate checks run on a set schedule,
+    // never from memory): the 8-dimension rubric self-score previously lived only in a
+    // session cron and went 16 DAYS stale (last row 2026-07-03) when sessions died. The
+    // writer's own flag/cadence gates govern; a flag-gated no-op is escalated by the agent
+    // rather than silently accepted (the chairman-directed cadence outranks ships-inert).
+    key: 'self-score',
+    label: 'Adam 8-dim rubric self-score (6h; feedback category=adam_self_assessment; writer gates govern)',
+    script: 'adam-self-assessment-writer.cjs',
+    cron: '40 */6 * * *',
+    prompt: 'Adam self-score tick: run node scripts/adam-self-assessment-writer.cjs. If it reports the flag/cadence gate blocked the write, re-run with --force and note the override in the row (chairman-directed 6h cadence, QF-20260719-825, outranks the ships-inert default). Never fabricate dimension scores — inconclusive stays inconclusive.',
+  },
+  {
+    // QF-20260719-825: Solomon singleton health check, 2x/day — previously a hand-armed
+    // session cron. Agent-judgment: liveness is session heartbeat_at (never SD updated_at),
+    // and never declare DEAD on a single signal.
+    key: 'solomon-health',
+    label: 'Solomon singleton health check (2x/day: heartbeat freshness + consult-inbox depth -> advisory on drift)',
+    script: null, // agent-judgment tick — liveness + inbox judgment, no single script
+    cron: '25 8,20 * * *',
+    prompt: 'Adam solomon-health tick: resolve the active Solomon (getActiveSolomonId) and check (a) claude_sessions heartbeat_at freshness for that session (heartbeat is the liveness signal — never SD updated_at, never DEAD on one signal), (b) unanswered solomon_consult depth/age in session_coordination. If Solomon looks dead/stale or consults are piling up, surface ONE advisory to the coordinator (node scripts/adam-advisory.cjs send) proposing a restart/succession check — propose-only, never restart anything yourself.',
   },
   {
     // QF-20260719-343 (contract c3, leo_protocol_sections id=601, chairman-directed 2026-07-19):

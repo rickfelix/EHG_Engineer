@@ -85,6 +85,33 @@ export const RESPONSIBILITIES = [
 // NOTE: the original SD scope text also named a "root-freshness" loop. It does not exist anywhere
 // in this array or the codebase (verified by VALIDATION, evidence row dd2f16c2-9c2e-424e-b7fb-94e76860b590)
 // — dropped as a phantom/typo'd scope-text reference, not implemented.
+//
+// TS-3 — per-loop double-fire (session-armed + GHA both trigger the same window) idempotency
+// verdict. TESTING gate finding (evidence row f3ece776-9f0e-4fc7-933d-40c2ca326c5d): a blanket
+// "these scripts are idempotent" claim by analogy to retention/backlog-rank is explicitly
+// insufficient — each of the 13 migrated scripts is verified individually below, citing the
+// concrete evidence (source-file comment, dedup-key/query-before-insert pattern, or read-only
+// no-write shape) rather than assumed safety.
+//
+//   key                       | verdict | evidence
+//   --------------------------|---------|------------------------------------------------------
+//   sweep                     | SAFE    | stale-session-sweep.cjs's own header: "Safe to run repeatedly — fully idempotent."
+//   flag-review               | SAFE    | flag-governance-review.mjs queries feedback for an existing metadata->>digest_key='flag-gov:<today>' row before inserting; the flags .update(last_reviewed_at) is a plain timestamp overwrite (repeat-safe by construction)
+//   unranked-gauge            | SAFE    | gauge-unranked-claimable-leaves.mjs is read + log only (no .insert/.upsert calls) — a pure gauge has nothing to duplicate
+//   singleton-relaunch        | SAFE    | singleton-relaunch-scheduler.mjs defaults to dry-run/report-only (SINGLETON_RELAUNCH_SCHEDULING_ENABLED gate) and guards real writes behind its own stampLastFired marker
+//   relay-drain                | SAFE    | coordinator-relay-drain.cjs only selects UNDRAINED relay_request rows (relay-queue.cjs's drainOne marks a row drained as part of processing it) — a second concurrent run finds nothing left to drain
+//   relay-drop-gauge          | SAFE    | coordinator-relay-drop-gauge.cjs's own header: "Idempotent per (correlationId): a row already flagged for the same correlation is [skipped]"
+//   fleet-retro               | SAFE    | coordinator-fleet-retro.mjs's insert uses an explicit dedup key on the capture path (source_id/type-scoped)
+//   row-growth                | SAFE    | row-growth-snapshot.cjs is internally due-gated (~22h) per its own STANDARD_LOOPS comment above — an extra run inside the gate window is a documented no-op
+//   review-rotation            | SAFE    | subsystem-review-rotation.cjs is internally due-gated (~6 days) per its own STANDARD_LOOPS comment above — extra arms/manual runs are documented no-ops
+//   scripts-reachability        | SAFE    | scripts-reachability-gauge.mjs is internally due-gated (~6 days) per its own STANDARD_LOOPS comment above
+//   gauge-runner                | SAFE    | gauge-runner.mjs's own header: "Idempotent (safe to re-run — findings are [deduped])"
+//   feedback-sla                | SAFE    | lib/coordinator/feedback-sla-gauge.cjs's remindSlaBreaches is rate-limited/deduped per category per day via metadata.sla_key, per its own STANDARD_LOOPS comment above
+//   solomon-ledger-resurface     | SAFE    | solomon-ledger-pending-resurface.cjs's own header: capped to once per stale ledger row per day via payload.dedup_key checked before insert
+//
+// All 13 verified SAFE for an occasional session+GHA double-fire. None required a code change to
+// reach this verdict — the additive migration pattern only works because these loops were already
+// built idempotent (a prerequisite the design doc's precedent, retention/backlog-rank, also relied on).
 export const STANDARD_LOOPS = [
   { key: 'sweep',       label: 'Stale-session sweep',  script: 'stale-session-sweep.cjs',   cron: '*/5 * * * *',
     gha_backed: true,
@@ -231,6 +258,20 @@ export const STANDARD_LOOPS = [
   { key: 'gauge-runner', label: 'Invariant-gauges execution surface (hourly, durable)', script: 'gauge-runner.mjs', cron: '0 * * * *',
     gha_backed: true,
     prompt: 'node scripts/gauge-runner.mjs --json' },
+  // QF-20260719-720 (operator directive: duty adherence must be schedule-driven, not memory-driven):
+  // three duties proven necessary by 2026-07-19 live incidents existed only as the incumbent
+  // coordinator's session crons (f9382bc7/8d60db23/ea868bfd) — the exact session-fragility class
+  // fixed for roles-review (QF-272) and gauge-runner (QF-563). Durably encoded here so every
+  // coordinator startup re-arms them. Idempotency: advisory-drain acts per-item with per-item
+  // actioned_at acks (an extra run finds nothing unactioned); silent-holder-audit skips holders
+  // already carrying an unanswered status request; shared-root-freshness's pull is a no-op on an
+  // up-to-date tree.
+  { key: 'advisory-drain', label: 'Adam-advisory drain — ACT + per-item ack (the QF-298 gauge is the counter; this is the acting half)', script: 'read-adam-advisories.cjs', cron: '6,16,26,36,46,56 * * * *',
+    prompt: 'Run `node scripts/read-adam-advisories.cjs`. For EACH unactioned advisory listed: ACTION it per its kind (route/decide/reply — never lean-filter advisories) and ack it PER-ITEM (actioned_at) — never bulk-ack. If none are listed this is a NO-OP. Incident basis: 14 advisories incl a chairman decision sat unactioned ~2.5h while every tick read clean.' },
+  { key: 'silent-holder-audit', label: 'Silent-claim-holder audit — status-or-release on >3h no-signal with no work product', script: null, cron: '23 * * * *',
+    prompt: 'Silent-holder audit: list fleet workers currently holding an sd_key claim. For each holder with >3h since their last /signal AND no work product in that window (no PR, no commits on the claim branch — WORK PRODUCT is the discriminator, never loop_state/started_at), send a status-or-release coordinator_request via the dispatch choke — unless that holder already has an unanswered status request pending (skip, no re-nudge). Release decisions stay with the sweep; this loop only asks.' },
+  { key: 'shared-root-freshness', label: 'Shared-root freshness — pull when clean main is behind origin (remediation half of the stale-tree gauge)', script: null, cron: '51 */2 * * *',
+    prompt: 'Shared-root freshness: in the SHARED ROOT (never a worktree), if `git status --porcelain` is clean AND the branch is main AND `git fetch origin && git rev-list --count HEAD..origin/main` > 0, run `git pull --ff-only`. If the tree is dirty or not on main, REPORT the state instead of pulling (another session may be mid-work). The stale-tree gauge detects; this loop remediates.' },
   // QF-20260704-493: feedback-consumption SLA gauge daily reminder (Solomon referent-audit
   // cell [4]) — actionable feedback categories (adam_adherence_drift, completion_flag,
   // coordinator_review, harness_backlog escalations) had no consumption deadline. Internally

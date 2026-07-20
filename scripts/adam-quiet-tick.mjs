@@ -29,6 +29,7 @@ import { TABLE as TASK_LEDGER_TABLE, syncParentRollupStatus } from '../lib/adam/
 import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const require = createRequire(import.meta.url);
+const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs');
 const { decideCadence, detectSalientDelta, runCoresFailSoft } = require('../lib/coordinator/quiet-tick.cjs');
@@ -284,6 +285,42 @@ export async function surfaceInboxItems(sb) {
 // labelled but non-matches still surface. Read-only surfacing (mirrors drainSmsRelayStaging's
 // all-undrained query in lib/chairman/sms-bridge.js); fail-soft — any error returns rows:[].
 const SMS_INBOUND_CAP = 50;
+// QF-20260719-825 (layer 2): oversight-staleness backstop. Even with the durable loop
+// entries + the GHA cron (QF-20260719-196), a lost cron must not go unnoticed for days
+// again (coordinator-health evidence was 70.4h stale; the self-score 16 days). Reads the
+// last-run stamps and flags when a stamp exceeds 2x its cadence, so the armed wakeup
+// prompt forces the check. Fail-soft: any read error reports nothing (never breaks the tick).
+export const OVERSIGHT_CADENCE_MS = 6 * 60 * 60 * 1000;   // coordinator-health loop cadence
+export const SELFSCORE_CADENCE_MS = 6 * 60 * 60 * 1000;   // self-score loop cadence
+export async function checkOversightStaleness(sb, { nowMs = Date.now() } = {}) {
+  const out = { oversightOverdueH: null, selfScoreOverdueH: null };
+  try {
+    const { data } = await sb
+      .from('codebase_health_snapshots')
+      .select('created_at')
+      .eq('dimension', 'adam_coordinator_health')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const last = data && data[0] && Date.parse(data[0].created_at);
+    if (Number.isFinite(last) && nowMs - last > 2 * OVERSIGHT_CADENCE_MS) {
+      out.oversightOverdueH = Math.round((nowMs - last) / 3600000);
+    }
+  } catch { /* fail-soft */ }
+  try {
+    const { data } = await sb
+      .from('feedback')
+      .select('created_at')
+      .eq('category', 'adam_self_assessment')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const last = data && data[0] && Date.parse(data[0].created_at);
+    if (Number.isFinite(last) && nowMs - last > 2 * SELFSCORE_CADENCE_MS) {
+      out.selfScoreOverdueH = Math.round((nowMs - last) / 3600000);
+    }
+  } catch { /* fail-soft */ }
+  return out;
+}
+
 export async function surfaceSmsInbound(sb) {
   try {
     const chairmanPhone = process.env.CHAIRMAN_PHONE || null;
@@ -433,13 +470,31 @@ async function main() {
     try {
       const coordinatorId = await getActiveCoordinatorId(sb);
       if (coordinatorId) {
+        const subject = '[ACCOUNT_SWITCH] Adam session Claude account changed';
+        const body = `Adam's Claude account switched from ${acctSwitch.event.from.email} (${acctSwitch.event.from.orgName}) ` +
+          `to ${acctSwitch.event.to.email} (${acctSwitch.event.to.orgName}).`;
+        // QF-20260719-208: mirror adam-advisory.cjs's L1 pre-send Solomon-consult gate at this
+        // tick's emit choke (previously bypassed it entirely). The tick is non-interactive (no
+        // live session to bounded-await a reply against), so a required consult fires a durable,
+        // non-blocking solomon_consult row alongside the send rather than adam-advisory's
+        // synchronous wait — Solomon still sees every consequential tick-originated send.
+        // Fail-open by construction: a gate/consult error never blocks the account-switch notice.
+        try {
+          const { evaluatePreSendConsult } = await import('../lib/adam/should-consult-solomon.js');
+          if (evaluatePreSendConsult({ title: subject, body, isChairmanTargeted: false }).action === 'consult-then-send') {
+            const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
+            const { buildSolomonConsultPayload } = require('./worker-signal.cjs');
+            const solomonId = await getActiveSolomonId(sb).catch(() => null);
+            const cp = buildSolomonConsultPayload({ correlationId: crypto.randomUUID(), body: `[PRE-SEND CONSULT] ${body}`, senderCallsign: 'adam-quiet-tick', repo: process.cwd(), severity: 'high' });
+            await insertCoordinationRow(sb, { sender_type: 'adam', target_session: solomonId || 'broadcast-solomon', message_type: 'INFO', subject: '[SOLOMON_CONSULT] pre-send', body: cp.body, payload: cp }, { targetRoleHint: 'solomon' });
+          }
+        } catch { /* fail-open — see comment above */ }
         await insertCoordinationRow(sb, {
           sender_type: 'adam',
           target_session: coordinatorId,
           message_type: 'INFO',
-          subject: '[ACCOUNT_SWITCH] Adam session Claude account changed',
-          body: `Adam's Claude account switched from ${acctSwitch.event.from.email} (${acctSwitch.event.from.orgName}) ` +
-            `to ${acctSwitch.event.to.email} (${acctSwitch.event.to.orgName}).`,
+          subject,
+          body,
           payload: { kind: 'account_switch_notice', ...acctSwitch.event, reply_class: 'fire-and-forget' },
         });
         acctNotified = true;
@@ -512,6 +567,15 @@ async function main() {
     }
     for (const v of ventureStall.alerted) {
       console.log(`QUIET_TICK_VENTURE_STALL_ALERT=adam venture=${v.id} name="${v.name}" state=${v.orchestrator_state} escalated=${v.escalated}`);
+    }
+    // QF-20260719-825 (layer 2): flag overdue oversight/self-score stamps so the armed
+    // wakeup prompt forces the check even when a cron was lost (act-on-flagged-lines contract).
+    const oversightStale = await checkOversightStaleness(sb);
+    if (oversightStale.oversightOverdueH) {
+      console.log(`QUIET_TICK_OVERSIGHT_OVERDUE=adam lastSnapshotAgeH=${oversightStale.oversightOverdueH} — run node scripts/adam-coordinator-health.mjs NOW (durable cron lost or failing; cadence 6h, threshold 2x)`);
+    }
+    if (oversightStale.selfScoreOverdueH) {
+      console.log(`QUIET_TICK_SELFSCORE_OVERDUE=adam lastScoreAgeH=${oversightStale.selfScoreOverdueH} — run node scripts/adam-self-assessment-writer.cjs NOW (durable cron lost or failing; cadence 6h, threshold 2x)`);
     }
     // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-3): first-class inbox surfacing —
     // directive/reply-needed rows carry the distinct hard-interrupt token.

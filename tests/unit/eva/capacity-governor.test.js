@@ -12,6 +12,17 @@ import {
   CONSTANTS,
 } from '../../../lib/eva/capacity-governor.js';
 
+// fetch-all-paginated (FR-6) chains .order().range() after .not() and awaits each
+// page; a short page (< pageSize) ends the loop after one page. This chainable
+// builder lets the ledger query resolve through the real (non-catch) code path.
+function ledgerBuilder(rows) {
+  const b = {
+    order: () => b,
+    range: () => Promise.resolve({ data: rows, error: null }),
+  };
+  return b;
+}
+
 describe('projectTimeToWall()', () => {
   it('reproduces the real ~5.3h/6-session exhaustion within +/-45min at reference burn rate (TS-1 backtest)', () => {
     const { hoursToWall } = projectTimeToWall({
@@ -54,7 +65,7 @@ describe('getCalibratedBudget()', () => {
       from: () => ({
         select: () => ({
           eq: () => ({
-            not: () => Promise.resolve({ data: [], error: null }),
+            not: () => ledgerBuilder([]),
           }),
         }),
       }),
@@ -70,7 +81,7 @@ describe('getCalibratedBudget()', () => {
       from: () => ({
         select: () => ({
           eq: () => ({
-            not: () => Promise.resolve({ data: [{ session_hours_burned: 32 }], error: null }),
+            not: () => ledgerBuilder([{ session_hours_burned: 32 }]),
           }),
         }),
       }),

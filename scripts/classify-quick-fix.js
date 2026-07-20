@@ -100,8 +100,14 @@ function analyzeDescription(description, title) {
 async function classifyQuickFix(qfId, options = {}) {
   console.log(`\n🔍 Classifying Quick-Fix: ${qfId}\n`);
 
+  // QF-20260720-415: this client claims (UPDATEs) quick_fixes rows via claimQuickFix()
+  // below, a privileged write RLS blocks for the anon role. The anon key silently no-ops
+  // the UPDATE (0 rows, no error) instead of throwing, which claimQuickFix() then
+  // misreports as "a different holder owns it" — every claim attempt failed fleet-wide
+  // regardless of actual claim state. Use the service-role key, matching every other
+  // privileged-write script in this codebase (e.g. the SD-claim path).
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
     console.log('❌ Missing Supabase credentials in .env file');

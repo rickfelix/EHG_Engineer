@@ -185,7 +185,10 @@ describe('TS-2/TS-3: dedup-by-done-state — nowMs always injected, corroboratio
           eq: () => ({
             gte: (_col, val) => {
               capturedGteArg = val;
-              return { or: () => ({ limit: async () => ({ data: [] }) }), limit: async () => ({ data: [] }) };
+              // recentRecount (FR-6 batch 7) chains .order() then fetch-all-paginated
+              // appends .range(); one empty short page = recount 0 (prior semantics).
+              const pageChain = { order: () => pageChain, range: async () => ({ data: [], error: null }) };
+              return { or: () => ({ limit: async () => ({ data: [] }) }), limit: async () => ({ data: [] }), order: () => pageChain };
             },
           }),
         }),
@@ -216,10 +219,16 @@ describe('TS-2/TS-3: dedup-by-done-state — nowMs always injected, corroboratio
       from: () => ({
         select: () => ({
           eq: () => ({
-            gte: () => ({
-              limit: async () => ({ data: [] }),
-              or: () => ({ limit: async () => ({ data: [{ sd_key: 'SD-FAKE-001', title: 'fixed thing', completion_date: daysAgo(2) }] }) }),
-            }),
+            gte: () => {
+              // recentRecount (FR-6 batch 7): .order().range() resolves one empty
+              // short page = recount 0 (prior `limit` terminal semantics preserved).
+              const pageChain = { order: () => pageChain, range: async () => ({ data: [], error: null }) };
+              return {
+                limit: async () => ({ data: [] }),
+                or: () => ({ limit: async () => ({ data: [{ sd_key: 'SD-FAKE-001', title: 'fixed thing', completion_date: daysAgo(2) }] }) }),
+                order: () => pageChain,
+              };
+            },
           }),
         }),
       }),
@@ -239,10 +248,16 @@ describe('TS-2/TS-3: dedup-by-done-state — nowMs always injected, corroboratio
       from: () => ({
         select: () => ({
           eq: () => ({
-            gte: () => ({
-              limit: async () => ({ data: [] }),
-              or: () => ({ limit: async () => ({ data: [{ sd_key: 'SD-FAKE-002', title: 'some backlog item', completion_date: daysAgo(2) }] }) }),
-            }),
+            gte: () => {
+              // recentRecount (FR-6 batch 7): .order().range() resolves one empty
+              // short page = recount 0 (prior `limit` terminal semantics preserved).
+              const pageChain = { order: () => pageChain, range: async () => ({ data: [], error: null }) };
+              return {
+                limit: async () => ({ data: [] }),
+                or: () => ({ limit: async () => ({ data: [{ sd_key: 'SD-FAKE-002', title: 'some backlog item', completion_date: daysAgo(2) }] }) }),
+                order: () => pageChain,
+              };
+            },
           }),
         }),
       }),

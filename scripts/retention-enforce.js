@@ -103,14 +103,21 @@ export async function enforcePolicy(supabase, policy, { apply = false, runId = n
       // retention_archive copies before retrying the delete. Check which of this batch's
       // ids already have an archive row for this table and skip re-archiving those —
       // only their delete is retried.
+      // QF-20260719-097: the dedup .in() must be CHUNKED like the delete below — a full
+      // BATCH_SIZE (1000) of UUIDs in one query string blows the PostgREST URL limit and
+      // 400s ('Bad Request'), failing every table with >~a few hundred eligible rows
+      // (live: the 07-19 cron red on 5 tables; ≤106-row tables passed).
       const candidateIds = rows.map((r) => String(r.id));
-      const { data: alreadyArchived, error: archCheckErr } = await supabase
-        .from('retention_archive')
-        .select('source_id')
-        .eq('source_table', policy.table)
-        .in('source_id', candidateIds);
-      if (archCheckErr) throw new Error(`archive-dedup check failed: ${archCheckErr.message}`);
-      const archivedIdSet = new Set((alreadyArchived || []).map((a) => a.source_id));
+      const archivedIdSet = new Set();
+      for (const idCh of chunk(candidateIds, DELETE_CHUNK)) {
+        const { data: alreadyArchived, error: archCheckErr } = await supabase
+          .from('retention_archive')
+          .select('source_id')
+          .eq('source_table', policy.table)
+          .in('source_id', idCh);
+        if (archCheckErr) throw new Error(`archive-dedup check failed: ${archCheckErr.message}`);
+        for (const a of (alreadyArchived || [])) archivedIdSet.add(a.source_id);
+      }
       const toArchive = rows.filter((r) => !archivedIdSet.has(String(r.id)));
 
       // 1) ARCHIVE — must succeed before any delete (TR-1). Skips ids already archived by

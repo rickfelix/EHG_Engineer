@@ -20,15 +20,22 @@ function makeWorker({ selectResult, captureLt, captureNeq }) {
     from: vi.fn().mockImplementation(() => {
       call++;
       if (call === 1) {
-        return {
-          select: () => ({
-            eq: () => ({
-              lt: (col, val) => { if (captureLt) captureLt(col, val); return Promise.resolve(selectResult); },
-              // the OLD broken comparison — present only so a regression that re-introduces it is caught
-              neq: (col, val) => { if (captureNeq) captureNeq(col, val); return Promise.resolve(selectResult); },
-            }),
-          }),
+        // fetch-all-paginated (FR-6) appends .order() and awaits .range(). The chain
+        // is fully chainable; .range() is the resolving terminal. A query error is
+        // surfaced by rejecting (mirrors fetchAllPaginated throwing on a page error),
+        // so _onStartupRecovery's FAIL-LOUD path sees the underlying message.
+        const b = {
+          select: () => b,
+          eq: () => b,
+          lt: (col, val) => { if (captureLt) captureLt(col, val); return b; },
+          // the OLD broken comparison — present only so a regression that re-introduces it is caught
+          neq: (col, val) => { if (captureNeq) captureNeq(col, val); return b; },
+          order: () => b,
+          range: () => (selectResult && selectResult.error
+            ? Promise.reject(new Error(selectResult.error.message))
+            : Promise.resolve(selectResult)),
         };
+        return b;
       }
       // UPDATE chain (and anything else) — inert success
       return { update: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) }), insert: () => Promise.resolve({ error: null }) };
