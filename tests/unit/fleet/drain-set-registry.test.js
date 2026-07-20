@@ -11,7 +11,11 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 const require = createRequire(import.meta.url);
 const { DRAIN_SETS } = require('../../../lib/fleet/worker-status.cjs');
-import { resolveRecognizedKinds, assertRegistryTablesExist } from '../../../lib/fleet/drain-set-registry.js';
+import {
+  resolveRecognizedKinds,
+  assertRegistryTablesExist,
+  warnIfUndrainedKindViaRegistry,
+} from '../../../lib/fleet/drain-set-registry.js';
 
 const REPO_ROOT = path.resolve(fileURLToPath(new URL('.', import.meta.url)), '../../..');
 const MIGRATION_PATH = path.join(REPO_ROOT, 'database/migrations/20260720_role_drain_sets_STAGED.sql');
@@ -44,6 +48,44 @@ describe('resolveRecognizedKinds (TS-3: fail-open byte-identical to DRAIN_SETS)'
 
   it('never throws on missing role', async () => {
     await expect(resolveRecognizedKinds({ supabase: null, role: undefined })).resolves.toEqual([]);
+  });
+});
+
+describe('warnIfUndrainedKindViaRegistry: unrecognized-role guard (adversarial review finding, PR #6331)', () => {
+  it('stays SILENT for a role not present in DRAIN_SETS -- matches warnIfUndrainedKind\'s "if (!set) return false" guard', async () => {
+    const warn = vi.fn();
+    const fired = await warnIfUndrainedKindViaRegistry({
+      supabase: null,
+      targetRole: 'chairman',
+      kind: 'adam_advisory',
+      log: warn,
+    });
+    expect(fired).toBe(false);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('stays SILENT for a known role with a kind that IS in its DRAIN_SETS entry (guard did not over-suppress)', async () => {
+    const warn = vi.fn();
+    const fired = await warnIfUndrainedKindViaRegistry({
+      supabase: null,
+      targetRole: 'solomon',
+      kind: 'coordinator_request',
+      log: warn,
+    });
+    expect(fired).toBe(false); // coordinator_request IS in the hard-coded DRAIN_SETS.solomon
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('WARNs for a known role with a genuinely undrained kind', async () => {
+    const warn = vi.fn();
+    const fired = await warnIfUndrainedKindViaRegistry({
+      supabase: null,
+      targetRole: 'worker',
+      kind: 'adam_advisory',
+      log: warn,
+    });
+    expect(fired).toBe(true);
+    expect(warn).toHaveBeenCalledOnce();
   });
 });
 
