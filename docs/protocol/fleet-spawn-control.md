@@ -54,6 +54,17 @@ Mirrors the existing `WORKER_SPAWN_EXECUTOR_LIVE` convention (`docs/protocol/coo
 - **SD-A** `SD-LEO-INFRA-FLEET-REGISTRY-MANIFEST-001` (completed) — the session-registry/manifest SSOT this SD adapts (`lib/fleet/session-registry-adapter.js`).
 - **SD-C** `SD-LEO-INFRA-FLEET-VIEW-BADGES-001` — pure read/render consumer of the lifecycle event feed this SD emits.
 - **SD-E** `SD-LEO-INFRA-FLEET-WATCHDOG-001` (shipped) — `lib/fleet/session-watchdog.js`'s AUTH-LOST remediation string names `relaunchUnderProfile()` by name (verb/state-model alignment, FR-10).
+- **`SD-LEO-INFRA-SESSION-VIEW-BROWSER-001-B`** (completed) — the terminal detail-pane consumer, `lib/fleet/session-detail-view.js`. See "Session Detail View (Child B)" below.
+
+## Session Detail View (Child B, `SD-LEO-INFRA-SESSION-VIEW-BROWSER-001-B`)
+
+`lib/fleet/session-detail-view.js` is a pure view-model builder for the fleet launcher session view's terminal detail pane (mockup #2, chairman-ratified). It composes this SD's `attach()` verb with raw `claude_sessions`/`context_usage_log` telemetry, patterned on `session-watchdog.js`'s `classifyWatchdogState()` convention (data-in / structured-object-out, no DB/IO inside the module itself — a caller does the fetching).
+
+- **`mapAttachState(attachResult)`** — maps this SD's `attach()` return shape (`{ok, reason, session_id}`, `reason` in the BARE strings `no_key`/`not_found`/`ambiguous`/`no_captured_handle`/`stale_handle` — never a `not_resolved:*`-prefixed string, which only ever appears in the internally-emitted `coordination_events` row) into a display-ready `{ok, reason, degraded, message}` descriptor. `undefined`/`null` input (attach never attempted) is deliberately distinct from a genuine failure (`ok:null`, not `ok:false`).
+- **`buildSessionDetailView(session, opts)`** — builds `{ctxPercent, lastTool, lastToolAt, lastActivityKind, silentUntil, attachState}` from a `claude_sessions` row plus optional `{ctxRow, attachResult}`. `ctxPercent` is read from the `context_usage_log` table directly (never the fleet-wide `get_context_usage_summary` RPC, which has no session grain) and fails soft to `null` — the table's `session_id` join is live-confirmed STARVED in production; that starvation is a separate, out-of-scope concern this module degrades around, not fixes.
+- **Deliberate scope cut**: "action history" is scoped to the single most-recent action (`lastTool`/`lastToolAt`/`lastActivityKind`) — no multi-entry scrollback exists anywhere in the fleet namespace (`coordination_events` is a general fleet-event log, not per-session tool-call history); a true scrollback is a separate, larger future SD.
+- **No live consumer yet** — mirrors sibling `SD-LEO-INFRA-SESSION-VIEW-BROWSER-001-A`'s (sandboxed agent-browser control plane) identical backend-only framing: this repo has no fleet launcher UI shell yet, so this module ships the tested building block a future UI backend route will call.
+- Tests: `tests/unit/fleet/session-detail-view.test.js` (14 tests) — includes a regression test for an adversarial-review-caught prototype-chain lookup bug (`reason` values like `'toString'`/`'constructor'`/`'__proto__'` previously returned a non-string inherited value via a plain-object lookup; fixed with an `Object.hasOwn()` own-property guard).
 
 ## Cross-References
 
