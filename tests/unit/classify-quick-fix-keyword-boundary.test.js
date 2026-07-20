@@ -61,3 +61,20 @@ describe('analyzeDescription — end-to-end (SD-REFILL-00202Z4B)', () => {
     expect(issues.some((i) => /refactor/i.test(i))).toBe(true);
   });
 });
+
+// QF-20260720-415: the Supabase client classifyQuickFix() builds performs a privileged
+// UPDATE (claimQuickFix's CAS) that RLS silently no-ops under the anon role — 0 rows
+// affected, no error — which claimQuickFix then misreports as "a different holder owns
+// it" regardless of the row's actual claim state. Every worker's claim attempt failed
+// fleet-wide until this was caught. Static source check (classifyQuickFix itself is
+// intentionally not exported — CLI-only per the file's own convention) so a future edit
+// can't silently reintroduce the anon key here.
+describe('classifyQuickFix Supabase client (QF-20260720-415)', () => {
+  it('constructs its client from SUPABASE_SERVICE_ROLE_KEY, never an anon key', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const source = readFileSync(fileURLToPath(new URL('../../scripts/classify-quick-fix.js', import.meta.url)), 'utf8');
+    expect(source).toContain('SUPABASE_SERVICE_ROLE_KEY');
+    expect(source).not.toContain('ANON_KEY');
+  });
+});
