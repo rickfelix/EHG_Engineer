@@ -1,0 +1,61 @@
+name: "Chairman morning-brief (6:00 ET self-healing cron)"
+
+# QF-20260720-531 — durable 6:00 AM ET morning-brief SMS (chairman contract c4).
+# The one-shot runner (scripts/cron/chairman-morning-brief-sweep.mjs --once) builds a short
+# roadmap-position + "what moved overnight" body and enqueues a TEXT-only 'morning_brief'
+# obligation via the hardened owed-state bridge (enqueueChairmanSms). Delivery-truth is
+# reconciled by the pre-existing sms-outbound-worker — this cron never sends via the provider
+# directly.
+#
+# ROOT CAUSE this replaces: morning-brief-sms previously existed only as a live-Adam-session
+# ADAM_LOOPS re-arm (scripts/adam-startup-check.mjs) -- session CronCreate jobs die with the
+# session and expire in 7 days (the same root cause QF-20260719-196/QF-20260719-997 fixed for
+# two sibling Adam duties the same day morning-brief-sms shipped). It missed its very next fire.
+#
+# SELF-HEALING WINDOW (not a single-fire cron): runs every 15 minutes from 6:00 AM through
+# 11:59 AM ET (both DST offsets always registered; the sweep gates real work on an
+# America/New_York wall-clock check). The first run past 6:00 ET does the real enqueue; every
+# later run in the window is a dedupe-key no-op UNLESS the first attempt failed, in which case
+# the next 15-minute tick sends it late -- the reconciliation check IS the trigger, by
+# construction, so there is no separate mechanism to fall out of sync with the primary fire.
+
+on:
+  schedule:
+    - cron: '*/15 10-15 * * *'  # 06:00-11:45 EDT (summer)
+    - cron: '*/15 11-16 * * *'  # 06:00-11:45 EST (winter)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  morning-brief:
+    name: Enqueue the 6:00 ET chairman morning-brief SMS
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CHAIRMAN_PHONE: ${{ secrets.CHAIRMAN_PHONE }}
+      TWILIO_STATUS_CALLBACK_URL: ${{ secrets.TWILIO_STATUS_CALLBACK_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Enqueue morning-brief SMS (6:00-11:59 ET self-healing window)
+        run: node scripts/cron/chairman-morning-brief-sweep.mjs --once
