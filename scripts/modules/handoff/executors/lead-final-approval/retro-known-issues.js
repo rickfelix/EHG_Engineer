@@ -40,13 +40,15 @@ export function isGenuineCaveat(text) {
   return true;
 }
 
+/**
+ * SECURITY review (EXEC-TO-PLAN): reference equality, not string content equality. A genuine
+ * retro caveat whose text happens to literally read "None at approval time" would otherwise be
+ * misdetected as the fallback via a content match. extractRetroKnownIssues() always returns the
+ * SAME NO_ISSUES_FALLBACK reference in its fallback path (never reconstructs an equivalent array),
+ * so identity comparison is both correct for the real call chain and immune to the string collision.
+ */
 export function isFallbackKnownIssues(knownIssues) {
-  return (
-    Array.isArray(knownIssues) &&
-    knownIssues.length === 1 &&
-    knownIssues[0] &&
-    knownIssues[0].issue === NO_ISSUES_FALLBACK[0].issue
-  );
+  return knownIssues === NO_ISSUES_FALLBACK;
 }
 
 /**

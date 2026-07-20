@@ -84,9 +84,8 @@ describe('isGenuineCaveat', () => {
 });
 
 describe('isFallbackKnownIssues', () => {
-  it('recognizes the exact fallback shape', () => {
+  it('recognizes the fallback via reference identity (the only shape extractRetroKnownIssues actually returns)', () => {
     expect(isFallbackKnownIssues(NO_ISSUES_FALLBACK)).toBe(true);
-    expect(isFallbackKnownIssues([{ issue: 'None at approval time' }])).toBe(true);
   });
 
   it('does not misfire on a genuine single-item list', () => {
@@ -95,6 +94,13 @@ describe('isFallbackKnownIssues', () => {
 
   it('does not misfire on a multi-item list', () => {
     expect(isFallbackKnownIssues([{ issue: 'a' }, { issue: 'b' }])).toBe(false);
+  });
+
+  it('SECURITY fix: a genuine caveat whose text happens to equal the fallback string is NOT misdetected (reference, not content, equality)', () => {
+    // A freshly-constructed array with matching CONTENT is not the same reference as
+    // NO_ISSUES_FALLBACK -- this is the exact collision the SECURITY review flagged as a risk
+    // under the old strict-string-equality implementation.
+    expect(isFallbackKnownIssues([{ issue: 'None at approval time' }])).toBe(false);
   });
 });
 
