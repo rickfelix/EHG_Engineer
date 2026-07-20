@@ -7,13 +7,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { readSalientState } from '../../../scripts/coordinator-quiet-tick.mjs';
 
-function makeMock({ drainSetsRows = null, drainSetsError = null, coordinationRows = [] } = {}) {
+function makeMock({ drainSetsRows = null, drainSetsError = null, coordinationRows = [], captured = {} } = {}) {
   return {
     from(table) {
       const chain = {
         select() { return chain; },
         eq() { return chain; },
-        or() { return chain; },
+        or(filterStr) { captured.orFilter = filterStr; return chain; },
         is() { return chain; },
         gte() { return chain; },
         then(res, rej) {
@@ -48,20 +48,35 @@ describe('readSalientState openSignalCount generalization (TS-4)', () => {
     expect(state.openSignalCount).toBe(1);
   });
 
-  it('a resolved kind explicitly excluded as mechanical (cross_party_ping) does NOT inflate the count via the OR-in term', async () => {
-    // The registry resolves cross_party_ping among coordinator's kinds (it IS in DRAIN_SETS.coordinator),
-    // but readSalientState must subtract it before building the .or() filter -- this test asserts the
-    // implementation actually does that subtraction by confirming the mock's role_drain_sets response
-    // (which INCLUDES cross_party_ping) does not, by itself, prove a wider count than intended. We can't
-    // directly observe the constructed filter string here (mock is filter-agnostic), so this test's real
-    // assertion lives in the static source-level check below (never regresses to including cross_party_ping
-    // unfiltered) -- combined with TS-5's diff-check that selectUnactionedAdvisories is untouched.
+  it('a resolved kind explicitly excluded as mechanical (cross_party_ping) is NOT present in the constructed OR filter', async () => {
+    const captured = {};
     const mock = makeMock({
-      drainSetsRows: [{ kind: 'cross_party_ping' }],
+      drainSetsRows: [{ kind: 'cross_party_ping' }, { kind: 'coordinator_directive' }],
       coordinationRows: [],
+      captured,
     });
-    const state = await readSalientState(mock);
-    expect(state.openSignalCount).toBe(0);
+    await readSalientState(mock);
+    expect(captured.orFilter).not.toContain('cross_party_ping');
+    expect(captured.orFilter).toContain('coordinator_directive');
+  });
+
+  it('EXEC-phase SECURITY hardening: a resolved kind containing filter-breaking characters (comma/paren) is excluded from the constructed OR filter, not interpolated raw', async () => {
+    const captured = {};
+    const mock = makeMock({
+      drainSetsRows: [
+        { kind: 'coordinator_directive' },
+        { kind: 'evil),id.eq.1--' }, // would break out of payload->>kind.in.(...) if interpolated raw
+        { kind: 'also,bad' },
+      ],
+      coordinationRows: [],
+      captured,
+    });
+    await readSalientState(mock);
+    expect(captured.orFilter).toContain('coordinator_directive');
+    expect(captured.orFilter).not.toContain('evil');
+    expect(captured.orFilter).not.toContain('also,bad');
+    // The filter-breaking characters themselves never reach the constructed string at all.
+    expect(captured.orFilter).not.toMatch(/[(),].*evil|evil.*[(),]/);
   });
 
   it('fails open (never throws) when role_drain_sets errors (unapplied/STAGED state)', async () => {
@@ -84,7 +99,7 @@ describe('FR-4 source-level guard: cross_party_ping subtraction and selectUnacti
   it('coordinator-quiet-tick.mjs subtracts PAYLOAD_KINDS.CROSS_PARTY_PING before building the OR filter', async () => {
     const fs = await import('node:fs');
     const src = fs.readFileSync(new URL('../../../scripts/coordinator-quiet-tick.mjs', import.meta.url), 'utf8');
-    expect(src).toMatch(/filter\(\(k\)\s*=>\s*k\s*!==\s*PAYLOAD_KINDS\.CROSS_PARTY_PING\)/);
+    expect(src).toMatch(/filter\(\(k\)\s*=>\s*k\s*!==\s*PAYLOAD_KINDS\.CROSS_PARTY_PING/);
   });
 
   it('does not call resolveRecognizedKinds inside selectUnactionedAdvisories (adam-advisory-store.cjs stays untouched)', async () => {

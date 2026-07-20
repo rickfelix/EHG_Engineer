@@ -158,8 +158,16 @@ export async function readSalientState(sb) {
     // adam_advisory. cross_party_ping is subtracted: it is Adam/coordinator quiet-tick's OWN
     // mechanical STUB row (emitCrossPartyPing, imported above), so counting it here would be a
     // self-referential feedback loop, not a genuine new-work signal.
+    // EXEC-phase SECURITY review: resolvedCoordinatorKinds is interpolated directly into a
+    // PostgREST .or() filter string below (supabase-js forwards it verbatim, unescaped). Not
+    // reachable today (hard-coded DRAIN_SETS.coordinator literals) nor once role_drain_sets is
+    // applied (service-role-write-only, chairman-seeded, no user-facing write path) — but the
+    // kind column itself has no DB-side vocabulary CHECK until Child A's migration is amended, so
+    // this filter is defense in depth against a future less-trusted write path, not a fix for a
+    // currently-reachable issue.
+    const SAFE_KIND_TOKEN = /^[A-Za-z][A-Za-z0-9_]*$/;
     const resolvedCoordinatorKinds = (await resolveRecognizedKinds({ supabase: sb, role: 'coordinator' }))
-      .filter((k) => k !== PAYLOAD_KINDS.CROSS_PARTY_PING);
+      .filter((k) => k !== PAYLOAD_KINDS.CROSS_PARTY_PING && SAFE_KIND_TOKEN.test(k));
     const orFilter = resolvedCoordinatorKinds.length > 0
       ? `payload->>signal_type.not.is.null,payload->>kind.in.(${resolvedCoordinatorKinds.join(',')})`
       : 'payload->>signal_type.not.is.null';

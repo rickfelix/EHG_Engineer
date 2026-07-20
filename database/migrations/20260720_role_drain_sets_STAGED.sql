@@ -23,7 +23,13 @@ BEGIN;
 CREATE TABLE IF NOT EXISTS role_drain_sets (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   role        text NOT NULL,
-  kind        text NOT NULL,
+  -- SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C (Child B) EXEC-phase SECURITY review: without a
+  -- vocabulary CHECK, "kind values are injection-safe identifiers" was convention-enforced only
+  -- (not reachable today -- writes are service-role-only and chairman-seeded -- but defense in
+  -- depth for any future write path). Permissive (mixed-case) because existing seed kinds include
+  -- CLAIM_RELEASED/SET_IDENTITY; still blocks commas/parens/quotes/dots that could break out of a
+  -- PostgREST .in.(...) filter clause (the FR-4 consumer in coordinator-quiet-tick.mjs).
+  kind        text NOT NULL CHECK (kind ~ '^[A-Za-z][A-Za-z0-9_]*$'),
   direction   text NOT NULL DEFAULT 'inbound' CHECK (direction IN ('inbound', 'outbound')),
   status      text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'deprecated')),
   provenance  text NULL,
