@@ -1,0 +1,55 @@
+name: "Adam coordinator-health audit (cron)"
+
+# QF-20260719-196 (chairman-directed 2026-07-19): Adam's deliberate checks must survive
+# session death — session CronCreate jobs die with the session and expire in 7 days.
+# The coordinator-health audit (scripts/adam-coordinator-health.mjs, SD-LEO-INFRA-
+# ADAM-COORDINATOR-HEALTH-AUDIT-001 + KPI-001) is fully script-runnable but had NO
+# durable runner: the loop_registry coordinator_health_oversight window is 26h yet the
+# codebase_health_snapshots evidence was 70.4h stale on 2026-07-19 — it only ran when a
+# live Adam remembered. Mirrors adam-doc-drift-cron.yml (same secrets/env wiring), but
+# deliberately NOT var-gated and NOT fail-softed: the whole point is that snapshot rows
+# appear every ~3h with no Adam session alive, and a failing probe must be VISIBLE
+# (the retention + canary-probe cron reds are how two real defects were caught).
+#
+# CONST-002: the script never claims/dispatches/mutates SD state — it reads, persists a
+# snapshot reading, and on breach writes a propose-only advisory row.
+
+on:
+  schedule:
+    # Every 3 hours at :19 — off-minute to spread fleet cron load (doc-drift 09:00,
+    # opportunity-scan :30, retention 03:00 Sun).
+    - cron: '19 */3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  adam-coordinator-health:
+    name: Adam coordinator-health audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run coordinator-health audit (read-only / propose-only)
+        run: node scripts/adam-coordinator-health.mjs

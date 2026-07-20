@@ -12,11 +12,18 @@ import {
 } from '../../../lib/eva/chairman-sla-enforcer.js';
 
 function createMockSupabase(pendingDecisions = []) {
+  // FR-6 batch 7: the pending read is paginated (fetchAllPaginated appends
+  // .order().range()), so every chain method returns the builder and the builder
+  // is THENABLE — awaiting it anywhere resolves the configured rows as one short
+  // page (also covers the awaited update().eq() escalation writes, error: null).
   const chainable = {
     select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockResolvedValue({ data: pendingDecisions, error: null }),
+    eq: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnThis(),
+    range: vi.fn().mockReturnThis(),
     insert: vi.fn().mockResolvedValue({ error: null }),
     update: vi.fn().mockReturnThis(),
+    then: (resolve, reject) => Promise.resolve({ data: pendingDecisions, error: null }).then(resolve, reject),
   };
 
   return {

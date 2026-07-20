@@ -22,6 +22,9 @@ function makeSb(cfg) {
         eq(col, val) { ctx.filters[col] = val; return builder; },
         in(col, vals) { ctx.inVals = { col, vals }; return builder; },
         not(col, _op, vals) { ctx.notIn = { col, vals }; return builder; },
+        order() { return builder; },
+        range() { return builder; }, // fetchAllPaginated (FR-6) paginates the ventures read
+
         then(resolve) {
           if (ctx.op === 'select') return resolve({ data: cfg.resolve(ctx), error: null });
           mutations.push({ table: ctx.table, op: ctx.op, filters: ctx.filters, payload: ctx.payload });

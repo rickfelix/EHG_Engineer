@@ -1,12 +1,12 @@
 {
  "sd": "SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001",
  "generated_by": "scripts/audit/count-truncation-inventory.mjs",
- "total_sites": 9172,
+ "total_sites": 9176,
  "by_classification": {
-  "bounded-by-design": 3153,
-  "needs-review": 1653,
+  "bounded-by-design": 3422,
+  "needs-review": 1332,
   "already-exact": 177,
-  "paginated": 121,
+  "paginated": 177,
   "tripwired": 15,
   "non-live-path": 4053
  },
@@ -872,1623 +872,1617 @@
   },
   {
    "site": "lib/eva/adapters/real-data-adapter.js:93",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one parent SD's children (.eq on parent_sd_id)"
   },
   {
    "site": "lib/eva/adherence-scorer.js:101",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/adherence-scorer.js:237",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/adr-extractor.js:134",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on architecture_plan_id) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/analysis-history.js:93",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,event_type)"
   },
   {
    "site": "lib/eva/artifact-enrichment-pipeline.js:47",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/artifact-mapping-resolver.js:79",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "venture_sd_artifact_mapping .eq(venture_type) — per-archetype mapping config"
   },
   {
    "site": "lib/eva/artifact-persistence-service.js:174",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,lifecycle_stage,artifact_type,is_current)"
   },
   {
    "site": "lib/eva/artifact-persistence-service.js:537",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,stage_number)"
   },
   {
    "site": "lib/eva/artifact-persistence-service.js:85",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,lifecycle_stage,artifact_type,is_current)"
   },
   {
    "site": "lib/eva/artifact-persistence-service.js:857",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on supports_vision_key,is_current) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/artifact-persistence-service.js:963",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on supports_plan_key,is_current) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/artifact-versioning.js:168",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/blueprint-scoring/persistence.js:166",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/bridge/design-reference-sampler.js:139",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "curated Awwwards design-reference library (~137 rows, manual curation only) — full-catalog read is by design"
   },
   {
    "site": "lib/eva/bridge/leaf-gate-live.js:161",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one SD's rows (.eq on sd_id)"
   },
   {
-   "site": "lib/eva/bridge/reap-orphaned-provisioning.js:34",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/bridge/reap-orphaned-provisioning.js:54",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(venture_id) — bounded by the caller-supplied id list"
   },
   {
-   "site": "lib/eva/bridge/reap-orphaned-provisioning.js:45",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/bridge/reap-orphaned-provisioning.js:62",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/bridge/reap-orphaned-provisioning.js:71",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".eq(metadata->>venture_id) — non-terminal SDs of ONE venture (per-venture SD tree)"
   },
   {
    "site": "lib/eva/bridge/replit-repo-seeder.js:1011",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,artifact_type,is_current)"
   },
   {
    "site": "lib/eva/bridge/replit-repo-seeder.js:1177",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
-   "site": "lib/eva/bridge/s19-reconciliation.js:24",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/bridge/s19-reconciliation.js:38",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/bridge/s19-reconciliation.js:47",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/bridge/trust-elevation.js:133",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "applications registry .eq(status,active) — small registered-apps set"
   },
   {
    "site": "lib/eva/bridge/venture-build-consumer.js:169",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/bridge/venture-build-consumer.js:218",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(parent_sd_id) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/bridge/venture-build-consumer.js:379",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning select (update) — .select() returns only the written rows"
   },
   {
    "site": "lib/eva/bridge/venture-drift-prober.js:105",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/bridge/venture-provisioner.js:311",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "applications registry .eq(status,active) — small registered-apps set"
   },
   {
    "site": "lib/eva/bridge/venture-session-routing.js:113",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/build-sd-review-gate.js:195",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/capacity-assignment-engine.js:120",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/capacity-assignment-engine.js:43",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/capacity-governor.js:124",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/capacity-governor.js:63",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/chairman-decision-timeout.js:74",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/chairman-dfe-feedback-loop.js:59",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/chairman-governance-panels.js:35",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one parent SD's children (.eq on parent_sd_id)"
   },
   {
    "site": "lib/eva/chairman-preference-store.js:225",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on chairman_id,venture_id) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/chairman-preference-store.js:242",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on chairman_id) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/chairman-product-review.js:189",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
-   "site": "lib/eva/chairman-sla-enforcer.js:55",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/chairman-sla-enforcer.js:61",
+   "classification": "paginated",
+   "auto_classification": "needs-review",
+   "exemption_note": "already wrapped in fetchAllPaginated (FR-6 batch 7) — anchor sits above the narrow chain window behind an interleaved comment"
   },
   {
    "site": "lib/eva/clean-clone/launch.js:51",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".or(seeded_from_venture_id.eq...) — clones seeded from one source venture"
   },
   {
    "site": "lib/eva/clean-clone/prereq-verifier.js:42",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/cli-authority-tracker.js:55",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/cli-write-gate.js:106",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(sd_key) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/constraint-drift-detector.js:203",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/consultant/confidence-engine.js:70",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,stage)"
   },
   {
    "site": "lib/eva/consultant/feedback-recorder.js:155",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "pending recommendations for one application_domain — transient pending set, drains on disposition"
   },
   {
    "site": "lib/eva/consultant/stamp-accepted-wave-item.js:52",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning select (update) — .select() returns only the written rows"
   },
   {
    "site": "lib/eva/contract-validator.js:164",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/contracts/describe-artifact-gap.js:133",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/contracts/stage-contracts.js:647",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/contracts/stage-contracts.js:679",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:103",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/cross-venture-learning.js:104",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(venture_id,status) — bounded by the caller-supplied id list"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:210",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/cross-venture-learning.js:211",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(venture_id) — bounded by the caller-supplied id list"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:230",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/cross-venture-learning.js:231",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(venture_id) — bounded by the caller-supplied id list"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:288",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/cross-venture-learning.js:384",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(venture_id,lifecycle_stage) — bounded by the caller-supplied id list"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:383",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/cross-venture-learning.js:44",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(venture_id) — bounded by the caller-supplied id list"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:43",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/cross-venture-learning.js:54",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(venture_id) — bounded by the caller-supplied id list"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:53",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/cross-venture-learning.js:627",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) declared sampling cap (callers default 50 ventures analyzed)"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:626",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/cross-venture-learning.js:73",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(stage_number) — bounded by the caller-supplied id list"
   },
   {
-   "site": "lib/eva/cross-venture-learning.js:72",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/cross-venture-learning.js:828",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/cross-venture-learning.js:829",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(eva_venture_id) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/decision-filter-engine.js:510",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "chain terminates .limit(1).single() at the await site — single-row preference read"
   },
   {
-   "site": "lib/eva/dependency-manager.js:120",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/dependency-manager.js:126",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on dependent_venture_id)"
   },
   {
-   "site": "lib/eva/dependency-manager.js:28",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/dependency-manager.js:29",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on dependent_venture_id,provider_venture_id)"
   },
   {
-   "site": "lib/eva/dependency-manager.js:32",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/dependency-manager.js:74",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/dependency-manager.js:33",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on dependent_venture_id,provider_venture_id)"
   },
   {
    "site": "lib/eva/deviation-ledger.js:125",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,artifact_type)"
   },
   {
-   "site": "lib/eva/dfe-gate-escalation-router.js:164",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/dfe-gate-escalation-router.js:237",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/economic-lens-analysis.js:118",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/economic-lens-analysis.js:315",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/economic-lens-analysis.js:119",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/escalation-event-persister.js:63",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one SD's rows (.eq on sd_id)"
   },
   {
    "site": "lib/eva/eva-master-scheduler.js:1176",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(this.dispatchBatchSize) (default 20) — declared dispatch batch cap"
   },
   {
    "site": "lib/eva/eva-master-scheduler.js:1479",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(topN) (default DEFAULT_STATUS_TOP_N=10) — status display cap"
   },
   {
    "site": "lib/eva/eva-master-scheduler.js:631",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(metadata->>sensemaking_correlation_id, correlationIds) — bounded by caller correlation-id list"
   },
   {
    "site": "lib/eva/eva-master-scheduler.js:930",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(VISION_SCORING_BATCH_SIZE=5) — declared scoring batch cap"
   },
   {
    "site": "lib/eva/eva-orchestrator-helpers.js:312",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,idempotency_key)"
   },
   {
    "site": "lib/eva/eva-orchestrator-helpers.js:358",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/eva-orchestrator.js:291",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on stage_number) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/eva-orchestrator.js:434",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,lifecycle_stage,is_current)"
   },
   {
    "site": "lib/eva/eva-orchestrator.js:624",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,lifecycle_stage)"
   },
   {
    "site": "lib/eva/event-bus/event-router.js:795",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "replay read carries .limit(limit) (default 100) applied after conditional filters — declared replay cap"
   },
   {
    "site": "lib/eva/event-bus/event-schema-registry.js:292",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "eva_event_schemas registry — small enumerated schema set"
   },
   {
    "site": "lib/eva/event-bus/handlers/gate-evaluated.js:141",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/event-bus/handlers/gate-evaluated.js:156",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on pipeline_id) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/event-bus/handlers/sd-completed.js:92",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one parent SD's children (.eq on parent_sd_id)"
   },
   {
    "site": "lib/eva/event-bus/handlers/stage-completed.js:110",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/event-bus/handlers/stage-completed.js:97",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on pipeline_id) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/event-bus/handlers/vision-rescore-completed.js:50",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one SD's rows (.eq on sd_id)"
   },
   {
    "site": "lib/eva/event-bus/handlers/vision-rescore-completed.js:91",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(vision_dimension_code) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/exit/data-room-generator.js:110",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/exit/data-room-generator.js:29",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/exit/data-room-generator.js:49",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/exit/data-room-generator.js:74",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/exit/data-room-generator.js:96",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/exit/data-room-templates.js:163",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/exit/data-room-templates.js:183",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/exit/separability-scorer.js:33",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/exit/separability-scorer.js:44",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/exit/separability-scorer.js:55",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/exit/separability-scorer.js:73",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/exit/separability-scorer.js:93",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/exit/separation-rehearsal.js:63",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/experiments/baseline-accuracy.js:51",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) (default 500) — declared sampling cap for accuracy baseline"
   },
   {
    "site": "lib/eva/experiments/baseline-accuracy.js:70",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(assignment_id) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/experiments/dual-evaluator.js:187",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on assignment.experiment_id) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/experiments/experiment-assignment.js:80",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on experiment_id) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/experiments/experiment-lifecycle.js:69",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on experiment_id,outcome_type) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/experiments/experiment-manager.js:76",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "experiments registry listing — operationally small, human/venture-created set"
   },
   {
    "site": "lib/eva/experiments/gate-outcome-bridge.js:167",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on experiment_id,outcome_type) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/experiments/multi-dimensional.js:141",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "experiments .eq(status,running) — operationally small running-experiment set"
   },
   {
    "site": "lib/eva/experiments/multi-dimensional.js:169",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/experiments/multi-dimensional.js:180",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(id) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/feedback-dimension-aggregator.js:33",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/filter-calibration.js:49",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/friday-data-aggregator.js:41",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/gate-failure-predictor.js:158",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/gate-failure-predictor.js:49",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(MAX_FEEDBACK_ITEMS=500) declared sampling cap on the aggregation window"
   },
   {
    "site": "lib/eva/gate-failure-predictor.js:67",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/guardrail-enforcement-engine.js:187",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/guardrail-enforcement-engine.js:201",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(id) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/historical-pattern-matcher.js:83",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(MAX_RESULTS*2=10) declared cap for dedup+relevance sort"
   },
   {
-   "site": "lib/eva/intelligence-loader.js:171",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/intelligence-loader.js:76",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one SD's rows (.eq on sd_id)"
   },
   {
-   "site": "lib/eva/intelligence-loader.js:74",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/intelligence-loader.js:85",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/intelligence-loader.js:87",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(id) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/jobs/okr-accept-generation.js:122",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "okr_generation_log pending_chairman_acceptance — transient pending set (monthly generation cadence)"
   },
   {
    "site": "lib/eva/jobs/okr-accept-generation.js:62",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on generation_id) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/jobs/okr-accept-generation.js:75",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning select (update) — .select() returns only the written rows"
   },
   {
    "site": "lib/eva/jobs/okr-accept-generation.js:88",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning select (update) — .select() returns only the written rows"
   },
   {
    "site": "lib/eva/jobs/okr-archive-stale.js:28",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "active objectives — small OKR governance set"
   },
   {
    "site": "lib/eva/jobs/okr-archive-stale.js:72",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning select (update) — .select() returns only the written rows"
   },
   {
    "site": "lib/eva/jobs/okr-mid-month-review.js:26",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "active key_results — small OKR governance set"
   },
   {
    "site": "lib/eva/jobs/okr-monthly-handler.js:27",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "active key_results — small OKR governance set"
   },
   {
    "site": "lib/eva/jobs/okr-stale-kr-sd-creator.js:123",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(key_result_id) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/jobs/okr-stale-kr-sd-creator.js:98",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "active key_results joined to active objectives — small OKR governance set"
   },
   {
    "site": "lib/eva/kr-reality-checker.js:148",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one SD's rows (.eq on sd_id)"
   },
   {
    "site": "lib/eva/kr-reality-checker.js:155",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "active key_results — small OKR governance set"
   },
   {
    "site": "lib/eva/kr-reality-checker.js:52",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on key_result_id) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/launch-mode.js:231",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning select (update) — .select() returns only the written rows"
   },
   {
    "site": "lib/eva/launch-workflow/index.js:136",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/launch-workflow/index.js:44",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/launch-workflow/index.js:96",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/learning-moat-gauge.js:50",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/legal-doc-producer.js:135",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(template_type) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/lifecycle-sd-bridge.js:1442",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "builder factory consumed with .eq(sprint_signature/sprint_name)+.limit(1) at both call sites — single-row dedup lookup"
   },
   {
    "site": "lib/eva/lifecycle-sd-bridge.js:1460",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one parent SD's children (.eq on parent_sd_id)"
   },
   {
    "site": "lib/eva/lifecycle-sd-bridge.js:1554",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/lifecycle-sd-bridge.js:1643",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/lifecycle-sd-bridge.js:1661",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/lifecycle-sd-bridge.js:867",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(sd_key) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/lifecycle-sd-bridge.js:872",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/lifecycle/exit-gate-verifiers.js:296",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/mental-models/model-selector.js:107",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(model_id) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/mental-models/model-selector.js:42",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mental_models registry .eq(is_active) — curated model set"
   },
   {
    "site": "lib/eva/mental-models/model-selector.js:85",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on stage_number) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/okr-cascade-resolver.js:30",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "objectives table — small OKR governance set (optionally vision-scoped)"
   },
   {
    "site": "lib/eva/okr-cascade-resolver.js:47",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(objective_id) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/okr-cascade-resolver.js:62",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(key_result_id) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/okr-priority-integrator.js:48",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one SD's rows (.eq on sd_id)"
   },
   {
    "site": "lib/eva/okr-priority-integrator.js:64",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(id) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/orchestrator-audit-trail.js:114",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(filters.limit || 50) — declared audit-trail read cap"
   },
   {
    "site": "lib/eva/pipeline-data/index.js:147",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/pipeline-data/index.js:205",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/pipeline-data/index.js:28",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/pipeline-data/index.js:93",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/pipeline-runner/demand-estimator.js:159",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "experiments .eq(status,active) — operationally small active-experiment set"
   },
   {
    "site": "lib/eva/portfolio-optimizer.js:392",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(id) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/post-build-verdict-engine.js:42",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "venture_stages registry .lte(stage_number) — fixed lifecycle stage registry"
   },
   {
    "site": "lib/eva/post-completion-verifier.js:241",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one SD's rows (.eq on sd_id)"
   },
   {
    "site": "lib/eva/post-completion-verifier.js:259",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) (default 50) — declared batch-verification cap"
   },
   {
    "site": "lib/eva/post-completion-verifier.js:37",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one SD's rows (.eq on sd_id,status)"
   },
   {
    "site": "lib/eva/post-completion-verifier.js:55",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(decision_type) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/post-completion-verifier.js:72",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/premise-liveness.js:72",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one SD's rows (.eq on sd_id)"
   },
   {
    "site": "lib/eva/qa/stitch-vision-qa.js:181",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "stitch_qa_report artifacts created today (gte todayStart) — small daily QA set"
   },
   {
    "site": "lib/eva/quality-findings/db-sourced-findings.js:184",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(MAX_PER_SOURCE+1=26) — declared per-source cap with overflow sentinel"
   },
   {
    "site": "lib/eva/quality-findings/db-sourced-findings.js:58",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/quality-findings/db-sourced-findings.js:82",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(sd_id) — bounded by the caller-supplied id list"
   },
   {
-   "site": "lib/eva/quality-findings/sd-generator.js:357",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/quality-findings/sd-generator.js:407",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/quality-findings/sd-generator.js:417",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(status) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/reality-gates.js:306",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/reality-gates.js:85",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/reconcile-gate-decisions.mjs:42",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/reconcile-gate-decisions.mjs:46",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "gate_boundary_config registry — small enumerated gate config"
   },
   {
    "site": "lib/eva/routing-state-machine.js:196",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,event_type)"
   },
   {
    "site": "lib/eva/rpc/get-s20-sd-progress.js:43",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/s20-pause-controller.js:223",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one parent SD's children (.eq on parent_sd_id)"
   },
   {
    "site": "lib/eva/s20-pause-controller.js:263",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on lifecycle_stage,stage_status) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/s20-pause-controller.js:343",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/services/brand-genome.js:25",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/services/brand-genome.js:261",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,submission_status)"
   },
   {
    "site": "lib/eva/services/brand-genome.js:44",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "brand_genome_submissions (non-archived, optionally venture-scoped) — human-authored submissions, small set"
   },
   {
    "site": "lib/eva/services/brand-genome.js:88",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "v_active_brand_genomes view (optionally venture-scoped) — one active genome per venture"
   },
   {
    "site": "lib/eva/services/competitive-intelligence.js:158",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on idea_id) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/services/competitive-intelligence.js:169",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(competitor_id) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/services/design-reference-library.js:108",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) (default 5) — top-N archetype references"
   },
   {
    "site": "lib/eva/services/design-reference-library.js:125",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "curated design-reference library (~137 rows) — category enumeration over full catalog"
   },
   {
    "site": "lib/eva/services/design-reference-library.js:92",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning select (upsert) — .select() returns only the written rows"
   },
   {
    "site": "lib/eva/services/eva-knowledge-view.js:29",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/services/finding-consolidator.js:74",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) (default DEFAULT_LIMIT=50) applied after conditional filters — declared summary cap"
   },
   {
    "site": "lib/eva/services/friday-scorecard.js:157",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning select (upsert) — .select() returns only the written rows"
   },
   {
    "site": "lib/eva/services/friday-scorecard.js:176",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(status,severity) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/services/friday-scorecard.js:199",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "scheduled quarterly assessments due — small transient scheduled set"
   },
   {
    "site": "lib/eva/services/friday-scorecard.js:65",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/services/friday-scorecard.js:71",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/services/ops-customer-health.js:105",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/services/ops-customer-health.js:126",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,customer_id)"
   },
   {
    "site": "lib/eva/services/ops-customer-health.js:146",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/services/ops-customer-health.js:226",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/services/ops-health-monitor.js:137",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/services/ops-health-monitor.js:143",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/services/ops-health-monitor.js:194",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning select (upsert) — .select() returns only the written rows"
   },
   {
    "site": "lib/eva/services/ops-health-monitor.js:256",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,metric_date)"
   },
   {
    "site": "lib/eva/services/ops-health-monitor.js:337",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(status) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/services/ops-health-monitor.js:47",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/services/ops-revenue-alerts.js:155",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/services/ops-revenue-collector.js:170",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/services/ops-revenue-collector.js:44",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/services/product-hunt-client.js:175",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning select (delete) — .select() returns only the written rows"
   },
   {
-   "site": "lib/eva/services/risk-forecaster.js:108",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/services/risk-forecaster.js:26",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
-   "site": "lib/eva/services/risk-forecaster.js:25",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/services/risk-forecaster.js:95",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/services/risk-forecaster.js:96",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning select (insert) — .select() returns only the written rows"
   },
   {
    "site": "lib/eva/services/srip-artifact-synthesizer.js:52",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/services/srip-brand-interview.js:87",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/services/srip-quality-check.js:99",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/services/srip-site-dna.js:90",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/services/srip-synthesis.js:92",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/stage-17/qa-rubric.js:62",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current,artifact_type)"
   },
   {
    "site": "lib/eva/stage-17/screenshot-generator.js:35",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,artifact_type,is_current)"
   },
   {
    "site": "lib/eva/stage-17/selection-flow.js:186",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,artifact_type,is_current)"
   },
   {
    "site": "lib/eva/stage-17/strategy-recommender.js:82",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/stage-17/strategy-stats.js:29",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/stage-artifact-precondition.js:60",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on stage_number,is_blocking) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/stage-artifact-precondition.js:87",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/stage-dependency-resolver.js:62",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/stage-execution-engine.js:257",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/stage-execution-worker.js:1116",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,lifecycle_stage,is_current)"
   },
   {
-   "site": "lib/eva/stage-execution-worker.js:2184",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/stage-execution-worker.js:2249",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning select (update) — .select() returns only the written rows"
   },
   {
-   "site": "lib/eva/stage-execution-worker.js:2245",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/stage-execution-worker.js:2770",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
-   "site": "lib/eva/stage-execution-worker.js:2444",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/stage-execution-worker.js:3771",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
-   "site": "lib/eva/stage-execution-worker.js:2506",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/stage-execution-worker.js:4187",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
-   "site": "lib/eva/stage-execution-worker.js:2574",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-execution-worker.js:2755",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-execution-worker.js:3756",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-execution-worker.js:4172",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-execution-worker.js:4278",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-execution-worker.js:510",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/stage-execution-worker.js:4293",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/stage-governance.js:57",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "venture_stages registry — fixed lifecycle stage set"
   },
   {
    "site": "lib/eva/stage-handlers/s17.js:70",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(name) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/stage-registry.js:171",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "venture_stages registry — fixed lifecycle stage set"
   },
   {
    "site": "lib/eva/stage-registry/index.js:37",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "venture_stages registry — fixed lifecycle stage set"
   },
   {
    "site": "lib/eva/stage-templates/analysis-steps/stage-10-customer-brand.js:491",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning .select(id) on upsert({onConflict: venture_id,persona_id}) — returns only written rows"
   },
   {
    "site": "lib/eva/stage-templates/analysis-steps/stage-17-blueprint-review.js:145",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/stage-templates/analysis-steps/stage-17-doc-generation.js:145",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/stage-templates/analysis-steps/stage-17-doc-generation.js:168",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".like(vision_key, VISION-<ventureSlug>-L2-DRAFT-SEED-%) — one venture archetype of draft-seed keys"
   },
   {
    "site": "lib/eva/stage-templates/analysis-steps/stage-17-doc-generation.js:231",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/stage-templates/analysis-steps/stage-17-doc-generation.js:256",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".like(vision_key, VISION-<ventureSlug>-L2-%) — one venture archetype of vision keys"
   },
   {
    "site": "lib/eva/stage-templates/analysis-steps/stage-20-build-execution.js:372",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/stage-templates/analysis-steps/stage-20-build-execution.js:382",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(sd_id) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js:102",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js:127",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_active)"
   },
   {
    "site": "lib/eva/stage-templates/analysis-steps/stage-24-go-live.js:150",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/stage-templates/analysis-steps/stage-25-acquirability-review.js:196",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/stage-templates/analysis-steps/stage-26-growth-playbook.js:157",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/stage-zero/archetype-profile-matrix.js:102",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on archetype_key) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/stage-zero/archetype-profile-matrix.js:113",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-zero/chairman-override-tracker.js:124",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-zero/chairman-override-tracker.js:86",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(id) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/stage-zero/chairman-review.js:58",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "mutation-returning select (update) — .select() returns only the written rows"
   },
   {
    "site": "lib/eva/stage-zero/data-feed.js:78",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(entry_type) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/stage-zero/decision-activation.js:100",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(MAX_PER_PASS=200) — declared per-pass activation cap"
   },
   {
    "site": "lib/eva/stage-zero/decision-activation.js:117",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on lifecycle_stage,decision_type) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/stage-zero/gate-signal-service.js:105",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on profile_id) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/stage-zero/gate-signal-service.js:126",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on profile_id) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/stage-zero/modeling.js:103",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(entry_type) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/stage-zero/paths/blueprint-browse.js:148",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "opportunity_blueprints .eq(is_active) — curated blueprint catalog"
   },
   {
    "site": "lib/eva/stage-zero/paths/discovery-mode.js:647",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(candidateCount*2) (default 10) — declared nursery-reeval sampling cap"
   },
   {
    "site": "lib/eva/stage-zero/paths/discovery-mode.js:979",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "discovery_strategies registry .eq(is_active) — small enumerated strategy set"
   },
   {
-   "site": "lib/eva/stage-zero/portfolio-allocation.js:149",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/stage-zero/portfolio-allocation.js:173",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "portfolio_profile_allocations — per-profile allocation config, handful of rows"
   },
   {
-   "site": "lib/eva/stage-zero/portfolio-allocation.js:168",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/stage-zero/portfolio-allocation.js:33",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "portfolio_profile_allocations — per-profile allocation config, handful of rows"
   },
   {
-   "site": "lib/eva/stage-zero/portfolio-allocation.js:31",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-zero/portfolio-allocation.js:46",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/stage-zero/portfolio-allocation.js:48",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(id) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/stage-zero/profile-service.js:185",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "evaluation_profiles registry — small versioned profile set"
   },
   {
    "site": "lib/eva/stage-zero/profile-service.js:431",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "selection_postures .eq(status,active) — small governance registry"
   },
   {
    "site": "lib/eva/stage-zero/strategy-loader.js:22",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "discovery_strategies registry .eq(is_active) — small enumerated strategy set"
   },
   {
    "site": "lib/eva/stage-zero/synthesis/chairman-constraints.js:98",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "chairman_constraints .eq(is_active) — small governance registry"
   },
   {
    "site": "lib/eva/stage-zero/traversability-gate.js:61",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-zero/venture-nursery.js:298",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/stage-zero/venture-nursery.js:342",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(maturity_level) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/taste-confidence-tracker.js:37",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(window) (default DEFAULT_WINDOW=20) — declared decision window"
   },
   {
    "site": "lib/eva/template-applier.js:153",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(id) — bounded by the caller-supplied id list"
   },
   {
    "site": "lib/eva/template-applier.js:73",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "venture_templates .eq(is_current) — curated template library"
   },
   {
    "site": "lib/eva/template-extractor.js:163",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/template-extractor.js:205",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/template-extractor.js:245",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/template-extractor.js:312",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/traversal-reflection-emitter.js:40",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "venture-scoped .eq(metadata->>venture_id) + .limit(RECENT_LESSON_LOOKBACK=5)"
   },
   {
    "site": "lib/eva/unified-escalation-router.js:244",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,event_type)"
   },
   {
    "site": "lib/eva/utils/assumption-reality-tracker.js:134",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
    "site": "lib/eva/utils/assumption-reality-tracker.js:150",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eva/utils/assumption-reality-tracker.js:51",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
-   "site": "lib/eva/venture-capture-forward.js:114",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/venture-capture-forward.js:115",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
-   "site": "lib/eva/venture-capture-forward.js:145",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/venture-capture-forward.js:146",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id)"
   },
   {
-   "site": "lib/eva/venture-capture-forward.js:176",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/venture-context-manager.js:166",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/venture-context-manager.js:192",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/venture-context-manager.js:193",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".or(venture_id/venture_name match) — one venture of SDs"
   },
   {
    "site": "lib/eva/venture-intake-gates.js:230",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: key-scoped read (.eq on lifecycle_stage,stage_status) — per-key row set, not table-wide"
   },
   {
    "site": "lib/eva/venture-intake-gates.js:238",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in(id) — bounded by the caller-supplied id list"
   },
   {
-   "site": "lib/eva/venture-monitor.js:343",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/vision-governance-service.js:109",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".limit(limit) (default 10) — declared score-history window"
   },
   {
-   "site": "lib/eva/venture-monitor.js:381",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/venture-monitor.js:431",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/venture-monitor.js:453",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/venture-monitor.js:480",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/vision-governance-service.js:107",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/vision-governance-service.js:123",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/vision-governance-service.js:143",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/vision-governance-service.js:61",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/workers/health-monitor-worker.js:29",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/workers/health-monitor-worker.js:52",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/workers/metrics-collector-worker.js:25",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
-  },
-  {
-   "site": "lib/eva/workers/stage-advance-worker.js:28",
-   "classification": "needs-review",
-   "auto_classification": "needs-review"
+   "site": "lib/eva/vision-governance-service.js:146",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "bounded: one venture's rows (.eq on venture_id,is_current)"
   },
   {
    "site": "lib/eval/eval-set-loader.mjs:72",
@@ -2913,6 +2907,21 @@
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
    "exemption_note": "eq(session_id)-bounded v_active_sessions probe — at most a handful of rows for one session"
+  },
+  {
+   "site": "lib/governance/fw3-cmv-rejecter.cjs:111",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "lib/governance/fw3-cmv-rejecter.cjs:172",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
+  },
+  {
+   "site": "lib/governance/fw3-cmv-rejecter.cjs:61",
+   "classification": "needs-review",
+   "auto_classification": "needs-review"
   },
   {
    "site": "lib/governance/guardrail-intelligence-analyzer.js:378",
@@ -6412,17 +6421,17 @@
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/gauge-runner.mjs:243",
+   "site": "scripts/gauge-runner.mjs:253",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/gauge-runner.mjs:295",
+   "site": "scripts/gauge-runner.mjs:305",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },
   {
-   "site": "scripts/gauge-runner.mjs:296",
+   "site": "scripts/gauge-runner.mjs:306",
    "classification": "needs-review",
    "auto_classification": "needs-review"
   },

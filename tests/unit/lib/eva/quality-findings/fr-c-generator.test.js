@@ -133,6 +133,7 @@ describe('FR-C generator — unit', () => {
       in: function () { return this; },
       order: function () { return this; },
       gte: function () { return this; },
+      range: function () { return this; },
       then: function (cb) { return cb({ data: this.data, error: this.error }); },
     });
 
@@ -233,6 +234,7 @@ describe('FR-C generator — fixture discriminator', () => {
       eq: function () { return this; },
       in: function () { return this; },
       order: function () { return this; },
+      range: function () { return this; },
       then: function (cb) { return cb({ data: this.data, error: this.error }); },
     };
 
@@ -265,6 +267,7 @@ describe('FR-C generator — fixture discriminator', () => {
       eq: function () { return this; },
       in: function () { return this; },
       order: function () { return this; },
+      range: function () { return this; },
       then: function (cb) { return cb({ data: this.data, error: this.error }); },
     };
     const supabase = {

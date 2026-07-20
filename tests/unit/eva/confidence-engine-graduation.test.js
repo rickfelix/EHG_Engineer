@@ -17,7 +17,8 @@ function mockClient(pastFindings) {
         select: () => builder,
         eq: () => builder,
         gte: () => builder,
-        order: () => Promise.resolve({ data: pastFindings }),
+        order: () => builder,
+        range: () => Promise.resolve({ data: pastFindings, error: null }),
       };
       return builder;
     },
