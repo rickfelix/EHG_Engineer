@@ -208,7 +208,7 @@ describe('FR-E1: drainSolomonOutbound (re-target on handoff — register depende
 function makeRecordingMock(selectRows = []) {
   const updates = [];
   const selects = [];
-  function chain() {
+  function chain(table) {
     const state = { op: 'select', filters: [], updatePayload: null };
     const c = {
       select: () => c,
@@ -222,6 +222,12 @@ function makeRecordingMock(selectRows = []) {
     };
     async function finish() {
       if (state.op === 'update') { updates.push(state); return { data: [], error: null }; }
+      // SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C (Child B): drainInbox now also queries
+      // role_drain_sets via the registry-reader — route it as PGRST205-style table-not-found
+      // (STAGED/unapplied, the real state today), so the registry-reader fails open to
+      // DRAIN_SETS.solomon exactly as before this repoint, instead of misreading inbox rows as
+      // drain-set rows.
+      if (table === 'role_drain_sets') return { data: null, error: { code: 'PGRST205', message: 'not found' } };
       selects.push(state);
       return { data: selectRows, error: null };
     }

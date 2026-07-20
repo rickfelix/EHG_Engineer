@@ -46,6 +46,12 @@ function makeMock(selectRows = []) {
       if (state.op === 'update') { updates.push(state); return { data: [], error: null }; }
       selects.push(state);
       if (state.head) return { count: 0, error: null };
+      // SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C (Child B): drainInbox now also queries
+      // role_drain_sets via the registry-reader — route it as PGRST205-style table-not-found
+      // (STAGED/unapplied, the real state today), so the registry-reader fails open to
+      // DRAIN_SETS.adam exactly as before this repoint, instead of misreading inbox rows as
+      // drain-set rows.
+      if (table === 'role_drain_sets') return { data: null, error: { code: 'PGRST205', message: 'not found' } };
       return { data: selectRows, error: null };
     }
     return c;
