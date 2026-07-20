@@ -62,12 +62,12 @@ const ERR = (msg) => () => ({ count: null, data: null, error: new Error(msg) });
 const ROWS = (rows) => () => ({ count: null, data: rows, error: null });
 
 describe('resolveFacts (FR-1b/2/3/4) — measured vs honestly-unknown', () => {
-  it('reliable sources -> 3-of-4 facts are finite/real; propose_only is honestly unknown', async () => {
+  it('reliable sources -> all facts are finite/real; propose_only MEASURED via role-claim census', async () => {
     const sb = makeSupabase({
       session_coordination: COUNT(4), // FR-P3 signals: 4 Adam signals (head-count)
       strategic_directives_v2: COUNT(2), // FR-1b sourced
       issue_patterns: ROWS([{ trend: 'stable' }, { trend: 'decreasing' }]), // FR-2: 1 live-recurring (stable), decreasing excluded
-      sub_agent_execution_results: COUNT(0), // FR-3 builds — NOT consulted (no per-row Adam marker)
+      claude_sessions: COUNT(0), // FR-1 propose_only: 0 adam-role sessions hold a build-claim
       audit_log: COUNT(1), // FR-4 vision read present (Adam-authored)
     });
     const facts = await resolveFacts(sb, { windowDays: 1 });
@@ -75,11 +75,10 @@ describe('resolveFacts (FR-1b/2/3/4) — measured vs honestly-unknown', () => {
     expect(facts.signalsInWindow).toBe(4); // FR-P3 measured
     expect(facts.recurrencesInWindow).toBe(1); // FR-2 measured (stable counts, decreasing excluded)
     expect(facts.visionGaugeReadInWindow).toBe(true); // FR-4 measured (>=1 Adam marker)
-    // FR-3 is HONESTLY UNMEASURABLE: there is no per-row Adam-author marker on
-    // sub_agent_execution_results, so adamAuthoredBuilds is null -> probe 'unknown'. We do NOT
-    // fabricate a 0 (a fake CONST-002 pass) nor a session-attributed FAIL.
-    expect(facts.adamAuthoredBuildsInWindow).toBeNull();
-    // 3-of-4 measurable: sourcing-cadence + friction-signaling + vision-going-forward.
+    // FR-1: propose_only is now MEASURED via the COUNTERFACTUAL-PRESENCE signal (claude_sessions
+    // metadata.role='adam' holding a non-null sd_key). A real 0 is a real PASS (Adam stayed
+    // propose-only) — no longer honestly-unmeasurable, no longer unknown-forever.
+    expect(facts.adamAuthoredBuildsInWindow).toBe(0);
   });
 
   it('FR-1b: a real 0 sourced stays 0 (NOT unknown) — cadence stall is measurable', async () => {
@@ -139,19 +138,34 @@ describe('resolveFacts (FR-1b/2/3/4) — measured vs honestly-unknown', () => {
     expect(facts.sourcedInWindow).toBeNull();
   });
 
-  it('FR-3: no per-row Adam-author marker exists -> adamAuthoredBuilds stays null (no fabricated CONST-002 pass OR fail)', async () => {
-    // Even with a healthy fleet of build rows, the resolver does NOT consult
-    // sub_agent_execution_results for FR-3: there is no reliable per-build Adam-author key, and
-    // session-lineage attribution would fabricate a FAIL (mixed-role sessions). Honest = unknown.
+  it('FR-1 propose_only: signal is the adam-ROLE claim census, NOT sub_agent_execution_results lineage', async () => {
+    // The counterfactual-presence signal keys on claude_sessions metadata.role='adam' holding an
+    // sd_key (Adam in the build lane). sub_agent_execution_results is NOT consulted — mixed-role
+    // lineage would fabricate a FAIL, so even a large build fleet must NOT bleed into the fact.
     const sb = makeSupabase({
       session_coordination: COUNT(2),
       strategic_directives_v2: COUNT(1),
       issue_patterns: ROWS([]),
-      sub_agent_execution_results: COUNT(99), // intentionally large — must NOT bleed into the fact
+      sub_agent_execution_results: COUNT(99), // MUST NOT be consulted
+      claude_sessions: COUNT(3), // 3 adam-role sessions hold a build-claim -> a real violation
       audit_log: COUNT(0),
     });
     const facts = await resolveFacts(sb, { windowDays: 1 });
-    expect(facts.adamAuthoredBuildsInWindow).toBeNull(); // honest unknown, NOT a fabricated 0 or 99
+    expect(facts.adamAuthoredBuildsInWindow).toBe(3); // measured from the role-claim census
+    // 3 > 0 => a real CONST-002 propose-only violation (falsifiable FAIL, never fabricated).
+    expect(runAdherenceProbes(facts).find((b) => b.probe === 'propose_only').verdict).toBe('fail');
+  });
+
+  it('FR-1 propose_only: a claude_sessions query ERROR leaves the fact null -> unknown (honesty preserved)', async () => {
+    const sb = makeSupabase({
+      session_coordination: COUNT(0),
+      strategic_directives_v2: COUNT(1),
+      issue_patterns: ROWS([]),
+      claude_sessions: ERR('db down'),
+      audit_log: COUNT(0),
+    });
+    const facts = await resolveFacts(sb, { windowDays: 1 });
+    expect(facts.adamAuthoredBuildsInWindow).toBeNull(); // query error -> unknown, never fabricated
   });
 
   it('FR-2: case-insensitive + widened allow-set (stable/increasing/persistent/recurring/new); wound-down trends excluded', async () => {
@@ -183,16 +197,29 @@ describe('resolveFacts (FR-1b/2/3/4) — measured vs honestly-unknown', () => {
     expect(facts.recurrencesInWindow).toBeNull();
   });
 
-  it('FR-4: zero Adam vision-read markers -> visionGaugeReadInWindow stays null (NEVER false)', async () => {
+  it('FR-1 vision: a SUCCESSFUL 0-marker window -> visionGaugeReadInWindow=false (FAIL, not unknown-forever)', async () => {
     const sb = makeSupabase({
       session_coordination: COUNT(1),
       strategic_directives_v2: COUNT(1),
       issue_patterns: ROWS([]),
-      sub_agent_execution_results: COUNT(0),
-      audit_log: COUNT(0), // no Adam marker this window
+      audit_log: COUNT(0), // no Adam vision-read marker in the window (a MEASURED absence)
     });
     const facts = await resolveFacts(sb, { windowDays: 1 });
-    expect(facts.visionGaugeReadInWindow).toBeNull(); // not false — could-not-confirm
+    // Post-FR-1: a measured absence of the durable read-marker is a falsifiable FAIL, not an
+    // unknown-forever gauge. ("An unknown-forever probe is worse than none.")
+    expect(facts.visionGaugeReadInWindow).toBe(false);
+    expect(runAdherenceProbes(facts).find((b) => b.probe === 'vision_monitoring').verdict).toBe('fail');
+  });
+
+  it('FR-1 vision: a query ERROR still leaves visionGaugeReadInWindow null -> unknown (honesty boundary preserved)', async () => {
+    const sb = makeSupabase({
+      session_coordination: COUNT(1),
+      strategic_directives_v2: COUNT(1),
+      issue_patterns: ROWS([]),
+      audit_log: ERR('db down'), // infra fault != measured absence
+    });
+    const facts = await resolveFacts(sb, { windowDays: 1 });
+    expect(facts.visionGaugeReadInWindow).toBeNull();
   });
 });
 
@@ -217,9 +244,9 @@ describe('FR-5: the audit ACTUALLY CATCHES drift', () => {
     expect(sourcing.verdict).toBe('fail');
     expect(hasDrift(res.bars)).toBe(true);
 
-    // propose_only is honestly 'unknown' (no per-row Adam marker) — never a fabricated fail.
+    // propose_only now MEASURES the adam-role claim census; the mock seeds 0 (default) -> PASS.
     const proposeOnly = res.bars.find((b) => b.probe === 'propose_only');
-    expect(proposeOnly.verdict).toBe('unknown');
+    expect(proposeOnly.verdict).toBe('pass');
 
     // A propose-only remediation feedback row was sourced with the canonical category.
     expect(res.remediationRef).toBe('fb-remediation-1');
@@ -247,26 +274,100 @@ describe('FR-5: the audit ACTUALLY CATCHES drift', () => {
     expect(sb._calls.feedbackInsert[0].category).toBe('adam_adherence_drift');
   });
 
-  it('HONESTY: a genuinely-unresolved fact yields unknown and does NOT, alone, trigger remediation', async () => {
-    // All MEASURED dims clean; vision-monitoring AND propose-only are honestly unknown (no markers /
-    // unmeasurable). An 'unknown' is neither pass nor fail -> hasDrift stays false -> no remediation.
+  it('HONESTY: a genuinely-unresolved fact (query error) yields unknown and does NOT, alone, trigger remediation', async () => {
+    // All MEASURED dims clean; friction is honestly 'unknown' because its recurrence SOURCE errored
+    // (a real infra fault, not a measured absence). An 'unknown' is neither pass nor fail -> hasDrift
+    // stays false -> no remediation. (Post-FR-1, vision-absence and propose-presence are MEASURED, so
+    // the honest 'could-not-measure' path is now a query ERROR — the only remaining unknown source.)
     const sb = makeSupabase({
       session_coordination: COUNT(1), // signals present
       strategic_directives_v2: COUNT(3), // sourcing pass
-      issue_patterns: ROWS([]), // friction pass (nothing to signal)
-      sub_agent_execution_results: COUNT(0), // not consulted -> propose_only unknown
-      audit_log: COUNT(0), // <-- vision marker ABSENT -> unknown (not false, not a fail)
+      issue_patterns: ERR('db down'), // <-- recurrence source ERROR -> friction unknown
+      claude_sessions: COUNT(0), // propose_only measured 0 -> pass
+      audit_log: COUNT(1), // vision read present -> pass
       feedback: () => ({ id: 'fb-should-not-be-written' }),
       adam_adherence_ledger: () => ({ id: 'ledger-3' }),
     });
     const res = await runSelfAdherenceReview(sb, { windowDays: 1, runId: 'run-unknown' });
-    const vision = res.bars.find((b) => b.probe === 'vision_monitoring');
-    expect(vision.verdict).toBe('unknown'); // honest unknown, never coerced to fail
+    const friction = res.bars.find((b) => b.probe === 'friction_signaling');
+    expect(friction.verdict).toBe('unknown'); // query error -> honest unknown, never coerced to fail
     const proposeOnly = res.bars.find((b) => b.probe === 'propose_only');
-    expect(proposeOnly.verdict).toBe('unknown'); // honestly unmeasurable, not a fail
-    expect(hasDrift(res.bars)).toBe(false); // an unknown alone is NOT drift
+    expect(proposeOnly.verdict).toBe('pass'); // measured 0 build-claims
+    expect(hasDrift(res.bars)).toBe(false); // an unknown alone is NOT drift (no probe FAILED)
     expect(res.remediationRef).toBeNull(); // no remediation sourced
     expect(sb._calls.feedbackInsert).toHaveLength(0); // NO real/feedback row written for an unknown
+  });
+});
+
+describe('FR-1: belt_starvation + dispatch_boundary resolve from LIVE claim tables (297/297-unknown class extinct)', () => {
+  const nowIso = () => new Date().toISOString();
+
+  it('belt_starvation: healthy belt (unclaimed claimable SD + idle worker + backlog) => PASS', async () => {
+    const sb = makeSupabase({
+      strategic_directives_v2: ROWS([
+        { sd_key: 'SD-A', sd_type: 'implementation', status: 'active', dependencies: [], claiming_session_id: null }, // unclaimed + claimable
+        { sd_key: 'SD-B', sd_type: 'implementation', status: 'active', dependencies: [], claiming_session_id: 'sess-1' }, // claimed
+      ]),
+      claude_sessions: ROWS([
+        { session_id: 'sess-2', metadata: { role: 'worker' }, sd_key: null, status: 'active', heartbeat_at: nowIso() }, // idle worker
+      ]),
+      feedback: ROWS([{ id: 'fb1', status: 'open', title: 'real backlog item', metadata: {} }]),
+    });
+    const facts = await resolveFacts(sb, { windowDays: 1 });
+    expect(facts.claimableBelt).toBe(1); // SD-A only (SD-B is claimed)
+    expect(facts.idleWorkers).toBe(1); // sess-2 holds no claim
+    expect(facts.sourceableBacklogCount).toBe(1);
+    expect(runAdherenceProbes(facts).find((b) => b.probe === 'belt_starvation').verdict).toBe('pass');
+  });
+
+  it('belt_starvation: belt=0 while a worker is idle and backlog exists => FAIL (real drift, not unknown)', async () => {
+    const sb = makeSupabase({
+      strategic_directives_v2: ROWS([
+        { sd_key: 'SD-C', sd_type: 'implementation', status: 'active', dependencies: [], claiming_session_id: 'sess-9' }, // all claimed
+      ]),
+      claude_sessions: ROWS([
+        { session_id: 'sess-idle', metadata: { role: 'worker' }, sd_key: null, status: 'idle', heartbeat_at: nowIso() },
+      ]),
+      feedback: ROWS([{ id: 'fb', status: 'open', title: 'genuine sourceable work', metadata: {} }]),
+    });
+    const facts = await resolveFacts(sb, { windowDays: 1 });
+    expect(facts.claimableBelt).toBe(0);
+    expect(facts.idleWorkers).toBe(1);
+    expect(facts.sourceableBacklogCount).toBe(1);
+    expect(runAdherenceProbes(facts).find((b) => b.probe === 'belt_starvation').verdict).toBe('fail');
+  });
+
+  it('belt_starvation: a claim-census query ERROR leaves the facts null -> unknown (honesty)', async () => {
+    const sb = makeSupabase({
+      strategic_directives_v2: ERR('db down'),
+      claude_sessions: ERR('db down'),
+    });
+    const facts = await resolveFacts(sb, { windowDays: 1 });
+    expect(facts.claimableBelt).toBeNull();
+    expect(facts.idleWorkers).toBeNull();
+    expect(runAdherenceProbes(facts).find((b) => b.probe === 'belt_starvation').verdict).toBe('unknown');
+  });
+
+  it('dispatch_boundary: an advisory carrying fleet-dispatch language => FAIL', async () => {
+    const sb = makeSupabase({
+      session_coordination: ROWS([
+        { payload: { kind: 'adam_advisory', body: 'Status: sourcing looks healthy.' }, created_at: 't1' },
+        { payload: { kind: 'adam_advisory', body: 'We should spin up a worker to cover the gap.' }, created_at: 't2' },
+      ]),
+    });
+    const facts = await resolveFacts(sb, { windowDays: 1 });
+    expect(typeof facts.advisoryBody).toBe('string');
+    expect(runAdherenceProbes(facts).find((b) => b.probe === 'dispatch_boundary').verdict).toBe('fail');
+  });
+
+  it('dispatch_boundary: a clean advisory corpus => PASS (resolved, not unknown)', async () => {
+    const sb = makeSupabase({
+      session_coordination: ROWS([
+        { payload: { kind: 'adam_advisory', body: 'Recommend we defer SD-X; belt is healthy.' }, created_at: 't1' },
+      ]),
+    });
+    const facts = await resolveFacts(sb, { windowDays: 1 });
+    expect(runAdherenceProbes(facts).find((b) => b.probe === 'dispatch_boundary').verdict).toBe('pass');
   });
 });
 

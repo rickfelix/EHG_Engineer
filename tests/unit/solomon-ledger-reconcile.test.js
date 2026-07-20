@@ -5,7 +5,11 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { mapSdStatusToOutcome, reconcileBatch } = require('../../scripts/solomon-ledger-reconcile.cjs');
+const {
+  mapSdStatusToOutcome, reconcileBatch,
+  selectNegativeBackprop, collectNegativeRefs, backPropagateNegativeOutcomes, addRefsFromMetadata,
+  NEGATIVE_OUTCOME, NEGATIVE_BACKPROP_SOURCE,
+} = require('../../scripts/solomon-ledger-reconcile.cjs');
 
 describe('FR-4: mapSdStatusToOutcome', () => {
   it('maps completed -> shipped_clean, cancelled -> reverted, else null (not yet terminal)', () => {
@@ -67,5 +71,93 @@ describe('FR-4: reconcileBatch — reads the actual downstream SD, not Solomon s
     expect(results[0].reason).toMatch(/transient db error/);
     expect(results[1].updated).toBe(true); // second row still processed despite the first failing
     expect(results[1].outcome).toBe('shipped_clean');
+  });
+});
+
+describe('FR-4 (W2, SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001): negative-outcome back-propagation', () => {
+  it('selectNegativeBackprop matches ONLY on exact outcome_ref equality (never a heuristic/substring)', () => {
+    const rows = [
+      { id: 'a', outcome: 'unknown', outcome_ref: 'SD-REVERTED-001' },       // exact match -> flip
+      { id: 'b', outcome: 'shipped_clean', outcome_ref: 'SD-REVERTED-001' }, // a later revert means it was NOT clean -> flip
+      { id: 'c', outcome: 'unknown', outcome_ref: 'SD-REVERTED-001-EXTRA' }, // superset string — must NOT match
+      { id: 'd', outcome: 'unknown', outcome_ref: 'SD-OTHER-002' },          // unrelated
+      { id: 'e', outcome: 'unknown', outcome_ref: null },                    // no linkage
+    ];
+    const picks = selectNegativeBackprop(rows, new Set(['SD-REVERTED-001']));
+    expect(picks.map((p) => p.id).sort()).toEqual(['a', 'b']);
+    expect(picks.find((p) => p.id === 'b').priorOutcome).toBe('shipped_clean');
+  });
+
+  it('never re-flips an already-negative row (idempotent) and never touches a NO_ARTIFACT sentinel', () => {
+    const rows = [
+      { id: 'a', outcome: 'reverted', outcome_ref: 'SD-X' },       // already negative
+      { id: 'b', outcome: 'caused_rework', outcome_ref: 'SD-X' },  // already negative
+      { id: 'c', outcome: 'unknown', outcome_ref: 'NO_ARTIFACT' }, // explicit no-artifact — nothing to track
+      { id: 'd', outcome: 'unknown', outcome_ref: 'NO_ARTIFACT: verbal ack' },
+    ];
+    // even if the ref set literally contained these strings, none should be selected
+    expect(selectNegativeBackprop(rows, new Set(['SD-X', 'NO_ARTIFACT', 'NO_ARTIFACT: verbal ack'])).length).toBe(0);
+  });
+
+  it('addRefsFromMetadata harvests candidate refs from a red-merge/revert signal metadata object', () => {
+    const set = new Set();
+    addRefsFromMetadata(set, { sha: 'abc123', sd_key: 'SD-Q', signature: 'red-merge:ci:abc123', irrelevant: 'x' });
+    expect(set.has('abc123')).toBe(true);
+    expect(set.has('SD-Q')).toBe(true);
+    expect(set.has('red-merge:ci:abc123')).toBe(true);
+    expect(set.has('x')).toBe(false); // only whitelisted keys
+  });
+
+  it('SEEDED end-to-end: a seeded revert signal back-propagates outcome=reverted onto its linked ledger row', async () => {
+    // Ledger candidate rows (returned by the .not(outcome_ref is null) select).
+    const ledger = [
+      { id: 'row-linked', outcome: 'unknown', outcome_ref: 'SD-SEEDED-REVERT-001' },
+      { id: 'row-unrelated', outcome: 'unknown', outcome_ref: 'SD-CLEAN-002' },
+    ];
+    const updates = [];
+    const sb = {
+      from: (table) => {
+        if (table === 'audit_log') {
+          return { select: () => ({ in: () => ({ limit: async () => ({ data: [{ event: 'SD_REVERTED', metadata: { sd_key: 'SD-SEEDED-REVERT-001' } }], error: null }) }) }) };
+        }
+        if (table === 'strategic_directives_v2') {
+          return { select: () => ({ not: () => ({ limit: async () => ({ data: [], error: null }) }) }) };
+        }
+        // solomon_advice_outcome_ledger
+        return {
+          select: () => ({ not: () => ({ limit: async () => ({ data: ledger, error: null }) }) }),
+          update: (patch) => ({ eq: (col, val) => { updates.push({ patch, col, val }); return Promise.resolve({ error: null }); } }),
+        };
+      },
+    };
+    const negRefs = await collectNegativeRefs(sb, {});
+    expect(negRefs.has('SD-SEEDED-REVERT-001')).toBe(true);
+    const res = await backPropagateNegativeOutcomes(sb, { negativeRefs: negRefs, nowIso: '2026-07-19T00:00:00Z' });
+    expect(res.updated).toEqual(['row-linked']);               // only the linked row flipped
+    expect(updates).toHaveLength(1);
+    expect(updates[0].val).toBe('row-linked');
+    expect(updates[0].patch.outcome).toBe(NEGATIVE_OUTCOME);   // 'reverted'
+    expect(updates[0].patch.closed_by).toBe(NEGATIVE_BACKPROP_SOURCE); // closer-of-record stamped
+    expect(updates[0].patch.closed_at).toBe('2026-07-19T00:00:00Z');
+  });
+
+  it('dryRun reports matches without writing', async () => {
+    const ledger = [{ id: 'r1', outcome: 'unknown', outcome_ref: 'SD-R' }];
+    let updateCalled = false;
+    const sb = { from: () => ({
+      select: () => ({ not: () => ({ limit: async () => ({ data: ledger, error: null }) }) }),
+      update: () => { updateCalled = true; return { eq: () => Promise.resolve({ error: null }) }; },
+    }) };
+    const res = await backPropagateNegativeOutcomes(sb, { negativeRefs: new Set(['SD-R']), dryRun: true });
+    expect(res.matched.map((m) => m.id)).toEqual(['r1']);
+    expect(res.updated).toEqual([]);
+    expect(updateCalled).toBe(false);
+  });
+
+  it('no negative refs → no-op (never queries the ledger)', async () => {
+    const sb = { from: () => ({ select: () => { throw new Error('should not query'); } }) };
+    const res = await backPropagateNegativeOutcomes(sb, { negativeRefs: new Set() });
+    expect(res.updated).toEqual([]);
+    expect(res.matched).toEqual([]);
   });
 });

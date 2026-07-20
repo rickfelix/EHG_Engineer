@@ -49,6 +49,13 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     adamMachineRaisedNoiseInWindow: null,
     pmBoardSnapshot: null,
     pmBoardPriorSnapshot: null,
+    // SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001 FR-1: the belt-starvation (D1) + dispatch-boundary
+    // (D2) cardinal facts are now resolved in the retro audit from LIVE claim tables (below), so
+    // those probes no longer degrade to 'unknown' here (the 297/297-unknown class).
+    claimableBelt: null,
+    idleWorkers: null,
+    sourceableBacklogCount: null,
+    advisoryBody: null,
   };
 
   // P3 friction-signaling (signals side): Adam-originated coordination messages within the window.
@@ -120,36 +127,36 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     }
   } catch { /* leave null -> unknown */ }
 
-  // FR-3 — propose-only (CONST-002): count build/PR/handoff/file-write actions AUTHORED by Adam
-  // within the window. HONEST-UNMEASURABLE by design: this fact stays null -> 'unknown'.
-  //
-  // Why we do NOT attribute via session lineage (the prior approach, which fabricated a FAIL):
-  //   - session_coordination.sender_session is a Claude session UUID, NOT a role tag. Sessions are
-  //     MIXED-ROLE — one session can speak as 'adam' (sender_type='adam') AND, in the same session,
-  //     run LEO worker/PLAN/EXEC phases that legitimately write sub_agent_execution_results. Counting
-  //     every build of any session that EVER sent an 'adam' message attributes legitimate LEO builds
-  //     to Adam -> a fabricated CONST-002 FAIL -> a false high-severity remediation flag.
-  //   - There is NO reliable PER-BUILD / PER-ROW Adam-author marker on sub_agent_execution_results.
-  //     Verified against live data (14d, 4,464 rows): metadata has NO 'sender_type' key (0 rows) and
-  //     NO 'actor' key (0 rows); 'sender_type'='adam'=0, 'actor'='adam'=0. The build rows carry
-  //     machinery keys (findings, routing, phase, session_id, repo_path, ...), none of which is a
-  //     per-build author identity. Adam is propose-only, so builds are simply never adam-tagged.
-  //
-  // The HONEST answer is therefore "could not measure": we leave adamAuthoredBuildsInWindow = null,
-  // which the probe turns into verdict='unknown' (never a fabricated 0/PASS and never a fabricated
-  // FAIL). propose_only honestly degrades to 'unknown' until a build-actor-tagging scheme exists
-  // (e.g. a per-row metadata->>'actor'='adam' stamp at the authoring seam). The SD target is 3-of-4
-  // measurable; the three measured dims are sourcing-cadence, friction-signaling, and vision-going-
-  // forward. NO query is issued here — there is no reliable source to query.
-  // facts.adamAuthoredBuildsInWindow stays null -> probe 'unknown' (honest).
+  // FR-1 (propose_only, CONST-002) — COUNTERFACTUAL-PRESENCE signal. Adam is propose-only: it NEVER
+  // steps into the claim/build lane. Prior code left this null -> 'unknown' FOREVER (108/108 unknown)
+  // arguing sub_agent_execution_results had no per-build Adam marker. That is true, but the SOUND
+  // signal is not "find an Adam build row" — it is the ROLE-ATTRIBUTABLE claim census: count
+  // claude_sessions carrying metadata.role='adam' that ALSO hold a non-null sd_key (an Adam-role
+  // session that claimed an SD to build). This is exactly the mirror of solomon-self-assessment's
+  // solomon_claim_count discipline signal (scripts/solomon-self-assessment-writer.cjs), keys on the
+  // durable role tag (NOT mixed-role session lineage, which fabricated FAILs), and NEVER fabricates:
+  // a real 0 is a real PASS (Adam stayed propose-only — falsifiable: it WOULD fail if an adam-role
+  // session held a claim), a >0 is a real violation, and only a query error leaves the fact
+  // null -> 'unknown'. Verified live 2026-07-19: 0 adam-role sessions hold an sd_key (PASS).
+  try {
+    const { count, error } = await supabase
+      .from('claude_sessions')
+      .select('session_id', { count: 'exact', head: true })
+      .eq('metadata->>role', 'adam')
+      .not('sd_key', 'is', null);
+    if (error) throw error; // a query error must NOT masquerade as a real "0 build-claims"
+    if (Number.isFinite(count)) facts.adamAuthoredBuildsInWindow = count;
+  } catch { /* leave null -> unknown */ }
 
-  // FR-4 — vision monitoring: did Adam read the vision gauge within the window? The durable read
-  // marker is an audit_log row event_type='vision_gauge_read' written when Adam runs
+  // FR-4 / FR-1 — vision monitoring: did Adam read the vision gauge within the window? The durable
+  // read marker is an audit_log row event_type='vision_gauge_read' written when Adam runs
   // scripts/adam-exec-summary.mjs (recordVisionGaugeRead below; existing store, no new table).
-  // HONEST (highest-risk dim): if NO such event exists in the window — or the source is unavailable
-  // (query error) — the fact stays null -> unknown. It MUST NOT default to false: an absent durable
-  // signal is "could not confirm", not "definitely not read". This dim may legitimately remain
-  // 'unknown' (the SD target is 3-of-4 measurable).
+  // MEASURED, FALSIFIABLE (SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001 FR-1): the vision-read marker
+  // is THE durable signal for this duty, so a SUCCESSFUL query with 0 events in the window means the
+  // duty was not evidenced -> FALSE -> probe FAIL (monitoring lapsed). Prior code degraded absence to
+  // null -> 'unknown', producing an unknown-forever gauge (66/108 unknown) that FR-1 forbids ("an
+  // unknown-forever probe is worse than none"). ONLY a query ERROR (infra fault) now leaves the fact
+  // null -> 'unknown' — a measured absence is a real, falsifiable FAIL, not a could-not-confirm.
   try {
     const { count, error } = await supabase
       .from('audit_log')
@@ -160,11 +167,10 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
       // always stamps metadata.sender_type='adam', so this filter is precise — a non-Adam writer of
       // the same event_type (should none ever exist) cannot satisfy Adam's monitoring duty.
       .eq('metadata->>sender_type', 'adam');
-    if (error) throw error;
-    // >=1 event -> measured TRUE. 0 events -> NOT measured-false: the marker is best-effort and may
-    // simply be absent for this window, so we honestly degrade to null -> unknown (never false).
-    if (Number.isFinite(count) && count >= 1) facts.visionGaugeReadInWindow = true;
-  } catch { /* leave null -> unknown */ }
+    if (error) throw error; // a query error must NOT masquerade as a measured "0 reads"
+    // >=1 event -> PASS (read). Successful 0 -> measured FALSE -> FAIL (lapsed). Error -> null/unknown.
+    if (Number.isFinite(count)) facts.visionGaugeReadInWindow = count >= 1;
+  } catch { /* leave null -> unknown (query error only) */ }
 
   // P7 decision-rubric (FR-1): the Adam->chairman decision-questions in the window. Adam's outward
   // advisory channel is session_coordination sender_type='adam', payload.kind='adam_advisory'
@@ -188,6 +194,18 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
       }));
     }
   } catch { /* leave null -> unknown */ }
+
+  // FR-1 (dispatch_boundary, D2) — resolve the advisory corpus body from the SAME in-window Adam
+  // advisory set resolved just above (session_coordination sender_type='adam', kind='adam_advisory').
+  // The pure probe scans for fleet-lifecycle/dispatch language; joining the window's advisory bodies
+  // makes it a real-window check — FAIL if ANY advisory crossed into the coordinator's capacity lane,
+  // PASS if none. Reuses the already-fetched corpus (no extra query). Null ONLY when that fetch itself
+  // failed (advisory set unresolved) -> probe 'unknown'; an empty-but-resolved corpus is '' -> PASS.
+  if (Array.isArray(facts.adamChairmanDecisionQuestionsInWindow)) {
+    facts.advisoryBody = facts.adamChairmanDecisionQuestionsInWindow
+      .map((q) => (q && q.body ? String(q.body) : ''))
+      .join('\n');
+  }
 
   // QF-20260704-748: the decision_rubric probe above only sees Adam's free-text advisory channel.
   // The stall detector (lib/adam/stall-alert.js) raises a SEPARATE, structured escalation channel --
@@ -265,6 +283,65 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     if (error) throw error;
     facts.pmBoardPriorSnapshot = parseSnapshotTail(lastRow && lastRow.detail);
   } catch { /* leave null -> unknown */ }
+
+  // FR-1 (belt_starvation, D1) — resolve the belt/idle census from the SAME live claim tables sd:next
+  // and the sweep read. claimableBelt = GENUINELY-claimable SDs (unclaimed + the canonical
+  // isClaimableSd predicate: non-orchestrator, all dependency blockers terminal) so a
+  // dependency-blocked SD never inflates the belt; idleWorkers = live WORKER sessions (recent
+  // heartbeat, active/idle, not a role-tagged non-worker) holding no SD claim — the claiming_session_id
+  // definition mirrored from lib/fleet/tier-backlog.cjs. The probe FAILs only when belt==0 AND idle>0
+  // AND backlog>0. HONEST: if EITHER census query errors, both facts stay null -> probe 'unknown'
+  // (never a fabricated belt=0 FAIL). Point-in-time snapshot: a real-time gauge's "window" is now.
+  try {
+    const mod = await import('../lib/coordinator/claimable-work.cjs');
+    const { isClaimableSd, dependencyKeys } = mod.default || mod;
+    const liveCutoff = new Date(nowMs - 15 * 60 * 1000).toISOString();
+    const [{ data: sdRows, error: sdErr }, { data: sessRows, error: sErr }] = await Promise.all([
+      supabase.from('strategic_directives_v2')
+        .select('sd_key, sd_type, status, dependencies, claiming_session_id')
+        .not('status', 'in', '(completed,cancelled,archived,deferred)'),
+      supabase.from('claude_sessions')
+        .select('session_id, metadata, sd_key, status, heartbeat_at')
+        .in('status', ['active', 'idle'])
+        .gte('heartbeat_at', liveCutoff),
+    ]);
+    if (sdErr) throw sdErr;
+    if (sErr) throw sErr;
+    const rows = Array.isArray(sdRows) ? sdRows : [];
+    // Resolve dependency-blocker statuses so isClaimableSd can judge each SD (unknown keys => UNMET,
+    // conservative). ONE .in() lookup over the distinct blocker keys (mirrors coordinator-audit).
+    const depKeys = dependencyKeys(rows);
+    const depStatus = {};
+    if (depKeys.length) {
+      const { data: depRows, error: depErr } = await supabase
+        .from('strategic_directives_v2').select('sd_key, status').in('sd_key', depKeys);
+      if (depErr) throw depErr;
+      for (const d of (depRows || [])) depStatus[d.sd_key] = d.status;
+    }
+    facts.claimableBelt = rows.filter((r) => !r.claiming_session_id && isClaimableSd(r, depStatus)).length;
+    const claimedSessionIds = new Set(rows.filter((r) => r.claiming_session_id).map((r) => r.claiming_session_id));
+    const NON_WORKER = new Set(['adam', 'solomon', 'coordinator', 'chairman', 'eva']);
+    const sess = Array.isArray(sessRows) ? sessRows : [];
+    facts.idleWorkers = sess.filter((s) => {
+      const role = String((s.metadata && s.metadata.role) || '').toLowerCase();
+      return !NON_WORKER.has(role) && !claimedSessionIds.has(s.session_id);
+    }).length;
+  } catch { /* leave claimableBelt/idleWorkers null -> belt probe unknown */ }
+
+  // FR-1 (belt_starvation, D1 third input) — sourceable backlog: genuine (auto-capture-excluded)
+  // open harness_backlog feedback, via the canonical scripts/lib/sourceable-backlog.mjs filter (the
+  // same the sweep's action-time check uses). HONEST: a real 0 is a real 0; only a query error leaves
+  // the fact null -> belt probe 'unknown'.
+  try {
+    const { sourceableBacklog } = await import('./lib/sourceable-backlog.mjs');
+    const { data: blRows, error: blErr } = await supabase
+      .from('feedback')
+      .select('id, status, title, metadata')
+      .eq('category', 'harness_backlog')
+      .in('status', ['open', 'new', 'backlog']);
+    if (blErr) throw blErr;
+    if (Array.isArray(blRows)) facts.sourceableBacklogCount = sourceableBacklog(blRows).length;
+  } catch { /* leave sourceableBacklogCount null -> belt probe unknown */ }
 
   return facts;
 }

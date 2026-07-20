@@ -63,6 +63,9 @@ const {
 // lane Adam wires (lib/coordinator/presence-grounding-signals.cjs) — no per-role reimplementation.
 const { getFleetPresence, getReadReceipts, getWorkingSignal } = require('../lib/coordinator/presence-grounding-signals.cjs');
 const { writeWorkingSignal } = require('../lib/coordinator/working-signal-store.cjs');
+// SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001 (W3, FR-6/TR-4): authoritative session cost telemetry
+// read at ledger-write time (fail-soft — a telemetry miss never blocks the write).
+const { readSessionCostTelemetry } = require('../lib/telemetry/session-cost.cjs');
 
 // The consult kind the Solomon lane drains (a deep-reasoning request routed to the oracle).
 const SOLOMON_CONSULT_KIND = 'solomon_consult';
@@ -508,9 +511,24 @@ async function ensureOriginatorCc(supabase, { replyRef, replyTo, target, session
  * advisory send — a ledger write failure (table not yet applied, transient DB error) must not
  * prevent the advisory from being sent. Mirrors the alreadyAnswered/checkConsultQuota fail-open
  * style above. SD-LEO-INFRA-SOLOMON-ADVICE-OUTCOME-LEDGER-001 (FR-2, TR-2). Exported for tests.
+ *
+ * SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001 (W3, FR-6/TR-4): also captures cost_tokens + cost_wall_ms
+ * from the writing session's authoritative telemetry AT WRITE TIME. FAIL-SOFT: when telemetry is
+ * unavailable the row still lands with cost_tokens/cost_wall_ms=null and the durable cost_captured=false
+ * marker, so a missing datum never blocks a write nor silently distorts the budget rollup (which counts
+ * only cost_captured rows). `readTelemetry` is injectable for tests.
  */
-async function captureLedgerRow(supabase, { advisoryId, correlationId, sdKey, body } = {}) {
+async function captureLedgerRow(
+  supabase,
+  { advisoryId, correlationId, sdKey, body, sessionId } = {},
+  { readTelemetry = readSessionCostTelemetry } = {}
+) {
   if (!correlationId) return { captured: false, reason: 'no correlation_id' };
+  // Read cost telemetry BEFORE the write; fully fail-soft (the reader never throws, but guard anyway).
+  let tele;
+  try { tele = readTelemetry({ sessionId }) || { captured: false }; }
+  catch { tele = { captured: false }; }
+  const costCaptured = tele.captured === true;
   try {
     const { error } = await supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
@@ -521,11 +539,14 @@ async function captureLedgerRow(supabase, { advisoryId, correlationId, sdKey, bo
           sd_key: sdKey || null,
           proposal_summary: String(body || '').slice(0, 4000),
           proposal_kind: 'advisory',
+          cost_tokens: costCaptured ? tele.costTokens : null,
+          cost_wall_ms: costCaptured ? tele.wallMs : null,
+          cost_captured: costCaptured,
         },
         { onConflict: 'correlation_id', ignoreDuplicates: true }
       );
     if (error) return { captured: false, reason: error.message };
-    return { captured: true };
+    return { captured: true, costCaptured };
   } catch (e) {
     return { captured: false, reason: (e && e.message) || String(e) };
   }
@@ -839,6 +860,7 @@ async function main() {
     correlationId: payload.correlation_id,
     sdKey: process.env.SD_KEY || null,
     body: payload.body,
+    sessionId, // W3 (FR-6): key cost telemetry to the writing session at write time
   });
   if (!ledgerResult.captured) {
     ledgerCaptureFailures += 1;

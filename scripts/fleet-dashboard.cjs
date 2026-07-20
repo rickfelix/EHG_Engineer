@@ -1784,7 +1784,13 @@ function computeSolomonLedgerRollup(rows, nowMs = Date.now()) {
   const all = rows || [];
   if (all.length === 0) return null;
 
-  const decided = all.filter((r) => r.decision && r.decision !== 'pending');
+  // FR-5/TR-3 (SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001, W2): rows carrying the durable
+  // batch_stamped marker are the 2026-07-12 non-contemporaneous retro backfill. They are EXCLUDED
+  // from the accuracy math — numerator AND denominator — so accuracy reflects only trustworthy
+  // contemporaneous evidence. Deterministic: keys on the durable column, never a timestamp heuristic.
+  const decidedAll = all.filter((r) => r.decision && r.decision !== 'pending');
+  const batchExcludedCount = decidedAll.filter((r) => r.batch_stamped === true).length;
+  const decided = decidedAll.filter((r) => r.batch_stamped !== true);
   const pending = all.filter((r) => !r.decision || r.decision === 'pending');
   const oldestPendingAgeMs = pending.length > 0
     ? Math.max(...pending.map((r) => nowMs - new Date(r.created_at).getTime()))
@@ -1799,6 +1805,7 @@ function computeSolomonLedgerRollup(rows, nowMs = Date.now()) {
       accuracyPct: null,
       acceptedCount: 0,
       costPerAccepted: null,
+      batchExcludedCount,
     };
   }
 
@@ -1806,8 +1813,14 @@ function computeSolomonLedgerRollup(rows, nowMs = Date.now()) {
   const accuracyPct = Math.round((acceptedShippedClean / decided.length) * 100);
 
   const accepted = decided.filter((r) => r.decision === 'accepted');
-  const acceptedCostSum = accepted.reduce((sum, r) => sum + (Number.isFinite(r.cost_tokens) ? r.cost_tokens : 0), 0);
-  const costPerAccepted = accepted.length > 0 ? Math.round(acceptedCostSum / accepted.length) : null;
+  // TR-4 (SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001, W3): the budget rollup counts ONLY rows whose
+  // cost was actually captured from telemetry — a fail-soft cost_captured=false row (cost_tokens=null)
+  // is excluded from BOTH the numerator and the denominator so a missing datum never silently distorts
+  // cost-per-accepted. The finiteness check equals the cost_captured marker (captured rows always carry
+  // a finite cost_tokens); the explicit !== false guard also drops any durable-marked uncaptured row.
+  const acceptedCaptured = accepted.filter((r) => r.cost_captured !== false && Number.isFinite(r.cost_tokens));
+  const acceptedCostSum = acceptedCaptured.reduce((sum, r) => sum + r.cost_tokens, 0);
+  const costPerAccepted = acceptedCaptured.length > 0 ? Math.round(acceptedCostSum / acceptedCaptured.length) : null;
 
   return {
     decidedCount: decided.length,
@@ -1816,7 +1829,9 @@ function computeSolomonLedgerRollup(rows, nowMs = Date.now()) {
     acceptedShippedClean,
     accuracyPct,
     acceptedCount: accepted.length,
+    costCapturedCount: acceptedCaptured.length,
     costPerAccepted,
+    batchExcludedCount,
   };
 }
 
@@ -1831,7 +1846,7 @@ async function printSolomonLedgerRollup() {
     // claiming a 5000-row sample. Paginate up to the declared 5000-row sampling cap.
     rows = await fapPaginate(() => supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
-      .select('decision, outcome, cost_tokens, created_at')
+      .select('decision, outcome, cost_tokens, cost_captured, batch_stamped, created_at')
       .order('created_at', { ascending: false })
       .order('id', { ascending: true }), { maxRows: 5000 }); // most-recent 5000, stable boundaries
   } catch (e) {
@@ -1858,6 +1873,11 @@ async function printSolomonLedgerRollup() {
 
   console.log('  ' + rollup.decidedCount + ' decided proposal(s) (' + rollup.pendingCount + ' pending, oldest ' + oldestPendingStr + ')');
   console.log('  accuracy: ' + rollup.accuracyPct + '% (' + rollup.acceptedShippedClean + '/' + rollup.decidedCount + ' accepted+shipped_clean)');
+  // FR-5: surface how many non-contemporaneous batch-stamped rows were excluded so the accuracy
+  // number is chairman/KPI-readable (accuracy is over trustworthy contemporaneous evidence only).
+  if (rollup.batchExcludedCount > 0) {
+    console.log('  (excluded ' + rollup.batchExcludedCount + ' batch-stamped/non-contemporaneous row(s) from accuracy)');
+  }
   console.log('  cost-per-accepted-proposal: ' + (rollup.costPerAccepted !== null ? rollup.costPerAccepted + ' tokens' : 'n/a (0 accepted)'));
   console.log('');
 }
