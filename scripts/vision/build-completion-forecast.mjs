@@ -84,8 +84,13 @@ async function gatherInputs() {
     const depKeys = new Set();
     rows.forEach(d => parseSdDependencies(d.dependencies).forEach(k => depKeys.add(k)));
     const depStatus = {};
-    if (depKeys.size) {
-      const { data: deps } = await sb.from('strategic_directives_v2').select('sd_key,status').in('sd_key', [...depKeys]);
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6/FR-7: depKeys is derived from `rows`,
+    // which is read unbounded via fetchAllPaginated above — chunk the .in() lookup.
+    const depKeysArr = [...depKeys];
+    const DEP_IN_CHUNK = 200;
+    for (let i = 0; i < depKeysArr.length; i += DEP_IN_CHUNK) {
+      const keyChunk = depKeysArr.slice(i, i + DEP_IN_CHUNK);
+      const { data: deps } = await sb.from('strategic_directives_v2').select('sd_key,status').in('sd_key', keyChunk);
       (deps || []).forEach(d => { depStatus[d.sd_key] = d.status; });
     }
     queueDepth = rows.filter(d => !d.claiming_session_id && d.sd_type !== 'orchestrator' && !isExcludedFromBelt(d)

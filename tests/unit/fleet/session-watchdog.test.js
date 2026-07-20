@@ -56,10 +56,13 @@ describe('watchdog badge summary (FR-3)', () => {
 });
 
 describe('watchdog adapter (FR-2) + tableAbsent', () => {
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: runWatchdog now reads via
+  // fetchAllPaginated, which calls queryFactory().range(offset, to) after .order() — the mock
+  // must be chainable through order()/range() rather than resolving directly off select().
   const fakeSupabase = ({ rows = [], absent = false } = {}) => ({
-    from: () => ({ select: () => absent
+    from: () => ({ select: () => ({ order: () => ({ range: () => absent
       ? Promise.resolve({ data: null, error: { code: '42P01', message: 'relation "claude_sessions" does not exist' } })
-      : Promise.resolve({ data: rows, error: null }) }),
+      : Promise.resolve({ data: rows, error: null }) }) }) }),
   });
   it('classifies live rows via injected isPidAlive', async () => {
     const rows = [
