@@ -1,7 +1,7 @@
 // SD-LEO-INFRA-FLEET-REGISTRY-MANIFEST-001 FR-4 — pure metering surface + manifest-drift contract.
 import { describe, it, expect } from 'vitest';
-import { meterSessions, actualByRole } from '../../../lib/fleet/session-metering.js';
-import { computeManifestDrift } from '../../../lib/fleet/session-manifest.js';
+import { meterSessions, actualByRole, actualByName } from '../../../lib/fleet/session-metering.js';
+import { computeManifestDrift, computeSlotDrift } from '../../../lib/fleet/session-manifest.js';
 
 describe('session-metering surface (FR-4)', () => {
   const joined = [
@@ -37,5 +37,27 @@ describe('session-metering surface (FR-4)', () => {
     });
     expect(drift.drift).toBe(true); // worker 2/3 under-provisioned
     expect(drift.under).toEqual([{ role: 'worker', desired: 3, actual: 2 }]);
+  });
+
+  // DESIRED-STATE SLOT SCHEMA (SD-LEO-INFRA-LEO-COMPLETION-001-B, FR-1/FR-2) — actualByName is the
+  // "actual" side that pairs with computeSlotDrift, mirroring actualByRole's existing role-keyed pattern.
+  it('actualByName keys the actual side by slot name (identity passthrough by default)', () => {
+    const slotJoined = [{ name: 'Alpha-5', model: 'sonnet' }, { name: null, model: 'opus' }];
+    expect(actualByName(slotJoined)).toEqual({ 'Alpha-5': { name: 'Alpha-5', model: 'sonnet' } });
+  });
+
+  it('actualByName uses injected nameOf/slotOf accessors', () => {
+    const joinedByCallsign = [{ callsign: 'Bravo-1', model: 'opus' }];
+    const result = actualByName(joinedByCallsign, { nameOf: (s) => s.callsign, slotOf: (s) => ({ model: s.model }) });
+    expect(result).toEqual({ 'Bravo-1': { model: 'opus' } });
+  });
+
+  it('actualByName feeds computeSlotDrift (actual side of desired-vs-actual, keyed by name)', () => {
+    const drift = computeSlotDrift({
+      desired: [{ name: 'Alpha-5', model: 'sonnet' }],
+      actualByKey: actualByName([{ name: 'Alpha-5', model: 'opus' }]),
+    });
+    expect(drift.drift).toBe(false);
+    expect(drift.present).toEqual([{ name: 'Alpha-5', mismatches: ['model'] }]);
   });
 });

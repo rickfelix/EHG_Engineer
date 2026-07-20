@@ -69,6 +69,7 @@ Mirrors the existing `WORKER_SPAWN_EXECUTOR_LIVE` convention (`docs/protocol/coo
 ## Cross-References
 
 - [Coordinator-Side Worker Revival Contract](./coordinator-worker-revival.md) — sibling default-OFF live-spawn-gate pattern (`WORKER_SPAWN_EXECUTOR_LIVE`)
+- [U4 Cookie-Non-Leak Spec](./u4-cookie-non-leak-spec.md) — formal threat model + falsifiable proof mechanism binding to `relaunchUnderProfile`'s isolation assertion below (`SD-LEO-INFRA-LEO-COMPLETION-001-B`, FR-4)
 - Retrospective: `SD-LEO-INFRA-FLEET-SPAWN-CONTROL-001` (quality_score 90) — documents the 2 CRITICAL data-integrity bugs an independent adversarial review caught and fixed before merge, and the CI-only cross-platform path-join bug
 
 ## Reference
