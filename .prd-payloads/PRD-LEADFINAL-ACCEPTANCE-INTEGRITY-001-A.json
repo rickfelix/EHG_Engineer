@@ -1,0 +1,104 @@
+{
+  "executive_summary": "LEAD-FINAL-APPROVAL's canonical accepted sd_phase_handoffs row hardcodes known_issues to 'None at approval time' unconditionally at two write sites (the primary pre-completion writer at index.js:468, and the resume/reconcile writer at index.js's _reconcileCanonicalLfaRow), regardless of what the SD's own SD_COMPLETION retrospective actually says. This SD wires both writers to read the SD's retrospective via the existing getFilteredRetrospective() helper, filters out boilerplate via the existing RetrospectiveQualityRubric.detectBoilerplate() detector, and surfaces genuine caveats into known_issues -- closing Solomon checkpoint-3's F1 finding that the known-issues channel fails CLOSED instead of failing OPEN.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Extract a shared retro-known-issues helper",
+      "description": "Add a function (e.g. extractRetroKnownIssues(sd, supabase)) to scripts/modules/handoff/executors/lead-final-approval/index.js (or a shared sibling file) that: calls getFilteredRetrospective(sd.id, sd.created_at || null, supabase, sd.sd_key || null) (reusing the existing helper -- no new query); if a retrospective is returned, reads what_needs_improvement, dereferences each item as typeof item === 'string' ? item : (item.improvement || item) (existing shape-handling pattern from pre-handoff-warnings.js:186, since items are sometimes {improvement, is_boilerplate} objects); runs RetrospectiveQualityRubric.detectBoilerplate() (scripts/modules/rubrics/retrospective-quality-rubric.js) against the retrospective and drops items that are pure boilerplate; returns an array of {issue: <text>} objects for known_issues, or the existing fallback [{issue: 'None at approval time'}] when nothing genuine remains (no retro, empty list, or 100% boilerplate).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "extractRetroKnownIssues() reuses getFilteredRetrospective -- no duplicate/new retrospective query is introduced",
+        "Both plain-string and {improvement: '...'} object shapes in what_needs_improvement are handled without throwing",
+        "A retro with only boilerplate what_needs_improvement entries yields the fallback [{issue: 'None at approval time'}]"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Wire the primary pre-completion writer (index.js:468)",
+      "description": "Replace the hardcoded known_issues: [{ issue: 'None at approval time' }] at line 468 with a call to extractRetroKnownIssues(sd, this.supabase), awaited before the insert() call. Wrap in try/catch (or rely on extractRetroKnownIssues's own internal fail-open) so a retro-read failure NEVER blocks or fails the canonical write -- fall back to the existing hardcoded value on any error.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "An SD whose retro has genuine non-boilerplate what_needs_improvement entries shows those entries (not the placeholder) in the canonical row's known_issues",
+        "An SD with a clean/boilerplate-only retro, or no retro, still gets 'None at approval time' -- fallback preserved exactly as before",
+        "A simulated retro-read error does not fail or block the canonical write or the overall LEAD-FINAL-APPROVAL result"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Wire the resume/reconcile writer (_reconcileCanonicalLfaRow)",
+      "description": "Extend _reconcileCanonicalLfaRow's known_issues write to ALSO surface retro known-issues, using the same extractRetroKnownIssues() helper, while preserving its existing honest provenance context. Combine both: known_issues should include both the surfaced retro caveats (if any) AND the existing 'Row synthesized at verify-time...' provenance note, not replace one with the other -- both are true and useful simultaneously.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "The resume/reconcile path also surfaces genuine retro caveats when they exist, not just the primary writer",
+        "The existing 'Row synthesized at verify-time...' provenance message is preserved (not dropped) alongside any surfaced caveats",
+        "A resume-path SD with a clean retro still gets the original single provenance-only known_issues content, unchanged from current behavior"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "No new query -- reuse getFilteredRetrospective", "description": "scripts/modules/handoff/retro-filters.js's getFilteredRetrospective() is the single source of truth for 'the SD's latest SD_COMPLETION retro' -- both new call sites use it, matching the exact call signature already used at gates.js:397." },
+    { "id": "TR-2", "title": "Reuse the canonical boilerplate detector", "description": "RetrospectiveQualityRubric.detectBoilerplate() (scripts/modules/rubrics/retrospective-quality-rubric.js) is the actively-enforced boilerplate list -- do not hand-write a new deny-list." },
+    { "id": "TR-3", "title": "Fail-open, never fail-closed on this new read", "description": "This executor is the SINGLE canonical completion path for every SD in the fleet. Any error reading/parsing the retrospective must fall back silently to the existing hardcoded known_issues value -- it must NEVER become a new reason LEAD-FINAL-APPROVAL fails or blocks." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Retro with genuine non-boilerplate caveat", "type": "unit", "expected": "extractRetroKnownIssues() returns the caveat text, not the placeholder" },
+    { "id": "TS-2", "scenario": "Retro with only boilerplate what_needs_improvement", "type": "unit", "expected": "extractRetroKnownIssues() returns the fallback [{issue: 'None at approval time'}]" },
+    { "id": "TS-3", "scenario": "No retrospective exists for the SD", "type": "unit", "expected": "extractRetroKnownIssues() returns the fallback, no error thrown" },
+    { "id": "TS-4", "scenario": "what_needs_improvement item is an object {improvement: '...'} not a string", "type": "unit", "expected": "The object is dereferenced correctly, not stringified as [object Object] or thrown" },
+    { "id": "TS-5", "scenario": "getFilteredRetrospective throws/errors", "type": "unit", "expected": "extractRetroKnownIssues() catches and falls back to the placeholder -- never propagates the error" },
+    { "id": "TS-6", "scenario": "Primary writer (index.js:468) integration with a seeded retro caveat", "type": "integration", "expected": "The canonical sd_phase_handoffs row's known_issues field contains the caveat" },
+    { "id": "TS-7", "scenario": "Resume/reconcile writer with a seeded retro caveat", "type": "integration", "expected": "known_issues contains BOTH the caveat AND the existing 'Row synthesized at verify-time...' provenance text" }
+  ],
+  "acceptance_criteria": [
+    "LEAD-FINAL surfaces retro known-issues (F1): an SD whose retro records a known gap shows that gap at LEAD-FINAL approval -- never 'None at approval time' against a non-empty, non-boilerplate retro known-issues list",
+    "Boilerplate-only or missing retros still fall back to 'None at approval time' -- the fallback stays meaningful",
+    "No retro-read failure ever blocks or fails LEAD-FINAL-APPROVAL for any SD",
+    "Both the primary and resume/reconcile canonical writers surface retro known-issues, not just one (avoiding a partial fix)"
+  ],
+  "risks": [
+    { "risk": "A retro-read failure (DB error, malformed row) could accidentally block LEAD-FINAL-APPROVAL for every SD fleet-wide -- this executor is the single canonical completion path", "mitigation": "extractRetroKnownIssues wraps its own logic in try/catch and returns the existing fallback on ANY failure; FR-2/FR-3 never let the new read become a new failure mode for approval itself", "severity": "high" },
+    { "risk": "This SD's own LEAD-FINAL-APPROVAL run is the first live exercise of this new code path -- a bug here could block THIS SD from completing", "mitigation": "Extensive unit test coverage (TS-1..TS-7) before EXEC-TO-PLAN; fail-open design means even a bug degrades to the pre-existing (safe, known) hardcoded behavior, not a hard failure", "severity": "medium" }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Every SD reaching LEAD-FINAL-APPROVAL fleet-wide -- this is the canonical, universal completion path"
+    ],
+    "dependencies": [
+      "scripts/modules/handoff/retro-filters.js getFilteredRetrospective() (existing -- direction: this SD calls it, read-only)",
+      "scripts/modules/rubrics/retrospective-quality-rubric.js RetrospectiveQualityRubric.detectBoilerplate() (existing -- direction: this SD calls it, read-only)",
+      "retrospectives table (existing -- direction: read-only; failure_mode: any read error falls back to the pre-existing hardcoded known_issues value per TR-3)"
+    ],
+    "data_contracts": [
+      "sd_phase_handoffs.known_issues (existing JSONB column) -- shape unchanged ([{issue: string}] array), only the CONTENT written changes from always-hardcoded to retro-derived-when-genuine"
+    ],
+    "runtime_config": ["No new env vars or flags required"],
+    "observability_rollout": [
+      "Rollout is observed by comparing known_issues content across newly-completed SDs' canonical rows before/after this change -- a query filtering known_issues NOT LIKE '%None at approval time%' shows adoption",
+      "Rollback: revert the two call sites back to the hardcoded literal; no data migration needed since this only affects new rows going forward"
+    ]
+  },
+  "system_architecture": {
+    "summary": "A new extractRetroKnownIssues(sd, supabase) helper, called from both existing canonical-write sites in lead-final-approval/index.js, composing two already-existing pure functions (getFilteredRetrospective, RetrospectiveQualityRubric.detectBoilerplate).",
+    "components": [
+      { "name": "scripts/modules/handoff/executors/lead-final-approval/index.js", "change": "MODIFIED -- new extractRetroKnownIssues() helper function + 2 call sites (line ~468 primary writer, _reconcileCanonicalLfaRow resume writer)" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Add the shared helper first with full unit test coverage (fail-open by construction), then wire both call sites, then verify with an integration test seeding a real retro caveat.",
+    "steps": [
+      "Implement extractRetroKnownIssues(sd, supabase) composing getFilteredRetrospective + RetrospectiveQualityRubric.detectBoilerplate + the string-or-object dereference pattern",
+      "Write unit tests TS-1..TS-5 against the helper in isolation (mocked supabase client)",
+      "Wire FR-2 (primary writer, line ~468)",
+      "Wire FR-3 (resume/reconcile writer)",
+      "Write integration tests TS-6/TS-7"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Seed a test SD's retro with a genuine what_needs_improvement caveat, then run LEAD-FINAL-APPROVAL for that SD", "expected_outcome": "The canonical sd_phase_handoffs row's known_issues field contains the caveat text, not 'None at approval time'" },
+    { "step_number": 2, "instruction": "Run LEAD-FINAL-APPROVAL for an SD whose retro's what_needs_improvement is only boilerplate entries", "expected_outcome": "known_issues still reads 'None at approval time' -- fallback preserved" },
+    { "step_number": 3, "instruction": "Run LEAD-FINAL-APPROVAL for an SD with zero retrospective rows", "expected_outcome": "Approval completes successfully (fail-open); known_issues falls back to the placeholder, no error/block" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001-A"
+  }
+}
