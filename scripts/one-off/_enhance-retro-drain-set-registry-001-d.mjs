@@ -7,7 +7,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const s = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY);
+const s = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const RETRO_ID = '1272cebc-ca9d-46e0-b4a5-30a25233b48e';
 const SD_KEY = 'SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-D';
