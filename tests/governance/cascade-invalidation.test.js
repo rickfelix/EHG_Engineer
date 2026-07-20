@@ -50,6 +50,9 @@ function createMockSupabase(overrides = {}) {
       is: () => chain,
       order: () => chain,
       limit: () => chain,
+      // fetch-all-paginated (FR-6 batch 7) appends .range() and awaits the page; the
+      // chain is thenable, so one short page resolves resp.data and ends the loop.
+      range: () => chain,
       single: () => Promise.resolve({ data: resp.singleData || (resp.data ? resp.data[0] : null), error: resp.error }),
       then: (fn) => Promise.resolve(fn({ data: resp.data, error: resp.error, count: resp.count })),
     };

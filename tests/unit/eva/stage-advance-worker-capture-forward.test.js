@@ -29,15 +29,19 @@ function createMockSupabase() {
   return {
     from: vi.fn((table) => {
       if (table === 'workflow_executions') {
-        return {
-          select: () => ({
-            eq: () => Promise.resolve({
-              data: [{ id: 'exec-1', venture_id: 'v1', current_stage: 19 }],
-              error: null,
-            }),
+        // fetch-all-paginated (FR-6) appends .order() and awaits .range() as the
+        // resolving terminal for the in_progress poll.
+        const q = {
+          select: () => q,
+          eq: () => q,
+          order: () => q,
+          range: () => Promise.resolve({
+            data: [{ id: 'exec-1', venture_id: 'v1', current_stage: 19 }],
+            error: null,
           }),
           update: () => ({ eq: () => Promise.resolve({ error: null }) }),
         };
+        return q;
       }
       if (table === 'stage_executions') {
         const chain = {

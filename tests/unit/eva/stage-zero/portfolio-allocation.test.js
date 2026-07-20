@@ -57,14 +57,17 @@ function mockSupabase(overrides = {}) {
       };
     }
     if (table === 'venture_briefs') {
-      return {
-        select: () => ({
-          not: () => Promise.resolve({
-            data: overrides.ventures ?? [],
-            error: overrides.ventureError ?? null,
-          }),
+      // fetch-all-paginated (FR-6) appends .order() and awaits .range() as the terminal.
+      const q = {
+        select: () => q,
+        not: () => q,
+        order: () => q,
+        range: () => Promise.resolve({
+          data: overrides.ventures ?? [],
+          error: overrides.ventureError ?? null,
         }),
       };
+      return q;
     }
     return { select: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) };
   };

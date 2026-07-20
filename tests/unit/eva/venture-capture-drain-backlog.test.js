@@ -32,6 +32,8 @@ function createMockDb({ ventures = [], snapshotsByVenture = {}, upsertShouldFail
           select: vi.fn(() => chain),
           eq: vi.fn(() => chain),
           gte: vi.fn(() => chain),
+          order: vi.fn(() => chain),
+          range: vi.fn(() => chain), // fetchAllPaginated (FR-6) paginates the ventures read
           then: (resolve) => Promise.resolve({ data: ventures, error: null }).then(resolve),
         };
         return chain;

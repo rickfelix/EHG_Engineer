@@ -17,6 +17,15 @@ function mockSupabase(tableData = {}) {
         gte: vi.fn(() => chain),
         order: vi.fn(() => chain),
         limit: vi.fn(() => chain),
+        // fetch-all-paginated (FR-6) appends .range() and awaits its result per page.
+        // A short page (< pageSize) stops the loop after one page. On error, reject
+        // with the raw Error so fetchAllPaginated re-throws it verbatim (matching the
+        // pre-conversion contract that surfaced queryError.message directly).
+        range: vi.fn(() => ({
+          then: (resolve, reject) => (data.error
+            ? Promise.reject(new Error(data.error.message)).then(resolve, reject)
+            : Promise.resolve(data).then(resolve, reject)),
+        })),
         upsert: vi.fn(() => Promise.resolve(data.upsertResult || { error: null })),
         then: (resolve) => resolve(data),
       };
