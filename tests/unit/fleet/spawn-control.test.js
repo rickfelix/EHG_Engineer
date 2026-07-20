@@ -157,6 +157,44 @@ describe('spawn (FR-1)', () => {
     expect(result.handleCaptureFailed).toBe(false);
   });
 
+  it('ADVERSARIAL-REVIEW FIX: merges the captured handle into existing metadata, never overwrites the whole blob', async () => {
+    const nowMs = 1_800_000_000_000;
+    const child = { pid: 4242 };
+    const spawnFn = vi.fn().mockReturnValue(child);
+    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{
+        session_id: 's1', pid: 4242, status: 'active',
+        created_at: new Date(nowMs - 5_000).toISOString(), // freshly self-registered, well within the match window
+        metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' },
+      }],
+    });
+    await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true });
+    const merged = supabaseClient._store.get('s1').metadata;
+    // Pre-existing keys survive the write (would be wiped by a bare full-blob overwrite).
+    expect(merged.fleet_identity).toEqual({ callsign: 'Alpha-5' });
+    expect(merged.role).toBe('worker');
+    expect(merged.window_handle).toBe(131074);
+    expect(merged.handle_capture_failed).toBe(false);
+  });
+
+  it('ADVERSARIAL-REVIEW FIX: never writes metadata for a stale/recycled pid match (created_at outside the freshness window)', async () => {
+    const nowMs = 1_800_000_000_000;
+    const child = { pid: 4242 };
+    const spawnFn = vi.fn().mockReturnValue(child);
+    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{
+        session_id: 's-old', pid: 4242, status: 'active',
+        created_at: new Date(nowMs - 60 * 60 * 1000).toISOString(), // an hour old -- a different, unrelated session that happens to share the recycled OS pid
+        metadata: { fleet_identity: { callsign: 'Unrelated-Session' }, role: 'worker' },
+      }],
+    });
+    await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true });
+    // Untouched -- the stale row's metadata must never be corrupted by a fresh spawn's recycled pid.
+    expect(supabaseClient._store.get('s-old').metadata).toEqual({ fleet_identity: { callsign: 'Unrelated-Session' }, role: 'worker' });
+  });
+
   it('FR-5: skips (never double-spawns) a callsign that already has a live session', async () => {
     const spawnFn = vi.fn();
     const supabaseClient = makeFakeSupabase({
@@ -244,11 +282,28 @@ describe('stop', () => {
 describe('restart (FR-4 singleton-serial / FR-5 worker-parallel)', () => {
   beforeEach(() => { sequenceSingletonRefresh.mockReset(); });
 
-  it('worker path: releases the old session and spawns a replacement without the singleton sequencer', async () => {
+  it('worker path (ADVERSARIAL-REVIEW FIX): never releases the old session when the replacement did NOT actually spawn live (dry-run)', async () => {
     const supabaseClient = makeFakeSupabase({
       sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' } }],
     });
     const result = await restart('Alpha-5', { supabaseClient, live: false });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('replacement_not_live');
+    expect(result.role).toBe('worker');
+    expect(sequenceSingletonRefresh).not.toHaveBeenCalled();
+    // Old session must remain untouched -- releasing it here would drop a tracked worker with
+    // no functioning replacement (the bug an adversarial review caught).
+    expect(supabaseClient._store.get('s1').status).toBe('active');
+  });
+
+  it('worker path: releases the old session only once the replacement genuinely spawned live', async () => {
+    const child = { pid: 4242 };
+    const spawnFn = vi.fn().mockReturnValue(child);
+    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' } }],
+    });
+    const result = await restart('Alpha-5', { supabaseClient, live: true, spawnFn, execFn, sleepFn: vi.fn() });
     expect(result.ok).toBe(true);
     expect(result.role).toBe('worker');
     expect(sequenceSingletonRefresh).not.toHaveBeenCalled();
@@ -289,17 +344,30 @@ describe('relaunchUnderProfile (FR-7)', () => {
     expect(dbTouch).not.toHaveBeenCalled();
   });
 
-  it('isolates the account switch to the target session; sibling untouched (worker path)', async () => {
+  it('isolates the account switch to the target session; sibling untouched (worker path, live spawn)', async () => {
+    const child = { pid: 4343 };
+    const spawnFn = vi.fn().mockReturnValue(child);
+    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
     const supabaseClient = makeFakeSupabase({
       sessions: [
         { session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' } },
         { session_id: 's2', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-6' }, role: 'worker' } },
       ],
     });
-    const result = await relaunchUnderProfile('Alpha-5', 'account_b', { supabaseClient, baseDir: 'C:\\profiles', live: false });
+    const result = await relaunchUnderProfile('Alpha-5', 'account_b', { supabaseClient, baseDir: 'C:\\profiles', live: true, spawnFn, execFn, sleepFn: vi.fn() });
     expect(result.ok).toBe(true);
     expect(supabaseClient._store.get('s1').status).toBe('released');
     expect(supabaseClient._store.get('s2').status).toBe('active');
+  });
+
+  it('ADVERSARIAL-REVIEW FIX: never releases the old session when the replacement did not actually spawn live (dry-run)', async () => {
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' } }],
+    });
+    const result = await relaunchUnderProfile('Alpha-5', 'account_b', { supabaseClient, baseDir: 'C:\\profiles', live: false });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('replacement_not_live');
+    expect(supabaseClient._store.get('s1').status).toBe('active');
   });
 
   it('throws if the supervisor process.env.CLAUDE_CONFIG_DIR is mutated during the call (isolation invariant)', async () => {
@@ -376,9 +444,29 @@ describe('drainAndRestart (FR-6: never restarts mid-claim)', () => {
         last_tool_at: new Date(nowMs - 30 * 1000).toISOString(),
       },
     });
-    const result = await drainAndRestart('Alpha-5', { supabaseClient, nowMs, live: false });
+    const child = { pid: 5252 };
+    const spawnFn = vi.fn().mockReturnValue(child);
+    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const result = await drainAndRestart('Alpha-5', { supabaseClient, nowMs, live: true, spawnFn, execFn, sleepFn: vi.fn() });
     expect(result.deferred).toBe(false);
     expect(result.verdict).toBe('PASS');
     expect(supabaseClient._store.get('s1').status).toBe('released');
+  });
+
+  it('ADVERSARIAL-REVIEW FIX: PASS verdict alone does not release the session if the replacement never actually spawned live', async () => {
+    const nowMs = 1_800_000_000_000;
+    const supabaseClient = makeBoundarySupabase({
+      sessionRow: {
+        session_id: 's1', status: 'active',
+        metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' },
+        claimed_at: new Date(nowMs - 60 * 1000).toISOString(),
+        last_tool_at: new Date(nowMs - 30 * 1000).toISOString(),
+      },
+    });
+    const result = await drainAndRestart('Alpha-5', { supabaseClient, nowMs, live: false });
+    expect(result.verdict).toBe('PASS');
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('replacement_not_live');
+    expect(supabaseClient._store.get('s1').status).toBe('active');
   });
 });
