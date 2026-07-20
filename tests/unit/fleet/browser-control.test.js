@@ -51,6 +51,23 @@ function makeSessionsTableMock(initialMetadata = {}) {
   return { client, state };
 }
 
+/** Fluent mock where the metadata UPDATE fails -- exercises persistPauseState's throw-on-write-failure path. */
+function makeWriteFailingSessionsTableMock(initialMetadata = {}) {
+  const client = {
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          maybeSingle: vi.fn(async () => ({ data: { metadata: initialMetadata }, error: null })),
+        })),
+      })),
+      update: vi.fn(() => ({
+        eq: vi.fn(async () => ({ data: null, error: { message: 'simulated write failure' } })),
+      })),
+    })),
+  };
+  return { client };
+}
+
 beforeEach(() => {
   logCoordinationEvent.mockClear();
 });
@@ -187,6 +204,18 @@ describe('signalTakeover / signalHandBack — FR-5 durable takeover (adversarial
       expect.objectContaining({ event_type: 'browser_handback', session_id: 'session-x', sd_key: 'SD-TEST' })
     );
   });
+
+  it('throws (never silently succeeds) when the pause state fails to persist, and does NOT log a false takeover event (adversarial-review round 2 fix)', async () => {
+    const { client } = makeWriteFailingSessionsTableMock();
+    await expect(signalTakeover(client, 'session-x', 'SD-TEST')).rejects.toThrow(/write failed/);
+    expect(logCoordinationEvent).not.toHaveBeenCalled();
+  });
+
+  it('throws when hand-back fails to persist, and does NOT log a false handback event', async () => {
+    const { client } = makeWriteFailingSessionsTableMock({ browser_takeover_paused: true });
+    await expect(signalHandBack(client, 'session-x', 'SD-TEST')).rejects.toThrow(/write failed/);
+    expect(logCoordinationEvent).not.toHaveBeenCalled();
+  });
 });
 
 describe('logBrowserAction — FR-3 audit logging (TS-4, GAP-FR3-AC1)', () => {
@@ -275,12 +304,12 @@ describe('driveAction — FR-3/FR-4/FR-5 guarded execution (TS-4, TS-5, GAP-FR3-
     expect(second.reason).toBe('browser_mcp_disabled');
   });
 
-  it('surfaces a lost audit-log write via auditWarning instead of silently discarding it (adversarial-review fix)', async () => {
+  it('surfaces a lost audit-log write via a generic auditWarning instead of silently discarding it or leaking raw error detail (adversarial-review round 1+2 fixes)', async () => {
     logCoordinationEvent.mockImplementationOnce(async () => {
-      throw new Error('simulated feed outage');
+      throw new Error('simulated feed outage with internal host:port detail');
     });
     const result = await driveAction({}, enabledSession, { eventType: 'browser_navigate', actionFn: vi.fn(() => 'ok') });
     expect(result.executed).toBe(true); // fail-open: the action still runs
-    expect(result.auditWarning).toMatch(/simulated feed outage/);
+    expect(result.auditWarning).toBe('audit log write failed'); // generic -- raw error never surfaced to the caller
   });
 });
