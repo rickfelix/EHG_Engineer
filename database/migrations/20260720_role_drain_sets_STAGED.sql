@@ -23,7 +23,13 @@ BEGIN;
 CREATE TABLE IF NOT EXISTS role_drain_sets (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   role        text NOT NULL,
-  kind        text NOT NULL,
+  -- SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C (Child B) EXEC-phase SECURITY review: without a
+  -- vocabulary CHECK, "kind values are injection-safe identifiers" was convention-enforced only
+  -- (not reachable today -- writes are service-role-only and chairman-seeded -- but defense in
+  -- depth for any future write path). Permissive (mixed-case) because existing seed kinds include
+  -- CLAIM_RELEASED/SET_IDENTITY; still blocks commas/parens/quotes/dots that could break out of a
+  -- PostgREST .in.(...) filter clause (the FR-4 consumer in coordinator-quiet-tick.mjs).
+  kind        text NOT NULL CHECK (kind ~ '^[A-Za-z][A-Za-z0-9_]*$'),
   direction   text NOT NULL DEFAULT 'inbound' CHECK (direction IN ('inbound', 'outbound')),
   status      text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'deprecated')),
   provenance  text NULL,
@@ -84,7 +90,17 @@ INSERT INTO role_drain_sets (role, kind, provenance) VALUES
   ('adam', 'coordinator_reply',       'lib/fleet/worker-status.cjs DRAIN_SETS'),
   ('adam', 'canary_request',         'lib/fleet/worker-status.cjs DRAIN_SETS'),
   ('adam', 'comms_check',            'lib/fleet/worker-status.cjs DRAIN_SETS'),
-  ('adam', 'cross_party_ping',       'lib/fleet/worker-status.cjs DRAIN_SETS')
+  ('adam', 'cross_party_ping',       'lib/fleet/worker-status.cjs DRAIN_SETS'),
+  -- SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C (Child B) FR-1 reconciliation: these 8 kinds were
+  -- only in scripts/adam-advisory.cjs's ADAM_INBOX_KINDS, never in DRAIN_SETS.adam, until Child B.
+  ('adam', 'chairman_heads_up',            'SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C FR-1 reconciliation'),
+  ('adam', 'chairman_handoff',             'SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C FR-1 reconciliation'),
+  ('adam', 'coordinator_advisory',         'SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C FR-1 reconciliation'),
+  ('adam', 'coordinator_adam_feedback',    'SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C FR-1 reconciliation'),
+  ('adam', 'assist_request',               'SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C FR-1 reconciliation'),
+  ('adam', 'reconcile_consult',            'SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C FR-1 reconciliation'),
+  ('adam', 'coordinator_source_request',   'SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C FR-1 reconciliation'),
+  ('adam', 'coordinator_review',           'SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C FR-1 reconciliation')
 ON CONFLICT (role, kind, direction) DO NOTHING;
 
 -- coordinator: DIRECTIVE_KINDS + roll_call + coordinator_reply + adam_advisory + relay_request + relay_confirm + cross_party_ping + solomon_consult
@@ -142,9 +158,9 @@ BEGIN
   ASSERT (SELECT count(*) FROM pg_policies WHERE tablename = 'role_drain_sets') = 1,
     'role_drain_sets must have exactly 1 policy (service-role-only)';
   SELECT count(*) INTO row_count FROM role_drain_sets;
-  -- 14 (solomon, incl. 2 R2 reconciliation fixes) + 14 (adam) + 16 (coordinator)
-  -- + 17 (worker) = 61 seed rows.
-  ASSERT row_count = 61, format('expected 61 seed rows, got %s', row_count);
+  -- 14 (solomon, incl. 2 R2 reconciliation fixes) + 22 (adam, incl. 8 Child B FR-1
+  -- reconciliation fixes) + 16 (coordinator) + 17 (worker) = 69 seed rows.
+  ASSERT row_count = 69, format('expected 69 seed rows, got %s', row_count);
 END
 $verify$;
 

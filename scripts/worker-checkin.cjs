@@ -1110,6 +1110,36 @@ const ORPHAN_CANDIDATE_LIMIT = 5;
 // one window past the clear. A genuine orphan sits indefinitely — the delay is safe.
 const ORPHAN_MIN_AGE_MS = 15 * 60 * 1000;
 
+// RCA a4587e48 (QF-20260720-911): adoptOrphanInProgress had no arbitration against a directed
+// WORK_ASSIGNMENT dispatched for the SAME SD — a just-cleared, just-dispatched orphan could be
+// stolen by a random worker before the assignee attached; the adopter then re-parked it
+// (requires_human_action=true), re-fencing before the assignee landed (a silent no-land loop).
+//
+// Deliberately does NOT reuse coordinatorReservation/ctx.reservations: drain-reservations.cjs's
+// own header documents that step running AFTER adopt-orphan in the checkin pipeline SPECIFICALLY
+// so orphan recovery stays unaffected by that fence mechanism — reordering the pipeline (or
+// plumbing a second, out-of-band reservations fetch) would fight that already-settled
+// architecture. This checks a narrower, independently-verifiable signal instead: an unread
+// directed WORK_ASSIGNMENT genuinely targeting this SD (target_sd, or the canonical
+// payload.assigned_sd/payload.sd_key dispatch keys — see extractSdFromAssignment/dispatch.cjs's
+// own resolution order) that has not yet expired. Fail-open: a query error never blocks adoption.
+async function pendingDirectedAssignmentBlocksAdoption(sb, sdKey) {
+  try {
+    const { data } = await sb
+      .from('session_coordination')
+      .select('id, expires_at')
+      .eq('message_type', 'WORK_ASSIGNMENT')
+      .is('read_at', null)
+      .or(`target_sd.eq.${sdKey},payload->>assigned_sd.eq.${sdKey},payload->>sd_key.eq.${sdKey}`)
+      .order('created_at', { ascending: false })
+      .limit(3);
+    const now = Date.now();
+    return (data || []).some((r) => !r.expires_at || new Date(r.expires_at).getTime() > now);
+  } catch {
+    return false;
+  }
+}
+
 async function adoptOrphanInProgress(sb, sessionId, base) {
   try {
     const cutoffIso = new Date(Date.now() - ORPHAN_MIN_AGE_MS).toISOString();
@@ -1147,6 +1177,9 @@ async function adoptOrphanInProgress(sb, sessionId, base) {
       // short-lived CLI invocations) -- foreignClaimantBlocksSteal() additionally requires the
       // live claimant to have real WIP before refusing. Fail-open: probe errors don't block.
       if (await foreignClaimantBlocksSteal(sb, sd.sd_key, sessionId)) continue;
+      // QF-20260720-911: a live, unread directed WORK_ASSIGNMENT for this SD means the
+      // coordinator already picked an assignee — honor that dispatch instead of stealing it.
+      if (await pendingDirectedAssignmentBlocksAdoption(sb, sd.sd_key)) continue;
       const claimed = await tryClaim(sb, sd.sd_key, sessionId);
       if (claimed.ok) {
         return {
@@ -1557,7 +1590,7 @@ async function main() {
 // top (imports are referenced directly — never re-derived).
 const CHECKIN_HELPERS = { ws, tryClaim, ackMessage, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, registerRollCall, rehydrateCallsign, selfClearQuarantine, mergeCheckinModelEffort, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isBuildForbiddenSession, ensureActiveBaseline, isCriticalQfJumpEligible, tryClaimDraftCandidate, baselinedCandidateEligible, isSdInFlight, selfClaimQuickFix, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, surfaceCoordinatorMessages, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, sortByDispatchRank, resolveWorkerTierRank, isTieringActive, fetchLowerTierBacklogData, ladderTopRank, fetchFableWindowActive, claimableForTier, claimableForRepo, getCommsActivitySignals, computeAdaptiveCadence, antiWinddownDirective, ASSIGNMENT_RECENCY_WINDOW_MS, TERMINAL_CLAIM_ERRORS, QF_CANDIDATE_LIMIT, SELF_CLAIM_CANDIDATE_LIMIT, DEFAULT_IDLE_WAKEUP_SECONDS };
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
+module.exports = { extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, selfClaimDraftSd, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, pendingDirectedAssignmentBlocksAdoption, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs };
 
 if (require.main === module) {
   main().catch(err => {

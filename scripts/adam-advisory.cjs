@@ -53,7 +53,7 @@ const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
 const { enqueueRelayRequest } = require('../lib/coordinator/relay-queue.cjs');
-const { PAYLOAD_KINDS, DIRECTIVE_KINDS, ADAM_EXCLUDED_KINDS } = require('../lib/fleet/worker-status.cjs');
+const { PAYLOAD_KINDS, DIRECTIVE_KINDS, ADAM_EXCLUDED_KINDS, DRAIN_SETS } = require('../lib/fleet/worker-status.cjs');
 // SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-C: fail-closed pick-vs-instrument routing predicate
 // (consumes the -B framing_class contract; FRAMING_CLASSES matching now lives in the router).
 const { routeFraming, FRAMING_ROUTES } = require('../lib/governance/fw3-framing-router.cjs');
@@ -419,88 +419,56 @@ function isDirectiveRow(r) {
 }
 
 /**
- * SD-LEO-FIX-ADAM-INBOX-ALL-CLASSES-001 — the Adam inbox must drain ALL classes DIRECTED to the Adam
- * session, not just the reply lane + the shared DIRECTIVE_KINDS (which FULL-LANE already covered).
- * Live data showed several genuinely Adam-directed classes still undrained, so this Adam-SCOPED
- * allowlist = the imported DIRECTIVE_KINDS (workers consume that; we do NOT mutate it) PLUS the
- * chairman/coordinator-directed classes that target Adam directly. Classify the KIND via the allowlist
- * (QF-20260610-545), never a broad payload->>kind server filter.
- *
- * DELIBERATELY EXCLUDED (owned by dedicated handlers — the Adam inbox must never mark them read first):
- *   canary_request   -> the canary responder
- *   comms_check      -> /checkin roll-call
- *   ack / coordinator_ack -> terminal acknowledgements (nothing to action)
- *   (untyped: no payload.kind) -> roll_call + other untyped rows (NOT directed action items)
+ * SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001: canonical home moved to
+ * lib/fleet/worker-status.cjs (ADAM_EXCLUDED_KINDS) so read-adam-directives.cjs and
+ * adam-quiet-tick.mjs share the list without a require cycle. Export name preserved.
  */
-const ADAM_INBOX_KINDS = Object.freeze([
-  ...DIRECTIVE_KINDS,
-  // SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B / FR-1: chairman_directive is ALSO a shared
-  // DIRECTIVE_KIND (spread above) — Adam drains it via the shared allowlist. It is intentionally
-  // NOT re-listed here (avoids a misleading duplicate); its FIRST-CLASS render partition below
-  // surfaces it ABOVE normal advisories so Adam actions it first.
-  'chairman_heads_up',
-  'chairman_handoff',
-  'coordinator_advisory',
-  // SD-LEO-FEAT-ADAM-INBOX-CONSUMPTION-001 (verify-the-premise): the coordinator hourly-review dispatches
-  // Adam a payload.kind='coordinator_reminder' ('review your Adam responsibilities'). This kind is ALREADY
-  // drained by the Adam inbox because it lives in the shared DIRECTIVE_KINDS (worker-status.cjs, added by
-  // #4610 on 2026-06-10) which is spread into ADAM_INBOX_KINDS above — live data confirms 0 unread. It is
-  // intentionally NOT re-listed here to avoid a misleading duplicate; the coupling is pinned by
-  // tests/unit/adam-inbox-coordinator-reminder.test.js so a future DIRECTIVE_KINDS edit can't silently
-  // break Adam's drain of it.
-  'coordinator_adam_feedback',
-  'assist_request',
-  'reconcile_consult',
-  // SD-LEO-INFRA-ADAM-INBOX-KINDS-SOURCE-REQUEST-001: the coordinator's belt-low source-to-capacity
-  // handshake dispatches Adam a payload.kind='coordinator_source_request'. Without it in this allowlist,
-  // isAdamInboxRow returned false and the normal drain skipped it — it only reached Adam via the degraded
-  // orphan/visibility-recovery fallback. A coordinator->Adam directive-to-action (sibling of
-  // coordinator_advisory / coordinator_adam_feedback), so it belongs here, NOT in EXCLUDED_KINDS.
-  'coordinator_source_request',
-  // QF-20260702-414: coordinator_review (the periodic every-N-SDs candid-feedback ask) and
-  // adam_advisory (reused directionally: PAYLOAD_KINDS.ADAM_ADVISORY is Adam's OWN outbound kind
-  // to the coordinator, but sprint-reasoner/worker/Solomon senders also address Adam directly with
-  // this same kind — target_session scoping in drainInbox's query already guarantees only rows
-  // TARGETING Adam match here, so widening this never causes Adam to self-consume its own sent
-  // advisories, which target the coordinator, not itself) were recirculating through the degraded
-  // orphan/visibility fallback (28 rows unchanged across 6+ drains) instead of the normal lane.
-  'coordinator_review',
-  'adam_advisory',
-]);
-
-/**
- * Is this row a directed Adam-inbox message? True when its payload.kind is in the Adam-scoped
- * ADAM_INBOX_KINDS allowlist (a SUPERSET of DIRECTIVE_KINDS). Untyped rows (no payload.kind) and any
- * excluded/responder-owned kind return false (never drained by the Adam inbox).
- */
-function isAdamInboxRow(r) {
-  const k = r && r.payload && r.payload.kind;
-  return k != null && ADAM_INBOX_KINDS.includes(k);
-}
-
-/**
- * SD-FDBK-INFRA-ADAM-INBOX-ADAM-001 — handler-owned kinds the Adam inbox must NEVER surface or
- * consume (each has a dedicated responder that owns the row; the Adam inbox marking it read first
- * would break that handler). Mirrors the "DELIBERATELY EXCLUDED" list in the ADAM_INBOX_KINDS doc.
- */
-// SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001: canonical home moved to
-// lib/fleet/worker-status.cjs (ADAM_EXCLUDED_KINDS) so read-adam-directives.cjs and
-// adam-quiet-tick.mjs share the list without a require cycle. Export name preserved.
 const EXCLUDED_KINDS = ADAM_EXCLUDED_KINDS;
+
+/**
+ * SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C (Child B) FR-2: the Adam-scoped recognized-kinds
+ * default, DERIVED from DRAIN_SETS.adam (the registry-reader's own fallback SSOT) minus
+ * ADAM_EXCLUDED_KINDS (canary_request/comms_check/ack/coordinator_ack/cross_party_ping —
+ * handler-owned rows the generic inbox must never consume). This is no longer a
+ * hand-authored allowlist (the former ADAM_INBOX_KINDS constant) — it is a live view over
+ * the shared DRAIN_SETS.adam constant (reconciled by FR-1), computed synchronously at
+ * module load so lib/coordinator/dispatch.cjs's existing zero-arg isAdamInboxRow(row) call
+ * site (a send-time guard) keeps working unchanged.
+ *
+ * drainInbox (below) resolves a LIVE kinds array via the registry-reader
+ * (lib/fleet/drain-set-registry.js's resolveRecognizedKinds) and passes it explicitly to
+ * isAdamInboxRow/isOrphanedAdamRow, so once role_drain_sets is applied, the drain reflects
+ * the live table; until then it fails open to this same derived default.
+ */
+const ADAM_INBOX_KINDS = Object.freeze(DRAIN_SETS.adam.filter((k) => !ADAM_EXCLUDED_KINDS.includes(k)));
+
+/**
+ * Is this row a directed Adam-inbox message? True when its payload.kind is in the resolved
+ * recognized-kinds set (default: ADAM_INBOX_KINDS, the DRAIN_SETS.adam-minus-excluded view;
+ * drainInbox passes an explicit registry-resolved array instead). Untyped rows (no
+ * payload.kind) and any excluded/responder-owned kind return false.
+ * @param {object} r
+ * @param {string[]} [recognizedKinds] defaults to ADAM_INBOX_KINDS
+ */
+function isAdamInboxRow(r, recognizedKinds = ADAM_INBOX_KINDS) {
+  const k = r && r.payload && r.payload.kind;
+  return k != null && recognizedKinds.includes(k);
+}
 
 /**
  * SD-FDBK-INFRA-ADAM-INBOX-ADAM-001 — is this an ORPHANED Adam-directed row? A row targeting the
  * Adam session (the drainInbox query already scopes target_session) that the two drain lanes both
- * miss: NOT a reply, NOT an Adam-directive (kind not in ADAM_INBOX_KINDS), and NOT a handler-owned
- * kind. This catches BOTH untyped rows (payload.kind null — the live 2026-06-20 enforcer-verdict
- * blindspot) AND unknown typed kinds (e.g. coordinator_alert) that no allowlist covers. These are
- * genuine deliveries, not noise — drainInbox WARNS about them (visibility) but does NOT consume
- * them, preserving the deliberate non-consume invariant (SD-LEO-FIX-ADAM-INBOX-ALL-CLASSES-001).
- * PURE. @param {object} r @returns {boolean}
+ * miss: NOT a reply, NOT an Adam-directive (kind not in the recognized-kinds set), and NOT a
+ * handler-owned kind. This catches BOTH untyped rows (payload.kind null — the live 2026-06-20
+ * enforcer-verdict blindspot) AND unknown typed kinds (e.g. coordinator_alert) that no allowlist
+ * covers. These are genuine deliveries, not noise — drainInbox WARNS about them (visibility) but
+ * does NOT consume them, preserving the deliberate non-consume invariant
+ * (SD-LEO-FIX-ADAM-INBOX-ALL-CLASSES-001).
+ * PURE. @param {object} r @param {string[]} [recognizedKinds] @returns {boolean}
  */
-function isOrphanedAdamRow(r) {
+function isOrphanedAdamRow(r, recognizedKinds = ADAM_INBOX_KINDS) {
   if (!r) return false;
-  if (isReplyRow(r) || isAdamInboxRow(r)) return false; // already drained by a real lane
+  if (isReplyRow(r) || isAdamInboxRow(r, recognizedKinds)) return false; // already drained by a real lane
   const k = r.payload && r.payload.kind;
   if (k != null && EXCLUDED_KINDS.includes(k)) return false; // handler-owned → never touch
   return true; // untyped, or an unknown typed kind targeting Adam → orphaned delivery
@@ -625,9 +593,16 @@ async function drainInbox(supabase, sessionId, { quiet = false, background = fal
     }
   } catch { /* count is advisory — never blocks the drain */ }
 
+  // SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C (Child B) FR-2: resolve the live recognized-kinds
+  // set via the registry-reader (fails open to ADAM_INBOX_KINDS while role_drain_sets remains
+  // unapplied), subtracting ADAM_EXCLUDED_KINDS so handler-owned kinds are never consumed here.
+  const { resolveRecognizedKinds } = await import('../lib/fleet/drain-set-registry.js');
+  const resolvedAdamKinds = (await resolveRecognizedKinds({ supabase, role: 'adam' }))
+    .filter((k) => !ADAM_EXCLUDED_KINDS.includes(k));
+
   // SD-LEO-FIX-ADAM-INBOX-ALL-CLASSES-001: widen the drain to ALL directed Adam classes
   // (isAdamInboxRow ⊇ DIRECTIVE_KINDS) — responder-owned + untyped rows stay untouched.
-  const rows = (allRows || []).filter((r) => isReplyRow(r) || isAdamInboxRow(r));
+  const rows = (allRows || []).filter((r) => isReplyRow(r) || isAdamInboxRow(r, resolvedAdamKinds));
 
   // SD-FDBK-INFRA-ADAM-INBOX-ADAM-001: surface (WARN, do NOT consume) orphaned Adam-directed rows the
   // two drain lanes miss — untyped (payload.kind null) or unknown typed kinds (e.g. coordinator_alert),
@@ -638,7 +613,7 @@ async function drainInbox(supabase, sessionId, { quiet = false, background = fal
   // ~50KB every tick, unchanged across 6+ drains, risking burial of new lane traffic). Print each
   // orphan row ONCE — payload.orphan_seen_at (a visibility marker, NEVER read_at) is stamped after
   // the first warn so a re-run stays silent about it while it remains genuinely recoverable/unread.
-  const orphaned = (allRows || []).filter(isOrphanedAdamRow);
+  const orphaned = (allRows || []).filter((r) => isOrphanedAdamRow(r, resolvedAdamKinds));
   const freshOrphans = orphaned.filter((r) => !(r.payload && r.payload.orphan_seen_at));
   if (freshOrphans.length > 0) {
     console.warn(`⚠ ${freshOrphans.length} unread Adam-directed row${freshOrphans.length === 1 ? '' : 's'} with unrecognized/untyped kind NOT auto-drained (visibility — NOT consumed, still recoverable):`);

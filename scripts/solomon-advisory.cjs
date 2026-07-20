@@ -47,7 +47,7 @@ const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled 
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version.cjs');
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
-const { PAYLOAD_KINDS, DIRECTIVE_KINDS, FRAMING_CLASSES } = require('../lib/fleet/worker-status.cjs');
+const { PAYLOAD_KINDS, DIRECTIVE_KINDS, FRAMING_CLASSES, DRAIN_SETS } = require('../lib/fleet/worker-status.cjs');
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 const { getActiveAdamId } = require('../lib/coordinator/adam-identity.cjs');
 // QF-20260719-387: fail-closed sender-role guard + target-role assert at the send/request chokes.
@@ -162,17 +162,31 @@ function isReplyRow(r) {
 // DIRECTIVE_KIND (spread below) — Solomon drains it via the shared allowlist (no re-list). Its FIRST-CLASS
 // render partition (renderChairmanDirectives, wired into the inbox mode) surfaces it above consults so a
 // chairman baseline directive can never silently die at Solomon's last hop (the 2h-non-compliant incident).
-const SOLOMON_INBOX_KINDS = Object.freeze([...DIRECTIVE_KINDS, SOLOMON_CONSULT_KIND, 'solomon_duty_reminder' /* QF-20260719-148: cron-written duty triggers */]);
-function isSolomonInboxRow(r) {
-  const k = r && r.payload && r.payload.kind;
-  return k != null && SOLOMON_INBOX_KINDS.includes(k);
-}
-
 // Handler-owned kinds the Solomon inbox must never consume (mirrors the Adam EXCLUDED_KINDS).
 const EXCLUDED_KINDS = Object.freeze(['canary_request', 'comms_check', 'ack', 'coordinator_ack']);
-function isOrphanedSolomonRow(r) {
+
+/**
+ * SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C (Child B) FR-3: the Solomon-scoped recognized-kinds
+ * default, DERIVED from DRAIN_SETS.solomon (the registry-reader's own fallback SSOT) minus
+ * comms_check -- DRAIN_SETS.solomon includes comms_check because SOME Solomon-side lane drains
+ * it (the dedicated first-class branch in drainInbox below), but the GENERIC inbox filter must
+ * never fold it in, exactly as the former hand-authored SOLOMON_INBOX_KINDS never did. No
+ * longer hand-authored -- a live view over the shared DRAIN_SETS.solomon constant.
+ */
+const SOLOMON_INBOX_KINDS = Object.freeze(DRAIN_SETS.solomon.filter((k) => k !== 'comms_check'));
+
+/**
+ * A Solomon-inbox row = a consult OR any shared coordinator DIRECTIVE kind, directed at the
+ * Solomon session. @param {object} r @param {string[]} [recognizedKinds] defaults to SOLOMON_INBOX_KINDS
+ */
+function isSolomonInboxRow(r, recognizedKinds = SOLOMON_INBOX_KINDS) {
+  const k = r && r.payload && r.payload.kind;
+  return k != null && recognizedKinds.includes(k);
+}
+
+function isOrphanedSolomonRow(r, recognizedKinds = SOLOMON_INBOX_KINDS) {
   if (!r) return false;
-  if (isReplyRow(r) || isSolomonInboxRow(r)) return false;
+  if (isReplyRow(r) || isSolomonInboxRow(r, recognizedKinds)) return false;
   const k = r.payload && r.payload.kind;
   if (k != null && EXCLUDED_KINDS.includes(k)) return false; // handler-owned → never touch
   return true; // untyped / unknown typed kind directed at Solomon → orphaned delivery (surface, don't consume)
@@ -299,7 +313,15 @@ async function drainInbox(supabase, sessionId, { quiet = false, background = fal
     .limit(100);
   if (error) { console.error('ERROR: solomon inbox query failed:', error.message); process.exit(1); }
 
-  const rows = (allRows || []).filter((r) => isReplyRow(r) || isSolomonInboxRow(r));
+  // SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C (Child B) FR-3: resolve the live recognized-kinds set
+  // via the registry-reader (fails open to SOLOMON_INBOX_KINDS while role_drain_sets remains
+  // unapplied), subtracting comms_check so the dedicated first-class branch below stays the
+  // ONLY thing that ever surfaces it.
+  const { resolveRecognizedKinds } = await import('../lib/fleet/drain-set-registry.js');
+  const resolvedSolomonKinds = (await resolveRecognizedKinds({ supabase, role: 'solomon' }))
+    .filter((k) => k !== 'comms_check');
+
+  const rows = (allRows || []).filter((r) => isReplyRow(r) || isSolomonInboxRow(r, resolvedSolomonKinds));
   // SD-LEO-INFRA-SEND-TIME-TARGET-001 / FR-3: Solomon-directed canary coverage. comms_check
   // was listed handler-owned (EXCLUDED_KINDS) but NO Solomon-side handler existed — a
   // comms_check sent to Solomon orphaned silently (the exact class this SD closes send-side).
@@ -315,7 +337,7 @@ async function drainInbox(supabase, sessionId, { quiet = false, background = fal
       console.log(`     Ack: node scripts/solomon-advisory.cjs ack ${r.id}  (or reply on the sender's channel)`);
     }
   }
-  const orphaned = (allRows || []).filter(isOrphanedSolomonRow);
+  const orphaned = (allRows || []).filter((r) => isOrphanedSolomonRow(r, resolvedSolomonKinds));
   if (orphaned.length > 0) {
     console.warn(`⚠ ${orphaned.length} unread Solomon-directed row${orphaned.length === 1 ? '' : 's'} with unrecognized/untyped kind NOT auto-drained (visibility — NOT consumed):`);
     for (const r of orphaned) {

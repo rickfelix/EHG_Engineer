@@ -409,7 +409,7 @@ describe('full-lane: drainInbox surfaces BOTH lanes + two-stage ACK', () => {
   // by call order.
   function mockInboxSb(rows, captured) {
     return {
-      from() {
+      from(table) {
         const q = {
           select() { return q; },
           update(patch) { captured.update = patch; return q; },
@@ -421,7 +421,15 @@ describe('full-lane: drainInbox surfaces BOTH lanes + two-stage ACK', () => {
           order() { return q; },
           limit() { return Promise.resolve({ data: rows, error: null }); },
           then(res, rej) {
-            // awaited chain terminal: the surface-stamp update resolves here
+            // SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C (Child B): drainInbox now also queries
+            // role_drain_sets via the registry-reader — route it as PGRST205-style
+            // table-not-found (STAGED/unapplied), the real state of that table today, so the
+            // registry-reader fails open to DRAIN_SETS.adam exactly as before this repoint.
+            // The session_coordination surface-stamp update still resolves via this same
+            // terminal for any other table.
+            if (table === 'role_drain_sets') {
+              return Promise.resolve({ data: null, error: { code: 'PGRST205', message: 'not found' } }).then(res, rej);
+            }
             return Promise.resolve({ data: [], error: null }).then(res, rej);
           },
         };

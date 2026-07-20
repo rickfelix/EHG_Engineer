@@ -41,6 +41,11 @@ function makeTableMock({ inboxRows = [], decisionProbeRows = [], failDecisionIns
         if (state.op === 'update') { decisionUpdates.push(state.payload); return { data: [], error: null }; }
         return { data: decisionProbeRows, error: null };
       }
+      // SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C (Child B): drainInbox now also queries
+      // role_drain_sets via the registry-reader — route it as PGRST205-style table-not-found
+      // (STAGED/unapplied, the real state today), so the registry-reader fails open to
+      // DRAIN_SETS.adam exactly as before this repoint.
+      if (table === 'role_drain_sets') return { data: null, error: { code: 'PGRST205', message: 'not found' } };
       if (state.op === 'update' || state.op === 'insert') return { data: [], error: null };
       return { data: inboxRows, error: null };
     }
