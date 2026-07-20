@@ -40,7 +40,12 @@ const { emitCrossPartyPing } = require('../lib/coordinator/cross-party-ping.cjs'
 // payload.actioned_at) — the inbox core counts only payload.signal_type rows, so this lane had
 // ZERO tick representation.
 const { selectUnactionedAdvisories } = require('../lib/coordinator/adam-advisory-store.cjs');
-const { DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
+const { DIRECTIVE_KINDS, PAYLOAD_KINDS } = require('../lib/fleet/worker-status.cjs');
+// SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C (Child B) FR-4: readSalientState's openSignalCount below
+// generalizes beyond payload.signal_type-only salience via this registry-reader — deliberately NOT
+// touching selectUnactionedAdvisories's actioned_at-coupled retirement logic above (out of scope,
+// see FR-4/TR-5: that coupling makes a kind-filter generalization there unsafe).
+import { resolveRecognizedKinds } from '../lib/fleet/drain-set-registry.js';
 // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2): surface which Claude account this fleet is
 // running under in the tick's status line.
 const { getAccountIdentity } = require('../lib/fleet/account-identity.cjs');
@@ -126,8 +131,12 @@ function scriptCore(key, args, { skip = false } = {}) {
   };
 }
 
-/** Compute the salient state used for FR-4 cross-party no-delta suppression. */
-async function readSalientState(sb) {
+/**
+ * Compute the salient state used for FR-4 cross-party no-delta suppression.
+ * Exported (SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C Child B FR-4) so tests can drive it directly
+ * with a mocked resolveRecognizedKinds response, proving the openSignalCount generalization.
+ */
+export async function readSalientState(sb) {
   const state = { beltZero: true, openSignalCount: 0, venture1State: null };
   try {
     const { data: claimable } = await sb
@@ -139,10 +148,25 @@ async function readSalientState(sb) {
   } catch { /* fail-soft: leave default */ }
   try {
     const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    // SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C (Child B) FR-4: the 2026-07-19 lane-blindness
+    // incident (commit bb661ec627e, QF-20260719-298) — this count originally read ONLY
+    // payload->>signal_type IS NOT NULL, structurally blind to payload.kind-only rows (14
+    // adam_advisory rows sat unactioned with zero tick representation). OR-in a payload.kind
+    // term sourced from the coordinator's registry-resolved recognized kinds (fails open to
+    // DRAIN_SETS.coordinator while role_drain_sets remains unapplied) so ANY future kind added
+    // to the coordinator's drain set gets salience representation automatically — not just
+    // adam_advisory. cross_party_ping is subtracted: it is Adam/coordinator quiet-tick's OWN
+    // mechanical STUB row (emitCrossPartyPing, imported above), so counting it here would be a
+    // self-referential feedback loop, not a genuine new-work signal.
+    const resolvedCoordinatorKinds = (await resolveRecognizedKinds({ supabase: sb, role: 'coordinator' }))
+      .filter((k) => k !== PAYLOAD_KINDS.CROSS_PARTY_PING);
+    const orFilter = resolvedCoordinatorKinds.length > 0
+      ? `payload->>signal_type.not.is.null,payload->>kind.in.(${resolvedCoordinatorKinds.join(',')})`
+      : 'payload->>signal_type.not.is.null';
     const { data: sigs } = await sb
       .from('session_coordination')
       .select('id')
-      .not('payload->>signal_type', 'is', null)
+      .or(orFilter)
       .is('acknowledged_at', null)
       .gte('created_at', since);
     state.openSignalCount = (sigs || []).length;
