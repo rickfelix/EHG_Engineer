@@ -157,6 +157,32 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
       default:
         break;
     }
+
+    // QF-20260720-851 (P2): surface missing sub-agent evidence BEFORE the full gate
+    // run. Reuses the SAME validator the real GATE_SUBAGENT_EVIDENCE gate enforces
+    // (no drift, no gate weakening, no auto-invoking agents) so a worker sees the
+    // missing-agent checklist in ~10s instead of discovering it after a full,
+    // expensive gate-pipeline run (SUBAGENT_EVIDENCE_MISSING was 24 rejections over
+    // 9 SDs in a 48h window, ~12-min mean retry latency, 23/24 resolved on retry —
+    // an ordering speed-bump, not a quality catch). A WAIT verdict (evidence may
+    // still be mid-write) is intentionally NOT treated as a preflight failure.
+    try {
+      const { validateSubagentEvidence } = await import('../gates/subagent-evidence-gate.js');
+      const evidenceResult = await validateSubagentEvidence(
+        { sd, handoffType: handoffType.toUpperCase(), supabase, sdId: sd.id },
+        supabase
+      );
+      if (evidenceResult.passed === false && !evidenceResult.wait) {
+        issues.push({
+          code: 'SUBAGENT_EVIDENCE_MISSING',
+          message: `Missing sub-agent evidence for: ${(evidenceResult.details?.missing || []).join(', ') || 'required agent(s)'}`,
+          remediation: evidenceResult.remediation || 'Invoke the missing sub-agent(s) via the Task tool before re-running the handoff.'
+        });
+      }
+    } catch (evidenceErr) {
+      // Fail-open: the real gate still enforces this later — preflight is UX only.
+      console.warn(`   ⚠️  Sub-agent evidence preflight error (non-blocking): ${evidenceErr.message}`);
+    }
   } catch (err) {
     // Fail-open: don't block handoff if preflight itself errors
     console.warn(`   ⚠️  Prerequisite preflight error (non-blocking): ${err.message}`);

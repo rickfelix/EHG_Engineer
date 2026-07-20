@@ -1142,7 +1142,7 @@ export class BaseExecutor {
 
     if (!session) {
       console.log('   [Claim] ❌ No session available - cannot proceed without claim');
-      return { success: false, error: 'Claim required - no session available' };
+      return { success: false, error: 'Claim required - no session available', message: 'Claim required - no session available' };
     }
 
     const result = await claimGuard(claimId, session.session_id);
@@ -1150,7 +1150,13 @@ export class BaseExecutor {
     if (!result.success) {
       console.log(formatClaimFailure(result));
       console.log('   [Claim] ❌ Cannot proceed - claim guard rejected');
-      return { success: false, error: 'Claim required - cannot proceed without valid SD claim', claimConflict: true };
+      // QF-20260720-851 (P1): fold the claimGuard verdict's own error/status into a
+      // concrete `.message` — recorder writers key rejection_reason off `.message`, and
+      // the prior hardcoded string (with no verdict detail) is exactly what produced a
+      // NULL/uninformative rejection_reason for every claim-guard rejection.
+      const detail = result.status ? `${result.error} (status=${result.status})` : (result.fence || result.error || 'unknown');
+      const message = `Claim guard rejected: ${detail}`;
+      return { success: false, error: message, message, claimConflict: true };
     }
 
     console.log(`   [Claim] ✅ SD ${claimId} claimed (${result.claim.status})`);

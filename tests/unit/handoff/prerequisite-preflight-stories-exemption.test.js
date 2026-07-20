@@ -69,6 +69,18 @@ describe('checkPlanToExecPrereqs USER_STORIES bypass behavior', () => {
             })
           };
         }
+        // QF-20260720-851 (P2): the subagent-evidence preflight check now runs for
+        // every handoffType — stub fresh evidence for all possible required agents
+        // so these unrelated (stories-exemption) tests don't also see a spurious
+        // SUBAGENT_EVIDENCE_MISSING issue.
+        if (table === 'sub_agent_execution_results') {
+          const rows = ['VALIDATION', 'Explore', 'TESTING', 'SECURITY', 'RETRO'].map((code) => ({
+            sub_agent_code: code, created_at: new Date().toISOString(), verdict: 'PASS'
+          }));
+          return {
+            select: () => ({ eq: () => ({ gte: async () => ({ data: rows, error: null }) }) })
+          };
+        }
         const builder = {
           select: () => builder,
           eq: () => builder,
@@ -207,6 +219,18 @@ describe('QF-20260423-666: passed filters info-severity entries', () => {
             select: () => ({
               eq: async () => ({ data: storyRows, error: null })
             })
+          };
+        }
+        // QF-20260720-851 (P2): the subagent-evidence preflight check now runs for
+        // every handoffType — stub fresh evidence for all possible required agents
+        // so these unrelated (stories-exemption) tests don't also see a spurious
+        // SUBAGENT_EVIDENCE_MISSING issue.
+        if (table === 'sub_agent_execution_results') {
+          const rows = ['VALIDATION', 'Explore', 'TESTING', 'SECURITY', 'RETRO'].map((code) => ({
+            sub_agent_code: code, created_at: new Date().toISOString(), verdict: 'PASS'
+          }));
+          return {
+            select: () => ({ eq: () => ({ gte: async () => ({ data: rows, error: null }) }) })
           };
         }
         const builder = {

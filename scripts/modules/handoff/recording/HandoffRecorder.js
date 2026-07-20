@@ -344,12 +344,16 @@ export class HandoffRecorder {
         : null;
     const actualScore = result.details?.actualScore ?? result.actualScore ?? null;
     const requiredScore = result.details?.requiredScore ?? result.requiredScore ?? null;
-    let enrichedRejectionReason = result.message;
+    // QF-20260720-851 (P1): some rejecting callers (e.g. BaseExecutor's claim-guard early
+    // return) set only `.error`/`.reasonCode`, never `.message` — that silently wrote
+    // rejection_reason=NULL (40% of rejections over a 48h Solomon sweep, diagnosis-resistant
+    // by construction). Every rejection writer now stamps SOME reason.
+    let enrichedRejectionReason = result.message || result.error || result.reasonCode || 'UNSPECIFIED_REJECTION (see validation_details)';
     if (requiredImprovements) {
       const scoreSuffix = (actualScore != null && requiredScore != null)
         ? ` (score ${actualScore}%, required ${requiredScore}%)`
         : '';
-      enrichedRejectionReason = `${result.message} | deficits: ${requiredImprovements.join('; ')}${scoreSuffix}`.slice(0, 1000);
+      enrichedRejectionReason = `${enrichedRejectionReason} | deficits: ${requiredImprovements.join('; ')}${scoreSuffix}`.slice(0, 1000);
     }
 
     // SD-MAN-INFRA-MEDIUM-EFFORT-HARDENING-001 (FR-1): completion actions record
@@ -509,7 +513,9 @@ export class HandoffRecorder {
           ? { gate_results: perGateResults, gate_results_version: 2 }
           : {})
       },
-      rejection_reason: result.message,
+      // QF-20260720-851 (P1): same NULL-reason fix as recordFailure — some rejecting
+      // callers (e.g. the claim-guard early return) set only `.error`/`.reasonCode`.
+      rejection_reason: result.message || result.error || result.reasonCode || 'UNSPECIFIED_REJECTION (see validation_details)',
       created_by: recorderIdentity()
     };
 
