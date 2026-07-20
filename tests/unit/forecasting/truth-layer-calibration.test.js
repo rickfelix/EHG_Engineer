@@ -14,6 +14,8 @@ function fakeSupabase({ rows = [], absent = false } = {}) {
       select: () => b,
       eq: (c, v) => { filters.push([c, v]); return b; },
       gte: () => b, // resolved_at range — seeded rows are all in-range, ignore in mock
+      order: () => b, // FR-6: fetchAllPaginated appends .order('id') for stable page boundaries
+      range: () => exec(), // FR-6: fetchAllPaginated pages via .range(); one mock page = all rows
       then: (res, rej) => exec().then(res, rej),
     };
     return b;

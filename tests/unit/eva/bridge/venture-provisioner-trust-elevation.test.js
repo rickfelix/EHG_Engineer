@@ -184,7 +184,19 @@ describe('TS-3 negative pin — external-shaped row never elevates AND VB-2 bloc
     const externalAppsSupabase = {
       from: (t) => {
         if (t !== 'applications') throw new Error(`unexpected table ${t}`);
-        return { select: () => ({ not: () => Promise.resolve({ data: [{ trust_tier: 'external', github_repo: 'rickfelix/importedco' }], error: null }) }) };
+        return {
+          select: () => ({
+            not: () => {
+              // fetchTrustTier paginates via fetchAllPaginated (SD-LEO-INFRA-COUNT-TRUNCATION-
+              // DISCIPLINE-001 FR-6 batch 8) — chainable .order() + a single short .range() page.
+              const chain = {
+                order: () => chain,
+                range: () => Promise.resolve({ data: [{ trust_tier: 'external', github_repo: 'rickfelix/importedco' }], error: null }),
+              };
+              return chain;
+            },
+          }),
+        };
       },
     };
     const tier = await fetchTrustTier('rickfelix', 'importedco', externalAppsSupabase);

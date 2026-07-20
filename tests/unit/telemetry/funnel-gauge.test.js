@@ -103,7 +103,8 @@ describe('computePaidGaugeState (SD-LEO-INFRA-PAYMENT-RAIL-ATTRIBUTION-002 FR-4)
           return {
             not: vi.fn(() => ({ limit: vi.fn(() => Promise.resolve({ data: readinessRows, error: null })) })),
             // resolved-rows query: .eq(venture_id).eq(attribution_status).eq(livemode)
-            eq: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ data: resolvedRows, error: null })) })) })),
+            // FR-6 batch 8: now paginated via fetchAllPaginated — chain through .order() and resolve on .range().
+            eq: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => { const b = { order: vi.fn(() => b), range: vi.fn(() => Promise.resolve({ data: resolvedRows, error: null })) }; return b; }) })) })),
           };
         }),
       })),

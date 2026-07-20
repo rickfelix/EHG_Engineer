@@ -8,7 +8,14 @@ function fakeSupabase(rows = []) {
   function builder() {
     const filters = [];
     const exec = () => Promise.resolve({ data: rows.filter((r) => filters.every(([c, v]) => r[c] === v)), error: null });
-    const b = { select: () => b, eq: (c, v) => { filters.push([c, v]); return b; }, then: (res, rej) => exec().then(res, rej) };
+    // FR-6 batch 8: attachForecasts now paginates via fetchAllPaginated (.order + .range)
+    const b = {
+      select: () => b,
+      eq: (c, v) => { filters.push([c, v]); return b; },
+      order: () => b,
+      range: (from, to) => exec().then((r) => ({ data: (r.data || []).slice(from, to + 1), error: r.error })),
+      then: (res, rej) => exec().then(res, rej),
+    };
     return b;
   }
   return { from: () => builder() };

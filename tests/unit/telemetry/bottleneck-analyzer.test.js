@@ -37,6 +37,9 @@ function createMockSupabase(overrides = {}) {
       ilike: (col, val) => { state.filters.push({ type: 'ilike', col, val }); return chainObj; },
       order: () => chainObj,
       limit: () => chainObj,
+      // FR-6 batch 8: workflow_trace_log is now read via fetchAllPaginated, which awaits .range();
+      // returning the (thenable) chainObj resolves to the same table-based { data, error } below.
+      range: () => chainObj,
       single: () => {
         if (state.table === 'protocol_improvement_queue' && state.insertData) {
           const handler = overrides.onInsertImprovement;

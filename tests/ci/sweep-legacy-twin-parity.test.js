@@ -40,6 +40,11 @@ function makeSupabaseSpy({ unreadMsgs = [] } = {}) {
       return {
         select() { return this; },
         is() { return this; },
+        // FR-6 batch 8: the dead-letter read now paginates via fetchAllPaginated, which appends
+        // .order() and applies .range() itself — extend the builder mock to support both. .range()
+        // resolves the SAME { data, error } the prior `await builder` (then) produced.
+        order() { return this; },
+        range() { return Promise.resolve({ data: unreadMsgs, error: null }); },
         update(payload) {
           return {
             eq(col, val) {

@@ -694,8 +694,14 @@ describe('createRegistryNarrowedTrustGate (FR-3: AND-composed, never-widen trust
   function makeSupabase(rows) {
     return {
       from: () => ({
+        // FR-6 batch 8: the registry-narrowed trust gate paginates the applications
+        // scan via fetchAllPaginated (.not().order().range()); extend the chain to match.
         select: () => ({
-          not: () => Promise.resolve({ data: rows, error: null }),
+          not: () => ({
+            order: () => ({
+              range: () => Promise.resolve({ data: rows, error: null }),
+            }),
+          }),
         }),
       }),
     };
@@ -733,7 +739,7 @@ describe('createRegistryNarrowedTrustGate (FR-3: AND-composed, never-widen trust
     const noMatch = createRegistryNarrowedTrustGate(makeSupabase([{ github_repo: 'rickfelix/marketlens', trust_tier: 'trusted' }]));
     expect(await noMatch('rickfelix', 'ehg')).toBe(true); // floor-eligible, no matching row — floor stands
 
-    const dbError = createRegistryNarrowedTrustGate({ from: () => ({ select: () => ({ not: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }) }) });
+    const dbError = createRegistryNarrowedTrustGate({ from: () => ({ select: () => ({ not: () => ({ order: () => ({ range: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }) }) }) }) });
     expect(await dbError('rickfelix', 'ehg')).toBe(true);
 
     const noSupabase = createRegistryNarrowedTrustGate(null);

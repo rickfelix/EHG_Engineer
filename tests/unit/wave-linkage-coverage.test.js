@@ -6,14 +6,24 @@
 import { describe, it, expect } from 'vitest';
 import { computeWaveLinkageCoverage, COVERAGE_THRESHOLD } from '../../lib/roadmap/wave-linkage-coverage.js';
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 8: computeWaveLinkageCoverage
+// now paginates via fetchAllPaginated, so .not(...) must return a chainable builder
+// (.order() returns itself, .range() resolves the single page) rather than a bare Promise.
 function mockSupabase({ sds, items }) {
+  function terminal(data) {
+    const builder = {
+      order: () => builder,
+      range: async () => ({ data, error: null }),
+    };
+    return builder;
+  }
   return {
     from: (table) => ({
       strategic_directives_v2: {
-        select: () => ({ not: () => Promise.resolve({ data: sds, error: null }) }),
+        select: () => ({ not: () => terminal(sds) }),
       },
       roadmap_wave_items: {
-        select: () => ({ not: () => Promise.resolve({ data: items, error: null }) }),
+        select: () => ({ not: () => terminal(items) }),
       },
     })[table],
   };

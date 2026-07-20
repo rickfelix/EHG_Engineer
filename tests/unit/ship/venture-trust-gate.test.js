@@ -29,8 +29,14 @@ function makeApplicationsSupabase(rows) {
     from: (table) => {
       if (table !== 'applications') throw new Error(`unexpected table ${table}`);
       return {
+        // FR-6 batch 8: fetchTrustTier now paginates via fetchAllPaginated
+        // (.not().order().range()); extend the chain to match.
         select: () => ({
-          not: () => Promise.resolve({ data: rows, error: null }),
+          not: () => ({
+            order: () => ({
+              range: () => Promise.resolve({ data: rows, error: null }),
+            }),
+          }),
         }),
       };
     },
@@ -77,7 +83,7 @@ describe('fetchTrustTier', () => {
   });
 
   it('returns null on query error', async () => {
-    const supabase = { from: () => ({ select: () => ({ not: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }) }) };
+    const supabase = { from: () => ({ select: () => ({ not: () => ({ order: () => ({ range: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }) }) }) }) };
     expect(await fetchTrustTier('rickfelix', 'marketlens', supabase)).toBeNull();
   });
 });
@@ -475,7 +481,8 @@ describe('live cross-repo collision — apexniche-ai vs marketlens (TS-1)', () =
     return {
       from: (table) => {
         if (table === 'applications') {
-          return { select: () => ({ not: () => Promise.resolve({ data: applications, error: null }) }) };
+          // FR-6 batch 8: fetchTrustTier paginates (.not().order().range()).
+          return { select: () => ({ not: () => ({ order: () => ({ range: () => Promise.resolve({ data: applications, error: null }) }) }) }) };
         }
         if (table === 'ship_review_findings') {
           const builder = {

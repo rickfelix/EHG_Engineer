@@ -31,7 +31,10 @@ function makeFakeSupabase(tables) {
             return orderAsc ? cmp : -cmp;
           });
         }
-        resolve({ data: matched.map((r) => ({ ...r })), error: null });
+        // FR-6: computeForecastRange() reads { count } from a head:true/count:'exact' select —
+        // mirror that shape here (matched.length is the exact count a real count:'exact' query
+        // would return for these same filters).
+        resolve({ data: matched.map((r) => ({ ...r })), count: matched.length, error: null });
         return Promise.resolve();
       },
     };

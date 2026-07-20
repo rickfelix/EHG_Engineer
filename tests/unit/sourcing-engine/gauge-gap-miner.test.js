@@ -42,6 +42,10 @@ function makeSupabaseMock({ laneColumnExists = true, sds = [], waveResolvable = 
       like() { return b; },
       limit() { return b; },
       order() { return b; },
+      // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 8: range() added so
+      // fetchAllPaginated-converted call sites (the SD dedup-load below) can chain on
+      // this thenable mock like any other filter method.
+      range() { return b; },
       insert(payload) {
         if (insertError) return Promise.resolve({ data: null, error: insertError });
         // TYPE-aware: the live source_id column is UUID — reject a non-UUID exactly as Postgres would.

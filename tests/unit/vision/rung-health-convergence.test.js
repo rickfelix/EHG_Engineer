@@ -13,6 +13,10 @@ const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.parse('2026-06-20T12:00:00.000Z');
 // helper: build N fail rows on the day that is `daysAgo` before NOW
 const failsOn = (daysAgo, n) => Array.from({ length: n }, () => ({ created_at: new Date(NOW - daysAgo * DAY).toISOString(), verdict: 'fail' }));
+// FR-6 batch 8: loadAdherenceLedger now paginates via fetchAllPaginated, which appends .order()
+// and awaits .range(). Terminate the mock chain with a builder that is chainable through .order()
+// and resolves the same { data, error } on .range().
+const pageable = (result) => { const b = { order: () => b, range: async () => result }; return b; };
 
 describe('computeCatchRateConvergence', () => {
   it('requires nowMs', () => {
@@ -97,12 +101,12 @@ describe('loadAdherenceLedger (fail-soft)', () => {
     expect(await loadAdherenceLedger(null, { nowMs: NOW })).toEqual([]);
   });
   it('returns [] when the query errors (table absent) — never throws', async () => {
-    const supabase = { from: () => ({ select: () => ({ gte: () => ({ eq: async () => ({ data: null, error: { message: 'relation does not exist' } }) }) }) }) };
+    const supabase = { from: () => ({ select: () => ({ gte: () => ({ eq: () => pageable({ data: null, error: { message: 'relation does not exist' } }) }) }) }) };
     expect(await loadAdherenceLedger(supabase, { nowMs: NOW })).toEqual([]);
   });
   it('returns rows on success', async () => {
     const fixture = failsOn(1, 2);
-    const supabase = { from: () => ({ select: () => ({ gte: () => ({ eq: async () => ({ data: fixture, error: null }) }) }) }) };
+    const supabase = { from: () => ({ select: () => ({ gte: () => ({ eq: () => pageable({ data: fixture, error: null }) }) }) }) };
     expect(await loadAdherenceLedger(supabase, { nowMs: NOW })).toEqual(fixture);
   });
 });

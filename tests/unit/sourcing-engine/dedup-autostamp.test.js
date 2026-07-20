@@ -28,6 +28,11 @@ function makeSupabaseMock({ laneColumnExists, sds = [], ledgerRows = [] }) {
       limit() { return b; },
       is() { return b; },
       eq() { return b; },
+      // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 8: order()/range() added so
+      // fetchAllPaginated-converted call sites (the SD load + candidates load below) can
+      // chain on this thenable mock like any other filter method.
+      order() { return b; },
+      range() { return b; },
       update(patch) { state._update = patch; return b; },
       then(resolve, reject) { return Promise.resolve(resolveResult(state)).then(resolve, reject); },
     };

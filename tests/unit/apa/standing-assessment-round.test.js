@@ -17,9 +17,15 @@ function makeSupabaseStub({ ventureDeployments = [], lastAssessment = null, inse
         return {
           select: () => ({
             eq: () => ({
-              not: () => ({
-                order: async () => ({ data: ventureDeployments, error: null }),
-              }),
+              // FR-6 batch 8: listLiveVentureDeploymentUrls now paginates via fetchAllPaginated
+              // (.order('created_at').order('id') then .range()) — order() chainable, range() terminal.
+              not: () => {
+                const orderable = {
+                  order: () => orderable,
+                  range: (from, to) => Promise.resolve({ data: ventureDeployments.slice(from, to + 1), error: null }),
+                };
+                return orderable;
+              },
             }),
           }),
         };

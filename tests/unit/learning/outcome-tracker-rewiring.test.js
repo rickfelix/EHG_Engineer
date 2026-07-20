@@ -33,6 +33,8 @@ function makeFakeSupabase(tables) {
     let orderCol = null;
     let orderAsc = true;
     let limitN = null;
+    let rangeFrom = null;
+    let rangeTo = null;
     let mutation = null;
 
     function table() {
@@ -82,6 +84,7 @@ function makeFakeSupabase(tables) {
         });
       }
       if (limitN != null) rows = rows.slice(0, limitN);
+      if (rangeFrom != null) rows = rows.slice(rangeFrom, rangeTo + 1);
       return { data: rows.map((r) => ({ ...r })), error: null, count: rows.length };
     }
 
@@ -97,6 +100,10 @@ function makeFakeSupabase(tables) {
       lt(col, val) { const get = parseCol(col); filters.push((r) => get(r) != null && get(r) < val); return builder; },
       order(col, opts) { orderCol = col; orderAsc = opts?.ascending !== false; return builder; },
       limit(n) { limitN = n; return builder; },
+      // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 8: fetchAllPaginated
+      // range-paginates via .range(from, to) — extend the mock chain rather than
+      // weaken the assertion (outcome-tracker's detectRecurrence now paginates).
+      range(from, to) { rangeFrom = from; rangeTo = to; return builder; },
       update(payload) { mutation = { type: 'update', payload }; return builder; },
       insert(payload) { mutation = { type: 'insert', payload }; return builder; },
       upsert(payload, opts) { mutation = { type: 'upsert', payload, onConflict: opts?.onConflict }; return builder; },
