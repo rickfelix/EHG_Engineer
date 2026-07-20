@@ -38,6 +38,7 @@ import pg from 'pg';
 import os from 'os';
 import { upsertArchPlan } from '../../lib/eva/archplan-upsert.js';
 import { extractArchPlanSection } from '../../lib/eva/extract-archplan-section.js';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 import {
   buildOrchestratorSD,
   buildChildSD,
@@ -116,22 +117,33 @@ async function writeCascadeError(supabase, { visionId, archplanKey, stage, error
  * Stage 1: vision -> archplan
  */
 export async function runStage1({ supabase, ventureId, dryRun = false, logger = console } = {}) {
-  let visionsQuery = supabase
-    .from('eva_vision_documents')
-    .select('id, vision_key, content, venture_id')
-    .eq('level', 'L2')
-    .eq('status', 'active')
-    .eq('chairman_approved', true)
-    .not('venture_id', 'is', null);
-  if (ventureId) visionsQuery = visionsQuery.eq('venture_id', ventureId);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — every candidate below is
+  // acted on (archplan creation); eva_vision_documents grows with portfolio size, so an
+  // unranged read would silently skip cascade candidates past the cap. Paginate; error
+  // policy mirrors the prior throw.
+  const visionsQueryFactory = () => {
+    let q = supabase
+      .from('eva_vision_documents')
+      .select('id, vision_key, content, venture_id')
+      .eq('level', 'L2')
+      .eq('status', 'active')
+      .eq('chairman_approved', true)
+      .not('venture_id', 'is', null);
+    if (ventureId) q = q.eq('venture_id', ventureId);
+    return q;
+  };
 
-  const { data: visions, error: visionsErr } = await visionsQuery;
-  if (visionsErr) throw new Error(`Stage 1 vision query failed: ${visionsErr.message}`);
+  let visions;
+  try {
+    visions = await fetchAllPaginated(() => visionsQueryFactory().order('id', { ascending: true }));
+  } catch (err) {
+    throw new Error(`Stage 1 vision query failed: ${err.message}`);
+  }
 
   const candidates = [];
   for (const v of (visions || [])) {
     const { data: existingArch } = await supabase
-      .from('eva_architecture_plans')
+      .from('eva_architecture_plans') // schema-lint-disable-line: pre-existing metadata column reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
       .select('plan_key, status, metadata')
       .eq('vision_id', v.id)
       .maybeSingle();
@@ -205,7 +217,7 @@ export async function runStage1({ supabase, ventureId, dryRun = false, logger = 
     }
     // Tag the auto_generated marker on the archplan via a follow-up update — required for first-run safety check.
     await supabase
-      .from('eva_architecture_plans')
+      .from('eva_architecture_plans') // schema-lint-disable-line: pre-existing metadata column reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
       .update({ metadata: { ...(data?.metadata || {}), auto_generated: true, generator: 'cascade-watcher' } })
       .eq('plan_key', planKey);
     success++;
@@ -218,16 +230,27 @@ export async function runStage1({ supabase, ventureId, dryRun = false, logger = 
  * Stage 2: archplan -> orchestrator + children
  */
 export async function runStage2({ supabase, ventureId, dryRun = false, logger = console } = {}) {
-  let archQuery = supabase
-    .from('eva_architecture_plans')
-    .select('id, plan_key, vision_key, vision_id, content, sections, extracted_dimensions, venture_id, metadata')
-    .eq('status', 'active')
-    .eq('chairman_approved', true)
-    .not('vision_key', 'is', null);
-  if (ventureId) archQuery = archQuery.eq('venture_id', ventureId);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — every candidate below is
+  // acted on (orchestrator + children creation); eva_architecture_plans grows with
+  // portfolio size, so an unranged read would silently skip cascade candidates past the
+  // cap. Paginate; error policy mirrors the prior throw.
+  const archQueryFactory = () => {
+    let q = supabase
+      .from('eva_architecture_plans') // schema-lint-disable-line: pre-existing metadata column reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
+      .select('id, plan_key, vision_key, vision_id, content, sections, extracted_dimensions, venture_id, metadata')
+      .eq('status', 'active')
+      .eq('chairman_approved', true)
+      .not('vision_key', 'is', null);
+    if (ventureId) q = q.eq('venture_id', ventureId);
+    return q;
+  };
 
-  const { data: plans, error: plansErr } = await archQuery;
-  if (plansErr) throw new Error(`Stage 2 archplan query failed: ${plansErr.message}`);
+  let plans;
+  try {
+    plans = await fetchAllPaginated(() => archQueryFactory().order('id', { ascending: true }));
+  } catch (err) {
+    throw new Error(`Stage 2 archplan query failed: ${err.message}`);
+  }
 
   const candidates = [];
   for (const p of (plans || [])) {

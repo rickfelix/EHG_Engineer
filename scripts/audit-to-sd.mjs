@@ -18,6 +18,10 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 // QF-20260609-943: score auto-generated audit SDs at conception (leo-create-sd guards its CLI behind isMainModule, so this import is side-effect-free).
 import { scoreSDAtConception } from './leo-create-sd.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the SD-AUDIT-% counter below is a
+// GAUGE feeding a correctness-critical ID sequence (a truncated/fabricated count risks a
+// colliding new SD id) — exact head-count, never a possibly-capped rows.length.
+import { renderCount } from '../lib/db/fetch-all-paginated.mjs';
 
 // Load environment variables
 dotenv.config();
@@ -255,13 +259,21 @@ async function generateSDs(filePath, options = {}) {
   // Step 3: Generate SDs
   console.log('\nStep 3: Generating Strategic Directives...');
 
-  // Get next SD counter
-  const { data: existingSDs, error: countError } = await supabase
+  // Get next SD counter. FR-6 batch 9 (real bug): the prior read had no count/error handling at
+  // all — a query failure silently coerced to 0 existing SDs, risking a NEW SD colliding with an
+  // EVERY existing SD-AUDIT-N id. Exact head-count; fail loud rather than fabricate a low count.
+  const { count: existingCount, error: countError } = await supabase
     .from('strategic_directives_v2')
-    .select('id')
+    .select('id', { count: 'exact', head: true })
     .like('id', 'SD-AUDIT-%');
-
-  let sdCounter = (existingSDs?.length || 0) + 1;
+  if (countError) {
+    throw new Error(`Failed to get existing SD-AUDIT count: ${countError.message}`);
+  }
+  const existingTotal = renderCount(existingCount);
+  if (existingTotal === 'unavailable') {
+    throw new Error('SD-AUDIT counter measurement unavailable — refusing to generate SDs with a possibly-colliding counter');
+  }
+  let sdCounter = existingTotal + 1;
 
   const sdsToCreate = [];
   const linksToCreate = [];

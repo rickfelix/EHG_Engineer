@@ -6,16 +6,23 @@ import { describe, it, expect } from 'vitest';
 import { buildWouldDenyProfile } from '../../scripts/dispatch-auth-would-deny-report.mjs';
 import { WOULD_DENY_EVENT_TYPE } from '../../lib/claim/gates/dispatch-authorization.cjs';
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: buildWouldDenyProfile now routes
+// through fetchAllPaginated, whose terminal call is .range() (not the implicit await formerly
+// used) — chain eq()/order() and resolve {data, error} from .range(), a single short page.
 function fakeSupabase(rows) {
   return {
     from(table) {
-      return {
-        select() { return this; },
+      let matched = rows;
+      const chain = {
+        select() { return chain; },
         eq(col, val) {
-          if (col === 'event_type' && val !== WOULD_DENY_EVENT_TYPE) return Promise.resolve({ data: [], error: null });
-          return Promise.resolve({ data: rows, error: null });
+          if (col === 'event_type' && val !== WOULD_DENY_EVENT_TYPE) matched = [];
+          return chain;
         },
+        order() { return chain; },
+        range() { return Promise.resolve({ data: matched, error: null }); },
       };
+      return chain;
     },
   };
 }
@@ -49,7 +56,7 @@ describe('buildWouldDenyProfile', () => {
   });
 
   it('surfaces a read error rather than silently returning an empty profile', async () => {
-    const supabase = { from: () => ({ select() { return this; }, eq: () => Promise.resolve({ data: null, error: { message: 'connection reset' } }) }) };
+    const supabase = { from: () => ({ select() { return this; }, eq() { return this; }, order() { return this; }, range: () => Promise.resolve({ data: null, error: { message: 'connection reset' } }) }) };
     await expect(buildWouldDenyProfile(supabase)).rejects.toThrow(/would_deny evidence read failed/);
   });
 });

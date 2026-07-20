@@ -25,6 +25,10 @@
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { pathToFileURL } from 'url';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the chairman review queue
+// is the whole point of this script -- an un-paginated read here would silently hide
+// backlog items past the PostgREST 1000-row cap from the chairman.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -62,18 +66,20 @@ function mapCaptureToActionIntent(captureIntent) {
 }
 
 async function getUnreviewedItems() {
-  const { data, error } = await supabase
-    .from('eva_todoist_intake')
-    .select('id, title, description, todoist_url, target_application, target_aspects, chairman_intent, enrichment_summary, classification_confidence, enrichment_status')
-    .eq('enrichment_status', 'enriched')
-    .is('chairman_reviewed_at', null)
-    .order('created_at', { ascending: true });
-
-  if (error) {
+  let data;
+  try {
+    data = await fetchAllPaginated(() => supabase
+      .from('eva_todoist_intake')
+      .select('id, title, description, todoist_url, target_application, target_aspects, chairman_intent, enrichment_summary, classification_confidence, enrichment_status')
+      .eq('enrichment_status', 'enriched')
+      .is('chairman_reviewed_at', null)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (error) {
     console.error('Error fetching items:', error.message);
     return [];
   }
-  return (data || []).map((it) => ({ ...it, _source: 'eva_todoist_intake' }));
+  return data.map((it) => ({ ...it, _source: 'eva_todoist_intake' }));
 }
 
 /**
@@ -84,18 +90,20 @@ async function getUnreviewedItems() {
  * storeReviewDecision stamps the correct table.
  */
 async function getUnreviewedYoutubeItems() {
-  const { data, error } = await supabase
-    .from('eva_youtube_intake')
-    .select('id, title, description, youtube_video_id, target_application, target_aspects, chairman_intent, enrichment_summary, classification_confidence, classified_at')
-    .not('classified_at', 'is', null)
-    .is('chairman_reviewed_at', null)
-    .order('created_at', { ascending: true });
-
-  if (error) {
+  let data;
+  try {
+    data = await fetchAllPaginated(() => supabase
+      .from('eva_youtube_intake')
+      .select('id, title, description, youtube_video_id, target_application, target_aspects, chairman_intent, enrichment_summary, classification_confidence, classified_at')
+      .not('classified_at', 'is', null)
+      .is('chairman_reviewed_at', null)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (error) {
     console.error('Error fetching YouTube items:', error.message);
     return [];
   }
-  return (data || []).map((it) => ({ ...it, _source: 'eva_youtube_intake' }));
+  return data.map((it) => ({ ...it, _source: 'eva_youtube_intake' }));
 }
 
 /**
@@ -105,19 +113,19 @@ async function getUnreviewedYoutubeItems() {
  * SD-LEO-FIX-DISTILL-ORPHAN-RECOVERY-001
  */
 async function getOrphanedItems() {
-  const { data, error } = await supabase
-    .from('eva_todoist_intake')
-    .select('id, title, chairman_reviewed_at')
-    .eq('status', 'pending')
-    .not('chairman_reviewed_at', 'is', null)
-    .is('processed_at', null)
-    .order('chairman_reviewed_at', { ascending: true });
-
-  if (error) {
+  try {
+    return await fetchAllPaginated(() => supabase
+      .from('eva_todoist_intake')
+      .select('id, title, chairman_reviewed_at')
+      .eq('status', 'pending')
+      .not('chairman_reviewed_at', 'is', null)
+      .is('processed_at', null)
+      .order('chairman_reviewed_at', { ascending: true })
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (error) {
     console.error('Error fetching orphaned items:', error.message);
     return [];
   }
-  return data || [];
 }
 
 function formatItemForReview(item, index, total) {

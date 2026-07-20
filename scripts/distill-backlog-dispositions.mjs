@@ -16,6 +16,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { classifyDisposition, convertedSdKeySet } from '../lib/intake/backlog-disposition.mjs';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const APPLY = process.argv.includes('--apply');
 const DRY_RUN = !APPLY;
@@ -39,15 +40,25 @@ async function main() {
   }
   if (probe.error) { console.log('   [ALERT] probe failed (fail-soft):', probe.error.message); return; }
 
-  const { data: items, error } = await sb
-    .from('sd_backlog_map')
-    .select('sd_id, backlog_id, completion_status, disposition');
-  if (error) { console.log('   [ALERT] load failed (fail-soft):', error.message); return; }
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: sd_backlog_map is unfiltered here
+  // and every row is classified + individually updated below — paginate to completion. Error
+  // policy preserved: fail-soft with the same alert message.
+  let items;
+  try {
+    items = await fetchAllPaginated(() => sb
+      .from('sd_backlog_map')
+      .select('sd_id, backlog_id, completion_status, disposition')
+      .order('sd_id', { ascending: true })
+      .order('backlog_id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (e) { console.log('   [ALERT] load failed (fail-soft):', e.message); return; }
 
-  // FR-3: conversion_ledger integrated feeder (empty today; dormant until populated).
+  // FR-3: conversion_ledger integrated feeder (empty today; dormant until populated). Paginated
+  // (not proven permanently bounded once populated) — fail-soft to an empty feeder set.
   let convertedSet = new Set();
   try {
-    const { data: ledger } = await sb.from('conversion_ledger').select('disposition, linked_sd_key');
+    const ledger = await fetchAllPaginated(() => sb.from('conversion_ledger')
+      .select('disposition, linked_sd_key')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
     convertedSet = convertedSdKeySet(ledger || []);
   } catch (e) { console.log('   feeder load skipped (fail-soft):', e.message); }
   console.log(`   backlog items: ${items.length} | conversion_ledger converted-SD feeders: ${convertedSet.size}`);

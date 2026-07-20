@@ -229,12 +229,16 @@ const alreadyAnswered = sharedAlreadyAnswered;
 async function checkConsultQuota(supabase, { sdKey = null, perSdMax = SOLOMON_PER_SD_MAX, perDayMax = SOLOMON_PER_DAY_MAX } = {}) {
   try {
     const since = new Date(); since.setUTCHours(0, 0, 0, 0);
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: was .limit(1000) — exactly the
+    // PostgREST cap, indistinguishable from a truncated read (the incident signature). This is a
+    // quota GATE, not a bulk-processing read: it only needs enough rows to confirm the ceiling was
+    // reached, so 500 is a safe, comfortably-below-cap margin above any realistic perDayMax.
     const { data, error } = await supabase
       .from('session_coordination')
       .select('id, payload, created_at')
       .eq('payload->>oracle', 'true')
       .gte('created_at', since.toISOString())
-      .limit(1000);
+      .limit(500);
     if (error) return { allowed: true };
     // QF-20260705-488 (adversarial-review W2): an answer's originator CC copy also carries
     // payload.oracle=true — exclude via='cc_originator' rows so a CC'd answer consumes ONE

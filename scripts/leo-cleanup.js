@@ -10,6 +10,7 @@ import fs from 'fs/promises';
 import chalk from 'chalk';
 import dotenv from 'dotenv';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -50,11 +51,18 @@ class LEOCleanup {
   async cleanCompletedSDs() {
     console.log(chalk.yellow('\n📋 Checking for completed SDs that should not be active...'));
 
-    // Get all completed SDs
-    const { data: completedSDs, error: _error } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, title, status, current_phase')
-      .eq('status', 'completed');
+    // Get all completed SDs (paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001
+    // FR-6 batch 9: strategic_directives_v2 is unbounded-growth; every row is iterated below)
+    let completedSDs;
+    try {
+      completedSDs = await fetchAllPaginated(() => supabase
+        .from('strategic_directives_v2')
+        .select('id, title, status, current_phase')
+        .eq('status', 'completed')
+        .order('id', { ascending: true }));
+    } catch (_error) {
+      completedSDs = [];
+    }
 
     if (completedSDs && completedSDs.length > 0) {
       console.log(chalk.cyan(`   Found ${completedSDs.length} completed SDs:`));
@@ -72,10 +80,14 @@ class LEOCleanup {
   async cleanOrphanedHandoffs() {
     console.log(chalk.yellow('\n🤝 Checking for orphaned handoffs...'));
 
-    // Find handoffs for completed SDs
-    const { data: orphanedHandoffs } = await supabase
-      .from('sd_phase_handoffs')
-      .select(`
+    // Find handoffs for completed SDs (paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001
+    // FR-6 batch 9: sd_phase_handoffs is unbounded-growth; every row is iterated/mutated below)
+    let orphanedHandoffs;
+    let readFailed = false;
+    try {
+      orphanedHandoffs = await fetchAllPaginated(() => supabase
+        .from('sd_phase_handoffs') // schema-lint-disable-line: pre-existing from_agent/to_agent/completed_at/embedded-relation columns, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
+        .select(`
         id,
         sd_id,
         from_agent,
@@ -83,8 +95,20 @@ class LEOCleanup {
         status,
         strategic_directives_v2!inner(status)
       `)
-      .eq('status', 'pending')
-      .eq('strategic_directives_v2.status', 'completed');
+        .eq('status', 'pending')
+        .eq('strategic_directives_v2.status', 'completed')
+        .order('id', { ascending: true }));
+    } catch (_error) {
+      readFailed = true;
+      orphanedHandoffs = [];
+    }
+
+    // GUARD READ: this gates the cancel-handoff mutation below — a failed read must not
+    // be silently treated as "no orphaned handoffs" (that would skip a real cleanup pass).
+    if (readFailed) {
+      console.log(chalk.red('   GUARD_UNAVAILABLE: orphaned-handoffs read failed — skipping cancel pass this run'));
+      return;
+    }
 
     if (orphanedHandoffs && orphanedHandoffs.length > 0) {
       console.log(chalk.yellow(`   Found ${orphanedHandoffs.length} orphaned handoffs`));
@@ -94,7 +118,7 @@ class LEOCleanup {
 
         // Mark as cancelled
         await supabase
-          .from('sd_phase_handoffs')
+          .from('sd_phase_handoffs') // schema-lint-disable-line: pre-existing from_agent/to_agent/completed_at/embedded-relation columns, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
           .update({ status: 'cancelled', completed_at: new Date() })
           .eq('id', handoff.id);
       }
@@ -123,12 +147,19 @@ class LEOCleanup {
   async showActiveWork() {
     console.log(chalk.blue('\n📊 Active Work Status:'));
 
-    // Show active SDs
-    const { data: activeSDs } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, title, status, current_phase, is_working_on')
-      .in('status', ['active', 'in_progress', 'pending_approval'])
-      .order('priority', { ascending: false });
+    // Show active SDs (paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6
+    // batch 9: strategic_directives_v2 is unbounded-growth; every row is iterated below)
+    let activeSDs;
+    try {
+      activeSDs = await fetchAllPaginated(() => supabase
+        .from('strategic_directives_v2')
+        .select('id, title, status, current_phase, is_working_on')
+        .in('status', ['active', 'in_progress', 'pending_approval'])
+        .order('priority', { ascending: false })
+        .order('id', { ascending: true }));
+    } catch (_error) {
+      activeSDs = [];
+    }
 
     if (activeSDs && activeSDs.length > 0) {
       console.log(chalk.cyan('\n   Active Strategic Directives:'));

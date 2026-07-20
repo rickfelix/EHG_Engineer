@@ -20,6 +20,10 @@
  */
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'node:url';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the completed-SD scan below is
+// UNBOUNDED-PROCESSED (strategic_directives_v2 grows without bound); paginate to completion so
+// a capped read never silently under-counts the backfill target set.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const APPLY = process.argv.includes('--apply');
 const LFA = 'LEAD-FINAL-APPROVAL';
@@ -81,11 +85,14 @@ async function main() {
     }
     return ids;
   };
-  const { data: completed, error } = await sb
-    .from('strategic_directives_v2')
-    .select('id, sd_key, target_application')
-    .eq('status', 'completed');
-  if (error) { console.error('query failed:', error.message); process.exit(1); }
+  let completed;
+  try {
+    completed = await fetchAllPaginated(() => sb
+      .from('strategic_directives_v2')
+      .select('id, sd_key, target_application')
+      .eq('status', 'completed')
+      .order('id', { ascending: true }));
+  } catch (e) { console.error('query failed:', e.message); process.exit(1); }
   const [execAccepted, canonAccepted] = await Promise.all([
     fetchAcceptedSdIds('leo_handoff_executions'),
     fetchAcceptedSdIds('sd_phase_handoffs'),

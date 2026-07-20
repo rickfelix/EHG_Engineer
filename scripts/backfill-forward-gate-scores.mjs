@@ -21,20 +21,29 @@ import 'dotenv/config';
 import { pathToFileURL } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { recordForwardGateScore, hasForwardGateScore } from '../lib/eva/forward-gate.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — when called without --limit this
+// scores EVERY chairman_decisions row (iterated/acted-on below), so a capped read would silently
+// skip scoring decisions past the PostgREST 1000-row boundary. `limit`, when given, is honored as
+// a declared sampling cap via fetchAllPaginated's maxRows (same first-N-in-order semantics as the
+// prior .limit(limit)).
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 export async function backfillForwardGateScores({ supabase, limit = null, dryRun = false, logger = console } = {}) {
   if (!supabase) throw new Error('supabase client required');
-  let q = supabase
-    .from('chairman_decisions')
-    .select('id, lifecycle_stage, health_score, brief_data, summary, decision_type')
-    .order('created_at', { ascending: true });
-  if (Number.isFinite(limit)) q = q.limit(limit);
-  const { data: decisions, error } = await q;
-  if (error) throw new Error(`failed to load chairman_decisions: ${error.message}`);
+  let decisions;
+  try {
+    decisions = await fetchAllPaginated(() => supabase
+      .from('chairman_decisions')
+      .select('id, lifecycle_stage, health_score, brief_data, summary, decision_type')
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true }), { maxRows: Number.isFinite(limit) ? limit : Infinity });
+  } catch (e) {
+    throw new Error(`failed to load chairman_decisions: ${e.message}`);
+  }
 
   let scored = 0;
   let skipped = 0;
-  for (const d of decisions || []) {
+  for (const d of decisions) {
     if (dryRun) {
       const exists = await hasForwardGateScore(d.id, supabase);
       if (exists) skipped++; else scored++;

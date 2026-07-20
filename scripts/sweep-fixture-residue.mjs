@@ -19,6 +19,7 @@
 
 import 'dotenv/config';
 import { createRequire } from 'node:module';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
@@ -49,14 +50,21 @@ export function isLiveResidue(v) {
  * @returns {Promise<{residue: Object[], fixed: number}>}
  */
 export async function sweepFixtureResidue(supabase, { fix = false, logger = console } = {}) {
-  const { data, error } = await supabase
-    .from('ventures')
-    .select('id, name, status, is_demo, deleted_at, metadata')
-    .is('deleted_at', null)
-    .in('status', ['active', 'paused']);
-  if (error) throw new Error(`sweep query failed: ${error.message}`);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: ventures is a portfolio table that
+  // grows with portfolio size — small today is not a provable bound. Paginate.
+  let data;
+  try {
+    data = await fetchAllPaginated(() => supabase
+      .from('ventures')
+      .select('id, name, status, is_demo, deleted_at, metadata')
+      .is('deleted_at', null)
+      .in('status', ['active', 'paused'])
+      .order('id', { ascending: true }));
+  } catch (e) {
+    throw new Error(`sweep query failed: ${e.message}`);
+  }
 
-  const residue = (data || []).filter(isLiveResidue);
+  const residue = data.filter(isLiveResidue);
 
   for (const v of residue) {
     logger.log(`FIXTURE_RESIDUE id=${v.id} name="${v.name}" status=${v.status} ⚠`);

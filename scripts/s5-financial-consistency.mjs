@@ -15,18 +15,26 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { evaluateS5Consistency, persistRecomputedVerdict, S5_ARTIFACT_TYPE } from '../lib/eva/s5-financial-consistency.js';
 import { recomputeKillGateVerdict } from '../lib/eva/kill-gate-recompute.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const APPLY = process.argv.includes('--apply');
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 async function main() {
-  const { data: rows, error } = await supabase
-    .from('venture_artifacts')
-    .select('venture_id, lifecycle_stage, artifact_data')
-    .eq('artifact_type', S5_ARTIFACT_TYPE)
-    .eq('is_current', true)
-    .eq('lifecycle_stage', 5);
-  if (error) throw new Error(`venture_artifacts read failed: ${error.message}`);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: venture_artifacts grows with
+  // portfolio size — is_current narrows to ~1 row/venture but is not provably <1000 long-term.
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => supabase
+      .from('venture_artifacts')
+      .select('venture_id, lifecycle_stage, artifact_data')
+      .eq('artifact_type', S5_ARTIFACT_TYPE)
+      .eq('is_current', true)
+      .eq('lifecycle_stage', 5)
+      .order('id', { ascending: true }));
+  } catch (e) {
+    throw new Error(`venture_artifacts read failed: ${e.message}`);
+  }
 
   console.log(`[s5-consistency] current S5 truth_financial_model artifacts: ${rows.length}`);
   const diverged = [];

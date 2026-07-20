@@ -7,6 +7,11 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — fetchSdTypeMap below reads the
+// WHOLE strategic_directives_v2 table unfiltered and is joined against every handoff row; a
+// PostgREST-capped read would silently mis-bucket handoffs for any SD past the cap as
+// sd_type='unknown', corrupting the per-SD-type breakdown.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const JSON_MODE = process.argv.includes('--json');
 const PAGE_SIZE = 1000;
@@ -68,8 +73,11 @@ export function computeSdTypeStats(rows, sdTypeMap) {
 }
 
 async function fetchSdTypeMap(supabase) {
-  const { data, error } = await supabase.from('strategic_directives_v2').select('id, sd_type');
-  if (error) throw new Error('fetchSdTypeMap failed: ' + error.message);
+  let data;
+  try {
+    data = await fetchAllPaginated(() => supabase.from('strategic_directives_v2')
+      .select('id, sd_type').order('id', { ascending: true }));
+  } catch (e) { throw new Error('fetchSdTypeMap failed: ' + e.message); }
   return new Map((data || []).map((r) => [r.id, r.sd_type || 'unknown']));
 }
 

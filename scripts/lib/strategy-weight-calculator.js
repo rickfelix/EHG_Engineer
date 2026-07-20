@@ -22,6 +22,7 @@
  */
 
 import { calculateOKRImpact, WEIGHTS } from './priority-scorer.js';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 /**
  * Calculate strategy_weight for a single SD.
@@ -128,11 +129,20 @@ export async function batchCalculateWeights({ supabase, sdKeys }) {
     .select('id, title, description, time_horizon, status, health_indicator, linked_okr_ids')
     .eq('status', 'active');
 
-  // Load OKR alignments for these SDs
-  const { data: alignments } = await supabase
-    .from('sd_key_result_alignment')
-    .select('sd_id, key_result_id, contribution_type, contribution_weight')
-    .in('sd_id', sdKeys);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — alignments are grouped and
+  // processed per-SD below; the sd_id list grows with baseline size, so an unranged read
+  // could silently cap the result set. Paginate; empty-on-error mirrors the prior fail-open
+  // (destructured data with no explicit error check).
+  let alignments;
+  try {
+    alignments = await fetchAllPaginated(() => supabase
+      .from('sd_key_result_alignment')
+      .select('sd_id, key_result_id, contribution_type, contribution_weight')
+      .in('sd_id', sdKeys)
+      .order('id', { ascending: true }));
+  } catch {
+    alignments = [];
+  }
 
   // Group alignments by SD
   const alignmentsBySd = {};
@@ -175,11 +185,20 @@ export async function batchCalculateWeights({ supabase, sdKeys }) {
  * @returns {Promise<{updated: number, skipped: number}>}
  */
 export async function updateBaselineStrategyWeights({ supabase, baselineId }) {
-  // Get all items in the baseline
-  const { data: items } = await supabase
-    .from('sd_baseline_items')
-    .select('id, sd_id, strategy_weight')
-    .eq('baseline_id', baselineId);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — a baseline snapshots the
+  // whole roadmap at a point in time and every item here gets updated below; an unranged
+  // read could silently skip updating weights past the cap. Paginate; empty-on-error
+  // mirrors the prior fail-open (destructured data with no explicit error check).
+  let items;
+  try {
+    items = await fetchAllPaginated(() => supabase
+      .from('sd_baseline_items')
+      .select('id, sd_id, strategy_weight')
+      .eq('baseline_id', baselineId)
+      .order('id', { ascending: true }));
+  } catch {
+    items = [];
+  }
 
   if (!items || items.length === 0) {
     return { updated: 0, skipped: 0 };

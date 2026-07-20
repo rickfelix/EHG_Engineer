@@ -94,7 +94,18 @@ function fakeSupabase({ ventureRows = [], orphanedApps = [] } = {}) {
   return {
     from(table) {
       if (table === 'ventures') {
-        return { select: () => ({ eq: (col, val) => Promise.resolve({ data: ventureRows.filter((v) => v[col] === val), error: null }) }) };
+        // FR-6 batch 9 (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001): the read now paginates
+        // via fetchAllPaginated, which calls .order() (chainable) then .range() (terminal)
+        // instead of awaiting .eq() directly — extend the chain, same filtering logic.
+        return {
+          select: () => ({
+            eq: (col, val) => {
+              const filtered = ventureRows.filter((v) => v[col] === val);
+              const chain = { order: () => chain, range: () => Promise.resolve({ data: filtered, error: null }) };
+              return chain;
+            },
+          }),
+        };
       }
       if (table === 'applications') {
         return {

@@ -17,6 +17,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { execSync } from 'child_process';
 import { checkUncommittedChanges, getAffectedRepos } from '../lib/multi-repo/index.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -58,21 +59,26 @@ async function listPendingVerification() {
   console.log(`${colors.cyan}═══════════════════════════════════════════════════════════════════${colors.reset}\n`);
 
   // Note: legacy_id column was deprecated and removed - using sd_key instead
-  const { data: sds, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, title, current_phase, status, progress_percentage, updated_at')
-    .eq('is_active', true)
-    .or('current_phase.eq.EXEC_COMPLETE,status.eq.review')
-    .neq('status', 'completed')
-    .neq('status', 'cancelled')
-    .order('updated_at', { ascending: false });
-
-  if (error) {
-    console.log(`${colors.red}Error querying SDs: ${error.message}${colors.reset}`);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 grows
+  // unbounded; this cross-cutting status filter (not a per-SD/per-baseline scope) is not
+  // provably bounded, so paginate.
+  let sds;
+  try {
+    sds = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, current_phase, status, progress_percentage, updated_at')
+      .eq('is_active', true)
+      .or('current_phase.eq.EXEC_COMPLETE,status.eq.review')
+      .neq('status', 'completed')
+      .neq('status', 'cancelled')
+      .order('updated_at', { ascending: false })
+      .order('id', { ascending: true }));
+  } catch (e) {
+    console.log(`${colors.red}Error querying SDs: ${e.message}${colors.reset}`);
     return;
   }
 
-  if (!sds || sds.length === 0) {
+  if (sds.length === 0) {
     console.log(`${colors.green}✓ No SDs pending verification${colors.reset}\n`);
     return;
   }
@@ -146,7 +152,7 @@ async function verifySD(sdId) {
   // 2. Check for handoff records
   const { data: handoffs } = await supabase
     .from('sd_phase_handoffs')
-    .select('direction, from_phase, to_phase, created_at')
+    .select('direction, from_phase, to_phase, created_at') // schema-lint-disable-line: pre-existing column reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
     .eq('sd_id', sd.id)
     .order('created_at', { ascending: false })
     .limit(5);

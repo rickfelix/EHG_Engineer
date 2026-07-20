@@ -32,6 +32,7 @@ import { createClient } from '@supabase/supabase-js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { discoverAllProcesses } from '../lib/periodic-liveness/enumerate-processes.mjs';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
@@ -62,11 +63,18 @@ function intervalForRoundKey(key) {
 }
 
 async function seedRoleSessions() {
-  const { data: rows, error } = await supabase
-    .from('claude_sessions')
-    .select('metadata')
-    .or('metadata->>role.not.is.null,metadata->>is_coordinator.eq.true');
-  if (error) throw new Error(`claude_sessions query failed: ${error.message}`);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: claude_sessions grows unbounded
+  // (every session ever run) — paginate rather than rely on a capped 1000-row scan.
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => supabase
+      .from('claude_sessions')
+      .select('metadata')
+      .or('metadata->>role.not.is.null,metadata->>is_coordinator.eq.true')
+      .order('id', { ascending: true }));
+  } catch (e) {
+    throw new Error(`claude_sessions query failed: ${e.message}`);
+  }
 
   // Only the 3 role loops the SD's own specimens name (Adam/coordinator/Solomon) -- sprint-reasoner-*
   // are explicitly non-fleet/non-role sessions per established fleet convention, out of this seed.

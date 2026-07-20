@@ -55,6 +55,7 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
 import { createClient } from '@supabase/supabase-js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 import { listActiveWorktrees, countActiveWorktrees, MAX_WORKTREE_COUNT } from '../lib/worktree-quota.js';
 import { safeRecursiveRm, safeRecursiveCp, removeWorktreeViaGit } from '../lib/worktree-manager.js';
@@ -398,12 +399,15 @@ async function loadClaimedKeySet(supabase) {
     }
   } catch { /* fail-safe */ }
   try {
-    const { data } = await supabase
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: was .limit(2000), above the
+    // PostgREST 1000-row cap (silently clamped anyway). This is a live-claim guard set — an
+    // undercounted claimedKeySet could wrongly leave a claimed SD's worktree unprotected.
+    const data = await fetchAllPaginated(() => supabase
       .from('strategic_directives_v2')
       .select('sd_key, claiming_session_id')
       .not('claiming_session_id', 'is', null)
-      .limit(2000);
-    for (const r of data || []) if (r.sd_key) set.add(r.sd_key);
+      .order('sd_key', { ascending: true }));
+    for (const r of data) if (r.sd_key) set.add(r.sd_key);
   } catch { /* fail-safe */ }
   return set;
 }

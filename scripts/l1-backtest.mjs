@@ -15,6 +15,10 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { computeL1Outcome } from '../lib/governance/l1-work-outcome.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 and
+// quick_fixes are growing tables, and --days is user-configurable (unbounded window) -- a
+// truncated read here silently corrupts the coverage measurement this backtest exists to report.
+import { fetchAllPaginated, warnIfCapTruncated } from '../lib/db/fetch-all-paginated.mjs';
 
 const DEFAULT_WINDOW_DAYS = 7;
 
@@ -28,35 +32,48 @@ function parseDays(argv) {
 async function collectWindowedWorkKeys(supabase, days) {
   const since = new Date(Date.now() - days * 86400000).toISOString();
 
-  const { data: sdRows, error: sdError } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key, updated_at')
-    .eq('status', 'completed')
-    .gte('updated_at', since);
-  if (sdError) throw new Error(`SD query failed: ${sdError.message}`);
+  let sdRows;
+  try {
+    sdRows = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, updated_at')
+      .eq('status', 'completed')
+      .gte('updated_at', since)
+      .order('updated_at', { ascending: true })
+      .order('sd_key', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
+  } catch (sdError) {
+    throw new Error(`SD query failed: ${sdError.message}`);
+  }
 
   // Exclude ghost-completed SDs (no real LEAD-FINAL evidence) from the trailing-window set --
   // they have no genuine completion signal, so including them would pollute the L1 outcome
   // computation with noise, not new drift.
-  const { data: ghostRows, error: ghostError } = await supabase
+  const { data: ghostRowsRaw, error: ghostError } = await supabase
     .from('v_sd_completion_integrity')
     .select('sd_key')
     .eq('is_ghost_completed', true);
   if (ghostError) throw new Error(`ghost-completed query failed: ${ghostError.message}`);
-  const ghostKeys = new Set((ghostRows || []).map((r) => r.sd_key));
+  const ghostRows = warnIfCapTruncated(ghostRowsRaw, 'v_sd_completion_integrity (ghost-completed, l1-backtest exclusion set)');
+  const ghostKeys = new Set(ghostRows.map((r) => r.sd_key));
 
-  const { data: qfRows, error: qfError } = await supabase
-    .from('quick_fixes')
-    .select('id, completed_at')
-    .eq('status', 'completed')
-    .gte('completed_at', since);
-  if (qfError) throw new Error(`QF query failed: ${qfError.message}`);
+  let qfRows;
+  try {
+    qfRows = await fetchAllPaginated(() => supabase
+      .from('quick_fixes')
+      .select('id, completed_at')
+      .eq('status', 'completed')
+      .gte('completed_at', since)
+      .order('completed_at', { ascending: true })
+      .order('id', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
+  } catch (qfError) {
+    throw new Error(`QF query failed: ${qfError.message}`);
+  }
 
-  const excludedGhostCount = (sdRows || []).filter((r) => ghostKeys.has(r.sd_key)).length;
-  const sdKeys = (sdRows || []).map((r) => r.sd_key).filter((k) => !ghostKeys.has(k));
-  const qfKeys = (qfRows || []).map((r) => r.id);
+  const excludedGhostCount = sdRows.filter((r) => ghostKeys.has(r.sd_key)).length;
+  const sdKeys = sdRows.map((r) => r.sd_key).filter((k) => !ghostKeys.has(k));
+  const qfKeys = qfRows.map((r) => r.id);
 
-  return { workKeys: [...sdKeys, ...qfKeys], excludedGhostCount, totalBeforeExclusion: (sdRows || []).length + (qfRows || []).length };
+  return { workKeys: [...sdKeys, ...qfKeys], excludedGhostCount, totalBeforeExclusion: sdRows.length + qfRows.length };
 }
 
 async function reportGhostCompleted(supabase) {

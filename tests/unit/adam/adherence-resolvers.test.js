@@ -40,6 +40,11 @@ function makeSupabase(spec) {
       // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: the sourcedInWindow QF lane switched from a
       // head-count to `.select('id, title').limit(1000)` so it can filter fixture-titled QFs.
       limit() { return builder; },
+      // FR-6 batch 9 (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001): several read lanes above
+      // now paginate via fetchAllPaginated, which calls .order() (chainable) then .range() —
+      // range() is the new TERMINAL call for those lanes, resolving the same result .then() did.
+      order() { return builder; },
+      range() { return Promise.resolve(result); },
       // insert flows: capture the row, then allow .select().single()
       insert(row) {
         if (table === 'feedback') calls.feedbackInsert.push(row);

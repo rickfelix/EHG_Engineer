@@ -47,6 +47,11 @@ vi.mock('../../../lib/supabase-client.js', () => {
       lt: () => builder,
       or: () => builder,
       limit: () => builder,
+      // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: fetchAllPaginated
+      // chains .order() then calls .range() directly (not via .then()) — a single
+      // page shorter than pageSize ends the paginate loop.
+      order: () => builder,
+      range: () => Promise.resolve(resolveResult()),
       then: (res, rej) => Promise.resolve().then(resolveResult).then(res, rej),
     };
     return builder;

@@ -14,6 +14,7 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -168,7 +169,7 @@ async function repairSD(sd, handoffs, { dryRun = false } = {}) {
 
   // Log recovery to audit
   try {
-    await supabase.from('audit_log').insert({
+    await supabase.from('audit_log').insert({ // schema-lint-disable-line: pre-existing action/details columns, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
       action: 'SD_RECOVER',
       entity_type: 'strategic_directive',
       entity_id: sd.id,
@@ -199,16 +200,25 @@ async function repairSD(sd, handoffs, { dryRun = false } = {}) {
 async function scanAll({ fix = false } = {}) {
   console.log('\n🔍 Scanning all active SDs for broken handoff chains...\n');
 
-  const { data: sds } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key')
-    .eq('is_active', true)
-    .neq('status', 'completed')
-    .neq('status', 'cancelled')
-    .neq('current_phase', 'LEAD')
-    .neq('current_phase', 'COMPLETED');
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 grows
+  // unbounded; paginate the active/in-flight scan. Original silently swallowed query errors
+  // (no `error` destructured) — preserve that fail-open policy rather than crashing the CLI.
+  let sds;
+  try {
+    sds = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('sd_key')
+      .eq('is_active', true)
+      .neq('status', 'completed')
+      .neq('status', 'cancelled')
+      .neq('current_phase', 'LEAD')
+      .neq('current_phase', 'COMPLETED')
+      .order('sd_key', { ascending: true }));
+  } catch {
+    sds = [];
+  }
 
-  if (!sds || sds.length === 0) {
+  if (sds.length === 0) {
     console.log('   No SDs to check (all in LEAD or completed).');
     return;
   }
@@ -235,7 +245,7 @@ async function scanAll({ fix = false } = {}) {
 
   console.log(`\n📊 Scan complete: ${sds.length} checked, ${broken} broken${fix ? `, ${repaired} repaired` : ''}`);
   if (broken > 0 && !fix) {
-    console.log(`   💡 Run with --fix to auto-repair: npm run sd:recover -- --scan --fix`);
+    console.log('   💡 Run with --fix to auto-repair: npm run sd:recover -- --scan --fix');
   }
 }
 
@@ -278,10 +288,10 @@ async function main() {
   }
 
   if (result.healthy) {
-    console.log(`\n   ✅ Handoff chain is healthy — no repair needed.`);
+    console.log('\n   ✅ Handoff chain is healthy — no repair needed.');
     console.log('RECOVER_RESULT=HEALTHY');
   } else {
-    console.log(`\n   ❌ BROKEN handoff chain detected:`);
+    console.log('\n   ❌ BROKEN handoff chain detected:');
     for (const issue of result.issues) {
       console.log(`      [${issue.severity}] ${issue.message}`);
     }

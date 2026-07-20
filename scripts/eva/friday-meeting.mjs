@@ -31,6 +31,11 @@ import { writeOutcome as _writeFridayOutcome } from '../../lib/eva-support/frida
 import { listPendingOkrGenerations, acceptPendingOkrGeneration } from '../../lib/eva/jobs/okr-accept-generation.js';
 import dotenv from 'dotenv';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 /
+// eva_consultant_recommendations / anthropic_plugin_registry grow indefinitely -- an
+// un-paginated read here would silently drop rows past the PostgREST 1000-row cap from
+// the weekly Friday meeting report. sd_baseline_items counts are pure gauges.
+import { fetchAllPaginated, renderCount } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -186,12 +191,14 @@ async function gatherPerformanceReview() {
   if (baseline) {
     // sd_baseline_items has sd_id, not sd_key — selecting the non-existent
     // column made supabase return data:null, silently zeroing both counters.
-    const { data: items } = await supabase
-      .from('sd_baseline_items')
-      .select('sd_id, is_ready')
-      .eq('baseline_id', baseline.id);
-    baselineItems = (items || []).length;
-    completedItems = (items || []).filter(i => i.is_ready).length;
+    // Gauges: exact head-counts (never rows.length) — a capped read here would
+    // silently under-report queue size once a baseline exceeds 1000 items.
+    const [{ count: totalCount }, { count: readyCount }] = await Promise.all([
+      supabase.from('sd_baseline_items').select('sd_id', { count: 'exact', head: true }).eq('baseline_id', baseline.id),
+      supabase.from('sd_baseline_items').select('sd_id', { count: 'exact', head: true }).eq('baseline_id', baseline.id).eq('is_ready', true),
+    ]);
+    baselineItems = renderCount(totalCount);
+    completedItems = renderCount(readyCount);
   }
 
   // SD-LEO-INFRA-REVIVE-EVA-ACCEPTANCE-STATE-001: OKR generations awaiting chairman acceptance
@@ -279,13 +286,17 @@ function renderPerformanceReview(data) {
 async function gatherCapabilityReport() {
   const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: completedSDs } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key, title, delivers_capabilities, modifies_capabilities')
-    .eq('status', 'completed')
-    .gte('completion_date', oneWeekAgo);
+  let completedSDs;
+  try {
+    completedSDs = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, title, delivers_capabilities, modifies_capabilities')
+      .eq('status', 'completed')
+      .gte('completion_date', oneWeekAgo)
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { completedSDs = []; } // prior behavior: read error ignored
 
-  return { completedSDs: completedSDs || [] };
+  return { completedSDs };
 }
 
 function renderCapabilityReport(data) {
@@ -315,22 +326,26 @@ function renderCapabilityReport(data) {
 // ─── Section 3: Consultant Findings ──────────────────────────
 
 async function gatherConsultantFindings() {
-  const { data: findings } = await supabase
-    .from('eva_consultant_recommendations')
-    .select('id, title, description, analysis_domain, priority_score, action_type, confidence_tier, status')
-    .eq('confidence_tier', 'high')
-    .eq('status', 'pending')
-    .order('priority_score', { ascending: false });
+  let findings;
+  try {
+    findings = await fetchAllPaginated(() => supabase
+      .from('eva_consultant_recommendations')
+      .select('id, title, description, analysis_domain, priority_score, action_type, confidence_tier, status')
+      .eq('confidence_tier', 'high')
+      .eq('status', 'pending')
+      .order('priority_score', { ascending: false })
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { findings = []; } // prior behavior: read error ignored
 
   // Group by domain
   const grouped = {};
-  for (const f of findings || []) {
+  for (const f of findings) {
     const domain = f.analysis_domain || 'uncategorized';
     if (!grouped[domain]) grouped[domain] = [];
     grouped[domain].push(f);
   }
 
-  return { findings: findings || [], grouped };
+  return { findings, grouped };
 }
 
 function renderConsultantFindings(data) {
@@ -520,14 +535,14 @@ async function gatherPluginDiscoveries() {
   try {
     const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    const { data, error } = await supabase
+    const data = await fetchAllPaginated(() => supabase
       .from('anthropic_plugin_registry')
       .select('plugin_name, source_repo, status, fitness_score, last_scanned_at, created_at')
       .gte('last_scanned_at', oneWeekAgo)
       .order('status')
-      .order('fitness_score', { ascending: false, nullsFirst: false });
+      .order('fitness_score', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
 
-    if (error || !data) return null;
     if (data.length === 0) return null;
 
     const byStatus = {};

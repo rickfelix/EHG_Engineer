@@ -15,8 +15,13 @@
 
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
+
+// Bulk .in(id, ids) writes built from a paginated read must be chunked too — 200/chunk is this
+// SD's established convention (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9).
+const UPDATE_CHUNK = 200;
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -42,16 +47,20 @@ async function main() {
   console.log(`   Threshold: ${days} days (before ${cutoffISO.split('T')[0]})`);
   console.log(`   Mode: ${dryRun ? 'DRY RUN (no changes)' : 'LIVE'}\n`);
 
-  // Find stale items
-  const { data: staleItems, error: queryError } = await supabase
-    .from('feedback')
-    .select('id, title, status, created_at')
-    .in('status', ['new', 'triaged'])
-    .lt('created_at', cutoffISO)
-    .order('created_at', { ascending: true });
-
-  if (queryError) {
-    console.error(`❌ Query error: ${queryError.message}`);
+  // Find stale items. SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: feedback is an
+  // unbounded growing table and the lower bound is open-ended (any 'new'/'triaged' row older
+  // than cutoff, back to project inception) — paginate to completion.
+  let staleItems;
+  try {
+    staleItems = await fetchAllPaginated(() => supabase
+      .from('feedback')
+      .select('id, title, status, created_at')
+      .in('status', ['new', 'triaged'])
+      .lt('created_at', cutoffISO)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (e) {
+    console.error(`❌ Query error: ${e.message}`);
     process.exit(1);
   }
 
@@ -72,20 +81,25 @@ async function main() {
     return;
   }
 
-  // Mark as stale
+  // Mark as stale. Chunked: a bulk .in(id, ids) write built from the now-unbounded read above
+  // must not itself carry an implicit ceiling (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6
+  // batch 9) — 200/chunk is this SD's established convention.
   const ids = staleItems.map(i => i.id);
-  const { error: updateError } = await supabase
-    .from('feedback')
-    .update({
-      status: 'stale',
-      resolution_notes: `Auto-marked stale after ${days} days without action.`,
-      updated_at: new Date().toISOString()
-    })
-    .in('id', ids);
+  for (let i = 0; i < ids.length; i += UPDATE_CHUNK) {
+    const chunk = ids.slice(i, i + UPDATE_CHUNK);
+    const { error: updateError } = await supabase
+      .from('feedback')
+      .update({
+        status: 'stale',
+        resolution_notes: `Auto-marked stale after ${days} days without action.`,
+        updated_at: new Date().toISOString()
+      })
+      .in('id', chunk);
 
-  if (updateError) {
-    console.error(`\n❌ Update error: ${updateError.message}`);
-    process.exit(1);
+    if (updateError) {
+      console.error(`\n❌ Update error: ${updateError.message}`);
+      process.exit(1);
+    }
   }
 
   console.log(`\n✅ Marked ${ids.length} item(s) as stale.`);

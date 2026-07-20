@@ -16,6 +16,11 @@
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { buildOkrSnapshot } from '../../lib/eva/okr-progress.mjs'; // FR-2: value-derived OKR progress
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 is a
+// growing table -- an un-paginated read here would silently skew the weekly status tally
+// past the PostgREST 1000-row cap. sd_baseline_items counts are converted to exact
+// head-counts (see baselineData below) to close the same class of bug.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -71,30 +76,37 @@ async function managementReviewHandler(_options = {}) {
 
   let baselineData = { active: false, totalItems: 0, version: 1 };
   if (baseline) {
-    const { data: items } = await supabase
-      .from('sd_baseline_items')
-      .select('sd_id, sequence_rank, track, is_ready')
-      .eq('baseline_id', baseline.id);
-
-    const readyCount = (items || []).filter(i => i.is_ready).length;
+    // Gauges: exact head-counts (never rows.length) — a capped read here would silently
+    // under-report queue size once a baseline exceeds 1000 items. Fed into the
+    // management_reviews numeric columns below, so a failed measurement falls back to 0
+    // (matching this function's pre-existing fail-open behavior) rather than the display
+    // 'unavailable' sentinel, which would violate the column's numeric type.
+    const [{ count: totalItems }, { count: readyItems }] = await Promise.all([
+      supabase.from('sd_baseline_items').select('sd_id', { count: 'exact', head: true }).eq('baseline_id', baseline.id),
+      supabase.from('sd_baseline_items').select('sd_id', { count: 'exact', head: true }).eq('baseline_id', baseline.id).eq('is_ready', true),
+    ]);
     baselineData = {
       active: true,
       id: baseline.id,
       name: baseline.baseline_name,
       version: baseline.version || 1,
-      totalItems: (items || []).length,
-      readyItems: readyCount,
+      totalItems: totalItems ?? 0,
+      readyItems: readyItems ?? 0,
     };
   }
 
   // --- Gather SD data ---
-  const { data: sds } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, status, current_phase, sd_type')
-    .not('status', 'in', '("cancelled","archived")');
+  let sds;
+  try {
+    sds = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, status, current_phase, sd_type')
+      .not('status', 'in', '("cancelled","archived")')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { sds = []; } // prior behavior: read error ignored
 
   const statusCounts = {};
-  for (const sd of sds || []) {
+  for (const sd of sds) {
     statusCounts[sd.status] = (statusCounts[sd.status] || 0) + 1;
   }
   const completed = statusCounts['completed'] || 0;

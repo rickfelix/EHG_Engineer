@@ -24,7 +24,13 @@ function mockSupabase({ drafts = [], scores = [] } = {}) {
         return {
           select: () => ({
             eq: () => ({
-              filter: () => Promise.resolve({ data: drafts, error: null }),
+              // FR-6 batch 9: draft dedup now reads via fetchAllPaginated, which chains
+              // .order() then .range() instead of awaiting the builder directly.
+              filter: () => ({
+                order: () => ({
+                  range: () => Promise.resolve({ data: drafts, error: null }),
+                }),
+              }),
             }),
           }),
         };

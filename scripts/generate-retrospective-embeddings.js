@@ -22,6 +22,10 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { getEmbeddingClient } from '../lib/llm/client-factory.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: retrospectives is a growing table;
+// a bare embedding-backlog fetch can exceed the PostgREST cap after a bulk import or long gap
+// between runs, silently leaving some PUBLISHED retrospectives without an embedding forever.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 import fs from 'fs';
 // import path from 'path'; // Currently unused - available for future path utilities
 import dotenv from 'dotenv';
@@ -185,35 +189,40 @@ async function processBatch(retrospectives, progress) {
  * Fetch retrospectives that need embeddings
  */
 async function fetchRetrospectivesNeedingEmbeddings(force, specificId, progress) {
-  let query = supabase
-    .from('retrospectives')
-    .select('id, title, key_learnings, action_items, content_embedding, status');
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: paginate to completion --
+  // queryFactory must return a FRESH builder per page, so the conditional filter-building
+  // moved into this closure (behavior-identical, just re-run per page).
+  const buildQuery = () => {
+    let query = supabase
+      .from('retrospectives')
+      .select('id, title, key_learnings, action_items, content_embedding, status');
 
-  // Filter by specific ID if provided
-  if (specificId) {
-    query = query.eq('id', specificId);
-  } else {
-    // Only PUBLISHED retrospectives
-    query = query.eq('status', 'PUBLISHED');
+    // Filter by specific ID if provided
+    if (specificId) {
+      query = query.eq('id', specificId);
+    } else {
+      // Only PUBLISHED retrospectives
+      query = query.eq('status', 'PUBLISHED');
 
-    // Skip if embedding exists (unless force)
-    if (!force) {
-      query = query.is('content_embedding', null);
+      // Skip if embedding exists (unless force)
+      if (!force) {
+        query = query.is('content_embedding', null);
+      }
+
+      // Skip already processed IDs
+      if (progress.processedIds.length > 0) {
+        query = query.not('id', 'in', `(${progress.processedIds.join(',')})`);
+      }
     }
 
-    // Skip already processed IDs
-    if (progress.processedIds.length > 0) {
-      query = query.not('id', 'in', `(${progress.processedIds.join(',')})`);
-    }
-  }
+    return query.order('id', { ascending: true }); // unique tiebreaker: stable page boundaries (FR-6)
+  };
 
-  const { data, error } = await query;
-
-  if (error) {
+  try {
+    return await fetchAllPaginated(buildQuery);
+  } catch (error) {
     throw new Error(`Failed to fetch retrospectives: ${error.message}`);
   }
-
-  return data || [];
 }
 
 // ============================================================================

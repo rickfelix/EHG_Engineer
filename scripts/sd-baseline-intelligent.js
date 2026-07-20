@@ -38,6 +38,8 @@ import {
   calculateStrategyWeight,
 } from './lib/strategy-weight-calculator.js';
 
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
+
 dotenv.config();
 
 // Initialize clients
@@ -145,39 +147,45 @@ class IntelligentBaselineGenerator {
 
   async loadData() {
     // Load active SDs
-    const { data: sds, error: sdError } = await supabase
-      .from('strategic_directives_v2')
-      .select(`
-        id, sd_key, title, status, priority, sd_type, category,
-        dependencies, sequence_rank, rolled_triage, readiness,
-        must_have_pct, complexity_level, delivers_capabilities,
-        modifies_capabilities, parent_sd_id, relationship_type
-      `)
-      .eq('is_active', true)
-      .in('status', ['draft', 'active', 'in_progress', 'lead_review', 'plan_active', 'exec_active'])
-      .order('sequence_rank', { nullsFirst: false });
-
-    if (sdError) {
-      throw new Error(`Failed to load SDs: ${sdError.message}`);
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 grows
+    // unbounded; sequence_rank order preserved, id appended as stable pagination tiebreaker.
+    let sds;
+    try {
+      sds = await fetchAllPaginated(() => supabase
+        .from('strategic_directives_v2')
+        .select(`
+          id, sd_key, title, status, priority, sd_type, category,
+          dependencies, sequence_rank, rolled_triage, readiness,
+          must_have_pct, complexity_level, delivers_capabilities,
+          modifies_capabilities, parent_sd_id, relationship_type
+        `)
+        .eq('is_active', true)
+        .in('status', ['draft', 'active', 'in_progress', 'lead_review', 'plan_active', 'exec_active'])
+        .order('sequence_rank', { nullsFirst: false })
+        .order('id', { ascending: true }));
+    } catch (e) {
+      throw new Error(`Failed to load SDs: ${e.message}`);
     }
 
-    this.sds = sds || [];
+    this.sds = sds;
     console.log(`  Loaded ${this.sds.length} active Strategic Directives`);
 
-    // Load OKR alignments
-    const { data: alignments } = await supabase
+    // Load OKR alignments — join table keyed to strategic_directives_v2 (unbounded above), so
+    // it inherits the same growth risk; paginate.
+    const alignments = await fetchAllPaginated(() => supabase
       .from('sd_key_result_alignment')
-      .select('sd_id, key_result_id, contribution_type, contribution_weight, contribution_note');
+      .select('sd_id, key_result_id, contribution_type, contribution_weight, contribution_note')
+      .order('id', { ascending: true }));
 
     // Group by SD
     this.alignments = {};
-    for (const a of alignments || []) {
+    for (const a of alignments) {
       if (!this.alignments[a.sd_id]) {
         this.alignments[a.sd_id] = [];
       }
       this.alignments[a.sd_id].push(a);
     }
-    console.log(`  Loaded ${(alignments || []).length} OKR alignments`);
+    console.log(`  Loaded ${alignments.length} OKR alignments`);
 
     // Load Key Results
     const { data: krs } = await supabase

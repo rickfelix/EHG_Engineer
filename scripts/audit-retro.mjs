@@ -17,6 +17,10 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { execute as executeRetro } from '../lib/sub-agents/retro.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: chairman_feedback's `.or()` below
+// has a target_type.eq.audit branch that is NOT scoped to this one filePath (matches every
+// audit-targeted feedback row ever recorded), so this read is unbounded — paginate.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 // Load environment variables
 dotenv.config();
@@ -104,12 +108,14 @@ function extractChairmanVerbatim(findings) {
  * Load Chairman feedback from chairman_feedback table
  */
 async function loadChairmanFeedback(supabase, filePath) {
-  const { data, error } = await supabase
-    .from('chairman_feedback')
-    .select('transcript_text, chairman_edited')
-    .or(`target_id.eq.${filePath},target_type.eq.audit`);
-
-  if (error) {
+  let data;
+  try {
+    data = await fetchAllPaginated(() => supabase
+      .from('chairman_feedback')
+      .select('id, transcript_text, chairman_edited')
+      .or(`target_id.eq.${filePath},target_type.eq.audit`)
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (error) {
     console.log(`   Note: Chairman feedback table not available: ${error.message}`);
     return [];
   }

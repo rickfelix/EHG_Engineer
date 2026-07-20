@@ -21,6 +21,10 @@ import 'dotenv/config';
 import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { SD_TYPE_DOC_DIRECTORIES } from '../lib/utils/post-completion-requirements.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 and
+// quick_fixes are both growing tables; a 3-day completion window is usually small but not
+// operationally pinned, so unbounded reads paginate rather than trust an implicit cap.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const WINDOW_DAYS = 3;
 const PROPOSAL_CATEGORY = 'adam_doc_drift';
@@ -40,25 +44,25 @@ export async function resolveCompletions(supabase, { windowDays = WINDOW_DAYS, n
   const since = windowStart(windowDays, nowMs);
   const items = [];
   try {
-    const { data, error } = await supabase
+    const data = await fetchAllPaginated(() => supabase
       .from('strategic_directives_v2')
       .select('sd_key, title, sd_type, updated_at')
       .eq('status', 'completed')
       .gte('updated_at', since)
-      .not('sd_key', 'like', 'QF-%');
-    if (error) throw error;
-    for (const r of (data || [])) items.push({ key: r.sd_key, title: r.title, sd_type: r.sd_type || 'feature', kind: 'sd' });
+      .not('sd_key', 'like', 'QF-%')
+      .order('sd_key', { ascending: true })); // unique tiebreaker (FR-6)
+    for (const r of data) items.push({ key: r.sd_key, title: r.title, sd_type: r.sd_type || 'feature', kind: 'sd' });
   } catch (e) { console.warn(`[doc-drift] completed-SD query failed (continuing): ${e.message}`); }
   try {
-    const { data, error } = await supabase
+    const data = await fetchAllPaginated(() => supabase
       .from('quick_fixes')
       .select('id, title, type, completed_at')
       .eq('status', 'completed')
-      .gte('completed_at', since);
-    if (error) throw error;
+      .gte('completed_at', since)
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
     // QF.type (bug/polish/typo/documentation/...) only maps cleanly if it is a known doc-dir key;
     // otherwise default a small fix to 'bugfix' (troubleshooting/changelog area) rather than mis-routing.
-    for (const r of (data || [])) {
+    for (const r of data) {
       const t = (r.type && SD_TYPE_DOC_DIRECTORIES[r.type]) ? r.type : 'bugfix';
       items.push({ key: r.id, title: r.title, sd_type: t, kind: 'qf' });
     }

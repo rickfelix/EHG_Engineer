@@ -22,6 +22,10 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolveActiveVentureByName } from '../../lib/venture-name-resolver.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: an unfiltered `history` call
+// reads mission versions across the whole portfolio -- an un-paginated read here would
+// silently drop versions past the PostgREST 1000-row cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -111,16 +115,20 @@ async function cmdView(supabase, opts) {
 async function cmdHistory(supabase, opts) {
   const ventureId = await resolveVentureId(supabase, opts.venture);
 
-  let query = supabase
-    .from('missions')
-    .select('id, mission_text, version, status, proposed_by, approved_by, created_at')
-    .order('version', { ascending: false });
+  const buildQuery = () => {
+    let q = supabase
+      .from('missions')
+      .select('id, mission_text, version, status, proposed_by, approved_by, created_at')
+      .order('version', { ascending: false })
+      .order('id', { ascending: true }); // unique tiebreaker (FR-6)
+    if (ventureId) q = q.eq('venture_id', ventureId);
+    return q;
+  };
 
-  if (ventureId) {
-    query = query.eq('venture_id', ventureId);
-  }
-
-  const { data, error } = await query;
+  let data, error;
+  try {
+    data = await fetchAllPaginated(buildQuery);
+  } catch (e) { error = e; }
 
   if (error || !data || data.length === 0) {
     console.log('\n  No mission history found.\n');

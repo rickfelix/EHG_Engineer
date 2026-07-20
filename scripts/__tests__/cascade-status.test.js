@@ -33,6 +33,9 @@ function makeSupabase({ heartbeat = null, errors = [], successCount24h = 0 } = {
       not() { return builder; },
       gte() { return builder; },
       is() { return builder; },
+      // fetchAllPaginated's terminal .range() call (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001
+      // FR-6 batch 9) — single page returns the full seeded rows.
+      range() { return handlers[table](); },
       maybeSingle() { return handlers[table](); },
       then(resolve, reject) { return handlers[table]().then(resolve, reject); },
     };

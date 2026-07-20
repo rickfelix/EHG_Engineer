@@ -23,6 +23,8 @@ function makeStatefulMock(rows) {
         return b; // select filter (e.g. lifecycle_stage=19)
       },
       update(payload) { pendingUpdate = payload; return b; },
+      order() { return b; }, // FR-6 batch 9: fetchAllPaginated appends .order() before .range()
+      range() { return Promise.resolve({ data: state.map((r) => ({ ...r })), error: null }); },
       then(onF, onR) { return Promise.resolve({ data: state.map((r) => ({ ...r })), error: null }).then(onF, onR); },
     };
     return b;

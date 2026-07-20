@@ -8,6 +8,7 @@ import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import chalk from 'chalk';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -144,11 +145,15 @@ export function convertMarkdownToJSON(markdownContent, sdId) {
 async function scanAllPRDs() {
   console.log(chalk.blue('🔍 Scanning all PRDs for format compliance...\n'));
 
-  const { data: prds, error } = await supabase
-    .from('product_requirements_v2')
-    .select('id, directive_id, title, content, status');
-
-  if (error) {
+  // Paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: every PRD is
+  // validated below; product_requirements_v2 is unbounded-growth.
+  let prds;
+  try {
+    prds = await fetchAllPaginated(() => supabase
+      .from('product_requirements_v2')
+      .select('id, directive_id, title, content, status')
+      .order('id', { ascending: true }));
+  } catch (error) {
     console.error(chalk.red('Error fetching PRDs:'), error);
     return;
   }

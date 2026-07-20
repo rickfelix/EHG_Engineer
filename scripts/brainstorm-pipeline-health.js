@@ -27,6 +27,10 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the health check iterates/acts on
+// EVERY brainstorm session (checks + auto-fixes), so a capped read would silently skip sessions
+// past the PostgREST 1000-row boundary.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -56,13 +60,15 @@ export async function checkBrainstormPipelineHealth(options = {}) {
   const dryRun = options.dryRun ?? DRY_RUN;
   const staleDays = options.staleDays ?? STALE_DAYS;
 
-  const { data: sessions, error } = await supabase
-    .from('brainstorm_sessions')
-    .select('id, domain, topic, outcome_type, stage, created_at, metadata')
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    return { error: error.message, checks: [] };
+  let sessions;
+  try {
+    sessions = await fetchAllPaginated(() => supabase
+      .from('brainstorm_sessions')
+      .select('id, domain, topic, outcome_type, stage, created_at, metadata')
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true }));
+  } catch (e) {
+    return { error: e.message, checks: [] };
   }
 
   const now = new Date();

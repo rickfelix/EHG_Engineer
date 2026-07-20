@@ -16,7 +16,9 @@ vi.mock('../../../lib/eva/consultant/distillation-queue-writer.js', () => ({
 import { run, loadTopWaveItems, clampBatch, MAX_BATCH, dispositionCoverage } from '../../../scripts/eva-distill-brainstorm.js';
 import { enqueueDistilledCandidate } from '../../../lib/eva/consultant/distillation-queue-writer.js';
 
-// Mock supabase: loadTopWaveItems (.from().select().not()) + enrichWaveItem (.from().select().eq().maybeSingle()).
+// Mock supabase: loadTopWaveItems (.from().select().not().order().range()) — SD-LEO-INFRA-COUNT-
+// TRUNCATION-DISCIPLINE-001 FR-6 batch 9: loadTopWaveItems now routes through fetchAllPaginated,
+// whose terminal call is .range() — + enrichWaveItem (.from().select().eq().maybeSingle()).
 function mockSupabase(waveItemCount) {
   const items = Array.from({ length: waveItemCount }, (_, i) => ({
     id: `wi-${i}`, wave_id: 'w', source_type: 'todoist', source_id: `s-${i}`,
@@ -26,10 +28,13 @@ function mockSupabase(waveItemCount) {
     from(table) {
       return {
         select() {
-          return {
-            not: async () => ({ data: items, error: null }),
+          const chain = {
+            not() { return chain; },
+            order() { return chain; },
+            range: async () => ({ data: items, error: null }),
             eq() { return { maybeSingle: async () => ({ data: null }) }; },
           };
+          return chain;
         },
       };
     },

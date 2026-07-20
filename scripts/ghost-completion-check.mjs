@@ -15,6 +15,11 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the ORDER BY updated_at DESC keeps
+// fresh-regression detection correct even if truncated (freshest rows sort first), but the
+// informational "legacy" backlog count below would silently under-report once ghost-completed
+// rows exceed the cap. warnIfCapTruncated flags that possibility without changing exit-code logic.
+import { warnIfCapTruncated } from '../lib/db/fetch-all-paginated.mjs';
 
 const sinceIdx = process.argv.indexOf('--since');
 const WATERMARK = sinceIdx > -1 ? process.argv[sinceIdx + 1] : '2026-06-12T22:00:00Z';
@@ -32,8 +37,9 @@ const { data, error } = await db
   .limit(1000);
 if (error) { console.error('[check-ghosts] query failed:', error.message); process.exit(2); }
 
-const fresh = (data || []).filter((r) => new Date(`${r.updated_at}Z`.replace('ZZ', 'Z')) > new Date(WATERMARK));
-const legacy = (data || []).length - fresh.length;
+const rows = warnIfCapTruncated(data, 'v_sd_completion_integrity (ghost-completed)');
+const fresh = rows.filter((r) => new Date(`${r.updated_at}Z`.replace('ZZ', 'Z')) > new Date(WATERMARK));
+const legacy = rows.length - fresh.length;
 
 console.log(`[check-ghosts] legacy (pre-${WATERMARK}, no-source backlog): ${legacy}`);
 if (fresh.length === 0) {

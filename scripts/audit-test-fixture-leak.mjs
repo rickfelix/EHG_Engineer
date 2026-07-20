@@ -5,6 +5,11 @@
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { isLikelyTestFixture } from '../lib/eva/quality-findings/sd-generator.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: venture_quality_findings grows
+// with portfolio size (mirrors scripts/aggregate-quality-findings.js's identical fix); this
+// sweep's --execute leg CANCELS every matched row, so a truncated read leaves fixture leaks
+// beyond the cap uncancelled — paginate.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 async function safeExit(code) {
   try {
@@ -16,11 +21,17 @@ async function safeExit(code) {
 
 const args = new Set(process.argv.slice(2));
 const supabase = createSupabaseServiceClient();
-const { data, error } = await supabase
-  .from('venture_quality_findings')
-  .select('id, venture_id, finding_category, severity, evidence_pointer, created_at')
-  .eq('status', 'pending');
-if (error) { console.error('[audit-test-fixture-leak] query failed:', error.message); await safeExit(2); }
+let data;
+try {
+  data = await fetchAllPaginated(() => supabase
+    .from('venture_quality_findings')
+    .select('id, venture_id, finding_category, severity, evidence_pointer, created_at')
+    .eq('status', 'pending')
+    .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+} catch (error) {
+  console.error('[audit-test-fixture-leak] query failed:', error.message);
+  await safeExit(2);
+}
 const leaks = (data || []).filter(isLikelyTestFixture);
 
 if (args.has('--json')) {

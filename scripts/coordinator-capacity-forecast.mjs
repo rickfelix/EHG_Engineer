@@ -32,7 +32,7 @@ import { dirname, join } from 'path';
 // fixtures AND bare-shell stubs (neither can pass LEAD-TO-PLAN) never inflate belt depth —
 // counting them as claimable over-reports capacity and suppresses the deficit/Adam alert.
 import { isExcludedFromBelt } from '../lib/coordinator/sd-exclusion.mjs';
-import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
+import { fetchAllPaginated, renderCount } from '../lib/db/fetch-all-paginated.mjs';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 // SD-LEO-INFRA-BACKLOG-RANK-CLAIMABLE-ELIGIBILITY-ALIGN-001: the forecaster builds its OWN claimable
 // belt (it does not read the ranker's dispatch_rank), so it must apply the SAME shared claim-eligibility
@@ -160,14 +160,18 @@ function _median(nums) {
 export async function computePhaseMinsFromActuals(supabase) {
   try {
     const sinceIso = new Date(Date.now() - ACTUALS_LOOKBACK_DAYS * 24 * 3600 * 1000).toISOString();
-    const { data: rows, error } = await supabase
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — ACTUALS_ROW_CAP (4000) exceeds
+    // the PostgREST max-rows clamp (1000), so the prior `.limit(ACTUALS_ROW_CAP)` never actually
+    // returned more than 1000 rows regardless of the declared "up to 4000" sample size. maxRows
+    // honors the declared cap for real via genuine pagination.
+    const rows = await fetchAllPaginated(() => supabase
       .from('sub_agent_execution_results')
       .select('sd_id, phase, execution_time, created_at')
       .gte('created_at', sinceIso)
       .not('execution_time', 'is', null)
       .order('created_at', { ascending: false })
-      .limit(ACTUALS_ROW_CAP);
-    if (error || !Array.isArray(rows) || !rows.length) return null;
+      .order('id', { ascending: false }), { maxRows: ACTUALS_ROW_CAP });
+    if (!rows.length) return null;
     // Restrict to the dominant sd_type (infrastructure) so the median is apples-to-apples with the
     // static table; resolve sd_type for the distinct sd_ids in the window.
     const sdIds = [...new Set(rows.map((r) => r.sd_id).filter(Boolean))];
@@ -206,8 +210,12 @@ export async function computePhaseMinsFromActuals(supabase) {
 
 async function main() {
   const liveCutoff = new Date(Date.now() - HEARTBEAT_LIVE_MS).toISOString();
-  const [{ data: sessions }, { data: sds }, { data: openQfRows }] = await Promise.all([
-    sb.from('claude_sessions')
+  const [sessions, sds, { count: openQfCountRaw }] = await Promise.all([
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: claude_sessions is a growing
+    // table and this read feeds worker-count/capacity math directly (filtered + iterated
+    // below) — paginate to completion. Preserve the prior fail-open policy (undefined `data`
+    // on error → `(sessions || [])` fallback below) by catching the throw and returning [].
+    fetchAllPaginated(() => sb.from('claude_sessions')
       // SD-LEO-INFRA-FORECASTER-FIXTURE-WORKER-EXCLUSION-001: + status so released/terminal sessions
       // are not counted as available workers even with a recent heartbeat (FR-2).
       // SD-LEO-FEAT-COORDINATOR-CAPACITY-FORECAST-001: + expected_silence_until — detectStalledLoop
@@ -222,19 +230,30 @@ async function main() {
       // excludes a worker running its post-completion tail (else the per-session stalled mark over-escalates
       // a fleet-down false alarm to the operator). Replicate the detector input-column contract.
       .select('session_id, terminal_id, sd_key, heartbeat_at, process_alive_at, loop_state, expected_silence_until, metadata, status, released_reason, released_at')
-      .gte('heartbeat_at', liveCutoff),
-    sb.from('strategic_directives_v2')
-      // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + metadata (is_fixture marker) and
-      // title/description (bare-shell detection) so excluded rows do not inflate belt depth.
-      // SD-REFILL-00306WTS: + target_application so un-actionable auto-filed venture remediation
-      // SDs (target_application != EHG_Engineer) are excluded from belt depth (false-SURPLUS fix).
+      .gte('heartbeat_at', liveCutoff)
+      .order('session_id', { ascending: true })) // unique tiebreaker: stable page boundaries (FR-6)
+      .catch(() => []),
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 is a
+    // growing table and this read feeds belt-depth/dependency resolution directly (iterated +
+    // acted on below) — paginate to completion. Preserve the prior fail-open policy (undefined
+    // `data` on error → `(sds || [])` fallbacks below) by catching the throw and returning [].
+    // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + metadata (is_fixture marker) and
+    // title/description (bare-shell detection) so excluded rows do not inflate belt depth.
+    // SD-REFILL-00306WTS: + target_application so un-actionable auto-filed venture remediation
+    // SDs (target_application != EHG_Engineer) are excluded from belt depth (false-SURPLUS fix).
+    fetchAllPaginated(() => sb.from('strategic_directives_v2')
       .select('sd_key, title, description, status, sd_type, current_phase, progress_percentage, claiming_session_id, dependencies, metadata, target_application')
-      .not('status', 'in', '("completed","cancelled","deferred")'),
+      .not('status', 'in', '("completed","cancelled","deferred")')
+      .order('sd_key', { ascending: true })) // unique tiebreaker (FR-6)
+      .catch(() => []),
     // Open QFs are claimable belt too (a worker can claim a QF) — counting only SDs
-    // under-reports belt depth and over-reports deficit (workers self-claim QFs).
-    sb.from('quick_fixes').select('id').eq('status', 'open'),
+    // under-reports belt depth and over-reports deficit (workers self-claim QFs). This is a
+    // gauge (only the count is used) — exact head-count avoids the 1000-row cap misreading
+    // belt depth (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9).
+    sb.from('quick_fixes').select('id', { count: 'exact', head: true }).eq('status', 'open'),
   ]);
-  const openQfCount = Array.isArray(openQfRows) ? openQfRows.length : 0;
+  const openQfCountRendered = renderCount(openQfCountRaw);
+  const openQfCount = typeof openQfCountRendered === 'number' ? openQfCountRendered : 0; // fail-open: unavailable → 0 belt contribution, same as prior [] fallback
 
   // ── resolve dependency statuses → claimable belt ──
   // parseSdDependencies handles the live shape mix ([{sd_id}], [{sd_key}], raw strings) AND drops the
@@ -243,6 +262,9 @@ async function main() {
   (sds || []).forEach(d => parseSdDependencies(d.dependencies).forEach(k => depKeys.add(k)));
   let depStatus = {};
   if (depKeys.size) {
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: bounded by design — depKeys is
+    // the set of distinct /^SD-/ dependency references parsed from the active-SD set above, an
+    // operationally small cardinality (dependency graphs stay in the tens/hundreds, not 1000s).
     const { data: deps } = await sb.from('strategic_directives_v2').select('sd_key,status').in('sd_key', Array.from(depKeys));
     (deps || []).forEach(d => { depStatus[d.sd_key] = d.status; });
   }

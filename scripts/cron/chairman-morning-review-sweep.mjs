@@ -34,6 +34,7 @@ import { createClient } from '@supabase/supabase-js';
 import { enqueueChairmanSms } from '../../lib/chairman/sms-bridge.js';
 import { computeForecast, formatForecastLine } from '../../lib/vision/build-completion-forecast.mjs';
 import { etLocalHour, etDateStr, et6amIso, etPrior545Iso } from '../../lib/time/chairman-et-wall-clock.js';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 export const SD_KEY = 'SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-B';
 export const ACTIVATION_TRIGGER = '.github/workflows/chairman-morning-review-cron.yml';
@@ -71,12 +72,17 @@ async function gatherForecastInputs(supabase, nowMs, windowDays = 14) {
   const sinceIso = new Date(nowMs - windowDays * DAY_MS).toISOString();
   let velocityPerDay = 0, sourcingPerDay = 0, queueDepth = 0, buildableRemaining = 0;
   try {
-    const { data } = await supabase.from('strategic_directives_v2').select('sd_key, updated_at').eq('status', 'completed').gte('updated_at', sinceIso);
-    velocityPerDay = (data?.length || 0) / windowDays;
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — only the count is used;
+    // exact head-count avoids the rows.length-capped-at-1000 gauge bug.
+    const { count } = await supabase.from('strategic_directives_v2').select('id', { count: 'exact', head: true }).eq('status', 'completed').gte('updated_at', sinceIso);
+    velocityPerDay = (count || 0) / windowDays;
   } catch { /* fail-soft */ }
   try {
-    const { data } = await supabase.from('strategic_directives_v2').select('sd_key, created_at, claiming_session_id, sd_type').not('status', 'in', NOT_IN_TERMINAL);
-    const rows = (Array.isArray(data) ? data : []).filter((d) => d.sd_type !== 'orchestrator');
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — rows are filtered by
+    // sd_type/created_at/claiming_session_id below to derive three metrics, so the full set
+    // (not just a count) is needed; strategic_directives_v2 grows, so paginate to completion.
+    const rowsAll = await fetchAllPaginated(() => supabase.from('strategic_directives_v2').select('id, sd_key, created_at, claiming_session_id, sd_type').not('status', 'in', NOT_IN_TERMINAL).order('id', { ascending: true }));
+    const rows = rowsAll.filter((d) => d.sd_type !== 'orchestrator');
     buildableRemaining = rows.length;
     sourcingPerDay = rows.filter((d) => d.created_at && d.created_at >= sinceIso).length / windowDays;
     queueDepth = rows.filter((d) => !d.claiming_session_id).length;
@@ -100,13 +106,15 @@ async function gatherWaves(supabase) {
 
 async function gatherYesterday(supabase, priorMorningIso) {
   let shipped = 0, inFlight = 0;
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — only the counts are used;
+  // exact head-count avoids the rows.length-capped-at-1000 gauge bug.
   try {
-    const { data } = await supabase.from('strategic_directives_v2').select('sd_key').eq('status', 'completed').gte('updated_at', priorMorningIso);
-    shipped = data?.length || 0;
+    const { count } = await supabase.from('strategic_directives_v2').select('id', { count: 'exact', head: true }).eq('status', 'completed').gte('updated_at', priorMorningIso);
+    shipped = count || 0;
   } catch { /* fail-soft */ }
   try {
-    const { data } = await supabase.from('strategic_directives_v2').select('sd_key').not('status', 'in', NOT_IN_TERMINAL);
-    inFlight = data?.length || 0;
+    const { count } = await supabase.from('strategic_directives_v2').select('id', { count: 'exact', head: true }).not('status', 'in', NOT_IN_TERMINAL);
+    inFlight = count || 0;
   } catch { /* fail-soft */ }
   return { shipped, inFlight };
 }

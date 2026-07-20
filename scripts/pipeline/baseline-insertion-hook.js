@@ -26,6 +26,7 @@ import {
 } from '../lib/dependency-graph.js';
 // eslint-disable-next-line import/no-named-as-default-member
 import priorityScorer from '../lib/priority-scorer.js';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 const { calculatePriorityScore, calculateStrategyWeight, assignTrack } = priorityScorer;
 
 const supabase = createSupabaseServiceClient();
@@ -68,15 +69,24 @@ async function isAlreadyInBaseline(baselineId, sdKey) {
  * Load all current baseline items + SD data for scoring.
  */
 async function loadBaselineContext(baselineId) {
-  // Load existing baseline items
-  const { data: items } = await supabase
-    .from('sd_baseline_items')
-    .select('sd_id, sequence_rank, track, is_ready')
-    .eq('baseline_id', baselineId)
-    .order('sequence_rank');
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — a baseline snapshots the
+  // whole roadmap at a point in time and every item feeds insertion-position scoring below;
+  // an unranged read could silently drop items past the cap. Paginate; empty-on-error
+  // mirrors the prior fail-open (destructured data with no explicit error check).
+  let items;
+  try {
+    items = await fetchAllPaginated(() => supabase
+      .from('sd_baseline_items')
+      .select('id, sd_id, sequence_rank, track, is_ready')
+      .eq('baseline_id', baselineId)
+      .order('sequence_rank')
+      .order('id', { ascending: true }));
+  } catch {
+    items = [];
+  }
 
   // Load all SDs that are in the baseline (for dependency graph)
-  const sdKeys = (items || []).map(i => i.sd_id);
+  const sdKeys = items.map(i => i.sd_id);
   const { data: sds } = await supabase
     .from('strategic_directives_v2')
     .select(`
@@ -85,10 +95,18 @@ async function loadBaselineContext(baselineId) {
     `)
     .in('sd_key', sdKeys);
 
-  // Load OKR alignments for scoring
-  const { data: alignments } = await supabase
-    .from('sd_key_result_alignment')
-    .select('sd_id, key_result_id, contribution_type, contribution_weight');
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — unfiltered read over ALL
+  // SD/key-result alignments, grouped and used for scoring below; sd_key_result_alignment
+  // grows with the roadmap, so an unranged read would silently drop alignments past the cap.
+  let alignments;
+  try {
+    alignments = await fetchAllPaginated(() => supabase
+      .from('sd_key_result_alignment')
+      .select('id, sd_id, key_result_id, contribution_type, contribution_weight')
+      .order('id', { ascending: true }));
+  } catch {
+    alignments = [];
+  }
 
   const alignmentsBySd = {};
   for (const a of alignments || []) {
@@ -117,12 +135,19 @@ async function loadBaselineContext(baselineId) {
     strategyObjectives.set(obj.id, obj);
   }
 
-  // Load baseline items' strategy_objective_id for existing linkages
-  const { data: baselineStratLinks } = await supabase
-    .from('sd_baseline_items')
-    .select('sd_id, strategy_objective_id, strategy_weight, time_horizon')
-    .eq('baseline_id', baselineId)
-    .not('strategy_objective_id', 'is', null);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — same per-baseline growth
+  // concern as the `items` read above. Paginate; empty-on-error mirrors the prior fail-open.
+  let baselineStratLinks;
+  try {
+    baselineStratLinks = await fetchAllPaginated(() => supabase
+      .from('sd_baseline_items')
+      .select('id, sd_id, strategy_objective_id, strategy_weight, time_horizon')
+      .eq('baseline_id', baselineId)
+      .not('strategy_objective_id', 'is', null)
+      .order('id', { ascending: true }));
+  } catch {
+    baselineStratLinks = [];
+  }
 
   const strategyLinks = {};
   for (const link of baselineStratLinks || []) {
@@ -243,13 +268,23 @@ function findPositionByScore(newScore, existingItems, scores) {
  * Cascade reorder: increment sequence_rank for all items at or above the target rank.
  */
 async function cascadeReorder(baselineId, fromRank) {
-  // Get all items that need to shift
-  const { data: itemsToShift } = await supabase
-    .from('sd_baseline_items')
-    .select('id, sd_id, sequence_rank')
-    .eq('baseline_id', baselineId)
-    .gte('sequence_rank', fromRank)
-    .order('sequence_rank', { ascending: false }); // Process highest first to avoid conflicts
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — every shifted item is
+  // acted on (rank incremented) below; same per-baseline growth concern as
+  // loadBaselineContext. Paginate; empty-on-error mirrors the prior fail-open. The
+  // highest-first processing order is preserved via the primary sort; `id` is only a
+  // tiebreaker for exact sequence_rank ties.
+  let itemsToShift;
+  try {
+    itemsToShift = await fetchAllPaginated(() => supabase
+      .from('sd_baseline_items')
+      .select('id, sd_id, sequence_rank')
+      .eq('baseline_id', baselineId)
+      .gte('sequence_rank', fromRank)
+      .order('sequence_rank', { ascending: false }) // Process highest first to avoid conflicts
+      .order('id', { ascending: true }));
+  } catch {
+    itemsToShift = [];
+  }
 
   if (!itemsToShift || itemsToShift.length === 0) return 0;
 

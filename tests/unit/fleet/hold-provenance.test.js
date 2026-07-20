@@ -14,6 +14,29 @@ const require = createRequire(import.meta.url);
 const { resolveHoldProvenance, formatHoldProvenance } = require('../../../lib/fleet/claim-eligibility.cjs');
 import { computeClaimableLeaves } from '../../../scripts/coordinator-backlog-rank.mjs';
 
+/**
+ * Minimal fake sb for computeClaimableLeaves' two query shapes.
+ * SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the main SD load is now routed
+ * through fetchAllPaginated, which chains .order(...).range(...) on the builder before awaiting
+ * it — so .not() must return a chainable builder (not resolve directly) whose terminal .range()
+ * resolves { data, error }.
+ */
+function fakeSbForRows({ data, error = null } = {}) {
+  return {
+    from: () => ({
+      select: () => {
+        const builder = {
+          not: () => builder,
+          order: () => builder,
+          range: () => Promise.resolve({ data, error }),
+          in: () => Promise.resolve({ data: [], error: null }),
+        };
+        return builder;
+      },
+    }),
+  };
+}
+
 describe('resolveHoldProvenance — coalesces every known writer key', () => {
   it('canonical requires_human_action_reason wins over every legacy key', () => {
     const p = resolveHoldProvenance({
@@ -86,14 +109,7 @@ describe('computeClaimableLeaves — returns humanActionHolds with provenance (d
         metadata: {}, description: 'a genuine description of the work to be done here',
       },
     ];
-    const sb = {
-      from: () => ({
-        select: () => ({
-          not: () => Promise.resolve({ data: rows, error: null }),
-          in: () => Promise.resolve({ data: [], error: null }),
-        }),
-      }),
-    };
+    const sb = fakeSbForRows({ data: rows });
     const result = await computeClaimableLeaves(sb, { quiet: true });
     expect(result.humanActionHolds).toHaveLength(1);
     expect(result.humanActionHolds[0].sd_key).toBe('SD-HELD-001');
@@ -109,15 +125,13 @@ describe('computeClaimableLeaves — returns humanActionHolds with provenance (d
       created_at: '2026-07-01T00:00:00Z', current_phase: 'LEAD', claiming_session_id: null, dependencies: null, parent_sd_id: null,
       metadata: { requires_human_action: true, not_worker_claimable_reason: 'PARKED' },
     });
-    const sb = {
-      from: () => ({ select: () => ({ not: () => Promise.resolve({ data: [held('SD-Z-001'), held('SD-A-001'), held('SD-M-001')], error: null }), in: () => Promise.resolve({ data: [], error: null }) }) }),
-    };
+    const sb = fakeSbForRows({ data: [held('SD-Z-001'), held('SD-A-001'), held('SD-M-001')] });
     const result = await computeClaimableLeaves(sb, { quiet: true });
     expect(result.humanActionHolds.map((h) => h.sd_key)).toEqual(['SD-A-001', 'SD-M-001', 'SD-Z-001']);
   });
 
   it('error path returns an EMPTY humanActionHolds array, never undefined (review I5)', async () => {
-    const sb = { from: () => ({ select: () => ({ not: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }) }) };
+    const sb = fakeSbForRows({ data: null, error: { message: 'boom' } });
     const result = await computeClaimableLeaves(sb, { quiet: true });
     expect(result.humanActionHolds).toEqual([]);
   });

@@ -23,6 +23,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 is a
+// growing table -- an un-paginated dedup read here could silently miss existing corrective
+// SDs past the PostgREST 1000-row cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 import { dirname, join } from 'path';
 import { readFileSync } from 'fs';
 
@@ -241,13 +245,15 @@ async function fetchPreviousScore(supabase) {
  */
 async function checkExistingCorrectives(supabase, failingDimIds) {
   try {
-    const { data: existingSDs, error } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, sd_key, metadata, status')
-      .filter('metadata->>source', 'eq', 'doc-health-audit')
-      .not('status', 'in', '("completed","cancelled","rejected")');
-
-    if (error || !existingSDs) {
+    let existingSDs;
+    try {
+      existingSDs = await fetchAllPaginated(() => supabase
+        .from('strategic_directives_v2')
+        .select('id, sd_key, metadata, status')
+        .filter('metadata->>source', 'eq', 'doc-health-audit')
+        .not('status', 'in', '("completed","cancelled","rejected")')
+        .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    } catch {
       console.log('  Warning: Could not check for existing corrective SDs. Proceeding with creation.');
       return { coveredDims: new Set(), existingKeys: [] };
     }

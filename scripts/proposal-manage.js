@@ -16,6 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -60,14 +61,19 @@ async function listProposals() {
   console.log(`${colors.bold} PENDING SD PROPOSALS${colors.reset}`);
   console.log(`${colors.cyan}═══════════════════════════════════════════════════════════════${colors.reset}\n`);
 
-  const { data: proposals, error } = await supabase
-    .from('sd_proposals')
-    .select('*')
-    .eq('status', 'pending')
-    .order('urgency_level', { ascending: true })
-    .order('confidence_score', { ascending: false });
-
-  if (error) {
+  // Paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: status='pending'
+  // does not bound sd_proposals (observer agents continuously generate proposals); every
+  // row below is listed.
+  let proposals;
+  try {
+    proposals = await fetchAllPaginated(() => supabase
+      .from('sd_proposals')
+      .select('*')
+      .eq('status', 'pending')
+      .order('urgency_level', { ascending: true })
+      .order('confidence_score', { ascending: false })
+      .order('id', { ascending: true }));
+  } catch (error) {
     console.error(`${colors.red}Error: ${error.message}${colors.reset}`);
     process.exit(1);
   }

@@ -17,6 +17,15 @@ const crypto = require('node:crypto');
 const { createClient } = require('@supabase/supabase-js');
 const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-20260719-890: drain before post-fetch exits
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — --sample N can request more
+// rows than the PostgREST cap; warn (not throw) rather than let the tool silently report
+// fewer rows verified than the operator asked for.
+let _fapModule = null;
+async function warnIfCapTruncatedBridge(rows, site) {
+  _fapModule ||= await import('../../lib/db/fetch-all-paginated.mjs');
+  return _fapModule.warnIfCapTruncated(rows, site);
+}
+
 function computeIntegrityHash(row) {
   const canonical = JSON.stringify({
     event_type: row.event_type,
@@ -62,7 +71,7 @@ async function main() {
   } else {
     const { data, error } = await supabase.from('security_audit_events').select('*').limit(sample);
     if (error) { console.error('Query error:', error.message); await drainAndExit(1); }
-    rows = data || [];
+    rows = await warnIfCapTruncatedBridge(data || [], 'scripts/hooks/verify-security-audit-integrity.cjs:sample');
   }
 
   if (rows.length === 0) {

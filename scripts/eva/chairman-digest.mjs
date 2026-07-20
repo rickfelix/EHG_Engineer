@@ -13,6 +13,10 @@
 
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: recommendations accumulate
+// indefinitely -- an un-paginated read here silently drops recommendations past the
+// PostgREST 1000-row cap from the digest.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -50,16 +54,16 @@ async function fetchRecentTrends() {
 }
 
 async function fetchRecommendations() {
-  const { data, error } = await supabase
-    .from('eva_consultant_recommendations')
-    .select('*')
-    .order('priority_score', { ascending: false });
-
-  if (error) {
+  try {
+    return await fetchAllPaginated(() => supabase
+      .from('eva_consultant_recommendations')
+      .select('*')
+      .order('priority_score', { ascending: false })
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (error) {
     console.error('Error fetching recommendations:', error.message);
     return [];
   }
-  return data || [];
 }
 
 async function fetchSourceHealth() {

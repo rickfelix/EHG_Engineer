@@ -12,6 +12,7 @@
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -70,19 +71,34 @@ async function fetchPipelineHealth() {
   // Fallback: query metrics directly
   const now = new Date().toISOString();
 
-  // Get MTTI averages
-  const { data: mttiData } = await supabase
-    .from('pipeline_metrics')
-    .select('metric_value, recorded_at')
-    .eq('metric_name', 'mtti_hours')
-    .gte('recorded_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+  // Get MTTI averages (paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9:
+  // pipeline_metrics is a growing time-series table; averages below need every row in the
+  // window, not just a count — a capped read would silently skew the average, the exact class
+  // of bug this SD closes)
+  let mttiData;
+  try {
+    mttiData = await fetchAllPaginated(() => supabase
+      .from('pipeline_metrics')
+      .select('metric_value, recorded_at')
+      .eq('metric_name', 'mtti_hours')
+      .gte('recorded_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+      .order('id', { ascending: true }));
+  } catch {
+    mttiData = null;
+  }
 
   // Get MTTR averages
-  const { data: mttrData } = await supabase
-    .from('pipeline_metrics')
-    .select('metric_value, recorded_at')
-    .eq('metric_name', 'mttr_hours')
-    .gte('recorded_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+  let mttrData;
+  try {
+    mttrData = await fetchAllPaginated(() => supabase
+      .from('pipeline_metrics')
+      .select('metric_value, recorded_at')
+      .eq('metric_name', 'mttr_hours')
+      .gte('recorded_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+      .order('id', { ascending: true }));
+  } catch {
+    mttrData = null;
+  }
 
   // Get pipeline activity
   const { count: proposals24h } = await supabase

@@ -22,6 +22,10 @@ import {
   fetchPatternSourceSDStatuses,
   persistFilterLog,
 } from './filter.mjs';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: two reads here have no
+// .limit() and iterate the full matching set (LEARN-Agent SD suppression list; orphaned
+// SD_CREATED improvements) — both grow unboundedly over the project's history.
+import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
@@ -301,14 +305,20 @@ async function getSubAgentLearnings(limit = TOP_N) {
   // QF-20260210-539: Suppress SAL items already linked to active/cancelled SDs
   // Prevents the same SAL-TESTING-REC from creating SDs repeatedly
   if (learnings.length > 0) {
-    const { data: existingLearnSDs } = await supabase
-      .from('strategic_directives_v2')
-      .select('metadata, status')
-      .eq('created_by', 'LEARN-Agent')
-      .in('status', ['draft', 'in_progress', 'cancelled']);
+    let existingLearnSDs = [];
+    try {
+      existingLearnSDs = await fetchAllPaginated(() => supabase
+        .from('strategic_directives_v2')
+        .select('metadata, status, id')
+        .eq('created_by', 'LEARN-Agent')
+        .in('status', ['draft', 'in_progress', 'cancelled'])
+        .order('id', { ascending: true }));
+    } catch (err) {
+      console.error('Error querying existing LEARN-Agent SDs:', err.message);
+    }
 
     const suppressedSalIds = new Set();
-    for (const sd of (existingLearnSDs || [])) {
+    for (const sd of existingLearnSDs) {
       for (const itemId of (sd.metadata?.source_items || [])) {
         if (typeof itemId === 'string' && itemId.startsWith('SAL-')) {
           suppressedSalIds.add(itemId);
@@ -750,14 +760,22 @@ async function getPendingImprovements(limit = TOP_N) {
     return [];
   }
 
-  // Detect orphaned SD_CREATED items (SD completed but improvement not marked APPLIED)
-  const { data: orphaned } = await supabase
-    .from('protocol_improvement_queue')
-    .select('id, assigned_sd_id')
-    .eq('status', 'SD_CREATED')
-    .not('assigned_sd_id', 'is', null);
+  // Detect orphaned SD_CREATED items (SD completed but improvement not marked APPLIED).
+  // Paginated — this set grows unboundedly over the project's history, and every row is
+  // scanned below to count orphans.
+  let orphaned = [];
+  try {
+    orphaned = await fetchAllPaginated(() => supabase
+      .from('protocol_improvement_queue')
+      .select('id, assigned_sd_id')
+      .eq('status', 'SD_CREATED')
+      .not('assigned_sd_id', 'is', null)
+      .order('id', { ascending: true }));
+  } catch (err) {
+    console.warn(`  Warning: Could not query orphaned SD_CREATED improvements: ${err.message}`);
+  }
 
-  if (orphaned && orphaned.length > 0) {
+  if (orphaned.length > 0) {
     const sdIds = [...new Set(orphaned.map(o => o.assigned_sd_id))];
     const { data: completedSDs } = await supabase
       .from('strategic_directives_v2')

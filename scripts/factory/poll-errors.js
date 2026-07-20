@@ -24,6 +24,10 @@ import { pollVentureErrors } from '../../lib/factory/sentry-poller.js';
 import { writeErrors } from '../../lib/factory/feedback-writer.js';
 import { checkGuardrails } from '../../lib/factory/guardrails.js';
 import { generateDigest, formatDigest } from '../../lib/factory/daily-digest.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — this scheduled task's whole
+// job is to poll every active venture; a PostgREST-capped read would silently skip error
+// polling for any active venture past the cap. ventures is a growing portfolio table.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const { values: args } = parseArgs({
   options: {
@@ -58,18 +62,15 @@ async function main() {
   const supabase = createSupabaseServiceClient();
 
   // Fetch ventures with Sentry config
-  let ventureQuery = supabase
-    .from('ventures')
-    .select('id, name, metadata')
-    .eq('status', 'active');
-
-  if (args.venture) {
-    ventureQuery = ventureQuery.ilike('name', `%${args.venture}%`);
-  }
-
-  const { data: ventures, error } = await ventureQuery;
-  if (error) {
-    console.error('Failed to fetch ventures:', error.message);
+  let ventures;
+  try {
+    ventures = await fetchAllPaginated(() => {
+      let q = supabase.from('ventures').select('id, name, metadata').eq('status', 'active');
+      if (args.venture) q = q.ilike('name', `%${args.venture}%`);
+      return q.order('id', { ascending: true });
+    });
+  } catch (e) {
+    console.error('Failed to fetch ventures:', e.message);
     process.exit(1);
   }
 

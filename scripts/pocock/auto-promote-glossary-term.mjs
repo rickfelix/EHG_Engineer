@@ -44,6 +44,10 @@ import {
   formatAgent,
   injectPrefixIdempotent
 } from '../modules/pocock/provenance-flag.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the corpus reads feed term
+// tallying (a capped read silently undercounts occurrences) and the existing-terms read
+// gates re-drafting (a capped read would re-draft an already-existing term past row 1000).
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -179,21 +183,29 @@ function clusterAliases(terms) {
 
 async function fetchSources() {
   const cutoff = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  const handoffs = await supabase
-    .from('sd_phase_handoffs')
-    .select('id, executive_summary, deliverables_manifest, key_decisions, action_items, created_at')
-    .gte('created_at', cutoff)
-    .limit(2000);
-  const feedback = await supabase
-    .from('feedback')
-    .select('id, title, description, created_at')
-    .gte('created_at', cutoff)
-    .limit(2000);
-  if (handoffs.error) log('warn', 'handoffs fetch failed', { error: handoffs.error.message });
-  if (feedback.error) log('warn', 'feedback fetch failed', { error: feedback.error.message });
+  let handoffRows = [];
+  try {
+    handoffRows = await fetchAllPaginated(() => supabase
+      .from('sd_phase_handoffs')
+      .select('id, executive_summary, deliverables_manifest, key_decisions, action_items, created_at')
+      .gte('created_at', cutoff)
+      .order('id', { ascending: true }), { maxRows: 2000 }); // declared sampling cap, preserved from prior .limit(2000)
+  } catch (e) {
+    log('warn', 'handoffs fetch failed', { error: e.message });
+  }
+  let feedbackRows = [];
+  try {
+    feedbackRows = await fetchAllPaginated(() => supabase
+      .from('feedback')
+      .select('id, title, description, created_at')
+      .gte('created_at', cutoff)
+      .order('id', { ascending: true }), { maxRows: 2000 }); // declared sampling cap, preserved from prior .limit(2000)
+  } catch (e) {
+    log('warn', 'feedback fetch failed', { error: e.message });
+  }
   return {
-    handoffs: handoffs.data || [],
-    feedback: feedback.data || [],
+    handoffs: handoffRows,
+    feedback: feedbackRows,
   };
 }
 
@@ -222,10 +234,14 @@ function computeConfidence({ count, alias_hits, handoff_hits, retro_hits }) {
 }
 
 async function existingTerms() {
-  const { data } = await supabase
-    .from('pocock_glossary_terms')
-    .select('term, status');
-  return new Set((data || []).map(r => r.term.toLowerCase()));
+  let rows = [];
+  try {
+    rows = await fetchAllPaginated(() => supabase
+      .from('pocock_glossary_terms')
+      .select('id, term, status')
+      .order('id', { ascending: true }));
+  } catch { /* fail-open: empty set (matches prior data||[] fallback on error) */ }
+  return new Set(rows.map(r => r.term.toLowerCase()));
 }
 
 async function draftCountThisWeek() {

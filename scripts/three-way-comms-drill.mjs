@@ -28,6 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'module';
 import { pathToFileURL } from 'node:url';
+import { renderCount } from '../lib/db/fetch-all-paginated.mjs';
 
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow, getThreadByTopicId } = require('../lib/coordinator/dispatch.cjs');
@@ -296,8 +297,13 @@ async function tryLiveObserve(now) {
 async function purgeStaleDrillRows() {
   try {
     const db = getServiceClient();
-    const { data } = await db.from('session_coordination').delete().eq('payload->>kind', 'comms_drill').select('id');
-    return { purged: (data || []).length };
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: was .select('id') then
+    // data.length — a GAUGE (purge count only, ids never used) whose RETURNING representation
+    // is capped at 1000 by PostgREST even though the DELETE itself is unbounded. Exact count
+    // instead so a large stale backlog is never silently underreported.
+    const { count, error } = await db.from('session_coordination').delete({ count: 'exact' }).eq('payload->>kind', 'comms_drill');
+    if (error) throw error;
+    return { purged: renderCount(count) };
   } catch (e) { return { purged: 0, error: String((e && e.message) || e) }; }
 }
 

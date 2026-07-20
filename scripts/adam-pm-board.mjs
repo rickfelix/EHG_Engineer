@@ -15,6 +15,9 @@ import { createRequire } from 'node:module';
 import 'dotenv/config';
 import { TABLE, rollupParentStatus, bubbleBlockers, sumTokenCost } from '../lib/adam/task-ledger.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: unfiltered select('*') over the
+// whole ledger, rows are grouped/rendered (not just counted) — paginate.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
@@ -69,9 +72,7 @@ function renderPanel(p) {
 }
 
 async function fetchLedgerRows(sb) {
-  const { data, error } = await sb.from(TABLE).select('*');
-  if (error) throw new Error(error.message);
-  return Array.isArray(data) ? data : [];
+  return fetchAllPaginated(() => sb.from(TABLE).select('*').order('id', { ascending: true })); // unique tiebreaker (FR-6)
 }
 
 async function main() {

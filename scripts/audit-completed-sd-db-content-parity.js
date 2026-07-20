@@ -20,6 +20,9 @@ import crypto from 'node:crypto';
 import { validateDbContentParity } from '../scripts/modules/handoff/gates/db-content-parity-gate.js';
 // SD-FDBK-INFRA-MIGRATE-EMIT-FEEDBACK-001 FR-5: route through canonical helper
 import { emitFeedback } from '../lib/governance/emit-feedback.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: with no --since/--sd-id filter this
+// walks EVERY completed SD ever (a growing table), so paginate.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 function parseArgs(argv) {
   const flags = { since: null, sdId: null, dryRun: false };
@@ -33,15 +36,21 @@ function parseArgs(argv) {
 }
 
 export async function runAudit({ supabase, since, sdId, dryRun, auditRunId }) {
-  let query = supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, status, updated_at, metadata')
-    .eq('status', 'completed');
-  if (since) query = query.gte('updated_at', since);
-  if (sdId) query = query.eq('sd_key', sdId);
-
-  const { data: sds, error } = await query;
-  if (error) throw new Error(`SD walk failed: ${error.message}`);
+  const buildQuery = () => {
+    let q = supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, status, updated_at, metadata')
+      .eq('status', 'completed');
+    if (since) q = q.gte('updated_at', since);
+    if (sdId) q = q.eq('sd_key', sdId);
+    return q.order('id', { ascending: true }); // unique tiebreaker (FR-6)
+  };
+  let sds;
+  try {
+    sds = await fetchAllPaginated(buildQuery);
+  } catch (e) {
+    throw new Error(`SD walk failed: ${e.message}`);
+  }
 
   const findings = [];
   for (const sd of sds || []) {

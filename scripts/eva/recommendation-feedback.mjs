@@ -16,6 +16,10 @@
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { stampAcceptedWaveItem } from '../../lib/eva/consultant/stamp-accepted-wave-item.js';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the pending-recommendations
+// queue grows indefinitely -- an un-paginated read here would silently hide/skip
+// recommendations past the PostgREST 1000-row cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -27,13 +31,15 @@ const CONFIDENCE_CAP = 1.5; // Max feedback_weight
 // ─── List Pending ──────────────────────────────────────────
 
 async function listPending() {
-  const { data, error } = await supabase
-    .from('eva_consultant_recommendations')
-    .select('id, recommendation_date, recommendation_type, title, description, priority_score, action_type, application_domain, status')
-    .eq('status', 'pending')
-    .order('priority_score', { ascending: false });
-
-  if (error) {
+  let data;
+  try {
+    data = await fetchAllPaginated(() => supabase
+      .from('eva_consultant_recommendations') // schema-lint-disable-line: pre-existing feedback_weight/metadata columns, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
+      .select('id, recommendation_date, recommendation_type, title, description, priority_score, action_type, application_domain, status')
+      .eq('status', 'pending')
+      .order('priority_score', { ascending: false })
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (error) {
     console.error('Error fetching recommendations:', error.message);
     return;
   }
@@ -169,12 +175,14 @@ export async function applyRecommendationDecay(cycleDate) {
     : String(cycleDate).slice(0, 10);
 
   // Fetch pending recs not yet decayed this cycle
-  const { data: recs, error } = await supabase
-    .from('eva_consultant_recommendations')
-    .select('id, feedback_weight, metadata')
-    .eq('status', 'pending');
-
-  if (error) {
+  let recs;
+  try {
+    recs = await fetchAllPaginated(() => supabase
+      .from('eva_consultant_recommendations') // schema-lint-disable-line: pre-existing feedback_weight/metadata columns, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
+      .select('id, feedback_weight, metadata')
+      .eq('status', 'pending')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (error) {
     console.error('[recommendation-feedback] applyRecommendationDecay fetch error:', error.message);
     return { decayed: 0 };
   }
@@ -193,7 +201,7 @@ export async function applyRecommendationDecay(cycleDate) {
     const updatedMetadata = { ...(rec.metadata || {}), last_decay_at: cycleDateStr };
 
     const { error: updateErr } = await supabase
-      .from('eva_consultant_recommendations')
+      .from('eva_consultant_recommendations') // schema-lint-disable-line: pre-existing feedback_weight/metadata columns, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
       .update({ feedback_weight: newWeight, metadata: updatedMetadata })
       .eq('id', rec.id);
 

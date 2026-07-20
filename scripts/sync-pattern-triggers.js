@@ -18,6 +18,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -211,20 +212,24 @@ async function syncPatternTriggers() {
   console.log(`Severity filter: ${CONFIG.MIN_SEVERITY.join(', ')}`);
 
   // Get eligible patterns
-  const { data: patterns, error } = await supabase
-    .from('issue_patterns')
-    .select('*')
-    .eq('status', 'active')
-    .in('severity', CONFIG.MIN_SEVERITY)
-    .gte('occurrence_count', CONFIG.THRESHOLD)
-    .order('occurrence_count', { ascending: false });
-
-  if (error) {
-    console.error(`Error fetching patterns: ${error.message}`);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: issue_patterns grows unbounded;
+  // paginate rather than rely on a capped 1000-row scan.
+  let patterns;
+  try {
+    patterns = await fetchAllPaginated(() => supabase
+      .from('issue_patterns')
+      .select('*')
+      .eq('status', 'active')
+      .in('severity', CONFIG.MIN_SEVERITY)
+      .gte('occurrence_count', CONFIG.THRESHOLD)
+      .order('occurrence_count', { ascending: false })
+      .order('id', { ascending: true }));
+  } catch (e) {
+    console.error(`Error fetching patterns: ${e.message}`);
     return;
   }
 
-  if (!patterns || patterns.length === 0) {
+  if (patterns.length === 0) {
     console.log('\n No patterns meet the criteria for trigger creation');
     return;
   }

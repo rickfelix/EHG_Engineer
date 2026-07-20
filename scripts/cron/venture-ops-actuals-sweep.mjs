@@ -38,6 +38,7 @@ import { createClient } from '@supabase/supabase-js';
 import { collectProductHealth } from '../../lib/eva/services/ops-health-monitor.js';
 import { collectRevenueMetrics } from '../../lib/eva/services/ops-revenue-collector.js';
 import { runVentureUptimeProbe } from '../../lib/ops/venture-uptime-probe.js';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 import { registerArmedMachinery, armedProcessKey } from '../../lib/machinery-class/armed-registration.js';
 import { stampLastFired } from '../../lib/periodic-liveness/stamp-last-fired.js';
 
@@ -93,13 +94,20 @@ async function ensureArmedRegistration(supabase, job, logger) {
 
 /** Ventures with a live deployment — the shared selection set for all three jobs. */
 async function fetchLiveDeploymentVentures(supabase) {
-  const { data, error } = await supabase
-    .from('ventures')
-    .select('id, deployment_url')
-    .not('deployment_url', 'is', null)
-    .neq('deployment_url', '');
-  if (error) throw new Error(`ventures query failed: ${error.message}`);
-  return data || [];
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — every venture returned here is
+  // acted on by all three collector jobs; the ventures table grows with the factory's output,
+  // so an unranged read could silently skip ventures past the cap. Paginate; error policy
+  // mirrors the prior throw.
+  try {
+    return await fetchAllPaginated(() => supabase
+      .from('ventures')
+      .select('id, deployment_url')
+      .not('deployment_url', 'is', null)
+      .neq('deployment_url', '')
+      .order('id', { ascending: true }));
+  } catch (err) {
+    throw new Error(`ventures query failed: ${err.message}`);
+  }
 }
 
 export async function main(argv = process.argv, deps = {}) {

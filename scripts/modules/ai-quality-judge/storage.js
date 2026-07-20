@@ -6,6 +6,10 @@
  */
 
 import { TABLES } from './config.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: getPendingImprovements() (no
+// options.limit) and getStatistics() read the full queue/assessments table — a capped read
+// would silently under-count and skip pending improvements.
+import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
 
 /**
  * AssessmentStorage class
@@ -135,28 +139,36 @@ export class AssessmentStorage {
    * @returns {Array} Pending improvements
    */
   async getPendingImprovements(options = {}) {
-    let query = this.supabase
-      .from(TABLES.QUEUE)
-      .select('*')
-      .eq('status', 'PENDING');
+    const buildQuery = () => {
+      let query = this.supabase
+        .from(TABLES.QUEUE)
+        .select('*')
+        .eq('status', 'PENDING');
 
-    if (options.risk_tier) {
-      query = query.eq('risk_tier', options.risk_tier);
-    }
+      if (options.risk_tier) {
+        query = query.eq('risk_tier', options.risk_tier);
+      }
 
+      return query.order('evidence_count', { ascending: false }).order('id', { ascending: true });
+    };
+
+    // An explicit limit is an intentional bound — honor it directly. With no limit the
+    // caller wants the full PENDING set, which must be paginated past the PostgREST cap.
     if (options.limit) {
-      query = query.limit(options.limit);
+      const { data, error } = await buildQuery().limit(options.limit);
+
+      if (error) {
+        throw new Error(`Failed to get pending improvements: ${error.message}`);
+      }
+
+      return data || [];
     }
 
-    query = query.order('evidence_count', { ascending: false });
-
-    const { data, error } = await query;
-
-    if (error) {
+    try {
+      return await fetchAllPaginated(buildQuery);
+    } catch (error) {
       throw new Error(`Failed to get pending improvements: ${error.message}`);
     }
-
-    return data || [];
   }
 
   /**
@@ -212,12 +224,14 @@ export class AssessmentStorage {
    * @returns {Object} Statistics about assessments
    */
   async getStatistics() {
-    const { data: assessments, error: assessError } = await this.supabase
-      .from(TABLES.ASSESSMENTS)
-      .select('recommendation, score');
-
-    if (assessError) {
-      throw new Error(`Failed to get statistics: ${assessError.message}`);
+    let assessments;
+    try {
+      assessments = await fetchAllPaginated(() => this.supabase
+        .from(TABLES.ASSESSMENTS)
+        .select('recommendation, score')
+        .order('id', { ascending: true }));
+    } catch (error) {
+      throw new Error(`Failed to get statistics: ${error.message}`);
     }
 
     const stats = {

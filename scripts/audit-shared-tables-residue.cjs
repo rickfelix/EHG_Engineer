@@ -32,6 +32,15 @@ const {
   KILLED_PATTERNS,
   isKilledVentureId,
 } = require('./lib/killed-initiatives.cjs');
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: pass-2's free-text .or(ilike) match
+// has no row-count bound (unlike pass-1's small hardcoded .in() lists) over growing tables
+// (feedback, client_error_events) — a silently-truncated read would UNDER-REPORT the exact
+// cross-portfolio residue this audit exists to find. Bridge for the CJS call sites below.
+let _fapModule = null;
+async function fapPaginate(queryFactory, opts) {
+  _fapModule ||= await import('../lib/db/fetch-all-paginated.mjs');
+  return _fapModule.fetchAllPaginated(queryFactory, opts);
+}
 
 const SCHEMA_VERSION = '1.0';
 const SD_UUID = 'f05587df-f924-4e7c-8e9f-8cba628af50e';
@@ -186,23 +195,29 @@ async function passTwo_TextOpportunistic(supabase, namePatterns) {
   // feedback: title, description, resolution_notes (free-text)
   {
     const orFilter = buildOr(['title', 'description', 'resolution_notes']);
-    const { data, error } = await supabase
-      .from('feedback')
-      .select('*')
-      .or(orFilter);
-    if (error) throw new Error(`feedback query: ${error.message}`);
-    result.feedback = data || [];
+    try {
+      result.feedback = await fapPaginate(() => supabase
+        .from('feedback')
+        .select('*')
+        .or(orFilter)
+        .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    } catch (e) {
+      throw new Error(`feedback query: ${e.message}`);
+    }
   }
 
   // client_error_events: message + route
   {
     const orFilter = buildOr(['message', 'route']);
-    const { data, error } = await supabase
-      .from('client_error_events')
-      .select('*')
-      .or(orFilter);
-    if (error) throw new Error(`client_error_events query: ${error.message}`);
-    result.client_error_events = data || [];
+    try {
+      result.client_error_events = await fapPaginate(() => supabase
+        .from('client_error_events')
+        .select('*')
+        .or(orFilter)
+        .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    } catch (e) {
+      throw new Error(`client_error_events query: ${e.message}`);
+    }
   }
 
   return result;

@@ -11,6 +11,7 @@
  */
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -24,10 +25,14 @@ async function main() {
   console.log('='.repeat(60));
   console.log('');
 
-  // Todoist counts
-  const { data: todoistCounts } = await supabase
+  // Todoist counts. SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: eva_todoist_intake
+  // is unbounded and every row is tallied into the per-status histogram below — paginate to
+  // completion. Fail-open to [] mirrors the prior undefined-on-error `todoistCounts || []`.
+  const todoistCounts = await fetchAllPaginated(() => supabase
     .from('eva_todoist_intake')
-    .select('status');
+    .select('status')
+    .order('id', { ascending: true })) // unique tiebreaker (FR-6)
+    .catch(() => []);
 
   const todoistByStatus = {};
   for (const row of todoistCounts || []) {
@@ -41,10 +46,14 @@ async function main() {
   }
   console.log('');
 
-  // YouTube counts
-  const { data: youtubeCounts } = await supabase
+  // YouTube counts. SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: eva_youtube_intake
+  // is unbounded and every row is tallied into the per-status histogram below — paginate to
+  // completion. Fail-open to [] mirrors the prior undefined-on-error `youtubeCounts || []`.
+  const youtubeCounts = await fetchAllPaginated(() => supabase
     .from('eva_youtube_intake')
-    .select('status');
+    .select('status')
+    .order('id', { ascending: true })) // unique tiebreaker (FR-6)
+    .catch(() => []);
 
   const youtubeByStatus = {};
   for (const row of youtubeCounts || []) {

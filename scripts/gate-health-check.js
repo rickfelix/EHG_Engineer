@@ -28,6 +28,11 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 // SD-LEO-INFRA-GATE-FALSE-POSITIVE-001: pure aggregation for the named-gate bypass leaderboard
 import { tallyBypassedGates } from './modules/handoff/bypass-rubric.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: validation_audit_log is an
+// audit-log-shaped growing table (up to 2000 bypass rows/day per the global bypass cap) —
+// the 30-day bypass leaderboard's old .limit(5000) silently re-clamps to the PostgREST 1000
+// cap with no ORDER BY, so the "leaderboard" was an arbitrary <=1000-row slice.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -399,20 +404,22 @@ async function recordFailurePattern(gateAlert) {
  */
 async function getNamedGateBypassLeaderboard() {
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
-    .from('validation_audit_log')
-    .select('metadata')
-    .eq('failure_category', 'bypass')
-    .gte('created_at', since)
-    .limit(5000);
-
-  if (error) {
+  let data;
+  try {
+    data = await fetchAllPaginated(() => supabase
+      .from('validation_audit_log')
+      .select('metadata')
+      .eq('failure_category', 'bypass')
+      .gte('created_at', since)
+      .order('id', { ascending: true }), // unique tiebreaker: stable page boundaries (FR-6)
+      { maxRows: 5000 }); // preserves the original declared sampling cap
+  } catch (error) {
     console.log('  ℹ️  Bypass leaderboard unavailable:', error.message);
     return { ranked: [], unattributed: 0, total: 0 };
   }
 
   // Pure aggregation extracted to bypass-rubric.js (unit-tested independently).
-  return tallyBypassedGates(data || []);
+  return tallyBypassedGates(data);
 }
 
 /**

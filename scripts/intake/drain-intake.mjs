@@ -29,6 +29,10 @@ import { registerItem, setDisposition, recordVerdict, backlogDepth } from '../..
 import { computeCompoundingScore } from '../../lib/intake/compounding-score.js';
 // SD-LEO-INFRA-ESTATE-DISPOSITION-001: pure, unit-tested estate-disposition helpers.
 import { estateAlreadyDrained, todoistPriorityToText, classifyEstateItem, buildEstateMarkOff, isToolChangelogIntakeRow } from '../../lib/intake/estate-disposition-helpers.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — Pool-1 (eva_consultant_recommendations)
+// and the estate intake tables are ongoing/growing sources this drain runs against repeatedly; a
+// capped read would silently leave items past row 1000 undrained with no error.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const APPLY = process.argv.includes('--apply');
 const DRY_RUN = !APPLY; // dry-run is the default
@@ -86,11 +90,16 @@ async function loadCapabilities(sb) {
 
 /** Pool 1: eva_consultant_recommendations (live source). */
 async function loadPool1(sb) {
-  const { data, error } = await sb.from('eva_consultant_recommendations')
-    .select('id, trend_id, title, description, priority_score, action_type, status')
-    .order('created_at', { ascending: true });
-  if (error) throw new Error(`loadPool1: ${error.message}`);
-  return (data || []).map(r => ({
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => sb.from('eva_consultant_recommendations')
+      .select('id, trend_id, title, description, priority_score, action_type, status')
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true }));
+  } catch (e) {
+    throw new Error(`loadPool1: ${e.message}`);
+  }
+  return rows.map(r => ({
     source_pool: 'eva_consultant_rec',
     source_id: r.id,
     source_external_id: r.trend_id || null,
@@ -162,9 +171,15 @@ const ESTATE_SOURCES = [
 /** Load one estate table → normalized items (UNDRAINED only — JS-filtered on the back-pointer so a
  *  re-run / the recurring trigger naturally skips already-dispositioned rows; idempotent on source id). */
 async function loadEstate(sb, src) {
-  const { data, error } = await sb.from(src.table).select(src.select).order('created_at', { ascending: true });
-  if (error) throw new Error(`loadEstate(${src.table}): ${error.message}`);
-  return (data || [])
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => sb.from(src.table).select(src.select)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true }));
+  } catch (e) {
+    throw new Error(`loadEstate(${src.table}): ${e.message}`);
+  }
+  return rows
     .filter((r) => !estateAlreadyDrained(r))
     // SD-REFILL-00SLQCLH: per-source exclude predicate (e.g. tool-changelog releases) — drops the row
     // from the drain entirely so it never registers in the conversion ledger as an idea.

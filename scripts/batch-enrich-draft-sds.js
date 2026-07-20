@@ -13,6 +13,10 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the DRAFT/LEAD-phase scan below is
+// iterated/enriched per row; strategic_directives_v2 is a growing table and a heavy DRAFT backlog
+// is a routine fleet state, so a capped read would silently skip enrichment past the boundary.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const execute = process.argv.includes('--execute');
@@ -27,19 +31,22 @@ async function main() {
   console.log('');
 
   // 1. Find DRAFT SDs with thin content
-  let query = supabase
-    .from('strategic_directives_v2')
-    .select('sd_key, title, description, sd_type, success_criteria, key_changes, scope, target_application')
-    .eq('status', 'draft')
-    .eq('current_phase', 'LEAD');
-
-  if (singleSd) {
-    query = query.eq('sd_key', singleSd);
+  let sds;
+  try {
+    sds = await fetchAllPaginated(() => {
+      let query = supabase
+        .from('strategic_directives_v2')
+        .select('sd_key, title, description, sd_type, success_criteria, key_changes, scope, target_application')
+        .eq('status', 'draft')
+        .eq('current_phase', 'LEAD')
+        .order('sd_key', { ascending: true });
+      if (singleSd) query = query.eq('sd_key', singleSd);
+      return query;
+    });
+  } catch (e) {
+    console.error('Query error:', e.message); process.exit(1);
   }
-
-  const { data: sds, error } = await query;
-  if (error) { console.error('Query error:', error.message); process.exit(1); }
-  if (!sds || sds.length === 0) { console.log('No DRAFT SDs found.'); return; }
+  if (sds.length === 0) { console.log('No DRAFT SDs found.'); return; }
 
   console.log(`Found ${sds.length} DRAFT SD(s) to analyze\n`);
 

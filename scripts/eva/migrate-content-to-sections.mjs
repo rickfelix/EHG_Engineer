@@ -13,6 +13,10 @@
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { parseMarkdownToSections, buildDefaultMapping } from './markdown-to-sections-parser.mjs';
 import { buildSectionKeyMapping } from './document-section-registry.mjs';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: this migration reads every row
+// of eva_vision_documents / eva_architecture_plans -- an un-paginated read would silently
+// skip rows past the PostgREST 1000-row cap, leaving them unmigrated with no error.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const dryRun = process.argv.includes('--dry-run');
 const supabase = createSupabaseServiceClient();
@@ -29,11 +33,13 @@ async function migrateTable(tableName, documentType, keyColumn) {
     mapping = buildDefaultMapping();
   }
 
-  const { data: rows, error } = await supabase
-    .from(tableName)
-    .select(`${keyColumn}, content, sections`);
-
-  if (error) {
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => supabase
+      .from(tableName)
+      .select(`${keyColumn}, content, sections`)
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (error) {
     console.error(`  Error loading ${tableName}: ${error.message}`);
     return { success: 0, failed: 0 };
   }

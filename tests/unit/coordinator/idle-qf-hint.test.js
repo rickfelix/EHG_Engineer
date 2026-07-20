@@ -116,6 +116,14 @@ describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live inser
           eq() { return this; },
           is() { return this; },
           order() { return this; },
+          // fetchAllPaginated's terminal call (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6
+          // batch 9: runIdleQfHintCore now paginates both reads) — resolve the same {data, error}
+          // the implicit-await path below produces; both fixtures are single short pages.
+          range() {
+            if (table === 'claude_sessions') return Promise.resolve({ data: sessions, error: null });
+            if (table === 'quick_fixes') return Promise.resolve({ data: qfs, error: null });
+            return Promise.resolve({ data: [], error: null });
+          },
           then(resolve) {
             if (table === 'claude_sessions') return resolve({ data: sessions, error: null });
             if (table === 'quick_fixes') return resolve({ data: qfs, error: null });

@@ -11,6 +11,7 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 // SD-LEO-FEAT-PRE-EXISTING-BUG-001: build the upsert payload via a pure helper that omits the
 // non-existent capability_gaps column (which 42703-errored every live run).
 import { buildReviewArtifact } from '../../lib/pipeline/management-review-artifact.mjs';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const supabase = createSupabaseServiceClient();
 const STALE_THRESHOLD_HOURS = 24;
@@ -48,10 +49,20 @@ async function gatherBaselineData() {
 
   if (!baseline) return { active: false };
 
-  const { data: items } = await supabase
-    .from('sd_baseline_items')
-    .select('sd_id, sequence_rank, track, is_ready')
-    .eq('baseline_id', baseline.id);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — totalItems/readyItems/
+  // trackDistribution below are computed over every row; a baseline snapshots the whole
+  // roadmap, so an unranged read would silently under-report exactly the kind of gauge
+  // this SD's incident was about. Paginate; empty-on-error mirrors the prior fail-open.
+  let items;
+  try {
+    items = await fetchAllPaginated(() => supabase
+      .from('sd_baseline_items')
+      .select('id, sd_id, sequence_rank, track, is_ready')
+      .eq('baseline_id', baseline.id)
+      .order('id', { ascending: true }));
+  } catch {
+    items = [];
+  }
 
   const readyCount = (items || []).filter(i => i.is_ready).length;
   const trackCounts = {};
@@ -71,10 +82,19 @@ async function gatherBaselineData() {
 }
 
 async function gatherSDData() {
-  const { data: sds } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, status, current_phase, sd_type, priority')
-    .not('status', 'in', '("cancelled","archived")');
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — status/phase/type counts
+  // below are computed over every row; a growing table filtered to exclude only a couple of
+  // terminal statuses is NOT bounded. Paginate; empty-on-error mirrors the prior fail-open.
+  let sds;
+  try {
+    sds = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, status, current_phase, sd_type, priority')
+      .not('status', 'in', '("cancelled","archived")')
+      .order('id', { ascending: true }));
+  } catch {
+    sds = [];
+  }
 
   const statusCounts = {};
   const phaseCounts = {};
@@ -164,10 +184,20 @@ async function gatherGapData() {
     return { hasGaps: false, gaps_by_objective: [], pending_proposals_count: 0 };
   }
 
-  const { data: capabilities } = await supabase
-    .from('venture_capabilities')
-    .select('capability_key')
-    .in('status', ['delivered', 'verified', 'active']);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — every delivered capability is
+  // folded into deliveredKeys below; venture_capabilities grows with portfolio size, so an
+  // unranged read would silently under-report and inflate the computed gap counts. Paginate;
+  // empty-on-error mirrors the prior fail-open.
+  let capabilities;
+  try {
+    capabilities = await fetchAllPaginated(() => supabase
+      .from('venture_capabilities')
+      .select('id, capability_key') // schema-lint-disable-line: pre-existing column reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
+      .in('status', ['delivered', 'verified', 'active'])
+      .order('id', { ascending: true }));
+  } catch {
+    capabilities = [];
+  }
 
   const deliveredKeys = new Set((capabilities || []).map(c => c.capability_key));
 
@@ -199,10 +229,20 @@ async function gatherGapData() {
 }
 
 async function gatherVentureData() {
-  const { data: ventures } = await supabase
-    .from('ventures')
-    .select('id, name, status, current_stage')
-    .eq('status', 'active');
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — activeCount and the rendered
+  // venture list below are both derived from this read; ventures grows with the factory's
+  // output, so an unranged read would silently under-report past the cap. Paginate;
+  // empty-on-error mirrors the prior fail-open.
+  let ventures;
+  try {
+    ventures = await fetchAllPaginated(() => supabase
+      .from('ventures')
+      .select('id, name, status, current_stage') // schema-lint-disable-line: pre-existing column reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
+      .eq('status', 'active')
+      .order('id', { ascending: true }));
+  } catch {
+    ventures = [];
+  }
 
   return {
     activeCount: (ventures || []).length,

@@ -32,6 +32,8 @@ function makeSupabase({ intake = {}, rows = [] } = {}) {
         eq() { return api; },
         is() { return api; },
         in() { return api; },
+        order() { return api; },                                    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: fetchAllPaginated chains .order() before .range()
+        range() { return Promise.resolve({ data: rows, error: null }); }, // single-page: fewer rows than pageSize ends the paginate loop
         then(resolve) { resolve({ data: rows, error: null }); },     // select(...).is().eq().in() awaited
         catch() { return api; },
       };

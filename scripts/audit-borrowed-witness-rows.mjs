@@ -21,6 +21,10 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { execFileSync } from 'node:child_process';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: ship_review_findings has no filter
+// below (whole-table read) and this audit's own thoroughness concern (a missed older row hides
+// a real borrow) makes silent truncation especially dangerous here — paginate.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 function listMergedPRs(repo) {
   try {
@@ -42,8 +46,14 @@ export async function runAudit({ supabase } = {}) {
   if (appsErr) throw new Error(`applications query failed: ${appsErr.message}`);
   const trustedRepos = (apps || []).map((r) => r.github_repo.replace(/\.git$/i, ''));
 
-  const { data: findings, error: findErr } = await sb.from('ship_review_findings').select('pr_number, branch, verdict, sd_key, created_at');
-  if (findErr) throw new Error(`ship_review_findings query failed: ${findErr.message}`);
+  let findings;
+  try {
+    findings = await fetchAllPaginated(() => sb.from('ship_review_findings')
+      .select('id, pr_number, branch, verdict, sd_key, created_at')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (e) {
+    throw new Error(`ship_review_findings query failed: ${e.message}`);
+  }
 
   const report = { trustedRepos, checkedPRs: 0, borrowedRowCandidates: [], chronologicallyImpossible: [], skippedRepos: [] };
 

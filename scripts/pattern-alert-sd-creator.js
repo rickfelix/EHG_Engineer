@@ -34,6 +34,7 @@ import {
   fetchPatternSourceSDStatuses,
 } from './modules/learning/filter.mjs';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -175,13 +176,18 @@ export async function hasExistingSD(patternId, pattern = null) {
  * Mirrors the wiring pattern at scripts/modules/learning/context-builder.js:443-471.
  */
 async function getAlertablePatterns() {
-  const { data: patterns, error } = await supabase
-    .from('issue_patterns')
-    .select('*')
-    .eq('status', 'active')
-    .order('occurrence_count', { ascending: false });
-
-  if (error) {
+  // Paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: issue_patterns
+  // is unbounded-growth and status='active' does not bound it; every row below is
+  // threshold-filtered and can trigger SD auto-creation.
+  let patterns;
+  try {
+    patterns = await fetchAllPaginated(() => supabase
+      .from('issue_patterns')
+      .select('*')
+      .eq('status', 'active')
+      .order('occurrence_count', { ascending: false })
+      .order('id', { ascending: true }));
+  } catch (error) {
     console.error(`Error fetching patterns: ${error.message}`);
     return [];
   }

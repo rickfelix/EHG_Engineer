@@ -10,6 +10,12 @@
  */
 
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9
+let _renderCountModule = null;
+async function renderCountAsync(count) {
+  _renderCountModule ||= await import('../lib/db/fetch-all-paginated.mjs');
+  return _renderCountModule.renderCount(count);
+}
 
 /**
  * SD-REFILL-00FHK2ED: map an eva_scheduler_heartbeat row into the worker-shaped object the health
@@ -62,12 +68,13 @@ async function main() {
     .order('updated_at', { ascending: false })
     .limit(10);
 
-  // 3. Query active workflow executions
-  const { data: activeExecs, error: execError } = await supabase
+  // 3. Query active workflow executions. GAUGE (only the count is used below) — exact
+  // head-count avoids both the 1000-row cap misreading activeWorkflows and an unbounded
+  // workflow_executions row fetch (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9).
+  const { count: activeExecCount } = await supabase
     .from('workflow_executions')
-    .select('id, venture_id, current_stage, status, started_at, updated_at')
-    .eq('status', 'in_progress')
-    .order('updated_at', { ascending: false });
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'in_progress');
 
   // (SD-REFILL-00FHK2ED) Removed the per-worker 'stage-execution-worker' heartbeat query: it read
   // the never-provisioned eva_worker_heartbeats and its result (sewHb) was assigned but never used.
@@ -80,7 +87,7 @@ async function main() {
   const report = {
     timestamp: new Date().toISOString(),
     workers: [],
-    activeWorkflows: activeExecs?.length || 0,
+    activeWorkflows: await renderCountAsync(activeExecCount),
     recentAlerts: recentAlerts?.length || 0,
     status: 'unknown'
   };

@@ -11,6 +11,15 @@
 const { execSync } = require('child_process');
 const crypto = require('crypto');
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — autoDismissResolved iterates
+// every pending ci_failure row to check/clear it; a capped read would silently leave rows
+// past 1000 stuck open with no error.
+let _fapModule = null;
+async function fapPaginate(queryFactory, opts) {
+  _fapModule ||= await import('../../lib/db/fetch-all-paginated.mjs');
+  return _fapModule.fetchAllPaginated(queryFactory, opts);
+}
+
 // Severity mapping: workflow name patterns -> severity level
 const SEVERITY_MAP = {
   critical: ['deploy', 'security', 'sign-', 'slsa-'],
@@ -130,14 +139,21 @@ async function insertFailures(supabase, failures, repo) {
 async function autoDismissResolved(supabase, repo) {
   let dismissed = 0;
 
-  const { data: pending } = await supabase
-    .from('feedback')
-    .select('id, metadata')
-    .eq('source_type', 'auto_capture')
-    .eq('category', 'ci_failure')
-    .in('status', ['new', 'triaged']);
+  let pending = [];
+  try {
+    pending = await fapPaginate(() => supabase
+      .from('feedback')
+      .select('id, metadata')
+      .eq('source_type', 'auto_capture')
+      .eq('category', 'ci_failure')
+      .in('status', ['new', 'triaged'])
+      .order('id', { ascending: true }));
+  } catch (e) {
+    console.error('autoDismissResolved: pending fetch failed:', e.message);
+    return { dismissed: 0 };
+  }
 
-  if (!pending || pending.length === 0) return { dismissed: 0 };
+  if (pending.length === 0) return { dismissed: 0 };
 
   for (const entry of pending) {
     const { workflow_name, branch } = entry.metadata || {};

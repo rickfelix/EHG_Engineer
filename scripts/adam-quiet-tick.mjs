@@ -27,6 +27,10 @@ import { checkAndAlertStalls } from '../lib/adam/stall-alert.js';
 import { runOutboundSilenceWatchdog } from '../lib/adam/outbound-silence-watchdog.js';
 import { TABLE as TASK_LEDGER_TABLE, syncParentRollupStatus } from '../lib/adam/task-ledger.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: task_ledger has no archival/
+// retention mechanism (verified) and the ventures stall-scan below has no .limit() either —
+// both are unbounded processing reads (rows iterated for stall detection), so paginate.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const require = createRequire(import.meta.url);
 const crypto = require('crypto');
@@ -127,12 +131,13 @@ export async function readCriticalPathParents(sb) {
     // stopped moving BY DEFINITION and is never a stall candidate. source_kind/source_ref are
     // read here too so checkAndAlertStalls can self-heal a sourced_sd node whose linked SD
     // already finished, instead of escalating a stale board row.
-    const { data } = await sb
+    const data = await fetchAllPaginated(() => sb
       .from(TASK_LEDGER_TABLE)
       .select('id, title, updated_at, status, source_kind, source_ref')
       .eq('tier', 'parent')
-      .in('status', ['open', 'in_progress', 'blocked']);
-    return (data || []).map((row) => ({ ...row, inFlightNextStep: row.status === 'in_progress' }));
+      .in('status', ['open', 'in_progress', 'blocked'])
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    return data.map((row) => ({ ...row, inFlightNextStep: row.status === 'in_progress' }));
   } catch {
     return [];
   }
@@ -156,16 +161,17 @@ export async function checkVentureTraversalStalls(sb, priorSnapshot = {}) {
   const snapshot = {};
   const alerted = [];
   try {
-    const { data: stuck } = await sb
+    const stuck = await fetchAllPaginated(() => sb
       .from('ventures')
       .select('id, name, orchestrator_state, status, updated_at')
       .eq('status', 'active')
       .eq('orchestrator_state', 'blocked')
       .eq('is_demo', false)
       .is('deleted_at', null)
-      .lt('updated_at', thresholdIso);
+      .lt('updated_at', thresholdIso)
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
 
-    for (const v of (stuck || [])) {
+    for (const v of stuck) {
       const { data: recent } = await sb
         .from('stage_executions')
         .select('id')

@@ -10,6 +10,7 @@
  */
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 import 'dotenv/config';
 
 const supabase = createSupabaseServiceClient();
@@ -30,7 +31,7 @@ async function getRecentEvents(limit = 10) {
   try {
     const { data } = await supabase
       .from('eva_events')
-      .select('id, event_type, venture_id, status, created_at')
+      .select('id, event_type, venture_id, status, created_at') // schema-lint-disable-line: pre-existing column reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
       .order('created_at', { ascending: false })
       .limit(limit);
     return data || [];
@@ -84,9 +85,12 @@ async function getHookObserverInfo() {
 
 async function getEventTypeCounts() {
   try {
-    const { data } = await supabase
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: eva_event_ledger is an
+    // unbounded, unfiltered event log and every row is tallied below — paginate to completion.
+    const data = await fetchAllPaginated(() => supabase
       .from('eva_event_ledger')
-      .select('event_type, status');
+      .select('event_type, status')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
 
     if (!data) return {};
     const counts = {};

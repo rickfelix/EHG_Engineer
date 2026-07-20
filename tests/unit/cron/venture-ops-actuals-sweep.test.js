@@ -22,6 +22,12 @@ function makeSupabase({ ventures = VENTURES } = {}) {
           select() { return this; },
           not() { return this; },
           neq() { return this; },
+          // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: production now
+          // paginates via fetchAllPaginated, which appends .order()/.range() after the
+          // filter chain — extend the mock with a chainable .order() and a .range() that
+          // resolves the (short, loop-ending) page.
+          order() { return this; },
+          range: async () => ({ data: ventures, error: null }),
           then: (resolve) => resolve({ data: ventures, error: null }),
         };
       }

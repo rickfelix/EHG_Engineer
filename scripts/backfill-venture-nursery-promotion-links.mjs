@@ -26,6 +26,10 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the ventures scan below reads the
+// WHOLE table for the name-matching heuristic; ventures grows with portfolio size (playbook
+// explicitly warns not to assume "small now" means bounded), so paginate to completion.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const APPLY = process.argv.includes('--apply');
 
@@ -65,12 +69,12 @@ async function main() {
     .is('promoted_to_venture_id', null);
   if (e1) throw e1;
 
-  const { data: ventures, error: e2 } = await supabase
+  const ventures = await fetchAllPaginated(() => supabase
     .from('ventures')
-    .select('id, name');
-  if (e2) throw e2;
+    .select('id, name')
+    .order('id', { ascending: true }));
 
-  const candidates = findHeuristicMatches(nurseryRows || [], ventures || []);
+  const candidates = findHeuristicMatches(nurseryRows || [], ventures);
 
   const summary = {
     sd_key: 'SD-FDBK-FIX-STAGE-PROMOTION-NEVER-001',

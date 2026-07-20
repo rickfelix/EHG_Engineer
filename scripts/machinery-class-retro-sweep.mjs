@@ -18,6 +18,7 @@ import 'dotenv/config';
 import { pathToFileURL } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { classifyMachineryClass } from '../lib/machinery-class/classify.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 import { evaluateActivationEvidence, checkActivationEvidence, checkArmedRegistration } from './modules/handoff/executors/lead-final-approval/gates/invocation-path-gate.js';
 
 const DAYS_ARG_IDX = process.argv.indexOf('--days');
@@ -37,16 +38,19 @@ const supabase = createClient(
  */
 export async function fetchRecentCompletedSds(sb, days) {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await sb
-    .from('strategic_directives_v2')
-    .select('sd_key, id, title, description, scope, status, sd_type, key_changes, completion_date, metadata, parent_sd_id')
-    .eq('status', 'completed')
-    .gte('completion_date', since);
-  if (error) {
+  // Paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: every row is
+  // classified/evaluated below (strategic_directives_v2 is unbounded-growth).
+  try {
+    return await fetchAllPaginated(() => sb
+      .from('strategic_directives_v2')
+      .select('sd_key, id, title, description, scope, status, sd_type, key_changes, completion_date, metadata, parent_sd_id')
+      .eq('status', 'completed')
+      .gte('completion_date', since)
+      .order('id', { ascending: true }));
+  } catch (error) {
     console.error(`[machinery-class-retro-sweep] load failed: ${error.message}`);
     return [];
   }
-  return data || [];
 }
 
 /**

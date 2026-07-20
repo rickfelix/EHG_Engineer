@@ -59,6 +59,11 @@ function makeSupabase(cfg = {}) {
       order() { return b; },
       limit() { return b; },
       maybeSingle() { ctx.single = true; return resolve(); },
+      // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: production now paginates
+      // the candidate read via fetchAllPaginated, which calls .range() explicitly instead of
+      // relying on the builder's thenable — resolve the same per-table result so a short page
+      // (fewer rows than pageSize) ends the pagination loop after one page.
+      range() { return resolve(); },
       then(res, rej) { return resolve().then(res, rej); },
     };
     return b;

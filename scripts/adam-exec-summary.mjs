@@ -44,6 +44,9 @@ import { assessAdamSourceWatchdog } from '../lib/fleet/adam-source-watchdog.mjs'
 import { shouldSendNow, recordSent } from '../lib/fleet/exec-email-send-guard.js';
 import { resolveWindow, loadRecentWork, renderRecentWork } from '../lib/fleet/exec-email-recent-work.js';
 import { enforceCliSendGuard } from '../lib/notifications/cli-send-guard.mjs';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: chairman_decisions has no filter
+// below and is displayed as an honest "consumed X of Y" total to the chairman.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 enforceCliSendGuard({
   scriptName: 'scripts/adam-exec-summary.mjs',
@@ -255,11 +258,12 @@ try {
 // graceful "(unavailable)" line and NEVER crashes the summary.
 let decisionsLine = null;
 try {
-  const { data: decisions } = await db.from('chairman_decisions').select('id, decision, status');
-  const rows = decisions || [];
+  const decisions = await fetchAllPaginated(() => db.from('chairman_decisions')
+    .select('id, decision, status')
+    .order('id', { ascending: true })); // unique tiebreaker (FR-6)
   const { deriveDecisionsPrior } = await import('../lib/adam/preference-model.js');
-  const { consumed } = deriveDecisionsPrior(rows);
-  decisionsLine = `chairman_decisions consumed: ${consumed} of ${rows.length}`;
+  const { consumed } = deriveDecisionsPrior(decisions);
+  decisionsLine = `chairman_decisions consumed: ${consumed} of ${decisions.length}`;
 } catch (e) {
   console.warn('[adam-email] chairman_decisions-consumed counter unavailable (fail-soft): ' + (e?.message || e));
   decisionsLine = 'chairman_decisions consumed: (unavailable)';

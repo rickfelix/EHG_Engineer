@@ -10,6 +10,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -35,13 +36,16 @@ class LEADSubmissionReviewer {
         console.log('Analyzing submissions for strategic context and approval...\n');
 
         try {
-            // Get all submissions
-            const { data: submissions, error } = await supabase
-                .from('directive_submissions')
-                .select('*')
-                .order('created_at', { ascending: false });
-
-            if (error) {
+            // Get all submissions (paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001
+            // FR-6 batch 9: every row is iterated/displayed below, not just counted)
+            let submissions;
+            try {
+                submissions = await fetchAllPaginated(() => supabase
+                    .from('directive_submissions')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .order('id', { ascending: true }));
+            } catch (error) {
                 console.error('Error fetching submissions:', error.message);
                 return;
             }

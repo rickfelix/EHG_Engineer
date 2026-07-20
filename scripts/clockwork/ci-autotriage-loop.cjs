@@ -27,6 +27,16 @@ const { execFileSync } = require('node:child_process');
 const path = require('node:path');
 const { createClient } = require('@supabase/supabase-js');
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the open ci_failure pool feeds
+// chronic-class detection + linking; a read silently capped at the PostgREST 1000-row max would
+// hide recurring classes past row 1000 with no error, so the loop would stop sourcing corrective
+// SDs for them.
+let _fapModule = null;
+async function fapPaginate(queryFactory, opts) {
+  _fapModule ||= await import('../../lib/db/fetch-all-paginated.mjs');
+  return _fapModule.fetchAllPaginated(queryFactory, opts);
+}
+
 const args = process.argv.slice(2);
 const APPLY = args.includes('--apply');
 const THRESHOLD = Number((args.find((a) => a.startsWith('--threshold=')) || '').split('=')[1]) || undefined;
@@ -51,21 +61,24 @@ async function main() {
     await import('../lib/ci-recurrence-detector.mjs');
 
   // 1. open ci_failure rows (resolved/self-healed rows are status='resolved' → excluded here).
-  const { data: rows, error } = await db
-    .from('feedback')
-    .select('id,status,error_hash,resolution_type,strategic_directive_id,resolution_sd_id,occurrence_count,created_at,error_message,metadata')
-    .eq('category', 'ci_failure')
-    .in('status', ['new', 'triaged', 'in_progress']);
-  if (error) { log('[ALERT] fetch failed (fail-soft):', error.message); return; }
-  log(`open ci_failure rows: ${rows ? rows.length : 0}`);
+  let rows;
+  try {
+    rows = await fapPaginate(() => db
+      .from('feedback')
+      .select('id,status,error_hash,resolution_type,strategic_directive_id,resolution_sd_id,occurrence_count,created_at,error_message,metadata')
+      .eq('category', 'ci_failure')
+      .in('status', ['new', 'triaged', 'in_progress'])
+      .order('id', { ascending: true }));
+  } catch (e) { log('[ALERT] fetch failed (fail-soft):', e.message); return; }
+  log(`open ci_failure rows: ${rows.length}`);
 
   // 2. strip DEAD links: a row whose only corrective link points at a terminal (cancelled/archived)
   //    SD is treated as UNCOVERED so a stale link can't permanently suppress a still-recurring class.
-  await stripDeadLinks(db, rows || []);
+  await stripDeadLinks(db, rows);
 
   // 3. detect chronic, uncovered classes.
   const threshold = THRESHOLD || DEFAULT_THRESHOLD;
-  const candidates = detectChronicClasses(rows || [], { threshold });
+  const candidates = detectChronicClasses(rows, { threshold });
   log(`chronic uncovered classes (threshold ${threshold}): ${candidates.length}`);
 
   // 4. anti-spam caps: per-run + remaining per-day budget (count today's ci-autotriage SDs).

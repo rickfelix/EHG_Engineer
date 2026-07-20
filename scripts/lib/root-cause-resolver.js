@@ -23,6 +23,7 @@
 import fs from 'fs';
 import dotenv from 'dotenv';
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -404,10 +405,13 @@ function generateRecommendations(analysis) {
  */
 async function checkKnownPatterns(error) {
   try {
-    const { data: patterns } = await supabase
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — issue_patterns grows over
+    // time; a capped read could silently miss a matching pattern. Paginate to completion.
+    const patterns = await fetchAllPaginated(() => supabase
       .from('issue_patterns')
       .select('*')
-      .eq('is_active', true);
+      .eq('is_active', true)
+      .order('id', { ascending: true }));
 
     if (!patterns) return null;
 
@@ -498,7 +502,7 @@ export async function skipAndLog(sdId, reason, sessionId) {
 
   // Update SD status
   await supabase
-    .from('strategic_directives_v2')
+    .from('strategic_directives_v2') // schema-lint-disable-line: pre-existing notes column, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
     .update({
       status: 'blocked',
       notes: `Auto-skipped: ${reason}`

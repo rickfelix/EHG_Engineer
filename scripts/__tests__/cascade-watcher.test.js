@@ -9,7 +9,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { parseArgs, main } from '../cron/cascade-watcher.mjs';
 
-const VISION_WITH_ARCH_SECTION = `# Vision\n\n## Problem\n...\n\n## Architectural Plan\n\nPhase 1 plan body of substantial length here to clear the body minimum threshold.\n\n## Phase 1: Backend setup\nWith schema migration logic.\n\n## Phase 2: Frontend dashboard\nWith UI components.\n\n## Phase 3: Integration tests\nTest harness.\n`;
+const VISION_WITH_ARCH_SECTION = '# Vision\n\n## Problem\n...\n\n## Architectural Plan\n\nPhase 1 plan body of substantial length here to clear the body minimum threshold.\n\n## Phase 1: Backend setup\nWith schema migration logic.\n\n## Phase 2: Frontend dashboard\nWith UI components.\n\n## Phase 3: Integration tests\nTest harness.\n';
 
 function makeSupabase({ visions = [], archplans = [], orchestrators = [], ventures = [], errorRows = [], insertCb = () => {} } = {}) {
   const inserts = [];
@@ -30,6 +30,9 @@ function makeSupabase({ visions = [], archplans = [], orchestrators = [], ventur
       ilike() { return builder; },
       maybeSingle() { return _exec(true); },
       single() { return _exec(true); },
+      // fetchAllPaginated's terminal .range() call (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001
+      // FR-6 batch 9) — single page returns the full filtered dataset.
+      range() { return _exec(false); },
       then(resolve, reject) { return _exec(false).then(resolve, reject); },
       insert(row) {
         inserts.push({ table, row });

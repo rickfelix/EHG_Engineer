@@ -21,6 +21,11 @@ import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { ImprovementExtractor } from './ImprovementExtractor.js';
 import { ImprovementApplicator } from './ImprovementApplicator.js';
 import { EffectivenessTracker } from './EffectivenessTracker.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — listImprovements/getStats/
+// getEffectivenessReport below list-and-process the ENTIRE protocol_improvement_queue
+// (a growing queue accumulating every retrospective-sourced improvement); a silently-capped
+// read undercounts stats and truncates the CLI list/effectiveness report with no error.
+import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
 
 // Re-export classes
 export { ImprovementExtractor, ImprovementApplicator, EffectivenessTracker };
@@ -34,21 +39,24 @@ export function createProtocolImprovementSystem() {
   return {
     // List improvements with optional filtering
     async listImprovements(filters = {}) {
-      const { createClient } = await import('@supabase/supabase-js');
       const supabase = createSupabaseServiceClient();
 
-      let query = supabase.from('protocol_improvement_queue').select('*');
+      const buildQuery = () => {
+        let query = supabase.from('protocol_improvement_queue').select('*');
 
-      if (filters.status) {
-        query = query.eq('status', filters.status.toUpperCase());
-      }
-      if (filters.phase) {
-        query = query.eq('target_phase', filters.phase.toUpperCase());
-      }
+        if (filters.status) {
+          query = query.eq('status', filters.status.toUpperCase());
+        }
+        if (filters.phase) {
+          query = query.eq('target_phase', filters.phase.toUpperCase());
+        }
 
-      const { data, error } = await query.order('evidence_count', { ascending: false });
-      if (error) throw error;
-      return data || [];
+        return query
+          .order('evidence_count', { ascending: false })
+          .order('id', { ascending: true });
+      };
+
+      return await fetchAllPaginated(buildQuery);
     },
 
     // Get a single improvement by ID
@@ -154,14 +162,15 @@ export function createProtocolImprovementSystem() {
 
     // Get effectiveness report
     async getEffectivenessReport(_filters = {}) {
-      const { createClient } = await import('@supabase/supabase-js');
       const supabase = createSupabaseServiceClient();
 
-      const { data, error } = await supabase
-        .from('v_improvement_effectiveness')
-        .select('*');
-
-      if (error) {
+      let data;
+      try {
+        data = await fetchAllPaginated(() => supabase
+          .from('v_improvement_effectiveness')
+          .select('*')
+          .order('id', { ascending: true }));
+      } catch {
         console.log('Note: v_improvement_effectiveness view may not exist yet');
         return [];
       }
@@ -180,19 +189,17 @@ export function createProtocolImprovementSystem() {
         });
       }
 
-      return data || [];
+      return data;
     },
 
     // Get statistics
     async getStats() {
-      const { createClient } = await import('@supabase/supabase-js');
       const supabase = createSupabaseServiceClient();
 
-      const { data, error } = await supabase
+      const data = await fetchAllPaginated(() => supabase
         .from('protocol_improvement_queue')
-        .select('status, improvement_type, target_phase');
-
-      if (error) throw error;
+        .select('status, improvement_type, target_phase, id')
+        .order('id', { ascending: true }));
 
       const stats = {
         total: data?.length || 0,

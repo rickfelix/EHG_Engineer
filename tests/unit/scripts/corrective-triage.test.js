@@ -27,6 +27,9 @@ beforeAll(async () => {
 // Builder that supports BOTH terminal modes:
 //   - .single() / .maybeSingle() resolve to {data, error}
 //   - implicit await (then) resolves to {data: rows, error}
+//   - .range() (fetchAllPaginated's terminal call — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001
+//     FR-6 batch 9: listFindings now routes through fetchAllPaginated) resolves the SAME
+//     {data, error} the implicit await produced — a single short page below pageSize.
 // All chainable methods return the same builder so order doesn't matter.
 function makeBuilder({ single, rows = [], error = null }) {
   const result = single !== undefined
@@ -40,6 +43,7 @@ function makeBuilder({ single, rows = [], error = null }) {
     limit() { return chain; },
     single() { return Promise.resolve(result); },
     maybeSingle() { return Promise.resolve(result); },
+    range() { return Promise.resolve(result); },
     then(resolve, reject) { return Promise.resolve(result).then(resolve, reject); },
   };
   return chain;

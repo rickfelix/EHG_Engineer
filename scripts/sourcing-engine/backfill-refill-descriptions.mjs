@@ -22,6 +22,10 @@
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { isSubstanceThinTitle, MIN_RECOVERED_SUBSTANCE_LEN } from '../../lib/sourcing-engine/refill-candidate-validity.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — every pending row is scanned
+// for the substance_thin recovery; a capped read would silently leave belt-blocking rows
+// unrecovered with no error.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -40,18 +44,24 @@ async function main() {
   log(APPLY ? 'APPLY mode — will WRITE metadata.description' : 'DRY-RUN (default) — no writes; pass --apply to write');
 
   // Candidate rows: staged (pending), truncated title shell, missing a recovered metadata.description.
-  const { data: rows, error } = await sb
-    .from('roadmap_wave_items')
-    .select('id, source_type, source_id, title, metadata, item_disposition')
-    .eq('item_disposition', 'pending');
-  if (error) { console.error('query failed:', error.message); process.exit(1); }
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => sb
+      .from('roadmap_wave_items')
+      .select('id, source_type, source_id, title, metadata, item_disposition')
+      .eq('item_disposition', 'pending')
+      .order('id', { ascending: true }));
+  } catch (e) {
+    console.error('query failed:', e.message);
+    process.exit(1);
+  }
 
-  const candidates = (rows || []).filter((r) => {
+  const candidates = rows.filter((r) => {
     const md = r.metadata && typeof r.metadata === 'object' ? r.metadata : {};
     const alreadyHas = typeof md.description === 'string' && md.description.trim().length >= MIN_RECOVERED_SUBSTANCE_LEN;
     return isSubstanceThinTitle(r.title) && !alreadyHas;
   });
-  log(`pending=${(rows || []).length} truncated-without-description=${candidates.length}`);
+  log(`pending=${rows.length} truncated-without-description=${candidates.length}`);
   if (!candidates.length) { log('nothing to recover — done'); return; }
 
   // Bounded batch lookup of source feedback descriptions (source_id = feedback row id).

@@ -17,6 +17,11 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { ARTIFACT_TYPES } from '../lib/eva/artifact-types.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: venture_artifacts is a growing
+// portfolio table; the old .limit(10000) still silently re-clamps to PostgREST's 1000-row cap,
+// which can miss a distinct artifact_type only present in later rows -- exactly the case this
+// generator exists to catch (a DB type not covered by the code registry).
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -33,11 +38,11 @@ for (let i = 0; i <= 26; i++) codeTypes.add(`stage_${i}_analysis`);
 ['s17_fill_screen', 's17_qa_report'].forEach(t => codeTypes.add(t));
 
 async function getDbTypes() {
-  const { data } = await supabase
+  const data = await fetchAllPaginated(() => supabase
     .from('venture_artifacts')
     .select('artifact_type')
-    .limit(10000);
-  return new Set((data ?? []).map(r => r.artifact_type));
+    .order('id', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
+  return new Set(data.map(r => r.artifact_type));
 }
 
 async function getConstraintCount() {

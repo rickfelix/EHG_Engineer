@@ -11,6 +11,11 @@
  */
 
 import { buildCodeArtifactIndex, buildSchemaIndex, classifyAll, getDistribution } from './content-classifier.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: eva_vision_documents/
+// eva_architecture_plans grow with portfolio size, and strategic_directives_v2 grows with SD
+// velocity — all three are iterated in full for coverage scoring, so a capped read would
+// silently under-score coverage.
+import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
 
 // ─── Stop words for keyword extraction ───────────────────────────────────────
 
@@ -88,12 +93,14 @@ export async function scoreD11(files, supabase) {
   const findings = [];
   const gaps = [];
 
-  const { data: visions, error } = await supabase
-    .from('eva_vision_documents')
-    .select('vision_key, extracted_dimensions, status')
-    .eq('status', 'active');
-
-  if (error) {
+  let visions;
+  try {
+    visions = await fetchAllPaginated(() => supabase
+      .from('eva_vision_documents')
+      .select('vision_key, extracted_dimensions, status')
+      .eq('status', 'active')
+      .order('id', { ascending: true }));
+  } catch (error) {
     return { score: 0, findings: [`Database error: ${error.message}`], gaps: [] };
   }
 
@@ -151,12 +158,14 @@ export async function scoreD12(files, supabase) {
   const findings = [];
   const gaps = [];
 
-  const { data: plans, error } = await supabase
-    .from('eva_architecture_plans')
-    .select('plan_key, extracted_dimensions, status')
-    .eq('status', 'active');
-
-  if (error) {
+  let plans;
+  try {
+    plans = await fetchAllPaginated(() => supabase
+      .from('eva_architecture_plans')
+      .select('plan_key, extracted_dimensions, status')
+      .eq('status', 'active')
+      .order('id', { ascending: true }));
+  } catch (error) {
     return { score: 0, findings: [`Database error: ${error.message}`], gaps: [] };
   }
 
@@ -218,14 +227,16 @@ export async function scoreD13(files, supabase) {
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - 180);
 
-  const { data: sds, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key, title, key_changes, delivers_capabilities, sd_type')
-    .eq('status', 'completed')
-    .in('sd_type', ['feature', 'api', 'infrastructure'])
-    .gte('completion_date', cutoffDate.toISOString());
-
-  if (error) {
+  let sds;
+  try {
+    sds = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, title, key_changes, delivers_capabilities, sd_type')
+      .eq('status', 'completed')
+      .in('sd_type', ['feature', 'api', 'infrastructure'])
+      .gte('completion_date', cutoffDate.toISOString())
+      .order('id', { ascending: true }));
+  } catch (error) {
     return { score: 0, findings: [`Database error: ${error.message}`], gaps: [] };
   }
 

@@ -19,6 +19,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { spawn } from 'child_process';
 import dotenv from 'dotenv';
+import { fetchAllPaginated, renderCount } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -79,25 +80,35 @@ function runScript(scriptPath, args = []) {
  * Get maintenance statistics
  */
 async function getStatistics() {
-  const { data: patterns } = await supabase
-    .from('issue_patterns')
-    .select('status, trend, related_sub_agents')
-    .eq('status', 'active');
+  // Paginated — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: issue_patterns is
+  // unbounded-growth and status='active' does not bound it; patterns_without_subagents needs
+  // the related_sub_agents array per row below, not just a count.
+  let patterns;
+  try {
+    patterns = await fetchAllPaginated(() => supabase
+      .from('issue_patterns')
+      .select('status, trend, related_sub_agents')
+      .eq('status', 'active')
+      .order('id', { ascending: true }));
+  } catch {
+    patterns = null;
+  }
 
-  const { data: mappings } = await supabase
+  // Gauges (exact head-count) — only a count is used for both.
+  const { count: totalMappings } = await supabase
     .from('pattern_subagent_mapping')
-    .select('id');
+    .select('id', { count: 'exact', head: true });
 
-  const { data: triggers } = await supabase
+  const { count: patternTriggerCount } = await supabase
     .from('leo_sub_agent_triggers')
-    .select('id')
+    .select('id', { count: 'exact', head: true })
     .eq('trigger_context', 'pattern');
 
   return {
     total_patterns: patterns?.length || 0,
     patterns_without_subagents: patterns?.filter(p => !p.related_sub_agents || p.related_sub_agents.length === 0).length || 0,
-    total_mappings: mappings?.length || 0,
-    pattern_triggers: triggers?.length || 0
+    total_mappings: renderCount(totalMappings),
+    pattern_triggers: renderCount(patternTriggerCount)
   };
 }
 

@@ -26,6 +26,10 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import { publishVisionEvent, VISION_EVENTS } from '../../lib/eva/event-bus/vision-events.js';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: issue_patterns is a growing
+// table -- an un-paginated read here would silently leave stale VGAP- patterns
+// unresolved past the PostgREST 1000-row cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -286,13 +290,17 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
   // ========================================================================
   let resolved = 0;
 
-  const { data: activeVgaps, error: vgapError } = await supabase
-    .from('issue_patterns')
-    .select('id, pattern_id, metadata')
-    .ilike('pattern_id', 'VGAP-%')
-    .in('status', ['active', 'assigned']);
+  let activeVgaps;
+  try {
+    activeVgaps = await fetchAllPaginated(() => supabase
+      .from('issue_patterns')
+      .select('id, pattern_id, metadata')
+      .ilike('pattern_id', 'VGAP-%')
+      .in('status', ['active', 'assigned'])
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { activeVgaps = []; } // prior behavior: read error ignored
 
-  if (!vgapError && activeVgaps && activeVgaps.length > 0) {
+  if (activeVgaps && activeVgaps.length > 0) {
     // Build set of dimension IDs that are STILL scoring low in this sync
     const stillLowDims = new Set(Object.keys(dimAggregates));
 

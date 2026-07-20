@@ -79,9 +79,14 @@ describe('tokenReconcile — never emits already_institutionalized (RISK R2)', (
 
 describe('loadTopWaveItems — standing enqueue gate (FR-3)', () => {
   function stubSupabase(rows) {
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: loadTopWaveItems now routes
+    // through fetchAllPaginated, whose terminal call is .range() — chain not()/order() and
+    // resolve from range() instead of the formerly-terminal not().
     const builder = {
       select: () => builder,
-      not: () => Promise.resolve({ data: rows, error: null }),
+      not: () => builder,
+      order: () => builder,
+      range: () => Promise.resolve({ data: rows, error: null }),
     };
     return { from: () => builder };
   }

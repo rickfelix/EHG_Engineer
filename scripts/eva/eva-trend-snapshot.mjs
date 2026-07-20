@@ -12,6 +12,10 @@
 
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: intake tables grow
+// indefinitely -- an un-paginated read here would silently skew weekly velocity/trend
+// aggregates past the PostgREST 1000-row cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -50,17 +54,19 @@ async function fetchClassifiedItems() {
   const items = [];
 
   for (const { table, source } of sources) {
-    const { data, error } = await supabase
-      .from(table)
-      .select('target_application, target_aspects, chairman_intent, classified_at')
-      .not('classified_at', 'is', null);
-
-    if (error) {
+    let data;
+    try {
+      data = await fetchAllPaginated(() => supabase
+        .from(table)
+        .select('target_application, target_aspects, chairman_intent, classified_at')
+        .not('classified_at', 'is', null)
+        .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    } catch (error) {
       console.error(`Error querying ${table}:`, error.message);
       continue;
     }
 
-    for (const row of data || []) {
+    for (const row of data) {
       items.push({ ...row, source });
     }
   }

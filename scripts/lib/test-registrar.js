@@ -10,6 +10,7 @@ import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import { fetchAllPaginated, warnIfCapTruncated, renderCount } from '../../lib/db/fetch-all-paginated.mjs';
 
 // Load environment variables from project root
 const __filename = fileURLToPath(import.meta.url);
@@ -310,27 +311,45 @@ export async function registerAllTests(parsedFiles, options = {}) {
 export async function getRegistrationStats() {
   const supabase = getSupabaseClient();
 
-  const { data: suites } = await supabase
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — totalSuites previously came
+  // from suites.length, a capped-array count that reproduces the incident's gauge-shows-1000
+  // bug (and coerced a failed measurement to a healthy-looking 0 via `|| 0`). Exact
+  // head-count for the number; the raw per-suite list stays a capped-with-warning display
+  // read below (this is a one-shot CLI --stats report, not bulk processing).
+  const { count: suitesCount } = await supabase
+    .from('uat_test_suites')
+    .select('id', { count: 'exact', head: true });
+
+  const { data: suitesRaw } = await supabase
     .from('uat_test_suites')
     .select('id, suite_name, total_tests, test_type');
+  const suites = warnIfCapTruncated(suitesRaw, 'scripts/lib/test-registrar.js:getRegistrationStats.suites');
 
   const { count: totalTests } = await supabase
     .from('uat_test_cases')
     .select('id', { count: 'exact' });
 
-  const { data: byType } = await supabase
-    .from('uat_test_cases')
-    .select('test_type')
-    .then(({ data }) => {
-      const counts = {};
-      data?.forEach(t => {
-        counts[t.test_type] = (counts[t.test_type] || 0) + 1;
-      });
-      return { data: counts };
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — every row is iterated to
+  // build the by-type breakdown; uat_test_cases grows with the suite, so an unranged read
+  // silently under-counts types past the cap. Paginate; empty breakdown mirrors the prior
+  // fail-open (destructured data with no explicit error check).
+  let byType;
+  try {
+    const testTypeRows = await fetchAllPaginated(() => supabase
+      .from('uat_test_cases')
+      .select('id, test_type')
+      .order('id', { ascending: true }));
+    const counts = {};
+    testTypeRows.forEach(t => {
+      counts[t.test_type] = (counts[t.test_type] || 0) + 1;
     });
+    byType = counts;
+  } catch {
+    byType = {};
+  }
 
   return {
-    totalSuites: suites?.length || 0,
+    totalSuites: renderCount(suitesCount),
     totalTests: totalTests || 0,
     suites: suites || [],
     byType: byType || {}

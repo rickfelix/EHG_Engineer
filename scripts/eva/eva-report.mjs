@@ -14,6 +14,11 @@ import { createClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: eva_vision_scores grows
+// indefinitely -- an un-paginated read here would silently skew the portfolio average
+// past the PostgREST 1000-row cap. eva_vision_gaps open-count is a pure gauge (renderCount
+// never coerces a failed measurement to a healthy-looking 0).
+import { fetchAllPaginated, renderCount } from '../../lib/db/fetch-all-paginated.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../../.env') });
@@ -54,10 +59,14 @@ async function main() {
     .limit(10);
 
   // 3. Portfolio scores
-  const { data: scores } = await supabase
-    .from('eva_vision_scores')
-    .select('total_score, threshold_action, created_by')
-    .not('created_by', 'eq', 'synthetic-LEAD-workaround');
+  let scores;
+  try {
+    scores = await fetchAllPaginated(() => supabase
+      .from('eva_vision_scores')
+      .select('total_score, threshold_action, created_by')
+      .not('created_by', 'eq', 'synthetic-LEAD-workaround')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { scores = []; } // prior behavior: read error ignored
 
   const organic = (scores || []).filter(s => s.created_by !== 'manual-chairman-override');
   const avg = organic.length > 0
@@ -66,14 +75,15 @@ async function main() {
   const escalateCount = (scores || []).filter(s => s.threshold_action === 'escalate').length;
   const acceptCount = (scores || []).filter(s => s.threshold_action === 'accept').length;
 
-  // 4. Open gaps (from eva_vision_gaps if it exists)
-  let openGaps = 0;
+  // 4. Open gaps (from eva_vision_gaps if it exists). Gauge: exact head-count, never
+  // coerced to a healthy-looking 0 when the measurement itself fails (renderCount).
+  let openGaps = 'unavailable';
   try {
-    const { data: gaps } = await supabase
+    const { count } = await supabase
       .from('eva_vision_gaps')
-      .select('id')
+      .select('id', { count: 'exact', head: true })
       .eq('status', 'open');
-    openGaps = gaps?.length || 0;
+    openGaps = renderCount(count);
   } catch { /* table may not have data yet */ }
 
   const report = {

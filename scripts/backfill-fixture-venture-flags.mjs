@@ -18,6 +18,10 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { isFixtureVenture } from '../lib/chairman/chairman-actionable.mjs';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — ventures grows with portfolio
+// size; a capped scan would silently under-count the fixture-flag candidate set. The follow-on
+// update is chunked because it's built from this now-unbounded read.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
@@ -25,18 +29,26 @@ const supabase = createClient(
 );
 
 const APPLY = process.argv.includes('--apply');
+const UPDATE_CHUNK = 200;
+function chunk(arr, n) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
+}
 
-const { data: ventures, error } = await supabase
-  .from('ventures')
-  .select('id, name, is_demo, created_at')
-  .not('is_demo', 'is', true);
-
-if (error) {
-  console.error('Fetch failed:', error.message);
+let ventures;
+try {
+  ventures = await fetchAllPaginated(() => supabase
+    .from('ventures')
+    .select('id, name, is_demo, created_at')
+    .not('is_demo', 'is', true)
+    .order('id', { ascending: true }));
+} catch (e) {
+  console.error('Fetch failed:', e.message);
   process.exit(1);
 }
 
-const candidates = (ventures || []).filter((v) => isFixtureVenture({ ...v, is_demo: false }));
+const candidates = ventures.filter((v) => isFixtureVenture({ ...v, is_demo: false }));
 
 console.log(`${candidates.length} unflagged fixture venture(s) matching canonical name patterns:`);
 for (const v of candidates) console.log(`  ${v.id}  ${v.created_at}  ${v.name}`);
@@ -51,14 +63,18 @@ if (candidates.length === 0) {
   process.exit(0);
 }
 
-const { error: updErr } = await supabase
-  .from('ventures')
-  .update({ is_demo: true })
-  .in('id', candidates.map((v) => v.id));
+// Chunked (FR-6 batch 9): candidates is built from the now-unbounded ventures read above, so an
+// unchunked .in(ids) update could carry an arbitrarily large id list.
+for (const idChunk of chunk(candidates.map((v) => v.id), UPDATE_CHUNK)) {
+  const { error: updErr } = await supabase
+    .from('ventures')
+    .update({ is_demo: true })
+    .in('id', idChunk);
 
-if (updErr) {
-  console.error('Update failed:', updErr.message);
-  process.exit(1);
+  if (updErr) {
+    console.error('Update failed:', updErr.message);
+    process.exit(1);
+  }
 }
 console.log(`Flagged ${candidates.length} venture(s) is_demo=true.`);
 // Durable audit trail: every flipped row had is_demo != true before this run, so this

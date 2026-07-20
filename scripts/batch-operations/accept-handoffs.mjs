@@ -2,6 +2,10 @@
  * Accept Handoffs Operation Adapter
  * Wraps batch-accept-all-valid-handoffs.mjs for the /batch dispatcher.
  */
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — every pending handoff is
+// accepted/skipped; a capped read would silently leave handoffs past row 1000 unaccepted
+// with no error.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 export default {
   key: 'accept-handoffs',
@@ -35,21 +39,23 @@ export default {
     const result = { total: 0, processed: 0, skipped: 0, failed: 0, details: [] };
 
     for (const [typeName, { from, to }] of typesToProcess) {
-      const { data: pendingHandoffs, error: queryError } = await supabase
-        .from('sd_phase_handoffs')
-        .select('id, sd_id, executive_summary, created_at')
-        .eq('from_phase', from)
-        .eq('to_phase', to)
-        .eq('status', 'pending_acceptance')
-        .order('created_at', { ascending: true });
-
-      if (queryError) {
+      let pendingHandoffs;
+      try {
+        pendingHandoffs = await fetchAllPaginated(() => supabase
+          .from('sd_phase_handoffs')
+          .select('id, sd_id, executive_summary, created_at')
+          .eq('from_phase', from)
+          .eq('to_phase', to)
+          .eq('status', 'pending_acceptance')
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true }));
+      } catch (queryError) {
         result.details.push({ type: typeName, error: queryError.message });
         result.failed++;
         continue;
       }
 
-      if (!pendingHandoffs || pendingHandoffs.length === 0) {
+      if (pendingHandoffs.length === 0) {
         result.details.push({ type: typeName, status: 'no_pending_handoffs' });
         continue;
       }

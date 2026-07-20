@@ -24,6 +24,10 @@
  */
 import path from 'path';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — evaluateGroundTruth groups
+// EVERY row by task_id; a capped read would silently hide adversarial splits that exist
+// past row 1000 with no error, making the gate FAIL-CLOSED for the wrong reason.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 dotenv.config();
 
 /**
@@ -60,12 +64,19 @@ async function main() {
     process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
-  const { data, error } = await supabase
-    .from('model_capability_reference')
-    .select('id, task_id, model_id, effort, clears_bar, graded_at, trusted_for_routing');
-  if (error) { console.error('read failed (table missing = ceremony pending):', error.message); process.exitCode = 2; return; }
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => supabase
+      .from('model_capability_reference')
+      .select('id, task_id, model_id, effort, clears_bar, graded_at, trusted_for_routing')
+      .order('id', { ascending: true }));
+  } catch (e) {
+    console.error('read failed (table missing = ceremony pending):', e.message);
+    process.exitCode = 2;
+    return;
+  }
 
-  const verdict = evaluateGroundTruth(data || []);
+  const verdict = evaluateGroundTruth(rows);
   console.log(`ground-truth-gate (ADVISORY): ${verdict.pass ? 'REPRODUCED-SPLIT' : 'BLOCKED'} — ${verdict.reason}`);
   if (!verdict.pass) { process.exitCode = 1; return; }
 
@@ -74,7 +85,7 @@ async function main() {
   // exclusively by lib/eval/ground-truth-gate.mjs bindTrustedForRouting (child C),
   // which reproduces an independently-adjudicated verdict and stamps binding_id +
   // bound_at. Report the split signal and stop — no row is modified here.
-  const gradedCount = (data || []).filter(r => r.graded_at).length;
+  const gradedCount = rows.filter(r => r.graded_at).length;
   console.log(dry
     ? `--dry: advisory only — ${gradedCount} graded row(s) show an adversarial split; the child-C binder owns any flip (no row modified).`
     : `advisory only — ${gradedCount} graded row(s) show an adversarial split, but routing trust is NOT flipped here; the child-C binder (lib/eval/ground-truth-gate.mjs) is the sole writer. No row modified.`);

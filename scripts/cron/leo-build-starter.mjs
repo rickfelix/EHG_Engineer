@@ -33,6 +33,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import pg from 'pg';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const S19 = 19;
 const NON_TERMINAL = ['draft', 'active'];
@@ -168,18 +169,29 @@ export async function emitSignal(supabase, { orchestrator, ventureId, readyChild
  * IS NULL restricts to the TOP orchestrator (child-orchestrators share created_via + venture_id).
  */
 export async function runDetect({ supabase, ventureId = null, dryRun = false, logger = console } = {}) {
-  let q = supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, venture_id, metadata')
-    .eq('sd_type', 'orchestrator')
-    .is('parent_sd_id', null)
-    .in('status', NON_TERMINAL)
-    .not('venture_id', 'is', null)
-    .filter('metadata->>created_via', 'eq', 'lifecycle-sd-bridge');
-  if (ventureId) q = q.eq('venture_id', ventureId);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — every candidate below is
+  // acted on (build-ready signal emitted); this scans top-level orchestrators across the
+  // whole venture portfolio, which grows, so an unranged read could silently skip candidates
+  // past the cap. Paginate; error policy mirrors the prior throw.
+  const qFactory = () => {
+    let q = supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, venture_id, metadata')
+      .eq('sd_type', 'orchestrator')
+      .is('parent_sd_id', null)
+      .in('status', NON_TERMINAL)
+      .not('venture_id', 'is', null)
+      .filter('metadata->>created_via', 'eq', 'lifecycle-sd-bridge');
+    if (ventureId) q = q.eq('venture_id', ventureId);
+    return q;
+  };
 
-  const { data: orchs, error } = await q;
-  if (error) throw new Error(`candidate query failed: ${error.message}`);
+  let orchs;
+  try {
+    orchs = await fetchAllPaginated(() => qFactory().order('id', { ascending: true }));
+  } catch (err) {
+    throw new Error(`candidate query failed: ${err.message}`);
+  }
 
   let signalled = 0, skipped = 0;
   for (const orch of (orchs || [])) {

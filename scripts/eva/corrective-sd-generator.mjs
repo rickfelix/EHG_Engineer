@@ -24,6 +24,10 @@ import { recordCorrectiveFinding } from '../../lib/eva/corrective-finding-record
 // SD-FDBK-INFRA-SUPPRESS-CORRECTIVE-GENERATOR-001 CAPA 3: reuse the canonical
 // placeholder regex set rather than redefining it here.
 import { isPlaceholderText } from '../modules/handoff/executors/lead-to-plan/gates/placeholder-content.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 is a
+// growing table -- an un-paginated draft-dedup read here could silently miss existing
+// drafts past the PostgREST 1000-row cap, producing duplicate corrective SDs.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../../.env') });
@@ -338,12 +342,13 @@ export async function findDuplicateCorrective(supabase, sourceSdId, dimensionIds
   if (!sourceSdId || !Array.isArray(dimensionIds) || dimensionIds.length === 0) return null;
   const dimsKey = [...dimensionIds].sort().join(',');
   try {
-    const { data: drafts } = await supabase
+    const drafts = await fetchAllPaginated(() => supabase
       .from('strategic_directives_v2')
       .select('sd_key, metadata')
       .eq('status', 'draft')
-      .filter('metadata->>source', 'eq', 'corrective_sd_generator');
-    const matches = (drafts || []).filter(
+      .filter('metadata->>source', 'eq', 'corrective_sd_generator')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    const matches = drafts.filter(
       d => (d.metadata?.dimensions || []).slice().sort().join(',') === dimsKey
     );
     if (!matches.length) return null;

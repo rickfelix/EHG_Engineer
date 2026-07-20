@@ -14,6 +14,7 @@
 
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import 'dotenv/config';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const supabase = createSupabaseServiceClient();
 
@@ -34,11 +35,21 @@ async function loadData() {
     return { baseline: null };
   }
 
-  const { data: items } = await supabase
-    .from('sd_baseline_items')
-    .select('sd_id, sequence_rank, track, is_ready')
-    .eq('baseline_id', baseline.id)
-    .order('sequence_rank');
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — items.length feeds the
+  // totalSDs/velocity burn-rate metrics below; a baseline snapshots the whole roadmap, so an
+  // unranged read would silently under-report exactly the kind of gauge this SD's incident
+  // was about. Paginate; empty-on-error mirrors the prior fail-open.
+  let items;
+  try {
+    items = await fetchAllPaginated(() => supabase
+      .from('sd_baseline_items')
+      .select('id, sd_id, sequence_rank, track, is_ready')
+      .eq('baseline_id', baseline.id)
+      .order('sequence_rank')
+      .order('id', { ascending: true }));
+  } catch {
+    items = [];
+  }
 
   const sdKeys = (items || []).map(i => i.sd_id);
   const { data: sds } = await supabase

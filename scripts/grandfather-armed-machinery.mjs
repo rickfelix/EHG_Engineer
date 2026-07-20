@@ -20,6 +20,10 @@ import {
   checkActivationEvidence,
   checkArmedRegistration,
 } from './modules/handoff/executors/lead-final-approval/gates/invocation-path-gate.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: both strategic_directives_v2 (the
+// open-SD sweep set) and sd_phase_handoffs (the observe-window query) are growing tables; a
+// silently-truncated sweep would leave real in-flight machinery SDs un-grandfathered.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const OBSERVE_WINDOW_START = '2026-07-02T00:00:00Z';
 const CHAIRMAN_RATIFICATION = '2026-07-11 in-session ratification (kill-gate/ownership thread) — authorizes advisory->block promotion';
@@ -38,11 +42,16 @@ function machineryLeaves(rows) {
   return rows.filter((sd) => !isOrchestratorSync(sd) && classifyMachineryClass(sd).machineryClass);
 }
 
-const { data: openSds, error } = await supabase
-  .from('strategic_directives_v2')
-  .select('id, sd_key, sd_type, title, status, description, scope, key_changes, metadata, parent_sd_id')
-  .not('status', 'in', `(${OPEN_FILTER.join(',')})`);
-if (error) { console.error(`sweep: SD query failed: ${error.message}`); process.exit(1); }
+let openSds;
+try {
+  openSds = await fetchAllPaginated(() => supabase
+    .from('strategic_directives_v2')
+    .select('id, sd_key, sd_type, title, status, description, scope, key_changes, metadata, parent_sd_id')
+    .not('status', 'in', `(${OPEN_FILTER.join(',')})`)
+    .order('id', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
+} catch (error) {
+  console.error(`sweep: SD query failed: ${error.message}`); process.exit(1);
+}
 
 let grandfathered = 0, alreadyCovered = 0;
 const grandfatheredKeys = [];
@@ -70,13 +79,18 @@ if (doReview && !dryRun) {
   // advisory period, and their activation states now. Every query on this path is
   // FAIL-LOUD (adversarial review): a swallowed error here would write a falsely-clean
   // evidence artifact — the exact opposite of its observe-then-bind purpose.
-  const { data: windowHandoffs, error: whErr } = await supabase
-    .from('sd_phase_handoffs')
-    .select('sd_id')
-    .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
-    .gte('created_at', OBSERVE_WINDOW_START);
-  if (whErr) { console.error(`review: handoff window query failed (${whErr.message}) — NOT writing a partial artifact`); process.exit(1); }
-  const windowIds = [...new Set((windowHandoffs ?? []).map((h) => h.sd_id))];
+  let windowHandoffs;
+  try {
+    windowHandoffs = await fetchAllPaginated(() => supabase
+      .from('sd_phase_handoffs')
+      .select('sd_id')
+      .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
+      .gte('created_at', OBSERVE_WINDOW_START)
+      .order('id', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
+  } catch (whErr) {
+    console.error(`review: handoff window query failed (${whErr.message}) — NOT writing a partial artifact`); process.exit(1);
+  }
+  const windowIds = [...new Set(windowHandoffs.map((h) => h.sd_id))];
   const { data: windowSds, error: wsErr } = windowIds.length
     ? await supabase.from('strategic_directives_v2')
         .select('id, sd_key, sd_type, title, status, description, scope, key_changes, metadata, parent_sd_id')

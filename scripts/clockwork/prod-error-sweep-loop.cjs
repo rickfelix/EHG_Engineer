@@ -33,6 +33,15 @@ const path = require('node:path');
 const { createClient } = require('@supabase/supabase-js');
 const { BREAK_CLASSES } = require('../../lib/coordinator/break-class-taxonomy.cjs');
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the unresolved-alerts window and
+// open bridge-row pool both feed chronic-class detection; a capped read would silently hide
+// recurring classes past row 1000 with no error.
+let _fapModule = null;
+async function fapPaginate(queryFactory, opts) {
+  _fapModule ||= await import('../../lib/db/fetch-all-paginated.mjs');
+  return _fapModule.fetchAllPaginated(queryFactory, opts);
+}
+
 const args = process.argv.slice(2);
 const APPLY = args.includes('--apply');
 const THRESHOLD = Number((args.find((a) => a.startsWith('--threshold=')) || '').split('=')[1]) || undefined;
@@ -62,13 +71,16 @@ async function main() {
   // 1. unresolved system_alerts in the window. We only READ here — alerts are never resolved.
   const windowHours = WINDOW_HOURS || DEFAULT_WINDOW_HOURS;
   const windowStart = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
-  const { data: alerts, error } = await db
-    .from('system_alerts')
-    .select('id,alert_type,severity,title,message,source_service,metadata,resolved_at,created_at')
-    .is('resolved_at', null)
-    .gte('created_at', windowStart);
-  if (error) { log('[ALERT] system_alerts fetch failed (fail-soft):', error.message); return; }
-  log(`unresolved alerts in last ${windowHours}h: ${alerts ? alerts.length : 0}`);
+  let alerts;
+  try {
+    alerts = await fapPaginate(() => db
+      .from('system_alerts')
+      .select('id,alert_type,severity,title,message,source_service,metadata,resolved_at,created_at')
+      .is('resolved_at', null)
+      .gte('created_at', windowStart)
+      .order('id', { ascending: true }));
+  } catch (e) { log('[ALERT] system_alerts fetch failed (fail-soft):', e.message); return; }
+  log(`unresolved alerts in last ${windowHours}h: ${alerts.length}`);
 
   // 2. open production_error bridge rows -> strip dead links -> HANDLED class-key set
   //    (covered by an open SD OR already surfaced as a new/triaged inbox row awaiting human triage).
@@ -79,7 +91,7 @@ async function main() {
 
   // 3. detect chronic, un-handled (break_class, source) classes within the frozen taxonomy.
   const threshold = THRESHOLD || DEFAULT_THRESHOLD;
-  const candidates = detectRecurringClasses(alerts || [], { threshold, legalClasses: BREAK_CLASSES, coveredKeys: handledKeys });
+  const candidates = detectRecurringClasses(alerts, { threshold, legalClasses: BREAK_CLASSES, coveredKeys: handledKeys });
   log(`chronic uncovered classes (threshold ${threshold}): ${candidates.length}`);
 
   // 4. anti-spam caps: per-run + remaining per-day budget (count today's prod-error-sweep SDs).
@@ -128,12 +140,12 @@ async function main() {
 /** Open production_error bridge rows (the durable triage records this loop links coverage on). */
 async function fetchOpenBridgeRows(db) {
   try {
-    const { data } = await db
+    return await fapPaginate(() => db
       .from('feedback')
       .select('id,status,strategic_directive_id,resolution_sd_id,metadata')
       .eq('category', BRIDGE_CATEGORY)
-      .in('status', ['new', 'triaged', 'in_progress']);
-    return data || [];
+      .in('status', ['new', 'triaged', 'in_progress'])
+      .order('id', { ascending: true }));
   } catch (e) { log('[ALERT] bridge-row fetch failed (fail-soft, treat all uncovered):', e.message); return []; }
 }
 

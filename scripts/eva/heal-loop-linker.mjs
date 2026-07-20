@@ -3,21 +3,29 @@
  *
  * Closes the heal loop for corrective SDs created outside generateCorrectiveSD().
  */
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: eva_vision_scores and
+// strategic_directives_v2 grow indefinitely -- un-paginated reads here would silently
+// leave heal scores/corrective SDs unlinked past the PostgREST 1000-row cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 /**
  * Find non-accept heal scores that have no generated_sd_ids (unlinked).
  */
 export async function findUnlinkedScores(supabase) {
-  const { data, error } = await supabase
-    .from('eva_vision_scores')
-    .select('id, sd_id, total_score, threshold_action, rubric_snapshot')
-    .not('sd_id', 'is', null)
-    .in('threshold_action', ['escalate', 'gap_closure_sd', 'minor_sd'])
-    .is('generated_sd_ids', null)
-    .order('scored_at', { ascending: false });
-
-  if (error) throw new Error(`Failed to query unlinked scores: ${error.message}`);
-  return (data || []).map(s => ({
+  let data;
+  try {
+    data = await fetchAllPaginated(() => supabase
+      .from('eva_vision_scores')
+      .select('id, sd_id, total_score, threshold_action, rubric_snapshot')
+      .not('sd_id', 'is', null)
+      .in('threshold_action', ['escalate', 'gap_closure_sd', 'minor_sd'])
+      .is('generated_sd_ids', null)
+      .order('scored_at', { ascending: false })
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (error) {
+    throw new Error(`Failed to query unlinked scores: ${error.message}`);
+  }
+  return data.map(s => ({
     scoreId: s.id,
     sdKey: s.sd_id,
     score: s.total_score,
@@ -58,10 +66,14 @@ export async function findCorrectiveSDs(supabase) {
 
   // Also get SDs with vision_origin_score_id already set (for completeness)
   // and SDs with "Corrective" in title
-  const { data: titled } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, title, parent_sd_id, metadata, vision_origin_score_id')
-    .ilike('title', '%Corrective%');
+  let titled;
+  try {
+    titled = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, parent_sd_id, metadata, vision_origin_score_id')
+      .ilike('title', '%Corrective%')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { titled = []; } // prior behavior: read error ignored
 
   // Merge, deduplicate by id
   const seen = new Set();

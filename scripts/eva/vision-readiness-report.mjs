@@ -23,6 +23,10 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: this report explicitly reads
+// EVERY eva_vision_documents row -- an un-paginated read here would silently hide unready
+// documents past the PostgREST 1000-row cap, undercounting the remediation queue.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../..');
@@ -35,11 +39,13 @@ async function main() {
   // Readiness predicate (per design-agent): extracted_dimensions IS NOT NULL
   // AND char_length(content) > 500 AND status='active'.
   // Unready = NOT(readiness predicate) — captured by per-row filter below.
-  const { data: unreadyDocs, error } = await supabase
-    .from('eva_vision_documents')
-    .select('vision_key, venture_id, level, status, content, extracted_dimensions');
-
-  if (error) {
+  let unreadyDocs;
+  try {
+    unreadyDocs = await fetchAllPaginated(() => supabase
+      .from('eva_vision_documents')
+      .select('vision_key, venture_id, level, status, content, extracted_dimensions')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (error) {
     console.error('[vision-readiness-report] query failed:', error.message);
     process.exit(1);
   }

@@ -20,6 +20,7 @@
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 dotenv.config();
 
 
@@ -262,25 +263,32 @@ async function batchScore(days = 60) {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
 
-  // Get all DESIGN results within timeframe
-  const { data: designResults, error: drErr } = await supabase
-    .from('sub_agent_execution_results')
-    .select('id, sd_id, confidence, metadata, created_at')
-    .eq('sub_agent_code', 'DESIGN')
-    .gte('created_at', cutoff.toISOString())
-    .order('created_at', { ascending: false });
-
-  if (drErr) {
-    console.error('Error fetching DESIGN results:', drErr.message);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: sub_agent_execution_results is an
+  // unbounded growing table and every row here is deduped + scored below — paginate to
+  // completion. Error policy preserved: catch and report the same message, then return.
+  let designResults;
+  try {
+    designResults = await fetchAllPaginated(() => supabase
+      .from('sub_agent_execution_results')
+      .select('id, sd_id, confidence, metadata, created_at')
+      .eq('sub_agent_code', 'DESIGN')
+      .gte('created_at', cutoff.toISOString())
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (e) {
+    console.error('Error fetching DESIGN results:', e.message);
     return;
   }
 
   console.log(`Found ${designResults.length} DESIGN result(s) in timeframe`);
 
-  // Get existing scores to skip already-scored SDs
-  const { data: existingScores } = await supabase
+  // Get existing scores to skip already-scored SDs. design_quality_scores grows 1:1 with every
+  // SD ever scored (unbounded over the project's life) — paginate to completion.
+  const existingScores = await fetchAllPaginated(() => supabase
     .from('design_quality_scores')
-    .select('sd_id');
+    .select('sd_id')
+    .order('sd_id', { ascending: true })) // unique tiebreaker (FR-6)
+    .catch(() => []);
 
   const scoredSdIds = new Set((existingScores || []).map(s => s.sd_id));
 

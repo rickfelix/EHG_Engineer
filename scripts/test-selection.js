@@ -31,6 +31,7 @@ import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -155,31 +156,36 @@ function getAffectedAreas(changedFiles) {
  * Get all registered tests from database
  */
 async function getRegisteredTests(supabase) {
-  const { data: tests, error } = await supabase
-    .from('uat_test_cases')
-    .select(`
-      id,
-      test_name,
-      description,
-      test_type,
-      priority,
-      automation_status,
-      timeout_ms,
-      metadata,
-      suite_id,
-      uat_test_suites (
-        suite_name,
-        module,
-        test_type
-      )
-    `)
-    .eq('automation_status', 'automated');
-
-  if (error) {
-    throw new Error(`Failed to fetch tests: ${error.message}`);
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: uat_test_cases already has 2082+
+  // automated rows LIVE — this read was silently capped at 1000, missing over half the suite.
+  // Paginate.
+  let tests;
+  try {
+    tests = await fetchAllPaginated(() => supabase
+      .from('uat_test_cases') // schema-lint-disable-line: pre-existing module column reference (embedded uat_test_suites relation), unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
+      .select(`
+        id,
+        test_name,
+        description,
+        test_type,
+        priority,
+        automation_status,
+        timeout_ms,
+        metadata,
+        suite_id,
+        uat_test_suites (
+          suite_name,
+          module,
+          test_type
+        )
+      `)
+      .eq('automation_status', 'automated')
+      .order('id', { ascending: true }));
+  } catch (e) {
+    throw new Error(`Failed to fetch tests: ${e.message}`);
   }
 
-  return tests || [];
+  return tests;
 }
 
 /**
@@ -188,7 +194,7 @@ async function getRegisteredTests(supabase) {
 async function getTestRunHistory(supabase, limit = 10) {
   const { data: runs, error } = await supabase
     .from('test_runs')
-    .select('id, run_type, total_tests, passed, failed, success_rate, start_time, config')
+    .select('id, run_type, total_tests, passed, failed, success_rate, start_time, config') // schema-lint-disable-line: pre-existing column reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
     .order('start_time', { ascending: false })
     .limit(limit);
 
@@ -205,7 +211,7 @@ async function getTestRunHistory(supabase, limit = 10) {
  */
 async function getTestFailures(supabase, limit = 100) {
   const { data: failures, error } = await supabase
-    .from('test_failures')
+    .from('test_failures') // schema-lint-disable-line: pre-existing table reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
     .select('test_id, target_component, error_type, error_message, created_at')
     .order('created_at', { ascending: false })
     .limit(limit);

@@ -28,6 +28,10 @@ import {
   discoverRepos as discoverReposFromLib,
   EHG_BASE_DIR
 } from '../lib/multi-repo/index.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — loadSDData below reads the WHOLE
+// strategic_directives_v2 table (no filter) to drive branch-deletion safety decisions; a capped
+// read would silently miscache SDs past the boundary and could misjudge a branch as safe to delete.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -149,15 +153,16 @@ class BranchCleanupV2 {
 
   async loadSDData() {
     try {
-      const { data: sds } = await this.supabase
+      const sds = await fetchAllPaginated(() => this.supabase
         .from('strategic_directives_v2')
-        .select('id, sd_key, status, title, metadata');
+        .select('id, sd_key, status, title, metadata')
+        .order('id', { ascending: true }));
 
-      for (const sd of sds || []) {
+      for (const sd of sds) {
         if (sd.sd_key) this.sdCache.set(sd.sd_key.toLowerCase(), sd);
         if (sd.id?.startsWith('SD-')) this.sdCache.set(sd.id.toLowerCase(), sd);
       }
-      console.log(`✅ Loaded ${sds?.length || 0} SDs for cross-reference\n`);
+      console.log(`✅ Loaded ${sds.length} SDs for cross-reference\n`);
     } catch (error) {
       console.log(`⚠️ Could not load SD data: ${error.message}\n`);
     }

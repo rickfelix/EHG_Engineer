@@ -32,19 +32,24 @@ function makeFakeSupabase(tables, { onInsert, capAt } = {}) {
       let orderCol = null;
       let orderAsc = true;
       let limitN = null;
+      // FR-6 batch 9: exact-head-count gauge mode ({count:'exact', head:true}) — no rows body,
+      // just the filtered count (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001).
+      let countMode = false;
       const builder = {
-        select() { return builder; },
+        select(_cols, opts) { if (opts && opts.count === 'exact') countMode = true; return builder; },
         eq(col, val) { filters.push((r) => r[col] === val); return builder; },
         in(col, vals) { filters.push((r) => vals.includes(r[col])); return builder; },
         is(col, val) { filters.push((r) => (r[col] ?? null) === val); return builder; },
         not(col, op, val) { filters.push((r) => r[col] !== val); return builder; },
         order(col, { ascending } = {}) { orderCol = col; orderAsc = ascending !== false; return builder; },
         limit(n) { limitN = n; return builder; },
+        range(from, to) { limitN = to - from + 1; return builder; },
         then(resolve) {
           let rows = (tables[tableName] || []).filter((r) => filters.every((f) => f(r)));
           if (orderCol) rows = [...rows].sort((a, b) => (orderAsc ? 1 : -1) * (a[orderCol] > b[orderCol] ? 1 : -1));
           const effectiveLimit = limitN != null ? limitN : capAt?.[tableName];
           if (effectiveLimit != null) rows = rows.slice(0, effectiveLimit);
+          if (countMode) { resolve({ data: null, count: rows.length, error: null }); return; }
           resolve({ data: rows, error: null });
         },
         insert(row) {

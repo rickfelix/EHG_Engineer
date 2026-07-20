@@ -61,7 +61,10 @@ describe('getUnreviewedYoutubeItems — FR-1 review-gap query', () => {
       select() { return builder; },
       not(col, op, val) { calls.filters.push(['not', col, op, val]); return builder; },
       is(col, val) { calls.filters.push(['is', col, val]); return builder; },
-      order() { return Promise.resolve({ data: [{ id: 'yt1', title: 'A', youtube_video_id: 'vid' }], error: null }); },
+      // FR-6 batch 9: getUnreviewedYoutubeItems now reads via fetchAllPaginated, which
+      // chains .order() (chronological, then unique tiebreaker) before .range().
+      order() { return builder; },
+      range() { return Promise.resolve({ data: [{ id: 'yt1', title: 'A', youtube_video_id: 'vid' }], error: null }); },
     };
     vi.resetModules();
     vi.doMock('../../../lib/supabase-client.js', () => ({

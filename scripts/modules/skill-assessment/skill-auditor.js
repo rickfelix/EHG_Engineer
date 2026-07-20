@@ -11,6 +11,10 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { parseAllSkills } from './skill-parser.js';
 import { scoreDescription } from './rubric-dimensions.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — getBaselineScores builds a
+// most-recent-per-skill map from ALL baseline-marked rows; a silently-capped read could
+// drop a skill's latest baseline. skill_assessment_scores accumulates every audit run.
+import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -113,13 +117,17 @@ export async function getBaselineScores() {
   if (!supabaseUrl || !supabaseKey) return new Map();
 
   const sb = createClient(supabaseUrl, supabaseKey);
-  const { data, error } = await sb
-    .from('skill_assessment_scores')
-    .select('skill_name, total_score')
-    .eq('is_baseline', true)
-    .order('assessed_at', { ascending: false });
-
-  if (error || !data) return new Map();
+  let data;
+  try {
+    data = await fetchAllPaginated(() => sb
+      .from('skill_assessment_scores')
+      .select('skill_name, total_score')
+      .eq('is_baseline', true)
+      .order('assessed_at', { ascending: false })
+      .order('id', { ascending: true }));
+  } catch {
+    return new Map();
+  }
 
   // Use the most recent baseline score per skill
   const map = new Map();

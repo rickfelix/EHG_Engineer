@@ -36,6 +36,7 @@ import { createRequire } from 'node:module';
 import { liveFleetWorkers } from '../lib/fleet/genuine-worker.mjs';
 import { getActiveCoordinatorId } from '../lib/coordinator/resolve.cjs';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
@@ -110,23 +111,37 @@ function buildHintRow({ qf, coordinatorId, targetSession }) {
 export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun = false } = {}) {
   const summary = { idleWorkers: 0, hinted: 0, skippedGated: 0 };
 
-  const { data: sessions } = await supabase
-    .from('claude_sessions')
-    .select('*')
-    .order('heartbeat_at', { ascending: false }); // QF-763 lesson: explicit order avoids the page-cap staleness trap
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: claude_sessions is unbounded and this
+  // read has no heartbeat/status filter at all (the QF-763 `.order()` only avoids a STALENESS bias
+  // in a capped read, it does not bound the read) — paginate to completion. Fail-open to [] mirrors
+  // the prior undefined-on-error → `sessions || []` fallback below.
+  let sessions;
+  try {
+    sessions = await fetchAllPaginated(() => supabase
+      .from('claude_sessions')
+      .select('*')
+      .order('heartbeat_at', { ascending: false })
+      .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { sessions = []; }
   const coordinatorId = await getActiveCoordinatorId(supabase).catch(() => null);
   const live = liveFleetWorkers(sessions || [], coordinatorId, nowMs);
   const idle = eligibleIdleWorkers(live, nowMs);
   summary.idleWorkers = idle.length;
   if (idle.length === 0) return summary;
 
-  const { data: qfs } = await supabase
-    .from('quick_fixes')
-    .select('id, title, description, severity, status, pr_url, commit_sha, created_at, routing_tier, not_before, owner, release_condition')
-    .eq('status', 'open')
-    .is('pr_url', null)
-    .is('commit_sha', null)
-    .order('created_at', { ascending: true });
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: quick_fixes is unbounded and this
+  // open-backlog read feeds the ranked hint list below — paginate to completion; fail-open to [].
+  let qfs;
+  try {
+    qfs = await fetchAllPaginated(() => supabase
+      .from('quick_fixes')
+      .select('id, title, description, severity, status, pr_url, commit_sha, created_at, routing_tier, not_before, owner, release_condition')
+      .eq('status', 'open')
+      .is('pr_url', null)
+      .is('commit_sha', null)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { qfs = []; }
 
   const ranked = eligibleQfCandidates(qfs, nowMs);
   summary.skippedGated = (qfs || []).length - ranked.length;

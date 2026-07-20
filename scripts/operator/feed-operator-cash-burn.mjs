@@ -36,6 +36,10 @@ import { readStripeCashSlice } from '../../lib/operator/cash-sources/stripe-bala
 import { readBankCashSlice } from '../../lib/operator/cash-sources/bank-read-service.js';
 import { loadTellerCertPair } from '../../lib/operator/cash-sources/token-vault.js';
 import { createTellerClient } from '../../lib/operator/cash-sources/teller-client.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the period's payment events are
+// SUMMED into the reported revenue figure; a capped read would silently UNDER-report revenue
+// with no error once a month's event volume exceeds the PostgREST cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -198,16 +202,16 @@ async function main() {
       const periodStart = `${periodMonth}T00:00:00.000Z`;
       const periodEnd = new Date(new Date(periodStart).getTime());
       periodEnd.setUTCMonth(periodEnd.getUTCMonth() + 1);
-      const { data: periodRows, error: periodErr } = await supabase
+      const periodRows = await fetchAllPaginated(() => supabase
         .from('ops_payment_events')
         .select('amount_cents, currency, event_type, payment_intent_id, stripe_charge_id, id')
         .eq('livemode', true)
         .gte('event_ts', periodStart)
-        .lt('event_ts', periodEnd.toISOString());
-      if (periodErr) throw new Error(periodErr.message);
-      const { totalCents } = computeAttributedRevenue(periodRows || []);
+        .lt('event_ts', periodEnd.toISOString())
+        .order('id', { ascending: true }));
+      const { totalCents } = computeAttributedRevenue(periodRows);
       const revUsd = Number((totalCents / 100).toFixed(2));
-      log('FR-3', `revenue (attributed) = $${revUsd} (livemode=true, ${(periodRows || []).length} events)`);
+      log('FR-3', `revenue (attributed) = $${revUsd} (livemode=true, ${periodRows.length} events)`);
       if (!DRY_RUN) {
         await upsertSubstrateInputs(periodMonth, { revenue_usd: revUsd, revenue_livemode: true }, supabase, nowIso);
       }

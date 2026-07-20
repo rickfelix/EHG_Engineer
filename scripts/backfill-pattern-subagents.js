@@ -11,6 +11,10 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — issue_patterns is a growing table
+// (RCA pattern history); the null-related_sub_agents scan below is iterated/acted-on per row, so
+// a capped read would silently leave patterns past the PostgREST 1000-row boundary un-backfilled.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -50,17 +54,19 @@ async function backfillPatternSubAgents() {
   console.log(`Mode: ${DRY_RUN ? 'DRY RUN' : 'LIVE'}`);
 
   // Get patterns with null related_sub_agents
-  const { data: patterns, error } = await supabase
-    .from('issue_patterns')
-    .select('pattern_id, category, related_sub_agents')
-    .is('related_sub_agents', null);
-
-  if (error) {
-    console.error(`❌ Error fetching patterns: ${error.message}`);
+  let patterns;
+  try {
+    patterns = await fetchAllPaginated(() => supabase
+      .from('issue_patterns')
+      .select('pattern_id, category, related_sub_agents')
+      .is('related_sub_agents', null)
+      .order('id', { ascending: true }));
+  } catch (e) {
+    console.error(`❌ Error fetching patterns: ${e.message}`);
     return;
   }
 
-  if (!patterns || patterns.length === 0) {
+  if (patterns.length === 0) {
     console.log('\n✅ All patterns already have related_sub_agents populated');
     return;
   }

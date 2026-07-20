@@ -50,6 +50,10 @@ import { findLeadAgingDrafts } from '../lib/coordinator/lead-aging-detector.mjs'
 // which legitimately never hold an SD claim — read as idle workers (a false DUTY-3 no WORK_ASSIGNMENT can clear).
 import { isDispatchableFleetMember } from '../lib/fleet/session-predicates.mjs';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the foundational SD/session-coordination
+// reads below feed detectors that act on every row (dep health, idle-with-work, backlog rank, ...) and
+// strategic_directives_v2/session_coordination are unbounded growing tables — paginate to completion.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const require = createRequire(import.meta.url);
 // SD-LEO-INFRA-FLEET-HIBERNATION-001 FR-2/FR-3: the SINGLE 'line stopped' signal, consumed here so the
@@ -105,14 +109,23 @@ async function main() {
   console.log('[COORD-CHARTER-AUDIT] ' + new Date(nowMs).toISOString());
 
   // ── FOUNDATIONAL queries — FAIL LOUD (never silent-empty / false all-clean) ──
-  const { data: sdRows, error: sdErr } = await db.from('strategic_directives_v2')
-    .select('sd_key,status,current_phase,claiming_session_id,updated_at,created_at,vision_score,dependencies,parent_sd_id,metadata,sd_type,target_application')
-    .not('status', 'in', '(' + [...TERMINAL].join(',') + ')');
-  const sdMarker = foundationalQueryError(sdErr, 'strategic_directives_v2');
-  if (sdMarker) { console.error(sdMarker); process.exit(1); }
-  const sds = sdRows || [];
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 is unbounded
+  // and every row here is iterated/joined by the detectors below — paginate to completion. FAIL LOUD
+  // policy preserved: fetchAllPaginated throws on a page error, mirrored into the same QUERY_ERROR
+  // marker + exit(1) the original destructured-error branch produced.
+  let sds;
+  try {
+    sds = await fetchAllPaginated(() => db.from('strategic_directives_v2')
+      .select('sd_key,status,current_phase,claiming_session_id,updated_at,created_at,vision_score,dependencies,parent_sd_id,metadata,sd_type,target_application')
+      .not('status', 'in', '(' + [...TERMINAL].join(',') + ')')
+      .order('sd_key', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (e) {
+    console.error(foundationalQueryError({ message: e.message }, 'strategic_directives_v2'));
+    process.exit(1);
+  }
 
   // Defense-in-depth: exclude lifecycle-terminated sessions server-side (classifyLiveness also guards this).
+  // Bounded by design: latest-80-by-heartbeat is an explicit .limit(80) < 1000 cap.
   const { data: sessRows, error: sessErr } = await db.from('claude_sessions')
     .select('session_id,terminal_id,heartbeat_at,sd_key,loop_state,expected_silence_until,status,metadata,worktree_path,claimed_at,continuous_sds_completed')
     .not('status', 'in', '(released,stale,ended)')
@@ -139,11 +152,18 @@ async function main() {
   const liveSessionApps = Array.from(new Set((liveWorkers || []).map((s) => appOfCwd(s.worktree_path)).filter(Boolean)));
 
   // pending WORK_ASSIGNMENTs (unread => still pending; read_at-stamped => drained by the sweep, NOT pending)
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: session_coordination is an unbounded
+  // growing table and this filter (message_type + read_at IS NULL) is not otherwise time-windowed —
+  // paginate to completion; fail-open policy preserved (catch keeps the empty-Set default).
   let pendingAssignmentSessionIds = new Set();
-  const { data: waRows, error: waErr } = await db.from('session_coordination')
-    .select('target_session,read_at').eq('message_type', 'WORK_ASSIGNMENT').is('read_at', null);
-  if (waErr) console.error('[COORD-CHARTER-AUDIT] WARN: WORK_ASSIGNMENT query failed (fail-open): ' + waErr.message);
-  else pendingAssignmentSessionIds = new Set((waRows || []).map((r) => r.target_session));
+  try {
+    const waRows = await fetchAllPaginated(() => db.from('session_coordination')
+      .select('target_session,read_at').eq('message_type', 'WORK_ASSIGNMENT').is('read_at', null)
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    pendingAssignmentSessionIds = new Set(waRows.map((r) => r.target_session));
+  } catch (e) {
+    console.error('[COORD-CHARTER-AUDIT] WARN: WORK_ASSIGNMENT query failed (fail-open): ' + e.message);
+  }
 
   // dep status map (missing key => ANOMALY, not BLOCKED)
   const depKeys = [...new Set(sds.flatMap(depKeysOf))];
@@ -230,10 +250,16 @@ async function main() {
     // QF-20260622-620: select metadata so promotableCount reflects recovered descriptions
     // (hasRecoveredSubstance reads item.metadata.description). 3rd/last blind site after PR #5030
     // fixed refill-cron.mjs + refill-verify.mjs; without it this advisory under-counts the belt.
-    const { data: staged, error: se } = await db.from('v_plan_of_record_remainder')
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the prior .limit(2000) did NOT
+    // actually bound the read below the PostgREST 1000-row cap (a requested limit above the cap is
+    // still server-clamped to 1000) — a growing remainder view silently under-counted promotable
+    // candidates. Paginate to completion instead; verifyStagedCandidates needs full row data (not
+    // just a count) to validate each candidate, so this stays a processed read, not a gauge.
+    const staged = await fetchAllPaginated(() => db.from('v_plan_of_record_remainder')
       .select('id, title, source_type, source_id, item_disposition, promoted_to_sd_key, lane, metadata')
-      .eq('remainder_state', 'promotable_now').limit(2000);
-    if (!se) promotableCount = verifyStagedCandidates(staged || []).validCount;
+      .eq('remainder_state', 'promotable_now')
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    promotableCount = verifyStagedCandidates(staged).validCount;
   } catch { /* fail-open → promotableCount stays 0, no advisory */ }
 
   // SD-LEO-INFRA-FLEET-HIBERNATION-001 FR-2/FR-3: assess fleet quiescence (the shared 'line stopped'

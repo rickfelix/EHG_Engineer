@@ -15,6 +15,9 @@ function mockClient(keyResults, alignments = []) {
   const thenable = (data) => {
     const p = Promise.resolve({ data });
     p.eq = () => Promise.resolve({ data });
+    // FR-6 batch 9: sd_key_result_alignment now reads via fetchAllPaginated, which
+    // chains .order() then .range() instead of awaiting the builder directly.
+    p.order = () => ({ range: () => Promise.resolve({ data, error: null }) });
     return p;
   };
   return {

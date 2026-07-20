@@ -17,6 +17,10 @@
 
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: "other active SDs" is checked
+// for overlap against every row — a capped read would silently skip overlap checks against
+// SDs beyond the PostgREST cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -241,13 +245,15 @@ export async function validateCrossSDConsistency(sdId, options = {}) {
       statusFilter.push('completed');
     }
 
-    const { data: otherSDs, error: otherError } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, title, status, category')
-      .in('status', statusFilter)
-      .neq('id', sdId);
-
-    if (otherError) {
+    let otherSDs;
+    try {
+      otherSDs = await fetchAllPaginated(() => supabase
+        .from('strategic_directives_v2')
+        .select('id, title, status, category')
+        .in('status', statusFilter)
+        .neq('id', sdId)
+        .order('id', { ascending: true }));
+    } catch (otherError) {
       result.warnings.push(`Could not fetch other SDs: ${otherError.message}`);
       return result;
     }

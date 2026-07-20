@@ -8,16 +8,26 @@
 import { describe, it, expect, vi } from 'vitest';
 import { computeClaimableLeaves } from '../../scripts/coordinator-backlog-rank.mjs';
 
-/** Minimal fake sb supporting the two query shapes computeClaimableLeaves issues. */
+/**
+ * Minimal fake sb supporting the two query shapes computeClaimableLeaves issues.
+ * SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the main SD load is now routed
+ * through fetchAllPaginated, which chains .order(...).range(...) on the builder before awaiting
+ * it — so .not() must return a chainable builder (not resolve directly) and that builder must
+ * support .order() and a terminal .range() resolving { data, error }. The single-page rows fixture
+ * still yields the same result set (rows.length < pageSize, so fetchAllPaginated stops after page 1).
+ */
 function fakeSb(rows) {
   return {
     from() {
       return {
         select() {
-          return {
-            not: () => Promise.resolve({ data: rows, error: null }),
+          const builder = {
+            not: () => builder,
+            order: () => builder,
+            range: () => Promise.resolve({ data: rows, error: null }),
             in: () => Promise.resolve({ data: [], error: null }),
           };
+          return builder;
         },
       };
     },

@@ -12,6 +12,10 @@
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { getClassificationClient } from '../../lib/llm/client-factory.js';
 import dotenv from 'dotenv';
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: accepted/rejected feedback
+// history accumulates indefinitely -- an un-paginated read here would silently skew the
+// domain-priority histogram past the PostgREST 1000-row cap.
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 dotenv.config();
 
@@ -39,18 +43,20 @@ async function fetchRecentTrends() {
 }
 
 async function fetchFeedbackHistory() {
-  const { data, error } = await supabase
-    .from('eva_consultant_recommendations')
-    .select('application_domain, status, recommendation_type')
-    .in('status', ['accepted', 'rejected']);
-
-  if (error) {
+  let data;
+  try {
+    data = await fetchAllPaginated(() => supabase
+      .from('eva_consultant_recommendations')
+      .select('application_domain, status, recommendation_type')
+      .in('status', ['accepted', 'rejected'])
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch (error) {
     console.error('Error fetching feedback history:', error.message);
     return { accepted: {}, rejected: {} };
   }
 
   const history = { accepted: {}, rejected: {} };
-  for (const row of data || []) {
+  for (const row of data) {
     const domain = row.application_domain || 'unknown';
     if (row.status === 'accepted') {
       history.accepted[domain] = (history.accepted[domain] || 0) + 1;
