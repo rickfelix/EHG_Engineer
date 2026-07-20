@@ -8,19 +8,26 @@
 import { describe, it, expect, vi } from 'vitest';
 import { sweepOrphanRows, isOrphanCandidate, REROUTE_TO_KIND, REPEAT_OFFENDER_THRESHOLD } from '../../../lib/fleet/orphan-reroute-sweep.js';
 
-function buildSupabase({ candidates = [], priorReroutes = [], priorReroutesError = null, updateResult = { data: [{ id: 'x' }], error: null } } = {}) {
+function buildSupabase({ candidates = [], priorReroutes = [], priorReroutesError = null, existingAlarms = [], updateResult = { data: [{ id: 'x' }], error: null } } = {}) {
   const updateCalls = [];
   return {
     from: vi.fn((table) => {
       if (table !== 'session_coordination') throw new Error(`unexpected table ${table}`);
       return {
         select: vi.fn((cols) => {
-          // Two distinct read shapes: the candidate scan (has .is) and the
-          // prior-reroute tally (has .eq on payload->>kind, no .is call).
+          // Three distinct read shapes: the candidate scan (multi-column, chains .is()),
+          // the prior-reroute tally (selects 'payload', chains .eq().gte()), and the
+          // alarm-dedup check (selects 'id', chains .eq().is()).
           const isCandidateScan = typeof cols === 'string' && cols.includes('target_session');
+          const isAlarmDedupCheck = cols === 'id';
           if (isCandidateScan) {
             return {
               is: () => ({ gte: () => ({ limit: async () => ({ data: candidates, error: null }) }) }),
+            };
+          }
+          if (isAlarmDedupCheck) {
+            return {
+              eq: () => ({ is: () => ({ limit: async () => ({ data: existingAlarms, error: null }) }) }),
             };
           }
           return {
@@ -185,6 +192,40 @@ describe('sweepOrphanRows — TS-2 repeat-offender alarm', () => {
     expect(localInsert).not.toHaveBeenCalled();
     expect(out.offenderTallyError).toBe('tally read boom');
   });
+
+  // Round-2 adversarial-review fix: a durable alarm-dedup check narrows the race between
+  // overlapping sweep invocations (e.g. a manual CLI run racing the cron) that could each
+  // independently cross the in-memory threshold and double-alarm.
+  it('skips the alarm insert when a durable dedup check finds an existing unread alarm for the same (role,kind) pair', async () => {
+    const row = { id: 'row-2', target_session: 'solomon-uuid', payload: { kind: 'mystery_kind' } };
+    const priorReroutes = [{ payload: { reroute: { from_role: 'solomon', from_kind: 'mystery_kind' } } }];
+    const sb = buildSupabase({ candidates: [row], priorReroutes, existingAlarms: [{ id: 'already-alarmed' }] });
+    const localInsert = vi.fn(async () => ({ data: [{ id: 'a' }], error: null }));
+    const out = await sweepOrphanRows(sb, {
+      resolveTargetRole: roleFor({ 'solomon-uuid': 'solomon' }),
+      resolveRecognizedKinds: recognizedFor({ solomon: [] }),
+      getActiveCoordinatorId: coordinatorId,
+      insertRow: localInsert,
+    });
+    expect(out.rerouted).toBe(1); // the reroute itself still proceeds
+    expect(out.alarmed).toBe(0); // dedup check found an existing alarm -> no new insert
+    expect(localInsert).not.toHaveBeenCalled();
+  });
+
+  it('stamps a stable alarm_key on the alarm payload for future dedup checks to match against', async () => {
+    const row = { id: 'row-2', target_session: 'solomon-uuid', payload: { kind: 'mystery_kind' } };
+    const priorReroutes = [{ payload: { reroute: { from_role: 'solomon', from_kind: 'mystery_kind' } } }];
+    const sb = buildSupabase({ candidates: [row], priorReroutes });
+    const localInsert = vi.fn(async () => ({ data: [{ id: 'a' }], error: null }));
+    await sweepOrphanRows(sb, {
+      resolveTargetRole: roleFor({ 'solomon-uuid': 'solomon' }),
+      resolveRecognizedKinds: recognizedFor({ solomon: [] }),
+      getActiveCoordinatorId: coordinatorId,
+      insertRow: localInsert,
+    });
+    const [, alarmRow] = localInsert.mock.calls[0];
+    expect(alarmRow.payload.alarm_key).toBe('orphan-repeat-offender:solomon:mystery_kind');
+  });
 });
 
 describe('sweepOrphanRows — TS-3 idempotency / non-orphan skips', () => {
@@ -227,6 +268,22 @@ describe('sweepOrphanRows — TS-3 idempotency / non-orphan skips', () => {
 });
 
 describe('sweepOrphanRows — TS-4 fail-soft', () => {
+  // Round-2 adversarial-review fix: a resolveRecognizedKinds() failure must SKIP the row,
+  // never default to [] (which would force every kind to read as orphan and misroute a
+  // legitimately-targeted, correctly-typed message away from its real recipient).
+  it('skips a row when resolveRecognizedKinds() throws, rather than misclassifying it as orphan', async () => {
+    const row = { id: 'row-1', target_session: 'solomon-uuid', payload: { kind: 'a_real_recognized_kind' } };
+    const sb = buildSupabase({ candidates: [row] });
+    const out = await sweepOrphanRows(sb, {
+      resolveTargetRole: roleFor({ 'solomon-uuid': 'solomon' }),
+      resolveRecognizedKinds: async () => { throw new Error('registry read boom'); },
+      getActiveCoordinatorId: coordinatorId,
+      insertRow,
+    });
+    expect(out.rerouted).toBe(0);
+    expect(sb.__updateCalls).toHaveLength(0);
+  });
+
   it('never throws on a candidate-read error; reports it structurally', async () => {
     const sb = {
       from: () => ({
