@@ -33,11 +33,11 @@ import { pathToFileURL } from 'url';
 import { createClient } from '@supabase/supabase-js';
 import { enqueueChairmanSms } from '../../lib/chairman/sms-bridge.js';
 import { computeForecast, formatForecastLine } from '../../lib/vision/build-completion-forecast.mjs';
+import { etLocalHour, etDateStr, et6amIso, etPrior545Iso } from '../../lib/time/chairman-et-wall-clock.js';
 
 export const SD_KEY = 'SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-B';
 export const ACTIVATION_TRIGGER = '.github/workflows/chairman-morning-review-cron.yml';
 const DAY_MS = 24 * 60 * 60 * 1000;
-const TZ = 'America/New_York';
 const NOT_IN_TERMINAL = '("completed","cancelled","deferred")';
 // ~2 GSM segments (153 chars/segment concatenated). The built body is capped here so a long
 // forecast note can never balloon past the segment budget.
@@ -61,35 +61,10 @@ function buildSupabase() {
   return createClient(url, key);
 }
 
-// ── ET wall-clock helpers (Intl only — never hand-roll UTC±offset arithmetic) ──
-function etParts(instant) {
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone: TZ, hour12: false,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  });
-  const p = {};
-  for (const x of dtf.formatToParts(instant)) p[x.type] = x.value;
-  return { year: p.year, month: p.month, day: p.day, hour: p.hour === '24' ? 0 : Number(p.hour), minute: Number(p.minute), second: Number(p.second) };
-}
-export function etLocalHour(now) { return etParts(now).hour; }
-export function etDateStr(now) { const p = etParts(now); return `${p.year}-${p.month}-${p.day}`; }
-/** ms the ET zone is ahead of UTC at `instant` (negative — ET is behind UTC). */
-function tzOffsetMs(instant) {
-  const p = etParts(instant);
-  return Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), p.hour, p.minute, p.second) - instant.getTime();
-}
-/** The UTC instant for a given ET wall-clock time on today's ET calendar date. */
-function etWallClockUtc(now, hour, minute = 0) {
-  const p = etParts(now);
-  const wall = Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), hour, minute, 0);
-  let t = wall - tzOffsetMs(new Date(wall));
-  t = wall - tzOffsetMs(new Date(t)); // second pass converges near a DST edge
-  return new Date(t);
-}
-export function et6amIso(now) { return etWallClockUtc(now, 6).toISOString(); }
-/** The prior 5:45 AM ET instant (~24h back) as the "what moved yesterday" window start. */
-export function etPrior545Iso(now) { return new Date(etWallClockUtc(now, 5, 45).getTime() - DAY_MS).toISOString(); }
+// ET wall-clock helpers (etLocalHour, etDateStr, et6amIso, etPrior545Iso) now live in
+// lib/time/chairman-et-wall-clock.js (SD-LEO-INFRA-SMS-DELIVERY-TRUTH-001-A consolidation) —
+// re-exported here so this script's own CLI/importers are unaffected by the move.
+export { etLocalHour, etDateStr, et6amIso, etPrior545Iso };
 
 // ── body data (DB-only, fail-soft; surgical — no git-grep VDR gauge / CLI refactor) ──
 async function gatherForecastInputs(supabase, nowMs, windowDays = 14) {

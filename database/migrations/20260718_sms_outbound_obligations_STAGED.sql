@@ -47,8 +47,12 @@ CREATE TABLE IF NOT EXISTS sms_outbound_obligations (
   body TEXT NOT NULL,                 -- composed message, stored so a retry resends byte-identically
   dedupe_key TEXT UNIQUE,             -- idempotent enqueue, e.g. 'morning_review:2026-07-18'
   status TEXT NOT NULL DEFAULT 'owed'
-    CHECK (status IN ('owed','sending','sent','delivered','undelivered','failed','canceled')),
+    -- 'owed_escalate' added by SD-LEO-INFRA-SMS-DELIVERY-TRUTH-001-A (Solomon Pin #3): a
+    -- sent-no-callback row whose provider-check itself failed/was inconclusive lands here —
+    -- never silently closed as 'failed', never blindly re-armed to 'owed'.
+    CHECK (status IN ('owed','sending','sent','delivered','undelivered','failed','canceled','owed_escalate')),
   provider_message_id TEXT NULL,      -- Twilio message SID, set after the 201-accept
+  prior_provider_message_ids TEXT[] NOT NULL DEFAULT '{}', -- SD-LEO-INFRA-SMS-DELIVERY-TRUTH-001-A (Solomon Pin #2): prior SID(s) preserved across a resend, so a late callback for an earlier attempt still resolves against this row instead of silently no-op'ing
   attempts INT NOT NULL DEFAULT 0,
   not_before TIMESTAMPTZ NULL,        -- sleep-window: 10PM-6AM ET sends queue to the 6AM batch
   claimed_at TIMESTAMPTZ NULL,        -- single-use claim stamp (serializes concurrent workers)
@@ -82,6 +86,10 @@ COMMENT ON COLUMN sms_outbound_obligations.not_before IS
   'Sleep-window gate: a row enqueued inside 10PM-6AM ET carries not_before=next-6AM so the worker does not claim it until the morning batch.';
 COMMENT ON COLUMN sms_outbound_obligations.media_url IS
   'Short-TTL signed URL (SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-D) for an MMS attachment (e.g. the daily-review Gantt PNG), sourced from a PRIVATE (public:false) Supabase Storage bucket — never a public URL. NULL for text-only sends. Passed to the Twilio provider as the MediaUrl form param.';
+COMMENT ON COLUMN sms_outbound_obligations.prior_provider_message_ids IS
+  'SD-LEO-INFRA-SMS-DELIVERY-TRUTH-001-A (Solomon Pin #2): prior Twilio SID(s) from earlier send attempts on this obligation, preserved across a resend. A late-arriving delivery callback for a PRIOR SID still resolves against this row (matched via containment) instead of silently no-op''ing once provider_message_id is overwritten by the newest attempt — the exact mechanism behind the live 7-duplicate incident.';
+COMMENT ON COLUMN sms_outbound_obligations.status IS
+  'owed_escalate (SD-LEO-INFRA-SMS-DELIVERY-TRUTH-001-A Solomon Pin #3): a sent-no-callback row whose provider-status-check itself failed or returned an inconclusive answer. Distinct from failed/undelivered (which ARE provider-confirmed) — escalate rather than guess, never silently closed.';
 
 -- RLS + policy in the SAME migration (RLS-at-create; SPINE-001-B recurrence guard),
 -- mirroring sms_inbound_suspensions_service_all in 20260717_sms_relay_staging.sql. Only the
