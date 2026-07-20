@@ -65,6 +65,7 @@
     "fleet:pulse:cron": "node scripts/fleet-worker-pulse.mjs",
     "fleet:down-alert": "node scripts/fleet-down-alert.mjs",
     "fleet:down-alert:cron": "node scripts/fleet-down-alert.mjs",
+    "fleet:dashboard": "node scripts/fleet-dashboard.cjs",
     "cascade:status": "node scripts/cron/cascade-status.mjs",
     "cascade:snapshot:capture": "node scripts/test-helpers/capture-crongenius-snapshot.mjs",
     "gov:recompute-cascade-kr": "node scripts/governance/recompute-cascade-kr.mjs",
