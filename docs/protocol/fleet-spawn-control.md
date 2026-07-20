@@ -35,6 +35,8 @@ Mirrors the existing `WORKER_SPAWN_EXECUTOR_LIVE` convention (`docs/protocol/coo
 
 **Operator gate before flipping `FLEET_SPAWN_CONTROL_LIVE=true`**: the exact `wt.exe` invocation in `buildLiveSpawnInvocation()` is host-specific and must be validated on the target fleet host first, exactly as `worker-spawn-executor.cjs`'s own README section requires for its live flag.
 
+**`FLEET_CANARY_KILL_ENABLED`** (default off, independent flag) — a separate gate for `lib/fleet/canary-guard.js`'s `canaryStop`/`canaryRestart`/`canaryRelaunchUnderProfile` (`SD-LEO-INFRA-LEO-COMPLETION-001-B`). Setting this true does NOT bypass the guard's own fail-closed check: the resolved target session must still carry `metadata.account_profile === 'canary'` and a `Canary-` namespaced callsign, or the mutation is rejected before any underlying verb runs. See [`u4-cookie-non-leak-spec.md`](./u4-cookie-non-leak-spec.md) for the isolation proof this harness composes with.
+
 ## Safety Invariants (enforced in code, not just documented)
 
 - **Spawn-detached**: every spawn uses `child_process.spawn(..., { detached: true, stdio: 'ignore' }); child.unref()` — the supervisor is never the OS process-parent, so a supervisor crash/kill never kills a fleet session.
