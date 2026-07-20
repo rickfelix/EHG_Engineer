@@ -14,6 +14,7 @@ const {
   roleOf, isSingletonRole, resolveProfileDir, isLiveEnabled, buildLiveSpawnInvocation,
   spawn, attach, stop, restart, relaunchUnderProfile, drainAndRestart,
 } = await import('../../../lib/fleet/spawn-control.js');
+const { logCoordinationEvent } = await import('../../../lib/coordinator/coordination-events.cjs');
 const { sequenceSingletonRefresh } = await import('../../../lib/coordinator/singleton-refresh-sequencer.cjs');
 
 /** Minimal in-memory fake covering exactly the claude_sessions/session_coordination shapes spawn-control.js touches. */
@@ -154,6 +155,50 @@ describe('spawn (FR-1)', () => {
     expect(result.live).toBe(true);
     expect(result.handle).toBe(131074);
     expect(result.handleCaptureFailed).toBe(false);
+  });
+
+  it('FR-5: skips (never double-spawns) a callsign that already has a live session', async () => {
+    const spawnFn = vi.fn();
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' } } }],
+    });
+    const result = await spawn({ role: 'worker', callsign: 'Alpha-5' }, { live: true, spawnFn, supabaseClient });
+    expect(result.skipped).toBe(true);
+    expect(spawnFn).not.toHaveBeenCalled();
+  });
+
+  it('FR-5: skipDedup:true (internal replacement path) bypasses the already-live check', async () => {
+    const child = { pid: 4242 };
+    const spawnFn = vi.fn().mockReturnValue(child);
+    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' } } }],
+    });
+    const result = await spawn({ role: 'worker', callsign: 'Alpha-5' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, skipDedup: true });
+    expect(result.skipped).toBeUndefined();
+    expect(spawnFn).toHaveBeenCalled();
+  });
+});
+
+describe('FR-9 SECURITY: event payload is hard-locked to {verb, outcome, at}', () => {
+  it('never includes CLAUDE_CONFIG_DIR or any other field', async () => {
+    logCoordinationEvent.mockClear();
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' } } }],
+    });
+    await stop('Alpha-5', { supabaseClient });
+    expect(logCoordinationEvent).toHaveBeenCalled();
+    const [, eventArg] = logCoordinationEvent.mock.calls.at(-1);
+    expect(Object.keys(eventArg.payload).sort()).toEqual(['at', 'outcome', 'verb']);
+    expect(JSON.stringify(eventArg.payload)).not.toContain('CLAUDE_CONFIG_DIR');
+  });
+});
+
+describe('FR-6 grep-pin: drainAndRestart never touches the unrelated message-kind drain concept', () => {
+  it('source contains no reference to drain-set-registry / role_drain_sets', async () => {
+    const fs = await import('node:fs');
+    const src = fs.readFileSync(new URL('../../../lib/fleet/spawn-control.js', import.meta.url), 'utf8');
+    expect(src).not.toMatch(/drain-set-registry|role_drain_sets/);
   });
 });
 
