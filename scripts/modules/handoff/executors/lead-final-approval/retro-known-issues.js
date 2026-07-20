@@ -12,7 +12,11 @@
 import { getFilteredRetrospective } from '../../retro-filters.js';
 import { RetrospectiveQualityRubric } from '../../../rubrics/retrospective-quality-rubric.js';
 
-export const NO_ISSUES_FALLBACK = [{ issue: 'None at approval time' }];
+// Adversarial review: frozen so no future consumer can mutate this shared singleton (it is
+// returned by reference across every SD completion in a long-lived fleet process) and
+// accidentally corrupt the fallback -- or the reference-equality check in isFallbackKnownIssues
+// -- for every subsequent completion.
+export const NO_ISSUES_FALLBACK = Object.freeze([Object.freeze({ issue: 'None at approval time' })]);
 
 // Boilerplate detection reuses RetrospectiveQualityRubric.BOILERPLATE_PATTERNS PER-ITEM, not the
 // aggregate detectBoilerplate(retrospective) method -- that method returns ONE hasBoilerplate flag
