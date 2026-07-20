@@ -178,6 +178,7 @@ worker — the exact failure mode CHILD A's launch-model decision must close.
 
 ## Cross-References
 
+- [Fleet Spawn-Control (six-verb session control layer)](./fleet-spawn-control.md) — sibling default-OFF live-spawn-gate pattern (`FLEET_SPAWN_CONTROL_LIVE`), builds a governed spawn/attach/stop/restart/relaunch-under-profile/drain-and-restart API rather than the request-only revival contract here
 - [Pre-Claim Cadence Gate](./cadence-gate.md) — sibling protocol contract, similar shape
 - [Fleet Coordination Reference](../reference/fleet-coordination.md) — overall fleet model
 - [Worker Registry Guide](../reference/worker-registry-guide.md) — callsign roster + identity assignment
