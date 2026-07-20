@@ -1,0 +1,52 @@
+name: "Worker fleet-retro capture (cron)"
+
+# SD-LEO-INFRA-DURABLE-COORDINATOR-LOOPS-001 / FR-2 — additive GHA-backed trigger for
+# STANDARD_LOOPS key `fleet-retro` (scripts/coordinator-startup-check.mjs). Always-on so
+# it survives a coordinator session death; the STANDARD_LOOPS session-armed entry stays in
+# place unchanged as a redundant backup (idempotent — an occasional double-fire is safe).
+#
+# Scope note: coordinator-fleet-retro.mjs's own header describes two steps — (1) CAPTURE
+# durable FLEET-RETRO signals into the `feedback` table (deterministic: regex match + dedup
+# insert) and (2) print recent retros with an [ACTION] line asking the coordinator session
+# to synthesize themes. Neither step makes an LLM call; step 2 only emits log lines for a
+# human/coordinator reader to act on later. FR-2 scopes this migration to the deterministic
+# capture path, which is the entirety of what this script executes — invoked as-is, matching
+# its STANDARD_LOOPS prompt.
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  fleet-retro:
+    name: Worker fleet-retro capture
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Capture worker fleet-retro signals
+        run: node scripts/coordinator-fleet-retro.mjs
