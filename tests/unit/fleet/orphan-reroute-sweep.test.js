@@ -8,7 +8,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { sweepOrphanRows, isOrphanCandidate, REROUTE_TO_KIND, REPEAT_OFFENDER_THRESHOLD } from '../../../lib/fleet/orphan-reroute-sweep.js';
 
-function buildSupabase({ candidates = [], priorReroutes = [], updateResult = { data: [{ id: 'x' }], error: null } } = {}) {
+function buildSupabase({ candidates = [], priorReroutes = [], priorReroutesError = null, updateResult = { data: [{ id: 'x' }], error: null } } = {}) {
   const updateCalls = [];
   return {
     from: vi.fn((table) => {
@@ -24,7 +24,7 @@ function buildSupabase({ candidates = [], priorReroutes = [], updateResult = { d
             };
           }
           return {
-            eq: () => ({ gte: () => ({ limit: async () => ({ data: priorReroutes, error: null }) }) }),
+            eq: () => ({ gte: () => ({ limit: async () => (priorReroutesError ? { data: null, error: priorReroutesError } : { data: priorReroutes, error: null }) }) }),
           };
         }),
         update: vi.fn((patch) => {
@@ -130,6 +130,60 @@ describe('sweepOrphanRows — TS-2 repeat-offender alarm', () => {
     expect(alarmRow.subject).toContain('solomon');
     expect(alarmRow.subject).toContain('mystery_kind');
     expect(alarmOpts).toEqual({ targetRoleHint: 'coordinator' });
+  });
+
+  // Adversarial-review fix: fires EXACTLY ONCE at the threshold, never again for later
+  // occurrences of the same (role,kind) pair (was `>=`, spamming one alarm per orphan).
+  it('does NOT re-alarm past the threshold (3rd occurrence, prior count already >= threshold)', async () => {
+    const row = { id: 'row-3', target_session: 'solomon-uuid', payload: { kind: 'mystery_kind' } };
+    const priorReroutes = [
+      { payload: { reroute: { from_role: 'solomon', from_kind: 'mystery_kind' } } },
+      { payload: { reroute: { from_role: 'solomon', from_kind: 'mystery_kind' } } },
+    ];
+    const sb = buildSupabase({ candidates: [row], priorReroutes });
+    const localInsert = vi.fn(async () => ({ data: [{ id: 'a' }], error: null }));
+    const out = await sweepOrphanRows(sb, {
+      resolveTargetRole: roleFor({ 'solomon-uuid': 'solomon' }),
+      resolveRecognizedKinds: recognizedFor({ solomon: [] }),
+      getActiveCoordinatorId: coordinatorId,
+      insertRow: localInsert,
+    });
+    expect(out.rerouted).toBe(1);
+    expect(out.alarmed).toBe(0);
+    expect(localInsert).not.toHaveBeenCalled();
+  });
+
+  it('fires only ONE alarm even when two rows in the SAME tick both cross the threshold sequentially', async () => {
+    const rowA = { id: 'row-a', target_session: 'solomon-uuid', payload: { kind: 'mystery_kind' } };
+    const rowB = { id: 'row-b', target_session: 'solomon-uuid', payload: { kind: 'mystery_kind' } };
+    const priorReroutes = [{ payload: { reroute: { from_role: 'solomon', from_kind: 'mystery_kind' } } }]; // count=1 already
+    const sb = buildSupabase({ candidates: [rowA, rowB], priorReroutes });
+    const localInsert = vi.fn(async () => ({ data: [{ id: 'a' }], error: null }));
+    const out = await sweepOrphanRows(sb, {
+      resolveTargetRole: roleFor({ 'solomon-uuid': 'solomon' }),
+      resolveRecognizedKinds: recognizedFor({ solomon: [] }),
+      getActiveCoordinatorId: coordinatorId,
+      insertRow: localInsert,
+    });
+    expect(out.rerouted).toBe(2);
+    expect(out.alarmed).toBe(1); // rowA brings count to 2 (=threshold, alarms); rowB brings it to 3 (no re-alarm)
+    expect(localInsert).toHaveBeenCalledOnce();
+  });
+
+  it('a failed repeat-offender tally read degrades to no-false-alarm and is surfaced structurally, never silently indistinguishable from a quiet tick', async () => {
+    const row = { id: 'row-1', target_session: 'solomon-uuid', payload: { kind: 'mystery_kind' } };
+    const sb = buildSupabase({ candidates: [row], priorReroutesError: { message: 'tally read boom' } });
+    const localInsert = vi.fn();
+    const out = await sweepOrphanRows(sb, {
+      resolveTargetRole: roleFor({ 'solomon-uuid': 'solomon' }),
+      resolveRecognizedKinds: recognizedFor({ solomon: [] }),
+      getActiveCoordinatorId: coordinatorId,
+      insertRow: localInsert,
+    });
+    expect(out.rerouted).toBe(1); // the reroute itself still proceeds
+    expect(out.alarmed).toBe(0);
+    expect(localInsert).not.toHaveBeenCalled();
+    expect(out.offenderTallyError).toBe('tally read boom');
   });
 });
 
