@@ -86,14 +86,29 @@ async function loadBaselineContext(baselineId) {
   }
 
   // Load all SDs that are in the baseline (for dependency graph)
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 adversarial-review fix: sdKeys is
+  // derived from the now-unbounded `items` read above, so it can no longer rely on items' old
+  // implicit 1000-row cap to keep this .in() list small — chunk + paginate each chunk, fail-open
+  // per chunk (mirrors the prior single-query fail-open: destructured `data` with no error check).
   const sdKeys = items.map(i => i.sd_id);
-  const { data: sds } = await supabase
-    .from('strategic_directives_v2')
-    .select(`
-      id, sd_key, title, status, priority, sd_type, category,
-      dependencies, rolled_triage, readiness, parent_sd_id
-    `)
-    .in('sd_key', sdKeys);
+  const ID_IN_CHUNK = 200;
+  const sds = [];
+  for (let i = 0; i < sdKeys.length; i += ID_IN_CHUNK) {
+    const keyChunk = sdKeys.slice(i, i + ID_IN_CHUNK);
+    try {
+      const page = await fetchAllPaginated(() => supabase
+        .from('strategic_directives_v2')
+        .select(`
+          id, sd_key, title, status, priority, sd_type, category,
+          dependencies, rolled_triage, readiness, parent_sd_id
+        `)
+        .in('sd_key', keyChunk)
+        .order('sd_key', { ascending: true }));
+      sds.push(...page);
+    } catch {
+      // fail-open: chunk unavailable, its SDs excluded from the dependency graph (matches prior behavior)
+    }
+  }
 
   // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — unfiltered read over ALL
   // SD/key-result alignments, grouped and used for scoring below; sd_key_result_alignment

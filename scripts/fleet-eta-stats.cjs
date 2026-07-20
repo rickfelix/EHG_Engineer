@@ -23,6 +23,17 @@ async function fapPaginate(queryFactory, opts) {
 // Idle gap threshold: gaps longer than this between handoffs are excluded from active-time
 const IDLE_GAP_THRESHOLD_MINUTES = 30;
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 adversarial-review fix: sdIds
+// (distinct sd_id values across ALL paginated handoffs, now unbounded) is fed into a bare
+// .in('id', sdIds) — an unchunked filter list this large blows past the URL-length limit
+// (414 Request-URI Too Large). Chunk the id list the same way this SD's bulk writes are chunked.
+const ID_IN_CHUNK = 200;
+function chunk(arr, n) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
+}
+
 // SD key prefix patterns for sub-bucketing
 const KEY_PREFIXES = [
   { pattern: /^SD-.*-OPS-/, label: 'OPS' },
@@ -87,13 +98,20 @@ function computeActiveMinutes(timestamps) {
   // 2. Get SD metadata
   const sdIds = [...new Set(handoffs.map(h => h.sd_id))];
   // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: distinct sd_id count grows with
-  // the SD backlog and can exceed the PostgREST cap even though the filter is a bare .in().
+  // the SD backlog and can exceed the PostgREST cap even though the filter is a bare .in() —
+  // AND the id list itself is chunked (ID_IN_CHUNK) since an unchunked .in() with thousands of
+  // UUIDs exceeds the URL-length limit regardless of row-count pagination.
   let sdMeta;
   try {
-    sdMeta = await fapPaginate(() => sb.from('strategic_directives_v2')
-      .select('id, sd_key, parent_sd_id, sd_type, status, current_phase')
-      .in('id', sdIds)
-      .order('id', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
+    const chunks = chunk(sdIds, ID_IN_CHUNK);
+    sdMeta = [];
+    for (const idChunk of chunks) {
+      const page = await fapPaginate(() => sb.from('strategic_directives_v2')
+        .select('id, sd_key, parent_sd_id, sd_type, status, current_phase')
+        .in('id', idChunk)
+        .order('id', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
+      sdMeta.push(...page);
+    }
   } catch (e2) {
     console.error('SD query error:', e2.message); process.exit(1);
   }

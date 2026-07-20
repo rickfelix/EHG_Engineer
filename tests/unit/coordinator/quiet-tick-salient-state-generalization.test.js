@@ -26,7 +26,10 @@ function makeMock({ drainSetsRows = null, drainSetsError = null, coordinationRow
           }
           // session_coordination: the test controls exactly which rows "match" the .or() filter
           // by pre-filtering coordinationRows into what the caller expects to be counted.
-          return Promise.resolve({ data: coordinationRows, error: null }).then(res, rej);
+          // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: openSignalCount now reads
+          // via {count:'exact', head:true} (a gauge) instead of data.length — include the exact
+          // count alongside data so both call shapes resolve correctly.
+          return Promise.resolve({ data: coordinationRows, count: coordinationRows.length, error: null }).then(res, rej);
         },
       };
       return chain;
@@ -85,7 +88,7 @@ describe('readSalientState openSignalCount generalization (TS-4)', () => {
       coordinationRows: [{ id: 'a' }, { id: 'b' }],
     });
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const state = await expect(readSalientState(mock)).resolves.toBeDefined();
+    await expect(readSalientState(mock)).resolves.toBeDefined();
     errorSpy.mockRestore();
   });
 

@@ -68,13 +68,24 @@ async function main() {
     .order('updated_at', { ascending: false })
     .limit(10);
 
-  // 3. Query active workflow executions. GAUGE (only the count is used below) — exact
-  // head-count avoids both the 1000-row cap misreading activeWorkflows and an unbounded
-  // workflow_executions row fetch (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9).
+  // 3. Query active workflow executions. GAUGE for the count — exact head-count avoids
+  // both the 1000-row cap misreading activeWorkflows and an unbounded workflow_executions
+  // row fetch (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9). A SEPARATE
+  // bounded query below fetches only the rows the human-readable report ever displays.
   const { count: activeExecCount } = await supabase
     .from('workflow_executions')
     .select('id', { count: 'exact', head: true })
     .eq('status', 'in_progress');
+
+  // Bounded display sample — the report below only ever renders the 5 most-recently
+  // updated active executions, so this is deliberately NOT paginated (disposition A,
+  // bounded-by-design).
+  const { data: activeExecRows } = await supabase
+    .from('workflow_executions')
+    .select('id, venture_id, current_stage, updated_at')
+    .eq('status', 'in_progress')
+    .order('updated_at', { ascending: false })
+    .limit(5);
 
   // (SD-REFILL-00FHK2ED) Removed the per-worker 'stage-execution-worker' heartbeat query: it read
   // the never-provisioned eva_worker_heartbeats and its result (sewHb) was assigned but never used.
@@ -180,15 +191,16 @@ async function main() {
   }
 
   // Active workflows
-  if (activeExecs && activeExecs.length > 0) {
+  if (activeExecRows && activeExecRows.length > 0) {
     console.log('  Active Workflows');
     console.log('  ' + '-'.repeat(60));
-    for (const exec of activeExecs.slice(0, 5)) {
+    for (const exec of activeExecRows) {
       const age = formatAge(now - new Date(exec.updated_at).getTime());
       console.log('  ' + (exec.venture_id || 'unknown').substring(0, 12) + '  Stage ' + exec.current_stage + '  Updated ' + age + ' ago');
     }
-    if (activeExecs.length > 5) {
-      console.log('  ... and ' + (activeExecs.length - 5) + ' more');
+    const totalActive = typeof activeExecCount === 'number' ? activeExecCount : activeExecRows.length;
+    if (totalActive > activeExecRows.length) {
+      console.log('  ... and ' + (totalActive - activeExecRows.length) + ' more');
     }
     console.log('');
   }

@@ -52,14 +52,24 @@ async function loadData() {
   }
 
   const sdKeys = (items || []).map(i => i.sd_id);
-  const { data: sds } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key, status, progress_percentage, updated_at')
-    .in('sd_key', sdKeys);
-
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 adversarial-review fix: sdKeys
+  // is derived from the now-unbounded `items` read above, so this lookup can no longer rely on
+  // items' old implicit 1000-row cap to keep it small — chunk + paginate each chunk, and fail
+  // open on any chunk error (mirrors the prior single-query fail-open, never a silent 0-row skip).
+  const ID_IN_CHUNK = 200;
   const sdMap = {};
-  for (const sd of sds || []) {
-    sdMap[sd.sd_key] = sd;
+  for (let i = 0; i < sdKeys.length; i += ID_IN_CHUNK) {
+    const keyChunk = sdKeys.slice(i, i + ID_IN_CHUNK);
+    try {
+      const page = await fetchAllPaginated(() => supabase
+        .from('strategic_directives_v2')
+        .select('sd_key, status, progress_percentage, updated_at')
+        .in('sd_key', keyChunk)
+        .order('sd_key', { ascending: true }));
+      for (const sd of page) sdMap[sd.sd_key] = sd;
+    } catch {
+      // fail-open: chunk unavailable, its SDs stay unmapped (matches prior single-query behavior)
+    }
   }
 
   return { baseline, items: items || [], sdMap };

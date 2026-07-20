@@ -171,11 +171,20 @@ class IntelligentBaselineGenerator {
     console.log(`  Loaded ${this.sds.length} active Strategic Directives`);
 
     // Load OKR alignments — join table keyed to strategic_directives_v2 (unbounded above), so
-    // it inherits the same growth risk; paginate.
-    const alignments = await fetchAllPaginated(() => supabase
-      .from('sd_key_result_alignment')
-      .select('sd_id, key_result_id, contribution_type, contribution_weight, contribution_note')
-      .order('id', { ascending: true }));
+    // it inherits the same growth risk; paginate. Prior behavior read this with no error check
+    // at all (fail-open, degraded-empty on failure) — fetchAllPaginated throws on a page error,
+    // so preserve that same fail-open policy explicitly rather than letting it propagate to a
+    // hard CLI abort (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 adversarial-review fix).
+    let alignments;
+    try {
+      alignments = await fetchAllPaginated(() => supabase
+        .from('sd_key_result_alignment')
+        .select('sd_id, key_result_id, contribution_type, contribution_weight, contribution_note')
+        .order('id', { ascending: true }));
+    } catch (e) {
+      console.log(`  ⚠️  Could not load OKR alignments: ${e.message} (continuing with none)`);
+      alignments = [];
+    }
 
     // Group by SD
     this.alignments = {};

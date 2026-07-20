@@ -47,6 +47,18 @@ const TERMINAL_SD_STATUSES = ['cancelled', 'archived', 'superseded', 'rejected']
 
 function log(...a) { console.log('[ci-autotriage-loop]', ...a); }
 
+// SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 adversarial-review fix: `rows`
+// (and the class rowIds derived from it) is now read via fapPaginate with no upper bound
+// (previously implicitly capped at PostgREST's 1000-row max), so a class sharing one
+// signature can now yield an .in(rowIds) filter list large enough to exceed the URL-length
+// limit. Chunk the linkClass() update the same way this SD's other bulk writes are chunked.
+const ID_IN_CHUNK = 200;
+function chunk(arr, n) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
+}
+
 async function main() {
   // flag-gated, default OFF. Fail-soft no-op when disabled.
   if (process.env.CI_AUTOTRIAGE_LOOP_ENABLE !== 'true') {
@@ -180,11 +192,13 @@ async function tagSourcedBy(db, sdKey, classSignature) {
 
 /** Link every still-open row in the class to the corrective SD — status stays in_progress (NOT resolved). */
 async function linkClass(db, rowIds, sdKey) {
-  await db
-    .from('feedback')
-    .update({ strategic_directive_id: sdKey, resolution_sd_id: sdKey, status: 'in_progress' })
-    .in('id', rowIds)
-    .neq('status', 'resolved');
+  for (const idChunk of chunk(rowIds, ID_IN_CHUNK)) {
+    await db
+      .from('feedback')
+      .update({ strategic_directive_id: sdKey, resolution_sd_id: sdKey, status: 'in_progress' })
+      .in('id', idChunk)
+      .neq('status', 'resolved');
+  }
 }
 
 main().then(() => process.exit(0)).catch((e) => { console.error('[ci-autotriage-loop] [ALERT] fatal (fail-soft):', e.message); process.exit(0); });

@@ -28,11 +28,12 @@ async function main() {
   // Todoist counts. SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: eva_todoist_intake
   // is unbounded and every row is tallied into the per-status histogram below — paginate to
   // completion. Fail-open to [] mirrors the prior undefined-on-error `todoistCounts || []`.
+  let todoistFailed = false;
   const todoistCounts = await fetchAllPaginated(() => supabase
     .from('eva_todoist_intake')
     .select('status')
     .order('id', { ascending: true })) // unique tiebreaker (FR-6)
-    .catch(() => []);
+    .catch(() => { todoistFailed = true; return []; });
 
   const todoistByStatus = {};
   for (const row of todoistCounts || []) {
@@ -40,7 +41,8 @@ async function main() {
   }
 
   console.log('  Todoist Intake:');
-  console.log(`    Total:          ${todoistCounts?.length || 0}`);
+  // A failed read must never look identical to a genuinely empty table (A3) — flag it explicitly.
+  console.log(`    Total:          ${todoistFailed ? 'unavailable' : (todoistCounts?.length || 0)}`);
   for (const [status, count] of Object.entries(todoistByStatus).sort()) {
     console.log(`    ${status.padEnd(16)} ${count}`);
   }
@@ -49,11 +51,12 @@ async function main() {
   // YouTube counts. SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: eva_youtube_intake
   // is unbounded and every row is tallied into the per-status histogram below — paginate to
   // completion. Fail-open to [] mirrors the prior undefined-on-error `youtubeCounts || []`.
+  let youtubeFailed = false;
   const youtubeCounts = await fetchAllPaginated(() => supabase
     .from('eva_youtube_intake')
     .select('status')
     .order('id', { ascending: true })) // unique tiebreaker (FR-6)
-    .catch(() => []);
+    .catch(() => { youtubeFailed = true; return []; });
 
   const youtubeByStatus = {};
   for (const row of youtubeCounts || []) {
@@ -61,7 +64,7 @@ async function main() {
   }
 
   console.log('  YouTube Intake:');
-  console.log(`    Total:          ${youtubeCounts?.length || 0}`);
+  console.log(`    Total:          ${youtubeFailed ? 'unavailable' : (youtubeCounts?.length || 0)}`);
   for (const [status, count] of Object.entries(youtubeByStatus).sort()) {
     console.log(`    ${status.padEnd(16)} ${count}`);
   }

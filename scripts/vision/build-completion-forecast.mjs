@@ -61,7 +61,11 @@ async function gatherInputs() {
   try {
     const { count: completedCount, error: completedErr } = await sb.from('strategic_directives_v2')
       .select('id', { count: 'exact', head: true }).eq('status', 'completed').gte('updated_at', sinceIso);
-    velocityPerDay = (!completedErr && typeof completedCount === 'number' ? completedCount : 0) / windowDays;
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 adversarial-review fix: a failed
+    // exact-count gauge must never be coerced into a healthy-looking 0 (A3) — throw so it hits
+    // the existing outer catch (loud warn, same fail-soft defaults as any other rate failure below).
+    if (completedErr) throw new Error(`completed-count gauge failed: ${completedErr.message}`);
+    velocityPerDay = completedCount / windowDays;
 
     // SD-REFILL-00306WTS: + target_application so isExcludedFromBelt drops un-actionable
     // auto-filed venture remediation SDs from sourcing-rate + queue depth.
