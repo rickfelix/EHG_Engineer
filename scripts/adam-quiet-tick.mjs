@@ -284,6 +284,42 @@ export async function surfaceInboxItems(sb) {
 // labelled but non-matches still surface. Read-only surfacing (mirrors drainSmsRelayStaging's
 // all-undrained query in lib/chairman/sms-bridge.js); fail-soft — any error returns rows:[].
 const SMS_INBOUND_CAP = 50;
+// QF-20260719-825 (layer 2): oversight-staleness backstop. Even with the durable loop
+// entries + the GHA cron (QF-20260719-196), a lost cron must not go unnoticed for days
+// again (coordinator-health evidence was 70.4h stale; the self-score 16 days). Reads the
+// last-run stamps and flags when a stamp exceeds 2x its cadence, so the armed wakeup
+// prompt forces the check. Fail-soft: any read error reports nothing (never breaks the tick).
+export const OVERSIGHT_CADENCE_MS = 6 * 60 * 60 * 1000;   // coordinator-health loop cadence
+export const SELFSCORE_CADENCE_MS = 6 * 60 * 60 * 1000;   // self-score loop cadence
+export async function checkOversightStaleness(sb, { nowMs = Date.now() } = {}) {
+  const out = { oversightOverdueH: null, selfScoreOverdueH: null };
+  try {
+    const { data } = await sb
+      .from('codebase_health_snapshots')
+      .select('created_at')
+      .eq('dimension', 'adam_coordinator_health')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const last = data && data[0] && Date.parse(data[0].created_at);
+    if (Number.isFinite(last) && nowMs - last > 2 * OVERSIGHT_CADENCE_MS) {
+      out.oversightOverdueH = Math.round((nowMs - last) / 3600000);
+    }
+  } catch { /* fail-soft */ }
+  try {
+    const { data } = await sb
+      .from('feedback')
+      .select('created_at')
+      .eq('category', 'adam_self_assessment')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const last = data && data[0] && Date.parse(data[0].created_at);
+    if (Number.isFinite(last) && nowMs - last > 2 * SELFSCORE_CADENCE_MS) {
+      out.selfScoreOverdueH = Math.round((nowMs - last) / 3600000);
+    }
+  } catch { /* fail-soft */ }
+  return out;
+}
+
 export async function surfaceSmsInbound(sb) {
   try {
     const chairmanPhone = process.env.CHAIRMAN_PHONE || null;
@@ -512,6 +548,15 @@ async function main() {
     }
     for (const v of ventureStall.alerted) {
       console.log(`QUIET_TICK_VENTURE_STALL_ALERT=adam venture=${v.id} name="${v.name}" state=${v.orchestrator_state} escalated=${v.escalated}`);
+    }
+    // QF-20260719-825 (layer 2): flag overdue oversight/self-score stamps so the armed
+    // wakeup prompt forces the check even when a cron was lost (act-on-flagged-lines contract).
+    const oversightStale = await checkOversightStaleness(sb);
+    if (oversightStale.oversightOverdueH) {
+      console.log(`QUIET_TICK_OVERSIGHT_OVERDUE=adam lastSnapshotAgeH=${oversightStale.oversightOverdueH} — run node scripts/adam-coordinator-health.mjs NOW (durable cron lost or failing; cadence 6h, threshold 2x)`);
+    }
+    if (oversightStale.selfScoreOverdueH) {
+      console.log(`QUIET_TICK_SELFSCORE_OVERDUE=adam lastScoreAgeH=${oversightStale.selfScoreOverdueH} — run node scripts/adam-self-assessment-writer.cjs NOW (durable cron lost or failing; cadence 6h, threshold 2x)`);
     }
     // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-3): first-class inbox surfacing —
     // directive/reply-needed rows carry the distinct hard-interrupt token.
