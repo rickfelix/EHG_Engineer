@@ -1,0 +1,136 @@
+{
+  "executive_summary": "Orchestrator coordination PRD for SD-LEO-INFRA-LEO-COMPLETION-001. Solomon checkpoint-3 FINAL ACCEPTANCE (verdict 2ef435e1, 2026-07-20) rejected program-done on 4 grounds (G1-G4) despite 7 foundation SDs shipping real, merged, unit-green code. This SD closes G1-G3 (G4 is a sibling SD dependency) via a shared-substrate-first decomposition into 4 children with a born-fenced dependency DAG: B (manifest desired-state-slot schema + canary isolation harness + U4 threat-model spec, no dependencies) unblocks C (launcher-shell supervisor + kill-supervisor live drill, depends on B) and E (operator cockpit wiring into scripts/fleet-dashboard.cjs + U4 cookie-non-leak proof, depends on B); D (reboot-respawn runner + scheduled task + claude --resume consumer, depends on B and C) closes last. Acceptance for every live-drill claim is a real, non-mocked drill re-run by Solomon on a canary account — the SD's own sourcing pin states nothing is accepted on assertion/unit-only again. This orchestrator delivers no code directly; deliverables live in children B/C/D/E, each carrying its own PRD/handoffs/gates.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Shared substrate: desired-state manifest slots + canary isolation harness + U4 spec (Child B)",
+      "description": "Redesign lib/fleet/session-manifest.js from role-count drift math ({role,min}) into DESIRED-STATE SLOTS (name/color/role/account/worktree/model+effort) per the checkpoint-1 REQUIRED amendment, as the frozen source-of-record interface Children C/D/E depend on. Build a canary/isolation harness (dedicated canary account/profile, canary-only callsign namespace, assert-before-kill guard, FLEET_SPAWN_CONTROL_LIVE default-OFF discipline) that today has zero code references. Originate the formal definition of U4 (agent-browser cookie-non-leak guarantee) — a threat model plus an observable proof mechanism — since it is referenced by Solomon's review but undefined anywhere in the codebase.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "lib/fleet/session-manifest.js carries slot fields (name/color/role/account/worktree/model/effort) as the respawn source-of-record; computeManifestDrift/normalizeDesiredManifest extended additively, not replaced; naming-collision with sibling SD-LEO-INFRA-FLEET-REGISTRY-MANIFEST-001 explicitly resolved (SSOT decision documented)",
+        "Canary isolation harness exists: dedicated canary account/profile, canary-only namespace, assert-before-kill guard (target account_profile===canary), env-gate never set in a live-fleet session — verified by a unit test that a non-canary target is rejected",
+        "U4 threat model + proof mechanism documented and reviewed (SECURITY sub-agent pass), ready for Child E to implement against"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Launcher shell entrypoint: real killable supervisor + kill-supervisor live drill (Child C, G1a)",
+      "description": "Build a real, persistent, killable supervisor process (launcher shell entrypoint) that owns/watches fleet child sessions, extending lib/fleet/spawn-control.js's verb-composition style rather than replacing it. De-mask the existing spawn-control.test.js kill-path test, which today only asserts a mocked spawnFn was called and never exercises the real detached-process behavior.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "LIVE DRILL on the Child-B canary account: kill -9 the real supervisor process; all fleet sessions continue uninterrupted",
+        "A real (non-mocked) fleet_verb_* event row is emitted by the kill and recorded",
+        "spawn-control.test.js's kill-path test exercises the real detached-flag/stdio path, not a mocked spawnFn assertion"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Reboot-respawn runner: scheduled task + claude --resume consumer (Child D, G1b/G2)",
+      "description": "Build a reboot-respawn runner registered as a Windows Scheduled Task (adapt the reusable buildSchtasksArgs pattern in scripts/setup-eva-watcher-task.mjs) that reads Child B's frozen desired-state-slot manifest and relaunches each slot via `claude --resume` with its captured session UUID, restoring context after a host reboot.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "LIVE DRILL: simulate a reboot with zero live session running; the scheduled task fires and each manifest slot relaunches via claude --resume with its captured UUID",
+        "A drill record (events/SAER) is persisted proving the respawn occurred",
+        "The runner reads slots from Child B's manifest schema, not the retired {role,min} drift math"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Operator cockpit wiring: real callers + model/effort chips + relaunch-under-profile U4 proof (Child E, G3/U4)",
+      "description": "Wire the already-merged, already-tested lib/fleet/browser-control.js and lib/fleet/session-detail-view.js (confirmed zero callers repo-wide) into scripts/fleet-dashboard.cjs — the concrete, lowest-risk, actively-developed CLI operator surface — as their first real production caller. Render the chairman's named model/effort chips in the same dashboard (data already captured via lib/checkin/steps/model-effort-merge.cjs into claude_sessions.metadata but never rendered). Prove relaunch-under-profile never leaks chairman cookies to the agent browser against Child B's U4 definition.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "buildSessionDetailView()/requestBrowserSession()/signalTakeover() are called from scripts/fleet-dashboard.cjs in a real (non-test) code path, grep-provable as a production caller",
+        "Model/effort chips render per session in scripts/fleet-dashboard.cjs's WORKERS section, sourced from claude_sessions.metadata",
+        "LIVE DRILL: account-switch relaunch-under-profile on the canary account; a U4 spot-check (per Child B's proof mechanism) shows zero chairman cookies visible to the agent browser"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Cross-child acceptance discipline: no assertion/unit-only acceptance, ever again",
+      "description": "Every live-drill acceptance criterion across Children C/D/E is verified by Solomon's checkpoint-3 re-run on the Child-B canary account, never by a unit test or mock alone — the exact failure mode this SD exists to close (per the SD's own sourcing pin). This orchestrator's own LEAD-FINAL-APPROVAL depends on sibling SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001 (in_progress at PLAN_PRD) so that the LEAD-FINAL gate itself cannot silently downgrade a live claim to a unit-test claim.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Every FR-2/FR-3/FR-4 live-drill AC has a drill/event DB record, not just a passing unit test, before its child SD reaches LEAD-FINAL",
+        "This orchestrator's LEAD-FINAL-APPROVAL is not run until SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001 has shipped (or an explicit chairman-approved exception is recorded)",
+        "Solomon checkpoint-3 is re-run against the completed children and upgrades from PARTIAL to ACCEPT"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Born-fenced dependency DAG", "description": "Enforced via leo-create-sd.js's --depends-on born-fencing (lib/fleet/claim-eligibility.cjs draftDepsSatisfied): B has no deps; C depends on B; D depends on B and C; E depends on B — no child is claimable before its dependencies complete." },
+    { "id": "TR-2", "title": "Frozen slot-schema interface", "description": "Child B's slot schema is a frozen, versioned interface consumed by both D (respawn) and E (relaunch-under-profile) — schema changes after B ships require a coordinated update across both consumers, not silent drift." },
+    { "id": "TR-3", "title": "Shared canary harness, not duplicated", "description": "The canary isolation harness (Child B) is a shared precondition for every live drill in C, D, and E; it is built once in B, not duplicated per child." },
+    { "id": "TR-4", "title": "Actual-state SSOT untouched", "description": "No SD in this decomposition modifies lib/fleet/session-registry.js or lib/fleet/session-registry-adapter.js (the actual-state SSOT) — only lib/fleet/session-manifest.js (desired-state) is redesigned." }
+  ],
+  "test_scenarios": [
+    { "scenario": "Kill-drill survival", "steps": "Enable FLEET_SPAWN_CONTROL_LIVE on the canary account; start the launcher shell; kill -9 the supervisor", "expected": "Fleet sessions continue uninterrupted; a real fleet_verb_* event is recorded; registry self-heals on restart" },
+    { "scenario": "Reboot-respawn with no live session", "steps": "Trigger the scheduled task with zero active fleet sessions", "expected": "Each manifest slot relaunches via claude --resume with its captured UUID; drill record persisted" },
+    { "scenario": "Operator cockpit end-to-end", "steps": "Open scripts/fleet-dashboard.cjs, attach to a session, drive the agent-browser, switch accounts", "expected": "Real production callers reached (grep-provable); model/effort chips render; U4 cookie non-leak holds under relaunch-under-profile" },
+    { "scenario": "Canary isolation guard rejects a non-canary target", "steps": "Attempt the kill-drill action against a non-canary account_profile", "expected": "The assert-before-kill guard refuses the action; no live fleet session is disrupted" },
+    { "scenario": "Manifest schema regression", "steps": "Run the existing computeManifestDrift/normalizeDesiredManifest unit suite after the slot-schema extension", "expected": "All pre-existing role-count drift tests still pass unchanged; new slot-field tests pass" }
+  ],
+  "risks": [
+    { "risk": "Killing a real process on the canary account could disrupt live fleet work if isolation isn't airtight.", "mitigation": "Child B builds the canary/isolation harness FIRST (assert-before-kill guard, canary-only namespace, env-gate discipline) as a hard prerequisite before any child runs a live kill/relaunch drill." },
+    { "risk": "U4 (cookie-non-leak) is undefined anywhere in the codebase; Child E cannot write a non-vacuous acceptance test against an undefined guarantee.", "mitigation": "Child B originates the formal U4 threat model + proof mechanism, reviewed by SECURITY, before Child E's EXEC phase begins." },
+    { "risk": "The manifest schema redesign (Child B) risks silently repurposing sibling SD-LEO-INFRA-FLEET-REGISTRY-MANIFEST-001's concept, given an already-flagged naming collision.", "mitigation": "Explicit SSOT/ownership decision required at Child B's PLAN phase (extend additively with a regression pin, or split to a distinctly-named module) before EXEC." },
+    { "risk": "This orchestrator's completion depends on sibling SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001, which is still in_progress and owned by a different session.", "mitigation": "Children B/C/D/E can proceed through LEAD/PLAN/EXEC independently now; only this orchestrator's own LEAD-FINAL-APPROVAL is gated on the sibling, tracked explicitly rather than silently blocking all downstream work." }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Solomon (checkpoint-3 live-drill re-run — the sole acceptance authority for this SD's claims)",
+      "The fleet coordinator (consumes the launcher-shell supervisor, reboot-respawn runner, and manifest slots for day-to-day fleet operation once shipped)",
+      "The chairman (consumes the operator cockpit wiring in scripts/fleet-dashboard.cjs, model/effort chips)"
+    ],
+    "dependencies": [
+      "lib/fleet/spawn-control.js and lib/fleet/session-manifest.js (already-merged, extended by this decomposition)",
+      "lib/fleet/browser-control.js and lib/fleet/session-detail-view.js (already-merged SD-LEO-INFRA-SESSION-VIEW-BROWSER-001 A/B, wired in by Child E)",
+      "Sibling SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001 (in_progress) gates this orchestrator's own LEAD-FINAL-APPROVAL"
+    ],
+    "data_contracts": [
+      "lib/fleet/session-manifest.js desired-state slot schema (name/color/role/account/worktree/model/effort) — the frozen interface Children D and E consume"
+    ],
+    "runtime_config": [
+      "FLEET_SPAWN_CONTROL_LIVE (existing, default-OFF) — gates every live-drill action across Children C, D, E; canary-scoped only per Child B's isolation harness"
+    ],
+    "observability_rollout": [
+      "fleet_verb_* coordination events (real, non-mocked) emitted by the kill-supervisor and relaunch-under-profile live drills",
+      "Reboot-respawn drill records persisted to the events/SAER trail",
+      "Solomon checkpoint-3 re-run verdict (PARTIAL -> ACCEPT) is the rollout's terminal observability signal"
+    ]
+  },
+  "system_architecture": {
+    "summary": "Four dependency-DAG'd child SDs extend the existing fleet-control-plane modules (spawn-control.js, session-manifest.js, browser-control.js, session-detail-view.js) with a real supervisor process, a slot-shaped manifest, a reboot-respawn runner, and a wired operator surface.",
+    "components": [
+      { "name": "lib/fleet/session-manifest.js", "change": "EXTEND — add desired-state slot fields (name/color/role/account/worktree/model/effort) alongside existing role-count drift math" },
+      { "name": "lib/fleet/spawn-control.js", "change": "EXTEND — add a persistent supervisor process layer on top of the existing spawn/attach/stop/restart verbs" },
+      { "name": "NEW launcher-shell module", "change": "NEW — the real, killable supervisor process entrypoint (Child C)" },
+      { "name": "NEW reboot-respawn runner + Scheduled Task registration", "change": "NEW — adapts scripts/setup-eva-watcher-task.mjs's buildSchtasksArgs pattern (Child D)" },
+      { "name": "NEW canary/isolation harness module", "change": "NEW — dedicated canary account/profile + assert-before-kill guard (Child B)" },
+      { "name": "scripts/fleet-dashboard.cjs", "change": "EXTEND — wire in browser-control.js/session-detail-view.js as first real callers; render model/effort chips (Child E)" },
+      { "name": "lib/fleet/browser-control.js, lib/fleet/session-detail-view.js", "change": "NO CHANGE (already merged/tested) — consumed for the first time by Child E" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Shared-substrate-first: build Child B's frozen interfaces and canary harness before any live drill, then fan out C/D/E respecting the dependency DAG.",
+    "steps": [
+      "Child B: redesign the manifest schema, build the canary/isolation harness, originate the U4 spec — unblocks everything downstream.",
+      "Child C (parallel-eligible with E once B ships): build the launcher-shell supervisor, de-mask the kill test, run the live kill-drill.",
+      "Child D (after B and C): build the reboot-respawn runner + scheduled task, run the live reboot-respawn drill.",
+      "Child E (parallel-eligible with C once B ships): wire browser-control.js/session-detail-view.js into fleet-dashboard.cjs, render model/effort chips, prove U4 via live relaunch-under-profile drill.",
+      "Orchestrator LEAD-FINAL: gated on all 4 children completing AND on sibling SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001 shipping, then Solomon re-runs checkpoint-3."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Enable FLEET_SPAWN_CONTROL_LIVE on a canary account; start the launcher shell; kill -9 the supervisor process", "expected_outcome": "Fleet sessions continue uninterrupted; a real fleet_verb_* event is recorded; registry self-heals on restart" },
+    { "step_number": 2, "instruction": "Trigger reboot-respawn (runner + scheduled task) with no live session", "expected_outcome": "Each slot relaunches via claude --resume with its captured UUID; drill record persisted" },
+    { "step_number": 3, "instruction": "Open scripts/fleet-dashboard.cjs, attach to a session, drive the agent-browser, switch accounts", "expected_outcome": "Real production callers reached; model/effort chips render; U4 cookie non-leak holds under relaunch-under-profile" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-LEO-COMPLETION-001",
+    "orchestrator": true,
+    "children": ["SD-LEO-INFRA-LEO-COMPLETION-001-B", "SD-LEO-INFRA-LEO-COMPLETION-001-C", "SD-LEO-INFRA-LEO-COMPLETION-001-D", "SD-LEO-INFRA-LEO-COMPLETION-001-E"],
+    "depends_on_sibling": "SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001",
+    "solomon_verdict_ref": "2ef435e1"
+  }
+}
