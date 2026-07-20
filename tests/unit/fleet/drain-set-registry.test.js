@@ -124,9 +124,9 @@ describe('Seed data 1:1 parity with live DRAIN_SETS (TS-2)', () => {
     expect(migrationText).toContain("('solomon', 'solomon_systemic_finding',");
   });
 
-  it('total seed row count is exactly 60 (matches the migration DO-block ASSERT)', () => {
+  it('total seed row count is exactly 61 (matches the migration DO-block ASSERT)', () => {
     const seedRowPattern = /^\s*\('(solomon|adam|coordinator|worker)',/gm;
     const matches = migrationText.match(seedRowPattern) || [];
-    expect(matches.length).toBe(60);
+    expect(matches.length).toBe(61);
   });
 });

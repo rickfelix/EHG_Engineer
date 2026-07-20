@@ -58,6 +58,7 @@ INSERT INTO role_drain_sets (role, kind, provenance) VALUES
   ('solomon', 'fence_notice',            'lib/fleet/worker-status.cjs DRAIN_SETS'),
   ('solomon', 'review_request',          'lib/fleet/worker-status.cjs DRAIN_SETS'),
   ('solomon', 'solomon_consult',         'lib/fleet/worker-status.cjs DRAIN_SETS'),
+  ('solomon', 'solomon_duty_reminder',   'lib/fleet/worker-status.cjs DRAIN_SETS'), -- QF-20260719-148, merged onto main after this SD branched
   ('solomon', 'comms_check',             'lib/fleet/worker-status.cjs DRAIN_SETS'),
   -- R2 reconciliation fix #1: Solomon's own oracle-answer replies ride adam_advisory
   -- (scripts/solomon-advisory.cjs, payload.oracle=true) but his drain set never
@@ -141,9 +142,9 @@ BEGIN
   ASSERT (SELECT count(*) FROM pg_policies WHERE tablename = 'role_drain_sets') = 1,
     'role_drain_sets must have exactly 1 policy (service-role-only)';
   SELECT count(*) INTO row_count FROM role_drain_sets;
-  -- 13 (solomon, incl. 2 R2 reconciliation fixes) + 14 (adam) + 16 (coordinator)
-  -- + 17 (worker) = 60 seed rows.
-  ASSERT row_count = 60, format('expected 60 seed rows, got %s', row_count);
+  -- 14 (solomon, incl. 2 R2 reconciliation fixes) + 14 (adam) + 16 (coordinator)
+  -- + 17 (worker) = 61 seed rows.
+  ASSERT row_count = 61, format('expected 61 seed rows, got %s', row_count);
 END
 $verify$;
 
