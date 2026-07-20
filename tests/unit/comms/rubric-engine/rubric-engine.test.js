@@ -93,3 +93,25 @@ describe('rubric-engine evaluate()', () => {
     expect(res.blockedReasons.some((r) => r.startsWith('no_reply_consequence'))).toBe(true);
   });
 });
+
+describe('QF-20260719-793 — explicit status raises the reclassification bar', () => {
+  it('live false positives stay status: bare interrogative words in prose', () => {
+    expect(effectiveType({ type: 'status', body: 'Cursor verdict v2: regardless of which host wins, the runner stays pinned.' })).toBe('status');
+    expect(effectiveType({ type: 'status', body: 'Heartbeat 13:15 — dedupe keys resolved; no reply needed from you.' })).toBe('status');
+  });
+
+  it('live false positive stays status: hyphen bullets in a status summary', () => {
+    expect(effectiveType({ type: 'status', body: 'Overnight summary:\n- three QFs shipped\n- belt drained\n- fleet green' })).toBe('status');
+  });
+
+  it('explicit status STILL upgrades on strong evidence (decision dressed as status)', () => {
+    expect(effectiveType({ type: 'status', body: 'Should I proceed with the migration?' })).toBe('decision'); // trailing ?
+    expect(effectiveType({ type: 'status', body: 'Two paths:\n- A) ship now\n- B) wait for soak\nreply A or B' })).toBe('decision'); // options + interrogative
+    expect(effectiveType({ type: 'status', body: 'x', options: ['a', 'b'] })).toBe('decision'); // structured options always decisive
+  });
+
+  it('undeclared/ambiguous types keep the aggressive single-signal promotion', () => {
+    expect(effectiveType({ body: 'which one do you want' })).toBe('decision');
+    expect(effectiveType({ body: '- A) yes\n- B) no' })).toBe('decision');
+  });
+});
