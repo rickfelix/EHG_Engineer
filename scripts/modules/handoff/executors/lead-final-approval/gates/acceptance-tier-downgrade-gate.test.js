@@ -12,9 +12,21 @@ import {
   acEntryText,
   isBindingEnabled,
   LIVE_TIER_KEYWORDS,
+  EVIDENCE_TEXT_COLUMNS,
 } from './acceptance-tier-downgrade-gate.js';
 
-function mockSupabase({ prd = null, evidenceRows = [] } = {}) {
+// The full, live-verified column list on sub_agent_execution_results (queried directly against
+// the real database, not a possibly-stale schema file — this is what caught the original
+// evidence/test_execution nonexistent-column bug). Frozen here as a regression fence: any
+// column the gate selects must be a member of this set.
+const REAL_SUB_AGENT_EXECUTION_RESULTS_COLUMNS = [
+  'id', 'sd_id', 'sub_agent_code', 'sub_agent_name', 'verdict', 'confidence', 'critical_issues',
+  'warnings', 'recommendations', 'detailed_analysis', 'execution_time', 'metadata', 'created_at',
+  'updated_at', 'risk_assessment_id', 'validation_mode', 'justification', 'conditions',
+  'invocation_id', 'summary', 'raw_output', 'source', 'required_sub_agents', 'phase', 'executed_from_cwd',
+];
+
+function mockSupabase({ prd = null, evidenceRows = [], prdThrows = null, evidenceThrows = null } = {}) {
   return {
     from(table) {
       if (table === 'product_requirements_v2') {
@@ -22,14 +34,20 @@ function mockSupabase({ prd = null, evidenceRows = [] } = {}) {
           select() { return this; },
           eq() { return this; },
           limit() { return this; },
-          maybeSingle: async () => ({ data: prd }),
+          maybeSingle: async () => {
+            if (prdThrows) throw prdThrows;
+            return { data: prd };
+          },
         };
       }
       if (table === 'sub_agent_execution_results') {
         return {
           select() { return this; },
           eq() { return this; },
-          in: async () => ({ data: evidenceRows }),
+          in: async () => {
+            if (evidenceThrows) throw evidenceThrows;
+            return { data: evidenceRows };
+          },
         };
       }
       return { select() { return this; }, eq() { return this; }, in: async () => ({ data: [] }) };
@@ -150,9 +168,23 @@ describe('TS-3/TS-4/ADD-5 — crossReferenceEvidence, per-FR isolation', () => {
 
   it('ADD-3: null/absent evidence columns never throw', () => {
     const flagged = [{ frId: 'FR-1', matchedPhrase: 'never mocked' }];
-    const evidence = [{ evidence: null, test_execution: null, detailed_analysis: null, summary: null, critical_issues: null, warnings: null, metadata: null }];
+    const evidence = [{ detailed_analysis: null, summary: null, critical_issues: null, warnings: null, recommendations: null, metadata: null }];
     expect(() => crossReferenceEvidence(flagged, evidence)).not.toThrow();
     expect(crossReferenceEvidence(flagged, evidence)[0].hasLiveEvidence).toBe(false);
+  });
+
+  it('ADD-7 (adversarial-review regression): "reproduction" must NEVER be matched as evidence for "production" (word-boundary fix)', () => {
+    const flagged = [{ frId: 'FR-1', matchedPhrase: 'never mocked' }];
+    const evidence = [{ summary: 'see reproduction steps in the bug report; unit tests only' }];
+    const result = crossReferenceEvidence(flagged, evidence);
+    expect(result[0].hasLiveEvidence).toBe(false);
+  });
+
+  it('ADD-7: a genuine whole-word "production" mention still counts as live evidence', () => {
+    const flagged = [{ frId: 'FR-1', matchedPhrase: 'never mocked' }];
+    const evidence = [{ summary: 'ran against production data' }];
+    const result = crossReferenceEvidence(flagged, evidence);
+    expect(result[0].hasLiveEvidence).toBe(true);
   });
 });
 
@@ -230,14 +262,55 @@ describe('TS-7 — no PRD / no FRs -> clean pass, no crash', () => {
   });
 });
 
-describe('TS-8 — evidence query never references a nonexistent findings column', () => {
-  it('the gate source never selects a `findings` column from sub_agent_execution_results', () => {
-    // Static guard: sub_agent_execution_results has no `findings` column (verified against
-    // schema this session) -- selecting it would silently return null and hide real evidence.
+describe('ADD-8/ADD-9 (adversarial-review regression) — DB/IO errors fail OPEN, never escape to the orchestrator', () => {
+  it('ADD-8: a PRD lookup error yields a passing result with a warning, not a thrown exception', async () => {
+    const gate = createAcceptanceTierDowngradeGate(mockSupabase({ prdThrows: new Error('connection reset') }), null);
+    let result;
+    await expect((async () => { result = await gate.validator({ sd }); })()).resolves.not.toThrow();
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(100);
+    expect(result.warnings.join(' ')).toContain('connection reset');
+  });
+
+  it('ADD-9: an evidence lookup error (after FRs are flagged) yields a passing result with a warning, not a thrown exception', async () => {
+    const prd = { functional_requirements: [{ id: 'FR-1', acceptance_criteria: ['never mocked'] }] };
+    const gate = createAcceptanceTierDowngradeGate(mockSupabase({ prd, evidenceThrows: new Error('timeout') }), null);
+    let result;
+    await expect((async () => { result = await gate.validator({ sd }); })()).resolves.not.toThrow();
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(100);
+    expect(result.warnings.join(' ')).toContain('timeout');
+  });
+});
+
+describe('ADD-10 (adversarial-review regression) — prdRepo path (production primary path) is exercised', () => {
+  it('prdRepo.getBySdUuid is used when provided, taking precedence over the supabase fallback', async () => {
+    const prd = { functional_requirements: [{ id: 'FR-1', acceptance_criteria: ['should be fast'] }] };
+    const prdRepo = { getBySdUuid: async () => prd };
+    // supabase would return a DIFFERENT (flagged) PRD if it were consulted — proves prdRepo wins.
+    const supabase = mockSupabase({ prd: { functional_requirements: [{ id: 'FR-X', acceptance_criteria: ['never mocked'] }] } });
+    const gate = createAcceptanceTierDowngradeGate(supabase, prdRepo);
+    const result = await gate.validator({ sd });
+    expect(result.warnings).toEqual([]); // the unflagged prdRepo PRD was used, not the flagged supabase one
+  });
+});
+
+describe('TS-8 — evidence query only ever selects columns that really exist on sub_agent_execution_results', () => {
+  it('EVIDENCE_TEXT_COLUMNS is a fixed, exported allowlist (regression fence)', () => {
+    expect(EVIDENCE_TEXT_COLUMNS).toEqual(['detailed_analysis', 'summary', 'critical_issues', 'warnings', 'recommendations', 'metadata']);
+  });
+
+  it('adversarial-review regression: every column in EVIDENCE_TEXT_COLUMNS is a real, live-verified column — and `evidence`/`test_execution` (the originally-shipped bug) are absent', () => {
+    for (const col of EVIDENCE_TEXT_COLUMNS) {
+      expect(REAL_SUB_AGENT_EXECUTION_RESULTS_COLUMNS, `EVIDENCE_TEXT_COLUMNS entry "${col}" must be a real column`).toContain(col);
+    }
+    expect(EVIDENCE_TEXT_COLUMNS).not.toContain('evidence');
+    expect(EVIDENCE_TEXT_COLUMNS).not.toContain('test_execution');
+  });
+
+  it('the gate source never selects a `findings` column, and its sub_agent_execution_results select is built from EVIDENCE_TEXT_COLUMNS', () => {
     const src = readFileSync(new URL('./acceptance-tier-downgrade-gate.js', import.meta.url), 'utf8');
-    const selectCalls = [...src.matchAll(/\.select\('([^']+)'\)/g)].map((m) => m[1]);
-    const subAgentSelect = selectCalls.find((s) => s.includes('sub_agent_code') && s.includes('evidence'));
-    expect(subAgentSelect).toBeDefined();
-    expect(subAgentSelect).not.toMatch(/\bfindings\b/);
+    expect(src).not.toMatch(/\.select\([^)]*\bfindings\b[^)]*\)/);
+    expect(src).toMatch(/EVIDENCE_TEXT_COLUMNS\.join/);
   });
 });
