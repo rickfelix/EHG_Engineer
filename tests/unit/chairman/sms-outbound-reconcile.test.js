@@ -473,6 +473,38 @@ describe('resend preserves provider_message_id history (Solomon Pin #2)', () => 
     expect(row.delivered_at).toBeTruthy();
   });
 
+  it("adversarial-review finding: a stale/superseded SID's late 'undelivered' callback must NOT flip a row whose CURRENT (newer) attempt is still unresolved", async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-superseded', status: 'sent', provider_message_id: 'SM-SECOND', prior_provider_message_ids: ['SM-FIRST'] }),
+    ] });
+    process.env.TWILIO_STATUS_CALLBACK_URL = 'https://engineer.example.com/api/webhooks/twilio-status';
+    // A late callback arrives for SM-FIRST (the SUPERSEDED attempt) reporting undelivered. This
+    // tells us nothing about SM-SECOND (the current, still-unresolved attempt) — it must NOT
+    // terminate the row.
+    await handleTwilioStatusCallback(
+      { method: 'POST', headers: { 'x-twilio-signature': 'sig' }, body: { MessageStatus: 'undelivered' }, protocol: 'https', get: () => 'host', originalUrl: '/x' },
+      makeRes(),
+      { supabase: sb, provider: { verifyInboundSignature: () => true, parseStatusCallback: () => ({ messageSid: 'SM-FIRST', status: 'undelivered' }) } },
+    );
+    const row = sb._tables.sms_outbound_obligations.find((r) => r.id === 'ob-superseded');
+    expect(row.status).toBe('sent'); // untouched — still tracking the current attempt
+  });
+
+  it("a 'delivered' callback for the current SID still applies normally (unaffected by the prior-SID scoping change)", async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-current', status: 'sent', provider_message_id: 'SM-SECOND', prior_provider_message_ids: ['SM-FIRST'] }),
+    ] });
+    process.env.TWILIO_STATUS_CALLBACK_URL = 'https://engineer.example.com/api/webhooks/twilio-status';
+    await handleTwilioStatusCallback(
+      { method: 'POST', headers: { 'x-twilio-signature': 'sig' }, body: { MessageStatus: 'delivered' }, protocol: 'https', get: () => 'host', originalUrl: '/x' },
+      makeRes(),
+      { supabase: sb, provider: { verifyInboundSignature: () => true, parseStatusCallback: () => ({ messageSid: 'SM-SECOND', status: 'delivered' }) } },
+    );
+    const row = sb._tables.sms_outbound_obligations.find((r) => r.id === 'ob-current');
+    expect(row.status).toBe('delivered');
+    expect(row.delivered_at).toBeTruthy();
+  });
+
   it("adversarial-review finding (SECURITY, EXEC-TO-PLAN): a callback for a PRIOR sid that lands mid-resend wins — the in-flight resend's own completion never clobbers it back to 'sent'", async () => {
     // The row is 'sending' (mid-resend, claimed) and already carries a prior SID from the send
     // this resend is superseding. A late callback for that prior SID arrives WHILE the resend is

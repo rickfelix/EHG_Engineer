@@ -91,10 +91,18 @@ const VALID_MESSAGE_SID = /^[A-Za-z0-9-]+$/;
 
 /**
  * Stamp delivery-truth onto the owed obligation row matched by provider_message_id (FR-2), OR
- * (SD-LEO-INFRA-SMS-DELIVERY-TRUTH-001-A Solomon Pin #2) by containment in
- * prior_provider_message_ids — a resend preserves the ORIGINAL SID there, so a late callback for
- * it still resolves against this row instead of silently no-op'ing once provider_message_id was
- * overwritten by the newest attempt.
+ * (SD-LEO-INFRA-SMS-DELIVERY-TRUTH-001-A Solomon Pin #2) — for a 'delivered' callback ONLY — by
+ * containment in prior_provider_message_ids. A resend preserves the ORIGINAL SID there, so a late
+ * 'delivered' callback for it still resolves against this row instead of silently no-op'ing once
+ * provider_message_id was overwritten by the newest attempt: delivery-truth achieved by ANY
+ * attempt satisfies the obligation, no matter which SID confirms it.
+ *
+ * PRIOR-SID SCOPE (adversarial-review finding, deep-tier review, /ship EXEC-TO-PLAN): a
+ * 'undelivered'/'failed' callback is matched ONLY against the CURRENT provider_message_id, never
+ * against prior_provider_message_ids. A superseded (pre-resend) attempt's late failure tells us
+ * nothing about the newer attempt actively in flight — applying it there would wrongly terminate
+ * a row whose current send may still succeed (or may have already delivered, awaiting its own
+ * callback), the exact "silently lost obligation" failure mode this SD exists to close.
  *
  * STATUS GUARD (adversarial-review finding, deep-tier SECURITY sub-agent, EXEC-TO-PLAN):
  * excludes rows already 'delivered' or 'canceled' — a late/duplicate callback for a SID the row
@@ -111,12 +119,17 @@ const VALID_MESSAGE_SID = /^[A-Za-z0-9-]+$/;
 async function applyOwedDeliveryTruth(supabase, { messageSid, status }) {
   const patch = owedRowUpdateForStatus(status, new Date().toISOString());
   if (!patch || !VALID_MESSAGE_SID.test(messageSid || '')) return;
+  // 'delivered' may resolve via prior-SID history (any attempt delivering satisfies the
+  // obligation); 'undelivered'/'failed' is scoped to the CURRENT SID only (see PRIOR-SID SCOPE).
+  const matchFilter = patch.status === 'delivered'
+    ? `provider_message_id.eq.${messageSid},prior_provider_message_ids.cs.{${messageSid}}`
+    : `provider_message_id.eq.${messageSid}`;
   try {
     await supabase
       .from('sms_outbound_obligations')
       .update(patch)
       .not('status', 'in', '(delivered,canceled)')
-      .or(`provider_message_id.eq.${messageSid},prior_provider_message_ids.cs.{${messageSid}}`);
+      .or(matchFilter);
   } catch {
     /* table absent (STAGED) — fail-soft no-op */
   }
