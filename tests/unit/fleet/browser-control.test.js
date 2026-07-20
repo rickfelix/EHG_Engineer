@@ -2,8 +2,11 @@
  * SD-LEO-INFRA-SESSION-VIEW-BROWSER-001-A -- sandboxed agent-browser pane control plane.
  * Covers PRD test_scenarios TS-1..TS-5, the 3 coverage gaps the TESTING sub-agent flagged
  * (GAP-FR1-AC2 agent-vs-agent profile isolation, GAP-FR4-AC3 revoke-while-active, GAP-FR3-AC2
- * log-before-action ordering), and the SECURITY sub-agent's path-traversal + event-emission findings
- * (session_id traversal guard, FR-5 AC2 takeover/handback event logging).
+ * log-before-action ordering), and the SECURITY/adversarial-review findings:
+ * - session_id path-traversal guard (SECURITY, EXEC-TO-PLAN)
+ * - FR-5 AC2 takeover/handback event logging (SECURITY, EXEC-TO-PLAN)
+ * - durable (DB-backed, not in-memory) takeover pause state (adversarial ship-gate review)
+ * - driveAction surfaces a lost audit-log write instead of silently discarding it (adversarial ship-gate review)
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
@@ -26,7 +29,27 @@ import {
 } from '../../../lib/fleet/browser-control.js';
 
 const BASE_OPTS = { baseDir: 'C:/fleet/browser-profiles' };
-const SB = {};
+
+/** Minimal fluent mock for the claude_sessions read-merge-write persistPauseState() uses. */
+function makeSessionsTableMock(initialMetadata = {}) {
+  const state = { metadata: { ...initialMetadata } };
+  const client = {
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          maybeSingle: vi.fn(async () => ({ data: { metadata: state.metadata }, error: null })),
+        })),
+      })),
+      update: vi.fn((patch) => ({
+        eq: vi.fn(async () => {
+          state.metadata = patch.metadata;
+          return { data: null, error: null };
+        }),
+      })),
+    })),
+  };
+  return { client, state };
+}
 
 beforeEach(() => {
   logCoordinationEvent.mockClear();
@@ -120,46 +143,48 @@ describe('requestBrowserSession — FR-4 entry guard (TS-3)', () => {
   });
 });
 
-describe('signalTakeover / signalHandBack / isPaused — FR-5 human takeover', () => {
-  beforeEach(async () => {
-    await signalHandBack(SB, 'session-takeover-test'); // ensure clean state between tests (idempotent)
-    logCoordinationEvent.mockClear();
+describe('isPaused — FR-5 pure read (durable, DB-backed via session.metadata)', () => {
+  it('is false when the field is absent/false', () => {
+    expect(isPaused({ metadata: {} })).toBe(false);
+    expect(isPaused({ metadata: { browser_takeover_paused: false } })).toBe(false);
+    expect(isPaused(null)).toBe(false);
   });
 
-  it('is not paused by default', () => {
-    expect(isPaused('session-takeover-test')).toBe(false);
+  it('is true only when explicitly true', () => {
+    expect(isPaused({ metadata: { browser_takeover_paused: true } })).toBe(true);
+  });
+});
+
+describe('signalTakeover / signalHandBack — FR-5 durable takeover (adversarial-review fix)', () => {
+  it('persists browser_takeover_paused=true to claude_sessions.metadata (survives a process restart, unlike in-memory state)', async () => {
+    const { client, state } = makeSessionsTableMock({ some_other_key: 'preserved' });
+    await signalTakeover(client, 'session-x', 'SD-TEST');
+    expect(state.metadata.browser_takeover_paused).toBe(true);
+    expect(state.metadata.some_other_key).toBe('preserved'); // read-merge-write, not a blind replace
   });
 
-  it('signalTakeover pauses; signalHandBack is the only way to clear it', async () => {
-    await signalTakeover(SB, 'session-takeover-test');
-    expect(isPaused('session-takeover-test')).toBe(true);
-    await signalHandBack(SB, 'session-takeover-test');
-    expect(isPaused('session-takeover-test')).toBe(false);
-  });
-
-  it('there is no automatic/timeout-based resume path', async () => {
-    // isPaused stays true across ticks -- no timer, no auto-clear -- until signalHandBack is called.
-    await signalTakeover(SB, 'session-takeover-test');
-    expect(isPaused('session-takeover-test')).toBe(true);
-    expect(isPaused('session-takeover-test')).toBe(true);
-    await signalHandBack(SB, 'session-takeover-test');
+  it('persists browser_takeover_paused=false on hand-back', async () => {
+    const { client, state } = makeSessionsTableMock({ browser_takeover_paused: true });
+    await signalHandBack(client, 'session-x', 'SD-TEST');
+    expect(state.metadata.browser_takeover_paused).toBe(false);
   });
 
   it('logs a browser_takeover event to the fleet feed (FR-5 AC2)', async () => {
-    await signalTakeover(SB, 'session-takeover-test', 'SD-TEST');
+    const { client } = makeSessionsTableMock();
+    await signalTakeover(client, 'session-x', 'SD-TEST');
     expect(logCoordinationEvent).toHaveBeenCalledWith(
-      SB,
-      expect.objectContaining({ event_type: 'browser_takeover', session_id: 'session-takeover-test', sd_key: 'SD-TEST' })
+      client,
+      expect.objectContaining({ event_type: 'browser_takeover', session_id: 'session-x', sd_key: 'SD-TEST' })
     );
   });
 
   it('logs a browser_handback event to the fleet feed (FR-5 AC3)', async () => {
-    await signalTakeover(SB, 'session-takeover-test');
+    const { client } = makeSessionsTableMock({ browser_takeover_paused: true });
     logCoordinationEvent.mockClear();
-    await signalHandBack(SB, 'session-takeover-test', 'SD-TEST');
+    await signalHandBack(client, 'session-x', 'SD-TEST');
     expect(logCoordinationEvent).toHaveBeenCalledWith(
-      SB,
-      expect.objectContaining({ event_type: 'browser_handback', session_id: 'session-takeover-test', sd_key: 'SD-TEST' })
+      client,
+      expect.objectContaining({ event_type: 'browser_handback', session_id: 'session-x', sd_key: 'SD-TEST' })
     );
   });
 });
@@ -172,8 +197,8 @@ describe('logBrowserAction — FR-3 audit logging (TS-4, GAP-FR3-AC1)', () => {
   });
 
   it('calls logCoordinationEvent with the browser_-prefixed shape (GAP-FR3-AC1: was previously unverified)', async () => {
-    await logBrowserAction(SB, { sessionId: 'session-x', sdKey: 'SD-TEST', eventType: 'browser_navigate', payload: { url: 'https://example.test' } });
-    expect(logCoordinationEvent).toHaveBeenCalledWith(SB, {
+    await logBrowserAction({}, { sessionId: 'session-x', sdKey: 'SD-TEST', eventType: 'browser_navigate', payload: { url: 'https://example.test' } });
+    expect(logCoordinationEvent).toHaveBeenCalledWith({}, {
       event_type: 'browser_navigate',
       session_id: 'session-x',
       sd_key: 'SD-TEST',
@@ -185,7 +210,7 @@ describe('logBrowserAction — FR-3 audit logging (TS-4, GAP-FR3-AC1)', () => {
     logCoordinationEvent.mockImplementationOnce(async () => {
       throw new Error('simulated feed outage');
     });
-    const result = await logBrowserAction(SB, { sessionId: 'session-x', eventType: 'browser_navigate' });
+    const result = await logBrowserAction({}, { sessionId: 'session-x', eventType: 'browser_navigate' });
     expect(result.ok).toBe(false);
   });
 });
@@ -193,9 +218,13 @@ describe('logBrowserAction — FR-3 audit logging (TS-4, GAP-FR3-AC1)', () => {
 describe('driveAction — FR-3/FR-4/FR-5 guarded execution (TS-4, TS-5, GAP-FR3-AC2, GAP-FR4-AC3)', () => {
   const enabledSession = { session_id: 'session-drive', sd_key: 'SD-TEST', metadata: { browser_mcp_enabled: true } };
   const disabledSession = { session_id: 'session-drive', sd_key: 'SD-TEST', metadata: {} };
+  const enabledPausedSession = {
+    session_id: 'session-drive',
+    sd_key: 'SD-TEST',
+    metadata: { browser_mcp_enabled: true, browser_takeover_paused: true },
+  };
 
-  beforeEach(async () => {
-    await signalHandBack(SB, 'session-drive');
+  beforeEach(() => {
     logCoordinationEvent.mockClear();
   });
 
@@ -209,43 +238,49 @@ describe('driveAction — FR-3/FR-4/FR-5 guarded execution (TS-4, TS-5, GAP-FR3-
       order.push('action');
       return 'result';
     });
-    const result = await driveAction(SB, enabledSession, { eventType: 'browser_navigate', actionFn });
+    const result = await driveAction({}, enabledSession, { eventType: 'browser_navigate', actionFn });
     expect(order).toEqual(['logged', 'action']);
     expect(result.executed).toBe(true);
     expect(result.result).toBe('result');
+    expect(result.auditWarning).toBeUndefined();
     expect(actionFn).toHaveBeenCalledTimes(1);
     expect(logCoordinationEvent).toHaveBeenCalledWith(
-      SB,
+      {},
       expect.objectContaining({ event_type: 'browser_navigate', session_id: 'session-drive' })
     );
   });
 
-  it('refuses to execute when paused for takeover (TS-5)', async () => {
-    await signalTakeover(SB, 'session-drive');
+  it('refuses to execute when the session is paused for takeover (TS-5)', async () => {
     const actionFn = vi.fn();
-    const result = await driveAction(SB, enabledSession, { eventType: 'browser_click', actionFn });
+    const result = await driveAction({}, enabledPausedSession, { eventType: 'browser_click', actionFn });
     expect(result.executed).toBe(false);
     expect(result.reason).toBe('paused_for_takeover');
     expect(actionFn).not.toHaveBeenCalled();
-    await signalHandBack(SB, 'session-drive');
   });
 
-  it('resumes only after explicit hand-back, never automatically', async () => {
-    await signalTakeover(SB, 'session-drive');
-    const blocked = await driveAction(SB, enabledSession, { eventType: 'browser_click', actionFn: vi.fn() });
+  it('resumes only once the caller passes a fresh, un-paused session -- never automatically', async () => {
+    const blocked = await driveAction({}, enabledPausedSession, { eventType: 'browser_click', actionFn: vi.fn() });
     expect(blocked.executed).toBe(false);
-    await signalHandBack(SB, 'session-drive');
-    const allowed = await driveAction(SB, enabledSession, { eventType: 'browser_click', actionFn: vi.fn() });
+    const allowed = await driveAction({}, enabledSession, { eventType: 'browser_click', actionFn: vi.fn() });
     expect(allowed.executed).toBe(true);
   });
 
   it('revoking the manifest field blocks the very next action (GAP-FR4-AC3: revoke-while-active)', async () => {
-    const first = await driveAction(SB, enabledSession, { eventType: 'browser_navigate', actionFn: vi.fn() });
+    const first = await driveAction({}, enabledSession, { eventType: 'browser_navigate', actionFn: vi.fn() });
     expect(first.executed).toBe(true);
 
     // Caller re-fetches a fresh session row with the field now revoked -- next call must block.
-    const second = await driveAction(SB, disabledSession, { eventType: 'browser_navigate', actionFn: vi.fn() });
+    const second = await driveAction({}, disabledSession, { eventType: 'browser_navigate', actionFn: vi.fn() });
     expect(second.executed).toBe(false);
     expect(second.reason).toBe('browser_mcp_disabled');
+  });
+
+  it('surfaces a lost audit-log write via auditWarning instead of silently discarding it (adversarial-review fix)', async () => {
+    logCoordinationEvent.mockImplementationOnce(async () => {
+      throw new Error('simulated feed outage');
+    });
+    const result = await driveAction({}, enabledSession, { eventType: 'browser_navigate', actionFn: vi.fn(() => 'ok') });
+    expect(result.executed).toBe(true); // fail-open: the action still runs
+    expect(result.auditWarning).toMatch(/simulated feed outage/);
   });
 });
