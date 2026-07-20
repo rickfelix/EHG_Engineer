@@ -111,7 +111,18 @@ describe('shouldRequireSmokeTest() helper', () => {
 describe('checkLeadToPlanPrereqs SMOKE_TEST bypass behavior', () => {
   function makeMockSupabase({ sdRow }) {
     return {
-      from: () => {
+      from: (table) => {
+        // QF-20260720-851 (P2): the subagent-evidence preflight check now runs for
+        // every handoffType — stub fresh evidence so these unrelated (smoke-test
+        // exemption) tests don't also see a spurious SUBAGENT_EVIDENCE_MISSING issue.
+        if (table === 'sub_agent_execution_results') {
+          const rows = ['VALIDATION', 'Explore', 'TESTING', 'SECURITY', 'RETRO'].map((code) => ({
+            sub_agent_code: code, created_at: new Date().toISOString(), verdict: 'PASS'
+          }));
+          return {
+            select: () => ({ eq: () => ({ gte: async () => ({ data: rows, error: null }) }) })
+          };
+        }
         const builder = {
           select: () => builder,
           eq: () => builder,
