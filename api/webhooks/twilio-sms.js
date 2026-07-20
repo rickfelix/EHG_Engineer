@@ -82,8 +82,27 @@ function owedRowUpdateForStatus(status, nowIso) {
   return null; // queued/sending/sent — transient, leave the owed row on its send path
 }
 
+// Twilio message SIDs are alphanumeric (e.g. "SM<32 hex chars>"); this codebase's own test
+// fixtures also use a hyphenated fake-SID convention (e.g. "SM-SENT-1"), so hyphens are allowed
+// too. Validated before use in a hand-built PostgREST .or() filter string (defense in depth —
+// the signature check above already guarantees this value is genuinely from Twilio, since params
+// are HMAC-signed with the auth token; this guard just keeps the filter string well-formed).
+const VALID_MESSAGE_SID = /^[A-Za-z0-9-]+$/;
+
 /**
- * Stamp delivery-truth onto the owed obligation row matched by provider_message_id (FR-2).
+ * Stamp delivery-truth onto the owed obligation row matched by provider_message_id (FR-2), OR
+ * (SD-LEO-INFRA-SMS-DELIVERY-TRUTH-001-A Solomon Pin #2) by containment in
+ * prior_provider_message_ids — a resend preserves the ORIGINAL SID there, so a late callback for
+ * it still resolves against this row instead of silently no-op'ing once provider_message_id was
+ * overwritten by the newest attempt.
+ *
+ * STATUS GUARD (adversarial-review finding, deep-tier SECURITY sub-agent, EXEC-TO-PLAN):
+ * excludes rows already 'delivered' or 'canceled' — a late/duplicate callback for a SID the row
+ * has EVER carried must never regress an already-correct terminal state. Without this guard, a
+ * late callback for a prior (pre-resend) SID could flip an already-'delivered' row's status
+ * backwards, or race a concurrent in-flight resend (see the matching .eq('status','sending')
+ * guard on the Pass-2 send-outcome update in lib/chairman/sms-outbound-worker.js).
+ *
  * FAIL-SOFT: while the STAGED sms_outbound_obligations migration is unapplied the table is
  * absent and supabase-js resolves the update to {data:null,error} (or throws in a fake) — either
  * way this degrades to a no-op and never crashes the callback path. Runs AFTER the 401 signature
@@ -91,12 +110,13 @@ function owedRowUpdateForStatus(status, nowIso) {
  */
 async function applyOwedDeliveryTruth(supabase, { messageSid, status }) {
   const patch = owedRowUpdateForStatus(status, new Date().toISOString());
-  if (!patch) return;
+  if (!patch || !VALID_MESSAGE_SID.test(messageSid || '')) return;
   try {
     await supabase
       .from('sms_outbound_obligations')
       .update(patch)
-      .eq('provider_message_id', messageSid);
+      .not('status', 'in', '(delivered,canceled)')
+      .or(`provider_message_id.eq.${messageSid},prior_provider_message_ids.cs.{${messageSid}}`);
   } catch {
     /* table absent (STAGED) — fail-soft no-op */
   }

@@ -19,6 +19,25 @@ const ago = (ms) => new Date(Date.now() - ms).toISOString();
 //   - select(...).eq().order().limit() / .in().limit()        - update(...).eq().eq().is().select()  (atomic claim)
 //   - update(...).eq('provider_message_id',...)               (missingTables => real missing-table {data:null,error})
 // ---------------------------------------------------------------------------------------
+// SD-LEO-INFRA-SMS-DELIVERY-TRUTH-001-A: minimal .or('col.eq.val,col2.cs.{val}') parser — just
+// enough to model applyOwedDeliveryTruth's provider_message_id-or-prior-history lookup, not a
+// general PostgREST filter-string parser.
+function parseOrFilter(str) {
+  return str.split(',').map((clause) => {
+    const firstDot = clause.indexOf('.');
+    const secondDot = clause.indexOf('.', firstDot + 1);
+    return { col: clause.slice(0, firstDot), op: clause.slice(firstDot + 1, secondDot), val: clause.slice(secondDot + 1) };
+  });
+}
+function matchesOrClause(row, clause) {
+  if (clause.op === 'eq') return row[clause.col] === clause.val;
+  if (clause.op === 'cs') {
+    const inner = clause.val.replace(/^\{/, '').replace(/\}$/, '');
+    return Array.isArray(row[clause.col]) && row[clause.col].includes(inner);
+  }
+  return false;
+}
+
 function makeFakeSupabase(seed = {}) {
   const tables = {
     sms_outbound_obligations: [...(seed.sms_outbound_obligations || [])],
@@ -33,13 +52,16 @@ function makeFakeSupabase(seed = {}) {
         if (op === 'eq') return row[col] === val;
         if (op === 'in') return Array.isArray(val) && val.includes(row[col]);
         if (op === 'is') return (row[col] ?? null) === val;
+        // .not(col, 'in', '(a,b)') — PostgREST literal-list format, as used by
+        // applyOwedDeliveryTruth's terminal-status exclusion guard.
+        if (op === 'not.in') return !val.replace(/^\(/, '').replace(/\)$/, '').split(',').includes(row[col]);
         return true;
       })
     );
   }
 
   function from(table) {
-    const ctx = { filters: [], order: null, limitN: null, mode: 'select', returnSelect: false, row: null, vals: null, upsertOpts: null };
+    const ctx = { filters: [], orFilters: null, order: null, limitN: null, mode: 'select', returnSelect: false, row: null, vals: null, upsertOpts: null };
     const isMissing = missing.has(table);
     const api = {
       select(_cols) { if (ctx.mode === 'update' || ctx.mode === 'insert' || ctx.mode === 'upsert') { ctx.returnSelect = true; return api; } ctx.mode = 'select'; return api; },
@@ -49,6 +71,8 @@ function makeFakeSupabase(seed = {}) {
       eq(col, val) { ctx.filters.push([col, 'eq', val]); return api; },
       in(col, arr) { ctx.filters.push([col, 'in', arr]); return api; },
       is(col, val) { ctx.filters.push([col, 'is', val]); return api; },
+      not(col, op, val) { ctx.filters.push([col, `not.${op}`, val]); return api; },
+      or(filterStr) { ctx.orFilters = parseOrFilter(filterStr); return api; },
       order(col, { ascending } = {}) { ctx.order = { col, ascending: !!ascending }; return api; },
       limit(n) { ctx.limitN = n; return api; },
       then(resolve) {
@@ -63,12 +87,14 @@ function makeFakeSupabase(seed = {}) {
           return;
         }
         if (ctx.mode === 'update') {
-          const rows = applyFilters(tables[table], ctx.filters);
+          let rows = applyFilters(tables[table], ctx.filters);
+          if (ctx.orFilters) rows = rows.filter((r) => ctx.orFilters.some((c) => matchesOrClause(r, c)));
           rows.forEach((r) => Object.assign(r, ctx.vals));
           resolve({ data: ctx.returnSelect ? rows.map((r) => ({ ...r })) : null, error: null });
           return;
         }
         let rows = applyFilters(tables[table], ctx.filters);
+        if (ctx.orFilters) rows = rows.filter((r) => ctx.orFilters.some((c) => matchesOrClause(r, c)));
         if (ctx.order) rows = [...rows].sort((a, b) => { const cmp = a[ctx.order.col] < b[ctx.order.col] ? -1 : a[ctx.order.col] > b[ctx.order.col] ? 1 : 0; return ctx.order.ascending ? cmp : -cmp; });
         if (ctx.limitN != null) rows = rows.slice(0, ctx.limitN);
         resolve({ data: rows, error: null });
@@ -82,7 +108,7 @@ function makeFakeSupabase(seed = {}) {
 const owedRow = (over = {}) => ({
   id: over.id || 'ob-1', recipient_phone: '+15551234567', kind: 'morning_review',
   decision_id: null, body: 'Good morning review. Reply to answer.', dedupe_key: null,
-  status: 'owed', provider_message_id: null, attempts: 0, not_before: null,
+  status: 'owed', provider_message_id: null, prior_provider_message_ids: [], attempts: 0, not_before: null,
   claimed_at: null, claimed_by: null, created_at: new Date().toISOString(),
   sent_at: null, delivered_at: null, last_error: null, ...over,
 });
@@ -225,11 +251,13 @@ describe('reconcileOutboundSms (FR-3)', () => {
 // =======================================================================================
 // SECURITY MEDIUM-2 — sent-no-callback delivery-timeout reconcile
 // =======================================================================================
-describe('sent-no-callback delivery-timeout (MEDIUM-2)', () => {
-  it('a sent row older than the timeout with delivered_at NULL is reconciled (re-armed under cap)', async () => {
+describe('sent-no-callback delivery-timeout (MEDIUM-2 / FR-2 provider-check)', () => {
+  it('a sent row older than the timeout, PROVIDER-CONFIRMS undelivered, is reconciled (re-armed under cap)', async () => {
     const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 0, provider_message_id: 'SM-old', sent_at: ago(20 * MIN), delivered_at: null })] });
-    const provider = okProvider();
+    const checkMessageStatus = vi.fn(async () => ({ status: 'undelivered' }));
+    const provider = { ...okProvider(), checkMessageStatus };
     const summary = await reconcileOutboundSms(sb, { provider, sentDeliveryTimeoutMs: 15 * MIN });
+    expect(checkMessageStatus).toHaveBeenCalledWith('SM-old'); // FR-2: never blind — always queries the provider first
     expect(summary.sentTimedOut).toBe(1);
     // re-armed to owed, then re-sent by the send pass in the same run (bounded retry)
     expect(provider.send).toHaveBeenCalledTimes(1);
@@ -237,24 +265,62 @@ describe('sent-no-callback delivery-timeout (MEDIUM-2)', () => {
     expect(sb._tables.sms_outbound_obligations[0].delivered_at).toBeNull(); // still never DELIVERED (201 != delivered)
   });
 
-  it('a sent row WITHIN the timeout is left alone (still awaiting a legitimate callback)', async () => {
+  it('a sent row WITHIN the timeout is left alone (still awaiting a legitimate callback, provider never queried)', async () => {
     const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 0, provider_message_id: 'SM-fresh', sent_at: ago(5 * MIN), delivered_at: null })] });
-    const provider = okProvider();
+    const checkMessageStatus = vi.fn(async () => ({ status: 'undelivered' }));
+    const provider = { ...okProvider(), checkMessageStatus };
     const summary = await reconcileOutboundSms(sb, { provider, sentDeliveryTimeoutMs: 15 * MIN });
     expect(summary.sentTimedOut).toBe(0);
+    expect(checkMessageStatus).not.toHaveBeenCalled();
     expect(provider.send).not.toHaveBeenCalled();
     expect(sb._tables.sms_outbound_obligations[0].status).toBe('sent');
   });
 
-  it('a sent row AT the cap alerts + goes terminal failed (not re-sent)', async () => {
+  it('a sent row AT the cap, PROVIDER-CONFIRMS undelivered, alerts + goes terminal failed (not re-sent)', async () => {
     const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 3, provider_message_id: 'SM-cap', sent_at: ago(30 * MIN), delivered_at: null })] });
-    const provider = okProvider();
+    const checkMessageStatus = vi.fn(async () => ({ status: 'undelivered' }));
+    const provider = { ...okProvider(), checkMessageStatus };
     const alert = vi.fn();
     const summary = await reconcileOutboundSms(sb, { provider, maxAttempts: 3, sentDeliveryTimeoutMs: 15 * MIN, alert });
     expect(alert).toHaveBeenCalledTimes(1);
     expect(provider.send).not.toHaveBeenCalled();
     expect(summary.alerted).toBe(1);
     expect(sb._tables.sms_outbound_obligations[0].status).toBe('failed');
+  });
+
+  it('FR-2: provider CONFIRMS delivered — stamps delivered_at directly, never re-owed/re-sent', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 0, provider_message_id: 'SM-late-deliver', sent_at: ago(20 * MIN), delivered_at: null })] });
+    const checkMessageStatus = vi.fn(async () => ({ status: 'delivered' }));
+    const provider = { ...okProvider(), checkMessageStatus };
+    const summary = await reconcileOutboundSms(sb, { provider, sentDeliveryTimeoutMs: 15 * MIN });
+    expect(summary.confirmedDelivered).toBe(1);
+    expect(provider.send).not.toHaveBeenCalled(); // the callback was just lost/late — never a duplicate send
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.status).toBe('delivered');
+    expect(row.delivered_at).toBeTruthy();
+  });
+
+  it('Solomon Pin #3: the provider-check ITSELF failing (no callback AND a failed check) escalates to owed_escalate, never silently closed', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 0, provider_message_id: 'SM-check-fails', sent_at: ago(20 * MIN), delivered_at: null })] });
+    const checkMessageStatus = vi.fn(async () => { throw new Error('twilio_status_check_http_500'); });
+    const provider = { ...okProvider(), checkMessageStatus };
+    const alert = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider, sentDeliveryTimeoutMs: 15 * MIN, alert });
+    expect(summary.escalated).toBe(1);
+    expect(alert).toHaveBeenCalledTimes(1); // never SILENTLY closed
+    expect(provider.send).not.toHaveBeenCalled();
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.status).toBe('owed_escalate');
+    expect(row.last_error).toMatch(/provider_check_failed/);
+  });
+
+  it('Solomon Pin #3: an ambiguous (non-terminal) provider-check answer despite our own timeout also escalates', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 0, provider_message_id: 'SM-ambiguous', sent_at: ago(20 * MIN), delivered_at: null })] });
+    const checkMessageStatus = vi.fn(async () => ({ status: 'queued' })); // Twilio itself says non-terminal
+    const provider = { ...okProvider(), checkMessageStatus };
+    const summary = await reconcileOutboundSms(sb, { provider, sentDeliveryTimeoutMs: 15 * MIN });
+    expect(summary.escalated).toBe(1);
+    expect(sb._tables.sms_outbound_obligations[0].status).toBe('owed_escalate');
   });
 });
 
@@ -372,6 +438,162 @@ describe('handleTwilioStatusCallback delivery-truth (FR-2)', () => {
     const row = sb._tables.sms_outbound_obligations[0];
     expect(row.delivered_at).toBeNull();
     expect(row.status).toBe('sent');
+  });
+});
+
+// =======================================================================================
+// Solomon Pin #2 — duplicate-send history preservation across a resend
+// =======================================================================================
+describe('resend preserves provider_message_id history (Solomon Pin #2)', () => {
+  it('a resend PRESERVES the prior SID in prior_provider_message_ids instead of overwriting it', async () => {
+    // Row already carries a prior SID (from a first send) and is back to 'owed' (re-armed).
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'owed', attempts: 1, provider_message_id: 'SM-FIRST', prior_provider_message_ids: [] })] });
+    const provider = { send: vi.fn(async () => ({ provider_message_id: 'SM-SECOND', status: 'queued' })) };
+    await reconcileOutboundSms(sb, { provider });
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.provider_message_id).toBe('SM-SECOND');
+    expect(row.prior_provider_message_ids).toContain('SM-FIRST'); // the old SID is NOT lost
+  });
+
+  it('a late callback for the ORIGINAL (pre-resend) SID still resolves against the row (Pin #2 acceptance) instead of silently no-op-ing', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-history', status: 'sent', provider_message_id: 'SM-SECOND', prior_provider_message_ids: ['SM-FIRST'] }),
+    ] });
+    const res = makeRes();
+    process.env.TWILIO_STATUS_CALLBACK_URL = 'https://engineer.example.com/api/webhooks/twilio-status';
+    // A callback arrives for SM-FIRST (the ORIGINAL send) — pre-fix this matches ZERO rows and
+    // silently no-ops, even though the row it belongs to still exists and needs delivery-truth.
+    await handleTwilioStatusCallback(
+      { method: 'POST', headers: { 'x-twilio-signature': 'sig' }, body: { MessageStatus: 'delivered' }, protocol: 'https', get: () => 'host', originalUrl: '/x' },
+      res,
+      { supabase: sb, provider: { verifyInboundSignature: () => true, parseStatusCallback: () => ({ messageSid: 'SM-FIRST', status: 'delivered' }) } },
+    );
+    const row = sb._tables.sms_outbound_obligations.find((r) => r.id === 'ob-history');
+    expect(row.status).toBe('delivered'); // resolved, NOT a silent no-op
+    expect(row.delivered_at).toBeTruthy();
+  });
+
+  it("adversarial-review finding (SECURITY, EXEC-TO-PLAN): a callback for a PRIOR sid that lands mid-resend wins — the in-flight resend's own completion never clobbers it back to 'sent'", async () => {
+    // The row is 'sending' (mid-resend, claimed) and already carries a prior SID from the send
+    // this resend is superseding. A late callback for that prior SID arrives WHILE the resend is
+    // still in flight (before its own completion write runs) and correctly stamps 'delivered'.
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-race', status: 'sending', provider_message_id: 'SM-FIRST', prior_provider_message_ids: [], claimed_at: new Date().toISOString(), claimed_by: 'worker-race' }),
+    ] });
+    process.env.TWILIO_STATUS_CALLBACK_URL = 'https://engineer.example.com/api/webhooks/twilio-status';
+    await handleTwilioStatusCallback(
+      { method: 'POST', headers: { 'x-twilio-signature': 'sig' }, body: { MessageStatus: 'delivered' }, protocol: 'https', get: () => 'host', originalUrl: '/x' },
+      makeRes(),
+      { supabase: sb, provider: { verifyInboundSignature: () => true, parseStatusCallback: () => ({ messageSid: 'SM-FIRST', status: 'delivered' }) } },
+    );
+    expect(sb._tables.sms_outbound_obligations[0].status).toBe('delivered'); // callback landed first
+
+    // The resend's own claim-holder (an in-progress reconcileOutboundSms Pass 2 iteration) now
+    // tries to write its completion — pre-fix this unconditionally overwrote status back to
+    // 'sent'. Simulate it directly against the SAME row state, mirroring the exact update shape
+    // Pass 2 issues (status guard included).
+    await sb.from('sms_outbound_obligations')
+      .update({ status: 'sent', provider_message_id: 'SM-SECOND', prior_provider_message_ids: ['SM-FIRST'], sent_at: new Date().toISOString(), attempts: 2 })
+      .eq('id', 'ob-race')
+      .eq('status', 'sending'); // guard: only applies while still 'sending' — no longer true
+
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.status).toBe('delivered'); // NOT clobbered back to 'sent'
+    expect(row.provider_message_id).toBe('SM-FIRST'); // the resend's completion never applied
+  });
+
+  it('kill-mid-retry/restart acceptance: two full reconcile passes against the same persisted state never duplicate a send beyond the claim/retry contract', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'owed' })] });
+    const provider = { send: vi.fn(async () => ({ provider_message_id: `SM-${sb._tables.sms_outbound_obligations[0].attempts}`, status: 'queued' })) };
+    // First "process" — send #1, then a crash is simulated by nothing further happening.
+    await reconcileOutboundSms(sb, { provider });
+    expect(provider.send).toHaveBeenCalledTimes(1);
+    // "Restart": a fresh reconcile pass against the SAME (already 'sent', undelivered) state.
+    // Since the row is 'sent' (not 'owed') and still within the sent-delivery timeout, the
+    // fresh pass must NOT re-send it — the claim+status contract alone prevents the duplicate.
+    await reconcileOutboundSms(sb, { provider });
+    expect(provider.send).toHaveBeenCalledTimes(1); // still exactly one send after "restart"
+  });
+});
+
+// =======================================================================================
+// Solomon Pin #1 — sleep-window enforcement AT RELEASE time (not just at enqueue)
+// =======================================================================================
+describe('sleep-window at retry-release (Solomon Pin #1)', () => {
+  it('a retry re-armed INSIDE the 10PM-6AM ET window is held with not_before set to the next 6AM ET release, not fired immediately', async () => {
+    // 2026-01-15 is not a DST edge; 11:58 PM ET = 04:58 UTC the next day.
+    const insideWindow = new Date('2026-01-16T04:58:00.000Z'); // 11:58 PM ET on 2026-01-15
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'undelivered', attempts: 1 })] });
+    const provider = okProvider();
+    await reconcileOutboundSms(sb, { provider, maxAttempts: 3, now: insideWindow.getTime() });
+    const row = sb._tables.sms_outbound_obligations[0];
+    // Re-armed to 'owed' with a future not_before means Pass 2's claimable filter excludes it —
+    // it must NOT have been sent in this same pass despite being under the retry cap.
+    expect(provider.send).not.toHaveBeenCalled();
+    expect(row.status).toBe('owed');
+    expect(row.not_before).toBeTruthy();
+    expect(new Date(row.not_before).getTime()).toBeGreaterThan(insideWindow.getTime());
+  });
+
+  it('a retry re-armed OUTSIDE the 10PM-6AM ET window is released immediately (not_before cleared) and resent in the same pass', async () => {
+    const outsideWindow = new Date('2026-01-15T15:00:00.000Z'); // ~10 AM ET
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'undelivered', attempts: 1 })] });
+    const provider = okProvider();
+    await reconcileOutboundSms(sb, { provider, maxAttempts: 3, now: outsideWindow.getTime() });
+    expect(provider.send).toHaveBeenCalledTimes(1); // re-armed then resent in the same pass
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.status).toBe('sent');
+  });
+});
+
+// =======================================================================================
+// FR-5 — owed-state sole-send-authority audit (durable, re-checked — not a one-time PR note)
+// =======================================================================================
+describe('owed-state sole-send-authority: no bypass call sites (FR-5 audit)', () => {
+  it('the ONLY direct provider.send()/twilioProvider.send() call sites are the two sanctioned ones', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const url = await import('url');
+    const dir = path.dirname(url.fileURLToPath(import.meta.url));
+    const repoRoot = path.join(dir, '..', '..', '..');
+    const CALL_RE = /\b(?:provider|twilioProvider)\.send\s*\(/;
+    // Sanctioned: worker.js's atomic-claim-gated Pass 2 send, and sms-bridge.js's documented
+    // STAGED-table-absent pre-apply fallback (dead code once FR-0's migration is applied).
+    const SANCTIONED = new Set([
+      path.join('lib', 'chairman', 'sms-outbound-worker.js'),
+      path.join('lib', 'chairman', 'sms-bridge.js'),
+    ]);
+
+    function walk(dirPath, out) {
+      for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
+        if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+        const full = path.join(dirPath, entry.name);
+        if (entry.isDirectory()) walk(full, out);
+        else if (/\.(js|mjs|cjs)$/.test(entry.name)) out.push(full);
+      }
+    }
+
+    // Strip comment-only lines (block-comment '*' continuations and '//' lines) so a PROSE
+    // mention of "provider.send(" in a docstring doesn't false-positive as a real call site.
+    function codeLines(src) {
+      return src.split('\n').filter((line) => !/^\s*(\*|\/\/)/.test(line));
+    }
+
+    const offenders = [];
+    for (const dirName of ['lib', 'scripts', 'api']) {
+      const abs = path.join(repoRoot, dirName);
+      if (!fs.existsSync(abs)) continue;
+      const files = [];
+      walk(abs, files);
+      for (const file of files) {
+        if (/[\\/](tests?|one-off)[\\/]/.test(file) || file.endsWith('.test.js')) continue;
+        const rel = path.relative(repoRoot, file);
+        if (SANCTIONED.has(rel)) continue;
+        const src = codeLines(fs.readFileSync(file, 'utf8')).join('\n');
+        if (CALL_RE.test(src)) offenders.push(rel);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });
 

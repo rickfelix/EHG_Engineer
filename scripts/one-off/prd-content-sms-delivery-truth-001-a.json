@@ -1,0 +1,96 @@
+{
+  "functional_requirements": [
+    {
+      "id": "FR-0",
+      "title": "Migration-apply ceremony for sms_outbound_obligations (chairman-gated)",
+      "description": "database/migrations/20260718_sms_outbound_obligations_STAGED.sql is a STAGED, chairman-gated migration that is NOT yet applied to the live DB. Every other FR in this child is fail-soft no-op until this table exists live. Run the 4-step apply runbook already documented in the migration file's own header: (1) chairman verbal/written approval; (2) apply via scripts/apply-migration.js --prod-deploy with a MIGRATION_APPLY_TOKEN 3-factor attestation commit; (3) run npm run schema:snapshot:lint and commit the regenerated snapshot in the same PR (removes sms_outbound_obligations from scripts/lint/schema-reference-allowlist.json); (4) verify with a real service_role probe: enqueue an owed row and run reconcileOutboundSms. Also widen the status CHECK constraint on this STAGED (still-unapplied, zero-risk) file to add the new 'owed_escalate' value, mirroring the DROP CONSTRAINT + ADD CONSTRAINT precedent in database/migrations/20260713_periodic_process_registry_gha_source_and_state_anchor.sql.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Chairman approval obtained and recorded (verbal/written) before apply",
+        "sms_outbound_obligations exists live with status CHECK IN ('owed','sending','sent','delivered','undelivered','failed','canceled','owed_escalate')",
+        "schema:snapshot:lint passes and sms_outbound_obligations no longer appears in scripts/lint/schema-reference-allowlist.json",
+        "A real service_role probe (enqueue + reconcileOutboundSms) succeeds against the live table"
+      ]
+    },
+    {
+      "id": "FR-1",
+      "title": "Wire TWILIO_STATUS_CALLBACK_URL to the existing callback handler",
+      "description": "handleTwilioStatusCallback (api/webhooks/twilio-sms.js:147-183) is fully built, signature-verified, and already mounted at server/index.js:150 (/api/webhooks/twilio-status). twilio-provider.js:44-45 already reads TWILIO_STATUS_CALLBACK_URL and sets it as Twilio's StatusCallback form param. This FR is CONFIG ONLY: set the env var to the real public URL and verify the route is reachable in production. No new webhook code.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "TWILIO_STATUS_CALLBACK_URL is set to a real, publicly-reachable URL pointing at /api/webhooks/twilio-status",
+        "A live test SMS is stamped delivered by the webhook (not the poller) within seconds of carrier delivery"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Provider-check at sent-timeout replaces blind re-arm",
+      "description": "The existing sent-no-callback timeout path (lib/chairman/sms-outbound-worker.js, 'Pass 1c', lines ~197-214) blindly re-arms a timed-out row to 'owed' without ever querying Twilio -- this is the anti-pattern to replace. When the reaper hits a sent-timeout row, it must QUERY Twilio by provider_message_id and stamp from the provider's real answer. Re-owe happens ONLY on provider-CONFIRMED non-delivery. Per Solomon Pin #3 (callback-loss backstop polarity): an obligation with no callback AND a failed provider-check goes to the new 'owed_escalate' status (added in FR-0), never silently closed or blindly re-owed.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "A delivered-but-unstamped row (callback suppressed in test) is provider-checked at timeout and stamped delivered -- no re-send",
+        "A genuinely-undelivered row is provider-checked and stamped 'owed_escalate' (not silently closed, not blindly re-armed to 'owed')",
+        "Zero blind re-arms to 'owed' occur without a preceding provider query"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Fix duplicate-send: preserve provider_message_id on resend (Solomon Pin #2)",
+      "description": "The exact, concrete mechanism behind the live 7-duplicate incident: retryOrAlert (lib/chairman/sms-outbound-worker.js:265-269) overwrites the row's provider_message_id on a resend with no history retained. A late callback for the ORIGINAL Twilio SID then matches zero rows and silently no-ops -- if the original send actually delivered late, the chairman receives a real duplicate SMS. Fix: preserve/append prior provider_message_id values (e.g. a small history array column, or a separate obligation_send_attempts table keyed by obligation id) so a late callback for any prior SID still resolves against the same obligation. This is a NARROWER, more precise target than 'idempotency by obligation' in the abstract -- retries already reference the same obligation row; the gap is data loss on that row's provider_message_id, not row identity.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Kill the runner mid-retry, restart the process, and verify zero duplicate sends occur (Solomon's literal acceptance test)",
+        "A late-arriving callback for a PRIOR (pre-retry) provider_message_id still resolves against the correct obligation row and does not no-op",
+        "The existing crash-reaper (worker.js:176-195, prevents resend when a 'sending' row already carries provider_message_id/sent_at) continues to pass after this change"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Sleep-window enforcement at retry-release time (Solomon Pin #1)",
+      "description": "Three separate ad-hoc quiet-window implementations already exist in the codebase (isWithinChairmanQuietWindow in lib/notifications/resend-adapter.js; a bespoke et6amIso/etLocalHour helper in scripts/cron/chairman-morning-review-sweep.mjs, enqueue-time only; a third inlined in the decision-scheduler) but NONE of them gate the retry-RELEASE point in retryOrAlert. Consolidate into ONE canonical helper and call it at the point retryOrAlert releases a retry, not just at original enqueue time. A message owed at 9:58PM ET must not fire at a 10:15PM sweep; morning release (6AM ET) is the correct degradation.",
+      "priority": "P1",
+      "acceptance_criteria": [
+        "A message re-armed for retry inside the 10PM-6AM ET window is held until 6AM release, not fired immediately",
+        "The three existing ad-hoc quiet-window implementations are consolidated into one canonical helper reused at the release point (not a fourth ad-hoc copy)"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Audit remaining direct-send call sites (owed-state sole-authority completion)",
+      "description": "The atomic single-use claim (worker.js:228-243) already gates the two known chairman-SMS callers (sendChairmanSmsQuestion in sms-bridge.js, chairman-sms-gate/index.js). This FR is an AUDIT: grep the full repo for any remaining direct provider.send()/twilioProvider.send() call sites that bypass the claim, and route any found through it. Not new dispatch-authority code -- closing a completeness gap.",
+      "priority": "P2",
+      "acceptance_criteria": [
+        "Repo-wide grep for direct provider.send()/twilioProvider.send() call sites is performed and documented",
+        "Any bypass sites found are routed through the atomic claim; if none found, this is documented as a closed-with-zero-findings audit"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "requirement": "All DB writes to sms_outbound_obligations go through the service_role client only (RLS: no anon/authenticated policy exists on this table)", "rationale": "Matches the STAGED migration's governance model (mirrors 20260717_sms_relay_staging.sql / 20260717_sms_spend_envelope_STAGED.sql precedents)" },
+    { "requirement": "Twilio provider-status queries (FR-2) use the existing lib/messaging/providers/twilio-provider.js client, not a new HTTP call path", "rationale": "Avoid a second, divergent Twilio integration surface" },
+    { "requirement": "provider_message_id history (FR-3) must not break the existing unique index idx_sms_outbound_obligations_provider_message_id (partial index WHERE provider_message_id IS NOT NULL)", "rationale": "Preserve existing query performance characteristics; if history requires a separate table, the index stays on the current-attempt column only" }
+  ],
+  "test_scenarios": [
+    { "scenario": "Live send with callbacks wired (Solomon smoke test 1)", "steps": "Send a live test SMS via the gated path; assert delivered stamp arrives via webhook within seconds, sweep untouched" },
+    { "scenario": "Callback-suppressed sent-timeout (Solomon smoke test 2)", "steps": "Suppress the callback for one send, let sent-timeout fire; assert the reaper provider-checks and stamps delivered, no re-send" },
+    { "scenario": "Crash-restart mid-retry duplicate check (Solomon Pin #2 acceptance + live incident replay)", "steps": "Kill the runner mid-retry, restart, assert zero duplicate sends; separately replay the exact incident shape (forced provider false-success, crash-restart retry) and show owed-state truth holds" },
+    { "scenario": "Sleep-window release gating (Solomon Pin #1 acceptance)", "steps": "Arm a retry-release at 9:58PM ET; assert it is held until 6AM ET release, not fired immediately" },
+    { "scenario": "Callback-loss + failed provider-check escalation polarity (Solomon Pin #3 acceptance)", "steps": "Simulate no callback AND a failed provider-check for one row; assert it transitions to owed_escalate, never silently closed or blindly re-owed" }
+  ],
+  "risks": [
+    { "risk": "Migration-apply ceremony (FR-0) depends on chairman availability/approval timing, outside engineering control", "mitigation": "FR-1 through FR-5 code can be written and unit-tested against the known STAGED schema before the live apply; only LIVE acceptance testing is blocked on FR-0 completing" },
+    { "risk": "provider_message_id history change (FR-3) could affect the existing partial unique index if implemented as a widened column rather than a separate table", "mitigation": "Prefer a separate obligation_send_attempts history table over widening the existing column, to leave idx_sms_outbound_obligations_provider_message_id untouched" },
+    { "risk": "Consolidating 3 existing quiet-window helpers (FR-4) could regress a caller relying on subtle behavioral differences between the 3 implementations", "mitigation": "Read all 3 implementations before consolidating; add regression tests pinning each existing caller's current behavior before the consolidation lands" }
+  ],
+  "system_architecture": {
+    "components": [
+      "api/webhooks/twilio-sms.js (handleTwilioStatusCallback) -- existing, unwired, no changes needed beyond FR-1 config",
+      "lib/chairman/sms-outbound-worker.js (retryOrAlert, crash-reaper, sent-timeout reaper) -- FR-2/FR-3/FR-4 target",
+      "database/migrations/20260718_sms_outbound_obligations_STAGED.sql -- FR-0 apply + status enum widen",
+      "lib/messaging/providers/twilio-provider.js -- existing, used for provider-status query in FR-2",
+      "lib/notifications/resend-adapter.js (isWithinChairmanQuietWindow) -- consolidation target for FR-4"
+    ],
+    "data_flow": "Chairman send request -> sms-bridge.js enqueueChairmanSms writes an 'owed' obligation row -> worker.js claims it atomically and sends via Twilio provider -> Twilio 201-accept stamps sent_at (not delivery) -> carrier callback (FR-1, wired) stamps delivered_at OR sent-timeout fires -> reaper provider-checks (FR-2) instead of blind re-arm -> confirmed non-delivery re-owes (respecting sleep-window release, FR-4) or escalates (FR-3 history-preserving retry / Pin#3 owed_escalate on callback+provider-check failure)."
+  },
+  "exploration_summary": "VALIDATION and Explore sub-agents (LEAD phase, this session) confirmed every file/function cited is real (no hallucinations): handleTwilioStatusCallback already built+mounted, the atomic claim already gates known callers, and the STAGED migration is genuinely unapplied. The single most valuable finding was locating the EXACT duplicate-send bug mechanism (provider_message_id overwritten on resend at worker.js:265-269) rather than treating Solomon's 'idempotency by obligation' pin as a vague restatement -- retries already reference the same obligation row; the real gap is data loss on that row during resend. F1 (callback wiring) and F5-audit (sole-authority) are both narrower/smaller than the parent proposal implied."
+}
