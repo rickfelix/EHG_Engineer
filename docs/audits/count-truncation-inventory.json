@@ -1,13 +1,13 @@
 {
  "sd": "SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001",
  "generated_by": "scripts/audit/count-truncation-inventory.mjs",
- "total_sites": 9236,
+ "total_sites": 9250,
  "by_classification": {
-  "bounded-by-design": 4368,
-  "tripwired": 36,
-  "paginated": 553,
+  "bounded-by-design": 4375,
+  "tripwired": 32,
+  "paginated": 558,
   "already-exact": 209,
-  "non-live-path": 4070
+  "non-live-path": 4076
  },
  "ledger_sites": [
   {
@@ -677,10 +677,10 @@
    "exemption_note": "pending+unfulfilled worker_spawn_requests — operationally tiny set with expiry window (mirrors fleet-dashboard.cjs:200)"
   },
   {
-   "site": "lib/coordinator/dispatch.cjs:836",
+   "site": "lib/coordinator/dispatch.cjs:839",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "mutation-returning select on .insert(row) — bounded by the single-row insert payload"
+   "exemption_note": "insert(row)-then-select return of the single just-inserted row; caller controls select() cols, never a bulk read."
   },
   {
    "site": "lib/coordinator/drain-gauge.cjs:39",
@@ -2711,6 +2711,12 @@
    "exemption_note": "released_at IS NULL + heartbeat within PEER_HEARTBEAT_WINDOW — live-fleet peer snapshot (documented deliberate fail-open: install is never blocked on a snapshot error)"
   },
   {
+   "site": "lib/fleet/attention-flag-writer.js:105",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "claude_sessions filtered to metadata->>attention=true — currently-flagged-for-attention sessions, a small live alert subset by definition."
+  },
+  {
    "site": "lib/fleet/claim-eligibility.cjs:451",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
@@ -2759,6 +2765,24 @@
    "exemption_note": ".limit(limit) — LIVE_FLEET_DEFAULTS.limit=200 opt param (variable limit sits past the numeric-literal heuristic); deliberate freshest-first server-side bound"
   },
   {
+   "site": "lib/fleet/orphan-reroute-sweep.js:163",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "update(...).eq('id', row.id) mutation-return of a single row by primary key."
+  },
+  {
+   "site": "lib/fleet/orphan-reroute-sweep.js:83",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "explicit .limit(limit), default 200 (sweepOrphanRows opts) — a bounded per-tick candidate batch by design."
+  },
+  {
+   "site": "lib/fleet/orphan-reroute-sweep.js:85",
+   "classification": "tripwired",
+   "auto_classification": "needs-review",
+   "exemption_note": "repeat-offender tally, deliberately window-bounded (not paginated, see file header WINDOW SCOPE); warnIfCapTruncated added at the exactly-1000 signature (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001)."
+  },
+  {
    "site": "lib/fleet/pick-reserve-target.cjs:90",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
@@ -2783,10 +2807,10 @@
    "exemption_note": ".in(candidateKeys) — bounded by the caller-supplied retro candidate key list"
   },
   {
-   "site": "lib/fleet/worker-status.cjs:287",
+   "site": "lib/fleet/worker-status.cjs:311",
    "classification": "tripwired",
    "auto_classification": "needs-review",
-   "exemption_note": "batch 8: CAP_TRUNCATION_SUSPECTED throw at the destructure site (line shifted by the FR-6 batch 9 fapPaginate bridge added above) — consumers act on inbox rows; pagination blocked by 9+ hermetic suites stubbing this builder chain before .range()"
+   "exemption_note": "getMessagesForSession already carries a data.length===1000 cap-truncation throw a few lines below (added FR-6 batch 8) — classifier doesn't see past the .select( line."
   },
   {
    "site": "lib/flywheel/analytics.js:32",
@@ -4355,10 +4379,10 @@
    "exemption_note": ".limit(1) terminal on the next statement (line 118, beyond the classifier chain window) — single-row guard lookup; fail-closed (blocked:true) on error"
   },
   {
-   "site": "scripts/adam-advisory.cjs:1199",
+   "site": "scripts/adam-advisory.cjs:1174",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "mutation-returning .update().select() — rows bounded by the update's matched-row set (unread rows for a specific old session, <=24h window)"
+   "exemption_note": "update(...).in('target_session', olds) mutation-return where olds = a retiring Adam's own prior session-id aliases — inherently a handful of entries, never a bulk read."
   },
   {
    "site": "scripts/adam-advisory.cjs:396",
@@ -4367,10 +4391,10 @@
    "exemption_note": ".eq('id', id) pins the update to a single row before the trailing .select() — mutation-returning, at most one row"
   },
   {
-   "site": "scripts/adam-advisory.cjs:742",
-   "classification": "tripwired",
+   "site": "scripts/adam-advisory.cjs:717",
+   "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "hand-rolled cap-check below (descRows.length === SWEEP_ROW_LIMIT, corrected to POSTGREST_MAX_ROWS=1000) plus a console.warn — mirrors warnIfCapTruncated's display policy for this one-shot CLI report"
+   "exemption_note": "explicit .limit(SWEEP_ROW_LIMIT) named constant bounds this window-sweep read."
   },
   {
    "site": "scripts/adam-coordinator-health.mjs:107",
@@ -4931,10 +4955,10 @@
    "exemption_note": "update-returning select — single-row CAS-guarded (eq session_id + eq cleanup_pending) UPDATE result set"
   },
   {
-   "site": "scripts/clockwork/ci-autotriage-loop.cjs:129",
-   "classification": "bounded-by-design",
+   "site": "scripts/clockwork/ci-autotriage-loop.cjs:144",
+   "classification": "paginated",
    "auto_classification": "needs-review",
-   "exemption_note": ".in('id', keys) where keys is the distinct set of SD ids referenced by the (now-paginated) ci_failure pool — many failures dedupe onto few corrective SDs, so this set is inherently much smaller than the failure row count"
+   "exemption_note": "stripDeadLinks() id lookup chunked to 200/request (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 PLAN_VERIFICATION fix) — keys derived from the now-unbounded fapPaginate rows read above."
   },
   {
    "site": "scripts/clockwork/prod-error-sweep-loop.cjs:162",
@@ -5255,16 +5279,16 @@
    "exemption_note": "eva_scheduler_heartbeat — one row per live scheduler instance, operationally tiny (a handful of concurrent instances, not a data table)."
   },
   {
-   "site": "scripts/eva-idea-status.js:73",
+   "site": "scripts/eva-idea-status.js:76",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "eva_sync_state — one row per sync source (todoist/youtube/...), operationally tiny."
+   "exemption_note": "eva_sync_state carries one row per intake source (a fixed, small enumeration), never a growing table."
   },
   {
-   "site": "scripts/eva-idea-status.js:91",
+   "site": "scripts/eva-idea-status.js:94",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "eva_idea_categories — a fixed taxonomy config table, provably tiny."
+   "exemption_note": "eva_idea_categories is a small curated taxonomy table, not a growing operational table."
   },
   {
    "site": "scripts/eva-intake-refine.js:114",
@@ -5675,64 +5699,64 @@
    "exemption_note": ".eq('status','completed').gte('completion_date', now-15min) — time-windowed to recently-completed SDs, operationally tiny."
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:1526",
-   "classification": "tripwired",
+   "site": "scripts/fleet-dashboard.cjs:1541",
+   "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "warnIfCapTruncated(held, 'review-held SDs') wraps this read's result 10 lines below (separate statement, after the error check) — outside the auto-detector's forward window (which breaks at the blank line right after the query chain)."
+   "exemption_note": "strategic_directives_v2 filtered to metadata->>needs_coordinator_review='true' + not-terminal — a rare, small chairman-review-flag subset."
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:165",
+   "site": "scripts/fleet-dashboard.cjs:168",
    "classification": "paginated",
    "auto_classification": "needs-review",
-   "exemption_note": "already wrapped in fapPaginate() (lines above) — the auto-detector's 3-line backward window is broken by two interleaved rationale comments directly above this .select(, so the paginated marker sits outside its scan window."
+   "exemption_note": "queryFactory body for a fetchAllPaginated() call (see the enclosing try/catch \"pagination failed\" degrade) — already fully paginated, classifier flags the inner .select( line."
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:177",
-   "classification": "tripwired",
-   "auto_classification": "needs-review",
-   "exemption_note": "warnIfCapTruncated(sessRes.data, 'v_active_sessions (claimed)') wraps this read's result ~67 lines below (separate statement, after the Promise.all resolves) — outside the auto-detector's 12-line forward window."
-  },
-  {
-   "site": "scripts/fleet-dashboard.cjs:202",
-   "classification": "tripwired",
-   "auto_classification": "needs-review",
-   "exemption_note": "claude_sessions drain-agent rows -- wrapped by warnIfCapTruncated(drainRes.data, 'claude_sessions (drain agents)') downstream (existing code) before use"
-  },
-  {
-   "site": "scripts/fleet-dashboard.cjs:214",
+   "site": "scripts/fleet-dashboard.cjs:180",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "worker_spawn_requests filtered to status='pending' and not-yet-expired -- an in-flight request queue, operationally small"
+   "exemption_note": "v_active_sessions filtered to sd_key IS NOT NULL — live active-fleet-with-work snapshot, observed count=3 in production; self-limiting by the view's own heartbeat-recency definition, never historically accumulating."
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:286",
+   "site": "scripts/fleet-dashboard.cjs:205",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": ".in(ids) where ids traces to `sessions`, already tripwired via warnIfCapTruncated(sessRes.data, 'v_active_sessions (claimed)') at line 244"
+   "exemption_note": "claude_sessions filtered to is_virtual=true + status active/idle — virtual drain-agent sessions, a small live subset."
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:357",
+   "site": "scripts/fleet-dashboard.cjs:217",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": ".in('sd_key', missingKeys) where missingKeys traces to rawSessRes, which carries .limit(30)"
+   "exemption_note": "worker_spawn_requests filtered to status=pending + not-yet-expired — inherently small (only currently-pending revival requests)."
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:367",
+   "site": "scripts/fleet-dashboard.cjs:289",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": ".in('sd_key', pendingKeys) -- pendingKeys is the actively-drained dispatch-ready claimable-leaves queue (computeClaimableLeaves), operationally small by fleet-capacity/backlog policy, not table growth"
+   "exemption_note": ".in('session_id', ids) where ids come from the already-bounded session list built earlier in the same render pass, not an independent unbounded read."
   },
   {
-   "site": "scripts/fleet-dashboard.cjs:406",
-   "classification": "tripwired",
-   "auto_classification": "needs-review",
-   "exemption_note": "quick_fixes open/in_progress rows -- wrapped by warnIfCapTruncated(qfRows, 'quick_fixes (open/in_progress)') downstream (existing code) before use"
-  },
-  {
-   "site": "scripts/fleet-dashboard.cjs:864",
+   "site": "scripts/fleet-dashboard.cjs:360",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "periodic_process_registry -- a config/registry table of distinct periodic-process definitions wired in code, not user-generated data"
+   "exemption_note": ".in('sd_key', missingKeys) — missingKeys is a small gap-fill diff list, not an independent unbounded read."
+  },
+  {
+   "site": "scripts/fleet-dashboard.cjs:370",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": ".in('sd_key', pendingKeys) where pendingKeys = the dashboard's already-bounded 'workable' SD list."
+  },
+  {
+   "site": "scripts/fleet-dashboard.cjs:409",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "quick_fixes filtered to status open/in_progress — live open-QF snapshot, observed count=1 in production; self-limiting (QFs close out quickly), never historically accumulating."
+  },
+  {
+   "site": "scripts/fleet-dashboard.cjs:879",
+   "classification": "bounded-by-design",
+   "auto_classification": "needs-review",
+   "exemption_note": "periodic_process_registry is a small static config table (one row per registered periodic process), not a growing operational table."
   },
   {
    "site": "scripts/fleet-down-alert.mjs:157",
@@ -8177,34 +8201,22 @@
    "exemption_note": "strategic_directives_v2 .eq('parent_sd_id', sd.id) -- one parent orchestrator's own children, operationally small."
   },
   {
-   "site": "scripts/pipeline/baseline-insertion-hook.js:120",
+   "site": "scripts/pipeline/baseline-insertion-hook.js:135",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "key_results unfiltered — small OKR key-result set"
+   "exemption_note": "key_results is a small curated OKR table, not a growing operational table."
   },
   {
-   "site": "scripts/pipeline/baseline-insertion-hook.js:130",
+   "site": "scripts/pipeline/baseline-insertion-hook.js:145",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "strategy_objectives filtered status in (active,paused) — small strategic-planning config set"
+   "exemption_note": "strategy_objectives filtered to status active/paused — a small curated strategy-objective table."
   },
   {
-   "site": "scripts/pipeline/baseline-insertion-hook.js:380",
+   "site": "scripts/pipeline/baseline-insertion-hook.js:395",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "single-row lookup by unique sd_key (.eq('sd_key', sdKey).single())"
-  },
-  {
-   "site": "scripts/pipeline/baseline-insertion-hook.js:92",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": ".in('sd_key', sdKeys) — sdKeys drawn from the (now paginated) per-baseline items read, bounded by that one baseline's SD set"
-  },
-  {
-   "site": "scripts/pipeline/burn-rate-worker.js:57",
-   "classification": "bounded-by-design",
-   "auto_classification": "needs-review",
-   "exemption_note": ".in('sd_key', sdKeys) — sdKeys drawn from the (now paginated) per-baseline items read, bounded by that one baseline's SD set"
+   "exemption_note": "loadBaselineContext's newSd lookup — single-SD-by-key fetch (the SD currently being inserted), never a bulk read."
   },
   {
    "site": "scripts/pipeline/management-review-generator.js:180",
@@ -8483,22 +8495,22 @@
    "exemption_note": "sd_baseline_items .eq(baseline_id) — per-baseline curated execution-plan rows, operationally small"
   },
   {
-   "site": "scripts/sd-baseline-intelligent.js:193",
+   "site": "scripts/sd-baseline-intelligent.js:202",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "key_results — curated OKR key-result registry, operationally small even unfiltered"
+   "exemption_note": "key_results is a small curated OKR table, not a growing operational table."
   },
   {
-   "site": "scripts/sd-baseline-intelligent.js:203",
+   "site": "scripts/sd-baseline-intelligent.js:212",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "objectives — curated OKR objective registry, operationally small even unfiltered"
+   "exemption_note": "objectives is a small curated OKR table, not a growing operational table."
   },
   {
-   "site": "scripts/sd-baseline-intelligent.js:213",
+   "site": "scripts/sd-baseline-intelligent.js:222",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "strategy_objectives .eq(status,'active') — curated strategic-planning registry, operationally small"
+   "exemption_note": "strategy_objectives filtered to status=active — a small curated strategy-objective table."
   },
   {
    "site": "scripts/sd-baseline.js:214",
@@ -8639,16 +8651,16 @@
    "exemption_note": "codebase_semantic_stats .eq('application', application) — per-application aggregate stats rows (entity_type x language), operationally small"
   },
   {
-   "site": "scripts/solomon-advisory.cjs:385",
+   "site": "scripts/solomon-advisory.cjs:407",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "mutation-returning .update(...).eq('id', id).select() — single-row optimistic ack (ackRows)"
+   "exemption_note": ".in('target_session', [expectedTarget, 'broadcast-solomon']) — a literal 2-element array, trivially bounded."
   },
   {
-   "site": "scripts/solomon-advisory.cjs:598",
+   "site": "scripts/solomon-advisory.cjs:620",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "mutation-returning .update(...).in('target_session', olds).is(read_at,null).gte(created_at,cutoff).select('id') — bounded to unread rows in a 24h window for a handful of old sessions (drainSolomonOutbound)"
+   "exemption_note": "update(...).in('target_session', olds) mutation-return where olds = a retiring Solomon's own prior session-id aliases — inherently a handful of entries."
   },
   {
    "site": "scripts/sourcing-engine/backfill-refill-descriptions.mjs:74",
@@ -8963,10 +8975,10 @@
    "exemption_note": "eq(derived_from_vision,true).eq(year,2026).eq(status,'draft') — known pre-pivot cohort (11 rows per docstring); one-off migration script"
   },
   {
-   "site": "scripts/vision/build-completion-forecast.mjs:84",
-   "classification": "bounded-by-design",
+   "site": "scripts/vision/build-completion-forecast.mjs:93",
+   "classification": "paginated",
    "auto_classification": "needs-review",
-   "exemption_note": ".in('sd_key', [...depKeys]) — deduped dependency-key set referenced across live SDs, a small derived list"
+   "exemption_note": "depKeys lookup chunked to 200/request (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 PLAN_VERIFICATION fix) — depKeys derived from the now-unbounded fetchAllPaginated rows read above."
   },
   {
    "site": "scripts/worker-checkin.cjs:1003",
@@ -8975,22 +8987,22 @@
    "exemption_note": ".limit(STRANDED_CANDIDATE_LIMIT=5) with deterministic .order(updated_at ASC) — oldest-stranded recovery window, bounded by design (recoverStrandedFinal)"
   },
   {
-   "site": "scripts/worker-checkin.cjs:1124",
+   "site": "scripts/worker-checkin.cjs:1154",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": ".limit(ORPHAN_CANDIDATE_LIMIT=5) with deterministic .order(updated_at ASC) — oldest-orphan adoption window, bounded by design (adoptOrphanInProgress)"
+   "exemption_note": "explicit .limit(ORPHAN_CANDIDATE_LIMIT) named constant bounds this orphan-candidate scan."
   },
   {
-   "site": "scripts/worker-checkin.cjs:1261",
+   "site": "scripts/worker-checkin.cjs:1294",
    "classification": "bounded-by-design",
    "auto_classification": "needs-review",
-   "exemption_note": "update-returning select, bounded by the mutation predicate (.eq session_id + CAS .is(sd_key,null) — at most one row; healOwnClaimPointer)"
+   "exemption_note": "update(...).eq('session_id', sessionId).is('sd_key', null) CAS mutation-return of a single row."
   },
   {
-   "site": "scripts/worker-checkin.cjs:1340",
+   "site": "scripts/worker-checkin.cjs:1373",
    "classification": "tripwired",
    "auto_classification": "needs-review",
-   "exemption_note": "warnIfCapTruncated applied 5 lines below at the destructure (fleet-identity used-set seed) — statement boundary at the prior line puts the wrapper outside the classifier's forward window (same shape/rationale as FR-6 batch 3's original override)"
+   "exemption_note": "warnIfCapTruncated already applied two lines below (FR-6 batch 3) — classifier flags the .select( line before it sees the tripwire."
   },
   {
    "site": "scripts/worker-checkin.cjs:275",

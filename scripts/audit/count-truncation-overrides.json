@@ -7743,5 +7743,170 @@
   "classification": "bounded-by-design",
   "match": "id, sd_key, status",
   "note": ".or('sd_key.in.(list),id.in.(list)') where list=allRefs, derived from dependency refs of a .limit(50)-bounded upstream SD set — small"
+ },
+ "lib/coordinator/dispatch.cjs:839": {
+  "classification": "bounded-by-design",
+  "match": "q = q.select(select);",
+  "note": "insert(row)-then-select return of the single just-inserted row; caller controls select() cols, never a bulk read."
+ },
+ "lib/fleet/attention-flag-writer.js:105": {
+  "classification": "bounded-by-design",
+  "match": ".select('session_id, metadata')",
+  "note": "claude_sessions filtered to metadata->>attention=true — currently-flagged-for-attention sessions, a small live alert subset by definition."
+ },
+ "lib/fleet/orphan-reroute-sweep.js:163": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "update(...).eq('id', row.id) mutation-return of a single row by primary key."
+ },
+ "lib/fleet/orphan-reroute-sweep.js:83": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, target_session, payload, created_at')",
+  "note": "explicit .limit(limit), default 200 (sweepOrphanRows opts) — a bounded per-tick candidate batch by design."
+ },
+ "lib/fleet/orphan-reroute-sweep.js:85": {
+  "classification": "tripwired",
+  "match": ".select('payload')",
+  "note": "repeat-offender tally, deliberately window-bounded (not paginated, see file header WINDOW SCOPE); warnIfCapTruncated added at the exactly-1000 signature (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001)."
+ },
+ "lib/fleet/worker-status.cjs:311": {
+  "classification": "tripwired",
+  "match": ".select([C.id, C.messageType",
+  "note": "getMessagesForSession already carries a data.length===1000 cap-truncation throw a few lines below (added FR-6 batch 8) — classifier doesn't see past the .select( line."
+ },
+ "scripts/adam-advisory.cjs:1174": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "update(...).in('target_session', olds) mutation-return where olds = a retiring Adam's own prior session-id aliases — inherently a handful of entries, never a bulk read."
+ },
+ "scripts/adam-advisory.cjs:717": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, payload, message_type, subject, created_at, read_at, acknowledged_at')",
+  "note": "explicit .limit(SWEEP_ROW_LIMIT) named constant bounds this window-sweep read."
+ },
+ "scripts/clockwork/ci-autotriage-loop.cjs:144": {
+  "classification": "paginated",
+  "match": ".in('id', idChunk)",
+  "note": "stripDeadLinks() id lookup chunked to 200/request (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 PLAN_VERIFICATION fix) — keys derived from the now-unbounded fapPaginate rows read above."
+ },
+ "scripts/eva-idea-status.js:76": {
+  "classification": "bounded-by-design",
+  "match": ".select('source_type, source_identifier, last_sync_at, total_synced, consecutive_failures')",
+  "note": "eva_sync_state carries one row per intake source (a fixed, small enumeration), never a growing table."
+ },
+ "scripts/eva-idea-status.js:94": {
+  "classification": "bounded-by-design",
+  "match": ".select('category_type')",
+  "note": "eva_idea_categories is a small curated taxonomy table, not a growing operational table."
+ },
+ "scripts/fleet-dashboard.cjs:1541": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_key, title, status, metadata')",
+  "note": "strategic_directives_v2 filtered to metadata->>needs_coordinator_review='true' + not-terminal — a rare, small chairman-review-flag subset."
+ },
+ "scripts/fleet-dashboard.cjs:168": {
+  "classification": "paginated",
+  "match": ".select('session_id, sd_key, computed_status, metadata, tty, heartbeat_age_seconds, heartbeat_age_human')",
+  "note": "queryFactory body for a fetchAllPaginated() call (see the enclosing try/catch \"pagination failed\" degrade) — already fully paginated, classifier flags the inner .select( line."
+ },
+ "scripts/fleet-dashboard.cjs:180": {
+  "classification": "bounded-by-design",
+  "match": ".select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, terminal_id, loop_state')",
+  "note": "v_active_sessions filtered to sd_key IS NOT NULL — live active-fleet-with-work snapshot, observed count=3 in production; self-limiting by the view's own heartbeat-recency definition, never historically accumulating."
+ },
+ "scripts/fleet-dashboard.cjs:205": {
+  "classification": "bounded-by-design",
+  "match": ".select('session_id, sd_key, status, heartbeat_at, is_virtual, parent_session_id, agent_slot, last_progress_at')",
+  "note": "claude_sessions filtered to is_virtual=true + status active/idle — virtual drain-agent sessions, a small live subset."
+ },
+ "scripts/fleet-dashboard.cjs:217": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, requested_callsign, requested_by_session_id, requested_at, expires_at')",
+  "note": "worker_spawn_requests filtered to status=pending + not-yet-expired — inherently small (only currently-pending revival requests)."
+ },
+ "scripts/fleet-dashboard.cjs:289": {
+  "classification": "bounded-by-design",
+  "match": ".select('session_id,current_tool,current_tool_expected_end_at",
+  "note": ".in('session_id', ids) where ids come from the already-bounded session list built earlier in the same render pass, not an independent unbounded read."
+ },
+ "scripts/fleet-dashboard.cjs:360": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_key, title, status, progress_percentage, completion_date, current_phase')",
+  "note": ".in('sd_key', missingKeys) — missingKeys is a small gap-fill diff list, not an independent unbounded read."
+ },
+ "scripts/fleet-dashboard.cjs:370": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_key, title, description, scope').in('sd_key', pendingKeys);",
+  "note": ".in('sd_key', pendingKeys) where pendingKeys = the dashboard's already-bounded 'workable' SD list."
+ },
+ "scripts/fleet-dashboard.cjs:409": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, status, claiming_session_id, created_at, owner, release_condition')",
+  "note": "quick_fixes filtered to status open/in_progress — live open-QF snapshot, observed count=1 in production; self-limiting (QFs close out quickly), never historically accumulating."
+ },
+ "scripts/fleet-dashboard.cjs:879": {
+  "classification": "bounded-by-design",
+  "match": ".select('process_key, display_name, process_type, currently_expected_active, last_fired_at, last_state, updated_at')",
+  "note": "periodic_process_registry is a small static config table (one row per registered periodic process), not a growing operational table."
+ },
+ "scripts/pipeline/baseline-insertion-hook.js:135": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, code, title, status');",
+  "note": "key_results is a small curated OKR table, not a growing operational table."
+ },
+ "scripts/pipeline/baseline-insertion-hook.js:145": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, time_horizon, status')",
+  "note": "strategy_objectives filtered to status active/paused — a small curated strategy-objective table."
+ },
+ "scripts/pipeline/baseline-insertion-hook.js:395": {
+  "classification": "bounded-by-design",
+  "match": ".select(`",
+  "note": "loadBaselineContext's newSd lookup — single-SD-by-key fetch (the SD currently being inserted), never a bulk read."
+ },
+ "scripts/sd-baseline-intelligent.js:202": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, code, title, status, objective_id, current_value, target_value');",
+  "note": "key_results is a small curated OKR table, not a growing operational table."
+ },
+ "scripts/sd-baseline-intelligent.js:212": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, code, title');",
+  "note": "objectives is a small curated OKR table, not a growing operational table."
+ },
+ "scripts/sd-baseline-intelligent.js:222": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, title, description, time_horizon, status, health_indicator, linked_okr_ids')",
+  "note": "strategy_objectives filtered to status=active — a small curated strategy-objective table."
+ },
+ "scripts/solomon-advisory.cjs:407": {
+  "classification": "bounded-by-design",
+  "match": "await q.select('id, read_at');",
+  "note": ".in('target_session', [expectedTarget, 'broadcast-solomon']) — a literal 2-element array, trivially bounded."
+ },
+ "scripts/solomon-advisory.cjs:620": {
+  "classification": "bounded-by-design",
+  "match": ".select('id');",
+  "note": "update(...).in('target_session', olds) mutation-return where olds = a retiring Solomon's own prior session-id aliases — inherently a handful of entries."
+ },
+ "scripts/vision/build-completion-forecast.mjs:93": {
+  "classification": "paginated",
+  "match": ".select('sd_key,status').in('sd_key', keyChunk);",
+  "note": "depKeys lookup chunked to 200/request (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 PLAN_VERIFICATION fix) — depKeys derived from the now-unbounded fetchAllPaginated rows read above."
+ },
+ "scripts/worker-checkin.cjs:1154": {
+  "classification": "bounded-by-design",
+  "match": ".select('sd_key, sd_type, status, current_phase, metadata, updated_at, target_application, parent_sd_id')",
+  "note": "explicit .limit(ORPHAN_CANDIDATE_LIMIT) named constant bounds this orphan-candidate scan."
+ },
+ "scripts/worker-checkin.cjs:1294": {
+  "classification": "bounded-by-design",
+  "match": ".select('session_id');",
+  "note": "update(...).eq('session_id', sessionId).is('sd_key', null) CAS mutation-return of a single row."
+ },
+ "scripts/worker-checkin.cjs:1373": {
+  "classification": "tripwired",
+  "match": ".select('session_id, metadata')",
+  "note": "warnIfCapTruncated already applied two lines below (FR-6 batch 3) — classifier flags the .select( line before it sees the tripwire."
  }
 }

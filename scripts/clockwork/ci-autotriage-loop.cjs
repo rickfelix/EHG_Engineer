@@ -138,8 +138,12 @@ async function stripDeadLinks(db, rows) {
   if (!keys.length) return;
   const statusByKey = {};
   try {
-    const { data } = await db.from('strategic_directives_v2').select('id,status').in('id', keys);
-    for (const sd of data || []) statusByKey[sd.id] = sd.status;
+    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6/FR-7: keys is derived from `rows`,
+    // now read unbounded via fapPaginate — chunk the same way linkClass() is chunked above.
+    for (const idChunk of chunk(keys, ID_IN_CHUNK)) {
+      const { data } = await db.from('strategic_directives_v2').select('id,status').in('id', idChunk);
+      for (const sd of data || []) statusByKey[sd.id] = sd.status;
+    }
   } catch (e) { log('[ALERT] dead-link status lookup failed (fail-soft, keep links):', e.message); return; }
   let stripped = 0;
   for (const r of rows) {

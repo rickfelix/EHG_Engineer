@@ -56,10 +56,13 @@ describe('watchdog badge summary (FR-3)', () => {
 });
 
 describe('watchdog adapter (FR-2) + tableAbsent', () => {
+  // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: runWatchdog now reads via
+  // fetchAllPaginated, which calls queryFactory().range(offset, to) after .order() — the mock
+  // must be chainable through order()/range() rather than resolving directly off select().
   const fakeSupabase = ({ rows = [], absent = false } = {}) => ({
-    from: () => ({ select: () => absent
+    from: () => ({ select: () => ({ order: () => ({ range: () => absent
       ? Promise.resolve({ data: null, error: { code: '42P01', message: 'relation "claude_sessions" does not exist' } })
-      : Promise.resolve({ data: rows, error: null }) }),
+      : Promise.resolve({ data: rows, error: null }) }) }) }),
   });
   it('classifies live rows via injected isPidAlive', async () => {
     const rows = [
@@ -79,5 +82,19 @@ describe('watchdog adapter (FR-2) + tableAbsent', () => {
     expect(tableAbsent({ code: '42P01' })).toBe(true);
     expect(tableAbsent({ code: 'PGRST205' })).toBe(true);
     expect(tableAbsent(null)).toBe(false);
+  });
+  it('tableAbsent detects the real-world PGRST205 "schema cache" message shape even when .code is dropped (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 adversarial-review fix)', () => {
+    expect(tableAbsent({ message: "fetchAllPaginated: page at offset 0 failed: Could not find the table 'public.claude_sessions' in the schema cache" })).toBe(true);
+  });
+  it('fail-soft on a PGRST205-shaped ("schema cache") error routed through fetchAllPaginated → inert, not error', async () => {
+    const supabase = {
+      from: () => ({ select: () => ({ order: () => ({ range: () => Promise.resolve({
+        data: null,
+        error: { message: "Could not find the table 'public.claude_sessions' in the schema cache" },
+      }) }) }) }),
+    };
+    const res = await runWatchdog({ supabase }, { nowMs: NOW, staleThresholdMs: STALE });
+    expect(res.inert).toBe(true);
+    expect(res.total).toBe(0);
   });
 });
