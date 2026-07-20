@@ -83,4 +83,18 @@ describe('watchdog adapter (FR-2) + tableAbsent', () => {
     expect(tableAbsent({ code: 'PGRST205' })).toBe(true);
     expect(tableAbsent(null)).toBe(false);
   });
+  it('tableAbsent detects the real-world PGRST205 "schema cache" message shape even when .code is dropped (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 adversarial-review fix)', () => {
+    expect(tableAbsent({ message: "fetchAllPaginated: page at offset 0 failed: Could not find the table 'public.claude_sessions' in the schema cache" })).toBe(true);
+  });
+  it('fail-soft on a PGRST205-shaped ("schema cache") error routed through fetchAllPaginated → inert, not error', async () => {
+    const supabase = {
+      from: () => ({ select: () => ({ order: () => ({ range: () => Promise.resolve({
+        data: null,
+        error: { message: "Could not find the table 'public.claude_sessions' in the schema cache" },
+      }) }) }) }),
+    };
+    const res = await runWatchdog({ supabase }, { nowMs: NOW, staleThresholdMs: STALE });
+    expect(res.inert).toBe(true);
+    expect(res.total).toBe(0);
+  });
 });
