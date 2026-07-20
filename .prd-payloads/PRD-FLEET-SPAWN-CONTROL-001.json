@@ -1,0 +1,248 @@
+{
+  "executive_summary": "Fleet launcher SD-B delivers the CONTROL layer over the SD-A session registry: six governed verbs (spawn, attach, stop, restart, relaunch-under-profile, drain-and-restart) so fleet lifecycle stops being manual terminal-window janitor work. It composes existing primitives (worker-spawn-executor's spawn-detached pattern, singleton-relaunch's register-then-retire mutex, claim-boundary-probe's idle detection) rather than rebuilding them, and adds the three genuinely new pieces validation-agent confirmed have no prior art: Windows window-handle capture for real-terminal attach, per-account CLAUDE_CONFIG_DIR profile injection at spawn, and a thin DB adapter wiring SD-A's pure registry/manifest/metering libs to live claude_sessions data. Verified by: kill -9 on the supervisor leaves spawned children alive (proves spawn-detached); a role respawn drill exercises the existing singleton guard end-to-end; relaunch-under-profile switches one session's account while siblings are untouched.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Spawn-detached with window-handle capture",
+      "description": "New lib/fleet/spawn-control.js exports spawnSession({role, callsign, profile}) that launches a VISIBLE Windows Terminal (wt.exe) process via child_process.spawn(..., {detached:true, stdio:'ignore'}).unref() -- the exact spawn-detached pattern already proven in scripts/fleet/worker-spawn-executor.cjs, but extended from the current headless `claude -p` invocation to a visible terminal window. Immediately after spawn, poll (short retry loop, bounded) for the child process's MainWindowHandle via a PowerShell one-liner (Get-Process -Id <pid> | Select-Object MainWindowHandle) since window creation is asynchronous relative to process creation. Persist the captured handle against the session row.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "spawnSession() launches a real, visible Windows Terminal window (not headless claude -p)",
+        "The supervisor process is NEVER the OS process-parent of the spawned session (detached:true + unref() verified via process tree inspection)",
+        "Killing the supervisor process (taskkill /F on supervisor PID only) leaves the spawned session's process and window alive",
+        "A non-null window handle is captured and persisted within the bounded retry window, or the row is marked handle_capture_failed=true (never silently null with no signal)",
+        "SECURITY: the PowerShell MainWindowHandle capture interpolates ONLY a strictly-numeric PID into the command string (validated/coerced to Number before interpolation) -- never a raw/unvalidated session or role identifier"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Six-verb control API (spawn / attach / stop / restart / relaunch-under-profile / drain-and-restart) -- no more",
+      "description": "lib/fleet/spawn-control.js exposes exactly these six exported verb functions, each operating against the SD-A registry (lib/fleet/session-registry.js resolveSessionIdentity, lib/fleet/session-manifest.js computeManifestDrift). Each verb is the single governed implementation behind its corresponding launcher UI action button (mockup #1). No 7th verb is added even if a future need seems similar -- new needs compose these six, they do not add a seventh.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "spawn(), attach(), stop(), restart(), relaunchUnderProfile(), drainAndRestart() are the ONLY six exported control verbs",
+        "Each verb accepts a session/card identifier and resolves it through resolveSessionIdentity() (collision-visible: ambiguous/not_found/no_key handled, never silently picks the wrong session)",
+        "Each verb call is logged with verb name, target session_id, and outcome"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Attach resolves card -> registry -> real terminal window",
+      "description": "attach(cardId) resolves the UI card to a registry entry via resolveSessionIdentity(), reads the captured window handle from FR-1, and focuses that real terminal window (PowerShell/win32 foreground-window call). This directly addresses the named risk that Windows Terminal tab-targeting by title/PID alone is weak -- the captured handle from spawn time is the source of truth, not a runtime window-title guess.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Card-click attach in the launcher UI calls attach() and the correct terminal window comes to the foreground",
+        "If the stored handle is stale (window closed), attach() reports a clear degraded state rather than silently focusing the wrong window or a random terminal"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Role-serial respawn reuses the existing singleton guard mutex",
+      "description": "restart()/relaunchUnderProfile() for a SINGLETON role (solomon/adam/coordinator) call the EXISTING lib/singleton-relaunch.js relaunchOntoFreshCheckout() + lib/coordinator/singleton-refresh-sequencer.cjs sequenceSingletonRefresh() -- do NOT re-implement retire/register logic. This guarantees register-then-retire ordering (new session verified healthy BEFORE the old one retires) so the set_*_flag singleton guard is never raced.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Restarting a singleton role session calls sequenceSingletonRefresh(), never a bespoke retire-then-spawn sequence",
+        "A respawn drill on a role session shows the new session's guard registers successfully BEFORE the old session's released_at/released_reason is stamped",
+        "Two concurrent restart() calls against the SAME role never result in zero or two simultaneously-live singletons"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Worker respawn is parallel, reusing spawn-executor-core's decision logic",
+      "description": "restart()/spawn() for WORKER (non-singleton) sessions reuse lib/fleet/spawn-executor-core.cjs resolveSpawnDecisions({pendingRequests, liveCallsigns, nowMs, perTickCap}) for dedup-by-callsign/expiry/per-tick-cap decisions, invoked in parallel across multiple workers (no artificial serialization). This composes the existing worker_spawn_requests table path rather than inventing a second request queue.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Multiple worker restarts triggered together execute concurrently, not one-at-a-time",
+        "A duplicate restart request for an already-live callsign is skipped per resolveSpawnDecisions(), not double-spawned"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "drain-and-restart waits for the idle boundary before restarting",
+      "description": "drainAndRestart(sessionId) calls lib/fleet/claim-boundary-probe.cjs evaluateClaimBoundary() and only proceeds to restart once the probe returns a genuine idle verdict (not mid-claim). This is explicitly required for the upgrade path (SD's own acceptance language: 'waits for an idle boundary'). Do NOT confuse this with lib/fleet/drain-set-registry.js / role_drain_sets (STAGED) -- that is an unrelated message-kind drain concept.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "drainAndRestart() calls evaluateClaimBoundary() and blocks/re-polls while the verdict is MISS (mid-claim), proceeding only on PASS",
+        "A session mid-claim when drainAndRestart() is invoked is NOT restarted immediately; it restarts once idle",
+        "drainAndRestart() never reads or writes role_drain_sets / drain_set_registry -- verified by a grep-pin test excluding that module"
+      ]
+    },
+    {
+      "id": "FR-7",
+      "title": "relaunch-under-profile: per-account CLAUDE_CONFIG_DIR injection, isolated to the target session only",
+      "description": "relaunchUnderProfile(sessionId, accountProfile) injects CLAUDE_CONFIG_DIR into the CHILD PROCESS'S env object at spawn time (process.env override on the spawn() call's env option), never mutating the supervisor's own process.env. This is the ratified account-switch verb: an account change is a relaunch of that one session under a new profile directory, never a global logout. Encodes the standing operational policy: one CLAUDE_CONFIG_DIR per Anthropic account.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "relaunchUnderProfile() passes CLAUDE_CONFIG_DIR only via the spawned child's env option, never via process.env of the supervisor",
+        "After relaunching one session under profile B, a second live sibling session under profile A is unaffected (no shared-credential mass-logout)",
+        "The new session comes up authenticated under the new profile without any global logout step",
+        "SECURITY: a direct assertion confirms the supervisor's own process.env.CLAUDE_CONFIG_DIR is unchanged after any relaunchUnderProfile() call",
+        "SECURITY: accountProfile resolves only to a known, allowlisted profile directory -- never a raw/absolute/traversal path supplied verbatim from card input"
+      ]
+    },
+    {
+      "id": "FR-8",
+      "title": "Thin DB adapter wiring live session data into SD-A's pure registry/manifest libs",
+      "description": "SD-A shipped PURE (no-DB, @wire-check-exempt) functions: joinSessionIdentity({sessions, callsignBySession}), resolveSessionIdentity(joined, {by, value}), normalizeDesiredManifest(desired), computeManifestDrift({desired, actualByRole}), meterSessions(joined, {roleOf, modelOf}). No DB adapter exists yet. This FR builds lib/fleet/session-registry-adapter.js: queries claude_sessions + the SET_IDENTITY callsign source, shapes them into the {sessions, callsignBySession} input joinSessionIdentity expects, and feeds live actualByRole() output into computeManifestDrift() so the six verbs can act on real fleet state rather than assumed shape.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "The adapter's output, fed through joinSessionIdentity(), matches the documented [{session_id, terminal_id, pid, callsign}] shape against real claude_sessions rows",
+        "computeManifestDrift() called with live actualByRole() data correctly identifies under-staffed roles that spawn()/restart() should act on",
+        "Callsign resolution uses the SET_IDENTITY row, never a nonexistent claude_sessions.callsign column"
+      ]
+    },
+    {
+      "id": "FR-9",
+      "title": "Fleet lifecycle event emission (spawn/stop/restart/attach) with a stable schema",
+      "description": "Every verb invocation (FR-2) emits a lifecycle event with a stable, documented schema. Persist via the existing coordination_events table (lib/coordinator/coordination-events.cjs logCoordinationEvent()) rather than inventing a new events table, since that table already exists and is the closest fit -- confirm the schema fields (event_type, session_id, verb, outcome, at) are sufficient for downstream consumers (SD-C badges, SD-E watchdog) and extend the payload shape if a genuine gap exists, but do not create a parallel event store.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "Each of the six verbs emits exactly one lifecycle event per invocation with a stable field shape",
+        "A mock downstream consumer can read back a spawn/stop/restart event and identify the affected session_id and verb outcome without any schema guessing",
+        "SECURITY: event payload is restricted to an explicit allowlist {event_type, session_id, verb, outcome, at} -- never the CLAUDE_CONFIG_DIR path, profile directory, email, or raw spawn argv"
+      ]
+    },
+    {
+      "id": "FR-10",
+      "title": "Verb/state-model alignment with SD-E's already-shipped AUTH-LOST remediation",
+      "description": "SD-E (FLEET-WATCHDOG-001, already shipped lib/fleet/session-watchdog.js) names 'relaunch-under-profile' as its AUTH-LOST remediation action. Confirm the exact verb name and session-identifier shape SD-B exposes (FR-7) match what SD-E's watchdog card remediation strings expect, so the watchdog's remediation button resolves to a real, callable SD-B verb rather than a dangling reference.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "SD-E's session-watchdog.js AUTH-LOST remediation reference is verified (by inspection or a shared contract test) to resolve to spawn-control.js's relaunchUnderProfile() with a compatible session-identifier shape",
+        "Any naming/shape mismatch found is either fixed in SD-B (preferred, since SD-E already shipped) or explicitly flagged to the coordinator as a follow-up"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Windows-only process/window control, no cross-platform abstraction required",
+      "description": "This SD targets the Windows fleet-hosting environment exclusively (win32 spawn-detached semantics, Windows Terminal, PowerShell window-handle capture). Do not build a cross-platform abstraction layer -- explicitly out of scope."
+    },
+    {
+      "id": "TR-2",
+      "title": "Compose, do not rebuild, existing spawn/singleton/drain primitives",
+      "description": "spawn-control.js MUST import and call scripts/fleet/worker-spawn-executor.cjs, lib/fleet/spawn-executor-core.cjs, lib/singleton-relaunch.js, lib/coordinator/singleton-refresh-sequencer.cjs, and lib/fleet/claim-boundary-probe.cjs rather than re-implementing their logic inline."
+    },
+    {
+      "id": "TR-3",
+      "title": "Supervisor is convenience, never load-bearing (design invariant)",
+      "description": "Every code path in this SD must preserve the invariant that supervisor process death/crash never kills a fleet session. This is the acceptance test for FR-1 and must not regress in any later verb implementation."
+    },
+    {
+      "id": "TR-4",
+      "title": "New columns behind an additive, default-off flag",
+      "description": "window_handle capture and any config-profile/resume-identity columns are additive (nullable, no backfill required) and the live spawn-control surface is gated behind a default-off env flag (e.g. FLEET_SPAWN_CONTROL_LIVE) mirroring the existing WORKER_SPAWN_EXECUTOR_LIVE convention, so rollout is opt-in and instantly reversible."
+    },
+    {
+      "id": "TR-5",
+      "title": "Allowlist all identifiers used to build spawn/PowerShell commands (SECURITY review)",
+      "description": "role, callsign, and accountProfile values driving any spawn() argv or PowerShell command string must be validated against a known allowlist (existing role/callsign vocabulary; known profile directories) before use -- never interpolated raw from card/UI input. PIDs used in window-handle capture must be coerced to Number before interpolation."
+    },
+    {
+      "id": "TR-6",
+      "title": "Lifecycle event payload allowlist (SECURITY review)",
+      "description": "logCoordinationEvent() calls from this SD's verbs pass an explicit field allowlist ({event_type, session_id, verb, outcome, at}), never a raw spread of internal state -- CLAUDE_CONFIG_DIR paths, profile directories, and spawn argv must never reach the event log."
+    }
+  ],
+  "ui_ux_requirements": [
+    {
+      "requirement": "relaunch-under-profile must be visually distinct from restart, not a peer icon button",
+      "rationale": "restart is same-account respawn; relaunch-under-profile is an account switch (DESIGN review, highest-risk finding). Use a distinct swap/account icon, a profile picker showing account A->B, and a confirmation step before executing."
+    },
+    {
+      "requirement": "handle_capture_failed / stale window handle gets a first-class degraded-state treatment",
+      "rationale": "A disabled attach action with a warning glyph + tooltip (\"no captured window handle\") is required so FR-1's honest failure signal is not wasted on a normal-looking attach button that silently no-ops."
+    },
+    {
+      "requirement": "Contextual verb visibility with overflow grouping; icon+label never icon-only; WCAG 2.1 AA",
+      "rationale": "Show only state-valid verbs per session card; keep attach/stop primary, move relaunch-under-profile and drain-and-restart into an overflow/kebab menu; 44x44 targets, non-color-only status indication, aria-labels on all six verb controls."
+    }
+  ],
+  "test_scenarios": [
+    {"id": "TS-1", "scenario": "Spawn a detached, visible session then kill the supervisor process only", "type": "e2e", "expected": "Session process and window remain alive; window handle was captured at spawn"},
+    {"id": "TS-2", "scenario": "Card-click attach on a live session", "type": "e2e", "expected": "The real terminal window for that session is focused via its captured handle"},
+    {"id": "TS-3", "scenario": "relaunch-under-profile on one of two live sibling sessions", "type": "e2e", "expected": "Target session returns under the new account profile; sibling session's auth/session is untouched"},
+    {"id": "TS-4", "scenario": "Full respawn drill: one singleton role + two workers", "type": "e2e", "expected": "Role re-registers serially through sequenceSingletonRefresh() before the old one retires; workers respawn in parallel; zero duplicate singletons"},
+    {"id": "TS-5", "scenario": "drain-and-restart invoked while the session is mid-claim", "type": "unit", "expected": "Restart is deferred until evaluateClaimBoundary() returns PASS; never restarts mid-claim"},
+    {"id": "TS-6", "scenario": "DB adapter feeds live claude_sessions rows through joinSessionIdentity() and computeManifestDrift()", "type": "unit", "expected": "Output shape matches SD-A's documented contract; under-staffed roles are correctly identified"},
+    {"id": "TS-7", "scenario": "Two concurrent restart() calls against the same singleton role", "type": "unit", "expected": "No race: exactly one new session ends up live and registered, old one retired, never zero or two simultaneously live"},
+    {"id": "TS-8", "scenario": "Verb invocation emits a lifecycle event", "type": "unit", "expected": "coordination_events row exists with correct event_type/session_id/verb/outcome, readable by a mock consumer"},
+    {"id": "TS-9", "scenario": "Contract test: SD-E's session-watchdog.js AUTH-LOST remediation string resolves to relaunchUnderProfile()", "type": "unit", "expected": "No dangling verb-name reference; the remediation string names a verb spawn-control.js actually exports with a compatible session-identifier shape (TESTING-agent-identified gap, FR-10)"},
+    {"id": "TS-10", "scenario": "spawn-control.js exports exactly the six named verbs, no more, no fewer", "type": "unit", "expected": "Module export list equals {spawn, attach, stop, restart, relaunchUnderProfile, drainAndRestart}; resolveSessionIdentity ambiguous/not_found/no_key branches are each exercised (FR-2)"}
+  ],
+  "acceptance_criteria": [
+    "All six verbs (spawn, attach, stop, restart, relaunch-under-profile, drain-and-restart) work against live sessions end-to-end",
+    "kill -9 (or taskkill /F) on the supervisor process results in zero child session deaths",
+    "A respawn drill exercises the singleton guard end-to-end with zero duplicate singletons",
+    "relaunch-under-profile isolates the account switch to the target session only",
+    "Card-click attach focuses the correct real terminal window via a captured window handle"
+  ],
+  "risks": [
+    {"risk": "Window-handle capture races window creation (MainWindowHandle is 0 immediately after spawn)", "mitigation": "Bounded poll/retry loop after spawn before giving up and marking handle_capture_failed=true", "severity": "medium"},
+    {"risk": "A future edit accidentally makes the supervisor the process-parent again (e.g. omitting detached:true in a refactor)", "mitigation": "TS-1 is a permanent regression test in the suite, not a one-time manual check", "severity": "high"},
+    {"risk": "Role-serial and worker-parallel respawn paths race the same singleton guard if not both routed through the existing sequencer", "mitigation": "TR-2 mandates reuse of sequenceSingletonRefresh(); TS-7 is a dedicated concurrency regression test", "severity": "high"},
+    {"risk": "relaunch-under-profile verb name/session-identifier shape diverges from what SD-E's already-shipped watchdog expects", "mitigation": "FR-10 explicit alignment check; coordinate with SD-E owner/coordinator before finalizing the verb signature", "severity": "medium"},
+    {"risk": "CLAUDE_CONFIG_DIR injected process-wide instead of per-child-process, causing account bleed across sibling sessions", "mitigation": "FR-7 acceptance criteria explicitly test sibling-session isolation (TS-3)", "severity": "high"}
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Fleet launcher UI (mockup #1 action buttons) -- calls all six verbs directly",
+      "SD-C (FLEET-VIEW-BADGES-001, draft/LEAD, pure read/render consumer) -- reads the lifecycle event feed (FR-9) to badge session state; no direct dependency on this SD's internals beyond the event schema",
+      "SD-E (FLEET-WATCHDOG-001, already shipped session-watchdog.js) -- its AUTH-LOST remediation calls relaunch-under-profile (FR-10 alignment)"
+    ],
+    "dependencies": [
+      "SD-A (FLEET-REGISTRY-MANIFEST-001, completed) -- provides the pure session-registry.js/session-manifest.js/session-metering.js libs this SD adapts (FR-8)",
+      "scripts/fleet/worker-spawn-executor.cjs + lib/fleet/spawn-executor-core.cjs -- existing spawn-detached/parallel-decision infra reused, not rebuilt",
+      "lib/singleton-relaunch.js + lib/coordinator/singleton-refresh-sequencer.cjs -- existing singleton retire/register mutex reused",
+      "lib/fleet/claim-boundary-probe.cjs -- existing idle-boundary detection reused for drain-and-restart",
+      "coordination_events table -- reused as the lifecycle event feed rather than a new table"
+    ],
+    "data_contracts": [
+      "New nullable column(s) on claude_sessions (or a new fleet_session_windows table): window_handle, handle_capture_failed",
+      "coordination_events event_type values for spawn/stop/restart/attach lifecycle events (schema extension if a genuine field gap is found in PLAN's DATABASE sub-agent review)",
+      "No changes to SD-A's pure lib function signatures -- only additive DB-adapter code sits in front of them"
+    ],
+    "runtime_config": [
+      "FLEET_SPAWN_CONTROL_LIVE (new, default-off) -- gates the live six-verb surface, mirroring WORKER_SPAWN_EXECUTOR_LIVE",
+      "CLAUDE_CONFIG_DIR -- existing Claude Code env var, injected per-child-process only (never process-wide) for relaunch-under-profile"
+    ],
+    "observability_rollout": [
+      "Every verb invocation logged to coordination_events (FR-9) -- rollout is observed by watching event volume/outcome after flipping FLEET_SPAWN_CONTROL_LIVE on",
+      "Rollback: flip FLEET_SPAWN_CONTROL_LIVE off -- existing worker-spawn-executor/singleton-relaunch/claim-boundary-probe paths are untouched and continue operating exactly as before this SD"
+    ]
+  },
+  "system_architecture": {
+    "summary": "A new lib/fleet/spawn-control.js exposes six verb functions that compose existing spawn/singleton/drain primitives plus three new pieces (window-handle capture, CLAUDE_CONFIG_DIR injection, a DB adapter for SD-A's pure libs), emitting lifecycle events to the existing coordination_events table.",
+    "components": [
+      {"name": "lib/fleet/spawn-control.js", "change": "NEW -- six verb functions (spawn/attach/stop/restart/relaunchUnderProfile/drainAndRestart)"},
+      {"name": "lib/fleet/window-handle.js", "change": "NEW -- PowerShell-backed MainWindowHandle capture + foreground-focus helper"},
+      {"name": "lib/fleet/session-registry-adapter.js", "change": "NEW -- thin DB adapter feeding claude_sessions + SET_IDENTITY into SD-A's pure joinSessionIdentity/computeManifestDrift"},
+      {"name": "scripts/fleet/worker-spawn-executor.cjs", "change": "REUSED -- extended to launch a visible Windows Terminal instead of headless claude -p"},
+      {"name": "lib/fleet/spawn-executor-core.cjs", "change": "REUSED unchanged -- worker-parallel spawn decision logic"},
+      {"name": "lib/singleton-relaunch.js", "change": "REUSED unchanged -- role-serial respawn mutex"},
+      {"name": "lib/coordinator/singleton-refresh-sequencer.cjs", "change": "REUSED unchanged -- register-then-retire sequencing"},
+      {"name": "lib/fleet/claim-boundary-probe.cjs", "change": "REUSED unchanged -- idle-boundary detection for drain-and-restart"},
+      {"name": "lib/coordinator/coordination-events.cjs", "change": "REUSED, payload shape possibly extended -- lifecycle event feed"}
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build the two genuinely-new primitives (window-handle capture, DB adapter) first since every verb depends on them, then implement the six verbs as thin composition functions over existing infra, then wire event emission and verify the SD-E naming alignment.",
+    "steps": [
+      "Build lib/fleet/window-handle.js (capture + focus) and lib/fleet/session-registry-adapter.js (DB adapter) with unit tests",
+      "Extend scripts/fleet/worker-spawn-executor.cjs's spawn call to launch a visible Windows Terminal and invoke window-handle capture",
+      "Implement lib/fleet/spawn-control.js's six verbs, each composing the existing primitives per TR-2",
+      "Wire lifecycle event emission (FR-9) into each verb",
+      "Verify FR-10 (SD-E naming alignment) by inspecting session-watchdog.js's remediation string against relaunchUnderProfile()'s exported signature",
+      "Run the full e2e smoke suite (TS-1 through TS-4) against live sessions behind FLEET_SPAWN_CONTROL_LIVE"
+    ]
+  },
+  "smoke_test_steps": [
+    {"step_number": 1, "instruction": "Spawn a session detached, then kill the supervisor", "expected_outcome": "Session lives; registry reconciles on supervisor restart"},
+    {"step_number": 2, "instruction": "relaunch-under-profile on one of two live sessions", "expected_outcome": "Target session returns under the new account; sibling session unaffected"},
+    {"step_number": 3, "instruction": "Full respawn drill with one role + two workers", "expected_outcome": "Role re-registers serially through its guard; workers respawn in parallel; zero duplicates"}
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-FLEET-SPAWN-CONTROL-001"
+  }
+}
