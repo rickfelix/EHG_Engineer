@@ -18,6 +18,12 @@ describe('summarizeHarness', () => {
     const r = summarizeHarness();
     expect(r.signals.open_harness_backlog).toBe(0);
   });
+  it('accepts an exact count number for backlog (QF-20260720-887 cap-safe count path)', () => {
+    // briefHarness now passes a head:true count:'exact' total (a number) instead of a
+    // capped rows array, so a value beyond the old 1000-row cap is reported faithfully.
+    expect(summarizeHarness({ backlog: 1500 }).signals.open_harness_backlog).toBe(1500);
+    expect(summarizeHarness({ backlog: 0 }).signals.open_harness_backlog).toBe(0);
+  });
 });
 
 describe('summarizePlatform', () => {
