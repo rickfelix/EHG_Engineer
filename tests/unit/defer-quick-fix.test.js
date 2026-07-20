@@ -92,6 +92,40 @@ describe('deferQuickFix', () => {
   });
 });
 
+describe('deferQuickFix — far-future park requires release-condition (QF-20260720-137)', () => {
+  function makeSupabaseStub(returnData, returnError = null) {
+    const update = vi.fn().mockReturnThis();
+    const eq = vi.fn().mockReturnThis();
+    const select = vi.fn().mockReturnThis();
+    const single = vi.fn().mockResolvedValue({ data: returnData, error: returnError });
+    return { client: { from: () => ({ update, eq, select, single }) }, update, eq, select, single };
+  }
+
+  function daysFromNowIso(days) {
+    return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  it('rejects a >30-day park with no --release-condition before any DB write', async () => {
+    const stub = makeSupabaseStub({ id: 'QF-X' });
+    await expect(deferQuickFix('QF-X', daysFromNowIso(60), { supabaseClient: stub.client }))
+      .rejects.toThrow(/FAR_FUTURE_PARK_REQUIRES_RELEASE_CONDITION|release-condition/);
+    expect(stub.update).not.toHaveBeenCalled();
+  });
+
+  it('allows a >30-day park when --release-condition is provided', async () => {
+    const stub = makeSupabaseStub({ id: 'QF-X', status: 'open', not_before: daysFromNowIso(60) });
+    await expect(deferQuickFix('QF-X', daysFromNowIso(60), {
+      releaseCondition: 'sibling SD ships', supabaseClient: stub.client,
+    })).resolves.toMatchObject({ id: 'QF-X' });
+  });
+
+  it('does not require --release-condition for a near-future (<=30 day) park', async () => {
+    const stub = makeSupabaseStub({ id: 'QF-X', status: 'open', not_before: daysFromNowIso(5) });
+    await expect(deferQuickFix('QF-X', daysFromNowIso(5), { supabaseClient: stub.client }))
+      .resolves.toMatchObject({ id: 'QF-X' });
+  });
+});
+
 describe('deferQuickFix — hold-state contract (SD-LEO-INFRA-HOLD-STATE-CONTRACT-001)', () => {
   const ORIGINAL = process.env.HOLD_STATE_CONTRACT_MODE;
   afterEach(() => { process.env.HOLD_STATE_CONTRACT_MODE = ORIGINAL; });
