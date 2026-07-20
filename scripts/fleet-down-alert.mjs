@@ -185,13 +185,37 @@ async function checkWorkerFleetDown(db, DRY) {
   console.log('[fleet-down-alert] email sent:', r?.id || JSON.stringify(r));
 }
 
+/** Pure: the chairman-SMS message payload for a dead-coordinator trip (TS-7). */
+export function buildDeadCoordinatorMessage(verdict, now = new Date()) {
+  return {
+    type: 'status',
+    body: `DEAD COORDINATOR: no active-coordinator heartbeat for ${verdict.elapsedMin.toFixed(0)}min. Coordinator standing duties (sweeps, gauges, dispatch-rank) are unattended. Start/restart a coordinator session.`,
+    kind: 'dead_coordinator_alert',
+    dedupeKey: `dead-coordinator-${now.toISOString().slice(0, 13)}`,
+  };
+}
+
 // SD-LEO-INFRA-DURABLE-COORDINATOR-LOOPS-001 / FR-3: independent of checkWorkerFleetDown above —
 // a live worker fleet does not imply a live coordinator (the coordinator's standing
 // responsibilities — sweeps, gauges, dispatch-rank — are a distinct outage class). Deliberately
 // kept as a SEPARATE function with its own query and its own edge-trigger state, so a bug in one
 // predicate can never mask or entangle the other (TESTING gate finding, non-regression scenario).
-async function checkDeadCoordinator(db, DRY) {
-  const coordinatorId = await getActiveCoordinatorId(db);
+//
+// TS-7: sendChairmanSMSFn is injectable (defaults to the real dynamic import) so a test can assert
+// the trip actually invokes the sender with the right message, not just that the pure predicate
+// returns alert:true — mirrors the opts.fallbackSend injectable pattern already used by
+// lib/comms/adam-outbound/chairman-sms-gate/index.js for the same testability reason.
+export async function checkDeadCoordinator(db, DRY, sendChairmanSMSFn = null, now = new Date()) {
+  // getActiveCoordinatorId is used here purely for the log line (console visibility into WHY
+  // an alert fired); the actual trip decision below is entirely heartbeat-elapsed-time-driven.
+  // Fail-open on any resolution hiccup (e.g. a minimal test double lacking the full resolution
+  // chain's query surface) so a coordinator-ID lookup failure can never suppress the alert.
+  let coordinatorId = null;
+  try {
+    coordinatorId = await getActiveCoordinatorId(db);
+  } catch (e) {
+    console.error('[dead-coordinator-alert] getActiveCoordinatorId failed (non-fatal, continuing):', e.message);
+  }
 
   // Regardless of whether a coordinator is CURRENTLY elected, find the most recent heartbeat any
   // coordinator-flagged session has ever reported — this is what evaluateDeadCoordinatorAlert()'s
@@ -205,23 +229,18 @@ async function checkDeadCoordinator(db, DRY) {
   if (error) { console.error('[fleet-down-alert] coordinator-heartbeat query failed:', error.message); return; }
 
   const lastCoordinatorHeartbeatAt = rows && rows[0] ? rows[0].heartbeat_at : null;
-  const verdict = evaluateDeadCoordinatorAlert({ lastCoordinatorHeartbeatAt, now: new Date() });
+  const verdict = evaluateDeadCoordinatorAlert({ lastCoordinatorHeartbeatAt, now });
   console.log(`[dead-coordinator-alert] activeCoordinatorId=${coordinatorId || 'null'} ${verdict.alert ? 'ALERT' : 'no-alert'}: ${verdict.reason}`);
 
   if (!verdict.alert) return;
 
-  const message = {
-    type: 'status',
-    body: `DEAD COORDINATOR: no active-coordinator heartbeat for ${verdict.elapsedMin.toFixed(0)}min. Coordinator standing duties (sweeps, gauges, dispatch-rank) are unattended. Start/restart a coordinator session.`,
-    kind: 'dead_coordinator_alert',
-    dedupeKey: `dead-coordinator-${new Date().toISOString().slice(0, 13)}`,
-  };
+  const message = buildDeadCoordinatorMessage(verdict, now);
   if (DRY) {
     console.log('[dead-coordinator-alert] [DRY] would page chairman via sendChairmanSMS:', message.body);
     return;
   }
-  const { sendChairmanSMS } = await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/chairman-sms-gate/index.js')).href);
-  const r = await sendChairmanSMS(message, { now: new Date() });
+  const send = sendChairmanSMSFn || (await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/chairman-sms-gate/index.js')).href)).sendChairmanSMS;
+  const r = await send(message, { now });
   console.log('[dead-coordinator-alert] sendChairmanSMS result:', JSON.stringify(r));
 }
 
