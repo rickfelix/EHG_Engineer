@@ -18,7 +18,7 @@ describe('assertValidPid (TR-5 SECURITY guardrail)', () => {
   });
 
   it('rejects non-numeric, negative, zero, and NaN values', () => {
-    expect(() => assertValidPid('123; rm -rf /')).toThrow(/not a valid PID/);
+    expect(() => assertValidPid('123; shutdown /s')).toThrow(/not a valid PID/);
     expect(() => assertValidPid(-1)).toThrow(/not a valid PID/);
     expect(() => assertValidPid(0)).toThrow(/not a valid PID/);
     expect(() => assertValidPid('abc')).toThrow(/not a valid PID/);
