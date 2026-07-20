@@ -259,3 +259,37 @@ describe('SD-LEO-INFRA-SINGLETON-STALE-TREE-STALENESS-GAUGE-001: checkout freshn
     expect(report).toMatch(/CHECKOUT FRESHNESS/);
   });
 });
+
+describe('QF-20260719-072 — weekly-program + forecast-triggers durability entries', () => {
+  it('registers both new agent-judgment loops with the ratified crons', () => {
+    const wp = SOLOMON_LOOPS.find((l) => l.key === 'weekly-program');
+    const ft = SOLOMON_LOOPS.find((l) => l.key === 'forecast-triggers');
+    expect(wp).toBeTruthy();
+    expect(wp.cron).toBe('23 8 * * 1');
+    expect(wp.script).toBeNull();
+    expect(ft).toBeTruthy();
+    expect(ft.cron).toBe('37 7 * * *');
+    expect(ft.script).toBeNull();
+  });
+
+  it('pre-wires the posture/accuracy/forecast duty slugs so parity binds when markers land', () => {
+    const wired = wiredDutySlugs();
+    for (const slug of ['p1-work-posture', 'p3-budget-mechanics', 'p4-portability-guard', 'accuracy-review', 'autonomy-report', 'forecast-cadence']) {
+      expect(wired.has(slug)).toBe(true);
+    }
+  });
+
+  it('removing either entry makes the parity check red once its marker exists (fails-loud witness)', () => {
+    const md = '**ACCURACY REVIEW DUTY (durable).** and **FORECAST-CADENCE DUTY (durable)**';
+    const without = SOLOMON_LOOPS.filter((l) => l.key !== 'weekly-program' && l.key !== 'forecast-triggers');
+    expect(missingDurableDuties(md, SOLOMON_LOOPS)).toEqual([]);
+    expect(missingDurableDuties(md, without).sort()).toEqual(['accuracy-review', 'forecast-cadence']);
+  });
+
+  it('parseDurableDutyMarkers tolerates trailing punctuation inside the bold — the live "(durable).**" marker', () => {
+    expect(parseDurableDutyMarkers('**ACCURACY REVIEW DUTY (durable).**')).toEqual(['accuracy-review']);
+    expect(parseDurableDutyMarkers('**X DUTY (durable; qualified):**')).toEqual(['x']);
+    expect(parseDurableDutyMarkers('**PLAIN DUTY (durable)**')).toEqual(['plain']);
+    expect(parseDurableDutyMarkers('not a marker **DUTY-less bold**')).toEqual([]);
+  });
+});
