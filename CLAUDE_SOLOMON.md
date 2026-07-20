@@ -1,8 +1,8 @@
-<!-- file_content_hash: 53e7818e9ed2fb38 -->
+<!-- file_content_hash: 5b0939a75f89e62e -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-07-20 8:54:53 AM
+**Generated**: 2026-07-20 3:47:06 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
