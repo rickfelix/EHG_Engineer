@@ -103,6 +103,13 @@ export const COMPOSED_CORES = [
   // quiescentSkip: an aged pending recommendation is exactly as stale-and-worth-surfacing during a
   // quiet fleet window as during an active one.
   { key: 'solomon-ledger-resurface', script: 'solomon-ledger-pending-resurface.cjs', args: ['scripts/solomon-ledger-pending-resurface.cjs'], quiescentSkip: false },
+  // QF-20260720-638: encodes the coordinator's manual idle-QF claim-hint intervention as
+  // standing behavior (Solomon-designed, Adam-sourced). PROPOSE-ONLY (writes an advisory hint
+  // row per idle worker, never claims/mutates quick_fixes) with belt-and-suspenders chairman-
+  // gated exclusion — see the script's own header for the full governance rationale. NOT
+  // quiescentSkip: an idle worker sitting behind the directed-dispatch grace window is exactly
+  // as worth absorbing during a quiet fleet window as during an active one.
+  { key: 'idle-qf-hint', script: 'coordinator-idle-qf-hint.mjs', args: ['scripts/coordinator-idle-qf-hint.mjs'], quiescentSkip: false },
 ];
 
 /** Build the fail-soft core list for the current mode (quiescent skips the expensive cores). */
