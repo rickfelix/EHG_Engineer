@@ -36,54 +36,22 @@ function createMockDb(tableResponses = {}) {
       }
 
       const chainable = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        in: vi.fn().mockReturnThis(),
-        not: vi.fn().mockReturnThis(),
-        gte: vi.fn().mockReturnThis(),
-        lte: vi.fn().mockReturnThis(),
-        or: vi.fn().mockReturnThis(),
-        order: vi.fn(() => {
-          const resp = getResponse();
-          // Return both as promise-like and chainable
-          const result = Promise.resolve(resp);
-          result.select = chainable.select;
-          result.eq = chainable.eq;
-          result.in = chainable.in;
-          result.not = chainable.not;
-          result.gte = chainable.gte;
-          result.lte = chainable.lte;
-          result.or = chainable.or;
-          result.order = chainable.order;
-          result.limit = chainable.limit;
-          result.maybeSingle = chainable.maybeSingle;
-          return result;
-        }),
-        limit: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn(() => {
           const resp = getResponse();
           return Promise.resolve(resp);
         }),
       };
 
-      // Make each method return chainable and also resolve
-      for (const method of ['select', 'eq', 'in', 'not', 'gte', 'lte', 'or', 'limit']) {
+      // Every chain method returns the builder; the builder is thenable (below), so a
+      // query resolves to { data, error } whether it terminates on a chain method
+      // (await query…) or on .range() — the terminal fetchAllPaginated calls after
+      // the ventures read chains .order().order() (FR-6 batch 7 pagination).
+      for (const method of ['select', 'eq', 'in', 'not', 'gte', 'lte', 'or', 'limit', 'order', 'range']) {
         chainable[method] = vi.fn().mockReturnValue(chainable);
       }
 
-      // Override order to resolve with data (terminal for most queries)
-      chainable.order = vi.fn(() => {
-        const resp = getResponse();
-        const resolved = Promise.resolve(resp);
-        // Allow further chaining after order
-        resolved.select = chainable.select;
-        resolved.eq = chainable.eq;
-        resolved.in = chainable.in;
-        resolved.limit = chainable.limit;
-        return resolved;
-      });
-
-      // Make chainable also act as a thenable (for queries without explicit order)
+      // Make chainable act as a thenable so both `await <chain>` and fetchAllPaginated's
+      // `await queryFactory().range(...)` resolve the table's configured response.
       chainable.then = (resolve, reject) => {
         const resp = getResponse();
         return Promise.resolve(resp).then(resolve, reject);

@@ -30,6 +30,11 @@ function makeSupabase({ decisions = [], ventures = [] } = {}) {
       select() { return api; },
       eq(col, val) { ctx.filters.push((r) => r[col] === val); return api; },
       in(col, vals) { ctx.filters.push((r) => vals.includes(r[col])); return api; },
+      // FR-6 batch 7: the real enforcer's pending read is paginated (fetchAllPaginated
+      // appends .order().range()); both are pass-through — the thenable below serves the
+      // full filtered set as one short page.
+      order() { return api; },
+      range() { return api; },
       update(vals) { ctx.op = 'update'; ctx.vals = vals; return api; },
       insert(vals) { ctx.op = 'insert'; ctx.vals = vals; return api; },
       upsert(vals) { ctx.op = 'upsert'; ctx.vals = vals; return api; },

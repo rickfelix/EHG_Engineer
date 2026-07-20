@@ -16,6 +16,9 @@ function makeSupabase({ ventures = [], stageWorkByVenture = {}, sdsByVenture = {
       select: () => chain,
       eq: (col, val) => { if (col === 'venture_id') ventureId = val; return chain; },
       gt: () => chain,
+      order: () => chain,
+      range: () => chain, // fetchAllPaginated (FR-6) paginates the ventures read
+
       async maybeSingle() {
         if (table === 'venture_stage_work') return { data: stageWorkByVenture[ventureId] || null, error: null };
         return { data: null, error: null };

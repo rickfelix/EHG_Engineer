@@ -26,6 +26,8 @@ function createMockDb(config = {}) {
       chainable.eq = vi.fn().mockReturnValue(chainable);
       chainable.neq = vi.fn().mockReturnValue(chainable);
       chainable.lte = vi.fn().mockReturnValue(chainable);
+      chainable.order = vi.fn().mockReturnValue(chainable);
+      chainable.range = vi.fn().mockReturnValue(chainable); // fetchAllPaginated (FR-6) paginates wouldCreateCycle's edge read
       chainable.single = vi.fn(() => {
         const key = `${table}:single`;
         return Promise.resolve(config[key] || { data: null, error: null });

@@ -49,6 +49,20 @@ function mockQueryBuilder(overrides = {}) {
   };
 }
 
+/**
+ * Chainable + thenable builder for the paginated reads. listVentures() now goes
+ * through fetchAllPaginated (FR-6), which appends .range() and awaits the chain,
+ * so success-path mocks must be thenable and support range/order/eq.
+ */
+function makeChainable(result) {
+  const b = {};
+  for (const m of ['select', 'order', 'eq', 'range', 'in', 'or', 'gte', 'lte', 'not', 'limit']) {
+    b[m] = vi.fn(() => b);
+  }
+  b.then = (resolve, reject) => Promise.resolve(result).then(resolve, reject);
+  return b;
+}
+
 function createMockSupabase(overrides = {}) {
   const mockQuery = mockQueryBuilder();
 
@@ -428,10 +442,7 @@ describe('VentureContextManager', () => {
         { id: 'v-2', name: 'B', status: 'ideation' },
       ];
 
-      mockSupabase.from.mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: ventures, error: null }),
-      });
+      mockSupabase.from.mockReturnValue(makeChainable({ data: ventures, error: null }));
 
       const result = await manager.listVentures();
       expect(result).toEqual(ventures);
@@ -439,15 +450,12 @@ describe('VentureContextManager', () => {
 
     it('should filter by status when provided', async () => {
       const ventures = [{ id: 'v-1', name: 'A', status: 'active' }];
-      const mockEq = vi.fn().mockResolvedValue({ data: ventures, error: null });
-      mockSupabase.from.mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        eq: mockEq,
-      });
+      const builder = makeChainable({ data: ventures, error: null });
+      mockSupabase.from.mockReturnValue(builder);
 
       const result = await manager.listVentures({ status: 'active' });
       expect(result).toEqual(ventures);
+      expect(builder.eq).toHaveBeenCalledWith('status', 'active');
     });
 
     it('should return empty array on error', async () => {
