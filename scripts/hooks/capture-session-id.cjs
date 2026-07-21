@@ -362,7 +362,13 @@ async function upsertSessionRow(sessionId, ccPid, source, model) {
     heartbeat_at: now,
     pid: Number.isFinite(pidNum) ? pidNum : null,
     hostname: require('os').hostname(),
-    metadata: buildSessionMetadata(existingMetadata, ccPid, source, model),
+    // SD-LEO-INFRA-LEO-COMPLETION-001-D (FR-2): stamp the Claude Code resume token
+    // (metadata.resume_uuid) for EVERY captured session. The resume token IS the session UUID
+    // (`claude --resume <uuid>` takes claude_sessions.session_id), so resume_uuid := sessionId.
+    // Additive + merge-safe: buildSessionMetadata already get-then-merges the existing metadata
+    // (preserving fleet_identity/callsign/tier_rank), and this only adds the one extra key that
+    // loadLiveSlotIdentity (session-registry-adapter.js:87) and reboot-respawn read.
+    metadata: { ...buildSessionMetadata(existingMetadata, ccPid, source, model), resume_uuid: sessionId },
   });
 
   const MAX_ATTEMPTS = 3;
