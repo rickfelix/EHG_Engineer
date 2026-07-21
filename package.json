@@ -61,6 +61,8 @@
     "adam:exec:email:cron": "node scripts/adam-exec-summary.mjs",
     "fleet:spawn-executor": "node scripts/fleet/worker-spawn-executor.cjs",
     "fleet:supersede-expired-spawns": "node scripts/fleet/supersede-expired-spawn-requests.mjs",
+    "fleet:reboot-respawn": "node scripts/fleet/reboot-respawn.cjs",
+    "fleet:setup-reboot-respawn-task": "node scripts/setup-reboot-respawn-task.mjs",
     "fleet:pulse": "node scripts/fleet-worker-pulse.mjs",
     "fleet:pulse:cron": "node scripts/fleet-worker-pulse.mjs",
     "fleet:down-alert": "node scripts/fleet-down-alert.mjs",
