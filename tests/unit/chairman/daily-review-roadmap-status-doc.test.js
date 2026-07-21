@@ -222,6 +222,70 @@ describe('buildRoadmapStatusDoc — plan_of_record section', () => {
     expect(f.expected_date).toBeNull();
   });
 
+  it('adversarial-review finding (PR #6387)/TR-3: an exact tie (dispatchable === gated) is NOT treated as dispatchable — half the fleet gated must not fabricate a date', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [makeForecastBasisRow({ dispatchableQf: 10, gatedHeld: 10 })],
+    });
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.confidence).toBe('insufficient_data');
+    expect(f.expected_date).toBeNull();
+  });
+
+  it('adversarial-review finding (PR #6387)/TR-3: a negative queue_wait_median_hrs (corrupted basis) does not fabricate a past date', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [{
+        category: 'solomon_forecast_basis',
+        created_at: new Date().toISOString(),
+        metadata: {
+          forecast_basis: {
+            gantt_rule_LEGC: 'SEGREGATE...',
+            dispatch_class_model: { open_queue: { queue_wait_median_hrs: -5, queue_wait_p90_hrs: 91 } },
+            work_time_model_started_to_completed: { sd_tier: { median_hrs: 1.5, p90_hrs: 4.5 } },
+            current_state_20260721: { dispatchable_qf: 53, chairman_gated_held: 4, fenced_set: 'x' },
+          },
+        },
+      }],
+    });
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.confidence).toBe('insufficient_data');
+    expect(f.expected_date).toBeNull();
+  });
+
+  it('adversarial-review finding (PR #6387)/TR-3: an inverted percentile (p90 < median, corrupted basis) does not fabricate an inverted date range', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [{
+        category: 'solomon_forecast_basis',
+        created_at: new Date().toISOString(),
+        metadata: {
+          forecast_basis: {
+            gantt_rule_LEGC: 'SEGREGATE...',
+            dispatch_class_model: { open_queue: { queue_wait_median_hrs: 20, queue_wait_p90_hrs: 5 } }, // p90 < median
+            work_time_model_started_to_completed: { sd_tier: { median_hrs: 1.5, p90_hrs: 4.5 } },
+            current_state_20260721: { dispatchable_qf: 53, chairman_gated_held: 4, fenced_set: 'x' },
+          },
+        },
+      }],
+    });
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.confidence).toBe('insufficient_data');
+    expect(f.expected_date).toBeNull();
+  });
+
   it('TS-13: resolves a date-stamped current_state_<date> key dynamically rather than a hardcoded literal', async () => {
     const supabase = makeFakeSupabase({
       strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],

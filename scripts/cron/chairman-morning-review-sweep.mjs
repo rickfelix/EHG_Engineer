@@ -151,6 +151,22 @@ export const COMPOSED_FLAG_ENV = 'DAILY_BRIEF_COMPOSED_ENABLED';
 // margin (TS-16).
 export const GANTT_SIGNED_URL_TTL_SECONDS = 12 * 60 * 60;
 const GANTT_BUCKET = 'chairman-daily-review';
+// Adversarial-review finding (PR #6387): the composed path was reusing BODY_CEILING (306
+// chars, sized for the OLD short 3-line SMS-segment summary), which silently truncated
+// buildRoadmapStatusDoc()'s much richer plainTextBody mid-sentence -- cutting off the
+// Solomon-calibrated forecast line and the entire narrative section under a realistic
+// multi-wave roadmap. MMS bodies are not SMS-segment-constrained; Twilio's MMS body limit is
+// far higher than a 2-segment SMS. 1500 gives generous headroom while still bounding runaway
+// content.
+export const COMPOSED_BODY_CEILING = 1500;
+
+/** Truncate at the last word boundary <= maxLen so a cut never lands mid-word/mid-sentence. */
+function truncateAtWordBoundary(text, maxLen) {
+  if (text.length <= maxLen) return text;
+  const slice = text.slice(0, maxLen - 1);
+  const lastBreak = Math.max(slice.lastIndexOf('\n'), slice.lastIndexOf(' '));
+  return `${(lastBreak > 0 ? slice.slice(0, lastBreak) : slice).trimEnd()}…`;
+}
 
 /**
  * FR-2 composer: buildRoadmapStatusDoc (Solomon-calibrated text, FR-1) + renderGanttPng +
@@ -161,12 +177,13 @@ const GANTT_BUCKET = 'chairman-daily-review';
  */
 export async function buildComposedBody(supabase, { now = new Date(), buildDoc = buildRoadmapStatusDoc, renderPng = renderGanttPng, uploadSign = uploadPrivateAndSign } = {}) {
   const doc = await buildDoc(supabase);
-  let body = doc.plainTextBody;
-  if (body.length > BODY_CEILING) body = `${body.slice(0, BODY_CEILING - 1)}…`;
+  const body = truncateAtWordBoundary(doc.plainTextBody, COMPOSED_BODY_CEILING);
 
   let mediaUrl = null;
   try {
-    const waves = doc.sections?.[0]?.data?.waves;
+    // Find by id, not array position -- a future section reorder must not silently disable
+    // the Gantt image (adversarial-review finding, PR #6387).
+    const waves = doc.sections?.find((s) => s.id === 'plan_of_record')?.data?.waves;
     if (Array.isArray(waves) && waves.length > 0) {
       const png = await renderPng(waves);
       const path = `${etDateStr(now)}.png`;

@@ -20,6 +20,7 @@ import {
   et6amIso,
   etPrior545Iso,
   BODY_CEILING,
+  COMPOSED_BODY_CEILING,
   COMPOSED_FLAG_ENV,
   GANTT_SIGNED_URL_TTL_SECONDS,
 } from '../../../scripts/cron/chairman-morning-review-sweep.mjs';
@@ -314,7 +315,7 @@ describe('PRD TS-5 — composer failure degrades to text-only, never crashes the
 
 describe('buildComposedBody (FR-2) — render/upload failure degrades to text-only, never throws', () => {
   it('5a: renderPng throws -> mediaUrl null, body still returned from buildDoc', async () => {
-    const buildDoc = vi.fn(async () => ({ plainTextBody: 'text body', sections: [{ data: { waves: [{ title: 'W1' }] } }] }));
+    const buildDoc = vi.fn(async () => ({ plainTextBody: 'text body', sections: [{ id: 'plan_of_record', data: { waves: [{ title: 'W1' }] } }] }));
     const renderPng = vi.fn(async () => { throw new Error('render failed'); });
     const uploadSign = vi.fn();
     const result = await buildComposedBody({}, { buildDoc, renderPng, uploadSign });
@@ -324,7 +325,7 @@ describe('buildComposedBody (FR-2) — render/upload failure degrades to text-on
   });
 
   it('5b: uploadSign throws -> mediaUrl null, does not throw', async () => {
-    const buildDoc = vi.fn(async () => ({ plainTextBody: 'text body', sections: [{ data: { waves: [{ title: 'W1' }] } }] }));
+    const buildDoc = vi.fn(async () => ({ plainTextBody: 'text body', sections: [{ id: 'plan_of_record', data: { waves: [{ title: 'W1' }] } }] }));
     const renderPng = vi.fn(async () => Buffer.from('png-bytes'));
     const uploadSign = vi.fn(async () => { throw new Error('upload failed'); });
     const result = await buildComposedBody({}, { buildDoc, renderPng, uploadSign });
@@ -333,7 +334,7 @@ describe('buildComposedBody (FR-2) — render/upload failure degrades to text-on
   });
 
   it('happy path: mediaUrl populated from uploadSign, TTL = GANTT_SIGNED_URL_TTL_SECONDS (PRD TS-16)', async () => {
-    const buildDoc = vi.fn(async () => ({ plainTextBody: 'text body', sections: [{ data: { waves: [{ title: 'W1' }] } }] }));
+    const buildDoc = vi.fn(async () => ({ plainTextBody: 'text body', sections: [{ id: 'plan_of_record', data: { waves: [{ title: 'W1' }] } }] }));
     const renderPng = vi.fn(async () => Buffer.from('png-bytes'));
     const uploadSign = vi.fn(async (_sb, args) => ({ path: args.path, signedUrl: 'https://signed.example/x.png' }));
     const result = await buildComposedBody({}, { buildDoc, renderPng, uploadSign, now: SUMMER_WORK });
@@ -343,7 +344,7 @@ describe('buildComposedBody (FR-2) — render/upload failure degrades to text-on
   });
 
   it('no waves available -> text-only, renderPng never called', async () => {
-    const buildDoc = vi.fn(async () => ({ plainTextBody: 'text body', sections: [{ data: { waves: [] } }] }));
+    const buildDoc = vi.fn(async () => ({ plainTextBody: 'text body', sections: [{ id: 'plan_of_record', data: { waves: [] } }] }));
     const renderPng = vi.fn();
     const uploadSign = vi.fn();
     const result = await buildComposedBody({}, { buildDoc, renderPng, uploadSign });
@@ -351,10 +352,23 @@ describe('buildComposedBody (FR-2) — render/upload failure degrades to text-on
     expect(renderPng).not.toHaveBeenCalled();
   });
 
-  it('body is truncated at BODY_CEILING like the text-only path', async () => {
-    const longBody = 'x'.repeat(BODY_CEILING + 50);
-    const buildDoc = vi.fn(async () => ({ plainTextBody: longBody, sections: [{ data: { waves: [] } }] }));
+  it('adversarial-review finding (PR #6387): composed body uses COMPOSED_BODY_CEILING (MMS-sized), not the old SMS-segment BODY_CEILING -- a realistic multi-wave body must NOT be gutted', async () => {
+    // A realistic ~800-char body (forecast line + narrative), well under COMPOSED_BODY_CEILING
+    // but well over the old BODY_CEILING=306 that used to silently truncate it mid-sentence.
+    const realisticBody = 'PLAN OF RECORD\n' + '  - Wave: 1/2 items\n'.repeat(20) + '  Forecast (calibrated): 2026-08-01 -- 2026-08-05 -- 2026-08-10\n\nWHAT MOVED YESTERDAY / PLAN FOR TODAY\n  DONE: SD-X-001\n';
+    expect(realisticBody.length).toBeGreaterThan(BODY_CEILING);
+    const buildDoc = vi.fn(async () => ({ plainTextBody: realisticBody, sections: [{ id: 'plan_of_record', data: { waves: [] } }] }));
     const result = await buildComposedBody({}, { buildDoc, renderPng: vi.fn(), uploadSign: vi.fn() });
-    expect(result.body.length).toBeLessThanOrEqual(BODY_CEILING);
+    expect(result.body).toBe(realisticBody); // untruncated -- forecast line survives
+    expect(result.body).toContain('Forecast (calibrated)');
+  });
+
+  it('body is truncated at COMPOSED_BODY_CEILING for pathologically large content, at a word boundary (never mid-word)', async () => {
+    const longBody = 'word '.repeat(400); // 2000 chars, well over COMPOSED_BODY_CEILING
+    const buildDoc = vi.fn(async () => ({ plainTextBody: longBody, sections: [{ id: 'plan_of_record', data: { waves: [] } }] }));
+    const result = await buildComposedBody({}, { buildDoc, renderPng: vi.fn(), uploadSign: vi.fn() });
+    expect(result.body.length).toBeLessThanOrEqual(COMPOSED_BODY_CEILING);
+    expect(result.body.endsWith('…')).toBe(true);
+    expect(result.body).not.toMatch(/wor…$/); // never cuts mid-word
   });
 });
