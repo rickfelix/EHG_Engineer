@@ -726,6 +726,27 @@ async function main() {
     } catch { /* fail-open on any internal error */ }
   }
 
+  // --- ENFORCEMENT 12d: worktree-removal shared-store wipe guard (QF-20260721-742) ---
+  // Raw `git worktree remove`/`rm -rf` on a junctioned worktree bypasses the in-code
+  // pre-unlink guards (removeWorktreeViaGit/concurrent-session-worktree.cjs) — 4th
+  // fleet-bricking wipe recurrence. Off-switch: LEO_WORKTREE_REMOVE_GUARD=off. Fail-open.
+  if (TOOL_NAME === 'Bash' && process.env.LEO_WORKTREE_REMOVE_GUARD !== 'off') {
+    try {
+      const { worktreeRemoveWouldWipeSharedStore } = require('../../lib/worktree-remove-junction-guard.cjs');
+      const verdict = worktreeRemoveWouldWipeSharedStore({ command: input.command || '', cwd: input.cwd || process.cwd() });
+      if (verdict.wipes) {
+        const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'WORKTREE-REMOVE-SHARED-WIPE', `worktree removal would wipe shared node_modules (${verdict.reason})`, 'block', { reason: verdict.reason, targetPath: verdict.targetPath });
+        process.stderr.write(
+          `WORKTREE-REMOVE SHARED-STORE WIPE GUARD (QF-20260721-742): refusing raw removal of a junctioned worktree.\n` +
+          `  Reason: ${verdict.reason} — this worktree's node_modules is a junction into the SHARED store; a raw remove follows it and bricks every parallel session.\n` +
+          `  Use the safe path instead:  npm run worktree:remove "${verdict.targetPath || '<path>'}"\n` +
+          `  Override (single-session only):    LEO_WORKTREE_REMOVE_GUARD=off\n`
+        );
+        await auditAndExit(auditPromise, 2, 1000);
+      }
+    } catch { /* fail-open on any internal error */ }
+  }
+
   // --- ENFORCEMENT 13: Worktree Hygiene Guard (SD-LEO-INFRA-PRE-TOOL-WORKTREE-GUARD-001) ---
   // PreToolUse check on Edit/Write — catches the most common parallel-session
   // failure mode at the moment of first damage:
