@@ -50,6 +50,10 @@ const ALLOWLIST_PATTERNS = [
   // kinds are legitimately bodyless-by-design for a lane-hygiene lint gauge, an orthogonal
   // concern to "does this role's inbox drain this kind" (the class Child B closed).
   /^lib\/coordination\/lane-lint-gauge\.cjs$/,
+  // NOT a per-role recognized-kinds mirror -- HIGH_VALUE_KINDS classifies which orphaned
+  // dead-letter kinds are high-value (retarget to a live role-successor) vs noise (drain), a
+  // triage/priority concern orthogonal to "does this role's inbox drain this kind" (QF-20260721-737).
+  /^lib\/coordination\/dead-letter-drain\.js$/,
 ];
 
 function isAllowlisted(rel) {
