@@ -8,7 +8,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import { classifyDeadLetterRow, summarizeDrain } from '../lib/coordination/dead-letter-drain.js';
+import { classifyDeadLetterRow, summarizeDrain, HIGH_VALUE_KINDS } from '../lib/coordination/dead-letter-drain.js';
 
 const APPLY = process.argv.includes('--apply');
 const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -71,7 +71,7 @@ async function main() {
   // count-integrity: re-verify zero unacked high-value dead-letter remains
   const recheck = await all('session_coordination', 'id,target_session,payload,message_type', (q) => q.is('acknowledged_at', null));
   const stillDead = recheck.filter((r) => { const t = r.target_session; return (!t || !byId.has(t) || !isLive(t)); })
-    .filter((r) => classifyDeadLetterRow(r, { successors }).action === 'retarget' || ['adam_advisory', 'directive', 'chairman_directive', 'solomon_consult'].includes((r.payload && r.payload.kind) || r.message_type));
+    .filter((r) => classifyDeadLetterRow(r, { successors }).action === 'retarget' || HIGH_VALUE_KINDS.includes((r.payload && r.payload.kind) || r.message_type));
   console.log(`post-check: unacked high-value-kind rows still targeting a non-live session = ${stillDead.length} (acceptance: 0)`);
 }
 
