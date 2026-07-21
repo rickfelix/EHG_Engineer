@@ -24,7 +24,7 @@ import { CRITICAL_PROTOCOL_FILES } from '../../lib/governance/checkout-freshness
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-test('ADAM_LOOPS has the 12 expected tick loops with the expected keys', () => {
+test('ADAM_LOOPS has the 14 expected tick loops with the expected keys', () => {
   // self-adherence added by SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001 (child E);
   // belt-countdown added by SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR2 — durable contract duty);
   // doc-drift + github-assessment added by SD-LEO-INFRA-REGISTER-TWO-EVERY-001 (every-3-day propose-only duties);
@@ -32,9 +32,11 @@ test('ADAM_LOOPS has the 12 expected tick loops with the expected keys', () => {
   // heartbeat-sms (was heartbeat-email, QF-20260702-433) + morning-brief-sms added by QF-20260719-343
   //   (contract c3/c4, leo_protocol_sections id=601, chairman-directed 2026-07-19);
   // quiet-tick added by SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001 (folds inbox-monitor/belt-countdown/offer-help);
-  // coordinator-health added by SD-LEO-INFRA-ADAM-COORDINATOR-HEALTH-001 (3-KPI coordinator oversight probe).
-  assert.equal(ADAM_LOOPS.length, 12);
-  assert.deepEqual(ADAM_LOOPS.map((l) => l.key), ['quiet-tick', 'governance-scan', 'inbox-monitor', 'offer-help', 'self-adherence', 'coordinator-health', 'belt-countdown', 'doc-drift', 'github-assessment', 'board-reconcile', 'heartbeat-sms', 'morning-brief-sms']);
+  // coordinator-health added by SD-LEO-INFRA-ADAM-COORDINATOR-HEALTH-001 (3-KPI coordinator oversight probe);
+  // self-score + solomon-health added by QF-20260719-825 (chairman-directed deliberate-check cadence)
+  //   -- this assertion was stale at 12 for 2 days until QF-20260721-518 caught + fixed it.
+  assert.equal(ADAM_LOOPS.length, 14);
+  assert.deepEqual(ADAM_LOOPS.map((l) => l.key), ['quiet-tick', 'governance-scan', 'inbox-monitor', 'offer-help', 'self-adherence', 'coordinator-health', 'belt-countdown', 'doc-drift', 'github-assessment', 'board-reconcile', 'self-score', 'solomon-health', 'heartbeat-sms', 'morning-brief-sms']);
   ADAM_LOOPS.forEach((l) => {
     assert.ok(l.cron && typeof l.cron === 'string', `${l.key} has a cron`);
     assert.ok(l.prompt && typeof l.prompt === 'string', `${l.key} has a prompt`);
