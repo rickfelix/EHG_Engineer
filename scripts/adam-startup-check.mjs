@@ -228,6 +228,19 @@ export const ADAM_LOOPS = [
     cron: '0 6 * * *',
     prompt: 'Adam morning-brief-sms tick: compose a self-contained, plan-first morning brief (roadmap position + overnight Slipped/Committing/Done condensed to phone scale, professional-casual), then run node scripts/adam-chairman-sms.mjs --kind morning_brief --dedupe-key "adam-morning-brief-<YYYY-MM-DD ET>" --body "<brief>". If a later tick finds today\'s dedupe key was never sent (the 6:00 fire was missed), compose and send it then instead -- late is better than never.',
   },
+  {
+    // QF-20260721-010 (contract, leo_protocol_sections id=601, mirrors the belt-countdown/board-reconcile
+    // durable-encoding pattern): the DECISION-DRIVING-SWEEP DUTY. A 3-hourly sweep that DRIVES pending
+    // chairman decisions to resolution. Was SESSION-ONLY (Adam-armed 2026-07-21) and DIED on every /adam
+    // restart; not a contract-named duty, so missingDurableDuties could not detect the gap. Now named durable
+    // in the contract (CLAUDE_ADAM.md "DECISION-DRIVING-SWEEP DUTY (durable)") AND armed here so a fresh
+    // /adam re-arms it and the contract<->tooling parity check holds. Minute-50 offset avoids fleet :00 collisions.
+    key: 'decision-driving-sweep',
+    label: 'Decision-driving sweep (3h: drive pending chairman decisions to resolution; propose-only, silence-by-default)',
+    script: null, // agent-judgment tick — drive/reconcile decisions, no single script
+    cron: '50 */3 * * *',
+    prompt: 'Adam decision-driving-sweep tick: read the pending chairman-decision queue (node scripts/chairman-decisions.mjs list) and DRIVE each pending decision toward resolution — for an un-surfaced decision that survives the pre-send rubric, send the SMS decision packet (labeled options + RECOMMENDED default + no-reply auto-default policy) via node scripts/adam-chairman-decision.mjs per the CHAIRMAN SMS CHANNEL DUTY; reconcile any in-flight no-reply retries (the ratified retry->auto-default clock, quiet-hours-paused); and re-surface chairman-gated blocks starving the belt (BELT-NEVER-DRY branch 3). Propose-only (CONST-002); if nothing is pending, STAY SILENT (silence-by-default).',
+  },
 ];
 
 // Parse the armed-cron basenames/prompts the agent passes from its CronList output.
