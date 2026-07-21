@@ -44,6 +44,21 @@ export const RESPONSIBILITIES = [
 //   - governance-scan: the flag-gated read-only opportunity-scan (the heartbeat body).
 //   - inbox-monitor:   drain coordinator replies that arrived after a sync await timed out.
 //   - offer-help:      an agent-judgment tick (no script) — propose-only, silence-by-default.
+//
+// QF-20260721-518 (UAT-agent-filed, 2026-07-21): flagged 2 crons as missing from this
+// manifest -- "hourly heartbeat-SMS" and "decision-driving sweep every 3h". Investigation
+// found both premises stale by the time the QF was actioned:
+//   - heartbeat-SMS: already the 'heartbeat-sms' entry below (shipped by QF-20260719-343,
+//     TWO DAYS before this QF was filed).
+//   - "decision-driving sweep every 3h": no such CLAUDE_ADAM.md-declared duty exists
+//     (missingDurableDuties(readFileSync('CLAUDE_ADAM.md'), ADAM_LOOPS) returns []); the
+//     closest candidate, scripts/cron/adam-decision-scheduler-tick.mjs, is already durable
+//     via .github/workflows/adam-decision-scheduler-cron.yml (session_bound=false in
+//     periodic_process_registry) -- GHA crons survive session restarts on their own and do
+//     NOT need an ADAM_LOOPS entry, which exists specifically for session-scoped harness
+//     CronCreate jobs. No periodic_process_registry row for a session-bound 3h decision
+//     sweep was found either. Left here so a future UAT/parity re-check of this exact class
+//     doesn't re-flag the same already-closed gap.
 export const ADAM_LOOPS = [
   {
     // SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: the quiet-tick cutover (docs/protocol/
