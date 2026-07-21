@@ -235,6 +235,12 @@ export const ADAM_LOOPS = [
     // restart; not a contract-named duty, so missingDurableDuties could not detect the gap. Now named durable
     // in the contract (CLAUDE_ADAM.md "DECISION-DRIVING-SWEEP DUTY (durable)") AND armed here so a fresh
     // /adam re-arms it and the contract<->tooling parity check holds. Minute-50 offset avoids fleet :00 collisions.
+    // QF-20260721-891 (part-1 durability re-ask, filed against a pre-#6395 snapshot): investigated and
+    // confirmed MOOT — PR #6395 (commit 0374ab2, 2026-07-21 17:16 ET, ~99min before QF-891 was filed) already
+    // wrote this duty into leo_protocol_sections id=601 AND this ADAM_LOOPS entry in the same PR. Re-verified
+    // live: missingDurableDuties(CLAUDE_ADAM.md) omits 'decision-driving-sweep' with the real ADAM_LOOPS
+    // (present-check), and flags it when the key is removed from the loops array (negative-check) — the
+    // contract<->tooling link is demonstrably live, not just co-existing text.
     key: 'decision-driving-sweep',
     label: 'Decision-driving sweep (3h: drive pending chairman decisions to resolution; propose-only, silence-by-default)',
     script: null, // agent-judgment tick — drive/reconcile decisions, no single script
