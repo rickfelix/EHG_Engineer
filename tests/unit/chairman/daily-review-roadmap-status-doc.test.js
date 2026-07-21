@@ -11,6 +11,7 @@ function makeFakeSupabase(tables) {
     const filters = [];
     let orderCol = null;
     let orderAsc = true;
+    let limitN = null;
 
     const builder = {
       select() { return builder; },
@@ -18,6 +19,7 @@ function makeFakeSupabase(tables) {
       in(col, vals) { filters.push((r) => vals.includes(r[col])); return builder; },
       gte(col, val) { filters.push((r) => r[col] != null && r[col] >= val); return builder; },
       order(col, opts) { orderCol = col; orderAsc = opts?.ascending !== false; return builder; },
+      limit(n) { limitN = n; return builder; },
       then(resolve) {
         const table = tables[tableName] || [];
         let matched = table.filter((r) => filters.every((f) => f(r)));
@@ -31,6 +33,7 @@ function makeFakeSupabase(tables) {
             return orderAsc ? cmp : -cmp;
           });
         }
+        if (Number.isFinite(limitN)) matched = matched.slice(0, limitN);
         // FR-6: computeForecastRange() reads { count } from a head:true/count:'exact' select —
         // mirror that shape here (matched.length is the exact count a real count:'exact' query
         // would return for these same filters).
@@ -41,6 +44,33 @@ function makeFakeSupabase(tables) {
     return builder;
   }
   return { from: (t) => query(t) };
+}
+
+// A live-shaped forecast_basis feedback row (SD-LEO-INFRA-DAILY-BRIEF-E2E-WIRING-001 FR-1),
+// mirroring the real live row (fa101872-844f-44c9-b000-23bf88199437) queried directly during
+// PLAN-phase discovery — dispatchable_qf dominates chairman_gated_held, so pickDominantDispatchClass
+// resolves 'open_queue'.
+function makeForecastBasisRow({ dispatchableQf = 53, gatedHeld = 4, fencedSet = 'fleet_desired_slots + apply-5-migrations + chairman email creds' } = {}) {
+  return {
+    category: 'solomon_forecast_basis',
+    created_at: new Date().toISOString(),
+    metadata: {
+      forecast_basis: {
+        gantt_rule_LEGC: 'SEGREGATE fenced/chairman-gated items...',
+        dispatch_class_model: {
+          open_queue: { queue_wait_median_hrs: 9.5, queue_wait_p90_hrs: 91 },
+        },
+        work_time_model_started_to_completed: {
+          sd_tier: { median_hrs: 1.5, p90_hrs: 4.5 },
+        },
+        current_state_20260721: {
+          dispatchable_qf: dispatchableQf,
+          chairman_gated_held: gatedHeld,
+          fenced_set: fencedSet,
+        },
+      },
+    },
+  };
 }
 
 // A supabase double whose strategic_roadmaps query throws, to exercise the fail-soft path.
@@ -132,12 +162,13 @@ describe('buildRoadmapStatusDoc — plan_of_record section', () => {
     expect(por.data.overall_pct).toBeCloseTo(33.3, 1); // 1 promoted of 3 total
   });
 
-  it('returns forecast confidence=insufficient_data when no recent completions exist', async () => {
+  it('TS-17: returns forecast confidence=insufficient_data (no fabricated date) when no forecast_basis feedback row exists', async () => {
     const supabase = makeFakeSupabase({
       strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
       roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
       v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
       strategic_directives_v2: [],
+      feedback: [],
     });
     const result = await buildRoadmapStatusDoc(supabase);
     const por = result.sections.find((s) => s.id === 'plan_of_record');
@@ -145,7 +176,7 @@ describe('buildRoadmapStatusDoc — plan_of_record section', () => {
     expect(por.data.forecast.expected_date).toBeNull();
   });
 
-  it('produces an optimistic <= expected <= pessimistic forecast date range when velocity > 0', async () => {
+  it('FR-1: produces an optimistic <= expected <= pessimistic calibrated forecast date range from the live forecast_basis', async () => {
     const supabase = makeFakeSupabase({
       strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
       roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
@@ -153,47 +184,81 @@ describe('buildRoadmapStatusDoc — plan_of_record section', () => {
         { id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' },
         { id: 'i2', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' },
       ],
-      strategic_directives_v2: [
-        { sd_key: 'SD-A-001', status: 'completed', completion_date: daysAgo(1) },
-        { sd_key: 'SD-B-001', status: 'completed', completion_date: daysAgo(3) },
-        { sd_key: 'SD-C-001', status: 'completed', completion_date: daysAgo(30) }, // outside lookback
-      ],
+      strategic_directives_v2: [],
+      feedback: [makeForecastBasisRow()],
     });
-    const result = await buildRoadmapStatusDoc(supabase, { velocityLookbackDays: 14 });
+    const result = await buildRoadmapStatusDoc(supabase);
     const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
-    expect(f.confidence).toBe('medium'); // 2 completions in window
+    expect(f.confidence).toBe('calibrated');
+    expect(f.dispatch_class).toBe('open_queue');
     expect(new Date(f.optimistic_date).getTime()).toBeLessThanOrEqual(new Date(f.expected_date).getTime());
     expect(new Date(f.expected_date).getTime()).toBeLessThanOrEqual(new Date(f.pessimistic_date).getTime());
   });
 
-  it('returns forecast confidence=high at >=5 completions in the lookback window', async () => {
+  it('TS-14/TR-3: surfaces a gating_note (fail-closed visibility) when fleet capacity is partially gated, without fabricating a per-item date suppression', async () => {
     const supabase = makeFakeSupabase({
       strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
       roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
-      v_plan_of_record_remainder: [
-        { id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' },
-        { id: 'i2', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' },
-      ],
-      strategic_directives_v2: Array.from({ length: 5 }, (_, i) => ({
-        sd_key: `SD-H-${i}`, status: 'completed', completion_date: daysAgo(i + 1),
-      })),
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [makeForecastBasisRow({ gatedHeld: 4 })],
     });
-    const result = await buildRoadmapStatusDoc(supabase, { velocityLookbackDays: 14 });
-    expect(result.sections.find((s) => s.id === 'plan_of_record').data.forecast.confidence).toBe('high');
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.gating_note).toMatch(/4 fleet item\(s\) currently gated-on-chairman-action/);
   });
 
-  it('returns forecast confidence=low at 1 completion in the lookback window', async () => {
+  it('TS-3/TR-3: fail-closed — gated volume >= dispatchable volume resolves no dispatch class and no fabricated date', async () => {
     const supabase = makeFakeSupabase({
       strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
       roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
-      v_plan_of_record_remainder: [
-        { id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' },
-        { id: 'i2', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' },
-      ],
-      strategic_directives_v2: [{ sd_key: 'SD-L-1', status: 'completed', completion_date: daysAgo(1) }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [makeForecastBasisRow({ dispatchableQf: 2, gatedHeld: 10 })],
     });
-    const result = await buildRoadmapStatusDoc(supabase, { velocityLookbackDays: 14 });
-    expect(result.sections.find((s) => s.id === 'plan_of_record').data.forecast.confidence).toBe('low');
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.confidence).toBe('insufficient_data');
+    expect(f.expected_date).toBeNull();
+  });
+
+  it('TS-13: resolves a date-stamped current_state_<date> key dynamically rather than a hardcoded literal', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [{
+        category: 'solomon_forecast_basis',
+        created_at: new Date().toISOString(),
+        metadata: {
+          forecast_basis: {
+            gantt_rule_LEGC: 'SEGREGATE...',
+            dispatch_class_model: { open_queue: { queue_wait_median_hrs: 9.5, queue_wait_p90_hrs: 91 } },
+            work_time_model_started_to_completed: { sd_tier: { median_hrs: 1.5, p90_hrs: 4.5 } },
+            current_state_20260722: { dispatchable_qf: 53, chairman_gated_held: 4, fenced_set: 'x' }, // a DIFFERENT (tomorrow's) date-stamp
+          },
+        },
+      }],
+    });
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.confidence).toBe('calibrated');
+    expect(f.gating_note).toMatch(/4 fleet item\(s\)/);
+  });
+
+  it('TS-17: a legacy flat-shape feedback row degrades to insufficient_data, does not throw', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [{ category: 'solomon_forecast_basis', created_at: new Date().toISOString(), metadata: { velocity_per_day: 1.2, open_scope_count: 30 } }],
+    });
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.confidence).toBe('insufficient_data');
+    expect(f.expected_date).toBeNull();
   });
 });
 
