@@ -35,6 +35,9 @@ import { enqueueChairmanSms } from '../../lib/chairman/sms-bridge.js';
 import { computeForecast, formatForecastLine } from '../../lib/vision/build-completion-forecast.mjs';
 import { etLocalHour, etDateStr, et6amIso, etPrior545Iso } from '../../lib/time/chairman-et-wall-clock.js';
 import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
+import { buildRoadmapStatusDoc } from '../../lib/chairman/daily-review/roadmap-status-doc.js';
+import { renderGanttPng } from '../../lib/chairman/daily-review/gantt-renderer.js';
+import { uploadPrivateAndSign } from '../../lib/storage/private-signed-upload.js';
 
 export const SD_KEY = 'SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-B';
 export const ACTIVATION_TRIGGER = '.github/workflows/chairman-morning-review-cron.yml';
@@ -138,6 +141,69 @@ export async function buildMorningReviewBody(supabase, { now = new Date() } = {}
   return body;
 }
 
+// SD-LEO-INFRA-DAILY-BRIEF-E2E-WIRING-001 FR-2: feature flag gating the composed (text + MMS
+// Gantt) brief path. Read PER-INVOCATION inside main() (never captured at module-load) so
+// flipping it requires only an env var change, no redeploy, and the OFF path stays byte-
+// identical to the pre-existing text-only behavior at all times (TS-11).
+export const COMPOSED_FLAG_ENV = 'DAILY_BRIEF_COMPOSED_ENABLED';
+// Long TTL: a brief signed at ~05:30 ET may not be fetched by Twilio until the last self-healing
+// retry at ~11:45 ET (chairman-morning-brief-sweep.mjs's window) -- roughly a 7h span. 12h gives
+// margin (TS-16).
+export const GANTT_SIGNED_URL_TTL_SECONDS = 12 * 60 * 60;
+const GANTT_BUCKET = 'chairman-daily-review';
+// Adversarial-review finding (PR #6387): the composed path was reusing BODY_CEILING (306
+// chars, sized for the OLD short 3-line SMS-segment summary), which silently truncated
+// buildRoadmapStatusDoc()'s much richer plainTextBody mid-sentence -- cutting off the
+// Solomon-calibrated forecast line and the entire narrative section under a realistic
+// multi-wave roadmap. MMS bodies are not SMS-segment-constrained; Twilio's MMS body limit is
+// far higher than a 2-segment SMS. 1500 gives generous headroom while still bounding runaway
+// content.
+export const COMPOSED_BODY_CEILING = 1500;
+
+/** Truncate at the last word boundary <= maxLen so a cut never lands mid-word/mid-sentence. */
+function truncateAtWordBoundary(text, maxLen) {
+  if (text.length <= maxLen) return text;
+  const slice = text.slice(0, maxLen - 1);
+  const lastBreak = Math.max(slice.lastIndexOf('\n'), slice.lastIndexOf(' '));
+  return `${(lastBreak > 0 ? slice.slice(0, lastBreak) : slice).trimEnd()}…`;
+}
+
+/**
+ * FR-2 composer: buildRoadmapStatusDoc (Solomon-calibrated text, FR-1) + renderGanttPng +
+ * uploadPrivateAndSign -> {body, mediaUrl}. The Gantt/upload leg is independently try/caught
+ * so a render or upload failure degrades to a text-only body (mediaUrl: null) rather than
+ * throwing -- the caller never needs its own try/catch around this beyond the outer
+ * text-build fallback already in main().
+ */
+export async function buildComposedBody(supabase, { now = new Date(), buildDoc = buildRoadmapStatusDoc, renderPng = renderGanttPng, uploadSign = uploadPrivateAndSign } = {}) {
+  const doc = await buildDoc(supabase);
+  const body = truncateAtWordBoundary(doc.plainTextBody, COMPOSED_BODY_CEILING);
+
+  let mediaUrl = null;
+  try {
+    // Find by id, not array position -- a future section reorder must not silently disable
+    // the Gantt image (adversarial-review finding, PR #6387).
+    const waves = doc.sections?.find((s) => s.id === 'plan_of_record')?.data?.waves;
+    if (Array.isArray(waves) && waves.length > 0) {
+      const png = await renderPng(waves);
+      const path = `${etDateStr(now)}.png`;
+      const { signedUrl } = await uploadSign(supabase, {
+        bucket: GANTT_BUCKET,
+        path,
+        buffer: png,
+        contentType: 'image/png',
+        expiresInSeconds: GANTT_SIGNED_URL_TTL_SECONDS,
+      });
+      mediaUrl = signedUrl;
+    }
+  } catch {
+    // Fail-soft: text-only send, never crash the composer (FR-2).
+    mediaUrl = null;
+  }
+
+  return { body, mediaUrl };
+}
+
 export async function main(argv = process.argv, deps = {}) {
   const args = parseArgs(argv);
   const logger = deps.logger || console;
@@ -165,27 +231,52 @@ export async function main(argv = process.argv, deps = {}) {
   try { supabase = deps.supabase || buildSupabase(); }
   catch (err) { logger.error?.(`[morning-review] supabase client unavailable: ${err.message}`); return { exitCode: 2, action: 'no_supabase' }; }
 
+  // SAME dedupe key regardless of composed path -- guarantees at most one 'morning_review'
+  // obligation/day whether the send ends up text-only or text+media (FR-2 idempotency; also
+  // the same key a degraded-to-text-only composer fallback reuses, so a partial media failure
+  // can never double-send under a different key).
   const dedupeKey = `morning_review:${etDateStr(now)}`;
   const notBefore = et6amIso(now); // defer an overnight/early enqueue to the 6AM batch (sleep-window)
 
-  let body;
-  try { body = await (deps.buildBody || buildMorningReviewBody)(supabase, { now }); }
-  catch (err) { logger.warn?.(`[morning-review] body build degraded (${err.message})`); body = 'Morning review: status unavailable this run.'; }
+  // Read the composed-path flag PER-INVOCATION (never at module load) so flipping it is a
+  // pure env var change with an instant revert to the byte-identical text-only path (TS-11).
+  const composedEnabled = String(env[COMPOSED_FLAG_ENV] || '').toLowerCase() === 'true';
 
-  if (args.dryRun) {
-    log({ action: 'dry_run', dedupe_key: dedupeKey, not_before: notBefore, body_len: body.length });
-    return { exitCode: 0, action: 'dry_run', summary: { dedupeKey, notBefore, bodyLength: body.length } };
+  let body, mediaUrl = null;
+  if (composedEnabled) {
+    try {
+      const composed = await (deps.buildComposedBody || buildComposedBody)(supabase, { now });
+      body = composed.body;
+      mediaUrl = composed.mediaUrl;
+    } catch (err) {
+      // Whole composer failed (not just the Gantt leg) -- degrade fully to the proven
+      // text-only path rather than lose the brief (FR-2).
+      logger.warn?.(`[morning-review] composed body failed, falling back to text-only (${err.message})`);
+      try { body = await (deps.buildBody || buildMorningReviewBody)(supabase, { now }); }
+      catch (err2) { logger.warn?.(`[morning-review] fallback body build degraded (${err2.message})`); body = 'Morning review: status unavailable this run.'; }
+    }
+  } else {
+    try { body = await (deps.buildBody || buildMorningReviewBody)(supabase, { now }); }
+    catch (err) { logger.warn?.(`[morning-review] body build degraded (${err.message})`); body = 'Morning review: status unavailable this run.'; }
   }
 
-  // Owed-state enqueue ONLY — the worker owns the provider send + delivery-truth.
-  const enq = await enqueue(supabase, { recipientPhone, kind: 'morning_review', body, decisionId: null, dedupeKey, notBefore });
+  if (args.dryRun) {
+    log({ action: 'dry_run', dedupe_key: dedupeKey, not_before: notBefore, body_len: body.length, media: !!mediaUrl });
+    return { exitCode: 0, action: 'dry_run', summary: { dedupeKey, notBefore, bodyLength: body.length, mediaUrl } };
+  }
+
+  // Owed-state enqueue ONLY — the worker owns the provider send + delivery-truth. Same
+  // direct-enqueue pattern the text-only path already used (never routes through
+  // lib/comms/adam-outbound/chairman-sms-gate, which is confirmed (harness_backlog ca9941ee)
+  // to console.warn-drop quiet-hours-blocked sends instead of durably deferring them — FR-3).
+  const enq = await enqueue(supabase, { recipientPhone, kind: 'morning_review', body, decisionId: null, dedupeKey, notBefore, mediaUrl });
   const action = enq.enqueued ? 'enqueued' : (enq.deduped ? 'deduped' : 'inert');
   // PII-safe: log counts/ids/reason only — never the recipient phone or the body text.
-  log({ action, obligation_id: enq.obligationId || null, reason: enq.reason || null, dedupe_key: dedupeKey, not_before: notBefore, body_len: body.length });
+  log({ action, obligation_id: enq.obligationId || null, reason: enq.reason || null, dedupe_key: dedupeKey, not_before: notBefore, body_len: body.length, media: !!mediaUrl });
   return {
     exitCode: 0,
     action,
-    summary: { enqueued: !!enq.enqueued, deduped: !!enq.deduped, reason: enq.reason || null, dedupeKey, notBefore, bodyLength: body.length, obligationId: enq.obligationId || null },
+    summary: { enqueued: !!enq.enqueued, deduped: !!enq.deduped, reason: enq.reason || null, dedupeKey, notBefore, bodyLength: body.length, mediaUrl, obligationId: enq.obligationId || null },
   };
 }
 

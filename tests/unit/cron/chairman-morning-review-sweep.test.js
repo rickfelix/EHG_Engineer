@@ -14,11 +14,15 @@ import {
   main,
   parseArgs,
   buildMorningReviewBody,
+  buildComposedBody,
   etLocalHour,
   etDateStr,
   et6amIso,
   etPrior545Iso,
   BODY_CEILING,
+  COMPOSED_BODY_CEILING,
+  COMPOSED_FLAG_ENV,
+  GANTT_SIGNED_URL_TTL_SECONDS,
 } from '../../../scripts/cron/chairman-morning-review-sweep.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -238,5 +242,133 @@ describe('CHAIRMAN_PHONE unset -> inert', () => {
     expect(r.action).toBe('inert');
     expect(r.reason).toBe('chairman_phone_unset');
     expect(enqueue).not.toHaveBeenCalled();
+  });
+});
+
+// ── SD-LEO-INFRA-DAILY-BRIEF-E2E-WIRING-001 (FR-2/FR-3) ── composed (text + MMS Gantt) path ──
+
+describe('PRD TS-11 — feature flag OFF (default): byte-identical to the pre-existing text-only path', () => {
+  it('does not call buildComposedBody when the flag is unset; mediaUrl is null; body matches buildMorningReviewBody', async () => {
+    const buildComposedBodySpy = vi.fn();
+    const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    const expectedBody = await buildMorningReviewBody(makeSupabase(richData), { now: SUMMER_WORK });
+    const deps = baseDeps({ enqueue, buildComposedBody: buildComposedBodySpy });
+
+    const r = await main(['node', 's', '--once'], deps);
+
+    expect(buildComposedBodySpy).not.toHaveBeenCalled();
+    expect(enqueue.mock.calls[0][1].mediaUrl).toBeNull();
+    expect(enqueue.mock.calls[0][1].body).toBe(expectedBody);
+    expect(r.summary.mediaUrl).toBeNull();
+  });
+
+  it('flag is read per-invocation (not module-load): explicitly false behaves identically to unset', async () => {
+    const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    const deps = baseDeps({ enqueue, env: { CHAIRMAN_PHONE: '+15555550123', [COMPOSED_FLAG_ENV]: 'false' } });
+    const r = await main(['node', 's', '--once'], deps);
+    expect(r.summary.mediaUrl).toBeNull();
+  });
+});
+
+describe('PRD TS-4 — feature flag ON: composed path enqueues with mediaUrl populated', () => {
+  it('calls the injected buildComposedBody and passes its mediaUrl through to enqueue', async () => {
+    const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    const buildComposedBodySpy = vi.fn(async () => ({ body: 'composed body text', mediaUrl: 'https://signed.example/gantt.png' }));
+    const deps = baseDeps({
+      enqueue,
+      buildComposedBody: buildComposedBodySpy,
+      env: { CHAIRMAN_PHONE: '+15555550123', [COMPOSED_FLAG_ENV]: 'true' },
+    });
+
+    const r = await main(['node', 's', '--once'], deps);
+
+    expect(buildComposedBodySpy).toHaveBeenCalledTimes(1);
+    expect(enqueue.mock.calls[0][1].mediaUrl).toBe('https://signed.example/gantt.png');
+    expect(enqueue.mock.calls[0][1].body).toBe('composed body text');
+    expect(r.summary.mediaUrl).toBe('https://signed.example/gantt.png');
+  });
+
+  it('uses the SAME dedupeKey as the text-only path (idempotency across composed/text-only, PRD TS-15)', async () => {
+    const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    const buildComposedBodySpy = vi.fn(async () => ({ body: 'x', mediaUrl: 'https://signed.example/g.png' }));
+    const deps = baseDeps({ enqueue, buildComposedBody: buildComposedBodySpy, env: { CHAIRMAN_PHONE: '+15555550123', [COMPOSED_FLAG_ENV]: 'true' } });
+    await main(['node', 's', '--once'], deps);
+    expect(enqueue.mock.calls[0][1].dedupeKey).toBe(`morning_review:${etDateStr(SUMMER_WORK)}`);
+  });
+});
+
+describe('PRD TS-5 — composer failure degrades to text-only, never crashes the live cron, same dedupe key', () => {
+  it('falls back to buildMorningReviewBody (mediaUrl null) when buildComposedBody throws entirely', async () => {
+    const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    const buildComposedBodySpy = vi.fn(async () => { throw new Error('composer blew up'); });
+    const expectedBody = await buildMorningReviewBody(makeSupabase(richData), { now: SUMMER_WORK });
+    const deps = baseDeps({ enqueue, buildComposedBody: buildComposedBodySpy, env: { CHAIRMAN_PHONE: '+15555550123', [COMPOSED_FLAG_ENV]: 'true' } });
+
+    const r = await main(['node', 's', '--once'], deps);
+
+    expect(r.exitCode).toBe(0);
+    expect(enqueue.mock.calls[0][1].mediaUrl).toBeNull();
+    expect(enqueue.mock.calls[0][1].body).toBe(expectedBody);
+    expect(enqueue.mock.calls[0][1].dedupeKey).toBe(`morning_review:${etDateStr(SUMMER_WORK)}`);
+  });
+});
+
+describe('buildComposedBody (FR-2) — render/upload failure degrades to text-only, never throws', () => {
+  it('5a: renderPng throws -> mediaUrl null, body still returned from buildDoc', async () => {
+    const buildDoc = vi.fn(async () => ({ plainTextBody: 'text body', sections: [{ id: 'plan_of_record', data: { waves: [{ title: 'W1' }] } }] }));
+    const renderPng = vi.fn(async () => { throw new Error('render failed'); });
+    const uploadSign = vi.fn();
+    const result = await buildComposedBody({}, { buildDoc, renderPng, uploadSign });
+    expect(result.mediaUrl).toBeNull();
+    expect(result.body).toBe('text body');
+    expect(uploadSign).not.toHaveBeenCalled();
+  });
+
+  it('5b: uploadSign throws -> mediaUrl null, does not throw', async () => {
+    const buildDoc = vi.fn(async () => ({ plainTextBody: 'text body', sections: [{ id: 'plan_of_record', data: { waves: [{ title: 'W1' }] } }] }));
+    const renderPng = vi.fn(async () => Buffer.from('png-bytes'));
+    const uploadSign = vi.fn(async () => { throw new Error('upload failed'); });
+    const result = await buildComposedBody({}, { buildDoc, renderPng, uploadSign });
+    expect(result.mediaUrl).toBeNull();
+    expect(result.body).toBe('text body');
+  });
+
+  it('happy path: mediaUrl populated from uploadSign, TTL = GANTT_SIGNED_URL_TTL_SECONDS (PRD TS-16)', async () => {
+    const buildDoc = vi.fn(async () => ({ plainTextBody: 'text body', sections: [{ id: 'plan_of_record', data: { waves: [{ title: 'W1' }] } }] }));
+    const renderPng = vi.fn(async () => Buffer.from('png-bytes'));
+    const uploadSign = vi.fn(async (_sb, args) => ({ path: args.path, signedUrl: 'https://signed.example/x.png' }));
+    const result = await buildComposedBody({}, { buildDoc, renderPng, uploadSign, now: SUMMER_WORK });
+    expect(result.mediaUrl).toBe('https://signed.example/x.png');
+    expect(uploadSign.mock.calls[0][1].expiresInSeconds).toBe(GANTT_SIGNED_URL_TTL_SECONDS);
+    expect(GANTT_SIGNED_URL_TTL_SECONDS).toBeGreaterThanOrEqual(7 * 60 * 60); // survives the 05:30->11:45 ET defer/retry window
+  });
+
+  it('no waves available -> text-only, renderPng never called', async () => {
+    const buildDoc = vi.fn(async () => ({ plainTextBody: 'text body', sections: [{ id: 'plan_of_record', data: { waves: [] } }] }));
+    const renderPng = vi.fn();
+    const uploadSign = vi.fn();
+    const result = await buildComposedBody({}, { buildDoc, renderPng, uploadSign });
+    expect(result.mediaUrl).toBeNull();
+    expect(renderPng).not.toHaveBeenCalled();
+  });
+
+  it('adversarial-review finding (PR #6387): composed body uses COMPOSED_BODY_CEILING (MMS-sized), not the old SMS-segment BODY_CEILING -- a realistic multi-wave body must NOT be gutted', async () => {
+    // A realistic ~800-char body (forecast line + narrative), well under COMPOSED_BODY_CEILING
+    // but well over the old BODY_CEILING=306 that used to silently truncate it mid-sentence.
+    const realisticBody = 'PLAN OF RECORD\n' + '  - Wave: 1/2 items\n'.repeat(20) + '  Forecast (calibrated): 2026-08-01 -- 2026-08-05 -- 2026-08-10\n\nWHAT MOVED YESTERDAY / PLAN FOR TODAY\n  DONE: SD-X-001\n';
+    expect(realisticBody.length).toBeGreaterThan(BODY_CEILING);
+    const buildDoc = vi.fn(async () => ({ plainTextBody: realisticBody, sections: [{ id: 'plan_of_record', data: { waves: [] } }] }));
+    const result = await buildComposedBody({}, { buildDoc, renderPng: vi.fn(), uploadSign: vi.fn() });
+    expect(result.body).toBe(realisticBody); // untruncated -- forecast line survives
+    expect(result.body).toContain('Forecast (calibrated)');
+  });
+
+  it('body is truncated at COMPOSED_BODY_CEILING for pathologically large content, at a word boundary (never mid-word)', async () => {
+    const longBody = 'word '.repeat(400); // 2000 chars, well over COMPOSED_BODY_CEILING
+    const buildDoc = vi.fn(async () => ({ plainTextBody: longBody, sections: [{ id: 'plan_of_record', data: { waves: [] } }] }));
+    const result = await buildComposedBody({}, { buildDoc, renderPng: vi.fn(), uploadSign: vi.fn() });
+    expect(result.body.length).toBeLessThanOrEqual(COMPOSED_BODY_CEILING);
+    expect(result.body.endsWith('…')).toBe(true);
+    expect(result.body).not.toMatch(/wor…$/); // never cuts mid-word
   });
 });
