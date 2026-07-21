@@ -98,6 +98,32 @@ other advancement path (`lib/agents/venture-ceo/handlers.js::_updateVentureProgr
 runtime) writes `current_lifecycle_stage` directly with no gate of any kind and is not yet covered — tracked
 in `docs/architecture/stage-advancement-path-census.md` entry #16 as a pre-existing, deferred bypass.
 
+## WebAuthn/passkey step-up gate on high-consequence decisions (SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-C, 2026-07-21)
+
+Extends the `blocking`/high-consequence machinery above (SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001) with a
+second, orthogonal factor for the human chairman console specifically: a platform-authenticator-only
+(Touch ID/Face ID/Windows Hello — never roaming keys) WebAuthn step-up challenge required before the
+`approve_chairman_decision`/`reject_chairman_decision` write, for any decision where
+`chairman_decisions.consequence_level='high'` OR `lifecycle_stage=24` (Stage 24 go-live). This is
+Child C of the chairman-ratified two-tier auth model (chairman-ratified 2026-07-16): routine/bounded
+decisions stay on the SMS tier (Child B); high-consequence decisions now additionally require a
+completed passkey ceremony.
+
+**Architecture note for future SDs touching this surface**: `ehg/src/pages/api/*` and
+`ehg/src/middleware/chairman-auth.ts` are dead Next.js-shaped code in this Vite SPA (no `next` or
+`@supabase/auth-helpers-nextjs` installed) — do not build on them. The live decide flow is
+`ehg/src/components/chairman-v3/decisions/DecisionActions.tsx` +
+`ehg/src/hooks/usePendingGateDecision.ts` (two separate call sites for the SAME
+`approve_chairman_decision`/`reject_chairman_decision` RPCs — both must be updated together for any
+future change to the decide contract) calling Postgres RPCs directly from the browser. WebAuthn
+ceremony verification (real CBOR/COSE/signature crypto) runs in 4 new Supabase Edge Functions under
+`ehg/supabase/functions/chairman-webauthn-*` — the only genuinely-deployed, browser-reachable,
+crypto-capable compute surface in this repo. Token issuance/consumption is atomic
+(`fn_verify_and_consume_stepup_token`, `chairman_stepup_tokens`), lockout-safe (no-op below 2 enrolled
+credentials, checked live), and kill-switched via `app_config.chairman_stepup.enforcement_mode`.
+Enrollment UI: Chairman Settings → Security tab (`WebAuthnRegistration.tsx`) — chairman-auth-gated
+only, never step-up-gated, since it is itself the break-glass re-enrollment path.
+
 ## Consumers (de-orphaning)
 
 - `scripts/chairman-decisions.mjs list|decide` — CLI (+ `/decisions` skill in
