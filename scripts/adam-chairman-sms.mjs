@@ -5,6 +5,7 @@
 import 'dotenv/config';
 import { enforceCliSendGuard } from '../lib/notifications/cli-send-guard.mjs';
 import { sendChairmanSMS } from '../lib/comms/adam-outbound/chairman-sms-gate/index.js';
+import { resolveAllowQuietHours } from '../lib/comms/adam-outbound/quiet-hours-extension.js';
 
 enforceCliSendGuard({
   scriptName: 'scripts/adam-chairman-sms.mjs',
@@ -26,11 +27,13 @@ if (!body || !body.trim()) {
 }
 
 const message = { type: 'status', body: body.trim(), kind, dedupeKey };
-const context = { now: new Date() };
 
 if (DRY) {
   console.log('=== [ADAM CHAIRMAN SMS — DRY RUN] no send ===\nKIND: ' + kind + '\n---\n' + message.body + '\n---');
 } else {
+  // QF-20260720-824: honor a recorded chairman window-extension; default window unchanged.
+  const now = new Date();
+  const context = { now, allowQuietHours: await resolveAllowQuietHours(now) };
   const r = await sendChairmanSMS(message, context);
   console.log('ADAM-CHAIRMAN-SMS', JSON.stringify(r));
 }
