@@ -169,7 +169,7 @@ export async function buildComposedBody(supabase, { now = new Date(), buildDoc =
     const waves = doc.sections?.[0]?.data?.waves;
     if (Array.isArray(waves) && waves.length > 0) {
       const png = await renderPng(waves);
-      const path = `${GANTT_BUCKET}/${etDateStr(now)}.png`;
+      const path = `${etDateStr(now)}.png`;
       const { signedUrl } = await uploadSign(supabase, {
         bucket: GANTT_BUCKET,
         path,

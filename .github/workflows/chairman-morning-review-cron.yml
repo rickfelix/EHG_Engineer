@@ -40,6 +40,12 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       CHAIRMAN_PHONE: ${{ secrets.CHAIRMAN_PHONE }}
       TWILIO_STATUS_CALLBACK_URL: ${{ secrets.TWILIO_STATUS_CALLBACK_URL }}
+      # SD-LEO-INFRA-DAILY-BRIEF-E2E-WIRING-001: activates the composed (Solomon-calibrated
+      # forecast text + MMS Gantt image) brief path in buildComposedBody(). Without this, the
+      # cron silently falls back to the pre-existing text-only composer (byte-identical
+      # OFF-path behavior) -- this line is the activation step that makes the composed brief
+      # actually fire, not just exist in code.
+      DAILY_BRIEF_COMPOSED_ENABLED: 'true'
 
     steps:
       - name: Checkout
