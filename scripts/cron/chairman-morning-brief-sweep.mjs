@@ -13,11 +13,14 @@
  *
  * RECONCILIATION BY CONSTRUCTION: rather than a separate "does today's brief exist" checker
  * (nothing in-repo does this today — verified), the workflow cron runs every 15 minutes across
- * a bounded 6:00-11:59 AM ET window (mirrors periodic-liveness-watcher-cron.yml's cadence). The
- * FIRST run past 6:00 AM ET does the real enqueue; every run after that is a dedupe-key no-op
+ * a bounded 5:00-11:59 AM ET window (mirrors periodic-liveness-watcher-cron.yml's cadence). The
+ * FIRST run past 5:00 AM ET does the real enqueue; every run after that is a dedupe-key no-op
  * (enqueueChairmanSms's upsert/ignoreDuplicates) UNLESS the first run failed for some reason, in
  * which case the next 15-minute tick sends it late — "late is better than never" without a
  * second mechanism to keep in sync with the first.
+ *
+ * QF-20260722-277: window start moved 6:00 → 5:00 ET to buffer GitHub Actions scheduled-workflow
+ * lag, so the real enqueue reliably lands before the chairman's 6:00 AM check.
  *
  * Content mirrors chairman-morning-review-sweep.mjs's buildMorningReviewBody (roadmap position +
  * overnight shipped/in-flight) — reused directly rather than re-derived, since the two chairman
@@ -39,9 +42,10 @@ import { etLocalHour, etDateStr } from '../../lib/time/chairman-et-wall-clock.js
 
 export const QF_KEY = 'QF-20260720-531';
 export const ACTIVATION_TRIGGER = '.github/workflows/chairman-morning-brief-cron.yml';
-// Self-healing window: fires from 6:00 AM ET onward; a missed/failed first attempt is retried
-// by the next 15-minute tick, capped at noon so this doesn't run unbounded all day.
-const WINDOW_START_ET_HOUR = 6;
+// Self-healing window: fires from 5:00 AM ET onward (QF-20260722-277: buffers GHA scheduled-
+// workflow lag); a missed/failed first attempt is retried by the next 15-minute tick, capped at
+// noon so this doesn't run unbounded all day.
+const WINDOW_START_ET_HOUR = 5;
 const WINDOW_END_ET_HOUR = 12;
 
 export function parseArgs(argv) {
@@ -74,7 +78,7 @@ export async function main(argv = process.argv, deps = {}) {
 
   if (args.help) { logger.log?.('chairman-morning-brief-sweep --once [--dry-run]'); return { exitCode: 0, action: 'help' }; }
 
-  // FR-1: self-healing ET wall-clock window (6:00-11:59 ET) — see file header for the
+  // FR-1: self-healing ET wall-clock window (5:00-11:59 ET) — see file header for the
   // "reconciliation by construction" rationale.
   const etHour = etLocalHour(now);
   if (etHour < WINDOW_START_ET_HOUR || etHour >= WINDOW_END_ET_HOUR) {
