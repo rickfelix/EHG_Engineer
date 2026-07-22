@@ -1,10 +1,10 @@
 ---
 Category: Reference
 Status: Approved
-Version: 1.0.0
+Version: 1.1.0
 Author: SD-LEO-INFRA-LEO-COMPLETION-001
-Last Updated: 2026-07-21
-Tags: fleet, launcher, respawn, supervisor, manifest, checkpoint-3
+Last Updated: 2026-07-22
+Tags: fleet, launcher, respawn, supervisor, manifest, checkpoint-3, session-view
 ---
 
 # Fleet Launcher & Respawn Architecture
@@ -27,7 +27,9 @@ no wired operator surface:
   unusable as a respawn source-of-record.
 - **G3**: `lib/fleet/browser-control.js` and `lib/fleet/session-detail-view.js`
   (from `SD-LEO-INFRA-SESSION-VIEW-BROWSER-001` A/B) were fully built and tested but
-  had zero production callers.
+  had zero production callers. (Closed by Child E below; a second, graphical
+  consumer was added later by `SD-LEO-INFRA-LEO-LAUNCHER-SHELL-001-B` — see
+  "Graphical Session View pane" section below.)
 - **U4**: the cookie-non-leak guarantee for `relaunchUnderProfile` was undefined
   anywhere in-repo — no formal spec, no drill.
 
@@ -67,6 +69,47 @@ no wired operator surface:
 - `lib/fleet/u4-drill-runner.js` — the formal U4 (cookie-non-leak) spec and live
   account-switch relaunch drill proving `relaunchUnderProfile` never leaks
   chairman cookies to the agent browser.
+
+## Graphical Session View pane (SD-LEO-INFRA-LEO-LAUNCHER-SHELL-001-B)
+
+A second, graphical consumer of `browser-control.js`/`session-detail-view.js`/
+`spawn-control.js`'s `attach()`, added as Child B of the chairman-directed
+`SD-LEO-INFRA-LEO-LAUNCHER-SHELL-001` (LEO launcher UI shell, mockup #2
+assembly). Child E's CLI cockpit (above) remains the terminal-based consumer;
+this is the first graphical one, served via EHG_Engineer's Express server under
+a narrow, chairman-ratified exception to SD-ARCH-EHG-007 (see the exception note
+at the top of `server/index.js`) since the fleet-launcher operator UI is
+internal-only, not customer-facing product UI.
+
+- `server/routes/fleet-sessions.js` — 5 `requireAuth`-gated routes: `GET /:id`
+  (fresh view-model), `POST /:id/attach`, `POST /:id/browser-session`,
+  `POST /:id/takeover`, `POST /:id/hand-back`, `GET /:id/browser-log` (auditable
+  take-over/hand-back trail from `coordination_events`). No changes to the 3
+  library modules — wired only.
+- `server/public/fleet-ui/` — framework-free HTML/CSS/vanilla-JS pane (no
+  React/Vue exists anywhere in this repo). Renders the 4 distinct `attach()`
+  outcomes, a caution-striped sandbox frame, human-takeover/hand-back controls,
+  and the auditable browser action log.
+- **Known scope boundary**: authorization is `requireAuth` (any authenticated
+  account) plus session-existence checks only — no role gate (unlike
+  `protocol-lint.js`'s `requireAdminRole`) and no per-session ownership check.
+  Matches the PLAN-phase "single-operator trust model" judgment; flagged as an
+  open follow-up decision given the surface drives OS-level window focus,
+  sandboxed browser launch, and pause/resume of another operator's session.
+- **Known integration gap**: the pane's own `fetch()` calls carry no auth
+  header, so every action 401s when loaded standalone — credential-passthrough
+  depends on how the parent SD's assembly shell eventually hosts this fragment.
+- **Cross-sibling coordination**: as of this child's EXEC phase, siblings -A
+  (fleet panel, `server/routes/fleet-panel.js`) and -C (control-verb buttons,
+  `server/routes/fleet-actions.js`) plus the parent's own assembly-shell work
+  all converge on one graphical UI surface. All three children (this one, -A,
+  -C) shipped API-only + tests -- none has committed a shared framework/mount-
+  contract or a static UI fragment except this child's `server/public/fleet-ui/`.
+  This fragment stays dependency-free and self-contained (no assumed
+  parent-shell mount API) to minimize integration coupling with whatever the
+  parent ultimately builds.
+- Ratified mockups: `docs/design/mockup-1-fleet-launcher.png` (sibling -A) and
+  `docs/design/mockup-2-session-view-terminal-agent-browser.png` (this child).
 
 ## Operating it
 
