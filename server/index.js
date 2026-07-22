@@ -2,9 +2,16 @@
 
 /**
  * EHG_Engineer Backend API Server
- * SD-ARCH-EHG-007: Backend API + LEO Protocol engine (no standalone UI)
- * All UI is in EHG unified frontend at port 8080
+ * SD-ARCH-EHG-007: Backend API + LEO Protocol engine -- customer/chairman-facing
+ * product UI stays in the EHG unified frontend at port 8080.
+ * RATIFIED NARROW EXCEPTION (SD-LEO-INFRA-LEO-LAUNCHER-SHELL-001, chairman-directed
+ * 2026-07-22): the fleet-launcher OPERATOR UI (internal-only, not customer-facing)
+ * is served from here, because the OS-level primitives it drives (process spawn/
+ * attach/kill, window focus, sandboxed CDP browser control) already run server-side
+ * in this process -- see server/routes/fleet-sessions.js. This does not generalize
+ * to other UI work in this repo.
  *
+
  * REFACTORED: This file now orchestrates modular components.
  * Original 2707 LOC split into focused modules (~100-400 LOC each):
  * - server/config.js: Configuration and initialization
@@ -56,6 +63,7 @@ import stage19Routes from './routes/stage19.js';
 import stage24Routes from './routes/stage24.js';
 import githubRepoRoutes from './routes/github-repo.js';
 import protocolLintRoutes, { requireAdminRole } from './routes/protocol-lint.js';
+import fleetSessionsRoutes from './routes/fleet-sessions.js';
 import { createChairmanScopeGuard } from '../lib/middleware/chairman-scope-guard.js';
 
 // Payment webhook handler (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001)
@@ -151,6 +159,11 @@ app.all('/api/webhooks/twilio-status', express.urlencoded({ extended: false }), 
 
 app.use(express.json());
 
+// Fleet-launcher operator UI static assets (SD-LEO-INFRA-LEO-LAUNCHER-SHELL-001-B): the
+// Session View pane fragment, mountable into the parent shell. See the ARCH-007 exception
+// note at the top of this file.
+app.use('/fleet-ui', express.static(path.join(PROJECT_ROOT, 'server', 'public', 'fleet-ui')));
+
 // NOTE: /api/webhooks/github-ci-status (api/webhooks/github-ci-status.js) is
 // intentionally NOT mounted here. Its ESM/CJS crash and an unauthenticated
 // dev-mode bypass were fixed (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001), but CI's
@@ -196,6 +209,9 @@ app.use('/api/stage24', requireAuth, stage24Routes);
 app.use('/api/github', requireAuth, githubRepoRoutes);
 // Protocol Linter Dashboard (SD-PROTOCOL-LINTER-DASHBOARD-001): read-only admin-gated
 app.use('/api/admin/protocol-lint', requireAuth, requireAdminRole, protocolLintRoutes);
+// Fleet launcher Session View pane (SD-LEO-INFRA-LEO-LAUNCHER-SHELL-001-B): attach-focus +
+// sandboxed browser pane control -- OS-level foreground focus, CDP launch, human-pause.
+app.use('/api/fleet/sessions', requireAuth, fleetSessionsRoutes);
 // Dashboard routes: read-only, optional auth
 app.use('/api', optionalAuth, dashboardRoutes);
 
