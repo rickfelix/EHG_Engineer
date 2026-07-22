@@ -31,6 +31,10 @@ import { isMainModule } from '../lib/utils/is-main-module.js';
 // retention mechanism (verified) and the ventures stall-scan below has no .limit() either —
 // both are unbounded processing reads (rows iterated for stall detection), so paginate.
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
+// SD-LEO-INFRA-VENTURE-REAL-DISCRIMINATOR-AND-STALL-ALARM-001-B (Part 2): the divergent+stalled
+// alarm class layered onto the existing orchestrator-blocked venture stall scan below. Consumes
+// the Child-A discriminator (lib/governance/real-build-discriminator.mjs) transitively.
+import { evaluateRealBuildStall } from '../lib/governance/real-build-stall-alarm.mjs';
 
 const require = createRequire(import.meta.url);
 const crypto = require('crypto');
@@ -156,14 +160,29 @@ export async function readCriticalPathParents(sb) {
 // seen on a prior tick, matching the codebase's default-to-NOT-escalating bias.
 const VENTURE_STALL_THRESHOLD_MS = 15 * 60 * 1000;
 
-export async function checkVentureTraversalStalls(sb, priorSnapshot = {}) {
+// SD-LEO-INFRA-VENTURE-REAL-DISCRIMINATOR-AND-STALL-ALARM-001-B (Part 2): a SECOND, distinct
+// alarm class layered additively onto the same active-blocked candidate scan — the
+// real_build_stall class. A venture alarms in this class only when it is BOTH divergent
+// (simulation-validated its gauge past STAGE_SIMULATION_OK with no real-build evidence, per the
+// Child-A discriminator) AND stalled beyond a tiered day-clock (evaluateRealBuildStall). This is
+// orthogonal to the orchestrator-blocked class above: a working S19_HARD_GATE block (divergent
+// but progressing) does NOT alarm. Reuses the same two-strike snapshot escalation shape (its OWN
+// snapshot object so the two classes' clocks never conflate) and the same exclusions. Wrapped in
+// its own try/catch so any error degrades to no real_build_stall alarm and NEVER aborts the
+// class-1 scan or throws — the function's fail-soft contract is preserved.
+export async function checkVentureTraversalStalls(sb, priorSnapshot = {}, priorRealBuildSnapshot = {}) {
   const thresholdIso = new Date(Date.now() - VENTURE_STALL_THRESHOLD_MS).toISOString();
   const snapshot = {};
   const alerted = [];
+  const realBuildSnapshot = {};
+  const realBuildStalled = [];
   try {
     const stuck = await fetchAllPaginated(() => sb
       .from('ventures')
-      .select('id, name, orchestrator_state, status, updated_at')
+      // Part 2 additive columns (current_lifecycle_stage / launch_mode / deployment_url /
+      // repo_url / workflow_started_at / metadata) feed the discriminator + tier resolver;
+      // the class-1 orchestrator-blocked path is unaffected by the widened projection.
+      .select('id, name, orchestrator_state, status, updated_at, current_lifecycle_stage, launch_mode, deployment_url, repo_url, workflow_started_at, metadata')
       .eq('status', 'active')
       .eq('orchestrator_state', 'blocked')
       .eq('is_demo', false)
@@ -174,20 +193,42 @@ export async function checkVentureTraversalStalls(sb, priorSnapshot = {}) {
     for (const v of stuck) {
       const { data: recent } = await sb
         .from('stage_executions')
-        .select('id')
+        .select('id, updated_at')
         .eq('venture_id', v.id)
         .gte('updated_at', thresholdIso)
         .limit(1);
-      if (recent && recent.length > 0) continue; // actively executing, not stalled
+      const freshStageRow = !!(recent && recent.length > 0); // actively executing, not stalled
 
-      const escalated = !!priorSnapshot[v.id];
-      snapshot[v.id] = priorSnapshot[v.id] || Date.now();
-      alerted.push({ id: v.id, name: v.name, orchestrator_state: v.orchestrator_state, escalated });
+      // --- Class 1: orchestrator-blocked traversal stall (UNCHANGED behavior) ---
+      if (!freshStageRow) {
+        const escalated = !!priorSnapshot[v.id];
+        snapshot[v.id] = priorSnapshot[v.id] || Date.now();
+        alerted.push({ id: v.id, name: v.name, orchestrator_state: v.orchestrator_state, escalated });
+      }
+
+      // --- Class 2: real-build STALL (divergent + stalled beyond tiered day-clock) ---
+      // Fail-soft in its OWN try so a bad row/eval can never abort the class-1 scan above.
+      // lastStageAdvanceAt derives from data already in hand: a fresh stage_executions row's
+      // timestamp when present, else the venture's own last-update stamp (the same forward-motion
+      // proxy the class-1 15-min threshold already uses) — no extra query.
+      try {
+        const lastStageAdvanceAt = (freshStageRow && recent[0] && recent[0].updated_at) || v.updated_at || null;
+        const rb = evaluateRealBuildStall(v, { now: Date.now(), lastStageAdvanceAt });
+        if (rb.alarm) {
+          const rbEscalated = !!priorRealBuildSnapshot[v.id];
+          realBuildSnapshot[v.id] = priorRealBuildSnapshot[v.id] || Date.now();
+          realBuildStalled.push({
+            id: v.id, name: v.name, class: 'real_build_stall',
+            tier: rb.tier, clock_days: rb.clock_days, elapsed_days: rb.elapsed_days,
+            reason: rb.reason, escalated: rbEscalated,
+          });
+        }
+      } catch { /* fail-soft: no real_build_stall alarm for this venture */ }
     }
   } catch (e) {
-    return { snapshot: priorSnapshot, alerted: [], error: e && e.message };
+    return { snapshot: priorSnapshot, alerted: [], realBuildSnapshot: priorRealBuildSnapshot, realBuildStalled: [], error: e && e.message };
   }
-  return { snapshot, alerted };
+  return { snapshot, alerted, realBuildSnapshot, realBuildStalled };
 }
 
 // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-3) — surface the Adam session's
@@ -414,6 +455,7 @@ async function main() {
   const priorSalient = priorState.salient !== undefined ? priorState.salient : priorState;
   const priorStallSnapshot = priorState.stallSnapshot || {};
   const priorVentureStallSnapshot = priorState.ventureStallSnapshot || {};
+  const priorVentureRealBuildStallSnapshot = priorState.ventureRealBuildStallSnapshot || {};
 
   // Child B FR-2/FR-3: intended-hold-vs-genuine-stall check on critical-path parents every
   // tick. Only a genuine stall (per stall-detector.js's classifier) ever calls
@@ -428,11 +470,11 @@ async function main() {
 
   // QF-20260710-056: a venture stuck mid-traversal is the thing that matters most —
   // check it every tick, independent of the task_ledger stall watch above.
-  let ventureStall = { snapshot: priorVentureStallSnapshot, alerted: [] };
+  let ventureStall = { snapshot: priorVentureStallSnapshot, alerted: [], realBuildSnapshot: priorVentureRealBuildStallSnapshot, realBuildStalled: [] };
   try {
-    ventureStall = await checkVentureTraversalStalls(sb, priorVentureStallSnapshot);
+    ventureStall = await checkVentureTraversalStalls(sb, priorVentureStallSnapshot, priorVentureRealBuildStallSnapshot);
   } catch (e) {
-    ventureStall = { snapshot: priorVentureStallSnapshot, alerted: [], error: e && e.message };
+    ventureStall = { snapshot: priorVentureStallSnapshot, alerted: [], realBuildSnapshot: priorVentureRealBuildStallSnapshot, realBuildStalled: [], error: e && e.message };
   }
 
   // SD-LEO-FIX-ADAM-OUTBOUND-SILENCE-001: watch Adam's own outbound rows at a live
@@ -456,7 +498,7 @@ async function main() {
   // reaches the coordinator on a real belt/venture delta, never a "still idle" status.
   const salient = await readSalientState(sb);
   const delta = detectSalientDelta(priorSalient, salient);
-  saveLastState({ salient, stallSnapshot: stall.snapshot, ventureStallSnapshot: ventureStall.snapshot });
+  saveLastState({ salient, stallSnapshot: stall.snapshot, ventureStallSnapshot: ventureStall.snapshot, ventureRealBuildStallSnapshot: ventureStall.realBuildSnapshot });
 
   // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-3): cold-start rule — loadLastAccountIdentity()
   // returning null (no prior state file / first tick after deploy-restart) means
@@ -529,6 +571,7 @@ async function main() {
     boardReconcile,
     stallAlerted: stall.alerted,
     ventureStallAlerted: ventureStall.alerted,
+    ventureRealBuildStallAlerted: ventureStall.realBuildStalled || [],
     inboxSurfaced: inboxSurface.items.length,
     inboxDirectives: inboxSurface.directives,
     smsInbound: smsInbound.count,
@@ -553,6 +596,7 @@ async function main() {
       `reconcile=parents:${boardReconcile.parents},errors:${boardReconcile.errors.length} ` +
       `stalls=${stall.alerted.length} ` +
       `ventureStalls=${ventureStall.alerted.length} ` +
+      `realBuildStalls=${(ventureStall.realBuildStalled || []).length} ` +
       `inbox=${inboxSurface.items.length}(dir:${inboxSurface.directives}) ` +
       `sms=${smsInbound.count} ` +
       `probes=${outboundSilence.probed.length} esc=${outboundSilence.escalated.length} ` +
@@ -573,6 +617,12 @@ async function main() {
     }
     for (const v of ventureStall.alerted) {
       console.log(`QUIET_TICK_VENTURE_STALL_ALERT=adam venture=${v.id} name="${v.name}" state=${v.orchestrator_state} escalated=${v.escalated}`);
+    }
+    // SD-LEO-INFRA-VENTURE-REAL-DISCRIMINATOR-AND-STALL-ALARM-001-B (Part 2): the DISTINCT
+    // real_build_stall class — a simulation-validated venture that advanced past
+    // STAGE_SIMULATION_OK with no real build AND has sat motionless beyond its tiered clock.
+    for (const v of (ventureStall.realBuildStalled || [])) {
+      console.log(`QUIET_TICK_VENTURE_REAL_BUILD_STALL_ALERT=adam venture=${v.id} name="${v.name}" tier=${v.tier} clock_days=${v.clock_days} elapsed_days=${v.elapsed_days} reason=${v.reason} escalated=${v.escalated} — divergent (stage past simulation-OK, no real build) AND stalled beyond its clock. Act: start the real build or record a gating decision.`);
     }
     // QF-20260719-825 (layer 2): flag overdue oversight/self-score stamps so the armed
     // wakeup prompt forces the check even when a cron was lost (act-on-flagged-lines contract).
