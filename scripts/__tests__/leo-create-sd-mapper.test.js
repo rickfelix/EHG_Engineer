@@ -67,6 +67,12 @@ describe('QF-251 MAPPER-5: existing mappings preserved', () => {
   it('orch → orchestrator', () => { expect(probeMapper('orch')).toBe('orchestrator'); });
 });
 
+describe('QF-20260722-851 MAPPER-7: corrective maps to infrastructure (was corrective, rejected by DB)', () => {
+  it('returns infrastructure for corrective input', () => {
+    expect(probeMapper('corrective')).toBe('infrastructure');
+  });
+});
+
 describe('QF-251 MAPPER-6: the canonical sd_type list (now lib/sd-type-enum.js) excludes stale qa/library/fix', () => {
   it('CANONICAL_SD_TYPES aligns with the DB sd_type_check constraint', () => {
     // SD-LEO-INFRA-UNIT-TEST-DEBT-TRIAGE-001: VALID_DB_SD_TYPES moved out of leo-create-sd.js into
