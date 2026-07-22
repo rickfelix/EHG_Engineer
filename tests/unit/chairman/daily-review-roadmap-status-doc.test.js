@@ -208,7 +208,7 @@ describe('buildRoadmapStatusDoc — plan_of_record section', () => {
     expect(f.gating_note).toMatch(/4 fleet item\(s\) currently gated-on-chairman-action/);
   });
 
-  it('TS-3/TR-3: fail-closed — gated volume >= dispatchable volume resolves no dispatch class and no fabricated date', async () => {
+  it('QF-20260722-717 (supersedes former TS-3/TR-3): gated volume >= dispatchable volume now yields a fenced-dominant, dispatchable-only calibrated forecast instead of insufficient_data', async () => {
     const supabase = makeFakeSupabase({
       strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
       roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
@@ -218,11 +218,14 @@ describe('buildRoadmapStatusDoc — plan_of_record section', () => {
     });
     const result = await buildRoadmapStatusDoc(supabase);
     const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
-    expect(f.confidence).toBe('insufficient_data');
-    expect(f.expected_date).toBeNull();
+    expect(f.confidence).toBe('calibrated');
+    expect(f.dispatch_class).toBe('open_queue');
+    expect(f.fenced_dominant).toBe(true);
+    expect(f.expected_date).not.toBeNull();
+    expect(f.gating_note).toMatch(/DISPATCHABLE-ONLY capacity — 10 chairman-gated item\(s\)/);
   });
 
-  it('adversarial-review finding (PR #6387)/TR-3: an exact tie (dispatchable === gated) is NOT treated as dispatchable — half the fleet gated must not fabricate a date', async () => {
+  it('QF-20260722-717 (supersedes former PR #6387 adversarial finding): an exact tie (dispatchable === gated) is fenced-dominant — still a calibrated dispatchable-only forecast, never fabricated as plain open_queue', async () => {
     const supabase = makeFakeSupabase({
       strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
       roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
@@ -232,8 +235,164 @@ describe('buildRoadmapStatusDoc — plan_of_record section', () => {
     });
     const result = await buildRoadmapStatusDoc(supabase);
     const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.confidence).toBe('calibrated');
+    expect(f.fenced_dominant).toBe(true);
+    expect(f.expected_date).not.toBeNull();
+  });
+
+  it('QF-20260722-717: dispatchable strictly exceeding gated resolves fenced_dominant=false with the original gating_note framing', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [makeForecastBasisRow({ dispatchableQf: 53, gatedHeld: 4 })],
+    });
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.confidence).toBe('calibrated');
+    expect(f.fenced_dominant).toBe(false);
+    expect(f.gating_note).toMatch(/^4 fleet item\(s\) currently gated-on-chairman-action/);
+  });
+
+  it('QF-20260722-717 FAIL-LOUD: current_state missing dispatchable_qf/chairman_gated_held names the missing fields instead of a silent insufficient_data', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [{
+        category: 'solomon_forecast_basis',
+        created_at: new Date().toISOString(),
+        metadata: {
+          forecast_basis: {
+            gantt_rule_LEGC: 'SEGREGATE...',
+            dispatch_class_model: { open_queue: { queue_wait_median_hrs: 9.5, queue_wait_p90_hrs: 91 } },
+            work_time_model_started_to_completed: { sd_tier: { median_hrs: 1.5, p90_hrs: 4.5 } },
+            current_state_20260721: { fenced_set: 'x' }, // re-stamp dropped both fields
+          },
+        },
+      }],
+    });
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
     expect(f.confidence).toBe('insufficient_data');
-    expect(f.expected_date).toBeNull();
+    expect(f.degraded_reason).toBe('schema_incomplete');
+    expect(f.degraded_detail).toMatch(/dispatchable_qf/);
+    expect(f.degraded_detail).toMatch(/chairman_gated_held/);
+    const por = result.sections.find((s) => s.id === 'plan_of_record');
+    expect(por.text).toMatch(/insufficient data \[schema_incomplete\]/);
+  });
+
+  it('QF-20260722-717 FAIL-LOUD: a resolved dispatch class whose model is missing queue_wait_median_hrs names the field, distinct from a plain no_data case', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [{
+        category: 'solomon_forecast_basis',
+        created_at: new Date().toISOString(),
+        metadata: {
+          forecast_basis: {
+            gantt_rule_LEGC: 'SEGREGATE...',
+            dispatch_class_model: {}, // open_queue entry missing entirely
+            work_time_model_started_to_completed: { sd_tier: { median_hrs: 1.5, p90_hrs: 4.5 } },
+            current_state_20260721: { dispatchable_qf: 53, chairman_gated_held: 4, fenced_set: 'x' },
+          },
+        },
+      }],
+    });
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.confidence).toBe('insufficient_data');
+    expect(f.degraded_reason).toBe('schema_incomplete');
+    expect(f.degraded_detail).toMatch(/dispatch_class_model\.open_queue\.queue_wait_median_hrs/);
+  });
+
+  it('QF-20260722-717: the pre-existing no-basis-row insufficient_data case is now labeled degraded_reason="no_data"', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [],
+    });
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.confidence).toBe('insufficient_data');
+    expect(f.degraded_reason).toBe('no_data');
+  });
+
+  it('QF-20260722-717 adversarial-verify finding: a wrong-type current_state field (present but non-numeric) is caught as schema_incomplete, not silently coerced to 0', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [makeForecastBasisRow({ dispatchableQf: 'unknown', gatedHeld: 5 })],
+    });
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.confidence).toBe('insufficient_data');
+    expect(f.degraded_reason).toBe('schema_incomplete');
+    expect(f.degraded_detail).toMatch(/dispatchable_qf/);
+  });
+
+  it('QF-20260722-717 adversarial-verify finding: a negative current_state count (out-of-range corruption) is caught as schema_incomplete, not treated as legitimately non-fenced', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [makeForecastBasisRow({ dispatchableQf: 53, gatedHeld: -1 })],
+    });
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.confidence).toBe('insufficient_data');
+    expect(f.degraded_reason).toBe('schema_incomplete');
+    expect(f.degraded_detail).toMatch(/chairman_gated_held/);
+  });
+
+  it('QF-20260722-717 adversarial-verify finding: a 0/0 (nothing dispatchable, nothing gated) belt is NOT reported as fenced_dominant', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [makeForecastBasisRow({ dispatchableQf: 0, gatedHeld: 0 })],
+    });
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.confidence).toBe('calibrated');
+    expect(f.fenced_dominant).toBe(false);
+    expect(f.gating_note).toBeNull();
+  });
+
+  it('QF-20260722-717 adversarial-verify finding: a missing work_time_model is named as schema_incomplete, symmetric with the queue-side guard', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [{
+        category: 'solomon_forecast_basis',
+        created_at: new Date().toISOString(),
+        metadata: {
+          forecast_basis: {
+            gantt_rule_LEGC: 'SEGREGATE...',
+            dispatch_class_model: { open_queue: { queue_wait_median_hrs: 9.5, queue_wait_p90_hrs: 91 } },
+            // work_time_model_started_to_completed dropped entirely
+            current_state_20260721: { dispatchable_qf: 53, chairman_gated_held: 4, fenced_set: 'x' },
+          },
+        },
+      }],
+    });
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.confidence).toBe('insufficient_data');
+    expect(f.degraded_reason).toBe('schema_incomplete');
+    expect(f.degraded_detail).toMatch(/work_time_model_started_to_completed/);
   });
 
   it('adversarial-review finding (PR #6387)/TR-3: a negative queue_wait_median_hrs (corrupted basis) does not fabricate a past date', async () => {

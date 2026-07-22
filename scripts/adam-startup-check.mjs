@@ -44,6 +44,21 @@ export const RESPONSIBILITIES = [
 //   - governance-scan: the flag-gated read-only opportunity-scan (the heartbeat body).
 //   - inbox-monitor:   drain coordinator replies that arrived after a sync await timed out.
 //   - offer-help:      an agent-judgment tick (no script) — propose-only, silence-by-default.
+//
+// QF-20260721-518 (UAT-agent-filed, 2026-07-21): flagged 2 crons as missing from this
+// manifest -- "hourly heartbeat-SMS" and "decision-driving sweep every 3h". Investigation
+// found both premises stale by the time the QF was actioned:
+//   - heartbeat-SMS: already the 'heartbeat-sms' entry below (shipped by QF-20260719-343,
+//     TWO DAYS before this QF was filed).
+//   - "decision-driving sweep every 3h": no such CLAUDE_ADAM.md-declared duty exists
+//     (missingDurableDuties(readFileSync('CLAUDE_ADAM.md'), ADAM_LOOPS) returns []); the
+//     closest candidate, scripts/cron/adam-decision-scheduler-tick.mjs, is already durable
+//     via .github/workflows/adam-decision-scheduler-cron.yml (session_bound=false in
+//     periodic_process_registry) -- GHA crons survive session restarts on their own and do
+//     NOT need an ADAM_LOOPS entry, which exists specifically for session-scoped harness
+//     CronCreate jobs. No periodic_process_registry row for a session-bound 3h decision
+//     sweep was found either. Left here so a future UAT/parity re-check of this exact class
+//     doesn't re-flag the same already-closed gap.
 export const ADAM_LOOPS = [
   {
     // SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: the quiet-tick cutover (docs/protocol/
@@ -65,7 +80,10 @@ export const ADAM_LOOPS = [
     // class this comment already warns about, just for two different tokens.
     // QF-20260719-848: QUIET_TICK_SMS_INBOUND (undrained chairman SMS, contract INBOUND WATCH
     // duty) is the newest such token — kept in parity here so a cold-start tick surfaces + acts on it.
-    prompt: 'Run `node scripts/adam-quiet-tick.mjs`. It prints ONE QUIET_TICK summary line and self-paces. If the output contains NO QUIET_TICK_PING / QUIET_TICK_STALL_ALERT / QUIET_TICK_VENTURE_STALL_ALERT / QUIET_TICK_OUTBOUND_PROBE / QUIET_TICK_INBOX_DIRECTIVE / QUIET_TICK_INBOX_ITEM / QUIET_TICK_INBOX_CAP / QUIET_TICK_SMS_INBOUND / QUIET_TICK_OVERSIGHT_OVERDUE / QUIET_TICK_SELFSCORE_OVERDUE / QUIET_TICK_ERROR lines, this turn is a NO-OP: arm ScheduleWakeup(nextWakeSeconds from the output) and emit nothing else. Otherwise act on the flagged lines (QUIET_TICK_INBOX_DIRECTIVE lines are HARD interrupts — process the directed row, then `node scripts/adam-advisory.cjs ack <id>`; QUIET_TICK_INBOX_ITEM lines are directed inbox rows to action or deliberately leave pending; QUIET_TICK_VENTURE_STALL_ALERT flags a stalled venture to investigate/escalate, mirroring QUIET_TICK_STALL_ALERT; QUIET_TICK_INBOX_CAP means the inbox fetch hit its cap — more rows may remain beyond this tick, re-run the drain; QUIET_TICK_SMS_INBOUND flags an undrained chairman SMS reply — a HARD interrupt: drain + reply per the CHAIRMAN SMS CHANNEL DUTY, `node scripts/sms-relay-drain.cjs`; QUIET_TICK_OVERSIGHT_OVERDUE / QUIET_TICK_SELFSCORE_OVERDUE flag a lost/failing deliberate-check cron — run the named check NOW per the line, QF-20260719-825), then arm the wakeup.',
+    // SD-LEO-INFRA-VENTURE-REAL-DISCRIMINATOR-AND-STALL-ALARM-001-B: QUIET_TICK_VENTURE_REAL_BUILD_STALL_ALERT
+    // is the distinct real-build-stall alarm class (FR-3) — a divergent (simulation-validated, no real
+    // build started) AND stalled venture, separate from the orchestrator-blocked QUIET_TICK_VENTURE_STALL_ALERT.
+    prompt: 'Run `node scripts/adam-quiet-tick.mjs`. It prints ONE QUIET_TICK summary line and self-paces. If the output contains NO QUIET_TICK_PING / QUIET_TICK_STALL_ALERT / QUIET_TICK_VENTURE_STALL_ALERT / QUIET_TICK_VENTURE_REAL_BUILD_STALL_ALERT / QUIET_TICK_OUTBOUND_PROBE / QUIET_TICK_INBOX_DIRECTIVE / QUIET_TICK_INBOX_ITEM / QUIET_TICK_INBOX_CAP / QUIET_TICK_SMS_INBOUND / QUIET_TICK_OVERSIGHT_OVERDUE / QUIET_TICK_SELFSCORE_OVERDUE / QUIET_TICK_ERROR lines, this turn is a NO-OP: arm ScheduleWakeup(nextWakeSeconds from the output) and emit nothing else. Otherwise act on the flagged lines (QUIET_TICK_INBOX_DIRECTIVE lines are HARD interrupts — process the directed row, then `node scripts/adam-advisory.cjs ack <id>`; QUIET_TICK_INBOX_ITEM lines are directed inbox rows to action or deliberately leave pending; QUIET_TICK_VENTURE_STALL_ALERT flags a stalled venture to investigate/escalate, mirroring QUIET_TICK_STALL_ALERT; QUIET_TICK_VENTURE_REAL_BUILD_STALL_ALERT flags a venture that is divergent (past simulation-OK, real build never started) AND stalled beyond its resolved clock — investigate/escalate: start the real build or record a gating decision; QUIET_TICK_INBOX_CAP means the inbox fetch hit its cap — more rows may remain beyond this tick, re-run the drain; QUIET_TICK_SMS_INBOUND flags an undrained chairman SMS reply — a HARD interrupt: drain + reply per the CHAIRMAN SMS CHANNEL DUTY, `node scripts/sms-relay-drain.cjs`; QUIET_TICK_OVERSIGHT_OVERDUE / QUIET_TICK_SELFSCORE_OVERDUE flag a lost/failing deliberate-check cron — run the named check NOW per the line, QF-20260719-825), then arm the wakeup.',
   },
   {
     key: 'governance-scan',
@@ -212,6 +230,25 @@ export const ADAM_LOOPS = [
     script: 'adam-chairman-sms.mjs',
     cron: '0 6 * * *',
     prompt: 'Adam morning-brief-sms tick: compose a self-contained, plan-first morning brief (roadmap position + overnight Slipped/Committing/Done condensed to phone scale, professional-casual), then run node scripts/adam-chairman-sms.mjs --kind morning_brief --dedupe-key "adam-morning-brief-<YYYY-MM-DD ET>" --body "<brief>". If a later tick finds today\'s dedupe key was never sent (the 6:00 fire was missed), compose and send it then instead -- late is better than never.',
+  },
+  {
+    // QF-20260721-010 (contract, leo_protocol_sections id=601, mirrors the belt-countdown/board-reconcile
+    // durable-encoding pattern): the DECISION-DRIVING-SWEEP DUTY. A 3-hourly sweep that DRIVES pending
+    // chairman decisions to resolution. Was SESSION-ONLY (Adam-armed 2026-07-21) and DIED on every /adam
+    // restart; not a contract-named duty, so missingDurableDuties could not detect the gap. Now named durable
+    // in the contract (CLAUDE_ADAM.md "DECISION-DRIVING-SWEEP DUTY (durable)") AND armed here so a fresh
+    // /adam re-arms it and the contract<->tooling parity check holds. Minute-50 offset avoids fleet :00 collisions.
+    // QF-20260721-891 (part-1 durability re-ask, filed against a pre-#6395 snapshot): investigated and
+    // confirmed MOOT — PR #6395 (commit 0374ab2, 2026-07-21 17:16 ET, ~99min before QF-891 was filed) already
+    // wrote this duty into leo_protocol_sections id=601 AND this ADAM_LOOPS entry in the same PR. Re-verified
+    // live: missingDurableDuties(CLAUDE_ADAM.md) omits 'decision-driving-sweep' with the real ADAM_LOOPS
+    // (present-check), and flags it when the key is removed from the loops array (negative-check) — the
+    // contract<->tooling link is demonstrably live, not just co-existing text.
+    key: 'decision-driving-sweep',
+    label: 'Decision-driving sweep (3h: drive pending chairman decisions to resolution; propose-only, silence-by-default)',
+    script: null, // agent-judgment tick — drive/reconcile decisions, no single script
+    cron: '50 */3 * * *',
+    prompt: 'Adam decision-driving-sweep tick: read the pending chairman-decision queue (node scripts/chairman-decisions.mjs list) and DRIVE each pending decision toward resolution — for an un-surfaced decision that survives the pre-send rubric, send the SMS decision packet (labeled options + RECOMMENDED default + no-reply auto-default policy) via node scripts/adam-chairman-decision.mjs per the CHAIRMAN SMS CHANNEL DUTY; reconcile any in-flight no-reply retries (the ratified retry->auto-default clock, quiet-hours-paused); and re-surface chairman-gated blocks starving the belt (BELT-NEVER-DRY branch 3). Propose-only (CONST-002); if nothing is pending, STAY SILENT (silence-by-default).',
   },
 ];
 

@@ -13,11 +13,19 @@
  *
  * RECONCILIATION BY CONSTRUCTION: rather than a separate "does today's brief exist" checker
  * (nothing in-repo does this today — verified), the workflow cron runs every 15 minutes across
- * a bounded 6:00-11:59 AM ET window (mirrors periodic-liveness-watcher-cron.yml's cadence). The
- * FIRST run past 6:00 AM ET does the real enqueue; every run after that is a dedupe-key no-op
+ * a bounded 5:00-11:59 AM ET window (mirrors periodic-liveness-watcher-cron.yml's cadence). The
+ * FIRST run past 5:00 AM ET does the real enqueue; every run after that is a dedupe-key no-op
  * (enqueueChairmanSms's upsert/ignoreDuplicates) UNLESS the first run failed for some reason, in
  * which case the next 15-minute tick sends it late — "late is better than never" without a
  * second mechanism to keep in sync with the first.
+ *
+ * QF-20260722-277: window start moved 6:00 → 5:00 ET to buffer GitHub Actions scheduled-workflow
+ * lag, so the real enqueue reliably lands before the chairman's 6:00 AM check. The window opening
+ * before 6:00 AM ET now overlaps the 10PM-6AM ET SMS quiet window (lib/time/chairman-et-wall-
+ * clock.js) — unlike before, when WINDOW_START_ET_HOUR (6) coincided with quiet-end, so the gate
+ * alone guaranteed a safe send time. The enqueue call now passes `notBefore: et6amIso(now)`
+ * (mirroring chairman-morning-review-sweep.mjs) so an early-window enqueue is held by the
+ * outbound worker until 6:00 AM ET regardless of when the sweep tick actually fired.
  *
  * Content mirrors chairman-morning-review-sweep.mjs's buildMorningReviewBody (roadmap position +
  * overnight shipped/in-flight) — reused directly rather than re-derived, since the two chairman
@@ -35,13 +43,14 @@ import { pathToFileURL } from 'url';
 import { createClient } from '@supabase/supabase-js';
 import { enqueueChairmanSms } from '../../lib/chairman/sms-bridge.js';
 import { buildMorningReviewBody } from './chairman-morning-review-sweep.mjs';
-import { etLocalHour, etDateStr } from '../../lib/time/chairman-et-wall-clock.js';
+import { etLocalHour, etDateStr, et6amIso } from '../../lib/time/chairman-et-wall-clock.js';
 
 export const QF_KEY = 'QF-20260720-531';
 export const ACTIVATION_TRIGGER = '.github/workflows/chairman-morning-brief-cron.yml';
-// Self-healing window: fires from 6:00 AM ET onward; a missed/failed first attempt is retried
-// by the next 15-minute tick, capped at noon so this doesn't run unbounded all day.
-const WINDOW_START_ET_HOUR = 6;
+// Self-healing window: fires from 5:00 AM ET onward (QF-20260722-277: buffers GHA scheduled-
+// workflow lag); a missed/failed first attempt is retried by the next 15-minute tick, capped at
+// noon so this doesn't run unbounded all day.
+const WINDOW_START_ET_HOUR = 5;
 const WINDOW_END_ET_HOUR = 12;
 
 export function parseArgs(argv) {
@@ -62,7 +71,7 @@ function buildSupabase() {
   return createClient(url, key);
 }
 
-export { etLocalHour, etDateStr, buildMorningReviewBody };
+export { etLocalHour, etDateStr, et6amIso, buildMorningReviewBody };
 
 export async function main(argv = process.argv, deps = {}) {
   const args = parseArgs(argv);
@@ -74,7 +83,7 @@ export async function main(argv = process.argv, deps = {}) {
 
   if (args.help) { logger.log?.('chairman-morning-brief-sweep --once [--dry-run]'); return { exitCode: 0, action: 'help' }; }
 
-  // FR-1: self-healing ET wall-clock window (6:00-11:59 ET) — see file header for the
+  // FR-1: self-healing ET wall-clock window (5:00-11:59 ET) — see file header for the
   // "reconciliation by construction" rationale.
   const etHour = etLocalHour(now);
   if (etHour < WINDOW_START_ET_HOUR || etHour >= WINDOW_END_ET_HOUR) {
@@ -103,15 +112,20 @@ export async function main(argv = process.argv, deps = {}) {
     return { exitCode: 0, action: 'dry_run', summary: { dedupeKey, bodyLength: body.length } };
   }
 
+  // QF-20260722-277: the window can now open as early as 5:00 ET (inside the 10PM-6AM ET SMS
+  // quiet window per lib/time/chairman-et-wall-clock.js), so notBefore must defer the actual
+  // send to 6:00 AM ET — mirroring chairman-morning-review-sweep.mjs's et6amIso(now) usage. On
+  // ticks at/after 6:00 ET, et6amIso(now) is already in the past, so this is a no-op deferral.
+  const notBefore = et6amIso(now);
   // Owed-state enqueue ONLY — the pre-existing sms-outbound-worker owns the provider send.
-  const enq = await enqueue(supabase, { recipientPhone, kind: 'morning_brief', body, decisionId: null, dedupeKey, notBefore: null });
+  const enq = await enqueue(supabase, { recipientPhone, kind: 'morning_brief', body, decisionId: null, dedupeKey, notBefore });
   const action = enq.enqueued ? 'enqueued' : (enq.deduped ? 'deduped' : 'inert');
   // PII-safe: log counts/ids/reason only — never the recipient phone or the body text.
-  log({ action, obligation_id: enq.obligationId || null, reason: enq.reason || null, dedupe_key: dedupeKey, body_len: body.length });
+  log({ action, obligation_id: enq.obligationId || null, reason: enq.reason || null, dedupe_key: dedupeKey, not_before: notBefore, body_len: body.length });
   return {
     exitCode: 0,
     action,
-    summary: { enqueued: !!enq.enqueued, deduped: !!enq.deduped, reason: enq.reason || null, dedupeKey, bodyLength: body.length, obligationId: enq.obligationId || null },
+    summary: { enqueued: !!enq.enqueued, deduped: !!enq.deduped, reason: enq.reason || null, dedupeKey, notBefore, bodyLength: body.length, obligationId: enq.obligationId || null },
   };
 }
 

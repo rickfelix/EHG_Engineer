@@ -10,11 +10,15 @@
 // Gated behind its OWN registered flag FLAG_GOVERNANCE_REVIEW_V1 (default-OFF until
 // baselined): when OFF it is a cheap no-op. Pass --force to run regardless (baseline/smoke).
 import 'dotenv/config';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { computeStaleFlags, formatDigest } from '../lib/feature-flags/governance-review.js';
+import { buildLiveReaderIndex } from '../lib/feature-flags/flag-reader-scan.js';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const GATE_FLAG = 'FLAG_GOVERNANCE_REVIEW_V1';
 
 export async function reviewMain({ force = false } = {}) {
@@ -34,7 +38,10 @@ export async function reviewMain({ force = false } = {}) {
 
   // Compute the digest BEFORE stamping so never-reviewed flags surface once.
   // env injected for the registry-vs-runtime drift detector (QF-20260610-863).
-  const result = computeStaleFlags(flags || [], Date.now(), { env: process.env });
+  // hasLiveReaders (QF-20260721-951): scan the source tree ONCE for each flag's live code
+  // readers so a disabled-aging-but-still-read flag is KEPT (load-bearing), not falsely KILLED.
+  const hasLiveReaders = buildLiveReaderIndex(REPO_ROOT, (flags || []).map((f) => f.flag_key).filter(Boolean));
+  const result = computeStaleFlags(flags || [], Date.now(), { env: process.env, hasLiveReaders });
   console.log(formatDigest(result));
 
   // Stamp last_reviewed_at on every reviewed flag (the automated review touched them this cycle).

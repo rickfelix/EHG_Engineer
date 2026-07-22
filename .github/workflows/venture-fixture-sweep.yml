@@ -1,0 +1,65 @@
+# Venture fixture residue sweep — weekly scheduled soft-delete of LIVE fixture ventures.
+# SD-LEO-INFRA-VENTURES-DATA-HYGIENE-001 (FR-4b).
+#
+# Runs scripts/sweep-fixture-residue.mjs --fix, which SOFT-DELETES (deleted_at + status)
+# any fixture-class venture sitting live (never a hard delete) and already SPARES the
+# sanctioned canary. Recurrence prevention for the leak class this SD cleaned up.
+#
+# FLAG-GATED (cannot become a dormant switch): a first step reads
+# leo_feature_flags.VENTURE_FIXTURE_SWEEP_V1 and the sweep step runs ONLY when it is
+# enabled. The flag ships OFF (no row => disabled), so merging this workflow performs
+# ZERO writes until an operator enables it via the standard registry flow. Same
+# leo_feature_flags mechanism + SUPABASE_* secrets wiring as canary-venture-probe.yml.
+name: Venture Fixture Sweep
+
+on:
+  schedule:
+    - cron: '23 4 * * 6'   # Saturdays 04:23 UTC (low-traffic; distinct from the canary's Sun 06:17)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: venture-fixture-sweep
+  cancel-in-progress: false
+
+jobs:
+  fixture-sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci --omit=dev --ignore-scripts
+
+      - name: Feature-flag gate (VENTURE_FIXTURE_SWEEP_V1)
+        id: gate
+        run: |
+          node --input-type=module <<'EOF'
+          import { createClient } from '@supabase/supabase-js';
+          import fs from 'node:fs';
+          const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+          const { data } = await sb
+            .from('leo_feature_flags')
+            .select('is_enabled')
+            .eq('flag_key', 'VENTURE_FIXTURE_SWEEP_V1')
+            .maybeSingle();
+          const enabled = data?.is_enabled === true;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `enabled=${enabled}\n`);
+          console.log(enabled
+            ? 'VENTURE_FIXTURE_SWEEP_V1 enabled — sweep will run.'
+            : 'VENTURE_FIXTURE_SWEEP_V1 disabled (or absent) — quiet no-op.');
+          EOF
+
+      - name: Run fixture residue sweep (soft-delete; flag-gated)
+        if: steps.gate.outputs.enabled == 'true'
+        run: node scripts/sweep-fixture-residue.mjs --fix
