@@ -102,6 +102,23 @@ _advanceStage), not on every poll-tick check, so the exemption survives the whol
 but does not linger to exempt a hypothetical future re-entry (not currently possible --
 advancement is strictly forward).';
 
+-- SECURITY (SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A EXEC-TO-PLAN SECURITY review, MUST-FIX #1):
+-- This table is the ONLY control preventing a FORGED grandfather exemption from suppressing a
+-- high-consequence blocking-decision mint. It was created without RLS while anon/authenticated
+-- hold DML grants (unlike its siblings chairman_decisions/ventures/venture_stages, all RLS-on).
+-- Enable RLS (default-deny) and REVOKE public DML so only the service role / SECURITY DEFINER
+-- RPC context (fn_advance_venture_stage, the daemon, the migration owner — all of which bypass
+-- RLS) can read/write it. anon + authenticated can never pre-seed a (venture, stage) exemption.
+ALTER TABLE venture_stage_cutover_grandfather ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON venture_stage_cutover_grandfather FROM anon, authenticated;
+DROP POLICY IF EXISTS venture_stage_cutover_grandfather_service_only ON venture_stage_cutover_grandfather;
+CREATE POLICY venture_stage_cutover_grandfather_service_only
+  ON venture_stage_cutover_grandfather
+  FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
 INSERT INTO venture_stage_cutover_grandfather (venture_id, stage_number)
 SELECT id, current_lifecycle_stage
 FROM ventures
