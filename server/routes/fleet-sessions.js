@@ -5,14 +5,24 @@
  * requestBrowserSession/signalTakeover/signalHandBack for the graphical Session
  * View pane (mockup #2). No changes to those modules -- consumed only.
  *
- * PER-SESSION-FRESH-FETCH DISCIPLINE (PRD FR-3): every handler re-queries
- * claude_sessions for the target row itself; no handler accepts or caches a
- * session snapshot across requests.
+ * PER-SESSION-FRESH-FETCH DISCIPLINE (PRD FR-3): every handler causes a fresh
+ * claude_sessions read for the target row on every call -- either via fetchFreshSession()
+ * below, or (for /attach) via attach()'s own internal resolveLiveSession() + metadata fetch.
+ * No handler accepts or caches a session snapshot across requests.
  *
  * SECURITY (PLAN review, sub_agent_execution_results bc990563): requestBrowserSession
  * is NEVER called with client-supplied opts -- opts.baseDir/host/port are the only
  * sandbox-escape vector in that function, so this route always omits opts entirely,
  * letting it fall back to the server-configured FLEET_BROWSER_PROFILES_DIR/127.0.0.1.
+ *
+ * KNOWN SCOPE BOUNDARY (adversarial review, pre-merge): authorization here is requireAuth
+ * only (any authenticated account) plus a session-existence check (fetchFreshSession /
+ * attach()'s own resolution) -- there is no role check and no per-session ownership check
+ * beyond existence. This matches the PLAN-phase "single-operator trust model" judgment for
+ * per-session authZ, but a caller-role gate (mirroring requireAdminRole in protocol-lint.js)
+ * was NOT independently evaluated for this surface, despite it driving OS-level window focus,
+ * sandboxed browser launch, and pause/resume of another operator's live session. Flagged as a
+ * follow-up decision, not fixed unilaterally here since it wasn't part of this child's PRD.
  */
 import { Router } from 'express';
 import { createClient } from '@supabase/supabase-js';
@@ -49,6 +59,13 @@ router.use((req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
   next();
 });
+
+/** sdKey is audit-log-only (never authorization) -- reject non-string shapes so a malformed
+ * value can't silently break the browser_takeover/browser_handback audit insert (adversarial
+ * review finding). */
+function safeSdKey(value) {
+  return typeof value === 'string' && value.length > 0 && value.length <= 200 ? value : null;
+}
 
 // GET /:id -- fresh view-model for the pane (telemetry, resting attach state, pause/gate flags).
 router.get('/:id', async (req, res) => {
@@ -96,7 +113,7 @@ router.post('/:id/takeover', async (req, res) => {
   try {
     const session = await fetchFreshSession(supabase, req.params.id);
     if (!session) return res.status(404).json({ ok: false, reason: 'session_not_found' });
-    await signalTakeover(supabase, req.params.id, req.body?.sdKey ?? null);
+    await signalTakeover(supabase, req.params.id, safeSdKey(req.body?.sdKey));
     res.json({ ok: true, paused: true });
   } catch (error) {
     console.error('[fleet-sessions] takeover failed:', error.message);
@@ -110,7 +127,7 @@ router.post('/:id/hand-back', async (req, res) => {
   try {
     const session = await fetchFreshSession(supabase, req.params.id);
     if (!session) return res.status(404).json({ ok: false, reason: 'session_not_found' });
-    await signalHandBack(supabase, req.params.id, req.body?.sdKey ?? null);
+    await signalHandBack(supabase, req.params.id, safeSdKey(req.body?.sdKey));
     res.json({ ok: true, paused: false });
   } catch (error) {
     console.error('[fleet-sessions] hand-back failed:', error.message);

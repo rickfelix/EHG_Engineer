@@ -11,6 +11,13 @@
  * a real browser process (e.g. the parent shell's native/Electron layer) -- browser-control.js's
  * own contract is "return launch options, never launch a browser here", and this fragment
  * honors that same boundary rather than attempting to spawn anything client-side.
+ *
+ * KNOWN INTEGRATION GAP (adversarial review, pre-merge): the fetch() calls below carry no
+ * Authorization/x-internal-api-key header, so every action 401s (fails closed) when this
+ * fragment is loaded standalone. Fresh-fails-closed is safe, but the credential-passthrough
+ * mechanism is genuinely undecided -- it depends on how the parent SD's assembly shell hosts
+ * this fragment (e.g. relaying its own session token). Tracked as an open dependency on the
+ * parent shell's integration work, not fixable from this child alone.
  */
 (function () {
   const API_BASE = '/api/fleet/sessions';

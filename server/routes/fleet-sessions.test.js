@@ -35,7 +35,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
 const { default: fleetSessionsRouter } = await import('./fleet-sessions.js');
 
 function mockReq(overrides = {}) {
-  return { params: {}, body: {}, headers: {}, ...overrides };
+  return { params: {}, body: {}, query: {}, headers: {}, ...overrides };
 }
 function mockRes() {
   const res = { headers: {} };
@@ -46,13 +46,13 @@ function mockRes() {
 }
 
 /** Invoke a router handler directly via its stack, without spinning up Express. */
-async function invokeRoute(method, path, { params = {}, body = {} } = {}) {
+async function invokeRoute(method, path, { params = {}, body = {}, query = {} } = {}) {
   const layer = fleetSessionsRouter.stack.find(
     (l) => l.route && l.route.path === path && l.route.methods[method.toLowerCase()]
   );
   if (!layer) throw new Error(`Route ${method} ${path} not found`);
   const handler = layer.route.stack[0].handle;
-  const req = mockReq({ params, body });
+  const req = mockReq({ params, body, query });
   const res = mockRes();
   await handler(req, res);
   return { req, res };
@@ -154,15 +154,30 @@ describe('POST /:id/browser-session', () => {
     expect(payload.launchOptions).toEqual(launchOptions);
   });
 
-  it('never forwards a client-supplied opts object to requestBrowserSession (SECURITY review condition)', async () => {
-    mockFromReturningSession({ session_id: 'sess-1', metadata: { browser_mcp_enabled: true } });
+  it('never forwards a client-supplied opts object (body) to requestBrowserSession (SECURITY review condition)', async () => {
+    const session = { session_id: 'sess-1', metadata: { browser_mcp_enabled: true } };
+    mockFromReturningSession(session);
     mockRequestBrowserSession.mockReturnValue({ ok: true, launchOptions: {} });
     await invokeRoute('POST', '/:id/browser-session', {
       params: { id: 'sess-1' },
       body: { opts: { baseDir: '/etc', host: '0.0.0.0' } },
     });
     expect(mockRequestBrowserSession).toHaveBeenCalledTimes(1);
-    expect(mockRequestBrowserSession.mock.calls[0].length).toBe(1); // session only -- no opts arg forwarded
+    // Value check, not just arg count: the exact fetched session, nothing else appended/merged.
+    expect(mockRequestBrowserSession).toHaveBeenCalledWith(session);
+    expect(mockRequestBrowserSession.mock.calls[0].length).toBe(1);
+  });
+
+  it('never forwards a client-supplied opts object (query string) to requestBrowserSession', async () => {
+    const session = { session_id: 'sess-1', metadata: { browser_mcp_enabled: true } };
+    mockFromReturningSession(session);
+    mockRequestBrowserSession.mockReturnValue({ ok: true, launchOptions: {} });
+    await invokeRoute('POST', '/:id/browser-session', {
+      params: { id: 'sess-1' },
+      query: { baseDir: '/etc', host: '0.0.0.0', port: '9222' },
+    });
+    expect(mockRequestBrowserSession).toHaveBeenCalledWith(session);
+    expect(mockRequestBrowserSession.mock.calls[0].length).toBe(1);
   });
 });
 
@@ -182,6 +197,24 @@ describe('POST /:id/takeover', () => {
     mockSignalTakeover.mockResolvedValue(undefined);
     const { res } = await invokeRoute('POST', '/:id/takeover', { params: { id: 'sess-1' } });
     expect(res.json.mock.calls[0][0]).toEqual({ ok: true, paused: true });
+  });
+
+  it('passes a valid string sdKey through to signalTakeover', async () => {
+    mockFromReturningSession({ session_id: 'sess-1', metadata: {} });
+    mockSignalTakeover.mockResolvedValue(undefined);
+    await invokeRoute('POST', '/:id/takeover', { params: { id: 'sess-1' }, body: { sdKey: 'SD-LEO-FOO-001' } });
+    expect(mockSignalTakeover).toHaveBeenCalledWith(expect.anything(), 'sess-1', 'SD-LEO-FOO-001');
+  });
+
+  it('normalizes a malformed sdKey (object, oversized string) to null rather than passing it through', async () => {
+    mockFromReturningSession({ session_id: 'sess-1', metadata: {} });
+    mockSignalTakeover.mockResolvedValue(undefined);
+    await invokeRoute('POST', '/:id/takeover', { params: { id: 'sess-1' }, body: { sdKey: { nested: 'object' } } });
+    expect(mockSignalTakeover).toHaveBeenCalledWith(expect.anything(), 'sess-1', null);
+
+    mockSignalTakeover.mockClear();
+    await invokeRoute('POST', '/:id/takeover', { params: { id: 'sess-1' }, body: { sdKey: 'x'.repeat(500) } });
+    expect(mockSignalTakeover).toHaveBeenCalledWith(expect.anything(), 'sess-1', null);
   });
 });
 
