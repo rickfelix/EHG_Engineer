@@ -46,6 +46,7 @@
     "database/migrations/20260610_purge_parity_fixture_ventures.sql",
     "database/migrations/20260611_fix_advance_stage_required_artifacts_cast.sql",
     "database/migrations/20260704_chairman_product_review_gate_scoped_precondition.sql",
-    "database/migrations/20260716_high_consequence_stage_gates.sql"
+    "database/migrations/20260716_high_consequence_stage_gates.sql",
+    "database/migrations/20260722_high_consequence_actuation_completeness.sql"
   ]
 }
