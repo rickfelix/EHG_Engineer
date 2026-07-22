@@ -119,6 +119,10 @@ async function getWorkingOnSD() {
         .from('strategic_directives_v2')
         .select(SD_COLUMNS)
         .eq('claiming_session_id', sessionId)
+        // feedback d19f7f7e: terminal-status guard — a CANCELLED/COMPLETED SD with a
+        // stale is_working_on=true / claim must never be reported as resume-eligible
+        // (would steer /leo continue into cancelled scope).
+        .not('status', 'in', '(cancelled,completed)')
         .lt('progress', 100);
       if (!ownError && ownClaim && ownClaim.length > 0) {
         workingOn = ownClaim;
@@ -146,6 +150,8 @@ async function getWorkingOnSD() {
         .from('strategic_directives_v2')
         .select(SD_COLUMNS)
         .or('claiming_session_id.not.is.null,is_working_on.eq.true')
+        // feedback d19f7f7e: same terminal-status guard on the spotlight fallback.
+        .not('status', 'in', '(cancelled,completed)')
         .lt('progress', 100);  // Less than 100% complete
 
       if (workingError) {

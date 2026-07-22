@@ -8,6 +8,15 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// The terminal-status guard is modeled faithfully: .not('status','in','(cancelled,completed)')
+// filters out rows whose status is terminal, mirroring the PostgREST behavior. This lets
+// the tests assert the guard's EFFECT, not just its presence in source.
+const TERMINAL = ['cancelled', 'completed'];
+function applyTerminalGuard(result) {
+  if (!result?.data) return result;
+  return { ...result, data: result.data.filter((r) => !TERMINAL.includes(r.status)) };
+}
+
 function buildSupabaseMock({ ownClaimResult, liveCountResult, spotlightResult }) {
   return {
     from(table) {
@@ -19,11 +28,11 @@ function buildSupabaseMock({ ownClaimResult, liveCountResult, spotlightResult })
           select: () => ({
             eq: (col) => {
               if (col === 'claiming_session_id') {
-                return { lt: () => Promise.resolve(ownClaimResult) };
+                return { not: () => ({ lt: () => Promise.resolve(applyTerminalGuard(ownClaimResult)) }) };
               }
               throw new Error(`Unexpected eq column: ${col}`);
             },
-            or: () => ({ lt: () => Promise.resolve(spotlightResult) }),
+            or: () => ({ not: () => ({ lt: () => Promise.resolve(applyTerminalGuard(spotlightResult)) }) }),
           }),
         };
       }
@@ -90,6 +99,36 @@ describe('QF-20260703-742: session-scoped getWorkingOnSD resolution', () => {
       ownClaimResult: { data: [], error: null },
       liveCountResult: { count: 3, error: null },
       spotlightResult: { data: null, error: new Error('must not be reached') },
+    });
+
+    const { default: getWorkingOnSD } = await import('../../scripts/get-working-on-sd.js');
+    const result = await getWorkingOnSD();
+
+    expect(result).toBeNull();
+  });
+
+  // feedback d19f7f7e: terminal-status guard. A CANCELLED/COMPLETED SD with a stale
+  // is_working_on=true / claim must not be reported as resume-eligible.
+  it('own-claim path: a CANCELLED SD with a stale claim is filtered out (not resumable)', async () => {
+    process.env.CLAUDE_SESSION_ID = 'session-mine';
+    mockSupabase = buildSupabaseMock({
+      ownClaimResult: { data: [{ id: 'sd-x', sd_key: 'SD-CANCELLED', title: 'Cancelled scope', status: 'cancelled', progress: 40, claiming_session_id: 'session-mine' }], error: null },
+      liveCountResult: { count: 3, error: null }, // multiple live → spotlight would refuse anyway
+      spotlightResult: { data: null, error: new Error('must not be reached') },
+    });
+
+    const { default: getWorkingOnSD } = await import('../../scripts/get-working-on-sd.js');
+    const result = await getWorkingOnSD();
+
+    expect(result).toBeNull();
+  });
+
+  it('spotlight path: a CANCELLED SD with stale is_working_on is filtered out (not resumable)', async () => {
+    process.env.CLAUDE_SESSION_ID = 'session-mine';
+    mockSupabase = buildSupabaseMock({
+      ownClaimResult: { data: [], error: null },
+      liveCountResult: { count: 1, error: null }, // sole live session → spotlight is consulted
+      spotlightResult: { data: [{ id: 'sd-y', sd_key: 'SD-CANCELLED-SPOT', title: 'Cancelled', status: 'cancelled', progress: 20, is_working_on: true }], error: null },
     });
 
     const { default: getWorkingOnSD } = await import('../../scripts/get-working-on-sd.js');
