@@ -2,6 +2,7 @@
 -- Migration: High-consequence actuation completeness
 -- SD: SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A
 -- Date: 2026-07-22
+-- @approved-by: codestreetlabs@gmail.com
 --
 -- Context: SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001 shipped the blocking MECHANISM
 -- (venture_stages.is_high_consequence, chairman_decisions.blocking, both
