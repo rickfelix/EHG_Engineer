@@ -91,7 +91,10 @@
     els.takeoverButton.type = 'button';
     els.handBackButton = el('button', 'sv-button sv-button--handback sv-hidden', 'Return control to agent');
     els.handBackButton.type = 'button';
-    els.browserPane.append(ribbon, els.browserPaneBody, els.takeoverButton, els.handBackButton);
+    const logHeading = el('p', 'sv-log-heading', 'BROWSER ACTION LOG (auditable)');
+    els.browserLog = el('ul', 'sv-log-list');
+    els.browserLog.setAttribute('aria-label', 'Auditable take-over / hand-back log');
+    els.browserPane.append(ribbon, els.browserPaneBody, els.takeoverButton, els.handBackButton, logHeading, els.browserLog);
     browserSection.append(els.browserButton, els.browserGateNote, els.browserPane);
     root.appendChild(browserSection);
   }
@@ -147,9 +150,33 @@
     renderGate(!!view.browserMcpEnabled);
   }
 
+  const LOG_EVENT_LABELS = { browser_takeover: 'Human took control', browser_handback: 'Control returned to agent' };
+
+  function renderBrowserLog(events, errored) {
+    els.browserLog.textContent = '';
+    if (errored) {
+      els.browserLog.appendChild(el('li', 'sv-log-empty', 'Unable to load browser action log.'));
+      return;
+    }
+    if (!events || events.length === 0) {
+      els.browserLog.appendChild(el('li', 'sv-log-empty', 'No take-over/hand-back events recorded yet.'));
+      return;
+    }
+    for (const ev of events) {
+      const label = LOG_EVENT_LABELS[ev.event_type] || ev.event_type;
+      els.browserLog.appendChild(el('li', 'sv-log-entry', `${ev.created_at} — ${label}`));
+    }
+  }
+
   async function fetchView() {
     const res = await fetch(`${API_BASE}/${encodeURIComponent(sessionId)}`, { method: 'GET' });
     if (!res.ok) throw new Error(`view fetch failed: ${res.status}`);
+    return res.json();
+  }
+
+  async function fetchBrowserLog() {
+    const res = await fetch(`${API_BASE}/${encodeURIComponent(sessionId)}/browser-log`, { method: 'GET' });
+    if (!res.ok) throw new Error(`browser-log fetch failed: ${res.status}`);
     return res.json();
   }
 
@@ -158,6 +185,12 @@
       renderView(await fetchView());
     } catch {
       els.attachMessage.textContent = 'Unable to load session state.';
+    }
+    try {
+      const log = await fetchBrowserLog();
+      renderBrowserLog(log.events, false);
+    } catch {
+      renderBrowserLog(null, true);
     }
   }
 

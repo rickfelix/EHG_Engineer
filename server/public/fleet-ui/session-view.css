@@ -160,6 +160,30 @@ body {
 .sv-button--takeover { background: var(--sv-warn); }
 .sv-button--handback { background: var(--sv-ok); }
 
+.sv-log-heading {
+  margin: 12px 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+}
+.sv-log-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 160px;
+  overflow-y: auto;
+  border-top: 1px solid #334155;
+}
+.sv-log-entry, .sv-log-empty {
+  padding: 6px 0;
+  border-bottom: 1px solid #1e293b;
+  font-size: 12px;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  color: #cbd5e1;
+}
+.sv-log-empty { color: #64748b; font-family: inherit; }
+
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }

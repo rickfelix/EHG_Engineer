@@ -81,6 +81,30 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// GET /:id/browser-log -- FR-5: auditable log of this session's browser_takeover/browser_handback
+// events (lib/coordinator/coordination-events.cjs's coordination_events table -- the same feed
+// signalTakeover/signalHandBack already write to via logBrowserAction). Granular in-page actions
+// (navigate/extract/screenshot) require an actual MCP-driven browser layer, which is out of
+// scope for this control-plane child (browser-control.js never drives a browser, only wires it) --
+// this surfaces the real, already-recorded take-over/hand-back audit trail, not illustrative data.
+router.get('/:id/browser-log', async (req, res) => {
+  const supabase = getSupabase();
+  try {
+    const { data, error } = await supabase
+      .from('coordination_events')
+      .select('id, event_type, created_at, sd_key')
+      .eq('session_id', req.params.id)
+      .in('event_type', ['browser_takeover', 'browser_handback'])
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (error) throw new Error(error.message);
+    res.json({ ok: true, events: data ?? [] });
+  } catch (error) {
+    console.error('[fleet-sessions] browser-log failed:', error.message);
+    res.status(500).json({ ok: false, reason: 'internal_error', message: error.message });
+  }
+});
+
 // POST /:id/attach -- FR-1: brings the session's terminal window to OS-level foreground focus.
 router.post('/:id/attach', async (req, res) => {
   const supabase = getSupabase();

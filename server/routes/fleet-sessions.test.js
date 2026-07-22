@@ -98,6 +98,50 @@ describe('GET /:id', () => {
   });
 });
 
+describe('GET /:id/browser-log', () => {
+  beforeEach(() => { vi.clearAllMocks(); mockSupabaseFromBuilder.mockReset(); });
+
+  it('FR-5: returns the take-over/hand-back audit trail for this session, newest first', async () => {
+    const events = [
+      { id: 'ev-2', event_type: 'browser_handback', created_at: '2026-01-01T00:05:00Z', sd_key: null },
+      { id: 'ev-1', event_type: 'browser_takeover', created_at: '2026-01-01T00:00:00Z', sd_key: null },
+    ];
+    mockSupabaseFromBuilder.mockImplementation((table) => {
+      if (table !== 'coordination_events') throw new Error(`unexpected table: ${table}`);
+      return {
+        select: () => ({
+          eq: () => ({
+            in: () => ({
+              order: () => ({
+                limit: () => Promise.resolve({ data: events, error: null }),
+              }),
+            }),
+          }),
+        }),
+      };
+    });
+    const { res } = await invokeRoute('GET', '/:id/browser-log', { params: { id: 'sess-1' } });
+    expect(res.status).not.toHaveBeenCalledWith(500);
+    expect(res.json.mock.calls[0][0]).toEqual({ ok: true, events });
+  });
+
+  it('surfaces a query error as 500 rather than a false empty list', async () => {
+    mockSupabaseFromBuilder.mockImplementation(() => ({
+      select: () => ({
+        eq: () => ({
+          in: () => ({
+            order: () => ({
+              limit: () => Promise.resolve({ data: null, error: { message: 'relation missing' } }),
+            }),
+          }),
+        }),
+      }),
+    }));
+    const { res } = await invokeRoute('GET', '/:id/browser-log', { params: { id: 'sess-1' } });
+    expect(res.status).toHaveBeenCalledWith(500);
+  });
+});
+
 describe('POST /:id/attach', () => {
   beforeEach(() => { vi.clearAllMocks(); mockSupabaseFromBuilder.mockReset(); });
 

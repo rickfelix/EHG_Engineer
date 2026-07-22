@@ -64,6 +64,7 @@ import stage24Routes from './routes/stage24.js';
 import githubRepoRoutes from './routes/github-repo.js';
 import protocolLintRoutes, { requireAdminRole } from './routes/protocol-lint.js';
 import fleetSessionsRoutes from './routes/fleet-sessions.js';
+import fleetPanelRoutes from './routes/fleet-panel.js';
 import { createChairmanScopeGuard } from '../lib/middleware/chairman-scope-guard.js';
 
 // Payment webhook handler (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001)
@@ -214,6 +215,8 @@ app.use('/api/admin/protocol-lint', requireAuth, requireAdminRole, protocolLintR
 app.use('/api/fleet/sessions', requireAuth, fleetSessionsRoutes);
 // Dashboard routes: read-only, optional auth
 app.use('/api', optionalAuth, dashboardRoutes);
+// Fleet panel (SD-LEO-INFRA-LEO-LAUNCHER-SHELL-001-A): read-only, optional auth
+app.use('/api/fleet-panel', optionalAuth, fleetPanelRoutes);
 
 // Story API Routes (with auth)
 app.post('/api/stories/generate', requireAuth, storiesAPI.generate);
