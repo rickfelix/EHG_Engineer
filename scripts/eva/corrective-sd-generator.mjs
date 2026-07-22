@@ -60,13 +60,16 @@ export function _isKnownDimensionKey(key) {
 }
 
 // SD type and priority per tier
-// Root Cause 2 fix: Use 'corrective' instead of 'feature' for gap-closure/escalation
-// Corrective type has 70% gate threshold (vs 85% for feature), lighter validation
+// Root Cause 2 fix: Use 'infrastructure' instead of 'feature' for gap-closure/escalation
+// (QF-20260722-851: 'corrective' was never added as a canonical sd_type / DB CHECK value,
+// so mapToDbType rejected it and every corrective-typed promote threw -- 10/14 rows stuck,
+// zero ever promoted. 'infrastructure' is the mapToDbType-valid type these gap-closure /
+// escalation rows resolve to anyway; category stays 'corrective' for labeling.)
 const TIER_CONFIG = {
   accept:      { action: 'accept',      sdType: null,            priority: null },
   minor:       { action: 'minor',       sdType: 'enhancement',   priority: 'medium' },
-  'gap-closure': { action: 'gap-closure', sdType: 'corrective',  priority: 'high' },
-  escalation:  { action: 'escalation',  sdType: 'corrective',    priority: 'critical' },
+  'gap-closure': { action: 'gap-closure', sdType: 'infrastructure', priority: 'high' },
+  escalation:  { action: 'escalation',  sdType: 'infrastructure',  priority: 'critical' },
 };
 
 // Orchestrator parent UUID (SD-MAN-ORCH-EVA-VISION-GOVERNANCE-001)
@@ -681,10 +684,12 @@ export async function generateCorrectiveSD(scoreId, options = {}) {
   }
 
   // Groups to process: V-dims → corrective SD; A-dims → infrastructure SD; other → corrective SD
+  // (sdType is always a mapToDbType-valid value; category:'corrective' is retained as the
+  // human-facing label -- see QF-20260722-851)
   const groups = [
-    { dims: vDims,    sdType: 'corrective',       category: 'corrective',      label: 'Vision' },
+    { dims: vDims,    sdType: 'infrastructure',   category: 'corrective',      label: 'Vision' },
     { dims: aDims,    sdType: 'infrastructure',   category: 'infrastructure',  label: 'Architecture' },
-    { dims: otherDims, sdType: tier.sdType ?? 'corrective', category: tier.sdType ?? 'corrective', label: 'Vision' },
+    { dims: otherDims, sdType: tier.sdType ?? 'infrastructure', category: 'corrective', label: 'Vision' },
   ].filter(g => g.dims.length > 0);
 
   // Fall back to single lowest-dimension if no weak dims found (e.g. empty dimension_scores)
@@ -692,8 +697,8 @@ export async function generateCorrectiveSD(scoreId, options = {}) {
     const { dimId, dimensionName } = _extractLowestDimension(score.dimension_scores, score.total_score);
     groups.push({
       dims: [{ dimId, dimensionName, score: score.total_score }],
-      sdType: tier.sdType ?? 'corrective',
-      category: tier.sdType ?? 'corrective',
+      sdType: tier.sdType ?? 'infrastructure',
+      category: 'corrective',
       label: 'Vision',
     });
   }
