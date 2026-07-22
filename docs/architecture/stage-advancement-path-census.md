@@ -132,13 +132,16 @@ is never read by any blocking-gate check.
   substrate this file tracks. For an irreversible gate (`venture_stages.is_irreversible=true`,
   Stage-24-class), it additionally returns `requiresManualConfirmation:true`; there is no single-call
   route from this function to an actual advance.
-- **ehg app repo (frontend)** — a parallel reconciliation lands in the `ehg` app repo
-  (`feat/SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A` branch there) for the divergent hard-gate-array
-  sources (`useStageDisplayData.ts`, `gate-config.ts`, `useChairmanConfig.ts`, `useStagePolicy.ts`,
-  `useStageGovernance.ts`) and the UI advance-stage write path (`src/lib/ventures/advanceStage.ts`).
-  That repo is out of THIS census's scope (EHG_Engineer only) but is the other half of "every
-  advancement path honors is_high_consequence+blocking identically" — see that repo's own PR for the
-  file:line detail.
+- **ehg app repo (frontend) — NOT YET DONE, explicitly deferred (2026-07-22)**: FR-2's divergent
+  hard-gate-array sources (`useStageDisplayData.ts`, `gate-config.ts`, `useChairmanConfig.ts`,
+  `useStagePolicy.ts`, `useStageGovernance.ts`) and the UI advance-stage write path
+  (`src/lib/ventures/advanceStage.ts`) have NOT been reconciled — TESTING sub-agent review (2026-07-22)
+  confirmed the `ehg` repo's `feat/SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A` branch carries no FR-2
+  commit. That repo is out of THIS census's scope (EHG_Engineer only); the ehg-side reconciliation is
+  tracked as an explicit follow-up (completion-flag, needs_decision) rather than assumed complete. Until
+  it lands, "every advancement path honors is_high_consequence+blocking identically" is TRUE for
+  EHG_Engineer's server-side enforcement only, NOT yet for the ehg-side client-facing gate-membership
+  displays/checks.
 
 ### Re-verified disposition of the 2 previously-deferred bypasses (#16, #17)
 
