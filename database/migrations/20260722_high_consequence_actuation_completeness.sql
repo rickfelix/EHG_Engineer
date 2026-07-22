@@ -5,10 +5,23 @@
 --
 -- Context: SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001 shipped the blocking MECHANISM
 -- (venture_stages.is_high_consequence, chairman_decisions.blocking, both
--- chokepoints -- see 20260716_high_consequence_stage_gates.sql) but left every
--- stage's is_high_consequence=FALSE, so the mechanism was inert. This migration
+-- chokepoints -- see 20260716_high_consequence_stage_gates.sql). This migration
 -- performs the actual cutover for stages 3/19/24, WITHOUT retroactively halting
 -- ventures already sitting at those stages the moment this migration lands.
+--
+-- CORRECTED PREMISE (RCA + Solomon oracle verdict, 2026-07-22, correlation
+-- cd32c63c): the original assumption below -- that every stage's
+-- is_high_consequence started FALSE, so the flag-gated mechanism was inert --
+-- is FALSE for stage 24. venture_stages.is_high_consequence for stage 24 was
+-- set TRUE on 2026-07-21T16:15Z via a path outside every tracked migration
+-- (most likely a chairman console action), and fn_advance_venture_stage has
+-- enforced it UNCONDITIONALLY (gated only by the pre-existing fleet-wide
+-- LEO_HIGH_CONSEQUENCE_GATES_ENABLED kill-switch, default ON) since
+-- 20260716_high_consequence_stage_gates.sql shipped -- i.e. stage 24 is
+-- ALREADY actively blocking today. Verified independently by both the
+-- database-agent sub-agent and the Solomon oracle by querying live
+-- venture_stages directly (exactly one stage, 24, has is_high_consequence=true;
+-- 3 and 19 do not).
 --
 -- Authoritative store confirmed (EXEC investigation): ventures.current_lifecycle_stage
 -- is what BOTH chokepoints (fn_advance_venture_stage below, and
@@ -17,15 +30,24 @@
 -- NOT what the blocking-gate check consults.
 --
 -- FR-1: is_high_consequence=true for stages 3/19/24 is set unconditionally below,
--- but its EFFECT is gated behind a NEW flag, HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED
--- (default OFF, i.e. lifecycle_state='disabled'), because the column itself has no
--- per-row flag-gating. Both READ paths -- this RPC (SQL) and lib/eva/stage-governance.js
--- (JS, consumed by the daemon's two JS-side chokepoints) -- treat is_high_consequence as
--- effectively FALSE for every stage until this NEW flag is deliberately flipped ON. This
+-- and its EFFECT is gated behind a NEW flag, HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED,
+-- because the column itself has no per-row flag-gating. Both READ paths -- this RPC
+-- (SQL) and lib/eva/stage-governance.js (JS, consumed by the daemon's two JS-side
+-- chokepoints) -- gate is_high_consequence enforcement on this flag. The flag is
+-- SEEDED ON (is_enabled=true, lifecycle_state='enabled') rather than the originally
+-- planned default-OFF: a code-swap migration must be behavior-preserving, and since
+-- stage 24 is the only is_high_consequence=true stage today, ON enforces ONLY stage
+-- 24 -- IDENTICAL to current live behavior (zero net-new enforcement; stages 3/19
+-- remain unenforced regardless of the flag, since their is_high_consequence stays
+-- false until a SEPARATE, deliberate, chairman-gated flip -- not part of this SD).
+-- Starting OFF would have been a silent regression: an unannounced disarm of an
+-- already-live, chairman-reserved gate (S24 pre-launch kill / product review). This
 -- is layered UNDER the pre-existing LEO_HIGH_CONSEQUENCE_GATES_ENABLED kill-switch
--- (default ON) -- that flag remains the fleet-wide emergency kill-switch for the whole
--- mechanism; this new flag is specifically the one-time cutover gate for THIS SD's
--- stage 3/19/24 flip, reversible via a single flip back to OFF (TR-1).
+-- (default ON) -- that flag remains the fleet-wide emergency kill-switch for the
+-- whole mechanism; HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED remains the reversible
+-- lever for this SD's cutover (flip to is_enabled=false/lifecycle_state='disabled'
+-- to roll back, TR-1) -- reversibility is fully preserved, only the SEEDED starting
+-- value changed from OFF to ON to match already-enforced reality.
 --
 -- FR-3: venture_stages.is_irreversible is a NEW, independent signal (decoupled from
 -- is_high_consequence) -- Stage 24 (Go-Live) is marked irreversible below. Consumed
@@ -70,18 +92,23 @@ manual, out-of-band chairman console action.';
 UPDATE venture_stages SET is_irreversible = true WHERE stage_number = 24;
 
 -- ── 2. Cutover kill-switch (FR-1, TR-1) ──────────────────────────────────────
--- Default OFF: is_enabled=false REQUIRES lifecycle_state='disabled' to satisfy
+-- SEEDED ON (behavior-preserving; see corrected-premise note above): stage 24 is
+-- ALREADY is_high_consequence=true live and already actively enforced. Seeding
+-- this flag OFF would be a silent regression (disarms an already-live gate);
+-- seeding it ON enforces ONLY stage 24 today (3/19 remain is_high_consequence=
+-- false, so the flag has zero effect on them until a separate deliberate flip).
+-- is_enabled=true REQUIRES lifecycle_state='enabled' to satisfy
 -- chk_flag_lifecycle_enabled_consistency (is_enabled = (lifecycle_state='enabled')).
 INSERT INTO leo_feature_flags (flag_key, display_name, description, is_enabled, lifecycle_state, gates_what)
 VALUES (
   'HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED',
   'High-Consequence Stage Cutover (3/19/24)',
-  'One-time cutover gate for SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A. Default OFF (row absent, or is_enabled=false, means every stage reads as NOT high-consequence regardless of venture_stages.is_high_consequence -- preserves current/pre-cutover behavior). When turned ON: venture_stages.is_high_consequence=true for stages 3/19/24 takes effect for BOTH chokepoints (fn_advance_venture_stage below, and lib/eva/stage-governance.js consumed by the JS daemon chokepoints). Ventures already sitting at stage 3/19/24 at the moment of cutover are exempted for that single stage-visit via venture_stage_cutover_grandfather (see chairman-decision-watcher.js createOrReusePendingDecision). Layered UNDER the pre-existing LEO_HIGH_CONSEQUENCE_GATES_ENABLED kill-switch (default ON), which remains the fleet-wide emergency disable for the whole mechanism regardless of which stages are classified. To flip OFF (revert to pre-cutover behavior): UPDATE leo_feature_flags SET is_enabled=false, lifecycle_state=''disabled'' WHERE flag_key=''HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED''.',
-  false,
-  'disabled',
+  'Cutover gate for SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A. Seeded ON (is_enabled=true) at deploy time because stage 24 is ALREADY venture_stages.is_high_consequence=true in production (set 2026-07-21, outside any tracked migration) and already actively enforced by fn_advance_venture_stage -- seeding OFF would silently disarm that live gate. ON means venture_stages.is_high_consequence=true takes effect for BOTH chokepoints (fn_advance_venture_stage below, and lib/eva/stage-governance.js consumed by the JS daemon chokepoints); today that is ONLY stage 24 (3/19 stay is_high_consequence=false and thus unenforced regardless of this flag, until a SEPARATE deliberate chairman-gated flip of their own column -- not part of this SD). Ventures already sitting at stage 3/19/24 at the moment of cutover are exempted for that single stage-visit via venture_stage_cutover_grandfather (see chairman-decision-watcher.js createOrReusePendingDecision). Layered UNDER the pre-existing LEO_HIGH_CONSEQUENCE_GATES_ENABLED kill-switch (default ON), which remains the fleet-wide emergency disable for the whole mechanism regardless of which stages are classified. To flip OFF (revert to pre-cutover-mechanism behavior -- NOTE this would disarm stage 24''s current live enforcement, so treat as a deliberate emergency action, not a routine rollback): UPDATE leo_feature_flags SET is_enabled=false, lifecycle_state=''disabled'' WHERE flag_key=''HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED''.',
+  true,
+  'enabled',
   'fn_advance_venture_stage is_high_consequence read gate + lib/eva/stage-governance.js highConsequenceStages derivation'
 )
-ON CONFLICT (flag_key) DO NOTHING;
+ON CONFLICT (flag_key) DO UPDATE SET is_enabled = true, lifecycle_state = 'enabled';
 
 -- ── 3. Grandfather table + one-time snapshot (retroactive-halt guard) ───────
 CREATE TABLE IF NOT EXISTS venture_stage_cutover_grandfather (
@@ -492,8 +519,8 @@ BEGIN
   SELECT is_enabled, lifecycle_state INTO v_flag_row
   FROM leo_feature_flags WHERE flag_key = 'HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED';
   ASSERT FOUND, 'HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED flag row missing';
-  ASSERT v_flag_row.is_enabled = false, 'HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED must default OFF';
-  ASSERT v_flag_row.lifecycle_state = 'disabled', 'HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED lifecycle_state must be disabled to match is_enabled=false';
+  ASSERT v_flag_row.is_enabled = true, 'HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED must be seeded ON (behavior-preserving for already-live stage-24 enforcement)';
+  ASSERT v_flag_row.lifecycle_state = 'enabled', 'HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED lifecycle_state must be enabled to match is_enabled=true';
 
   SELECT count(*) INTO v_hc_count FROM venture_stages WHERE stage_number IN (3, 19, 24) AND is_high_consequence = true;
   ASSERT v_hc_count = 3, format('Expected stages 3/19/24 to have is_high_consequence=true, found %s of 3', v_hc_count);
