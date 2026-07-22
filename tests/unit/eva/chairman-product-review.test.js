@@ -445,6 +445,12 @@ function makeRequestReviewSupabase({ artifacts = [], priorAttempt = null } = {})
       if (table === 'venture_stages') {
         return { select: vi.fn().mockReturnThis(), order: vi.fn().mockResolvedValue({ data: [], error: null }) };
       }
+      // SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A: _readFresh now ALSO reads leo_feature_flags
+      // (HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED) on every refresh. Irrelevant here (empty
+      // venture_stages rows above already default every stage to non-high-consequence).
+      if (table === 'leo_feature_flags') {
+        return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: { is_enabled: true }, error: null }) };
+      }
       throw new Error(`unexpected table: ${table}`);
     }),
     channel: vi.fn(() => { throw new Error('channel not available in this mock'); }),

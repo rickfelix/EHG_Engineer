@@ -82,6 +82,95 @@ must carry it since path #8 (`artifact-persistence-service.js`) delegates to the
 inherits the hold from that side. Disposition: superseded-historical-on-next-migration, same as
 every other dated `fn_advance_venture_stage` entry below.
 
+## Post-census addition (2026-07-22) — SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A
+
+**Authoritative-store finding (re-confirmed, EXEC investigation)**: `ventures.current_lifecycle_stage`
+remains the sole authoritative store the blocking-gate check reads/writes — both
+`fn_advance_venture_stage` (path #1) and `lib/eva/stage-execution-worker.js` (path #5) read/write it
+directly. `workflow_executions.current_stage` is NOT authoritative: it is a parallel, write-only
+observability log maintained independently by `lib/eva/workers/stage-advance-worker.js` (see below) and
+is never read by any blocking-gate check.
+
+- **`database/migrations/20260722_high_consequence_actuation_completeness.sql`** — another additive
+  `CREATE OR REPLACE` of `fn_advance_venture_stage` (path #1). Layers a NEW cutover kill-switch
+  (`leo_feature_flags.HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED`, default OFF) underneath the
+  pre-existing `LEO_HIGH_CONSEQUENCE_GATES_ENABLED` check from the 2026-07-16 migration, and adds a
+  `DELETE FROM venture_stage_cutover_grandfather` consumption step on a successful advance. Also
+  performs the actual cutover: `venture_stages.is_high_consequence=true` for stages 3/19/24 (effect
+  gated by the new flag), `venture_stages.is_irreversible=true` for stage 24 (a NEW, independent
+  signal), and a one-time snapshot of every venture already sitting at stage 3/19/24 into
+  `venture_stage_cutover_grandfather` so the cutover cannot retroactively halt them.
+- **`lib/eva/stage-governance.js`** — the single JS-side read both of path #5's two chokepoints
+  consume (`isHighConsequence`/`highConsequenceStages`) now ALSO gates on the same
+  `HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED` flag, read alongside the existing `venture_stages` query
+  (same 60s cache TTL). This keeps the JS side and the SQL RPC side in identical lockstep: until the
+  flag is deliberately flipped on, is_high_consequence reads as false everywhere regardless of the DB
+  column (TR-1 reversibility).
+- **`lib/eva/chairman-decision-watcher.js::createOrReusePendingDecision`** — before minting a
+  BLOCKING decision, checks `venture_stage_cutover_grandfather` for the exact `(venture_id,
+  stage_number)` pair; if present, mints non-blocking instead (logged) and leaves the row in place
+  until the venture actually advances past that stage (consumption lives in the RPC/`_advanceStage`,
+  not here — see migration notes above; repeated same-visit poll-tick calls must not un-grandfather
+  mid-visit).
+- **`lib/eva/workers/stage-advance-worker.js` (`StageAdvanceWorker`)** — path #8 was previously
+  dispositioned "GATED (already clean)" on the strength of delegating to `fn_advance_venture_stage`
+  via `supabase.rpc()`. This SD's audit found two real defects in that same worker, both now fixed:
+  (1) its own `GATE_STAGES` set (used only to decide whether THIS worker should attempt an advance at
+  all, separate from the RPC's own enforcement) omitted Stage 19, so it would attempt — and the RPC
+  would then correctly block — an advance the worker itself should never have attempted; (2) it
+  previously updated `workflow_executions.current_stage` (its own non-authoritative observability
+  pointer) BEFORE calling `advanceStage()`/checking the RPC result, so a gate-blocked or failed
+  advance left that pointer pointing at the next stage even though `ventures.current_lifecycle_stage`
+  (the authoritative store) never moved. Both fixed: `GATE_STAGES` now includes 19, and the RPC call
+  is awaited (wrapped in try/catch) with the `workflow_executions` update moved to AFTER a confirmed
+  success, skipped entirely (via `continue`) on any thrown block/failure.
+- **New: `lib/eva/artifact-persistence-service.js::emergencyUnblockGate()`** (FR-3) — a liveness-only
+  action that re-opens a stuck, pending, blocking `chairman_decisions` row without ever writing an
+  approving `decision` value and without ever calling any stage-advance RPC. It does not itself write
+  `ventures.current_lifecycle_stage` or any equivalent column, so it is not a new "path" in this
+  census's sense — documented here for completeness since it is the newest piece of the audit
+  substrate this file tracks. For an irreversible gate (`venture_stages.is_irreversible=true`,
+  Stage-24-class), it additionally returns `requiresManualConfirmation:true`; there is no single-call
+  route from this function to an actual advance.
+- **ehg app repo (frontend)** — a parallel reconciliation lands in the `ehg` app repo
+  (`feat/SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A` branch there) for the divergent hard-gate-array
+  sources (`useStageDisplayData.ts`, `gate-config.ts`, `useChairmanConfig.ts`, `useStagePolicy.ts`,
+  `useStageGovernance.ts`) and the UI advance-stage write path (`src/lib/ventures/advanceStage.ts`).
+  That repo is out of THIS census's scope (EHG_Engineer only) but is the other half of "every
+  advancement path honors is_high_consequence+blocking identically" — see that repo's own PR for the
+  file:line detail.
+
+### Re-verified disposition of the 2 previously-deferred bypasses (#16, #17)
+
+Both remain out of THIS SD's EXEC scope per explicit direction (not modified here), but were
+re-examined specifically for whether they write to the NEWLY-gated stages (3/19/24):
+
+- **#16 `lib/agents/venture-ceo/handlers.js::_updateVentureProgress`** — confirmed: this still
+  performs an unconditional `ventures.update({ current_lifecycle_stage: completedStage + 1 })` with
+  **no stage-number restriction whatsoever** and no high-consequence/blocking check of any kind.
+  `completedStage` is fleet-supplied metadata from a CEO-agent task-completion message, so this path
+  CAN write across stage 3→4, 19→20, or 24→25 exactly like any other transition — it is not merely
+  the old artifact-gate bypass, it is *also* a live, confirmed, reachable bypass of the new
+  high-consequence blocking gate on the authoritative store. Deferred, not fixed, per this SD's
+  explicit "do not modify" scope — but the risk is now materially higher than when #16 was first
+  logged (2026-07-04), since a high-consequence stage is, by definition, the class of stage where an
+  unaudited silent advance matters most. **Flagged for urgent follow-up**, not merely routine cleanup.
+- **#17 `lib/eva/post-lifecycle-decisions.js::handlePivot`** — confirmed: still writes
+  `current_lifecycle_stage` to `eva_ventures`, not `ventures` — a different table from the one the
+  high-consequence gate (and every other chokepoint in this census) reads. Whether `eva_ventures` is a
+  synced mirror of `ventures` remains unresolved (same as the 2026-07-04 finding). Additional note
+  surfaced by this SD: `handlePivot`'s own doc comment says it resets "`current_lifecycle_stage` to an
+  earlier stage for re-entry" — i.e. it can move a venture's stage number BACKWARD. This SD's
+  grandfather-table design (chairman-decision-watcher.js / the 20260722 migration) relies on the
+  assumption that `ventures.current_lifecycle_stage` cannot re-enter a previously-visited stage number
+  (supported by `fn_advance_venture_stage`'s forward-only advancement and `gate_boundary_config`'s
+  `CHECK (to_stage > from_stage)`). That assumption is scoped to `ventures`, not `eva_ventures` —
+  `handlePivot` writing to a DIFFERENT table does not itself invalidate it, but if `eva_ventures` ever
+  turns out to be a synced/promoted-back-to pointer for `ventures.current_lifecycle_stage`, the
+  no-re-entry assumption would need re-examination before it can be relied on for
+  `ventures`-side logic. Documented as an open risk, not resolved here (same "needs its own
+  investigation" disposition as 2026-07-04).
+
 ## Disposition summary
 
 - 100% disposition: 15 of 15 identified write sites (0 undispositioned).
