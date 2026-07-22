@@ -68,7 +68,7 @@ describe('module surface (TS-10: exactly six named verbs, no more)', () => {
     const verbNames = ['spawn', 'attach', 'stop', 'restart', 'relaunchUnderProfile', 'drainAndRestart'];
     for (const name of verbNames) expect(typeof mod[name]).toBe('function');
     // Every OTHER export must be a helper, never an undocumented 7th verb.
-    const helperNames = ['roleOf', 'isSingletonRole', 'resolveProfileDir', 'isLiveEnabled', 'buildLiveSpawnInvocation'];
+    const helperNames = ['roleOf', 'isSingletonRole', 'resolveProfileDir', 'isLiveEnabled', 'buildLiveSpawnInvocation', 'resolveClaudeCmd', 'resolveRepoRoot'];
     const unexpected = Object.keys(mod).filter((k) => !verbNames.includes(k) && !helperNames.includes(k));
     expect(unexpected).toEqual([]);
   });

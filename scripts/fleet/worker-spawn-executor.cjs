@@ -39,9 +39,23 @@ function isLiveEnabled(env = process.env) {
  * ⚠️ The exact program/args are HOST-SPECIFIC and must be operator-validated before the live
  * flag is flipped. This default is a best-effort, documented starting point only.
  */
+// Pilot fix FR-1 (CHECKPOINT-3): resolve the FULL claude launcher path — bare 'claude' relies on the
+// child shell PATH (fails inside wt.exe with 0x80070002); resolve it here too for consistency across
+// spawn paths. Prefer an operator override, else the Windows npm global bin, else fall back to bare.
+function resolveClaudeCmd(env = process.env) {
+  const override = env.FLEET_CLAUDE_CMD || env.CLAUDE_CLI_PATH;
+  if (override && String(override).trim()) return String(override).trim();
+  if (env.APPDATA) {
+    const p = require('node:path'); const fs = require('node:fs');
+    const c = p.win32.join(env.APPDATA, 'npm', 'claude.cmd');
+    try { if (fs.existsSync(c)) return c; } catch { /* fall through to bare */ }
+  }
+  return 'claude';
+}
+
 function buildSpawnInvocation(callsign, prompt) {
   return {
-    program: 'claude',
+    program: resolveClaudeCmd(),
     // -p / --print runs headlessly with the prompt; the operator may need a different form
     // (detached terminal, wrapper script, env seeding) on this host — hence the operator gate.
     args: ['-p', prompt],
@@ -159,6 +173,9 @@ async function main() {
         const child = spawn(invocation.program, invocation.args, {
           detached: true,
           stdio: 'ignore',
+          // Pilot fix FR-2: start the revived worker at repo root so its SessionStart hooks register it
+          // in claude_sessions (FLEET_REPO_ROOT override, else this script's repo root).
+          cwd: process.env.FLEET_REPO_ROOT || require('node:path').resolve(__dirname, '..', '..'),
           env: { ...process.env, ...(invocation.env || {}) },
         });
         child.on('error', reject);

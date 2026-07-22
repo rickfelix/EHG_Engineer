@@ -130,7 +130,7 @@ describe('config + invocation helpers (FR-3)', () => {
 
   it('buildSpawnInvocation returns a structured command without executing it', () => {
     const inv = buildSpawnInvocation('Echo', 'PROMPT');
-    expect(inv.program).toBe('claude');
+    expect(inv.program).toMatch(/claude(\.cmd)?$/); // pilot FR-1: resolved full claude.cmd on a Windows fleet host, bare 'claude' on CI/non-Windows
     expect(Array.isArray(inv.args)).toBe(true);
     expect(inv.args).toContain('PROMPT');
     expect(inv.env.FLEET_WORKER_CALLSIGN).toBe('Echo');

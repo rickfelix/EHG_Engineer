@@ -20,8 +20,10 @@ if (require.main === module) {
 
     // Real detached spawner — mirrors spawn-control.js's default spawner (detached + unref'd so the
     // relaunched tabs survive this process's exit). Only invoked when live.
-    const spawnFn = (program, args, env) => {
-      const child = spawn(program, args, { detached: true, stdio: 'ignore', env: { ...process.env, ...env } });
+    const spawnFn = (program, args, env, cwd) => {
+      // Pilot fix FR-2: pass the invocation's repo-root cwd through (paired with the new-tab -d
+      // start-dir) so the wt.exe process starts at repo root too; the spawned tab registers in claude_sessions.
+      const child = spawn(program, args, { detached: true, stdio: 'ignore', cwd, env: { ...process.env, ...env } });
       if (child && typeof child.unref === 'function') child.unref();
       return child;
     };

@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { runRebootRespawn } from '../../../lib/fleet/reboot-respawn-runner.js';
+import { resolveClaudeCmd, resolveRepoRoot } from '../../../lib/fleet/spawn-control.js';
 
 const SLOTS = [
   { name: 'Worker-1', role: 'worker', account_profile: null, resume_uuid: 'u-1' },
@@ -29,9 +30,10 @@ describe('runRebootRespawn dry-run (FR-5) — default INERT', () => {
     expect(events.every((e) => e.event_type === 'fleet_verb_respawn')).toBe(true);
     expect(events[0].payload).toMatchObject({ verb: 'respawn', callsign: 'Worker-1', resume_uuid: 'u-1', live: false });
 
-    // The per-slot invocation carries the correct --resume token (slot 1) / no token (slot 2).
-    expect(res.results[0].invocation.args).toEqual(['new-tab', '--', 'claude', '--resume', 'u-1']);
-    expect(res.results[1].invocation.args).toEqual(['new-tab', '--', 'claude']);
+    // The per-slot invocation carries the correct --resume token (slot 1) / no token (slot 2),
+    // atop the CHECKPOINT-3 base argv (new-tab -d <repo-root> -- <resolved claude.cmd>).
+    expect(res.results[0].invocation.args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1']);
+    expect(res.results[1].invocation.args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd()]);
   });
 
   it('builds a supervisor-shaped roster from the slots', async () => {
@@ -52,12 +54,13 @@ describe('runRebootRespawn live (FR-5)', () => {
     });
     expect(res.live).toBe(true);
     expect(spawnFn).toHaveBeenCalledTimes(2);
-    expect(spawnCalls[0]).toEqual({ program: 'wt.exe', args: ['new-tab', '--', 'claude', '--resume', 'u-1'] });
-    expect(spawnCalls[1].args).toEqual(['new-tab', '--', 'claude']); // slot 2 had no token
+    expect(spawnCalls[0].program).toBe('wt.exe');
+    expect(spawnCalls[0].args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1']);
+    expect(spawnCalls[1].args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd()]); // slot 2 had no token
     expect(res.results.map((r) => r.spawned)).toEqual([true, true]);
   });
 
-  it('resolves account_profile into CLAUDE_CONFIG_DIR via the injected resolver, and is fail-soft if it throws', async () => {
+  it('resolves account_profile into CLAUDE_CONFIG_DIR via the injected resolver, and FAILS LOUD (no spawn) if it throws', async () => {
     const okResolver = (name) => `C:\\profiles\\${name}`;
     const spawnCalls = [];
     const spawnFn = (program, args, env) => { spawnCalls.push(env); return { pid: 1 }; };
@@ -68,14 +71,16 @@ describe('runRebootRespawn live (FR-5)', () => {
     expect(spawnCalls[0].CLAUDE_CONFIG_DIR).toBe('C:\\profiles\\canary');
     expect(res.results[0].spawned).toBe(true);
 
-    // Throwing resolver -> profileDir null, slot still respawns (fail-soft), no CLAUDE_CONFIG_DIR.
+    // Pilot fix FR-3: a REQUESTED profile that cannot be resolved FAILS LOUD -> no spawn (never a
+    // silently-unisolated session), and the slot result is marked isolation_failed.
     const spawnCalls2 = [];
     const res2 = await runRebootRespawn({
       supabase: {}, loadFn: async () => [{ name: 'Canary-1', role: 'worker', account_profile: 'bad', resume_uuid: 'u-c' }],
       spawnFn: (p, a, e) => { spawnCalls2.push(e); return { pid: 1 }; },
       logFn: async () => ({ ok: true }), live: true, resolveProfileDirFn: () => { throw new Error('bad profile'); },
     });
-    expect(spawnCalls2[0]).not.toHaveProperty('CLAUDE_CONFIG_DIR');
-    expect(res2.results[0].spawned).toBe(true);
+    expect(spawnCalls2).toHaveLength(0); // never spawned unisolated
+    expect(res2.results[0].spawned).toBe(false);
+    expect(res2.results[0].isolation_failed).toBe(true);
   });
 });
