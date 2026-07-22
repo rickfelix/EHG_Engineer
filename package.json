@@ -453,6 +453,7 @@
     "review:generate": "node scripts/pipeline/management-review-generator.js",
     "review:history": "node scripts/pipeline/management-review-generator.js --history",
     "review:trigger": "node scripts/eva/management-review-round.mjs",
+    "daily-review:drive-doc": "node scripts/daily-review-drive-doc.js",
     "sd:claim": "node scripts/claude-session-coordinator.mjs claim",
     "sd:release": "node scripts/claude-session-coordinator.mjs release",
     "sd:verify": "node scripts/sd-verify.js",
