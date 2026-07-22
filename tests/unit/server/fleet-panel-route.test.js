@@ -5,12 +5,12 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('../../../lib/fleet/account-capacity-gauge.cjs', () => ({
-  loadStore: vi.fn(() => ({})),
-}));
-vi.mock('../../../lib/fleet/account-identity.cjs', () => ({
-  getAccountIdentity: vi.fn(() => null),
-}));
+// loadStore is mocked to an empty store (no FS); buildNamedAccountChips is the REAL pure
+// function (via importActual) so the route genuinely renders exactly 3 named chips.
+vi.mock('../../../lib/fleet/account-capacity-gauge.cjs', async (importActual) => {
+  const actual = await importActual();
+  return { ...actual, loadStore: vi.fn(() => ({})) };
+});
 
 const { getFleetPanel } = await import('../../../server/routes/fleet-panel.js');
 
@@ -70,7 +70,11 @@ describe('GET /api/fleet-panel', () => {
       model_effort: 'sonnet/xhigh',
       status: 'active',
     });
+    // FR-1/FR-2: exactly 3 named-account chips render (empty store → all wkPct null).
     expect(Array.isArray(payload.accountChips)).toBe(true);
+    expect(payload.accountChips).toHaveLength(3);
+    expect(payload.accountChips.map((c) => c.name)).toEqual(['Deep Soul', 'Rick Felix', 'CodeStreet']);
+    expect(payload.accountChips.every((c) => c.wkPct === null)).toBe(true);
     expect(Array.isArray(payload.attentionStrip)).toBe(true);
   });
 

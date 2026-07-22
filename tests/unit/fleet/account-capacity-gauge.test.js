@@ -19,6 +19,7 @@ const {
   bindingWeeklyPct,
   rankAccountsByHeadroom,
   bestHeadroomAccount,
+  buildNamedAccountChips,
 } = require('../../../lib/fleet/account-capacity-gauge.cjs');
 
 const DEEPSOUL = { email: 'deepsoulsessionslabel@gmail.com', orgName: "Deep Soul Sessions's Organization", accountUuid8: 'ca1de6e4' };
@@ -117,5 +118,48 @@ describe('rankAccountsByHeadroom / bestHeadroomAccount (pure)', () => {
 
   it('bestHeadroomAccount returns null for an empty store', () => {
     expect(bestHeadroomAccount({})).toBeNull();
+  });
+});
+
+describe('buildNamedAccountChips (pure — mockup-1 FR-1/FR-2)', () => {
+  it('returns EXACTLY 3 named chips (Deep Soul / Rick Felix / CodeStreet), all null, for an empty store', () => {
+    const chips = buildNamedAccountChips({});
+    expect(chips).toHaveLength(3);
+    expect(chips.map((c) => c.name)).toEqual(['Deep Soul', 'Rick Felix', 'CodeStreet']);
+    expect(chips.every((c) => c.wkPct === null)).toBe(true);
+  });
+
+  it('still returns 3 chips (all null) for an undefined/null store, never throwing', () => {
+    expect(buildNamedAccountChips(undefined)).toHaveLength(3);
+    expect(buildNamedAccountChips(null).every((c) => c.wkPct === null)).toBe(true);
+  });
+
+  it('carries the rounded binding weekly % for orgName-matched accounts; unmatched stay null', () => {
+    // Store keyed by ARBITRARY uuid8 (no invented canonical UUIDs) — matching is by orgName regex.
+    const store = {
+      deadbeef: { orgName: "Deep Soul Sessions's Organization", weeklyAllModelsPct: 53, weeklyFablePct: 80 }, // binding 80
+      feedface: { orgName: "Rick Felix 2000's Organization", weeklyAllModelsPct: 27.4, weeklyFablePct: 12 },  // binding 27.4 -> 27
+      // no Code Street entry present
+    };
+    expect(buildNamedAccountChips(store)).toEqual([
+      { name: 'Deep Soul', wkPct: 80 },
+      { name: 'Rick Felix', wkPct: 27 },
+      { name: 'CodeStreet', wkPct: null },
+    ]);
+  });
+
+  it('matches orgName loosely on case/spacing (e.g. "CodeStreet Labs" -> CodeStreet)', () => {
+    const store = { aa11bb22: { orgName: 'CodeStreet Labs', weeklyAllModelsPct: 10, weeklyFablePct: 5 } };
+    const chips = buildNamedAccountChips(store);
+    expect(chips.find((c) => c.name === 'CodeStreet').wkPct).toBe(10);
+    expect(chips.find((c) => c.name === 'Deep Soul').wkPct).toBeNull();
+    expect(chips.find((c) => c.name === 'Rick Felix').wkPct).toBeNull();
+  });
+
+  it('ignores store entries with a missing/non-string orgName without throwing', () => {
+    const store = { x: { weeklyAllModelsPct: 99 }, y: { orgName: 42, weeklyAllModelsPct: 88 } };
+    const chips = buildNamedAccountChips(store);
+    expect(chips).toHaveLength(3);
+    expect(chips.every((c) => c.wkPct === null)).toBe(true);
   });
 });

@@ -10,10 +10,9 @@
 
 import { Router } from 'express';
 import { createClient } from '@supabase/supabase-js';
-import { formatCapacityChip, computeSessionBadge } from '../../lib/fleet/fleet-view-badges.cjs';
+import { computeSessionBadge } from '../../lib/fleet/fleet-view-badges.cjs';
 import { getAttentionFlaggedSessions } from '../../lib/fleet/attention-flag-writer.js';
-import { loadStore } from '../../lib/fleet/account-capacity-gauge.cjs';
-import { getAccountIdentity } from '../../lib/fleet/account-identity.cjs';
+import { loadStore, buildNamedAccountChips } from '../../lib/fleet/account-capacity-gauge.cjs';
 
 const router = Router();
 
@@ -51,6 +50,10 @@ function formatSessionRow(row) {
       pAlive: meta.p_alive,
       isSilent: meta.is_silent,
       failCount: meta.fail_count,
+      computedStatus: row.computed_status,
+      role: identity.role,
+      model,
+      effort,
     }),
   };
 }
@@ -71,9 +74,9 @@ export async function getFleetPanel(req, res) {
 
   const sessions = sessionsError || !sessionRows ? [] : sessionRows.map(formatSessionRow);
 
-  const store = loadStore();
-  const identity = getAccountIdentity();
-  const accountChips = [formatCapacityChip(identity, store)];
+  // FR-1/FR-2: three named-account capacity chips (mockup-1) — always exactly 3, even when the
+  // capacity store is empty/partial (unmatched accounts render 'wk --%').
+  const accountChips = buildNamedAccountChips(loadStore());
 
   let attentionStrip = [];
   try {
