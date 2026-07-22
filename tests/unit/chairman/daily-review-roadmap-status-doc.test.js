@@ -324,6 +324,62 @@ describe('buildRoadmapStatusDoc — plan_of_record section', () => {
     expect(f.degraded_reason).toBe('no_data');
   });
 
+  it('QF-20260722-717 adversarial-verify finding: a wrong-type current_state field (present but non-numeric) is caught as schema_incomplete, not silently coerced to 0', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [makeForecastBasisRow({ dispatchableQf: 'unknown', gatedHeld: 5 })],
+    });
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.confidence).toBe('insufficient_data');
+    expect(f.degraded_reason).toBe('schema_incomplete');
+    expect(f.degraded_detail).toMatch(/dispatchable_qf/);
+  });
+
+  it('QF-20260722-717 adversarial-verify finding: a 0/0 (nothing dispatchable, nothing gated) belt is NOT reported as fenced_dominant', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [makeForecastBasisRow({ dispatchableQf: 0, gatedHeld: 0 })],
+    });
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.confidence).toBe('calibrated');
+    expect(f.fenced_dominant).toBe(false);
+    expect(f.gating_note).toBeNull();
+  });
+
+  it('QF-20260722-717 adversarial-verify finding: a missing work_time_model is named as schema_incomplete, symmetric with the queue-side guard', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
+      roadmap_waves: [{ id: 'w1', roadmap_id: 'r1', title: 'Wave 1', sequence_rank: 1, status: 'approved', progress_pct: 0, confidence_score: 0.5 }],
+      v_plan_of_record_remainder: [{ id: 'i1', wave_id: 'w1', item_disposition: 'pending', promoted_to_sd_key: null, remainder_state: 'promotable_now' }],
+      strategic_directives_v2: [],
+      feedback: [{
+        category: 'solomon_forecast_basis',
+        created_at: new Date().toISOString(),
+        metadata: {
+          forecast_basis: {
+            gantt_rule_LEGC: 'SEGREGATE...',
+            dispatch_class_model: { open_queue: { queue_wait_median_hrs: 9.5, queue_wait_p90_hrs: 91 } },
+            // work_time_model_started_to_completed dropped entirely
+            current_state_20260721: { dispatchable_qf: 53, chairman_gated_held: 4, fenced_set: 'x' },
+          },
+        },
+      }],
+    });
+    const result = await buildRoadmapStatusDoc(supabase);
+    const f = result.sections.find((s) => s.id === 'plan_of_record').data.forecast;
+    expect(f.confidence).toBe('insufficient_data');
+    expect(f.degraded_reason).toBe('schema_incomplete');
+    expect(f.degraded_detail).toMatch(/work_time_model_started_to_completed/);
+  });
+
   it('adversarial-review finding (PR #6387)/TR-3: a negative queue_wait_median_hrs (corrupted basis) does not fabricate a past date', async () => {
     const supabase = makeFakeSupabase({
       strategic_roadmaps: [{ id: 'r1', title: 'Main Roadmap', status: 'active', current_baseline_version: 0 }],
