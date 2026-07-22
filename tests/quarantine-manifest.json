@@ -217,14 +217,6 @@
       "triaged_by": "SD-REFILL-00L29WFH"
     },
     {
-      "file": "scripts/modules/shipping/__tests__/post-merge-worktree-cleanup-claim-protect.test.js",
-      "reason_class": "assertion-drift",
-      "error_signature": "AssertionError: expected -1 to be greater than 662",
-      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
       "file": "scripts/twoway-roundtrip.test.js",
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected false to be true // Object.is equality",
