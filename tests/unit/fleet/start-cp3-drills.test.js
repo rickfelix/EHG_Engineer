@@ -38,6 +38,17 @@ describe('main — worker-startable, dry-run default', () => {
     expect(r.live).toBe(true);
     expect(runDrills).toHaveBeenCalledTimes(1);
   });
+
+  // QF-20260724-119: regression test for the cp3-do-it-right-20260724 incident (12-13 real fleet-worker
+  // process spawns caused by a non-mocked test invoking --live with no runDrills override).
+  it('REFUSES --live under the test runner when no runDrills override is injected (QF-20260724-119)', async () => {
+    const logs = [];
+    const r = await main(['--live'], { env: OKENV, log: (m) => logs.push(m) });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/REFUSED/);
+    expect(r.error).toMatch(/runDrills/);
+    expect(logs.join('\n')).toMatch(/REFUSED/);
+  });
 });
 
 // QF-20260724-923: the live path must WIRE all 3 legs to emit real fleet_verb_* evidence (was a stub).
