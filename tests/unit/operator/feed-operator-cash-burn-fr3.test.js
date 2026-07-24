@@ -224,17 +224,18 @@ describe('feed-operator-cash-burn FR-3 revenue-mirror rewire', () => {
     expect(call[1]).toMatchObject({ revenue_usd: 700, revenue_livemode: true, manual_revenue_usd: 200 });
   });
 
-  it('(e) zero manual entries: revenue_usd equals the pre-existing Stripe-only value unchanged (no regression)', async () => {
+  it('(e) confirmed-zero manual entries (aggregator ran, found none): revenue_usd unchanged, manual_revenue_usd:0 written honestly', async () => {
     H.state.responses.ops_payment_events = {
       count: 1,
       data: [{ event_type: 'charge.succeeded', amount_cents: 12300, currency: 'usd', payment_intent_id: 'pi_1', stripe_charge_id: 'ch_1', id: 'e1' }],
     };
-    // manualRevenueMock defaults to { total_usd: 0, ... } via beforeEach.
+    manualRevenueMock.mockResolvedValue({ total_usd: 0, excluded_non_usd_count: 0, matched_record_count: 0, source_available: true });
 
     const result = await main();
 
     expect(result.revenue).toMatchObject({ value_usd: 123, stripe_value_usd: 123, manual_value_usd: 0 });
     const call = upsertCallWith('revenue_usd');
+    // source_available:true -> a genuine confirmed-zero, honest to write
     expect(call[1]).toMatchObject({ revenue_usd: 123, manual_revenue_usd: 0 });
   });
 
@@ -250,13 +251,17 @@ describe('feed-operator-cash-burn FR-3 revenue-mirror rewire', () => {
     expect(call[1]).toMatchObject({ revenue_usd: 4800, manual_revenue_usd: 300 });
   });
 
-  it('(g) SD-...-001-A aggregator unavailable: feed script stays runnable, manual component is $0', async () => {
+  it('(g) SD-...-001-A aggregator unavailable: feed stays runnable, revenue_usd still writes, manual_revenue_usd is left UNATTESTED (not fabricated as 0)', async () => {
     H.state.responses.ops_payment_events = { count: 0 };
     H.state.responses.income_capture_monthly = { data: [{ recurring_revenue: 999, livemode: true }] };
-    manualRevenueMock.mockResolvedValue({ total_usd: 0, excluded_non_usd_count: 0, matched_record_count: 0, source_available: false });
+    // manualRevenueMock defaults to source_available:false via beforeEach.
 
     const result = await main();
 
-    expect(result.revenue).toMatchObject({ value_usd: 999, manual_value_usd: 0 });
+    expect(result.revenue).toMatchObject({ value_usd: 999, manual_value_usd: 0, written: true });
+    const call = upsertCallWith('revenue_usd');
+    // CORE CONTRACT: an unattested input is never written as a fabricated 0 -- the already-live
+    // revenue_usd write still succeeds, but manual_revenue_usd is simply absent from this upsert.
+    expect(call[1]).not.toHaveProperty('manual_revenue_usd');
   });
 });

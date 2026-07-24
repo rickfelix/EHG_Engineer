@@ -100,6 +100,8 @@ describe('fetchManualRevenueTotal', () => {
     ]);
     const result = await fetchManualRevenueTotal({}, '2026-07');
     expect(result).toMatchObject({ total_usd: 75, source_available: true, matched_record_count: 1 });
+    // bounded to the target month (avoids an unbounded full-table scan every hourly run)
+    expect(aggregatorMock.fetchAndRollup).toHaveBeenCalledWith({}, { since: '2026-07-01T00:00:00.000Z' });
   });
 
   it('fails soft when the SD-...-001-A aggregator throws (returns 0, source_available:false)', async () => {

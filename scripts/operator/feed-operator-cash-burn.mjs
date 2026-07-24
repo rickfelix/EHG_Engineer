@@ -201,8 +201,13 @@ async function main() {
     if (manualRevenue.matched_record_count > 0) {
       log('FR-3-manual', `manual revenue (SD-...-001-A rollup) = $${manualRevenue.total_usd} for ${manualPeriodMonth} (${manualRevenue.matched_record_count} record(s)${manualRevenue.excluded_non_usd_count ? `, ${manualRevenue.excluded_non_usd_count} non-USD excluded` : ''})`);
     } else if (!manualRevenue.source_available) {
-      log('FR-3-manual', `SD-...-001-A aggregator not yet available — manual revenue component left at $0 (additive-only, no fabrication)`);
+      warn('FR-3-manual', `SD-...-001-A aggregator unavailable — manual_revenue_usd left UNATTESTED this run (not written as 0; revenue_usd still gets the Stripe-only component)`);
     }
+    // CORE CONTRACT (matches this file's header): an unattested input is left untouched, never
+    // written as a fabricated 0. Only include manual_revenue_usd in the upsert when the sibling
+    // aggregator actually ran successfully -- a genuine "no manual entries this month" reading
+    // (source_available:true, total_usd:0) is fine to write; "aggregator unreachable" is not.
+    const manualRevenueField = manualRevenue.source_available ? { manual_revenue_usd: manualRevenue.total_usd } : {};
 
     const { count: anyEventCount, error: anyEventErr } = await supabase
       .from('ops_payment_events')
@@ -230,7 +235,7 @@ async function main() {
       const revUsd = Number((stripeRevUsd + manualRevenue.total_usd).toFixed(2));
       log('FR-3', `revenue (attributed) = $${revUsd} (stripe=$${stripeRevUsd} + manual=$${manualRevenue.total_usd}, livemode=true, ${periodRows.length} events)`);
       if (!DRY_RUN) {
-        await upsertSubstrateInputs(periodMonth, { revenue_usd: revUsd, revenue_livemode: true, manual_revenue_usd: manualRevenue.total_usd }, supabase, nowIso);
+        await upsertSubstrateInputs(periodMonth, { revenue_usd: revUsd, revenue_livemode: true, ...manualRevenueField }, supabase, nowIso);
       }
       result.revenue = { written: !DRY_RUN, value_usd: revUsd, stripe_value_usd: stripeRevUsd, manual_value_usd: manualRevenue.total_usd, livemode: true, source: 'attribution_resolver' };
     } else {
@@ -254,7 +259,7 @@ async function main() {
         const revUsd = stripeRevUsd == null ? null : Number((stripeRevUsd + manualRevenue.total_usd).toFixed(2));
         log('FR-3', `revenue (fallback) = $${revUsd} (stripe=$${stripeRevUsd} + manual=$${manualRevenue.total_usd}, livemode=${pick.livemode})`);
         if (!DRY_RUN && revUsd != null) {
-          await upsertSubstrateInputs(periodMonth, { revenue_usd: revUsd, revenue_livemode: pick.livemode === true, manual_revenue_usd: manualRevenue.total_usd }, supabase, nowIso);
+          await upsertSubstrateInputs(periodMonth, { revenue_usd: revUsd, revenue_livemode: pick.livemode === true, ...manualRevenueField }, supabase, nowIso);
         }
         result.revenue = { written: !DRY_RUN && revUsd != null, value_usd: revUsd, stripe_value_usd: stripeRevUsd, manual_value_usd: manualRevenue.total_usd, livemode: pick.livemode === true, source: 'income_capture_monthly' };
       }
