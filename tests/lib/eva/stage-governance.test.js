@@ -40,13 +40,31 @@ const STAGE_FIXTURE = [
   { stage_number: 26, stage_name: 'Growth Playbook',             stage_key: 'growth',        gate_type: 'none',      review_mode: 'auto',   work_type: 'artifact_only',   chunk: null, description: null },
 ];
 
+// SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A: _readFresh now ALSO reads
+// leo_feature_flags (flag_key=HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED) on every
+// refresh. This baseline file predates that flag and never asserts on
+// is_high_consequence/highConsequenceStages, so default the flag to enabled — its
+// value is irrelevant to every assertion here, but the table-aware branch is
+// required so `.eq(...).maybeSingle()` resolves instead of throwing on a
+// table-name-blind mock.
 function makeMockSupabase(rows = STAGE_FIXTURE) {
   return {
-    from: () => ({
-      select: () => ({
-        order: () => Promise.resolve({ data: rows, error: null }),
-      }),
-    }),
+    from: (table) => {
+      if (table === 'leo_feature_flags') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: { is_enabled: true }, error: null }),
+            }),
+          }),
+        };
+      }
+      return {
+        select: () => ({
+          order: () => Promise.resolve({ data: rows, error: null }),
+        }),
+      };
+    },
     channel: () => ({
       on: function () { return this; },
       subscribe: function (_cb) { return this; },
@@ -58,6 +76,19 @@ function makeMockSupabase(rows = STAGE_FIXTURE) {
 beforeEach(async () => {
   vi.resetModules();
 });
+
+// SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A: _readFresh now ALSO reads leo_feature_flags
+// (flag_key=HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED) on every refresh. Wraps a table-blind
+// `from` implementation so raw ad-hoc mocks below resolve that read (defaulted ENABLED —
+// irrelevant to every assertion in this file) instead of throwing on a missing `.eq()`.
+function withLeoFeatureFlags(realFrom) {
+  return (table) => {
+    if (table === 'leo_feature_flags') {
+      return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { is_enabled: true }, error: null }) }) }) };
+    }
+    return realFrom(table);
+  };
+}
 
 describe('stage-governance — canonical sets derived from work_type', () => {
   it('killStages contains only decision_gate stages with gate_type=kill (S3, S5, S13, S23)', async () => {
@@ -148,11 +179,11 @@ describe('stage-governance — defensive behavior', () => {
 
   it('null data yields empty sets', async () => {
     const sb = {
-      from: () => ({
+      from: withLeoFeatureFlags(() => ({
         select: () => ({
           order: () => Promise.resolve({ data: null, error: null }),
         }),
-      }),
+      })),
       channel: () => ({ on: function () { return this; }, subscribe: function () { return this; }, unsubscribe: () => undefined }),
     };
     const mod = await import('../../../lib/eva/stage-governance.js');
@@ -181,18 +212,19 @@ describe('stage-governance — cache behavior', () => {
     let callCount = 0;
     // SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-B: ONE venture_stages read per fresh fetch.
     const sb = {
-      from: () => ({
+      from: withLeoFeatureFlags(() => ({
         select: () => ({
           order: () => {
             callCount++;
             return Promise.resolve({ data: STAGE_FIXTURE, error: null });
           },
         }),
-      }),
+      })),
       channel: () => ({ on: function () { return this; }, subscribe: function () { return this; }, unsubscribe: () => undefined }),
     };
     await mod.getStageGovernance(sb);
-    // After first call: 1 DB query (venture_stages)
+    // After first call: 1 DB query (venture_stages) — the leo_feature_flags read is a
+    // separate table-keyed branch, not counted by this venture_stages-scoped callCount.
     expect(callCount).toBe(1);
     await mod.getStageGovernance(sb);
     // Second call cached: still 1 (no additional queries)
@@ -204,14 +236,14 @@ describe('stage-governance — cache behavior', () => {
     mod._resetCacheForTest();
     let callCount = 0;
     const sb = {
-      from: () => ({
+      from: withLeoFeatureFlags(() => ({
         select: () => ({
           order: () => {
             callCount++;
             return Promise.resolve({ data: STAGE_FIXTURE, error: null });
           },
         }),
-      }),
+      })),
       channel: () => ({ on: function () { return this; }, subscribe: function () { return this; }, unsubscribe: () => undefined }),
     };
     await mod.getStageGovernance(sb);
@@ -249,7 +281,7 @@ describe('stage-governance — Realtime channel teardown safety (QF-20260701-709
       },
     };
     const sb = {
-      from: () => ({ select: () => ({ order: () => Promise.resolve({ data: rows, error: null }) }) }),
+      from: withLeoFeatureFlags(() => ({ select: () => ({ order: () => Promise.resolve({ data: rows, error: null }) }) })),
       channel: () => channelMock,
       removeChannel: function () {
         removeChannelCallCount++;

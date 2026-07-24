@@ -518,9 +518,10 @@ function printWorkers(d) {
   } else {
     const csidHeader = hasCollision ? pad('CSID', 12) : '';
     const mcHeader = mcOk ? pad('P(alive)', 16) : '';
-    console.log('  ' + pad('Terminal', 12) + csidHeader + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 8) + pad('Fails', 6) + pad('WIP', 5) + pad('LoopState', 14) + pad('Badge', 12) + pad('Model/Effort', 16) + pad('Activity', 18) + pad('Silent until', 14) + mcHeader + 'Heartbeat');
+    console.log('  ' + pad('Terminal', 12) + csidHeader + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 8) + pad('Fails', 6) + pad('WIP', 5) + pad('LoopState', 14) + pad('Badge', 14) + pad('Model/Effort', 16) + pad('Activity', 18) + pad('Silent until', 14) + mcHeader + 'Heartbeat');
     // SD-LEO-INFRA-LOOP-STATE-SIGNAL-001: LoopState column (14 chars) added between WIP and Activity → 14-char wider separator.
-    console.log('  ' + '─'.repeat(hasCollision ? (mcOk ? 150 : 134) : (mcOk ? 138 : 122)));
+    // SD-LEO-INFRA-LEO-LAUNCHER-SHELL-001-D: Badge column widened 12→14 ('AWAITING INPUT' is 14 chars) → each separator width +2.
+    console.log('  ' + '─'.repeat(hasCollision ? (mcOk ? 152 : 136) : (mcOk ? 140 : 124)));
     for (const s of d.activeSessions) {
       // QF-20260704-737: d.children is scoped to ONE orchestrator's children — every other worker's
       // Progress always read as 0. d.sdStatusMap already covers any sd_key a worker is claiming.
@@ -550,9 +551,14 @@ function printWorkers(d) {
         pAlive: mcRow ? mcRow.p_alive : null,
         isSilent: Boolean(silent),
         failCount: s.handoff_fail_count,
+        // SD-LEO-INFRA-LEO-LAUNCHER-SHELL-001-D: enrich with the design-vocab inputs when present;
+        // all are optional (graceful defaults) so the console render works even without them.
+        computedStatus: s.computed_status,
+        model: s.model,
+        effort: s.effort,
       });
       const modelEffortChip = formatModelEffortChip(s);
-      console.log('  ' + pad(s.tty, 12) + csid + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 8) + pad(fails, 6) + pad(wip, 5) + pad(loopCell, 14) + pad(badge, 12) + pad(modelEffortChip, 16) + pad(activity, 18) + pad(silent, 14) + mcCell + s.heartbeat_age_human + struggleTag);
+      console.log('  ' + pad(s.tty, 12) + csid + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 8) + pad(fails, 6) + pad(wip, 5) + pad(loopCell, 14) + pad(badge, 14) + pad(modelEffortChip, 16) + pad(activity, 18) + pad(silent, 14) + mcCell + s.heartbeat_age_human + struggleTag);
     }
   }
 

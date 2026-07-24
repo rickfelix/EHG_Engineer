@@ -44,17 +44,35 @@ const VENTURE_STAGES_FIXTURE = [
 
 // SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-B: single venture_stages table read.
 // One refresh == exactly one .from('venture_stages') call.
-function mockSupabase(rows, { failChannel = false } = {}) {
+// SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A: _readFresh now ALSO reads
+// leo_feature_flags (flag_key=HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED) every refresh —
+// one refresh is now 2 .from() calls. Defaults the flag to ENABLED so every
+// pre-existing assertion in this file (all written before the cutover flag existed,
+// against a fixture that marks stages 4/24 is_high_consequence=true directly) keeps
+// its original meaning; the dedicated cutover-flag test below overrides this default
+// to prove the OFF-by-default gating behavior.
+function mockSupabase(rows, { failChannel = false, cutoverFlagRow = { is_enabled: true } } = {}) {
   // SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001: default is_high_consequence=false on any row
   // that doesn't explicitly set it, mirroring the DB's NOT NULL DEFAULT false — existing
   // fixture rows above don't need updating individually.
   const filledRows = rows === null ? rows : rows.map((r) => ({ is_high_consequence: false, ...r }));
   return {
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        order: vi.fn(async () => ({ data: filledRows, error: null })),
-      })),
-    })),
+    from: vi.fn((table) => {
+      if (table === 'leo_feature_flags') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn(async () => ({ data: cutoverFlagRow, error: null })),
+            })),
+          })),
+        };
+      }
+      return {
+        select: vi.fn(() => ({
+          order: vi.fn(async () => ({ data: filledRows, error: null })),
+        })),
+      };
+    }),
     channel: failChannel
       ? () => { throw new Error('channel not available'); }
       : vi.fn(() => ({
@@ -134,22 +152,48 @@ describe('stage-governance', () => {
     expect(gov.isHighConsequence(1)).toBe(false);
   });
 
-  test('cache: second call within TTL does not re-fetch (one refresh = 1 .from() call on venture_stages)', async () => {
+  test('cache: second call within TTL does not re-fetch (one refresh = 2 .from() calls: venture_stages + cutover flag)', async () => {
     // SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-B: single-table read → 1 .from() per refresh
     // (was 2 when stage_config + lifecycle_stage_config were read separately).
+    // SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A: +1 .from() per refresh for the
+    // HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED read, so one refresh is now 2 calls.
     const supabase = mockSupabase(VENTURE_STAGES_FIXTURE);
     await getStageGovernance(supabase);
     await getStageGovernance(supabase);
-    expect(supabase.from).toHaveBeenCalledTimes(1);
+    expect(supabase.from).toHaveBeenCalledTimes(2);
   });
 
   test('_resetCacheForTest forces a re-fetch', async () => {
     // SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-B: 2 refreshes × 1 table = 2 .from() calls.
+    // SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A: now 2 tables/refresh → 2 refreshes × 2 = 4.
     const supabase = mockSupabase(VENTURE_STAGES_FIXTURE);
     await getStageGovernance(supabase);
     _resetCacheForTest();
     await getStageGovernance(supabase);
-    expect(supabase.from).toHaveBeenCalledTimes(2);
+    expect(supabase.from).toHaveBeenCalledTimes(4);
+  });
+
+  // SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A (FR-1, TR-1)
+  test('cutover flag OFF (default, row absent) treats every stage as NOT high-consequence regardless of the DB column', async () => {
+    const gov = await getStageGovernance(mockSupabase(VENTURE_STAGES_FIXTURE, { cutoverFlagRow: null }));
+    expect(gov.highConsequenceStages.size).toBe(0);
+    expect(gov.isHighConsequence(4)).toBe(false);
+    expect(gov.isHighConsequence(24)).toBe(false);
+    // Composed classifications (kill/promotion/review) are untouched by the cutover gate.
+    expect(gov.isPromotion(24)).toBe(true);
+  });
+
+  test('cutover flag explicitly OFF (is_enabled=false) behaves identically to an absent row', async () => {
+    const gov = await getStageGovernance(mockSupabase(VENTURE_STAGES_FIXTURE, { cutoverFlagRow: { is_enabled: false } }));
+    expect(gov.highConsequenceStages.size).toBe(0);
+    expect(gov.isHighConsequence(24)).toBe(false);
+  });
+
+  test('cutover flag ON restores is_high_consequence classification from the DB column', async () => {
+    const gov = await getStageGovernance(mockSupabase(VENTURE_STAGES_FIXTURE, { cutoverFlagRow: { is_enabled: true } }));
+    expect([...gov.highConsequenceStages].sort((a, b) => a - b)).toEqual([4, 24]);
+    expect(gov.isHighConsequence(4)).toBe(true);
+    expect(gov.isHighConsequence(24)).toBe(true);
   });
 
   test('falls back gracefully when realtime channel API is unavailable', async () => {
@@ -169,12 +213,20 @@ describe('stage-governance', () => {
   test('Realtime channel teardown safety: CHANNEL_ERROR/CLOSED/TIMED_OUT drops the reference without calling unsubscribe()/removeChannel() (both would recurse)', async () => {
     const { channelMock, removeChannel, getStatusCallback, getUnsubscribeCallCount, getRemoveChannelCallCount } =
       createFaithfulRealtimeChannelMock();
+    // SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A: table-aware branch so the new
+    // leo_feature_flags read (HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED) resolves instead
+    // of throwing on a table-name-blind mock; value is irrelevant to this test.
     const supabase = {
-      from: vi.fn(() => ({
-        select: vi.fn(() => ({
-          order: vi.fn(async () => ({ data: VENTURE_STAGES_FIXTURE, error: null })),
-        })),
-      })),
+      from: vi.fn((table) => {
+        if (table === 'leo_feature_flags') {
+          return { select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: { is_enabled: true }, error: null })) })) })) };
+        }
+        return {
+          select: vi.fn(() => ({
+            order: vi.fn(async () => ({ data: VENTURE_STAGES_FIXTURE, error: null })),
+          })),
+        };
+      }),
       channel: vi.fn(() => channelMock),
       removeChannel,
     };
@@ -205,7 +257,12 @@ describe('stage-governance', () => {
 
   test('null data with no error yields empty sets (defensive — empty table or minimal mock)', async () => {
     const supabase = {
-      from: () => ({ select: () => ({ order: async () => ({ data: null, error: null }) }) }),
+      from: (table) => {
+        if (table === 'leo_feature_flags') {
+          return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_enabled: true }, error: null }) }) }) };
+        }
+        return { select: () => ({ order: async () => ({ data: null, error: null }) }) };
+      },
       channel: () => ({ on: () => ({ subscribe: () => ({}) }), subscribe: () => ({}) }),
     };
     const gov = await getStageGovernance(supabase);

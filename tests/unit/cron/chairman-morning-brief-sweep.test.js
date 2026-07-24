@@ -2,9 +2,12 @@
  * QF-20260720-531 — durable 6:00 ET self-healing morning-brief sweep.
  *
  * Pins the owed-state contract: enqueue-only (never provider.send), per-ET-date dedupe
- * double-fire no-op, the self-healing 6:00-11:59 ET window (unlike morning-review's exact-hour
- * gate, this window intentionally spans multiple 15-min ticks so a missed first attempt is
- * retried), STAGED-absent fail-soft inert, and PII-free logging.
+ * double-fire no-op, the self-healing 5:00-11:59 ET window (QF-20260722-277: buffers GHA
+ * scheduled-workflow lag; unlike morning-review's exact-hour gate, this window intentionally
+ * spans multiple 15-min ticks so a missed first attempt is retried), the notBefore=6:00 AM ET
+ * sleep-window deferral (QF-20260722-277: the window opening at 5:00 ET now overlaps the
+ * 10PM-6AM ET SMS quiet window, so every enqueue is held until 6:00 AM regardless of tick time),
+ * STAGED-absent fail-soft inert, and PII-free logging.
  */
 import { describe, it, expect, vi } from 'vitest';
 import {
@@ -12,14 +15,15 @@ import {
   parseArgs,
   etLocalHour,
   etDateStr,
+  et6amIso,
 } from '../../../scripts/cron/chairman-morning-brief-sweep.mjs';
 
 // Instants chosen so the self-healing window gate is exercised in BOTH DST seasons.
-const SUMMER_WINDOW_START = new Date('2026-07-18T10:00:00Z'); // 06:00 EDT -> ET hour 6 (does work)
+const SUMMER_WINDOW_START = new Date('2026-07-18T09:00:00Z'); // 05:00 EDT -> ET hour 5 (does work)
 const SUMMER_WINDOW_LATE = new Date('2026-07-18T14:45:00Z');  // 10:45 EDT -> ET hour 10 (still in window — retry tick)
-const SUMMER_TOO_EARLY = new Date('2026-07-18T09:45:00Z');    // 05:45 EDT -> ET hour 5 (inert)
+const SUMMER_TOO_EARLY = new Date('2026-07-18T08:45:00Z');    // 04:45 EDT -> ET hour 4 (inert)
 const SUMMER_TOO_LATE = new Date('2026-07-18T16:15:00Z');     // 12:15 EDT -> ET hour 12 (inert)
-const WINTER_WINDOW_START = new Date('2026-01-15T11:00:00Z'); // 06:00 EST -> ET hour 6 (does work)
+const WINTER_WINDOW_START = new Date('2026-01-15T10:00:00Z'); // 05:00 EST -> ET hour 5 (does work)
 
 /** Minimal fake supabase — the brief body builder is imported/exercised via its own suite. */
 function makeSupabase() {
@@ -49,13 +53,13 @@ describe('parseArgs', () => {
 
 describe('self-healing window fixtures are valid (season sanity)', () => {
   it('summer window-start/late/too-early/too-late map to the expected ET hours', () => {
-    expect(etLocalHour(SUMMER_WINDOW_START)).toBe(6);
+    expect(etLocalHour(SUMMER_WINDOW_START)).toBe(5);
     expect(etLocalHour(SUMMER_WINDOW_LATE)).toBe(10);
-    expect(etLocalHour(SUMMER_TOO_EARLY)).toBe(5);
+    expect(etLocalHour(SUMMER_TOO_EARLY)).toBe(4);
     expect(etLocalHour(SUMMER_TOO_LATE)).toBe(12);
   });
-  it('winter window-start is ET hour 6', () => {
-    expect(etLocalHour(WINTER_WINDOW_START)).toBe(6);
+  it('winter window-start is ET hour 5', () => {
+    expect(etLocalHour(WINTER_WINDOW_START)).toBe(5);
   });
 });
 
@@ -95,8 +99,8 @@ describe('TS-2 — self-healing: a later in-window tick retries after a missed f
   });
 });
 
-describe('TS-3 — window gate: inert outside 6:00-11:59 ET', () => {
-  it('inert before 6:00 ET', async () => {
+describe('TS-3 — window gate: inert outside 5:00-11:59 ET', () => {
+  it('inert before 5:00 ET', async () => {
     const enqueue = vi.fn();
     const r = await main(['node', 's', '--once'], baseDeps({ enqueue, now: SUMMER_TOO_EARLY }));
     expect(r.action).toBe('inert');
@@ -129,11 +133,19 @@ describe('TS-4 — STAGED obligations table absent -> fail-soft inert, no crash'
   });
 });
 
-describe('TS-5 — no notBefore deferral (already past 6AM when this can fire)', () => {
-  it('enqueue is called with notBefore null', async () => {
+describe('TS-5 — QF-20260722-277: notBefore defers early-window enqueues to 6:00 AM ET (sleep-window safe)', () => {
+  it('at window start (5:00 ET) notBefore is set to 6:00 AM ET the same day, deferring the actual send', async () => {
     const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
     await main(['node', 's', '--once'], baseDeps({ enqueue }));
-    expect(enqueue.mock.calls[0][1].notBefore).toBeNull();
+    expect(enqueue.mock.calls[0][1].notBefore).toBe(et6amIso(SUMMER_WINDOW_START));
+  });
+
+  it('on a later in-window tick (10:45 ET) notBefore is already elapsed, so no extra delay is added', async () => {
+    const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-late' }));
+    await main(['node', 's', '--once'], baseDeps({ enqueue, now: SUMMER_WINDOW_LATE }));
+    const notBefore = enqueue.mock.calls[0][1].notBefore;
+    expect(notBefore).toBe(et6amIso(SUMMER_WINDOW_LATE));
+    expect(new Date(notBefore).getTime()).toBeLessThan(SUMMER_WINDOW_LATE.getTime());
   });
 });
 

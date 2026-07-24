@@ -112,8 +112,19 @@ describe('stage-governance gate-type resolution (FR-2b / FR-3)', () => {
     { stage_number: 19, gate_type: 'promotion', work_type: 'sd_required', review_mode: 'auto' },
     { stage_number: 22, gate_type: 'none', work_type: 'artifact_only', review_mode: 'review' },
   ];
+  // SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A: _readFresh now ALSO reads leo_feature_flags
+  // (HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED) on every refresh — table-aware branch so that
+  // read resolves instead of throwing; irrelevant to every assertion in this describe block
+  // (none of these rows set is_high_consequence).
   function mockGovSb(rows) {
-    return { from: () => ({ select: () => ({ order: () => ({ data: rows, error: null }) }) }) };
+    return {
+      from: (table) => {
+        if (table === 'leo_feature_flags') {
+          return { select: () => ({ eq: () => ({ maybeSingle: () => ({ data: { is_enabled: true }, error: null }) }) }) };
+        }
+        return { select: () => ({ order: () => ({ data: rows, error: null }) }) };
+      },
+    };
   }
 
   it('gate-type: S18/S19 resolve to promotion_gate (no longer the stage_gate catch-all)', async () => {
