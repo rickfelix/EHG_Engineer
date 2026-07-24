@@ -1,10 +1,10 @@
 ---
 Category: Reference
 Status: Approved
-Version: 1.2.0
+Version: 1.3.0
 Author: SD-LEO-INFRA-LEO-COMPLETION-001
 Last Updated: 2026-07-24
-Tags: fleet, launcher, respawn, supervisor, manifest, checkpoint-3, session-view, mockup-2
+Tags: fleet, launcher, respawn, supervisor, manifest, checkpoint-3, session-view, mockup-2, fleet-panel, mockup-1
 ---
 
 # Fleet Launcher & Respawn Architecture
@@ -113,17 +113,53 @@ internal-only, not customer-facing product UI.
 - **Known integration gap**: the pane's own `fetch()` calls carry no auth
   header, so every action 401s when loaded standalone — credential-passthrough
   depends on how the parent SD's assembly shell eventually hosts this fragment.
-- **Cross-sibling coordination**: as of this child's EXEC phase, siblings -A
-  (fleet panel, `server/routes/fleet-panel.js`) and -C (control-verb buttons,
+- **Cross-sibling coordination**: siblings -A (fleet panel API,
+  `server/routes/fleet-panel.js`) and -C (control-verb buttons,
   `server/routes/fleet-actions.js`) plus the parent's own assembly-shell work
-  all converge on one graphical UI surface. All three children (this one, -A,
-  -C) shipped API-only + tests -- none has committed a shared framework/mount-
-  contract or a static UI fragment except this child's `server/public/fleet-ui/`.
-  This fragment stays dependency-free and self-contained (no assumed
-  parent-shell mount API) to minimize integration coupling with whatever the
-  parent ultimately builds.
+  all converge on one graphical UI surface. -A has since also shipped its own
+  static UI fragment (`server/public/fleet-ui/fleet-panel.html/.css/.js`,
+  `SD-LEO-INFRA-LEO-APP-RENDERED-001-A`) — see the "Fleet panel graphical
+  render" section below. Both fragments stay dependency-free and
+  self-contained (no assumed parent-shell mount API) to minimize integration
+  coupling with whatever the parent ultimately builds.
 - Ratified mockups: `docs/design/mockup-1-fleet-launcher.png` (sibling -A) and
   `docs/design/mockup-2-session-view-terminal-agent-browser.png` (this child).
+
+## Fleet panel graphical render (SD-LEO-INFRA-LEO-APP-RENDERED-001-A)
+
+The mockup-1 counterpart to the Session View pane above: renders
+`server/routes/fleet-panel.js`'s `GET /api/fleet-panel` (manifest table, 3
+named-account capacity chips, attention strip) and drives the 4
+`server/routes/fleet-actions.js` verbs (respawn fleet, relaunch under
+profile, add session, snapshot manifest).
+
+- `server/public/fleet-ui/fleet-panel.html/.css/.js` — same framework-free,
+  vanilla-JS pattern as `session-view.js` (IIFE, `textContent`-only DOM
+  builder, `fetch`+`refresh` polling), reusing `session-view.css`'s dark-theme
+  token values so both `/fleet-ui` pages read as one system. Each render
+  region (manifest/chips/attention) runs in its own `try`/`catch` so one
+  failing region never silently blanks the others.
+- `server/public/fleet-ui/fleet-panel-format.js` — the pure formatters
+  (badge CSS class, chip-percent text, em-dash fallback) as a UMD-lite
+  module: `module.exports` under Node/vitest, `window.FleetPanelFormat` in
+  the browser. Unit-tested directly (`tests/unit/server/
+  fleet-panel-format.test.js`) without a DOM.
+- **Auth (reversed after adversarial PR review, agent a4d0de1d)**:
+  `/api/fleet-actions` is `requireAuth`-gated and its only non-bearer-token
+  option is `x-internal-api-key` — the SAME app-wide admin-bypass secret
+  shared across ~15 unrelated route groups (`server/index.js:189-228`), not
+  something scoped to fleet-actions. Since `/fleet-ui` itself is served with
+  no auth at all (`server/index.js:167`), an earlier draft of this page that
+  solicited that key into an input and persisted it in `sessionStorage` was
+  reverted before merge: it would have let any XSS found anywhere on the
+  origin read the key and fully bypass auth app-wide. This page instead
+  matches `session-view.js`'s disclosed no-auth gap above — action calls
+  carry no header and fail closed (401) — until a properly *scoped*
+  credential mechanism exists (tracked as a follow-up, not invented under
+  time pressure here).
+- Verified via a Node `vm`+DOM-shim trace (not live-browser automation — see
+  Gotchas below) that the render logic itself handles null/missing fields,
+  an empty attention strip, and an unknown badge value correctly.
 
 ## Operating it
 
@@ -149,3 +185,14 @@ internal-only, not customer-facing product UI.
 - The kill-supervisor test previously passed while asserting nothing real; if a
   future change reintroduces a mocked `spawnFn` in that test path, it silently
   regresses G1a's coverage without failing CI.
+- **Debugging `/fleet-ui` pages**: if claude-in-chrome MCP isn't connected,
+  do NOT fall back to raw OS-level screen-capture + `SendKeys` automation on
+  this machine — it runs multiple concurrent fleet-worker sessions sharing
+  one physical desktop, and that fallback (tried during
+  `SD-LEO-INFRA-LEO-APP-RENDERED-001-A`) went wrong: DevTools console
+  autocomplete mangled typed input, a stuck Alt-Tab overlay, and ultimately a
+  system-wide `taskkill /IM msedge.exe` that could have disrupted other
+  sessions' browser state. A cheap Node `vm`+DOM-shim trace (feed the real
+  page-JS source a fake `document`/`fetch`, assert on the resulting fake DOM
+  tree) diagnoses client-side rendering bugs safely and should be reached for
+  *before* live-browser debugging, not after.
