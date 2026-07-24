@@ -89,6 +89,14 @@ vi.mock('../../../lib/operator/cash-sources/teller-client.js', () => ({
 // --- FR-2 cost report: fail-soft (spawnSync returns non-zero → ai_burn stays stale) ---
 vi.mock('node:child_process', () => ({ spawnSync: H.spawnSyncMock }));
 
+// --- SD-EHG-PRODUCT-FIRSTREV-SUBSTRATE-ROLLUP-001-B: manual-revenue component, per-test ---
+const manualRevenueMock = vi.hoisted(() => vi.fn(async () => ({
+  total_usd: 0, excluded_non_usd_count: 0, matched_record_count: 0, source_available: false,
+})));
+vi.mock('../../../lib/income/manual-revenue-portfolio-summary.js', () => ({
+  fetchManualRevenueTotal: manualRevenueMock,
+}));
+
 // computeAttributedRevenue + periodMonthOf are intentionally NOT mocked (real).
 import { main } from '../../../scripts/operator/feed-operator-cash-burn.mjs';
 
@@ -103,6 +111,8 @@ describe('feed-operator-cash-burn FR-3 revenue-mirror rewire', () => {
     H.state.tablesQueried = [];
     // FR-5 backfill: empty ledger so that step is a no-op.
     H.state.responses.venture_token_ledger = { data: [] };
+    // Default: no manual revenue (matches pre-SD-...-001-B behavior unless a test overrides it).
+    manualRevenueMock.mockResolvedValue({ total_usd: 0, excluded_non_usd_count: 0, matched_record_count: 0, source_available: false });
   });
 
   it('(a) attribution live: computeAttributedRevenue drives revenue_usd, livemode:true, source:attribution_resolver', async () => {
@@ -189,5 +199,69 @@ describe('feed-operator-cash-burn FR-3 revenue-mirror rewire', () => {
     });
     const call = upsertCallWith('revenue_usd');
     expect(call[1]).toMatchObject({ revenue_usd: 200, revenue_livemode: false });
+  });
+
+  // --- SD-EHG-PRODUCT-FIRSTREV-SUBSTRATE-ROLLUP-001-B: additive manual-revenue merge ---
+
+  it('(d) additive merge on attribution path: revenue_usd = stripe + manual, never overwritten', async () => {
+    H.state.responses.ops_payment_events = {
+      count: 2,
+      data: [{ event_type: 'charge.succeeded', amount_cents: 50000, currency: 'usd', payment_intent_id: 'pi_1', stripe_charge_id: 'ch_1', id: 'e1' }],
+    };
+    manualRevenueMock.mockResolvedValue({ total_usd: 200, excluded_non_usd_count: 0, matched_record_count: 1, source_available: true });
+
+    const result = await main();
+
+    expect(result.revenue).toMatchObject({
+      written: true,
+      value_usd: 700, // 500 (stripe) + 200 (manual)
+      stripe_value_usd: 500,
+      manual_value_usd: 200,
+      livemode: true,
+      source: 'attribution_resolver',
+    });
+    const call = upsertCallWith('revenue_usd');
+    expect(call[1]).toMatchObject({ revenue_usd: 700, revenue_livemode: true, manual_revenue_usd: 200 });
+  });
+
+  it('(e) confirmed-zero manual entries (aggregator ran, found none): revenue_usd unchanged, manual_revenue_usd:0 written honestly', async () => {
+    H.state.responses.ops_payment_events = {
+      count: 1,
+      data: [{ event_type: 'charge.succeeded', amount_cents: 12300, currency: 'usd', payment_intent_id: 'pi_1', stripe_charge_id: 'ch_1', id: 'e1' }],
+    };
+    manualRevenueMock.mockResolvedValue({ total_usd: 0, excluded_non_usd_count: 0, matched_record_count: 0, source_available: true });
+
+    const result = await main();
+
+    expect(result.revenue).toMatchObject({ value_usd: 123, stripe_value_usd: 123, manual_value_usd: 0 });
+    const call = upsertCallWith('revenue_usd');
+    // source_available:true -> a genuine confirmed-zero, honest to write
+    expect(call[1]).toMatchObject({ revenue_usd: 123, manual_revenue_usd: 0 });
+  });
+
+  it('(f) additive merge on fallback path: revenue_usd = income_capture mirror + manual', async () => {
+    H.state.responses.ops_payment_events = { count: 0 };
+    H.state.responses.income_capture_monthly = { data: [{ recurring_revenue: 4500, livemode: true }] };
+    manualRevenueMock.mockResolvedValue({ total_usd: 300, excluded_non_usd_count: 0, matched_record_count: 2, source_available: true });
+
+    const result = await main();
+
+    expect(result.revenue).toMatchObject({ value_usd: 4800, stripe_value_usd: 4500, manual_value_usd: 300, livemode: true, source: 'income_capture_monthly' });
+    const call = upsertCallWith('revenue_usd');
+    expect(call[1]).toMatchObject({ revenue_usd: 4800, manual_revenue_usd: 300 });
+  });
+
+  it('(g) SD-...-001-A aggregator unavailable: feed stays runnable, revenue_usd still writes, manual_revenue_usd is left UNATTESTED (not fabricated as 0)', async () => {
+    H.state.responses.ops_payment_events = { count: 0 };
+    H.state.responses.income_capture_monthly = { data: [{ recurring_revenue: 999, livemode: true }] };
+    // manualRevenueMock defaults to source_available:false via beforeEach.
+
+    const result = await main();
+
+    expect(result.revenue).toMatchObject({ value_usd: 999, manual_value_usd: 0, written: true });
+    const call = upsertCallWith('revenue_usd');
+    // CORE CONTRACT: an unattested input is never written as a fabricated 0 -- the already-live
+    // revenue_usd write still succeeds, but manual_revenue_usd is simply absent from this upsert.
+    expect(call[1]).not.toHaveProperty('manual_revenue_usd');
   });
 });
