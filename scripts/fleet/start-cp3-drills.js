@@ -66,10 +66,26 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
 }
 
 /**
- * QF-20260724-923: WIRE the live path so `--live` writes THREE real fleet_verb_* rows (was a stub that
- * passed supabase=null + gave runU4Drill only {opts:{}} -> zero evidence). Every dependency is
- * injectable so this is unit-testable with ZERO live spawn/kill; the canary-guard gating
- * (assertCanaryTarget + FLEET_CANARY_KILL_ENABLED) still fail-closes a real run against a non-canary.
+ * QF-20260724-923 (fix-of-the-fix, correlation_id=cp3-do-it-right-20260724, chairman-approved
+ * 2026-07-24): the prior version wired the CALL SITES but not the DATA CONTRACTS between them, so
+ * `--live` still wrote zero-to-one real fleet_verb_* rows. Three defects closed here:
+ *
+ *   (bug1) reboot-respawn never received a real spawnFn -- SECURITY FENCE FIRST: the reboot leg
+ *          reads ALL enabled fleet_desired_slots, so a real spawner is only ever wired AFTER filtering
+ *          to canary-profile slots (canaryOnlyLoadFn below). A live spawn from this drill entrypoint
+ *          can therefore never target a non-canary (production) worker, regardless of what's seeded.
+ *   (bug2) canaryRestart/canaryRelaunchUnderProfile were called with `{ supabase }`, but
+ *          canary-guard.js's guardedVerb reads `opts.supabaseClient` -- the mismatched key made
+ *          resolveCanaryTarget always fail closed (silently, before this fix added visibility).
+ *          Also: the resolved `target` IDENTITY OBJECT was passed where guardedVerb expects a
+ *          callsign STRING (resolveSessionIdentity does `j[by] === value`, an object never matches).
+ *   (bug3) See the DB-side fix: the seeded fleet_desired_slots.name must be `Canary-`-prefixed
+ *          (capital C) to satisfy canary-guard.js's isCanaryCallsign defense-in-depth check -- not
+ *          fixed in code, tracked as a data migration alongside this change.
+ *
+ * Every dependency remains injectable so this is unit-testable with ZERO live spawn/kill; the
+ * canary-guard gating (assertCanaryTarget + FLEET_CANARY_KILL_ENABLED) still fail-closes a real run
+ * against a non-canary, and the reboot leg's slot-filter fail-closes independently of the guard.
  */
 export async function defaultRunDrills(plan, deps = {}) {
   const load = async (p, name, injected) => injected || (await import(p))[name];
@@ -83,9 +99,12 @@ export async function defaultRunDrills(plan, deps = {}) {
   // (1) real SERVICE client so the drills can loadDesiredSlots + WRITE fleet_verb_* rows (was null).
   const supabase = deps.supabase || (await import('../../lib/supabase-client.cjs')).createSupabaseServiceClient();
 
-  // Resolve the live canary session (canary-guard fail-closes if none / not a real canary).
+  // Resolve the live canary session (canary-guard fail-closes if none / not a real canary). `target`
+  // here is the RESOLVED IDENTITY OBJECT ({resolved, identity:{session_id,callsign,...}} shape) --
+  // extract the callsign STRING for every downstream call that needs a target key (bug2).
   const target = await resolveCanary(supabase, { by: 'account_profile', value: 'canary' });
-  const sessionId = target && (target.session_id || target.id);
+  const targetCallsign = (target && target.resolved && target.identity && target.identity.callsign) || null;
+  const sessionId = (target && target.resolved && target.identity && target.identity.session_id) || null;
   const fromProfile = process.env.FLEET_LIVE_PROFILE || 'live';
   const toProfile = plan?.canaryProfile || 'canary';
   const queryEventsFn = deps.queryEventsFn || (async (sid) => {
@@ -94,20 +113,63 @@ export async function defaultRunDrills(plan, deps = {}) {
     return data || [];
   });
 
-  // G1a kill-supervisor -> fleet_verb_restart (canary-guarded).
-  const g1a = await Promise.resolve(canaryRestart(target, { supabase })).catch((e) => ({ error: e && e.message }));
-  // (3) G1b+G2 reboot-respawn -> fleet_verb_respawn (now with a real client, not null).
-  const reboot = await runRebootRespawnDrill({ supabase, live: true }).catch((e) => ({ error: e && e.message }));
-  // (2) G3+U4 relaunch-under-profile -> fleet_verb_relaunch_under_profile (required args wired, was {opts:{}}).
-  const u4 = await runU4Drill({
-    target, fromProfile, toProfile, sessionId,
-    relaunchFn: canaryRelaunchUnderProfile, resolveFn: resolveProfileDir, queryEventsFn, opts: { supabase },
+  // G1a kill-supervisor -> fleet_verb_restart (canary-guarded). Requires an EXISTING live canary
+  // session to target -- reports the gap explicitly (never silently swallowed) when none exists yet.
+  const g1a = targetCallsign
+    ? await Promise.resolve(canaryRestart(targetCallsign, { supabaseClient: supabase })).catch((e) => ({ error: e && e.message }))
+    : { ok: false, reason: 'no_live_canary_session' };
+
+  // (3) G1b+G2 reboot-respawn -> fleet_verb_respawn (real client, not null). SECURITY FENCE (bug1):
+  // filter to canary-profile desired slots BEFORE a real spawner is ever wired -- this is the ONLY
+  // thing that makes it safe to default a real child_process.spawn here (mirrors the already-live-
+  // proven wiring in scripts/fleet/reboot-respawn.cjs, scoped to canary-only for this entrypoint).
+  const canaryOnlyLoadFn = deps.loadFn || (async (sb) => {
+    const { loadDesiredSlots } = await import('../../lib/fleet/desired-slots-store.js');
+    const slots = await loadDesiredSlots(sb);
+    return slots.filter((s) => s && s.account_profile === 'canary');
+  });
+  const canarySpawnFn = deps.spawnFn || (await (async () => {
+    const { spawn: spawnProcess } = await import('node:child_process');
+    return (program, args, env, cwd) => {
+      const child = spawnProcess(program, args, { detached: true, stdio: 'ignore', cwd, env: { ...process.env, ...env } });
+      child.unref();
+      return child;
+    };
+  })());
+  const reboot = await runRebootRespawnDrill({
+    supabase, live: true, loadFn: canaryOnlyLoadFn, spawnFn: canarySpawnFn, queryEventsFn: deps.rebootQueryEventsFn,
   }).catch((e) => ({ error: e && e.message }));
+
+  // (2) G3+U4 relaunch-under-profile -> fleet_verb_relaunch_under_profile (bug2 fix: supabaseClient
+  // key + callsign string). Same explicit no-target reporting as G1a.
+  const u4 = targetCallsign
+    ? await runU4Drill({
+        target: targetCallsign, fromProfile, toProfile, sessionId,
+        relaunchFn: canaryRelaunchUnderProfile, resolveFn: resolveProfileDir, queryEventsFn, opts: { supabaseClient: supabase },
+      }).catch((e) => ({ error: e && e.message }))
+    : { pass: false, checks: [{ name: 'target_resolution', pass: false, detail: 'no live canary session to target (account_profile=canary)' }] };
 
   return { g1a, reboot, u4 };
 }
 
+/**
+ * Observability fix (cp3-do-it-right-20260724): root-causing the QF-923 gap required reading source
+ * instead of stdout, because the CLI wrapper never printed the returned per-leg results/errors before
+ * exiting. Print a compact leg-by-leg summary here so a future silent failure is visible from the CLI
+ * alone.
+ */
+function printResultsSummary(results) {
+  if (!results) return;
+  console.log('[start-cp3-drills] leg results:');
+  for (const [leg, outcome] of Object.entries(results)) {
+    console.log(`  ${leg}: ${JSON.stringify(outcome)}`);
+  }
+}
+
 const isMain = process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
 if (isMain) {
-  main().then((r) => process.exit(r.ok ? 0 : 1)).catch((e) => { console.error('[start-cp3-drills] FATAL', e && e.message); process.exit(1); });
+  main().then((r) => {
+    printResultsSummary(r.results);
+    process.exit(r.ok ? 0 : 1);
+  }).catch((e) => { console.error('[start-cp3-drills] FATAL', e && e.message); process.exit(1); });
 }

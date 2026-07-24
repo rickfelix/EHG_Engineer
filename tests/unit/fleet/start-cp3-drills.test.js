@@ -40,36 +40,80 @@ describe('main — worker-startable, dry-run default', () => {
   });
 });
 
-// QF-20260724-923: the live path must WIRE all 3 legs to emit real fleet_verb_* evidence (was a stub).
-describe('defaultRunDrills — wired live path (QF-20260724-923)', () => {
-  it('uses a real supabase client, resolves the canary, and calls all 3 legs with the required args', async () => {
+// QF-20260724-923 + its fix-of-the-fix (cp3-do-it-right-20260724): the live path must WIRE all 3
+// legs to emit real fleet_verb_* evidence with the CORRECT data contracts (supabaseClient key,
+// callsign string target, canary-filtered slots before a real spawner). This call-shape test is a
+// fast smoke check; the LOAD-BEARING non-mocked acceptance evidence is
+// tests/integration/start-cp3-drills-canary-fence.test.js (no_unit_mock=true, mirrors the drill
+// runners' own anti-test-masking discipline) — a fully-mocked call-shape test alone is exactly the
+// acceptance-by-mock class that hid these bugs the first time (Solomon R1 verdict 0e9e466e).
+describe('defaultRunDrills — wired live path with correct data contracts (cp3-do-it-right-20260724)', () => {
+  it('resolves the canary via the REAL identity shape, and calls all 3 legs with the required args', async () => {
     const supabase = { from: vi.fn() };
-    const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
+    // resolveCanaryTarget's REAL contract (session-registry.js resolveSessionIdentity) is
+    // {resolved, identity:{session_id, callsign, account_profile}} -- NOT a bare session row. A mock
+    // shaped like a bare session row (the prior version of this test) hides the callsign-vs-object bug.
+    const target = { resolved: true, identity: { session_id: 'canary-sess-1', callsign: 'Canary-pilot', account_profile: 'canary' } };
     const resolveCanaryTarget = vi.fn(async () => target);
     const canaryRestart = vi.fn(async () => ({ verb: 'fleet_verb_restart', outcome: 'ok' }));
     const canaryRelaunchUnderProfile = vi.fn(async () => ({ verb: 'fleet_verb_relaunch_under_profile', outcome: 'ok' }));
     const runRebootRespawnDrill = vi.fn(async () => ({ pass: true }));
     const runU4Drill = vi.fn(async () => ({ pass: true }));
+    const loadFn = vi.fn(async () => []);
+    const spawnFn = vi.fn();
 
     const plan = { canaryProfile: 'canary', cwd: 'R:\\r', legs: [] };
     const res = await defaultRunDrills(plan, {
-      supabase, resolveCanaryTarget, canaryRestart, canaryRelaunchUnderProfile, runRebootRespawnDrill, runU4Drill,
+      supabase, resolveCanaryTarget, canaryRestart, canaryRelaunchUnderProfile, runRebootRespawnDrill, runU4Drill, loadFn, spawnFn,
     });
 
     // supabase is NOT null (was the stub bug); canary resolved.
     expect(resolveCanaryTarget).toHaveBeenCalledWith(supabase, { by: 'account_profile', value: 'canary' });
-    // G1a kill-supervisor -> fleet_verb_restart.
-    expect(canaryRestart).toHaveBeenCalledWith(target, { supabase });
-    // G1b+G2 reboot-respawn gets a REAL client + live:true (was supabase=null).
-    expect(runRebootRespawnDrill).toHaveBeenCalledWith({ supabase, live: true });
-    // G3+U4 gets the REQUIRED args (was only {opts:{}} -> no-op): target, sessionId, relaunchFn, resolveFn, queryEventsFn.
+    // G1a kill-supervisor -> fleet_verb_restart. bug2 fix: callsign STRING (not the identity object)
+    // + `supabaseClient` key (canary-guard.js's guardedVerb reads opts.supabaseClient, not opts.supabase).
+    expect(canaryRestart).toHaveBeenCalledWith('Canary-pilot', { supabaseClient: supabase });
+    // G1b+G2 reboot-respawn: real client + live:true + a canary-filtering loadFn + a real spawnFn
+    // (bug1 fix: the fence -- both are ALWAYS provided together, never a bare live:true with no fence).
+    expect(runRebootRespawnDrill).toHaveBeenCalledWith(expect.objectContaining({ supabase, live: true, loadFn, spawnFn }));
+    // G3+U4 gets the REQUIRED args with the corrected contract: target is the callsign STRING,
+    // opts uses supabaseClient (not supabase).
     const u4Args = runU4Drill.mock.calls[0][0];
-    expect(u4Args.target).toBe(target);
+    expect(u4Args.target).toBe('Canary-pilot');
     expect(u4Args.sessionId).toBe('canary-sess-1');
     expect(u4Args.toProfile).toBe('canary');
     expect(typeof u4Args.relaunchFn).toBe('function');
     expect(typeof u4Args.resolveFn).toBe('function');
     expect(typeof u4Args.queryEventsFn).toBe('function');
+    expect(u4Args.opts).toEqual({ supabaseClient: supabase });
     expect(res).toMatchObject({ g1a: expect.anything(), reboot: expect.anything(), u4: expect.anything() });
+  });
+
+  it('SECURITY FENCE: filters fleet_desired_slots to canary-profile ONLY before any real spawner is wired (bug1)', async () => {
+    const supabase = { from: vi.fn() };
+    const target = { resolved: false, reason: 'not_found' };
+    const resolveCanaryTarget = vi.fn(async () => target);
+    const runRebootRespawnDrill = vi.fn(async () => ({ pass: true }));
+    const runU4Drill = vi.fn(async () => ({ pass: true }));
+
+    const plan = { canaryProfile: 'canary', cwd: 'R:\\r', legs: [] };
+    await defaultRunDrills(plan, { supabase, resolveCanaryTarget, runRebootRespawnDrill, runU4Drill });
+
+    const call = runRebootRespawnDrill.mock.calls[0][0];
+    expect(typeof call.loadFn).toBe('function');
+    expect(typeof call.spawnFn).toBe('function');
+  });
+
+  it('reports the no-live-canary-session gap explicitly for G1a/G3-U4 instead of silently no-op-ing (observability)', async () => {
+    const supabase = { from: vi.fn() };
+    const resolveCanaryTarget = vi.fn(async () => ({ resolved: false, reason: 'not_found' }));
+    const runRebootRespawnDrill = vi.fn(async () => ({ pass: true }));
+    const runU4Drill = vi.fn();
+
+    const plan = { canaryProfile: 'canary', cwd: 'R:\\r', legs: [] };
+    const res = await defaultRunDrills(plan, { supabase, resolveCanaryTarget, runRebootRespawnDrill, runU4Drill });
+
+    expect(res.g1a).toEqual({ ok: false, reason: 'no_live_canary_session' });
+    expect(runU4Drill).not.toHaveBeenCalled();
+    expect(res.u4.pass).toBe(false);
   });
 });
