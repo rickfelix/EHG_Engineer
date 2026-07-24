@@ -53,13 +53,16 @@ describe('pure helpers', () => {
     const { buildNarrationLines } = await loadModule();
     expect(buildNarrationLines(null)).toEqual([]);
     expect(buildNarrationLines([])).toEqual([]);
+    // ADVERSARIAL REVIEW FIX: GET /:id/browser-log returns newest-first (descending
+    // created_at) -- this fixture matches that real ordering, not an idealized ascending one.
     const events = [
-      { event_type: 'browser_takeover', created_at: '2026-01-01T00:00:00Z' },
-      { event_type: 'browser_handback', created_at: '2026-01-01T00:05:00Z' },
       { event_type: 'unknown_event', created_at: '2026-01-01T00:06:00Z' },
+      { event_type: 'browser_handback', created_at: '2026-01-01T00:05:00Z' },
+      { event_type: 'browser_takeover', created_at: '2026-01-01T00:00:00Z' },
     ];
     const lines = buildNarrationLines(events);
     expect(lines).toHaveLength(3);
+    // Narration must number in causal (ascending) order regardless of input order.
     expect(lines[0]).toBe('1. Human took control (2026-01-01T00:00:00Z)');
     expect(lines[1]).toBe('2. Control returned to agent (2026-01-01T00:05:00Z)');
     expect(lines[2]).toBe('3. unknown_event (2026-01-01T00:06:00Z)');
@@ -169,9 +172,10 @@ describe('integration (rendered DOM)', () => {
       },
       browserLog: {
         ok: true,
+        // Real endpoint order: newest-first (descending created_at).
         events: [
-          { event_type: 'browser_takeover', created_at: '2026-01-01T00:00:00Z' },
           { event_type: 'browser_handback', created_at: '2026-01-01T00:05:00Z' },
+          { event_type: 'browser_takeover', created_at: '2026-01-01T00:00:00Z' },
         ],
       },
     });

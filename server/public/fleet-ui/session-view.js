@@ -79,12 +79,18 @@
   /**
    * FR-3: numbered narration lines derived 1:1 from real browser-log events. Never fabricates
    * content beyond a friendly label + the event's own timestamp (TS-2/TS-7).
+   *
+   * ADVERSARIAL REVIEW FIX (pre-merge): GET /:id/browser-log orders its rows newest-first
+   * (`created_at` descending) -- a numbered narration must read oldest-first to tell the
+   * story in causal order, so this sorts ascending by `created_at` before numbering rather
+   * than trusting the input array's order.
    * @param {Array<{event_type:string, created_at:string}>|null|undefined} events
    * @returns {string[]}
    */
   function buildNarrationLines(events) {
     if (!events || events.length === 0) return [];
-    return events.map((ev, i) => {
+    const chronological = events.slice().sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+    return chronological.map((ev, i) => {
       const label = NARRATION_EVENT_LABELS[ev.event_type] || ev.event_type;
       return `${i + 1}. ${label} (${ev.created_at})`;
     });

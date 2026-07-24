@@ -96,6 +96,38 @@ describe('GET /:id', () => {
     expect(payload.browserMcpEnabled).toBe(true);
     expect(payload.attachState).toEqual({ ok: null, reason: null, degraded: false, message: null });
   });
+
+  it('SD-LEO-INFRA-LEO-APP-RENDERED-001-B TR-1: includes additive badge/model/effort/role/callsign fields', async () => {
+    mockFromReturningSession({
+      session_id: 'sess-1', status: 'active', loop_state: 'active', current_tool: 'Read',
+      last_tool_at: '2026-01-01T00:00:00Z', last_activity_kind: 'tool', expected_silence_until: null,
+      metadata: { model: 'opus', effort: 'xhigh', fleet_identity: { role: 'advisor', callsign: 'Alpha-5' } },
+    });
+    mockIsPaused.mockReturnValue(false);
+    mockIsBrowserMcpEnabled.mockReturnValue(true);
+
+    const { res } = await invokeRoute('GET', '/:id', { params: { id: 'sess-1' } });
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.badge).toBe('DEEP WORK');
+    expect(payload.model).toBe('opus');
+    expect(payload.effort).toBe('xhigh');
+    expect(payload.role).toBe('advisor');
+    expect(payload.callsign).toBe('Alpha-5');
+  });
+
+  it('SD-LEO-INFRA-LEO-APP-RENDERED-001-B TR-1: additive fields degrade to null/safe defaults when metadata is empty', async () => {
+    mockFromReturningSession({ session_id: 'sess-1', status: 'active', metadata: {} });
+    mockIsPaused.mockReturnValue(false);
+    mockIsBrowserMcpEnabled.mockReturnValue(false);
+
+    const { res } = await invokeRoute('GET', '/:id', { params: { id: 'sess-1' } });
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.badge).toBe('WORKING');
+    expect(payload.model).toBeNull();
+    expect(payload.effort).toBeNull();
+    expect(payload.role).toBeNull();
+    expect(payload.callsign).toBeNull();
+  });
 });
 
 describe('GET /:id/browser-log', () => {
