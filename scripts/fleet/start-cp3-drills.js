@@ -97,6 +97,45 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
  * canary-guard gating (assertCanaryTarget + FLEET_CANARY_KILL_ENABLED) still fail-closes a real run
  * against a non-canary, and the reboot leg's slot-filter fail-closes independently of the guard.
  */
+/**
+ * DURABLE FIX (cp3-do-it-right-20260724, coordinator-diagnosed): G1a's restart() ALWAYS releases the
+ * old canary target and spawns a fresh, UNSTAMPED replacement (metadata={}) -- without immediately
+ * re-stamping it, G3/U4's target resolution (which reuses the pre-G1a callsign snapshot) races the
+ * replacement's own self-registration and fails closed (not_found) every time, requiring a human to
+ * manually stamp it mid-drill. Poll for the fresh session created since G1a started -- called BEFORE
+ * the reboot leg runs, so the ONLY unstamped session in that window is G1a's own replacement (the
+ * reboot leg's separate Canary-pilot spawn hasn't happened yet, so there's no ambiguity to resolve).
+ * @param {object} supabase
+ * @param {string} sinceIso - ISO timestamp captured right before canaryRestart() was called
+ * @returns {Promise<string|null>} the fresh, still-unstamped session_id, or null if none appeared
+ */
+async function pollForFreshUnstampedCanary(supabase, sinceIso, { maxAttempts = 10, delayMs = 500 } = {}) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const { data } = await supabase.from('claude_sessions')
+      .select('session_id, metadata, created_at')
+      .gt('created_at', sinceIso)
+      .in('status', ['active', 'idle'])
+      .order('created_at', { ascending: true });
+    const unstamped = (data || []).find((s) => !s.metadata || !s.metadata.account_profile);
+    if (unstamped) return unstamped.session_id;
+    if (attempt < maxAttempts) await new Promise((resolve) => { setTimeout(resolve, delayMs); });
+  }
+  return null;
+}
+
+/**
+ * Read-merge-write stamp (never a blind overwrite -- mirrors the coordinator's own manual pattern):
+ * sets metadata.account_profile=canary + metadata.fleet_identity.callsign on the fresh replacement,
+ * preserving any other metadata keys already present.
+ */
+async function restampCanary(supabase, newSessionId, callsign) {
+  const { data: current } = await supabase.from('claude_sessions').select('metadata').eq('session_id', newSessionId).maybeSingle();
+  const existing = (current && current.metadata) || {};
+  await supabase.from('claude_sessions').update({
+    metadata: { ...existing, account_profile: 'canary', fleet_identity: { ...(existing.fleet_identity || {}), callsign, role: 'worker' } },
+  }).eq('session_id', newSessionId);
+}
+
 export async function defaultRunDrills(plan, deps = {}) {
   const load = async (p, name, injected) => injected || (await import(p))[name];
   const runRebootRespawnDrill = await load('../../lib/fleet/reboot-respawn-drill-runner.js', 'runRebootRespawnDrill', deps.runRebootRespawnDrill);
@@ -144,9 +183,21 @@ export async function defaultRunDrills(plan, deps = {}) {
 
   // G1a kill-supervisor -> fleet_verb_restart (canary-guarded). Requires an EXISTING live canary
   // session to target -- reports the gap explicitly (never silently swallowed) when none exists yet.
+  const g1aStartedAt = new Date().toISOString();
   const g1a = targetCallsign
     ? await Promise.resolve(canaryRestart(targetCallsign, { supabaseClient: supabase, spawnFn: injectedSpawnFn })).catch((e) => ({ error: e && e.message }))
     : { ok: false, reason: 'no_live_canary_session' };
+
+  // DURABLE FIX: G1a's own restart releases the old target + spawns a fresh, unstamped replacement --
+  // self-stamp it NOW (before the reboot leg spawns its own separate Canary-pilot session) so G3/U4's
+  // target resolution finds a live, correctly-identified canary instead of racing the replacement's
+  // self-registration. Injectable for tests; a no-op when g1a didn't actually respawn anything.
+  if (g1a && g1a.ok && targetCallsign) {
+    const pollFn = deps.pollNewCanarySession || pollForFreshUnstampedCanary;
+    const restampFn = deps.restampCanary || restampCanary;
+    const freshSessionId = await pollFn(supabase, g1aStartedAt).catch(() => null);
+    if (freshSessionId) await restampFn(supabase, freshSessionId, targetCallsign).catch(() => {});
+  }
 
   // (3) G1b+G2 reboot-respawn -> fleet_verb_respawn (real client, not null). SECURITY FENCE (bug1):
   // filter to canary-profile desired slots BEFORE a real spawner is ever wired -- this is the ONLY
