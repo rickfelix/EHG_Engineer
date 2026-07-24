@@ -1,27 +1,30 @@
 /**
- * SD-LEO-INFRA-LEO-COMPLETION-001-D FR-4 — buildLiveSpawnInvocation `--resume` extension.
- * Pure argv builder: resume append + strict back-compat (no-resume path byte-identical) + the
- * CLAUDE_CONFIG_DIR-into-returned-env-only isolation invariant preserved.
+ * buildLiveSpawnInvocation `--resume` extension — now DELEGATES to the canonical buildSessionLaunch
+ * (SD-LEO-INFRA-LEO-APP-LAUNCHER-001 FR-2). The base argv is `new-tab -d <repo-root> -- <resolved
+ * claude.cmd>` (full claude path + repo-root start dir so the session registers in claude_sessions).
+ * Assertions are resolver-aware so they hold on both Windows fleet hosts and CI.
  */
 import { describe, it, expect } from 'vitest';
 import { buildLiveSpawnInvocation } from '../../../lib/fleet/spawn-control.js';
+import { resolveClaudeCmd, resolveRepoRoot } from '../../../lib/fleet/build-session-launch.cjs';
 
-describe('buildLiveSpawnInvocation --resume (FR-4)', () => {
-  it('appends [--resume, <uuid>] to the argv when a resumeUuid is supplied', () => {
+describe('buildLiveSpawnInvocation --resume (via canonical buildSessionLaunch)', () => {
+  it('appends [--resume, <uuid>] after the base argv (new-tab -d <root> -- <claude>)', () => {
     const inv = buildLiveSpawnInvocation({ role: 'worker', callsign: 'Worker-1', resumeUuid: 'abc-123' });
-    // RED against pre-change code (which had NO resume path): args would be ['new-tab','--','claude'].
-    expect(inv.args).toEqual(['new-tab', '--', 'claude', '--resume', 'abc-123']);
+    expect(inv.args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'abc-123']);
     expect(inv.program).toBe('wt.exe');
   });
 
-  it('is byte-identical to the legacy invocation when no resumeUuid is given (back-compat)', () => {
+  it('builds the base argv + repo-root cwd + persistent when no resumeUuid is given', () => {
     const inv = buildLiveSpawnInvocation({ role: 'worker', callsign: 'Worker-1' });
-    expect(inv.args).toEqual(['new-tab', '--', 'claude']);
+    expect(inv.args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd()]);
+    expect(inv.cwd).toBe(resolveRepoRoot());
+    expect(inv.persistent).toBe(true);
   });
 
   it('coerces a non-string resume token via String() (never leaks a raw object into argv)', () => {
     const inv = buildLiveSpawnInvocation({ callsign: 'W', resumeUuid: 42 });
-    expect(inv.args).toEqual(['new-tab', '--', 'claude', '--resume', '42']);
+    expect(inv.args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', '42']);
   });
 
   it('injects CLAUDE_CONFIG_DIR only into the returned env, never process.env, and never as an argv token', () => {

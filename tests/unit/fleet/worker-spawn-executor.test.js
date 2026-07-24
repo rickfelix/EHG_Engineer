@@ -128,11 +128,13 @@ describe('config + invocation helpers (FR-3)', () => {
     expect(resolvePerTickCap({ WORKER_SPAWN_EXECUTOR_PER_TICK_CAP: 'x' })).toBe(2);
   });
 
-  it('buildSpawnInvocation returns a structured command without executing it', () => {
+  it('buildSpawnInvocation returns a PERSISTENT wt.exe launch (canonical buildSessionLaunch, FR-2) — not headless claude -p', () => {
     const inv = buildSpawnInvocation('Echo', 'PROMPT');
-    expect(inv.program).toBe('claude');
+    expect(inv.program).toBe('wt.exe'); // persistent session that registers in claude_sessions, not headless -p
     expect(Array.isArray(inv.args)).toBe(true);
-    expect(inv.args).toContain('PROMPT');
+    expect(inv.args).not.toContain('-p'); // never headless
+    expect(inv.persistent).toBe(true);
+    expect(inv.env.FLEET_WORKER_STARTUP_PROMPT).toBe('PROMPT'); // /loop prompt carried in env for the SessionStart hook to seed
     expect(inv.env.FLEET_WORKER_CALLSIGN).toBe('Echo');
   });
 });

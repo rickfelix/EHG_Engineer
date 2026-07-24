@@ -43,6 +43,7 @@ import { checkClaimGateFreshness } from '../lib/claim/gate-freshness-check.mjs';
 import { checkPreClaimEvidence } from './modules/claim-health/triangulate.js';
 import { isSDClaimed } from '../lib/session-conflict-checker.mjs';
 import { isProcessRunning, startHeartbeat, stopHeartbeat } from '../lib/heartbeat-manager.mjs';
+import { classifyOwnerLiveness } from '../lib/claim/owner-liveness.js';
 import { getEstimatedDuration, formatEstimateDetailed } from './lib/duration-estimator.js';
 import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
 // SD-LEO-INFRA-FLEET-DASHBOARD-VISIBILITY-001: shared formatter so the roster
@@ -1122,8 +1123,9 @@ async function main() {
       const heartbeatAge = ownerSession?.heartbeat_at
         ? Date.now() - new Date(ownerSession.heartbeat_at).getTime()
         : Infinity;
-      const isStale = heartbeatAge > CLAIM_TTL_MS;
-      const isInactive = !ownerSession || ownerSession.status !== 'active';
+      // FR-5 (SD-LEO-INFRA-LEO-APP-LAUNCHER-001): dead-vs-live discrimination via the extracted,
+      // behaviorally-tested classifier — preserves the QF-20260722-842 / 4d8fbb5 behavior exactly.
+      const { isStale, isInactive } = classifyOwnerLiveness({ heartbeatAge, ownerSession, ttlMs: CLAIM_TTL_MS });
 
       if (isStale || isInactive) {
         const ageMin = Math.round(heartbeatAge / 60000);
