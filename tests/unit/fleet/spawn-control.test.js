@@ -348,6 +348,22 @@ describe('restart (FR-4 singleton-serial / FR-5 worker-parallel)', () => {
     expect(sequenceSingletonRefresh).toHaveBeenCalledWith(supabaseClient, { newSessionId: 's2', oldSessionId: 's1' });
     expect(result.ok).toBe(true);
   });
+
+  // QF-20260724-335: an explicit opts.sdKey must be stamped on the fleet_verb_restart event so a set
+  // of CP3 drill legs can be attributed to one intentional run (Solomon S7 acceptance).
+  it('threads opts.sdKey through to the emitted fleet_verb_restart event (QF-20260724-335)', async () => {
+    logCoordinationEvent.mockClear();
+    const child = { pid: 5151 };
+    const spawnFn = vi.fn().mockReturnValue(child);
+    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' } }],
+    });
+    await restart('Alpha-5', { supabaseClient, live: true, spawnFn, execFn, sleepFn: vi.fn(), sdKey: 'CHECKPOINT-3' });
+    const [, eventArg] = logCoordinationEvent.mock.calls.at(-1);
+    expect(eventArg.event_type).toBe('fleet_verb_restart');
+    expect(eventArg.sd_key).toBe('CHECKPOINT-3');
+  });
 });
 
 describe('relaunchUnderProfile (FR-7)', () => {
@@ -398,6 +414,22 @@ describe('relaunchUnderProfile (FR-7)', () => {
     await expect(relaunchUnderProfile('Alpha-5', 'account_b', { supabaseClient, baseDir: 'C:\\profiles', live: true, spawnFn, execFn: vi.fn().mockResolvedValue({ stdout: '0' }), sleepFn: vi.fn() }))
       .rejects.toThrow(/isolation invariant violated/);
     delete process.env.CLAUDE_CONFIG_DIR;
+  });
+
+  // QF-20260724-335: same run-correlator convention as restart() -- required for the G3/U4 leg's
+  // fleet_verb_relaunch_under_profile event to be attributable to the same CP3 run as the other 2 legs.
+  it('threads opts.sdKey through to the emitted fleet_verb_relaunch_under_profile event (QF-20260724-335)', async () => {
+    logCoordinationEvent.mockClear();
+    const child = { pid: 6161 };
+    const spawnFn = vi.fn().mockReturnValue(child);
+    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{ session_id: 's1', status: 'active', metadata: { fleet_identity: { callsign: 'Alpha-5' }, role: 'worker' } }],
+    });
+    await relaunchUnderProfile('Alpha-5', 'account_b', { supabaseClient, baseDir: 'C:\\profiles', live: true, spawnFn, execFn, sleepFn: vi.fn(), sdKey: 'CHECKPOINT-3' });
+    const [, eventArg] = logCoordinationEvent.mock.calls.at(-1);
+    expect(eventArg.event_type).toBe('fleet_verb_relaunch_under_profile');
+    expect(eventArg.sd_key).toBe('CHECKPOINT-3');
   });
 });
 

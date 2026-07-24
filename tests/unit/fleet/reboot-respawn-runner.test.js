@@ -35,6 +35,19 @@ describe('runRebootRespawn dry-run (FR-5) — default INERT', () => {
     expect(res.results[1].invocation.args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd()]);
   });
 
+  // QF-20260724-335: opts.sdKey stamps every fleet_verb_respawn event with an explicit run-correlator
+  // (e.g. 'CHECKPOINT-3') so the G1b/G2 leg's events are attributable to the same intentional CP3 run
+  // as the other 2 legs (Solomon S7 acceptance).
+  it('threads opts.sdKey onto every per-slot fleet_verb_respawn event (QF-20260724-335)', async () => {
+    const events = [];
+    const logFn = vi.fn(async (_s, ev) => { events.push(ev); return { ok: true }; });
+    await runRebootRespawn({
+      supabase: {}, loadFn: async () => SLOTS, spawnFn: vi.fn(), logFn, live: false, sdKey: 'CHECKPOINT-3',
+    });
+    expect(events).toHaveLength(2);
+    expect(events.every((e) => e.sd_key === 'CHECKPOINT-3')).toBe(true);
+  });
+
   it('builds a supervisor-shaped roster from the slots', async () => {
     const res = await runRebootRespawn({ supabase: {}, loadFn: async () => SLOTS, logFn: async () => ({ ok: true }), live: false });
     expect(res.roster).toEqual([
