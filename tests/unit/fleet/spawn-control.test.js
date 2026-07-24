@@ -121,7 +121,16 @@ describe('resolveProfileDir (TR-5 SECURITY: allowlist, no traversal)', () => {
     expect(() => resolveProfileDir('C:\\Windows\\System32', { baseDir: 'C:\\profiles' })).toThrow(/invalid profile name/);
   });
   it('throws if no base dir is configured', () => {
-    expect(() => resolveProfileDir('account_b', {})).toThrow(/FLEET_ACCOUNT_PROFILES_DIR/);
+    // Pre-existing env leakage: this repo's .env sets FLEET_ACCOUNT_PROFILES_DIR, which
+    // resolveProfileDir() falls back to when opts.baseDir is absent -- neutralize it for the
+    // duration of this one assertion so the test doesn't depend on ambient shell state.
+    const saved = process.env.FLEET_ACCOUNT_PROFILES_DIR;
+    delete process.env.FLEET_ACCOUNT_PROFILES_DIR;
+    try {
+      expect(() => resolveProfileDir('account_b', {})).toThrow(/FLEET_ACCOUNT_PROFILES_DIR/);
+    } finally {
+      if (saved !== undefined) process.env.FLEET_ACCOUNT_PROFILES_DIR = saved;
+    }
   });
 });
 
