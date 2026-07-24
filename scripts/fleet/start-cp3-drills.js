@@ -103,11 +103,20 @@ export async function defaultRunDrills(plan, deps = {}) {
       .eq('session_id', sid).like('event_type', 'fleet_verb_%');
     return data || [];
   });
+  // QF-20260724-113 (FR-b): reboot-respawn's respawn_events_present check takes a NO-ARG
+  // queryEventsFn (unlike U4's session-scoped one, since reboot-respawn creates one replacement
+  // session PER slot, not a single target) -- without this the live CLI path always failed
+  // respawn_events_present ("no queryEventsFn supplied") even on a genuinely successful respawn.
+  const rebootQueryEventsFn = deps.rebootQueryEventsFn || (async () => {
+    const { data } = await supabase.from('coordination_events').select('event_type,payload,session_id')
+      .eq('event_type', 'fleet_verb_respawn').order('created_at', { ascending: false }).limit(50);
+    return data || [];
+  });
 
   // G1a kill-supervisor -> fleet_verb_restart (canary-guarded).
   const g1a = await Promise.resolve(canaryRestart(target, { supabase })).catch((e) => ({ error: e && e.message }));
   // (3) G1b+G2 reboot-respawn -> fleet_verb_respawn (now with a real client, not null).
-  const reboot = await runRebootRespawnDrill({ supabase, live: true }).catch((e) => ({ error: e && e.message }));
+  const reboot = await runRebootRespawnDrill({ supabase, live: true, queryEventsFn: rebootQueryEventsFn }).catch((e) => ({ error: e && e.message }));
   // (2) G3+U4 relaunch-under-profile -> fleet_verb_relaunch_under_profile (required args wired, was {opts:{}}).
   const u4 = await runU4Drill({
     target, fromProfile, toProfile, sessionId,
