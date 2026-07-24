@@ -3,7 +3,7 @@
  *
  * Regression guard for the consumption-semantics census (clause e, session_coordination row
  * 09189ed9): every scripts/*.cjs or lib/coordinator/*.cjs write to session_coordination's
- * read_at/acknowledged_at columns must be one of the 12 sites already classified and cited in
+ * read_at/acknowledged_at columns must be one of the 13 sites already classified and cited in
  * docs/protocol/coordinator-adam-comms.md. A NEW write site appearing outside this allowlist
  * means either a fresh (un-classified) drift, or the census doc needs updating alongside the
  * new site — this test forces that choice to be explicit rather than silent.
@@ -19,8 +19,9 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
-// The 12 write sites classified in docs/protocol/coordinator-adam-comms.md's
-// "Consumption-semantics census" section (2026-07-11). Relative to REPO_ROOT, POSIX separators.
+// The 13 write sites classified in docs/protocol/coordinator-adam-comms.md's
+// "Consumption-semantics census" section (2026-07-11, +1 QF-20260724-556). Relative to
+// REPO_ROOT, POSIX separators.
 const ALLOWED_WRITE_FILES = new Set([
   'scripts/adam-advisory.cjs',
   'scripts/solomon-advisory.cjs',
@@ -28,6 +29,7 @@ const ALLOWED_WRITE_FILES = new Set([
   'scripts/fleet-dashboard.cjs',
   'scripts/worker-checkin.cjs',
   'scripts/worker-signal.cjs',
+  'scripts/worker-ack-directive.cjs',
   'scripts/fleet-coaching.cjs',
   'scripts/stale-session-sweep.cjs',
   'scripts/hooks/coordination-inbox.cjs',

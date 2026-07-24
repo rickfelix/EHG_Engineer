@@ -173,7 +173,7 @@ every write site already conforms, each traceable to a specific prior fix. No co
 as part of this SD; this section is the auditable record so a future session does not need
 to re-run the census.
 
-### Write sites (12) — already-correct or exempt, each cited
+### Write sites (13) — already-correct or exempt, each cited
 
 | Site | Classification | Citation |
 |---|---|---|
@@ -181,6 +181,7 @@ to re-run the census.
 | `scripts/adam-advisory.cjs` `awaitCoordinatorReply` consumption | exempt | atomic reply-consumption — a synchronously-awaited reply is definitionally both seen and actioned in one step |
 | `scripts/solomon-advisory.cjs` `stampSurfaced`/`ackRows` (mirrors adam-advisory) | already-correct | QF-20260710-593 |
 | `scripts/coordinator-ack-signal.cjs` | already-correct | explicit CLI ack command, genuine action |
+| `scripts/worker-ack-directive.cjs` | already-correct | explicit CLI ack command for a `coordinator_directive` addressed to a worker, genuine action (mirrors `coordinator-ack-signal.cjs`) — closes the "actioned directive resurfaces on every /checkin forever" gap for the worker role, since `DIRECTIVE_KINDS` deliberately blocks auto-ack in `scripts/worker-checkin.cjs`'s `surfaceCoordinatorMessages` | QF-20260724-556 |
 | `scripts/fleet-dashboard.cjs` (signal-inbox + advisory-inbox render) | already-correct | `read_at`-only, defers ack to explicit ack commands; advisory path additionally documents the `payload.actioned_at` dual-marker (see receipt-contract table above) |
 | `scripts/worker-checkin.cjs` `ackMessage`/`surfaceCoordinatorMessages` | exempt (deliberate bounded consumption for advisory-class; directives always wait for genuine action) | SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001, SD-LEO-INFRA-WORKER-INBOX-PUSH-DELIVERY-001, QF-20260610-545 |
 | `scripts/worker-signal.cjs` `awaitCoordinatorReply` consumption (x2) | exempt | atomic reply-consumption (same as adam-advisory.cjs) |
