@@ -10,10 +10,17 @@ vi.mock('../../../lib/coordinator/coordination-events.cjs', () => ({
 vi.mock('../../../lib/coordinator/singleton-refresh-sequencer.cjs', () => ({
   sequenceSingletonRefresh: vi.fn(),
 }));
+// QF-20260724-295: partial mock so canaryRestart's LIVE-respawn wiring can be exercised without a real
+// OS spawn -- only restart() is replaced; stop()/relaunchUnderProfile() stay REAL for the existing tests.
+vi.mock('../../../lib/fleet/spawn-control.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, restart: vi.fn() };
+});
 
+const { restart: spawnControlRestartMock } = await import('../../../lib/fleet/spawn-control.js');
 const {
   isCanaryKillEnabled, isCanaryCallsign, resolveCanaryTarget, assertCanaryTarget,
-  canaryStop, canaryRestart, canaryRelaunchUnderProfile,
+  canaryStop, canaryRestart, canaryRelaunchUnderProfile, stampRespawnedCanary,
 } = await import('../../../lib/fleet/canary-guard.js');
 
 /** Same claude_sessions fake shape as spawn-control.test.js, extended with account_profile in metadata. */
@@ -166,6 +173,71 @@ describe('canaryStop / canaryRestart / canaryRelaunchUnderProfile (guarded verbs
     const result = await canaryStop('Canary-2', { supabaseClient: sb, env: { FLEET_CANARY_KILL_ENABLED: 'true' } });
     expect(result.ok).toBe(false);
     expect(result.reason).toBe('not_canary_profile');
+  });
+});
+
+// QF-20260724-295: self-stamp the respawned canary so CP3 target-scoped legs (which fail-closed require
+// account_profile==='canary' + a Canary- callsign) resolve against the ACTIVE respawn rather than no-op.
+describe('QF-20260724-295 stampRespawnedCanary + canaryRestart wiring', () => {
+  const noSleep = () => Promise.resolve();
+
+  it('(a) stamps account_profile=canary on the pid session, MERGING (never clobbering) existing metadata', async () => {
+    // Respawn is unstamped: no account_profile, and its callsign is NOT yet in the canary namespace.
+    const respawn = { session_id: 's-respawn', pid: 6980, status: 'active', metadata: { fleet_identity: { callsign: 'worker-tmp', color: 'red' }, role: 'worker' } };
+    const sb = makeFakeSupabase({ sessions: [respawn] });
+    const res = await stampRespawnedCanary(sb, { pid: 6980, callsign: 'Canary-1' }, { sleepFn: noSleep });
+    expect(res.stamped).toBe(true);
+    const md = sb._store.get('s-respawn').metadata;
+    expect(md.account_profile).toBe('canary');              // stamped
+    expect(md.fleet_identity.callsign).toBe('Canary-1');    // carried forward from the old canary
+    expect(md.fleet_identity.color).toBe('red');            // merged, not clobbered
+    expect(md.role).toBe('worker');                         // merged, not clobbered
+  });
+
+  it('(b) is idempotent: an already-stamped canary is NOT re-written ({already:true}, no update call)', async () => {
+    const respawn = { session_id: 's-c', pid: 42, status: 'active', metadata: { fleet_identity: { callsign: 'Canary-9' }, account_profile: 'canary', role: 'worker' } };
+    const sb = makeFakeSupabase({ sessions: [respawn] });
+    const before = sb._store.get('s-c').metadata;
+    const res = await stampRespawnedCanary(sb, { pid: 42, callsign: 'Canary-9' }, { sleepFn: noSleep });
+    expect(res).toEqual({ stamped: true, already: true, session_id: 's-c' });
+    expect(sb._store.get('s-c').metadata).toBe(before);     // same reference => no write occurred
+  });
+
+  it('(c) fail-soft: returns {stamped:false,reason:respawn_not_registered} when the pid never registers', async () => {
+    const sb = makeFakeSupabase({ sessions: [] });
+    const res = await stampRespawnedCanary(sb, { pid: 999999, callsign: 'Canary-1' }, { sleepFn: noSleep, stampAttempts: 2 });
+    expect(res).toEqual({ stamped: false, reason: 'respawn_not_registered' });
+  });
+
+  it('returns {stamped:false,reason:no_pid} when supabase/pid is missing (never throws)', async () => {
+    expect(await stampRespawnedCanary(null, { pid: 1 })).toEqual({ stamped: false, reason: 'no_pid' });
+    const sb = makeFakeSupabase({ sessions: [] });
+    expect(await stampRespawnedCanary(sb, { pid: null })).toEqual({ stamped: false, reason: 'no_pid' });
+  });
+
+  it('(d) canaryRestart WIRES stampRespawnedCanary: a LIVE respawn stamps the new pid session, return value unchanged', async () => {
+    const respawn = { session_id: 's-respawn', pid: 6980, status: 'active', metadata: { role: 'worker' } }; // unstamped respawn
+    const sb = makeFakeSupabase({ sessions: [canarySession, respawn] });
+    spawnControlRestartMock.mockResolvedValue({ ok: true, role: 'worker', spawnResult: { live: true, pid: 6980 } });
+    const result = await canaryRestart('Canary-1', { supabaseClient: sb, env: { FLEET_CANARY_KILL_ENABLED: 'true' }, sleepFn: noSleep });
+    expect(result).toEqual({ ok: true, role: 'worker', spawnResult: { live: true, pid: 6980 } }); // stamping is a side effect
+    const md = sb._store.get('s-respawn').metadata;
+    expect(md.account_profile).toBe('canary');
+    expect(md.fleet_identity.callsign).toBe('Canary-1');    // carried forward from the released canary
+  });
+
+  it('(e) accepts the CP3 drill opts key: { supabase } (not { supabaseClient }) still resolves the guard + stamps the respawn', async () => {
+    // start-cp3-drills.js calls the verbs with { supabase }; before QF-295 that left guardedVerb +
+    // spawn-control with an undefined client so the guard could not resolve -> every leg no-op.
+    const respawn = { session_id: 's-respawn2', pid: 7001, status: 'active', metadata: { role: 'worker' } };
+    const sb = makeFakeSupabase({ sessions: [canarySession, respawn] });
+    spawnControlRestartMock.mockResolvedValue({ ok: true, role: 'worker', spawnResult: { live: true, pid: 7001 } });
+    const result = await canaryRestart('Canary-1', { supabase: sb, env: { FLEET_CANARY_KILL_ENABLED: 'true' }, sleepFn: noSleep });
+    expect(result.ok).toBe(true);                            // guard resolved via opts.supabase (was undefined before)
+    // spawn-control verb received the injected canonical key so it could resolve too
+    expect(spawnControlRestartMock.mock.lastCall[1].supabaseClient).toBe(sb);
+    const md = sb._store.get('s-respawn2').metadata;
+    expect(md.account_profile).toBe('canary');               // respawn self-stamped
   });
 });
 
