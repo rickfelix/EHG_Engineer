@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 11,202
+**Generated**: 2026-07-24T14:39:36.126Z
+**Rows**: 3,095
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (14 total)
+## Columns (15 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -32,6 +32,7 @@
 | read_at | `timestamp with time zone` | YES | - | - |
 | acknowledged_at | `timestamp with time zone` | YES | - | - |
 | correlation_id | `text` | YES | - | Optional message id this row replies to / correlates with. Nullable -- no backfill for historical rows. SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-D |
+| delivered_at | `timestamp with time zone` | YES | - | Transport receipt: a consumer's process saw this row (poll/list/render). Distinct from read_at, which is reserved for genuine action-required surfacing. No backfill for historical rows. SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001 |
 
 ## Constraints
 

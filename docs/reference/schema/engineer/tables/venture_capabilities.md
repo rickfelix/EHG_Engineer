@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 0
-**RLS**: Enabled (2 policies)
+**Generated**: 2026-07-24T14:39:36.126Z
+**Rows**: 4
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,13 +14,13 @@
 
 ---
 
-## Columns (12 total)
+## Columns (15 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
 | name | `text` | **NO** | - | Capability name (e.g., AI Scoring Engine, Payment Gateway) |
-| origin_venture_id | `uuid` | **NO** | - | Venture where this capability was first developed |
+| origin_venture_id | `uuid` | YES | - | Which venture first proved this capability, if any. NULL for platform-level capabilities registered directly by an infra SD (see origin_sd_key) rather than originating from a specific venture build. |
 | origin_sd_key | `text` | YES | - | SD that produced this capability (optional) |
 | capability_type | `text` | **NO** | - | Category of capability (e.g., infrastructure, ai_ml, data_pipeline, ui_component) |
 | reusability_score | `integer(32)` | YES | `5` | How easily this capability can be reused (0-10) |
@@ -30,6 +30,9 @@
 | consumers | `jsonb` | YES | `'[]'::jsonb` | Array of venture IDs currently consuming this capability |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| evidence | `jsonb` | YES | - | Delivery evidence citation ({type, value, verified_at, notes?}). Required for any row registered by SD-LEO-INFRA-STAGE0-ENVELOPE-REGISTRATION-001's registration script -- no aspirational entries. |
+| reuse_count | `integer(32)` | **NO** | `0` | FR-3 (SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-E): incremented on each recordCapabilityReuse() call. Mirrors fn_record_capability_reuse pattern on sd_capabilities. |
+| last_reused_at | `timestamp with time zone` | YES | - | FR-3 (SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-E): recency of last reuse. Decay is read-derived from this timestamp, not stored -- guard: extraction honesty (a capability with no second consumer within N ventures decays to reference, not asset). |
 
 ## Constraints
 
@@ -80,12 +83,17 @@
 
 ## RLS Policies
 
-### 1. service_role_insert_venture_capabilities (INSERT)
+### 1. authenticated_read_venture_capabilities (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 2. service_role_insert_venture_capabilities (INSERT)
 
 - **Roles**: {service_role}
 - **With Check**: `true`
 
-### 2. service_role_select_venture_capabilities (SELECT)
+### 3. service_role_select_venture_capabilities (SELECT)
 
 - **Roles**: {service_role}
 - **Using**: `true`

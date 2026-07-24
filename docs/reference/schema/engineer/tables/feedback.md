@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-04T23:07:17.175Z
-**Rows**: 5,584
-**RLS**: Enabled (8 policies)
+**Generated**: 2026-07-24T14:39:36.126Z
+**Rows**: 11,559
+**RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (64 total)
+## Columns (65 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -82,6 +82,7 @@
 | promoted_at | `timestamp with time zone` | YES | - | Timestamp when triage CLI promoted this finding to an SD. Set together with promoted_to_sd_id. |
 | promoted_by | `text` | YES | - | session_id of the operator who ran corrective-triage promote. Audit trail. |
 | provenance_source | `text` | YES | - | AI-provenance source per Pocock pattern. Format: agent:SEAT:ROUND_ID | human:USER_ID. NULL = legacy / human-authored. Phase-1 permissive (no CHECK). SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-F. |
+| archived_at | `timestamp with time zone` | YES | - | SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 FR-6: set by the age-out job for category='informational_note' rows untouched 30+ days. NULL means active/not archived. Archive-not-delete: the row is never removed, only marked. |
 
 ## Constraints
 
@@ -214,6 +215,10 @@ END)
   ```sql
   CREATE INDEX idx_feedback_strategic_directive_id ON public.feedback USING btree (strategic_directive_id) WHERE (strategic_directive_id IS NOT NULL)
   ```
+- `idx_feedback_telemetry_dedup`
+  ```sql
+  CREATE UNIQUE INDEX idx_feedback_telemetry_dedup ON public.feedback USING btree (category, ((metadata ->> 'dedup_hash'::text))) WHERE ((category)::text = 'fleet_dormancy'::text)
+  ```
 - `idx_feedback_value`
   ```sql
   CREATE INDEX idx_feedback_value ON public.feedback USING btree (value_estimate) WHERE ((type)::text = 'enhancement'::text)
@@ -250,7 +255,7 @@ END)
 ### 3. select_feedback_policy (SELECT)
 
 - **Roles**: {authenticated}
-- **Using**: `true`
+- **Using**: `(((feedback_type)::text ~~ 'user_%'::text) AND (venture_id IS NOT NULL) AND fn_user_has_venture_access(venture_id))`
 
 ### 4. telegram_bot_insert_feedback (INSERT)
 
@@ -271,11 +276,6 @@ END)
 
 - **Roles**: {anon}
 - **With Check**: `(((feedback_type)::text ~~ 'user_%'::text) AND (venture_id IS NOT NULL) AND venture_exists_and_active(venture_id) AND (NOT check_feedback_rate_limit(venture_id)))`
-
-### 8. venture_user_select_feedback (SELECT)
-
-- **Roles**: {anon}
-- **Using**: `(((feedback_type)::text ~~ 'user_%'::text) AND (venture_id IS NOT NULL))`
 
 ## Triggers
 

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 5,057
+**Generated**: 2026-07-24T14:39:36.126Z
+**Rows**: 5,813
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -25,7 +25,7 @@
 | iteration | `integer(32)` | **NO** | `1` | - |
 | total_score | `integer(32)` | **NO** | - | - |
 | dimension_scores | `jsonb` | **NO** | - | Per-dimension scoring. Format: [{"dimension":"...", "score":72, "weight":0.15, "reasoning":"..."}] |
-| threshold_action | `character varying(20)` | **NO** | - | Action taken based on score: accept (>=85), minor_sd (70-84), gap_closure_sd (50-69), escalate (<50) |
+| threshold_action | `character varying(20)` | **NO** | - | Action taken based on score: accept (>=93), minor_sd (83-92), gap_closure_sd (70-82), escalate (<70), unverified (lineage_verdict=BACKFILLED_LOW_CONFIDENCE override, independent of score). |
 | generated_sd_ids | `jsonb` | YES | - | - |
 | rubric_snapshot | `jsonb` | **NO** | - | - |
 | scored_at | `timestamp with time zone` | **NO** | `now()` | - |
@@ -44,7 +44,7 @@
 - `eva_vision_scores_vision_id_fkey`: vision_id → eva_vision_documents(id)
 
 ### Check Constraints
-- `eva_vision_scores_threshold_action_check`: CHECK (((threshold_action)::text = ANY ((ARRAY['accept'::character varying, 'minor_sd'::character varying, 'gap_closure_sd'::character varying, 'escalate'::character varying])::text[])))
+- `eva_vision_scores_threshold_action_check`: CHECK (((threshold_action)::text = ANY ((ARRAY['accept'::character varying, 'minor_sd'::character varying, 'gap_closure_sd'::character varying, 'escalate'::character varying, 'unverified'::character varying])::text[])))
 - `eva_vision_scores_total_score_check`: CHECK (((total_score >= 0) AND (total_score <= 100)))
 
 ## Indexes

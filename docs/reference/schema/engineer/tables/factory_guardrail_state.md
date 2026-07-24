@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 14
+**Generated**: 2026-07-24T14:39:36.126Z
+**Rows**: 19
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (7 total)
+## Columns (8 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -25,6 +25,7 @@
 | canary_expires_at | `timestamp with time zone` | YES | - | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| active_content_loop_instances | `integer(32)` | **NO** | `0` | Count of currently-running MarketLens owned-audience content-loop instances for this venture. Capped at 2 (standing cap, chairman decision 08547ee8) by application-level acquire/release helpers. |
 
 ## Constraints
 

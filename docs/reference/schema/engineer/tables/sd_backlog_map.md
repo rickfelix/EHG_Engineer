@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 171
+**Generated**: 2026-07-24T14:39:36.126Z
+**Rows**: 283
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -65,7 +65,7 @@
 - `sd_backlog_map_unique_sd_backlog`: UNIQUE (sd_id, backlog_id)
 
 ### Check Constraints
-- `chk_sd_backlog_map_disposition`: CHECK (((disposition IS NULL) OR (disposition = ANY (ARRAY['BUILD'::text, 'RESEARCH'::text, 'REFERENCE'::text, 'CANCEL'::text]))))
+- `chk_sd_backlog_map_disposition`: CHECK (((disposition IS NULL) OR (disposition = ANY (ARRAY['BUILD'::text, 'RESEARCH'::text, 'REFERENCE'::text, 'CANCEL'::text, 'DONE_ALREADY'::text, 'QUARANTINE'::text]))))
 - `sd_backlog_map_completion_status_check`: CHECK ((completion_status = ANY (ARRAY['NOT_STARTED'::text, 'IN_PROGRESS'::text, 'COMPLETED'::text, 'UTILIZED_ELSEWHERE'::text, 'DEFERRED'::text, 'CANCELLED'::text])))
 - `sd_backlog_map_coverage_pct_check`: CHECK (((coverage_pct >= 0) AND (coverage_pct <= 100)))
 - `sd_backlog_map_item_type_check`: CHECK ((item_type = ANY (ARRAY['epic'::text, 'story'::text, 'task'::text])))

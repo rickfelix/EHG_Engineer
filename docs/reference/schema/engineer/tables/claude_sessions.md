@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 12,855
+**Generated**: 2026-07-24T14:39:36.126Z
+**Rows**: 12,976
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (46 total)
+## Columns (47 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -64,6 +64,7 @@
 | expected_silence_until | `timestamp with time zone` | YES | - | Worker-declared silent period (Bash timeout, Agent invocation). Sweep enforces 30-minute hard cap — values beyond that are IGNORED to prevent masking dead workers. |
 | loop_state | `text` | YES | `'unknown'::text` | - |
 | cleanup_pending | `timestamp with time zone` | YES | - | NULL = no filesystem cleanup pending. NOT NULL = orphan-worktree-reaper enqueued this released session for deferred worktree removal at the given timestamp (typically used as a CAS guard to coordinate concurrent reapers). Set when filesystem rm of worktree_path raised Windows EBUSY/ENOTEMPTY; cleared atomically by the reaper after a successful retry. See SD-LEO-INFRA-WORKTREE-CLEANUP-WINDOWS-001. |
+| last_tool_at | `timestamp with time zone` | YES | - | Tick-immune tool-activity clock. SINGLE-WRITER CONTRACT: written ONLY by the PostToolUse hook scripts/hooks/post-tool-clear-telemetry.cjs (fires on every tool call) via the writeTelemetry allowlist in session-telemetry-writer.cjs. session-tick.cjs and writeTelemetryAwait MUST NOT write it - tick-immunity is the column's entire value (heartbeat_at/process_alive_at are tick-contaminated and lie during window-level prompt blocks). NULL = session predates the hook rollout; consumers MUST treat NULL as UNKNOWN, never as frozen. Primary consumer: claim-boundary pre-flight probe in stale-session-sweep.cjs (SD-LEO-INFRA-CLAIM-BOUNDARY-PRE-001). |
 
 ## Constraints
 
