@@ -32,6 +32,7 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { priceFor } from '../../lib/cost/llm-pricing.js';
 import { periodMonthOf, upsertSubstrateInputs, AI_BURN_LOWER_BOUND_LABEL } from '../../lib/operator/cash-burn-substrate.js';
 import { computeAttributedRevenue } from '../../lib/payments/attribution-resolver.js';
+import { fetchManualRevenueTotal } from '../../lib/income/manual-revenue-portfolio-summary.js';
 import { readStripeCashSlice } from '../../lib/operator/cash-sources/stripe-balance.js';
 import { readBankCashSlice } from '../../lib/operator/cash-sources/bank-read-service.js';
 import { loadTellerCertPair } from '../../lib/operator/cash-sources/token-vault.js';
@@ -191,6 +192,23 @@ async function main() {
   // from "attribution never wired" (fall back) requires checking whether ops_payment_events
   // has ANY row at all, not just rows in the current period.
   try {
+    // SD-EHG-PRODUCT-FIRSTREV-SUBSTRATE-ROLLUP-001-B: portfolio-level manual-revenue
+    // component (venture_revenue_entries, via sibling -A's rollup), additive to whichever
+    // Stripe-derived figure is computed below. FAIL-SOFT: 0 with source_available:false
+    // when -A's aggregator isn't merged yet or the fetch fails -- never blocks FR-3.
+    const manualPeriodMonth = periodMonth.slice(0, 7); // 'YYYY-MM' -- SD-...-001-A's rollup month-key format
+    const manualRevenue = await fetchManualRevenueTotal(supabase, manualPeriodMonth);
+    if (manualRevenue.matched_record_count > 0) {
+      log('FR-3-manual', `manual revenue (SD-...-001-A rollup) = $${manualRevenue.total_usd} for ${manualPeriodMonth} (${manualRevenue.matched_record_count} record(s)${manualRevenue.excluded_non_usd_count ? `, ${manualRevenue.excluded_non_usd_count} non-USD excluded` : ''})`);
+    } else if (!manualRevenue.source_available) {
+      warn('FR-3-manual', `SD-...-001-A aggregator unavailable — manual_revenue_usd left UNATTESTED this run (not written as 0; revenue_usd still gets the Stripe-only component)`);
+    }
+    // CORE CONTRACT (matches this file's header): an unattested input is left untouched, never
+    // written as a fabricated 0. Only include manual_revenue_usd in the upsert when the sibling
+    // aggregator actually ran successfully -- a genuine "no manual entries this month" reading
+    // (source_available:true, total_usd:0) is fine to write; "aggregator unreachable" is not.
+    const manualRevenueField = manualRevenue.source_available ? { manual_revenue_usd: manualRevenue.total_usd } : {};
+
     const { count: anyEventCount, error: anyEventErr } = await supabase
       .from('ops_payment_events')
       .select('id', { count: 'exact', head: true });
@@ -210,12 +228,16 @@ async function main() {
         .lt('event_ts', periodEnd.toISOString())
         .order('id', { ascending: true }));
       const { totalCents } = computeAttributedRevenue(periodRows);
-      const revUsd = Number((totalCents / 100).toFixed(2));
-      log('FR-3', `revenue (attributed) = $${revUsd} (livemode=true, ${periodRows.length} events)`);
+      const stripeRevUsd = Number((totalCents / 100).toFixed(2));
+      // Additive merge (FR-3): the manual component is ADDED to, never replaces, the
+      // Stripe-attributed figure. revenue_livemode stays governed by Stripe attribution
+      // only — a blended manual+Stripe total is not represented as purely "live".
+      const revUsd = Number((stripeRevUsd + manualRevenue.total_usd).toFixed(2));
+      log('FR-3', `revenue (attributed) = $${revUsd} (stripe=$${stripeRevUsd} + manual=$${manualRevenue.total_usd}, livemode=true, ${periodRows.length} events)`);
       if (!DRY_RUN) {
-        await upsertSubstrateInputs(periodMonth, { revenue_usd: revUsd, revenue_livemode: true }, supabase, nowIso);
+        await upsertSubstrateInputs(periodMonth, { revenue_usd: revUsd, revenue_livemode: true, ...manualRevenueField }, supabase, nowIso);
       }
-      result.revenue = { written: !DRY_RUN, value_usd: revUsd, livemode: true, source: 'attribution_resolver' };
+      result.revenue = { written: !DRY_RUN, value_usd: revUsd, stripe_value_usd: stripeRevUsd, manual_value_usd: manualRevenue.total_usd, livemode: true, source: 'attribution_resolver' };
     } else {
       // Attribution never wired for this fleet yet — fall back to the pre-pivot mirror.
       // Prefer the LIVE row; fall back to the TEST-mode row, surfacing livemode honestly.
@@ -228,14 +250,18 @@ async function main() {
       const test = (rows || []).find((r) => r.livemode === false);
       const pick = live || test || null;
       if (!pick) {
+        // SD-...-001-B scope boundary: with no Stripe-derived row at all yet, this SD does
+        // not introduce a manual-only write path here (FR-3 is scoped to an ADDITIVE merge
+        // onto an existing Stripe component) — left stale, same as before this SD.
         result.revenue = { written: false, reason: 'no income_capture_monthly row yet (left stale)', source: 'income_capture_monthly' };
       } else {
-        const revUsd = pick.recurring_revenue == null ? null : Number(pick.recurring_revenue);
-        log('FR-3', `revenue (fallback) = $${revUsd} (livemode=${pick.livemode})`);
+        const stripeRevUsd = pick.recurring_revenue == null ? null : Number(pick.recurring_revenue);
+        const revUsd = stripeRevUsd == null ? null : Number((stripeRevUsd + manualRevenue.total_usd).toFixed(2));
+        log('FR-3', `revenue (fallback) = $${revUsd} (stripe=$${stripeRevUsd} + manual=$${manualRevenue.total_usd}, livemode=${pick.livemode})`);
         if (!DRY_RUN && revUsd != null) {
-          await upsertSubstrateInputs(periodMonth, { revenue_usd: revUsd, revenue_livemode: pick.livemode === true }, supabase, nowIso);
+          await upsertSubstrateInputs(periodMonth, { revenue_usd: revUsd, revenue_livemode: pick.livemode === true, ...manualRevenueField }, supabase, nowIso);
         }
-        result.revenue = { written: !DRY_RUN && revUsd != null, value_usd: revUsd, livemode: pick.livemode === true, source: 'income_capture_monthly' };
+        result.revenue = { written: !DRY_RUN && revUsd != null, value_usd: revUsd, stripe_value_usd: stripeRevUsd, manual_value_usd: manualRevenue.total_usd, livemode: pick.livemode === true, source: 'income_capture_monthly' };
       }
     }
   } catch (e) { warn('FR-3', `failed (fail-soft): ${e.message}`); result.revenue = { written: false, error: e.message }; }

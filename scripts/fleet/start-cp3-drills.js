@@ -60,6 +60,16 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   }
   // LIVE: delegate to the drill runners (which route launches through buildSessionLaunch and self-gate on
   // the live env flags). Injectable for tests so the unit path never spawns.
+  // QF-20260724-119: fail-loud (not silent) when --live is invoked under a test runner with no injected
+  // runDrills override -- this exact gap caused 12-13 real fleet-worker process spawns on the chairman's
+  // machine during CP3 drill-fix testing (correlation_id=cp3-do-it-right-20260724): a non-mocked test
+  // called main(['--live'], {...}) with no override, and the worktree's FLEET_SPAWN_CONTROL_LIVE=true let
+  // defaultRunDrills() spawn/kill for real.
+  if (!deps.runDrills && (process.env.VITEST || process.env.NODE_ENV === 'test')) {
+    const msg = '[start-cp3-drills] REFUSED: --live under a test runner (VITEST/NODE_ENV=test) with no injected deps.runDrills would fall through to the REAL defaultRunDrills() and risk live process spawns. Inject deps.runDrills.';
+    log(msg);
+    return { ok: false, error: msg };
+  }
   const run = deps.runDrills || defaultRunDrills;
   const results = await run(plan, deps);
   return { ok: true, live: true, legs: plan.legs, results };
@@ -112,6 +122,15 @@ export async function defaultRunDrills(plan, deps = {}) {
       .eq('session_id', sid).like('event_type', 'fleet_verb_%');
     return data || [];
   });
+  // QF-20260724-113 (FR-b): reboot-respawn's respawn_events_present check takes a NO-ARG
+  // queryEventsFn (unlike U4's session-scoped one, since reboot-respawn creates one replacement
+  // session PER slot, not a single target) -- without this the live CLI path always failed
+  // respawn_events_present ("no queryEventsFn supplied") even on a genuinely successful respawn.
+  const rebootQueryEventsFn = deps.rebootQueryEventsFn || (async () => {
+    const { data } = await supabase.from('coordination_events').select('event_type,payload,session_id')
+      .eq('event_type', 'fleet_verb_respawn').order('created_at', { ascending: false }).limit(50);
+    return data || [];
+  });
 
   // TEST-ISOLATION HARDENING (cp3-do-it-right-20260724 incident post-mortem, coordinator-approved
   // plan): the OS-spawn injection seam must cover ALL THREE legs, not just the reboot leg -- relying
@@ -146,8 +165,12 @@ export async function defaultRunDrills(plan, deps = {}) {
       return child;
     };
   })());
+  // QF-20260724-113 (FR-b): use the properly-defaulted rebootQueryEventsFn (falls back to a real
+  // DB query when no deps override is injected) instead of the raw, undefined-in-production
+  // deps.rebootQueryEventsFn -- closes the "respawn_events_present always fails on a genuine live
+  // run" gap even when the underlying respawn succeeded.
   const reboot = await runRebootRespawnDrill({
-    supabase, live: true, loadFn: canaryOnlyLoadFn, spawnFn: canarySpawnFn, queryEventsFn: deps.rebootQueryEventsFn,
+    supabase, live: true, loadFn: canaryOnlyLoadFn, spawnFn: canarySpawnFn, queryEventsFn: rebootQueryEventsFn,
   }).catch((e) => ({ error: e && e.message }));
 
   // (2) G3+U4 relaunch-under-profile -> fleet_verb_relaunch_under_profile (bug2 fix: supabaseClient

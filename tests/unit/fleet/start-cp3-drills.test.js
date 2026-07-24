@@ -38,6 +38,17 @@ describe('main — worker-startable, dry-run default', () => {
     expect(r.live).toBe(true);
     expect(runDrills).toHaveBeenCalledTimes(1);
   });
+
+  // QF-20260724-119: regression test for the cp3-do-it-right-20260724 incident (12-13 real fleet-worker
+  // process spawns caused by a non-mocked test invoking --live with no runDrills override).
+  it('REFUSES --live under the test runner when no runDrills override is injected (QF-20260724-119)', async () => {
+    const logs = [];
+    const r = await main(['--live'], { env: OKENV, log: (m) => logs.push(m) });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/REFUSED/);
+    expect(r.error).toMatch(/runDrills/);
+    expect(logs.join('\n')).toMatch(/REFUSED/);
+  });
 });
 
 // QF-20260724-923 + its fix-of-the-fix (cp3-do-it-right-20260724): the live path must WIRE all 3
@@ -76,6 +87,9 @@ describe('defaultRunDrills — wired live path with correct data contracts (cp3-
     expect(canaryRestart).toHaveBeenCalledWith('Canary-pilot', { supabaseClient: supabase, spawnFn });
     // G1b+G2 reboot-respawn: real client + live:true + a canary-filtering loadFn + a real spawnFn
     // (bug1 fix: the fence -- both are ALWAYS provided together, never a bare live:true with no fence).
+    // QF-20260724-113 FR-b: the production default now also wires a real rebootQueryEventsFn (checked
+    // separately below via a dedicated deps.rebootQueryEventsFn injection) so respawn_events_present
+    // doesn't always fail on a genuine live run.
     expect(runRebootRespawnDrill).toHaveBeenCalledWith(expect.objectContaining({ supabase, live: true, loadFn, spawnFn }));
     // G3+U4 gets the REQUIRED args with the corrected contract: target is the callsign STRING,
     // opts uses supabaseClient (not supabase).
@@ -117,5 +131,37 @@ describe('defaultRunDrills — wired live path with correct data contracts (cp3-
     expect(res.g1a).toEqual({ ok: false, reason: 'no_live_canary_session' });
     expect(runU4Drill).not.toHaveBeenCalled();
     expect(res.u4.pass).toBe(false);
+  });
+});
+
+// QF-20260724-113 (FR-b): the wired rebootQueryEventsFn must actually satisfy respawn_events_present
+// on a real live run (Golf-2-flagged gap: reboot-respawn's own queryEventsFn takes NO session-id arg,
+// unlike U4's session-scoped one, since a respawn drill creates one replacement session PER slot).
+describe('defaultRunDrills — rebootQueryEventsFn wiring (QF-20260724-113)', () => {
+  it('the default rebootQueryEventsFn queries fleet_verb_respawn events with no required argument', async () => {
+    const eq = vi.fn().mockReturnThis();
+    const order = vi.fn().mockReturnThis();
+    const limit = vi.fn().mockResolvedValue({ data: [{ event_type: 'fleet_verb_respawn' }, { event_type: 'fleet_verb_respawn' }] });
+    const select = vi.fn(() => ({ eq, order, limit }));
+    const supabase = { from: vi.fn(() => ({ select })) };
+    const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
+    const resolveCanaryTarget = vi.fn(async () => target);
+    const canaryRestart = vi.fn(async () => ({ verb: 'fleet_verb_restart', outcome: 'ok' }));
+    const canaryRelaunchUnderProfile = vi.fn(async () => ({ verb: 'fleet_verb_relaunch_under_profile', outcome: 'ok' }));
+    const runRebootRespawnDrill = vi.fn(async (args) => {
+      // Exercise the injected queryEventsFn exactly as the real runner does (no arg).
+      const events = await args.queryEventsFn();
+      return { pass: events.length >= 2, checks: [] };
+    });
+    const runU4Drill = vi.fn(async () => ({ pass: true }));
+
+    const plan = { canaryProfile: 'canary', cwd: 'R:\\r', legs: [] };
+    const res = await defaultRunDrills(plan, {
+      supabase, resolveCanaryTarget, canaryRestart, canaryRelaunchUnderProfile, runRebootRespawnDrill, runU4Drill,
+    });
+
+    expect(select).toHaveBeenCalledWith('event_type,payload,session_id');
+    expect(eq).toHaveBeenCalledWith('event_type', 'fleet_verb_respawn');
+    expect(res.reboot.pass).toBe(true);
   });
 });
