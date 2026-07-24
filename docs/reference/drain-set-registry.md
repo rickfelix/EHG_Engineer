@@ -1,20 +1,41 @@
 ---
 category: reference
-status: draft
-version: 1.1.0
+status: approved
+version: 1.2.0
 author: Claude Sonnet 5
-last_updated: 2026-07-20
+last_updated: 2026-07-24
 tags: [reference, fleet, coordination, registry]
 ---
 # Drain-Set Registry
 
 ## Metadata
 - **Category**: Reference
-- **Status**: Draft
-- **Version**: 1.1.0
-- **Author**: Claude Sonnet 5 (SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-B, -001-C)
-- **Last Updated**: 2026-07-20
+- **Status**: Approved
+- **Version**: 1.2.0
+- **Author**: Claude Sonnet 5 (SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-B, -001-C, -001-D)
+- **Last Updated**: 2026-07-24
 - **Tags**: fleet, coordination, drain-set, registry
+
+## Orchestrator status (2026-07-24)
+
+`SD-LEO-INFRA-DRAIN-SET-REGISTRY-001` reached `status=completed`. Final
+child disposition: **B** (substrate), **C** (inbox readers), **D** (orphan
+sweep) all shipped `completed`. **E** (warn→enforce graduation + send-choke
+correlation hygiene, described as "Planned" below) is `deferred` — it is
+soak-gated on live warn-mode observation data (coordinator requirement: at
+least one full coordinator+adam tick cycle at zero false-positives before
+enforce graduates) that had not yet accumulated at rollup time. This is a
+deliberate, PRD-documented deferral, not an abandoned scope item; re-open
+`SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-E` once the soak evidence exists.
+
+Shipping this rollup surfaced a second, independent instance of the same
+"terminal-status enumeration omits `deferred`" bug class inside the
+`get_progress_breakdown()` Postgres function (fixed via QF-20260724-212,
+companion to QF-20260724-703 which fixed the JS-side `prerequisite-check.js`
+gate). Several further sibling call sites with the identical omission
+(`lib/orchestrator/child-terminal-status.js` and others) remain open as a
+tracked follow-up — see the SD's retrospective and the coordinator signal
+thread for `correlation_id=drain-set-registry-complete-20260724`.
 
 ## What this is
 
@@ -113,8 +134,10 @@ field orthogonal to the `(role, kind)` pair this table tracks.
   readers — `scripts/adam-advisory.cjs`'s `drainInbox`, `scripts/solomon-advisory.cjs`'s
   `drainInbox`, and `scripts/coordinator-quiet-tick.mjs`'s `readSalientState`
   (see "Repointed inbox readers" below).
-- **Planned**: Child D (`-001-E`) builds warn→enforce graduation on top of
-  this substrate.
+- **Deferred, soak-gated**: Child E (`-001-E`) was scoped to build warn→enforce
+  graduation on top of this substrate; deferred pending live warn-mode soak
+  evidence (see "Orchestrator status" above). WARN-only enforcement remains
+  the live behavior until that child ships.
 
 ## Repointed inbox readers (Child B, `SD-LEO-INFRA-DRAIN-SET-REGISTRY-001-C`)
 
