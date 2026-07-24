@@ -1,10 +1,10 @@
 ---
 Category: Reference
 Status: Approved
-Version: 1.1.0
+Version: 1.2.0
 Author: SD-LEO-INFRA-LEO-COMPLETION-001
-Last Updated: 2026-07-22
-Tags: fleet, launcher, respawn, supervisor, manifest, checkpoint-3, session-view
+Last Updated: 2026-07-24
+Tags: fleet, launcher, respawn, supervisor, manifest, checkpoint-3, session-view, mockup-2
 ---
 
 # Fleet Launcher & Respawn Architecture
@@ -90,6 +90,20 @@ internal-only, not customer-facing product UI.
   React/Vue exists anywhere in this repo). Renders the 4 distinct `attach()`
   outcomes, a caution-striped sandbox frame, human-takeover/hand-back controls,
   and the auditable browser action log.
+- **Render-layer completion (SD-LEO-INFRA-LEO-APP-RENDERED-001-B)**: the
+  2026-07-22 render smoke-check found this pane missing a header bar, a live
+  TTY/terminal pane with a ctx%/last-tool/wakeup footer, an agent-browser pane
+  (URL bar + AGENT badge + narration), and F/B/A keyboard nav — this child SD
+  closed that gap to match the ratified mockup-2 image below. `GET
+  /:id` gained additive `badge`/`model`/`effort`/`role`/`callsign` fields
+  (reusing `lib/fleet/fleet-view-badges.cjs`'s `computeSessionBadge()`, no
+  logic duplication). The agent-narration stream is synthesized client-side
+  from the real `browser-log` events (sorted chronologically before
+  numbering — the endpoint itself returns newest-first) rather than a
+  fabricated transcript, since no narration/transcript data source exists
+  anywhere in the fleet namespace; a merge-blocking static-string test
+  (`session-view.test.js` TS-7) guards against ever shipping the mockup's
+  illustrative dialogue as real content.
 - **Known scope boundary**: authorization is `requireAuth` (any authenticated
   account) plus session-existence checks only — no role gate (unlike
   `protocol-lint.js`'s `requireAdminRole`) and no per-session ownership check.
