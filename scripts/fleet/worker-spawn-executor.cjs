@@ -39,14 +39,14 @@ function isLiveEnabled(env = process.env) {
  * ⚠️ The exact program/args are HOST-SPECIFIC and must be operator-validated before the live
  * flag is flipped. This default is a best-effort, documented starting point only.
  */
+// SD-LEO-INFRA-LEO-APP-LAUNCHER-001 (FR-2): delegate to THE canonical buildSessionLaunch so worker
+// revival uses the SAME launch contract as every other path — a PERSISTENT wt.exe session (NOT the
+// old headless `claude -p`, which does not reliably register/persist in claude_sessions) with the full
+// claude.cmd path + explicit repo-root cwd + fail-loud. The /loop startup prompt is carried in the
+// child env (FLEET_WORKER_STARTUP_PROMPT) for the SessionStart hook to seed into the persistent session.
+const { buildSessionLaunch } = require('../../lib/fleet/build-session-launch.cjs');
 function buildSpawnInvocation(callsign, prompt) {
-  return {
-    program: 'claude',
-    // -p / --print runs headlessly with the prompt; the operator may need a different form
-    // (detached terminal, wrapper script, env seeding) on this host — hence the operator gate.
-    args: ['-p', prompt],
-    env: { FLEET_WORKER_CALLSIGN: callsign || '' },
-  };
+  return buildSessionLaunch({ callsign, startupPrompt: prompt });
 }
 
 /**
@@ -159,6 +159,8 @@ async function main() {
         const child = spawn(invocation.program, invocation.args, {
           detached: true,
           stdio: 'ignore',
+          // FR-2: start at the invocation's repo-root cwd (paired with new-tab -d) so the revived session registers in claude_sessions.
+          cwd: invocation.cwd,
           env: { ...process.env, ...(invocation.env || {}) },
         });
         child.on('error', reject);

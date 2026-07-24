@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { runRebootRespawn } from '../../../lib/fleet/reboot-respawn-runner.js';
+import { resolveClaudeCmd, resolveRepoRoot } from '../../../lib/fleet/build-session-launch.cjs';
 
 const SLOTS = [
   { name: 'Worker-1', role: 'worker', account_profile: null, resume_uuid: 'u-1' },
@@ -30,8 +31,8 @@ describe('runRebootRespawn dry-run (FR-5) — default INERT', () => {
     expect(events[0].payload).toMatchObject({ verb: 'respawn', callsign: 'Worker-1', resume_uuid: 'u-1', live: false });
 
     // The per-slot invocation carries the correct --resume token (slot 1) / no token (slot 2).
-    expect(res.results[0].invocation.args).toEqual(['new-tab', '--', 'claude', '--resume', 'u-1']);
-    expect(res.results[1].invocation.args).toEqual(['new-tab', '--', 'claude']);
+    expect(res.results[0].invocation.args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1']);
+    expect(res.results[1].invocation.args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd()]);
   });
 
   it('builds a supervisor-shaped roster from the slots', async () => {
@@ -52,8 +53,8 @@ describe('runRebootRespawn live (FR-5)', () => {
     });
     expect(res.live).toBe(true);
     expect(spawnFn).toHaveBeenCalledTimes(2);
-    expect(spawnCalls[0]).toEqual({ program: 'wt.exe', args: ['new-tab', '--', 'claude', '--resume', 'u-1'] });
-    expect(spawnCalls[1].args).toEqual(['new-tab', '--', 'claude']); // slot 2 had no token
+    expect(spawnCalls[0]).toEqual({ program: 'wt.exe', args: ['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1'] });
+    expect(spawnCalls[1].args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd()]); // slot 2 had no token
     expect(res.results.map((r) => r.spawned)).toEqual([true, true]);
   });
 
