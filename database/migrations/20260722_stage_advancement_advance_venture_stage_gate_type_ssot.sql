@@ -1,3 +1,4 @@
+-- @chairman-gated
 -- =============================================================================
 -- Migration: advance_venture_stage(uuid,int,int,text) -- converge hard-gate
 --            membership onto the venture_stages SSOT (delete hardcoded arrays)

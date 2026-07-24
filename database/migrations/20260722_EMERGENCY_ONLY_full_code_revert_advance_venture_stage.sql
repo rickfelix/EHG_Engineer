@@ -1,8 +1,9 @@
+-- @chairman-gated
 -- =============================================================================
 -- EMERGENCY-ONLY Full Code Revert: advance_venture_stage(uuid,int,int,text)
 --                 back to its pre-SD-LEO-INFRA-RECONCILE-EHG-REPO-001 LIVE def.
 -- SD: SD-LEO-INFRA-RECONCILE-EHG-REPO-001
--- Date: 2026-07-22
+-- Date: 2026-07-24
 --
 -- !!! DO NOT USE THIS FOR AN APPROVAL-BACKLOG / "TOO MANY VENTURES BLOCKED"
 -- !!! INCIDENT. Use the data-level partial revert instead:
