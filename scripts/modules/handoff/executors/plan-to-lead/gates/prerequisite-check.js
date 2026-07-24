@@ -208,7 +208,7 @@ async function checkParentOrchestrator(supabase, sdUuid, _ctx) {
   if (childSDs && childSDs.length > 0) {
     console.log(`   ℹ️  Parent SD detected with ${childSDs.length} children`);
 
-    const terminalStatuses = ['completed', 'cancelled'];
+    const terminalStatuses = ['completed', 'cancelled', 'deferred'];
     const completedChildren = childSDs.filter(c => terminalStatuses.includes(c.status));
     const incompleteChildren = childSDs.filter(c => !terminalStatuses.includes(c.status));
 
