@@ -339,3 +339,33 @@ describe('filterOutGhostSessions + shared isFixtureSession (SD-FDBK-INFRA-SHARED
     expect(src).toContain('filterOutGhostSessions(nonCoordinators, claimedSessionIds, isFixtureSession)');
   });
 });
+
+// QF-20260724-521: assign-fleet-identities reassigned a live canary session's Canary-1
+// callsign to a NATO band callsign (Charlie), because Canary-1 is never in any tier band,
+// so it always fell to needsAssignment. This breaks canary-guard.js's assertCanaryTarget,
+// which requires the callsign to start with 'Canary-' (defence-in-depth alongside
+// account_profile==='canary'). The assignedRaw/needsAssignment split in main() must skip
+// canary sessions from tier-band reassignment entirely, mirroring the fixture/probe skip
+// in filterOutGhostSessions. main() is not exported (only called via require.main), so this
+// is a source-pin regex test on the call site, matching the pattern used above.
+describe('QF-20260724-521: canary sessions are skipped from callsign reassignment', () => {
+  const src = readFileSync(ASSIGNER, 'utf8');
+
+  it('the assignedRaw/needsAssignment loop checks account_profile===canary or a Canary- callsign', () => {
+    expect(src).toMatch(/account_profile\s*===\s*['"]canary['"]/);
+    expect(src).toMatch(/callsign\?\.startsWith\(['"]Canary-['"]\)/);
+  });
+
+  it('the canary check pushes straight to assignedRaw and continues, BEFORE the tier-band check', () => {
+    const loopStart = src.indexOf('const assignedRaw = [];');
+    const canaryCheckIdx = src.indexOf("account_profile === 'canary'", loopStart);
+    const tierBandCheckIdx = src.indexOf('callsignInTierBand(identity.callsign, tierRankOf(worker))', loopStart);
+    expect(loopStart).toBeGreaterThan(-1);
+    expect(canaryCheckIdx).toBeGreaterThan(loopStart);
+    expect(tierBandCheckIdx).toBeGreaterThan(canaryCheckIdx); // canary skip runs first
+    // the canary branch must `continue` (skip the tier-band check for that worker), not fall through
+    const canaryBlock = src.slice(canaryCheckIdx, tierBandCheckIdx);
+    expect(canaryBlock).toContain('assignedRaw.push(worker)');
+    expect(canaryBlock).toContain('continue;');
+  });
+});

@@ -385,6 +385,15 @@ async function main() {
 
   for (const worker of uniqueWorkers) {
     const identity = worker.metadata?.fleet_identity;
+    // QF-20260724-521: canary sessions (account_profile='canary', callsign 'Canary-N') live
+    // outside the NATO tier-band scheme entirely -- canary-guard requires the callsign to
+    // start with 'Canary-'. Without this skip, the tier-band check below always fails for
+    // them (Canary-1 is never in any NATO band), so they get demoted to needsAssignment and
+    // reassigned a NATO callsign, breaking canary-guard mid-drill.
+    if (worker.metadata?.account_profile === 'canary' || identity?.callsign?.startsWith('Canary-')) {
+      assignedRaw.push(worker);
+      continue;
+    }
     // QF-20260627-108 (FR-1): a worker is "assigned" ONLY if its callsign is in its tier band
     // (effort-encoded SoT). A callsign from the wrong band (e.g. a tier-2 worker still holding
     // "Bravo") is re-derived, so the chairman scheme self-heals instead of being preserved-wrong.
