@@ -38,7 +38,7 @@ export function planDrills({ canaryProfile = 'canary', cwd, live = false } = {},
   const repoRoot = deps.resolveRepoRoot || resolveRepoRoot;
   const canaryProfileDir = resolveProfile(canaryProfile, { env }); // fail-loud precondition
   const startDir = (cwd && String(cwd).trim()) ? String(cwd) : repoRoot(env);
-  return { live: !!live, cwd: startDir, canaryProfileDir, legs: LEGS.map((l) => ({ ...l })) };
+  return { live: !!live, cwd: startDir, canaryProfile, canaryProfileDir, legs: LEGS.map((l) => ({ ...l })) };
 }
 
 /** Run the starter. Returns a result object; never runs live kill/reboot itself (delegates + self-gates). */
@@ -65,14 +65,46 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   return { ok: true, live: true, legs: plan.legs, results };
 }
 
-async function defaultRunDrills(plan, deps = {}) {
-  const { runRebootRespawnDrill } = await import('../../lib/fleet/reboot-respawn-drill-runner.js');
-  const { runU4Drill } = await import('../../lib/fleet/u4-drill-runner.js');
-  const supabase = deps.supabase || null; // real client supplied by the operator wrapper when live
-  // reboot-respawn + u4 both default-gate; kill-supervisor is exercised by the supervisor's own drill doc.
+/**
+ * QF-20260724-923: WIRE the live path so `--live` writes THREE real fleet_verb_* rows (was a stub that
+ * passed supabase=null + gave runU4Drill only {opts:{}} -> zero evidence). Every dependency is
+ * injectable so this is unit-testable with ZERO live spawn/kill; the canary-guard gating
+ * (assertCanaryTarget + FLEET_CANARY_KILL_ENABLED) still fail-closes a real run against a non-canary.
+ */
+export async function defaultRunDrills(plan, deps = {}) {
+  const load = async (p, name, injected) => injected || (await import(p))[name];
+  const runRebootRespawnDrill = await load('../../lib/fleet/reboot-respawn-drill-runner.js', 'runRebootRespawnDrill', deps.runRebootRespawnDrill);
+  const runU4Drill = await load('../../lib/fleet/u4-drill-runner.js', 'runU4Drill', deps.runU4Drill);
+  const cg = deps.canaryGuard || await import('../../lib/fleet/canary-guard.js');
+  const resolveCanary = deps.resolveCanaryTarget || cg.resolveCanaryTarget;
+  const canaryRestart = deps.canaryRestart || cg.canaryRestart;
+  const canaryRelaunchUnderProfile = deps.canaryRelaunchUnderProfile || cg.canaryRelaunchUnderProfile;
+
+  // (1) real SERVICE client so the drills can loadDesiredSlots + WRITE fleet_verb_* rows (was null).
+  const supabase = deps.supabase || (await import('../../lib/supabase-client.cjs')).createSupabaseServiceClient();
+
+  // Resolve the live canary session (canary-guard fail-closes if none / not a real canary).
+  const target = await resolveCanary(supabase, { by: 'account_profile', value: 'canary' });
+  const sessionId = target && (target.session_id || target.id);
+  const fromProfile = process.env.FLEET_LIVE_PROFILE || 'live';
+  const toProfile = plan?.canaryProfile || 'canary';
+  const queryEventsFn = deps.queryEventsFn || (async (sid) => {
+    const { data } = await supabase.from('coordination_events').select('event_type,payload,session_id')
+      .eq('session_id', sid).like('event_type', 'fleet_verb_%');
+    return data || [];
+  });
+
+  // G1a kill-supervisor -> fleet_verb_restart (canary-guarded).
+  const g1a = await Promise.resolve(canaryRestart(target, { supabase })).catch((e) => ({ error: e && e.message }));
+  // (3) G1b+G2 reboot-respawn -> fleet_verb_respawn (now with a real client, not null).
   const reboot = await runRebootRespawnDrill({ supabase, live: true }).catch((e) => ({ error: e && e.message }));
-  const u4 = await runU4Drill({ opts: {} }).catch((e) => ({ error: e && e.message }));
-  return { reboot, u4 };
+  // (2) G3+U4 relaunch-under-profile -> fleet_verb_relaunch_under_profile (required args wired, was {opts:{}}).
+  const u4 = await runU4Drill({
+    target, fromProfile, toProfile, sessionId,
+    relaunchFn: canaryRelaunchUnderProfile, resolveFn: resolveProfileDir, queryEventsFn, opts: { supabase },
+  }).catch((e) => ({ error: e && e.message }));
+
+  return { g1a, reboot, u4 };
 }
 
 const isMain = process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
