@@ -60,6 +60,16 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   }
   // LIVE: delegate to the drill runners (which route launches through buildSessionLaunch and self-gate on
   // the live env flags). Injectable for tests so the unit path never spawns.
+  // QF-20260724-119: fail-loud (not silent) when --live is invoked under a test runner with no injected
+  // runDrills override -- this exact gap caused 12-13 real fleet-worker process spawns on the chairman's
+  // machine during CP3 drill-fix testing (correlation_id=cp3-do-it-right-20260724): a non-mocked test
+  // called main(['--live'], {...}) with no override, and the worktree's FLEET_SPAWN_CONTROL_LIVE=true let
+  // defaultRunDrills() spawn/kill for real.
+  if (!deps.runDrills && (process.env.VITEST || process.env.NODE_ENV === 'test')) {
+    const msg = '[start-cp3-drills] REFUSED: --live under a test runner (VITEST/NODE_ENV=test) with no injected deps.runDrills would fall through to the REAL defaultRunDrills() and risk live process spawns. Inject deps.runDrills.';
+    log(msg);
+    return { ok: false, error: msg };
+  }
   const run = deps.runDrills || defaultRunDrills;
   const results = await run(plan, deps);
   return { ok: true, live: true, legs: plan.legs, results };
