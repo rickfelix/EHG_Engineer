@@ -71,8 +71,12 @@ describe('defaultRunDrills — wired live path (QF-20260724-923)', () => {
     expect(resolveCanaryTarget).toHaveBeenCalledWith(supabase, { by: 'account_profile', value: 'canary' });
     // G1a kill-supervisor -> fleet_verb_restart.
     expect(canaryRestart).toHaveBeenCalledWith(target, { supabase });
-    // G1b+G2 reboot-respawn gets a REAL client + live:true (was supabase=null).
-    expect(runRebootRespawnDrill).toHaveBeenCalledWith({ supabase, live: true });
+    // G1b+G2 reboot-respawn gets a REAL client + live:true (was supabase=null) + a queryEventsFn
+    // (QF-20260724-113 FR-b: without one, respawn_events_present always fails on a live run).
+    const rebootArgs = runRebootRespawnDrill.mock.calls[0][0];
+    expect(rebootArgs.supabase).toBe(supabase);
+    expect(rebootArgs.live).toBe(true);
+    expect(typeof rebootArgs.queryEventsFn).toBe('function');
     // G3+U4 gets the REQUIRED args (was only {opts:{}} -> no-op): target, sessionId, relaunchFn, resolveFn, queryEventsFn.
     const u4Args = runU4Drill.mock.calls[0][0];
     expect(u4Args.target).toBe(target);
@@ -82,5 +86,37 @@ describe('defaultRunDrills — wired live path (QF-20260724-923)', () => {
     expect(typeof u4Args.resolveFn).toBe('function');
     expect(typeof u4Args.queryEventsFn).toBe('function');
     expect(res).toMatchObject({ g1a: expect.anything(), reboot: expect.anything(), u4: expect.anything() });
+  });
+});
+
+// QF-20260724-113 (FR-b): the wired rebootQueryEventsFn must actually satisfy respawn_events_present
+// on a real live run (Golf-2-flagged gap: reboot-respawn's own queryEventsFn takes NO session-id arg,
+// unlike U4's session-scoped one, since a respawn drill creates one replacement session PER slot).
+describe('defaultRunDrills — rebootQueryEventsFn wiring (QF-20260724-113)', () => {
+  it('the default rebootQueryEventsFn queries fleet_verb_respawn events with no required argument', async () => {
+    const eq = vi.fn().mockReturnThis();
+    const order = vi.fn().mockReturnThis();
+    const limit = vi.fn().mockResolvedValue({ data: [{ event_type: 'fleet_verb_respawn' }, { event_type: 'fleet_verb_respawn' }] });
+    const select = vi.fn(() => ({ eq, order, limit }));
+    const supabase = { from: vi.fn(() => ({ select })) };
+    const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
+    const resolveCanaryTarget = vi.fn(async () => target);
+    const canaryRestart = vi.fn(async () => ({ verb: 'fleet_verb_restart', outcome: 'ok' }));
+    const canaryRelaunchUnderProfile = vi.fn(async () => ({ verb: 'fleet_verb_relaunch_under_profile', outcome: 'ok' }));
+    const runRebootRespawnDrill = vi.fn(async (args) => {
+      // Exercise the injected queryEventsFn exactly as the real runner does (no arg).
+      const events = await args.queryEventsFn();
+      return { pass: events.length >= 2, checks: [] };
+    });
+    const runU4Drill = vi.fn(async () => ({ pass: true }));
+
+    const plan = { canaryProfile: 'canary', cwd: 'R:\\r', legs: [] };
+    const res = await defaultRunDrills(plan, {
+      supabase, resolveCanaryTarget, canaryRestart, canaryRelaunchUnderProfile, runRebootRespawnDrill, runU4Drill,
+    });
+
+    expect(select).toHaveBeenCalledWith('event_type,payload,session_id');
+    expect(eq).toHaveBeenCalledWith('event_type', 'fleet_verb_respawn');
+    expect(res.reboot.pass).toBe(true);
   });
 });
