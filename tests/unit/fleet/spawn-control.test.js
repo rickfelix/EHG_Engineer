@@ -233,6 +233,75 @@ describe('spawn (FR-1)', () => {
     expect(result.skipped).toBeUndefined();
     expect(spawnFn).toHaveBeenCalled();
   });
+
+  // --- QF-20260724-739: fresh-spawn must bind session_id, not report it as null ---
+
+  it('QF-20260724-739: binds session_id from the SessionStart-registered row, in BOTH the return value and the fleet_verb_spawn event (not hardcoded null)', async () => {
+    const nowMs = 1_800_000_000_000;
+    const child = { pid: 4242 };
+    const spawnFn = vi.fn().mockReturnValue(child);
+    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const supabaseClient = makeFakeSupabase({
+      sessions: [{
+        session_id: 's1', pid: 4242, status: 'active',
+        created_at: new Date(nowMs - 5_000).toISOString(),
+        metadata: { fleet_identity: { callsign: 'Beta-1' }, role: 'worker' },
+      }],
+    });
+    logCoordinationEvent.mockClear();
+    const result = await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, nowMs, skipDedup: true });
+
+    expect(result.session_id).toBe('s1');
+    const spawnEventCall = logCoordinationEvent.mock.calls.find((c) => c[1].event_type === 'fleet_verb_spawn');
+    expect(spawnEventCall).toBeTruthy();
+    expect(spawnEventCall[1].session_id).toBe('s1'); // was hardcoded null before this fix
+  });
+
+  it('QF-20260724-739: retries the session-bind lookup (bounded) when the SessionStart row has not landed yet on the first attempt', async () => {
+    const nowMs = 1_800_000_000_000;
+    const child = { pid: 4242 };
+    const spawnFn = vi.fn().mockReturnValue(child);
+    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    let lookups = 0;
+    const supabaseClient = {
+      from(table) {
+        if (table === 'claude_sessions') {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => {
+                  lookups++;
+                  // Row only "appears" (self-registers) on the 2nd lookup.
+                  if (lookups < 2) return { data: null };
+                  return { data: { session_id: 's-late', metadata: {}, created_at: new Date(nowMs - 100).toISOString() } };
+                },
+              }),
+            }),
+            update: () => ({ eq: async () => ({ error: null }) }),
+          };
+        }
+        if (table === 'session_coordination') return { select: () => ({ eq: () => ({ gte: async () => ({ count: 0 }) }) }) };
+        throw new Error(`unexpected table: ${table}`);
+      },
+    };
+    const sleepFn = vi.fn().mockResolvedValue(undefined);
+    const result = await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn, supabaseClient, nowMs, skipDedup: true });
+
+    expect(lookups).toBe(2);
+    expect(sleepFn).toHaveBeenCalledTimes(1); // slept once between attempt 1 and attempt 2
+    expect(result.session_id).toBe('s-late');
+  });
+
+  it('QF-20260724-739: gives up cleanly (session_id stays null, no throw) when the SessionStart row never lands within the bounded retry budget', async () => {
+    const child = { pid: 4242 };
+    const spawnFn = vi.fn().mockReturnValue(child);
+    const execFn = vi.fn().mockResolvedValue({ stdout: '131074' });
+    const supabaseClient = makeFakeSupabase({ sessions: [] }); // never self-registers
+    const result = await spawn({ role: 'worker', callsign: 'Beta-1' }, { live: true, spawnFn, execFn, sleepFn: vi.fn(), supabaseClient, skipDedup: true });
+
+    expect(result.session_id).toBeNull();
+    expect(result.live).toBe(true); // spawn itself still succeeded -- only the session-bind is unresolved
+  });
 });
 
 describe('FR-9 SECURITY: event payload is hard-locked to {verb, outcome, at}', () => {
