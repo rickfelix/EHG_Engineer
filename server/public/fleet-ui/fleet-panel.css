@@ -158,21 +158,6 @@ body {
 
 .fp-status-line { margin-top: 8px; color: var(--sv-muted); font-size: 12px; min-height: 1em; }
 
-.fp-key-setting {
-  margin-top: 16px;
-  font-size: 12px;
-  color: var(--sv-muted);
-}
-.fp-key-setting input {
-  background: var(--sv-panel);
-  border: 1px solid var(--sv-border);
-  color: var(--sv-fg);
-  border-radius: 4px;
-  padding: 4px 6px;
-  font-size: 12px;
-  width: 220px;
-}
-
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }

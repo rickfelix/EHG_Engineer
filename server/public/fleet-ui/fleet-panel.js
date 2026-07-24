@@ -7,18 +7,20 @@
  * snapshot-manifest).
  *
  * AUTH: GET /api/fleet-panel is optionalAuth (server/index.js:220); /api/fleet-actions/* is
- * requireAuth (server/index.js:223), which accepts an `x-internal-api-key` header as an
- * alternative to a Supabase bearer token (server/middleware/auth.js). This page never embeds
- * that key in the shipped source (it is a server secret) -- it is entered once by the operator
- * into the "Fleet actions key" field below and kept in sessionStorage only, sent as a request
- * header on each action call. session-view.js's action buttons carry NO auth at all (a disclosed
- * open gap, see its own header comment); this page deliberately does not repeat that gap for its
- * mutating action buttons.
+ * requireAuth (server/index.js:223). requireAuth's only non-bearer-token option is
+ * x-internal-api-key -- the SAME app-wide admin-bypass secret used across ~15 unrelated route
+ * groups (server/index.js:189-228), not something scoped to fleet-actions. Since /fleet-ui is
+ * itself served with no auth (server/index.js:167, plain express.static), soliciting that key
+ * into a form on this page and persisting it in Web Storage would let any XSS found ANYWHERE
+ * on this origin read it and fully bypass auth app-wide -- a materially worse outcome than not
+ * gating these 4 buttons at all (adversarial PR review, agent a4d0de1d). So this page matches
+ * session-view.js's disclosed, already-accepted gap instead: action calls carry no auth header
+ * and fail closed (401) until a properly SCOPED credential mechanism exists (tracked as a
+ * follow-up, not invented here -- out of scope for a presentation-only child SD).
  */
 (function () {
   const PANEL_URL = '/api/fleet-panel';
   const ACTIONS_BASE = '/api/fleet-actions';
-  const KEY_STORAGE = 'fleetPanelActionsKey';
   const root = document.getElementById('fleet-panel');
 
   const { badgeClassFor, formatChipPct, fallbackText } = window.FleetPanelFormat;
@@ -78,16 +80,6 @@
     els.statusLine = el('p', 'fp-status-line', '');
     els.statusLine.setAttribute('aria-live', 'polite');
     root.appendChild(els.statusLine);
-
-    const keySetting = el('div', 'fp-key-setting');
-    const keyLabel = el('label', null, 'Fleet actions key: ');
-    els.keyInput = document.createElement('input');
-    els.keyInput.type = 'password';
-    els.keyInput.placeholder = 'x-internal-api-key (kept in this browser only)';
-    els.keyInput.value = sessionStorage.getItem(KEY_STORAGE) || '';
-    keyLabel.appendChild(els.keyInput);
-    keySetting.appendChild(keyLabel);
-    root.appendChild(keySetting);
   }
 
   function renderSessionRow(row) {
@@ -182,16 +174,8 @@
     }
   }
 
-  function actionsKey() {
-    const value = els.keyInput.value.trim();
-    if (value) sessionStorage.setItem(KEY_STORAGE, value);
-    return value;
-  }
-
   async function callAction(path, { method = 'POST', body } = {}) {
     const headers = {};
-    const key = actionsKey();
-    if (key) headers['x-internal-api-key'] = key;
     if (body) headers['content-type'] = 'application/json';
     const res = await fetch(`${ACTIONS_BASE}/${path}`, {
       method,
