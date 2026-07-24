@@ -87,10 +87,24 @@ describe('summarizeManualRevenue', () => {
   });
 });
 
+// SD-EHG-PRODUCT-FIRSTREV-SUBSTRATE-ROLLUP-001-A merged (lib/income/first-revenue-rollup-aggregator.js
+// now exists on main): mock the dynamic import so both the available and unavailable paths are
+// deterministic regardless of the sibling module's live presence/implementation.
+const aggregatorMock = vi.hoisted(() => ({ fetchAndRollup: vi.fn() }));
+vi.mock('../../../lib/income/first-revenue-rollup-aggregator.js', () => aggregatorMock);
+
 describe('fetchManualRevenueTotal', () => {
-  it('fails soft when SD-...-001-A aggregator module is not available (returns 0, source_available:false)', async () => {
+  it('summarizes real fetchAndRollup() output when the SD-...-001-A aggregator is available', async () => {
+    aggregatorMock.fetchAndRollup.mockResolvedValue([
+      record({ entry_type: 'first_dollar', total_amount: 75 }),
+    ]);
     const result = await fetchManualRevenueTotal({}, '2026-07');
-    expect(result.total_usd).toBe(0);
-    expect(result.source_available).toBe(false);
+    expect(result).toMatchObject({ total_usd: 75, source_available: true, matched_record_count: 1 });
+  });
+
+  it('fails soft when the SD-...-001-A aggregator throws (returns 0, source_available:false)', async () => {
+    aggregatorMock.fetchAndRollup.mockRejectedValue(new Error('boom'));
+    const result = await fetchManualRevenueTotal({}, '2026-07');
+    expect(result).toMatchObject({ total_usd: 0, source_available: false });
   });
 });
