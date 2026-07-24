@@ -94,6 +94,36 @@ describe('FR-2: sd_key drift telemetry enriches --force-reclaim audit (AC-2.1, A
   });
 });
 
+// ── QF-20260722-842: --force-reclaim explicit liveness refusal ──────────
+
+describe('QF-20260722-842: --force-reclaim explicitly refuses a genuinely-live owner', () => {
+  it('the refusal branch is the else-if sibling of the heartbeat-TTL isStale/isInactive release', () => {
+    const ttlIdx = src.indexOf("const CLAIM_TTL_MS = 30 * 60 * 1000");
+    const refuseIdx = src.indexOf('force-reclaim REFUSED');
+    expect(ttlIdx).toBeGreaterThan(0);
+    expect(refuseIdx).toBeGreaterThan(ttlIdx);
+    const between = src.slice(ttlIdx, refuseIdx);
+    expect(between).toMatch(/if\s*\(isStale\s*\|\|\s*isInactive\)/);
+    expect(between).toMatch(/\}\s*\}\s*else if\s*\(forceReclaim\)\s*\{/);
+  });
+
+  it('refusal exits non-zero without releasing the owner claim', () => {
+    const refuseIdx = src.indexOf('force-reclaim REFUSED');
+    const slice = src.slice(refuseIdx, refuseIdx + 500);
+    expect(slice).toMatch(/process\.exit\(1\)/);
+    expect(slice).not.toMatch(/release_sd/);
+  });
+
+  it('never fires when the owner is actually stale or inactive (mutually exclusive with auto-release)', () => {
+    const releaseIdx = src.indexOf("console.log(`[claimGuard] ${reason}");
+    const refuseIdx = src.indexOf('force-reclaim REFUSED');
+    const between = src.slice(releaseIdx, refuseIdx);
+    // The refusal branch must be inside an else-if attached to the SAME if(isStale || isInactive),
+    // not a parallel independent check — so it can never run in the same pass as the release.
+    expect(between).toMatch(/autoReleased = true;\s*\}\s*\}\s*else if \(forceReclaim\)/);
+  });
+});
+
 // ── Cross-cutting guards ─────────────────────────────────────────────────
 
 describe('sd-start.js wire-in: cross-cutting guards', () => {
