@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 4,810
+**Generated**: 2026-07-24T14:39:36.126Z
+**Rows**: 5,375
 **RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (103 total)
+## Columns (104 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -125,6 +125,7 @@ Use the id column instead - it is the canonical identifier. |
 | initiative_id | `uuid` | YES | - | Initiative grain: the OKR objective this (orchestrator) SD advances. Nullable; forward-looking adoption. SD-LEO-INFRA-INITIATIVE-BACKBONE-CANONICAL-001. |
 | lineage_attribution_confidence | `numeric(5,2)` | YES | - | - |
 | lineage_verdict | `text` | YES | - | - |
+| claim_gate_client_version | `integer(32)` | YES | - | - |
 
 ## Constraints
 
@@ -395,6 +396,11 @@ Use the id column instead - it is the canonical identifier. |
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION enforce_progress_on_completion()`
 
+### sd_cancel_restamp_remainder
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION trg_restamp_items_on_sd_cancel()`
+
 ### status_auto_transition
 
 - **Timing**: BEFORE UPDATE
@@ -404,6 +410,11 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION check_intensity_required()`
+
+### tr_claim_eligibility_observe
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION claim_eligibility_observe()`
 
 ### tr_enforce_business_value_gate
 

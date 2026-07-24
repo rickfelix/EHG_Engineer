@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 560
+**Generated**: 2026-07-24T14:39:36.126Z
+**Rows**: 602
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (18 total)
+## Columns (23 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -36,6 +36,11 @@
 | data_points | `integer(32)` | YES | `0` | Number of data points supporting this finding |
 | graduation_date | `timestamp with time zone` | YES | - | Timestamp when a medium-confidence finding graduated to high confidence |
 | confidence_tier | `text` | YES | `'medium'::text` | Confidence classification tier: low, medium, or high |
+| source_wave_item_id | `uuid` | YES | - | SD-LEO-INFRA-BRAINSTORM-DISTILLATION-PIPELINE-001-A: FK to the roadmap_wave_items row this distilled recommendation was minted from (chairman review queue link). |
+| distilled_sd_payload | `jsonb` | YES | - | SD-LEO-INFRA-BRAINSTORM-DISTILLATION-PIPELINE-001-A: the distilled SD JSON payload (distiller child idx 2 writes; chairman reviews; disposition-gate child idx 1 FK-checks acceptance). |
+| fingerprint | `text` | YES | - | SD-LEO-INFRA-EVA-CONSULTANT-GENERATOR-001: stable per-finding identity used for write-time dedup, independent of volatile runtime-computed numbers in the rendered title. |
+| re_review_at | `timestamp with time zone` | YES | - | SD-LEO-INFRA-EVA-CONSULTANT-GENERATOR-001: a finding sharing this row's fingerprint is suppressed from re-insertion until this timestamp passes. |
+| disposition | `text` | YES | - | Reserved for a follow-up SD (review-SLA/disposition-echo); unused by SD-LEO-INFRA-EVA-CONSULTANT-GENERATOR-001's own generator logic. |
 
 ## Constraints
 
@@ -43,6 +48,7 @@
 - `eva_consultant_recommendations_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `eva_consultant_recommendations_source_wave_item_id_fkey`: source_wave_item_id → roadmap_wave_items(id)
 - `eva_consultant_recommendations_trend_id_fkey`: trend_id → eva_consultant_trends(id)
 
 ### Unique Constraints
@@ -72,6 +78,14 @@
 - `idx_eva_consultant_recommendations_date`
   ```sql
   CREATE INDEX idx_eva_consultant_recommendations_date ON public.eva_consultant_recommendations USING btree (recommendation_date DESC)
+  ```
+- `idx_eva_consultant_recommendations_fingerprint`
+  ```sql
+  CREATE INDEX idx_eva_consultant_recommendations_fingerprint ON public.eva_consultant_recommendations USING btree (fingerprint)
+  ```
+- `idx_eva_consultant_recommendations_source_wave_item_id`
+  ```sql
+  CREATE INDEX idx_eva_consultant_recommendations_source_wave_item_id ON public.eva_consultant_recommendations USING btree (source_wave_item_id)
   ```
 - `idx_eva_consultant_recommendations_status`
   ```sql

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 12
+**Generated**: 2026-07-24T14:39:36.126Z
+**Rows**: 14
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (22 total)
+## Columns (23 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -40,6 +40,7 @@
 | deleted_at | `timestamp with time zone` | YES | - | SD-LEO-INFRA-VENTURE-LIFECYCLE-SOFT-001: reversible tombstone. NULL == live. Set when the linked venture is retired/deleted; clearing it restores the row. |
 | deleted_by | `text` | YES | - | - |
 | deletion_reason | `text` | YES | - | - |
+| metrics_cadence_hours | `integer(32)` | YES | - | Declared expected /v1/metrics pull cadence in hours for the funnel gauge STALE check (SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-A). NULL = use lib/telemetry/funnel-gauge.mjs DEFAULT_CADENCE_HOURS. |
 
 ## Constraints
 

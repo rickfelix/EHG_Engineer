@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 582
+**Generated**: 2026-07-24T14:39:36.126Z
+**Rows**: 1,015
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (38 total)
+## Columns (42 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -56,6 +56,13 @@
 | actual_test_loc | `integer(32)` | YES | - | SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001: test-file lines changed (matched by .test./.spec./__tests__/tests/e2e/playwright path patterns). Excluded from cap. |
 | force_completed | `boolean` | **NO** | `false` | SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001: --force-complete CLI flag set this to true. Operator-supplied --reason recorded in verification_notes JSON. |
 | resolution_sd_id | `text` | YES | - | SD that resolved/superseded this QF. When that SD completes, trg_auto_close_quick_fixes_on_sd_completion cancels this QF. Populated operator-confirmed via the FR-3 close-the-loop prompt (SD-LEO-INFRA-AUTO-CLOSE-QUICK-001). |
+| not_before | `timestamp with time zone` | YES | - | Durable time-gated defer: when set, the quick-fix is not eligible for claim
+   until NOW() >= not_before. NULL (default) means no defer / immediately
+   eligible. Added an additional WHERE predicate (e.g. not_before IS NULL OR
+   not_before <= NOW()) to claim queries; not an ORDER BY key, so no index. |
+| reason | `text` | YES | - | Hold-state contract stamp (SD-LEO-INFRA-HOLD-STATE-CONTRACT-001): why this QF was deferred. NULL for QFs deferred before this column existed, or while HOLD_STATE_CONTRACT_MODE=observe let an incomplete stamp proceed. |
+| owner | `text` | YES | - | Hold-state contract stamp: who is accountable for reviewing/releasing this defer. |
+| release_condition | `text` | YES | - | Hold-state contract stamp: the condition under which this defer should be released, distinct from the time-based not_before. |
 
 ## Constraints
 
@@ -77,7 +84,6 @@
 - `quick_fixes_found_during_check`: CHECK ((found_during = ANY (ARRAY['uat'::text, 'manual-testing'::text, 'code-review'::text])))
 - `quick_fixes_severity_check`: CHECK ((severity = ANY (ARRAY['critical'::text, 'high'::text, 'medium'::text, 'low'::text])))
 - `quick_fixes_status_check`: CHECK ((status = ANY (ARRAY['open'::text, 'in_progress'::text, 'completed'::text, 'escalated'::text, 'cancelled'::text, 'closed'::text])))
-- `quick_fixes_target_application_check`: CHECK ((target_application = ANY (ARRAY['EHG'::text, 'EHG_Engineer'::text])))
 - `quick_fixes_type_check`: CHECK ((type = ANY (ARRAY['bug'::text, 'polish'::text, 'typo'::text, 'documentation'::text])))
 
 ## Indexes
@@ -137,6 +143,16 @@
 
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION fn_auto_close_feedback_on_qf_completion()`
+
+### trg_quick_fixes_validate_target_application
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION fn_quick_fixes_validate_target_application()`
+
+### trg_quick_fixes_validate_target_application
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION fn_quick_fixes_validate_target_application()`
 
 ---
 

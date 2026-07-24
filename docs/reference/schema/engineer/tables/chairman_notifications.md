@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 0
+**Generated**: 2026-07-24T14:39:36.126Z
+**Rows**: 1
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (16 total)
+## Columns (18 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -34,6 +34,8 @@
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | sent_at | `timestamp with time zone` | YES | - | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+| channel | `text` | **NO** | `'email'::text` | Delivery channel: email (default, existing behavior) or sms (SD-LEO-FEAT-TWO-WAY-CHAIRMAN-001) |
+| recipient_phone | `text` | YES | - | E.164 phone number for channel=sms sends; null for email |
 
 ## Constraints
 
@@ -44,6 +46,7 @@
 - `chairman_notifications_decision_id_fkey`: decision_id → chairman_decisions(id)
 
 ### Check Constraints
+- `chairman_notifications_channel_check`: CHECK ((channel = ANY (ARRAY['email'::text, 'sms'::text])))
 - `chairman_notifications_notification_type_check`: CHECK ((notification_type = ANY (ARRAY['immediate'::text, 'daily_digest'::text, 'weekly_summary'::text, 'telegram_vision_score'::text, 'telegram_release_monitor'::text])))
 - `chairman_notifications_status_check`: CHECK ((status = ANY (ARRAY['queued'::text, 'sent'::text, 'failed'::text, 'rate_limited'::text, 'deferred'::text])))
 

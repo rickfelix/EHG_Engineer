@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
+**Generated**: 2026-07-24T14:39:36.126Z
 **Rows**: 26
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (21 total)
+## Columns (23 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -39,6 +39,16 @@
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 | gate_label | `text` | YES | - | App-only: human-readable gate caption mirrored into ehg venture-workflow.ts gateLabel (9 gate stages). Backend does not read this. SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-D. |
 | app_description | `text` | YES | - | App-only: frontend stage description mirrored into ehg venture-workflow.ts description. Distinct from venture_stages.description (the backend-read column). SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-D. |
+| is_high_consequence | `boolean` | **NO** | `false` | Chairman-configurable (FR-1, SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001): when true, chairman stage-gate decisions minted for this stage (createOrReusePendingDecision) are created with chairman_decisions.blocking=true, and BOTH venture-advancement chokepoints (fn_advance_venture_stage, lib/eva/stage-execution-worker.js _advanceStage) hold advancement on a pending blocking=true decision. Independent of gate_type/review_mode -- a stage can be high-consequence regardless of its existing gate classification (e.g. gate_type='none' stages like a first live-money/launch stage that has no gate today). |
+| is_irreversible | `boolean` | **NO** | `false` | SD-LEO-FEAT-HIGH-CONSEQUENCE-STAGE-001-A (FR-3): chairman-configurable, decoupled from
+is_high_consequence -- a stage can be high-consequence without being irreversible (and vice
+versa, though in practice the two compose at Stage 24 / Go-Live). Consumed by
+lib/eva/artifact-persistence-service.js::emergencyUnblockGate to refuse ever providing a
+single-call path to advance an irreversible gate: that function may re-open/un-stick a
+pending decision (liveness-only) but must additionally return requiresManualConfirmation:true
+and never itself call any stage-advance RPC when the gate is irreversible. Until Child C's
+WebAuthn step-up console exists, actually advancing an irreversible gate requires a separate,
+manual, out-of-band chairman console action. |
 
 ## Constraints
 
