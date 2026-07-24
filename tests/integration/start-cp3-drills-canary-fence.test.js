@@ -164,9 +164,18 @@ describe.skipIf(!HAS_REAL_DB)('start-cp3-drills defaultRunDrills — non-mocked 
     // beforeAll setup can never silently regress this into a live OS spawn again.
     expect(process.env.FLEET_SPAWN_CONTROL_LIVE).toBe('false');
 
+    // DEFENSE-IN-DEPTH (cp3-do-it-right-20260724 incident hardening, coordinator-approved plan):
+    // defaultRunDrills now threads this SAME spawnFn through to G1a (canaryRestart) and G3/U4
+    // (canaryRelaunchUnderProfile) as well, not just the reboot leg -- so a stub is present at the
+    // OS-spawn boundary for every leg. With FLEET_SPAWN_CONTROL_LIVE forced 'false' (tripwire above),
+    // spawn-control.js's spawn() returns dry-run before ever reaching opts.spawnFn, so this stub is
+    // NOT invoked on this pass -- it exists as an independent second layer that only engages if `live`
+    // is ever true, which is exactly the condition that was unguarded during the incident. The wiring
+    // itself (spawnFn actually reaching canaryRestart/runU4Drill's opts) is asserted directly in the
+    // mocked-call-shape unit test (start-cp3-drills.test.js).
     const res = await defaultRunDrills(
       { canaryProfile: 'canary', cwd: process.cwd(), legs: [] },
-      { supabase, spawnFn: () => ({ pid: 1 }) }, // reboot leg's stub; irrelevant to this assertion
+      { supabase, spawnFn: () => ({ pid: 1 }) },
     );
 
     // Bug2/bug3 proof: the guard must get PAST resolution (not fail at not_resolved/canary_kill_disabled/

@@ -113,10 +113,20 @@ export async function defaultRunDrills(plan, deps = {}) {
     return data || [];
   });
 
+  // TEST-ISOLATION HARDENING (cp3-do-it-right-20260724 incident post-mortem, coordinator-approved
+  // plan): the OS-spawn injection seam must cover ALL THREE legs, not just the reboot leg -- relying
+  // on FLEET_SPAWN_CONTROL_LIVE=false alone left G1a/G3-U4 with no independent stub, so a stale/leaked
+  // env value was the ONLY thing standing between a test run and a real process spawn. spawn-control.js's
+  // spawn() already has its own correct real-spawn default (3-arg: program,args,env, cwd closed over
+  // internally) -- we deliberately do NOT supply our own default here (that would require a 4th `cwd`
+  // arg, mismatching spawn-control.js's contract); only pass an override through when a caller injects
+  // one (deps.spawnFn), leaving spawn-control.js's own default to engage in production.
+  const injectedSpawnFn = deps.spawnFn;
+
   // G1a kill-supervisor -> fleet_verb_restart (canary-guarded). Requires an EXISTING live canary
   // session to target -- reports the gap explicitly (never silently swallowed) when none exists yet.
   const g1a = targetCallsign
-    ? await Promise.resolve(canaryRestart(targetCallsign, { supabaseClient: supabase })).catch((e) => ({ error: e && e.message }))
+    ? await Promise.resolve(canaryRestart(targetCallsign, { supabaseClient: supabase, spawnFn: injectedSpawnFn })).catch((e) => ({ error: e && e.message }))
     : { ok: false, reason: 'no_live_canary_session' };
 
   // (3) G1b+G2 reboot-respawn -> fleet_verb_respawn (real client, not null). SECURITY FENCE (bug1):
@@ -145,7 +155,8 @@ export async function defaultRunDrills(plan, deps = {}) {
   const u4 = targetCallsign
     ? await runU4Drill({
         target: targetCallsign, fromProfile, toProfile, sessionId,
-        relaunchFn: canaryRelaunchUnderProfile, resolveFn: resolveProfileDir, queryEventsFn, opts: { supabaseClient: supabase },
+        relaunchFn: canaryRelaunchUnderProfile, resolveFn: resolveProfileDir, queryEventsFn,
+        opts: { supabaseClient: supabase, spawnFn: injectedSpawnFn },
       }).catch((e) => ({ error: e && e.message }))
     : { pass: false, checks: [{ name: 'target_resolution', pass: false, detail: 'no live canary session to target (account_profile=canary)' }] };
 

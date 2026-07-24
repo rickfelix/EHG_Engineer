@@ -71,7 +71,9 @@ describe('defaultRunDrills — wired live path with correct data contracts (cp3-
     expect(resolveCanaryTarget).toHaveBeenCalledWith(supabase, { by: 'account_profile', value: 'canary' });
     // G1a kill-supervisor -> fleet_verb_restart. bug2 fix: callsign STRING (not the identity object)
     // + `supabaseClient` key (canary-guard.js's guardedVerb reads opts.supabaseClient, not opts.supabase).
-    expect(canaryRestart).toHaveBeenCalledWith('Canary-pilot', { supabaseClient: supabase });
+    // cp3-do-it-right-20260724 incident hardening: spawnFn is now threaded through to G1a too (not just
+    // the reboot leg) so a test-injected stub intercepts EVERY leg's real OS spawn, not only one of three.
+    expect(canaryRestart).toHaveBeenCalledWith('Canary-pilot', { supabaseClient: supabase, spawnFn });
     // G1b+G2 reboot-respawn: real client + live:true + a canary-filtering loadFn + a real spawnFn
     // (bug1 fix: the fence -- both are ALWAYS provided together, never a bare live:true with no fence).
     expect(runRebootRespawnDrill).toHaveBeenCalledWith(expect.objectContaining({ supabase, live: true, loadFn, spawnFn }));
@@ -84,7 +86,7 @@ describe('defaultRunDrills — wired live path with correct data contracts (cp3-
     expect(typeof u4Args.relaunchFn).toBe('function');
     expect(typeof u4Args.resolveFn).toBe('function');
     expect(typeof u4Args.queryEventsFn).toBe('function');
-    expect(u4Args.opts).toEqual({ supabaseClient: supabase });
+    expect(u4Args.opts).toEqual({ supabaseClient: supabase, spawnFn });
     expect(res).toMatchObject({ g1a: expect.anything(), reboot: expect.anything(), u4: expect.anything() });
   });
 
