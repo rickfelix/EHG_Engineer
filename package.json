@@ -679,6 +679,7 @@
     "eslint-plugin-boundaries": "^5.1.0",
     "eslint-plugin-playwright": "^2.3.0",
     "husky": "^9.1.7",
+    "jsdom": "^29.1.1",
     "minimatch": "^10.2.5",
     "puppeteer": "^24.23.0",
     "typescript": "^5.9.2",
