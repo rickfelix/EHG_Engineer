@@ -153,7 +153,9 @@ export async function defaultRunDrills(plan, deps = {}) {
   // extract the callsign STRING for every downstream call that needs a target key (bug2).
   const target = await resolveCanary(supabase, { by: 'account_profile', value: 'canary' });
   const targetCallsign = (target && target.resolved && target.identity && target.identity.callsign) || null;
-  const sessionId = (target && target.resolved && target.identity && target.identity.session_id) || null;
+  // NOTE: reassigned after G1a's self-stamp step below (G1a's restart always replaces the session
+  // behind this callsign, so the pre-G1a session_id snapshot goes stale before G3/U4 needs it).
+  let sessionId = (target && target.resolved && target.identity && target.identity.session_id) || null;
   const fromProfile = process.env.FLEET_LIVE_PROFILE || 'live';
   const toProfile = plan?.canaryProfile || 'canary';
   const queryEventsFn = deps.queryEventsFn || (async (sid) => {
@@ -191,12 +193,18 @@ export async function defaultRunDrills(plan, deps = {}) {
   // DURABLE FIX: G1a's own restart releases the old target + spawns a fresh, unstamped replacement --
   // self-stamp it NOW (before the reboot leg spawns its own separate Canary-pilot session) so G3/U4's
   // target resolution finds a live, correctly-identified canary instead of racing the replacement's
-  // self-registration. Injectable for tests; a no-op when g1a didn't actually respawn anything.
+  // self-registration. Also refresh `sessionId` to the fresh replacement -- U4's event_log_presence
+  // check queries coordination_events by session_id, and relaunch_under_profile's own emitted event
+  // carries the (now-current) session's id, not the pre-G1a snapshot this variable held until here.
+  // Injectable for tests; a no-op when g1a didn't actually respawn anything.
   if (g1a && g1a.ok && targetCallsign) {
     const pollFn = deps.pollNewCanarySession || pollForFreshUnstampedCanary;
     const restampFn = deps.restampCanary || restampCanary;
     const freshSessionId = await pollFn(supabase, g1aStartedAt).catch(() => null);
-    if (freshSessionId) await restampFn(supabase, freshSessionId, targetCallsign).catch(() => {});
+    if (freshSessionId) {
+      await restampFn(supabase, freshSessionId, targetCallsign).catch(() => {});
+      sessionId = freshSessionId;
+    }
   }
 
   // (3) G1b+G2 reboot-respawn -> fleet_verb_respawn (real client, not null). SECURITY FENCE (bug1):
