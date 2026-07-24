@@ -113,14 +113,20 @@ export async function defaultRunDrills(plan, deps = {}) {
     return data || [];
   });
 
+  // QF-20260724-335: an explicit, intentional run-correlator stamped on all 3 leg fleet_verb events
+  // of this single --live invocation. Timing/session-proximity correlation is insufficient (a stray
+  // dry-run/accidental-spawn batch can collide with a real run) -- Solomon's S7 acceptance requires a
+  // unique intentional binding of the 3 legs to one CP3 run.
+  const sdKey = deps.sdKey || 'CHECKPOINT-3';
+
   // G1a kill-supervisor -> fleet_verb_restart (canary-guarded).
-  const g1a = await Promise.resolve(canaryRestart(target, { supabase })).catch((e) => ({ error: e && e.message }));
+  const g1a = await Promise.resolve(canaryRestart(target, { supabase, sdKey })).catch((e) => ({ error: e && e.message }));
   // (3) G1b+G2 reboot-respawn -> fleet_verb_respawn (now with a real client, not null).
-  const reboot = await runRebootRespawnDrill({ supabase, live: true, queryEventsFn: rebootQueryEventsFn }).catch((e) => ({ error: e && e.message }));
+  const reboot = await runRebootRespawnDrill({ supabase, live: true, queryEventsFn: rebootQueryEventsFn, opts: { sdKey } }).catch((e) => ({ error: e && e.message }));
   // (2) G3+U4 relaunch-under-profile -> fleet_verb_relaunch_under_profile (required args wired, was {opts:{}}).
   const u4 = await runU4Drill({
     target, fromProfile, toProfile, sessionId,
-    relaunchFn: canaryRelaunchUnderProfile, resolveFn: resolveProfileDir, queryEventsFn, opts: { supabase },
+    relaunchFn: canaryRelaunchUnderProfile, resolveFn: resolveProfileDir, queryEventsFn, opts: { supabase, sdKey },
   }).catch((e) => ({ error: e && e.message }));
 
   return { g1a, reboot, u4 };

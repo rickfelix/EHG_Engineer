@@ -70,7 +70,7 @@ describe('defaultRunDrills — wired live path (QF-20260724-923)', () => {
     // supabase is NOT null (was the stub bug); canary resolved.
     expect(resolveCanaryTarget).toHaveBeenCalledWith(supabase, { by: 'account_profile', value: 'canary' });
     // G1a kill-supervisor -> fleet_verb_restart.
-    expect(canaryRestart).toHaveBeenCalledWith(target, { supabase });
+    expect(canaryRestart).toHaveBeenCalledWith(target, { supabase, sdKey: 'CHECKPOINT-3' });
     // G1b+G2 reboot-respawn gets a REAL client + live:true (was supabase=null) + a queryEventsFn
     // (QF-20260724-113 FR-b: without one, respawn_events_present always fails on a live run).
     const rebootArgs = runRebootRespawnDrill.mock.calls[0][0];
@@ -118,5 +118,50 @@ describe('defaultRunDrills — rebootQueryEventsFn wiring (QF-20260724-113)', ()
     expect(select).toHaveBeenCalledWith('event_type,payload,session_id');
     expect(eq).toHaveBeenCalledWith('event_type', 'fleet_verb_respawn');
     expect(res.reboot.pass).toBe(true);
+  });
+});
+
+// QF-20260724-335: an explicit, intentional run-correlator must be stamped on all 3 leg events of one
+// --live invocation (timing/session-proximity alone is insufficient -- a stray batch can collide with
+// a real run; Solomon S7 acceptance requires unique intentional binding of the 3 legs to one CP3 run).
+describe('defaultRunDrills — run-correlator stamped on all 3 legs (QF-20260724-335)', () => {
+  it('passes the SAME sdKey to canaryRestart, runRebootRespawnDrill, and runU4Drill', async () => {
+    const supabase = { from: vi.fn() };
+    const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
+    const resolveCanaryTarget = vi.fn(async () => target);
+    const canaryRestart = vi.fn(async () => ({ verb: 'fleet_verb_restart', outcome: 'ok' }));
+    const canaryRelaunchUnderProfile = vi.fn(async () => ({ verb: 'fleet_verb_relaunch_under_profile', outcome: 'ok' }));
+    const runRebootRespawnDrill = vi.fn(async () => ({ pass: true }));
+    const runU4Drill = vi.fn(async () => ({ pass: true }));
+
+    const plan = { canaryProfile: 'canary', cwd: 'R:\\r', legs: [] };
+    await defaultRunDrills(plan, {
+      supabase, resolveCanaryTarget, canaryRestart, canaryRelaunchUnderProfile, runRebootRespawnDrill, runU4Drill,
+    });
+
+    // Default run-correlator is the SD-scoped literal 'CHECKPOINT-3'.
+    expect(canaryRestart.mock.calls[0][1].sdKey).toBe('CHECKPOINT-3');
+    expect(runRebootRespawnDrill.mock.calls[0][0].opts.sdKey).toBe('CHECKPOINT-3');
+    expect(runU4Drill.mock.calls[0][0].opts.sdKey).toBe('CHECKPOINT-3');
+  });
+
+  it('honors an injected deps.sdKey override (e.g. a per-invocation run_id) for all 3 legs', async () => {
+    const supabase = { from: vi.fn() };
+    const target = { session_id: 'canary-sess-1', metadata: { account_profile: 'canary' } };
+    const resolveCanaryTarget = vi.fn(async () => target);
+    const canaryRestart = vi.fn(async () => ({ verb: 'fleet_verb_restart', outcome: 'ok' }));
+    const canaryRelaunchUnderProfile = vi.fn(async () => ({ verb: 'fleet_verb_relaunch_under_profile', outcome: 'ok' }));
+    const runRebootRespawnDrill = vi.fn(async () => ({ pass: true }));
+    const runU4Drill = vi.fn(async () => ({ pass: true }));
+
+    const plan = { canaryProfile: 'canary', cwd: 'R:\\r', legs: [] };
+    await defaultRunDrills(plan, {
+      supabase, resolveCanaryTarget, canaryRestart, canaryRelaunchUnderProfile, runRebootRespawnDrill, runU4Drill,
+      sdKey: 'run-2026-07-24T22-00-00Z',
+    });
+
+    expect(canaryRestart.mock.calls[0][1].sdKey).toBe('run-2026-07-24T22-00-00Z');
+    expect(runRebootRespawnDrill.mock.calls[0][0].opts.sdKey).toBe('run-2026-07-24T22-00-00Z');
+    expect(runU4Drill.mock.calls[0][0].opts.sdKey).toBe('run-2026-07-24T22-00-00Z');
   });
 });
