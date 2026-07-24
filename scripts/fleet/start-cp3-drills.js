@@ -234,6 +234,7 @@ export async function defaultRunDrills(plan, deps = {}) {
 
   // (2) G3+U4 relaunch-under-profile -> fleet_verb_relaunch_under_profile (bug2 fix: supabaseClient
   // key + callsign string). Same explicit no-target reporting as G1a.
+  const u4StartedAt = new Date().toISOString();
   const u4 = targetCallsign
     ? await runU4Drill({
         target: targetCallsign, fromProfile, toProfile, sessionId,
@@ -241,6 +242,20 @@ export async function defaultRunDrills(plan, deps = {}) {
         opts: { supabaseClient: supabase, spawnFn: injectedSpawnFn },
       }).catch((e) => ({ error: e && e.message }))
     : { pass: false, checks: [{ name: 'target_resolution', pass: false, detail: 'no live canary session to target (account_profile=canary)' }] };
+
+  // DURABLE FIX (part 2): relaunchUnderProfile follows the SAME release-old/spawn-fresh pattern as
+  // G1a's restart -- a successful U4 leg also orphans the canary identity onto a new, unstamped
+  // session. Self-stamp it too so the canary survives between separate drill invocations, not just
+  // within a single one (nothing runs after U4 in THIS call, but the next --live invocation needs a
+  // live target to resolve against).
+  const u4Succeeded = !!(u4 && Array.isArray(u4.checks)
+    && u4.checks.find((c) => c.name === 'supervisor_env_invariant')?.result?.ok === true);
+  if (u4Succeeded && targetCallsign) {
+    const pollFn = deps.pollNewCanarySession || pollForFreshUnstampedCanary;
+    const restampFn = deps.restampCanary || restampCanary;
+    const freshSessionId = await pollFn(supabase, u4StartedAt).catch(() => null);
+    if (freshSessionId) await restampFn(supabase, freshSessionId, targetCallsign).catch(() => {});
+  }
 
   return { g1a, reboot, u4 };
 }
