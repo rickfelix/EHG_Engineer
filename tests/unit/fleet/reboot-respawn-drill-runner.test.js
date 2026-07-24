@@ -43,6 +43,33 @@ describe('runRebootRespawnDrill (FR-7)', () => {
     expect(checks.find((c) => c.name === 'respawn_events_present').pass).toBe(false);
   });
 
+  it('respawn_events_present FAILs when the events are respawn_unbound no-ops even though the COUNT meets slots (QF-20260724-828)', async () => {
+    const { logFn } = makeEventSeams();
+    // Post-QF-911 a live respawn that binds no heartbeating session emits outcome:'respawn_unbound' +
+    // session_id:null. Two such events meet the count (2 >= slots.length) yet bound NO session — the
+    // old count-based check false-passed on this no-op; the session-bound check must FAIL it.
+    const { checks } = await runRebootRespawnDrill({
+      supabase: {}, loadFn: async () => SLOTS, spawnFn: () => ({ pid: 1 }), logFn, live: false,
+      queryEventsFn: async () => [
+        { event_type: 'fleet_verb_respawn', session_id: null, payload: { outcome: 'respawn_unbound' } },
+        { event_type: 'fleet_verb_respawn', session_id: null, payload: { outcome: 'respawn_unbound' } },
+      ],
+    });
+    expect(checks.find((c) => c.name === 'respawn_events_present').pass).toBe(false);
+  });
+
+  it('respawn_events_present PASSES when events are session-bound (outcome ok + non-null session_id) (QF-20260724-828)', async () => {
+    const { logFn } = makeEventSeams();
+    const { checks } = await runRebootRespawnDrill({
+      supabase: {}, loadFn: async () => SLOTS, spawnFn: () => ({ pid: 1 }), logFn, live: false,
+      queryEventsFn: async () => [
+        { event_type: 'fleet_verb_respawn', session_id: 'sess-1', payload: { outcome: 'ok' } },
+        { event_type: 'fleet_verb_respawn', session_id: 'sess-2', payload: { outcome: 'ok' } },
+      ],
+    });
+    expect(checks.find((c) => c.name === 'respawn_events_present').pass).toBe(true);
+  });
+
   it('FAILs manifest_loaded when the desired manifest is empty (table unapplied / no seed)', async () => {
     const { logFn, queryEventsFn } = makeEventSeams();
     const { pass, checks } = await runRebootRespawnDrill({
