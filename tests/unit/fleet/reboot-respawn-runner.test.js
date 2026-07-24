@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { runRebootRespawn } from '../../../lib/fleet/reboot-respawn-runner.js';
-import { resolveClaudeCmd, resolveRepoRoot } from '../../../lib/fleet/spawn-control.js';
+import { resolveClaudeCmd, resolveRepoRoot } from '../../../lib/fleet/build-session-launch.cjs';
 
 const SLOTS = [
   { name: 'Worker-1', role: 'worker', account_profile: null, resume_uuid: 'u-1' },
@@ -54,8 +54,7 @@ describe('runRebootRespawn live (FR-5)', () => {
     });
     expect(res.live).toBe(true);
     expect(spawnFn).toHaveBeenCalledTimes(2);
-    expect(spawnCalls[0].program).toBe('wt.exe');
-    expect(spawnCalls[0].args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1']);
+    expect(spawnCalls[0]).toEqual({ program: 'wt.exe', args: ['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd(), '--resume', 'u-1'] });
     expect(spawnCalls[1].args).toEqual(['new-tab', '-d', resolveRepoRoot(), '--', resolveClaudeCmd()]); // slot 2 had no token
     expect(res.results.map((r) => r.spawned)).toEqual([true, true]);
   });

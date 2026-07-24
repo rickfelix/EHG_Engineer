@@ -18,7 +18,7 @@ Every function/code path found (via full-estate grep, not a hand-picked list) th
 |---|------|----------|--------------|-------|
 | 1 | `fn_advance_venture_stage` | `database/migrations/20260704_chairman_product_review_gate_scoped_precondition_fixture_bypass.sql` | **GATED** | The chokepoint. Reads `venture_stages.required_artifacts` (canonical) with a `stage_artifact_requirements` legacy fallback; also enforces `chairman_decisions` review/kill/promotion gates and the 23->24 product-review gate. |
 | 2 | `rescan_stage_20` | `database/migrations/20260530_rescan_stage20_reason.sql` | **BYPASSED (staged fix, chairman-gated, FR-3)** | Raw `UPDATE ventures SET current_lifecycle_stage = 21` after checking only SD-completion + `deployment_url`. Never reads artifacts. Amendment migration staged, not applied. |
-| 3 | `advance_venture_stage(uuid,int,int,text)` | `database/migrations/20260611_guard_pack_secdef_fns.sql` | **BYPASSED (staged fix, chairman-gated, FR-3)** | Enforces chairman kill/promotion gate arrays but zero artifact check. Amendment migration staged, not applied. |
+| 3 | `advance_venture_stage(uuid,int,int,text)` | `database/migrations/20260704_stage_advancement_advance_venture_stage_artifact_gate.sql` (live artifact check, shipped) + `database/migrations/20260722_stage_advancement_advance_venture_stage_gate_type_ssot.sql` (staged, chairman-gated, SD-LEO-INFRA-RECONCILE-EHG-REPO-001) | **PARTIALLY FIXED (artifact check live; gate-array SSOT fix staged, chairman-gated)** | Artifact-precondition check now live (closed by the 20260704 migration referenced in this row, superseding this row's original "zero artifact check" note). Separately, the chairman kill/promotion gate enforcement itself was hardcoded (`v_kill_gates`/`v_promotion_gates`/`v_all_gates` SQL arrays) and had drifted from the `venture_stages.gate_type` SSOT — omitting promotion gates 10/16/19/25 entirely (a confirmed-active, forensically-proven-exploited bypass: 6 of 45 historical advances from those stages had no approved chairman decision) and swapping the 23/24 kill/promotion labels. `20260722_stage_advancement_advance_venture_stage_gate_type_ssot.sql` replaces the 3 hardcoded arrays with a per-call SSOT read; staged only, requires a separate chairman GO before production apply (with a pre-deploy census + forensic-query artifact attached to that request). |
 | 4 | `advance_venture_to_stage(uuid,int,text,text)` | `database/migrations/20260611_guard_pack_secdef_fns.sql` | **BYPASSED (staged fix, chairman-gated, FR-3)** | Only validates `p_target_stage = current+1` and an access guard -- zero gate/artifact check whatsoever. Used by the sibling EHG app's `advanceStage.ts`/`BuildMethodSelector.tsx`/`LeoBridgeBuildPanel.tsx`. Amendment migration staged, not applied. |
 | 5 | `lib/eva/stage-execution-worker.js::_advanceStage` | JS, daemon walk | **FIXED (this SD, FR-2, ships normally)** | The daemon-walk's single side-effecting advance for ALL stages, called from 8+ call sites. Was a raw `.update()` with zero artifact check -- the most consequential bypass (the MarketLens incident's root cause). Now calls `checkStageArtifactPrecondition()` (an independent JS mirror of the RPC's artifact-check logic, reusing `deviation-ledger.js` for documented skips) before the raw update. |
 | 6 | `lib/eva/saga-coordinator.js::createStageCompensation` | JS, saga rollback | **DELIBERATELY EXEMPT** | Revert-only compensation write (moves `current_lifecycle_stage` back to a previous stage on rollback), never a forward advance. Out of scope by definition -- reverting never needs an artifact precondition. |
@@ -173,6 +173,29 @@ re-examined specifically for whether they write to the NEWLY-gated stages (3/19/
   no-re-entry assumption would need re-examination before it can be relied on for
   `ventures`-side logic. Documented as an open risk, not resolved here (same "needs its own
   investigation" disposition as 2026-07-04).
+
+## Post-census addition (2026-07-24)
+
+**`database/migrations/20260722_stage_advancement_advance_venture_stage_gate_type_ssot.sql`**
+(SD-LEO-INFRA-RECONCILE-EHG-REPO-001) — amends path #3 (`advance_venture_stage(uuid,int,int,text)`).
+Discovery: the chairman kill/promotion gate check that path #3's original entry credited as working
+("enforces chairman kill/promotion gate arrays") was itself running on 3 hardcoded SQL arrays
+(`v_kill_gates`/`v_promotion_gates`/`v_all_gates`) that had drifted from the ratified
+`venture_stages.gate_type` SSOT — omitting promotion gates 10/16/19/25 entirely. This is a confirmed-
+active, forensically-proven-exploited authorization bypass (a query against
+`venture_stage_transitions` joined to `chairman_decisions` found 6 of 45 historical advances FROM
+those 4 stages had no approved decision, including 3 named real ventures: DataDistill, CronGenius at
+Stage 19; Market Modeling SaaS at Stage 16), not merely a code-hygiene issue. The migration deletes the
+3 arrays and reads `venture_stages.gate_type` per-call instead, mirroring how path #1
+(`fn_advance_venture_stage`) already reads the SSOT. Also fixes an independent 23/24 kill/promotion
+label swap in the same function's response. STAGED ONLY — chairman-gated per
+SD-LEO-INFRA-MIGRATION-READINESS-CHAIRMAN-GATED-EXEMPT-001, same convention as path #3's original
+FR-3 amendment; requires a separate chairman GO with the pre-deploy census and forensic-query results
+attached. A companion `20260722_EMERGENCY_ONLY_full_code_revert_advance_venture_stage.sql` restores
+the pre-fix function body as a genuine last resort ONLY (never the default incident lever — the
+default rollback is a data-level `UPDATE venture_stages SET gate_type='none'` for the 4 affected
+stages, which does not reopen the confirmed bypass). Disposition: staged amendment to path #3, same
+class as the original FR-3 entry.
 
 ## Disposition summary
 

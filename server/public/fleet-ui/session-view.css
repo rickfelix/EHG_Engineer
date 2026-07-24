@@ -12,6 +12,10 @@
   --sv-bg: #0f172a;
   --sv-fg: #e2e8f0;
   --sv-panel: #1e293b;
+  /* mockup-2 (docs/design/mockup-2-session-view-terminal-agent-browser.png) accent -- additive,
+   * does not replace any existing token above. */
+  --sv-agent: #7c5cff;
+  --sv-agent-bg: #1a1330;
 }
 
 * { box-sizing: border-box; }
@@ -24,9 +28,76 @@ body {
 }
 
 #session-view {
-  max-width: 640px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 16px;
+}
+
+/* FR-1: app header -- identity chips, status pill, F/B/A key legend. */
+.sv-appheader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--sv-panel);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.sv-identity-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.sv-id-chip {
+  font-size: 12px;
+  color: #cbd5e1;
+  background: #1f2937;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.sv-status-pill {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #052e16;
+  color: #4ade80;
+  border: 1px solid var(--sv-ok);
+}
+.sv-status-pill--off { background: #1f2937; color: #94a3b8; border-color: var(--sv-neutral); }
+.sv-status-pill--idle { background: #1f2937; color: #94a3b8; border-color: var(--sv-neutral); }
+.sv-status-pill--awaiting-input { background: #451a03; color: #fbbf24; border-color: var(--sv-warn); }
+.sv-status-pill--mechanical { background: #1f2937; color: #cbd5e1; border-color: var(--sv-neutral); }
+.sv-status-pill--deep-work { background: var(--sv-agent-bg); color: #c4b5fd; border-color: var(--sv-agent); }
+.sv-status-pill--pilot-wk1 { background: #1f2937; color: #cbd5e1; border-color: var(--sv-neutral); }
+
+.sv-key-legend {
+  margin-left: auto;
+  font-size: 12px;
+  color: #94a3b8;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+}
+
+.sv-account-panel {
+  background: var(--sv-panel);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+.sv-account-field { margin: 2px 0; color: #cbd5e1; font-size: 13px; }
+
+/* Two-pane mockup-2 layout: TTY (left) + agent-browser (right). */
+.sv-shell {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .sv-shell { grid-template-columns: 1fr; }
 }
 
 .sv-hidden { display: none !important; }
@@ -183,6 +254,103 @@ body {
   color: #cbd5e1;
 }
 .sv-log-empty { color: #64748b; font-family: inherit; }
+
+/* FR-2: TTY / terminal pane (left column). */
+.sv-tty {
+  background: #0b1220;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+}
+.sv-tty-header {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+  border-bottom: 1px solid #1e293b;
+}
+.sv-tty-scrollback {
+  flex: 1;
+  padding: 12px;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 13px;
+  color: #cbd5e1;
+  overflow-y: auto;
+}
+.sv-tty-placeholder { color: #64748b; }
+.sv-attach-row { display: flex; gap: 8px; padding: 0 12px; }
+.sv-tty-footer {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #94a3b8;
+  border-top: 1px solid #1e293b;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+}
+
+/* FR-3/FR-4: agent-browser pane (right column). */
+.sv-agent-browser {
+  background: var(--sv-panel);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.sv-url-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  color: #0f172a;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+}
+.sv-url-dots {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 16px 0 0 #f59e0b, 32px 0 0 #22c55e;
+  margin-right: 24px;
+}
+.sv-url-text { flex: 1; font-family: ui-monospace, "Cascadia Code", monospace; font-size: 13px; }
+.sv-agent-badge {
+  background: var(--sv-agent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+/* FR-3: narration stream -- purple-accented per the ratified mockup. */
+.sv-narration {
+  border: 1px solid var(--sv-agent);
+  background: var(--sv-agent-bg);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 10px 0;
+}
+.sv-narration-heading {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #c4b5fd;
+  letter-spacing: 0.04em;
+}
+.sv-narration-list {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  font-size: 13px;
+  color: #e9e4ff;
+}
+.sv-narration-line { margin: 2px 0; }
+.sv-narration-hint { margin: 0; font-size: 12px; color: #a78bfa; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }

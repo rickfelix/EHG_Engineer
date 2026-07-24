@@ -35,6 +35,7 @@ import {
   isBrowserMcpEnabled,
 } from '../../lib/fleet/browser-control.js';
 import { buildSessionDetailView, mapAttachState } from '../../lib/fleet/session-detail-view.js';
+import { computeSessionBadge } from '../../lib/fleet/fleet-view-badges.cjs';
 
 function getSupabase() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -46,11 +47,41 @@ function getSupabase() {
 async function fetchFreshSession(supabase, sessionId) {
   const { data, error } = await supabase
     .from('claude_sessions')
-    .select('session_id, status, current_tool, last_tool_at, last_activity_kind, expected_silence_until, metadata')
+    .select('session_id, status, loop_state, current_tool, last_tool_at, last_activity_kind, expected_silence_until, metadata')
     .eq('session_id', sessionId)
     .maybeSingle();
   if (error) throw new Error(`fetchFreshSession: ${error.message}`);
   return data;
+}
+
+/** Whether `expected_silence_until` is still in the future (PRD TR-1). Mirrors
+ * scripts/fleet-dashboard.cjs's formatSilentUntil/isSilent inline logic -- no shared helper
+ * exists yet, so this is a deliberate small duplication rather than a new cross-module dep. */
+function isSilentNow(expectedSilenceUntil) {
+  if (!expectedSilenceUntil) return false;
+  const endMs = Date.parse(expectedSilenceUntil);
+  return Number.isFinite(endMs) && endMs > Date.now();
+}
+
+/** PRD TR-1: additive identity/badge fields for the header bar. `pAlive` has no cheap
+ * per-row source (it requires the fleet-wide Monte-Carlo liveness subprocess) so it is
+ * omitted (null) here -- computeSessionBadge() degrades gracefully without it. */
+function buildIdentityFields(session) {
+  const meta = session?.metadata || {};
+  const role = meta.fleet_identity?.role ?? null;
+  const model = meta.model ?? null;
+  const effort = meta.effort ?? null;
+  const callsign = meta.fleet_identity?.callsign ?? meta.callsign ?? null;
+  const badge = computeSessionBadge({
+    loopState: session?.loop_state ?? null,
+    pAlive: null,
+    isSilent: isSilentNow(session?.expected_silence_until),
+    computedStatus: session?.status ?? null,
+    role,
+    model,
+    effort,
+  });
+  return { badge, role, model, effort, callsign };
 }
 
 const router = Router();
@@ -74,7 +105,12 @@ router.get('/:id', async (req, res) => {
     const session = await fetchFreshSession(supabase, req.params.id);
     if (!session) return res.status(404).json({ ok: false, reason: 'session_not_found' });
     const view = buildSessionDetailView(session);
-    res.json({ ...view, paused: isPaused(session), browserMcpEnabled: isBrowserMcpEnabled(session) });
+    res.json({
+      ...view,
+      paused: isPaused(session),
+      browserMcpEnabled: isBrowserMcpEnabled(session),
+      ...buildIdentityFields(session),
+    });
   } catch (error) {
     console.error('[fleet-sessions] GET /:id failed:', error.message);
     res.status(500).json({ ok: false, reason: 'internal_error', message: error.message });
