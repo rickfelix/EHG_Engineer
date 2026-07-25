@@ -199,6 +199,75 @@ describe('FR-5 — NO SELF-EXEMPTION (mechanism, not caller opt-in)', () => {
     const hasConsultEvidence = (r) => r.consultRecorded === true || Boolean(r.ledger);
     expect(hasConsultEvidence(sent)).toBe(true);
     expect(hasConsultEvidence(degraded)).toBe(true);
+
+    // TS-13 (SD-LEO-INFRA-SOLOMON-CONSULT-CANNOT-DELIVER-001): keep the invariant NON-TAUTOLOGICAL.
+    // hasConsultEvidence must be capable of returning false, else the two assertions above pass
+    // for any shape and the guard is decorative.
+    expect(hasConsultEvidence({ action: 'send' })).toBe(false);
+    expect(hasConsultEvidence({ action: 'proceed' })).toBe(false);
+  });
+
+  // TS-8 / TS-12 (SD-LEO-INFRA-SOLOMON-CONSULT-CANNOT-DELIVER-001) — FR-7 guard.
+  // The non-blocking lane resolves IMMEDIATELY with a correlation envelope and NO verdict. Before
+  // FR-7 the `result != null` test read that as success: action 'send', consultRecorded true, and
+  // NO ledger row — which would make FR-0 ("every degraded-proceed row carries a correlation id")
+  // vacuously true over an EMPTY SET and leave the reconciler with nothing to join on.
+  it('FR-7: a pending non-blocking emit still takes the ledger arm and stamps the correlation', async () => {
+    const ledgerWrites = [];
+    const r = await performBoundedConsult(HIGH, {
+      consult: async () => ({ correlationId: 'corr-abc-123', pending: true }),
+      recordLedger: async (l) => { ledgerWrites.push(l); },
+      timeoutMs: 200,
+    });
+
+    // NOT 'send' — there is no verdict yet.
+    expect(r.action).toBe('proceed');
+    expect(r.consultRecorded).toBeUndefined();
+    expect(r.pendingReconcile).toBe(true);
+    expect(r.correlationId).toBe('corr-abc-123');
+
+    // TS-12: the ledger row is the reconciliation ANCHOR — it must carry the correlation.
+    expect(ledgerWrites).toHaveLength(1);
+    expect(ledgerWrites[0]).toMatchObject({
+      probe: 'decision_rubric',
+      duty: 'pre_send_consult',
+      verdict: 'unknown',
+      detail: 'solomon-consult-async::pending-reconcile',
+      remediation_ref: 'corr-abc-123',
+    });
+
+    // Distinguishable from a genuine timeout, which keeps its own discriminator and no correlation.
+    const timedOut = await performBoundedConsult(HIGH, {
+      consult: () => new Promise(() => {}),
+      recordLedger: async (l) => { ledgerWrites.push(l); },
+      timeoutMs: 10,
+    });
+    expect(timedOut.ledger.detail).toBe('solomon-consult-timeout::documented-proceed');
+    expect(timedOut.ledger.remediation_ref).toBeNull();
+  });
+
+  it('FR-7: an envelope CARRYING a verdict still reaches send (pending is what withholds it)', async () => {
+    const recordLedger = vi.fn();
+    const r = await performBoundedConsult(HIGH, {
+      consult: async () => ({ verdict: { v: 1 }, correlationId: 'corr-xyz' }),
+      recordLedger,
+      timeoutMs: 200,
+    });
+    expect(r.action).toBe('send');
+    expect(r.consultRecorded).toBe(true);
+    expect(r.verdict).toEqual({ v: 1 });
+    expect(recordLedger).not.toHaveBeenCalled();
+  });
+
+  it('FR-7: a LEGACY bare verdict object containing a verdict key is NOT unwrapped', async () => {
+    // Regression guard for the discriminator: keying the envelope check on 'verdict' would have
+    // silently unwrapped this and changed what callers receive (caught by :89 during EXEC).
+    const r = await performBoundedConsult(HIGH, {
+      consult: async () => ({ verdict: 'looks-good' }),
+      timeoutMs: 200,
+    });
+    expect(r.action).toBe('send');
+    expect(r.verdict).toEqual({ verdict: 'looks-good' });
   });
 });
 
