@@ -106,6 +106,7 @@ export async function main(argv = process.argv, deps = {}) {
       // "Failing row contains (...)" with the consult body, and this log is world-readable on a
       // public repo. Length-capping that message would not help — it bounds size, not content.
       first_error_code: result.firstErrorCode ?? null,
+      window_saturated: result.saturated === true,
       ok: true,
     })}`);
     return { exitCode: EXIT_OK, summary: result };
