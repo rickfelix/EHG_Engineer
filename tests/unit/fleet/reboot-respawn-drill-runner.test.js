@@ -24,12 +24,12 @@ function makeEventSeams() {
 }
 
 describe('runRebootRespawnDrill (FR-7)', () => {
-  it('PASSes all four checks when manifest loads, roster builds, --resume relaunches, and events persist', async () => {
+  it('PASSes all five checks when manifest loads, roster builds, --resume relaunches, and events persist', async () => {
     const { logFn, queryEventsFn } = makeEventSeams();
     const { pass, checks } = await runRebootRespawnDrill({
       supabase: {}, loadFn: async () => SLOTS, spawnFn: () => ({ pid: 1 }), logFn, queryEventsFn, live: false,
     });
-    expect(checks.map((c) => c.name)).toEqual(['manifest_loaded', 'roster_built', 'per_slot_resume_relaunch', 'respawn_events_present']);
+    expect(checks.map((c) => c.name)).toEqual(['manifest_loaded', 'roster_built', 'per_slot_resume_relaunch', 'respawn_events_present', 'respawn_bind_audited']);
     expect(pass).toBe(true);
     expect(checks.every((c) => c.pass)).toBe(true);
   });
@@ -77,6 +77,49 @@ describe('runRebootRespawnDrill (FR-7)', () => {
     });
     expect(pass).toBe(false);
     expect(checks.find((c) => c.name === 'manifest_loaded').pass).toBe(false);
+  });
+
+  it('respawn_bind_audited PASSES when every session-bound respawn has a matching RESPAWN_BIND_VERIFIED audit row (QF-20260724-070)', async () => {
+    const { logFn } = makeEventSeams();
+    const { checks } = await runRebootRespawnDrill({
+      supabase: {}, loadFn: async () => SLOTS, spawnFn: () => ({ pid: 1 }), logFn, live: false,
+      queryEventsFn: async () => [
+        { event_type: 'fleet_verb_respawn', session_id: 'sess-1', payload: { outcome: 'ok' } },
+        { event_type: 'fleet_verb_respawn', session_id: 'sess-2', payload: { outcome: 'ok' } },
+      ],
+      queryLifecycleEventsFn: async () => [
+        { event_type: 'RESPAWN_BIND_VERIFIED', session_id: 'sess-1' },
+        { event_type: 'RESPAWN_BIND_VERIFIED', session_id: 'sess-2' },
+      ],
+    });
+    expect(checks.find((c) => c.name === 'respawn_bind_audited').pass).toBe(true);
+  });
+
+  it('respawn_bind_audited FAILs when a session-bound respawn has NO matching audit row -- session_id-populated-post-hoc alone is not proof (QF-20260724-070)', async () => {
+    const { logFn } = makeEventSeams();
+    const { checks } = await runRebootRespawnDrill({
+      supabase: {}, loadFn: async () => SLOTS, spawnFn: () => ({ pid: 1 }), logFn, live: false,
+      queryEventsFn: async () => [
+        { event_type: 'fleet_verb_respawn', session_id: 'sess-1', payload: { outcome: 'ok' } },
+        { event_type: 'fleet_verb_respawn', session_id: 'sess-2', payload: { outcome: 'ok' } },
+      ],
+      queryLifecycleEventsFn: async () => [
+        { event_type: 'RESPAWN_BIND_VERIFIED', session_id: 'sess-1' }, // sess-2 never audited
+      ],
+    });
+    expect(checks.find((c) => c.name === 'respawn_bind_audited').pass).toBe(false);
+  });
+
+  it('respawn_bind_audited PASSES trivially when no session-bound respawns exist (dry-run/unbound), even without queryLifecycleEventsFn', async () => {
+    const { logFn } = makeEventSeams();
+    const { checks } = await runRebootRespawnDrill({
+      supabase: {}, loadFn: async () => SLOTS, spawnFn: () => ({ pid: 1 }), logFn, live: false,
+      queryEventsFn: async () => [
+        { event_type: 'fleet_verb_respawn', session_id: null, payload: { outcome: 'dry_run' } },
+        { event_type: 'fleet_verb_respawn', session_id: null, payload: { outcome: 'dry_run' } },
+      ],
+    });
+    expect(checks.find((c) => c.name === 'respawn_bind_audited').pass).toBe(true);
   });
 
   it('per_slot_resume_relaunch FAILs if a slot with a resume_uuid is relaunched WITHOUT its --resume token', async () => {

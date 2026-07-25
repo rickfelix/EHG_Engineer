@@ -169,3 +169,42 @@ describe('runRebootRespawn (QF-20260724-911): payload.live is ground-truth-recon
     expect(events[0].payload).toMatchObject({ live: false, outcome: 'dry_run' });
   });
 });
+
+describe('runRebootRespawn (QF-20260724-070): durable bind-time audit row', () => {
+  function makeFakeSupabase(sessionsByPid) {
+    return {
+      from: (table) => {
+        if (table !== 'claude_sessions') throw new Error(`unexpected table: ${table}`);
+        return { select: () => ({ eq: (_col, pid) => ({ maybeSingle: async () => ({ data: sessionsByPid[pid] || null }) }) }) };
+      },
+    };
+  }
+
+  it('writes an immutable RESPAWN_BIND_VERIFIED session_lifecycle_events row the instant the bind is confirmed healthy', async () => {
+    const nowMs = 1_800_000_000_000;
+    const supabase = makeFakeSupabase({ 111: { session_id: 's-new', heartbeat_at: new Date(nowMs - 1000).toISOString(), loop_state: 'active' } });
+    const spawnFn = vi.fn(() => ({ pid: 111 }));
+    const auditEvents = [];
+    const writeLifecycleEventFn = vi.fn(async (_s, ev) => { auditEvents.push(ev); return true; });
+    await runRebootRespawn({
+      supabase, loadFn: async () => [SLOTS[0]], spawnFn, logFn: async () => ({ ok: true }), live: true,
+      sleepFn: vi.fn(), nowMs, writeLifecycleEventFn, sdKey: 'CHECKPOINT-3', now: () => 'iso-checked-at',
+    });
+    expect(auditEvents).toHaveLength(1);
+    expect(auditEvents[0]).toMatchObject({
+      event_type: 'RESPAWN_BIND_VERIFIED', session_id: 's-new', pid: 111,
+      metadata: { heartbeat_at: expect.any(String), loop_state: 'active', sd_key: 'CHECKPOINT-3', checked_at: 'iso-checked-at' },
+    });
+  });
+
+  it('never writes an audit row when the session never binds (respawn_unbound)', async () => {
+    const supabase = makeFakeSupabase({});
+    const writeLifecycleEventFn = vi.fn(async () => true);
+    const res = await runRebootRespawn({
+      supabase, loadFn: async () => [SLOTS[0]], spawnFn: vi.fn(() => ({ pid: 999 })), logFn: async () => ({ ok: true }),
+      live: true, sleepFn: vi.fn(), reconcileMaxAttempts: 2, writeLifecycleEventFn,
+    });
+    expect(res.results[0].session_id).toBeNull();
+    expect(writeLifecycleEventFn).not.toHaveBeenCalled();
+  });
+});
