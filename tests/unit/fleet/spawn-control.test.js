@@ -3,7 +3,12 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../lib/coordinator/coordination-events.cjs', () => ({
+// QF-20260725-757: spread the ORIGINAL module rather than replacing it wholesale. spawn() now reads
+// the canonical FLEET_WORKER_STARTUP_PROMPT from here (the keepalive it must forward), and a
+// stub that dropped that export made every spawn() test throw. Only logCoordinationEvent is
+// overridden; everything else stays real so the stub cannot drift from the module's contract again.
+vi.mock('../../../lib/coordinator/coordination-events.cjs', async (importOriginal) => ({
+  ...(await importOriginal()),
   logCoordinationEvent: vi.fn().mockResolvedValue({ ok: true }),
 }));
 vi.mock('../../../lib/coordinator/singleton-refresh-sequencer.cjs', () => ({
@@ -153,6 +158,27 @@ describe('buildLiveSpawnInvocation (FR-7: env isolation)', () => {
   it('omits CLAUDE_CONFIG_DIR when no profileDir is given', () => {
     const invocation = buildLiveSpawnInvocation({ role: 'worker', callsign: 'Alpha-5' });
     expect(invocation.env.CLAUDE_CONFIG_DIR).toBeUndefined();
+  });
+});
+
+describe('spawn (FR-1) — keepalive forwarding (QF-20260725-757)', () => {
+  // spawn() was the THIRD hop of the QF-20260724-290 keepalive drop: that QF fixed
+  // buildLiveSpawnInvocation and the respawn runner, but spawn() built its invocation with NO
+  // startupPrompt, so every session created through the generic spawn verb came up with nothing to
+  // do, heartbeat once, and ghosted. This is why provisioned canaries kept dying.
+  it('REGRESSION: forwards the canonical keepalive prompt into the invocation env', async () => {
+    const result = await spawn({ role: 'worker', callsign: 'Canary-pilot' }, { live: false });
+    expect(result.invocation.env.FLEET_WORKER_STARTUP_PROMPT).toBeTruthy();
+  });
+
+  it('honours an explicit startupPrompt override', async () => {
+    const result = await spawn({ role: 'worker', callsign: 'Canary-pilot' }, { live: false, startupPrompt: 'custom-keepalive' });
+    expect(result.invocation.env.FLEET_WORKER_STARTUP_PROMPT).toBe('custom-keepalive');
+  });
+
+  it('honours an explicit null as a deliberate no-keepalive opt-out (respawn-runner parity)', async () => {
+    const result = await spawn({ role: 'worker', callsign: 'Canary-pilot' }, { live: false, startupPrompt: null });
+    expect(result.invocation.env.FLEET_WORKER_STARTUP_PROMPT).toBeUndefined();
   });
 });
 

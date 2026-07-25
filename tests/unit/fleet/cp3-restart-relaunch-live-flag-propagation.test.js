@@ -16,7 +16,10 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('../../../lib/coordinator/coordination-events.cjs', () => ({
+// QF-20260725-757: spread the ORIGINAL module — spawn() now reads the canonical
+// FLEET_WORKER_STARTUP_PROMPT from here, and a wholesale stub dropped that export.
+vi.mock('../../../lib/coordinator/coordination-events.cjs', async (importOriginal) => ({
+  ...(await importOriginal()),
   logCoordinationEvent: vi.fn().mockResolvedValue({ ok: true }),
 }));
 vi.mock('../../../lib/coordinator/singleton-refresh-sequencer.cjs', () => ({
