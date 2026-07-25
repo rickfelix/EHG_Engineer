@@ -7,25 +7,23 @@
  * scripts/canary/run-canary-probe.mjs:67, is an unrelated same-named LOCAL function. So the
  * provisioning step exists, is tested, and has never once run. This file is the missing caller.
  *
- * WHY THIS DELIBERATELY DOES NOT CLAIM TO CLOSE DISCOVERABILITY. Wiring up a caller does not by
- * itself cause metadata.account_profile='canary' to be written. Traced end to end before writing this:
- *   1. provisionCanary calls spawn-control spawn() with accountProfile:'canary'. spawn() uses that
- *      value at exactly one place (spawn-control.js:162) to resolve a profile DIRECTORY. It is never
- *      written to metadata; spawn() has no stamp step at all.
- *   2. The ONLY writer of account_profile='canary' repo-wide is stampRespawnedCanary
- *      (canary-guard.js:173), whose only callers are canary-guard.js:121/:132 — the RESPAWN and
- *      RELAUNCH verbs. The fresh-spawn path provisioning uses never reaches it.
- *   3. That writer is itself dead: it finds its row with .eq('pid', pid) (canary-guard.js:167) where
- *      pid is the wt.exe launcher pid, while claude_sessions.pid holds the CLAUDE CODE pid. It polls
- *      8x/500ms, matches nothing, returns respawn_not_registered. spawn()'s own metadata write at
- *      :202 has the identical break.
- * canary-guard.js:153 already documents (1) in a comment. The comment is accurate; nobody acted on it.
+ * HISTORY, KEPT SHORT AND CURRENT. This header used to say the CLI could not close discoverability:
+ * that spawn() had no stamp step, that the only account_profile writer was stampRespawnedCanary on the
+ * respawn path, and that a live run would always exit registration_timeout. ALL THREE ARE NOW FALSE and
+ * were left standing after the code moved underneath them (caught by PLAN_VERIFICATION review). What is
+ * true now:
+ *   - spawn() DOES stamp metadata.account_profile on the fresh-spawn path (FR-3).
+ *   - correlation is by spawner-MINTED `claude --session-id <uuid>`, proven live: the registered
+ *     session_id came back byte-identical to the minted uuid.
+ *   - a live run PROVISIONED a canary: resolveCanaryTarget(by account_profile=canary) returns
+ *     resolved:true, with window_handle persisted and the child running from the isolated canary
+ *     profile dir.
+ * A stale comment that describes a fixed defect as live is not harmless -- it sends the next reader
+ * down a path that no longer exists, which is the same failure mode as the wrong-suspect diagnosis
+ * this file's DIAGNOSIS table was rewritten to avoid.
  *
- * So a live run of this CLI today spawns, polls the gate, and exits registration_timeout — the same
- * fail-closed the drill hits, one layer further in. That is WHY the value here is the DIAGNOSIS: the
- * exit reason names which of the three links broke, so the one permitted live run produces an answer
- * instead of a re-run. Discoverability closes when FR-3 fixes correlation and stamps the fresh-spawn
- * path; this CLI is its prerequisite and its instrument, not its completion.
+ * The DIAGNOSIS table below remains the point of this CLI: a bare timeout is unactionable, so each exit
+ * reason names the next thing to check.
  *
  * SAFETY: dry-run is the DEFAULT. --live is an explicit opt-in that this module never infers.
  *

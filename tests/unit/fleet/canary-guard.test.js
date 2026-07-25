@@ -194,6 +194,35 @@ describe('QF-20260724-295 stampRespawnedCanary + canaryRestart wiring', () => {
     expect(md.role).toBe('worker');                         // merged, not clobbered
   });
 
+  it('VAL-CANHOST-01: stamps by the MINTED session id, not by the wt.exe launcher pid', async () => {
+    // THE DISCRIMINATING FIXTURE. This was the THIRD dead correlation site and the only one FR-3 did
+    // not reach, even though the PRD claimed all three were fixed — caught by PLAN_VERIFICATION.
+    // Every OTHER fixture in this describe keys the row on the SAME pid the caller passes, so a pid
+    // join and a session_id join are indistinguishable there and none of them could have caught it.
+    // Here they DISAGREE, which is the real-world case: wt.exe exits, and claude_sessions.pid holds
+    // the Claude Code pid (often null). A pid join finds nothing; the minted-id join stamps.
+    const MINTED = '11111111-2222-4333-8444-555555555555';
+    const respawn = { session_id: MINTED, pid: 999999, status: 'active', metadata: { role: 'worker' } };
+    const sb = makeFakeSupabase({ sessions: [respawn] });
+    const res = await stampRespawnedCanary(
+      sb, { pid: 4242, callsign: 'Canary-1', sessionId: MINTED }, { sleepFn: noSleep, stampAttempts: 2 },
+    );
+    expect(res.stamped).toBe(true);
+    expect(res.session_id).toBe(MINTED);
+    const md = sb._store.get(MINTED).metadata;
+    expect(md.account_profile).toBe('canary');
+    expect(md.role).toBe('worker'); // merged, not clobbered
+  });
+
+  it('VAL-CANHOST-01: still falls back to pid when no session id was minted', async () => {
+    // Back-compat: a caller that mints nothing must keep working exactly as before.
+    const respawn = { session_id: 's-old', pid: 7777, status: 'active', metadata: {} };
+    const sb = makeFakeSupabase({ sessions: [respawn] });
+    const res = await stampRespawnedCanary(sb, { pid: 7777, callsign: 'Canary-1' }, { sleepFn: noSleep });
+    expect(res.stamped).toBe(true);
+    expect(res.session_id).toBe('s-old');
+  });
+
   it('(b) is idempotent: an already-stamped canary is NOT re-written ({already:true}, no update call)', async () => {
     const respawn = { session_id: 's-c', pid: 42, status: 'active', metadata: { fleet_identity: { callsign: 'Canary-9' }, account_profile: 'canary', role: 'worker' } };
     const sb = makeFakeSupabase({ sessions: [respawn] });
