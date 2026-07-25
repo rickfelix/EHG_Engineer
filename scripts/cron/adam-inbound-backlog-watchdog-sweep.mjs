@@ -91,7 +91,11 @@ export async function main(argv = process.argv, deps = {}) {
   logger.log?.(`[adam-inbound-backlog] ${JSON.stringify(summary)}`);
 
   if (result.error) return { exitCode: EXIT_INFRA, summary };
-  if (result.breaching) return { exitCode: EXIT_BREACH, summary };
+  // TS-18: a dry run REPORTS the verdict and emits nothing, exiting 0. EXIT_BREACH is an
+  // operational signal that an escalation was raised — a dry run raises none, so returning 2
+  // here would make `--dry-run` look like a live breach to any caller reading the exit code.
+  // INFRA still wins above: a dry run that cannot read the lane has genuinely failed.
+  if (result.breaching && !args.dryRun) return { exitCode: EXIT_BREACH, summary };
   return { exitCode: EXIT_OK, summary };
 }
 

@@ -161,6 +161,9 @@ describe('TS-10 / TS-11 — pagination and all-historical-adam-id scoping (IO se
           select() { return b; },
           in(col, ids) { calls.push({ col, ids }); return b; },
           is() { return b; },
+          // The selector uses .or('acknowledged_at.is.null,payload->>auto_acked.eq.true') rather
+          // than a bare .is() so auto_acked rows stay reachable (see the module comment).
+          or() { return b; },
           order() { return b; },
           range(from, to) {
             const page = [];

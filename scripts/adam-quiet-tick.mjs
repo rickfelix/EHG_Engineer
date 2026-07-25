@@ -615,6 +615,12 @@ async function main() {
     ventureRealBuildStallAlerted: ventureStall.realBuildStalled || [],
     inboxSurfaced: inboxSurface.items.length,
     inboxDirectives: inboxSurface.directives,
+    // FR-3: the SUPPRESSION-FREE backlog count from the shared SSOT selector. Distinct from
+    // inboxSurfaced, which is the windowed+capped DISPLAY count — the very number that read
+    // "1-5" while 21 rows sat unacked. Surfacing only the display count is what made the
+    // incident invisible, so the real one has to reach the operator, not just be computed.
+    inboxBacklog: inboxSurface.backlogCount,
+    inboxBacklogBreaching: inboxSurface.backlogBreachingCount,
     smsInbound: smsInbound.count,
     outboundSilence,
     crossPartyPing: delta.changed,
@@ -639,6 +645,10 @@ async function main() {
       `ventureStalls=${ventureStall.alerted.length} ` +
       `realBuildStalls=${(ventureStall.realBuildStalled || []).length} ` +
       `inbox=${inboxSurface.items.length}(dir:${inboxSurface.directives}) ` +
+      // The suppression-free backlog, printed alongside the display count. During the witnessed
+      // incident `inbox=` read 1-5 while 21 rows sat unacked; this is the number that would have
+      // shown the truth. `?` when the selector failed, never a healthy-looking 0.
+      `backlog=${inboxSurface.backlogCount ?? '?'}(breach:${inboxSurface.backlogBreachingCount ?? '?'}) ` +
       `sms=${smsInbound.count} ` +
       `probes=${outboundSilence.probed.length} esc=${outboundSilence.escalated.length} ` +
       `ping=${delta.changed ? delta.fields.join(',') : 'suppressed'} ` +

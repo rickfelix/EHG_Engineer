@@ -61,6 +61,7 @@ function fakeSupabase(backlogRows, { adamIds = ['adam-1'], sessionError = null }
         eq() { return builder; },
         in() { return builder; },
         is() { return builder; },
+        or() { return builder; },
         order() { return builder; },
         range(from, to) {
           // Both reads paginate now (session ids AND the backlog), so the fake must answer per table.
@@ -369,11 +370,20 @@ describe('FR-4 — DI sweep, exit codes, and workflow wiring', () => {
     expect(infra.exitCode).not.toBe(EXIT_BREACH); // a broken watchdog is never a quiet lane
   });
 
-  it('--dry-run classifies without emitting', async () => {
-    const { main } = await import('../../../scripts/cron/adam-inbound-backlog-watchdog-sweep.mjs');
+  it('--dry-run classifies without emitting, and exits 0 even on a breach (TS-18)', async () => {
+    const { main, EXIT_OK } = await import('../../../scripts/cron/adam-inbound-backlog-watchdog-sweep.mjs');
     const r = await main(['node', 'x', '--once', '--dry-run'], { logger: { log: vi.fn() }, env: {}, now: NOW, supabase: fakeSupabase(replayFixtures()) });
     expect(r.summary.breaching).toBe(true);
     expect(emitFeedbackMock).not.toHaveBeenCalled();
+    // EXIT_BREACH signals "an escalation was raised". A dry run raises none, so returning 2 would
+    // make --dry-run indistinguishable from a live breach to any caller reading the exit code.
+    expect(r.exitCode).toBe(EXIT_OK);
+  });
+
+  it('--dry-run still reports INFRA failure as 1 (a dry run that cannot read the lane HAS failed)', async () => {
+    const { main, EXIT_INFRA } = await import('../../../scripts/cron/adam-inbound-backlog-watchdog-sweep.mjs');
+    const r = await main(['node', 'x', '--once', '--dry-run'], { logger: { log: vi.fn() }, env: {}, now: NOW, supabase: fakeSupabase([], { sessionError: 'boom' }) });
+    expect(r.exitCode).toBe(EXIT_INFRA);
   });
 
   it('logs a single-line JSON summary behind a bracket tag', async () => {
