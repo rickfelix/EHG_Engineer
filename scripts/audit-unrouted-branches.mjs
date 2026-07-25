@@ -34,6 +34,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { resolveGitHubRepo } from '../lib/repo-paths.js';
 
 const BASE = 'origin/main';
 const PROTECTED = new Set(['main', 'master', 'HEAD']);
@@ -150,7 +151,10 @@ function main() {
   const argv = process.argv.slice(2);
   const flag = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
   const json = flag('--format') === 'json';
-  const repo = flag('--repo') || 'rickfelix/EHG_Engineer';
+  // Never hard-code an owner/repo literal: lint-repo-resolution-drift exists to stop code
+  // assuming the platform only ever has two repos. Env first (in a GHA venue GITHUB_REPOSITORY
+  // is the authoritative match for the checkout we are scanning), then the canonical resolver.
+  const repo = flag('--repo') || process.env.GITHUB_REPOSITORY || resolveGitHubRepo('EHG_Engineer');
   const maxAgeDays = Number(flag('--max-age-days') ?? DEFAULT_MAX_AGE_DAYS);
 
   const rows = findUnroutedBranches(process.cwd(), repo, { maxAgeDays });
