@@ -89,6 +89,71 @@ function getTTY() {
   return `win-${pid}`;
 }
 
+/**
+ * QF-20260725-480 — session-creation lifecycle emission was fully decoupled from session
+ * creation: across a measured 12-hour window FOUR sessions were created and ZERO emitted
+ * SESSION_CREATED, while NINE SESSION_CREATED events fired for sessions created OUTSIDE it.
+ *
+ * Root cause: this hook is THE creation path for every real Claude Code session, and it
+ * upserted claude_sessions without ever emitting a lifecycle event. The only SESSION_CREATED
+ * emitter in the tree was lib/session-manager.mjs:474 (a different entry path), and the
+ * claim_sd RPC also writes SESSION_CREATED rows — which is why events kept appearing for
+ * ALREADY-EXISTING sessions while genuinely new ones emitted nothing. Not canary-specific:
+ * a session carrying no account_profile behaved identically.
+ *
+ * Emission is deliberately conditional on the row having just been INSERTED. This hook also
+ * runs on resume/compaction, where the upsert is a heartbeat UPDATE; emitting there would
+ * turn SESSION_CREATED into "session touched" and destroy the signal we are restoring.
+ *
+ * HOW NEWNESS IS DETERMINED, and why it is not a timestamp comparison. The first version of
+ * this fix asked "is created_at within N seconds of now?". That is a TIME heuristic for a
+ * question that has nothing to do with time, and it has a window: end-to-end acceptance
+ * (run the real hook twice for one session) showed the second run emitting a SECOND
+ * SESSION_CREATED, because a resume landing inside the window still looked new. The unit
+ * tests missed it — they seeded a months-old created_at, which clears any window.
+ *
+ * So newness is now settled BEFORE the write: probe whether the row already exists, and emit
+ * only when it did not. No window, no clock skew, and re-running the hook for an existing
+ * session is silent no matter how soon it happens.
+ *
+ * Fail CLOSED: if the probe itself errored we cannot show the row is new, so we stay silent
+ * rather than risk relabelling a heartbeat as a creation. Telemetry must never break session
+ * start, so every failure here is swallowed — matching lib/session-manager.mjs.
+ */
+async function sessionRowExisted(supabase, sessionId) {
+  try {
+    const { data, error } = await supabase
+      .from('claude_sessions').select('session_id').eq('session_id', sessionId).maybeSingle();
+    if (error) return { probed: false, existed: true };
+    return { probed: true, existed: !!data };
+  } catch {
+    return { probed: false, existed: true };
+  }
+}
+
+async function emitSessionCreated(supabase, { sessionId, payload, prior }) {
+  try {
+    // Unknown or pre-existing both mean "do not emit". Only a confirmed absence qualifies.
+    if (!prior || prior.probed !== true || prior.existed !== false) return false;
+
+    await supabase.rpc('log_session_event', {
+      p_event_type: 'SESSION_CREATED',
+      p_session_id: sessionId,
+      p_machine_id: payload.hostname || null,
+      p_terminal_id: payload.tty || null,
+      p_pid: process.pid,
+      p_metadata: {
+        codebase: payload.codebase,
+        hostname: payload.hostname,
+        source: 'session-register-hook'
+      }
+    });
+    return true;
+  } catch {
+    return false; // telemetry — never abort SessionStart
+  }
+}
+
 async function main() {
   let supabase;
   try {
@@ -117,6 +182,12 @@ async function main() {
     heartbeat_at: now
   });
 
+  // QF-20260725-480: settle INSERT-vs-heartbeat-UPDATE BEFORE the upsert, because the upsert
+  // itself cannot report which one it did, and after it runs the row exists either way. That
+  // distinction is the whole fix — emitting unconditionally would fire SESSION_CREATED on
+  // every hook run, including every resume and compaction.
+  const prior = await sessionRowExisted(supabase, sessionId);
+
   const { error } = await supabase
     .from('claude_sessions')
     .upsert(payload, {
@@ -126,6 +197,7 @@ async function main() {
 
   if (!error) {
     console.log(`session-register: registered ${sessionId.slice(0, 12)}...`);
+    await emitSessionCreated(supabase, { sessionId, payload, prior });
   } else {
     process.stderr.write(`[session-register] upsert.failed session=${sessionId.slice(0, 12)} error=${error.message}\n`);
   }
@@ -208,4 +280,4 @@ if (require.main === module) {
  * deleting the other would have been the inconsistency.
  */
 
-module.exports = { getCurrentSessionId, main };
+module.exports = { getCurrentSessionId, main, emitSessionCreated };
