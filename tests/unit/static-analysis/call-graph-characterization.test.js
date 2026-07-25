@@ -69,6 +69,14 @@ beforeAll(() => {
   // Directory import resolving through index.js.
   w('pkg/index.js', 'export const p = 4;\n');
   w('dir-import.js', "import './pkg';\n");
+  // The pathToFileURL idiom. Distinct from dyn-variable.js above: that one is a bare
+  // variable, THIS is the computed-MemberExpression shape opts.resolveFileUrlIdiom
+  // recognizes. Without this fixture the default-OFF contract is unpinned — verified by
+  // adversarial review: patching the signature to `opts = { resolveFileUrlIdiom: true }`
+  // passed the entire suite, leaving the highest-consequence regression in this change
+  // unguarded (it would add edges, loosening the live WIRE_CHECK_GATE, and delete the
+  // CAUTION warnings that gate propagates via warnings.length).
+  w('dyn-fileurl.js', "import { pathToFileURL } from 'node:url';\nimport { resolve } from 'node:path';\nexport async function go() { return import(pathToFileURL(resolve('leaf-b.js')).href); }\n");
 });
 
 afterAll(() => {
@@ -135,6 +143,48 @@ describe('buildCallGraph — characterization of present-day behavior', () => {
     const edges = [...graph.get(FILES['entry.js'])].map((e) => rel(ROOT, e)).sort();
     expect(edges).toEqual(['barrel.js', 'leaf-a.js']);
     expect(edges.some((e) => e.includes('acorn'))).toBe(false);
+  });
+
+  it('DEFAULT-OFF CONTRACT: the pathToFileURL idiom yields a CAUTION and NO edge with no opts', () => {
+    // The guard this suite previously lacked. Both live merge-blocking gates call
+    // buildCallGraph positionally, so this default must never drift.
+    const { graph, warnings } = buildCallGraph([FILES['dyn-fileurl.js']], ROOT);
+    expect([...graph.get(FILES['dyn-fileurl.js'])]).toEqual([]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('non-literal dynamic import() detected');
+  });
+
+  it('OPT-IN: with resolveFileUrlIdiom the same idiom resolves to an edge and drops the CAUTION', () => {
+    const { graph, warnings } = buildCallGraph([FILES['dyn-fileurl.js']], ROOT, { resolveFileUrlIdiom: true });
+    expect([...graph.get(FILES['dyn-fileurl.js'])].map((e) => rel(ROOT, e))).toEqual(['leaf-b.js']);
+    expect(warnings).toEqual([]);
+  });
+
+  it('allowedRoots keeps only edges resolving inside the declared subgraph', () => {
+    // Shipped with no production consumer (the census restricts its input file set
+    // instead), so this is the option's only exercise — pin it deliberately.
+    const inputs = [FILES['entry.js'], FILES['barrel.js'], FILES['leaf-a.js'], FILES['leaf-b.js'], FILES['leaf-c.js']];
+    const { graph } = buildCallGraph(inputs, ROOT, { allowedRoots: ['pkg'] });
+    expect([...graph.values()].flatMap((edges) => [...edges])).toEqual([]);
+    const { graph: unfiltered } = buildCallGraph(inputs, ROOT);
+    expect([...unfiltered.get(FILES['entry.js'])].length).toBeGreaterThan(0);
+  });
+
+  it('degrades a walker overflow to a warning instead of throwing out of buildCallGraph', () => {
+    // This runs in the sole required status check, so an uncaught RangeError would
+    // block every merge repo-wide. acorn parses this shape fine; the recursive walk
+    // is what overflows.
+    const deepRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'cgb-deep-'));
+    try {
+      const deep = path.join(deepRoot, 'deep.js');
+      fs.writeFileSync(deep, `const v = a${'.b'.repeat(20000)};\n`, 'utf8');
+      const abs = deep.replace(/\\/g, '/');
+      let result;
+      expect(() => { result = buildCallGraph([abs], deepRoot); }).not.toThrow();
+      expect(result.graph.has(abs)).toBe(true);
+    } finally {
+      fs.rmSync(deepRoot, { recursive: true, force: true });
+    }
   });
 
   it('pins arity — the live gates call these strictly positionally', () => {

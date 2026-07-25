@@ -75,8 +75,13 @@ const TRANSPORT_TARGETS = [
 /** The protective check whose leaf placement caused the defect class. */
 const CONSULT_GATE = 'lib/adam/should-consult-solomon.js';
 
-/** NOT sinks. Kept strictly separate from KNOWN_DEBT so real debt can never be
- *  laundered as "not a sink". */
+/** NOT sinks — genuine classification errors of the traversal, not deferred work.
+ *  An earlier revision of this comment claimed that keeping this list separate from
+ *  KNOWN_DEBT meant real debt "can never be laundered as not a sink". That was FALSE:
+ *  adversarial review proved that MOVING an entry from KNOWN_DEBT into NOT_A_SINK
+ *  passed every test, because set disjointness is preserved by a move and runCensus()
+ *  skips NOT_A_SINK paths BEFORE evaluating conformance. The guarantee now comes from
+ *  EXPECTED_NON_CONFORMANT + NOT_A_SINK_EXPECTED below, not from disjointness. */
 const NOT_A_SINK = [
   { path: 'api/webhooks/twilio-sms.js', reason: 'INBOUND Twilio webhook, not an outbound sink. The single known false positive of the traversal.' },
   { path: 'lib/marketing/ai/email-campaigns.js', reason: 'Sends via raw fetch to api.resend.com and imports nothing from lib/notifications, so it is structurally invisible to import-graph traversal. Named so the census never implies coverage it lacks.' },
@@ -114,6 +119,44 @@ const KNOWN_DEBT = [
 ];
 /** Committed ceiling — the ratchet. Never raise this; lowering it is the point. */
 const KNOWN_DEBT_CEILING = 14;
+
+/**
+ * IDENTITY BASELINE — the actual anti-laundering guarantee.
+ *
+ * The frozen set of paths that were non-conformant when this control was authored,
+ * measured with BOTH allowlists ignored. Pinned by IDENTITY rather than by count or
+ * by set-disjointness, so none of these can be silently reclassified: moving one into
+ * NOT_A_SINK, deleting it from KNOWN_DEBT without remediating, or narrowing the
+ * discovery roots all make it vanish from the census and fail the subset assertion.
+ * Removing an entry here is therefore a deliberate, diffed, reviewable edit — which
+ * is the whole point of the control.
+ *
+ * Shrinking this is legitimate ONLY when the sink genuinely inherits the consult gate
+ * (or the module is gone).
+ */
+const EXPECTED_NON_CONFORMANT = [
+  'lib/adam/stall-alert.js',
+  'lib/chairman/record-pending-decision.mjs',
+  'lib/chairman/sms-bridge.js',
+  'lib/chairman/sms-channel-health.js',
+  'lib/chairman/sms-outbound-worker.js',
+  'lib/comms/adam-outbound/chairman-sms-gate/index.js',
+  'lib/comms/adam-outbound/decision-scheduler/index.js',
+  'lib/notifications/channel-health-recorder.js',
+  'lib/notifications/orchestrator.js',
+  'lib/notifications/scheduler.js',
+  'lib/switch-automation/switchon-decision-packet.js',
+  'scripts/adam-decision-email.mjs',
+  'scripts/adam-exec-summary.mjs',
+  'scripts/adam-heartbeat-email.mjs',
+];
+
+/** Exact expected NOT_A_SINK membership — parking a real sink here now fails loudly. */
+const NOT_A_SINK_EXPECTED = [
+  'api/webhooks/twilio-sms.js',
+  'lib/marketing/ai/email-campaigns.js',
+  'lib/services/sovereign-alert.js',
+];
 
 const toPosix = (p) => p.replace(/\\/g, '/');
 const relPosix = (abs) => toPosix(path.relative(REPO_ROOT, abs));
@@ -162,7 +205,9 @@ function runCensus(opts = {}) {
   const targets = TRANSPORT_TARGETS.map(abs).filter((p) => fs.existsSync(p));
   const gateAbs = abs(CONSULT_GATE);
 
-  const notASink = new Set(NOT_A_SINK.map((e) => e.path));
+  // ignoreNotASink is what makes the identity baseline un-launderable: with it set, a
+  // path moved into NOT_A_SINK is still evaluated, so it cannot vanish quietly.
+  const notASink = new Set(opts.ignoreNotASink ? [] : NOT_A_SINK.map((e) => e.path));
   const debt = new Set(opts.ignoreKnownDebt ? [] : KNOWN_DEBT.map((e) => e.path));
   // The transports (and the barrel that re-exports one) are the EMITTERS, not
   // callers of an emitter. The consult gate belongs on the code that decides to
@@ -242,9 +287,39 @@ describe('allowlist integrity', () => {
     expect(KNOWN_DEBT.length).toBeLessThanOrEqual(KNOWN_DEBT_CEILING);
   });
 
-  it('KNOWN_DEBT and NOT_A_SINK are disjoint — debt cannot be laundered as not-a-sink', () => {
+  it('the committed ceiling itself is pinned — raising it is a one-line ratchet kill', () => {
+    // Without this, `KNOWN_DEBT.length <= CEILING` is trivially satisfiable by editing
+    // the constant. Lowering it as debt is genuinely remediated is the only intended
+    // change, and it must be a deliberate diffed edit here too.
+    expect(KNOWN_DEBT_CEILING).toBe(14);
+  });
+
+  it('KNOWN_DEBT and NOT_A_SINK are disjoint (blocks duplication, NOT migration)', () => {
+    // Necessary but far from sufficient: a MOVE preserves disjointness. The real
+    // anti-laundering guarantee is the identity baseline assertion below.
     const notSink = new Set(NOT_A_SINK.map((e) => e.path));
     expect(KNOWN_DEBT.filter((e) => notSink.has(e.path))).toEqual([]);
+  });
+
+  it('ANTI-LAUNDERING: every baseline non-conformant path is still reported with BOTH allowlists ignored', () => {
+    // Catches what disjointness cannot: reclassifying debt as not-a-sink, deleting a
+    // debt entry without remediating, or narrowing the roots to hide it.
+    const bare = runCensus({ ignoreKnownDebt: true, ignoreNotASink: true });
+    for (const p of EXPECTED_NON_CONFORMANT) {
+      expect(bare.nonConformant, `baseline sink no longer reported: ${p}`).toContain(p);
+    }
+  });
+
+  it('NOT_A_SINK membership is pinned exactly — a real sink cannot be parked here', () => {
+    expect(NOT_A_SINK.map((e) => e.path).sort()).toEqual([...NOT_A_SINK_EXPECTED].sort());
+  });
+
+  it('the honest-limit disclosure is present in the shipped source', () => {
+    // Load-bearing: a green run must never be read as full coverage, since raw-fetch
+    // sends are structurally invisible to this traversal.
+    const src = fs.readFileSync(path.join(HERE, SELF_BASENAME), 'utf8');
+    expect(src).toMatch(/not bypass-proof/i);
+    expect(src).toMatch(/structurally invisible/i);
   });
 
   it('no allowlist entry is stale — every listed path still exists', () => {
